@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:flow="http://prototype-lab.example/flowone/v1">
+  <soapenv:Header>
+    <flow:CorrelationId>WDH-POSTMAN-DEMO-0001</flow:CorrelationId>
+  </soapenv:Header>
+  <soapenv:Body>
+    <flow:ActivateSubscriberRequest>
+      <flow:IMSI>310150123456789</flow:IMSI>
+      <flow:MSISDN>+13125550101</flow:MSISDN>
+      <flow:ServicePackage>DATA_SMS</flow:ServicePackage>
+      <flow:RoamingPackage>DOMESTIC</flow:RoamingPackage>
+    </flow:ActivateSubscriberRequest>
+  </soapenv:Body>
+</soapenv:Envelope>

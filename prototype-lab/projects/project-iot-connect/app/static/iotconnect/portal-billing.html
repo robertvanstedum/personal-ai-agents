@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Billing</title>
+  <link rel="stylesheet" href="/static/iotconnect/iotconnect.css">
+  <style>
+    .topbar.customer { grid-template-columns:1fr auto; }
+    .customer-nav { height:49px;display:flex;align-items:end;gap:30px;padding:0 28px;border-bottom:1px solid var(--line);background:var(--surface); }
+    .customer-tab { height:49px;display:flex;align-items:center;position:relative;color:var(--muted);font-size:12px;font-weight:600; }
+    .customer-tab.current { color:var(--teal); }
+    .customer-tab.current::after { content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:2px 2px 0 0;background:var(--teal); }
+    .customer-main { min-height:calc(100vh - 107px);padding:16px 22px 22px; }
+    .page-head { margin-bottom:0; }
+    .subnav { display:flex;gap:24px;height:45px;align-items:end;padding:0 16px;margin-bottom:11px;border:1px solid var(--line);border-top:0;border-radius:0 0 7px 7px;background:var(--surface); }
+    .subnav a { height:44px;display:flex;align-items:center;position:relative;color:var(--muted);font-size:11px;font-weight:600; }
+    .subnav a.current { color:var(--teal); }
+    .subnav a.current::after { content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--teal); }
+    .billing-grid { display:grid;grid-template-columns:minmax(610px,1.25fr) minmax(360px,.75fr);gap:11px; }
+    .cycle-card { padding:0;overflow:hidden; }
+    .cycle-head { display:flex;justify-content:space-between;align-items:center;padding:13px 15px;border-bottom:1px solid var(--line); }
+    .cycle-head h2 { margin:0;font-size:14px; }
+    .cycle-head span { color:var(--muted);font-size:10px; }
+    .invoice-meta { display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:12px 15px;border-bottom:1px solid var(--line); }
+    .invoice-fact { padding:9px 10px;border-radius:5px;background:var(--soft); }
+    .invoice-fact span { color:var(--muted);font-size:9px; }
+    .invoice-fact strong { display:block;margin-top:4px;font-size:12px; }
+    .charge-table th,.charge-table td { padding:11px 15px; }
+    .charge-table .negative { color:#a33939; }
+    .charge-detail { display:block;margin-top:3px;color:var(--muted);font-size:9px; }
+    .boundary { margin:13px 15px 15px;padding:11px 13px;border:1px solid #c7dbe2;border-radius:6px;background:#f1f7fa;color:#39576a;font-size:10px;line-height:1.5; }
+    .history-card { padding:0;overflow:hidden;align-self:start; }
+    .history-card table th,.history-card table td { padding:10px 12px; }
+    .cycle-link { color:var(--teal);font-weight:650; }
+    .invoice-link { color:var(--teal);font-size:10px; }
+    .history-note { padding:11px 13px;border-top:1px solid var(--line);background:var(--soft);color:var(--muted);font-size:9.5px;line-height:1.5; }
+    .status.pending { color:#536476;background:#eef3f5; }
+    .status.issued { color:var(--teal);background:var(--teal-soft); }
+    .invoice-actions { display:flex;align-items:center;justify-content:space-between;padding:11px 15px;border-bottom:1px solid var(--line);background:#eff9f7; }
+    .invoice-actions p { margin:0;color:#476b67;font-size:10px; }
+    .pdf-button { min-height:34px;padding:0 13px;border:1px solid var(--teal);border-radius:6px;background:white;color:var(--teal);font-size:10px;font-weight:700; }
+    .invoice-total td { padding-top:13px;padding-bottom:13px;border-top:2px solid var(--line);font-size:12px;font-weight:750; }
+    @media(max-width:1000px){.billing-grid{grid-template-columns:1fr}.customer-nav{gap:17px;padding:0 16px}}
+  </style>
+</head>
+<body data-iotconnect-page="portal-billing">
+  <header class="topbar customer">
+    <a class="brand brand-home-link" href="/" aria-label="Return to IoT Connect gateway"><div class="brand-mark">C</div><div><strong>IoT Connect</strong><small>Enterprise IoT Portal</small></div></a>
+    <div class="identity"><span class="name">Boreal Equipment Group</span><span class="chip role">Customer account</span><span class="chip">POC environment</span></div>
+  </header>
+  <nav class="customer-nav" aria-label="Account sections">
+    <a class="customer-tab" href="/portal">Overview</a>
+    <a class="customer-tab" href="/portal/subscriptions">Subscriptions &amp; SIMs</a>
+    <a class="customer-tab current" href="/portal/billing">Billing</a>
+  </nav>
+  <main class="customer-main">
+    <section class="page-head"><div><h1>Billing</h1><p>Boreal Equipment Group · ACCT-000200</p></div></section>
+    <section class="billing-grid">
+      <article id="latestBillingCard" class="card cycle-card">
+        <div class="cycle-head"><h2>July 2026 invoice</h2><span><span class="status issued">ISSUED</span></span></div>
+        <div class="invoice-meta">
+          <div class="invoice-fact"><span>Invoice</span><strong>INV-202607-200</strong></div>
+          <div class="invoice-fact"><span>Billing period</span><strong>Jul 1–31, 2026</strong></div>
+          <div class="invoice-fact"><span>Issued</span><strong>Aug 5, 2026</strong></div>
+          <div class="invoice-fact"><span>Due</span><strong>Sep 4, 2026</strong></div>
+          <div class="invoice-fact"><span>SIMs billed</span><strong>49,320</strong></div>
+        </div>
+        <div class="invoice-actions"><p>Official invoice produced by the operator billing system.</p><button class="pdf-button">View invoice PDF</button></div>
+        <table class="charge-table">
+          <thead><tr><th>Invoice category</th><th class="num">Amount</th></tr></thead>
+          <tbody>
+            <tr><td>Monthly access charges<span class="charge-detail">Recurring subscription access across billed SIMs</span></td><td class="num">$121,450</td></tr>
+            <tr><td>Usage and overage charges<span class="charge-detail">Rated usage after pooled allowances and included quantities</span></td><td class="num">$11,600</td></tr>
+            <tr><td>Account-level charges<span class="charge-detail">Platform enablement, data exchange, and managed operations</span></td><td class="num">$4,620</td></tr>
+            <tr><td>One-time charges<span class="charge-detail">Non-recurring service and configuration activity</span></td><td class="num">$1,750</td></tr>
+            <tr><td>Credits and adjustments<span class="charge-detail">Approved commercial credits and account adjustments</span></td><td class="num negative">−$1,000</td></tr>
+            <tr><td>Platform charges subtotal</td><td class="num">$138,420</td></tr>
+            <tr><td>Tax and surcharges<span class="charge-detail">Calculated and applied by the operator billing system</span></td><td class="num">$11,293</td></tr>
+            <tr class="invoice-total"><td>Total invoice</td><td class="num">$149,713</td></tr>
+          </tbody>
+        </table>
+        <div class="boundary">IoT Connect supplies the reconciled platform charges. The operator billing system produces the official invoice and applies tax, payment terms, collections, and invoice-level adjustments.</div>
+      </article>
+
+      <aside id="billingHistoryCard" class="card history-card">
+        <div class="cycle-head"><h2>Billing history</h2><span><a href="#">View all cycles</a></span></div>
+        <table>
+          <thead><tr><th>Cycle</th><th class="num">SIMs billed</th><th class="num">Invoice total</th><th>Invoice</th></tr></thead>
+          <tbody>
+            <tr><td><span class="cycle-link">Jul 2026</span></td><td class="num">49,320</td><td class="num">$149,713</td><td><a class="invoice-link" href="#">PDF</a></td></tr>
+            <tr><td><span class="cycle-link">Jun 2026</span></td><td class="num">48,705</td><td class="num">$145,923</td><td><a class="invoice-link" href="#">PDF</a></td></tr>
+            <tr><td><span class="cycle-link">May 2026</span></td><td class="num">47,980</td><td class="num">$142,446</td><td><a class="invoice-link" href="#">PDF</a></td></tr>
+            <tr><td><span class="cycle-link">Apr 2026</span></td><td class="num">46,860</td><td class="num">$137,852</td><td><a class="invoice-link" href="#">PDF</a></td></tr>
+            <tr><td><span class="cycle-link">Mar 2026</span></td><td class="num">45,740</td><td class="num">$134,196</td><td><a class="invoice-link" href="#">PDF</a></td></tr>
+          </tbody>
+        </table>
+        <div class="history-note">Select a cycle to review its categories. The PDF is the official invoice produced by the operator billing system.</div>
+      </aside>
+    </section>
+  </main>
+  <script src="/static/api-client.js"></script>
+  <script src="/static/iotconnect/iotconnect.js"></script>
+</body>
+</html>

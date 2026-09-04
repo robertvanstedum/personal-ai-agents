@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://schemas.xmlsoap.org/wsdl/"
+             xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+             xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+             xmlns:tns="http://prototype-lab.example/flowone/v1"
+             targetNamespace="http://prototype-lab.example/flowone/v1"
+             name="FlowOneProvisioningService">
+  <types>
+    <xsd:schema targetNamespace="http://prototype-lab.example/flowone/v1" elementFormDefault="qualified">
+      <xsd:element name="ActivateSubscriberRequest">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="IMSI" type="xsd:string"/>
+          <xsd:element name="MSISDN" type="xsd:string"/>
+          <xsd:element name="ServicePackage" type="xsd:string"/>
+          <xsd:element name="RoamingPackage" type="xsd:string"/>
+          <xsd:element name="PrivateAPN" type="xsd:string" minOccurs="0"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+      <xsd:element name="ActivateSubscriberResponse">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="FlowOneRequestId" type="xsd:string"/>
+          <xsd:element name="CorrelationId" type="xsd:string"/>
+          <xsd:element name="OverallStatus" type="xsd:string"/>
+          <xsd:element name="ResultCode" type="xsd:string"/>
+          <xsd:element name="Message" type="xsd:string"/>
+          <xsd:element name="IMSI" type="xsd:string"/>
+          <xsd:element name="MSISDN" type="xsd:string"/>
+          <xsd:element name="ServicePackage" type="xsd:string"/>
+          <xsd:element name="RoamingPackage" type="xsd:string"/>
+          <xsd:element name="RollbackStatus" type="xsd:string"/>
+          <xsd:element name="ElementResults" type="xsd:anyType"/>
+          <xsd:element name="StartedAt" type="xsd:string"/>
+          <xsd:element name="CompletedAt" type="xsd:string"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </types>
+  <message name="ActivateSubscriberInput"><part name="parameters" element="tns:ActivateSubscriberRequest"/></message>
+  <message name="ActivateSubscriberOutput"><part name="parameters" element="tns:ActivateSubscriberResponse"/></message>
+  <portType name="FlowOneProvisioningPortType">
+    <operation name="ActivateSubscriber"><input message="tns:ActivateSubscriberInput"/><output message="tns:ActivateSubscriberOutput"/></operation>
+  </portType>
+  <binding name="FlowOneProvisioningSoapBinding" type="tns:FlowOneProvisioningPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="ActivateSubscriber"><soap:operation soapAction="ActivateSubscriber"/><input><soap:body use="literal"/></input><output><soap:body use="literal"/></output></operation>
+  </binding>
+  <service name="FlowOneProvisioningService">
+    <port name="FlowOneProvisioningSoapPort" binding="tns:FlowOneProvisioningSoapBinding">
+      <soap:address location="http://127.0.0.1:8096/mock/flowone/v1/FlowOneProvisioningService"/>
+    </port>
+  </service>
+</definitions>

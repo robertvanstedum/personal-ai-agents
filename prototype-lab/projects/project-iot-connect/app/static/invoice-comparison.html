@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Legacy Statement A/B Artifact</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="artifact-page">
+  <header class="topbar no-print">
+    <a class="brand" href="/"><span class="brand-mark">C</span><span><b>IoT Connect</b><small>Billing evidence artifact</small></span></a>
+    <nav><a href="/admin">Admin Console</a><a href="/">Customer Proof</a><a class="active" href="/artifacts/invoice-comparison">A/B Statements</a></nav>
+    <span class="pill neutral">Legacy Billing artifact</span>
+  </header>
+
+  <main class="shell artifact-shell">
+    <section class="page-head no-print">
+      <div><p class="eyebrow">Illustrative downstream artifact</p><h1>Same financial integrity. A radically smaller legacy footprint.</h1></div>
+      <div class="artifact-actions"><label>Billing cycle<input id="comparisonCycle" value="2026-08" pattern="\d{4}-\d{2}"></label><button id="generateButton" class="button primary">Generate statements</button><button id="printButton" class="button ghost">Print / Save PDF</button></div>
+    </section>
+
+    <section class="legacy-boundary no-print">
+      <div><b>New IoT platform</b><span>Subscriptions · rating · line-level charges · reconciled billing output</span></div><i>→</i><div><b>Legacy Billing</b><span>Customer invoice · accounts receivable · payments · collections · GL downstream</span></div>
+    </section>
+
+    <section id="comparisonSummary" class="comparison-summary hidden"></section>
+    <section class="statement-grid">
+      <div id="detailedStatement" class="statement-slot"><div class="empty-state">Run Aster billing, then generate the comparison.</div></div>
+      <div id="summarizedStatement" class="statement-slot"><div class="empty-state">Run Boreal billing, then generate the comparison.</div></div>
+    </section>
+    <p class="artifact-disclaimer">Synthetic demonstration only. These statements illustrate the downstream artifact that Legacy Billing could produce from the reconciled file. They are not part of the proposed IoT platform and do not represent a real customer invoice.</p>
+  </main>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/api-client.js"></script>
+  <script src="/static/invoice-comparison.js"></script>
+</body>
+</html>

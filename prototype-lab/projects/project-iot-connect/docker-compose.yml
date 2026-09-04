@@ -1,0 +1,100 @@
+# IoT Connect standalone beta — complete demonstration stack.
+#
+#   make up      build the runtime image (app is its single writer), start everything, wait until healthy
+#   make down    stop without deleting the database volume
+#   make reset   restore the deterministic seed state
+#   make status  health and dependency report
+#   make smoke   smoke tests
+#   make verify  reset → smoke → IoT success/failure → summarized billing → restart persistence
+#
+# Every value can be overridden through .env (see .env.example). Nothing here
+# is a live credential; the PostgreSQL password is a local demo constant.
+
+name: iotconnect
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${IOTCONNECT_DB_NAME:-iotconnect}
+      POSTGRES_USER: ${IOTCONNECT_DB_USER:-iotconnect_app}
+      POSTGRES_PASSWORD: ${IOTCONNECT_DB_PASSWORD:-iotconnect-local-demo-password}
+    ports:
+      - "127.0.0.1:${IOTCONNECT_DB_PORT:-54329}:5432"
+    # Schema and seed are applied by the app's scripts/bootstrap_database.py
+    # (idempotent) — no initdb.d bind mount, so the stack does not depend on the
+    # project path being shared with the Docker VM.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${IOTCONNECT_DB_USER:-iotconnect_app} -d ${IOTCONNECT_DB_NAME:-iotconnect}
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+
+  integrations:
+    # Same runtime image as `app`; only `app` builds and publishes the tag so
+    # two services never write it concurrently. `make up` builds first.
+    image: iotconnect-app:0.9.0-beta.1
+    pull_policy: never
+    command:
+      - uvicorn
+      - integration_stubs.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8096"
+    ports:
+      - "127.0.0.1:${IOTCONNECT_INTEGRATIONS_PORT:-8096}:8096"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8096/mock/flowone/v1/health', timeout=3).status == 200 else 1)"
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: iotconnect-app:0.9.0-beta.1
+    environment:
+      IOTCONNECT_STORE: postgres
+      POSTGRES_DSN: postgresql://${IOTCONNECT_DB_USER:-iotconnect_app}:${IOTCONNECT_DB_PASSWORD:-iotconnect-local-demo-password}@postgres:5432/${IOTCONNECT_DB_NAME:-iotconnect}
+      FLOWONE_BASE_URL: http://integrations:8096
+      AMDOCS_MIDDLEWARE_BASE_URL: http://integrations:8096
+      IOTCONNECT_SEED_TIMESTAMP: ${IOTCONNECT_SEED_TIMESTAMP:-2026-08-01T00:00:00+00:00}
+      # URL prefix when deployed behind a reverse proxy (e.g. /app/iotconnect); empty = standalone
+      IOTCONNECT_ROOT_PATH: ${IOTCONNECT_ROOT_PATH:-}
+      # Trusted-identity mode: local_demo (X-Demo-* headers) or minimoi_proxy (portal-verified X-Minimoi-* headers)
+      IOTCONNECT_AUTH_MODE: ${IOTCONNECT_AUTH_MODE:-local_demo}
+      IOTCONNECT_APP_URL: http://127.0.0.1:8095
+      IOTCONNECT_INTEGRATIONS_URL: http://integrations:8096
+    ports:
+      - "127.0.0.1:${IOTCONNECT_APP_PORT:-8095}:8095"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      integrations:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8095/api/v1/health', timeout=3).status == 200 else 1)"
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

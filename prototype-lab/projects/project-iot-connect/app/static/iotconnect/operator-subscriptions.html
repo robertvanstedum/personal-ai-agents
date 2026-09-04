@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Operator subscriptions</title>
+  <link rel="stylesheet" href="/static/iotconnect/iotconnect.css">
+  <style>
+    .topbar.operator { grid-template-columns:1fr auto; }
+    .operator-nav { height:45px;display:flex;align-items:end;gap:29px;padding:0 28px;border-bottom:1px solid var(--line);background:var(--surface); }
+    .operator-tab { height:45px;display:flex;align-items:center;position:relative;color:var(--muted);font-size:12px;font-weight:600; }
+    .operator-tab.current { color:var(--teal); }
+    .operator-tab.current::after { content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--teal); }
+    .account-bar { min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 28px;border-bottom:1px solid var(--line);background:#f8fbfb; }
+    .account-context { display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px; }
+    .account-context a { font-weight:600; }
+    .account-context strong { color:var(--text);font-size:12px; }
+    .account-tabs { display:flex;align-self:stretch;gap:23px; }
+    .account-tab { display:flex;align-items:center;position:relative;color:var(--muted);font-size:11px;font-weight:600; }
+    .account-tab.current { color:var(--teal); }
+    .account-tab.current::after { content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--teal); }
+    .operator-main { min-height:calc(100vh - 151px);padding:14px 22px 22px; }
+    .subscription-head { display:grid;grid-template-columns:minmax(330px,1fr) minmax(470px,630px);align-items:center;min-height:62px;margin-bottom:9px; }
+    .page-search { height:36px;display:flex;align-items:center;gap:10px;padding:0 12px;border:1px solid #aebdc5;border-radius:6px;background:var(--surface);color:var(--muted); }
+    .page-search span:first-child { color:var(--teal);font-size:18px; }
+    .page-search span:last-child { font-size:11px; }
+    .summary-line { display:flex;gap:24px;align-items:center;margin:0 0 9px;padding:9px 14px; }
+    .summary-item { min-width:125px; }
+    .summary-item span { color:var(--muted);font-size:9px; }
+    .summary-item strong { display:block;margin-top:3px;font-size:17px; }
+    .summary-item.active strong { color:var(--teal); }
+    .summary-rule { width:1px;height:28px;background:var(--line); }
+    .grid-card { padding:0;overflow:hidden; }
+    .grid-title { display:flex;justify-content:space-between;align-items:center;gap:18px;padding:10px 13px 8px; }
+    .grid-title h2 { margin:0;font-size:14px; }
+    .grid-tools { display:flex;align-items:center;gap:9px;color:var(--muted);font-size:9px; }
+    .selection { padding:5px 8px;border-radius:4px;background:var(--teal-soft);color:var(--teal);font-weight:650; }
+    .small-button { height:29px;padding:0 11px;border:0;border-radius:5px;background:var(--teal);color:white;font-size:10px;font-weight:650; }
+    .resource-window { height:472px;overflow-y:auto; }
+    .resource-table { table-layout:fixed; }
+    .resource-table th,.resource-table td { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .resource-table thead { position:sticky;top:0;z-index:2; }
+    .resource-table thead tr:first-child th { padding-top:7px;padding-bottom:5px;background:#f4f7f8; }
+    .resource-table thead tr.filters th { padding:5px 4px 8px;background:#f4f7f8; }
+    .filter-box { width:100%;height:26px;padding:0 6px;border:1px solid #d2dde1;border-radius:4px;background:white;color:#8793a2;font-size:8.5px;font-weight:500;text-transform:none;letter-spacing:0; }
+    select.filter-box { appearance:auto; }
+    .resource-table tbody tr { cursor:pointer; }
+    .resource-table tbody tr:hover { background:#f2faf8; }
+    .resource-table tbody tr.selected { background:#edf9f7;box-shadow:inset 3px 0 var(--teal); }
+    .resource-table td { padding:9px 5px;font-size:9.5px; }
+    .mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:9px; }
+    .status { font-size:8px; }
+    .status.available { color:#536476;background:#eef3f5; }
+    .status.suspended { color:var(--warn-text);background:var(--warn-soft); }
+    .status.pending { color:#46647c;background:#edf3f7; }
+    .legacy-none { color:#667482;background:#eef3f5; }
+    .empty { color:var(--faint); }
+    .stream-footer { display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border-top:1px solid var(--line);background:var(--soft);color:var(--muted);font-size:9px; }
+    .stream-state { display:flex;align-items:center;gap:7px; }
+    .stream-dot { width:7px;height:7px;border-radius:50%;background:var(--teal); }
+    .operator-note { margin-top:9px;color:var(--muted);font-size:9px;line-height:1.45; }
+    @media(max-width:1100px){.subscription-head{grid-template-columns:1fr;gap:9px}.account-bar{align-items:flex-start;flex-direction:column;padding:10px 18px}.account-tabs{min-height:32px}.summary-line{flex-wrap:wrap}}
+  </style>
+</head>
+<body data-iotconnect-page="operator-subscriptions">
+  <header class="topbar operator">
+    <a class="brand brand-home-link" href="/" aria-label="Return to IoT Connect gateway"><div class="brand-mark">C</div><div><strong>IoT Connect</strong><small>Enterprise IoT Operations</small></div></a>
+    <div class="identity"><span class="name">Business Operations</span><span class="chip role">Operator</span><span class="chip">POC environment</span></div>
+  </header>
+  <nav class="operator-nav" aria-label="Operator work areas">
+    <a class="operator-tab current" href="/operator">Portfolio</a><a class="operator-tab" href="/operator/accounts">Accounts</a><a class="operator-tab" href="/operator/inventory">SIM Inventory</a><a class="operator-tab" href="/operator/bill-cycles">Bill Cycles</a><a class="operator-tab" href="/operator/catalog">Plan Catalog</a><a class="operator-tab" href="/operator/api-activity">API Activity</a>
+  </nav>
+  <nav class="account-bar" aria-label="Selected account sections">
+    <div class="account-context"><a href="/operator">Portfolio</a><span>›</span><strong>Boreal Equipment Group</strong><span>ACCT-000200</span></div>
+    <div class="account-tabs">
+      <a class="account-tab" href="/operator/account">Overview</a><a class="account-tab current" href="/operator/subscriptions">Subscriptions &amp; SIMs</a><a class="account-tab" href="/operator/billing">Billing</a><a class="account-tab" href="/operator/account/configuration">Account Configuration</a>
+    </div>
+  </nav>
+
+  <main class="operator-main">
+    <section class="page-head subscription-head">
+      <div><h1>Subscriptions &amp; SIMs</h1><p>Boreal Equipment Group · operator account view</p></div>
+      <label class="page-search"><span>⌕</span><input id="resourceSearch" aria-label="Search account resources" placeholder="Search subscription ID, ICCID, IMSI, MDN, or customer reference"></label>
+    </section>
+
+    <section class="card summary-line">
+      <div class="summary-item active"><span>Active subscriptions</span><strong>49,940</strong></div><div class="summary-rule"></div>
+      <div class="summary-item"><span>Available SIMs</span><strong>2,450</strong></div><div class="summary-rule"></div>
+      <div class="summary-item"><span>Suspended</span><strong>40</strong></div><div class="summary-rule"></div>
+      <div class="summary-item"><span>Total on account</span><strong>52,430</strong></div>
+      <div style="margin-left:auto;color:var(--muted);font-size:9px">Updated Aug 29 · 6:18 PM CT</div>
+    </section>
+
+    <section class="card grid-card">
+      <div class="grid-title">
+        <h2>Account resources</h2>
+        <div class="grid-tools"><span id="resourceMatchCount">Loading resources</span><button id="selectFilteredButton" class="small-button secondary">Select filtered available (max 50)</button><span id="resourceSelectionCount" class="selection">0 selected</span><button id="manageSelectedButton" class="small-button">Manage selected</button></div>
+      </div>
+      <div class="resource-window">
+        <table class="resource-table">
+          <colgroup><col style="width:3%"><col style="width:17%"><col style="width:14%"><col style="width:12%"><col style="width:19%"><col style="width:10%"><col style="width:14%"><col style="width:11%"></colgroup>
+          <thead>
+            <tr><th aria-label="Select"></th><th data-sort="0">ICCID</th><th data-sort="1">IMSI</th><th data-sort="2">MDN</th><th data-sort="3">Rate plan</th><th data-sort="4">Status</th><th data-sort="5">Subscription</th><th data-sort="6">Last change</th></tr>
+            <tr class="filters">
+              <th></th>
+              <th><input class="filter-box" aria-label="Filter ICCID" placeholder="Filter"></th>
+              <th><input class="filter-box" aria-label="Filter IMSI" placeholder="Filter"></th>
+              <th><input class="filter-box" aria-label="Filter MDN" placeholder="Filter"></th>
+              <th><select class="filter-box" aria-label="Filter rate plan"><option>All plans</option></select></th>
+              <th><select class="filter-box" aria-label="Filter status"><option>All statuses</option></select></th>
+              <th><input class="filter-box" aria-label="Filter subscription" placeholder="Filter"></th>
+              <th><input class="filter-box" aria-label="Filter last change" placeholder="Filter"></th>
+            </tr>
+          </thead>
+          <tbody id="resourceRows">
+            <tr class="selected"><td class="mono">89014103211118510051</td><td class="mono">310150123400051</td><td>312-208-1051</td><td>Connected Device Essential</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000051</a></td><td>Aug 29</td></tr>
+            <tr><td class="mono">89014103211118510052</td><td class="mono">310150123400052</td><td>312-208-1052</td><td>Domestic Pool Plus</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000052</a></td><td>Aug 29</td></tr>
+            <tr><td class="mono">89014103211118510053</td><td class="mono">310150123400053</td><td>312-208-1053</td><td>Private Network</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000053</a></td><td>Aug 28</td></tr>
+            <tr><td class="mono">89014103211118510054</td><td class="mono">310150123400054</td><td>312-208-1054</td><td>Connected Device Essential</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000054</a></td><td>Aug 28</td></tr>
+            <tr><td class="mono">89014103211118510055</td><td class="mono">310150123400055</td><td>312-208-1055</td><td>Telemetry Standby</td><td><span class="status suspended">SUSPENDED</span></td><td><a href="#" class="mono">SUB-0000055</a></td><td>Aug 27</td></tr>
+            <tr><td class="mono">89014103211118510056</td><td class="mono">310150123400056</td><td><span class="empty">At activation</span></td><td><span class="empty">At activation</span></td><td><span class="status available">AVAILABLE</span></td><td><span class="empty">—</span></td><td>Aug 25</td></tr>
+            <tr><td class="mono">89014103211118510057</td><td class="mono">310150123400057</td><td>312-208-1057</td><td>Domestic Pool Plus</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000057</a></td><td>Aug 24</td></tr>
+            <tr><td class="mono">89014103211118510058</td><td class="mono">310150123400058</td><td><span class="empty">At activation</span></td><td><span class="empty">At activation</span></td><td><span class="status available">AVAILABLE</span></td><td><span class="empty">—</span></td><td>Aug 23</td></tr>
+            <tr><td class="mono">89014103211118510059</td><td class="mono">310150123400059</td><td>312-208-1059</td><td>Connected Device Essential</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000059</a></td><td>Aug 22</td></tr>
+            <tr><td class="mono">89014103211118510060</td><td class="mono">310150123400060</td><td>312-208-1060</td><td>Connected Device Essential</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000060</a></td><td>Aug 22</td></tr>
+            <tr><td class="mono">89014103211118510061</td><td class="mono">310150123400061</td><td>312-208-1061</td><td>Private Network</td><td><span class="status pending">PENDING</span></td><td><a href="#" class="mono">SUB-0000061</a></td><td>Aug 22</td></tr>
+            <tr><td class="mono">89014103211118510062</td><td class="mono">310150123400062</td><td>312-208-1062</td><td>Connected Device Essential</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000062</a></td><td>Aug 21</td></tr>
+            <tr><td class="mono">89014103211118510063</td><td class="mono">310150123400063</td><td>312-208-1063</td><td>Domestic Pool Plus</td><td><span class="status">ACTIVE</span></td><td><a href="#" class="mono">SUB-0000063</a></td><td>Aug 21</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="stream-footer"><span class="stream-state"><i class="stream-dot"></i>One scrollable list; filters and column sorts apply to the complete account dataset.</span><span id="resourceLoadCount">Loading</span></div>
+    </section>
+    <p id="operatorResourceNote" class="operator-note">The operator can activate, suspend, reactivate, retire, or change the rate plan for selected account resources. The grid itself does not silently edit state; each change opens a controlled review and creates an auditable request.</p>
+  </main>
+  <script src="/static/api-client.js"></script>
+  <script src="/static/iotconnect/iotconnect.js"></script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+schema_version: "0.1"
+id: project-iot-connect
+name: IoT Connect Demo Program
+status: design_review
+owner: robert
+decision_owner: robert
+created_at: 2026-09-02
+
+purpose:
+  business_question: >-
+    Can the existing IoT Connect prototype become a portable, repeatable
+    demonstration and then support a materially different fiber
+    order-to-activate-to-bill scenario without forking an unmaintainable copy?
+  success_criteria:
+    - a clean checkout starts, resets, verifies, and stops with documented commands
+    - the existing IoT scenario remains repeatable and independently releasable
+    - the fiber scenario models real product, service, resource, and billing boundaries
+    - Salesforce can act as an optional real CRM and order-entry adapter
+    - the learning package maps the fiber lifecycle through Zuora order-to-cash processes
+    - a synthetic Zuora service validates an approved subset of the published API contract
+    - a synthetic payment gateway demonstrates idempotent payment outcomes and dunning events
+    - IoT Connect has an approved fiber-specific orchestration and operational-control boundary
+    - the same correlation identifier is visible across order, activation, billing, and evidence
+    - private interview context and credentials never enter committed artifacts
+
+workstreams:
+  - id: WS0
+    name: promote_working_prototype
+    owner_role: implementation
+    gate: G0A
+  - id: WS1
+    name: standalone_demo_formalization
+    owner_role: implementation
+    gate: G2
+  - id: WS2
+    name: fiber_backoffice_research
+    owner_role: design_and_research
+    gate: G3
+  - id: WS3
+    name: zuora_and_salesforce_learning
+    owner_role: robert_with_design_support
+    gate: G3
+  - id: WS4
+    name: fiber_salesforce_zuora_payments_poc
+    owner_role: implementation
+    gate: G5
+
+scenarios:
+  - id: iot_enterprise_activation
+    status: existing_working_prototype
+    disposition: baseline_to_formalize
+  - id: fiber_existing_ont_activation
+    status: design
+    disposition: derived_demo
+  - id: fiber_zuora_contract_billing
+    status: design
+    disposition: required_derived_demo_component
+  - id: fiber_payment_failure_recovery
+    status: design
+    disposition: staged_derived_demo_component
+
+data_policy:
+  classification: synthetic
+  commit_safe_only: true
+  retain_raw_run_bodies: false
+  secrets_in_repository: false
+
+release_plan:
+  tracked_project_home: prototype-lab/projects/project-iot-connect
+  baseline_candidate: iotconnect-v0.9.0-beta.1
+  fiber_candidate: iotconnect-v0.10.0-beta.1
+  release_requires:
+    - automated_tests
+    - clean_checkout_smoke_test
+    - deterministic_reset_test
+    - external_contract_tests
+    - rendered_presentation_review
+    - reviewed_diff_approval
+
+relationships:
+  predecessor: project-nightjar
+  governed_by: prototype_lab
+  planning_record: pending
+
+design_gates:
+  - id: G3A
+    name: iot_connect_fiber_role_boundary
+    status: pending
+    artifact: design/IOT_CONNECT_FIBER_ROLE_BOUNDARY.md

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · SIM actions</title>
+  <link rel="stylesheet" href="/static/iotconnect/iotconnect.css">
+  <style>
+    .topbar.customer{grid-template-columns:1fr auto}.customer-nav,.operator-nav{height:49px;display:flex;align-items:end;gap:29px;padding:0 28px;border-bottom:1px solid var(--line);background:white}.customer-tab,.operator-tab{height:49px;display:flex;align-items:center;position:relative;color:var(--muted);font-size:12px;font-weight:600}.customer-tab.current,.operator-tab.current{color:var(--teal)}.customer-tab.current::after,.operator-tab.current::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--teal)}
+    .actions-main{min-height:calc(100vh - 107px);padding:16px 22px 24px}.action-grid{display:grid;grid-template-columns:minmax(620px,1.3fr) minmax(360px,.7fr);gap:11px}.resource-card,.order-card{padding:0;overflow:hidden}.action-head{display:flex;justify-content:space-between;align-items:center;padding:13px 15px;border-bottom:1px solid var(--line)}.action-head h2{margin:0;font-size:14px}.action-head span{color:var(--muted);font-size:10px}.selected-table td{font-size:10px}.selected-table .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.order-body{padding:15px}.order-body label{display:grid;gap:6px;margin-bottom:11px;color:var(--muted);font-size:10px;font-weight:650}.order-body input,.order-body select{height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:white;font:inherit}.check-row{display:flex!important;grid-template-columns:18px 1fr!important;align-items:center}.check-row input{height:auto}.action-buttons{display:grid;gap:8px;margin-top:14px}.action-buttons button{min-height:38px;border-radius:6px;font-weight:700}.secondary-action{border:1px solid var(--teal);background:white;color:var(--teal)}.primary-action{border:0;background:var(--teal);color:white}.primary-action:disabled,.secondary-action:disabled{opacity:.45}.action-result{margin-top:11px;padding:12px;border-radius:6px;background:var(--soft);color:var(--muted);font-size:10px;line-height:1.5}.action-result.success{background:var(--teal-soft);color:#155f58}.completion-card{margin-bottom:11px;padding:18px;border-left:5px solid var(--teal);background:#effaf8}.completion-card[hidden]{display:none}.completion-card h2{margin:0 0 5px;font-size:20px}.completion-metrics{display:flex;gap:22px;margin:13px 0}.completion-metrics strong{display:block;font-size:24px}.completion-metrics span{color:var(--muted);font-size:9px}.completion-actions{display:flex;gap:8px}.result-table{margin-top:11px;overflow:auto}.result-table td{font-size:9.5px}.batch-history{margin-top:11px}.batch-history td{font-size:9.5px}.boundary-note{margin-top:11px;padding:11px 13px;border-left:3px solid var(--teal);background:#f0f8f7;color:#45615e;font-size:10px;line-height:1.5}@media(max-width:980px){.action-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body data-iotconnect-page="portal-actions">
+  <header class="topbar customer"><a class="brand brand-home-link" href="/" aria-label="Return to IoT Connect gateway"><div class="brand-mark">C</div><div><strong>IoT Connect</strong><small>Enterprise IoT Portal</small></div></a><div class="identity"><span class="name">Customer account</span><span class="chip role">Customer</span><span class="chip">POC environment</span></div></header>
+  <nav class="customer-nav" aria-label="Account sections"><a class="customer-tab" href="/portal">Overview</a><a class="customer-tab" href="/portal/subscriptions">Subscriptions &amp; SIMs</a><a class="customer-tab current" href="/portal/actions">SIM Actions</a><a class="customer-tab" href="/portal/billing">Billing</a></nav>
+  <main class="actions-main">
+    <section class="page-head"><div><h1>Activate selected SIMs</h1><p id="actionAccountContext">Loading account context</p></div><a id="backToResources" class="button secondary" href="/portal/subscriptions">Back to resources</a></section>
+    <section id="actionCompletion" class="card completion-card" hidden><h2 id="actionCompletionTitle">Activation completed</h2><p id="actionCompletionText"></p><div class="completion-metrics"><div><strong id="completionSucceeded">0</strong><span>Succeeded</span></div><div><strong id="completionFailed">0</strong><span>Failed</span></div><div><strong id="completionBatch">—</strong><span>Batch</span></div></div><div class="completion-actions"><button id="viewActionEvidence" class="button">View per-SIM results</button><a id="completionBackToResources" class="button secondary" href="/portal/subscriptions">Back to subscriptions</a></div></section>
+    <section class="action-grid">
+      <article class="card resource-card"><div class="action-head"><h2>Selected account inventory</h2><span id="selectedActionCount">Loading</span></div><div id="selectedActionRows"></div><div class="boundary-note">This action is account-scoped. Every SIM must already be assigned to this account and remain available for activation.</div></article>
+      <aside class="card order-card"><div class="action-head"><h2>Activation order</h2><span id="actionState">Draft</span></div><div class="order-body">
+        <label>Customer batch reference<input id="customerBatchReference"></label>
+        <label>Rate plan<select id="customerRatePlan"></select></label>
+        <label>Network profile<select id="customerNetworkProfile"></select></label>
+        <label id="customerPrivateApnRow" class="check-row" hidden><input id="customerPrivateApn" type="checkbox"><span>Use account private APN: <b id="customerPrivateApnName"></b></span></label>
+        <div class="action-buttons"><button id="createCustomerBatch" class="secondary-action">1. Create batch and reserve MDNs</button><button id="submitCustomerBatch" class="primary-action" disabled>2. Submit activation</button></div>
+        <div id="customerActionResult" class="action-result">No activation batch created in this session.</div>
+      </div></aside>
+    </section>
+    <section id="customerActionEvidence" class="card result-table" hidden></section>
+    <section class="card batch-history"><div class="action-head"><h2>Activation batch history</h2><span id="activationBatchCount">Loading</span></div><div id="activationBatchRows"></div></section>
+  </main>
+  <script src="/static/api-client.js"></script><script src="/static/iotconnect/iotconnect.js"></script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Admin Console</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">C</span><span><b>IoT Connect</b><small>Developer and support verification</small></span></a>
+    <nav><a class="active" href="/admin">Admin Console</a><a href="/">Project home</a><a href="/docs">IoT Connect API (8095)</a></nav>
+    <span id="backendBadge" class="pill neutral">connecting</span>
+  </header>
+
+  <main class="shell">
+    <section class="page-head">
+      <div><p class="eyebrow">Developer and support verification</p><h1>Account and transaction controls</h1><p class="intro">Configure an account, execute the transaction, and inspect the resulting records.</p></div>
+      <button id="resetButton" class="button danger">Reset prepared demo</button>
+    </section>
+
+    <section class="architecture-bar" aria-label="Application architecture">
+      <span><b>UI</b> input and evidence</span><i>→</i><span><b>API</b> FastAPI contract</span><i>→</i><span><b>Python</b> use-case rules</span><i>→</i><span><b>DB</b> repository and SQL</span>
+    </section>
+
+    <div class="layout-sidebar">
+      <aside>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Step 1</p><h2>Accounts</h2></div><span id="accountCount" class="pill">0</span></div>
+          <div id="accountList" class="account-list"></div>
+        </article>
+        <article class="panel compact">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Create</p>
+              <h2>New customer</h2>
+            </div>
+          </div>
+          <label>Customer name<input id="customerName" placeholder="Cedar Logistics"></label>
+          <label>Account name<input id="accountName" placeholder="Cedar Logistics IoT"></label>
+          <label>External Amdocs billing account<input id="externalBillingAccount" placeholder="LEG-ACCT-300" required></label>
+          <label>External customer reference<input id="externalRef" placeholder="CRM-CEDAR-300"></label>
+          <label>Reason<input id="createReason" value="Prototype Lab controlled account setup"></label>
+          <button id="createAccountButton" class="button primary full">Create customer, account and contract</button>
+          <p class="microcopy">The Amdocs account must exist first. IoT Connect then generates its own customer, account and contract identifiers.</p>
+        </article>
+      </aside>
+
+      <div class="main-column">
+        <section class="grid two">
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Step 2</p><h2>Account control</h2></div><span id="modePill" class="pill neutral">—</span></div>
+            <dl id="accountFacts" class="facts"></dl>
+            <div class="subpanel">
+              <h3>Billing behavior</h3>
+              <p>Detailed mode posts subscription charges by MDN. Summarized mode posts consolidated charges to the Amdocs account.</p>
+
+              <label class="mode-toggle" for="summarizedToggle">
+                <input type="checkbox" id="summarizedToggle">
+                <span><b>Summarized billing</b><small>Post consolidated charges to the Amdocs account</small></span>
+              </label>
+
+              <div id="modeWarning" class="mode-warning hidden">
+                <b>This cannot be undone.</b>
+                <p>Amdocs subscription creation stops for this account. Subscriptions activated from this point have no Amdocs subscription record, so detailed posting cannot be restored without a retroactive migration.</p>
+                <label>Reason (recorded in the audit log)<input id="modeReason" value="Accounting-approved Prototype Lab configuration"></label>
+                <div class="button-cluster">
+                  <button id="applyModeButton" class="button primary">Enable summarized billing</button>
+                  <button id="cancelModeButton" class="button ghost">Cancel</button>
+                </div>
+              </div>
+
+              <p id="modeLocked" class="microcopy hidden">Summarized billing is active for this account and cannot be reversed. Reset the prepared data to return to detailed posting.</p>
+            </div>
+            <div id="configResult" class="message hidden"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Step 3</p>
+                <h2>Assign SIM inventory</h2>
+              </div>
+              <span id="availableSimCount" class="pill neutral">0 available</span>
+            </div>
+            <p class="intro">Select up to 50 SIMs and move them from operator inventory into the selected customer account.</p>
+            <div class="selection-toolbar">
+              <label class="check-control"><input id="selectAllAvailableSims" type="checkbox"> Select visible</label>
+              <span id="availableSelectionCount" class="selection-meta">0 selected · max 50</span>
+            </div>
+            <div id="availableSimList" class="sim-checklist"></div>
+            <button id="assignSimButton" class="button primary full">Assign selected SIMs to account</button>
+            <div id="assignmentResult" class="result-box">No SIMs assigned in this session.</div>
+          </article>
+        </section>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Step 4</p>
+              <h2>Create and submit an activation order</h2>
+            </div>
+            <span id="activationStatus" class="pill neutral">Not started</span>
+          </div>
+          <p class="intro">Select up to 50 account-owned SIMs. One commercial rate plan and network profile apply to the entire batch; IoT Connect reserves one MDN per SIM when the draft is created.</p>
+          <div class="activation-form">
+            <label>Customer batch reference<input id="sourceOrderRef" placeholder="CEDAR-BATCH-001"></label>
+            <label>Rate plan<select id="activationRatePlan"></select></label>
+            <label>Network profile<select id="networkProfile"></select></label>
+            <div id="privateApnControl" class="private-apn-control hidden">
+              <label class="check-control"><input id="usePrivateApn" type="checkbox"> Use account private APN</label>
+              <select id="privateApnSelect" disabled></select>
+              <small id="privateApnHint"></small>
+            </div>
+          </div>
+          <div class="selection-toolbar activation-selection-toolbar">
+            <label class="check-control"><input id="selectAllAssignedSims" type="checkbox"> Select visible</label>
+            <span id="activationSelectionCount" class="selection-meta">0 selected · max 50</span>
+          </div>
+          <div id="assignedSimList" class="sim-checklist activation-sim-list"></div>
+          <div class="button-row activation-actions">
+            <button id="createActivationButton" class="button secondary">1. Create batch and reserve MDNs</button>
+            <button id="submitActivationButton" class="button primary" disabled>2. Submit batch: FlowOne, then Amdocs</button>
+          </div>
+          <div id="activationResult" class="result-box">No activation batch created in this session.</div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Persistent identifiers</p><h2>IoT subscriptions and legacy lines</h2></div><button id="refreshDataButton" class="button ghost">Refresh</button></div>
+          <div class="grid two evidence-grid"><div><h3>IoT source of truth</h3><div id="iotTable"></div></div><div><h3>Legacy footprint</h3><div id="legacyTable"></div></div></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Product catalog</p>
+              <h2>Four controlled connectivity rate plans</h2>
+            </div>
+            <span class="pill success">Active</span>
+          </div>
+          <p class="intro">The activation order carries a stable rate-plan ID. Price, GL code, description and status come from this catalog—not from user-entered order data.</p>
+          <div id="catalogTable"></div>
+        </article>
+      </div>
+    </div>
+  </main>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/api-client.js"></script>
+  <script src="/static/admin.js?v=20260829-2"></script>
+</body>
+</html>

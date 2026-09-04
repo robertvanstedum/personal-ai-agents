@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Connect · Operator account workspace</title>
+  <link rel="stylesheet" href="/static/iotconnect/iotconnect.css">
+  <style>
+    .topbar.operator { grid-template-columns:1fr auto; }
+    .operator-nav { height:45px;display:flex;align-items:end;gap:29px;padding:0 28px;border-bottom:1px solid var(--line);background:var(--surface); }
+    .operator-tab { height:45px;display:flex;align-items:center;position:relative;color:var(--muted);font-size:12px;font-weight:600; }
+    .operator-tab.current { color:var(--teal); }
+    .operator-tab.current::after { content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:2px 2px 0 0;background:var(--teal); }
+    .account-bar { min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 28px;border-bottom:1px solid var(--line);background:#f8fbfb; }
+    .account-context { display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px; }
+    .account-context a { font-weight:600; }
+    .account-context strong { color:var(--text);font-size:12px; }
+    .account-tabs { display:flex;align-self:stretch;gap:23px; }
+    .account-tab { display:flex;align-items:center;position:relative;color:var(--muted);font-size:11px;font-weight:600; }
+    .account-tab.current { color:var(--teal); }
+    .account-tab.current::after { content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--teal); }
+    .operator-main { min-height:calc(100vh - 151px);padding:14px 22px 22px; }
+    .operator-main .page-head { min-height:62px;margin-bottom:9px; }
+    .operator-main .page-head .account-status { display:flex;align-items:center;gap:8px; }
+    .operator-badge { padding:5px 9px;border:1px solid #9ccdc8;border-radius:999px;background:var(--teal-soft);color:var(--teal);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em; }
+    .config-strip { display:grid;grid-template-columns:1.15fr .9fr 1fr .9fr auto;gap:0;margin-bottom:9px;padding:0;border:1px solid var(--line);border-radius:7px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden; }
+    .config-item { min-height:68px;padding:11px 14px;border-right:1px solid var(--line); }
+    .config-item span { display:block;color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase; }
+    .config-item strong { display:block;margin-top:7px;font-size:13px;font-weight:650; }
+    .config-item small { display:block;margin-top:3px;color:var(--muted);font-size:9px; }
+    .config-action { display:flex;align-items:center;padding:0 15px;white-space:nowrap;color:var(--teal);font-size:10px;font-weight:650; }
+    .metrics.compact { grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:9px; }
+    .metrics.compact .metric { min-height:89px;padding:12px 14px; }
+    .metrics.compact .metric strong { margin-top:7px;font-size:27px; }
+    .metrics.compact .metric small { margin-top:6px; }
+    .content-grid.operator-account { grid-template-columns:minmax(420px,.94fr) minmax(560px,1.06fr);gap:9px; }
+    .content-grid.operator-account .panel { min-height:360px; }
+    .weekly-chart { height:172px; }
+    .bar-stack { width:34px; }
+    .cycle-context { margin-top:10px;color:var(--muted);font-size:9px;line-height:1.45; }
+    .share-track { width:100%;height:6px;margin-top:4px;border-radius:999px;background:#edf2f4;overflow:hidden; }
+    .share-fill { height:100%;border-radius:inherit;background:#42a99f; }
+    .plan-share { color:var(--muted);font-size:9px; }
+    @media(max-width:1100px){.config-strip{grid-template-columns:repeat(2,1fr)}.config-item{border-bottom:1px solid var(--line)}.content-grid.operator-account{grid-template-columns:1fr}.account-bar{align-items:flex-start;flex-direction:column;padding:10px 18px}.account-tabs{min-height:32px}.metrics.compact{grid-template-columns:repeat(2,1fr)}}
+  </style>
+</head>
+<body data-iotconnect-page="operator-account">
+  <header class="topbar operator">
+    <a class="brand brand-home-link" href="/" aria-label="Return to IoT Connect gateway"><div class="brand-mark">C</div><div><strong>IoT Connect</strong><small>Enterprise IoT Operations</small></div></a>
+    <div class="identity"><span class="name">Business Operations</span><span class="chip role">Operator</span><span class="chip">POC environment</span></div>
+  </header>
+
+  <nav class="operator-nav" aria-label="Operator work areas">
+    <a class="operator-tab current" href="/operator">Portfolio</a>
+    <a class="operator-tab" href="/operator/accounts">Accounts</a>
+    <a class="operator-tab" href="/operator/inventory">SIM Inventory</a>
+    <a class="operator-tab" href="/operator/bill-cycles">Bill Cycles</a>
+    <a class="operator-tab" href="/operator/catalog">Plan Catalog</a>
+    <a class="operator-tab" href="/operator/api-activity">API Activity</a>
+  </nav>
+
+  <nav class="account-bar" aria-label="Selected account sections">
+    <div class="account-context"><a href="/operator">Portfolio</a><span>›</span><strong>Boreal Equipment Group</strong><span>ACCT-000200</span></div>
+    <div class="account-tabs">
+      <a class="account-tab current" href="/operator/account">Overview</a>
+      <a class="account-tab" href="/operator/subscriptions">Subscriptions &amp; SIMs</a>
+      <a class="account-tab" href="/operator/billing">Billing</a>
+      <a class="account-tab" href="/operator/account/configuration">Account Configuration</a>
+    </div>
+  </nav>
+
+  <main class="operator-main">
+    <section class="page-head">
+      <div><h1>Boreal Equipment Group</h1><p>Enterprise account · August 2026 cycle in progress</p></div>
+      <div class="account-status"><span class="operator-badge">Operator account view</span><span class="status">Active</span></div>
+    </section>
+
+    <section class="config-strip" aria-label="Operator account configuration summary">
+      <div class="config-item"><span>External billing account</span><strong>AMDOCS-882104</strong><small>invoice, tax, AR and SAP interface</small></div>
+      <div class="config-item"><span>Billing mode</span><strong>Summarized</strong><small>one-way controlled setting</small></div>
+      <div class="config-item"><span>Network profile</span><strong>Private APN</strong><small>boreal.private</small></div>
+      <div class="config-item"><span>Assigned inventory</span><strong>2,450 SIMs</strong><small>ready to activate</small></div>
+      <a class="config-action" href="/operator/account/configuration">Manage configuration →</a>
+    </section>
+
+    <section class="metrics compact">
+      <div class="card metric primary"><span class="metric-dot"></span><span class="label">Available SIMs</span><strong>2,450</strong><small>assigned and ready to activate</small></div>
+      <div class="card metric"><span class="metric-dot"></span><span class="label">Active subscriptions</span><strong>49,940</strong><small>active on the network and billing</small></div>
+      <div class="card metric"><span class="metric-dot warn"></span><span class="label">Suspended</span><strong>40</strong><small>retained on account, not billing</small></div>
+      <div class="card metric primary"><span class="label">Current cycle total</span><strong>$142,870</strong><small>rated platform charges through August 29</small></div>
+    </section>
+
+    <section class="content-grid operator-account">
+      <article class="card panel">
+        <div class="panel-head"><h2>Activation activity</h2><span>Illustrative context · last 7 days</span></div>
+        <div class="health-summary">
+          <div class="health-stat"><span>Submitted</span><strong>1,180</strong></div>
+          <div class="health-stat good"><span>Succeeded</span><strong>1,162</strong></div>
+          <div class="health-stat bad"><span>Failed &amp; rolled back</span><strong>18</strong></div>
+        </div>
+        <div class="weekly-chart">
+          <div class="day"><span class="count">120</span><div class="bar-stack"><div class="bar-success" style="height:55px"></div><div class="bar-fail"></div></div><label>Mon</label></div>
+          <div class="day"><span class="count">175</span><div class="bar-stack"><div class="bar-success" style="height:80px"></div><div class="bar-fail"></div></div><label>Tue</label></div>
+          <div class="day"><span class="count">245</span><div class="bar-stack"><div class="bar-success" style="height:112px"></div><div class="bar-fail"></div></div><label>Wed</label></div>
+          <div class="day"><span class="count">225</span><div class="bar-stack"><div class="bar-success" style="height:102px"></div><div class="bar-fail"></div></div><label>Thu</label></div>
+          <div class="day"><span class="count">160</span><div class="bar-stack"><div class="bar-success" style="height:73px"></div><div class="bar-fail"></div></div><label>Fri</label></div>
+          <div class="day"><span class="count">135</span><div class="bar-stack"><div class="bar-success" style="height:61px"></div><div class="bar-fail"></div></div><label>Sat</label></div>
+          <div class="day"><span class="count">120</span><div class="bar-stack"><div class="bar-success" style="height:55px"></div><div class="bar-fail"></div></div><label>Sun</label></div>
+        </div>
+        <div class="legend"><span><i></i>Activated</span><span class="failed"><i></i>Failed and rolled back</span></div>
+      </article>
+
+      <article class="card panel">
+        <div class="panel-head"><h2>Active subscriptions by rate plan</h2><span>49,940 active subscriptions</span></div>
+        <table>
+          <thead><tr><th>Rate plan</th><th class="num">Active SIMs</th><th style="width:32%">Share of active base</th></tr></thead>
+          <tbody>
+            <tr><td>Connected Device Essential<span class="subtext">PLAN-IOT-001</span></td><td class="num">41,220</td><td><span class="plan-share">82.5%</span><div class="share-track"><div class="share-fill" style="width:82.5%"></div></div></td></tr>
+            <tr><td>Domestic Pool Plus<span class="subtext">PLAN-IOT-002</span></td><td class="num">6,180</td><td><span class="plan-share">12.4%</span><div class="share-track"><div class="share-fill" style="width:12.4%"></div></div></td></tr>
+            <tr><td>Private Network<span class="subtext">PLAN-IOT-003</span></td><td class="num">2,140</td><td><span class="plan-share">4.3%</span><div class="share-track"><div class="share-fill" style="width:4.3%"></div></div></td></tr>
+            <tr><td>Telemetry Standby<span class="subtext">PLAN-IOT-004</span></td><td class="num">400</td><td><span class="plan-share">0.8%</span><div class="share-track"><div class="share-fill" style="width:0.8%"></div></div></td></tr>
+          </tbody>
+          <tfoot><tr><td>Total</td><td class="num">49,940</td><td></td></tr></tfoot>
+        </table>
+        <p class="cycle-context">Operator view uses the same account measures the customer sees. Account configuration, inventory assignment, network evidence, and bill-cycle controls remain explicitly operator-controlled.</p>
+      </article>
+    </section>
+  </main>
+  <script src="/static/api-client.js"></script>
+  <script src="/static/iotconnect/iotconnect.js"></script>
+</body>
+</html>
