@@ -866,16 +866,27 @@ def _card_blocks(html):
             re.findall(r"<!-- (Build|Operate|Improve) -->\n(.*?)</a>", html, re.S)}
 
 
-def test_the_three_original_landing_cards_are_byte_identical_to_main():
-    """§9.2: the landing differs only by the fourth card (and the row metrics)."""
-    baseline = _git_show("origin/main:minimoi_portal/templates/guild/guild_landing.html")
-    if baseline is None:
-        pytest.skip("origin/main not available in this checkout")
+def test_the_three_original_landing_cards_are_still_present():
+    """§9.2 guard, relaxed after G1 shipped: the landing keeps its three original
+    cards and their links; wording may change deliberately (PR #197 renamed the
+    Improve kicker), so the byte-identical comparison against origin/main is gone."""
     current = (Path(__file__).resolve().parent.parent
                / "minimoi_portal" / "templates" / "guild" / "guild_landing.html").read_text()
-    before, after = _card_blocks(baseline), _card_blocks(current)
-    assert set(before) == {"Build", "Operate", "Improve"}
-    assert after == before
+    blocks = _card_blocks(current)
+    assert set(blocks) == {"Build", "Operate", "Improve"}
+    assert 'href="/guild/build/queue"' in blocks["Build"]
+    assert 'href="/guild/operate"' in blocks["Operate"]
+    assert 'href="/guild/improve"' in blocks["Improve"]
+
+
+def test_improve_card_no_longer_claims_experiment():
+    """Experiment belongs to the fourth card; Improve reads review → analyze."""
+    current = (Path(__file__).resolve().parent.parent
+               / "minimoi_portal" / "templates" / "guild" / "guild_landing.html").read_text()
+    improve = _card_blocks(current)["Improve"]
+    assert "Review · Analyze" in improve
+    assert "review → analyze → improve" in improve
+    assert "Experiment" not in improve and "experiment" not in improve
 
 
 @pytest.mark.parametrize("suite", ["tests/test_guild.py", "tests/test_portal.py",
