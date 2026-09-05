@@ -1,0 +1,8 @@
+Vendor evaluation notes — internal tooling refresh
+
+Three candidates reviewed. Candidate A has the strongest migration story and
+the weakest support commitment. Candidate B is the incumbent; switching cost
+is real but the renewal terms are worse than last cycle. Candidate C is
+cheapest and least proven.
+
+Open question: whether the migration risk is worth the support difference.

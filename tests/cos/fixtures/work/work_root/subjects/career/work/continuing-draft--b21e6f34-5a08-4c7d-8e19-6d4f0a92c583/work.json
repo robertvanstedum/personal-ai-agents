@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "work_contract_version": 1,
+  "work_id": "b21e6f34-5a08-4c7d-8e19-6d4f0a92c583",
+  "subject": "career",
+  "label": "Coastal hub operations manager",
+  "intent": "Still working out what this role needs proven.",
+  "state": "continuing",
+  "created_at": "2026-08-27T14:05:11Z",
+  "updated_at": "2026-08-27T14:39:50Z",
+  "sources": [],
+  "artifacts": [
+    {
+      "ref": "art-0001",
+      "path": "artifacts/0001-letter.md",
+      "sha256": "a6345c93de454faed99402dfcfa1ba55bf1504bc01bcbb03fd5b7a67b9a7445b",
+      "bytes": 254,
+      "context_class": "agent_draft",
+      "revision": 1,
+      "based_on": [],
+      "created_at": "2026-08-27T14:39:50Z",
+      "operation_id": "9c5eb014-70a6-4f8c-934b-6eb0a5c2f789"
+    }
+  ],
+  "pending_approval": null,
+  "disposition": null
+}

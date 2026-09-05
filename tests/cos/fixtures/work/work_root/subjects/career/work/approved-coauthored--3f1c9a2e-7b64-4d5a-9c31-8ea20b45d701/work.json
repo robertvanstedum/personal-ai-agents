@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "work_contract_version": 1,
+  "work_id": "3f1c9a2e-7b64-4d5a-9c31-8ea20b45d701",
+  "subject": "career",
+  "label": "Quayside Logistics operations lead",
+  "intent": "Write a letter that proves I have closed a real reconciliation gap.",
+  "state": "approved_text",
+  "created_at": "2026-08-11T09:14:02Z",
+  "updated_at": "2026-08-13T17:02:41Z",
+  "sources": [
+    {
+      "ref": "src-0001",
+      "path": "sources/0001-posting.txt",
+      "sha256": "05007f309d21912f6dde722670a4131f1ef60c209080d078c27230ec53c5b018",
+      "bytes": 306,
+      "context_class": "external_source",
+      "origin_note": "supplied in conversation",
+      "created_at": "2026-08-11T09:15:30Z",
+      "operation_id": "5e1a7d90-3c62-4b48-9f07-2ad6c1e8b345"
+    }
+  ],
+  "artifacts": [
+    {
+      "ref": "art-0001",
+      "path": "artifacts/0001-letter.md",
+      "sha256": "9cdb6a088f5ce986e1684e77df58bcbbe2bef3c9e5fa36620753d32ef47f518e",
+      "bytes": 230,
+      "context_class": "agent_draft",
+      "revision": 1,
+      "based_on": [
+        {
+          "ref": "src-0001",
+          "sha256": "05007f309d21912f6dde722670a4131f1ef60c209080d078c27230ec53c5b018"
+        }
+      ],
+      "created_at": "2026-08-11T10:02:19Z",
+      "operation_id": "6f2b8ea1-4d73-4c59-a018-3be7d2f9c456"
+    },
+    {
+      "ref": "art-0002",
+      "path": "artifacts/0002-letter.md",
+      "sha256": "78121fdd77778c04e8a710b8605c21774d92c25c82955a8767a96d8d2d76e850",
+      "bytes": 562,
+      "context_class": "coauthored_output",
+      "revision": 2,
+      "based_on": [
+        {
+          "ref": "src-0001",
+          "sha256": "05007f309d21912f6dde722670a4131f1ef60c209080d078c27230ec53c5b018"
+        }
+      ],
+      "created_at": "2026-08-13T16:48:07Z",
+      "operation_id": "7a3c9fb2-5e84-4d6a-b129-4cf8e3a0d567"
+    }
+  ],
+  "pending_approval": null,
+  "disposition": {
+    "state": "approved_text",
+    "decided_at": "2026-08-13T17:02:41Z",
+    "artifact_ref": "art-0002",
+    "reason": null,
+    "operation_id": "0a5d31c6-9e72-4a18-b3f5-27c69d08e4b1"
+  }
+}

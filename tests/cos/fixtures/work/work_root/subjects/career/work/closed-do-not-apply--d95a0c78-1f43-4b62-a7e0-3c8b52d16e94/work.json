@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "work_contract_version": 1,
+  "work_id": "d95a0c78-1f43-4b62-a7e0-3c8b52d16e94",
+  "subject": "career",
+  "label": "Withdrawn Freight Partners regional lead",
+  "intent": "Decide whether this is worth pursuing at all.",
+  "state": "closed",
+  "created_at": "2026-08-05T11:20:44Z",
+  "updated_at": "2026-08-06T09:01:12Z",
+  "sources": [],
+  "artifacts": [
+    {
+      "ref": "art-0001",
+      "path": "artifacts/0001-letter.md",
+      "sha256": "fc0a587d6aa222529fe7ed552464e07c54b3a18151285a4c9d527393a24cbbb5",
+      "bytes": 176,
+      "context_class": "agent_draft",
+      "revision": 1,
+      "based_on": [],
+      "created_at": "2026-08-05T15:12:38Z",
+      "operation_id": "a06fc125-81b7-4a9d-a45c-7fc1b6d30890"
+    }
+  ],
+  "pending_approval": null,
+  "disposition": {
+    "state": "closed",
+    "decided_at": "2026-08-06T09:01:12Z",
+    "artifact_ref": "art-0001",
+    "reason": "do not apply",
+    "operation_id": "2c7f53e8-b094-4c3a-95b7-49e8bf2a06d3"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "work_contract_version": 1,
+  "work_id": "8c47d0b1-2e59-4f6a-b0d2-1a7c3e95f412",
+  "subject": "career",
+  "label": "Trellis Distribution network operations",
+  "intent": "Keep this draft as a trusted starting point for dense-network roles.",
+  "state": "approved_text",
+  "created_at": "2026-08-19T08:31:55Z",
+  "updated_at": "2026-08-19T12:10:03Z",
+  "sources": [],
+  "artifacts": [
+    {
+      "ref": "art-0001",
+      "path": "artifacts/0001-letter.md",
+      "sha256": "ee0e54463e582d0aa6f4cc15d91fa61601ad36539d31c5831f467fd169bdfe97",
+      "bytes": 439,
+      "context_class": "agent_draft",
+      "revision": 1,
+      "based_on": [],
+      "created_at": "2026-08-19T09:44:12Z",
+      "operation_id": "8b4daf03-6f95-4e7b-823a-5da9f4b1e678"
+    }
+  ],
+  "pending_approval": null,
+  "disposition": {
+    "state": "approved_text",
+    "decided_at": "2026-08-19T12:10:03Z",
+    "artifact_ref": "art-0001",
+    "reason": "Useful base, still an agent draft.",
+    "operation_id": "1b6e42d7-af83-4b29-84a6-38d7ae19f5c2"
+  }
+}

@@ -1,0 +1,7 @@
+Budget context — internal tooling refresh
+
+The line item is flat year on year. Any increase has to come out of the
+contractor budget, which is already committed through the second quarter.
+
+Constraint: no additional spend before the quarter closes. A decision to
+defer is an acceptable outcome and should be written down as one.
