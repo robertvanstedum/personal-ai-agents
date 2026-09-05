@@ -76,8 +76,12 @@ _ARTIFACT_REQUIRED = (
 )
 _ARTIFACT_OPTIONAL = ("bytes", "operation_id", "supersedes_ref")
 
-_PENDING_REQUIRED = ("pending_id", "proposed_state", "artifact_ref", "issued_at", "expires_at")
-_PENDING_OPTIONAL = ("artifact_sha256",)
+#: A pending approval of *text* names the artifact it proposes; a pending
+#: close or unresolved decision is about the work item and names nothing. The
+#: key is therefore optional at this level and the conditional shape is
+#: judged once, as a cross-field rule, in :func:`parse_work_record`.
+_PENDING_REQUIRED = ("pending_id", "proposed_state", "issued_at", "expires_at")
+_PENDING_OPTIONAL = ("artifact_ref", "artifact_sha256")
 
 _DISPOSITION_REQUIRED = ("state", "decided_at", "artifact_ref", "reason", "operation_id")
 
@@ -152,7 +156,7 @@ class PendingApproval:
 
     pending_id: str
     proposed_state: str
-    artifact_ref: str
+    artifact_ref: str | None
     issued_at: str
     expires_at: str
     artifact_sha256: str | None = None
@@ -374,10 +378,13 @@ def parse_pending_approval(data: Any) -> PendingApproval | None:
     sha = data.get("artifact_sha256")
     if sha is not None:
         _sha256({"sha256": sha}, what)
+    artifact_ref = _optional_text(data, "artifact_ref", what)
+    if artifact_ref is not None and not artifact_ref.strip():
+        raise RecordInvalid(f"{what} needs a text value for artifact_ref")
     return PendingApproval(
         pending_id=str(pending_id),
         proposed_state=proposed_state,
-        artifact_ref=_text(data, "artifact_ref", what),
+        artifact_ref=artifact_ref,
         issued_at=_text(data, "issued_at", what),
         expires_at=_text(data, "expires_at", what),
         artifact_sha256=sha,
@@ -459,8 +466,20 @@ def parse_work_record(data: Any) -> WorkRecord:
 
     if record.pending_approval is not None:
         pending = record.pending_approval
-        if record.artifact(pending.artifact_ref) is None:
+        if pending.proposed_state == "approved_text":
+            if pending.artifact_ref is None:
+                raise RecordInvalid(
+                    "a pending approval of text must name the artifact it proposes"
+                )
+        if pending.artifact_ref is not None and record.artifact(pending.artifact_ref) is None:
             raise RecordInvalid("the pending approval names an artifact this record does not have")
+        if pending.proposed_state == "approved_text":
+            if pending.artifact_sha256 is None:
+                raise RecordInvalid(
+                    "a pending approval of text must pin the artifact's digest"
+                )
+        elif pending.artifact_ref is not None or pending.artifact_sha256 is not None:
+            raise RecordInvalid("a pending close or unresolved may not name an artifact")
 
     approved = record.approved_artifact_ref
     if approved is not None and record.artifact(approved) is None:

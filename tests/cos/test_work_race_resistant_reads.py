@@ -147,7 +147,15 @@ def test_retrieval_layer_never_opens_a_path_of_its_own():
 
 
 def test_only_the_confinement_module_opens_descriptors():
-    """the whole package reaches the filesystem through one place"""
+    """the whole package reaches the filesystem through two places
+
+    Reading is confinement's alone: nothing else in the package opens a file
+    to look at its contents. The write side has to open descriptors of its
+    own — a directory to fsync it, a temp to write and link — and it does
+    that in exactly one module, whose every open is checked below to be a
+    directory open or a creation. There is still no second way to read a
+    file by name.
+    """
     offenders = {}
     for path in sorted(PACKAGE.rglob("*.py")):
         source = path.read_text("utf-8")
@@ -158,4 +166,18 @@ def test_only_the_confinement_module_opens_descriptors():
         ]
         if hits:
             offenders[path.name] = hits
-    assert set(offenders) <= {"confine.py"}
+    assert set(offenders) <= {"confine.py", "store.py"}
+
+
+def test_the_write_side_only_opens_directories_and_creations():
+    """the write side never opens an existing file to read it"""
+    source = (PACKAGE / "store.py").read_text("utf-8")
+    lines = source.splitlines()
+    calls = []
+    for number, line in enumerate(lines):
+        if "os.open(" not in line:
+            continue
+        calls.append("\n".join(lines[number : number + 8]))
+    assert calls
+    for call in calls:
+        assert "_DIR_FLAGS" in call or "O_CREAT" in call, call
