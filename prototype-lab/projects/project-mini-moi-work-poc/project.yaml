@@ -1,0 +1,79 @@
+schema_version: "0.1"
+id: project-mini-moi-work-poc
+name: Mini-moi Work Proof of Concept
+status: proof_of_concept
+owner: robert
+decision_owner: robert
+created_at: "2026-09-05"
+
+purpose:
+  business_question: >-
+    Can Robert and Chief of Staff use a person-owned, product-independent Work
+    foundation to create consequential artifacts together while preserving
+    provenance, authorship, privacy, and Robert's authority—and can the
+    multi-agent delivery method that built it be repeated reliably?
+  success_criteria:
+    - the W0a and W0b foundation is merged only through reviewed-diff approval
+    - a file-level test proves safe use of a Robert-selected local folder
+    - Chief of Staff can accept a job description and begin a cover-letter work item
+    - Robert can revise directly and resume without losing sources or authorship
+    - approval never becomes permission to submit or communicate externally
+    - the agent-and-Robert delivery method remains independently reviewable
+    - real-use evidence determines whether the capability and method are kept
+
+deliverables:
+  - id: work_capability
+    name: Mini-moi Work foundation
+    kind: code_and_service
+    status: built_candidate
+    implementation: domains/cos/work
+    first_subject: career_cover_letters
+  - id: agent_robert_team_method
+    name: Agent and Robert delivery method
+    kind: practice_and_case_study
+    status: proof_of_concept
+    current_artifact: docs/CASE_STUDY_AGENT_TEAM.md
+    future_promotion: master_craftsman_material
+
+workstreams:
+  - id: W0
+    name: foundation_build_and_independent_review
+    owner_role: implementation_and_review
+    gate: reviewed_diff
+  - id: W1
+    name: case_study_and_process_evidence
+    owner_role: robert_with_editorial_team
+    gate: living_draft
+  - id: W2
+    name: file_and_real_use_validation
+    owner_role: robert_with_chief_of_staff
+    gate: keep_decision
+  - id: W3
+    name: chief_of_staff_domain_release
+    owner_role: implementation
+    gate: v0_9_private_deployment
+
+data_policy:
+  classification: public_design_and_synthetic_evidence_only
+  private_career_material_in_repository: false
+  secrets_in_repository: false
+  real_use_results_require_sanitization_before_commit: true
+
+release_plan:
+  tracked_project_home: prototype-lab/projects/project-mini-moi-work-poc
+  first_candidate: cos-work-v0.9
+  follow_on: cos-work-v1.0
+  release_requires:
+    - reviewed_diff_approval
+    - file_level_acceptance
+    - chief_of_staff_entry_point
+    - real_cover_letter_use
+    - privacy_and_egress_verification
+    - robert_keep_decision
+
+relationships:
+  governed_by: prototype_lab
+  design_origin: planning-studio/initiatives/INIT-2026-0004-mini-moi-collaborative-work
+  code_pull_requests:
+    - 200
+    - 201
