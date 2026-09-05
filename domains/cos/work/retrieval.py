@@ -34,6 +34,15 @@ and bytes examined. A traversal that hits a budget reports a content-free
 ``search_truncated`` issue, so a partial answer is never presented as a
 complete one. There is no relevance engine and no index.
 
+Every candidate is read exactly once, through the confined primitive and
+under the remaining byte allowance, and *those* bytes are what get scored,
+decoded, hashed, authorized against the disposition pin, and charged to the
+budget. Reading twice would leave a window in which an excerpt and its
+reported digest could describe different versions of a file, and in which
+changed, no-longer-approved text could be returned under an old approved
+digest. A snapshot whose digest no longer matches its pin yields a
+content-free ``stale_context`` issue and no hit.
+
 There is no list-all-work operation. The projection is internal to search and
 read. Nothing here performs network input or output.
 """
@@ -53,7 +62,7 @@ from .confine import (
     iter_files,
     normalise_relative,
     read_bytes,
-    read_text,
+    read_bytes_capped,
     sha256_bytes,
     sha256_confined,
 )
@@ -166,7 +175,13 @@ class ApprovedArtifact:
 
 
 class _Budget:
-    """A deterministic traversal allowance, spent as files are examined."""
+    """A deterministic traversal allowance, spent as files are examined.
+
+    The allowance is charged against bytes *actually read*, never against a
+    size observed beforehand: the read is given the remaining allowance as a
+    hard ceiling, so a file that grew since it was enumerated cannot cause
+    more content to be examined than the budget records.
+    """
 
     def __init__(self, max_files: int, max_bytes: int) -> None:
         self.max_files = max_files
@@ -175,14 +190,26 @@ class _Budget:
         self.bytes = 0
         self.exhausted = False
 
-    def take(self, size: int) -> bool:
-        """Charge one file. False means the budget is spent; stop walking."""
-        if self.files + 1 > self.max_files or self.bytes + size > self.max_bytes:
+    @property
+    def remaining_bytes(self) -> int:
+        """What is left of the byte allowance, and so the next read's cap."""
+        return self.max_bytes - self.bytes
+
+    def take_file(self) -> bool:
+        """Claim one file slot. False means the budget is spent; stop walking."""
+        if self.files + 1 > self.max_files or self.remaining_bytes <= 0:
             self.exhausted = True
             return False
         self.files += 1
-        self.bytes += size
         return True
+
+    def charge(self, size: int) -> None:
+        """Record the bytes a read actually transferred."""
+        self.bytes += size
+
+    def exhaust(self) -> None:
+        """Mark the allowance spent: a candidate did not fit what was left."""
+        self.exhausted = True
 
 
 def is_approved_root(root_ref: str) -> bool:
@@ -393,16 +420,41 @@ class Accumulation:
                 issues.extend(item_issues)
                 base = self._approved_base(subject)
                 for item in items:
-                    confined = confine(base, item.relative_path)
-                    if not budget.take(confined.size):
+                    try:
+                        confined = confine(base, item.relative_path)
+                    except WorkError:
+                        continue
+                    if not budget.take_file():
                         break
+                    snapshot, exhausted = _take_snapshot(confined, budget)
+                    if exhausted:
+                        break
+                    if snapshot is None:
+                        continue
+                    # Authorization is checked against the bytes just read,
+                    # not against an earlier read of the same name. Approved
+                    # material that changed underneath is reported, never
+                    # returned.
+                    if sha256_bytes(snapshot) != item.sha256:
+                        issues.append(
+                            RetrievalIssue(
+                                code="stale_context",
+                                root_ref=root_ref,
+                                relative_path=item.relative_path,
+                                message=(
+                                    "the stored file no longer matches the hash "
+                                    "recorded for it"
+                                ),
+                            )
+                        )
+                        continue
                     scored.extend(
                         _score_file(
                             subject=subject,
                             root_ref=root_ref,
                             confined=confined,
                             tokens=tokens,
-                            sha256=item.sha256,
+                            raw=snapshot,
                             context_class=item.context_class,
                             disposition=item.disposition,
                             max_excerpt_chars=max_excerpt_chars,
@@ -411,15 +463,20 @@ class Accumulation:
             else:
                 root = self._configuration.resolve(subject, root_ref)
                 for confined in iter_files(root.path):
-                    if not budget.take(confined.size):
+                    if not budget.take_file():
                         break
+                    snapshot, exhausted = _take_snapshot(confined, budget)
+                    if exhausted:
+                        break
+                    if snapshot is None:
+                        continue
                     scored.extend(
                         _score_file(
                             subject=subject,
                             root_ref=root_ref,
                             confined=confined,
                             tokens=tokens,
-                            sha256=None,
+                            raw=snapshot,
                             context_class=root.context_class,
                             disposition=None,
                             max_excerpt_chars=max_excerpt_chars,
@@ -568,18 +625,49 @@ def _require_bound(value: int, ceiling: int, name: str) -> None:
         raise InvalidRequest(f"{name} may not be greater than {ceiling}")
 
 
+def _take_snapshot(
+    confined: ConfinedFile, budget: _Budget
+) -> tuple[bytes | None, bool]:
+    """Read one candidate once, within what is left of the byte allowance.
+
+    Returns ``(bytes, exhausted)``. The read is capped at the budget's
+    remaining allowance, so it cannot transfer more than the walk is allowed
+    to examine; a file that does not fit spends the allowance and stops the
+    walk, and no hit is ever built from a partial read. The budget is then
+    charged with the exact number of bytes this read returned.
+
+    A file that has become unreadable since it was enumerated — deleted,
+    replaced by a link, grown past the per-file ceiling — is not an error: it
+    is skipped, with the walk carrying on.
+    """
+    try:
+        raw = read_bytes_capped(confined, cap=budget.remaining_bytes)
+    except WorkError:
+        return None, False
+    if raw is None:
+        budget.exhaust()
+        return None, True
+    budget.charge(len(raw))
+    return raw, False
+
+
 def _score_file(
     *,
     subject: str,
     root_ref: str,
     confined: ConfinedFile,
     tokens: Sequence[str],
-    sha256: str | None,
+    raw: bytes,
     context_class: str,
     disposition: DispositionRef | None,
     max_excerpt_chars: int,
 ) -> list[tuple[int, str, str, int, SearchHit]]:
-    """Score one file and build its candidate hits.
+    """Score one already-read snapshot and build its candidate hits.
+
+    The caller passes the exact bytes it read through the confined primitive.
+    Those same bytes are decoded, matched and hashed here, so a hit's excerpt
+    and its reported digest always describe one snapshot of one file. Nothing
+    is reopened.
 
     A line matches when it contains any query token as a case-insensitive
     substring. A file's score is the number of distinct tokens it matches
@@ -588,8 +676,8 @@ def _score_file(
     ranked by an opinion.
     """
     try:
-        text = read_text(confined)
-    except WorkError:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
         return []
 
     matched_tokens: set[str] = set()
@@ -605,7 +693,7 @@ def _score_file(
     if not lines:
         return []
 
-    digest = sha256 if sha256 is not None else sha256_confined(confined)
+    digest = sha256_bytes(raw)
     score = len(matched_tokens)
     candidates = []
     for number, line in lines:

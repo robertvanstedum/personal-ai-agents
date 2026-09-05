@@ -15,6 +15,12 @@ walks from the root's own directory descriptor, opening each component with
 before a single byte is read. A component swapped after validation therefore
 fails the read, not merely the earlier check.
 
+A caller working under a byte allowance reads through
+:func:`read_bytes_capped`, which enforces that allowance inside the read
+itself and returns the whole file or nothing at all. One read then yields the
+bytes that are scored, decoded, hashed and charged, so those can never
+describe different snapshots of the same file.
+
 :class:`ConfinedFile` deliberately carries no absolute path. Callers hold a
 relative path and the root they were confined to, and read through the helpers
 here; there is nothing for a later layer to open directly.
@@ -266,6 +272,60 @@ def read_bytes(
             if read > max_bytes:
                 raise TooLarge(shown)
             chunks.append(chunk)
+    finally:
+        os.close(handle)
+    return b"".join(chunks)
+
+
+def read_bytes_capped(
+    confined: ConfinedFile,
+    *,
+    cap: int,
+    max_bytes: int = DEFAULT_MAX_FILE_BYTES,
+    allowed_extensions: frozenset[str] = ALLOWED_EXTENSIONS,
+) -> bytes | None:
+    """Read a confined file whole, or not at all, within ``cap`` bytes.
+
+    This is the primitive a caller with a *byte allowance* uses. The allowance
+    is enforced inside the read: at most ``cap`` bytes are ever transferred,
+    and the file is only returned when its whole content fitted. When the file
+    does not fit — including a file that grew after it was enumerated — the
+    bytes read are discarded and ``None`` is returned, so a caller can never
+    build an answer out of a partial snapshot or spend more of its allowance
+    than it had left.
+
+    Returning the bytes rather than a handle is deliberate: the caller scores,
+    decodes and hashes *these* bytes, so an excerpt, its digest and the
+    allowance charged all describe one snapshot of one file.
+    """
+    if not isinstance(cap, int) or isinstance(cap, bool) or cap < 0:
+        raise PathDenied("a byte allowance is required", relative_path=confined.relative_path)
+    relative = normalise_relative(confined.relative_path)
+    shown = str(relative)
+    handle, info = _open_confined(confined.root, relative, shown)
+    try:
+        _check_descriptor(
+            info, shown, PurePosixPath(shown).suffix, max_bytes, allowed_extensions
+        )
+        if info.st_size > cap:
+            return None
+        chunks: list[bytes] = []
+        read = 0
+        while read < cap:
+            chunk = os.read(handle, min(_READ_CHUNK_BYTES, cap - read))
+            if not chunk:
+                break
+            read += len(chunk)
+            chunks.append(chunk)
+        else:
+            # The whole allowance was consumed without reaching the end of the
+            # file. Anything still there is past the allowance, so this file
+            # does not fit — checked with ``fstat`` rather than by reading one
+            # more byte, because the allowance is a hard ceiling on bytes read.
+            if os.fstat(handle).st_size > cap:
+                return None
+        if read > max_bytes:
+            raise TooLarge(shown)
     finally:
         os.close(handle)
     return b"".join(chunks)
