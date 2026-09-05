@@ -390,9 +390,16 @@ def freeze(value: Any) -> Any:
     afterwards. Every mapping becomes a read-only proxy over its own copy and
     every list becomes a tuple, so a validated authority or receipt states
     exactly what it stated when it was validated.
+
+    An existing ``MappingProxyType`` is copied like any other mapping rather
+    than passed through. A proxy is read-only *through the proxy*; whoever
+    holds the dictionary behind it can still change what the proxy shows.
+    Returning such a proxy unchanged would leave that alias in place after
+    validation, so a caller could rewrite a validated subject — or add a
+    body-carrying key the allowlist has already accepted the absence of —
+    and every later read would agree with the change. The copy is made
+    unconditionally so that no input, however wrapped, is shared.
     """
-    if isinstance(value, MappingProxyType):
-        return value
     if isinstance(value, Mapping):
         return MappingProxyType({key: freeze(item) for key, item in value.items()})
     if isinstance(value, (str, bytes, bytearray)):

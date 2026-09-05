@@ -18,12 +18,15 @@ import hashlib
 import json
 import os
 import threading
+from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
 from conftest import Crash
 from domains.cos.work import grants, store
 from domains.cos.work.envelope import (
+    Receipt,
     WorkError,
     make_receipt,
     new_operation_id,
@@ -38,6 +41,16 @@ def paths_for(flow, work_id):
 def code_of(response):
     assert response["ok"] is False, response
     return response["error"]["code"]
+
+
+def make_receipt_over(operation_id, effect, outcome, backing):
+    """A receipt whose fields are given as a read-only view of ``backing``."""
+    return Receipt(
+        operation_id=operation_id,
+        effect=effect,
+        outcome=outcome,
+        fields=MappingProxyType(backing),
+    )
 
 
 @pytest.fixture
@@ -581,3 +594,367 @@ def test_control_record_failure_is_a_closed_work_error():
     """the failure class is a Work error carrying the closed code"""
     assert issubclass(store.ControlRecordInvalid, WorkError)
     assert store.ControlRecordInvalid("x").code == "invalid_request"
+
+
+# =========================================================================
+# Revision 8 — the four boundary defects Codex proved against revision 7.
+#
+# B6: an immutable wrapper is not immutable if someone still holds the dict
+# behind it. B7: the pending parser accepted shapes the writer never emits,
+# and one of them mutated canonical state before failing. B8: a receipt and
+# the record carrying it were only partly cross-checked. B9: the
+# create-occupancy path wrote a marker its own parser refuses.
+# =========================================================================
+
+
+# -- B6: a validated object owns its own copy of every mapping ------------
+
+
+def test_a_receipt_over_a_mapping_proxy_cannot_be_changed_afterwards():
+    """a read-only view of someone else's dict is not immutability"""
+    backing = {"subject": "career", "work_id": new_operation_id(), "state": "continuing"}
+    receipt = make_receipt_over(new_operation_id(), "open_work", "ok", backing)
+
+    backing["subject"] = "tampered"
+
+    assert receipt.fields["subject"] == "career"
+    assert receipt.as_dict()["subject"] == "career"
+
+
+def test_a_receipt_over_a_mapping_proxy_cannot_gain_a_forbidden_key():
+    """the allowlist cannot be defeated by writing behind the proxy"""
+    backing = {"subject": "career", "result_count": 0}
+    receipt = make_receipt_over(new_operation_id(), "search_sources", "ok", backing)
+
+    backing["relative_path"] = "sources/0001-leak.md"
+
+    assert "relative_path" not in receipt.fields
+    assert "relative_path" not in receipt.as_dict()
+    assert set(receipt.as_dict()) == {
+        "operation_id",
+        "effect",
+        "outcome",
+        "subject",
+        "result_count",
+    }
+
+
+def test_a_grant_built_over_a_mapping_proxy_keeps_its_own_bindings():
+    """a directly constructed grant copies the authority it was given"""
+    from datetime import datetime, timedelta, timezone
+    from types import MappingProxyType
+
+    from domains.cos.work.grants import Grant
+
+    backing = {"work_id": new_operation_id(), "source_class": "external_source"}
+    issued = datetime.now(timezone.utc)
+    grant = Grant(
+        grant_ref="grant-1",
+        turn_id="turn-1",
+        effect="attach_source",
+        subject="career",
+        data_class="external_public",
+        egress="none",
+        issued_at=issued,
+        expires_at=issued + timedelta(minutes=1),
+        conversation_id="owner",
+        bindings=MappingProxyType(backing),
+    )
+
+    backing["source_class"] = "robert_source"
+    backing["allow_create"] = True
+
+    assert grant.source_class == "external_source"
+    assert grant.allow_create is False
+    assert "allow_create" not in grant.bindings
+
+
+def test_a_nested_mapping_behind_a_proxy_is_copied_too():
+    """the copy is recursive, so no nested alias survives either"""
+    from types import MappingProxyType
+
+    from domains.cos.work.envelope import freeze
+
+    inner = {"ref": "art-0001"}
+    frozen = freeze(MappingProxyType({"pinned": MappingProxyType(inner)}))
+
+    inner["ref"] = "art-9999"
+
+    assert frozen["pinned"]["ref"] == "art-0001"
+
+
+# -- B7: a pending object is exactly the shape this writer emits ----------
+
+
+def content_pending(flow, work_id, crash_at, uninjected, *, content="A draft.\n"):
+    """A crashed write whose record candidate is staged and matching."""
+    operation_id = new_operation_id()
+    crash_at("P7")
+    with pytest.raises(Crash):
+        flow.write(work_id, content, operation_id=operation_id)
+    uninjected()
+    paths = paths_for(flow, work_id)
+    path = paths.pending / f"{operation_id}.json"
+    return operation_id, paths, path, json.loads(path.read_bytes())
+
+
+def test_parse_intent_requires_the_content_group_for_a_content_effect(
+    flow, crash_at, uninjected
+):
+    """a write_artifact record without its content fields is not a shape we write"""
+    work_id = flow.started()
+    _, _, _, document = content_pending(flow, work_id, crash_at, uninjected)
+    for key in store._INTENT_CONTENT_GROUP:
+        document.pop(key)
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_requires_the_embedded_receipt(flow, crash_at, uninjected):
+    """recovery commits forward from the receipt, so it is never optional"""
+    work_id = flow.started()
+    _, _, _, document = content_pending(flow, work_id, crash_at, uninjected)
+    document.pop("receipt")
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_a_pending_object_without_its_content_group_changes_nothing(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """a metadata-only reading of a content write may not install a candidate"""
+    work_id = flow.started()
+    operation_id, paths, path, document = content_pending(
+        flow, work_id, crash_at, uninjected
+    )
+    for key in store._INTENT_CONTENT_GROUP:
+        document.pop(key)
+    rewrite(path, document)
+    before = snapshot_tree(work_root)
+
+    response = flow.write(work_id, "A draft.\n", operation_id=operation_id)
+
+    assert code_of(response) == "invalid_request"
+    assert store.read_terminal(paths, operation_id) is None
+    assert snapshot_tree(work_root) == before
+
+
+def test_a_pending_object_without_a_receipt_changes_nothing(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """no terminal is published from a record that carries no receipt"""
+    work_id = flow.started()
+    operation_id, paths, path, document = content_pending(
+        flow, work_id, crash_at, uninjected
+    )
+    document.pop("receipt")
+    rewrite(path, document)
+    before = snapshot_tree(work_root)
+
+    response = flow.write(work_id, "A draft.\n", operation_id=operation_id)
+
+    assert code_of(response) == "invalid_request"
+    assert store.read_terminal(paths, operation_id) is None
+    assert snapshot_tree(work_root) == before
+
+
+# -- B8: a receipt and its record state the same thing about the same bytes
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("revision", 99),
+        ("bytes", 8),
+        ("context_class", "coauthored_output"),
+        ("created_at", "2001-01-01T00:00:00Z"),
+    ],
+)
+def test_parse_intent_refuses_a_receipt_that_disagrees_about_a_shared_field(
+    flow, crash_at, uninjected, key, value
+):
+    """every value both records state must be the same value"""
+    work_id = flow.started()
+    _, _, _, document = content_pending(flow, work_id, crash_at, uninjected)
+    assert document["receipt"][key] != value
+    document["receipt"][key] = value
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_refuses_an_edit_receipt_that_supersedes_something_else(
+    flow, crash_at, uninjected
+):
+    """the reference an edit replaces is part of that identity too"""
+    work_id = flow.started()
+    written = flow.write(work_id, "A first draft.\n")
+    ref = written["result"]["artifact_ref"]
+    digest = written["result"]["sha256"]
+
+    operation_id = new_operation_id()
+    crash_at("P7")
+    with pytest.raises(Crash):
+        flow.edit_inline(
+            work_id, "In my own words.\n", ref, digest, operation_id=operation_id
+        )
+    uninjected()
+    paths = paths_for(flow, work_id)
+    document = json.loads((paths.pending / f"{operation_id}.json").read_bytes())
+
+    assert store.parse_intent(document).as_document() == document
+    document["receipt"]["supersedes_ref"] = "art-9999"
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_a_receipt_that_disagrees_about_provenance_never_becomes_the_answer(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """a mismatched receipt is refused before recovery can return it"""
+    work_id = flow.started()
+    operation_id, paths, path, document = content_pending(
+        flow, work_id, crash_at, uninjected
+    )
+    document["receipt"]["context_class"] = "coauthored_output"
+    rewrite(path, document)
+    before = snapshot_tree(work_root)
+
+    response = flow.write(work_id, "A draft.\n", operation_id=operation_id)
+
+    assert code_of(response) == "invalid_request"
+    assert store.read_terminal(paths, operation_id) is None
+    assert snapshot_tree(work_root) == before
+
+
+# -- B9: every control record this service writes is one it can read ------
+
+
+def occupied_tree(flow, crash_at, uninjected, *, intruder="intruder.md"):
+    """Leave a reservation-owned directory holding something we never wrote."""
+    operation_id = new_operation_id()
+    crash_at("create:mkdir:operations/staging")
+    with pytest.raises(Crash):
+        flow.create(label="An occupied item", operation_id=operation_id)
+    uninjected()
+
+    subject_paths = flow.service.store.subject_paths(flow.subject)
+    reservation = json.loads(
+        (subject_paths.creates / f"{operation_id}.json").read_bytes()
+    )
+    directory = subject_paths.work_base / reservation["work_dirname"]
+    planted = directory / intruder
+    planted.write_text("Something this create never wrote.\n", "utf-8")
+    os.chmod(planted, 0o600)
+    return operation_id, store.WorkPaths(directory=directory)
+
+
+def test_the_create_occupancy_marker_round_trips_through_its_parser(
+    flow, crash_at, uninjected
+):
+    """the marker the occupied path writes is one read_terminal can read"""
+    operation_id, paths = occupied_tree(flow, crash_at, uninjected)
+
+    response = flow.create(label="An occupied item", operation_id=operation_id)
+
+    assert code_of(response) == "stale_context"
+    terminal = store.read_terminal(paths, operation_id)
+    assert terminal is not None
+    assert terminal.outcome == "quarantined"
+    assert terminal.reason_code == "create_path_occupied"
+    assert terminal.relative_path == "intruder.md"
+    document = json.loads(
+        (paths.directory / paths.terminal_relative(operation_id)).read_bytes()
+    )
+    assert store.parse_terminal(document).as_document() == document
+
+
+def test_a_second_retry_over_an_occupied_tree_answers_the_same_way(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """the marker written by the first retry is what the second one reads"""
+    operation_id, paths = occupied_tree(flow, crash_at, uninjected)
+
+    first = flow.create(label="An occupied item", operation_id=operation_id)
+    after_first = snapshot_tree(work_root)
+    second = flow.create(label="An occupied item", operation_id=operation_id)
+
+    assert code_of(first) == "stale_context"
+    assert code_of(second) == "stale_context"
+    assert first["error"] == second["error"]
+    assert snapshot_tree(work_root) == after_first
+
+
+def parse_control_record(path, relative):
+    """Read one stored control record through the exact parser that owns it."""
+    document = json.loads(path.read_bytes())
+    parts = relative.split("/")
+    if parts[0] == store.CREATES_DIRNAME:
+        return store.parse_reservation(document)
+    if parts[-2] == store.PENDING_DIRNAME:
+        return store.parse_intent(document)
+    if path.name.endswith(".terminal.json"):
+        return store.parse_terminal(document)
+    return None
+
+
+def test_every_control_record_the_service_writes_round_trips(
+    flow, crash_at, uninjected, work_root
+):
+    """no write site can produce a record its own parser refuses"""
+    work_id = flow.started(label="A busy item")
+    written = flow.write(work_id, "A first draft.\n")
+    ref = written["result"]["artifact_ref"]
+    digest = written["result"]["sha256"]
+    flow.attach_inline(work_id, "Text an external turn captured.\n")
+    edited = flow.edit_inline(work_id, "In my own words.\n", ref, digest)
+    proposed = flow.propose(
+        work_id, "approved_text", edited["result"]["artifact_ref"]
+    )
+    flow.decide(work_id, proposed["result"]["pending_id"], "approved_text")
+
+    approved_dir = flow.work_dir(work_id).name
+    qualified = (
+        f"approved:{flow.subject}/{approved_dir}/{edited['result']['relative_path']}"
+    )
+    citing = flow.started(label="A citing item")
+    cited = flow.write(
+        citing,
+        "A draft that cites it.\n",
+        based_on=[{"ref": qualified, "sha256": edited["result"]["sha256"]}],
+    )
+    assert cited["ok"] is True
+
+    # A crashed write leaves a real pending object behind, and an occupied
+    # create leaves the quarantine marker that path publishes.
+    crash_at("P7")
+    with pytest.raises(Crash):
+        flow.write(citing, "A draft that never landed.\n")
+    uninjected()
+    occupied_id, _ = occupied_tree(flow, crash_at, uninjected)
+    assert code_of(flow.create(label="An occupied item", operation_id=occupied_id)) == (
+        "stale_context"
+    )
+
+    seen = 0
+    for directory, _dirnames, filenames in os.walk(work_root):
+        for name in filenames:
+            if not name.endswith(".json"):
+                continue
+            path = Path(directory) / name
+            relative = str(path.relative_to(work_root))
+            if "/conversations/" in f"/{relative}" or name == store.WORK_RECORD_FILENAME:
+                continue
+            parsed = parse_control_record(path, relative)
+            if parsed is None:
+                continue
+            assert parsed.as_document() == json.loads(path.read_bytes()), relative
+            seen += 1
+    assert seen >= 4

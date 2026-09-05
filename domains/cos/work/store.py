@@ -73,6 +73,7 @@ from .envelope import (
     is_uuid4,
 )
 from .retrieval import (
+    APPROVED_ROOT_PREFIX,
     CONVERSATIONS_DIRNAME,
     SUBJECTS_DIRNAME,
     WORK_DIRNAME,
@@ -739,6 +740,11 @@ QUARANTINE_REASON_CODES: frozenset[str] = frozenset(
         "binding_candidate_lost",
         "unreferenced_output",
         "record_candidate_lost",
+        # A create found something in the directory its reservation names
+        # that this create cannot have written. Nothing is completed, and
+        # the marker records which name obstructed it so a later duplicate
+        # under the same operation id gets the same closed answer.
+        "create_path_occupied",
     }
 )
 
@@ -884,6 +890,40 @@ def _control_group(document: Mapping[str, Any], group: Sequence[str], what: str)
     return True
 
 
+#: How long a pinned input reference may be. The same ceiling the request
+#: parameter is held to, restated here because a stored record is validated
+#: against the schema rather than against the caller-facing parser.
+MAX_PINNED_REF_CHARS = 256
+
+
+def _control_input_ref(value: Any, what: str) -> str:
+    """A pinned input reference, in either form the writer actually emits.
+
+    A pinned input is either a reference derived inside this work item or
+    the one qualified ``approved:`` reference the contract admits, which
+    names another work item's approved artifact. Holding both to the
+    derived-reference grammar refused every record a ``based_on`` write
+    produces, so a crashed write that cited approved text could not be read
+    back at all.
+    """
+    if not isinstance(value, str) or not value or len(value) > MAX_PINNED_REF_CHARS:
+        raise ControlRecordInvalid(f"{what} needs a record reference for ref")
+    if _DERIVED_REF_PATTERN.fullmatch(value) is not None:
+        return value
+    if not value.startswith(APPROVED_ROOT_PREFIX):
+        raise ControlRecordInvalid(f"{what} needs a record reference for ref")
+    remainder = value[len(APPROVED_ROOT_PREFIX) :]
+    named_subject, slash, rest = remainder.partition("/")
+    if not slash:
+        raise ControlRecordInvalid(f"{what} needs a record reference for ref")
+    _control_identifier(named_subject, "subject", what)
+    relative = _control_relative(rest, "ref", what)
+    parts = relative.split("/")
+    if len(parts) < 3 or parts[1] != records.ARTIFACTS_DIRNAME:
+        raise ControlRecordInvalid(f"{what} pins an input that is not an artifact")
+    return value
+
+
 def _control_expected_inputs(value: Any, what: str) -> tuple[Mapping[str, str], ...]:
     if value is None:
         return ()
@@ -898,7 +938,7 @@ def _control_expected_inputs(value: Any, what: str) -> tuple[Mapping[str, str], 
         entries.append(
             freeze(
                 {
-                    "ref": _control_ref(entry.get("ref"), "ref", f"{what} pinned input"),
+                    "ref": _control_input_ref(entry.get("ref"), f"{what} pinned input"),
                     "sha256": _control_digest(
                         entry.get("sha256"), "sha256", f"{what} pinned input"
                     ),
@@ -914,18 +954,30 @@ def parse_intent(document: Any) -> Intent:
     data = _control_object(document, what)
     writes_content = _control_group(data, _INTENT_CONTENT_GROUP, what)
     writes_binding = _control_group(data, _INTENT_BINDING_GROUP, what)
-    optional = ["receipt"]
+    optional = []
     if writes_content:
         optional.extend(_INTENT_CONTENT_GROUP)
     if writes_binding:
         optional.extend(_INTENT_BINDING_GROUP)
-    _control_keys(data, _INTENT_REQUIRED, optional, what)
+    # The receipt is required, not optional. Every pending object this
+    # service publishes carries the receipt its operation validated before
+    # anything was written, and recovery commits forward from it. A pending
+    # object without one is not a shape this writer emits, and accepting it
+    # let a malformed record reach the point where a matching candidate is
+    # installed over ``work.json`` before the absence was noticed.
+    _control_keys(data, _INTENT_REQUIRED + ("receipt",), optional, what)
     _control_schema_version(data, what)
 
     operation_id = _control_uuid(data.get("operation_id"), "operation_id", what)
     effect = data.get("effect")
     if effect not in EFFECTS:
         raise ControlRecordInvalid(f"{what} names an operation that does not exist")
+    # The content group is required exactly when the effect writes bytes of
+    # its own, so a content-writing record can neither drop its content
+    # fields nor be read as a metadata-only operation.
+    if str(effect) in _CONTENT_SUBTREE and not writes_content:
+        missing = ", ".join(sorted(_INTENT_CONTENT_GROUP))
+        raise ControlRecordInvalid(f"{what} is missing: {missing}")
     work_id = _control_uuid(data.get("work_id"), "work_id", what)
     subject = _control_identifier(data.get("subject"), "subject", what)
 
@@ -1004,18 +1056,24 @@ def parse_intent(document: Any) -> Intent:
         binding_candidate_sha256=binding_candidate_sha256,
         receipt=_receipt_from_document(data.get("receipt"), what),
     )
-    if intent.receipt is not None:
-        _require_receipt_matches(
-            intent.receipt,
-            what,
-            operation_id=operation_id,
-            effect=str(effect),
-            subject=subject,
-            work_id=work_id,
-            relative_path=target_relative_path,
-            sha256=output_sha256,
-            ref=ref,
-        )
+    if intent.receipt is None:
+        raise ControlRecordInvalid(f"{what} is missing: receipt")
+    _require_receipt_matches(
+        intent.receipt,
+        what,
+        operation_id=operation_id,
+        effect=str(effect),
+        subject=subject,
+        work_id=work_id,
+        relative_path=target_relative_path,
+        sha256=output_sha256,
+        ref=ref,
+        output_bytes=output_bytes,
+        revision=revision,
+        context_class=context_class,
+        supersedes_ref=supersedes_ref,
+        created_at=intent.created_at,
+    )
     return intent
 
 
@@ -1054,8 +1112,24 @@ def _require_receipt_matches(
     relative_path: str | None = None,
     sha256: str | None = None,
     ref: str | None = None,
+    output_bytes: int | None = None,
+    revision: int | None = None,
+    context_class: str | None = None,
+    supersedes_ref: str | None = None,
+    created_at: str | None = None,
 ) -> None:
-    """A stored receipt must describe the very record that carries it."""
+    """A stored receipt must describe the very record that carries it.
+
+    Every value the record and its receipt both state is compared, not a
+    chosen few. A receipt is the durable answer recovery returns, so a
+    receipt that agreed about the path and the digest while disagreeing
+    about the revision, the size, the provenance class or the moment would
+    still be a different statement about the same bytes than the record it
+    travels in. The comparison is made wherever both records carry the
+    value: an effect whose receipt shape has no room for a field (a
+    ``write_artifact`` receipt states no ``supersedes_ref``) has nothing to
+    disagree with, and is left alone.
+    """
     if receipt.operation_id != operation_id:
         raise ControlRecordInvalid(f"{what} carries a receipt for another operation")
     if effect is not None and receipt.effect != effect:
@@ -1066,6 +1140,11 @@ def _require_receipt_matches(
         ("relative_path", relative_path),
         ("sha256", sha256),
         ("ref", ref),
+        ("bytes", output_bytes),
+        ("revision", revision),
+        ("context_class", context_class),
+        ("supersedes_ref", supersedes_ref),
+        ("created_at", created_at),
     ):
         if expected is None:
             continue
@@ -1581,22 +1660,35 @@ class WorkStore:
 
     def publish_pending(self, paths: WorkPaths, intent: Intent) -> None:
         _checkpoint("P5")
+        document = intent.as_document()
+        parse_intent(document)
         publish(
             paths.pending,
             f"{intent.operation_id}.json",
-            encode_json(intent.as_document()),
+            encode_json(document),
             operation_id=intent.operation_id,
             staging_dir=paths.staging,
         )
 
     def publish_terminal(self, paths: WorkPaths, terminal: Terminal) -> bool:
-        """Publish the one terminal name, or report that one already exists."""
+        """Publish the one terminal name, or report that one already exists.
+
+        The marker is read back through its own parser before it is written.
+        Every control record this service publishes is later read by that
+        parser and nothing else, so a record the parser refuses is a record
+        no duplicate and no recovery can act on. Validating at the single
+        publication site makes that impossible to get wrong at a call site,
+        rather than leaving each caller to assemble a document by hand and
+        hope it fits the schema.
+        """
         _checkpoint("P11")
+        document = terminal.as_document()
+        parse_terminal(document)
         try:
             publish(
                 paths.operations,
                 paths.terminal_name(terminal.operation_id),
-                encode_json(terminal.as_document()),
+                encode_json(document),
                 operation_id=terminal.operation_id,
             )
         except AlreadyPublished:

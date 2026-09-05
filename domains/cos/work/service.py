@@ -923,7 +923,12 @@ class WorkService:
                     subject_paths, reservation, terminal, paths
                 )
 
-        self._make_create_tree(paths, operation_id, intent.record_candidate_sha256)
+        self._make_create_tree(
+            paths,
+            operation_id,
+            intent.record_candidate_sha256,
+            reservation.request_sha256,
+        )
 
         if store.read_pending(paths, operation_id) is not None:
             outcome = self.store.recover(paths, intent, subject_paths=subject_paths)
@@ -960,7 +965,11 @@ class WorkService:
         return self._orientation(paths, subject_paths), stored
 
     def _make_create_tree(
-        self, paths: store.WorkPaths, operation_id: str, record_candidate_sha256: str
+        self,
+        paths: store.WorkPaths,
+        operation_id: str,
+        record_candidate_sha256: str,
+        request_sha256: str,
     ) -> None:
         """Create the work directory and its five children, resumably.
 
@@ -989,7 +998,9 @@ class WorkService:
             try:
                 handle = store.open_dir(target)
             except OSError as exc:
-                raise self._occupied(paths, operation_id, relative or base.name) from exc
+                raise self._occupied(
+                    paths, operation_id, request_sha256, relative or base.name
+                ) from exc
             os.close(handle)
             if relative == "":
                 store.touch_lock(paths.lock)
@@ -999,6 +1010,7 @@ class WorkService:
                     expected_files,
                     expected_dirs,
                     record_candidate_sha256,
+                    request_sha256,
                 )
 
     def _check_create_tree(
@@ -1008,6 +1020,7 @@ class WorkService:
         expected_files: set[str],
         expected_dirs: set[str],
         record_candidate_sha256: str,
+        request_sha256: str,
     ) -> None:
         """One bounded look at what is actually in a reservation-owned tree."""
         bound = store.MAX_RECOVERED_OPERATIONS + 1
@@ -1015,31 +1028,39 @@ class WorkService:
         if installed is not None and installed.sha256 != record_candidate_sha256:
             # A record at this name that this create did not write is someone
             # else's work item, not a resumption point.
-            raise self._occupied(paths, operation_id, store.WORK_RECORD_FILENAME)
+            raise self._occupied(
+                paths, operation_id, request_sha256, store.WORK_RECORD_FILENAME
+            )
         with os.scandir(paths.directory) as entries:
             for entry in itertools.islice(entries, bound):
                 if entry.is_dir(follow_symlinks=False):
                     if entry.name not in expected_dirs:
-                        raise self._occupied(paths, operation_id, entry.name)
+                        raise self._occupied(paths, operation_id, request_sha256, entry.name)
                     continue
                 if entry.name not in expected_files:
-                    raise self._occupied(paths, operation_id, entry.name)
+                    raise self._occupied(paths, operation_id, request_sha256, entry.name)
         if paths.operations.is_dir():
             with os.scandir(paths.operations) as entries:
                 for entry in itertools.islice(entries, bound):
                     if entry.is_dir(follow_symlinks=False):
                         continue
                     if entry.name != paths.terminal_name(operation_id):
-                        raise self._occupied(paths, operation_id, entry.name)
+                        raise self._occupied(paths, operation_id, request_sha256, entry.name)
         for directory in (paths.pending, paths.staging):
             if not directory.is_dir():
                 continue
             with os.scandir(directory) as entries:
                 for entry in itertools.islice(entries, bound):
                     if operation_id not in entry.name:
-                        raise self._occupied(paths, operation_id, entry.name)
+                        raise self._occupied(paths, operation_id, request_sha256, entry.name)
 
-    def _occupied(self, paths: store.WorkPaths, operation_id: str, name: str) -> WorkError:
+    def _occupied(
+        self,
+        paths: store.WorkPaths,
+        operation_id: str,
+        request_sha256: str,
+        name: str,
+    ) -> WorkError:
         """Refuse without completing anything, and say so where it can be said.
 
         A marker can only be published when there is already an
@@ -1047,24 +1068,34 @@ class WorkService:
         the work directory itself there is nowhere to write one, and the
         create simply fails having written nothing — which is the correct
         record of the fact that it never got a directory of its own.
+
+        The marker published here is an ordinary quarantine marker, built as
+        a :class:`store.Terminal` and written through the one publication
+        site, so it is bound to this request's digest and names the very
+        entry that obstructed the create. It is the same record the terminal
+        parser reads, which is what lets a second attempt under this
+        operation id answer from it with the identical closed refusal
+        instead of failing on a marker it cannot read.
         """
         if paths.operations.is_dir():
             try:
-                store.publish(
-                    paths.operations,
-                    paths.terminal_name(operation_id),
-                    store.encode_json(
-                        {
-                            "schema_version": 1,
-                            "operation_id": operation_id,
-                            "outcome": "quarantined",
-                            "request_sha256": "",
-                            "reason_code": "create_path_occupied",
-                        }
+                self.store.publish_terminal(
+                    paths,
+                    store.Terminal(
+                        operation_id=operation_id,
+                        outcome="quarantined",
+                        request_sha256=request_sha256,
+                        receipt=None,
+                        reason_code="create_path_occupied",
+                        relative_path=name,
                     ),
-                    operation_id=operation_id,
                 )
             except store.AlreadyPublished:
+                pass
+            except store.ControlRecordInvalid:
+                # The obstructing entry cannot be stated as a bound relative
+                # path, so there is no truthful marker to write. Nothing is
+                # published and the refusal still stands.
                 pass
         return records.StaleContext(name)
 
