@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Mapping
 
 WORK_CONTRACT_VERSION = 1
@@ -380,6 +381,29 @@ class InvalidRequest(WorkError):
         super().__init__("invalid_request", message)
 
 
+def freeze(value: Any) -> Any:
+    """Return a deeply immutable copy of ``value``.
+
+    A frozen dataclass freezes its *attributes*, not the objects they point
+    at. A plain ``dict`` reached through a validated object is a hole in the
+    validation: whatever was checked at construction can be changed
+    afterwards. Every mapping becomes a read-only proxy over its own copy and
+    every list becomes a tuple, so a validated authority or receipt states
+    exactly what it stated when it was validated.
+    """
+    if isinstance(value, MappingProxyType):
+        return value
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: freeze(item) for key, item in value.items()})
+    if isinstance(value, (str, bytes, bytearray)):
+        return value
+    if isinstance(value, (list, tuple)):
+        return tuple(freeze(item) for item in value)
+    if isinstance(value, set):
+        return frozenset(value)
+    return value
+
+
 @dataclass(frozen=True)
 class Receipt:
     """A content-free record of one operation's outcome.
@@ -419,6 +443,7 @@ class Receipt:
                 + (f"missing {missing}; " if missing else "")
                 + (f"not permitted here: {extra}" if extra else "")
             )
+        object.__setattr__(self, "fields", freeze(self.fields))
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {

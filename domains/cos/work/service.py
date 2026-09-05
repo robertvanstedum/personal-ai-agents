@@ -464,11 +464,9 @@ class WorkService:
         subject: str,
         resolved: Mapping[str, Any],
     ) -> grants.Grant:
-        grant = self.issuer.verify(
+        return self.issuer.verify_and_consume(
             grant_ref, effect=effect, subject=subject, resolved=resolved
         )
-        self.issuer.consume(grant)
-        return grant
 
     def _require_binding(self, call: _Call) -> None:
         """One direct open. No reverse index, no scan over conversations.
@@ -723,7 +721,7 @@ class WorkService:
         with store.Lock(subject_paths.create_lock):
             reservation = self._read_reservation(subject_paths, operation_id)
             if reservation is not None:
-                if reservation.get("request_sha256") != fingerprint:
+                if reservation.request_sha256 != fingerprint:
                     raise InvalidRequest("that operation id was used for a different request")
             else:
                 store.unlink_quietly(
@@ -807,7 +805,7 @@ class WorkService:
         conversation_id: str | None,
         fingerprint: str,
         moment: datetime,
-    ) -> dict[str, Any]:
+    ) -> store.Reservation:
         """Publish the content-free reservation that owns this create's id."""
         work_id = store.new_work_id()
         work_dirname = f"{store.slugify(label, 'work')}--{work_id}"
@@ -847,6 +845,7 @@ class WorkService:
             "reserved_at": reserved_at,
             "receipt": receipt.as_dict(),
         }
+        parsed = store.parse_reservation(reservation)
         store._checkpoint("create:reserve")
         store.publish(
             subject_paths.creates,
@@ -854,22 +853,37 @@ class WorkService:
             store.encode_json(reservation),
             operation_id=operation_id,
         )
-        return reservation
+        return parsed
 
     def _read_reservation(
         self, subject_paths: store.SubjectPaths, operation_id: str
-    ) -> dict[str, Any] | None:
+    ) -> store.Reservation | None:
+        """One derived open, read back as the exact reservation schema.
+
+        A retry decides which directory it completes, and which receipt it
+        answers with, from these bytes. Raw decoded JSON is therefore not
+        good enough: the reservation is validated as the bound control
+        record it is, and a malformed one fails closed here rather than
+        becoming a path or a duplicate answer.
+        """
         snap = store.try_snapshot(
             subject_paths.base, f"{store.CREATES_DIRNAME}/{operation_id}.json"
         )
         if snap is None:
             return None
-        return json.loads(snap.raw)
+        reservation = store.parse_reservation(
+            store.decode_control(snap.raw, "a create reservation")
+        )
+        if reservation.operation_id != operation_id:
+            raise store.ControlRecordInvalid(
+                "a create reservation names a different operation"
+            )
+        return reservation
 
     def _complete_create(
         self,
         subject_paths: store.SubjectPaths,
-        reservation: Mapping[str, Any],
+        reservation: store.Reservation,
         operation_id: str,
         subject: str,
         label: str,
@@ -877,32 +891,23 @@ class WorkService:
         conversation_id: str | None,
     ) -> tuple[dict[str, Any], Receipt]:
         """Steps 3 to 10, run identically on a first attempt and on a retry."""
-        work_id = str(reservation["work_id"])
-        directory = subject_paths.work_base / str(reservation["work_dirname"])
+        work_id = reservation.work_id
+        directory = subject_paths.work_base / reservation.work_dirname
         paths = store.WorkPaths(directory=directory)
 
-        receipt = Receipt(
-            operation_id=operation_id,
-            effect="open_work",
-            outcome=str(reservation["receipt"]["outcome"]),
-            fields={
-                key: value
-                for key, value in reservation["receipt"].items()
-                if key not in ("operation_id", "effect", "outcome")
-            },
-        )
+        receipt = reservation.receipt
         intent = store.Intent(
             operation_id=operation_id,
             effect="open_work",
             work_id=work_id,
             subject=subject,
-            request_sha256=str(reservation["request_sha256"]),
-            record_sha256_before=reservation.get("record_sha256_before"),
-            record_candidate_sha256=str(reservation["record_candidate_sha256"]),
-            created_at=str(reservation["reserved_at"]),
-            binding_relative_path=reservation.get("binding_relative_path"),
-            binding_sha256_before=reservation.get("binding_sha256_before"),
-            binding_candidate_sha256=reservation.get("binding_candidate_sha256"),
+            request_sha256=reservation.request_sha256,
+            record_sha256_before=reservation.record_sha256_before,
+            record_candidate_sha256=reservation.record_candidate_sha256,
+            created_at=reservation.reserved_at,
+            binding_relative_path=reservation.binding_relative_path,
+            binding_sha256_before=reservation.binding_sha256_before,
+            binding_candidate_sha256=reservation.binding_candidate_sha256,
             receipt=receipt,
         )
 
@@ -936,7 +941,7 @@ class WorkService:
             label,
             intent_text,
             conversation_id,
-            str(reservation["reserved_at"]),
+            reservation.reserved_at,
         )
         if confine.sha256_bytes(record_payload) != intent.record_candidate_sha256:
             raise WorkError("internal_error", "this change could not be confirmed")
@@ -1066,7 +1071,7 @@ class WorkService:
     def _answer_committed_create(
         self,
         subject_paths: store.SubjectPaths,
-        reservation: Mapping[str, Any],
+        reservation: store.Reservation,
         terminal: store.Terminal,
         paths: store.WorkPaths,
     ) -> tuple[dict[str, Any], Receipt]:
@@ -1081,11 +1086,11 @@ class WorkService:
         """
         if terminal.outcome != "committed" or terminal.receipt is None:
             raise self._terminal_failure(terminal)
-        relative = reservation.get("binding_relative_path")
+        relative = reservation.binding_relative_path
         if relative:
-            snap = store.try_snapshot(subject_paths.base, str(relative))
-            if snap is None or snap.sha256 != reservation.get("binding_candidate_sha256"):
-                raise records.StaleContext(str(relative))
+            snap = store.try_snapshot(subject_paths.base, relative)
+            if snap is None or snap.sha256 != reservation.binding_candidate_sha256:
+                raise records.StaleContext(relative)
         return (
             {"retry": True, **self._orientation(paths, subject_paths)},
             terminal.receipt,
@@ -1331,13 +1336,12 @@ class WorkService:
     ) -> _Call:
         work_id = require_uuid4(params.get("work_id"), "work_id")
         grant_ref_value = grant_ref
-        pre = self.issuer.verify(
+        pre = self.issuer.verify_and_consume(
             grant_ref_value,
             effect=effect,
             subject=self._grant_subject(grant_ref_value),
             resolved={"work_id": work_id, **dict(resolved)},
         )
-        self.issuer.consume(pre)
         subject = pre.subject
         subject_paths = self.store.subject_paths(subject)
         directory = self.store.find_work_directory(subject, work_id)
@@ -1503,11 +1507,14 @@ class WorkService:
     def _search_sources(
         self, operation_id: str, params: Mapping[str, Any], grant_ref: Any
     ) -> tuple[dict[str, Any], Receipt]:
-        requested = params.get("root_refs")
-        if requested is not None and isinstance(requested, (str, bytes)):
-            raise InvalidRequest("root references must be given as a list")
+        # The selection is validated into a set of root names *before* it is
+        # made into one: `frozenset(...)` over an unvalidated request field
+        # is the request escaping the envelope, because a scalar or an
+        # unhashable member raises out of the handler rather than answering
+        # `invalid_request`.
+        requested = grants.normalise_requested_roots(params.get("root_refs"))
         work_id = require_uuid4(params.get("work_id"), "work_id")
-        grant = self.issuer.verify(
+        grant = self.issuer.verify_and_consume(
             grant_ref,
             effect="search_sources",
             subject=self._grant_subject(grant_ref),
@@ -1518,7 +1525,6 @@ class WorkService:
                 else self._bound_roots(grant_ref),
             },
         )
-        self.issuer.consume(grant)
         call = self._context_for(grant, operation_id, params, work_id, "search_sources")
         self._require_binding(call)
 

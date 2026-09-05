@@ -23,8 +23,10 @@ between mint and commit.
 from __future__ import annotations
 
 import secrets
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
 from .confine import normalise_relative
@@ -34,6 +36,7 @@ from .envelope import (
     SOURCE_CONTEXT_CLASSES,
     InvalidRequest,
     WorkError,
+    freeze,
     is_identifier,
     is_uuid4,
     require_effect,
@@ -54,6 +57,11 @@ DEFAULT_TTL_SECONDS = 120
 MAX_TTL_SECONDS = 600
 
 MAX_TURN_ID_CHARS = 128
+
+#: The most roots one grant or one request may name. Deployment configures
+#: far fewer; the bound exists so an unvalidated sequence cannot become an
+#: unbounded amount of validation work.
+MAX_ROOT_REFS = 64
 
 #: The binding fields a grant may carry, beyond the ones every grant has.
 #: Anything outside this set is not a field the mint API knows about.
@@ -190,6 +198,20 @@ class Grant:
     conversation_id: str | None = None
     bindings: Mapping[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        """Freeze the authority this grant carries.
+
+        ``frozen=True`` protects the attribute, not the mapping it points at.
+        A caller holding a minted grant could otherwise rewrite the very
+        provenance the issuer validated at mint — swap an external source
+        class for a personally authored one — and verification, which reads
+        the same live object, would agree. The bindings are copied and made
+        read-only here, so mint-time policy is the last word on them.
+        """
+        if not isinstance(self.bindings, Mapping):
+            raise InvalidRequest("grant bindings must be an object")
+        object.__setattr__(self, "bindings", freeze(self.bindings))
+
     def bound(self, name: str) -> Any:
         """The value bound for ``name``, or ``None`` when it is unbound."""
         return self.bindings.get(name)
@@ -228,20 +250,39 @@ class Grant:
         return payload
 
 
-def _normalise_root_refs(value: Any) -> frozenset[str]:
-    if isinstance(value, (str, bytes)):
+def normalise_requested_roots(value: Any) -> tuple[str, ...] | None:
+    """Validate a caller's root selection into a bounded tuple of names.
+
+    ``None`` means "whatever the grant already narrowed to" and is returned
+    unchanged. Everything else must be an actual sequence of root names: a
+    scalar, an object, a member that is not a name, a member that is not even
+    hashable, and a selection longer than the bound are all refused here, as
+    ``invalid_request``, before any set is built from them.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, (list, tuple)):
         raise InvalidRequest("root references must be given as a list")
-    try:
-        refs = list(value)
-    except TypeError as exc:
-        raise InvalidRequest("root references must be given as a list") from exc
-    if not refs:
-        raise InvalidRequest("at least one source root is required")
-    for ref in refs:
+    if len(value) > MAX_ROOT_REFS:
+        raise InvalidRequest("too many source roots were named")
+    refs: list[str] = []
+    for ref in value:
+        if not isinstance(ref, str):
+            raise InvalidRequest("root_ref is not a valid name")
         if is_approved_root(ref):
             require_identifier(ref[len("approved:") :], "subject")
-            continue
-        require_identifier(ref, "root_ref")
+        else:
+            require_identifier(ref, "root_ref")
+        refs.append(ref)
+    if not refs:
+        raise InvalidRequest("at least one source root is required")
+    return tuple(refs)
+
+
+def _normalise_root_refs(value: Any) -> frozenset[str]:
+    refs = normalise_requested_roots(value)
+    if refs is None or not refs:
+        raise InvalidRequest("at least one source root is required")
     return frozenset(refs)
 
 
@@ -293,6 +334,12 @@ class GrantIssuer:
         self._accumulation = accumulation
         self._live: dict[str, Grant] = {}
         self._consumed: dict[str, datetime] = {}
+        #: One re-entrant lock over the whole table. Minting, verification,
+        #: consumption, sweeping and the capacity count are all statements
+        #: about the same two dictionaries, so they are serialised together:
+        #: a single-use grant that two threads can verify before either
+        #: spends it is not single-use at all.
+        self._guard = threading.RLock()
 
     # -- table maintenance ---------------------------------------------
 
@@ -316,7 +363,8 @@ class GrantIssuer:
     @property
     def entry_count(self) -> int:
         """Live plus consumed entries — the number the capacity bounds."""
-        return len(self._live) + len(self._consumed)
+        with self._guard:
+            return len(self._live) + len(self._consumed)
 
     # -- minting --------------------------------------------------------
 
@@ -370,24 +418,25 @@ class GrantIssuer:
         self._check_policy(effect, subject, data_class, resolved)
 
         moment = now or _now()
-        self._sweep(moment)
-        if self.entry_count >= MAX_GRANT_ENTRIES:
-            raise GrantError("grant_invalid", "no grant capacity is available")
+        with self._guard:
+            self._sweep(moment)
+            if self.entry_count >= MAX_GRANT_ENTRIES:
+                raise GrantError("grant_invalid", "no grant capacity is available")
 
-        grant = Grant(
-            grant_ref=secrets.token_urlsafe(32),
-            turn_id=turn_id,
-            effect=effect,
-            subject=subject,
-            data_class=data_class,
-            egress=egress,
-            issued_at=moment,
-            expires_at=moment + timedelta(seconds=ttl_seconds),
-            conversation_id=conversation_id,
-            bindings=dict(resolved),
-        )
-        self._live[grant.grant_ref] = grant
-        return grant
+            grant = Grant(
+                grant_ref=secrets.token_urlsafe(32),
+                turn_id=turn_id,
+                effect=effect,
+                subject=subject,
+                data_class=data_class,
+                egress=egress,
+                issued_at=moment,
+                expires_at=moment + timedelta(seconds=ttl_seconds),
+                conversation_id=conversation_id,
+                bindings=dict(resolved),
+            )
+            self._live[grant.grant_ref] = grant
+            return grant
 
     def _check_policy(
         self, effect: str, subject: str, data_class: str, resolved: Mapping[str, Any]
@@ -433,6 +482,51 @@ class GrantIssuer:
     ) -> Grant:
         """Run every check, in order, and return the grant. Nothing is spent.
 
+        This is the inspection form. A caller that is about to *act* on the
+        authority calls :meth:`verify_and_consume` instead, so that no second
+        caller can pass the same checks against the same live entry.
+        """
+        with self._guard:
+            return self._verify_locked(
+                grant_ref, effect=effect, subject=subject, resolved=resolved, now=now
+            )
+
+    def verify_and_consume(
+        self,
+        grant_ref: Any,
+        *,
+        effect: str,
+        subject: str,
+        resolved: Mapping[str, Any] | None = None,
+        now: datetime | None = None,
+    ) -> Grant:
+        """Verify and spend one grant as a single indivisible step.
+
+        Single use is a property of the table, not of the caller's ordering.
+        Verifying and then spending in two steps lets two turns both pass
+        every check against one live entry and both proceed; holding the
+        table lock across both means exactly one of them finds the entry
+        live, and every other one is refused as ``grant_invalid`` before its
+        effect begins.
+        """
+        with self._guard:
+            grant = self._verify_locked(
+                grant_ref, effect=effect, subject=subject, resolved=resolved, now=now
+            )
+            self._consume_locked(grant)
+            return grant
+
+    def _verify_locked(
+        self,
+        grant_ref: Any,
+        *,
+        effect: str,
+        subject: str,
+        resolved: Mapping[str, Any] | None = None,
+        now: datetime | None = None,
+    ) -> Grant:
+        """The checks themselves, in order, under the table lock.
+
         The bounded sweep runs *after* the checks, not before: retiring an
         expired entry first would turn "that authority has expired" into
         "this turn holds no authority", which is a less accurate answer to
@@ -470,8 +564,15 @@ class GrantIssuer:
             value = supplied[name]
             if name == "root_refs":
                 # A request may narrow further; it may never reach outside
-                # what the grant already narrowed to.
-                requested = frozenset(value)
+                # what the grant already narrowed to. A value that is not a
+                # set of names is not a narrower selection, it is a different
+                # resource, and it is refused as one rather than raising.
+                try:
+                    requested = frozenset(value)
+                except TypeError as exc:
+                    raise GrantError(
+                        "grant_resource_mismatch", "that authority belongs to different work"
+                    ) from exc
                 if not requested or not requested.issubset(bound):
                     raise GrantError(
                         "grant_resource_mismatch", "that authority belongs to different work"
@@ -495,8 +596,18 @@ class GrantIssuer:
         return grant
 
     def consume(self, grant: Grant) -> None:
-        """Spend a grant. Never rolled back, whatever the effect then does."""
-        self._live.pop(grant.grant_ref, None)
+        """Spend a grant. Never rolled back, whatever the effect then does.
+
+        Spending an entry that is no longer live is not a silent no-op: it
+        means some other caller already spent it, and this caller therefore
+        holds no authority.
+        """
+        with self._guard:
+            self._consume_locked(grant)
+
+    def _consume_locked(self, grant: Grant) -> None:
+        if self._live.pop(grant.grant_ref, None) is None:
+            raise GrantError("grant_invalid", "this turn holds no authority for that")
         self._consumed[grant.grant_ref] = grant.expires_at
 
     def peek(self, grant_ref: Any) -> Grant | None:
@@ -508,11 +619,13 @@ class GrantIssuer:
         """
         if not isinstance(grant_ref, str):
             return None
-        return self._live.get(grant_ref)
+        with self._guard:
+            return self._live.get(grant_ref)
 
     def is_consumed(self, grant_ref: str) -> bool:
         """True when this reference has already been spent."""
-        return grant_ref in self._consumed
+        with self._guard:
+            return grant_ref in self._consumed
 
 
 def narrowed_root_refs(
@@ -548,8 +661,10 @@ __all__ = [
     "GrantError",
     "GrantIssuer",
     "MAX_GRANT_ENTRIES",
+    "MAX_ROOT_REFS",
     "MAX_TTL_SECONDS",
     "is_grant_ref",
     "is_uuid4",
     "narrowed_root_refs",
+    "normalise_requested_roots",
 ]

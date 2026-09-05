@@ -49,7 +49,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from importlib import import_module
 
@@ -62,10 +62,14 @@ from . import records
 #: reach both of them.
 confine = import_module(f"{__package__}.confine")
 from .envelope import (
+    ARTIFACT_CONTEXT_CLASSES,
+    EFFECTS,
+    SOURCE_CONTEXT_CLASSES,
     TERMINAL_OUTCOMES,
-    InvalidRequest,
     Receipt,
     WorkError,
+    freeze,
+    is_identifier,
     is_uuid4,
 )
 from .retrieval import (
@@ -272,6 +276,38 @@ def unlink_quietly(directory: Path, name: str) -> bool:
         os.close(handle)
 
 
+def _raw_write(handle: int, view: memoryview) -> int:
+    """One raw write syscall.
+
+    The same seam as :func:`_checkpoint`: a test forces the short writes the
+    kernel is allowed to make, against the real writer rather than a
+    simulation of one.
+    """
+    return os.write(handle, view)
+
+
+def write_all(handle: int, payload: bytes) -> None:
+    """Write every byte of ``payload`` to ``handle``, or raise.
+
+    ``os.write`` is permitted to write fewer bytes than it was given. Ignoring
+    the count is how a truncated file gets fsynced, linked at its final
+    canonical name and then confirmed by a terminal marker: the bytes on disk
+    are not the bytes whose digest was pinned, and nothing downstream would
+    notice. This is the only writer in this module, so there is one place
+    where "the whole planned payload landed" is established.
+
+    A zero-byte write with bytes still outstanding is treated as a failure
+    rather than a reason to spin.
+    """
+    view = memoryview(payload)
+    written = 0
+    while written < len(view):
+        count = _raw_write(handle, view[written:])
+        if count <= 0:
+            raise OSError(errno.EIO, "the file could not be written in full")
+        written += count
+
+
 def publish(
     final_dir: Path,
     final_name: str,
@@ -305,7 +341,7 @@ def publish(
                 dir_fd=source_fd,
             )
             try:
-                os.write(handle, payload)
+                write_all(handle, payload)
                 os.fsync(handle)
             finally:
                 os.close(handle)
@@ -343,7 +379,7 @@ def stage_candidate(directory: Path, name: str, payload: bytes) -> None:
             dir_fd=handle_dir,
         )
         try:
-            os.write(handle, payload)
+            write_all(handle, payload)
             os.fsync(handle)
         finally:
             os.close(handle)
@@ -630,54 +666,412 @@ class Intent:
         return document
 
 
-def parse_intent(document: Any) -> Intent:
-    """Read a pending object back, refusing anything malformed."""
+#: The exact key set a pending object always carries.
+_INTENT_REQUIRED: tuple[str, ...] = (
+    "schema_version",
+    "operation_id",
+    "effect",
+    "work_id",
+    "subject",
+    "request_sha256",
+    "record_sha256_before",
+    "record_candidate_sha256",
+    "created_at",
+)
+
+#: The all-or-nothing group a content-writing operation adds.
+_INTENT_CONTENT_GROUP: tuple[str, ...] = (
+    "target_relative_path",
+    "output_sha256",
+    "output_bytes",
+    "ref",
+    "revision",
+    "context_class",
+    "supersedes_ref",
+    "expected_inputs",
+)
+
+#: The all-or-nothing group a binding-writing operation adds.
+_INTENT_BINDING_GROUP: tuple[str, ...] = (
+    "binding_relative_path",
+    "binding_sha256_before",
+    "binding_candidate_sha256",
+)
+
+_TERMINAL_REQUIRED: tuple[str, ...] = (
+    "schema_version",
+    "operation_id",
+    "outcome",
+    "request_sha256",
+)
+
+_RESERVATION_REQUIRED: tuple[str, ...] = (
+    "schema_version",
+    "operation_id",
+    "work_id",
+    "subject",
+    "request_sha256",
+    "work_dirname",
+    "record_sha256_before",
+    "record_candidate_sha256",
+    "binding_relative_path",
+    "binding_sha256_before",
+    "binding_candidate_sha256",
+    "reserved_at",
+    "receipt",
+)
+
+#: The effects that publish bytes of their own beside the record, and the
+#: subtree each one is allowed to have written into. An operation record that
+#: claims a source was written into ``artifacts/`` is not a record this
+#: service ever wrote, whatever else it says.
+_CONTENT_SUBTREE: dict[str, str] = {
+    "attach_source": records.SOURCES_DIRNAME,
+    "write_artifact": records.ARTIFACTS_DIRNAME,
+    "use_robert_edit": records.ARTIFACTS_DIRNAME,
+}
+
+#: The closed set of reasons recovery may quarantine for.
+QUARANTINE_REASON_CODES: frozenset[str] = frozenset(
+    {
+        "record_changed_underneath",
+        "recorded_bytes_changed",
+        "binding_candidate_lost",
+        "unreferenced_output",
+        "record_candidate_lost",
+    }
+)
+
+_STAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+_DERIVED_REF_PATTERN = re.compile(r"^(?:src|art)-[0-9]{4,}$")
+
+#: How many pinned inputs one artifact record may name.
+MAX_EXPECTED_INPUTS = 64
+
+
+class ControlRecordInvalid(WorkError):
+    """A stored transaction-control record failed exact validation.
+
+    A pending object, a terminal marker and a create reservation are not
+    inputs a caller supplies; they are files this service wrote. They still
+    drive recovery mutations and duplicate answers, so they are validated as
+    exactly the bound schemas the design defines rather than trusted because
+    of where they were found. Failing here is a closed Work error: nothing is
+    installed, no path derived from the unvalidated content is cleaned, and
+    no success is reported.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__("invalid_request", message)
+
+
+def _control_object(document: Any, what: str) -> Mapping[str, Any]:
     if not isinstance(document, Mapping):
-        raise InvalidRequest("an operation record must be an object")
-    try:
-        return Intent(
-            operation_id=str(document["operation_id"]),
-            effect=str(document["effect"]),
-            work_id=str(document["work_id"]),
-            subject=str(document["subject"]),
-            request_sha256=str(document["request_sha256"]),
-            record_sha256_before=document.get("record_sha256_before"),
-            record_candidate_sha256=str(document["record_candidate_sha256"]),
-            created_at=str(document["created_at"]),
-            target_relative_path=document.get("target_relative_path"),
-            output_sha256=document.get("output_sha256"),
-            output_bytes=document.get("output_bytes"),
-            ref=document.get("ref"),
-            revision=document.get("revision"),
-            context_class=document.get("context_class"),
-            supersedes_ref=document.get("supersedes_ref"),
-            expected_inputs=tuple(document.get("expected_inputs") or ()),
-            binding_relative_path=document.get("binding_relative_path"),
-            binding_sha256_before=document.get("binding_sha256_before"),
-            binding_candidate_sha256=document.get("binding_candidate_sha256"),
-            receipt=_receipt_from_document(document.get("receipt")),
+        raise ControlRecordInvalid(f"{what} must be an object")
+    for key in document:
+        if not isinstance(key, str):
+            raise ControlRecordInvalid(f"{what} has a field name that is not text")
+    return document
+
+
+def _control_keys(
+    document: Mapping[str, Any],
+    required: Sequence[str],
+    optional: Sequence[str],
+    what: str,
+) -> None:
+    keys = set(document)
+    unknown = sorted(keys - set(required) - set(optional))
+    if unknown:
+        raise ControlRecordInvalid(
+            f"{what} has fields that are not part of the contract: {', '.join(unknown)}"
         )
-    except KeyError as exc:
-        raise InvalidRequest("an operation record is missing a required field") from exc
+    missing = sorted(set(required) - keys)
+    if missing:
+        raise ControlRecordInvalid(f"{what} is missing: {', '.join(missing)}")
 
 
-def _receipt_from_document(payload: Any) -> Receipt | None:
+def _control_schema_version(document: Mapping[str, Any], what: str) -> int:
+    value = document.get("schema_version")
+    if value != 1:
+        raise ControlRecordInvalid(f"{what} is not a version-1 record")
+    return 1
+
+
+def _control_uuid(value: Any, key: str, what: str) -> str:
+    if not is_uuid4(value):
+        raise ControlRecordInvalid(f"{what} needs a UUID4 {key}")
+    return str(value)
+
+
+def _control_digest(value: Any, key: str, what: str) -> str:
+    if not isinstance(value, str) or records.SHA256_PATTERN.fullmatch(value) is None:
+        raise ControlRecordInvalid(f"{what} needs a lowercase hex sha256 digest for {key}")
+    return value
+
+
+def _control_optional_digest(value: Any, key: str, what: str) -> str | None:
+    if value is None:
+        return None
+    return _control_digest(value, key, what)
+
+
+def _control_stamp(value: Any, key: str, what: str) -> str:
+    if not isinstance(value, str) or _STAMP_PATTERN.fullmatch(value) is None:
+        raise ControlRecordInvalid(f"{what} needs a UTC timestamp for {key}")
+    return value
+
+
+def _control_identifier(value: Any, key: str, what: str) -> str:
+    if not is_identifier(value):
+        raise ControlRecordInvalid(f"{what} needs a valid name for {key}")
+    return str(value)
+
+
+def _control_relative(value: Any, key: str, what: str, *, subtree: str | None = None) -> str:
+    """A stored path that must stay inside the tree it names."""
+    if not isinstance(value, str) or not value:
+        raise ControlRecordInvalid(f"{what} needs a relative path for {key}")
+    parts = value.split("/")
+    if (
+        value.startswith("/")
+        or "\\" in value
+        or "\x00" in value
+        or ".." in parts
+        or "." in parts
+        or "" in parts
+        or any(part.strip() != part for part in parts)
+    ):
+        raise ControlRecordInvalid(f"{what} needs a relative path inside the work item for {key}")
+    if subtree is not None and (len(parts) < 2 or parts[0] != subtree):
+        raise ControlRecordInvalid(f"{what} needs a path inside {subtree}/ for {key}")
+    return value
+
+
+def _control_ref(value: Any, key: str, what: str, *, prefix: str | None = None) -> str:
+    if not isinstance(value, str) or _DERIVED_REF_PATTERN.fullmatch(value) is None:
+        raise ControlRecordInvalid(f"{what} needs a record reference for {key}")
+    if prefix is not None and not value.startswith(prefix):
+        raise ControlRecordInvalid(f"{what} names a reference of the wrong kind for {key}")
+    return value
+
+
+def _control_int(value: Any, key: str, what: str, *, minimum: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        raise ControlRecordInvalid(f"{what} needs a whole number for {key}")
+    return value
+
+
+def _control_binding_path(value: Any, what: str) -> str:
+    relative = _control_relative(
+        value, "binding_relative_path", what, subtree=CONVERSATIONS_DIRNAME
+    )
+    parts = relative.split("/")
+    if len(parts) != 2 or not parts[1].endswith(".json"):
+        raise ControlRecordInvalid(f"{what} needs a conversation binding path")
+    _control_identifier(parts[1][: -len(".json")], "conversation_id", what)
+    return relative
+
+
+def _control_group(document: Mapping[str, Any], group: Sequence[str], what: str) -> bool:
+    """True when a conditional group is wholly present, refusing half of one."""
+    present = [key for key in group if key in document]
+    if not present:
+        return False
+    if len(present) != len(group):
+        missing = sorted(set(group) - set(present))
+        raise ControlRecordInvalid(f"{what} is missing: {', '.join(missing)}")
+    return True
+
+
+def _control_expected_inputs(value: Any, what: str) -> tuple[Mapping[str, str], ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ControlRecordInvalid(f"{what} needs a list for expected_inputs")
+    if len(value) > MAX_EXPECTED_INPUTS:
+        raise ControlRecordInvalid(f"{what} names too many pinned inputs")
+    entries: list[Mapping[str, str]] = []
+    for item in value:
+        entry = _control_object(item, f"{what} pinned input")
+        _control_keys(entry, ("ref", "sha256"), (), f"{what} pinned input")
+        entries.append(
+            freeze(
+                {
+                    "ref": _control_ref(entry.get("ref"), "ref", f"{what} pinned input"),
+                    "sha256": _control_digest(
+                        entry.get("sha256"), "sha256", f"{what} pinned input"
+                    ),
+                }
+            )
+        )
+    return tuple(entries)
+
+
+def parse_intent(document: Any) -> Intent:
+    """Read a pending object back as the exact bound schema it must be."""
+    what = "an operation record"
+    data = _control_object(document, what)
+    writes_content = _control_group(data, _INTENT_CONTENT_GROUP, what)
+    writes_binding = _control_group(data, _INTENT_BINDING_GROUP, what)
+    optional = ["receipt"]
+    if writes_content:
+        optional.extend(_INTENT_CONTENT_GROUP)
+    if writes_binding:
+        optional.extend(_INTENT_BINDING_GROUP)
+    _control_keys(data, _INTENT_REQUIRED, optional, what)
+    _control_schema_version(data, what)
+
+    operation_id = _control_uuid(data.get("operation_id"), "operation_id", what)
+    effect = data.get("effect")
+    if effect not in EFFECTS:
+        raise ControlRecordInvalid(f"{what} names an operation that does not exist")
+    work_id = _control_uuid(data.get("work_id"), "work_id", what)
+    subject = _control_identifier(data.get("subject"), "subject", what)
+
+    target_relative_path = None
+    output_sha256 = None
+    output_bytes = None
+    ref = None
+    revision = None
+    context_class = None
+    supersedes_ref = None
+    expected_inputs: tuple[Mapping[str, str], ...] = ()
+    if writes_content:
+        subtree = _CONTENT_SUBTREE.get(str(effect))
+        if subtree is None:
+            raise ControlRecordInvalid(f"{what} claims content this operation never writes")
+        target_relative_path = _control_relative(
+            data.get("target_relative_path"), "target_relative_path", what, subtree=subtree
+        )
+        output_sha256 = _control_digest(data.get("output_sha256"), "output_sha256", what)
+        output_bytes = _control_int(data.get("output_bytes"), "output_bytes", what, minimum=0)
+        is_source = subtree == records.SOURCES_DIRNAME
+        ref = _control_ref(data.get("ref"), "ref", what, prefix="src-" if is_source else "art-")
+        if data.get("revision") is not None:
+            revision = _control_int(data.get("revision"), "revision", what, minimum=1)
+        if is_source and revision is not None:
+            raise ControlRecordInvalid(f"{what} gives a captured source a revision")
+        if not is_source and revision is None:
+            raise ControlRecordInvalid(f"{what} is missing: revision")
+        context_class = data.get("context_class")
+        permitted = SOURCE_CONTEXT_CLASSES if is_source else ARTIFACT_CONTEXT_CLASSES
+        if context_class not in permitted:
+            raise ControlRecordInvalid(f"{what} has an unknown provenance class")
+        if data.get("supersedes_ref") is not None:
+            supersedes_ref = _control_ref(
+                data.get("supersedes_ref"), "supersedes_ref", what, prefix="art-"
+            )
+            if is_source:
+                raise ControlRecordInvalid(f"{what} says a captured source supersedes something")
+        expected_inputs = _control_expected_inputs(data.get("expected_inputs"), what)
+
+    binding_relative_path = None
+    binding_sha256_before = None
+    binding_candidate_sha256 = None
+    if writes_binding:
+        binding_relative_path = _control_binding_path(data.get("binding_relative_path"), what)
+        binding_sha256_before = _control_optional_digest(
+            data.get("binding_sha256_before"), "binding_sha256_before", what
+        )
+        binding_candidate_sha256 = _control_digest(
+            data.get("binding_candidate_sha256"), "binding_candidate_sha256", what
+        )
+
+    intent = Intent(
+        operation_id=operation_id,
+        effect=str(effect),
+        work_id=work_id,
+        subject=subject,
+        request_sha256=_control_digest(data.get("request_sha256"), "request_sha256", what),
+        record_sha256_before=_control_optional_digest(
+            data.get("record_sha256_before"), "record_sha256_before", what
+        ),
+        record_candidate_sha256=_control_digest(
+            data.get("record_candidate_sha256"), "record_candidate_sha256", what
+        ),
+        created_at=_control_stamp(data.get("created_at"), "created_at", what),
+        target_relative_path=target_relative_path,
+        output_sha256=output_sha256,
+        output_bytes=output_bytes,
+        ref=ref,
+        revision=revision,
+        context_class=context_class,
+        supersedes_ref=supersedes_ref,
+        expected_inputs=expected_inputs,
+        binding_relative_path=binding_relative_path,
+        binding_sha256_before=binding_sha256_before,
+        binding_candidate_sha256=binding_candidate_sha256,
+        receipt=_receipt_from_document(data.get("receipt"), what),
+    )
+    if intent.receipt is not None:
+        _require_receipt_matches(
+            intent.receipt,
+            what,
+            operation_id=operation_id,
+            effect=str(effect),
+            subject=subject,
+            work_id=work_id,
+            relative_path=target_relative_path,
+            sha256=output_sha256,
+            ref=ref,
+        )
+    return intent
+
+
+def _receipt_from_document(payload: Any, what: str) -> Receipt | None:
     """Read a stored receipt back through the validated constructor."""
     if payload is None:
         return None
-    if not isinstance(payload, Mapping):
-        raise InvalidRequest("a stored receipt must be an object")
+    data = _control_object(payload, f"{what} receipt")
+    for key in ("operation_id", "effect", "outcome"):
+        if key not in data:
+            raise ControlRecordInvalid(f"{what} receipt is missing: {key}")
     fields = {
         key: value
-        for key, value in payload.items()
+        for key, value in data.items()
         if key not in ("operation_id", "effect", "outcome")
     }
-    return Receipt(
-        operation_id=str(payload.get("operation_id")),
-        effect=str(payload.get("effect")),
-        outcome=str(payload.get("outcome")),
-        fields=fields,
-    )
+    try:
+        return Receipt(
+            operation_id=data["operation_id"],
+            effect=data["effect"],
+            outcome=data["outcome"],
+            fields=fields,
+        )
+    except WorkError as exc:
+        raise ControlRecordInvalid(f"{what} carries a receipt that is not valid") from exc
+
+
+def _require_receipt_matches(
+    receipt: Receipt,
+    what: str,
+    *,
+    operation_id: str,
+    effect: str | None = None,
+    subject: str | None = None,
+    work_id: str | None = None,
+    relative_path: str | None = None,
+    sha256: str | None = None,
+    ref: str | None = None,
+) -> None:
+    """A stored receipt must describe the very record that carries it."""
+    if receipt.operation_id != operation_id:
+        raise ControlRecordInvalid(f"{what} carries a receipt for another operation")
+    if effect is not None and receipt.effect != effect:
+        raise ControlRecordInvalid(f"{what} carries a receipt for another operation")
+    for key, expected in (
+        ("subject", subject),
+        ("work_id", work_id),
+        ("relative_path", relative_path),
+        ("sha256", sha256),
+        ("ref", ref),
+    ):
+        if expected is None:
+            continue
+        actual = receipt.fields.get(key)
+        if actual is not None and actual != expected:
+            raise ControlRecordInvalid(f"{what} carries a receipt about different work")
 
 
 @dataclass(frozen=True)
@@ -708,21 +1102,164 @@ class Terminal:
 
 
 def parse_terminal(document: Any) -> Terminal:
-    """Read a terminal marker back through the validated receipt constructor."""
-    if not isinstance(document, Mapping):
-        raise InvalidRequest("a terminal marker must be an object")
-    outcome = document.get("outcome")
-    if outcome not in TERMINAL_OUTCOMES:
-        raise InvalidRequest("a terminal marker records an unknown outcome")
-    receipt = _receipt_from_document(document.get("receipt"))
-    return Terminal(
-        operation_id=str(document.get("operation_id")),
-        outcome=str(outcome),
-        request_sha256=str(document.get("request_sha256")),
-        receipt=receipt,
-        reason_code=document.get("reason_code"),
-        relative_path=document.get("relative_path"),
+    """Read a terminal marker back as the exact bound schema it must be."""
+    what = "a terminal marker"
+    data = _control_object(document, what)
+    _control_keys(
+        data, _TERMINAL_REQUIRED, ("receipt", "reason_code", "relative_path"), what
     )
+    _control_schema_version(data, what)
+    operation_id = _control_uuid(data.get("operation_id"), "operation_id", what)
+    outcome = data.get("outcome")
+    if outcome not in TERMINAL_OUTCOMES:
+        raise ControlRecordInvalid(f"{what} records an unknown outcome")
+    request_sha256 = _control_digest(data.get("request_sha256"), "request_sha256", what)
+    receipt = _receipt_from_document(data.get("receipt"), what)
+    reason_code = data.get("reason_code")
+    relative_path = data.get("relative_path")
+
+    if outcome == "committed":
+        if receipt is None:
+            raise ControlRecordInvalid(f"{what} says committed and carries no receipt")
+        if receipt.outcome != "committed":
+            raise ControlRecordInvalid(f"{what} says committed over a receipt that does not")
+        if reason_code is not None or relative_path is not None:
+            raise ControlRecordInvalid(f"{what} says committed and also gives a failure reason")
+        _require_receipt_matches(receipt, what, operation_id=operation_id)
+    else:
+        if receipt is not None:
+            raise ControlRecordInvalid(f"{what} did not commit and may carry no receipt")
+    if outcome == "quarantined":
+        if reason_code not in QUARANTINE_REASON_CODES:
+            raise ControlRecordInvalid(f"{what} gives an unknown quarantine reason")
+        relative_path = _control_relative(relative_path, "relative_path", what)
+    elif outcome == "abandoned":
+        if reason_code is not None or relative_path is not None:
+            raise ControlRecordInvalid(f"{what} was abandoned and names nothing")
+
+    return Terminal(
+        operation_id=operation_id,
+        outcome=str(outcome),
+        request_sha256=request_sha256,
+        receipt=receipt,
+        reason_code=reason_code if outcome == "quarantined" else None,
+        relative_path=relative_path if outcome == "quarantined" else None,
+    )
+
+
+@dataclass(frozen=True)
+class Reservation:
+    """The content-free create reservation that owns one operation id."""
+
+    operation_id: str
+    work_id: str
+    subject: str
+    request_sha256: str
+    work_dirname: str
+    record_candidate_sha256: str
+    reserved_at: str
+    receipt: Receipt
+    record_sha256_before: str | None = None
+    binding_relative_path: str | None = None
+    binding_sha256_before: str | None = None
+    binding_candidate_sha256: str | None = None
+
+    def as_document(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "operation_id": self.operation_id,
+            "work_id": self.work_id,
+            "subject": self.subject,
+            "request_sha256": self.request_sha256,
+            "work_dirname": self.work_dirname,
+            "record_sha256_before": self.record_sha256_before,
+            "record_candidate_sha256": self.record_candidate_sha256,
+            "binding_relative_path": self.binding_relative_path,
+            "binding_sha256_before": self.binding_sha256_before,
+            "binding_candidate_sha256": self.binding_candidate_sha256,
+            "reserved_at": self.reserved_at,
+            "receipt": self.receipt.as_dict(),
+        }
+
+
+def parse_reservation(document: Any) -> Reservation:
+    """Read a create reservation back as the exact bound schema it must be."""
+    what = "a create reservation"
+    data = _control_object(document, what)
+    _control_keys(data, _RESERVATION_REQUIRED, (), what)
+    _control_schema_version(data, what)
+    operation_id = _control_uuid(data.get("operation_id"), "operation_id", what)
+    work_id = _control_uuid(data.get("work_id"), "work_id", what)
+    subject = _control_identifier(data.get("subject"), "subject", what)
+
+    work_dirname = data.get("work_dirname")
+    suffix = f"--{work_id}"
+    if (
+        not isinstance(work_dirname, str)
+        or not work_dirname.endswith(suffix)
+        or not is_identifier(work_dirname[: -len(suffix)])
+    ):
+        raise ControlRecordInvalid(f"{what} does not name a directory it could have reserved")
+
+    if data.get("record_sha256_before") is not None:
+        raise ControlRecordInvalid(f"{what} claims a record that existed before the work item")
+
+    binding_relative_path = data.get("binding_relative_path")
+    binding_sha256_before = data.get("binding_sha256_before")
+    binding_candidate_sha256 = data.get("binding_candidate_sha256")
+    if binding_relative_path is None:
+        if binding_sha256_before is not None or binding_candidate_sha256 is not None:
+            raise ControlRecordInvalid(f"{what} pins a binding it does not name")
+    else:
+        binding_relative_path = _control_binding_path(binding_relative_path, what)
+        binding_sha256_before = _control_optional_digest(
+            binding_sha256_before, "binding_sha256_before", what
+        )
+        binding_candidate_sha256 = _control_digest(
+            binding_candidate_sha256, "binding_candidate_sha256", what
+        )
+
+    receipt = _receipt_from_document(data.get("receipt"), what)
+    if receipt is None:
+        raise ControlRecordInvalid(f"{what} is missing: receipt")
+    if receipt.effect != "open_work" or receipt.outcome != "committed":
+        raise ControlRecordInvalid(f"{what} carries a receipt for another operation")
+    reserved_at = _control_stamp(data.get("reserved_at"), "reserved_at", what)
+    _require_receipt_matches(
+        receipt,
+        what,
+        operation_id=operation_id,
+        effect="open_work",
+        subject=subject,
+        work_id=work_id,
+    )
+    if receipt.fields.get("created_at") != reserved_at:
+        raise ControlRecordInvalid(f"{what} carries a receipt from a different reservation")
+
+    return Reservation(
+        operation_id=operation_id,
+        work_id=work_id,
+        subject=subject,
+        request_sha256=_control_digest(data.get("request_sha256"), "request_sha256", what),
+        work_dirname=work_dirname,
+        record_candidate_sha256=_control_digest(
+            data.get("record_candidate_sha256"), "record_candidate_sha256", what
+        ),
+        reserved_at=reserved_at,
+        receipt=receipt,
+        record_sha256_before=None,
+        binding_relative_path=binding_relative_path,
+        binding_sha256_before=binding_sha256_before,
+        binding_candidate_sha256=binding_candidate_sha256,
+    )
+
+
+def decode_control(raw: bytes, what: str) -> Any:
+    """Decode a stored control record's bytes, failing closed on garbage."""
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError) as exc:
+        raise ControlRecordInvalid(f"{what} is not readable as JSON") from exc
 
 
 # -- the write plan ---------------------------------------------------------
@@ -761,7 +1298,7 @@ def read_terminal(paths: WorkPaths, operation_id: str) -> Terminal | None:
     snap = try_snapshot(paths.directory, paths.terminal_relative(operation_id))
     if snap is None:
         return None
-    return parse_terminal(json.loads(snap.raw))
+    return parse_terminal(decode_control(snap.raw, "a terminal marker"))
 
 
 def read_pending(paths: WorkPaths, operation_id: str) -> Intent | None:
@@ -769,7 +1306,7 @@ def read_pending(paths: WorkPaths, operation_id: str) -> Intent | None:
     snap = try_snapshot(paths.directory, paths.pending_relative(operation_id))
     if snap is None:
         return None
-    return parse_intent(json.loads(snap.raw))
+    return parse_intent(decode_control(snap.raw, "an operation record"))
 
 
 def read_record(paths: WorkPaths) -> tuple[records.WorkRecord, dict[str, Any], Snapshot] | None:
@@ -777,7 +1314,7 @@ def read_record(paths: WorkPaths) -> tuple[records.WorkRecord, dict[str, Any], S
     snap = try_snapshot(paths.directory, WORK_RECORD_FILENAME)
     if snap is None:
         return None
-    document = json.loads(snap.raw)
+    document = decode_control(snap.raw, "the work record")
     return records.parse_work_record(document), document, snap
 
 
@@ -790,7 +1327,12 @@ def read_binding(
     )
     if snap is None:
         return None, None
-    return records.parse_conversation_binding(json.loads(snap.raw)), snap
+    return (
+        records.parse_conversation_binding(
+            decode_control(snap.raw, "a conversation binding")
+        ),
+        snap,
+    )
 
 
 # -- the transaction --------------------------------------------------------
@@ -949,6 +1491,13 @@ class WorkStore:
             try:
                 intent = read_pending(paths, operation_id)
             except (WorkError, ValueError):
+                # This is a survey of *other* operations, so an entry that is
+                # not the exact control record is left exactly as found and
+                # acted on by nothing: it is never recovered from, never
+                # cleaned up, and never counted as evidence. The operation
+                # this call is actually answering reads its own pending
+                # object by derived name, where the same failure is a closed
+                # error rather than an omission.
                 continue
             if intent is not None:
                 found.append(intent)
@@ -1100,7 +1649,7 @@ class WorkStore:
                     dir_fd=handle_dir,
                 )
                 try:
-                    os.write(handle, plan.output)
+                    write_all(handle, plan.output)
                     os.fsync(handle)
                 finally:
                     os.close(handle)
@@ -1441,7 +1990,12 @@ __all__ = [
     "make_dir",
     "new_work_id",
     "now_stamp",
+    "ControlRecordInvalid",
+    "Reservation",
+    "decode_control",
     "parse_intent",
+    "parse_reservation",
+    "write_all",
     "parse_terminal",
     "publish",
     "read_binding",
