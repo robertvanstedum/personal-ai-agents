@@ -5,6 +5,10 @@ trees cannot carry owner-private directory modes through Git, and the roots
 under test must be owner-private, so each test copies what it needs and sets
 the modes itself.
 
+Temporary paths are canonicalised first: on macOS the system temporary
+directory reaches through ``/var -> /private/var``, and a root with a
+symbolic link at any component is refused by design.
+
 All fixture content is synthetic: invented people, employers and postings.
 """
 
@@ -38,36 +42,44 @@ def copy_private(source: Path, destination: Path) -> Path:
 
 
 @pytest.fixture
+def workspace(tmp_path: Path) -> Path:
+    """A canonical, symlink-free temporary directory."""
+    resolved = Path(os.path.realpath(tmp_path))
+    make_private(resolved)
+    return resolved
+
+
+@pytest.fixture
 def fixture_root() -> Path:
     """The committed, synthetic fixture tree (read only)."""
     return FIXTURE_ROOT
 
 
 @pytest.fixture
-def career_sources(tmp_path: Path) -> Path:
+def career_sources(workspace: Path) -> Path:
     """An owner-private copy of the synthetic Career source tree."""
-    return copy_private(FIXTURE_ROOT / "sources" / "career", tmp_path / "career-sources")
+    return copy_private(FIXTURE_ROOT / "sources" / "career", workspace / "career-sources")
 
 
 @pytest.fixture
-def decision_memo_sources(tmp_path: Path) -> Path:
+def decision_memo_sources(workspace: Path) -> Path:
     """An owner-private copy of the synthetic decision-memo source tree."""
     return copy_private(
-        FIXTURE_ROOT / "sources" / "decision_memo", tmp_path / "decision-memo-sources"
+        FIXTURE_ROOT / "sources" / "decision_memo", workspace / "decision-memo-sources"
     )
 
 
 @pytest.fixture
-def private_work_root(tmp_path: Path) -> Path:
+def private_work_root(workspace: Path) -> Path:
     """An owner-private copy of the synthetic canonical work tree."""
-    return copy_private(FIXTURE_ROOT / "work_root", tmp_path / "work-root")
+    return copy_private(FIXTURE_ROOT / "work_root", workspace / "work-root")
 
 
 @pytest.fixture
-def source_roots_env():
+def declare_source_roots():
     """Build the deployment declaration for authorized read-only roots."""
 
-    def build(mapping: dict[str, dict[str, Path | str]]) -> str:
+    def build(mapping: dict[str, dict[str, object]]) -> str:
         return json.dumps(
             {
                 subject: {ref: str(path) for ref, path in refs.items()}
@@ -79,11 +91,45 @@ def source_roots_env():
 
 
 @pytest.fixture
-def temp_git_repo(tmp_path: Path):
+def career_env(private_work_root: Path, career_sources: Path, declare_source_roots):
+    """A complete, valid environment for the synthetic Career subject."""
+    from domains.cos.work.roots import ENV_SOURCE_ROOTS, ENV_WORK_ROOT
+
+    return {
+        ENV_WORK_ROOT: str(private_work_root),
+        ENV_SOURCE_ROOTS: declare_source_roots(
+            {
+                "career": {
+                    "resumes": career_sources / "resumes",
+                    "other-responses": career_sources / "other-responses",
+                    "base-letters": career_sources / "base-letters",
+                }
+            }
+        ),
+    }
+
+
+@pytest.fixture
+def career_accumulation(career_env):
+    """The accumulation reference, configured for the Career fixtures."""
+    from domains.cos.work.retrieval import Accumulation
+    from domains.cos.work.roots import load_root_configuration
+
+    configuration = load_root_configuration(career_env)
+    assert configuration.issues == ()
+    return Accumulation(configuration)
+
+
+@pytest.fixture
+def temp_git_repo(workspace: Path):
     """Create a throwaway Git checkout so in-checkout root rules are testable."""
 
+    created: dict[str, Path] = {}
+
     def build(name: str = "checkout") -> Path:
-        repo = tmp_path / name
+        if name in created:
+            return created[name]
+        repo = workspace / name
         repo.mkdir()
         make_private(repo)
         subprocess.run(["git", "init", "--quiet"], cwd=repo, check=True)
@@ -91,6 +137,7 @@ def temp_git_repo(tmp_path: Path):
             ["git", "config", "user.email", "fixture@example.invalid"], cwd=repo, check=True
         )
         subprocess.run(["git", "config", "user.name", "Fixture"], cwd=repo, check=True)
+        created[name] = repo
         return repo
 
     return build

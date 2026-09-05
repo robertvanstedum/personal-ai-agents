@@ -1,26 +1,127 @@
 """Anti-overfitting: a second subject needs no code.
 
-Checkpoint A: the full test list, not yet implemented.
+The first real slice is Career, but the foundation has to stay fit for a
+decision memo written from two local text files. If that requires a branch
+anywhere in the common package, the boundary is in the wrong place.
 """
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
 import pytest
 
-def test_decision_memo_uses_same_search_with_different_roots():
+from domains.cos.work.envelope import InvalidRequest
+from domains.cos.work.records import FORBIDDEN_FIELDS
+from domains.cos.work.retrieval import Accumulation, approved_root_ref
+from domains.cos.work.roots import (
+    ENV_SOURCE_ROOTS,
+    ENV_WORK_ROOT,
+    load_root_configuration,
+)
+
+
+@pytest.fixture
+def both_subjects(
+    private_work_root: Path, career_sources: Path, decision_memo_sources: Path
+) -> Accumulation:
+    """One configuration, two subjects, no code between them."""
+    declaration = {
+        "career": {
+            "resumes": str(career_sources / "resumes"),
+            "other-responses": str(career_sources / "other-responses"),
+            "base-letters": str(career_sources / "base-letters"),
+        },
+        "decision_memo": {"notes": str(decision_memo_sources / "notes")},
+    }
+    configuration = load_root_configuration(
+        {ENV_WORK_ROOT: str(private_work_root), ENV_SOURCE_ROOTS: json.dumps(declaration)}
+    )
+    assert configuration.source_root_issues == ()
+    return Accumulation(configuration)
+
+
+def test_decision_memo_uses_same_search_with_different_roots(both_subjects: Accumulation):
     """the same service serves a different subject"""
-    pytest.skip("checkpoint A")
+    memo = both_subjects.search_sources("decision_memo", ["notes"], "migration support")
+    assert memo.hits
+    assert {hit.root_ref for hit in memo.hits} == {"notes"}
+    assert {hit.context_class for hit in memo.hits} == {"robert_source"}
 
-def test_decision_memo_guidance_words_differ_from_career():
+    read = both_subjects.read_source("decision_memo", "notes", "vendor-notes.txt")
+    assert "Candidate A" in read.content
+    assert read.sha256
+
+    career = both_subjects.search_sources("career", ["resumes"], "throughput")
+    assert career.hits
+    assert type(memo) is type(career)
+
+
+def test_decision_memo_guidance_words_differ_from_career(
+    career_sources: Path, decision_memo_sources: Path
+):
     """the fixtures share no guidance vocabulary"""
-    pytest.skip("checkpoint A")
+    def vocabulary(root: Path) -> set[str]:
+        words: set[str] = set()
+        for path in sorted(root.rglob("*")):
+            if path.is_file():
+                words.update(re.findall(r"[a-z]{4,}", path.read_text("utf-8").casefold()))
+        return words
 
-def test_decision_memo_needs_no_subject_extension():
+    career_words = vocabulary(career_sources)
+    memo_words = vocabulary(decision_memo_sources)
+
+    career_guidance = {"throughput", "warehouse", "carriers", "freight"}
+    memo_guidance = {"budget", "migration", "renewal", "incumbent"}
+    assert career_guidance <= career_words
+    assert memo_guidance <= memo_words
+    assert career_guidance & memo_words == set()
+    assert memo_guidance & career_words == set()
+
+
+def test_decision_memo_needs_no_subject_extension(both_subjects: Accumulation):
     """no per-subject record container is required"""
-    pytest.skip("checkpoint A")
+    assert "subject_extension" in FORBIDDEN_FIELDS
+    outcome = both_subjects.search_sources("decision_memo", None, "defer")
+    assert outcome.hits
+    assert outcome.issues == ()
 
-def test_decision_memo_subject_has_no_dedicated_code_path():
+    from domains.cos.work import records
+
+    for module_source in [records.__doc__ or ""]:
+        assert "namespace" not in module_source
+
+
+def test_decision_memo_subject_has_no_dedicated_code_path(both_subjects: Accumulation):
     """no branch anywhere depends on the subject name"""
-    pytest.skip("checkpoint A")
+    package = Path(__file__).resolve().parents[2] / "domains" / "cos" / "work"
+    for path in sorted(package.rglob("*.py")):
+        source = path.read_text("utf-8")
+        assert "decision_memo" not in source
+        assert '"career"' not in source
+        assert "'career'" not in source
 
-def test_decision_memo_projection_empty_without_approved_work():
+    for subject, root_ref, term in [
+        ("career", "resumes", "throughput"),
+        ("decision_memo", "notes", "budget"),
+    ]:
+        outcome = both_subjects.search_sources(subject, [root_ref], term)
+        assert outcome.hits
+        assert all(hit.subject == subject for hit in outcome.hits)
+
+
+def test_decision_memo_projection_empty_without_approved_work(both_subjects: Accumulation):
     """a subject with no approved work projects nothing"""
-    pytest.skip("checkpoint A")
+    items, issues = both_subjects.approved_artifacts("decision_memo")
+    assert items == ()
+    assert issues == ()
 
+    outcome = both_subjects.search_sources(
+        "decision_memo", [approved_root_ref("decision_memo")], "budget"
+    )
+    assert outcome.hits == ()
+
+    with pytest.raises(InvalidRequest):
+        both_subjects.search_sources("decision_memo", [approved_root_ref("career")], "budget")
