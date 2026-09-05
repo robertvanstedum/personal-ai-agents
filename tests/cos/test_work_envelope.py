@@ -115,7 +115,14 @@ def test_request_envelope_shape():
 def test_success_response_shape():
     """responses carry version, ok, result, receipt and error"""
     receipt = make_receipt(
-        OPERATION_ID, "read_source", "committed", relative_path="current-resume.md", bytes=1228
+        OPERATION_ID,
+        "read_source",
+        "ok",
+        subject="career",
+        root_ref="resumes",
+        relative_path="current-resume.md",
+        sha256="0" * 64,
+        bytes=1228,
     )
     response = success_response("read_source", OPERATION_ID, {"result_count": 1}, receipt)
     assert response["work_contract_version"] == 1
