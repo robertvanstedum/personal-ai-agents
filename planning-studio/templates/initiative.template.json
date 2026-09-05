@@ -1,0 +1,22 @@
+{
+  "schema_version": "0.1",
+  "initiative_id": "INIT-YYYY-NNNN",
+  "slug": "short-kebab-case-name",
+  "title": "Human-readable title",
+  "created_at": "YYYY-MM-DD",
+  "updated_at": "YYYY-MM-DD",
+  "status": "captured",
+  "origin": {
+    "type": "conversation|note|research|domain_evidence|other",
+    "participants": []
+  },
+  "steward": "current_lifecycle_steward",
+  "decision_owner": "Robert",
+  "domains": [],
+  "roadmap_authority": "none",
+  "release_target": null,
+  "relationships": [],
+  "next_gate": "intake_review",
+  "tags": []
+}
+

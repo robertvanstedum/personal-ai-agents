@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1",
+  "name": "Planning Studio",
+  "created_at": "2026-09-02",
+  "status": "design_review",
+  "decision_owner": "Robert",
+  "current_minimoi_release": "1.1",
+  "roadmap_authority": "none",
+  "implementation_authority": "none",
+  "commercial_scope": "excluded",
+  "current_design_candidate": "initiatives/INIT-2026-0001-central-personal-repository/documents/planning-studio-central-personal-repository-design--9rfkaje5.md",
+  "next_gate": "second_independent_design_review",
+  "registry_status": "v0.1 manual scaffold; non-authoritative pending review of generated projection design",
+  "registries": {
+    "initiatives": "registry/initiatives.json",
+    "artifacts": "registry/artifacts.json"
+  },
+  "review_entry": "REVIEW_START_HERE.md"
+}

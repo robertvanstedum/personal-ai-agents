@@ -1,0 +1,81 @@
+Overall verdict: revise, then run the experimentThe thesis is sound and should be kept: person-owned, file-first memory that remains readable with no application, with automation as bookkeeping rather than authority. That is the right substrate for mini-moi’s durable value, including later work such as Nightjar reviews.Do not advance the full operating model. Advance a thinner v0.9-experiment slice. The document already knows this (non-goals, continuation threshold, “not authorized”). The risk is that the conceptual system is larger than the evidence case and will recreate the friction it exists to remove.You are right to like the approach. The revision is scope, not direction.Five highest-risk assumptions (priority order)1. Explicit capture will become habitual if bookkeeping is automated.
+The brief correctly says taxonomy/IDs/version labels kill capture. The hidden assumption is that the remaining human act—“save this”—is small enough. In practice the hard part is recognizing that a conversation, Nightjar critique, or Curator briefing is now durable. If CoS only recommends and Robert must still remember to intake, the repository stays sparse and agents keep reconstructing from chat.2. File-first durability postpones, rather than removes, consistency problems.
+Files are the right read interface and the right portability interface. They are a weak multi-writer interface. The moment two agents (or Robert + an agent) capture into the same series, you need atomic write, lock or compare-and-swap, collision policy, and rollback. That is a database-shaped problem even if Postgres is not the durable store. Calling everything a “projection” does not make concurrent Markdown updates safe.3. Five named roles will clarify work before they have been used.
+Robert → CoS → Planning Studio → Guild → domain delivery is a good eventual responsibility map. For the first experiment it is five nouns a later agent can mis-route. Curator already crosses CoS, Planning Studio, and Guild in the Pleistocene case. If intake requires choosing a steward and domains correctly, classification becomes the new filing tax.4. Typed relationship graphs are needed to retrieve the right context.
+supports, contradicts, derived_from, reviews, motivates, supersedes, promoted_to are real distinctions. They are also easy to encode wrongly and hard to maintain by hand. The first retrieval test (“ask CoS a substantive question”) will succeed or fail on series + decision + a few obvious links, not on a complete typed graph. Building the vocabulary first is architecture ahead of evidence.5. “Source bytes never edited” plus a separate provenance record will stay cheap.
+Necessary in principle: reviewers must see exact v0.1 and v0.2 bytes. Costly in practice: every capture becomes payload + metadata + orientation projection + registry projection. If the provenance record is a second document humans must open to understand the first, you have duplicated the README+JSON sidecar problem you just retired.The known input gap belongs under assumption 2/4: generator scope is incomplete until the missing Claude decision and design-review files are actually in the library. Do not treat the generator as specified.Defend and retainFilesystem as primary interface. A later Grok, a later model, or Robert on another machine must be able to open a folder and understand history. That is the portability requirement. Databases, graphs, and indexes stay projections.
+Sources / notes / decisions as three kinds. Do not flatten exploration into one narrative. Especially keep decisions immutable and superseding, not edited in place.
+Visible series history. Revision 1 beside Revision 2 beside Revision 3, with checksums and explicit supersession, is the feature that makes this better than chat memory or Git-only history.
+Human does not mint IDs, counters, filenames, or supersedes. That requirement is the difference between a repository and a neglected archive.
+Repository revision ≠ semantic version. Keep source_version as a label on the artifact (v0.9, Mini-moi-2.0 folder name as provenance). Never infer a product release from a filename.
+Capture is explicit. Agents recommend; they do not vacuum the working tree or every conversation.
+Promotion is a decision, not a folder move. Guild remains delivery governance. Planning Studio may hold work that never becomes a roadmap item (Nightjar review, Pleistocene curiosity).
+Kill criterion. Five deliberate captures and two retrievals that change a decision within six months is the right kind of test. Architecture interest is not success.
+Person-owned private state separate from reusable software. Another instance can start clean. Robert’s context does not ship inside domain baselines.
+
+Simplify or remove before the first experimentRemove from the experiment, not necessarily from the long-term design.Cut now
+Why
+Guild promotion path as a required step
+Pleistocene and Nightjar reviews may never need a roadmap. Test capture → review → decision → retrieval first.
+Full typed-edge vocabulary
+Keep only supersedes, reviews, and derived_from if a source actually spawned a note. Add contradicts / promoted_to when a real record needs them.
+Domain-as-permission model
+Relevance tags are enough for five records. Stewardship/ACL before migration is premature.
+Generated JSON registry as a deliverable
+One series orientation file plus frontmatter is enough to prove bookkeeping. A registry is a projection you do not need to validate the thesis.
+CoS write path
+Retrieval-only for the experiment. Writing from CoS is a trust boundary you should not open until intake validation exists.
+Graph store, semantic index, PostgreSQL, UI, hooks
+Named as non-goals already. Keep them off the table even as “small helpers.”
+Initiative-as-a-kind plus pattern-as-a-kind
+Let note stay a note. Refine kind after you have five real records, not before.
+Orientation-file naming as a design debate
+Settled: no generic README.md except root. Do not spend experiment energy on filename policy.
+
+Keep the three record types, ULID, checksum, series folder, immutable sources, separate decision records.Answers to the questions that block a bounded spec1. File-first vs database.
+File-first is sufficient for durability and portability. It is not sufficient for concurrent mutation. Spec the durable objects as files; spec intake as a single-writer transaction over those files (temp dir + atomic rename, lockfile, or a tiny append-only log). Do not introduce Postgres until a projection must answer a query files cannot (cross-series search at scale, permissions). That is later.2. Role separation.
+Keep the five names as a responsibility legend, not as intake fields Robert must fill. Default: origin = Robert or named agent; steward = Robert; domains = multi-value hint, optional at capture. Planning Studio is the folder. Guild is a later door.3. Friction and minimum safe automation.
+Minimum automation that makes capture habitual:Drop or “save this” into an intake inbox.  
+System mints ULID, slug, checksum, filename, next series revision, supersedes if series is known.  
+System writes frontmatter and leaves the source bytes untouched.  
+If series is ambiguous, ask one question: “Continue X, or new series?”  
+Stop.
+
+Do not auto-classify domains, do not auto-write CoS memory, do not auto-promote.4. Source file + provenance.
+Necessary, but provenance should live in frontmatter on an orientation record and on the source’s sibling metadata, not as a second essay. One human-visible series page listing revisions; each payload file immutable. If a .md source already has frontmatter, do not wrap it in another Markdown file unless the source is binary or must remain byte-identical (docx, PDF, ZIP). This brief arriving as .docx is exactly why byte-identical sources matter.5. Revision scheme.
+Monotonic integer per series, plus ULID on every record.  Series revision: R1, R2, R3 — what a reviewer sees.  
+ULID: global identity and time order.
+Do not derive revision from timestamps alone (clock skew, two captures in one second). Do not use semantic versions as the repository counter.
+
+6. Concurrency before multi-agent writes.
+Must be specified before any second writer:One intake process per repository at a time (lockfile with timeout).  
+Allocate ULID first; detect duplicate ULID/slug before publish.  
+Write payload + metadata to a staging directory; validate; atomic move into the series folder; then refresh orientation.  
+If orientation refresh fails, the series still contains the new source; rebuild orientation from files.  
+Never rewrite a published source file.  
+Collision on series revision: abort and ask, do not take max+1 after a stale read.  
+Tombstone for exceptional delete; no silent unlink.
+Until that exists, only Robert + one designated intake helper, not “any agent may capture.”
+
+7. Typed relationships and domains now?
+Not as a graph product. Yes as two optional frontmatter fields: domains: [] and relations: [{type, id}] with a tiny allowed type list. No separate relationship store for the experiment.8. Where decisions live.
+Canonically co-located with the series they dispose, named as decision records, immutable. A global decision index is a projection generated later. People reason about “what we decided about Pleistocene / Nightjar,” not about a master decision ledger. A global folder of decisions with no series nearby becomes another unreadable registry.9. Minimum private-repo and backup before migration.
+Do not migrate OpenClaw wholesale. Before any personal material that is not already a design artifact:Private repo, not the reusable mini-moi software repo.  
+Force-push disabled.  
+Secret scan on intake.  
+Sensitivity flag on records (personal / design / restricted); restricted stays local.  
+Two restore paths: Time Machine (or equivalent) and versioned object storage.  
+One documented restore test of a single series.
+
+That is the bar. Name and location can wait; the split between private context and public software cannot.10. Remove before first experiment.
+See the cut list above. Also remove any temptation to treat “Mini-moi-2.0” source folder names as roadmap signal.11. Evidence to continue vs pause.
+Continue 1.x investment only if, within the period you confirm:At least five deliberate captures across more than one concern (Pleistocene alone is insufficient; Nightjar review is a natural second series).  
+Two retrievals where CoS or you opened the source + later decision, not a chat paraphrase.  
+At least one case where visible vN beside vN+1 prevented an argument about “what we said.”
+
+Pause or archive if intake still needs manual IDs, if records are only written by design-process enthusiasm, or if retrieval returns the orientation file instead of the evidence.Smallest evidence-producing next stepDo not build Planning Studio, a generator product, or a CoS writer.Do this, in order:Close the input gap. Place the missing Claude decision (decision-authorize-registry-generator-for-first-experiment--jy330nyb) and the second Claude design review into the source library as immutable sources. If they do not exist as files, that fact is itself a decision: generator scope is not reviewable.
+Run one assisted capture by hand against a written procedure, not a tool: take this Grok critique (and/or a Nightjar review) as a new source; assign ULID, series, checksum, filename, supersedes if any; write one decision record for “design review received; experiment still not authorized.” Prove the procedure is shorter than doing it ad hoc.
+Only then specify the intake helper as a single-writer script that performs step 2. No registry generator until that script has been used for the five-capture threshold.
+
+That tests the actual thesis: Robert drops work he already did; the repository keeps it readable; a later agent can find the source and the disposition.How this sits next to NightjarNightjar stays a domain reenactment under prototypes/project-nightjar, navy/teal, review-first, no implementation unless asked. Planning Studio is where the Nightjar handoff, architecture critique, and later dispositions should live as sources and decisions so they are not trapped in this chat. That is the first useful cross-domain test that is not Pleistocene. Do not fold Nightjar implementation into Planning Studio, and do not restyle Nightjar to Guild cream.I have both briefs. When you send architecture markdown for Nightjar or the missing Claude files for Planning Studio, I will review those as sources against this substrate—not as a license to build.
+

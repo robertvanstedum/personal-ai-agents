@@ -1,0 +1,23 @@
+{
+  "artifact_id": "ART-STABLE-NAME",
+  "version": "0.1",
+  "record_type": "capture",
+  "title": "Human-readable title",
+  "status": "captured",
+  "initiative_id": null,
+  "origin": {
+    "type": "conversation|file|url|generated|other",
+    "creator": "",
+    "captured_at": "YYYY-MM-DD"
+  },
+  "domains": [],
+  "steward": "",
+  "sensitivity": "private",
+  "retention": "retain",
+  "reuse_status": "not_assessed",
+  "path": "",
+  "sha256": "",
+  "relationships": [],
+  "tags": []
+}
+

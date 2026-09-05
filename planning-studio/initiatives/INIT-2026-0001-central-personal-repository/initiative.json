@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1",
+  "initiative_id": "INIT-2026-0001",
+  "slug": "central-personal-repository",
+  "title": "Central Personal Repository",
+  "created_at": "2026-09-02",
+  "updated_at": "2026-09-02",
+  "status": "design_review",
+  "origin": {
+    "type": "design_conversation",
+    "participants": [
+      "Robert",
+      "Codex"
+    ]
+  },
+  "steward": "planning_studio",
+  "decision_owner": "Robert",
+  "domains": [
+    "cos",
+    "guild",
+    "curator",
+    "platform",
+    "future_domains"
+  ],
+  "roadmap_authority": "none",
+  "release_target": null,
+  "design_horizon": "A possible future mini-moi 2.0; not a release commitment",
+  "related_initiatives": [
+    {
+      "initiative_id": "INIT-2026-0002",
+      "relationship": "motivated_by"
+    }
+  ],
+  "commercial_scope": "excluded",
+  "current_design_candidate": "documents/planning-studio-central-personal-repository-design--9rfkaje5.md",
+  "reviews": [
+    "reviews/claude-design-review-planning-studio--zz7807nr.md",
+    "reviews/codex-assessment-claude-planning-studio-review--ybssp2r3.md"
+  ],
+  "next_gate": "second_independent_design_review",
+  "tags": [
+    "personal-context",
+    "durability",
+    "planning-studio",
+    "cos",
+    "portability",
+    "cross-domain"
+  ]
+}
