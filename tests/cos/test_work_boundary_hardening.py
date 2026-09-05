@@ -24,7 +24,7 @@ from types import MappingProxyType
 import pytest
 
 from conftest import Crash
-from domains.cos.work import grants, store
+from domains.cos.work import control, grants, service, store
 from domains.cos.work.envelope import (
     Receipt,
     WorkError,
@@ -1147,7 +1147,7 @@ def test_every_pending_variant_the_writer_emits_round_trips(flow, crash_at, unin
     for name, document in variants.items():
         assert store.parse_intent(document).as_document() == document, name
     assert {document["effect"] for document in variants.values()} == set(
-        store.PENDING_VARIANTS
+        control.PENDING_VARIANTS
     )
 
 
@@ -1155,7 +1155,7 @@ def test_the_variant_table_covers_the_six_write_effects_only(flow):
     """no read effect has a row, so no pending object can name one"""
     from domains.cos.work.envelope import EFFECTS, READ_EFFECTS
 
-    assert set(store.PENDING_VARIANTS) == set(EFFECTS) - set(READ_EFFECTS)
+    assert set(control.PENDING_VARIANTS) == set(EFFECTS) - set(READ_EFFECTS)
 
 
 def test_parse_intent_refuses_a_pending_object_for_a_read_effect(
@@ -1451,4 +1451,108 @@ def test_the_wrong_supersedes_shape_changes_nothing(
             expected,
             operation_id=operation_id,
         ),
+    )
+
+
+# -- B11: the stored evidence list is the writer's evidence list ----------
+
+
+def artifact_pending_with_inputs(flow, crash_at, uninjected, entries, *, second=False):
+    """A crashed ``write_artifact`` whose pinned evidence is replaced wholesale."""
+    work_id = flow.started()
+    if second:
+        flow.write(work_id, "A first draft.\n")
+    _, _, _, document = content_pending(flow, work_id, crash_at, uninjected)
+    assert document["effect"] == "write_artifact"
+    document["expected_inputs"] = list(entries)
+    return document
+
+
+def refused_evidence(document):
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+    return excinfo.value
+
+
+def test_stored_evidence_uses_the_writer_ceiling(flow, crash_at, uninjected):
+    """B11.1 — one entry past the contract's 32 is refused, not tolerated to 64"""
+    assert control.MAX_EVIDENCE_ENTRIES == service.MAX_BASED_ON_ENTRIES == 32
+    entries = [
+        {"ref": f"src-{index + 1:04d}", "sha256": f"{index:064x}"}
+        for index in range(control.MAX_EVIDENCE_ENTRIES + 1)
+    ]
+    document = artifact_pending_with_inputs(flow, crash_at, uninjected, entries)
+
+    refused_evidence(document)
+
+    document["expected_inputs"] = entries[: control.MAX_EVIDENCE_ENTRIES]
+    assert len(store.parse_intent(document).expected_inputs) == 32
+
+
+def test_stored_evidence_refuses_the_same_ref_twice(flow, crash_at, uninjected):
+    """B11.2 — one reference, two digests, is a list the request parser refuses"""
+    entries = [
+        {"ref": "art-0001", "sha256": "a" * 64},
+        {"ref": "art-0001", "sha256": "b" * 64},
+    ]
+    document = artifact_pending_with_inputs(flow, crash_at, uninjected, entries)
+
+    refused_evidence(document)
+
+
+def test_stored_evidence_refuses_another_subjects_approved_text(
+    flow, crash_at, uninjected
+):
+    """B11.3 — an approved input may only name this record's own subject"""
+    assert flow.subject == "career"
+    foreign = "approved:decision-memo/w-0001/artifacts/0001-letter.md"
+    own = f"approved:{flow.subject}/w-0001/artifacts/0001-letter.md"
+    document = artifact_pending_with_inputs(
+        flow, crash_at, uninjected, [{"ref": foreign, "sha256": "c" * 64}]
+    )
+
+    refused_evidence(document)
+
+    # Only the subject was wrong: the identical path under this record's own
+    # subject is a reference the writer can have emitted.
+    document["expected_inputs"] = [{"ref": own, "sha256": "c" * 64}]
+    assert store.parse_intent(document).expected_inputs[0]["ref"] == own
+
+
+def test_stored_evidence_refuses_an_artifact_citing_itself(
+    flow, crash_at, uninjected
+):
+    """B11.4 — the artifact being created cannot be its own input"""
+    document = artifact_pending_with_inputs(
+        flow, crash_at, uninjected, [], second=True
+    )
+    assert document["ref"] == "art-0002"
+    document["expected_inputs"] = [{"ref": "art-0002", "sha256": "d" * 64}]
+
+    refused_evidence(document)
+
+    # The revision it actually follows is still legal evidence.
+    document["expected_inputs"] = [{"ref": "art-0001", "sha256": "d" * 64}]
+    assert store.parse_intent(document).expected_inputs[0]["ref"] == "art-0001"
+
+
+def test_the_evidence_rules_have_exactly_one_definition():
+    """B12 — neither parser carries its own copy of a limit, and the store has
+    no effect vocabulary of its own to disagree with"""
+    for gone in (
+        "MAX_EXPECTED_INPUTS",
+        "MAX_PINNED_REF_CHARS",
+        "PENDING_VARIANTS",
+        "PendingVariant",
+    ):
+        assert not hasattr(store, gone), gone
+    assert service.MAX_BASED_ON_ENTRIES == control.MAX_EVIDENCE_ENTRIES
+    assert service.MAX_QUALIFIED_REF_CHARS == control.MAX_EVIDENCE_REF_CHARS
+    # The store never names a limit or a provenance class itself; it looks up
+    # the row the contract module resolved.
+    store_source = Path(store.__file__).read_text(encoding="utf-8")
+    assert "control.variant_for(" in store_source
+    assert store_source.count("PENDING_VARIANTS") == store_source.count(
+        "control.PENDING_VARIANTS"
     )

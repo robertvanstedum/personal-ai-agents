@@ -36,7 +36,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import approval, grants, records, store
+from . import approval, control, grants, records, store
 from .envelope import (
     PROPOSED_STATES,
     SOURCE_CONTEXT_CLASSES,
@@ -69,9 +69,25 @@ MAX_LABEL_CHARS = 120
 MAX_INTENT_CHARS = 2000
 MAX_ORIGIN_NOTE_CHARS = 200
 MAX_REASON_CHARS = 500
-MAX_BASED_ON_ENTRIES = 32
-MAX_QUALIFIED_REF_CHARS = 256
+#: The two evidence-list ceilings are the contract's, not this module's.
+#: Both parsers that read a ``based_on`` list — this one, for a request, and
+#: the stored-control parser, for a document this service wrote — take them
+#: from the same place, so neither can be relaxed on one side only.
+MAX_BASED_ON_ENTRIES = control.MAX_EVIDENCE_ENTRIES
+MAX_QUALIFIED_REF_CHARS = control.MAX_EVIDENCE_REF_CHARS
 MAX_CONVERSATION_ID_CHARS = 64
+
+#: The same evidence rules, in the words a caller is owed. A self-reference
+#: reaches the caller as the unresolvable handle it is: at the moment the
+#: request is parsed the artifact it names does not exist in the record yet,
+#: which is exactly what the local-handle resolution says about it.
+_EVIDENCE_MESSAGES: dict[str, str] = {
+    "too_many": "based_on names more inputs than this operation accepts",
+    "ref_not_usable": "that reference is not a usable input",
+    "duplicate_ref": "based_on names the same input twice",
+    "self_reference": "that reference is not part of this work item",
+    "foreign_subject": "that reference belongs to a different subject",
+}
 
 #: How long a pending approval stays answerable.
 PENDING_TTL_SECONDS = 600
@@ -214,18 +230,22 @@ def _based_on_param(params: Mapping[str, Any]) -> tuple[dict[str, str], ...]:
         return ()
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise InvalidRequest("based_on must be a list of pinned inputs")
-    if len(value) > MAX_BASED_ON_ENTRIES:
-        raise InvalidRequest("based_on names more inputs than this operation accepts")
+    try:
+        control.check_evidence_count(len(value))
+    except control.EvidenceViolation as exc:
+        raise InvalidRequest(
+            "based_on names more inputs than this operation accepts"
+        ) from exc
     entries: list[dict[str, str]] = []
     seen: set[str] = set()
     for item in value:
         if not isinstance(item, Mapping) or set(item) != {"ref", "sha256"}:
             raise InvalidRequest("each based_on entry names a ref and a sha256")
-        ref = item["ref"]
-        if not isinstance(ref, str) or not ref.strip() or len(ref) > MAX_QUALIFIED_REF_CHARS:
-            raise InvalidRequest("that reference is not a usable input")
-        if ref in seen:
-            raise InvalidRequest("based_on names the same input twice")
+        try:
+            ref = control.check_evidence_ref_text(item["ref"])
+            control.check_evidence_not_duplicate(ref, seen)
+        except control.EvidenceViolation as exc:
+            raise InvalidRequest(_EVIDENCE_MESSAGES[exc.rule]) from exc
         seen.add(ref)
         digest = item["sha256"]
         if records.SHA256_PATTERN.fullmatch(str(digest)) is None:
@@ -255,8 +275,10 @@ def parse_approved_ref(raw: str, subject: str) -> str:
     if not slash:
         raise InvalidRequest("that reference names no file")
     require_identifier(named_subject, "subject")
-    if named_subject != subject:
-        raise InvalidRequest("that reference belongs to a different subject")
+    try:
+        control.check_evidence_subject(raw, subject)
+    except control.EvidenceViolation as exc:
+        raise InvalidRequest(_EVIDENCE_MESSAGES[exc.rule]) from exc
     relative = confine.normalise_relative(rest)
     parts = relative.parts
     if len(parts) < 3 or parts[1] != records.ARTIFACTS_DIRNAME:

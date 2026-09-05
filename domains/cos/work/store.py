@@ -29,6 +29,12 @@ never rebuilds a record from an intent — an intent deliberately omits the
 private text a record carries — so it commits only from a digest-pinned
 candidate it verified from the bytes it is about to install.
 
+*Effect meaning arrives resolved, never decided here.* The per-effect pending
+variant and the ``based_on`` evidence rules live in
+:mod:`~domains.cos.work.control`; this module looks up the row for the effect
+a stored document names and applies it to paths, digests and publication. No
+ceiling, prefix rule or provenance class is chosen a second time here.
+
 *One confined snapshot per internal file.* Digest and size always come from
 the same bytes, read once through the no-follow descriptor walk. Two
 observations of a pathname are not one snapshot, so no path-based digest
@@ -53,7 +59,7 @@ from typing import Any, Mapping, Sequence
 
 from importlib import import_module
 
-from . import records
+from . import control, records
 
 #: The confinement *module*, deliberately not the package attribute of the
 #: same name: the package re-exports ``confine``'s own ``confine`` function,
@@ -63,7 +69,6 @@ from . import records
 confine = import_module(f"{__package__}.confine")
 from .envelope import (
     EFFECTS,
-    SOURCE_CONTEXT_CLASSES,
     TERMINAL_OUTCOMES,
     Receipt,
     WorkError,
@@ -721,91 +726,6 @@ _RESERVATION_REQUIRED: tuple[str, ...] = (
     "receipt",
 )
 
-@dataclass(frozen=True)
-class PendingVariant:
-    """The one pending shape a single effect is allowed to have published.
-
-    A pending object is not "a control record that happens to validate". It
-    is the exact document one write site emits, and the writer fixes most of
-    it mechanically: which subtree the bytes went into, which kind of
-    reference names them, which provenance class the effect always states,
-    whether a revision number or a superseded reference is part of that
-    shape at all. Stating those as data — one row per effect — is what makes
-    "this is not a document we ever wrote" decidable, rather than a sequence
-    of partial conditionals that can only notice the disagreements two
-    populated fields happen to expose.
-
-    The table is closed in both directions: an effect with no row here never
-    publishes a pending object, and a row admits nothing beyond what its own
-    write site produces.
-    """
-
-    #: The subtree this effect's bytes go into, or ``None`` when the effect
-    #: writes no bytes of its own and therefore carries no content group.
-    subtree: str | None = None
-    #: The reference kind naming those bytes.
-    ref_prefix: str | None = None
-    #: The provenance classes this effect may state. A single-member set is
-    #: a value the writer fixes, not a choice the record gets to make.
-    context_classes: frozenset[str] = frozenset()
-    #: Whether the content group carries a revision number.
-    revision: bool = False
-    #: ``"forbidden"`` or ``"required"``. Nothing here is optional: section
-    #: 6.2 gives ``supersedes_ref`` to ``use_robert_edit`` only, and always.
-    supersedes: str = "forbidden"
-    #: Whether this effect may pin ``based_on`` evidence at all. An effect
-    #: that never writes evidence must carry an empty ``expected_inputs``,
-    #: not merely a well-formed one.
-    based_on: bool = False
-    #: ``"forbidden"``, or ``"reopen_required"`` for the one effect that may
-    #: write the conversation pointer: permitted when the same operation
-    #: creates the record, required when it reopens an existing one, because
-    #: reopening with nothing to bind publishes no pending object at all.
-    binding: str = "forbidden"
-    #: Whether this effect may publish a record that did not exist before.
-    creates_record: bool = False
-
-
-#: The closed set of pending objects this service can write, one row per
-#: effect. The two read effects are absent on purpose: a read publishes a
-#: receipt and nothing else, so a pending object naming one is a document
-#: this writer cannot have produced, and recovery must never act on it.
-PENDING_VARIANTS: dict[str, PendingVariant] = {
-    "open_work": PendingVariant(binding="reopen_required", creates_record=True),
-    "attach_source": PendingVariant(
-        subtree=records.SOURCES_DIRNAME,
-        ref_prefix="src-",
-        context_classes=SOURCE_CONTEXT_CLASSES,
-    ),
-    "write_artifact": PendingVariant(
-        subtree=records.ARTIFACTS_DIRNAME,
-        ref_prefix="art-",
-        context_classes=frozenset({"agent_draft"}),
-        revision=True,
-        based_on=True,
-    ),
-    "use_robert_edit": PendingVariant(
-        subtree=records.ARTIFACTS_DIRNAME,
-        ref_prefix="art-",
-        context_classes=frozenset({"coauthored_output"}),
-        revision=True,
-        supersedes="required",
-    ),
-    "request_disposition": PendingVariant(),
-    "record_disposition": PendingVariant(),
-}
-
-#: The effects that publish bytes of their own beside the record, and the
-#: subtree each one is allowed to have written into. An operation record that
-#: claims a source was written into ``artifacts/`` is not a record this
-#: service ever wrote, whatever else it says. Derived from the variant table
-#: so the two can never drift apart.
-_CONTENT_SUBTREE: dict[str, str] = {
-    effect: variant.subtree
-    for effect, variant in PENDING_VARIANTS.items()
-    if variant.subtree is not None
-}
-
 #: The closed set of reasons recovery may quarantine for.
 QUARANTINE_REASON_CODES: frozenset[str] = frozenset(
     {
@@ -824,9 +744,6 @@ QUARANTINE_REASON_CODES: frozenset[str] = frozenset(
 
 _STAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 _DERIVED_REF_PATTERN = re.compile(r"^(?:src|art)-[0-9]{4,}$")
-
-#: How many pinned inputs one artifact record may name.
-MAX_EXPECTED_INPUTS = 64
 
 
 class ControlRecordInvalid(WorkError):
@@ -964,10 +881,22 @@ def _control_group(document: Mapping[str, Any], group: Sequence[str], what: str)
     return True
 
 
-#: How long a pinned input reference may be. The same ceiling the request
-#: parameter is held to, restated here because a stored record is validated
-#: against the schema rather than against the caller-facing parser.
-MAX_PINNED_REF_CHARS = 256
+#: Every evidence-list rule this parser applies is
+#: :mod:`~domains.cos.work.control`'s, mapped here into the wording a stored
+#: control record deserves. Nothing about ``based_on`` is decided in this
+#: module: a ceiling or a prefix rule chosen independently here is exactly
+#: how the stored schema came to admit lists the writer would have refused.
+_EVIDENCE_MESSAGES: dict[str, str] = {
+    "too_many": "names too many pinned inputs",
+    "ref_not_usable": "needs a record reference for ref",
+    "duplicate_ref": "pins the same input twice",
+    "self_reference": "pins itself as its own input",
+    "foreign_subject": "pins approved text belonging to another subject",
+}
+
+
+def _evidence_refused(exc: control.EvidenceViolation, what: str) -> ControlRecordInvalid:
+    return ControlRecordInvalid(f"{what} {_EVIDENCE_MESSAGES[exc.rule]}")
 
 
 def _control_input_ref(value: Any, what: str) -> str:
@@ -979,14 +908,20 @@ def _control_input_ref(value: Any, what: str) -> str:
     derived-reference grammar refused every record a ``based_on`` write
     produces, so a crashed write that cited approved text could not be read
     back at all.
+
+    Only the *path* below an approved reference is judged here, because a
+    stored path is a path this service wrote. The length ceiling and the
+    subject rule are the contract's, applied over the whole list.
     """
-    if not isinstance(value, str) or not value or len(value) > MAX_PINNED_REF_CHARS:
+    try:
+        ref = control.check_evidence_ref_text(value)
+    except control.EvidenceViolation as exc:
+        raise _evidence_refused(exc, what) from exc
+    if _DERIVED_REF_PATTERN.fullmatch(ref) is not None:
+        return ref
+    if not ref.startswith(APPROVED_ROOT_PREFIX):
         raise ControlRecordInvalid(f"{what} needs a record reference for ref")
-    if _DERIVED_REF_PATTERN.fullmatch(value) is not None:
-        return value
-    if not value.startswith(APPROVED_ROOT_PREFIX):
-        raise ControlRecordInvalid(f"{what} needs a record reference for ref")
-    remainder = value[len(APPROVED_ROOT_PREFIX) :]
+    remainder = ref[len(APPROVED_ROOT_PREFIX) :]
     named_subject, slash, rest = remainder.partition("/")
     if not slash:
         raise ControlRecordInvalid(f"{what} needs a record reference for ref")
@@ -995,37 +930,57 @@ def _control_input_ref(value: Any, what: str) -> str:
     parts = relative.split("/")
     if len(parts) < 3 or parts[1] != records.ARTIFACTS_DIRNAME:
         raise ControlRecordInvalid(f"{what} pins an input that is not an artifact")
-    return value
+    return ref
 
 
-def _control_expected_inputs(value: Any, what: str) -> tuple[Mapping[str, str], ...]:
+def _control_expected_inputs(
+    value: Any,
+    what: str,
+    *,
+    subject: str,
+    self_ref: str | None,
+) -> tuple[Mapping[str, str], ...]:
+    """The evidence a stored record pins, held to the writer's own contract.
+
+    A stored list is not a weaker list. ``based_on`` admits at most
+    :data:`control.MAX_EVIDENCE_ENTRIES` entries, never the same reference
+    twice, never the artifact being created, and approved text only from
+    this record's own subject — and a record that says otherwise is not a
+    record this writer produced, whatever else is well formed about it.
+    """
     if value is None:
         return ()
     if not isinstance(value, list):
         raise ControlRecordInvalid(f"{what} needs a list for expected_inputs")
-    if len(value) > MAX_EXPECTED_INPUTS:
-        raise ControlRecordInvalid(f"{what} names too many pinned inputs")
     entries: list[Mapping[str, str]] = []
-    for item in value:
-        entry = _control_object(item, f"{what} pinned input")
-        _control_keys(entry, ("ref", "sha256"), (), f"{what} pinned input")
-        entries.append(
-            freeze(
-                {
-                    "ref": _control_input_ref(entry.get("ref"), f"{what} pinned input"),
-                    "sha256": _control_digest(
-                        entry.get("sha256"), "sha256", f"{what} pinned input"
-                    ),
-                }
+    refs: list[str] = []
+    try:
+        control.check_evidence_count(len(value))
+        for item in value:
+            entry = _control_object(item, f"{what} pinned input")
+            _control_keys(entry, ("ref", "sha256"), (), f"{what} pinned input")
+            ref = _control_input_ref(entry.get("ref"), f"{what} pinned input")
+            refs.append(ref)
+            entries.append(
+                freeze(
+                    {
+                        "ref": ref,
+                        "sha256": _control_digest(
+                            entry.get("sha256"), "sha256", f"{what} pinned input"
+                        ),
+                    }
+                )
             )
-        )
+        control.check_evidence_refs(refs, subject=subject, self_ref=self_ref)
+    except control.EvidenceViolation as exc:
+        raise _evidence_refused(exc, what) from exc
     return tuple(entries)
 
 
 def parse_intent(document: Any) -> Intent:
     """Read a pending object back as the exact per-effect variant it must be.
 
-    The variant is decided from :data:`PENDING_VARIANTS` *first*, and every
+    The variant is decided from :data:`control.PENDING_VARIANTS` *first*, and every
     conditional group, fixed value and forbidden field follows from that one
     row. This ordering is the point: recovery installs a pinned record
     candidate over ``work.json``, and a conversation-binding group is its
@@ -1040,7 +995,7 @@ def parse_intent(document: Any) -> Intent:
     effect = data.get("effect")
     if not isinstance(effect, str) or effect not in EFFECTS:
         raise ControlRecordInvalid(f"{what} names an operation that does not exist")
-    variant = PENDING_VARIANTS.get(effect)
+    variant = control.variant_for(effect)
     if variant is None:
         # A read effect, or anything else the request surface admits that
         # never writes: no pending object exists for it to have been.
@@ -1125,7 +1080,9 @@ def parse_intent(document: Any) -> Intent:
             )
         elif data.get("supersedes_ref") is not None:
             raise ControlRecordInvalid(f"{what} says this operation supersedes something")
-        expected_inputs = _control_expected_inputs(data.get("expected_inputs"), what)
+        expected_inputs = _control_expected_inputs(
+            data.get("expected_inputs"), what, subject=subject, self_ref=ref
+        )
         if expected_inputs and not variant.based_on:
             raise ControlRecordInvalid(f"{what} pins evidence this operation never records")
 
@@ -2185,10 +2142,8 @@ __all__ = [
     "MAX_ORPHAN_TEMPS_SWEPT",
     "MAX_RECOVERED_OPERATIONS",
     "MAX_WORK_TOTAL_BYTES",
-    "PENDING_VARIANTS",
     "AlreadyPublished",
     "Intent",
-    "PendingVariant",
     "Lock",
     "RecoveryOutcome",
     "Snapshot",
