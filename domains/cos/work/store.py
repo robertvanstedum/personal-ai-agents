@@ -62,7 +62,6 @@ from . import records
 #: reach both of them.
 confine = import_module(f"{__package__}.confine")
 from .envelope import (
-    ARTIFACT_CONTEXT_CLASSES,
     EFFECTS,
     SOURCE_CONTEXT_CLASSES,
     TERMINAL_OUTCOMES,
@@ -722,14 +721,89 @@ _RESERVATION_REQUIRED: tuple[str, ...] = (
     "receipt",
 )
 
+@dataclass(frozen=True)
+class PendingVariant:
+    """The one pending shape a single effect is allowed to have published.
+
+    A pending object is not "a control record that happens to validate". It
+    is the exact document one write site emits, and the writer fixes most of
+    it mechanically: which subtree the bytes went into, which kind of
+    reference names them, which provenance class the effect always states,
+    whether a revision number or a superseded reference is part of that
+    shape at all. Stating those as data — one row per effect — is what makes
+    "this is not a document we ever wrote" decidable, rather than a sequence
+    of partial conditionals that can only notice the disagreements two
+    populated fields happen to expose.
+
+    The table is closed in both directions: an effect with no row here never
+    publishes a pending object, and a row admits nothing beyond what its own
+    write site produces.
+    """
+
+    #: The subtree this effect's bytes go into, or ``None`` when the effect
+    #: writes no bytes of its own and therefore carries no content group.
+    subtree: str | None = None
+    #: The reference kind naming those bytes.
+    ref_prefix: str | None = None
+    #: The provenance classes this effect may state. A single-member set is
+    #: a value the writer fixes, not a choice the record gets to make.
+    context_classes: frozenset[str] = frozenset()
+    #: Whether the content group carries a revision number.
+    revision: bool = False
+    #: ``"forbidden"`` or ``"required"``. Nothing here is optional: section
+    #: 6.2 gives ``supersedes_ref`` to ``use_robert_edit`` only, and always.
+    supersedes: str = "forbidden"
+    #: Whether this effect may pin ``based_on`` evidence at all. An effect
+    #: that never writes evidence must carry an empty ``expected_inputs``,
+    #: not merely a well-formed one.
+    based_on: bool = False
+    #: ``"forbidden"``, or ``"reopen_required"`` for the one effect that may
+    #: write the conversation pointer: permitted when the same operation
+    #: creates the record, required when it reopens an existing one, because
+    #: reopening with nothing to bind publishes no pending object at all.
+    binding: str = "forbidden"
+    #: Whether this effect may publish a record that did not exist before.
+    creates_record: bool = False
+
+
+#: The closed set of pending objects this service can write, one row per
+#: effect. The two read effects are absent on purpose: a read publishes a
+#: receipt and nothing else, so a pending object naming one is a document
+#: this writer cannot have produced, and recovery must never act on it.
+PENDING_VARIANTS: dict[str, PendingVariant] = {
+    "open_work": PendingVariant(binding="reopen_required", creates_record=True),
+    "attach_source": PendingVariant(
+        subtree=records.SOURCES_DIRNAME,
+        ref_prefix="src-",
+        context_classes=SOURCE_CONTEXT_CLASSES,
+    ),
+    "write_artifact": PendingVariant(
+        subtree=records.ARTIFACTS_DIRNAME,
+        ref_prefix="art-",
+        context_classes=frozenset({"agent_draft"}),
+        revision=True,
+        based_on=True,
+    ),
+    "use_robert_edit": PendingVariant(
+        subtree=records.ARTIFACTS_DIRNAME,
+        ref_prefix="art-",
+        context_classes=frozenset({"coauthored_output"}),
+        revision=True,
+        supersedes="required",
+    ),
+    "request_disposition": PendingVariant(),
+    "record_disposition": PendingVariant(),
+}
+
 #: The effects that publish bytes of their own beside the record, and the
 #: subtree each one is allowed to have written into. An operation record that
 #: claims a source was written into ``artifacts/`` is not a record this
-#: service ever wrote, whatever else it says.
+#: service ever wrote, whatever else it says. Derived from the variant table
+#: so the two can never drift apart.
 _CONTENT_SUBTREE: dict[str, str] = {
-    "attach_source": records.SOURCES_DIRNAME,
-    "write_artifact": records.ARTIFACTS_DIRNAME,
-    "use_robert_edit": records.ARTIFACTS_DIRNAME,
+    effect: variant.subtree
+    for effect, variant in PENDING_VARIANTS.items()
+    if variant.subtree is not None
 }
 
 #: The closed set of reasons recovery may quarantine for.
@@ -949,35 +1023,69 @@ def _control_expected_inputs(value: Any, what: str) -> tuple[Mapping[str, str], 
 
 
 def parse_intent(document: Any) -> Intent:
-    """Read a pending object back as the exact bound schema it must be."""
+    """Read a pending object back as the exact per-effect variant it must be.
+
+    The variant is decided from :data:`PENDING_VARIANTS` *first*, and every
+    conditional group, fixed value and forbidden field follows from that one
+    row. This ordering is the point: recovery installs a pinned record
+    candidate over ``work.json``, and a conversation-binding group is its
+    authority to install a pointer, so a document that is not one of the six
+    shapes this writer emits has to be refused here — before recovery can
+    act on it — rather than at the terminal it would otherwise have reached
+    with canonical state already changed.
+    """
     what = "an operation record"
     data = _control_object(document, what)
-    writes_content = _control_group(data, _INTENT_CONTENT_GROUP, what)
-    writes_binding = _control_group(data, _INTENT_BINDING_GROUP, what)
-    optional = []
-    if writes_content:
-        optional.extend(_INTENT_CONTENT_GROUP)
-    if writes_binding:
-        optional.extend(_INTENT_BINDING_GROUP)
+
+    effect = data.get("effect")
+    if not isinstance(effect, str) or effect not in EFFECTS:
+        raise ControlRecordInvalid(f"{what} names an operation that does not exist")
+    variant = PENDING_VARIANTS.get(effect)
+    if variant is None:
+        # A read effect, or anything else the request surface admits that
+        # never writes: no pending object exists for it to have been.
+        raise ControlRecordInvalid(
+            f"{what} names an operation that never writes an operation record"
+        )
+
+    # Which of the two conditional groups this variant carries is decided
+    # before the key set is checked, so a group belonging to another effect
+    # is an unknown field rather than something to be validated and then
+    # believed. The one conditional case is ``open_work``: the create leg
+    # binds a conversation only when the request named one, while reopening
+    # an existing record with no pointer to write publishes nothing at all.
+    if "record_sha256_before" not in data:
+        raise ControlRecordInvalid(f"{what} is missing: record_sha256_before")
+    creates_record = data.get("record_sha256_before") is None
+    if creates_record and not variant.creates_record:
+        raise ControlRecordInvalid(
+            f"{what} claims to create a record this operation never creates"
+        )
+
+    required = list(_INTENT_REQUIRED)
     # The receipt is required, not optional. Every pending object this
     # service publishes carries the receipt its operation validated before
     # anything was written, and recovery commits forward from it. A pending
     # object without one is not a shape this writer emits, and accepting it
     # let a malformed record reach the point where a matching candidate is
     # installed over ``work.json`` before the absence was noticed.
-    _control_keys(data, _INTENT_REQUIRED + ("receipt",), optional, what)
+    required.append("receipt")
+    writes_content = variant.subtree is not None
+    if writes_content:
+        required.extend(_INTENT_CONTENT_GROUP)
+    optional: list[str] = []
+    if variant.binding == "reopen_required":
+        if creates_record:
+            optional.extend(_INTENT_BINDING_GROUP)
+        else:
+            required.extend(_INTENT_BINDING_GROUP)
+    _control_keys(data, tuple(required), tuple(optional), what)
+    # Half a group is still refused as half a group, with the same message,
+    # rather than as a set of unrelated missing fields.
+    writes_binding = _control_group(data, _INTENT_BINDING_GROUP, what)
     _control_schema_version(data, what)
 
     operation_id = _control_uuid(data.get("operation_id"), "operation_id", what)
-    effect = data.get("effect")
-    if effect not in EFFECTS:
-        raise ControlRecordInvalid(f"{what} names an operation that does not exist")
-    # The content group is required exactly when the effect writes bytes of
-    # its own, so a content-writing record can neither drop its content
-    # fields nor be read as a metadata-only operation.
-    if str(effect) in _CONTENT_SUBTREE and not writes_content:
-        missing = ", ".join(sorted(_INTENT_CONTENT_GROUP))
-        raise ControlRecordInvalid(f"{what} is missing: {missing}")
     work_id = _control_uuid(data.get("work_id"), "work_id", what)
     subject = _control_identifier(data.get("subject"), "subject", what)
 
@@ -990,33 +1098,36 @@ def parse_intent(document: Any) -> Intent:
     supersedes_ref = None
     expected_inputs: tuple[Mapping[str, str], ...] = ()
     if writes_content:
-        subtree = _CONTENT_SUBTREE.get(str(effect))
-        if subtree is None:
-            raise ControlRecordInvalid(f"{what} claims content this operation never writes")
+        assert variant.subtree is not None
         target_relative_path = _control_relative(
-            data.get("target_relative_path"), "target_relative_path", what, subtree=subtree
+            data.get("target_relative_path"),
+            "target_relative_path",
+            what,
+            subtree=variant.subtree,
         )
         output_sha256 = _control_digest(data.get("output_sha256"), "output_sha256", what)
         output_bytes = _control_int(data.get("output_bytes"), "output_bytes", what, minimum=0)
-        is_source = subtree == records.SOURCES_DIRNAME
-        ref = _control_ref(data.get("ref"), "ref", what, prefix="src-" if is_source else "art-")
-        if data.get("revision") is not None:
+        ref = _control_ref(data.get("ref"), "ref", what, prefix=variant.ref_prefix)
+        if variant.revision:
             revision = _control_int(data.get("revision"), "revision", what, minimum=1)
-        if is_source and revision is not None:
+        elif data.get("revision") is not None:
             raise ControlRecordInvalid(f"{what} gives a captured source a revision")
-        if not is_source and revision is None:
-            raise ControlRecordInvalid(f"{what} is missing: revision")
+        # The provenance class is not "one of the classes this kind of file
+        # may hold"; it is the value this effect always states. An agent
+        # draft relabelled as co-authored output, or the reverse, is a claim
+        # about who wrote the words, so the table fixes it per effect.
         context_class = data.get("context_class")
-        permitted = SOURCE_CONTEXT_CLASSES if is_source else ARTIFACT_CONTEXT_CLASSES
-        if context_class not in permitted:
+        if context_class not in variant.context_classes:
             raise ControlRecordInvalid(f"{what} has an unknown provenance class")
-        if data.get("supersedes_ref") is not None:
+        if variant.supersedes == "required":
             supersedes_ref = _control_ref(
                 data.get("supersedes_ref"), "supersedes_ref", what, prefix="art-"
             )
-            if is_source:
-                raise ControlRecordInvalid(f"{what} says a captured source supersedes something")
+        elif data.get("supersedes_ref") is not None:
+            raise ControlRecordInvalid(f"{what} says this operation supersedes something")
         expected_inputs = _control_expected_inputs(data.get("expected_inputs"), what)
+        if expected_inputs and not variant.based_on:
+            raise ControlRecordInvalid(f"{what} pins evidence this operation never records")
 
     binding_relative_path = None
     binding_sha256_before = None
@@ -1032,7 +1143,7 @@ def parse_intent(document: Any) -> Intent:
 
     intent = Intent(
         operation_id=operation_id,
-        effect=str(effect),
+        effect=effect,
         work_id=work_id,
         subject=subject,
         request_sha256=_control_digest(data.get("request_sha256"), "request_sha256", what),
@@ -1058,11 +1169,19 @@ def parse_intent(document: Any) -> Intent:
     )
     if intent.receipt is None:
         raise ControlRecordInvalid(f"{what} is missing: receipt")
+    # Recovery publishes this receipt inside a *committed* terminal. A
+    # pending object carrying any other outcome therefore describes an
+    # answer that could never be given, and is refused before the record
+    # candidate it pins can be installed.
+    if intent.receipt.outcome != "committed":
+        raise ControlRecordInvalid(
+            f"{what} carries a receipt for an operation that committed nothing"
+        )
     _require_receipt_matches(
         intent.receipt,
         what,
         operation_id=operation_id,
-        effect=str(effect),
+        effect=effect,
         subject=subject,
         work_id=work_id,
         relative_path=target_relative_path,
@@ -2066,8 +2185,10 @@ __all__ = [
     "MAX_ORPHAN_TEMPS_SWEPT",
     "MAX_RECOVERED_OPERATIONS",
     "MAX_WORK_TOTAL_BYTES",
+    "PENDING_VARIANTS",
     "AlreadyPublished",
     "Intent",
+    "PendingVariant",
     "Lock",
     "RecoveryOutcome",
     "Snapshot",

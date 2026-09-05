@@ -958,3 +958,497 @@ def test_every_control_record_the_service_writes_round_trips(
             assert parsed.as_document() == json.loads(path.read_bytes()), relative
             seen += 1
     assert seen >= 4
+
+
+# -- B10: a pending object is one of a closed set of per-effect variants ---
+
+
+def crashed_pending_for(flow, crash_at, uninjected, run, *, work_id=None, step="P7"):
+    """Drive one real write to a crash point and read its pending object.
+
+    ``step`` is ``P7`` for the three effects that publish bytes of their own
+    and ``P10`` for the three that do not, because that is where each one is
+    interrupted with its pending object already published.
+    """
+    operation_id = new_operation_id()
+    crash_at(step)
+    with pytest.raises(Crash):
+        run(operation_id)
+    uninjected()
+    if work_id is None:
+        subject_paths = flow.service.store.subject_paths(flow.subject)
+        reservation = json.loads(
+            (subject_paths.creates / f"{operation_id}.json").read_bytes()
+        )
+        paths = store.WorkPaths(
+            directory=subject_paths.work_base / reservation["work_dirname"]
+        )
+    else:
+        paths = paths_for(flow, work_id)
+    path = paths.pending / f"{operation_id}.json"
+    return operation_id, paths, path, json.loads(path.read_bytes())
+
+
+def open_work_pending(flow, crash_at, uninjected):
+    """A real ``open_work`` pending object that writes the conversation pointer."""
+    work_id = flow.started(label="An unbound item", conversation_id=None)
+    operation_id, paths, path, document = crashed_pending_for(
+        flow,
+        crash_at,
+        uninjected,
+        lambda oid: flow.open_existing(work_id, operation_id=oid),
+        work_id=work_id,
+        step="P10",
+    )
+    return work_id, operation_id, paths, path, document
+
+
+def edit_pending(flow, crash_at, uninjected):
+    """A real ``use_robert_edit`` pending object, over a draft it supersedes."""
+    work_id = flow.started(label="An edited item")
+    drafted = flow.write(work_id, "A first draft.\n")
+    operation_id, paths, path, document = crashed_pending_for(
+        flow,
+        crash_at,
+        uninjected,
+        lambda oid: flow.edit_inline(
+            work_id,
+            "In my own words.\n",
+            drafted["result"]["artifact_ref"],
+            drafted["result"]["sha256"],
+            operation_id=oid,
+        ),
+        work_id=work_id,
+    )
+    return work_id, operation_id, paths, path, document, drafted["result"]
+
+
+def writer_pending_variants(flow, crash_at, uninjected):
+    """Every pending object the six write effects can publish.
+
+    Enumerated from the write sites rather than from the parser: each entry
+    is a real crashed operation, so a variant the service genuinely emits
+    and the closed table would refuse fails here.
+    """
+    variants: dict[str, dict] = {}
+
+    def record(name, run, **kwargs):
+        _, _, _, document = crashed_pending_for(flow, crash_at, uninjected, run, **kwargs)
+        variants[name] = document
+
+    record(
+        "open_work/create-binding-the-conversation",
+        lambda oid: flow.create(label="A bound item", operation_id=oid),
+        step="P10",
+    )
+    record(
+        "open_work/create-without-a-conversation",
+        lambda oid: flow.create(
+            label="An unbound item", conversation_id=None, operation_id=oid
+        ),
+        step="P10",
+    )
+
+    reopened = flow.started(label="A reopened item", conversation_id=None)
+    record(
+        "open_work/reopen-writing-the-pointer",
+        lambda oid: flow.open_existing(reopened, operation_id=oid),
+        work_id=reopened,
+        step="P10",
+    )
+
+    attaching = flow.started(label="An attaching item")
+    record(
+        "attach_source",
+        lambda oid: flow.attach_inline(
+            attaching, "Text an external turn captured.\n", operation_id=oid
+        ),
+        work_id=attaching,
+    )
+
+    drafting = flow.started(label="A drafting item")
+    record(
+        "write_artifact/without-evidence",
+        lambda oid: flow.write(drafting, "A draft.\n", operation_id=oid),
+        work_id=drafting,
+    )
+
+    # Approved text in one item is the only evidence a ``based_on`` write may
+    # pin, so the citing variant needs a whole approved item behind it.
+    approved = flow.started(label="An approved item")
+    first = flow.write(approved, "A first draft.\n")
+    proposed = flow.propose(approved, "approved_text", first["result"]["artifact_ref"])
+    flow.decide(approved, proposed["result"]["pending_id"], "approved_text")
+    qualified = (
+        f"approved:{flow.subject}/{flow.work_dir(approved).name}/"
+        f"{first['result']['relative_path']}"
+    )
+    citing = flow.started(label="A citing item")
+    record(
+        "write_artifact/pinning-evidence",
+        lambda oid: flow.write(
+            citing,
+            "A draft that cites it.\n",
+            based_on=[{"ref": qualified, "sha256": first["result"]["sha256"]}],
+            operation_id=oid,
+        ),
+        work_id=citing,
+    )
+
+    editing = flow.started(label="An edited item")
+    drafted = flow.write(editing, "A first draft.\n")
+    record(
+        "use_robert_edit",
+        lambda oid: flow.edit_inline(
+            editing,
+            "In my own words.\n",
+            drafted["result"]["artifact_ref"],
+            drafted["result"]["sha256"],
+            operation_id=oid,
+        ),
+        work_id=editing,
+    )
+
+    deciding = flow.started(label="A deciding item")
+    ready = flow.write(deciding, "A draft to decide about.\n")
+    record(
+        "request_disposition",
+        lambda oid: flow.propose(
+            deciding, "approved_text", ready["result"]["artifact_ref"], operation_id=oid
+        ),
+        work_id=deciding,
+        step="P10",
+    )
+
+    recording = flow.started(label="A recorded item")
+    settled = flow.write(recording, "A draft to approve.\n")
+    awaiting = flow.propose(
+        recording, "approved_text", settled["result"]["artifact_ref"]
+    )
+    record(
+        "record_disposition",
+        lambda oid: flow.decide(
+            recording,
+            awaiting["result"]["pending_id"],
+            "approved_text",
+            operation_id=oid,
+        ),
+        work_id=recording,
+        step="P10",
+    )
+    return variants
+
+
+def test_every_pending_variant_the_writer_emits_round_trips(flow, crash_at, uninjected):
+    """the closed table accepts exactly the documents the write sites produce"""
+    variants = writer_pending_variants(flow, crash_at, uninjected)
+
+    assert len(variants) == 9
+    for name, document in variants.items():
+        assert store.parse_intent(document).as_document() == document, name
+    assert {document["effect"] for document in variants.values()} == set(
+        store.PENDING_VARIANTS
+    )
+
+
+def test_the_variant_table_covers_the_six_write_effects_only(flow):
+    """no read effect has a row, so no pending object can name one"""
+    from domains.cos.work.envelope import EFFECTS, READ_EFFECTS
+
+    assert set(store.PENDING_VARIANTS) == set(EFFECTS) - set(READ_EFFECTS)
+
+
+def test_parse_intent_refuses_a_pending_object_for_a_read_effect(
+    flow, crash_at, uninjected
+):
+    """B10.1 — a read publishes a receipt and nothing else, never a pending object"""
+    work_id = flow.started()
+    operation_id, _, _, document = content_pending(flow, work_id, crash_at, uninjected)
+    for key in store._INTENT_CONTENT_GROUP:
+        document.pop(key)
+    document["effect"] = "search_sources"
+    document["receipt"] = make_receipt(
+        operation_id, "search_sources", "ok", subject=flow.subject, result_count=1
+    ).as_dict()
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_refuses_a_receipt_that_committed_nothing(
+    flow, crash_at, uninjected
+):
+    """B10.2 — recovery publishes this receipt in a committed terminal"""
+    work_id, operation_id, _, _, document = open_work_pending(
+        flow, crash_at, uninjected
+    )
+    document["receipt"] = make_receipt(
+        operation_id,
+        "open_work",
+        "ok",
+        subject=flow.subject,
+        work_id=work_id,
+        state="continuing",
+    ).as_dict()
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_refuses_a_conversation_binding_on_a_content_write(
+    flow, crash_at, uninjected
+):
+    """B10.3 — the binding group is recovery's authority to install a pointer"""
+    _, _, _, _, bound = open_work_pending(flow, crash_at, uninjected)
+    drafting = flow.started(label="A drafting item")
+    _, _, _, document = content_pending(flow, drafting, crash_at, uninjected)
+    for key in store._INTENT_BINDING_GROUP:
+        document[key] = bound[key]
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_refuses_provenance_the_effect_never_states(
+    flow, crash_at, uninjected
+):
+    """B10.4 — a draft relabelled as co-authored output, agreed by both records"""
+    work_id = flow.started()
+    _, _, _, draft = content_pending(flow, work_id, crash_at, uninjected)
+    draft["context_class"] = "coauthored_output"
+    draft["receipt"]["context_class"] = "coauthored_output"
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(draft)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_refuses_an_edit_that_claims_to_be_an_agent_draft(
+    flow, crash_at, uninjected
+):
+    """B10.4 — and the reverse relabelling, which the matcher also cannot see"""
+    _, _, _, _, document, _drafted = edit_pending(flow, crash_at, uninjected)
+    document["context_class"] = "agent_draft"
+    document["receipt"]["context_class"] = "agent_draft"
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_requires_an_edit_to_name_what_it_supersedes(
+    flow, crash_at, uninjected
+):
+    """B10.5 — section 6.2 gives supersedes_ref to use_robert_edit always"""
+    _, _, _, _, document, _drafted = edit_pending(flow, crash_at, uninjected)
+    assert document["receipt"]["supersedes_ref"] == "art-0001"
+    document["supersedes_ref"] = None
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_refuses_a_draft_that_supersedes_something(
+    flow, crash_at, uninjected
+):
+    """B10.5 — and to use_robert_edit only, so a draft may never carry one"""
+    work_id = flow.started()
+    _, _, _, document = content_pending(flow, work_id, crash_at, uninjected)
+    assert "supersedes_ref" not in document["receipt"]
+    document["supersedes_ref"] = "art-0001"
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_refuses_evidence_an_effect_never_records(
+    flow, crash_at, uninjected
+):
+    """an effect that writes no based_on evidence carries an empty list, not a valid one"""
+    _, _, _, _, document, _drafted = edit_pending(flow, crash_at, uninjected)
+    assert document["expected_inputs"] == []
+    document["expected_inputs"] = [{"ref": "art-0001", "sha256": "a" * 64}]
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_refuses_a_content_write_that_creates_its_record(
+    flow, crash_at, uninjected
+):
+    """only open_work publishes a record that did not exist before"""
+    work_id = flow.started()
+    _, _, _, document = content_pending(flow, work_id, crash_at, uninjected)
+    document["record_sha256_before"] = None
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+def test_parse_intent_requires_the_pointer_when_an_open_work_reopens(
+    flow, crash_at, uninjected
+):
+    """a reopen that writes no pointer publishes no pending object at all"""
+    _, _, _, _, document = open_work_pending(flow, crash_at, uninjected)
+    for key in store._INTENT_BINDING_GROUP:
+        document.pop(key)
+
+    with pytest.raises(WorkError) as excinfo:
+        store.parse_intent(document)
+    assert excinfo.value.code == "invalid_request"
+
+
+# -- B10 end to end: a refused variant leaves the whole tree untouched -----
+
+
+def refused_variant_changes_nothing(
+    flow, work_root, snapshot_tree, paths, path, operation_id, document, retry
+):
+    """Corrupt one pending object, replay its operation, prove nothing moved."""
+    rewrite(path, document)
+    before = snapshot_tree(work_root)
+
+    response = retry()
+
+    assert code_of(response) == "invalid_request"
+    assert store.read_terminal(paths, operation_id) is None
+    assert snapshot_tree(work_root) == before
+
+
+def test_a_read_effect_pending_object_changes_nothing(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """B10.1 end to end"""
+    work_id = flow.started()
+    operation_id, paths, path, document = content_pending(
+        flow, work_id, crash_at, uninjected
+    )
+    for key in store._INTENT_CONTENT_GROUP:
+        document.pop(key)
+    document["effect"] = "search_sources"
+    document["receipt"] = make_receipt(
+        operation_id, "search_sources", "ok", subject=flow.subject, result_count=1
+    ).as_dict()
+
+    refused_variant_changes_nothing(
+        flow,
+        work_root,
+        snapshot_tree,
+        paths,
+        path,
+        operation_id,
+        document,
+        lambda: flow.write(work_id, "A draft.\n", operation_id=operation_id),
+    )
+
+
+def test_a_pending_object_whose_receipt_committed_nothing_changes_nothing(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """B10.2 end to end: no binding candidate is installed from an `ok` receipt"""
+    work_id, operation_id, paths, path, document = open_work_pending(
+        flow, crash_at, uninjected
+    )
+    document["receipt"] = make_receipt(
+        operation_id,
+        "open_work",
+        "ok",
+        subject=flow.subject,
+        work_id=work_id,
+        state="continuing",
+    ).as_dict()
+
+    refused_variant_changes_nothing(
+        flow,
+        work_root,
+        snapshot_tree,
+        paths,
+        path,
+        operation_id,
+        document,
+        lambda: flow.open_existing(work_id, operation_id=operation_id),
+    )
+
+
+def test_a_foreign_binding_group_changes_nothing(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """B10.3 end to end: a content write may not install the conversation pointer"""
+    _, _, _, _, bound = open_work_pending(flow, crash_at, uninjected)
+    work_id = flow.started(label="A drafting item")
+    operation_id, paths, path, document = content_pending(
+        flow, work_id, crash_at, uninjected
+    )
+    for key in store._INTENT_BINDING_GROUP:
+        document[key] = bound[key]
+
+    refused_variant_changes_nothing(
+        flow,
+        work_root,
+        snapshot_tree,
+        paths,
+        path,
+        operation_id,
+        document,
+        lambda: flow.write(work_id, "A draft.\n", operation_id=operation_id),
+    )
+
+
+def test_wrong_fixed_provenance_changes_nothing(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """B10.4 end to end: agreement between the two records is not agreement with 6.2"""
+    work_id = flow.started()
+    operation_id, paths, path, document = content_pending(
+        flow, work_id, crash_at, uninjected
+    )
+    document["context_class"] = "coauthored_output"
+    document["receipt"]["context_class"] = "coauthored_output"
+
+    refused_variant_changes_nothing(
+        flow,
+        work_root,
+        snapshot_tree,
+        paths,
+        path,
+        operation_id,
+        document,
+        lambda: flow.write(work_id, "A draft.\n", operation_id=operation_id),
+    )
+
+
+def test_the_wrong_supersedes_shape_changes_nothing(
+    flow, crash_at, uninjected, work_root, snapshot_tree
+):
+    """B10.5 end to end: an edit that names nothing it replaces installs nothing"""
+    work_id, operation_id, paths, path, document, drafted = edit_pending(
+        flow, crash_at, uninjected
+    )
+    supersedes_ref = drafted["artifact_ref"]
+    expected = drafted["sha256"]
+    assert document["supersedes_ref"] == supersedes_ref
+    document["supersedes_ref"] = None
+
+    refused_variant_changes_nothing(
+        flow,
+        work_root,
+        snapshot_tree,
+        paths,
+        path,
+        operation_id,
+        document,
+        lambda: flow.edit_inline(
+            work_id,
+            "In my own words.\n",
+            supersedes_ref,
+            expected,
+            operation_id=operation_id,
+        ),
+    )
