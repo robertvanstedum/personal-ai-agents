@@ -34,6 +34,14 @@ def _is_release_only(path: str) -> bool:
         or path.startswith("docs/")
         or path.startswith("scripts/docs/")
         or path.startswith("tests/")
+        # Prototype Lab and Planning Studio project homes are documentation:
+        # briefs, specifications, decision records, and preserved evidence. A
+        # promoted prototype's runnable code lives with it (for example
+        # prototype-lab/projects/<name>/Dockerfile) and is released by its own
+        # tag workflow, never by this pipeline, so no mini-moi service restarts
+        # for a change under these trees.
+        or path.startswith("prototype-lab/")
+        or path.startswith("planning-studio/")
         or path in {"requirements.test.txt", "pytest.ini", ".gitignore"}
     )
 
