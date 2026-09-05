@@ -43,3 +43,24 @@ All counts and identifiers in the evidence section: 38 / 25 / 13, 11 `REVISE` ac
 ## One thing this note does not do
 
 It does not recommend cutting length. Codex's estimate that 150–250 words could come out is likely right, and it should happen in the same pass that adds testing evidence — not before, because the passages most likely to tighten are the ones testing will rewrite anyway.
+
+---
+
+## Applied 2026-09-05 by Claude Code, on Robert's approval
+
+Two corrections were made to `docs/CASE_STUDY_AGENT_TEAM.md` before it was
+published, and this note records them because the source draft `v9` in this
+directory is preserved unchanged.
+
+1. **Merge-authority sentence.** "No agent merged any work" was replaced with
+   "No agent merged on its own authority: every merge followed Robert's explicit
+   approval of a reviewed diff and was made under his account." GitHub attributes
+   every merge in the sequence to Robert and none happened without his approval,
+   but the merge commands were executed by Claude Code under his session, so the
+   original wording was not exactly true. Raised by Claude Code before merge and
+   approved by Robert.
+2. **W0b merge state.** PR #201 merged as `0e535db` on 2026-09-05. The intro
+   sentence, the evidence-table row, and the limits paragraph were updated
+   together, as the handoff required. The limits paragraph now states the more
+   useful current constraint: both slices are merged, but the Work package is a
+   library that no service imports yet.

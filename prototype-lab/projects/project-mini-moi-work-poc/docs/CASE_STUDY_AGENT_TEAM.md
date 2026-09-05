@@ -3,14 +3,14 @@
 ## A case study in design, independent verification, and human ownership
 
 **Status:** Living draft awaiting file-level and real Career-use evidence  
-**Editorial date:** September 5, 2026  
+**Editorial date:** September 5, 2026 (updated after both slices merged)  
 **Decision owner and final editor:** Robert van Stedum  
 **This round:** Claude.ai draft v9, with narrow corrections from independent Codex and Grok reviews  
 **Companion:** [Mini-moi Work vision](MINI_MOI_WORK_VISION.md)
 
 Over several days in early September 2026, Robert van Stedum worked with four AI systems as a small delivery team, building the first durable piece of a personal system he calls mini-moi. He set the direction and made every decision that mattered. Claude.ai developed and reconciled the product design with him. Grok challenged the early design position. Claude Code turned the agreed direction into a detailed design and then built it. Codex independently reviewed both the design and the committed code.
 
-The result worth writing about is not that several models participated. It is that they worked through stable roles, durable handoffs, independent evidence, and human decision gates. No agent merged any work. The agent that wrote the code did not approve it. Repository changes stayed serialized even while design, implementation, and review overlapped in time.
+The result worth writing about is not that several models participated. It is that they worked through stable roles, durable handoffs, independent evidence, and human decision gates. No agent merged on its own authority: every merge followed Robert's explicit approval of a reviewed diff and was made under his account. The agent that wrote the code did not approve it. Repository changes stayed serialized even while design, implementation, and review overlapped in time.
 
 That is the point at which an interesting experiment started to look like an operating method.
 
@@ -20,7 +20,7 @@ The method was first exercised on smaller changes where a mistake would cost lit
 
 Those runs tested the mechanics. They did not establish that the same process could be trusted with personal work — where provenance, authorship, and judgment carry consequences.
 
-The next build raised the stakes and prepared that test. It created the durable Work foundation for Chief of Staff, the relational center of mini-moi, with cover-letter collaboration for Robert's active job search as the first intended use. The service is deliberately not a cover-letter generator. It keeps the identity of a piece of work, preserves supplied sources, records drafts and revisions, distinguishes who authored what, controls one-time authority, records dispositions, and recovers safely after an interrupted write. It contains no model, vendor, or network dependency. Of its two slices, the first was merged and the second had been independently reviewed but not yet merged at the recorded fact-check point; the evidence section gives the exact state.
+The next build raised the stakes and prepared that test. It created the durable Work foundation for Chief of Staff, the relational center of mini-moi, with cover-letter collaboration for Robert's active job search as the first intended use. The service is deliberately not a cover-letter generator. It keeps the identity of a piece of work, preserves supplied sources, records drafts and revisions, distinguishes who authored what, controls one-time authority, records dispositions, and recovers safely after an interrupted write. It contains no model, vendor, or network dependency. Both of its slices were independently reviewed and are now merged; the evidence section gives the exact commits.
 
 That distinction is foundational to what Robert is building. The aim is not to automate himself out of the work. For a role he cares about, he expects to rewrite a first letter many times and put his own language into it directly — his hands on the keyboard are part of the design, not friction to remove. For an exploratory application, he may ask Chief of Staff to adapt a standard letter and review the result. Over time, ten rewrites should become two or three, not because the system takes over but because it has accumulated a better understanding of his history, evidence, preferences, and voice. The [companion vision](MINI_MOI_WORK_VISION.md) sets out that larger intent; this case study covers only the method and its evidence.
 
@@ -67,7 +67,7 @@ The foundation was split into two separately authorized slices.
 | Slice | Status at last recheck, September 5, 10:19 CDT | Change size |
 |---|---|---:|
 | W0a: accumulation and bounded retrieval | Merged as PR [#200](https://github.com/robertvanstedum/personal-ai-agents/pull/200), commit `476568d` (September 4, 21:46 CDT) | 41 files; 6,329 additions |
-| W0b: durable Work service | Independently cleared at `c9cdde7` (September 5, ~02:53 CDT); PR [#201](https://github.com/robertvanstedum/personal-ai-agents/pull/201) open, awaiting Robert's merge decision | 25 files; 12,202 additions, 17 deletions |
+| W0b: durable Work service | Independently cleared at `c9cdde7` (September 5, ~02:53 CDT), then merged as PR [#201](https://github.com/robertvanstedum/personal-ai-agents/pull/201), commit `0e535db` | 25 files; 12,202 additions, 17 deletions |
 
 Together the reviewed tree contains 61 unique paths — five W0b paths revise files introduced in W0a — and adds 18,514 lines: 8,366 in the provider-neutral Work package and 10,148 in tests and synthetic fixtures. The size is not the achievement. It shows how much executable boundary evidence accompanied the service.
 
@@ -85,9 +85,9 @@ The part Robert does not want to scale away is the design conversation. What sho
 
 ## What has not been proved
 
-The limits are real. W0b passed independent review, but PR #201 was still open at the last recheck, September 5 at 10:19 CDT. Nothing is connected to the running Chief of Staff. No private Career material has entered the service, and no cover letter has been produced through it. The evidence so far comes from synthetic data and adversarial tests in one repository, with one human decision owner.
+The limits are real. Both slices are merged, but nothing is connected to the running Chief of Staff: the Work package is a library that no service imports yet. No private Career material has entered the service, and no cover letter has been produced through it. The evidence so far comes from synthetic data and adversarial tests in one repository, with one human decision owner.
 
-The next proof is deliberately plain. First, a file-level acceptance test against the merged service. Then a thin Chief of Staff integration should let Robert attach a job description and say: **"Start cover letter."** Chief of Staff should preserve the description, use only the Career sources Robert has authorized, create and store a first draft, show him the committed result, and wait. It must not submit anything.
+The next proof is deliberately plain. First, a file-level acceptance test against the merged service, using one authorized folder and a local store, with no model in the loop. Then a thin Chief of Staff integration should let Robert attach a job description and say: **"Start cover letter."** Chief of Staff should preserve the description, use only the Career sources Robert has authorized, create and store a first draft, show him the committed result, and wait. It must not submit anything.
 
 One successful letter will not complete the case. The deeper test is whether the collaboration grows more useful across many letters while Robert remains the author, editor, and decision owner. If that holds, the same foundation becomes credible for the broader work mini-moi is meant to do.
 
