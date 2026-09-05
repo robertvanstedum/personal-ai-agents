@@ -75,19 +75,30 @@ def private_work_root(workspace: Path) -> Path:
     return copy_private(FIXTURE_ROOT / "work_root", workspace / "work-root")
 
 
+def declaration(mapping: dict, default_class: str = "robert_source") -> str:
+    """Render the deployment declaration for authorized read-only roots.
+
+    Every root carries an explicit provenance class. A value may be given as a
+    plain path — which takes ``default_class`` — or as a ``(path, class)``
+    pair, so a test can declare a root of any of the four classes.
+    """
+    document: dict[str, dict[str, dict[str, str]]] = {}
+    for subject, refs in mapping.items():
+        entries: dict[str, dict[str, str]] = {}
+        for ref, value in refs.items():
+            if isinstance(value, tuple):
+                path, context_class = value
+            else:
+                path, context_class = value, default_class
+            entries[ref] = {"path": str(path), "context_class": context_class}
+        document[subject] = entries
+    return json.dumps(document)
+
+
 @pytest.fixture
 def declare_source_roots():
     """Build the deployment declaration for authorized read-only roots."""
-
-    def build(mapping: dict[str, dict[str, object]]) -> str:
-        return json.dumps(
-            {
-                subject: {ref: str(path) for ref, path in refs.items()}
-                for subject, refs in mapping.items()
-            }
-        )
-
-    return build
+    return declaration
 
 
 @pytest.fixture

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.cos.work.records import StaleHash
+from domains.cos.work.records import StaleContext
 from domains.cos.work.retrieval import (
     APPROVED_ROOT_PREFIX,
     Accumulation,
@@ -101,7 +101,7 @@ def test_projection_carries_disposition_reference(career_accumulation: Accumulat
     for item in items:
         assert item.disposition.work_id
         assert item.disposition.operation_id
-        assert item.disposition.at.endswith("Z")
+        assert item.disposition.decided_at.endswith("Z")
 
 
 def test_search_approved_root_finds_approved_language(career_accumulation: Accumulation):
@@ -136,31 +136,31 @@ def test_read_approved_artifact_returns_original_class(career_accumulation: Accu
 def test_stale_artifact_hash_is_reported_not_silently_returned(
     career_accumulation: Accumulation, private_work_root: Path
 ):
-    """a changed artifact is reported as stale_hash in search"""
+    """a changed artifact is reported as stale_context in search"""
     directory = work_dir(private_work_root, "approved-coauthored")
     target = directory / "artifacts" / "0002-letter.md"
     target.write_text(target.read_text() + "\nEdited outside the system.\n")
 
     items, issues = career_accumulation.approved_artifacts("career")
-    assert [issue.code for issue in issues] == ["stale_hash"]
+    assert [issue.code for issue in issues] == ["stale_context"]
     assert issues[0].relative_path.startswith("approved-coauthored")
     assert not any(item.relative_path.startswith("approved-coauthored") for item in items)
 
     outcome = career_accumulation.search_sources("career", [APPROVED], "quayside")
     assert outcome.hits == ()
-    assert [issue.code for issue in outcome.issues] == ["stale_hash"]
+    assert [issue.code for issue in outcome.issues] == ["stale_context"]
 
 
-def test_stale_artifact_hash_on_read_raises_stale_hash(
+def test_stale_artifact_hash_on_read_raises_stale_context(
     career_accumulation: Accumulation, private_work_root: Path
 ):
     """a changed artifact is refused on read"""
     directory = work_dir(private_work_root, "approved-coauthored")
     relative = f"{directory.name}/artifacts/0002-letter.md"
     (directory / "artifacts" / "0002-letter.md").write_text("replaced entirely\n")
-    with pytest.raises(StaleHash) as excinfo:
+    with pytest.raises(StaleContext) as excinfo:
         career_accumulation.read_source("career", APPROVED, relative)
-    assert excinfo.value.code == "stale_hash"
+    assert excinfo.value.code == "stale_context"
     assert excinfo.value.relative_path == relative
 
 

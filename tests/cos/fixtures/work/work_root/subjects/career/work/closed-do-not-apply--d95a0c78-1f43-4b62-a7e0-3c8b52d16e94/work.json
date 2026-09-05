@@ -25,7 +25,7 @@
   "pending_approval": null,
   "disposition": {
     "state": "closed",
-    "at": "2026-08-06T09:01:12Z",
+    "decided_at": "2026-08-06T09:01:12Z",
     "artifact_ref": "art-0001",
     "reason": "do not apply",
     "operation_id": "2c7f53e8-b094-4c3a-95b7-49e8bf2a06d3"

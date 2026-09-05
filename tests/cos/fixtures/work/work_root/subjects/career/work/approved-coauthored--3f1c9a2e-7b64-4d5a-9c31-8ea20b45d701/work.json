@@ -57,7 +57,7 @@
   "pending_approval": null,
   "disposition": {
     "state": "approved_text",
-    "at": "2026-08-13T17:02:41Z",
+    "decided_at": "2026-08-13T17:02:41Z",
     "artifact_ref": "art-0002",
     "reason": null,
     "operation_id": "0a5d31c6-9e72-4a18-b3f5-27c69d08e4b1"

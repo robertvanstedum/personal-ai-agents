@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "work_contract_version": 1,
+  "work_id": "4e7b1a20-6c39-4f81-b5d2-9a0e13c8f472",
+  "subject": "career",
+  "label": "Harbourline Freight depot lead",
+  "intent": "Decide quickly whether this is worth any writing at all.",
+  "state": "closed",
+  "created_at": "2026-08-21T07:40:12Z",
+  "updated_at": "2026-08-21T07:52:39Z",
+  "sources": [],
+  "artifacts": [],
+  "pending_approval": null,
+  "disposition": {
+    "state": "closed",
+    "decided_at": "2026-08-21T07:52:39Z",
+    "artifact_ref": null,
+    "reason": "do not apply, nothing drafted",
+    "operation_id": "b41d8c07-2a5e-4f39-8d6b-51ca7e29f083"
+  }
+}

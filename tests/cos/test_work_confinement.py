@@ -10,9 +10,9 @@ import pytest
 from domains.cos.work.confine import (
     ALLOWED_EXTENSIONS,
     NotFound,
-    PathRejected,
+    PathDenied,
     TooLarge,
-    UnsupportedFile,
+    UnsupportedMedia,
     confine,
     iter_files,
     sha256_bytes,
@@ -38,36 +38,37 @@ def test_confine_accepts_plain_relative_path(root: Path):
     """an ordinary relative path resolves"""
     confined = confine(root, "letters/one.md")
     assert confined.relative_path == "letters/one.md"
-    assert confined.absolute_path == root / "letters" / "one.md"
+    assert confined.root == root
+    assert not hasattr(confined, "absolute_path")
     assert confined.size == len("first letter\n")
 
 
 def test_confine_rejects_parent_traversal(root: Path):
     """'..' is refused before any read"""
     for candidate in ["../outside/secret.md", "letters/../../outside/secret.md", ".."]:
-        with pytest.raises(PathRejected) as excinfo:
+        with pytest.raises(PathDenied) as excinfo:
             confine(root, candidate)
-        assert excinfo.value.code == "path_rejected"
+        assert excinfo.value.code == "path_denied"
 
 
 def test_confine_rejects_absolute_path(root: Path, workspace: Path):
     """a caller-supplied absolute path is refused"""
-    with pytest.raises(PathRejected):
+    with pytest.raises(PathDenied):
         confine(root, str(workspace / "outside" / "secret.md"))
-    with pytest.raises(PathRejected):
+    with pytest.raises(PathDenied):
         confine(root, "/etc/hosts")
 
 
 def test_confine_rejects_nul_byte(root: Path):
     """a NUL byte is refused"""
-    with pytest.raises(PathRejected):
+    with pytest.raises(PathDenied):
         confine(root, "letters/one.md\x00.txt")
 
 
 def test_confine_rejects_symlink_final_component(root: Path, workspace: Path):
     """a symlinked file is refused"""
     (root / "shortcut.md").symlink_to(workspace / "outside" / "secret.md")
-    with pytest.raises(PathRejected) as excinfo:
+    with pytest.raises(PathDenied) as excinfo:
         confine(root, "shortcut.md")
     assert "symbolic link" in excinfo.value.message
 
@@ -75,7 +76,7 @@ def test_confine_rejects_symlink_final_component(root: Path, workspace: Path):
 def test_confine_rejects_symlink_directory_component(root: Path, workspace: Path):
     """a symlinked directory component is refused"""
     (root / "elsewhere").symlink_to(workspace / "outside", target_is_directory=True)
-    with pytest.raises(PathRejected):
+    with pytest.raises(PathDenied):
         confine(root, "elsewhere/secret.md")
 
 
@@ -86,7 +87,7 @@ def test_confine_rejects_symlink_pointing_inside_root(root: Path):
     can be repointed between one call and the next.
     """
     (root / "alias.md").symlink_to(root / "letters" / "one.md")
-    with pytest.raises(PathRejected) as excinfo:
+    with pytest.raises(PathDenied) as excinfo:
         confine(root, "alias.md")
     assert "symbolic link" in excinfo.value.message
 
@@ -95,7 +96,7 @@ def test_confine_rejects_non_regular_file(root: Path):
     """a FIFO or device is refused"""
     fifo = root / "pipe.txt"
     os.mkfifo(fifo)
-    with pytest.raises(PathRejected) as excinfo:
+    with pytest.raises(PathDenied) as excinfo:
         confine(root, "pipe.txt")
     assert "regular files" in excinfo.value.message
 
@@ -103,9 +104,9 @@ def test_confine_rejects_non_regular_file(root: Path):
 def test_confine_rejects_unsupported_extension(root: Path):
     """anything but .md and .txt is refused"""
     assert ALLOWED_EXTENSIONS == frozenset({".md", ".txt"})
-    with pytest.raises(UnsupportedFile) as excinfo:
+    with pytest.raises(UnsupportedMedia) as excinfo:
         confine(root, "picture.png")
-    assert excinfo.value.code == "unsupported_file"
+    assert excinfo.value.code == "unsupported_media"
 
 
 def test_confine_rejects_oversized_file(root: Path):
@@ -122,7 +123,7 @@ def test_confine_rejects_escape_after_resolution(root: Path, workspace: Path):
     """a path that escapes after resolution is refused"""
     escape = root / "letters" / "up"
     escape.symlink_to(workspace / "outside", target_is_directory=True)
-    with pytest.raises(PathRejected):
+    with pytest.raises(PathDenied):
         confine(root, "letters/up/secret.md")
 
 

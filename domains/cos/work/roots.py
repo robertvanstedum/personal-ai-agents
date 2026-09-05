@@ -32,20 +32,34 @@ import stat
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
-from .envelope import WorkError
+from .envelope import CONTEXT_CLASSES, WorkError, is_identifier
 
 #: Absolute path of the canonical write root.
 ENV_WORK_ROOT = "COS_WORK_ROOT"
 
-#: Authorized read-only source roots, inline JSON:
-#: ``{"<subject>": {"<root_ref>": "/absolute/path", ...}, ...}``
+#: Authorized read-only source roots, inline JSON. Every root declares its
+#: provenance explicitly::
+#:
+#:     {"<subject>": {"<root_ref>": {"path": "/absolute/path",
+#:                                   "context_class": "robert_source"}}}
+#:
+#: ``context_class`` is one of ``robert_source``, ``external_source``,
+#: ``agent_draft`` or ``coauthored_output``. There is no default: a root whose
+#: class is missing or unknown is refused, because guessing would let an
+#: external posting or the system's own draft be presented later as Robert's
+#: own writing. W0a requires each root to be provenance-homogeneous — one
+#: class for everything under it — and stores no per-file metadata.
 ENV_SOURCE_ROOTS = "COS_WORK_SOURCE_ROOTS"
 
 #: Path to a file holding the same JSON document. Used when the inline
 #: variable is absent; the inline variable wins when both are set.
 ENV_SOURCE_ROOTS_FILE = "COS_WORK_SOURCE_ROOTS_FILE"
+
+#: The reserved prefix addressing a subject's approved-output projection. It
+#: is derived, never configured: a deployment may not declare a root under it.
+APPROVED_REF_PREFIX = "approved:"
 
 #: Permission bits that must be clear on every root: no group, no other.
 NON_OWNER_PERMISSION_BITS = 0o077
@@ -74,6 +88,7 @@ class SourceRoot:
     subject: str
     ref: str
     path: Path
+    context_class: str
     inside_checkout: bool = False
 
 
@@ -274,7 +289,7 @@ def validate_work_root(
 def validate_source_root(
     subject: str,
     ref: str,
-    raw: str,
+    entry: Any,
     checkout_root: Path | None,
 ) -> tuple[SourceRoot | None, RootIssue | None]:
     """Validate one configured read-only source root. Fails closed."""
@@ -284,6 +299,25 @@ def validate_source_root(
             subject=subject, ref=ref, code="source_root_unavailable", reason=reason
         )
 
+    if not is_identifier(subject):
+        return refuse("the configured subject is not a valid name")
+    if isinstance(ref, str) and ref.startswith(APPROVED_REF_PREFIX):
+        return refuse("a configured root may not claim the reserved approved prefix")
+    if not is_identifier(ref):
+        return refuse("the configured root reference is not a valid name")
+    if not isinstance(entry, Mapping):
+        return refuse("the root must declare an object with a path and a provenance class")
+    unknown = sorted(set(entry) - {"path", "context_class"})
+    if unknown:
+        return refuse("the root declaration has fields that are not part of it")
+
+    context_class = entry.get("context_class")
+    if not isinstance(context_class, str) or not context_class.strip():
+        return refuse("the root does not declare a provenance class")
+    if context_class not in CONTEXT_CLASSES:
+        return refuse("the root declares an unknown provenance class")
+
+    raw = entry.get("path")
     if not isinstance(raw, str) or not raw.strip():
         return refuse("the configured path is empty")
     path = Path(raw.strip())
@@ -304,33 +338,42 @@ def validate_source_root(
             )
     return (
         SourceRoot(
-            subject=subject, ref=ref, path=Path(os.path.realpath(path)), inside_checkout=inside
+            subject=subject,
+            ref=ref,
+            path=Path(os.path.realpath(path)),
+            context_class=context_class,
+            inside_checkout=inside,
         ),
         None,
     )
 
 
-def parse_source_root_declaration(raw: str) -> Mapping[str, Mapping[str, str]]:
-    """Parse the deployment JSON declaration of source roots."""
+def parse_source_root_declaration(raw: str) -> Mapping[str, Mapping[str, Any]]:
+    """Parse the deployment JSON declaration of source roots.
+
+    Only the document's outer shape is decided here — it must be an object of
+    subjects, each an object of root references. Each root's own declaration is
+    passed through untouched to :func:`validate_source_root`, so one badly
+    declared root is dropped and reported on its own rather than taking every
+    sibling down with it.
+    """
     try:
         parsed = json.loads(raw)
     except (TypeError, ValueError) as exc:
         raise ValueError("source-root declaration is not valid JSON") from exc
     if not isinstance(parsed, dict):
         raise ValueError("source-root declaration must map subjects to roots")
-    declaration: dict[str, dict[str, str]] = {}
+    declaration: dict[str, dict[str, Any]] = {}
     for subject, refs in parsed.items():
-        if not isinstance(subject, str) or not subject.strip():
-            raise ValueError("each subject must be a non-empty name")
+        if not isinstance(subject, str) or not subject:
+            raise ValueError("each subject must be a valid name")
         if not isinstance(refs, dict):
-            raise ValueError("each subject must map root references to paths")
-        entries: dict[str, str] = {}
-        for ref, path in refs.items():
-            if not isinstance(ref, str) or not ref.strip():
-                raise ValueError("each root reference must be a non-empty name")
-            if not isinstance(path, str):
-                raise ValueError("each root path must be a string")
-            entries[ref] = path
+            raise ValueError("each subject must map root references to declarations")
+        entries: dict[str, Any] = {}
+        for ref, entry in refs.items():
+            if not isinstance(ref, str):
+                raise ValueError("each root reference must be a valid name")
+            entries[ref] = entry
         declaration[subject] = entries
     return declaration
 
@@ -384,8 +427,8 @@ def load_root_configuration(
             )
         for subject, refs in declaration.items():
             valid: dict[str, SourceRoot] = {}
-            for ref, raw_path in refs.items():
-                root, issue = validate_source_root(subject, ref, raw_path, checkout_root)
+            for ref, entry in refs.items():
+                root, issue = validate_source_root(subject, ref, entry, checkout_root)
                 if issue is not None:
                     issues.append(issue)
                     continue

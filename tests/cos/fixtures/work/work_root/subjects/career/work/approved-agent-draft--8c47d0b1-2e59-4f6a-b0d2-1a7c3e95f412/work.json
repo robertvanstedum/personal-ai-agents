@@ -25,7 +25,7 @@
   "pending_approval": null,
   "disposition": {
     "state": "approved_text",
-    "at": "2026-08-19T12:10:03Z",
+    "decided_at": "2026-08-19T12:10:03Z",
     "artifact_ref": "art-0001",
     "reason": "Useful base, still an agent draft.",
     "operation_id": "1b6e42d7-af83-4b29-84a6-38d7ae19f5c2"

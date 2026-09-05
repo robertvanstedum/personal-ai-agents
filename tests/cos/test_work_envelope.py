@@ -61,11 +61,11 @@ def test_required_w0a_error_codes_present():
         "invalid_request",
         "work_root_unavailable",
         "source_root_unavailable",
-        "path_rejected",
+        "path_denied",
         "not_found",
-        "unsupported_file",
+        "unsupported_media",
         "too_large",
-        "stale_hash",
+        "stale_context",
         "egress_denied",
         "runtime_profile_unavailable",
     }
@@ -75,7 +75,7 @@ def test_required_w0a_error_codes_present():
 
 def test_unknown_error_code_refused():
     """constructing an error outside the vocabulary fails"""
-    for code in ["", "PATH_REJECTED", "path-rejected", "model_refused"]:
+    for code in ["", "PATH_DENIED", "path-denied", "model_refused"]:
         with pytest.raises(ValueError):
             WorkError(code, "plain language")
 
@@ -135,12 +135,12 @@ def test_success_response_shape():
 
 def test_error_response_is_content_free():
     """errors carry no body and no absolute path"""
-    error = WorkError("path_rejected", "that file name is not allowed", relative_path="a/b.md")
+    error = WorkError("path_denied", "that file name is not allowed", relative_path="a/b.md")
     response = error_response("read_source", OPERATION_ID, error)
     assert response["ok"] is False
     assert response["result"] is None
     assert response["error"] == {
-        "code": "path_rejected",
+        "code": "path_denied",
         "message": "that file name is not allowed",
         "relative_path": "a/b.md",
     }

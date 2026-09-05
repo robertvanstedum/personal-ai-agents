@@ -29,10 +29,21 @@ def private_dir(parent: Path, name: str) -> Path:
     return path
 
 
-def declare(mapping: dict[str, dict[str, object]]) -> str:
-    return json.dumps(
-        {subject: {ref: str(path) for ref, path in refs.items()} for subject, refs in mapping.items()}
-    )
+def declare(mapping: dict, default_class: str = "robert_source") -> str:
+    """Render a deployment declaration; every root carries a provenance class.
+
+    A value may be a plain path — which takes ``default_class`` — or a
+    ``(path, context_class)`` pair, so a test can declare any of the four
+    classes without a second helper.
+    """
+    document: dict[str, dict[str, dict[str, str]]] = {}
+    for subject, refs in mapping.items():
+        entries: dict[str, dict[str, str]] = {}
+        for ref, value in refs.items():
+            path, context_class = value if isinstance(value, tuple) else (value, default_class)
+            entries[ref] = {"path": str(path), "context_class": context_class}
+        document[subject] = entries
+    return json.dumps(document)
 
 
 # -- the canonical write root ------------------------------------------------
@@ -199,7 +210,7 @@ def test_source_root_malformed_json_yields_issue_not_crash(temp_git_repo):
 def test_source_root_relative_path_dropped_and_reported(temp_git_repo):
     """a relative source root is dropped fail-closed"""
     config = load_root_configuration(
-        {ENV_SOURCE_ROOTS: json.dumps({"career": {"resumes": "relative/resumes"}})},
+        {ENV_SOURCE_ROOTS: declare({"career": {"resumes": "relative/resumes"}})},
         checkout_root=temp_git_repo(),
     )
     assert config.root_refs("career") == ()

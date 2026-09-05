@@ -17,12 +17,18 @@ change authorship. An approved ``agent_draft`` stays an agent draft.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from .confine import sha256_file
-from .envelope import WorkError, is_uuid4
+from .envelope import (
+    ARTIFACT_CONTEXT_CLASSES,
+    SOURCE_CONTEXT_CLASSES,
+    WorkError,
+    is_uuid4,
+)
 
 SCHEMA_VERSION = 1
 
@@ -30,11 +36,11 @@ SCHEMA_VERSION = 1
 #: a free-text reason with state ``closed``, not a new state.
 WORK_STATES: frozenset[str] = frozenset({"continuing", "approved_text", "closed", "unresolved"})
 
-#: Stored provenance classes for captured sources.
-SOURCE_CONTEXT_CLASSES: frozenset[str] = frozenset({"robert_source", "external_source"})
-
-#: Stored provenance classes for produced artifacts.
-ARTIFACT_CONTEXT_CLASSES: frozenset[str] = frozenset({"agent_draft", "coauthored_output"})
+#: The subtree each kind of record entry must stay inside. A source can never
+#: be recorded as an artifact path, and an artifact can never be recorded as a
+#: source path, whatever the writing side believes.
+SOURCES_DIRNAME = "sources"
+ARTIFACTS_DIRNAME = "artifacts"
 
 #: Fields removed from the contract by review. Their presence is an error with
 #: a specific message so a regression is obvious rather than merely "unknown".
@@ -73,11 +79,15 @@ _ARTIFACT_OPTIONAL = ("bytes", "operation_id", "supersedes_ref")
 _PENDING_REQUIRED = ("pending_id", "proposed_state", "artifact_ref", "issued_at", "expires_at")
 _PENDING_OPTIONAL = ("artifact_sha256",)
 
-_DISPOSITION_REQUIRED = ("state", "at", "artifact_ref", "reason", "operation_id")
+_DISPOSITION_REQUIRED = ("state", "decided_at", "artifact_ref", "reason", "operation_id")
 
 _BINDING_REQUIRED = ("schema_version", "conversation_id", "subject", "work_id", "updated_at")
 
 _BASED_ON_REQUIRED = ("ref", "sha256")
+
+
+#: The exact shape a stored digest must have.
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class RecordInvalid(WorkError):
@@ -87,12 +97,12 @@ class RecordInvalid(WorkError):
         super().__init__("invalid_request", message, relative_path=relative_path)
 
 
-class StaleHash(WorkError):
+class StaleContext(WorkError):
     """Stored bytes no longer match the hash the record pinned."""
 
     def __init__(self, relative_path: str) -> None:
         super().__init__(
-            "stale_hash",
+            "stale_context",
             "the stored file no longer matches the hash recorded for it",
             relative_path=relative_path,
         )
@@ -153,7 +163,7 @@ class Disposition:
     """Robert's recorded decision about a work item."""
 
     state: str
-    at: str
+    decided_at: str
     artifact_ref: str | None
     reason: str | None
     operation_id: str | None
@@ -185,7 +195,14 @@ class WorkRecord:
 
     @property
     def approved_artifact_ref(self) -> str | None:
-        """The exact artifact pinned by an ``approved_text`` disposition."""
+        """The exact artifact pinned by an ``approved_text`` disposition.
+
+        Both the record's own state and the disposition must say
+        ``approved_text``. Continuing work never projects an approval, however
+        confidently a disposition claims one.
+        """
+        if self.state != "approved_text":
+            return None
         if self.disposition is None or self.disposition.state != "approved_text":
             return None
         return self.disposition.artifact_ref
@@ -254,7 +271,7 @@ def _optional_int(data: Mapping[str, Any], key: str, what: str) -> int | None:
 
 def _sha256(data: Mapping[str, Any], what: str) -> str:
     value = data.get("sha256")
-    if not isinstance(value, str) or len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+    if not isinstance(value, str) or SHA256_PATTERN.fullmatch(value) is None:
         raise RecordInvalid(f"{what} needs a lowercase hex sha256 digest")
     return value
 
@@ -268,10 +285,21 @@ def _optional_operation_id(data: Mapping[str, Any], what: str) -> str | None:
     return value
 
 
-def _relative_path(data: Mapping[str, Any], what: str) -> str:
+def _relative_path(data: Mapping[str, Any], what: str, subtree: str) -> str:
+    """Validate a stored path and require it to sit inside ``subtree``."""
     value = _text(data, "path", what)
-    if value.startswith("/") or ".." in value.split("/"):
+    parts = value.split("/")
+    if value.startswith("/") or ".." in parts or "." in parts or "" in parts[1:]:
         raise RecordInvalid(f"{what} needs a relative path inside the work directory")
+    if len(parts) < 2 or parts[0] != subtree:
+        raise RecordInvalid(f"{what} needs a path inside {subtree}/")
+    return value
+
+
+def _byte_count(data: Mapping[str, Any], key: str, what: str) -> int | None:
+    value = _optional_int(data, key, what)
+    if value is not None and value < 0:
+        raise RecordInvalid(f"{what} needs a byte count of zero or more")
     return value
 
 
@@ -284,11 +312,11 @@ def parse_source_ref(data: Any) -> SourceRef:
         raise RecordInvalid(f"{what} has an unknown provenance class")
     return SourceRef(
         ref=_text(data, "ref", what),
-        path=_relative_path(data, what),
+        path=_relative_path(data, what, SOURCES_DIRNAME),
         sha256=_sha256(data, what),
         context_class=context_class,
         created_at=_text(data, "created_at", what),
-        bytes=_optional_int(data, "bytes", what),
+        bytes=_byte_count(data, "bytes", what),
         origin_note=_optional_text(data, "origin_note", what),
         operation_id=_optional_operation_id(data, what),
     )
@@ -319,13 +347,13 @@ def parse_artifact_ref(data: Any) -> ArtifactRef:
         raise RecordInvalid(f"{what} needs a revision number of at least one")
     return ArtifactRef(
         ref=_text(data, "ref", what),
-        path=_relative_path(data, what),
+        path=_relative_path(data, what, ARTIFACTS_DIRNAME),
         sha256=_sha256(data, what),
         context_class=context_class,
         revision=revision,
         created_at=_text(data, "created_at", what),
         based_on=_parse_based_on(data.get("based_on")),
-        bytes=_optional_int(data, "bytes", what),
+        bytes=_byte_count(data, "bytes", what),
         operation_id=_optional_operation_id(data, what),
         supersedes_ref=_optional_text(data, "supersedes_ref", what),
     )
@@ -370,7 +398,7 @@ def parse_disposition(data: Any) -> Disposition | None:
         raise RecordInvalid("an approved disposition must name the exact artifact it approved")
     return Disposition(
         state=state,
-        at=_text(data, "at", what),
+        decided_at=_text(data, "decided_at", what),
         artifact_ref=artifact_ref,
         reason=_optional_text(data, "reason", what),
         operation_id=_optional_operation_id(data, what),
@@ -407,10 +435,47 @@ def parse_work_record(data: Any) -> WorkRecord:
         pending_approval=parse_pending_approval(data.get("pending_approval")),
         disposition=parse_disposition(data.get("disposition")),
     )
+    _require_unique(record.sources, "two sources share a reference", key=lambda s: s.ref)
+    _require_unique(record.artifacts, "two artifacts share a reference", key=lambda a: a.ref)
+    _require_unique(
+        record.artifacts, "two artifacts share a revision number", key=lambda a: a.revision
+    )
+    _require_unique(record.sources, "two sources share a path", key=lambda s: s.path)
+    _require_unique(record.artifacts, "two artifacts share a path", key=lambda a: a.path)
+
+    disposition = record.disposition
+    if disposition is not None:
+        if disposition.state == "approved_text":
+            if record.state != "approved_text":
+                raise RecordInvalid(
+                    "a disposition may not claim an approval this work record's state denies"
+                )
+            if record.artifact(disposition.artifact_ref or "") is None:
+                raise RecordInvalid(
+                    "the approved disposition names an artifact this record does not have"
+                )
+        elif disposition.artifact_ref is not None and record.artifact(disposition.artifact_ref) is None:
+            raise RecordInvalid("the disposition names an artifact this record does not have")
+
+    if record.pending_approval is not None:
+        pending = record.pending_approval
+        if record.artifact(pending.artifact_ref) is None:
+            raise RecordInvalid("the pending approval names an artifact this record does not have")
+
     approved = record.approved_artifact_ref
     if approved is not None and record.artifact(approved) is None:
         raise RecordInvalid("the approved disposition names an artifact this record does not have")
     return record
+
+
+def _require_unique(items: Sequence[Any], message: str, *, key) -> None:
+    """Refuse a record that reuses an identifier, a revision or a path."""
+    seen: set[Any] = set()
+    for item in items:
+        value = key(item)
+        if value in seen:
+            raise RecordInvalid(message)
+        seen.add(value)
 
 
 def load_work_record(path: Path) -> WorkRecord:
@@ -466,6 +531,6 @@ def verify_sha256(path: Path, expected: str) -> bool:
 
 
 def require_sha256(path: Path, expected: str, relative_path: str) -> None:
-    """Raise :class:`StaleHash` unless the stored bytes still match."""
+    """Raise :class:`StaleContext` unless the stored bytes still match."""
     if not verify_sha256(path, expected):
-        raise StaleHash(relative_path)
+        raise StaleContext(relative_path)

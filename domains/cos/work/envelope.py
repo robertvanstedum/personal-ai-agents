@@ -12,6 +12,7 @@ that the contract is closed from the start and W0b adds behaviour, not names.
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Mapping
@@ -37,17 +38,19 @@ EFFECTS: frozenset[str] = frozenset(
 #: Effects this gate actually implements. The rest are declared, not served.
 READ_EFFECTS: frozenset[str] = frozenset({"search_sources", "read_source"})
 
-#: Error codes raised by this gate.
+#: Error codes raised by this gate. These are the final contract's names:
+#: ``path_denied``, ``unsupported_media`` and ``stale_context``. No synonym
+#: exists, and the vocabulary is closed — W0b adds behaviour, not names.
 W0A_ERROR_CODES: frozenset[str] = frozenset(
     {
         "invalid_request",
         "work_root_unavailable",
         "source_root_unavailable",
-        "path_rejected",
+        "path_denied",
         "not_found",
-        "unsupported_file",
+        "unsupported_media",
         "too_large",
-        "stale_hash",
+        "stale_context",
         "egress_denied",
         "runtime_profile_unavailable",
     }
@@ -62,7 +65,6 @@ RESERVED_ERROR_CODES: frozenset[str] = frozenset(
         "grant_expired",
         "grant_effect_mismatch",
         "grant_resource_mismatch",
-        "stale_context",
         "locked",
         "ambiguous_work",
         "pending_expired",
@@ -75,9 +77,29 @@ RESERVED_ERROR_CODES: frozenset[str] = frozenset(
 #: error and is refused at construction time.
 ERROR_CODES: frozenset[str] = W0A_ERROR_CODES | RESERVED_ERROR_CODES
 
+#: A partial-result notice. It is deliberately *not* an error code: the
+#: operation succeeded, and the caller is told only that a root was not walked
+#: to the end. It carries no path and no content.
+SEARCH_TRUNCATED = "search_truncated"
+
+#: Codes a per-item issue may carry: every error code, plus the partial-search
+#: notice. Issues are reported alongside results; they never carry content.
+ISSUE_CODES: frozenset[str] = ERROR_CODES | {SEARCH_TRUNCATED}
+
 #: The only permitted egress value. A future capability that needs egress must
 #: add a value here and re-open review rather than flip a boolean.
 EGRESS_VALUES: frozenset[str] = frozenset({"none"})
+
+#: Stored provenance classes for captured sources.
+SOURCE_CONTEXT_CLASSES: frozenset[str] = frozenset({"robert_source", "external_source"})
+
+#: Stored provenance classes for produced artifacts.
+ARTIFACT_CONTEXT_CLASSES: frozenset[str] = frozenset({"agent_draft", "coauthored_output"})
+
+#: Every provenance class. A configured root declares exactly one of these;
+#: there is no default, because a wrong default would present someone else's
+#: writing, or the system's own draft, as Robert's own words.
+CONTEXT_CLASSES: frozenset[str] = SOURCE_CONTEXT_CLASSES | ARTIFACT_CONTEXT_CLASSES
 
 #: Grant data classes. Career is a subject, not a platform privacy type.
 DATA_CLASSES: frozenset[str] = frozenset({"private_personal", "external_public"})
@@ -98,6 +120,19 @@ RECEIPT_KEYS: frozenset[str] = frozenset(
         "created_at",
     }
 )
+
+
+#: The closed grammar for a subject name and for a configured root
+#: reference. Lower-case letters, digits, ``_`` and ``-`` only; it must begin
+#: with a letter or digit; at most 64 characters. Path separators, ``..``,
+#: control characters, whitespace, ``:`` and the empty string are all outside
+#: it, so an identifier can never become a path fragment or a reserved prefix.
+IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
+def is_identifier(value: Any) -> bool:
+    """True when ``value`` satisfies the closed identifier grammar."""
+    return isinstance(value, str) and IDENTIFIER_PATTERN.fullmatch(value) is not None
 
 
 class WorkError(Exception):
@@ -182,6 +217,13 @@ def require_uuid4(value: Any, field_name: str) -> str:
     if not is_uuid4(value):
         raise InvalidRequest(f"{field_name} must be a UUID4 value")
     return str(value).lower()
+
+
+def require_identifier(value: Any, field_name: str) -> str:
+    """Return ``value`` when it satisfies the identifier grammar, else raise."""
+    if not is_identifier(value):
+        raise InvalidRequest(f"{field_name} is not a valid name")
+    return str(value)
 
 
 def require_effect(effect: Any) -> str:

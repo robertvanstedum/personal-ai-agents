@@ -14,7 +14,7 @@ from domains.cos.work.records import (
     SOURCE_CONTEXT_CLASSES,
     WORK_STATES,
     RecordInvalid,
-    StaleHash,
+    StaleContext,
     load_conversation_binding,
     load_work_record,
     parse_conversation_binding,
@@ -43,7 +43,7 @@ def approved_record_data(private_work_root: Path) -> dict:
 def test_load_work_record_accepts_fixture_records(private_work_root: Path):
     """every synthetic work.json validates"""
     directories = work_records(private_work_root)
-    assert len(directories) == 4
+    assert len(directories) == 5
     states = set()
     for directory in directories:
         record = load_work_record(directory / "work.json")
@@ -161,13 +161,13 @@ def test_disposition_shape_and_closed_state(approved_record_data: dict, private_
     assert record.disposition is not None
     assert record.disposition.state == "approved_text"
     assert record.disposition.artifact_ref == "art-0002"
-    assert record.disposition.at
+    assert record.disposition.decided_at
     assert record.disposition.operation_id
 
     closed = next(
         load_work_record(p / "work.json")
         for p in work_records(private_work_root)
-        if p.name.startswith("closed-")
+        if p.name.startswith("closed-do-not-apply")
     )
     assert closed.disposition is not None
     assert closed.disposition.state == "closed"
@@ -237,8 +237,8 @@ def test_verify_sha256_detects_changed_bytes(private_work_root: Path, approved_r
     assert verify_sha256(target, artifact.sha256) is False
 
 
-def test_require_sha256_raises_stale_hash(private_work_root: Path, approved_record_data: dict):
-    """a mismatch raises stale_hash naming the relative path"""
+def test_require_sha256_raises_stale_context(private_work_root: Path, approved_record_data: dict):
+    """a mismatch raises stale_context naming the relative path"""
     record = parse_work_record(approved_record_data)
     artifact = record.artifact("art-0002")
     directory = next(
@@ -247,9 +247,9 @@ def test_require_sha256_raises_stale_hash(private_work_root: Path, approved_reco
     target = directory / artifact.path
     require_sha256(target, artifact.sha256, artifact.path)
     target.write_text("replaced\n")
-    with pytest.raises(StaleHash) as excinfo:
+    with pytest.raises(StaleContext) as excinfo:
         require_sha256(target, artifact.sha256, artifact.path)
-    assert excinfo.value.code == "stale_hash"
+    assert excinfo.value.code == "stale_context"
     assert excinfo.value.relative_path == artifact.path
 
 

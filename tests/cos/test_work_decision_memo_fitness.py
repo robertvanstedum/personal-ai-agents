@@ -23,21 +23,40 @@ from domains.cos.work.roots import (
 )
 
 
+def declare(mapping: dict, default_class: str = "robert_source") -> str:
+    """Render a deployment declaration; every root carries a provenance class.
+
+    A value may be a plain path — which takes ``default_class`` — or a
+    ``(path, context_class)`` pair, so a test can declare any of the four
+    classes without a second helper.
+    """
+    document: dict[str, dict[str, dict[str, str]]] = {}
+    for subject, refs in mapping.items():
+        entries: dict[str, dict[str, str]] = {}
+        for ref, value in refs.items():
+            path, context_class = value if isinstance(value, tuple) else (value, default_class)
+            entries[ref] = {"path": str(path), "context_class": context_class}
+        document[subject] = entries
+    return json.dumps(document)
+
+
 @pytest.fixture
 def both_subjects(
     private_work_root: Path, career_sources: Path, decision_memo_sources: Path
 ) -> Accumulation:
     """One configuration, two subjects, no code between them."""
-    declaration = {
-        "career": {
-            "resumes": str(career_sources / "resumes"),
-            "other-responses": str(career_sources / "other-responses"),
-            "base-letters": str(career_sources / "base-letters"),
-        },
-        "decision_memo": {"notes": str(decision_memo_sources / "notes")},
-    }
+    declared = declare(
+        {
+            "career": {
+                "resumes": career_sources / "resumes",
+                "other-responses": career_sources / "other-responses",
+                "base-letters": career_sources / "base-letters",
+            },
+            "decision_memo": {"notes": decision_memo_sources / "notes"},
+        }
+    )
     configuration = load_root_configuration(
-        {ENV_WORK_ROOT: str(private_work_root), ENV_SOURCE_ROOTS: json.dumps(declaration)}
+        {ENV_WORK_ROOT: str(private_work_root), ENV_SOURCE_ROOTS: declared}
     )
     assert configuration.source_root_issues == ()
     return Accumulation(configuration)

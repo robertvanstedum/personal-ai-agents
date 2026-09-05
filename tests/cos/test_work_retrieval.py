@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from domains.cos.work.confine import NotFound, PathRejected, sha256_file
+from domains.cos.work.confine import NotFound, PathDenied, sha256_file
 from domains.cos.work.envelope import InvalidRequest
 from domains.cos.work.retrieval import (
     MAX_EXCERPT_CHARS_CEILING,
@@ -161,9 +161,9 @@ def test_read_source_returns_content_hash_and_size(
 
 def test_read_source_rejects_traversal(career_accumulation: Accumulation):
     """read is confined"""
-    with pytest.raises(PathRejected):
+    with pytest.raises(PathDenied):
         career_accumulation.read_source("career", "resumes", "../other-responses/answer-01.md")
-    with pytest.raises(PathRejected):
+    with pytest.raises(PathDenied):
         career_accumulation.read_source("career", "resumes", "/etc/hosts")
     with pytest.raises(NotFound):
         career_accumulation.read_source("career", "resumes", "absent.md")
