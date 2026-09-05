@@ -64,7 +64,7 @@ All three sat outside the ordinary path. Each implementation finding was made co
 
 The foundation was split into two separately authorized slices.
 
-| Slice | Status at last recheck, September 5, 10:19 CDT | Change size |
+| Slice | Status at last recheck, September 5, 16:10 CDT | Change size |
 |---|---|---:|
 | W0a: accumulation and bounded retrieval | Merged as PR [#200](https://github.com/robertvanstedum/personal-ai-agents/pull/200), commit `476568d` (September 4, 21:46 CDT) | 41 files; 6,329 additions |
 | W0b: durable Work service | Independently cleared at `c9cdde7` (September 5, ~02:53 CDT), then merged as PR [#201](https://github.com/robertvanstedum/personal-ai-agents/pull/201), commit `0e535db` | 25 files; 12,202 additions, 17 deletions |

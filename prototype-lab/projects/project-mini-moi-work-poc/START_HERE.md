@@ -35,8 +35,9 @@ decision through real use.
 
 The implementation is not copied into this project folder. Its authoritative
 location remains `domains/cos/work/`, with synthetic tests under `tests/cos/`.
-W0a merged through PR `#200`; W0b was independently cleared at commit
-`c9cdde7` and remained open as PR `#201` at the September 5 fact check.
+W0a merged through PR `#200` as `476568d`; W0b was independently cleared at
+commit `c9cdde7` and merged through PR `#201` as `0e535db`. No running service
+imports the package yet.
 
 The design began in the local Planning Studio work under `INIT-2026-0004`, but
 this project does not depend on Planning Studio becoming a production system.

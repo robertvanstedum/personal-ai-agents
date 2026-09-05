@@ -16,10 +16,11 @@ The validation covers both experiment deliverables:
 
 ## Gate 1 — Code baseline
 
-- Confirm W0a is present on the selected baseline.
-- Resolve PR `#201` only through Robert's reviewed-diff decision.
-- Record the exact merged or rejected commit before testing.
-- Do not treat a merge as authorization for Chief of Staff integration.
+- Merged baseline: W0a `476568d` through PR `#200`, and W0b `0e535db` through
+  PR `#201`. Both were independently reviewed before merge.
+- Confirm both commits are ancestors of the branch used for testing.
+- Do not treat a merge as authorization for Chief of Staff integration. No
+  service imports `domains/cos/work/`, and this gate does not change that.
 
 ## Gate 2 — File-level acceptance
 
