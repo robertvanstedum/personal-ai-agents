@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "manifest_id": "MANIFEST-INIT-2026-0002-SOURCES-001",
+  "created_at": "2026-09-02",
+  "preservation_rule": "Repository copies must remain byte-identical to the listed intake files. Interpretations and corrections require separate records.",
+  "sources": [
+    {
+      "artifact_id": "ART-CURATOR-ROADMAP-PROPOSAL",
+      "version": "1-draft",
+      "record_type": "source",
+      "artifact_type": "roadmap_proposal",
+      "title": "Curator Roadmap v1 draft",
+      "repository_path": "ROADMAP_CURATOR_v1_draft_2026-09-02.md",
+      "original_path": "iCloud Drive/personal-ai-agents/Mini-moi-2.0/Curator Domain/ROADMAP_CURATOR_v1_draft_2026-09-02.md",
+      "sha256": "81ba816c55a92f7e63acc823c67f97fc9e32653d7d829a01e7be501efff75528",
+      "line_count": 249,
+      "status": "preserved",
+      "authority": "proposal_only",
+      "sensitivity": "private_review_pending"
+    },
+    {
+      "artifact_id": "ART-CURATOR-TERMINAL-PLEISTOCENE-BRIEFING",
+      "version": "0.1",
+      "record_type": "source",
+      "artifact_type": "research_briefing",
+      "title": "Terminal Pleistocene briefing",
+      "repository_path": "terminal-pleistocene-briefing-v0.1.md",
+      "original_path": "iCloud Drive/personal-ai-agents/Mini-moi-2.0/Curator Domain/terminal-pleistocene-briefing-v0.1.md",
+      "sha256": "33f22d7f95b7763dbf611386b786d95afdf3d36a877378c747b6b4c935d3219e",
+      "line_count": 391,
+      "status": "preserved",
+      "sensitivity": "private_review_pending"
+    },
+    {
+      "artifact_id": "ART-CURATOR-TERMINAL-PLEISTOCENE-BRIEFING",
+      "version": "0.2",
+      "record_type": "source",
+      "artifact_type": "research_briefing",
+      "title": "Terminal Pleistocene briefing",
+      "repository_path": "terminal-pleistocene-briefing-v0.2.md",
+      "original_path": "iCloud Drive/personal-ai-agents/Mini-moi-2.0/Curator Domain/terminal-pleistocene-briefing-v0.2.md",
+      "sha256": "e25e9536f47253ceb48251186c948794e1ae5bce8da8daa15c2a3d12ac2088e1",
+      "line_count": 510,
+      "status": "preserved",
+      "supersedes": "ART-CURATOR-TERMINAL-PLEISTOCENE-BRIEFING@0.1",
+      "sensitivity": "private_review_pending"
+    }
+  ]
+}
+

@@ -1,0 +1,40 @@
+{
+  "schema_version": "0.1",
+  "updated_at": "2026-09-02",
+  "authority": "non_authoritative_v0.1_scaffold",
+  "note": "Manual registry retained as design history. The v0.9 candidate proposes a generated projection.",
+  "initiatives": [
+    {
+      "initiative_id": "INIT-2026-0001",
+      "slug": "central-personal-repository",
+      "title": "Central Personal Repository",
+      "status": "exploring",
+      "steward": "guild_planning_studio",
+      "domains": [
+        "cos",
+        "guild",
+        "curator",
+        "platform",
+        "future_domains"
+      ],
+      "path": "../initiatives/INIT-2026-0001-central-personal-repository/initiative.json",
+      "release_target": null,
+      "next_gate": "independent_design_review"
+    },
+    {
+      "initiative_id": "INIT-2026-0002",
+      "slug": "curator-open-subject",
+      "title": "Open-subject Curator",
+      "status": "captured",
+      "steward": "guild_planning_studio_intake",
+      "domains": [
+        "curator",
+        "cos",
+        "guild"
+      ],
+      "path": "../initiatives/INIT-2026-0002-curator-open-subject/initiative.json",
+      "release_target": null,
+      "next_gate": "design_intake_review"
+    }
+  ]
+}

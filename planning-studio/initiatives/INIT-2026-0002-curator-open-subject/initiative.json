@@ -1,0 +1,45 @@
+{
+  "schema_version": "0.1",
+  "initiative_id": "INIT-2026-0002",
+  "slug": "curator-open-subject",
+  "title": "Open-subject Curator",
+  "created_at": "2026-09-02",
+  "updated_at": "2026-09-02",
+  "status": "captured",
+  "origin": {
+    "type": "personal_curiosity_and_design_artifacts",
+    "participants": [
+      "Robert",
+      "Claude"
+    ]
+  },
+  "steward": "planning_studio_intake",
+  "decision_owner": "Robert",
+  "domains": [
+    "curator",
+    "cos",
+    "guild"
+  ],
+  "roadmap_authority": "none",
+  "release_target": null,
+  "relationships": [
+    {
+      "initiative_id": "INIT-2026-0001",
+      "relationship": "motivates"
+    }
+  ],
+  "source_history": "../../library/sources/terminal-pleistocene-briefing/README.md",
+  "source_records": [
+    "../../library/records/curator-roadmap-v1-draft--ha61ckn6.md",
+    "../../library/records/terminal-pleistocene-briefing-0-1--bwx25shy.md",
+    "../../library/records/terminal-pleistocene-briefing-0-2--zgavq2cf.md"
+  ],
+  "next_gate": "design_intake_review",
+  "tags": [
+    "curator",
+    "subject-injection",
+    "open-topic",
+    "research-artifact",
+    "cross-domain"
+  ]
+}
