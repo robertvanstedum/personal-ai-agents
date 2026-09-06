@@ -137,9 +137,9 @@
     .s-spec_ready  { color: #2a6e4e; background: rgba(42,110,78,0.08);  border-color: rgba(42,110,78,0.25); }
     .s-in_build    { color: #1a5c8a; background: rgba(26,92,138,0.08);  border-color: rgba(26,92,138,0.25); }
     .s-blocked     { color: #8b2020; background: rgba(139,32,32,0.08);  border-color: rgba(139,32,32,0.25); }
+    .s-idea, .s-design, .s-backlog { color: var(--text-muted); background: var(--surface2); border-color: var(--border); }
     .s-done        { color: var(--text-dim); background: rgba(0,0,0,0.04); border-color: var(--border); }
-    .s-deferred    { color: var(--text-dim); background: rgba(0,0,0,0.03); border-color: var(--border); opacity: 0.7; }
-    .s-incomplete  { color: #8b5a00; background: rgba(139,90,0,0.08);   border-color: rgba(139,90,0,0.25); }
+    .s-deferred, .s-cancelled, .s-superseded { color: var(--text-dim); background: rgba(0,0,0,0.03); border-color: var(--border); opacity: 0.7; }
 
     .age-cell { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
     .gh-badge {
@@ -271,10 +271,14 @@
       <div>
         <label>Status</label>
         <select name="status">
+          <option value="idea">Idea</option>
+          <option value="design">Design</option>
+          <option value="backlog">Backlog</option>
           <option value="spec_ready">Spec Ready</option>
           <option value="in_build">In Build</option>
-          <option value="incomplete">Incomplete</option>
+          <option value="blocked">Blocked</option>
           <option value="deferred">Deferred</option>
+          <option value="cancelled">Cancelled</option>
         </select>
       </div>
       <div style="padding-bottom:1px;">
@@ -290,17 +294,18 @@
 
 <form class="filters" method="GET" action="/guild/build">
   <span class="filter-label">Status:</span>
-  <a href="/guild/build" class="filter-btn {% if status_filter == 'all' %}active{% endif %}">All</a>
+  <a href="/guild/build" class="filter-btn {% if status_filter == 'active' %}active{% endif %}">Active</a>
+  <a href="/guild/build?status=all" class="filter-btn {% if status_filter == 'all' %}active{% endif %}">All</a>
+  <a href="/guild/build?status=idea"       class="filter-btn {% if status_filter == 'idea' %}active{% endif %}">Idea</a>
+  <a href="/guild/build?status=design"     class="filter-btn {% if status_filter == 'design' %}active{% endif %}">Design</a>
+  <a href="/guild/build?status=backlog"    class="filter-btn {% if status_filter == 'backlog' %}active{% endif %}">Backlog</a>
   <a href="/guild/build?status=in_build"   class="filter-btn {% if status_filter == 'in_build' %}active{% endif %}">In Build</a>
   <a href="/guild/build?status=spec_ready" class="filter-btn {% if status_filter == 'spec_ready' %}active{% endif %}">Spec Ready</a>
-  {% if has_incomplete %}
-  <a href="/guild/build?status=incomplete" class="filter-btn {% if status_filter == 'incomplete' %}active{% endif %}">Incomplete</a>
-  {% endif %}
-  {% if has_blocked %}
   <a href="/guild/build?status=blocked"    class="filter-btn {% if status_filter == 'blocked' %}active{% endif %}">Blocked</a>
-  {% endif %}
-  <a href="/guild/build?status=done"       class="filter-btn {% if status_filter == 'done' %}active{% endif %}">Done</a>
   <a href="/guild/build?status=deferred"   class="filter-btn {% if status_filter == 'deferred' %}active{% endif %}">Deferred</a>
+  <a href="/guild/build?status=cancelled"  class="filter-btn {% if status_filter == 'cancelled' %}active{% endif %}">Cancelled</a>
+  <a href="/guild/build?status=superseded" class="filter-btn {% if status_filter == 'superseded' %}active{% endif %}">Superseded</a>
+  <a href="/guild/build?status=done"       class="filter-btn {% if status_filter == 'done' %}active{% endif %}">Done</a>
 </form>
 
 <div class="table-wrap">
@@ -341,12 +346,6 @@
           {% endif %}
           {% if item.blocked_reason %}
           <div style="font-size:11px;color:#8b2020;margin-top:3px;">⚠ {{ item.blocked_reason }}</div>
-          {% endif %}
-          {% if item.status == 'incomplete' %}
-          <div style="margin-top:5px;display:flex;align-items:flex-start;gap:6px;">
-            <button class="check-btn" onclick="runCheck({{ item.id }}, this)" style="font-size:10px;padding:2px 7px;border:1px solid #c8a060;border-radius:3px;background:rgba(139,90,0,0.07);color:#8b5a00;cursor:pointer;white-space:nowrap;">why incomplete?</button>
-            <div id="check-result-{{ item.id }}" style="font-size:10px;color:#8b5a00;line-height:1.5;"></div>
-          </div>
           {% endif %}
         </td>
         <td>
@@ -426,27 +425,6 @@ function toggleHistRow(id) {
   const showing = r.style.display === 'table-row';
   r.style.display = showing ? 'none' : 'table-row';
   if (!showing) loadLogHistory(id);
-}
-function runCheck(id, btn) {
-  const out = document.getElementById('check-result-' + id);
-  btn.disabled = true;
-  btn.textContent = 'checking…';
-  fetch('/guild/build/items/' + id + '/check')
-    .then(r => r.json())
-    .then(data => {
-      if (data.error && !data.failures) {
-        out.textContent = '⚠ ' + data.error;
-      } else if (data.failures && data.failures.length) {
-        out.innerHTML = data.failures.map(f => '• ' + f).join('<br>');
-        if (data.stale) out.innerHTML += '<br><em style="color:var(--text-dim)">File now passes — refresh status to update.</em>';
-      } else {
-        out.innerHTML = '✓ File passes checks now' + (data.stale ? ' — status is stale, flip to spec_ready' : '');
-        out.style.color = 'var(--text-dim)';
-      }
-      btn.textContent = 're-check';
-      btn.disabled = false;
-    })
-    .catch(() => { out.textContent = 'unavailable'; btn.textContent = 're-check'; btn.disabled = false; });
 }
 function loadLogHistory(id) {
   const el = document.getElementById('lhist-' + id);

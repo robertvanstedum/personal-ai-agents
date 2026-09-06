@@ -3,27 +3,27 @@
     "id": 153,
     "spec_title": "Prototype Lab — Isolated Guild Prototyping Capability",
     "spec_file": "spec_153_prototype_lab_2026-08-26.md",
-    "status": "spec_ready",
+    "status": "design",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": "Official spec is review-ready; multi-agent review and Robert decision are required before a Phase 1 build spec or implementation.",
     "last_transition_at": "2026-08-26T15:43:45Z",
     "summary": "Guild Prototype Lab with Project Sable Alpha, Project Nightjar telecom BSS prototype, dedicated stoppable Mac/AWS runtimes and PostgreSQL databases, Postman/Swagger/API/data workflows, reusable-component lifecycle, and mandatory 2-5 slide product decks.",
-    "notes": "Official Spec #153 v1.0 review baseline. Claude, OpenClaw, and Grok are asked to review and comment in separate artifacts without editing the spec. Spec Ready means review-ready, not implementation-authorized. No implementation, database, AWS resource, GitHub issue, or production change is authorized. Codex compares reviews for Robert after receipt. Shared multi-agent memory/brain store is a related architecture initiative but is not included in Prototype Lab Phase 1. Handoff: _working/HANDOFF_PROTOTYPE_LAB_MULTI_AGENT_REVIEW_2026-08-26.md"
+    "notes": "Official Spec #153 v1.0 remains a design/review baseline, not an implementation-ready current-sprint item. Later Prototype Lab and Guild Experiment slices shipped separately; the unbuilt remainder still requires Robert to choose and authorize a bounded phase. Shared multi-agent memory/brain store remains outside this item. Handoff: _working/HANDOFF_PROTOTYPE_LAB_MULTI_AGENT_REVIEW_2026-08-26.md"
   },
   {
     "id": 136,
     "spec_title": "Defect: Container Data Persistence — Missing Volume Mounts",
     "spec_file": "defect_container_persistence_2026-07-14.md",
-    "status": "open",
+    "status": "done",
     "github_issue": null,
     "priority": "critical",
     "blocked_reason": null,
-    "last_transition_at": "2026-07-14T00:00:00Z",
-    "notes": "Scope expanded same night: two compounding failures. (1) Missing volume mounts — immediate patches shipped, systematic audit still open. (2) Backup system not functional for file data — Tier 1 local script never written; S3 and Dropbox receive Postgres + agent_logs only, no curator_archive or other file data. spec #122 was marked closed but Tier 1 was never built. Build backup_local.sh before this can close."
+    "last_transition_at": "2026-07-16T01:34:21Z",
+    "notes": "Closed after the missing volume mounts were corrected and the Tier 1 local backup was implemented and reconciled with existing production behavior (1cedee6, abc6e5f). Tier 2 is live. The distinct broken Dropbox/Tier 3 path and restore-test gaps remain operational follow-ups; they do not keep this original persistence defect open."
   },
   {
-    "id": 135,
+    "id": 156,
     "spec_title": "OpenClaw #2 — CoS-Scoped Gateway, Dev Setup",
     "spec_file": "spec_133_plan_openclaw2_dev_setup_v2_2026-07-14.md",
     "status": "superseded",
@@ -31,7 +31,7 @@
     "priority": "normal",
     "blocked_reason": "Blocked at session start on four items OpenClaw must supply: (1) npm install command, (2) CLI start command, (3) minimal config schema, (4) _collect_response protocol answer. Claude Code can implement everything else immediately once all four arrive.",
     "last_transition_at": "2026-07-14T00:00:00Z",
-    "notes": "Phase 1 Task 9 of spec #133 v1.3. Do not start build until all four OpenClaw answers are in hand. Claude Code implements: openclaw_backend.py WS client, COS_BACKEND_TYPE env-var switch in init_backend(), Dockerfile.openclaw-cos, openclaw-cos compose service, scripts/cos_ab_test.py A/B harness. Memory judgment stays in coordination layer (not in backend). See plan for full implementation detail. Superseded by Spec #146 (2026-08-09)."
+    "notes": "Phase 1 Task 9 of spec #133 v1.3. Do not start build until all four OpenClaw answers are in hand. Claude Code implements: openclaw_backend.py WS client, COS_BACKEND_TYPE env-var switch in init_backend(), Dockerfile.openclaw-cos, openclaw-cos compose service, scripts/cos_ab_test.py A/B harness. Memory judgment stays in coordination layer (not in backend). See plan for full implementation detail. Superseded by Spec #146 (2026-08-09). Renumbered from the duplicate id 135 to 156 during the 2026-09-05 queue reconciliation; historical references may still call this item 135."
   },
   {
     "id": 134,
@@ -59,11 +59,11 @@
     "id": 123,
     "spec_title": "AI Observations path fix — port intelligence job to EC2",
     "spec_file": null,
-    "status": "backlog",
+    "status": "done",
     "github_issue": null,
-    "blocked_reason": "Spec required from OpenClaw before build.",
-    "notes": "curator_intelligence.py writes to Path.home()/'.openclaw'/'workspace'/ — hardcoded to ~/.openclaw/workspace/ which on EC2 is /root/.openclaw/workspace/ (container-local, not mounted). curator_server.py reads from /app/data/curator/intelligence_*.json (volume-mounted). Two options: (A) run job via docker exec on EC2 + set CURATOR_DATA_DIR to redirect output, or (B) sync Mac job output to EC2 after each run. 31 historical files SCPed to /tmp/intelligence_restore/ on EC2 (Mar–Apr 2026). Anthropic API key confirmed in SSM (/minimoi/production/anthropic_api_key). Investigation complete 2026-07-05 — no code touched.",
-    "last_transition_at": "2026-07-06T00:51:24Z"
+    "blocked_reason": null,
+    "notes": "Closed by d43e381, which restored the EC2 AI Observations schedule. Current operations evidence records both daily and weekly AI Observations as active; later Curator reliability defects remain separately tracked.",
+    "last_transition_at": "2026-07-21T17:58:13Z"
   },
   {
     "id": 125,
@@ -834,10 +834,12 @@
     "id": 117,
     "spec_title": "Guild Navigation & Build Queue Redesign",
     "spec_file": "spec_117_guild_navigation_redesign_2026-07-04.md",
-    "status": "backlog",
-    "github_issue": null,
+    "status": "in_build",
+    "github_issue": 91,
     "blocked_reason": null,
-    "last_transition_at": "2026-07-04T12:01:32.469502+00:00"
+    "last_transition_at": "2026-09-06T03:40:55Z",
+    "summary": "Keep the daily Queue limited to implementation-ready and actively building work; retain every other lifecycle state in the filterable Build Log.",
+    "notes": "Robert authorized the bounded issue #91 Phase A on 2026-09-05: reconcile stale statuses, reduce Queue to Spec Ready and In Build, retain the complete history in Build Log, and add regression validation. The broader write API and editable-roadmap portions of Spec #117 remain separate, unapproved work."
   },
   {
     "id": 118,
@@ -863,21 +865,21 @@
     "id": 120,
     "spec_title": "Domain Standardization — German + Portuguese",
     "spec_file": "spec_120_domain_standardization_2026-07-04.md",
-    "status": "spec_ready",
+    "status": "backlog",
     "github_issue": null,
-    "blocked_reason": null,
-    "last_transition_at": "2026-07-06T00:11:33Z",
-    "notes": "JSON-first principle locked — no storage migration. Four phases: (1) bot refactor / #54 gates everything, (2) per-user isolation fix for German persona memory, (3) launchd plists for German + Portuguese dev servers + Colima (Colima plist confirmed working 2026-07-05; homebrew.mxcl.colima disabled, com.vanstedum.colima is sole manager, stop/restart tested), (4) tips verification. Produces docs/DOMAIN_TEMPLATE.md. Spec exists as PDF in _working/ — .md version needed from OpenClaw before build. Grok review requested."
+    "blocked_reason": "Not in the current sprint; German and Portuguese dev reconciliation must preserve their live uncommitted work before cross-domain standardization resumes.",
+    "last_transition_at": "2026-09-06T03:40:55Z",
+    "notes": "Retained in Backlog rather than Spec Ready. The Markdown spec is present, but this cross-domain item is not authorized for the current sprint and must follow the September dev-runtime reconciliation. JSON-first remains locked; no storage migration is implied."
   },
   {
     "id": 121,
     "spec_title": "Tips UX Redesign — Nav Bar Icon + Tab-Specific Popovers",
     "spec_file": "spec_121_tips_ux_redesign_2026-07-05.md",
-    "status": "built",
+    "status": "done",
     "github_issue": null,
     "blocked_reason": null,
     "last_transition_at": "2026-07-09T00:00:00Z",
-    "notes": "Phase A shipped: full-width banner removed from all German + Portuguese tabs, nav bar SVG lightbulb icon with tab-specific popover, Gespräche/Conversas secondary inline tip (commit 7063a83: replaced 💡 emoji with inline SVG). All German + Portuguese tooltip title attributes translated to English. CSS: german.css v=29, portuguese.css v=12. Phase B (Curator tips) deferred until DESK/LEANINGS routing confirmed working."
+    "notes": "Phase A shipped: full-width banner removed from all German + Portuguese tabs, nav bar SVG lightbulb icon with tab-specific popover, Gespräche/Conversas secondary inline tip (7063a83), and Curator parity (5a1413e). Normalized the obsolete built status to done."
   },
   {
     "id": 124,
@@ -970,12 +972,12 @@
     "id": 133,
     "spec_title": "mini-moi Intelligence Layer — CoS + Memory + Local LLM (Multi-Agent, Lock-In-Free)",
     "spec_file": "spec_133_intelligence_layer_v1.3_2026-07-12.md",
-    "status": "spec_ready",
+    "status": "backlog",
     "github_issue": null,
     "priority": "high",
-    "blocked_reason": null,
-    "last_transition_at": "2026-07-12T12:00:00Z",
-    "notes": "v1.3 — Phase 0 complete (#134, done). Phase 1 in build. Two-layer backend model: coordination layer (permanent) vs. backend call (swappable). OpenClaw as second backend. cos_interface.md v0.2 finalized and Grok-reviewed. Scope enforcement: observe/mutate boundary. Rollback/Production Safety required before containerization cutover."
+    "blocked_reason": "The original Phase 1 shipped and later CoS Agent A/model-gateway slices changed the baseline; remaining scope needs a new bounded authorization.",
+    "last_transition_at": "2026-09-06T03:40:55Z",
+    "notes": "Moved out of Spec Ready because it is no longer one coherent ready-to-build slice. CoS extraction, the backend boundary, CoS Agent A, and the shared model gateway shipped in later work. Any remaining memory/local-model scope should be reconciled against the current runtime before a new build decision."
   },
   {
     "id": 140,
@@ -992,34 +994,34 @@
     "id": 143,
     "spec_title": "mini-moi Front Door and Guest Tour Refresh (v2)",
     "spec_file": "spec_minimoi_front_door_guest_tour_v2_2026-07-22.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": null,
-    "last_transition_at": "2026-07-23T03:40:43Z",
-    "notes": "Technically reviewed by Claude Code 2026-07-22, all 5 review questions in spec section 14 confirmed, no blocking findings. Findings recorded in spec section 15 as implementation caveats: (1) workspace registry must delegate 100% to existing _require_owner/_dauth.has_domain_access() checks, never re-derive its own -- doing so also fixes a pre-existing drift bug where /dashboard has a looser Portuguese-guest check than portuguese_root; (2) scripts/tools/capture_snapshot.py and tests/test_auth.py both have real /dashboard-keyed logic needing lockstep updates, beyond the ~10 template link references; (3) /preview/* serves from minimoi_portal/static/preview/ but capture_snapshot.py writes to a different directory (static/public/preview/) -- rollback preservation must target the former; (4) docs/screenshots/2026-07-21/ has usable curated images for /tour but is .dockerignored, so must be copied into minimoi_portal/static/ to ship. Repository-reorganization merges (#107/#108/#109) confirmed complete, main is clean. Implementation not authorized -- Codex builds, Robert reviews the PR before merge/deploy. Robert authorized implementation 2026-07-22: Codex builds from this spec in a clean codex/minimoi-front-door-143 worktree/branch, stops at a reviewable PR, no merge/deploy inferred. Claude Code reviews the implementation before merge."
+    "last_transition_at": "2026-07-23T23:19:39Z",
+    "notes": "Closed after the reviewed front-door and public guest-tour implementation merged through PR #120 (e79cae5). Later tour refinements and repeatable capture work are tracked separately."
   },
   {
     "id": 146,
     "spec_title": "Provider-swappable realtime voice architecture for Gespräche/Conversas",
     "spec_file": "spec_voice_realtime_architecture_2026-07-24.md",
-    "status": "spec_ready",
+    "status": "done",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": null,
-    "last_transition_at": "2026-07-24T00:00:00Z",
-    "notes": "Direct outcome of the 2026-07-24 voice-pause investigation. Replaces the current MediaRecorder + polling-VAD + three-sequential-HTTP-call pipeline in Mein Deutsch Gespraeche and Meu Portugues Conversas with a true realtime speech-to-speech architecture, swappable between OpenAI and Grok via a single config change (Claude has no public realtime voice API, stays on post-session review). Cost note: xAI Grok Voice Agent API is $3/hour for speech-to-speech -- surface to Robert before regular/extended use. Full findings in _working/INVESTIGATION_voice_session_pauses_2026-07-24.md and _working/FIXPLAN_voice_session_pauses_2026-07-24.md."
+    "last_transition_at": "2026-07-25T21:19:17Z",
+    "notes": "Closed after shared realtime practice merged in PR #129 (dca937a) and the deployed language-domain UI was enabled in PR #132 (aaed4ed). Later voice drift/defects remain separately tracked in issue #177 and live dev worktrees."
   },
   {
     "id": 147,
     "spec_title": "Guest Tour Repeatable Screenshot Capture",
     "spec_file": "spec_guest_tour_interaction_capture_2026-07-30.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": null,
-    "last_transition_at": "2026-07-31T14:14:26Z",
-    "notes": "Build authorized 2026-07-31. Phase 1 implements a shared Playwright capture and image-production pipeline, proven first with a Portuguese mobile reading flow. Robert may choose current content and perform authentic actions through declared operator pauses; validation, screenshots, filenames, PNG/WebP output, manifest, contact sheet, review page, reporting, and diagnostics are repeatable and automatic. Portuguese/German may use a guest profile; Curator, Guild, and Chief of Staff require an owner-session profile in later rollout. No article pinning, production capture, public viewer changes, video, or voice recording. Current tour remains until generated assets and the implementation diff are separately approved."
+    "last_transition_at": "2026-08-05T02:48:35Z",
+    "notes": "Closed after the repeatable capture utility and Portuguese proof of concept merged through PR #169 (eee0756), followed by the all-domain desktop galleries and public viewer rollout through PR #178 (225d169). Capture and viewer regression tests passed again on 2026-09-06. Future recaptures or gallery changes are separate operational work, not unfinished scope on this item."
   },
   {
     "id": 148,
@@ -1047,45 +1049,45 @@
     "id": 150,
     "spec_title": "COS Conversation Memory, Privacy, and Natural Capture Intents",
     "spec_file": "spec_cos_conversation_memory_privacy_and_intents_2026-08-16.md",
-    "status": "spec_ready",
+    "status": "design",
     "github_issue": null,
     "priority": "high",
-    "blocked_reason": "Implementation requires Robert's decisions on raw retention, distilled-summary lifetime, backup deletion expectations, supported OpenClaw session cleanup, and agenda/research store boundaries.",
-    "last_transition_at": "2026-08-16T00:00:00Z",
-    "notes": "Follow-up after COS Agent A beta. Locks JSON-first/database-projection-second unless an explicit design decision says otherwise; specifies provider-neutral conversation storage, retention classes, deletion/off-record controls, natural capture intents, verified receipts, and phased delivery. Not authorized for implementation."
+    "blocked_reason": null,
+    "last_transition_at": "2026-09-06T15:10:00Z",
+    "notes": "In-process design, partially superseded 2026-09-06. Storage rule, data boundaries and the verified-operation rule are answered by the merged Work service (PRs #200/#201). Now scoped to what CoS forgets: conversation retention, raw-text window, summary lifetime, off-the-record mode and deletion commands. Natural capture intents moved to the CoS reference-shelf design. Still needs Robert's decisions on the retention window, summary lifetime, backup expectations and runtime session cleanup."
   },
   {
     "id": 151,
     "spec_title": "Scoped Document and Domain Release Pipeline",
     "spec_file": "spec_scoped_release_pipeline_2026-08-16.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
-    "last_transition_at": "2026-08-16T00:00:00Z",
-    "notes": "Separates document-only, domain-scoped, and full application releases. Explicit dependency mapping prevents unrelated domains from restarting, while unknown paths fall back safely to the full stack. Also moves image pruning after successful health checks and extends SSM execution/polling to 30 minutes. Dev implementation and regression verification complete; production review pending."
+    "last_transition_at": "2026-09-06T01:20:00Z",
+    "notes": "Closed after the scoped document/domain pipeline reached main and the September 5 document-only production run synchronized the Mini-moi Work POC without rebuilding or restarting application containers. Follow-up classifier robustness defect #204 and dev-first process issue #205 remain open and separate."
   },
   {
     "id": 152,
     "spec_title": "Defect: Curator xAI Credential Coupled to OpenClaw State",
     "spec_file": null,
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
-    "last_transition_at": "2026-08-17T00:00:00Z",
-    "notes": "Curator scoring bypassed the shared credential helper and read ~/.openclaw/agents/main/agent/auth-profiles.json directly. The review-branch fix resolves XAI_API_KEY through core.get_secret, aligned with /minimoi/production/xai_api_key and the deployment secret-sync step. Regression coverage passes; production release and verification remain pending."
+    "last_transition_at": "2026-08-17T14:12:23Z",
+    "notes": "Closed after the credential correction was independently integrated on main in PR #190 at 92280ea and a successful full deployment at 72382ac rebuilt and deployed Curator. The scorer now resolves XAI_API_KEY through core.get_secret with focused regression coverage. PR #172 was closed as superseded on 2026-09-06; its old branch conflicted with main and carried obsolete surrounding changes."
   },
   {
     "id": 155,
     "spec_title": "Guild Experiment Workspace — One Working Page, From Idea to Operational",
     "spec_file": "spec_155_guild_experiment_workspace_2026-09-03.md",
-    "status": "spec_ready",
+    "status": "done",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
-    "last_transition_at": "2026-09-03T19:11:20Z",
+    "last_transition_at": "2026-09-04T00:16:00Z",
     "summary": "Fourth Guild landing card 'Experiment': a read-only working page with an Operational section (IoT Connect: launch, admin and billing workbenches, Swagger, live health) and a working matrix projected from Planning Studio records (Idea → Tinkering → Built → Operational). G1 only; notes/stage writes (G2) need the Central Personal Repository write contract.",
-    "notes": "Official Spec #155 v1.1 (v1.0 + Codex's five final sign-off edits). Approved by Robert 2026-09-03 for the G1 read-only slice, pending Codex BUILD READY on the v1.0→v1.1 delta. G1 is a follow-up after PR #193 merges; Claude Code builds in three ~40-minute chunks."
+    "notes": "Closed after the three reviewed G1 chunks merged through PR #195; subsequent Prototype Lab table and artwork refinements merged through PRs #196 and #197. G2 notes/stage writes remain a separate future capability requiring the Central Personal Repository write contract."
   }
 ]

@@ -1,11 +1,40 @@
 # COS Conversation Memory, Privacy, and Natural Capture Intents
 
 **Registered:** Build queue #150
-**Date:** 2026-08-16
-**Status:** Follow-up specification; not authorized for implementation
+**Date:** 2026-08-16 · **Revised:** 2026-09-06
+**Status:** In-process design; partially superseded (see below). Not authorized for implementation
 **Owner / decision point:** Robert
 **Initial consumer:** Chief of Staff / COS Agent A
 **Related:** Specs #133, #148, and #149
+
+## 0. Revision note — 2026-09-06
+
+This specification predates the Work service, which was designed, independently
+reviewed and merged on 4–5 September (PRs #200 and #201, `domains/cos/work/`).
+Three of its sections are now answered by shipped code rather than open:
+
+| Section | Disposition |
+|---|---|
+| §2 Governing storage rule — JSON first, database projection second | **Superseded.** What shipped is stricter: files only, no database, immutable source and artifact revisions, SHA-256 on every stored object. There is no projection to reconcile |
+| §3 Platform-owned data boundaries | **Largely superseded** by the merged root configuration, path confinement and per-root provenance classes |
+| §8 Verified operation rule | **Implemented.** The Work service executes the operation and returns a content-free receipt; nothing reports success without a committed terminal marker read back from disk |
+
+**What this specification now covers** is the part the Work service does not:
+what Chief of Staff *forgets*. Conversation retention, the raw-text window,
+distilled-summary lifetime, off-the-record mode, and the deletion commands.
+Those are destructive, confirmation-bound operations on the conversation itself,
+and they are deliberately kept separate from the reference and artifact store.
+
+**What has moved out.** §7's natural capture intents ("take a note to …",
+"file this") belong with the Chief of Staff reference shelf, which is in design
+separately (`_working/cos-strategy-2026-09-06/`). They are the same idea as
+Robert's requirement to hand something over without choosing a directory for it.
+
+**Effect on the blocking decisions in §11:** decision 5, whether agenda and
+research share one JSON store, is largely settled by the merged file-first
+design and the subject-scoped direction of the shelf work. The remaining
+decisions — the retention window, summary lifetime, backup expectations and
+runtime session cleanup — are unchanged and still Robert's.
 
 ## 1. Purpose
 

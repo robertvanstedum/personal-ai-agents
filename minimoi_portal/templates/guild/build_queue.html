@@ -79,7 +79,7 @@
     /* ── Board ── */
     .board {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0;
       margin: 0 24px 40px;
     }
@@ -150,7 +150,6 @@
       text-transform: uppercase; letter-spacing: 0.05em;
       padding: 1px 6px; border-radius: 3px; border: 1px solid;
     }
-    .tag-incomplete { color: #8b5a00; background: rgba(139,90,0,0.08); border-color: rgba(139,90,0,0.25); }
     .tag-blocked    { color: #8b2020; background: rgba(139,32,32,0.08); border-color: rgba(139,32,32,0.25); }
     .tag-gh         { color: var(--text-muted); background: transparent; border-color: var(--border); }
 
@@ -255,23 +254,11 @@
     {% endif %}
     <div class="card-meta">
       <span>{{ age_str }}</span>
-      {% if status == 'incomplete' %}
-        <span class="card-tag tag-incomplete">⚠ incomplete</span>
-      {% endif %}
-      {% if item.blocked_reason and status == 'blocked' %}
-        <span class="card-tag tag-blocked" title="{{ item.blocked_reason }}">{{ item.blocked_reason | truncate(30, true, '…') }}</span>
-      {% endif %}
       {% if item.github_issue %}
         <a href="https://github.com/robertvanstedum/personal-ai-agents/issues/{{ item.github_issue | replace('#','') }}"
            target="_blank" rel="noopener noreferrer" class="card-tag tag-gh">#{{ item.github_issue | replace('#','') }}</a>
       {% endif %}
     </div>
-    {% if status == 'incomplete' %}
-    <div style="margin-top:5px;display:flex;align-items:flex-start;gap:6px;">
-      <button class="check-btn" onclick="runCheck({{ item_id }}, this)" style="font-size:10px;padding:2px 7px;border:1px solid #c8a060;border-radius:3px;background:rgba(139,90,0,0.07);color:#8b5a00;cursor:pointer;white-space:nowrap;">why incomplete?</button>
-      <div id="check-result-{{ item_id }}" style="font-size:10px;color:#8b5a00;line-height:1.5;"></div>
-    </div>
-    {% endif %}
     {% if item.spec_file %}
     <div style="margin-top:5px;">
       <a href="/guild/build/spec/{{ item.spec_file }}"
@@ -288,12 +275,16 @@
       <input type="hidden" name="note" id="bn-{{ item_id }}" value="">
       <select class="card-select" name="status" id="bs-{{ item_id }}"
               onchange="queueStatus(this, {{ item_id }})">
+        <option value="idea"        {% if status == 'idea'        %}selected{% endif %}>Idea</option>
+        <option value="design"      {% if status == 'design'      %}selected{% endif %}>Design</option>
+        <option value="backlog"     {% if status == 'backlog'     %}selected{% endif %}>Backlog</option>
         <option value="spec_ready"  {% if status == 'spec_ready'  %}selected{% endif %}>Spec Ready</option>
-        <option value="incomplete"  {% if status == 'incomplete'  %}selected{% endif %}>Incomplete</option>
         <option value="in_build"    {% if status == 'in_build'    %}selected{% endif %}>In Build</option>
         <option value="blocked"     {% if status == 'blocked'     %}selected{% endif %}>Blocked</option>
-        <option value="done"        {% if status == 'done'        %}selected{% endif %}>Done</option>
         <option value="deferred"    {% if status == 'deferred'    %}selected{% endif %}>Deferred</option>
+        <option value="cancelled"   {% if status == 'cancelled'   %}selected{% endif %}>Cancelled</option>
+        <option value="superseded"  {% if status == 'superseded'  %}selected{% endif %}>Superseded</option>
+        <option value="done"        {% if status == 'done'        %}selected{% endif %}>Done</option>
       </select>
       <button type="submit" class="save-btn" id="bsave-{{ item_id }}">Save</button>
     </form>
@@ -348,21 +339,18 @@
 </nav>
 
 {% set spec_ready_items = items | selectattr('status', 'equalto', 'spec_ready') | list %}
-{% set incomplete_items = items | selectattr('status', 'equalto', 'incomplete') | list %}
 {% set in_build_items   = items | selectattr('status', 'equalto', 'in_build') | list %}
-{% set blocked_items    = items | selectattr('status', 'equalto', 'blocked') | list %}
-{% set done_items       = items | selectattr('status', 'equalto', 'done') | list %}
-{% set visible_cols = 3 + (1 if incomplete_items else 0) + (1 if blocked_items else 0) %}
 
 <div class="page-header">
   <h1 class="page-title">Build Queue</h1>
-  <span class="page-meta">{{ items | length }} item{{ 's' if items | length != 1 else '' }} in motion</span>
+  <span class="page-meta">{{ items | length }} active item{{ 's' if items | length != 1 else '' }}</span>
   <div class="header-actions">
+    <a href="/guild/build" class="gh-link">View full Build Log →</a>
     <a href="https://github.com/robertvanstedum/personal-ai-agents/issues" target="_blank" rel="noopener" class="gh-link">View GitHub Issues →</a>
   </div>
 </div>
 
-<div class="board" style="grid-template-columns: repeat({{ visible_cols }}, 1fr);">
+<div class="board">
 
   {# ── Spec Ready ── #}
   <div class="board-col">
@@ -377,17 +365,6 @@
     {% endif %}
   </div>
 
-  {# ── Incomplete (collapses when empty) ── #}
-  {% if incomplete_items %}
-  <div class="board-col">
-    <div class="col-header" style="color:#8b5e20;">
-      Incomplete
-      <span class="col-count">{{ incomplete_items | length }}</span>
-    </div>
-    {% for item in incomplete_items %}{{ board_card(item) }}{% endfor %}
-  </div>
-  {% endif %}
-
   {# ── In Build ── #}
   <div class="board-col">
     <div class="col-header">
@@ -401,54 +378,9 @@
     {% endif %}
   </div>
 
-  {# ── Blocked (collapses when empty) ── #}
-  {% if blocked_items %}
-  <div class="board-col">
-    <div class="col-header" style="color:#8b2020;">
-      Blocked
-      <span class="col-count">{{ blocked_items | length }}</span>
-    </div>
-    {% for item in blocked_items %}{{ board_card(item) }}{% endfor %}
-  </div>
-  {% endif %}
-
-  {# ── Recently Done ── #}
-  <div class="board-col">
-    <div class="col-header">
-      Recently Done
-      <span class="col-count">{{ done_items | length }}</span>
-    </div>
-    {% if done_items %}
-      {% for item in done_items %}{{ board_card(item) }}{% endfor %}
-    {% else %}
-      <div class="col-empty">—</div>
-    {% endif %}
-  </div>
-
 </div>
 
 <script>
-function runCheck(id, btn) {
-  const out = document.getElementById('check-result-' + id);
-  btn.disabled = true;
-  btn.textContent = 'checking…';
-  fetch('/guild/build/items/' + id + '/check')
-    .then(r => r.json())
-    .then(data => {
-      if (data.error && !data.failures) {
-        out.textContent = '⚠ ' + data.error;
-      } else if (data.failures && data.failures.length) {
-        out.innerHTML = data.failures.map(f => '• ' + f).join('<br>');
-        if (data.stale) out.innerHTML += '<br><em style="color:var(--text-dim)">File now passes — flip status to spec_ready.</em>';
-      } else {
-        out.innerHTML = '✓ File passes checks now' + (data.stale ? ' — flip status to spec_ready' : '');
-        out.style.color = 'var(--text-dim)';
-      }
-      btn.textContent = 're-check';
-      btn.disabled = false;
-    })
-    .catch(() => { out.textContent = 'unavailable'; btn.textContent = 're-check'; btn.disabled = false; });
-}
 function queueStatus(select, id) {
   const val = select.value;
   const saveBtn = document.getElementById('bsave-' + id);

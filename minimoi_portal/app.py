@@ -1254,6 +1254,19 @@ def score_color(score):
 
 # File-first build queue — source of truth for UI; DB is analytics/archive only
 _BQ_PATH = Path(__file__).parent.parent / "data" / "guild" / "build_queue.json"
+_BUILD_QUEUE_STATUSES = (
+    "idea",
+    "design",
+    "backlog",
+    "spec_ready",
+    "in_build",
+    "blocked",
+    "deferred",
+    "cancelled",
+    "superseded",
+    "done",
+)
+_BUILD_QUEUE_ACTIVE_STATUSES = ("spec_ready", "in_build")
 
 
 def _load_build_queue() -> list:
@@ -2024,40 +2037,33 @@ def guild_career_focus_save():
 @app.route("/guild/build")
 @_require_owner
 def guild_build():
-    status_filter = request.args.get('status', 'all')
+    status_filter = request.args.get('status', 'active')
+    if status_filter not in {'active', 'all', *_BUILD_QUEUE_STATUSES}:
+        status_filter = 'active'
     all_items = _load_build_queue()
     items = all_items
-    if status_filter != 'all':
+    if status_filter == 'active':
+        terminal = {'done', 'cancelled', 'superseded', 'deferred'}
+        items = [i for i in items if i.get('status') not in terminal]
+    elif status_filter != 'all':
         items = [i for i in items if i.get('status') == status_filter]
     # Sort: most recently transitioned first (items without timestamp go last)
     items.sort(key=lambda i: i.get('last_transition_at') or '', reverse=True)
-    # Incomplete/Blocked tabs collapse when empty across the whole queue, not
-    # just the current filter — computed from all_items so switching filters
-    # doesn't make a tab flicker in and out.
-    has_incomplete = any(i.get('status') == 'incomplete' for i in all_items)
-    has_blocked = any(i.get('status') == 'blocked' for i in all_items)
     return render_template("guild/build_log.html", items=items,
-                           status_filter=status_filter, user=_current_user(),
-                           has_incomplete=has_incomplete, has_blocked=has_blocked)
+                           status_filter=status_filter, user=_current_user())
 
 
 @app.route("/guild/build/queue")
 @_require_owner
 def guild_build_queue():
-    _STATUS_RANK = {"blocked": 1, "in_build": 2, "spec_ready": 3,
-                    "incomplete": 4, "done": 5}
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
-
-    all_items = _load_build_queue()
+    status_rank = {status: rank for rank, status in enumerate(_BUILD_QUEUE_ACTIVE_STATUSES)}
     items = [
-        i for i in all_items
-        if i.get('status') in ('spec_ready', 'in_build', 'blocked', 'incomplete')
-        or (i.get('status') == 'done' and (i.get('last_transition_at') or '') >= cutoff)
+        item for item in _load_build_queue()
+        if item.get("status") in _BUILD_QUEUE_ACTIVE_STATUSES
     ]
-    items.sort(key=lambda i: (
-        _STATUS_RANK.get(i.get('status', ''), 9),
-        -(hash(i.get('last_transition_at') or ''))  # stable secondary sort
-    ))
+    # Newest first within each of the two deliberately small active columns.
+    items.sort(key=lambda item: item.get("last_transition_at") or "", reverse=True)
+    items.sort(key=lambda item: status_rank[item["status"]])
     return render_template("guild/build_queue.html", items=items,
                            user=_current_user())
 
@@ -2117,7 +2123,7 @@ def guild_build_spec_raw(filename):
 @app.route("/guild/build/items/<int:item_id>/check")
 @_require_owner
 def guild_build_check(item_id):
-    """Re-run completeness check on a spec file and return current failures as JSON."""
+    """Re-run the spec readiness check and return current failures as JSON."""
     from pathlib import Path
     items = _load_build_queue()
     item = next((i for i in items if i.get('id') == item_id), None)
@@ -2142,7 +2148,7 @@ def guild_build_check(item_id):
         failures.append("missing ## Definition of Done section")
     if "## commit" not in _lower:
         failures.append("missing ## Commit section")
-    current_status = "spec_ready" if not failures else "incomplete"
+    current_status = "spec_ready" if not failures else "design"
     json_status = item.get("status")
     return jsonify({
         "spec_file": spec_file,
@@ -2261,8 +2267,7 @@ def guild_build_roadmap():
 def update_build_status(item_id):
     new_status = request.form.get('status')
     note = request.form.get('note') or None
-    valid = {'design', 'spec_ready', 'in_build', 'blocked', 'done', 'deferred', 'incomplete'}
-    if new_status not in valid:
+    if new_status not in _BUILD_QUEUE_STATUSES:
         return redirect(url_for('guild_build_queue'))
 
     # ── 1. Update JSON (source of truth) ──────────────────────────────────────
@@ -2354,12 +2359,12 @@ def new_build_item():
     spec_file    = request.form.get('spec_file',    '').strip() or None
     summary      = request.form.get('summary',      '').strip() or None
     github_issue = request.form.get('github_issue', '').strip() or None
-    status       = request.form.get('status', 'spec_ready')
-    valid_status = {'design', 'spec_ready', 'in_build', 'blocked', 'incomplete', 'deferred'}
+    status       = request.form.get('status', 'idea')
+    valid_status = set(_BUILD_QUEUE_STATUSES) - {'done', 'superseded'}
     if not spec_title:
         return redirect(url_for('guild_build'))
     if status not in valid_status:
-        status = 'spec_ready'
+        status = 'idea'
     try:
         rows = _guild_db_query(
             "INSERT INTO guild.design_log "

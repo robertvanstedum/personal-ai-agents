@@ -1,12 +1,22 @@
 # Look Inside Repeatable Screenshot Capture
 
 - **File:** `docs/specs/spec_guest_tour_interaction_capture_2026-07-30.md`
-- **Version:** v1.3
-- **Date:** July 31, 2026
-- **Status:** Working draft incorporating Robert's post-review decisions
+- **Version:** v1.4
+- **Date:** September 6, 2026
+- **Status:** Completed - implementation and promoted galleries merged
 - **Scope:** Repeatable high-quality screenshots for the public `/tour`
 - **Reference:** `docs/specs/spec_minimoi_front_door_guest_tour_v2_2026-07-22.md`
 - **Capture engine:** Python Playwright with Chromium
+
+## Completion Record
+
+- The repeatable capture utility and Portuguese proof of concept merged through
+  PR #169 at `eee0756` on July 31, 2026.
+- The all-domain desktop galleries and public viewer rollout merged through
+  PR #178 at `225d169` on August 5, 2026.
+- Capture and viewer regression tests passed again on September 6, 2026.
+- Future recaptures and gallery changes are operational follow-ups, not
+  unfinished scope on this specification.
 
 ## 1. Purpose
 
@@ -510,25 +520,25 @@ Manual review of the smoke-test output confirms:
 
 ## 13. Definition of Done
 
-- [ ] One documented command runs the Portuguese reading capture.
-- [ ] The operator can choose a current general-interest article without
+- [x] One documented command runs the Portuguese reading capture.
+- [x] The operator can choose a current general-interest article without
       editing the scenario.
-- [ ] The runner records and validates the chosen article through the remaining
+- [x] The runner records and validates the chosen article through the remaining
       checkpoints.
-- [ ] Screenshots are taken at named checkpoints.
-- [ ] Mobile PNG and WebP images are 1170 × 2532 unless the approved profile
+- [x] Screenshots are taken at named checkpoints.
+- [x] Mobile PNG and WebP images are 1170 × 2532 unless the approved profile
       changes.
-- [ ] WebP images pass visual quality review.
-- [ ] No browser chrome is captured.
-- [ ] The run uses the declared light theme, Portuguese locale, and fixed
+- [x] WebP images pass visual quality review.
+- [x] No browser chrome is captured.
+- [x] The run uses the declared light theme, Portuguese locale, and fixed
       profile.
-- [ ] No unexpected horizontal overflow, scrollbar, loading state, toast, or
+- [x] No unexpected horizontal overflow, scrollbar, loading state, toast, or
       blocking overlay appears in an approved image.
-- [ ] No manual cropping or renaming is required.
-- [ ] A manifest, contact sheet, and review page are generated.
-- [ ] A failed checkpoint produces a clear error.
-- [ ] Current production tour remains unchanged.
-- [ ] Robert approves the generated images and implementation diff before any
+- [x] No manual cropping or renaming is required.
+- [x] A manifest, contact sheet, and review page are generated.
+- [x] A failed checkpoint produces a clear error.
+- [x] Current production tour remained unchanged during the Phase 1 capture proof.
+- [x] Robert approved the generated images and implementation diff before any
       viewer or production change.
 
 ## 14. Post-review Implementation Direction

@@ -389,7 +389,9 @@ OpenClaw-managed authentication file. The scorer now uses the shared credential
 helper with `XAI_API_KEY`, matching German, Portuguese, CoS, the model gateway, and
 the deployment secret-sync step. The authoritative production parameter is
 `/minimoi/production/xai_api_key`; dev may use its environment or the `xai/api_key`
-Keychain entry. The correction is not live until the reviewed release is shipped.
+Keychain entry. The correction reached `main` through PR #190 at `92280ea`; the
+successful full deployment at `72382ac` rebuilt and deployed Curator with it.
+The older PR #172 was closed as superseded on 2026-09-06 and must not be merged.
 
 DB roles are separated (`robert_sql`, `minimoi_agent`) and rotated off the old weak
 password — confirmed as distinct SSM parameters.
