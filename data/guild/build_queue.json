@@ -1016,12 +1016,12 @@
     "id": 147,
     "spec_title": "Guest Tour Repeatable Screenshot Capture",
     "spec_file": "spec_guest_tour_interaction_capture_2026-07-30.md",
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "normal",
     "blocked_reason": null,
-    "last_transition_at": "2026-07-31T14:14:26Z",
-    "notes": "Build authorized 2026-07-31. Phase 1 implements a shared Playwright capture and image-production pipeline, proven first with a Portuguese mobile reading flow. Robert may choose current content and perform authentic actions through declared operator pauses; validation, screenshots, filenames, PNG/WebP output, manifest, contact sheet, review page, reporting, and diagnostics are repeatable and automatic. Portuguese/German may use a guest profile; Curator, Guild, and Chief of Staff require an owner-session profile in later rollout. No article pinning, production capture, public viewer changes, video, or voice recording. Current tour remains until generated assets and the implementation diff are separately approved."
+    "last_transition_at": "2026-08-05T02:48:35Z",
+    "notes": "Closed after the repeatable capture utility and Portuguese proof of concept merged through PR #169 (eee0756), followed by the all-domain desktop galleries and public viewer rollout through PR #178 (225d169). Capture and viewer regression tests passed again on 2026-09-06. Future recaptures or gallery changes are separate operational work, not unfinished scope on this item."
   },
   {
     "id": 148,
@@ -1071,12 +1071,12 @@
     "id": 152,
     "spec_title": "Defect: Curator xAI Credential Coupled to OpenClaw State",
     "spec_file": null,
-    "status": "in_build",
+    "status": "done",
     "github_issue": null,
     "priority": "high",
     "blocked_reason": null,
-    "last_transition_at": "2026-08-17T00:00:00Z",
-    "notes": "Curator scoring bypassed the shared credential helper and read ~/.openclaw/agents/main/agent/auth-profiles.json directly. The review-branch fix resolves XAI_API_KEY through core.get_secret, aligned with /minimoi/production/xai_api_key and the deployment secret-sync step. Regression coverage passes; production release and verification remain pending."
+    "last_transition_at": "2026-08-17T14:12:23Z",
+    "notes": "Closed after the credential correction was independently integrated on main in PR #190 at 92280ea and a successful full deployment at 72382ac rebuilt and deployed Curator. The scorer now resolves XAI_API_KEY through core.get_secret with focused regression coverage. PR #172 was closed as superseded on 2026-09-06; its old branch conflicted with main and carried obsolete surrounding changes."
   },
   {
     "id": 155,

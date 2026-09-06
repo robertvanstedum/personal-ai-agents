@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-17T13:10:06.296722+00:00",
+  "generated_at": "2026-09-06T14:02:36.920543+00:00",
   "publisher": "python3 scripts/docs/publish_key_docs.py",
   "documents": [
     {
@@ -28,12 +28,12 @@
     {
       "source": "OPERATIONS.md",
       "pdf": "OPERATIONS.pdf",
-      "source_sha256": "acac10431ecab4466ce2eb010844080e9aba4298b63bf3cd0e023d5b6a0d196d",
+      "source_sha256": "ca0ed000b8947fb5e6a6eda784b163826b281da15223f3d4405073e8adcce3aa",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "7550701e8523d2920e4bb1e04f60e8951e899aa1a5c105757c1c2c3ab9294662",
+      "pdf_sha256": "9923e35eca40c615213c3d8a9a3694b901bef7c55facefa0915b8cf16a32b04a",
       "mermaid_diagrams": 1,
       "pages": 12,
-      "extractable_text_characters": 26501,
+      "extractable_text_characters": 26652,
       "title": "mini-moi Operations"
     },
     {

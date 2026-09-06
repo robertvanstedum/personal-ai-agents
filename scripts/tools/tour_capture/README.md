@@ -1,7 +1,9 @@
 # Tour Capture Utility
 
-Phase 1 creates review-only screenshots from the real dev application. It does
-not change the public tour or deploy assets.
+This utility creates review-only screenshots from the real dev application.
+It supports the original Portuguese reading checkpoint flow plus interactive
+desktop capture for Portuguese, German, Curator, Guild, and Chief of Staff.
+Capture runs never deploy assets or change the public tour automatically.
 
 ## One-time setup
 
@@ -36,7 +38,10 @@ keyring set minimoi-tour-capture minimoi_capture_owner_password
 python -m scripts.tools.tour_capture.cli portuguese-reading --dry-run
 ```
 
-## Run the Portuguese proof of concept
+## Run a capture
+
+The structured Portuguese mobile proof of concept captures five declared
+checkpoints around three operator pauses:
 
 ```bash
 python -m scripts.tools.tour_capture.cli portuguese-reading \
@@ -47,11 +52,28 @@ The browser opens visibly. Follow each short operator instruction and press
 Enter in the terminal when the displayed state is ready. Choose a current,
 public-safe general-interest article; the scenario does not seed or pin one.
 
+The desktop scenarios use an interactive free-capture step. Browse normally,
+press Enter for each frame you want to keep, and type `done` when the sequence
+is complete:
+
+```bash
+python -m scripts.tools.tour_capture.cli portuguese-desktop --base-url https://dev.minimoi.ai
+python -m scripts.tools.tour_capture.cli german-desktop --base-url https://dev.minimoi.ai
+python -m scripts.tools.tour_capture.cli curator-desktop --base-url https://dev.minimoi.ai
+python -m scripts.tools.tour_capture.cli guild-desktop --base-url https://dev.minimoi.ai
+python -m scripts.tools.tour_capture.cli cos-desktop --base-url https://dev.minimoi.ai
+```
+
+For a desktop free-capture scenario, `--dry-run` reports zero predetermined
+screenshots because the operator chooses the number of frames during the run.
+
 Successful output is written beneath:
 
 ```text
 _working/tour-capture/portuguese-reading/<UTC timestamp>/
 ```
+
+Each other scenario uses its own scenario ID in the same directory structure.
 
 Open the printed `review.html` path. The folder also contains raw PNGs,
 optimized WebPs, `manifest.json`, `report.json`, and `contact-sheet.webp`.
@@ -62,3 +84,5 @@ optimized WebPs, `manifest.json`, `report.json`, and `contact-sheet.webp`.
 - Authentication state and output remain under ignored `_working/`.
 - No production capture or write path exists.
 - A failed run retains a diagnostic screenshot and structured report.
+- Promotion into `minimoi_portal/static/tour/` remains a separate reviewed
+  repository change.
