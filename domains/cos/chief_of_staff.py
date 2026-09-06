@@ -838,7 +838,9 @@ _state_lock = threading.Lock()
 # ── Loop state (updated by each run) ─────────────────────────────────────────
 
 _loop_state: dict[str, dict] = {
-    "loop_a": {"name": "career_focus_scout",    "last_run": None, "last_result": None, "error": None},
+    # loop_a is not scheduled — career search deprecated 2026-09-01. Kept here so
+    # /loops reports it as disabled rather than silently omitting it.
+    "loop_a": {"name": "career_focus_scout (disabled)", "last_run": None, "last_result": None, "error": None},
     "loop_b": {"name": "german_watch",           "last_run": None, "last_result": None, "error": None},
     "loop_c": {"name": "curator_scout",          "last_run": None, "last_result": None, "error": None},
     "loop_d": {"name": "novelty_watch",          "last_run": None, "last_result": None, "error": None},
@@ -1593,11 +1595,14 @@ def _start_cos():
     )
 
     if loops_ok:
-        # Loop A — twice daily
-        scheduler.add_job(
-            lambda: _run_loop("loop_a", run_career_focus_scout),
-            "cron", hour="6,18", id="loop_a", misfire_grace_time=600
-        )
+        # Loop A — career focus scout: DISABLED 2026-09-01.
+        # Career search is deprecated for now (Robert's call). The loop code in
+        # domains/guild/agents/loops/cos_job_search.py is left intact — re-enable
+        # by uncommenting the add_job below.
+        # scheduler.add_job(
+        #     lambda: _run_loop("loop_a", run_career_focus_scout),
+        #     "cron", hour="6,18", id="loop_a", misfire_grace_time=600
+        # )
         # Loop B — weekly Sunday 09:00
         scheduler.add_job(
             lambda: _run_loop("loop_b", run_german_watch),
@@ -1613,9 +1618,9 @@ def _start_cos():
             lambda: _run_loop("loop_d", run_novelty_watch),
             "cron", day="1,15", hour=8, id="loop_d", misfire_grace_time=600
         )
-        print("   Scheduler: loop_a(6+18h) loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅")
+        print("   Scheduler: loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅ — loop_a disabled (career search deprecated)")
     else:
-        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅ — loop_a/b/c/d disabled (import error)")
+        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅ — loop_b/c/d disabled (import error), loop_a disabled (career search deprecated)")
 
     scheduler.start()
 
