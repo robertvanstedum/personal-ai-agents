@@ -27,8 +27,13 @@ and they are deliberately kept separate from the reference and artifact store.
 
 **What has moved out.** §7's natural capture intents ("take a note to …",
 "file this") belong with the Chief of Staff reference shelf, which is in design
-separately (`_working/cos-strategy-2026-09-06/`). They are the same idea as
-Robert's requirement to hand something over without choosing a directory for it.
+separately in
+[`spec_cos_reference_shelf_conversation_capture_2026-09-06.md`](spec_cos_reference_shelf_conversation_capture_2026-09-06.md).
+Its private source packet is Planning Studio initiative
+`INIT-2026-0005-conversation-memory`; raw transcripts are intentionally not
+committed to the public repository. The natural intents are the same idea as
+Robert's requirement to hand something over without choosing a directory for
+it.
 
 **Effect on the blocking decisions in §11:** decision 5, whether agenda and
 research share one JSON store, is largely settled by the merged file-first
