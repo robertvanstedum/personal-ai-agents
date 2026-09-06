@@ -20,20 +20,18 @@ Three of its sections are now answered by shipped code rather than open:
 | §8 Verified operation rule | **Implemented.** The Work service executes the operation and returns a content-free receipt; nothing reports success without a committed terminal marker read back from disk |
 
 **What this specification now covers** is the part the Work service does not:
-what Chief of Staff *forgets*. Conversation retention, the raw-text window,
-distilled-summary lifetime, off-the-record mode, and the deletion commands.
-Those are destructive, confirmation-bound operations on the conversation itself,
-and they are deliberately kept separate from the reference and artifact store.
+what Chief of Staff *forgets*. Ordinary live-conversation retention, the
+raw-text window, distilled-summary lifetime, off-the-record mode, and the
+deletion commands remain here. Those are deliberately separate from the
+durable filed record created by `Save this conversation`.
 
-**What has moved out.** §7's natural capture intents ("take a note to …",
-"file this") belong with the Chief of Staff reference shelf, which is in design
-separately in
-[`spec_cos_reference_shelf_conversation_capture_2026-09-06.md`](spec_cos_reference_shelf_conversation_capture_2026-09-06.md).
+**What has moved out.** `Save this conversation` and `File this` belong to the
+conversation capture and direct-intake design in
+[`spec_cos_conversation_capture_cross_chair_retrieval_2026-09-06.md`](spec_cos_conversation_capture_cross_chair_retrieval_2026-09-06.md).
 Its private source packet is Planning Studio initiative
 `INIT-2026-0005-conversation-memory`; raw transcripts are intentionally not
-committed to the public repository. The natural intents are the same idea as
-Robert's requirement to hand something over without choosing a directory for
-it.
+committed to the public repository. The general reference-shelf concept is
+parked. Other explicit-item intents in §7 remain in this specification.
 
 **Effect on the blocking decisions in §11:** decision 5, whether agenda and
 research share one JSON store, is largely settled by the merged file-first
@@ -105,7 +103,6 @@ agenda/memory sources. It must distinguish retrieved plans from inference.
 | Class | Intended behavior |
 |---|---|
 | `standard` | Raw conversation retained for a configured window, then distilled and purged |
-| `keep` | Robert explicitly preserves the conversation |
 | `off_record` | No platform conversation archive or derived summary |
 | `explicit_item` | Note, decision, action, question, research, or revisit item retained until resolved or deleted |
 
@@ -118,15 +115,22 @@ The 30-day window, summary lifetime, and backup-expiration disclosure require
 Robert's acceptance before implementation. Configuration owns these values;
 they are not hardcoded in domain logic.
 
+A durable filed conversation is not a live-conversation retention class.
+`Save this conversation` creates the filed full-transcript record governed by
+the related conversation-capture specification. That record is outside this
+30-day raw window; expiration or distillation of the runtime copy cannot modify
+or replace it.
+
 ## 6. Privacy and deletion commands
 
 The platform, not the model, executes these operations and returns a receipt.
 
 - **“Off the record.”** Start a non-retained segment and acknowledge the mode.
 - **“Back on the record.”** End the private segment and begin a retained one.
-- **“Keep this conversation.”** Apply a retention override.
-- **“Delete this conversation.”** Identify scope, request confirmation, then
-  delete authoritative content, projection rows, derived summaries, and indexes.
+- **“Delete this conversation.”** Identify whether the target is the live
+  runtime thread, the durable filed conversation, or both; name the target or
+  targets, request confirmation, then delete controlled authoritative content,
+  projection rows, derived summaries, and indexes.
 - **“Delete my last conversation.”** Name the target date/title before confirmation.
 - **“Don't save that.”** Clarify whether Robert means the last explicit item or
   the current conversation when the target is ambiguous.
@@ -149,7 +153,7 @@ starter vocabulary is deliberately small and explicit.
 
 | Natural phrase | Platform record type | Result |
 |---|---|---|
-| “Save this…”, “Note this…”, “Remember this…” | `note` | Durable reference |
+| “Take a note…”, “Note this…”, “Remember this…” | `note` | Durable explicit item |
 | “Add this to today's agenda…” | `action` | Pending agenda item |
 | “Record this decision…” | `decision` | Durable decision |
 | “Add a research item…” | `research` | Research queue item; no automatic external action |
@@ -163,6 +167,11 @@ command when the content boundary is unambiguous.
 
 Ambiguous language does not silently mutate state. For example, “Can you
 research it?” may mean research now or create a future item; COS asks which.
+
+`Save this conversation` is not a note intent: it creates the durable filed
+conversation defined by the related specification. `File this` likewise uses
+that specification's direct-input record rather than silently creating one of
+the structured items in this table.
 
 Topical tags such as `cos`, `voice`, `production`, or `today` may be suggested
 automatically. Robert can override them with “Tag this as …”. Tags never grant
@@ -184,8 +193,8 @@ idempotent.
 3. Add provider-neutral conversation capture for typed and transcribed voice
    turns with configurable retention.
 4. Add natural note, agenda, decision, question, research, and revisit intents.
-5. Add keep/off-record/delete controls after supported Agent A session cleanup
-   is proven.
+5. Add off-record/delete controls after supported Agent A session cleanup is
+   proven.
 6. Add scheduled distillation/purge and transparent backup-expiration reporting.
 
 Each phase requires a reviewed diff and dev acceptance before production.
