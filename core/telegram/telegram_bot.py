@@ -72,8 +72,12 @@ from german_domain import (
     _resolve_verb, _resolve_phrases, _resolve_drill_verb,
 )
 
-BASE_DIR = Path(__file__).parent
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# BASE_DIR resolves repository-root paths (curator output, logs, venv, notes).
+# It must stay the repository root: this file moved to core/telegram/ in the
+# root consolidation, and `Path(__file__).parent` silently began resolving
+# every one of those paths inside core/telegram/, where none of them exist.
+BASE_DIR = PROJECT_ROOT
 CURATOR_CRON_SCRIPT = PROJECT_ROOT / "scripts" / "operations" / "run_curator_cron.sh"
 processed_callbacks = set()
 
