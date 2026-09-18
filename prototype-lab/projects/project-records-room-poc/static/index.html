@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mini-moi · Records & Rooms</title><link rel="stylesheet" href="/static/style.css"></head>
+<body>
+<div class="environment"><span class="env-dot"></span> LOCAL DEVELOPMENT <span class="env-detail">Private test workspace · no production or model connection</span></div>
+<section id="login" class="login hidden">
+  <div class="login-mark">m.</div><p class="eyebrow">MINI-MOI / RECORDS & ROOMS</p><h1>Keep the thread.</h1>
+  <p class="lead">A place for purposeful conversations, shared work, and the thinking worth returning to.</p>
+  <form id="login-form"><label for="access-key">Local access key</label><input id="access-key" type="password" autocomplete="current-password" required placeholder="From your private owner-key.txt file"><button class="primary">Enter test workspace <span>↗</span></button></form>
+  <p class="muted">This proof of concept runs on your Mac. It does not read other chat applications or capture casual conversations.</p>
+</section>
+<div id="workspace" class="workspace hidden">
+  <aside class="sidebar">
+    <a class="brand" href="#rooms"><span class="brand-mark">m.</span><span>mini-moi<small>WORKING TOGETHER</small></span></a>
+    <nav aria-label="Main navigation"><button data-view="rooms" class="nav-item selected"><span>◫</span> Working rooms</button><button data-view="vault" class="nav-item"><span>▤</span> Records vault</button><button data-view="connections" class="nav-item"><span>⌘</span> Connections</button></nav>
+    <div class="sidebar-label">YOUR SESSIONS<button id="new-room-small" title="New session" aria-label="New session">＋</button></div>
+    <div id="room-list" class="room-list"></div>
+    <div class="sidebar-foot"><div class="local-status"><i></i> Stored on this Mac</div><p>Production sync not connected.<br>Same-disk backup is not disaster recovery.</p><div class="profile"><span id="profile-initial">R</span><div id="profile-name">Robert</div><button id="logout" title="Sign out">↪</button></div></div>
+  </aside>
+  <main id="main">
+    <section id="rooms-view" class="view">
+      <header class="page-header"><div><p class="eyebrow">WORKSPACE / PURPOSEFUL CONVERSATIONS</p><h1>Working rooms</h1></div><button id="new-room" class="primary">＋ New session</button></header>
+      <div id="empty-room" class="empty-room"><div class="empty-symbol">◫</div><h2>Start with something<br>worth thinking through.</h2><p>A one-to-one conversation, a team meeting, or an operational bridge. You choose when the record begins.</p><button id="new-room-empty" class="primary">Open a working session</button><div class="scope-note">Casual check-ins stay outside the vault.</div></div>
+      <div id="room-workspace" class="room-workspace hidden">
+        <div class="conversation-panel">
+          <div class="room-heading"><div class="room-meta"><span id="room-mode" class="pill"></span><span id="room-state" class="capture-badge"></span></div><h2 id="room-title"></h2><p id="room-purpose"></p><div class="room-controls"><button id="pause-room" class="quiet">Pause recording</button><button id="close-room" class="quiet">Close session</button><a id="export-md" class="quiet">Export transcript ↗</a></div></div>
+          <div class="transcript-label"><span>SESSION TRANSCRIPT</span><span id="event-count"></span></div>
+          <div id="messages" class="messages" aria-label="Session transcript"></div>
+          <form id="composer" class="composer">
+            <div id="paused-notice" class="paused-notice hidden">Recording is paused. Resume the session before adding a contribution.</div>
+            <div class="composer-controls"><label>Contribution<select id="event-kind"><option value="message">Message</option><option value="checkpoint">Thinking checkpoint</option><option value="proposal">Proposal</option><option value="task">Assignment</option><option value="task_update">Task update</option></select></label><label id="target-label">Address to<select id="target"><option value="">Everyone in this room</option></select></label><label id="reference-label" class="hidden">Reference<select id="reference"></select></label></div>
+            <label class="sr-only" for="message-body">Your contribution</label><textarea id="message-body" rows="3" maxlength="16000" placeholder="Contribute to the discussion…" required></textarea>
+            <div class="composer-bottom"><span>Attributed to you · saved on submit</span><button id="send-message" class="primary">Contribute ↑</button></div>
+          </form>
+        </div>
+        <aside class="room-brief">
+          <div class="brief-title"><p class="eyebrow">JOINING MIDWAY?</p><h3>The current picture</h3><p>From recorded contributions, not an AI-generated summary.</p></div>
+          <section><h4>Latest checkpoint</h4><div id="checkpoint"></div></section>
+          <section><h4>Meeting notes<button id="new-note" class="text-button">＋ Write</button></h4><p class="muted">Separate from the full transcript. Notes do not approve artifacts.</p><div id="meeting-notes"></div></section>
+          <section><h4>Confirmed decisions</h4><div id="decisions"></div></section>
+          <section><h4>Assignments <span class="subtle">not executions</span></h4><div id="tasks"></div></section>
+          <section><h4>Participants<button id="invite" class="text-button">Manage</button></h4><p id="moderator" class="muted"></p><div id="participants"></div></section>
+          <section><h4>Sources<button id="upload" class="text-button">＋ File</button></h4><div id="documents"></div></section>
+        </aside>
+      </div>
+    </section>
+    <section id="vault-view" class="view hidden"><header class="page-header"><div><p class="eyebrow">RECORDS / FIND THE REASONING</p><h1>Your thinking, preserved.</h1><p class="subtitle">Search contributions and filed text sources across your authorized sessions.</p></div></header><form id="search-form" class="search-form"><input id="search-query" type="search" required maxlength="160" placeholder="What were we working through?" aria-label="Search the vault"><button class="primary">Search vault ↗</button></form><p class="muted search-note">Literal text search · provenance included · imported files retain their original bytes</p><div id="search-results" class="search-results"><div class="vault-empty">Start with a phrase, a decision, or an unresolved question.</div></div></section>
+    <section id="connections-view" class="view hidden"><header class="page-header"><div><p class="eyebrow">SYSTEM / HONEST BOUNDARIES</p><h1>Connected by contract.</h1><p class="subtitle">A participant identity is not a running agent.</p></div></header><div class="connection-grid"><article class="system-card"><span class="pill">AVAILABLE</span><h2>Local records service</h2><p>Transactional storage, attributed contributions, private room membership, portable exports.</p><div id="store-status"></div><button id="backup" class="secondary">Create test backup</button><p id="backup-result" class="muted"></p></article><article class="system-card"><span class="pill amber">NOT CONNECTED</span><h2>Production & agent runtimes</h2><p>No production sync, model calls, or automatic worker execution. Agents can contribute through the authenticated API or local CLI.</p><p class="muted">Next integration target: existing development CoS. Production promotion requires a separate review.</p></article></div><div class="section-head"><h2>Client identities</h2><button id="new-principal" class="secondary">＋ Provision a client</button></div><div id="principal-list"></div></section>
+  </main>
+</div>
+<div id="toast" role="status" class="toast hidden"></div>
+<div id="pending-operation" class="pending-operation hidden"><span>Last write was not confirmed.</span><button id="retry-operation">Retry same operation</button><button id="dismiss-operation">Check saved receipt</button></div>
+<dialog id="modal"><form id="modal-form"><div class="dialog-head"><h2 id="modal-title"></h2><button type="button" id="modal-close" aria-label="Close dialog">×</button></div><div id="modal-fields"></div><div class="dialog-actions"><button type="button" id="modal-cancel" class="quiet">Cancel</button><button id="modal-submit" class="primary">Save</button></div></form></dialog>
+<script src="/static/app.js" defer></script>
+</body></html>

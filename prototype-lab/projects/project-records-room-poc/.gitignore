@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+*.sqlite3*
+*-key.txt
+*.log
+.venv/
+evidence/screenshots/
+records-room-poc-runtime/
+runtime/
+data/
+.env
+.env.*
