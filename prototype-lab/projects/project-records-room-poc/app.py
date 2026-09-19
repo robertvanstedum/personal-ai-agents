@@ -104,12 +104,28 @@ def create_app(data_dir, port=18880, testing=False):
             counts={table:db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                     for table in ("rooms","events","documents","operations")}
             mode=db.execute("PRAGMA journal_mode").fetchone()[0]
-        return jsonify(environment="local-test",schema_version=4,counts=counts,journal_mode=mode,
+        return jsonify(environment="local-test",schema_version=5,counts=counts,journal_mode=mode,
                        production="not_connected",replication="not_implemented",models="not_connected",
                        independent_backup=False,data_directory=str(store.root))
 
     @app.get("/api/v1/rooms")
     def rooms(): return jsonify(rooms=store.rooms(actor()))
+
+    # v1 /rooms remains the stable session alias for existing clients/receipts.
+    @app.get("/api/v2/rooms")
+    def persistent_rooms(): return jsonify(rooms=store.persistent_rooms(actor()))
+
+    @app.post("/api/v2/rooms")
+    def create_persistent_room(): return jsonify(store.create_persistent_room(actor(),key(),body())),201
+
+    @app.get("/api/v2/rooms/<room>")
+    def persistent_room(room): return jsonify(store.persistent_room(actor(),room))
+
+    @app.post("/api/v2/rooms/<room>/sessions")
+    def create_session(room): return jsonify(store.create_session(actor(),key(),room,body())),201
+
+    @app.get("/api/v2/sessions/<room>")
+    def session_record(room): return jsonify(store.room(actor(),room))
 
     @app.get("/api/v1/operations/<operation_key>")
     def operation(operation_key): return jsonify(store.operation(actor(),operation_key))

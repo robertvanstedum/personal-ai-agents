@@ -59,6 +59,8 @@ def test_separate_notes_after_meeting_closes(live):
     store.state("robert","notes-close",first,dict(state="closed",version=1,checkpoint="Meeting finished"))
     page.reload()
     expect(page.locator("#message-body")).to_be_disabled()
+    expect(page.locator("#pause-room")).to_be_hidden()
+    expect(page.locator("#paused-notice")).to_contain_text("closed permanently")
     page.locator("#new-note").click()
     page.locator("#field-title").fill("Review outcomes")
     page.locator("#field-kind").select_option("decision_summary")

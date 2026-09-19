@@ -117,7 +117,7 @@ class Store:
             """)
             db.execute("BEGIN IMMEDIATE")
             version=db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-            if version not in {"1","2","3","4"}:
+            if version not in {"1","2","3","4","5"}:
                 raise ValueError("Unsupported schema version")
             if version=="1":
                 db.execute("ALTER TABLE operations ADD COLUMN room TEXT REFERENCES rooms(id)")
@@ -144,6 +144,24 @@ class Store:
                     context_class TEXT,origin TEXT)""")
                 db.execute("CREATE INDEX notes_room ON notes(room,created)")
                 db.execute("UPDATE meta SET value='4' WHERE key='schema_version'")
+                version="4"
+            if version=="4":
+                # Legacy `rooms` rows remain session identities: every foreign key,
+                # receipt and external URL keeps its original meaning.
+                db.execute("""CREATE TABLE persistent_rooms(
+                    id TEXT PRIMARY KEY,title TEXT NOT NULL,purpose TEXT NOT NULL,
+                    created TEXT NOT NULL,updated TEXT NOT NULL)""")
+                db.execute("ALTER TABLE rooms ADD COLUMN parent_room_id TEXT REFERENCES persistent_rooms(id)")
+                db.execute("INSERT INTO persistent_rooms SELECT id,title,purpose,created,updated FROM rooms")
+                db.execute("UPDATE rooms SET parent_room_id=id")
+                db.execute("CREATE INDEX session_parent ON rooms(parent_room_id)")
+                db.execute("""CREATE TRIGGER session_parent_required BEFORE INSERT ON rooms
+                    WHEN NEW.parent_room_id IS NULL BEGIN
+                    SELECT RAISE(ABORT,'Session requires a parent room'); END""")
+                db.execute("""CREATE TRIGGER session_parent_immutable BEFORE UPDATE OF parent_room_id ON rooms
+                    WHEN NEW.parent_room_id IS NOT OLD.parent_room_id BEGIN
+                    SELECT RAISE(ABORT,'Session parent cannot change'); END""")
+                db.execute("UPDATE meta SET value='5' WHERE key='schema_version'")
             db.execute("INSERT OR IGNORE INTO principals VALUES(?,?,?,?,?)",
                        ("robert", "Robert", "human", digest(self.owner_key.encode()), now()))
             owner=db.execute("SELECT token_hash FROM principals WHERE id='robert'").fetchone()
@@ -252,12 +270,67 @@ class Store:
 
         def action(db):
             room, timestamp = uid(), now()
-            db.execute("INSERT INTO rooms VALUES(?,?,?,?,?,?,?,?,?)",
-                       (room,title,purpose,mode,"active",1,"robert",timestamp,timestamp))
+            db.execute("INSERT INTO persistent_rooms VALUES(?,?,?,?,?)",(room,title,purpose,timestamp,timestamp))
+            db.execute("INSERT INTO rooms VALUES(?,?,?,?,?,?,?,?,?,?)",
+                       (room,title,purpose,mode,"active",1,"robert",timestamp,timestamp,room))
             db.execute("INSERT INTO members VALUES(?,?,?)", (room,actor,"contributor"))
             self._event(db,room,actor,"session_opened", "Recorded working session opened. " + purpose)
             return dict(db.execute("SELECT * FROM rooms WHERE id=?",(room,)).fetchone())
         return self.mutate(actor,key,{"op":"create_room","payload":payload},action)
+
+    def create_persistent_room(self, actor, key, payload):
+        """Create a quiet container, not a recording session or an agent task."""
+        title=string(payload.get("title"),"Title",160)
+        purpose=string(payload.get("purpose"),"Purpose",2400)
+        def action(db):
+            timestamp=now()
+            record=dict(id=uid(),title=title,purpose=purpose,created=timestamp,updated=timestamp)
+            db.execute("INSERT INTO persistent_rooms VALUES(:id,:title,:purpose,:created,:updated)",record)
+            return record
+        return self.mutate(actor,key,{"op":"create_persistent_room","payload":payload},action)
+
+    def create_session(self, actor, key, parent, payload):
+        # Owner-only opening in this slice. Membership is never inherited.
+        self.owner(actor)
+        title=string(payload.get("title"),"Title",160)
+        purpose=string(payload.get("purpose"),"Purpose",2400)
+        mode=payload.get("mode","meeting")
+        if not isinstance(mode,str) or mode not in {"conversation","meeting","bridge"}:
+            raise Problem("Unknown session mode")
+        if payload.get("recording_acknowledged") is not True:
+            raise Problem("Acknowledge this deliberate session's recording scope")
+        def action(db):
+            if not db.execute("SELECT 1 FROM persistent_rooms WHERE id=?",(parent,)).fetchone():
+                raise Problem("Room not found",404)
+            session_id,timestamp=uid(),now()
+            db.execute("INSERT INTO rooms VALUES(?,?,?,?,?,?,?,?,?,?)",
+                       (session_id,title,purpose,mode,"active",1,"robert",timestamp,timestamp,parent))
+            db.execute("INSERT INTO members VALUES(?,?,?)",(session_id,actor,"contributor"))
+            self._event(db,session_id,actor,"session_opened","Recorded working session opened. "+purpose)
+            db.execute("UPDATE persistent_rooms SET updated=? WHERE id=?",(timestamp,parent))
+            return dict(db.execute("SELECT * FROM rooms WHERE id=?",(session_id,)).fetchone())
+        return self.mutate(actor,key,{"op":"create_session","parent":parent,"payload":payload},action)
+
+    def persistent_rooms(self, actor):
+        with self.connect() as db:
+            # Shared membership is session-scoped. Do not leak sibling counts.
+            return [dict(r) for r in db.execute("""SELECT p.id,p.title,p.purpose,p.created,
+                (SELECT COUNT(*) FROM rooms s WHERE s.parent_room_id=p.id AND
+                 (?='robert' OR EXISTS(SELECT 1 FROM members m WHERE m.room=s.id AND m.actor=?))) AS visible_session_count
+                FROM persistent_rooms p WHERE ?='robert' OR EXISTS(
+                 SELECT 1 FROM rooms s JOIN members m ON m.room=s.id
+                 WHERE s.parent_room_id=p.id AND m.actor=?) ORDER BY p.created,p.id""",(actor,actor,actor,actor))]
+
+    def persistent_room(self, actor, parent):
+        with self.connect() as db:
+            db.execute("BEGIN")
+            record=db.execute("SELECT id,title,purpose,created FROM persistent_rooms WHERE id=?",(parent,)).fetchone()
+            sessions=[dict(r) for r in db.execute("""SELECT s.* FROM rooms s WHERE s.parent_room_id=? AND
+                (?='robert' OR EXISTS(SELECT 1 FROM members m WHERE m.room=s.id AND m.actor=?))
+                ORDER BY s.created,s.id""",(parent,actor,actor))]
+            if not record or (actor!="robert" and not sessions):
+                raise Problem("Room not found",404)
+            return {**dict(record),"sessions":sessions,"visible_session_count":len(sessions)}
 
     def rooms(self, actor):
         with self.connect() as db:
@@ -350,6 +423,8 @@ class Store:
                 raise Problem("Unknown session state")
             if state == current["state"]:
                 raise Problem("Session already has that state",409)
+            if current["state"] == "closed":
+                raise Problem("Closed sessions cannot reopen; open a new session in the room",409)
             body = string(payload.get("checkpoint"),"Closing/resumption checkpoint",2400)
             db.execute("UPDATE rooms SET state=?,version=version+1 WHERE id=?",(state,room))
             event = self._event(db,room,actor,"state_change",f"{current['state']} → {state}. {body}")

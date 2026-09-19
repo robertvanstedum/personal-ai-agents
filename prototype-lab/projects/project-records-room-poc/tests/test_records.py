@@ -9,6 +9,7 @@ import sys
 from uuid import uuid4
 
 import pytest
+from conftest import remove_v5_shape
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from app import create_app
@@ -334,6 +335,7 @@ def test_provenance_is_distinct_from_actor_and_not_approval(store):
 def test_v2_migration_preserves_content_without_inventing_provenance(store):
     room=create(store);post(store,room,"Before migration")
     with store.connect() as db:
+        remove_v5_shape(db)
         db.execute("DROP TABLE notes")
         db.execute("ALTER TABLE events DROP COLUMN origin")
         db.execute("DROP TABLE artifact_refs")
@@ -349,6 +351,7 @@ def test_v2_migration_preserves_content_without_inventing_provenance(store):
 
 def test_migration_failure_rolls_back_and_can_retry(store,monkeypatch):
     with store.connect() as db:
+        remove_v5_shape(db)
         db.execute("DROP TABLE notes")
         db.execute("ALTER TABLE events DROP COLUMN origin")
         db.execute("DROP TABLE artifact_refs")
@@ -367,7 +370,7 @@ def test_migration_failure_rolls_back_and_can_retry(store,monkeypatch):
         assert "context_class" not in [r[1] for r in db.execute("PRAGMA table_info(events)")]
         assert db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]=="2"
     with Store(store.root).connect() as db:
-        assert db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]=="4"
+        assert db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]=="5"
 
 
 def test_artifact_retrieval_separates_linker_and_supporting_author(store):

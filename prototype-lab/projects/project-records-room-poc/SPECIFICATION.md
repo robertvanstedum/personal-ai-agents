@@ -24,7 +24,27 @@ Room state is stored in mutable columns with corresponding audit events, not
 claimed to be a fully event-derived projection. An actor identity and declared
 runtime metadata are distinct; declarations do not prove actual execution.
 
-Limitations: a room currently also acts as its session. The owner is hard-coded.
+Schema 5 separates persistent containers from sessions at the storage/API layer.
+The legacy `rooms` table holds sessions; `persistent_rooms` holds their parent
+containers. Each historical session receives a parent with the same ID. Existing
+foreign keys and receipts remain unchanged; the table name is retained for
+compatibility, not evidence that room and session remain one entity.
+
+`GET/POST /api/v2/rooms` lists/creates persistent containers; `GET
+/api/v2/rooms/<id>` lists only sessions visible to the caller; `POST
+/api/v2/rooms/<id>/sessions` opens an explicitly acknowledged session;
+`GET /api/v2/sessions/<id>` reads it. Existing v1 `/rooms/<id>` endpoints remain
+session aliases for messages, notes, access and exports. Creating a container
+does not record discussion or start execution. Only the owner opens sessions
+in this slice; no membership is inherited between siblings. Container title
+and purpose are shared metadata visible to members of any child session;
+sibling content, counts and update timestamps are not exposed to them.
+
+Closed sessions cannot reopen. Paused sessions can resume; a later meeting
+gets a new session ID. The current UI remains a session list; persistent-room
+navigation and opening sibling sessions through the UI are the next slice.
+
+Limitations: the owner is hard-coded.
 There is no production replication, independent automatic backup, unattended
 agent coordination or verified actual-CoS participation. Local backup alone is
 not protection against loss of the host. This prototype is not production ready.

@@ -88,6 +88,8 @@ def test_v3_migration_atomic_and_legacy_receipts_preserved(setup,monkeypatch):
     # Reconstruct v3's actual shape and historical receipt (which had no origin).
     saved['result'].pop('origin')
     with store.connect() as db:
+        from conftest import remove_v5_shape
+        remove_v5_shape(db)
         db.execute('DROP TABLE notes')
         db.execute('ALTER TABLE events DROP COLUMN origin')
         db.execute("UPDATE meta SET value='3' WHERE key='schema_version'")
