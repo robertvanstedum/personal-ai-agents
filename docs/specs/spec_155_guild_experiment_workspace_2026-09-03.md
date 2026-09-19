@@ -1,5 +1,7 @@
 # Spec #155: Guild Experiment Workspace — One Working Page, From Idea to Operational
 
+> **Current direction, 19 September 2026:** [Connected work](minimoi-connected-work/README.md) confirms Guild Experiment as Prototype Lab's lightweight surface and CoS ownership of Planning Studio. One authoritative record per fact and the existing G1/G2 authorization boundaries remain; no second registry or new lab subdomain is implied.
+
 **Version:** v1.1 build baseline (v1.0 plus Codex's five final sign-off edits of 2026-09-03; equals working-draft v0.3)
 **Date:** 2026-09-03
 **Status:** Approved by Robert on 2026-09-03 for the **G1 read-only slice**. G2 (notes and stage writes) is designed here but not authorized; it requires the Central Personal Repository write contract (shared with CoS Career C0).

@@ -1,5 +1,7 @@
 # CoS Agent and Master Craftsman — Living Product & Solution Approach
 
+> **Directional update, 19 September 2026:** [Connected work](../specs/minimoi-connected-work/README.md) defines the current working-area and Records & Rooms target. It augments this approach; CoS does not assume Guild build verification or Master Craftsman's technical authority. See the scoped [impact map](../specs/minimoi-connected-work/IMPACT_AND_SUPERSESSION.md).
+
 **Subtitle:** Proving bounded agent mechanics in one domain, then applying the learning to another<br>
 **Status:** Living baseline v1.0 — D1, D2, and D4 decided for the first bounded CoS capability; D3 dispositioned with the reference-task spike still gated; governs the next component specs; not approved to build<br>
 **Date:** 2026-08-15<br>

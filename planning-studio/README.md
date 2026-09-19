@@ -1,5 +1,7 @@
 # Planning Studio — Design Repository
 
+> **Current direction (19 September 2026):** [Mini-moi connected work](../docs/specs/minimoi-connected-work/README.md) and [charter v0.2](governance/PLANNING_STUDIO_CHARTER_v0.2_2026-09-19.md). Robert places Planning Studio under CoS; Guild supplies technical review/build standards. The earlier scaffold statuses below are historical, not current release/build authority.
+
 **Repository scaffold version:** 0.1; consolidated design candidate 0.9  
 **Established:** 2026-09-02  
 **Status:** Second design review; not an approved roadmap or build specification  
@@ -12,8 +14,8 @@ This directory is the first durable home for early mini-moi ideas that have
 become important enough to preserve but are not yet approved roadmap work.
 It is deliberately outside `_working/`.
 
-Planning Studio is governed by Guild at the promotion boundary but is not named
-or owned as a Guild subdomain. It separates four things that were previously
+Planning Studio is owned by CoS for continuity, intake and organization;
+Guild supplies technical review and build/promotion standards. It separates four things that were previously
 easy to blur:
 
 1. an early thought or conversation;

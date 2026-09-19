@@ -1,5 +1,7 @@
 # COS Conversation Memory, Privacy, and Natural Capture Intents
 
+> **Scope clarification, 19 September 2026:** acknowledged recorded sessions follow [Records & Rooms revision 6](minimoi-connected-work/RECORDS_ROOMS_v6.md). Ordinary conversational retention/forgetting and existing Work authority remain separate; this is not permission for blanket capture or deletion.
+
 **Registered:** Build queue #150
 **Date:** 2026-08-16 · **Revised:** 2026-09-06
 **Status:** In-process design; partially superseded (see below). Not authorized for implementation
