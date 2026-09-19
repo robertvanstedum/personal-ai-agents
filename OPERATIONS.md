@@ -471,16 +471,70 @@ loaded but idle (`com.vanstedum.curator`, `curator-intelligence`,
 removal here — flagged so nobody is surprised that the Mac has more loaded automation
 than the active-service list suggests.
 
-**Open item — port 8766 ambiguity:** a native launchd process
-(`com.user.curator-server`, running `curator_server.py` via the project venv) holds
-host port 8766 per `lsof`, while the local `minimoi-curator` container claims to
-publish the same port and `docker port` reports the mapping as active. The OS-level
-listener answering `curl localhost:8766/health` is the *native* process. Which one
-Docker-bound traffic actually reaches was not resolved — tracked in Known Gaps, stated
-here as an ambiguity rather than a conclusion.
+**Port 8766 — resolved 2026-09-08.** The earlier ambiguity is settled: the
+**Docker `minimoi-curator` container owns 8766**. The `ssh` process seen holding the
+port in `lsof` is Colima's port-forwarder acting on the container's behalf, not a
+native listener. Both native curator launchd jobs (`com.user.curator-server`,
+`com.vanstedum.minimoi-curator`) were pre-Docker leftovers that could never bind, and
+are disabled as `*.plist.disabled-2026-09-08`.
 
-After a Mac reboot: `colima status` → `docker ps` → start what's missing. Dev being
-down never affects production.
+## Mac restart protocol
+
+Dev being down never affects production. Nothing here is urgent — but nothing here
+comes back on its own either, and several pieces are easy to assume are running.
+
+**1. Docker runtime, then the containers that do not self-start.**
+
+```bash
+colima status || colima start
+docker ps
+```
+
+`minimoi-cos-agent-a`, `minimoi-model-gateway`, `minimoi-curator`, `minimoi-german`
+and `postgres-ai-agents` carry `restart: unless-stopped` and return by themselves.
+
+**`minimoi-cos-dev` does not.** Its restart policy is `no`, so it stays down after
+every reboot until started by hand, and a passing `docker ps` glance will not show
+it missing unless you know to look:
+
+```bash
+docker start minimoi-cos-dev
+curl -s localhost:18769/health          # {"ok":true}
+```
+
+**2. Verify the dev path before trusting it.** Three launchd jobs carry it, and a
+live PID is the check that matters — a nonzero *last* exit status on a running job
+is normal:
+
+```bash
+launchctl list | grep -E 'cloudflared|minimoi-portal|com.user.cos'
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:5001/        # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://dev.minimoi.ai/app/cos # 302 = auth redirect, healthy
+```
+
+**3. Demo stacks are deliberately left stopped.** The IoT Connect and Connect HQ
+prototypes both live in one compose file and are not needed for ordinary work. They
+hold roughly 275 MiB between them, which matters on an 8 GB machine.
+
+```bash
+cd _working/claude-connect-hq-standalone-build-2026-09-02/build/project-connect-hq
+docker compose -p iotdemo start                # or: stop
+docker compose -p connecthq-codex-local start  # or: stop
+```
+
+Use `stop`/`start`, never `down` — `down` removes the containers and their data.
+The project names are not derived from the directory, so `-p` is required.
+
+**4. `/private/tmp` is purged at boot.** Disposable test virtualenvs, prepared
+patches and extracted evidence under `/private/tmp` do not survive a restart. This
+cost real time on 2026-09-19, when a reviewed test environment vanished mid-batch and
+looked like a tooling failure. Put anything that must outlive a reboot in the repo
+working tree or under `~`.
+
+**5. Low-memory triage.** On the 8 GB Mac the Colima VM holds 3 GiB. If the machine
+is swapping hard (`vm_stat` free pages near zero, large `Swapouts`), `colima stop`
+returns the most memory in one move — at the cost of dev CoS, curator and German.
+Native Python test runs do not need it.
 
 ---
 
