@@ -19,6 +19,8 @@ tags: [planning-studio, central-repository, cos, curator, guild, portability, pr
 
 # Planning Studio and Central Personal Repository
 
+> **Current direction:** [Connected work](../../../../docs/specs/minimoi-connected-work/README.md). This historical candidate is partially superseded for Planning Studio ownership and session-record authority; see the [impact map](../../../../docs/specs/minimoi-connected-work/IMPACT_AND_SUPERSESSION.md). Other repository/source-preservation principles remain unless explicitly amended.
+
 ## Consolidated Design Candidate v0.9
 
 This document consolidates the initial Planning Studio package, Claude's

@@ -1,5 +1,7 @@
 # Guild Planning Studio Charter
 
+> **Historical charter.** Ownership and record-authority boundaries are superseded by [charter v0.2](PLANNING_STUDIO_CHARTER_v0.2_2026-09-19.md) and the [current direction](../../docs/specs/minimoi-connected-work/README.md). The original text below is preserved as design history.
+
 **Version:** 0.1  
 **Date:** 2026-09-02  
 **Status:** Draft for design review  
@@ -166,4 +168,3 @@ This charter does not:
 5. What belongs in Git versus an encrypted data store?
 6. How should an artifact participate in several initiatives without copies?
 7. What minimum backup and integrity controls justify "never lost"?
-

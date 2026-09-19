@@ -1,5 +1,7 @@
 # Spec #153: mini-moi Prototype Lab
 
+> **Current directional simplification, 19 September 2026:** [Connected work](minimoi-connected-work/README.md) places Prototype Lab within Guild Experiment with stable repository homes and lightweight tracking. A dedicated new service/database is not required merely to start an experiment. Existing hosted implementations and project-specific approvals are not deleted or revoked. See the [impact map](minimoi-connected-work/IMPACT_AND_SUPERSESSION.md); older universal platform requirements below apply only where separately retained for a project.
+
 **Version:** v1.0 review baseline  
 **Date:** 2026-08-26  
 **Status:** Official spec; multi-agent review pending; implementation not authorized  
