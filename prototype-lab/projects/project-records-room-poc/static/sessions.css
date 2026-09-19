@@ -1,0 +1,9 @@
+.room-group { margin-bottom: 14px; }
+.parent-link { font-weight: 700; border-bottom: 1px solid #dedbd5; }
+.session-link { padding-left: 22px; }
+.parent-link, .session-link, #parent-sessions button { overflow-wrap: anywhere; white-space: normal; }
+#parent-workspace { margin-bottom: 24px; }
+#parent-title, #parent-purpose { overflow-wrap: anywhere; }
+#parent-sessions { margin-top: 24px; }
+.page-header > .room-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) { .page-header { flex-wrap: wrap; gap: 12px; } }

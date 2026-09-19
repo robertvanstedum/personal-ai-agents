@@ -1,6 +1,6 @@
 "use strict";
 const $=id=>document.getElementById(id);
-const state={me:null,rooms:[],room:null,view:"rooms",pending:null,authEpoch:0,navigation:0,drafts:{}};
+const state={me:null,rooms:[],parents:[],parent:null,room:null,view:"rooms",pending:null,authEpoch:0,navigation:0,drafts:{}};
 const modeLabels={conversation:"One-to-one thinking",meeting:"Team meeting",bridge:"Operational bridge"};
 const kindLabels={message:"Message",checkpoint:"Checkpoint",proposal:"Proposal",decision:"Owner decision",task:"Assignment",task_update:"Task update"};
 const element=(tag,content,cls)=>{const node=document.createElement(tag);if(content!==undefined)node.textContent=content;if(cls)node.className=cls;return node;};
@@ -30,12 +30,62 @@ async function write(path,payload){
 function savePending(request){state.pending=request;sessionStorage.setItem(`minimoi.pending.${request.actor}`,JSON.stringify({path:request.path,key:request.key,actor:request.actor}));}
 function clearPending(){if(state.me)sessionStorage.removeItem(`minimoi.pending.${state.me.id}`);state.pending=null;$("pending-operation").classList.add("hidden");}
 async function checkReceipt(){const pending=state.pending;if(!pending||pending.actor!==state.me?.id)return;try{const response=await api(`/api/v1/operations/${encodeURIComponent(pending.key)}`);clearPending();if(pending.payload?.body===$("message-body").value)$("message-body").value="";if($("modal").open)$("modal").close();await refreshRooms();await navigate();toast("Recovered the original committed receipt; do not resubmit.");return response;}catch(error){if(error.status===404)toast("No receipt found yet. Retry the same operation; after reload, re-enter its original content.",true);else toast(error.message,true);}}
-function showLogin(){state.authEpoch++;state.navigation++;state.me=null;state.room=null;state.rooms=[];state.pending=null;state.drafts={};for(const id of ["search-results","principal-list","messages","room-list","modal-fields","checkpoint","decisions","tasks","participants","documents","store-status","artifact-links","meeting-notes"])clear($(id));$("composer").reset();$("search-query").value="";$("backup-result").textContent="";$("room-title").textContent="";$("room-purpose").textContent="";$("messages").dataset.last="";$("pending-operation").classList.add("hidden");$("toast").classList.add("hidden");if($("modal").open)$("modal").close();$("workspace").classList.add("hidden");$("login").classList.remove("hidden");}
-async function enter(){state.me=await api("/api/v1/me");$("login").classList.add("hidden");$("workspace").classList.remove("hidden");$("profile-name").textContent=state.me.label;$("profile-initial").textContent=state.me.label[0];const owner=state.me.id==="robert";["new-room","new-room-small","new-room-empty"].forEach(id=>$(id).classList.toggle("hidden",!owner));$("backup").disabled=!owner;$("new-principal").disabled=!owner;const saved=sessionStorage.getItem(`minimoi.pending.${state.me.id}`);if(saved){try{const pending=JSON.parse(saved);if(pending.actor===state.me.id){state.pending=pending;$("pending-operation").classList.remove("hidden");}}catch(error){toast("Unrecognized recovery metadata; inspect prior records before resubmitting.",true);}}await refreshRooms();await navigate();if(state.pending)await checkReceipt();}
-async function refreshRooms(){state.rooms=(await api("/api/v1/rooms")).rooms;renderRoomList();}
-function renderRoomList(){clear($("room-list"));for(const room of state.rooms){const button=element("button",undefined,"room-link"+(state.room?.id===room.id?" active":""));button.append(element("strong",room.title),element("small",`${modeLabels[room.mode]} · ${room.state}`));button.onclick=()=>{location.hash=`room/${room.id}`;};$("room-list").append(button);}}
-async function navigate(){if(!state.me)return;const generation=++state.navigation;if(state.room)state.drafts[state.room.id]=$("message-body").value;const hash=location.hash.slice(1);const [name,id]=hash.split("/");state.view=name==="vault"?"vault":name==="connections"?"connections":"rooms";document.querySelectorAll(".view").forEach(node=>node.classList.toggle("hidden",node.id!==`${state.view}-view`));document.querySelectorAll("[data-view]").forEach(node=>node.classList.toggle("selected",node.dataset.view===state.view));if(state.view==="rooms"){const roomId=name==="room"?id:state.room?.id||state.rooms[0]?.id;if(roomId){$("message-body").disabled=true;$("send-message").disabled=true;await loadRoom(roomId,generation);}else{$("empty-room").classList.remove("hidden");$("room-workspace").classList.add("hidden");}}if(state.view==="connections")await connections();}
-async function loadRoom(id,generation=state.navigation){const epoch=state.authEpoch;const room=await api(`/api/v1/rooms/${id}`);if(epoch!==state.authEpoch||generation!==state.navigation||state.view!=="rooms"||(location.hash.startsWith("#room/")&&location.hash!==`#room/${id}`))return;if(state.room?.id!==id){$("message-body").value=state.drafts[id]||"";$("messages").dataset.last="";}state.room=room;renderRoom();renderRoomList();}
+function showLogin(){state.authEpoch++;state.navigation++;state.me=null;state.room=null;state.rooms=[];state.parents=[];state.parent=null;$("parent-title").textContent="";$("parent-purpose").textContent="";clear($("parent-sessions"));$("parent-workspace").classList.add("hidden");state.pending=null;state.drafts={};for(const id of ["search-results","principal-list","messages","room-list","modal-fields","checkpoint","decisions","tasks","participants","documents","store-status","artifact-links","meeting-notes"])clear($(id));$("composer").reset();$("search-query").value="";$("backup-result").textContent="";$("room-title").textContent="";$("room-purpose").textContent="";$("messages").dataset.last="";$("pending-operation").classList.add("hidden");$("toast").classList.add("hidden");if($("modal").open)$("modal").close();$("workspace").classList.add("hidden");$("login").classList.remove("hidden");}
+async function enter(){state.me=await api("/api/v1/me");$("login").classList.add("hidden");$("workspace").classList.remove("hidden");$("profile-name").textContent=state.me.label;$("profile-initial").textContent=state.me.label[0];const owner=state.me.id==="robert";["new-room","new-room-small","new-room-empty","new-project","new-child-session"].forEach(id=>$(id).classList.toggle("hidden",!owner));$("backup").disabled=!owner;$("new-principal").disabled=!owner;const saved=sessionStorage.getItem(`minimoi.pending.${state.me.id}`);if(saved){try{const pending=JSON.parse(saved);if(pending.actor===state.me.id){state.pending=pending;$("pending-operation").classList.remove("hidden");}}catch(error){toast("Unrecognized recovery metadata; inspect prior records before resubmitting.",true);}}await refreshRooms();await navigate();if(state.pending)await checkReceipt();}
+async function refreshRooms(){
+  const epoch=state.authEpoch;
+  const [sessions,parents]=await Promise.all([api("/api/v1/rooms"),api("/api/v2/rooms")]);
+  if(epoch!==state.authEpoch)return;
+  state.rooms=sessions.rooms;state.parents=parents.rooms;renderRoomList();
+}
+function renderRoomList(){
+  clear($("room-list"));
+  for(const parent of state.parents){
+    const group=element("div",undefined,"room-group");
+    const heading=element("button",parent.title,"room-link parent-link");heading.dataset.parent=parent.id;
+    heading.onclick=()=>{location.hash=`project/${parent.id}`;};group.append(heading);
+    for(const room of state.rooms.filter(s=>s.parent_room_id===parent.id)){
+      const button=element("button",undefined,"room-link session-link"+(state.room?.id===room.id?" active":""));
+      button.append(element("strong",room.title),element("small",`${modeLabels[room.mode]} · ${room.state}`));
+      button.onclick=()=>{location.hash=`room/${room.id}`;};group.append(button);
+    }
+    $("room-list").append(group);
+  }
+}
+async function navigate(){
+  if(!state.me)return;const generation=++state.navigation;
+  if(state.room)state.drafts[state.room.id]=$("message-body").value;
+  const [name,id]=location.hash.slice(1).split("/");
+  state.view=name==="vault"?"vault":name==="connections"?"connections":"rooms";
+  document.querySelectorAll(".view").forEach(node=>node.classList.toggle("hidden",node.id!==`${state.view}-view`));
+  document.querySelectorAll("[data-view]").forEach(node=>node.classList.toggle("selected",node.dataset.view===state.view));
+  $("parent-workspace").classList.add("hidden");
+  if(state.view==="rooms"){
+    if(name==="project"&&id){await loadParent(id,generation);return;}
+    const roomId=name==="room"?id:state.room?.id||state.rooms[0]?.id;
+    if(roomId){$("message-body").disabled=true;$("send-message").disabled=true;await loadRoom(roomId,generation);}
+    else if(state.parents.length){await loadParent(state.parents[0].id,generation);}
+    else{state.room=null;state.parent=null;$("empty-room").classList.remove("hidden");$("room-workspace").classList.add("hidden");}
+  }
+  if(state.view==="connections")await connections();
+}
+async function loadParent(id,generation=state.navigation){
+  const epoch=state.authEpoch;state.room=null;state.parent=null;
+  $("message-body").value="";$("message-body").disabled=true;$("send-message").disabled=true;
+  $("room-workspace").classList.add("hidden");$("empty-room").classList.add("hidden");
+  clear($("parent-sessions"));$("parent-title").textContent="";$("parent-purpose").textContent="";
+  const parent=await api(`/api/v2/rooms/${id}`);
+  if(epoch!==state.authEpoch||generation!==state.navigation||state.view!=="rooms")return;
+  state.parent=parent;$("parent-title").textContent=parent.title;$("parent-purpose").textContent=parent.purpose;
+  $("parent-workspace").classList.remove("hidden");$("new-child-session").classList.toggle("hidden",state.me.id!=="robert");
+  if(!parent.sessions.length)$("parent-sessions").append(element("p","No sessions yet. This room is quiet; no recording or agent has started.","muted"));
+  for(const session of parent.sessions){
+    const button=element("button",`${session.title} · ${session.state}`,"room-link");
+    button.onclick=()=>{location.hash=`room/${session.id}`;};$("parent-sessions").append(button);
+  }
+  renderRoomList();
+}
+async function loadRoom(id,generation=state.navigation){const epoch=state.authEpoch;const room=await api(`/api/v1/rooms/${id}`);if(epoch!==state.authEpoch||generation!==state.navigation||state.view!=="rooms"||(location.hash.startsWith("#room/")&&location.hash!==`#room/${id}`))return;if(state.room?.id!==id){$("message-body").value=state.drafts[id]||"";$("messages").dataset.last="";}state.parent=null;$("parent-workspace").classList.add("hidden");state.room=room;renderRoom();renderRoomList();}
 const date=value=>new Date(value).toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
 function options(select,entries,empty){const previous=select.value;clear(select);if(empty!==undefined)select.append(new Option(empty,""));for(const [value,label]of entries)select.append(new Option(label,value));if([...select.options].some(x=>x.value===previous))select.value=previous;}
 function renderRoom(){const room=state.room;if(!room)return;$("empty-room").classList.add("hidden");$("room-workspace").classList.remove("hidden");$("room-title").textContent=room.title;$("room-purpose").textContent=room.purpose;$("room-mode").textContent=modeLabels[room.mode];$("room-state").textContent=room.state==="active"?"● Recording this session":`○ ${room.state[0].toUpperCase()+room.state.slice(1)}`;$("room-state").className="capture-badge"+(room.state==="active"?" recording":"");$("event-count").textContent=`${room.events.length} records`;
@@ -54,7 +104,21 @@ function renderBrief(){const room=state.room;const events=room.events;for(const 
 function configureComposer(){if(!state.room)return;const kind=$("event-kind").value;$("reference-label").classList.toggle("hidden",kind!=="task_update");$("target-label").classList.toggle("hidden",kind==="task_update");if(kind==="task_update")options($("reference"),state.room.events.filter(e=>e.kind==="task").map(e=>[e.id,`${e.target}: ${e.body.slice(0,55)}`]));}
 function field(name,label,type="text",value="",choices){const wrapper=element("label",label);let input;if(type==="select"){input=element("select");for(const [key,text] of choices)input.append(new Option(text,key));}else input=element(type==="textarea"?"textarea":"input");if(type!=="textarea"&&type!=="select")input.type=type;input.name=name;input.id=`field-${name}`;if(type==="checkbox")input.checked=Boolean(value);else input.value=value;input.required=name!=="context_class";if(type==="text")input.maxLength=2400;wrapper.append(input);return wrapper;}
 function modal(title,fields,submit,label="Save"){clear($("modal-fields"));$("modal-title").textContent=title;for(const item of fields)$("modal-fields").append(item);$("modal-submit").textContent=label;$("modal-submit").disabled=false;$("modal-form").onsubmit=async event=>{event.preventDefault();$("modal-submit").disabled=true;try{const data=Object.fromEntries(new FormData($("modal-form")));await submit(data);$("modal").close();}catch(error){toast(error.message,true);}finally{$("modal-submit").disabled=false;}};$("modal").showModal();}
-function newRoom(){modal("Open a working session",[field("title","Session title"),field("purpose","What are we working through?","textarea"),field("mode","Session mode","select","conversation",Object.entries(modeLabels)),field("capture","Record the complete discussion in this session","checkbox",false),element("p","Every submitted message is retained. Meeting notes are a separate document. Other applications are not connected.")],async data=>{const response=await write("/api/v1/rooms",{title:data.title,purpose:data.purpose,mode:data.mode,recording_acknowledged:data.capture==="on"});await refreshRooms();location.hash=`room/${response.result.id}`;toast("Session opened · committed locally");},"Open session");}
+function newRoom(){
+  const parentId=state.parent?.id||state.room?.parent_room_id||"__new__";
+  const choices=[["__new__","Create a new room with this first session"],...state.parents.map(p=>[p.id,p.title])];
+  modal("Open a working session",[field("parent","Persistent room","select",parentId,choices),field("title","Session title"),field("purpose","What are we working through?","textarea"),field("mode","Session mode","select","conversation",Object.entries(modeLabels)),field("capture","Record the complete discussion in this session","checkbox",false),element("p","Every submitted message is retained. Participants are not inherited from other sessions. A new room uses this title and purpose as shared metadata.")],async data=>{
+    const path=data.parent==="__new__"?"/api/v1/rooms":`/api/v2/rooms/${data.parent}/sessions`;
+    const response=await write(path,{title:data.title,purpose:data.purpose,mode:data.mode,recording_acknowledged:data.capture==="on"});
+    await refreshRooms();location.hash=`room/${response.result.id}`;toast("Session opened · committed locally");
+  },"Open session");
+}
+function newPersistentRoom(){
+  modal("Create a quiet room",[field("title","Room title"),field("purpose","Shared room purpose","textarea"),element("p","Visible to participants of any session in this room. Do not include sibling-private information. Creating a room does not start recording or agents.")],async data=>{
+    const response=await write("/api/v2/rooms",{title:data.title,purpose:data.purpose});
+    await refreshRooms();location.hash=`project/${response.result.id}`;toast("Quiet room created · no session opened");
+  },"Create room");
+}
 function changeState(next){const room=state.room;modal(next==="active"?"Resume the thread":"Leave a useful stopping point",[field("checkpoint",next==="active"?"Where are we picking up?":"What is settled, open, or next?","textarea"),element("p",next==="active"?"New contributions will be recorded again.":"This closes or pauses recording. It does not approve proposals or deployments.")],async data=>{await write(`/api/v1/rooms/${room.id}/state`,{state:next,version:room.version,checkpoint:data.checkpoint});await loadRoom(room.id);await refreshRooms();toast(`Session ${next} · checkpoint preserved`);},next==="active"?"Resume recording":"Save checkpoint");}
 function roomContext(){const id=state.room.id,epoch=state.authEpoch;return {id,check(){if(epoch!==state.authEpoch||state.room?.id!==id||state.view!=="rooms"||(location.hash.startsWith("#room/")&&location.hash!==`#room/${id}`))throw new Error("The target session changed. Reopen this action in the intended room.");}};}
 function decision(event){const context=roomContext();modal("Record your decision",[element("p",`Proposal: ${event.body}`),field("body","Your decision and its scope","textarea"),element("p","This records your position. It does not run a task, approve a code diff, or deploy anything.")],async data=>{context.check();await write(`/api/v1/rooms/${context.id}/events`,{kind:"decision",body:data.body,reference:event.id});await loadRoom(context.id);toast("Your decision was recorded with its source proposal");},"Record my decision");}
@@ -66,6 +130,8 @@ $("login-form").onsubmit=async event=>{event.preventDefault();try{await api("/ap
 $("logout").onclick=async()=>{try{await api("/api/logout","POST",{});showLogin();}catch(error){toast(error.message,true);}};
 document.querySelectorAll("[data-view]").forEach(button=>button.onclick=()=>{location.hash=button.dataset.view;});
 for(const id of ["new-room","new-room-small","new-room-empty"])$(id).onclick=newRoom;
+$("new-project").onclick=newPersistentRoom;
+$("new-child-session").onclick=newRoom;
 $("pause-room").onclick=()=>changeState(state.room.state==="active"?"paused":"active");$("close-room").onclick=()=>changeState("closed");$("invite").onclick=()=>members().catch(error=>toast(error.message,true));$("upload").onclick=upload;$("event-kind").onchange=configureComposer;
 $("composer").onsubmit=async event=>{event.preventDefault();const button=$("send-message"),context=roomContext(),roomId=context.id,body=$("message-body").value,actor=state.me.id;button.disabled=true;try{context.check();const kind=$("event-kind").value;await write(`/api/v1/rooms/${roomId}/events`,{kind,body,target:kind==="task_update"?null:$("target").value||null,reference:kind==="task_update"?$("reference").value:null});if(state.me?.id!==actor)return;if(state.drafts[roomId]===body)state.drafts[roomId]="";if(state.room?.id===roomId){if($("message-body").value===body)$("message-body").value="";await loadRoom(roomId);$("messages").scrollTop=$("messages").scrollHeight;}await refreshRooms();toast("Contribution committed locally");}catch(error){toast(error.message,true);}finally{button.disabled=state.room?.state!=="active"||(location.hash.startsWith("#room/")&&location.hash!==`#room/${state.room?.id}`);}};
 $("search-form").onsubmit=async event=>{event.preventDefault();try{const data=await api(`/api/v1/search?q=${encodeURIComponent($("search-query").value)}`);clear($("search-results"));if(!data.results.length)$("search-results").append(element("div","No matching records in your authorized sessions.","vault-empty"));for(const result of data.results){const item=element("button",undefined,"search-result");item.append(element("span",result.kind,"pill"),element("h3",result.title),element("p",result.body),element("small",`${result.supporting_actor_label?`Linked by ${result.author} · supporting ${result.supporting_kind} by ${result.supporting_actor_label}`:`Submitted by ${result.author}`} · ${result.context_class||"Not classified"} · ${date(result.created)} · record ${result.id.slice(0,8)}`));item.onclick=()=>{location.hash=`room/${result.room}`;};$("search-results").append(item);}}catch(error){toast(error.message,true);}};

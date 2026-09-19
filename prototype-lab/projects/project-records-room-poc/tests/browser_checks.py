@@ -83,6 +83,89 @@ def test_separate_notes_after_meeting_closes(live):
     expect(page.locator("#meeting-notes")).to_be_empty()
 
 
+def test_quiet_room_and_two_separate_sessions(live):
+    page,store,url,first,_,_=live
+    signin(page,url,store.owner_key,first)
+    page.locator("#new-project").click()
+    page.locator("#field-title").fill("Synthetic persistent room")
+    page.locator("#field-purpose").fill("Shared context, not a session transcript")
+    page.locator("#modal-submit").click()
+    expect(page.locator("#parent-title")).to_have_text("Synthetic persistent room")
+    expect(page.locator("#parent-sessions")).to_contain_text("No sessions yet")
+    expect(page.locator("#room-workspace")).to_be_hidden()
+    assert len(store.rooms("robert"))==2
+    parent_id=page.url.split("#project/")[1]
+    page.locator("#new-child-session").click()
+    assert page.locator("#field-parent").input_value()==parent_id
+    page.locator("#field-title").fill("First discussion")
+    page.locator("#field-purpose").fill("First purpose")
+    page.locator("#field-capture").check()
+    page.locator("#modal-submit").click()
+    expect(page.locator("#room-title")).to_have_text("First discussion")
+    first_child=page.url.split("#room/")[1]
+    page.locator("#message-body").fill("FIRST_SESSION_ONLY")
+    page.locator("#send-message").click()
+    expect(page.locator("#messages")).to_contain_text("FIRST_SESSION_ONLY")
+    page.locator("#close-room").click()
+    page.locator("#field-checkpoint").fill("First session complete")
+    page.locator("#modal-submit").click()
+    expect(page.locator("#pause-room")).to_be_hidden()
+    page.locator(f'[data-parent="{parent_id}"]').click()
+    expect(page.locator("#parent-sessions")).to_contain_text("First discussion · closed")
+    page.locator("#new-child-session").click()
+    page.locator("#field-title").fill("Second discussion")
+    page.locator("#field-purpose").fill("Second purpose")
+    page.locator("#field-capture").check()
+    page.locator("#modal-submit").click()
+    expect(page.locator("#room-title")).to_have_text("Second discussion")
+    expect(page.locator("#messages")).not_to_contain_text("FIRST_SESSION_ONLY")
+    siblings=store.persistent_room("robert",parent_id)["sessions"]
+    assert len(siblings)==2 and len({s["id"] for s in siblings})==2
+    assert store.room("robert",first_child)["state"]=="closed"
+    assert all(len(store.room("robert",s["id"])["members"])==1 for s in siblings)
+    page.locator(f'[data-parent="{parent_id}"]').click()
+    expect(page.locator("#parent-sessions")).to_contain_text("Second discussion · active")
+    shots=Path(__file__).resolve().parents[1]/"evidence"/"screenshots"
+    shots.mkdir(parents=True,exist_ok=True)
+    page.screenshot(path=str(shots/"persistent-room-desktop.png"),full_page=True)
+    page.set_viewport_size({"width":390,"height":844})
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.screenshot(path=str(shots/"persistent-room-mobile.png"),full_page=True)
+    page.locator("#logout").click()
+    expect(page.locator("#parent-title")).to_be_empty()
+    expect(page.locator("#parent-sessions")).to_be_empty()
+
+
+def test_parent_ui_never_lists_unauthorized_sibling(live):
+    page,store,url,first,_,token=live
+    sibling=store.create_session("robert","sibling",first,dict(title="HIDDEN_SIBLING",purpose="Hidden",recording_acknowledged=True))["result"]["id"]
+    signin(page,url,token,first)
+    page.locator(f'[data-parent="{first}"]').click()
+    expect(page.locator("#parent-title")).to_have_text("Synthetic design review")
+    expect(page.locator("#parent-sessions")).not_to_contain_text("HIDDEN_SIBLING")
+    expect(page.locator("#room-list")).not_to_contain_text("HIDDEN_SIBLING")
+    expect(page.locator("#new-child-session")).to_be_hidden()
+    expect(page.locator("#new-project")).to_be_hidden()
+    assert sibling not in page.locator("#parent-sessions").inner_html()
+
+
+def test_delayed_parent_cannot_replace_session_navigation(live):
+    page,store,url,first,second,_=live
+    signin(page,url,store.owner_key,first)
+    delayed=[]
+    page.route(f"**/api/v2/rooms/{second}",lambda route:delayed.append(route),times=1)
+    page.locator(f'[data-parent="{second}"]').click()
+    expect(page.locator("#room-workspace")).to_be_hidden()
+    page.evaluate("id => location.hash='room/'+id",first)
+    expect(page.locator("#room-title")).to_have_text("Synthetic design review")
+    expect(page.locator("#room-workspace")).to_be_visible()
+    assert delayed
+    delayed[0].continue_()
+    page.wait_for_timeout(200)
+    expect(page.locator("#parent-workspace")).to_be_hidden()
+    expect(page.locator("#room-title")).to_have_text("Synthetic design review")
+
+
 def test_browser_workflow_and_layout(live):
     page,store,url,first,second,_=live
     signin(page,url,store.owner_key,first)

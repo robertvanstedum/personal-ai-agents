@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mini-moi · Records & Rooms</title><link rel="stylesheet" href="/static/style.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mini-moi · Records & Rooms</title><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/sessions.css"></head>
 <body>
 <div class="environment"><span class="env-dot"></span> LOCAL DEVELOPMENT <span class="env-detail">Private test workspace · no production or model connection</span></div>
 <section id="login" class="login hidden">
@@ -13,13 +13,14 @@
   <aside class="sidebar">
     <a class="brand" href="#rooms"><span class="brand-mark">m.</span><span>mini-moi<small>WORKING TOGETHER</small></span></a>
     <nav aria-label="Main navigation"><button data-view="rooms" class="nav-item selected"><span>◫</span> Working rooms</button><button data-view="vault" class="nav-item"><span>▤</span> Records vault</button><button data-view="connections" class="nav-item"><span>⌘</span> Connections</button></nav>
-    <div class="sidebar-label">YOUR SESSIONS<button id="new-room-small" title="New session" aria-label="New session">＋</button></div>
+    <div class="sidebar-label">ROOMS & SESSIONS<button id="new-room-small" title="New session" aria-label="New session">＋</button></div>
     <div id="room-list" class="room-list"></div>
     <div class="sidebar-foot"><div class="local-status"><i></i> Stored on this Mac</div><p>Production sync not connected.<br>Same-disk backup is not disaster recovery.</p><div class="profile"><span id="profile-initial">R</span><div id="profile-name">Robert</div><button id="logout" title="Sign out">↪</button></div></div>
   </aside>
   <main id="main">
     <section id="rooms-view" class="view">
-      <header class="page-header"><div><p class="eyebrow">WORKSPACE / PURPOSEFUL CONVERSATIONS</p><h1>Working rooms</h1></div><button id="new-room" class="primary">＋ New session</button></header>
+      <header class="page-header"><div><p class="eyebrow">WORKSPACE / PURPOSEFUL CONVERSATIONS</p><h1>Working rooms</h1></div><div class="room-controls"><button id="new-project" class="quiet">＋ New room</button><button id="new-room" class="primary">＋ New session</button></div></header>
+      <section id="parent-workspace" class="system-card hidden"><p class="eyebrow">PERSISTENT ROOM · SEPARATE RECORDED SESSIONS</p><h2 id="parent-title"></h2><p id="parent-purpose"></p><p class="muted">Room metadata is shared. Session membership is separate; opening a session does not invite participants from other sessions.</p><button id="new-child-session" class="primary">＋ New session in this room</button><div id="parent-sessions"></div></section>
       <div id="empty-room" class="empty-room"><div class="empty-symbol">◫</div><h2>Start with something<br>worth thinking through.</h2><p>A one-to-one conversation, a team meeting, or an operational bridge. You choose when the record begins.</p><button id="new-room-empty" class="primary">Open a working session</button><div class="scope-note">Casual check-ins stay outside the vault.</div></div>
       <div id="room-workspace" class="room-workspace hidden">
         <div class="conversation-panel">

@@ -27,6 +27,11 @@ IDs, events, notes, documents, artifact links, memberships and operations are
 not rewritten. New-session creation is owner-only, each begins with only the
 owner as a member, and session parents cannot be changed.
 
-This is API/storage separation, not full H1 acceptance: browser navigation,
-bounded scheduling/mandates, actual agent execution, independent preservation
+The UI now supports grouped room/session navigation, quiet room creation and
+explicit new sessions within a chosen room. Legacy #room/session-id links
+remain valid; #project/parent-id opens a persistent room. Creating a session
+requires recording acknowledgement and does not inherit sibling participants.
+
+This is room/session separation, not full H1 acceptance: bounded
+scheduling/mandates, actual agent execution, independent preservation
 and the other acceptance cases still require subsequent work and review.

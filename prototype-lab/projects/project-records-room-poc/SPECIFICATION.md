@@ -41,8 +41,9 @@ and purpose are shared metadata visible to members of any child session;
 sibling content, counts and update timestamps are not exposed to them.
 
 Closed sessions cannot reopen. Paused sessions can resume; a later meeting
-gets a new session ID. The current UI remains a session list; persistent-room
-navigation and opening sibling sessions through the UI are the next slice.
+gets a new session ID. The UI groups sessions under their persistent rooms,
+can create a quiet room without recording, and can open explicitly acknowledged
+sibling sessions. Legacy session links remain valid. Membership is not inherited.
 
 Limitations: the owner is hard-coded.
 There is no production replication, independent automatic backup, unattended
