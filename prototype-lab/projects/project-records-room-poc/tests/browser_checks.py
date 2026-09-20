@@ -515,18 +515,25 @@ def test_owner_requests_cos_and_reply_appears_end_to_end(live,tmp_path):
     page.locator('#message-body').fill('Synthetic owner question: Chief of Staff, are you here?')
     page.locator('#send-message').click()
     expect(page.locator('#message-body')).to_have_value('')
-    expect(page.locator('#ask-cos')).to_be_enabled()
-    page.locator('#ask-cos').click()
-    expect(page.locator('#cos-request-status')).to_contain_text('Request saved')
+    expect(page.locator('#ask-cos')).to_have_count(0)
+    page.locator('#toggle-cos-auto').click()
+    expect(page.locator('#cos-auto-status')).to_contain_text('active')
+    queue.schedule_auto()
     assert not calls
     queue.run_once(lambda room,key,action,guard:respond(room,key,client=client,model=model,journal=journal,
-        policy=SyntheticSessionPolicy([room]),owner_authorized=True,action=action,expected_guard=guard))
+        policy=SyntheticSessionPolicy([room]),owner_authorized=True,action=action,expected_guard=guard,
+        authorization_check=lambda:queue.check_auto_authority(key)))
     expect(page.locator('#messages')).to_contain_text('Browser integration fixture: I received your saved question.',timeout=10000)
     expect(page.locator('#cos-request-status')).to_contain_text('reply saved',timeout=10000)
     assert len(calls)==1 and calls[0]['records'][-1]['body'].startswith('Synthetic owner question')
-    # Invite once, then a normal saved message triggers the next response.
-    page.locator('#toggle-cos-auto').click()
-    expect(page.locator('#cos-auto-status')).to_contain_text('active')
+    # Catch-up must use the same readable projection and warning as the room.
+    page.locator('[data-view="activity"]').click()
+    expect(page.locator('#activity-list .activity-excerpt')).to_contain_text('Browser integration fixture: I received your saved question.')
+    expect(page.locator('#activity-list')).not_to_contain_text('request_fingerprint')
+    expect(page.locator('#activity-list .agent-warning')).to_contain_text('Synthetic test only')
+    page.locator('#activity-list').get_by_role('button',name='Synthetic design review').click()
+    expect(page.locator('#message-body')).to_be_enabled()
+    # Already invited: a normal saved message triggers the next response.
     page.locator('#message-body').fill('Synthetic followup: respond automatically now.')
     page.locator('#send-message').click()
     expect(page.locator('#message-body')).to_have_value('')
@@ -536,10 +543,116 @@ def test_owner_requests_cos_and_reply_appears_end_to_end(live,tmp_path):
         authorization_check=lambda:queue.check_auto_authority(key)))
     expect(page.locator('#messages').get_by_text('Browser integration fixture: I received your saved question.',exact=True)).to_have_count(2,timeout=10000)
     assert len(calls)==2
+    # GET status fails while POST pause is still available.
+    page.route('**/cos-requests',lambda route:route.fulfill(status=503,content_type='application/json',body='{"error":"status unavailable"}'))
+    expect(page.locator('#cos-request-status')).to_contain_text('status unavailable',timeout=10000)
+    expect(page.locator('#toggle-cos-auto')).to_be_enabled()
     page.locator('#toggle-cos-auto').click()
+    expect(page.locator('#toggle-cos-auto')).to_be_enabled()
+    assert not queue.status('robert',room)['auto']['enabled']
+    page.unroute('**/cos-requests')
     expect(page.locator('#cos-auto-status')).to_contain_text('off')
     page.locator('#message-body').fill('Synthetic message while CoS is paused.')
     page.locator('#send-message').click()
     expect(page.locator('#message-body')).to_have_value('')
     queue.schedule_auto()
     assert not queue.run_once(lambda *args: (_ for _ in ()).throw(AssertionError('paused')))
+    page.evaluate('Date.now = () => 0') # client clock cannot revive an expired invitation
+    queue.set_auto('robert',room,{'enabled':True})
+    with store.connect() as db:db.execute("UPDATE cos_auto SET expires='2000-01-01T00:00:00+00:00' WHERE room=?",(room,))
+    # No scheduler sweep: the raw enabled flag remains true.
+    assert queue.status('robert',room)['auto']['enabled']
+    expect(page.locator('#cos-auto-status')).to_contain_text('invitation expired',timeout=10000)
+    expect(page.locator('#toggle-cos-auto')).to_have_text('Invite CoS to auto-reply')
+
+
+def test_activity_is_read_only_scoped_and_preserves_room_drafts(live):
+    page,store,url,first,second,reviewer_token=live
+    store.append('robert','activity-first',first,dict(body='Visible working session update'))
+    store.append('robert','activity-private',second,dict(body='Separate private status discussion'))
+    before=[len(store.room('robert',r)['events']) for r in [first,second]]
+    signin(page,url,reviewer_token,first)
+    page.locator('#message-body').fill('Unsent working-room draft')
+    page.locator('[data-view="activity"]').click()
+    expect(page.locator('#activity-list')).to_contain_text('Visible working session update')
+    expect(page.locator('#activity-list')).not_to_contain_text('Separate private status discussion')
+    expect(page.locator('#activity-status')).to_contain_text('1 sessions')
+    page.locator('#activity-list').get_by_role('button',name='Synthetic design review').click()
+    expect(page.locator('#message-body')).to_have_value('Unsent working-room draft')
+    assert before==[len(store.room('robert',r)['events']) for r in [first,second]]
+    page.locator('[data-view="activity"]').click()
+    expect(page.locator('#activity-list')).to_contain_text('Visible working session update')
+    page.locator('#logout').click()
+    expect(page.locator('#activity-list')).to_be_empty()
+    expect(page.locator('#activity-status')).to_be_empty()
+
+
+def test_activity_keeps_available_sessions_when_one_fails(live):
+    page,store,url,first,second,_=live
+    store.append('robert','available-activity',first,dict(body='Available session survives another failure'))
+    signin(page,url,store.owner_key,first)
+    page.route(f'**/api/v1/rooms/{second}',lambda route:route.fulfill(status=500,content_type='application/json',body='{"error":"temporary failure"}'))
+    page.locator('[data-view="activity"]').click()
+    expect(page.locator('#activity-list')).to_contain_text('Available session survives another failure')
+    expect(page.locator('#activity-status')).to_contain_text('1 session(s) unavailable')
+    page.unroute(f'**/api/v1/rooms/{second}')
+    page.locator('#refresh-activity').click()
+    expect(page.locator('#activity-status')).to_contain_text('2 sessions')
+    expect(page.locator('#activity-status')).not_to_contain_text('unavailable')
+
+
+def test_activity_omits_membership_revoked_during_fetch(live):
+    page,store,url,first,second,token=live
+    store.membership('robert','second-membership',second,dict(actor='reviewer',role='contributor'))
+    store.append('robert','revoked-content',second,dict(body='Revoked content must not appear'))
+    signin(page,url,token,first)
+    def revoke(route):
+        store.membership('robert','revoke-on-fetch',second,dict(actor='reviewer',role='remove'))
+        route.continue_()
+    page.route(f'**/api/v1/rooms/{second}',revoke)
+    page.locator('[data-view="activity"]').click()
+    expect(page.locator('#activity-status')).to_contain_text('1 sessions')
+    expect(page.locator('#activity-list')).not_to_contain_text('Revoked content must not appear')
+    expect(page.locator('#activity-list')).not_to_contain_text('Synthetic incident bridge')
+
+
+def test_coordination_question_answer_and_executive_snapshot(live):
+    page,store,url,work,executive,_=live
+    queue=store._browser_test_app.extensions['coordination']
+    request=queue.create('reviewer','browser-question',work,dict(kind='owner_input',title='Need Robert direction',body='Which option?',assignee='robert'))['result']
+    source=store.append('robert','browser-source',work,dict(body='Working-room progress for executive briefing'))['result']
+    signin(page,url,store.owner_key,work)
+    expect(page.locator('#coordination-inbox')).to_be_visible(timeout=15000)
+    expect(page.locator('#coordination-items')).to_contain_text('Need Robert direction',timeout=10000)
+    page.locator('#coordination-items').get_by_role('button',name='Answer request').click()
+    page.locator('#field-body').fill('Proceed with option A')
+    page.locator('#modal-submit').click()
+    expect(page.locator('#coordination-items')).to_contain_text('Result submitted',timeout=10000)
+    assert queue.list('reviewer',work)['items'][0]['steps'][-1]['actor']=='robert'
+    before=store.room('robert',work)['events']
+    page.goto(f'{url}/#room/{executive}')
+    expect(page.locator('#room-title')).to_have_text('Synthetic incident bridge')
+    page.locator('#new-snapshot').click()
+    page.locator('#field-source').select_option(work)
+    page.locator('#modal-submit').click()
+    expect(page.locator('#modal-title')).to_have_text('Select records to disclose')
+    page.locator(f'input[value="{source["id"]}"]').check()
+    page.locator('#field-disclosure').check()
+    page.locator('#modal-submit').click()
+    expect(page.locator('#executive-snapshots')).to_contain_text('1 selected records',timeout=10000)
+    page.locator('#executive-snapshots summary').click()
+    expect(page.locator('#executive-snapshots')).to_contain_text('Working-room progress for executive briefing')
+    assert store.room('robert',work)['events']==before
+    page.screenshot(path='/private/tmp/records-beta-executive-desktop.png',full_page=True)
+    page.set_viewport_size({'width':390,'height':844})
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.screenshot(path='/private/tmp/records-beta-executive-mobile.png',full_page=True)
+    page.set_viewport_size({'width':1512,'height':1040})
+    page.locator('#executive-snapshots').get_by_role('button',name='Send handoff back').click()
+    page.locator('#field-title').fill('Authorized next step')
+    page.locator('#field-body').fill('Review the revised plan')
+    page.locator('#field-assignee').select_option('reviewer')
+    page.locator('#modal-submit').click()
+    expect(page.locator('#modal')).not_to_be_visible()
+    assert queue.list('robert',work)['items'][0]['source_snapshot']
+    assert queue.list('robert',work)['items'][0]['state']=='requested'

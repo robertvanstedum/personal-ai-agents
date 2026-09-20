@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mini-moi · Records & Rooms</title><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/sessions.css"></head>
 <body>
-<div class="environment"><span class="env-dot"></span> LOCAL DEVELOPMENT <span class="env-detail">Private test workspace · no production or model connection</span></div>
+<div class="environment"><span class="env-dot"></span> LOCAL DEVELOPMENT <span class="env-detail">Development workspace · CoS API in enabled test sessions</span></div>
 <section id="login" class="login hidden">
   <div class="login-mark">m.</div><p class="eyebrow">MINI-MOI / RECORDS & ROOMS</p><h1>Keep the thread.</h1>
   <p class="lead">A place for purposeful conversations, shared work, and the thinking worth returning to.</p>
@@ -12,7 +12,7 @@
 <div id="workspace" class="workspace hidden">
   <aside class="sidebar">
     <a class="brand" href="#rooms"><span class="brand-mark">m.</span><span>mini-moi<small>WORKING TOGETHER</small></span></a>
-    <nav aria-label="Main navigation"><button data-view="rooms" class="nav-item selected"><span>◫</span> Working rooms</button><button data-view="vault" class="nav-item"><span>▤</span> Records vault</button><button data-view="connections" class="nav-item"><span>⌘</span> Connections</button></nav>
+    <nav aria-label="Main navigation"><button data-view="activity" class="nav-item"><span>◷</span> Activity</button><button data-view="rooms" class="nav-item selected"><span>◫</span> Working rooms</button><button data-view="vault" class="nav-item"><span>▤</span> Records vault</button><button data-view="connections" class="nav-item"><span>⌘</span> Connections</button></nav>
     <div class="sidebar-label">ROOMS & SESSIONS<button id="new-room-small" title="New session" aria-label="New session">＋</button></div>
     <div id="room-list" class="room-list"></div>
     <div class="sidebar-foot"><div class="local-status"><i></i> Stored on this Mac</div><p>Production sync not connected.<br>Same-disk backup is not disaster recovery.</p><div class="profile"><span id="profile-initial">R</span><div id="profile-name">Robert</div><button id="logout" title="Sign out">↪</button></div></div>
@@ -27,13 +27,12 @@
           <div class="room-heading"><div class="room-meta"><span id="room-mode" class="pill"></span><span id="room-state" class="capture-badge"></span></div><h2 id="room-title"></h2><p id="room-purpose"></p><div class="room-controls"><button id="pause-room" class="quiet">Pause recording</button><button id="close-room" class="quiet">Close session</button><a id="export-md" class="quiet">Export transcript ↗</a></div></div>
           <div class="transcript-label"><span>SESSION TRANSCRIPT</span><span id="event-count"></span></div>
           <div id="messages" class="messages" aria-label="Session transcript"></div>
-          <section id="cos-controls" class="hidden" aria-label="Chief of Staff participation">
-            <button type="button" id="toggle-cos-auto">Invite CoS to auto-reply</button>
+          <section id="cos-controls" class="hidden cos-controls" aria-label="Chief of Staff participation">
+            <button type="button" id="toggle-cos-auto" class="secondary">Invite CoS to auto-reply</button>
             <p id="cos-auto-status" role="status"></p>
-            <button type="button" id="ask-cos">Ask Chief of Staff to respond</button>
-            <button type="button" id="reconcile-cos" class="hidden">Check uncertain outcome — no new model call</button>
+            <button type="button" id="reconcile-cos" class="hidden quiet">Check uncertain outcome — no new model call</button>
             <p id="cos-request-status" role="status"></p>
-            <p class="muted">CoS uses the API backend. Auto-reply invitation: up to 20 response attempts for one hour in this non-private test session. You can pause it anytime. Manual requests remain available when auto-reply is off.</p>
+            <p class="muted">CoS uses the API backend. Auto-reply invitation: up to 20 response attempts for one hour in this non-private test session. You can pause it anytime. Invite once, then send ordinary messages while participation is active.</p>
           </section>
           <form id="composer" class="composer">
             <div id="paused-notice" class="paused-notice hidden">Recording is paused. Resume the session before adding a contribution.</div>
@@ -53,8 +52,9 @@
         </aside>
       </div>
     </section>
+    <section id="activity-view" class="view hidden"><header class="page-header"><div><p class="eyebrow">ACROSS YOUR AUTHORIZED SESSIONS</p><h1>Catch up on the work.</h1><p class="subtitle">Recorded activity, checkpoints and proposals. Open a session to join its conversation.</p></div><button id="refresh-activity" class="secondary">Refresh activity</button></header><p class="activity-scope muted">This view reads existing records. It does not start agents, generate summaries, or treat proposals as approvals.</p><p id="activity-status" role="status" class="activity-scope"></p><div id="activity-list" class="activity-list"></div></section>
     <section id="vault-view" class="view hidden"><header class="page-header"><div><p class="eyebrow">RECORDS / FIND THE REASONING</p><h1>Your thinking, preserved.</h1><p class="subtitle">Search contributions and filed text sources across your authorized sessions.</p></div></header><form id="search-form" class="search-form"><input id="search-query" type="search" required maxlength="160" placeholder="What were we working through?" aria-label="Search the vault"><button class="primary">Search vault ↗</button></form><p class="muted search-note">Literal text search · provenance included · imported files retain their original bytes</p><div id="search-results" class="search-results"><div class="vault-empty">Start with a phrase, a decision, or an unresolved question.</div></div></section>
-    <section id="connections-view" class="view hidden"><header class="page-header"><div><p class="eyebrow">SYSTEM / HONEST BOUNDARIES</p><h1>Connected by contract.</h1><p class="subtitle">A participant identity is not a running agent.</p></div></header><div class="connection-grid"><article class="system-card"><span class="pill">AVAILABLE</span><h2>Local records service</h2><p>Transactional storage, attributed contributions, private room membership, portable exports.</p><div id="store-status"></div><button id="backup" class="secondary">Create test backup</button><p id="backup-result" class="muted"></p></article><article class="system-card"><span class="pill amber">NOT CONNECTED</span><h2>Production & agent runtimes</h2><p>No production sync, model calls, or automatic worker execution. Agents can contribute through the authenticated API or local CLI.</p><p class="muted">Next integration target: existing development CoS. Production promotion requires a separate review.</p></article></div><div class="section-head"><h2>Client identities</h2><button id="new-principal" class="secondary">＋ Provision a client</button></div><div id="principal-list"></div></section>
+    <section id="connections-view" class="view hidden"><header class="page-header"><div><p class="eyebrow">SYSTEM / HONEST BOUNDARIES</p><h1>Connected by contract.</h1><p class="subtitle">A participant identity is not a running agent.</p></div></header><div class="connection-grid"><article class="system-card"><span class="pill">AVAILABLE</span><h2>Local records service</h2><p>Transactional storage, attributed contributions, private room membership, portable exports.</p><div id="store-status"></div><button id="backup" class="secondary">Create test backup</button><p id="backup-result" class="muted"></p></article><article class="system-card"><span class="pill amber">SESSION-SCOPED</span><h2>Agent participation</h2><p>Development CoS can reply in explicitly enabled test sessions. The owner can see the response mode in each session. Other clients can contribute through authenticated API or CLI access.</p><p class="muted">Membership alone does not establish a live agent connection. Production sync is not connected.</p></article></div><div class="section-head"><h2>Client identities</h2><button id="new-principal" class="secondary">＋ Provision a client</button></div><div id="principal-list"></div></section>
   </main>
 </div>
 <div id="toast" role="status" class="toast hidden"></div>
@@ -62,4 +62,5 @@
 <dialog id="modal"><form id="modal-form"><div class="dialog-head"><h2 id="modal-title"></h2><button type="button" id="modal-close" aria-label="Close dialog">×</button></div><div id="modal-fields"></div><div class="dialog-actions"><button type="button" id="modal-cancel" class="quiet">Cancel</button><button id="modal-submit" class="primary">Save</button></div></form></dialog>
 <script src="/static/contribution.js" defer></script>
 <script src="/static/app.js" defer></script>
+<script src="/static/coordination.js" defer></script>
 </body></html>

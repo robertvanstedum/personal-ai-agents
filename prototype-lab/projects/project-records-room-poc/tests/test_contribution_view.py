@@ -55,3 +55,15 @@ def test_invalid_or_unmatched_evidence_falls_back(agent_setup, case):
 def test_ordinary_room_does_not_require_connector_evidence(agent_setup):
     s = agent_setup
     assert all('presentation' not in e for e in s.store.room('robert', s.room)['events'])
+
+
+def test_executive_snapshot_copies_readable_reply_and_warning(agent_setup):
+    from coordination import Coordination
+    from uuid import uuid4
+    s=agent_setup;turn(s)
+    event=s.store.room('robert',s.room)['events'][-1]
+    destination=s.store.create_room('robert',str(uuid4()),dict(title='Executive briefing',purpose='Synthetic',mode='meeting',recording_acknowledged=True))['result']['id']
+    copied=Coordination(s.store).snapshot('robert','copy-reply',destination,dict(source=s.room,event_ids=[event['id']],disclosure_acknowledged=True))['result']['records'][0]
+    assert copied['text']==event['presentation']['text']
+    assert copied['warning']==event['presentation']['warning']
+    assert 'request_fingerprint' not in copied['text']

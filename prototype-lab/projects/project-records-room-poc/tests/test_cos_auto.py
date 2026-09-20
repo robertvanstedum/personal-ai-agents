@@ -107,3 +107,11 @@ def test_context_changes_between_queue_check_and_responder_fetch(agent_setup):
     q.schedule_auto();assert q.run_once(runner(s,q))
     assert len(s.calls)==1
     assert q.status('robert',s.room)['requests'][0]['state']=='committed'
+
+
+def test_status_reports_expiry_before_scheduler_sweep(agent_setup):
+    s=agent_setup;q=setup_auto(s)
+    assert q.status('robert',s.room)['auto']['active']
+    with s.store.connect() as db:db.execute("UPDATE cos_auto SET expires='2000-01-01T00:00:00+00:00'")
+    status=q.status('robert',s.room)['auto']
+    assert status['enabled'] and status['expired'] and not status['active']

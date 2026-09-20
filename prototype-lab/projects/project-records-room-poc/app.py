@@ -34,6 +34,9 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
             cos_sessions=json.loads(private_file(config_path).read_text())["allowed_sessions"]
     cos_queue=CoSRequests(store,cos_sessions)
     app.extensions["cos_requests"]=cos_queue
+    from coordination import Coordination
+    coordination=Coordination(store)
+    app.extensions["coordination"]=coordination
     allowed_hosts={f"127.0.0.1:{port}",f"localhost:{port}"}
     if testing: allowed_hosts.add("localhost")
 
@@ -68,7 +71,7 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
             operations={"get_room":"read","session_record":"read","events":"post","import_conversation":"post","transfer":"post",
                         "documents":"upload","artifact_link":"link","operation":"receipt",
                         "export":"export","document":"read","rooms":"read","me":"read",
-                        "logout":"read"}
+                        "logout":"read","coordination_inbox":"read","coordination_list":"read","coordination_create":"post","coordination_transition":"post"}
             if endpoint not in operations: raise Problem("Route unavailable to installation clients",403)
             request_operation.set(operations[endpoint])
             if endpoint=="operation" and not request.args.get("destination"):
@@ -191,6 +194,21 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
 
     @app.post("/api/v1/rooms/<room>/moderator")
     def moderator(room): return jsonify(store.moderator(actor(),key(),room,body()))
+
+    @app.get("/api/v1/coordination/inbox")
+    def coordination_inbox(): return jsonify(coordination.inbox(actor()))
+
+    @app.get("/api/v1/rooms/<room>/coordination")
+    def coordination_list(room): return jsonify(coordination.list(actor(),room))
+
+    @app.post("/api/v1/rooms/<room>/coordination")
+    def coordination_create(room): return jsonify(coordination.create(actor(),key(),room,body())),201
+
+    @app.post("/api/v1/rooms/<room>/coordination/<item>")
+    def coordination_transition(room,item): return jsonify(coordination.transition(actor(),key(),room,item,body()))
+
+    @app.post("/api/v1/rooms/<room>/executive-snapshots")
+    def executive_snapshot(room): return jsonify(coordination.snapshot(actor(),key(),room,body())),201
 
     @app.get("/api/v1/rooms/<room>/cos-requests")
     def cos_status(room): return jsonify(cos_queue.status(actor(),room))

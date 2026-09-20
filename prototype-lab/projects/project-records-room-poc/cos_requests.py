@@ -33,7 +33,10 @@ class CoSRequests:
 
     def auto_status(self, db, room):
         row=db.execute('SELECT * FROM cos_auto WHERE room=?',(room,)).fetchone()
-        return dict(row) if row else {'enabled':False,'remaining':0,'reason':'not_invited','expires':None}
+        result = dict(row) if row else {'enabled':False,'remaining':0,'reason':'not_invited','expires':None}
+        result['expired'] = bool(result['enabled'] and result['expires'] <= now())
+        result['active'] = bool(result['enabled'] and not result['expired'])
+        return result
 
     def set_auto(self, actor, room, payload):
         self.authorized(actor,room)

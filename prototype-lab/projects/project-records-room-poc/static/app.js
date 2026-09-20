@@ -34,7 +34,7 @@ async function write(path,payload){
 function savePending(request){state.pending=request;sessionStorage.setItem(`minimoi.pending.${request.actor}`,JSON.stringify({path:request.path,key:request.key,actor:request.actor}));}
 function clearPending(){if(state.me)sessionStorage.removeItem(`minimoi.pending.${state.me.id}`);state.pending=null;$("pending-operation").classList.add("hidden");}
 async function checkReceipt(){const pending=state.pending;if(!pending||pending.actor!==state.me?.id)return;try{const response=await api(`/api/v1/operations/${encodeURIComponent(pending.key)}`);clearPending();if(pending.payload?.body===$("message-body").value)$("message-body").value="";if($("modal").open)$("modal").close();await refreshRooms();await navigate();toast("Recovered the original committed receipt; do not resubmit.");return response;}catch(error){if(error.status===404)toast("No receipt found yet. Retry the same operation; after reload, re-enter its original content.",true);else toast(error.message,true);}}
-function showLogin(){state.authEpoch++;state.navigation++;state.me=null;state.room=null;state.rooms=[];state.parents=[];state.parent=null;$("parent-title").textContent="";$("parent-purpose").textContent="";clear($("parent-sessions"));$("parent-workspace").classList.add("hidden");state.pending=null;state.drafts={};for(const id of ["search-results","principal-list","messages","room-list","modal-fields","checkpoint","decisions","tasks","participants","documents","store-status","artifact-links","meeting-notes"])clear($(id));$("composer").reset();$("search-query").value="";$("backup-result").textContent="";$("room-title").textContent="";$("room-purpose").textContent="";$("messages").dataset.last="";$("pending-operation").classList.add("hidden");$("toast").classList.add("hidden");if($("modal").open)$("modal").close();$("workspace").classList.add("hidden");$("login").classList.remove("hidden");}
+function showLogin(){window.dispatchEvent(new Event("records-signout"));state.authEpoch++;state.navigation++;state.me=null;state.room=null;state.rooms=[];state.parents=[];state.parent=null;$("parent-title").textContent="";$("parent-purpose").textContent="";clear($("parent-sessions"));$("parent-workspace").classList.add("hidden");state.pending=null;state.drafts={};for(const id of ["activity-list","search-results","principal-list","messages","room-list","modal-fields","checkpoint","decisions","tasks","participants","documents","store-status","artifact-links","meeting-notes"])clear($(id));$("composer").reset();$("search-query").value="";$("backup-result").textContent="";$("activity-status").textContent="";$("room-title").textContent="";$("room-purpose").textContent="";$("messages").dataset.last="";$("pending-operation").classList.add("hidden");$("toast").classList.add("hidden");if($("modal").open)$("modal").close();$("workspace").classList.add("hidden");$("login").classList.remove("hidden");}
 async function enter(){state.me=await api("/api/v1/me");$("login").classList.add("hidden");$("workspace").classList.remove("hidden");$("profile-name").textContent=state.me.label;$("profile-initial").textContent=state.me.label[0];const owner=state.me.id==="robert";["new-room","new-room-small","new-room-empty","new-project","new-child-session"].forEach(id=>$(id).classList.toggle("hidden",!owner));$("backup").disabled=!owner;$("new-principal").disabled=!owner;const saved=sessionStorage.getItem(`minimoi.pending.${state.me.id}`);if(saved){try{const pending=JSON.parse(saved);if(pending.actor===state.me.id){state.pending=pending;$("pending-operation").classList.remove("hidden");}}catch(error){toast("Unrecognized recovery metadata; inspect prior records before resubmitting.",true);}}await refreshRooms();await navigate();if(state.pending)await checkReceipt();}
 async function refreshRooms(){
   const epoch=state.authEpoch;
@@ -60,7 +60,7 @@ async function navigate(){
   if(!state.me)return;const generation=++state.navigation;
   if(state.room)state.drafts[state.room.id]=$("message-body").value;
   const [name,id]=location.hash.slice(1).split("/");
-  state.view=name==="vault"?"vault":name==="connections"?"connections":"rooms";
+  state.view=["activity","vault","connections"].includes(name)?name:"rooms";
   document.querySelectorAll(".view").forEach(node=>node.classList.toggle("hidden",node.id!==`${state.view}-view`));
   document.querySelectorAll("[data-view]").forEach(node=>node.classList.toggle("selected",node.dataset.view===state.view));
   $("parent-workspace").classList.add("hidden");
@@ -72,6 +72,7 @@ async function navigate(){
     else{state.room=null;state.parent=null;$("empty-room").classList.remove("hidden");$("room-workspace").classList.add("hidden");}
   }
   if(state.view==="connections")await connections();
+  if(state.view==="activity")await loadActivity(generation);
 }
 async function loadParent(id,generation=state.navigation){
   const epoch=state.authEpoch;state.room=null;state.parent=null;
@@ -221,7 +222,7 @@ $("new-note").onclick=()=>{
 };
 enter().catch(error=>{if(error.status!==401)toast(error.message,true);showLogin();});
 
-// Explicit owner request; ordinary transcript posts never dispatch an agent.
+// Owner invitation enables bounded replies to ordinary in-room messages.
 let cosRefreshRunning=false;
 async function refreshCoS(){
   const room=state.room, actor=state.me?.id, generation=state.navigation;
@@ -233,34 +234,20 @@ async function refreshCoS(){
     if(state.room?.id!==room.id||state.me?.id!==actor||state.navigation!==generation)return;
     $("cos-controls").classList.remove("hidden");
     const latest=data.requests[0], pending=data.requests.some(r=>["queued","queued_reconcile","running","uncertain"].includes(r.state));
-    const automatic=!!data.auto?.enabled;
+    const expired=!!data.auto?.expired;
+    const automatic=!!data.auto?.active;
     $("toggle-cos-auto").textContent=automatic?"Pause CoS auto-replies":"Invite CoS to auto-reply";
     $("toggle-cos-auto").dataset.enabled=automatic?"true":"false";
     $("toggle-cos-auto").disabled=!data.enabled||(!automatic&&room.state!=="active");
-    $("cos-auto-status").textContent=automatic?`CoS auto-replies active · ${data.auto.remaining} attempts remaining · ends ${date(data.auto.expires)}`:`CoS auto-replies off · ${data.auto?.reason||"not invited"}`;
-    $("ask-cos").disabled=!data.enabled||room.state!=="active"||pending||automatic;
+    $("cos-auto-status").textContent=automatic?`CoS auto-reply invitation active · ${data.auto.remaining} attempts remaining · ends ${date(data.auto.expires)}`:`CoS auto-replies off · ${expired?"invitation expired":data.auto?.reason||"not invited"}`;
     $("reconcile-cos").classList.toggle("hidden",latest?.state!=="uncertain");
     $("reconcile-cos").dataset.requestId=latest?.id||"";
     const labels={superseded:"Newer session context arrived; this reply was not posted",queued_reconcile:"Checking the saved outcome — no new model call",queued:"Request saved — awaiting CoS",running:"CoS is responding",committed:"CoS reply saved in this session",cancelled:"Request cancelled before inference: session context changed or request expired",uncertain:"Outcome uncertain — no automatic retry. Reconciliation required."};
-    $("cos-request-status").textContent=!data.enabled?"CoS has not been enabled for this session.":latest?`${labels[latest.state]||latest.state} · ${latest.id}`:"Save your message, then ask CoS to respond.";
+    $("cos-request-status").textContent=!data.enabled?"CoS has not been enabled for this session.":latest?`${labels[latest.state]||latest.state} · ${latest.id}`:automatic?"Ready for your next message.":"Invite CoS once to receive replies to ordinary messages.";
   }catch(error){
-    if(state.room?.id===room.id){$("ask-cos").disabled=true;$("cos-request-status").textContent="CoS request status unavailable";}
+    if(state.room?.id===room.id){$("toggle-cos-auto").disabled=$("toggle-cos-auto").dataset.enabled!=="true";$("cos-request-status").textContent=$("toggle-cos-auto").dataset.enabled==="true"?"CoS status unavailable · last known invitation shown; Pause remains available":"CoS status unavailable · retrying";}
   }finally{cosRefreshRunning=false;}
 }
-$("ask-cos").onclick=async()=>{
-  const context=roomContext(), actor=state.me.id;
-  if($("message-body").value.trim()){toast("Save your message before asking CoS to respond.",true);return;}
-  $("ask-cos").disabled=true;
-  const storageKey=`minimoi.cos-request.${actor}.${context.id}`;
-  let requestId=sessionStorage.getItem(storageKey)||crypto.randomUUID();
-  sessionStorage.setItem(storageKey,requestId);
-  try{
-    context.check();
-    const result=await api(`/api/v1/rooms/${context.id}/cos-requests`,"POST",{action:"contribute"},requestId);
-    if(result.id===requestId)sessionStorage.removeItem(storageKey);
-    if(state.me?.id===actor&&state.room?.id===context.id)await refreshCoS();
-  }catch(error){toast("CoS request not confirmed. The same request ID is retained. "+error.message,true);await refreshCoS();}
-};
 setInterval(()=>{if(state.view==="rooms"&&state.room)refreshCoS();},2500);
 
 $("reconcile-cos").onclick=async()=>{
@@ -276,3 +263,37 @@ $("toggle-cos-auto").onclick=async()=>{
   try{context.check();await api(`/api/v1/rooms/${context.id}/cos-auto`,"POST",{enabled:enable});await refreshCoS();}
   catch(error){toast(error.message,true);await refreshCoS();}
 };
+
+// Activity is a read-only projection, never an orchestration or approval action.
+async function loadActivity(generation=state.navigation){
+  const epoch=state.authEpoch;
+  const current=()=>epoch===state.authEpoch&&generation===state.navigation&&state.view==="activity";
+  clear($("activity-list"));$("activity-status").textContent="Loading recorded activity…";
+  try{
+    const index=await api("/api/v1/rooms");
+    const results=await Promise.allSettled(index.rooms.map(async item=>{
+      try{return await api(`/api/v1/rooms/${item.id}`);}catch(error){if(error.status===403||error.status===404)return null;throw error;}
+    }));
+    if(!current())return;
+    const failed=results.filter(result=>result.status==="rejected").length;
+    const rooms=results.filter(result=>result.status==="fulfilled").map(result=>result.value).filter(Boolean).sort((a,b)=>(b.events.at(-1)?.created||"").localeCompare(a.events.at(-1)?.created||""));
+    for(const room of rooms){
+      const card=element("article",undefined,"activity-card");
+      const header=element("div",undefined,"activity-heading"),open=element("button",room.title,"activity-open");
+      open.onclick=()=>{location.hash=`room/${room.id}`;};
+      header.append(open,element("span",room.state,"pill"));card.append(header,element("p",room.purpose,"muted"));
+      const events=room.events.filter(e=>["message","checkpoint","proposal","decision","task","task_update"].includes(e.kind));
+      const checkpoint=events.filter(e=>e.kind==="checkpoint").at(-1);
+      const proposals=events.filter(e=>e.kind==="proposal"&&!events.some(d=>d.kind==="decision"&&d.reference===e.id));
+      if(checkpoint){card.append(element("h3","Latest checkpoint"),element("p",checkpoint.body,"activity-excerpt"));}
+      if(proposals.length)card.append(element("p",`${proposals.length} proposal${proposals.length===1?"":"s"} without a recorded decision · not an approval request notification`,"activity-proposals"));
+      const last=events.at(-1);
+      if(last){card.append(element("h3","Latest contribution"),element("p",last.presentation?.type==="agent_contribution"?last.presentation.text:last.body,"activity-excerpt"),element("small",`${last.actor_label} · ${date(last.created)} · ${kindLabels[last.kind]||last.kind}`));}
+      else card.append(element("p","No conversation contributions yet.","muted"));
+      if(last?.presentation?.type==="agent_contribution")card.append(element("p",last.presentation.warning,"agent-warning"));
+      $("activity-list").append(card);
+    }
+    $("activity-status").textContent=(rooms.length?`${rooms.length} sessions · refreshed ${new Date().toLocaleTimeString()}`:failed?"No sessions could be loaded.":"No authorized sessions yet.")+(failed?` · ${failed} session(s) unavailable; Refresh to retry.`:"");
+  }catch(error){if(current()){$("activity-status").textContent="Activity could not be loaded. Refresh to try again.";clear($("activity-list"));}}
+}
+$("refresh-activity").onclick=()=>{++state.navigation;loadActivity(state.navigation);};

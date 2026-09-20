@@ -21,6 +21,10 @@ def main():
     parser.add_argument("--operation-id",help="Reuse the same ID and payload after an uncertain response")
     commands=parser.add_subparsers(dest="command",required=True)
     commands.add_parser("rooms")
+    commands.add_parser("inbox")
+    coordination=commands.add_parser("coordination");coordination.add_argument("room")
+    request=commands.add_parser("request");request.add_argument("room");request.add_argument("path",help="JSON kind/title/body/assignee payload")
+    transition=commands.add_parser("respond");transition.add_argument("room");transition.add_argument("item");transition.add_argument("path",help="JSON action/body/version payload")
     receipt=commands.add_parser("receipt");receipt.add_argument("room");receipt.add_argument("operation")
     read=commands.add_parser("read");read.add_argument("room")
     search=commands.add_parser("search");search.add_argument("query")
@@ -45,6 +49,16 @@ def main():
     token=credential.read_text().strip()
     data=None
     if args.command=="rooms": path="/api/v1/rooms"
+    elif args.command=="inbox": path="/api/v1/coordination/inbox"
+    elif args.command=="coordination": path=f"/api/v1/rooms/{quote(args.room,safe='')}/coordination"
+    elif args.command in {"request","respond"}:
+        if not args.operation_id:parser.error("Coordination writes require a retained --operation-id")
+        file=Path(args.path)
+        if file.stat().st_size>32_000:parser.error("Coordination payload exceeds32KB")
+        data=json.loads(file.read_text())
+        if not isinstance(data,dict):parser.error("Payload must be a JSON object")
+        path=f"/api/v1/rooms/{quote(args.room,safe='')}/coordination"
+        if args.command=="respond":path+="/"+quote(args.item,safe='')
     elif args.command=="receipt": path=f"/api/v1/operations/{quote(args.operation,safe='')}?destination={quote(args.room,safe='')}"
     elif args.command=="read": path=f"/api/v1/rooms/{quote(args.room,safe='')}"
     elif args.command=="search": path="/api/v1/search?q="+quote(args.query,safe="")

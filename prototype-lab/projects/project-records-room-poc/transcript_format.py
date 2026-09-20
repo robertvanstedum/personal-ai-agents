@@ -32,7 +32,7 @@ TIME = {"type": "string", "format": "date-time", "pattern": "Z$"}
 NULL_TIME = {"type": ["string", "null"], "format": "date-time", "pattern": "Z$"}
 KINDS = ["message", "lifecycle", "correction", "proposal", "recorded_decision",
          "assignment", "checkpoint", "task_update", "membership", "moderator",
-         "document_filed", "note_filed", "artifact_linked"]
+         "document_filed", "note_filed", "artifact_linked", "coordination", "executive_snapshot"]
 
 RECORD = _object(dict(
     record_id=ID, seq=NUMBER, kind={"enum": KINDS}, speaker_id=ACTOR_ID,
