@@ -250,6 +250,28 @@ class Store:
                        (actor, key, request_hash, canonical(response), now(), room))
             return response
 
+    def acknowledge_join(self, actor, key, room, payload):
+        """Evidence of one authenticated contact, never live presence or a grant."""
+        if payload:
+            raise Problem("Join acknowledgment takes no caller identity or runtime claims")
+        def action(db):
+            current = self.access(db, actor, room)
+            if current["state"] != "active":
+                raise Problem("Session is not active", 409)
+            from platform_access import request_credential
+            credential_id = request_credential.get()
+            auth = self.platform_access.lookup(db, credential_id=credential_id)
+            if not auth or auth["id"] != actor:
+                raise Problem("Authenticated client credential required", 401)
+            # Stored in the same durable receipt transaction; no transcript turn,
+            # membership change, process launch, model claim or inferred presence.
+            return {"stage": "joined", "session_id": room, "principal": actor,
+                    "installation_id": auth["installation_id"],
+                    "credential_id": auth["credential_id"], "observed_at": now(),
+                    "evidence": "authenticated_contact", "live_presence": False,
+                    "runtime_attested": False, "billing_attested": False}
+        return self.mutate(actor, key, {"join": room}, action, room=room, write=False)
+
     def operation(self, actor, key, destination=None):
         with self.connect() as db:
             row=db.execute("SELECT response,room FROM operations WHERE actor=? AND key=?",(actor,key)).fetchone()

@@ -26,6 +26,7 @@ def main():
     request=commands.add_parser("request");request.add_argument("room");request.add_argument("path",help="JSON kind/title/body/assignee payload")
     transition=commands.add_parser("respond");transition.add_argument("room");transition.add_argument("item");transition.add_argument("path",help="JSON action/body/version payload")
     receipt=commands.add_parser("receipt");receipt.add_argument("room");receipt.add_argument("operation")
+    join=commands.add_parser("join");join.add_argument("room")
     read=commands.add_parser("read");read.add_argument("room")
     search=commands.add_parser("search");search.add_argument("query")
     post=commands.add_parser("post");post.add_argument("room");post.add_argument("--text",required=True)
@@ -60,6 +61,10 @@ def main():
         path=f"/api/v1/rooms/{quote(args.room,safe='')}/coordination"
         if args.command=="respond":path+="/"+quote(args.item,safe='')
     elif args.command=="receipt": path=f"/api/v1/operations/{quote(args.operation,safe='')}?destination={quote(args.room,safe='')}"
+    elif args.command=="join":
+        if not args.operation_id: parser.error("Join requires a retained --operation-id")
+        path=f"/api/v1/rooms/{quote(args.room,safe='')}/join"
+        data={}
     elif args.command=="read": path=f"/api/v1/rooms/{quote(args.room,safe='')}"
     elif args.command=="search": path="/api/v1/search?q="+quote(args.query,safe="")
     elif args.command=="transfer":

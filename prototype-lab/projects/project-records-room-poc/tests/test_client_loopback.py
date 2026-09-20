@@ -36,6 +36,9 @@ def test_provision_import_upload_receipt_rotate_revoke(tmp_path):
         issued=run(owner+['issue','--request',str(request),'--credential-file',str(token)])
         assert 'access_token' not in issued and token.stat().st_mode&0o077==0
         client=[sys.executable,str(root/'roomctl.py'),'--url',url,'--token-file',str(token)]
+        joined=run(client+['--operation-id','cli-join','join',room])
+        assert joined['result']['principal']=='claude-code'
+        assert run(client+['receipt',room,'cli-join'])==joined
         payload=tmp_path/'import.json';payload.write_text(json.dumps(dict(source_application='claude-code-cli-synthetic',coverage='One test turn, no live vendor history',turns=[dict(speaker='robert',text='Declared only')],handoff='Suggested next step')))
         saved=run(client+['--operation-id','cli-import','import',room,str(payload)])
         assert run(client+['receipt',room,'cli-import'])==saved

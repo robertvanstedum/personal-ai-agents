@@ -109,3 +109,13 @@ Before acceptance: independent review of this exact build and a signed-in Claude
 Code session using the configured tool on agreed non-private fixture rooms.
 Existing initial Records UI/worker changes are inherited, not silently accepted.
 No merge, deployment, or saved-meeting write is performed by these tests.
+
+## Explicit client contact acknowledgment
+
+`roomctl --token-file PRIVATE_FILE --operation-id RETAINED_ID join SESSION_ID`
+records an authenticated contact receipt using the credential's server-derived
+principal and installation. It requires current read access and an active session;
+it grants no membership, posts no transcript turn and launches nothing. Recover
+with the existing receipt command. This is evidence of that contact only, never
+continuous presence, runtime/model attestation or billing verification. Native
+chat/CLI identity and subscription behavior still need their own acceptance.

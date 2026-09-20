@@ -71,7 +71,7 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
             operations={"get_room":"read","session_record":"read","events":"post","import_conversation":"post","transfer":"post",
                         "documents":"upload","artifact_link":"link","operation":"receipt",
                         "export":"export","document":"read","rooms":"read","me":"read",
-                        "logout":"read","coordination_inbox":"read","coordination_list":"read","coordination_create":"post","coordination_transition":"post"}
+                        "logout":"read","coordination_inbox":"read","coordination_list":"read","coordination_create":"post","coordination_transition":"post","acknowledge_join":"read"}
             if endpoint not in operations: raise Problem("Route unavailable to installation clients",403)
             request_operation.set(operations[endpoint])
             if endpoint=="operation" and not request.args.get("destination"):
@@ -223,6 +223,10 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
 
     @app.post("/api/v1/rooms/<room>/cos-auto")
     def cos_auto(room): return jsonify(cos_queue.set_auto(actor(),room,body()))
+
+    @app.post("/api/v1/rooms/<room>/join")
+    def acknowledge_join(room):
+        return jsonify(store.acknowledge_join(actor(), key(), room, body())), 201
 
     @app.get("/api/v1/platform/credentials")
     def credential_inventory(): return jsonify(credentials=store.platform_access.inventory(actor()))
