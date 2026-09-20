@@ -462,6 +462,8 @@ class Store:
             current=self.access(db,actor,room,True)
             if current["state"] != "active":
                 raise Problem("Session is not recording; resume before contributing",409)
+            if kind in {"decision","task","task_update"} and expected is None:
+                raise Problem("Consequential contributions require expected_context",409)
             if expected is not None:
                 latest=db.execute("SELECT COALESCE(MAX(seq),0) FROM events WHERE room=?",(room,)).fetchone()[0]
                 if expected!={"version":current["version"],"last_seq":latest}:

@@ -7,7 +7,7 @@ from pathlib import Path
 import sqlite3
 from uuid import uuid4
 
-from store import Store
+from store import Store, Problem
 
 
 def seed(store):
@@ -33,9 +33,14 @@ def seed(store):
     room=rooms["meeting"]
     store.append("robert","fixture-message-v1",room,dict(body="Synthetic opening: the question is how we preserve the reasoning without turning every casual exchange into a permanent record."))
     proposal=store.append("example-reviewer","fixture-proposal-v1",room,dict(kind="proposal",body="Synthetic proposal: preserve the complete available transcript of an explicitly opened working session. Keep summaries separate and link decisions to their source proposals."))["result"]
-    store.append("robert","fixture-decision-v1",room,dict(kind="decision",body="Synthetic owner decision for this example only: use explicit session boundaries. This is not a production or implementation approval.",reference=proposal["id"]))
-    task=store.append("robert","fixture-task-v1",room,dict(kind="task",body="Synthetic assignment: inspect whether a paused session rejects new transcript messages.",target="example-reviewer"))["result"]
-    store.append("example-reviewer","fixture-task-update-v1",room,dict(kind="task_update",body="Fixture response: the test scenario should verify that rejected messages never appear in an export.",reference=task["id"]))
+    def guarded(actor,key,payload):
+        try: return store.operation(actor,key)
+        except Problem as error:
+            if error.status!=404: raise
+        return store.append(actor,key,room,{**payload,"expected_context":store.room(actor,room)["contribution_guard"]})
+    guarded("robert","fixture-decision-v1",dict(kind="decision",body="Synthetic owner decision for this example only: use explicit session boundaries. This is not a production or implementation approval.",reference=proposal["id"]))
+    task=guarded("robert","fixture-task-v1",dict(kind="task",body="Synthetic assignment: inspect whether a paused session rejects new transcript messages.",target="example-reviewer"))["result"]
+    guarded("example-reviewer","fixture-task-update-v1",dict(kind="task_update",body="Fixture response: the test scenario should verify that rejected messages never appear in an export.",reference=task["id"]))
     store.append("robert","fixture-checkpoint-v1",room,dict(kind="checkpoint",body="Example checkpoint\nEstablished: originals and interpretations remain distinct.\nOpen: how live agent adapters join the meeting.\nNext: test pause/resume, export, and retrieval."))
     content=b"# Synthetic source\n\nPurposeful working sessions are preserved. Casual greetings are excluded.\n\nThis document is a test fixture, not an approved architecture.\n"
     store.document("robert","fixture-source-v1",room,dict(name="synthetic-session-principles.md",source_note="Generated synthetic fixture for this local proof; contains no imported personal dialogue.",base64=base64.b64encode(content).decode()))
@@ -47,14 +52,23 @@ def seed(store):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=["init","seed","backup","verify"])
+    parser.add_argument("command",choices=["init","seed","backup","verify","publish-transcript","recover-transcripts"])
     parser.add_argument("--data-dir",required=True)
+    parser.add_argument("--session-id")
     args=parser.parse_args()
     store=Store(args.data_dir)
     if args.command=="init":
         print(json.dumps({"data_directory":str(store.root),"owner_key_file":str(store.root/"owner-key.txt")}))
     elif args.command=="seed": print(json.dumps(seed(store),indent=2))
     elif args.command=="backup": print(json.dumps(store.backup("robert"),indent=2))
+    elif args.command=="publish-transcript":
+        if not args.session_id: parser.error("--session-id is required")
+        from transcript_publish import publish
+        print(json.dumps({"bundle_directory":str(publish(store,"robert",args.session_id)),
+                          "automatic_publication":False,"off_device_backup":False}))
+    elif args.command=="recover-transcripts":
+        from transcript_publish import recover
+        print(json.dumps({"recovered":[str(path) for path in recover(store,"robert")]}))
     elif args.command=="verify":
         with store.connect() as db:
             integrity=db.execute("PRAGMA integrity_check").fetchone()[0]

@@ -368,8 +368,8 @@ def test_brief_discloses_earlier_records(live):
     page,store,url,first,_,_=live
     proposal=store.append("robert","proposal",first,dict(kind="proposal",body="Synthetic proposal"))["result"]
     for index in range(7):
-        store.append("robert",f"decision-{index}",first,dict(kind="decision",body=f"Synthetic decision {index}",reference=proposal["id"]))
-        store.append("robert",f"task-{index}",first,dict(kind="task",body=f"Synthetic assignment {index}",target="reviewer"))
+        store.append("robert",f"decision-{index}",first,dict(kind="decision",body=f"Synthetic decision {index}",reference=proposal["id"],expected_context=store.room("robert",first)["contribution_guard"]))
+        store.append("robert",f"task-{index}",first,dict(kind="task",body=f"Synthetic assignment {index}",target="reviewer",expected_context=store.room("robert",first)["contribution_guard"]))
     signin(page,url,store.owner_key,first)
     page.get_by_role("button",name="3 earlier decisions — view all 7").click()
     expect(page.locator("#modal-fields")).to_contain_text("Synthetic decision 0")

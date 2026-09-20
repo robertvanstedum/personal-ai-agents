@@ -32,6 +32,8 @@ def agent(store,room,actor="reviewer",role="contributor"):
 
 
 def post(store,room,body="A contribution",actor="robert",**kw):
+    if kw.get("kind") in {"decision","task","task_update"} and "expected_context" not in kw:
+        kw["expected_context"]=store.room(actor,room)["contribution_guard"]
     return store.append(actor,str(uuid4()),room,dict(body=body,**kw))["result"]
 
 
