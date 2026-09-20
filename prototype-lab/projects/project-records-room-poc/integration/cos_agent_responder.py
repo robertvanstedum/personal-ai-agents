@@ -110,7 +110,7 @@ def saved_result(saved, actor, session_id, request_id, fingerprint):
 
 
 def respond(session_id, request_id, *, client, model, journal, policy,
-            owner_authorized=False, action="contribute"):
+            owner_authorized=False, action="contribute", expected_guard=None):
     """Trusted platform caller gates owner authentication BEFORE this function.
 
     owner_authorized must come from server authentication, never a request body.
@@ -129,7 +129,7 @@ def respond(session_id, request_id, *, client, model, journal, policy,
     room = client.request(f"/api/v1/rooms/{session_id}")
     fingerprint = sha(encoded([SOURCE, client.actor, session_id, action, request_id]))
     key = "cos-agent-response:" + request_id
-    previous = client.request("/api/v1/operations/" + quote(key, safe=""), missing_ok=True)
+    previous = client.request("/api/v1/operations/" + quote(key, safe="") + "?destination=" + quote(session_id, safe=""), missing_ok=True)
     if previous:
         return saved_result(previous, client.actor, session_id, request_id, fingerprint)
     if room["state"] != "active" or not any(
@@ -139,6 +139,8 @@ def respond(session_id, request_id, *, client, model, journal, policy,
     if (not isinstance(guard, dict) or set(guard) != {"version", "last_seq"}
             or any(type(v) is not int or v < 0 for v in guard.values())):
         raise RoomBridgeError("Atomic session context guard is required.")
+    if expected_guard is not None and guard != expected_guard:
+        raise RoomBridgeError("Session changed after the owner requested this response.")
     data = snapshot(room)
     # Prefix isolates this journal namespace from the legacy gateway responder.
     journal_key = SOURCE + ":" + request_id

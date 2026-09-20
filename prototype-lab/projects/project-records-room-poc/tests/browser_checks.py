@@ -23,6 +23,7 @@ def live(tmp_path):
         sock.bind(("127.0.0.1",0)); port=sock.getsockname()[1]
     app=create_app(tmp_path/"private",port=port,testing=True)
     store=app.extensions["records_store"]
+    store._browser_test_app=app
     def room(title):
         return store.create_room("robert",str(uuid4()),dict(title=title,purpose="Synthetic browser validation only",
                      mode="meeting",recording_acknowledged=True))["result"]["id"]
@@ -484,3 +485,42 @@ def test_dev_portal_prefix_real_proxy_roundtrip(tmp_path):
     finally:
         for server in servers:server.shutdown();server.server_close()
         for thread in threads:thread.join(timeout=5)
+
+
+def test_owner_requests_cos_and_reply_appears_end_to_end(live,tmp_path):
+    from test_cos_records_bridge import LocalSession
+    from integration.cos_records_bridge import RoomClient
+    from integration.cos_agent_responder import respond,SyntheticSessionPolicy
+    from integration.cos_room_responder import TurnJournal
+    page,store,url,room,_,_=live
+    token=store.add_principal('robert','cos-browser-client',dict(id='cos-dev',label='Chief of Staff'))['access_token']
+    store.membership('robert','cos-browser-invite',room,dict(actor='cos-dev',role='contributor'))
+    key=tmp_path/'cos.key';key.write_text(token);key.chmod(0o600)
+    config=tmp_path/'cos.json';config.write_text(json.dumps(dict(url='http://127.0.0.1:18880',actor_id='cos-dev',token_file=str(key))));config.chmod(0o600)
+    app=store._browser_test_app;queue=app.extensions['cos_requests'];queue.allowed=frozenset([room])
+    import requests
+    from urllib.parse import urlsplit
+    class EphemeralLoopback(requests.Session):
+        def request(self,method,target,**kwargs):
+            parts=urlsplit(target)
+            kwargs['headers']['Host']=urlsplit(url).netloc
+            return super().request(method,url+parts.path+('?' + parts.query if parts.query else ''),**kwargs)
+    client=RoomClient(config,session=EphemeralLoopback());journal=TurnJournal(tmp_path/'turns')
+    calls=[]
+    def model(data,request_id,action):
+        calls.append(data)
+        return dict(text='Browser integration fixture: I received your saved question.',coordination_request_id=request_id,
+                    openclaw_run_id='chatcmpl_'+str(uuid4()),agent_id='cos-agent-a',mode='actual_agent_response')
+    signin(page,url,store.owner_key,room)
+    page.locator('#message-body').fill('Synthetic owner question: Chief of Staff, are you here?')
+    page.locator('#send-message').click()
+    expect(page.locator('#message-body')).to_have_value('')
+    expect(page.locator('#ask-cos')).to_be_enabled()
+    page.locator('#ask-cos').click()
+    expect(page.locator('#cos-request-status')).to_contain_text('Request saved')
+    assert not calls
+    queue.run_once(lambda room,key,action,guard:respond(room,key,client=client,model=model,journal=journal,
+        policy=SyntheticSessionPolicy([room]),owner_authorized=True,action=action,expected_guard=guard))
+    expect(page.locator('#messages')).to_contain_text('Browser integration fixture: I received your saved question.',timeout=10000)
+    expect(page.locator('#cos-request-status')).to_contain_text('reply saved',timeout=10000)
+    assert len(calls)==1 and calls[0]['records'][-1]['body'].startswith('Synthetic owner question')

@@ -27,6 +27,12 @@
           <div class="room-heading"><div class="room-meta"><span id="room-mode" class="pill"></span><span id="room-state" class="capture-badge"></span></div><h2 id="room-title"></h2><p id="room-purpose"></p><div class="room-controls"><button id="pause-room" class="quiet">Pause recording</button><button id="close-room" class="quiet">Close session</button><a id="export-md" class="quiet">Export transcript ↗</a></div></div>
           <div class="transcript-label"><span>SESSION TRANSCRIPT</span><span id="event-count"></span></div>
           <div id="messages" class="messages" aria-label="Session transcript"></div>
+          <section id="cos-controls" class="hidden" aria-label="Chief of Staff participation">
+            <button type="button" id="ask-cos">Ask Chief of Staff to respond</button>
+            <button type="button" id="reconcile-cos" class="hidden">Check uncertain outcome — no new model call</button>
+            <p id="cos-request-status" role="status"></p>
+            <p class="muted">One requested reply to saved messages. Uses the CoS API backend. Non-private test sessions only; no continuous listening.</p>
+          </section>
           <form id="composer" class="composer">
             <div id="paused-notice" class="paused-notice hidden">Recording is paused. Resume the session before adding a contribution.</div>
             <div class="composer-controls"><label>Contribution<select id="event-kind"><option value="message">Message</option><option value="checkpoint">Thinking checkpoint</option><option value="proposal">Proposal</option><option value="task">Assignment</option><option value="task_update">Task update</option></select></label><label id="target-label">Address to<select id="target"><option value="">Everyone in this room</option></select></label><label id="reference-label" class="hidden">Reference<select id="reference"></select></label></div>

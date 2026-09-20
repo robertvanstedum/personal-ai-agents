@@ -16,7 +16,7 @@ from store import Problem, Store
 from platform_access import AccessError, request_credential, request_operation
 
 
-def create_app(data_dir, port=18880, testing=False):
+def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
     app=Flask(__name__,static_folder="static",static_url_path="/static")
     store=Store(data_dir)
     app.config.update(SECRET_KEY=store.session_key,MAX_CONTENT_LENGTH=3_000_000,
@@ -24,6 +24,16 @@ def create_app(data_dir, port=18880, testing=False):
                       SESSION_COOKIE_NAME="minimoi_room_poc",PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
                       TESTING=testing)
     app.extensions["records_store"]=store
+    from cos_requests import CoSRequests
+    if cos_sessions is None:
+        import os
+        cos_sessions=[]
+        config_path=os.environ.get("RECORDS_COS_CONFIG")
+        if config_path:
+            from integration.cos_records_bridge import private_file
+            cos_sessions=json.loads(private_file(config_path).read_text())["allowed_sessions"]
+    cos_queue=CoSRequests(store,cos_sessions)
+    app.extensions["cos_requests"]=cos_queue
     allowed_hosts={f"127.0.0.1:{port}",f"localhost:{port}"}
     if testing: allowed_hosts.add("localhost")
 
@@ -181,6 +191,17 @@ def create_app(data_dir, port=18880, testing=False):
 
     @app.post("/api/v1/rooms/<room>/moderator")
     def moderator(room): return jsonify(store.moderator(actor(),key(),room,body()))
+
+    @app.get("/api/v1/rooms/<room>/cos-requests")
+    def cos_status(room): return jsonify(cos_queue.status(actor(),room))
+
+    @app.post("/api/v1/rooms/<room>/cos-requests")
+    def cos_request(room): return jsonify(cos_queue.submit(actor(),room,key(),body())),202
+
+    @app.post("/api/v1/rooms/<room>/cos-requests/<request_id>/reconcile")
+    def cos_reconcile(room,request_id):
+        if body(): raise Problem("Reconciliation takes no new request content")
+        return jsonify(cos_queue.reconcile(actor(),room,request_id)),202
 
     @app.get("/api/v1/platform/credentials")
     def credential_inventory(): return jsonify(credentials=store.platform_access.inventory(actor()))

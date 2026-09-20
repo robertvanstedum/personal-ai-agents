@@ -92,7 +92,8 @@ async function loadParent(id,generation=state.navigation){
 async function loadRoom(id,generation=state.navigation){const epoch=state.authEpoch;const room=await api(`/api/v1/rooms/${id}`);if(epoch!==state.authEpoch||generation!==state.navigation||state.view!=="rooms"||(location.hash.startsWith("#room/")&&location.hash!==`#room/${id}`))return;if(state.room?.id!==id){$("message-body").value=state.drafts[id]||"";$("messages").dataset.last="";}state.parent=null;$("parent-workspace").classList.add("hidden");state.room=room;renderRoom();renderRoomList();}
 const date=value=>new Date(value).toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
 function options(select,entries,empty){const previous=select.value;clear(select);if(empty!==undefined)select.append(new Option(empty,""));for(const [value,label]of entries)select.append(new Option(label,value));if([...select.options].some(x=>x.value===previous))select.value=previous;}
-function renderRoom(){const room=state.room;if(!room)return;$("empty-room").classList.add("hidden");$("room-workspace").classList.remove("hidden");$("room-title").textContent=room.title;$("room-purpose").textContent=room.purpose;$("room-mode").textContent=modeLabels[room.mode];$("room-state").textContent=room.state==="active"?"● Recording this session":`○ ${room.state[0].toUpperCase()+room.state.slice(1)}`;$("room-state").className="capture-badge"+(room.state==="active"?" recording":"");$("event-count").textContent=`${room.events.length} records`;
+function renderRoom(){
+  refreshCoS();const room=state.room;if(!room)return;$("empty-room").classList.add("hidden");$("room-workspace").classList.remove("hidden");$("room-title").textContent=room.title;$("room-purpose").textContent=room.purpose;$("room-mode").textContent=modeLabels[room.mode];$("room-state").textContent=room.state==="active"?"● Recording this session":`○ ${room.state[0].toUpperCase()+room.state.slice(1)}`;$("room-state").className="capture-badge"+(room.state==="active"?" recording":"");$("event-count").textContent=`${room.events.length} records`;
   const canModerate=state.me.id==="robert"||room.moderator===state.me.id;const member=room.members.find(m=>m.id===state.me.id);const writable=room.state==="active"&&(state.me.id==="robert"||member?.role==="contributor");$("pause-room").classList.toggle("hidden",!canModerate||room.state==="closed");$("close-room").classList.toggle("hidden",!canModerate||room.state==="closed");$("pause-room").textContent=room.state==="active"?"Pause recording":"Resume session";$("export-md").href=`/api/v1/rooms/${room.id}/export?format=markdown`;$("paused-notice").classList.toggle("hidden",room.state==="active");$("paused-notice").textContent=room.state==="closed"?"Session closed permanently. Start a new session for further discussion.":"Recording is paused. Resume the session before adding a contribution.";$("message-body").disabled=!writable;$("send-message").disabled=!writable;$("invite").classList.toggle("hidden",state.me.id!=="robert");$("upload").classList.toggle("hidden",!(state.me.id==="robert"||member?.role==="contributor"));
   $("upload").classList.toggle("hidden",!writable);options($("target"),room.members.map(m=>[m.id,m.label]),"Everyone in this room");configureComposer();
   const messages=$("messages");const nearBottom=messages.scrollHeight-messages.scrollTop-messages.clientHeight<90;const oldLast=messages.dataset.last;const last=room.events.at(-1)?.id;
@@ -219,3 +220,47 @@ $("new-note").onclick=()=>{
   },"Save note");
 };
 enter().catch(error=>{if(error.status!==401)toast(error.message,true);showLogin();});
+
+// Explicit owner request; ordinary transcript posts never dispatch an agent.
+let cosRefreshRunning=false;
+async function refreshCoS(){
+  const room=state.room, actor=state.me?.id, generation=state.navigation;
+  if(!room||actor!=="robert"){ $("cos-controls").classList.add("hidden"); return; }
+  if(cosRefreshRunning)return;
+  cosRefreshRunning=true;
+  try{
+    const data=await api(`/api/v1/rooms/${room.id}/cos-requests`);
+    if(state.room?.id!==room.id||state.me?.id!==actor||state.navigation!==generation)return;
+    $("cos-controls").classList.remove("hidden");
+    const latest=data.requests[0], pending=data.requests.some(r=>["queued","queued_reconcile","running","uncertain"].includes(r.state));
+    $("ask-cos").disabled=!data.enabled||room.state!=="active"||pending;
+    $("reconcile-cos").classList.toggle("hidden",latest?.state!=="uncertain");
+    $("reconcile-cos").dataset.requestId=latest?.id||"";
+    const labels={queued_reconcile:"Checking the saved outcome — no new model call",queued:"Request saved — awaiting CoS",running:"CoS is responding",committed:"CoS reply saved in this session",cancelled:"Request cancelled before inference: session context changed or request expired",uncertain:"Outcome uncertain — no automatic retry. Reconciliation required."};
+    $("cos-request-status").textContent=!data.enabled?"CoS has not been enabled for this session.":latest?`${labels[latest.state]||latest.state} · ${latest.id}`:"Save your message, then ask CoS to respond.";
+  }catch(error){
+    if(state.room?.id===room.id){$("ask-cos").disabled=true;$("cos-request-status").textContent="CoS request status unavailable";}
+  }finally{cosRefreshRunning=false;}
+}
+$("ask-cos").onclick=async()=>{
+  const context=roomContext(), actor=state.me.id;
+  if($("message-body").value.trim()){toast("Save your message before asking CoS to respond.",true);return;}
+  $("ask-cos").disabled=true;
+  const storageKey=`minimoi.cos-request.${actor}.${context.id}`;
+  let requestId=sessionStorage.getItem(storageKey)||crypto.randomUUID();
+  sessionStorage.setItem(storageKey,requestId);
+  try{
+    context.check();
+    const result=await api(`/api/v1/rooms/${context.id}/cos-requests`,"POST",{action:"contribute"},requestId);
+    if(result.id===requestId)sessionStorage.removeItem(storageKey);
+    if(state.me?.id===actor&&state.room?.id===context.id)await refreshCoS();
+  }catch(error){toast("CoS request not confirmed. The same request ID is retained. "+error.message,true);await refreshCoS();}
+};
+setInterval(()=>{if(state.view==="rooms"&&state.room)refreshCoS();},2500);
+
+$("reconcile-cos").onclick=async()=>{
+  const context=roomContext(), id=$("reconcile-cos").dataset.requestId;
+  if(!id)return;
+  try{context.check();await api(`/api/v1/rooms/${context.id}/cos-requests/${id}/reconcile`,"POST",{});await refreshCoS();}
+  catch(error){toast(error.message,true);}
+};

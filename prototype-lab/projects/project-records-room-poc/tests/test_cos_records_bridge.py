@@ -16,7 +16,7 @@ class LocalSession:
     def request(self,method,url,headers,json,**kwargs):
         from urllib.parse import urlsplit
         self.calls.append((method,url))
-        response=self.app.open(urlsplit(url).path,method=method,headers=headers,json=json)
+        response=self.app.open(urlsplit(url).path+("?"+urlsplit(url).query if urlsplit(url).query else ""),method=method,headers=headers,json=json)
         class Response:
             status_code=response.status_code
             def json(self):return response.get_json()
