@@ -24,6 +24,11 @@ class RoomBridgeError(RuntimeError):
     """Safe public diagnostic; never includes upstream body, token or file path."""
 
 
+class RoomBridgeConflict(RoomBridgeError):
+    """Server definitively rejected a write; not an ambiguous transport outcome."""
+    definitive_conflict = True
+
+
 def parse_command(text):
     text=text.strip()
     if text.casefold() in {"/rooms","list my meetings","show my meetings","list rooms"}:
@@ -81,7 +86,7 @@ class RoomClient:
             raise RoomBridgeError("Local room service unavailable; an attempted write may have committed. Retry with the same request ID.") from None
         if response.status_code==404 and missing_ok:return None
         if response.status_code in {401,403,404}:raise RoomBridgeError("Room access unavailable. Check the cos-dev credential and invitation; no owner fallback is allowed.")
-        if response.status_code==409:raise RoomBridgeError("Room write conflicted or recording stopped. Keep the same request ID and check the room before retrying.")
+        if response.status_code==409:raise RoomBridgeConflict("Room write conflicted or recording stopped. Keep the same request ID and check the room before retrying.")
         if not 200<=response.status_code<300:raise RoomBridgeError("Room service did not confirm success. Retry the same request ID; do not assume a write failed.")
         try:return response.json()
         except ValueError:raise RoomBridgeError("Room service returned an unreadable response; retry the same request ID.") from None

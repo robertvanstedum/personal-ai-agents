@@ -203,6 +203,9 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
         if body(): raise Problem("Reconciliation takes no new request content")
         return jsonify(cos_queue.reconcile(actor(),room,request_id)),202
 
+    @app.post("/api/v1/rooms/<room>/cos-auto")
+    def cos_auto(room): return jsonify(cos_queue.set_auto(actor(),room,body()))
+
     @app.get("/api/v1/platform/credentials")
     def credential_inventory(): return jsonify(credentials=store.platform_access.inventory(actor()))
 

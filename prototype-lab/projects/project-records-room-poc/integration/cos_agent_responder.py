@@ -10,10 +10,10 @@ import json
 import re
 
 try:
-    from .cos_records_bridge import RoomBridgeError
+    from .cos_records_bridge import RoomBridgeError, RoomBridgeConflict
     from .cos_room_responder import TurnJournal, encoded, sha, snapshot
 except ImportError:
-    from cos_records_bridge import RoomBridgeError
+    from cos_records_bridge import RoomBridgeError, RoomBridgeConflict
     from cos_room_responder import TurnJournal, encoded, sha, snapshot
 
 
@@ -110,7 +110,7 @@ def saved_result(saved, actor, session_id, request_id, fingerprint):
 
 
 def respond(session_id, request_id, *, client, model, journal, policy,
-            owner_authorized=False, action="contribute", expected_guard=None):
+            owner_authorized=False, action="contribute", expected_guard=None, authorization_check=None):
     """Trusted platform caller gates owner authentication BEFORE this function.
 
     owner_authorized must come from server authentication, never a request body.
@@ -140,13 +140,14 @@ def respond(session_id, request_id, *, client, model, journal, policy,
             or any(type(v) is not int or v < 0 for v in guard.values())):
         raise RoomBridgeError("Atomic session context guard is required.")
     if expected_guard is not None and guard != expected_guard:
-        raise RoomBridgeError("Session changed after the owner requested this response.")
+        raise RoomBridgeConflict("Session changed before inference began.")
     data = snapshot(room)
     # Prefix isolates this journal namespace from the legacy gateway responder.
     journal_key = SOURCE + ":" + request_id
     payload = journal.reserve(journal_key, fingerprint, {
         "session_id": session_id, "guard": guard, "snapshot_sha256": sha(encoded(data)),
         "coordination_request_id": request_id, "action": action, "synthetic_only": True})
+    if authorization_check: authorization_check()
     if payload is None:
         result = model(data, request_id, action)
         validate_evidence(result, request_id)
@@ -164,5 +165,6 @@ def respond(session_id, request_id, *, client, model, journal, policy,
                               "agent_id": "cos-agent-a", "runtime": "OpenClaw",
                               "execution_id": evidence["openclaw_run_id"]}}
         journal.generated(journal_key, payload)
+    if authorization_check: authorization_check()
     saved = client.request(f"/api/v1/rooms/{session_id}/events", payload, key)
     return saved_result(saved, client.actor, session_id, request_id, fingerprint)

@@ -41,13 +41,14 @@ def main():
     queue.recover_interrupted()
     def run(room,request_id,action,guard):
         return respond(room,request_id,client=client,model=model,journal=journal,
-                       policy=policy,owner_authorized=True,action=action,expected_guard=guard)
+                       policy=policy,owner_authorized=True,action=action,expected_guard=guard,authorization_check=lambda:queue.check_auto_authority(request_id))
     def forbid_inference(*args):
         raise RuntimeError('Reconciliation never starts inference')
     def reconcile(room,request_id,action):
         return respond(room,request_id,client=client,model=forbid_inference,journal=journal,
-                       policy=policy,owner_authorized=True,action=action)
+                       policy=policy,owner_authorized=True,action=action,authorization_check=lambda:queue.check_auto_authority(request_id))
     while True:
+        queue.schedule_auto()
         if not queue.run_once(run,reconcile):time.sleep(1)
 
 

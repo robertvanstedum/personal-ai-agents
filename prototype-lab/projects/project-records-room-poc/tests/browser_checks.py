@@ -524,3 +524,22 @@ def test_owner_requests_cos_and_reply_appears_end_to_end(live,tmp_path):
     expect(page.locator('#messages')).to_contain_text('Browser integration fixture: I received your saved question.',timeout=10000)
     expect(page.locator('#cos-request-status')).to_contain_text('reply saved',timeout=10000)
     assert len(calls)==1 and calls[0]['records'][-1]['body'].startswith('Synthetic owner question')
+    # Invite once, then a normal saved message triggers the next response.
+    page.locator('#toggle-cos-auto').click()
+    expect(page.locator('#cos-auto-status')).to_contain_text('active')
+    page.locator('#message-body').fill('Synthetic followup: respond automatically now.')
+    page.locator('#send-message').click()
+    expect(page.locator('#message-body')).to_have_value('')
+    queue.schedule_auto()
+    assert queue.run_once(lambda room,key,action,guard:respond(room,key,client=client,model=model,journal=journal,
+        policy=SyntheticSessionPolicy([room]),owner_authorized=True,action=action,expected_guard=guard,
+        authorization_check=lambda:queue.check_auto_authority(key)))
+    expect(page.locator('#messages').get_by_text('Browser integration fixture: I received your saved question.',exact=True)).to_have_count(2,timeout=10000)
+    assert len(calls)==2
+    page.locator('#toggle-cos-auto').click()
+    expect(page.locator('#cos-auto-status')).to_contain_text('off')
+    page.locator('#message-body').fill('Synthetic message while CoS is paused.')
+    page.locator('#send-message').click()
+    expect(page.locator('#message-body')).to_have_value('')
+    queue.schedule_auto()
+    assert not queue.run_once(lambda *args: (_ for _ in ()).throw(AssertionError('paused')))

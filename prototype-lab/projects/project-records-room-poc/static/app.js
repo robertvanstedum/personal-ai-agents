@@ -233,10 +233,15 @@ async function refreshCoS(){
     if(state.room?.id!==room.id||state.me?.id!==actor||state.navigation!==generation)return;
     $("cos-controls").classList.remove("hidden");
     const latest=data.requests[0], pending=data.requests.some(r=>["queued","queued_reconcile","running","uncertain"].includes(r.state));
-    $("ask-cos").disabled=!data.enabled||room.state!=="active"||pending;
+    const automatic=!!data.auto?.enabled;
+    $("toggle-cos-auto").textContent=automatic?"Pause CoS auto-replies":"Invite CoS to auto-reply";
+    $("toggle-cos-auto").dataset.enabled=automatic?"true":"false";
+    $("toggle-cos-auto").disabled=!data.enabled||(!automatic&&room.state!=="active");
+    $("cos-auto-status").textContent=automatic?`CoS auto-replies active · ${data.auto.remaining} attempts remaining · ends ${date(data.auto.expires)}`:`CoS auto-replies off · ${data.auto?.reason||"not invited"}`;
+    $("ask-cos").disabled=!data.enabled||room.state!=="active"||pending||automatic;
     $("reconcile-cos").classList.toggle("hidden",latest?.state!=="uncertain");
     $("reconcile-cos").dataset.requestId=latest?.id||"";
-    const labels={queued_reconcile:"Checking the saved outcome — no new model call",queued:"Request saved — awaiting CoS",running:"CoS is responding",committed:"CoS reply saved in this session",cancelled:"Request cancelled before inference: session context changed or request expired",uncertain:"Outcome uncertain — no automatic retry. Reconciliation required."};
+    const labels={superseded:"Newer session context arrived; this reply was not posted",queued_reconcile:"Checking the saved outcome — no new model call",queued:"Request saved — awaiting CoS",running:"CoS is responding",committed:"CoS reply saved in this session",cancelled:"Request cancelled before inference: session context changed or request expired",uncertain:"Outcome uncertain — no automatic retry. Reconciliation required."};
     $("cos-request-status").textContent=!data.enabled?"CoS has not been enabled for this session.":latest?`${labels[latest.state]||latest.state} · ${latest.id}`:"Save your message, then ask CoS to respond.";
   }catch(error){
     if(state.room?.id===room.id){$("ask-cos").disabled=true;$("cos-request-status").textContent="CoS request status unavailable";}
@@ -263,4 +268,11 @@ $("reconcile-cos").onclick=async()=>{
   if(!id)return;
   try{context.check();await api(`/api/v1/rooms/${context.id}/cos-requests/${id}/reconcile`,"POST",{});await refreshCoS();}
   catch(error){toast(error.message,true);}
+};
+
+$("toggle-cos-auto").onclick=async()=>{
+  const context=roomContext(), enable=$("toggle-cos-auto").dataset.enabled!=="true";
+  $("toggle-cos-auto").disabled=true;
+  try{context.check();await api(`/api/v1/rooms/${context.id}/cos-auto`,"POST",{enabled:enable});await refreshCoS();}
+  catch(error){toast(error.message,true);await refreshCoS();}
 };
