@@ -13,6 +13,7 @@ from flask import Flask, g, jsonify, request, send_file, session
 from werkzeug.exceptions import HTTPException
 
 from store import Problem, Store
+from platform_access import AccessError, request_credential, request_operation
 
 
 def create_app(data_dir, port=18880, testing=False):
@@ -45,12 +46,29 @@ def create_app(data_dir, port=18880, testing=False):
         actor=None
         if authorization.startswith("Bearer "):
             actor=store.authenticate(authorization[7:])
-        elif session.get("actor"):
-            with store.connect() as db:
-                row=db.execute("SELECT id,label,kind FROM principals WHERE id=?",(session["actor"],)).fetchone()
-                actor=dict(row) if row else None
+        elif session.get("credential_id"):
+            actor=store.platform_access.authenticate(credential_id=session["credential_id"])
         if not actor: raise Problem("Sign in with a local access key",401)
         g.actor=actor
+        g.auth_context=request_credential.set(actor["credential_id"])
+        g.operation_context=request_operation.set("read")
+        if not actor["legacy"]:
+            # Explicit allowlist for installation clients. Unknown routes fail closed.
+            endpoint=request.endpoint
+            operations={"get_room":"read","session_record":"read","events":"post","import_conversation":"post","transfer":"post",
+                        "documents":"upload","artifact_link":"link","operation":"receipt",
+                        "export":"export","document":"read","rooms":"read","me":"read",
+                        "logout":"read"}
+            if endpoint not in operations: raise Problem("Route unavailable to installation clients",403)
+            request_operation.set(operations[endpoint])
+            if endpoint=="operation" and not request.args.get("destination"):
+                raise Problem("Receipt lookup requires an explicit destination")
+
+    @app.teardown_request
+    def clear_authority(error):
+        if hasattr(g,"auth_context"): request_credential.reset(g.auth_context)
+        if hasattr(g,"operation_context"): request_operation.reset(g.operation_context)
+
 
     @app.after_request
     def headers(response):
@@ -60,6 +78,7 @@ def create_app(data_dir, port=18880, testing=False):
         response.headers["Content-Security-Policy"]="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         return response
 
+    @app.errorhandler(AccessError)
     @app.errorhandler(Problem)
     def problem(error): return jsonify(error=error.message),error.status
 
@@ -86,7 +105,7 @@ def create_app(data_dir, port=18880, testing=False):
     def login():
         principal=store.authenticate(body().get("token"))
         if not principal: raise Problem("Invalid local access key",401)
-        session.clear(); session["actor"]=principal["id"]; session.permanent=True
+        session.clear(); session["actor"]=principal["id"]; session["credential_id"]=principal["credential_id"]; session.permanent=True
         return jsonify(principal)
 
     @app.post("/api/logout")
@@ -109,7 +128,12 @@ def create_app(data_dir, port=18880, testing=False):
                        independent_backup=False,data_directory=str(store.root))
 
     @app.get("/api/v1/rooms")
-    def rooms(): return jsonify(rooms=store.rooms(actor()))
+    def rooms():
+        result=store.rooms(actor())
+        if not g.actor["legacy"]:
+            grants=json.loads(g.actor["grants"])
+            result=[room for room in result if "read" in grants.get(room["id"],[])]
+        return jsonify(rooms=result)
 
     # v1 /rooms remains the stable session alias for existing clients/receipts.
     @app.get("/api/v2/rooms")
@@ -128,7 +152,7 @@ def create_app(data_dir, port=18880, testing=False):
     def session_record(room): return jsonify(store.room(actor(),room))
 
     @app.get("/api/v1/operations/<operation_key>")
-    def operation(operation_key): return jsonify(store.operation(actor(),operation_key))
+    def operation(operation_key): return jsonify(store.operation(actor(),operation_key,request.args.get("destination")))
 
     @app.post("/api/v1/rooms")
     def create_room(): return jsonify(store.create_room(actor(),key(),body())),201
@@ -143,11 +167,29 @@ def create_app(data_dir, port=18880, testing=False):
     @app.post("/api/v1/rooms/<room>/events")
     def events(room): return jsonify(store.append(actor(),key(),room,body())),201
 
+    @app.post("/api/v1/rooms/<room>/disclosures")
+    def disclosure(room): return jsonify(store.disclosure(actor(),key(),room,body())),201
+
+    @app.post("/api/v1/rooms/<room>/transfers")
+    def transfer(room): return jsonify(store.transfer(actor(),key(),room,body())),201
+
+    @app.post("/api/v1/rooms/<room>/imports")
+    def import_conversation(room): return jsonify(store.import_conversation(actor(),key(),room,body())),201
+
     @app.post("/api/v1/rooms/<room>/state")
     def state(room): return jsonify(store.state(actor(),key(),room,body()))
 
     @app.post("/api/v1/rooms/<room>/moderator")
     def moderator(room): return jsonify(store.moderator(actor(),key(),room,body()))
+
+    @app.get("/api/v1/platform/credentials")
+    def credential_inventory(): return jsonify(credentials=store.platform_access.inventory(actor()))
+
+    @app.post("/api/v1/platform/credentials")
+    def issue_credential(): return jsonify(store.platform_access.issue(actor(),body())),201
+
+    @app.post("/api/v1/platform/credentials/<credential>/revoke")
+    def revoke_credential(credential): return jsonify(store.platform_access.revoke(actor(),credential))
 
     @app.get("/api/v1/principals")
     def principals(): return jsonify(principals=store.principals(actor()))

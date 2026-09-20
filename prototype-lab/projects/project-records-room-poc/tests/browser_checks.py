@@ -377,3 +377,59 @@ def test_brief_discloses_earlier_records(live):
     page.locator("#modal-submit").click()
     page.get_by_role("button",name="2 earlier assignments — view all 7").click()
     expect(page.locator("#modal-fields")).to_contain_text("Synthetic assignment 0")
+
+
+def test_agent_contribution_readable_safe_and_receipt_linked(live, tmp_path):
+    import requests
+    from integration.cos_records_bridge import RoomClient
+    from integration.cos_agent_responder import respond, SyntheticSessionPolicy
+    from integration.cos_room_responder import TurnJournal
+    page, store, url, room, _, _ = live
+    token = store.add_principal('robert', 'agent-ui', dict(id='cos-dev', label='Development CoS'))['access_token']
+    store.membership('robert', 'agent-invite', room, dict(actor='cos-dev', role='contributor'))
+    source = store.append('robert', 'source-ui', room, dict(body='Synthetic UI question', context_class='robert_source'))['result']['id']
+    key = tmp_path / 'agent-key'; key.write_text(token); key.chmod(0o600)
+    config = tmp_path / 'agent-config.json'
+    config.write_text(json.dumps(dict(url='http://127.0.0.1:18880', actor_id='cos-dev', token_file=str(key)))); config.chmod(0o600)
+    # Use the same Flask application behind the loopback fixture, via actual HTTP.
+    class EphemeralPortSession:
+        def request(self, method, target, **kwargs):
+            kwargs["headers"]["Host"] = url.removeprefix("http://")
+            return requests.request(method, target.replace("http://127.0.0.1:18880", url, 1), **kwargs)
+    client = RoomClient(config, session=EphemeralPortSession())
+    reply = 'Readable synthetic answer <img src=x onerror=alert(1)>\nSecond line.'
+    request = str(uuid4())
+    result = respond(room, request, client=client,
+        model=lambda data, rid, action: dict(text=reply, coordination_request_id=rid,
+            openclaw_run_id='chatcmpl_'+str(uuid4()), agent_id='cos-agent-a', mode='actual_agent_response'),
+        journal=TurnJournal(tmp_path/'journal'), policy=SyntheticSessionPolicy([room]), owner_authorized=True)
+    signin(page, url, store.owner_key, room)
+    contribution = page.locator('.agent-contribution')
+    expect(contribution.locator('.event-body')).to_have_text(reply)
+    expect(contribution.locator('img')).to_have_count(0)
+    expect(contribution.locator('.agent-warning')).to_be_visible()
+    expect(contribution.locator('details')).not_to_have_attribute('open', '')
+    contribution.locator('summary').click()
+    expect(contribution).to_contain_text(result['operation']['receipt_id'])
+    contribution.locator(f'a[href="#event-{source}"]').click()
+    assert page.url.endswith('#room/'+room)
+    expect(page.locator('#event-'+source)).to_be_in_viewport()
+    page.set_viewport_size(dict(width=390, height=844))
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.reload()
+    expect(page.locator('.agent-contribution .event-body')).to_have_text(reply)
+
+
+def test_imported_speaker_is_untrusted_text_not_identity(live):
+    page,store,url,first,second,token=live
+    store.import_conversation('reviewer','browser-import',first,dict(
+        source_application='synthetic-client',coverage='Two selected synthetic turns',
+        turns=[dict(speaker='robert',text='Quoted statement only'),
+               dict(speaker='<img src=x onerror="window.importExecuted=true">',text='Literal label')],
+        handoff='Proposed handoff; no approved assignment'))
+    signin(page,url,store.owner_key,first)
+    expect(page.get_by_text('Declared speaker: robert · submitted transcript label, not verified identity',exact=True)).to_be_visible()
+    expect(page.get_by_text('Declared speaker: <img src=x onerror="window.importExecuted=true"> · submitted transcript label, not verified identity',exact=True)).to_be_visible()
+    assert page.evaluate('window.importExecuted === undefined')
+    row=page.locator('.event').filter(has_text='Quoted statement only')
+    expect(row.locator('.event-author')).to_have_text('Synthetic reviewer')

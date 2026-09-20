@@ -167,6 +167,17 @@ class Store:
             owner=db.execute("SELECT token_hash FROM principals WHERE id='robert'").fetchone()
             if owner[0]!=digest(self.owner_key.encode()):
                 raise ValueError("Owner access key does not match this database")
+        from platform_access import PlatformAccess
+        self.platform_access = PlatformAccess(self.connect)
+        with self.connect() as db:
+            db.executescript("""
+                CREATE TABLE IF NOT EXISTS disclosure_grants(
+                    id TEXT PRIMARY KEY,actor TEXT NOT NULL,source TEXT NOT NULL,destination TEXT NOT NULL,
+                    event_ids TEXT NOT NULL,expires TEXT NOT NULL,revoked TEXT);
+                CREATE TABLE IF NOT EXISTS room_transfers(
+                    id TEXT PRIMARY KEY,actor TEXT NOT NULL,source TEXT NOT NULL,destination TEXT NOT NULL,
+                    event_ids TEXT NOT NULL,grant_id TEXT NOT NULL,created TEXT NOT NULL);
+            """)
         os.chmod(self.path, 0o600)
 
     def _secret(self, name):
@@ -199,12 +210,7 @@ class Store:
             db.close()
 
     def authenticate(self, token):
-        if not token or not isinstance(token, str):
-            return None
-        with self.connect() as db:
-            row = db.execute("SELECT id,label,kind FROM principals WHERE token_hash=?",
-                             (digest(token.encode()),)).fetchone()
-        return dict(row) if row else None
+        return self.platform_access.authenticate(token=token)
 
     @staticmethod
     def owner(actor):
@@ -212,6 +218,8 @@ class Store:
             raise Problem("Only Robert can perform this operation", 403)
 
     def access(self, db, actor, room, write=False):
+        from platform_access import request_operation
+        self.platform_access.enforce(db,actor,room,request_operation.get())
         row = db.execute("SELECT * FROM rooms WHERE id=?", (room,)).fetchone()
         member = db.execute("SELECT role FROM members WHERE room=? AND actor=?", (room, actor)).fetchone()
         if not row or (actor != "robert" and not member):
@@ -229,6 +237,7 @@ class Store:
                 self.access(db, actor, room, write)
             else:
                 self.owner(actor)
+                self.platform_access.enforce(db,actor,None,"admin")
             old = db.execute("SELECT * FROM operations WHERE actor=? AND key=?", (actor, key)).fetchone()
             if old:
                 if old["request_hash"] != request_hash:
@@ -241,10 +250,11 @@ class Store:
                        (actor, key, request_hash, canonical(response), now(), room))
             return response
 
-    def operation(self, actor, key):
+    def operation(self, actor, key, destination=None):
         with self.connect() as db:
             row=db.execute("SELECT response,room FROM operations WHERE actor=? AND key=?",(actor,key)).fetchone()
             if not row: raise Problem("No committed receipt found yet",404)
+            if destination is not None and row["room"] != destination: raise Problem("Receipt destination mismatch",404)
             if row["room"]: self.access(db,actor,row["room"])
             elif actor!="robert": raise Problem("Receipt not available",404)
             return json.loads(row["response"])
@@ -356,6 +366,7 @@ class Store:
             if db.execute("SELECT 1 FROM principals WHERE id=?",(name,)).fetchone():
                 raise Problem("Participant already exists",409)
             db.execute("INSERT INTO principals VALUES(?,?,?,?,?)",(name,label,"agent",digest(token.encode()),now()))
+            self.platform_access.import_legacy(db,dict(id=name,label=label,token_hash=digest(token.encode()),created=now()))
             # Do not persist a bearer token in the operations receipt.
             return {"id":name,"label":label,"kind":"agent"}
         result = self.mutate(actor,key,{"op":"principal","payload":payload},action)
@@ -397,6 +408,9 @@ class Store:
                 FROM events e JOIN principals p ON p.id=e.actor WHERE e.room=? AND e.seq>? ORDER BY e.seq""",(room,after))]
             for event in data["events"]:
                 event["origin"] = json.loads(event["origin"]) if event["origin"] else None
+                from contribution_view import connector_view
+                view = connector_view(db, event)
+                if view is not None: event["presentation"] = view
             data["notes"] = [dict(r) for r in db.execute("""SELECT n.*,p.label AS actor_label
                 FROM notes n JOIN principals p ON p.id=n.actor WHERE n.room=? ORDER BY n.created,n.id""",(room,))]
             for note in data["notes"]:
@@ -483,6 +497,114 @@ class Store:
                 if actor not in {"robert",ref["target"]}: raise Problem("Only the assignee or owner updates this task",403)
             return self._event(db,room,actor,kind,body,target,reference,provenance,origin)
         return self.mutate(actor,key,{"op":"append","room":room,"payload":payload},action,room)
+
+    def disclosure(self, actor, key, source, payload):
+        self.owner(actor)
+        def action(db):
+            if payload.get("revoke"):
+                row=db.execute("SELECT id FROM disclosure_grants WHERE id=? AND source=?",(payload["revoke"],source)).fetchone()
+                if not row: raise Problem("Disclosure grant not found",404)
+                db.execute("UPDATE disclosure_grants SET revoked=? WHERE id=?",(now(),row["id"]))
+                return dict(grant_id=row["id"],status="revoked")
+            destination=string(payload.get("destination"),"Destination",100)
+            target=string(payload.get("actor"),"Participant",60)
+            if source==destination: raise Problem("Choose a different destination")
+            source_member=db.execute("SELECT role FROM members WHERE room=? AND actor=?",(source,target)).fetchone()
+            destination_member=db.execute("SELECT role FROM members WHERE room=? AND actor=?",(destination,target)).fetchone()
+            if not source_member or not destination_member or destination_member["role"]!="contributor":
+                raise Problem("Participant needs source membership and destination contribution access",403)
+            ids=payload.get("event_ids")
+            if not isinstance(ids,list) or not 1<=len(ids)<=100 or any(not isinstance(i,str) for i in ids) or len(set(ids))!=len(ids):
+                raise Problem("Provide 1–100 distinct source event IDs")
+            for eid in ids:
+                if not db.execute("SELECT 1 FROM events WHERE id=? AND room=?",(eid,source)).fetchone():
+                    raise Problem("Source event unavailable",404)
+            try:
+                expiry=datetime.fromisoformat(payload.get("expires_at",""))
+                if expiry.tzinfo is None or expiry<=datetime.now(timezone.utc): raise ValueError()
+                expires=expiry.astimezone(timezone.utc).isoformat()
+            except (TypeError,ValueError): raise Problem("Provide a future disclosure expiry")
+            gid=uid()
+            db.execute("INSERT INTO disclosure_grants VALUES(?,?,?,?,?,?,NULL)",(gid,target,source,destination,canonical(ids),expires))
+            return dict(grant_id=gid,source=source,destination=destination,event_ids=ids,actor=target,expires_at=expires)
+        return self.mutate(actor,key,{"op":"disclosure","source":source,"payload":payload},action,source)
+
+    def transfer(self, actor, key, destination, payload):
+        if set(payload)!={"grant_id"}: raise Problem("Transfer requires only an explicit grant_id")
+        gid=string(payload.get("grant_id"),"Disclosure grant",100)
+        def action(db):
+            grant=db.execute("SELECT * FROM disclosure_grants WHERE id=? AND actor=? AND destination=?",(gid,actor,destination)).fetchone()
+            if not grant or grant["revoked"] or grant["expires"]<=now():
+                raise Problem("No current source disclosure authority",403)
+            current=self.access(db,actor,destination,True)
+            if current["state"]!="active": raise Problem("Destination is not recording",409)
+            from platform_access import request_operation
+            marker=request_operation.set("read")
+            try: self.access(db,actor,grant["source"])
+            finally: request_operation.reset(marker)
+            records=[]
+            for eid in json.loads(grant["event_ids"]):
+                row=db.execute("SELECT * FROM events WHERE id=? AND room=?",(eid,grant["source"])).fetchone()
+                if not row: raise Problem("Source record unavailable",404)
+                original=json.loads(row["origin"]) if row["origin"] else {}
+                # Source names, participants, paths and links are not projected.
+                origin=dict(source_application="minimoi_explicit_transfer",mode="relay",
+                    declared_speaker=original.get("declared_speaker",row["actor"]),material_type="transcript",
+                    coverage="Explicitly authorized source record; private provenance retained in owner audit")
+                records.append(self._event(db,destination,actor,"message",row["body"],provenance="external_source",origin=origin))
+            tid=uid()
+            db.execute("INSERT INTO room_transfers VALUES(?,?,?,?,?,?,?)",(tid,actor,grant["source"],destination,grant["event_ids"],gid,now()))
+            return dict(transfer_id=tid,destination=destination,records=records)
+        return self.mutate(actor,key,{"op":"transfer","destination":destination,"payload":payload},action,destination)
+
+    def import_conversation(self, actor, key, room, payload):
+        """Atomic explicit transcript/handoff publication; never dispatches work."""
+        if set(payload)-{"source_application","coverage","turns","handoff"}:
+            raise Problem("Unknown import fields")
+        source=string(payload.get("source_application"),"Source application",200)
+        coverage=string(payload.get("coverage"),"Available source coverage and omissions",2400)
+        turns=payload.get("turns",[])
+        handoff=payload.get("handoff")
+        if not isinstance(turns,list) or len(turns)>100 or (not turns and handoff is None):
+            raise Problem("Provide up to 100 turns, a handoff, or both")
+        def exact_text(value):
+            if not isinstance(value,str) or not value.strip() or len(value)>16000:
+                raise Problem("Imported text requires 1–16000 characters")
+            return value
+        validated=[]
+        for turn in turns:
+            if not isinstance(turn,dict) or set(turn)-{"speaker","text","source_created_at"}:
+                raise Problem("Invalid transcript turn fields")
+            label=string(turn.get("speaker"),"Declared speaker",200)
+            text=exact_text(turn.get("text"))
+            source_time=turn.get("source_created_at")
+            if source_time is not None:
+                try:
+                    parsed=datetime.fromisoformat(source_time.replace("Z","+00:00"))
+                    if parsed.tzinfo is None: raise ValueError()
+                    source_time=parsed.astimezone(timezone.utc).isoformat().replace("+00:00","Z")
+                except (ValueError,TypeError,AttributeError): raise Problem("Source time must include a timezone")
+            validated.append((label,text,source_time))
+        if handoff is not None: handoff=exact_text(handoff)
+        def action(db):
+            current=self.access(db,actor,room,True)
+            if current["state"]!="active": raise Problem("Session is not recording",409)
+            records=[]
+            for index,(label,text,source_time) in enumerate(validated):
+                origin=dict(source_application=source,mode="relay",declared_speaker=label,
+                    source_created_at=source_time,coverage=coverage,source_ordinal=index,
+                    material_type="transcript",usage_evidence={"status":"none","reason":"explicit import; no inference invoked"})
+                records.append(self._event(db,room,actor,"message",text,provenance="external_source",origin=origin))
+            transcript_ids=[record["id"] for record in records]
+            if handoff is not None:
+                records.append(self._event(db,room,actor,"checkpoint",handoff,
+                    reference=transcript_ids[0] if transcript_ids else None,provenance="agent_draft",
+                    origin=dict(source_application=source,mode="relay",material_type="handoff",
+                        coverage=coverage,source_record_ids=transcript_ids,
+                        usage_evidence={"status":"none","reason":"explicit import; no inference invoked"})))
+            return dict(records=records,transcript_ids=transcript_ids,
+                        handoff_id=records[-1]["id"] if handoff is not None else None)
+        return self.mutate(actor,key,{"op":"import","room":room,"payload":payload},action,room)
 
     def note(self, actor, key, room, payload):
         """Append an interpretation of a fixed transcript prefix, including after closure."""

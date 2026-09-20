@@ -55,6 +55,10 @@ def capture(store, actor, session_id):
                 material_class=event["context_class"], origin_assurance="declared" if origin else "unknown",
                 reply_to_record_id=event["reference"] if event["reference"] in ids else None,
                 corrects_record_id=None, context_through_seq=None))
+            if origin.get("material_type") in {"transcript","handoff"}:
+                records[-1]["imported_source"]={key:origin[key] for key in
+                    ("declared_speaker","coverage","source_ordinal","source_record_ids","material_type") if key in origin}
+                records[-1]["source_created_at"]=origin.get("source_created_at")
         note_by_id = {n["id"]: n for n in notes}
         def version(note):
             seen, current, count = set(), note, 1

@@ -52,9 +52,11 @@ def seed(store):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=["init","seed","backup","verify","publish-transcript","recover-transcripts"])
+    parser.add_argument("command",choices=["init","seed","backup","verify","publish-transcript","recover-transcripts","publish-cycle","watch-transcripts","cleanup-transcripts"])
     parser.add_argument("--data-dir",required=True)
     parser.add_argument("--session-id")
+    parser.add_argument("--interval",type=float,default=5.0)
+    parser.add_argument("--duration",type=float,default=3600.0)
     args=parser.parse_args()
     store=Store(args.data_dir)
     if args.command=="init":
@@ -69,6 +71,26 @@ def main():
     elif args.command=="recover-transcripts":
         from transcript_publish import recover
         print(json.dumps({"recovered":[str(path) for path in recover(store,"robert")]}))
+    elif args.command=="publish-cycle":
+        from transcript_worker import cycle
+        result=cycle(store,"robert")
+        print(json.dumps(result,indent=2))
+        if result["failures"]: raise SystemExit(1)
+    elif args.command=="cleanup-transcripts":
+        from transcript_publish import cleanup_scratch
+        print(json.dumps(cleanup_scratch(store,"robert"),indent=2))
+    elif args.command=="watch-transcripts":
+        import signal
+        import threading
+        from transcript_worker import run
+        stop=threading.Event()
+        previous={sig:signal.signal(sig,lambda *_:stop.set()) for sig in (signal.SIGINT,signal.SIGTERM)}
+        try:
+            count=run(store,"robert",interval=args.interval,duration=args.duration,stop_event=stop,
+                      on_cycle=lambda report:print(json.dumps(report),flush=True))
+            print(json.dumps({"state":"stopped","cycles":count,"off_device_backup":False}))
+        finally:
+            for sig,handler in previous.items(): signal.signal(sig,handler)
     elif args.command=="verify":
         with store.connect() as db:
             integrity=db.execute("PRAGMA integrity_check").fetchone()[0]

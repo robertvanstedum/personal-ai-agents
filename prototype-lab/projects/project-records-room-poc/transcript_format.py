@@ -43,6 +43,9 @@ RECORD = _object(dict(
     reply_to_record_id=NULL_ID, corrects_record_id=NULL_ID,
     context_through_seq={"type": ["integer", "null"], "minimum": 0},
     execution=_object(dict(coordination_request_id=ID, openclaw_run_id=TEXT), required=[]),
+    imported_source=_object(dict(declared_speaker=TEXT,coverage=TEXT,source_ordinal=NUMBER,
+        source_record_ids={"type":"array","items":ID},material_type={"enum":["transcript","handoff"]}),
+        required=["coverage","material_type"]),
     evidence_reference=TEXT, verification_method=TEXT),
     required=["record_id", "seq", "kind", "speaker_id", "submitted_by", "speaker_label", "text",
               "source_created_at", "ingested_at", "agent_id", "model", "source_application",
@@ -173,6 +176,9 @@ def render(snapshot, *, snapshot_at):
         stamp = record["source_created_at"] or record["ingested_at"] + " (ingested)"
         lines.extend([f"{stamp} — {_label(record['speaker_label'])} [{record['kind']}; {record['record_id']}; speaker={record['speaker_id']}]:",
                       _literal(record["text"]), ""])
+        if record.get("imported_source"):
+            source=record["imported_source"]
+            lines.extend(["Imported source (declared, not authenticated speaker): " + _literal(json.dumps(source,ensure_ascii=False,sort_keys=True)), ""])
     lines.extend(["## Notes — separate from transcript", ""])
     for note in data["notes"]:
         lines.extend([f"{note['created_at']} — {_label(note['author_id'])} [{_label(note['kind'])}; {note['note_id']}; author={note['author_id']}]:",

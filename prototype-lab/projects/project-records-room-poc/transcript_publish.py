@@ -91,9 +91,12 @@ def _complete(store, root, row, fault):
         if verify(destination)!=manifest: raise ValueError("Existing publication conflicts with journal")
     else:
         scratch=Path(tempfile.mkdtemp(prefix=".pending-",dir=root))
+        _write(scratch/".publication-owner.json",_json({"bundle_id":row["id"]}))
+        fault("after_scratch")
         for name,content in files.items(): _write(scratch/name,content)
         _write(scratch/"manifest.json",_json(manifest))
         verify(scratch)
+        (scratch/".publication-owner.json").unlink()
         _sync_dir(scratch)
         fault("before_rename")
         os.rename(scratch,destination)
@@ -128,3 +131,51 @@ def recover(store,actor):
             _prepare(db)
             pending=[dict(r) for r in db.execute("SELECT * FROM transcript_publications WHERE state='pending' ORDER BY session,revision")]
         return [_complete(store,root,row,lambda stage:None) for row in pending]
+
+
+def cleanup_scratch(store,actor):
+    """Quarantine positively identified scratch only AFTER verified publication.
+
+    Never recursively delete. Unknown/malformed/symlink entries remain untouched.
+    Quarantine retains recovery evidence; disk-space reclamation is an explicit
+    later operator action, not an inferred cleanup permission.
+    """
+    store.owner(actor)
+    moved,skipped=[],[]
+    with _locked(store) as root:
+        with store.connect() as db:
+            _prepare(db)
+            rows={r["id"]:dict(r) for r in db.execute("SELECT * FROM transcript_publications WHERE state='published'")}
+        for scratch in sorted(root.glob(".pending-*")):
+            try:
+                if scratch.is_symlink() or not scratch.is_dir(): raise ValueError("unsafe scratch")
+                entries=list(scratch.iterdir())
+                allowed={".publication-owner.json","transcript.json","transcript.md","manifest.json"}
+                if any(p.is_symlink() or not p.is_file() or p.name not in allowed for p in entries):
+                    raise ValueError("unrecognized scratch content")
+                marker=scratch/".publication-owner.json"
+                if marker.exists():
+                    identity=json.loads(marker.read_text())["bundle_id"]
+                else:
+                    identity=verify(scratch)["bundle_id"]
+                # Lookup precedes path construction: only journal-owned names.
+                row=rows.get(identity)
+                if row is None: raise ValueError("no published journal")
+                destination=root/identity
+                manifest=verify(destination)
+                data=json.loads(row["payload"])
+                expected=render(data,snapshot_at=row["snapshot_at"])
+                if manifest["bundle_id"]!=identity or any(
+                        (destination/name).read_bytes()!=content for name,content in expected.items()):
+                    raise ValueError("published data mismatch")
+                quarantine=root/"scratch-quarantine"
+                _directory(quarantine)
+                target=quarantine/scratch.name
+                if target.exists() or target.is_symlink(): raise ValueError("quarantine collision")
+                os.rename(scratch,target)
+                _sync_dir(quarantine)
+                _sync_dir(root)
+                moved.append(str(target))
+            except (OSError,ValueError,KeyError,TypeError):
+                skipped.append(scratch.name)
+    return {"quarantined":moved,"left_untouched":skipped,"deleted":0}
