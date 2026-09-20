@@ -433,3 +433,54 @@ def test_imported_speaker_is_untrusted_text_not_identity(live):
     assert page.evaluate('window.importExecuted === undefined')
     row=page.locator('.event').filter(has_text='Quoted statement only')
     expect(row.locator('.event-author')).to_have_text('Synthetic reviewer')
+
+
+def test_dev_portal_prefix_real_proxy_roundtrip(tmp_path):
+    from flask import Flask,session,redirect
+    from functools import wraps
+    from dev_portal_bridge import install
+    servers=[];threads=[]
+    for _ in range(2):
+        server=make_server('127.0.0.1',0,lambda env,start: [],threaded=True)
+        servers.append(server)
+    backend,portal_server=servers
+    records=create_app(tmp_path/'private-proxy',port=backend.server_port,testing=True)
+    backend.app=records
+    store=records.extensions['records_store']
+    room=store.create_room('robert','proxy-room',dict(title='Dev proxy synthetic',purpose='Prefix and auth verification',recording_acknowledged=True))['result']['id']
+    portal=Flask('synthetic-portal');portal.secret_key='synthetic-cookie-key'
+    def owner(fn):
+        @wraps(fn)
+        def wrapped(*a,**kw):
+            if session.get('owner') is not True: return 'Owner sign-in required',401
+            return fn(*a,**kw)
+        return wrapped
+    @portal.get('/test-signin')
+    def test_signin():
+        session['owner']=True
+        return redirect('/app/records/')
+    install(portal,owner,owner,backend=f'http://127.0.0.1:{backend.server_port}',local_port=portal_server.server_port)
+    portal_server.app=portal
+    for server in servers:
+        thread=Thread(target=server.serve_forever,daemon=True);thread.start();threads.append(thread)
+    try:
+        with sync_playwright() as playwright:
+            browser=playwright.chromium.launch(channel='chrome',headless=True)
+            page=browser.new_page(); errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+            url=f'http://127.0.0.1:{portal_server.server_port}'
+            assert page.request.get(url+'/app/records/api/v1/rooms').status==401
+            page.goto(url+'/test-signin')
+            page.locator('#access-key').fill(store.owner_key)
+            page.locator('#login-form button').click()
+            expect(page.locator('#workspace')).to_be_visible()
+            page.goto(url+'/app/records/#room/'+room)
+            expect(page.locator('#message-body')).to_be_enabled()
+            page.locator('#message-body').fill('Saved through dev prefix')
+            page.locator('#send-message').click()
+            expect(page.locator('.event-body').filter(has_text='Saved through dev prefix')).to_be_visible()
+            assert store.room('robert',room)['events'][-1]['body']=='Saved through dev prefix'
+            assert not errors
+            browser.close()
+    finally:
+        for server in servers:server.shutdown();server.server_close()
+        for thread in threads:thread.join(timeout=5)
