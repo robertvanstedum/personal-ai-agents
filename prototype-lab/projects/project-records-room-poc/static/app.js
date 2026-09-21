@@ -233,7 +233,7 @@ async function refreshCoS(){
   try{
     const data=await api(`/api/v1/rooms/${room.id}/cos-requests`);
     if(state.room?.id!==room.id||state.me?.id!==actor||state.navigation!==generation)return;
-    $("cos-controls").classList.remove("hidden");
+    $("cos-controls").classList.remove("hidden");$("cos-controls").dataset.available=String(data.enabled);
     const latest=data.requests[0], pending=data.requests.some(r=>["queued","queued_reconcile","running","uncertain"].includes(r.state));
     const expired=!!data.auto?.expired;
     const automatic=!!data.auto?.active;

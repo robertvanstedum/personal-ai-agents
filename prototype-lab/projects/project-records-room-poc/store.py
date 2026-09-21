@@ -758,6 +758,7 @@ class Store:
         return record
 
     def transcript(self, actor, room):
+        from transcript_format import _literal
         record=self.room(actor,room)
         from coordination import export_briefing
         with self.connect() as db:
@@ -770,7 +771,7 @@ class Store:
         for event in record["events"]:
             lines.extend([f"## {event['created']} — {event['actor_label']} [{event['kind']}]",
                           f"Record: {event['id']} · provenance: {event['context_class'] or 'not classified'}",
-                          f"Declared origin (not runtime attestation): {canonical(event['origin']) if event['origin'] else 'not supplied'}",event["body"],""])
+                          f"Declared origin (not runtime attestation): {canonical(event['origin']) if event['origin'] else 'not supplied'}",_literal(event["body"]),""])
         lines.extend(["## Artifact-version links", ""])
         for ref in record["artifact_refs"]:
             lines.extend([f"{ref['label']} [{ref['kind']}] — {ref['value']}",

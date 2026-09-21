@@ -159,3 +159,24 @@ def test_briefing_text_in_all_exports_without_history_rewrite(setup):
     assert 'Portable briefing contents' in record['text'] and 'Quoted speaker: reviewer' in record['text']
     assert record['submitted_by']=='robert'
     assert s.room('robert',executive)['events']==before
+
+
+def test_malformed_briefing_falls_back_to_saved_marker(setup):
+    _,s,q,work,executive,_=setup
+    event=s.append('reviewer','malformed-source',work,dict(body='Quoted content'))['result']
+    q.snapshot('robert','malformed-brief',executive,dict(source=work,event_ids=[event['id']],disclosure_acknowledged=True))
+    marker=s.room('robert',executive)['events'][-1]['body']
+    with s.connect() as db:
+        db.execute("UPDATE executive_snapshots SET records=? WHERE room=?", ('[{"text":"missing attribution"}]',executive))
+    assert marker in s.transcript('robert',executive)
+    assert s.export('robert',executive)['events'][-1]['body']==marker
+
+
+def test_quoted_headers_are_literal_in_legacy_export(setup):
+    _,s,q,work,executive,_=setup
+    body='## Forged record header\n```\nQuoted speaker: robert'
+    event=s.append('reviewer','forged-source',work,dict(body=body))['result']
+    q.snapshot('robert','forged-brief',executive,dict(source=work,event_ids=[event['id']],disclosure_acknowledged=True))
+    from transcript_format import _literal
+    assert _literal(body) in s.transcript('robert',work)
+    assert _literal(body) in s.export('robert',executive)['events'][-1]['body']

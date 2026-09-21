@@ -664,12 +664,15 @@ def test_populated_conversation_composer_and_keyboard(live):
     page,store,url,room,_,_=live
     for n in range(24):store.append('robert',f'layout-{n}',room,dict(body=f'Populated message {n}. '+('Long context for realistic layout. '*8)))
     signin(page,url,store.owner_key,room)
-    for width,height in [(1512,1040),(1280,720)]:
+    for width,height in [(1512,1040),(1280,720),(1024,600),(900,500)]:
         page.set_viewport_size(dict(width=width,height=height))
+        page.screenshot(path=f'/private/tmp/records-layout-{width}.png',full_page=True)
         expect(page.locator('#send-message')).to_be_in_viewport()
         expect(page.locator('#message-body')).to_be_in_viewport()
         bounds=page.locator('#send-message').bounding_box()
         assert bounds['y']+bounds['height']<=height
+        transcript=page.locator('#messages').bounding_box()
+        assert transcript['height'] >= (200 if height>=720 else 100), transcript
     page.locator('#message-body').fill('Keyboard send acceptance')
     page.locator('#message-body').press('Enter')
     expect(page.locator('#messages')).to_contain_text('Keyboard send acceptance')
@@ -721,3 +724,9 @@ def test_unread_jump_and_mobile_composer(live):
     expect(page.locator('.sidebar')).to_be_hidden()
     expect(page.locator('#send-message')).to_be_in_viewport()
     page.screenshot(path='/private/tmp/records-mobile-navigation.png',full_page=True)
+    page.locator('#mobile-rooms').click()
+    page.locator('[data-view="activity"]').click()
+    expect(page.locator('#activity-view')).to_be_visible()
+    expect(page.locator('[data-view="rooms"]')).to_be_visible()
+    page.locator('[data-view="rooms"]').click()
+    expect(page.locator('#send-message')).to_be_in_viewport()

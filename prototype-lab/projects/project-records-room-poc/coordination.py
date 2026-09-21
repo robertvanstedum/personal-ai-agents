@@ -143,13 +143,17 @@ def export_briefing(db, room, event):
     if event['kind']!='executive_snapshot':return body
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='executive_snapshots'").fetchone():return body
     for snapshot in db.execute('SELECT * FROM executive_snapshots WHERE room=?',(room,)):
+        try:quoted=json.loads(snapshot['records'])
+        except (TypeError,ValueError):continue
+        if not isinstance(quoted,list) or any(not isinstance(r,dict) or any(not isinstance(r.get(k),str) for k in ['actor','id','created','text']) for r in quoted):continue
         # The original marker contains the exact snapshot timestamp, including microseconds.
-        marker=f"Executive briefing snapshot · {len(json.loads(snapshot['records']))} selected records · captured {snapshot['created']}"
+        marker=f"Executive briefing snapshot · {len(quoted)} selected records · captured {snapshot['created']}"
         if body!=marker:continue
         lines=[body,'',f"Source session: {snapshot['source']}",f"Snapshot: {snapshot['id']}",
                'Coverage: owner-selected records only; quoted speakers are not the submitting identity.']
-        for record in json.loads(snapshot['records']):
-            lines.extend(['',f"Quoted speaker: {record['actor']} · source record {record['id']} · {record['created']}",record['text']])
+        from transcript_format import _literal
+        for record in quoted:
+            lines.extend(['',f"Quoted speaker: {record['actor']} · source record {record['id']} · {record['created']}",_literal(record['text'])])
             if record.get('warning'):lines.append(record['warning'])
         return '\n'.join(lines)
     return body
