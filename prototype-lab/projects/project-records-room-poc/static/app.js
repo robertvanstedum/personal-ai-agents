@@ -297,3 +297,5 @@ async function loadActivity(generation=state.navigation){
   }catch(error){if(current()){$("activity-status").textContent="Activity could not be loaded. Refresh to try again.";clear($("activity-list"));}}
 }
 $("refresh-activity").onclick=()=>{++state.navigation;loadActivity(state.navigation);};
+
+$("message-body").addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();if(!$("send-message").disabled)$("composer").requestSubmit();}});

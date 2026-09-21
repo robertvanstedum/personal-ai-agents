@@ -32,13 +32,13 @@
             <p id="cos-auto-status" role="status"></p>
             <button type="button" id="reconcile-cos" class="hidden quiet">Check uncertain outcome — no new model call</button>
             <p id="cos-request-status" role="status"></p>
-            <p class="muted">CoS uses the API backend. Auto-reply invitation: up to 20 response attempts for one hour in this non-private test session. You can pause it anytime. Invite once, then send ordinary messages while participation is active.</p>
+            <details><summary>Participation limits and cost</summary><p class="muted">CoS uses the API backend. Auto-reply invitation: up to 20 response attempts for one hour in this non-private test session. You can pause it anytime. Invite once, then send ordinary messages while participation is active.</p></details>
           </section>
           <form id="composer" class="composer">
             <div id="paused-notice" class="paused-notice hidden">Recording is paused. Resume the session before adding a contribution.</div>
             <div class="composer-controls"><label>Contribution<select id="event-kind"><option value="message">Message</option><option value="checkpoint">Thinking checkpoint</option><option value="proposal">Proposal</option><option value="task">Assignment</option><option value="task_update">Task update</option></select></label><label id="target-label">Address to<select id="target"><option value="">Everyone in this room</option></select></label><label id="reference-label" class="hidden">Reference<select id="reference"></select></label></div>
             <label class="sr-only" for="message-body">Your contribution</label><textarea id="message-body" rows="3" maxlength="16000" placeholder="Contribute to the discussion…" required></textarea>
-            <div class="composer-bottom"><span>Attributed to you · saved on submit</span><button id="send-message" class="primary">Contribute ↑</button></div>
+            <div class="composer-bottom"><span>Enter to send · Shift+Enter for newline</span><button id="send-message" class="primary">Contribute ↑</button></div>
           </form>
         </div>
         <aside class="room-brief">

@@ -656,3 +656,23 @@ def test_coordination_question_answer_and_executive_snapshot(live):
     expect(page.locator('#modal')).not_to_be_visible()
     assert queue.list('robert',work)['items'][0]['source_snapshot']
     assert queue.list('robert',work)['items'][0]['state']=='requested'
+
+
+def test_populated_conversation_composer_and_keyboard(live):
+    page,store,url,room,_,_=live
+    for n in range(24):store.append('robert',f'layout-{n}',room,dict(body=f'Populated message {n}. '+('Long context for realistic layout. '*8)))
+    signin(page,url,store.owner_key,room)
+    for width,height in [(1512,1040),(1280,720)]:
+        page.set_viewport_size(dict(width=width,height=height))
+        expect(page.locator('#send-message')).to_be_in_viewport()
+        expect(page.locator('#message-body')).to_be_in_viewport()
+        bounds=page.locator('#send-message').bounding_box()
+        assert bounds['y']+bounds['height']<=height
+    page.locator('#message-body').fill('Keyboard send acceptance')
+    page.locator('#message-body').press('Enter')
+    expect(page.locator('#messages')).to_contain_text('Keyboard send acceptance')
+    expect(page.locator('#message-body')).to_have_value('')
+    page.locator('#message-body').fill('Line one')
+    page.locator('#message-body').press('Shift+Enter')
+    expect(page.locator('#message-body')).to_have_value('Line one\n')
+    page.screenshot(path='/private/tmp/records-populated-desktop.png',full_page=True)

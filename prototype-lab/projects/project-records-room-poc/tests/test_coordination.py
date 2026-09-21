@@ -126,3 +126,36 @@ def test_coordination_and_briefing_export_remain_valid(setup):
         snapshot,stamp=capture(s,'robert',room)
         assert any(r['kind']==kind for r in snapshot['raw_transcript'])
         assert render(snapshot,snapshot_at=stamp)
+
+
+def test_requests_require_serviceable_independent_recipient(setup):
+    _,s,q,room,_,_=setup
+    for actor,assignee in [('reviewer','reviewer'),('robert','robert'),('robert','cos-dev')]:
+        with pytest.raises(Problem):
+            q.create(actor,'invalid-'+actor+assignee,room,dict(kind='review',title='Review',body='Candidate',assignee=assignee))
+    assert q.list('robert',room)['items']==[]
+
+
+def test_cancelled_item_cannot_add_duplicate_history(setup):
+    _,s,q,room,_,_=setup
+    item=q.create('robert','cancel-target',room,dict(kind='review',title='Review',body='Candidate',assignee='reviewer'))['result']
+    q.transition('robert','first-cancel',room,item['id'],dict(action='cancel',body='Cancelled',version=1))
+    before=q.list('robert',room)
+    with pytest.raises(Problem):q.transition('robert','repeat-cancel',room,item['id'],dict(action='cancel',body='Cancelled again',version=2))
+    assert q.list('robert',room)==before
+
+
+def test_briefing_text_in_all_exports_without_history_rewrite(setup):
+    from transcript_snapshot import capture
+    _,s,q,work,executive,_=setup
+    event=s.append('reviewer','quoted-source',work,dict(body='Portable briefing contents'))['result']
+    q.snapshot('robert','portable-brief',executive,dict(source=work,event_ids=[event['id']],disclosure_acknowledged=True))
+    before=s.room('robert',executive)['events']
+    assert 'Portable briefing contents' in s.transcript('robert',executive)
+    exported=s.export('robert',executive)
+    assert any('Portable briefing contents' in e['body'] for e in exported['events'])
+    snapshot,_=capture(s,'robert',executive)
+    record=next(r for r in snapshot['raw_transcript'] if r['kind']=='executive_snapshot')
+    assert 'Portable briefing contents' in record['text'] and 'Quoted speaker: reviewer' in record['text']
+    assert record['submitted_by']=='robert'
+    assert s.room('robert',executive)['events']==before

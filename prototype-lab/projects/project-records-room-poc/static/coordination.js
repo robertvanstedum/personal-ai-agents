@@ -28,7 +28,7 @@
     for(const [action,label] of actions(item))node.append(button(label,()=>change(item,action,label)));return node;
   }
   add.onclick=()=>{
-    const context=roomContext();modal('Request work or input',[field('kind','Request type','select','review',[['review','Review'],['handoff','Handoff'],['owner_input','Robert input needed']]),field('title','Title'),field('body','Question, candidate reference, or handoff','textarea'),field('assignee','Assigned participant','select','robert',state.room.members.filter(m=>m.role==='contributor').map(m=>[m.id,m.label])),element('p','For Robert input, select Robert. A request is not a running agent or an approval.')],async data=>{context.check();await write(`/api/v1/rooms/${context.id}/coordination`,data);signature='';await refresh();},'Record request');
+    const context=roomContext();modal('Request work or input',[field('kind','Request type','select','review',[['review','Review'],['handoff','Handoff'],['owner_input','Robert input needed']]),field('title','Title'),field('body','Question, candidate reference, or handoff','textarea'),field('assignee','Assigned participant','select','robert',state.room.members.filter(m=>m.role==='contributor'&&m.id!==state.me.id&&m.id!=='cos-dev').map(m=>[m.id,m.label])),element('p','For Robert input, select Robert. A request is not a running agent or an approval.')],async data=>{context.check();await write(`/api/v1/rooms/${context.id}/coordination`,data);signature='';await refresh();},'Record request');
   };
   capture.onclick=async()=>{
     const context=roomContext();await refreshRooms();context.check();const choices=state.rooms.filter(r=>r.id!==context.id).map(r=>[r.id,r.title]);
@@ -42,7 +42,7 @@
   };
   function handoff(snapshot){
     const context=roomContext();api(`/api/v1/rooms/${snapshot.source}`).then(source=>{
-      context.check();modal('Send explicit handoff to working session',[field('title','Handoff title'),field('body','Authorized next steps','textarea'),field('assignee','Assigned participant','select','robert',source.members.filter(m=>m.role==='contributor').map(m=>[m.id,m.label])),element('p',`This records a linked handoff in “${source.title}”. The assignee must acknowledge pickup; no runtime is launched.`)],async data=>{context.check();await write(`/api/v1/rooms/${snapshot.source}/coordination`,{...data,kind:'handoff',source_snapshot:snapshot.id});toast('Handoff recorded in working session; awaiting assignee pickup.');},'Send handoff');
+      context.check();modal('Send explicit handoff to working session',[field('title','Handoff title'),field('body','Authorized next steps','textarea'),field('assignee','Assigned participant','select','robert',source.members.filter(m=>m.role==='contributor'&&m.id!==state.me.id&&m.id!=='cos-dev').map(m=>[m.id,m.label])),element('p',`This records a linked handoff in “${source.title}”. The assignee must acknowledge pickup; no runtime is launched.`)],async data=>{context.check();await write(`/api/v1/rooms/${snapshot.source}/coordination`,{...data,kind:'handoff',source_snapshot:snapshot.id});toast('Handoff recorded in working session; awaiting assignee pickup.');},'Send handoff');
     }).catch(error=>toast(error.message,true));
   }
   async function refresh(){

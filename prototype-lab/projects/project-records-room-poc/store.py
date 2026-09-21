@@ -745,6 +745,9 @@ class Store:
 
     def export(self, actor, room):
         record=self.room(actor,room)
+        from coordination import export_briefing
+        with self.connect() as db:
+            for event in record["events"]:event["body"]=export_briefing(db,room,event)
         record["format"]="minimoi.room.v1"
         record["exported_at"]=now()
         record["capture_coverage"]="Only contributions and sources explicitly submitted to this application"
@@ -755,6 +758,9 @@ class Store:
 
     def transcript(self, actor, room):
         record=self.room(actor,room)
+        from coordination import export_briefing
+        with self.connect() as db:
+            for event in record["events"]:event["body"]=export_briefing(db,room,event)
         lines=[f"# {record['title']}","",f"Purpose: {record['purpose']}",f"Session: {room}",
                f"Mode: {record['mode']} · State: {record['state']}",
                "Coverage: only contributions explicitly submitted here. Imported documents remain separate sources.",

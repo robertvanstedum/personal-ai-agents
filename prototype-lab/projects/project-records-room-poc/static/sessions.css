@@ -14,3 +14,32 @@
 .coordination-card{border:1px solid var(--line);border-radius:6px;padding:12px;margin-top:12px;background:var(--paper);overflow-wrap:anywhere}.coordination-card strong,.coordination-card small{display:block}.coordination-card small{color:var(--muted);font-size:10px;margin:5px 0}.coordination-card p{font-size:12px;white-space:pre-wrap;margin:8px 0}.coordination-card button{margin:10px 12px 0 0}.coordination-card summary{font-size:11px;cursor:pointer}#coordination-inbox{position:fixed;right:18px;top:40px;z-index:15;box-shadow:var(--shadow)}.snapshot-selection{max-height:300px;overflow:auto}.snapshot-selection label{display:flex!important;gap:8px;align-items:flex-start}.snapshot-selection input{flex-shrink:0}.room-brief #coordination-panel{margin-top:0;padding-top:0;border:0}
 
 @media(max-width:600px){.room-brief{display:block}.room-brief section{margin-bottom:24px}}
+
+/* Keep the primary conversation action in reach with a populated transcript. */
+body:has(#room-workspace:not(.hidden)) .workspace{height:calc(100dvh - 30px);min-height:0}
+body:has(#room-workspace:not(.hidden)) #main{min-height:0}
+body:has(#room-workspace:not(.hidden)) #rooms-view{height:100%;display:flex;flex-direction:column}
+body:has(#room-workspace:not(.hidden)) #rooms-view>.page-header{padding:8px 20px;flex-shrink:0}
+body:has(#room-workspace:not(.hidden)) #rooms-view>.page-header h1{font-size:17px;margin:0}
+body:has(#room-workspace:not(.hidden)) #rooms-view>.page-header .eyebrow{display:none}
+#room-workspace:not(.hidden){flex:1;min-height:0;overflow:hidden}
+.conversation-panel{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.conversation-panel .room-heading{padding:12px 20px;flex-shrink:0}
+.conversation-panel .room-heading h2{font-size:22px;margin:6px 0}
+.conversation-panel .room-heading p{margin:4px 0}
+.conversation-panel .messages{flex:1;min-height:60px;max-height:none;overflow:auto}
+.conversation-panel .transcript-label{padding-top:8px;padding-bottom:8px}
+.conversation-panel .cos-controls{flex-shrink:0;margin:6px 16px;padding:8px 12px}
+.conversation-panel .cos-controls button{font-size:11px;margin-bottom:2px;padding:5px 8px}
+.conversation-panel .cos-controls p{font-size:10px;margin:3px 0}
+.conversation-panel .composer{flex-shrink:0;margin:6px 16px 12px}
+.conversation-panel .composer-controls{padding:8px 12px}
+.conversation-panel .composer textarea{height:64px;min-height:44px;padding:10px 12px}
+.conversation-panel .composer-bottom{padding:8px 12px}
+.room-brief{max-height:100%;min-height:0;overflow:auto}
+@media(max-width:850px){#room-workspace:not(.hidden){display:flex;flex-direction:column;overflow:auto}.conversation-panel{height:calc(100dvh - 105px);min-height:calc(100dvh - 105px);flex-shrink:0}.room-brief{max-height:none;overflow:visible;flex-shrink:0}}
+@media(max-width:600px){body:has(#room-workspace:not(.hidden)) .workspace{height:auto}.conversation-panel{height:calc(100dvh - 55px);min-height:calc(100dvh - 55px)}#room-workspace:not(.hidden){overflow:visible}.conversation-panel .room-heading{padding:10px 16px}.conversation-panel .composer{margin:6px 12px 10px}.conversation-panel .room-heading h2{font-size:18px}}
+body:has(#room-workspace:not(.hidden)):has(#pending-operation:not(.hidden)) .workspace{height:calc(100dvh - 134px)}
+.pending-operation{max-height:100px;overflow:auto}
+@media(max-width:850px){body:has(#pending-operation:not(.hidden)) .conversation-panel{height:calc(100dvh - 205px);min-height:calc(100dvh - 205px)}}
+@media(min-width:601px){body:has(#room-workspace:not(.hidden)) .workspace{grid-template-rows:minmax(0,1fr)}body:has(#room-workspace:not(.hidden)) .sidebar{height:100%;min-height:0;overflow:auto}}

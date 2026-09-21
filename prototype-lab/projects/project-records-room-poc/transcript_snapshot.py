@@ -44,11 +44,13 @@ def capture(store, actor, session_id):
         records = []
         for event in events:
             origin = json.loads(event["origin"]) if event["origin"] else {}
+            from coordination import export_briefing
+            exported_body=export_briefing(db,session_id,event)
             # Historical display labels were not captured: use stable identity,
             # not today's label disguised as a historical quote.
             records.append(dict(record_id=event["id"], seq=event["seq"],
                 kind=kinds.get(event["kind"], event["kind"]), speaker_id=event["actor"],
-                submitted_by=event["actor"], speaker_label=event["actor"], text=event["body"],
+                submitted_by=event["actor"], speaker_label=event["actor"], text=exported_body,
                 source_created_at=None, ingested_at=utc(event["created"]),
                 agent_id=origin.get("agent_id"), model=None,
                 source_application=origin.get("source_application"),

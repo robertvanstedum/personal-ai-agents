@@ -35,6 +35,8 @@ class Coordination:
         if kind not in {'review','handoff','owner_input'}:raise Problem('Unknown coordination kind')
         title=string(payload['title'],'Title',160);body=string(payload['body'],'Request',16000)
         assignee=string(payload['assignee'],'Assignee',60)
+        if assignee==actor:raise Problem('Choose a different participant; requests require an independent recipient')
+        if assignee=='cos-dev':raise Problem('Chief of Staff replies to messages; it cannot pick up coordination requests yet')
         if kind=='owner_input' and assignee!='robert':raise Problem('Owner input is addressed to Robert')
         def action(db):
             self._active(db,actor,room)
@@ -76,8 +78,8 @@ class Coordination:
             if verb=='pickup' and row['state']=='requested' and actor==row['assignee']:state='picked_up'
             elif verb=='submit' and row['state']=='picked_up' and actor==row['assignee']:state='result_submitted'
             elif verb=='answer' and row['kind']=='owner_input' and row['state'] in {'requested','picked_up'} and actor=='robert':state='result_submitted'
-            elif verb=='acknowledge' and row['state']=='result_submitted' and actor==row['requester']:state='acknowledged'
-            elif verb=='cancel' and row['state']!='acknowledged' and actor in {row['requester'],'robert'}:state='cancelled'
+            elif verb=='acknowledge' and row['state']=='result_submitted' and actor==row['requester'] and actor!=row['assignee']:state='acknowledged'
+            elif verb=='cancel' and row['state'] not in {'acknowledged','cancelled'} and actor in {row['requester'],'robert'}:state='cancelled'
             else:raise Problem('This identity cannot perform that transition from the current state',403)
             at=now();db.execute('UPDATE coordination_items SET state=?,version=version+1,updated=? WHERE id=?',(state,at,item))
             db.execute('INSERT INTO coordination_steps VALUES(?,?,?,?,?,?)',(uid(),item,actor,verb,body,at))
@@ -133,3 +135,21 @@ class Coordination:
             return dict(snapshot_id=sid,source=source,destination=room,created=at,through_seq=records[-1]['seq'],records=records,
                         coverage='Owner-selected records only; not a full-session summary')
         return self.store.mutate(actor,key,dict(op='executive_snapshot',room=room,payload=payload),action,room)
+
+
+def export_briefing(db, room, event):
+    """Expand the immutable selected records in exports without rewriting history."""
+    body=event['body']
+    if event['kind']!='executive_snapshot':return body
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='executive_snapshots'").fetchone():return body
+    for snapshot in db.execute('SELECT * FROM executive_snapshots WHERE room=?',(room,)):
+        # The original marker contains the exact snapshot timestamp, including microseconds.
+        marker=f"Executive briefing snapshot · {len(json.loads(snapshot['records']))} selected records · captured {snapshot['created']}"
+        if body!=marker:continue
+        lines=[body,'',f"Source session: {snapshot['source']}",f"Snapshot: {snapshot['id']}",
+               'Coverage: owner-selected records only; quoted speakers are not the submitting identity.']
+        for record in json.loads(snapshot['records']):
+            lines.extend(['',f"Quoted speaker: {record['actor']} · source record {record['id']} · {record['created']}",record['text']])
+            if record.get('warning'):lines.append(record['warning'])
+        return '\n'.join(lines)
+    return body
