@@ -60,7 +60,16 @@
       }
     }catch(error){if(current()){clear(list);clear(snapshots);list.append(element('p','Coordination unavailable. Retrying…','muted'));signature='';}}finally{running=false;}
   }
-  inbox.onclick=()=>{modal('Requests for your attention',inboxItems.map(item=>{const card=element('div',undefined,'coordination-card');card.append(element('strong',item.title),element('p',`${labels[item.state]} · ${item.body}`),button('Join session',()=>{$('modal').close();location.hash=`room/${item.room}`;}));return card;}),async()=>{},'Close');};
+  function answerFromInbox(item){
+    const epoch=state.authEpoch,actor=state.me.id,generation=state.navigation;
+    $('modal').close();
+    modal('Answer request',[element('strong',item.title),element('p',item.body),field('body','Your answer','textarea')],async data=>{
+      if(!state.me||state.me.id!==actor||state.authEpoch!==epoch||state.navigation!==generation)throw new Error('Your session changed. Reopen this request from the inbox.');
+      await write(`/api/v1/rooms/${item.room}/coordination/${item.id}`,{action:'answer',body:data.body,version:item.version});
+      signature='';await refreshInbox();await refresh();toast('Answer recorded; awaiting requester acknowledgment.');
+    },'Send answer');
+  }
+  inbox.onclick=()=>{modal('Requests for your attention',inboxItems.map(item=>{const card=element('div',undefined,'coordination-card');card.append(element('strong',item.title),element('p',`${labels[item.state]} · ${item.body}`),button('Join session',()=>{$('modal').close();location.hash=`room/${item.room}`;}));if(item.kind==='owner_input'&&item.assignee===state.me.id&&state.me.id==='robert'&&['requested','picked_up'].includes(item.state))card.append(button('Answer request',()=>answerFromInbox(item)));return card;}),async()=>{},'Close');};
   async function refreshInbox(){
     if(!state.me){inbox.classList.add('hidden');inboxItems=[];seen.clear();clear(list);clear(snapshots);signature='';lastAuth=null;return;}
     const epoch=state.authEpoch;

@@ -760,3 +760,20 @@ def test_malformed_snapshot_keeps_requests_available(live):
     expect(page.locator('#executive-snapshots')).to_contain_text('Briefing contents unavailable',timeout=10000)
     expect(page.locator('#coordination-items')).to_contain_text('Still needs an answer')
     expect(page.locator('#coordination-items').get_by_role('button',name='Answer request')).to_be_enabled()
+
+
+def test_answer_owner_request_directly_from_inbox(live):
+    page,store,url,work,other,_=live
+    queue=store._browser_test_app.extensions['coordination']
+    request=queue.create('reviewer','inbox-direct',work,dict(kind='owner_input',title='Confirm delivery',body='Please answer Received',assignee='robert'))['result']
+    signin(page,url,store.owner_key,other)
+    page.locator('#coordination-inbox').click(timeout=15000)
+    page.locator('#modal').get_by_role('button',name='Answer request',exact=True).click()
+    expect(page.locator('#modal-title')).to_have_text('Answer request')
+    page.get_by_label('Your answer',exact=True).fill('Received')
+    page.locator('#modal-submit').click()
+    expect(page.locator('#modal')).not_to_be_visible()
+    item=next(i for i in queue.list('reviewer',work)['items'] if i['id']==request['id'])
+    assert item['state']=='result_submitted'
+    assert item['steps'][-1]['body']=='Received' and item['steps'][-1]['actor']=='robert'
+    assert queue.list('robert',other)['items']==[]
