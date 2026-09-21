@@ -199,7 +199,9 @@ def test_browser_workflow_and_layout(live):
     page.screenshot(path=str(shots/"room-desktop.png"),full_page=True)
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     page.set_viewport_size({"width":390,"height":844})
+    page.locator("#mobile-rooms").click()
     expect(page.locator("#logout")).to_be_visible()
+    page.locator("#mobile-room-close").click()
     page.screenshot(path=str(shots/"room-mobile.png"),full_page=True)
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     page.set_viewport_size({"width":1512,"height":1040})
@@ -676,3 +678,46 @@ def test_populated_conversation_composer_and_keyboard(live):
     page.locator('#message-body').press('Shift+Enter')
     expect(page.locator('#message-body')).to_have_value('Line one\n')
     page.screenshot(path='/private/tmp/records-populated-desktop.png',full_page=True)
+
+
+def test_safe_markdown_keeps_raw_record_and_rejects_active_content(live):
+    page,store,url,room,_,_=live
+    body='**Bold** and *italic* with `code`\n- First\n- Second\n```python\nprint("hello")\n```\n[Docs](https://example.com/docs)\n[Unsafe](javascript:alert(1))\n<img src=x onerror=alert(1)>'
+    event=store.append('robert','markdown-fixture',room,dict(body=body))['result']
+    signin(page,url,store.owner_key,room)
+    node=page.locator('#event-'+event['id'])
+    expect(node.locator('strong')).to_have_text('Bold')
+    expect(node.locator('em')).to_have_text('italic')
+    expect(node.locator('pre code')).to_contain_text('print("hello")')
+    expect(node.locator('li')).to_have_count(2)
+    expect(node.locator('a')).to_have_attribute('href','https://example.com/docs')
+    expect(node.locator('img,script,iframe')).to_have_count(0)
+    expect(node).to_contain_text('[Unsafe](javascript:alert(1))')
+    assert store.room('robert',room)['events'][-1]['body']==body
+
+
+def test_unread_jump_and_mobile_composer(live):
+    page,store,url,first,second,_=live
+    for n in range(20):store.append('robert',f'nav-{n}',first,dict(body='Earlier conversation '+str(n)+' '+('context '*40)))
+    signin(page,url,store.owner_key,first)
+    page.locator('#jump-latest').evaluate('(node)=>node.click()')
+    page.locator('#messages').evaluate('(node)=>node.scrollTop=0')
+    expect(page.locator('#jump-latest')).to_be_visible()
+    store.append('robert','while-reading',first,dict(body='New message while reading earlier context'))
+    expect(page.locator('#messages')).to_contain_text('New message while reading earlier context',timeout=10000)
+    assert page.locator('#messages').evaluate('(node)=>node.scrollTop')<100
+    page.locator('#jump-latest').click()
+    expect(page.locator('#jump-latest')).to_be_hidden()
+    store.append('robert','other-session',second,dict(body='Other session has changed'))
+    expect(page.locator(f'[data-session="{second}"] .unread-badge')).to_be_visible(timeout=15000)
+    page.locator(f'[data-session="{second}"]').click()
+    expect(page.locator(f'[data-session="{second}"] .unread-badge')).to_have_count(0)
+    page.set_viewport_size(dict(width=390,height=844))
+    expect(page.locator('#send-message')).to_be_in_viewport()
+    expect(page.locator('#message-body')).to_be_in_viewport()
+    page.locator('#mobile-rooms').click()
+    expect(page.locator(f'[data-session="{first}"]')).to_be_visible()
+    page.locator(f'[data-session="{first}"]').click()
+    expect(page.locator('.sidebar')).to_be_hidden()
+    expect(page.locator('#send-message')).to_be_in_viewport()
+    page.screenshot(path='/private/tmp/records-mobile-navigation.png',full_page=True)

@@ -345,7 +345,8 @@ class Store:
     def rooms(self, actor):
         with self.connect() as db:
             return [dict(row) for row in db.execute("""SELECT r.*,
-                (SELECT COUNT(*) FROM events e WHERE e.room=r.id) AS event_count
+                (SELECT COUNT(*) FROM events e WHERE e.room=r.id) AS event_count,
+                (SELECT COALESCE(MAX(seq),0) FROM events e WHERE e.room=r.id) AS latest_seq
                 FROM rooms r WHERE ?='robert' OR EXISTS
                 (SELECT 1 FROM members m WHERE m.room=r.id AND m.actor=?)
                 ORDER BY updated DESC""", (actor,actor))]

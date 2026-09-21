@@ -9,7 +9,7 @@ window.RecordsContribution = {
       return node;
     };
     const node = make("section", undefined, "agent-contribution");
-    node.append(make("div", view.text, "event-body"), make("p", view.warning, "agent-warning"));
+    node.append(window.RecordsFormatting.render(view.text), make("p", view.warning, "agent-warning"));
     const details = make("details", undefined, "agent-evidence");
     details.append(make("summary", "Evidence"));
     const evidence = view.evidence;

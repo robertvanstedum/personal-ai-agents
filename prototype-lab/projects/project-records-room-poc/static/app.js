@@ -50,11 +50,12 @@ function renderRoomList(){
     heading.onclick=()=>{location.hash=`project/${parent.id}`;};group.append(heading);
     for(const room of state.rooms.filter(s=>s.parent_room_id===parent.id)){
       const button=element("button",undefined,"room-link session-link"+(state.room?.id===room.id?" active":""));
-      button.append(element("strong",room.title),element("small",`${modeLabels[room.mode]} · ${room.state}`));
+      button.dataset.session=room.id;button.append(element("strong",room.title),element("small",`${modeLabels[room.mode]} · ${room.state}`));
       button.onclick=()=>{location.hash=`room/${room.id}`;};group.append(button);
     }
     $("room-list").append(group);
   }
+  window.RecordsNavigation?.decorate();
 }
 async function navigate(){
   if(!state.me)return;const generation=++state.navigation;
@@ -99,9 +100,9 @@ function renderRoom(){
   $("upload").classList.toggle("hidden",!writable);options($("target"),room.members.map(m=>[m.id,m.label]),"Everyone in this room");configureComposer();
   const messages=$("messages");const nearBottom=messages.scrollHeight-messages.scrollTop-messages.clientHeight<90;const oldLast=messages.dataset.last;const last=room.events.at(-1)?.id;
   if(oldLast!==last){clear(messages);for(const event of room.events)messages.append(renderEvent(event));messages.dataset.last=last||"";if(nearBottom||!oldLast)messages.scrollTop=messages.scrollHeight;}
-  renderBrief();renderEvidence();renderNotes();
+  renderBrief();renderEvidence();renderNotes();window.RecordsNavigation?.roomRendered({oldLast,nearBottom});
 }
-function renderEvent(event){const system=["session_opened","membership","moderator","state_change","document"].includes(event.kind);const node=element("article",undefined,`event event-${event.kind}${system?" event-system":""}`);node.id=`event-${event.id}`;const top=element("div",undefined,"event-top");top.append(element("span",event.actor_label[0],"avatar"),element("span",event.actor_label,"event-author"));if(!system)top.append(element("span",kindLabels[event.kind]||event.kind,"pill"));top.append(element("time",date(event.created),"event-time"));const contribution=!system&&window.RecordsContribution.render(event.presentation,new Set(state.room.events.map(record=>record.id)));node.append(top,contribution||element("div",system?`${event.body} · ${event.actor_label}`:event.body,"event-body"));if(!system){let note=event.actor_kind==="agent"?"Authenticated client contribution · ":"";note+=`Record ${event.id.slice(0,8)}`;if(event.target)note+=` · to ${event.target}`;if(event.reference)note+=` · references ${event.reference.slice(0,8)}`;node.append(element("div",note,"event-note"));}
+function renderEvent(event){const system=["session_opened","membership","moderator","state_change","document"].includes(event.kind);const node=element("article",undefined,`event event-${event.kind}${system?" event-system":""}`);node.id=`event-${event.id}`;const top=element("div",undefined,"event-top");top.append(element("span",event.actor_label[0],"avatar"),element("span",event.actor_label,"event-author"));if(!system)top.append(element("span",kindLabels[event.kind]||event.kind,"pill"));top.append(element("time",date(event.created),"event-time"));const contribution=!system&&window.RecordsContribution.render(event.presentation,new Set(state.room.events.map(record=>record.id)));node.append(top,contribution||(system?element("div",`${event.body} · ${event.actor_label}`,"event-body"):window.RecordsFormatting.render(event.body)));if(!system){let note=event.actor_kind==="agent"?"Authenticated client contribution · ":"";note+=`Record ${event.id.slice(0,8)}`;if(event.target)note+=` · to ${event.target}`;if(event.reference)note+=` · references ${event.reference.slice(0,8)}`;node.append(element("div",note,"event-note"));}
   if(!system)node.append(element("div",event.context_class||"Provenance not classified","event-note"));
   if(event.origin?.declared_speaker)node.append(element("div",`Declared speaker: ${event.origin.declared_speaker} · submitted transcript label, not verified identity`,"event-note"));
   if(event.origin?.coverage)node.append(element("div",`Source coverage: ${event.origin.coverage}`,"event-note"));
