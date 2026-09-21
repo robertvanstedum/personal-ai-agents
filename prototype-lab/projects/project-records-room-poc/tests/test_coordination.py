@@ -168,6 +168,9 @@ def test_malformed_briefing_falls_back_to_saved_marker(setup):
     marker=s.room('robert',executive)['events'][-1]['body']
     with s.connect() as db:
         db.execute("UPDATE executive_snapshots SET records=? WHERE room=?", ('[{"text":"missing attribution"}]',executive))
+    listing=q.list('robert',executive)
+    assert listing['snapshots'][0]['content_unavailable'] is True
+    assert listing['snapshots'][0]['records']==[]
     assert marker in s.transcript('robert',executive)
     assert s.export('robert',executive)['events'][-1]['body']==marker
 

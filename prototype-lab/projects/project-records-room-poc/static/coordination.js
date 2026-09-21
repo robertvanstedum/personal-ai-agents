@@ -54,6 +54,7 @@
     try{const data=await api(`/api/v1/rooms/${room}/coordination`);if(!current())return;const next=JSON.stringify([data,state.room.state]);if(next===signature)return;signature=next;clear(list);clear(snapshots);
       for(const item of data.items)list.append(renderItem(item));if(!data.items.length)list.append(element('p','No recorded requests.','muted'));
       for(const snap of data.snapshots){const node=element('article',undefined,'coordination-card');node.append(element('strong',`Snapshot · ${date(snap.created)}`),element('small',`${snap.records.length} selected records · through source sequence ${snap.through_seq}`));
+        if(snap.content_unavailable)node.append(element('p','Briefing contents unavailable: stored snapshot is malformed. Original record retained.','agent-warning'));
         const details=element('details');details.append(element('summary','Read briefing records'));for(const record of snap.records){details.append(element('p',`${record.actor} · ${date(record.created)}\n${record.text}`));if(record.warning)details.append(element('p',record.warning,'agent-warning'));}node.append(details);
         if(state.me.id==='robert'){node.append(button('Open source session',()=>{location.hash=`room/${snap.source}`;}),button('Send handoff back',()=>handoff(snap)));}snapshots.append(node);
       }

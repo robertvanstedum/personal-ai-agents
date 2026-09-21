@@ -703,7 +703,8 @@ def test_unread_jump_and_mobile_composer(live):
     page,store,url,first,second,_=live
     for n in range(20):store.append('robert',f'nav-{n}',first,dict(body='Earlier conversation '+str(n)+' '+('context '*40)))
     signin(page,url,store.owner_key,first)
-    page.locator('#jump-latest').evaluate('(node)=>node.click()')
+    expect(page.locator('#jump-latest')).to_be_hidden()
+    expect(page.locator(f'[data-session="{first}"] .unread-badge')).to_have_count(0)
     page.locator('#messages').evaluate('(node)=>node.scrollTop=0')
     expect(page.locator('#jump-latest')).to_be_visible()
     store.append('robert','while-reading',first,dict(body='New message while reading earlier context'))
@@ -715,13 +716,19 @@ def test_unread_jump_and_mobile_composer(live):
     expect(page.locator(f'[data-session="{second}"] .unread-badge')).to_be_visible(timeout=15000)
     page.locator(f'[data-session="{second}"]').click()
     expect(page.locator(f'[data-session="{second}"] .unread-badge')).to_have_count(0)
+    for width,height in [(390,844),(375,667),(360,640)]:
+        page.set_viewport_size(dict(width=width,height=height))
+        bounds=page.locator('#send-message').bounding_box()
+        assert bounds['y']+bounds['height']<=height, (width,height,bounds)
+        expect(page.locator('#message-body')).to_be_in_viewport()
+    store.append('robert','return-unread',first,dict(body='Added while you were in another room'))
     page.set_viewport_size(dict(width=390,height=844))
-    expect(page.locator('#send-message')).to_be_in_viewport()
-    expect(page.locator('#message-body')).to_be_in_viewport()
     page.locator('#mobile-rooms').click()
     expect(page.locator(f'[data-session="{first}"]')).to_be_visible()
     page.locator(f'[data-session="{first}"]').click()
     expect(page.locator('.sidebar')).to_be_hidden()
+    expect(page.locator('.unread-divider')).to_have_count(1)
+    expect(page.locator('#jump-latest')).to_be_hidden()
     expect(page.locator('#send-message')).to_be_in_viewport()
     page.screenshot(path='/private/tmp/records-mobile-navigation.png',full_page=True)
     page.locator('#mobile-rooms').click()
@@ -730,3 +737,26 @@ def test_unread_jump_and_mobile_composer(live):
     expect(page.locator('[data-view="rooms"]')).to_be_visible()
     page.locator('[data-view="rooms"]').click()
     expect(page.locator('#send-message')).to_be_in_viewport()
+
+
+def test_markdown_link_shows_actual_destination(live):
+    page,store,url,room,_,_=live
+    store.append('robert','misleading-link',room,dict(body='[https://bank.example/login](https://evil.example/steal)'))
+    signin(page,url,store.owner_key,room)
+    link=page.locator('#messages a[href="https://evil.example/steal"]')
+    expect(link).to_have_text('https://bank.example/login (evil.example)')
+    expect(link).to_have_attribute('title','https://evil.example/steal')
+
+
+def test_malformed_snapshot_keeps_requests_available(live):
+    page,store,url,work,executive,_=live
+    queue=store._browser_test_app.extensions['coordination']
+    store.membership('robert','reviewer-executive',executive,dict(actor='reviewer',role='contributor'))
+    queue.create('reviewer','malformed-question',executive,dict(kind='owner_input',title='Still needs an answer',body='Can you read this?',assignee='robert'))
+    source=store.append('robert','malformed-source',work,dict(body='Source'))['result']
+    queue.snapshot('robert','malformed-capture',executive,dict(source=work,event_ids=[source['id']],disclosure_acknowledged=True))
+    with store.connect() as db:db.execute('UPDATE executive_snapshots SET records=? WHERE room=?',('not-json',executive))
+    signin(page,url,store.owner_key,executive)
+    expect(page.locator('#executive-snapshots')).to_contain_text('Briefing contents unavailable',timeout=10000)
+    expect(page.locator('#coordination-items')).to_contain_text('Still needs an answer')
+    expect(page.locator('#coordination-items').get_by_role('button',name='Answer request')).to_be_enabled()

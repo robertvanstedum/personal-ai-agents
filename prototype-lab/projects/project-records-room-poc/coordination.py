@@ -4,6 +4,18 @@ from platform_access import AccessError
 from store import Problem, canonical, now, string, uid
 
 
+def snapshot_records(value):
+    try: records=json.loads(value)
+    except (TypeError,ValueError): return None
+    if not isinstance(records,list) or any(not isinstance(r,dict) or any(not isinstance(r.get(k),str) for k in ['actor','id','created','text']) for r in records): return None
+    return records
+
+
+def snapshot_view(row):
+    records=snapshot_records(row['records'])
+    return dict(row,records=records if records is not None else [],content_unavailable=records is None)
+
+
 class Coordination:
     def __init__(self, store):
         self.store=store
@@ -92,7 +104,7 @@ class Coordination:
         with self.store.connect() as db:
             db.execute('BEGIN');self.store.access(db,actor,room)
             return dict(items=[self._item(db,r['id']) for r in db.execute('SELECT id FROM coordination_items WHERE room=? ORDER BY updated DESC',(room,))],
-                        snapshots=[dict(r,records=json.loads(r['records'])) for r in db.execute('SELECT * FROM executive_snapshots WHERE room=? ORDER BY created DESC',(room,))])
+                        snapshots=[snapshot_view(r) for r in db.execute('SELECT * FROM executive_snapshots WHERE room=? ORDER BY created DESC',(room,))])
 
     def inbox(self, actor):
         items=[]
@@ -143,9 +155,8 @@ def export_briefing(db, room, event):
     if event['kind']!='executive_snapshot':return body
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='executive_snapshots'").fetchone():return body
     for snapshot in db.execute('SELECT * FROM executive_snapshots WHERE room=?',(room,)):
-        try:quoted=json.loads(snapshot['records'])
-        except (TypeError,ValueError):continue
-        if not isinstance(quoted,list) or any(not isinstance(r,dict) or any(not isinstance(r.get(k),str) for k in ['actor','id','created','text']) for r in quoted):continue
+        quoted=snapshot_records(snapshot['records'])
+        if quoted is None:continue
         # The original marker contains the exact snapshot timestamp, including microseconds.
         marker=f"Executive briefing snapshot · {len(quoted)} selected records · captured {snapshot['created']}"
         if body!=marker:continue
