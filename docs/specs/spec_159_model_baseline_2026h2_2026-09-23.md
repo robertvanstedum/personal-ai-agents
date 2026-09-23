@@ -6,7 +6,7 @@
 - **Build queue:** #159, `design`, high priority.
 - **Supersedes:** Spec 125 (Model Name Centralization, 2026-07-05). Spec 125's file inventory, config-file mechanism and regression plan are carried forward here (§9, §10) and updated. Spec 125 is closed as superseded at Robert's direction, 23 Sep 2026.
 - **Builds on, does not replace:** [Shared LiteLLM Model Gateway](spec_shared_litellm_model_gateway_2026-08-15.md) (routing, fallback, telemetry), [Spec 146](spec_146_openclaw_cos_gateway_2026-08-09.md) (OpenClaw CoS gateway), and the unmerged Track B branch `feat/cos-guild-model-roles` @ `021a1bb` (model roles for CoS and Guild).
-- **Target:** implementation starts Friday 25 Sep 2026 or the week of 28 Sep, after Thursday's commitments, and is sequenced with the existing backlog.
+- **Target:** final design over the weekend of 26–27 Sep 2026, implementation the week of 28 Sep, sequenced with the existing backlog. Phase 0 (stopping the personal OpenClaw spend) this week.
 - **Companion report:** `_working/model-rebalance_2026-09-23.html` (rate card and matrices, same numbers as §3).
 
 ---
