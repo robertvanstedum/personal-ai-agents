@@ -1,6 +1,6 @@
 # Spec #125: Domain Standardization Phase 2 — Model Name Centralization
 **File:** `spec_125_model_standardization_2026-07-05.md`
-**Status:** Backlog
+**Status:** Superseded — 2026-09-23 by [Spec 159 — Model Baseline 2026 H2](spec_159_model_baseline_2026h2_2026-09-23.md). Kept for history; its inventory and regression plan continue in Spec 159.
 **Date:** 2026-07-05
 **Build queue:** #125
 **GitHub issue:** #78
