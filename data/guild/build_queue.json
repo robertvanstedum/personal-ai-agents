@@ -1,5 +1,17 @@
 [
   {
+    "id": 157,
+    "spec_title": "CoS Conversation Capture and Cross-Chair Retrieval",
+    "spec_file": "spec_cos_conversation_capture_cross_chair_retrieval_2026-09-06.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "priority": "normal",
+    "blocked_reason": null,
+    "last_transition_at": "2026-09-06T21:19:12Z",
+    "summary": "Explicit durable full-transcript capture, direct intake, and provenance-preserving retrieval across independent chair conversations, with CoS as a chair and analysis kept optional and separate.",
+    "notes": "Revision 0.3 completed multi-chair design review. Registration makes the item visible but conveys no build authority. Do not move to in_build, implement the experiment, or start production work without Robert's explicit approval. General reference shelf and shared-room mode remain out of scope."
+  },
+  {
     "id": 153,
     "spec_title": "Prototype Lab — Isolated Guild Prototyping Capability",
     "spec_file": "spec_153_prototype_lab_2026-08-26.md",
