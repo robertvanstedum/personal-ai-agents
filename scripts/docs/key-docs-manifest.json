@@ -28,12 +28,12 @@
     {
       "source": "OPERATIONS.md",
       "pdf": "OPERATIONS.pdf",
-      "source_sha256": "ca0ed000b8947fb5e6a6eda784b163826b281da15223f3d4405073e8adcce3aa",
+      "source_sha256": "cf3100bea6751427ac6c19a482ad82947627c6b8e8330673dd9a9e5349f5e4a6",
       "renderer_sha256": "d6b762ea5ed9e605152865845dca8ec2d3f7812d930f4a899774724578d88323",
-      "pdf_sha256": "9923e35eca40c615213c3d8a9a3694b901bef7c55facefa0915b8cf16a32b04a",
+      "pdf_sha256": "c617ef3b5373e704dda56233178b9e1d431a315afce1fcb3f15651bf4887273b",
       "mermaid_diagrams": 1,
-      "pages": 12,
-      "extractable_text_characters": 26652,
+      "pages": 13,
+      "extractable_text_characters": 28864,
       "title": "mini-moi Operations"
     },
     {

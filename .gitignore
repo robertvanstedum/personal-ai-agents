@@ -174,3 +174,6 @@ domains/guild/data/linkedin_connections.csv
 data/curator/
 node_modules/
 scripts/.curator_dev_cron_on
+
+# Private local Career workspace — never publish personal/client material
+/private/career/
