@@ -1,0 +1,37 @@
+--- a/domains/cos/chief_of_staff.py
++++ b/domains/cos/chief_of_staff.py
+@@ -868,6 +868,34 @@
+     conversation_id: str = "owner",
+     request_id: str | None = None,
+ ):
++    # Opt-in records-room commands; ordinary CoS/capture turns are unchanged.
++    # This is a platform connection, not automatic model attendance.
++    from domains.cos.cos_records_bridge import dispatch, parse_command, RoomBridgeError
++    from flask import has_request_context
++    from uuid import uuid4
++    from domains.cos.confer_service import ConferTurnResult
++    try:
++        if parse_command(text) is not None:
++            if (not has_request_context() or resolve_user_id(request) is None
++                    or request.headers.get("X-Minimoi-User-Tier") != "owner"):
++                raise RoomBridgeError("Room access requires the authenticated owner portal session.")
++        room_outcome = dispatch(text, request_id)
++    except RoomBridgeError as exc:
++        raise ConferOperationFailed(str(exc)) from exc
++    if room_outcome is not None:
++        _inc_chat()
++        return ConferTurnResult(
++            turn_id=str(uuid4()),
++            conversation_id=conversation_id,
++            channel=channel,
++            user_text=text,
++            reply=room_outcome["reply"],
++            backend_label=room_outcome.get("backend_label", "Development CoS room connector"),
++            model_label="",
++            created_at=datetime.now(timezone.utc).isoformat(),
++            operation=room_outcome["operation"],
++        )
++
+     receipt_resolver = (
+         _get_routing_receipt
+         if getattr(_backend, "supports_routing_receipts", False)

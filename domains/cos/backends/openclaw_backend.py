@@ -9,7 +9,9 @@ import hashlib
 import logging
 import os
 import re
+from dataclasses import dataclass
 from datetime import datetime
+from uuid import UUID
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -35,6 +37,22 @@ class AgentRuntimeError(RuntimeError):
 
 class AgentSessionRecoveryRequired(AgentRuntimeError):
     """The current runtime session must be explicitly reset before reuse."""
+
+
+@dataclass(frozen=True)
+class AgentExecutionReply:
+    """Connector-captured response, not a Records receipt or tool permission.
+
+    This reports a successful response from the configured runtime. Live H1
+    evidence additionally requires verified routing and a Records write receipt.
+    Unit-test transports do not establish actual agent participation.
+    """
+
+    text: str
+    coordination_request_id: str
+    openclaw_run_id: str
+    agent_id: str
+    mode: str = "actual_agent_response"
 
 
 class OpenClawBackend:
@@ -222,6 +240,62 @@ class OpenClawBackend:
 
     def call_backend(self, prompt: str, context: dict, tool_policy: dict) -> str:
         """Send one text turn and return only the final assistant-visible text."""
+        payload = self._call_backend_payload(prompt, context, tool_policy)
+        return self._reply_text(payload)
+
+    @staticmethod
+    def _reply_text(payload: dict) -> str:
+        try:
+            reply = payload["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise AgentRuntimeError("COS Agent A returned an invalid response.") from exc
+        if not isinstance(reply, str) or not reply.strip():
+            raise AgentRuntimeError("COS Agent A returned no visible reply.")
+        return reply.strip()
+
+    def call_backend_with_evidence(
+        self, prompt: str, context: dict, tool_policy: dict
+    ) -> AgentExecutionReply:
+        """Opt-in strict response boundary; does not enable any meeting route.
+
+        Request identity is platform correlation; execution identity MUST come
+        from the authenticated runtime payload, never context or model prose.
+        No retries or writes occur here. The caller must journal uncertainty.
+        tool_policy is NOT enforced by this HTTP adapter: callers must verify
+        runtime permissions separately before introducing meeting content.
+        """
+        request_id = (context.get("confer") or {}).get("receipt_id")
+        try:
+            if not isinstance(request_id, str) or str(UUID(request_id)) != request_id:
+                raise ValueError
+        except (ValueError, AttributeError, TypeError):
+            raise ValueError("Execution evidence requires a canonical coordination request UUID.") from None
+        payload = self._call_backend_payload(prompt, context, tool_policy)
+        try:
+            run_id = payload["id"]
+            choices = payload["choices"]
+            if (
+                payload.get("object") != "chat.completion"
+                or payload.get("model") != f"openclaw/{self._agent_id}"
+                or not isinstance(run_id, str)
+                or not re.fullmatch(
+                    r"chatcmpl_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", run_id
+                )
+                or not isinstance(choices, list) or len(choices) != 1
+                or choices[0].get("finish_reason") != "stop"
+            ):
+                raise ValueError
+            message = choices[0]["message"]
+            if (message.get("role") != "assistant" or message.get("tool_calls")
+                    or message.get("function_call") or message.get("refusal")):
+                raise ValueError
+            text = self._reply_text(payload)
+        except (KeyError, IndexError, TypeError, AttributeError, ValueError):
+            raise AgentRuntimeError("COS Agent A did not return valid execution evidence; do not retry automatically.") from None
+        return AgentExecutionReply(text, request_id, run_id, self._agent_id)
+
+    def _call_backend_payload(self, prompt: str, context: dict, tool_policy: dict) -> dict:
+        """Shared transport; the legacy text API retains its existing contract."""
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("prompt must not be empty")
 
@@ -249,15 +323,7 @@ class OpenClawBackend:
             "content": self._normalize_relative_date_prompt(prompt),
         })
 
-        payload = self._post_turn(
+        return self._post_turn(
             messages=messages,
             conversation_id=conversation_id,
         )
-        try:
-            reply = payload["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise AgentRuntimeError("COS Agent A returned an invalid response.") from exc
-
-        if not isinstance(reply, str) or not reply.strip():
-            raise AgentRuntimeError("COS Agent A returned no visible reply.")
-        return reply.strip()
