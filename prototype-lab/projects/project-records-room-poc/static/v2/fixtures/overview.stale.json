@@ -1,0 +1,246 @@
+{
+  "schema": "minimoi.work.overview/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "roster": {
+    "schema": "minimoi.work.roster/1",
+    "observed_at": "2026-09-25T15:42:00Z",
+    "refresh_s": 5,
+    "monitor": {
+      "last_run_at": "2026-09-25T15:12:04Z",
+      "freshness": "stale",
+      "observer": "ops-monitor"
+    },
+    "principals": [
+      {
+        "id": "robert",
+        "label": "Robert",
+        "kind": "person"
+      },
+      {
+        "id": "claude-code",
+        "label": "Claude Code",
+        "kind": "agent"
+      },
+      {
+        "id": "codex",
+        "label": "Codex",
+        "kind": "agent"
+      },
+      {
+        "id": "workshop",
+        "label": "Workshop (mac-workshop-1)",
+        "kind": "agent"
+      },
+      {
+        "id": "master-craftsman",
+        "label": "Master Craftsman",
+        "kind": "agent"
+      },
+      {
+        "id": "ops-monitor",
+        "label": "Operations monitor",
+        "kind": "service"
+      }
+    ],
+    "agents": [
+      {
+        "principal": "claude-code",
+        "role": "builder",
+        "status": "stale",
+        "wait_reason": null,
+        "step": "draft-findings",
+        "current_attempt": "att-c2c-003-1",
+        "last_contact_at": "2026-09-25T15:11:40Z",
+        "last_contact_source": "checkpoint",
+        "runtime": "Claude Code CLI · manual run"
+      },
+      {
+        "principal": "workshop",
+        "role": "builder",
+        "status": "stale",
+        "wait_reason": "tool",
+        "step": "collect-results",
+        "current_attempt": "att-room-021-2",
+        "last_contact_at": "2026-09-25T15:11:50Z",
+        "last_contact_source": "heartbeat",
+        "runtime": "Python 3.11.9 · subprocess_python (real adapter)"
+      },
+      {
+        "principal": "codex",
+        "role": "reviewer",
+        "status": "configured_not_running",
+        "wait_reason": null,
+        "step": null,
+        "current_attempt": null,
+        "last_contact_at": null,
+        "last_contact_source": null,
+        "runtime": "Codex · check-in on request"
+      },
+      {
+        "principal": "master-craftsman",
+        "role": "oversight",
+        "status": "configured_not_running",
+        "wait_reason": null,
+        "step": null,
+        "current_attempt": null,
+        "last_contact_at": null,
+        "last_contact_source": null,
+        "runtime": "No runtime in this build"
+      }
+    ],
+    "attempts": [
+      {
+        "attempt_id": "att-room-021-2",
+        "assignment_id": "asg-room-021",
+        "work_ref": "build_queue:ROOM-021",
+        "title": "Room handoff adapter",
+        "agent": "workshop",
+        "adapter_kind": "real",
+        "manual": true,
+        "execution": "waiting",
+        "delivery": "centrally_recorded",
+        "assurance": "none",
+        "wait_reason": "tool",
+        "step": "collect-results",
+        "started_at": "2026-09-25T14:55:00Z",
+        "elapsed_s": null,
+        "last_contact_at": "2026-09-25T15:11:50Z",
+        "last_contact_source": "heartbeat",
+        "last_progress_at": "2026-09-25T15:09:30Z",
+        "last_progress_basis": "observation",
+        "freshness": "stale",
+        "latest_evidence": "Last observed at checkpoint 2 of 5",
+        "next_owner": "workshop",
+        "next_action": "Finish collecting results",
+        "trace_id": "3c335974932b73e5d21d39b48c16f4f0"
+      },
+      {
+        "attempt_id": "att-c2c-003-1",
+        "assignment_id": "asg-c2c-003",
+        "work_ref": "record:rec-3e77@1",
+        "title": "Synthetic Concept to Cash review",
+        "agent": "claude-code",
+        "adapter_kind": "real",
+        "manual": true,
+        "execution": "running",
+        "delivery": "centrally_recorded",
+        "assurance": "none",
+        "wait_reason": null,
+        "step": "draft-findings",
+        "started_at": "2026-09-25T15:05:00Z",
+        "elapsed_s": null,
+        "last_contact_at": "2026-09-25T15:11:40Z",
+        "last_contact_source": "checkpoint",
+        "last_progress_at": "2026-09-25T15:11:40Z",
+        "last_progress_basis": "self_report",
+        "freshness": "stale",
+        "latest_evidence": "Last self-report: findings draft 1 of 3",
+        "next_owner": "claude-code",
+        "next_action": "Finish the findings draft",
+        "trace_id": "b37dbc39c98fc6bf03eab319912f8dc1"
+      },
+      {
+        "attempt_id": "att-capture-014-1",
+        "assignment_id": "asg-capture-014",
+        "work_ref": "build_queue:CAPTURE-014",
+        "title": "Standalone capture connector",
+        "agent": "claude-code",
+        "adapter_kind": "real",
+        "manual": true,
+        "execution": "finished",
+        "delivery": "centrally_recorded",
+        "assurance": "builder_verified",
+        "wait_reason": null,
+        "step": null,
+        "started_at": "2026-09-25T14:52:00Z",
+        "elapsed_s": 2344,
+        "last_contact_at": "2026-09-25T15:31:04Z",
+        "last_contact_source": "checkpoint",
+        "last_progress_at": "2026-09-25T15:31:04Z",
+        "last_progress_basis": "observation",
+        "freshness": "current",
+        "latest_evidence": "Diff and local check results available",
+        "next_owner": "codex",
+        "next_action": "Independent review",
+        "trace_id": "402392ea1970303a9682f863c6cefc13"
+      }
+    ],
+    "completed_recent": [
+      {
+        "attempt_id": "att-export-009-1",
+        "assignment_id": "asg-export-009",
+        "work_ref": "build_queue:EXPORT-009",
+        "title": "Source export validation",
+        "agent": "codex",
+        "execution": "finished",
+        "finished_at": "2026-09-25T14:48:00Z",
+        "assurance": "accepted",
+        "accepted": {
+          "by": "robert",
+          "at": "2026-09-25T15:05:00Z",
+          "authority": "owner",
+          "disposition_id": "disp-0091"
+        },
+        "released": null,
+        "note": "Release not requested"
+      }
+    ]
+  },
+  "attention": {
+    "status": "known",
+    "observed_at": "2026-09-25T15:42:00Z",
+    "observer": "ops-monitor",
+    "exceptions": [
+      {
+        "id": "exc-monitor-stale",
+        "category": "monitor_stale",
+        "title": "The monitor has not reported for 30 minutes",
+        "summary": "Contact and progress below were last observed at 10:12 CT and are not current. Lost contact is not proof that work stopped.",
+        "impact": "Work state is not current",
+        "state": "open",
+        "first_observed_at": "2026-09-25T15:14:04Z",
+        "last_observed_at": "2026-09-25T15:42:00Z",
+        "detected_by": "Records service freshness check (receiving clock)",
+        "recovery_owner": "master-craftsman",
+        "next_action": "Check whether the monitor process is running",
+        "target": null
+      }
+    ],
+    "decisions": [
+      {
+        "id": "dec-req-32",
+        "kind": "owner_question",
+        "title": "Accept partial coverage for the synthetic export?",
+        "summary": "Codex asks whether to proceed with the excerpt, which is missing the first three turns and diagram.png.",
+        "since": "2026-09-25T15:10:00Z",
+        "next_owner": "robert",
+        "next_action": "Answer in the session inbox",
+        "target": {
+          "view": "collaborate",
+          "ref": "ses-handoff-review"
+        }
+      }
+    ]
+  },
+  "health": {
+    "central_records": {
+      "status": "available",
+      "detail": "Records service answered",
+      "observed_at": "2026-09-25T15:42:00Z",
+      "source": "records-service"
+    },
+    "local_workshop": {
+      "status": "stale",
+      "detail": "Last contact by heartbeat at 10:11 CT",
+      "observed_at": "2026-09-25T15:11:50Z",
+      "source": "heartbeat"
+    },
+    "diagnostics": {
+      "status": "unknown",
+      "detail": "Exporter counters not reported since the monitor stopped",
+      "observed_at": null,
+      "source": null
+    }
+  }
+}

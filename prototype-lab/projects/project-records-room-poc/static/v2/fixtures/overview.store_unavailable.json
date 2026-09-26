@@ -1,0 +1,37 @@
+{
+  "schema": "minimoi.work.overview/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "roster": {
+    "status": "unavailable",
+    "code": "store_unavailable",
+    "observed_at": "2026-09-25T15:42:00Z",
+    "detail": "The work store could not be read (database locked or unreadable)."
+  },
+  "attention": {
+    "status": "unknown",
+    "reason": "store_unavailable",
+    "observed_at": "2026-09-25T15:42:00Z",
+    "detail": "Open exceptions and decisions are kept in the work store, which could not be read."
+  },
+  "health": {
+    "central_records": {
+      "status": "unavailable",
+      "detail": "Store read failed",
+      "observed_at": "2026-09-25T15:42:00Z",
+      "source": "records-service"
+    },
+    "local_workshop": {
+      "status": "unknown",
+      "detail": "Contact is recorded in the store, which could not be read",
+      "observed_at": null,
+      "source": null
+    },
+    "diagnostics": {
+      "status": "unknown",
+      "detail": "No observation available",
+      "observed_at": null,
+      "source": null
+    }
+  }
+}

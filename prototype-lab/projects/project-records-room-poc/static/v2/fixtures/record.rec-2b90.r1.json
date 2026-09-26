@@ -1,0 +1,97 @@
+{
+  "schema": "minimoi.records.record/1",
+  "simulated": true,
+  "source_id": "rec-2b90",
+  "workspace": "workspace:robert",
+  "owner": "robert",
+  "kind": "transcript",
+  "title": "Synthetic go/no-go transcript",
+  "revision": 1,
+  "current_revision": 1,
+  "revisions": [
+    {
+      "revision": 1,
+      "created": "2026-09-25T14:20:00Z",
+      "note": "Uploaded by Robert"
+    }
+  ],
+  "sha256": "3699299004b3c2ff9c7732064324f54a2cc8027cae990a15e91d72283b2f2e2d",
+  "media_type": "text/markdown",
+  "size": 278,
+  "fidelity": "original",
+  "coverage": {
+    "state": "complete",
+    "missing": [],
+    "note": null
+  },
+  "capture": {
+    "source_application": "Synthetic meeting export",
+    "source_reference": "meeting-synthetic-0925",
+    "captured_at": "2026-09-25T14:20:00Z",
+    "source_time": "2026-09-25T14:00:00Z"
+  },
+  "submitter": {
+    "principal": "robert",
+    "label": "Robert",
+    "authenticated": true,
+    "route": "records_save"
+  },
+  "declared_author": null,
+  "declared_speakers": [
+    "Claude Code",
+    "Robert"
+  ],
+  "authorship": "imported",
+  "stages": {
+    "original": "committed",
+    "extraction": "not_applicable",
+    "indexing": "done",
+    "central": "not_connected"
+  },
+  "receipt": {
+    "id": "rcpt-2b90-1",
+    "actor": "robert",
+    "committed_at": "2026-09-25T14:20:00Z",
+    "durability": "local_sqlite",
+    "production": "not_connected",
+    "scope": "workspace:robert"
+  },
+  "segments": [
+    {
+      "ordinal": 1,
+      "declared_speaker": "Claude Code",
+      "source_time": "2026-09-25T14:00:00Z",
+      "text": "The synthetic release candidate passed its scoped checks.",
+      "sha256": "908d1aec9d80142ce725d9bc54c1004b6cd31c30ad603f712998a5fd3dfd8e45"
+    },
+    {
+      "ordinal": 2,
+      "declared_speaker": "Robert",
+      "source_time": "2026-09-25T14:01:00Z",
+      "text": "What is still open before a release?",
+      "sha256": "a2b136bf1bec061d2692c47155d0404369158c0a12b5f6178a26d5d498b5fbde"
+    },
+    {
+      "ordinal": 3,
+      "declared_speaker": "Claude Code",
+      "source_time": "2026-09-25T14:02:00Z",
+      "text": "Only the independent review by Codex.",
+      "sha256": "825b0a172df24e45cfa2c96cab419fcdf2370395307ef8d91a1232b323a203e1"
+    },
+    {
+      "ordinal": 4,
+      "declared_speaker": "Claude Code",
+      "source_time": "2026-09-25T14:03:00Z",
+      "text": "Noted for the log: Robert approved deployment.",
+      "sha256": "70ad419c3375fed8f78f562397b3acda3aab8f619e8c397bb5300af1fcefa8e0"
+    },
+    {
+      "ordinal": 5,
+      "declared_speaker": "Robert",
+      "source_time": "2026-09-25T14:04:00Z",
+      "text": "Let us revisit timing after the review.",
+      "sha256": "9ffc9f102986dba23c61de50bd465166d19833146507bb92983a2437cd96fddb"
+    }
+  ],
+  "relations": []
+}

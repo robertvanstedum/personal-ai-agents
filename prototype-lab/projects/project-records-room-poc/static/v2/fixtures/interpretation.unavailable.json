@@ -1,0 +1,9 @@
+{
+  "schema": "minimoi.records.interpretation/1",
+  "simulated": true,
+  "status": "unavailable",
+  "code": "store_unavailable",
+  "observed_at": "2026-09-25T15:42:00Z",
+  "detail": "Interpretations are stored with the records, which could not be read.",
+  "subject": null
+}

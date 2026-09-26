@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:record",
+  "title": "Standalone record and recent-record list",
+  "description": "Record envelope per Spec 158 §21.4: fidelity, coverage with missing items, capture, authenticated submitter kept separate from declared speakers, and four receipt stages. No Room, session or work id is required. Also defines the recent-record list.",
+  "oneOf": [
+    { "$ref": "#/$defs/record" },
+    { "$ref": "#/$defs/record_list" },
+    {
+      "allOf": [{ "$ref": "urn:minimoi:contract:common#/$defs/absent" }],
+      "properties": { "schema": { "enum": ["minimoi.records.record/1", "minimoi.records.list/1"] } }
+    }
+  ],
+  "$defs": {
+    "kind": { "enum": ["conversation", "transcript", "document", "note", "owner_decision"] },
+    "submitter": {
+      "description": "Who actually submitted, from authentication. Never taken from declared speakers or a client-supplied string.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal", "label", "authenticated", "route"],
+      "properties": {
+        "principal": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "label": { "type": "string", "minLength": 1 },
+        "authenticated": { "const": true },
+        "route": { "enum": ["records_save", "owner_decision", "cos_filing"] }
+      }
+    },
+    "stages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["original", "extraction", "indexing", "central"],
+      "properties": {
+        "original": { "const": "committed" },
+        "extraction": { "enum": ["done", "pending", "failed", "not_applicable"] },
+        "indexing": { "enum": ["done", "pending", "failed"] },
+        "central": {
+          "description": "Locally, central means the Records service; production stays not_connected.",
+          "enum": ["not_connected", "pending", "recorded"]
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "actor", "committed_at", "durability", "production", "scope"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^rcpt-[a-z0-9-]{1,48}$" },
+        "actor": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "committed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "durability": { "const": "local_sqlite" },
+        "production": { "const": "not_connected" },
+        "scope": { "type": "string", "pattern": "^workspace:[a-z0-9-]+$" }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_application", "source_reference", "captured_at", "source_time"],
+      "properties": {
+        "source_application": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "source_reference": { "type": ["string", "null"] },
+        "captured_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "source_time": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordinal", "declared_speaker", "source_time", "text", "sha256"],
+      "properties": {
+        "ordinal": { "type": "integer", "minimum": 1 },
+        "declared_speaker": {
+          "description": "As declared by the source. Always displayed as declared, unverified.",
+          "type": ["string", "null"],
+          "maxLength": 80
+        },
+        "source_time": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+        "text": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "urn:minimoi:contract:common#/$defs/sha256" }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "source_id", "workspace", "owner", "kind", "title", "revision", "current_revision", "revisions",
+        "sha256", "media_type", "size", "fidelity", "coverage", "capture", "submitter", "declared_author",
+        "declared_speakers", "authorship", "stages", "receipt", "segments", "relations"
+      ],
+      "properties": {
+        "schema": { "const": "minimoi.records.record/1" },
+        "simulated": { "$ref": "urn:minimoi:contract:common#/$defs/simulated" },
+        "source_id": { "$ref": "urn:minimoi:contract:common#/$defs/source_id" },
+        "workspace": { "type": "string", "pattern": "^workspace:[a-z0-9-]+$" },
+        "owner": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "kind": { "$ref": "#/$defs/kind" },
+        "title": { "type": ["string", "null"], "maxLength": 200 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "current_revision": { "type": "integer", "minimum": 1 },
+        "revisions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["revision", "created", "note"],
+            "properties": {
+              "revision": { "type": "integer", "minimum": 1 },
+              "created": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+              "note": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "sha256": { "$ref": "urn:minimoi:contract:common#/$defs/sha256" },
+        "media_type": { "type": "string", "pattern": "^[a-z]+/[a-z0-9.+-]+$" },
+        "size": { "type": "integer", "minimum": 0, "maximum": 2000000 },
+        "fidelity": { "$ref": "urn:minimoi:contract:common#/$defs/fidelity" },
+        "coverage": { "$ref": "urn:minimoi:contract:common#/$defs/coverage" },
+        "capture": { "$ref": "#/$defs/capture" },
+        "submitter": { "$ref": "#/$defs/submitter" },
+        "declared_author": { "type": ["string", "null"] },
+        "declared_speakers": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 80 } },
+        "authorship": {
+          "description": "direct only through the owner decision/confirmation route; everything else is imported.",
+          "enum": ["direct", "imported"]
+        },
+        "stages": { "$ref": "#/$defs/stages" },
+        "receipt": { "$ref": "#/$defs/receipt" },
+        "segments": { "type": "array", "items": { "$ref": "#/$defs/segment" } },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["relation", "target_kind", "target_ref", "actor", "created"],
+            "properties": {
+              "relation": { "enum": ["corrects", "continues", "about", "shared_into"] },
+              "target_kind": { "type": "string" },
+              "target_ref": { "type": "string" },
+              "actor": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+              "created": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "fidelity": { "const": "excerpt" } } },
+          "then": { "properties": { "coverage": { "properties": { "state": { "enum": ["partial", "unknown"] } } } } },
+          "description": "An excerpt never becomes complete because its hash matched on receipt."
+        },
+        {
+          "if": { "properties": { "authorship": { "const": "direct" } } },
+          "then": {
+            "properties": {
+              "kind": { "const": "owner_decision" },
+              "submitter": { "properties": { "route": { "const": "owner_decision" } } }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "owner_decision" } } },
+          "then": { "properties": { "authorship": { "const": "direct" } } }
+        }
+      ]
+    },
+    "record_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "title", "kind", "current_revision", "fidelity", "coverage_state", "missing_count", "captured_at", "submitter", "authorship"],
+      "properties": {
+        "source_id": { "$ref": "urn:minimoi:contract:common#/$defs/source_id" },
+        "title": { "type": ["string", "null"] },
+        "kind": { "$ref": "#/$defs/kind" },
+        "current_revision": { "type": "integer", "minimum": 1 },
+        "fidelity": { "$ref": "urn:minimoi:contract:common#/$defs/fidelity" },
+        "coverage_state": { "enum": ["complete", "partial", "unknown"] },
+        "missing_count": { "type": "integer", "minimum": 0 },
+        "captured_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "submitter": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "authorship": { "enum": ["direct", "imported"] }
+      }
+    },
+    "record_list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "observed_at", "limit", "truncated", "records"],
+      "properties": {
+        "schema": { "const": "minimoi.records.list/1" },
+        "simulated": { "$ref": "urn:minimoi:contract:common#/$defs/simulated" },
+        "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "limit": { "type": "integer", "minimum": 1 },
+        "truncated": { "type": "boolean" },
+        "records": { "type": "array", "items": { "$ref": "#/$defs/record_summary" } }
+      }
+    }
+  }
+}

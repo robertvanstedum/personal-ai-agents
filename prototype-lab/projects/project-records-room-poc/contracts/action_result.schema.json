@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:action_result",
+  "title": "Result of a UI action",
+  "description": "Returned by act(action) and saveRecord(draft). In the preview every result is simulated and changes nothing outside the page.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "action", "outcome", "message", "at", "effects", "state_changes", "record"],
+  "properties": {
+    "schema": { "const": "minimoi.ui.action_result/1" },
+    "simulated": { "$ref": "urn:minimoi:contract:common#/$defs/simulated" },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "target"],
+      "properties": {
+        "type": { "enum": ["check_saved_result", "pause_recovery", "save_record", "share_selected_context", "answer_request"] },
+        "target": { "type": "string", "minLength": 1 }
+      }
+    },
+    "outcome": { "enum": ["receipt_found", "no_receipt", "paused", "saved", "not_saved", "shared", "answered", "refused"] },
+    "message": { "type": "string", "minLength": 1 },
+    "at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+    "effects": { "type": "string", "minLength": 1 },
+    "state_changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "field", "from", "to"],
+        "properties": {
+          "target": { "type": "string" },
+          "field": { "type": "string" },
+          "from": { "type": ["string", "null"] },
+          "to": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "record": {
+      "description": "Present for a completed save: the stored record's identity, receipt stages and submitter kept apart from declared speakers.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_id", "revision", "sha256", "title", "fidelity", "coverage", "stages", "receipt", "submitter", "declared_speakers"],
+          "properties": {
+            "source_id": { "$ref": "urn:minimoi:contract:common#/$defs/source_id" },
+            "revision": { "type": "integer", "minimum": 1 },
+            "sha256": { "$ref": "urn:minimoi:contract:common#/$defs/sha256" },
+            "title": { "type": ["string", "null"] },
+            "fidelity": { "$ref": "urn:minimoi:contract:common#/$defs/fidelity" },
+            "coverage": { "$ref": "urn:minimoi:contract:common#/$defs/coverage" },
+            "stages": { "$ref": "urn:minimoi:contract:record#/$defs/stages" },
+            "receipt": { "$ref": "urn:minimoi:contract:record#/$defs/receipt" },
+            "submitter": { "$ref": "urn:minimoi:contract:record#/$defs/submitter" },
+            "declared_speakers": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        { "type": "null" }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "saved" } } },
+      "then": { "properties": { "record": { "type": "object" }, "action": { "properties": { "type": { "const": "save_record" } } } } },
+      "else": { "properties": { "record": { "type": "null" } } }
+    }
+  ]
+}

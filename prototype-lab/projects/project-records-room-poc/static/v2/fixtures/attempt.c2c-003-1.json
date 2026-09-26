@@ -1,0 +1,184 @@
+{
+  "schema": "minimoi.work.attempt/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "principals": [
+    {
+      "id": "robert",
+      "label": "Robert",
+      "kind": "person"
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "kind": "agent"
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "kind": "agent"
+    },
+    {
+      "id": "workshop",
+      "label": "Workshop (mac-workshop-1)",
+      "kind": "agent"
+    },
+    {
+      "id": "master-craftsman",
+      "label": "Master Craftsman",
+      "kind": "agent"
+    },
+    {
+      "id": "ops-monitor",
+      "label": "Operations monitor",
+      "kind": "service"
+    }
+  ],
+  "attempt": {
+    "attempt_id": "att-c2c-003-1",
+    "assignment_id": "asg-c2c-003",
+    "number": 1,
+    "previous_attempt": null,
+    "runtime": {
+      "client": "claude-code",
+      "runtime": "claude-code-cli",
+      "version": "fixture-1.0",
+      "adapter": "manual",
+      "adapter_kind": "real",
+      "manual": true
+    },
+    "host": "mac-workshop-1",
+    "environment": "local-proof",
+    "repo": null,
+    "fence": 1,
+    "execution": "running",
+    "delivery": "centrally_recorded",
+    "wait_reason": null,
+    "step": "draft-findings",
+    "started_at": "2026-09-25T15:05:00Z",
+    "ended_at": null,
+    "last_contact_at": "2026-09-25T15:41:40Z",
+    "last_contact_source": "checkpoint",
+    "last_progress_at": "2026-09-25T15:41:40Z",
+    "freshness": "current",
+    "trace_id": "b37dbc39c98fc6bf03eab319912f8dc1"
+  },
+  "assignment": {
+    "assignment_id": "asg-c2c-003",
+    "title": "Synthetic Concept to Cash review",
+    "summary": "Review the extracted synthetic checklist and list gaps with citations.",
+    "work_ref": {
+      "kind": "record",
+      "ref": "rec-3e77@1"
+    },
+    "spec_revision": "Spec 158 v0.7 §21.5 (proposed)",
+    "acceptance_boundary": "Findings cite exact segments; gaps in the extraction are named, not guessed.",
+    "requester": "robert",
+    "builder": "claude-code",
+    "reviewer": "codex",
+    "mandate": {
+      "operations": [
+        "record_read",
+        "work_report"
+      ],
+      "host": "mac-workshop-1",
+      "expires_at": "2026-09-26T03:00:00Z",
+      "retry_limit": 2,
+      "quiet_period_s": 600,
+      "stale_after_s": 120,
+      "offline_allowed": false
+    }
+  },
+  "assurance": {
+    "produced": {
+      "state": "not_yet",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Not yet"
+    },
+    "builder_verified": {
+      "state": "not_yet",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Not yet"
+    },
+    "independently_reviewed": {
+      "state": "not_yet",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Not yet"
+    },
+    "accepted": {
+      "state": "not_yet",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Not yet"
+    },
+    "released": {
+      "state": "not_requested",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Release not requested"
+    }
+  },
+  "timeline": [
+    {
+      "seq": 1,
+      "kind": "checkpoint",
+      "basis": "observation",
+      "title": "Assignment claimed",
+      "detail": "Authenticated claim receipt · fence 1",
+      "actor": "claude-code",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T15:05:00Z",
+      "received_at": "2026-09-25T15:05:01Z",
+      "operation_id": null,
+      "evidence_refs": []
+    },
+    {
+      "seq": 2,
+      "kind": "self_report",
+      "basis": "self_report",
+      "title": "Reported: source read",
+      "detail": "Self-report from the agent",
+      "actor": "claude-code",
+      "step": "read-source",
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T15:14:18Z",
+      "received_at": "2026-09-25T15:14:20Z",
+      "operation_id": null,
+      "evidence_refs": []
+    },
+    {
+      "seq": 3,
+      "kind": "self_report",
+      "basis": "self_report",
+      "title": "Reported: findings draft 2 of 3",
+      "detail": "Self-report from the agent · not verified",
+      "actor": "claude-code",
+      "step": "draft-findings",
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T15:41:38Z",
+      "received_at": "2026-09-25T15:41:40Z",
+      "operation_id": null,
+      "evidence_refs": []
+    }
+  ],
+  "evidence": [],
+  "next_owner": {
+    "principal": "claude-code",
+    "action": "Finish the findings draft"
+  },
+  "diagnostics": {
+    "console_connected": false,
+    "trace_id": "b37dbc39c98fc6bf03eab319912f8dc1",
+    "note": "The diagnostics console is a separate local window (A2). It is not connected in this preview."
+  },
+  "recovery": null
+}

@@ -1,0 +1,82 @@
+{
+  "schema": "minimoi.records.record/1",
+  "simulated": true,
+  "source_id": "rec-3e77",
+  "workspace": "workspace:robert",
+  "owner": "robert",
+  "kind": "document",
+  "title": "Extracted text: synthetic source export checklist",
+  "revision": 1,
+  "current_revision": 1,
+  "revisions": [
+    {
+      "revision": 1,
+      "created": "2026-09-25T13:30:00Z",
+      "note": "Text extracted from a synthetic PDF"
+    }
+  ],
+  "sha256": "9c7ceb0b74a75cd18873aa487fda33e0e0062d924a29826b2846ae15b3ebacd8",
+  "media_type": "application/pdf",
+  "size": 146,
+  "fidelity": "extraction",
+  "coverage": {
+    "state": "partial",
+    "missing": [
+      "attachment: table-2.png (image not extracted)"
+    ],
+    "note": null
+  },
+  "capture": {
+    "source_application": "PDF text extraction",
+    "source_reference": "synthetic-checklist.pdf",
+    "captured_at": "2026-09-25T13:30:00Z",
+    "source_time": null
+  },
+  "submitter": {
+    "principal": "robert",
+    "label": "Robert",
+    "authenticated": true,
+    "route": "records_save"
+  },
+  "declared_author": null,
+  "declared_speakers": [],
+  "authorship": "imported",
+  "stages": {
+    "original": "committed",
+    "extraction": "done",
+    "indexing": "done",
+    "central": "not_connected"
+  },
+  "receipt": {
+    "id": "rcpt-3e77-1",
+    "actor": "robert",
+    "committed_at": "2026-09-25T13:30:00Z",
+    "durability": "local_sqlite",
+    "production": "not_connected",
+    "scope": "workspace:robert"
+  },
+  "segments": [
+    {
+      "ordinal": 1,
+      "declared_speaker": null,
+      "source_time": null,
+      "text": "1. Every exported turn keeps its declared speaker.",
+      "sha256": "705c30610c5eae50ee2931ee7fc8cfe79a6f1abe653c367d34fb1d4f16a705f2"
+    },
+    {
+      "ordinal": 2,
+      "declared_speaker": null,
+      "source_time": null,
+      "text": "2. Omitted turns are listed, never filled in.",
+      "sha256": "5e9a2c8aff11e4f728dd99fa5e09e2820fd98e9620e653dfe4e650bcb703168c"
+    },
+    {
+      "ordinal": 3,
+      "declared_speaker": null,
+      "source_time": null,
+      "text": "3. Attachments are referenced by name and hash.",
+      "sha256": "85ce97294942418ae2c4352048239c5002aeae5a250c2bd32a04acb1d0257af0"
+    }
+  ],
+  "relations": []
+}

@@ -1,0 +1,69 @@
+{
+  "schema": "minimoi.records.list/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "limit": 50,
+  "truncated": false,
+  "records": [
+    {
+      "source_id": "rec-7f1c",
+      "title": "Synthetic review exchange",
+      "kind": "conversation",
+      "current_revision": 2,
+      "fidelity": "excerpt",
+      "coverage_state": "partial",
+      "missing_count": 2,
+      "captured_at": "2026-09-25T15:02:00Z",
+      "submitter": "robert",
+      "authorship": "imported"
+    },
+    {
+      "source_id": "rec-5d31",
+      "title": "Owner decision: recovery stays inside Work detail",
+      "kind": "owner_decision",
+      "current_revision": 1,
+      "fidelity": "original",
+      "coverage_state": "complete",
+      "missing_count": 0,
+      "captured_at": "2026-09-25T14:58:00Z",
+      "submitter": "robert",
+      "authorship": "direct"
+    },
+    {
+      "source_id": "rec-2b90",
+      "title": "Synthetic go/no-go transcript",
+      "kind": "transcript",
+      "current_revision": 1,
+      "fidelity": "original",
+      "coverage_state": "complete",
+      "missing_count": 0,
+      "captured_at": "2026-09-25T14:20:00Z",
+      "submitter": "robert",
+      "authorship": "imported"
+    },
+    {
+      "source_id": "rec-9a04",
+      "title": "Reconstructed summary: planning call",
+      "kind": "conversation",
+      "current_revision": 1,
+      "fidelity": "reconstruction",
+      "coverage_state": "partial",
+      "missing_count": 2,
+      "captured_at": "2026-09-25T13:50:00Z",
+      "submitter": "robert",
+      "authorship": "imported"
+    },
+    {
+      "source_id": "rec-3e77",
+      "title": "Extracted text: synthetic source export checklist",
+      "kind": "document",
+      "current_revision": 1,
+      "fidelity": "extraction",
+      "coverage_state": "partial",
+      "missing_count": 1,
+      "captured_at": "2026-09-25T13:30:00Z",
+      "submitter": "robert",
+      "authorship": "imported"
+    }
+  ]
+}

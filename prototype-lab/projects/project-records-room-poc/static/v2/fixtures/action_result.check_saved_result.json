@@ -1,0 +1,33 @@
+{
+  "schema": "minimoi.ui.action_result/1",
+  "simulated": true,
+  "action": {
+    "type": "check_saved_result",
+    "target": "att-room-021-2"
+  },
+  "outcome": "receipt_found",
+  "message": "Receipt found · simulated. The central save committed at 10:28 CT and its payload hash matches the local evidence. Closure still needs a verified result.",
+  "at": "2026-09-25T15:43:00Z",
+  "effects": "None. Preview only: nothing outside this page changed.",
+  "state_changes": [
+    {
+      "target": "att-room-021-2",
+      "field": "execution",
+      "from": "outcome_uncertain",
+      "to": "finished"
+    },
+    {
+      "target": "att-room-021-2",
+      "field": "delivery",
+      "from": "central_ack_pending",
+      "to": "centrally_recorded"
+    },
+    {
+      "target": "exc-room-021-2",
+      "field": "receipt_check",
+      "from": "not_checked",
+      "to": "receipt_found"
+    }
+  ],
+  "record": null
+}

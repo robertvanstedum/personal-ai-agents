@@ -1,0 +1,87 @@
+{
+  "schema": "minimoi.rooms.session_view/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "principals": [
+    {
+      "id": "robert",
+      "label": "Robert",
+      "kind": "person"
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "kind": "agent"
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "kind": "agent"
+    },
+    {
+      "id": "workshop",
+      "label": "Workshop (mac-workshop-1)",
+      "kind": "agent"
+    },
+    {
+      "id": "master-craftsman",
+      "label": "Master Craftsman",
+      "kind": "agent"
+    },
+    {
+      "id": "cos",
+      "label": "Robert's CoS",
+      "kind": "agent"
+    }
+  ],
+  "session": {
+    "id": "ses-handoff-review",
+    "room": {
+      "id": "room-workshop",
+      "title": "Workshop"
+    },
+    "title": "New session",
+    "purpose": null,
+    "state": "recording",
+    "created": "2026-09-25T15:40:00Z"
+  },
+  "viewer": "robert",
+  "participants": [
+    {
+      "principal": "robert",
+      "membership": {
+        "role": "owner",
+        "since": "2026-09-25T15:40:00Z"
+      },
+      "contact": {
+        "state": "joined",
+        "receipt_id": "join-robert-02",
+        "at": "2026-09-25T15:40:05Z",
+        "note": null
+      },
+      "working": {
+        "state": "not_working",
+        "attempt_id": null,
+        "observed_at": null,
+        "source": null,
+        "freshness": null,
+        "wait_reason": null,
+        "note": null
+      }
+    }
+  ],
+  "standing_visibility": [
+    {
+      "principal": "cos",
+      "role": "cos_knowledge",
+      "membership": false,
+      "note": "Standing read of Robert-visible records. This is not membership: CoS is not a participant here, is not shown as present, and cannot post."
+    }
+  ],
+  "selected_context": [],
+  "requests": [],
+  "inbox": {
+    "viewer": "robert",
+    "for_you": []
+  }
+}

@@ -1,0 +1,245 @@
+{
+  "schema": "minimoi.work.attempt/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "principals": [
+    {
+      "id": "robert",
+      "label": "Robert",
+      "kind": "person"
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "kind": "agent"
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "kind": "agent"
+    },
+    {
+      "id": "workshop",
+      "label": "Workshop (mac-workshop-1)",
+      "kind": "agent"
+    },
+    {
+      "id": "master-craftsman",
+      "label": "Master Craftsman",
+      "kind": "agent"
+    },
+    {
+      "id": "ops-monitor",
+      "label": "Operations monitor",
+      "kind": "service"
+    }
+  ],
+  "attempt": {
+    "attempt_id": "att-capture-014-1",
+    "assignment_id": "asg-capture-014",
+    "number": 1,
+    "previous_attempt": null,
+    "runtime": {
+      "client": "claude-code",
+      "runtime": "claude-code-cli",
+      "version": "fixture-1.0",
+      "adapter": "manual",
+      "adapter_kind": "real",
+      "manual": true
+    },
+    "host": "mac-workshop-1",
+    "environment": "local-proof",
+    "repo": {
+      "repository": "personal-ai-agents",
+      "worktree": "rooms-build",
+      "base_rev": "0df6a4b",
+      "dirty_patch_sha256": null
+    },
+    "fence": 1,
+    "execution": "finished",
+    "delivery": "centrally_recorded",
+    "wait_reason": null,
+    "step": null,
+    "started_at": "2026-09-25T14:52:00Z",
+    "ended_at": "2026-09-25T15:31:04Z",
+    "last_contact_at": "2026-09-25T15:31:04Z",
+    "last_contact_source": "checkpoint",
+    "last_progress_at": "2026-09-25T15:31:04Z",
+    "freshness": "current",
+    "trace_id": "402392ea1970303a9682f863c6cefc13"
+  },
+  "assignment": {
+    "assignment_id": "asg-capture-014",
+    "title": "Standalone capture connector",
+    "summary": "Save a supplied conversation and retrieve it without creating a Room.",
+    "work_ref": {
+      "kind": "build_queue",
+      "ref": "CAPTURE-014"
+    },
+    "spec_revision": "Spec 158 v0.7 §21.4 (proposed) · plan rev 2",
+    "acceptance_boundary": "Save, read, repeated request and partial coverage behave as specified; no Room or session row is created.",
+    "requester": "robert",
+    "builder": "claude-code",
+    "reviewer": "codex",
+    "mandate": {
+      "operations": [
+        "record_save",
+        "record_read",
+        "work_report"
+      ],
+      "host": "mac-workshop-1",
+      "expires_at": "2026-09-26T03:00:00Z",
+      "retry_limit": 2,
+      "quiet_period_s": 600,
+      "stale_after_s": 120,
+      "offline_allowed": false
+    }
+  },
+  "assurance": {
+    "produced": {
+      "state": "done",
+      "by": "claude-code",
+      "at": "2026-09-25T15:24:30Z",
+      "evidence_ref": "ev-diff-014",
+      "note": "Diff preserved",
+      "authority": "builder"
+    },
+    "builder_verified": {
+      "state": "done",
+      "by": "claude-code",
+      "at": "2026-09-25T15:29:10Z",
+      "evidence_ref": "ev-test-014",
+      "note": "Local checks attached",
+      "authority": "builder"
+    },
+    "independently_reviewed": {
+      "state": "not_yet",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Waiting for Codex (configured, not running)"
+    },
+    "accepted": {
+      "state": "not_yet",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Not requested until review is recorded"
+    },
+    "released": {
+      "state": "not_requested",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Release not requested"
+    }
+  },
+  "timeline": [
+    {
+      "seq": 1,
+      "kind": "checkpoint",
+      "basis": "observation",
+      "title": "Assignment claimed",
+      "detail": "Authenticated claim receipt · fence 1",
+      "actor": "claude-code",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T14:52:00Z",
+      "received_at": "2026-09-25T14:52:01Z",
+      "operation_id": null,
+      "evidence_refs": []
+    },
+    {
+      "seq": 2,
+      "kind": "effect_observed",
+      "basis": "observation",
+      "title": "Source saved without a session",
+      "detail": "Record and payload hash match",
+      "actor": "claude-code",
+      "step": "save-proof",
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T15:06:11Z",
+      "received_at": "2026-09-25T15:06:12Z",
+      "operation_id": null,
+      "evidence_refs": []
+    },
+    {
+      "seq": 3,
+      "kind": "heartbeat",
+      "basis": "observation",
+      "title": "Heartbeat",
+      "detail": "Contact only, not progress",
+      "actor": "claude-code",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T15:20:00Z",
+      "received_at": "2026-09-25T15:20:00Z",
+      "operation_id": null,
+      "evidence_refs": []
+    },
+    {
+      "seq": 4,
+      "kind": "result",
+      "basis": "observation",
+      "title": "Local acceptance checks passed",
+      "detail": "Test evidence: four scoped behaviours",
+      "actor": "claude-code",
+      "step": "local-checks",
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T15:29:08Z",
+      "received_at": "2026-09-25T15:29:10Z",
+      "operation_id": null,
+      "evidence_refs": [
+        "ev-test-014"
+      ]
+    },
+    {
+      "seq": 5,
+      "kind": "self_report",
+      "basis": "self_report",
+      "title": "Builder reported the candidate complete",
+      "detail": "Self-report · independent review pending · not verification",
+      "actor": "claude-code",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T15:31:02Z",
+      "received_at": "2026-09-25T15:31:04Z",
+      "operation_id": null,
+      "evidence_refs": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev-diff-014",
+      "kind": "diff",
+      "sha256": "57f9013cf80c0ec103d171e4458b15324383ace89acd8b8c046244083df28efc",
+      "command": null,
+      "result": null,
+      "reviewed_revision": null,
+      "location": "Candidate diff against base 0df6a4b (fixture)",
+      "source": "builder upload",
+      "created": "2026-09-25T15:24:30Z"
+    },
+    {
+      "id": "ev-test-014",
+      "kind": "test",
+      "sha256": null,
+      "command": "python -m pytest -q tests/test_sources.py",
+      "result": "4 passed (synthetic)",
+      "reviewed_revision": null,
+      "location": null,
+      "source": "builder run, observed by the Workshop",
+      "created": "2026-09-25T15:29:10Z"
+    }
+  ],
+  "next_owner": {
+    "principal": "codex",
+    "action": "Inspect the diff and rerun the scoped checks"
+  },
+  "diagnostics": {
+    "console_connected": false,
+    "trace_id": "402392ea1970303a9682f863c6cefc13",
+    "note": "The diagnostics console is a separate local window (A2). It is not connected in this preview."
+  },
+  "recovery": null
+}
