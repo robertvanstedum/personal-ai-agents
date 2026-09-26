@@ -8,6 +8,8 @@
 **Delivery plan:** [Beta → v0.9 plan](https://minimoi.ai/guild/build/spec/rooms_beta_to_v09_delivery_plan_2026-09-21.md).
 **Provenance:** frozen source v0.6 SHA256 `72ba28dca8434d90fc4e56b40d6e0c39db3624a7afc0345e89e8985168b58677`. Review dispositions remain in §§16/18/20. This docs registration supersedes the candidate’s earlier pending-registration/adoption language; it preserves all technical requirements and Robert’s platform-first direction. Spec 157 remains the historical collaborator-access baseline; this self-contained spec adds the Rooms/CoS product and delivery contract.
 
+**Amendment v0.7 (proposed September 25, 2026; effective only on Robert's acceptance):** §21 adds standalone capture, local execution visibility and the September 25 build packages. For that scope it supersedes the implementation-lead assignment and the September 27 production target above, renames §12.1's slices S158-A0…S158-A3, and leaves §§1–20 otherwise in force. Every supersession is listed in §21.15.
+
 
 This is the single document needed for the next review. Version 0.6 retains Claude Code’s findings in §16, records the reconciled decisions in §17, dispositions Claude Chat’s findings in §18 and defines Robert’s platform-first direction in §19 and reconciles Grok’s final comments in §20. The room review has been acknowledged, so no repeat Claude Code review is pending. It incorporates the earlier UI draft, Claude Chat revision 2, Codex's factual corrections, and Robert's subsequent CoS direction. It supersedes the earlier UI draft as the working candidate; source reviews remain unchanged. It proposes additions/amendments to official Spec 157 rather than silently replacing that approved document. Creating this candidate does not change live access or deploy code.
 
@@ -350,6 +352,8 @@ Verified source baseline for this draft: records-live-cos HEAD 6410d44, correspo
 
 ### 12.1 Named initial release slices
 
+> **v0.7:** cite these slices as S158-A0…S158-A3; the §21 build packages A0–A5 and U are different work. The ownership and first-release statements below are superseded as delivery planning by §21.1 and §21.15; slice content is unchanged.
+
 The selected **first release is A0 + A1**, targeting this week with Robert and the current agents. It is accepted only when both named slices pass their applicable checks. Do not call A2/A3 delivered from an inventory, and do not claim the complete right-hand CoS experience from this release. Dates are targets, not evidence that the work fits a week: if A0 is larger than expected, report the release impact rather than substituting a Rooms-only login or weakening authorization.
 
 | Slice | Included and exit evidence | Ownership/dependency |
@@ -573,3 +577,284 @@ Source: `GROK_FINAL_CHECK_COLLABORATION_ROOMS_RECEIVED_2026-09-21.txt`, preserve
 | Optional styling/drafts | Retained restrained UI style and page-memory draft limitation; themes, presets and synchronized unread stay later. No new style review loop required. |
 
 Local reconciliation evidence: approved Spec 157 §§8 and cross-room transfer provisions already require freshness and separate source disclosure. `minimoi_portal/workspaces.py` contains navigation decisions mirroring tier/domain policy and points to route decorators as the security boundary. That source inspection establishes some existing permission logic, not a complete live grant service or proof that every route uses it. A0 must inspect the actual route/authentication path before extending it. No application, credential, runtime or official-spec mutation occurred during this document reconciliation.
+
+## 21. Amendment v0.7 — standalone capture, local execution visibility and the September 25 build
+
+**Status:** proposed September 25, 2026 by Claude Code under package A0. It takes effect only when Robert accepts it after Codex's review. Sources: the reviewed v0.2 candidate (`REVISED_SPEC_v0.2.md`, SHA-256 `5b1fd8d2…76a7`) as amended by the shared build handoff Revision 2 §3, and the A0 implementation review. Both live in `planning-studio/initiatives/INIT-2026-0006-working-room/review-packets/2026-09-25-design-revision-v02/`. The candidate, Claude Chat's and Grok's reviews and Codex's reconciliation remain unchanged there as evidence. A builder reads this section and the implementation plan it links, not those sources.
+
+### 21.1 Authority, ownership and relationship to this specification
+
+- **Roles.** Claude Code is the single implementer for the scope below. Codex independently validates the actual diffs and runs end-to-end tests. Robert accepts specification, plan, each reviewed diff and any release separately. For this scope, this supersedes "Implementation lead: Codex" in the header and §12.1, and the delivery plan's ownership line.
+- **Release target.** "Production v0.9 by September 27" was superseded by Guild Rev3 D5 (component releases, no Rooms production hosting this week). This amendment adds no production scope. Package A5 proposes release components separately.
+- **Naming.** §12.1's slices are cited as **S158-A0…S158-A3** from v0.7 onward. The build packages defined here are **A0–A5 and U** (§21.12). The two sets are different work.
+- **Earlier slices.** S158-A0 (MiniMoi login-linked permissions) is not a prerequisite for the local proofs U and A1–A4. Those use existing Records installation credentials behind the owner-gated development route. S158-A0 remains mandatory before any production Rooms route or any additional person, so A5 must either include it or exclude Rooms hosting. S158-A1, S158-A2 and S158-A3 are unchanged and scheduled separately. Standing read over the new standalone namespace (§21.5) does not implement S158-A2's session-wide role.
+- **What stays in force.** §§1–20 remain in force except where §21.15 states a supersession. §13 remains the product-wide catalog. §21.14 defines this amendment's acceptance IDs and maps overlaps. Spec 157 continues to govern identity, installation credentials, membership, transfer and receipts; its amendment of the same date records the typed non-room scopes used here.
+
+### 21.2 Outcomes
+
+Robert can preserve useful thinking from an ordinary conversation without opening a Room, return to the actual sources with CoS, bring people and agents together when helpful, and understand what happened to authorized work even when execution was interrupted.
+
+| Experience | Visible result |
+|---|---|
+| Save | One deliberate save, a receipt and honest coverage. No Room, project or classification is required |
+| Continue | Source-linked understanding, disagreements and owner decisions, with the original material one step away |
+| Collaborate | A persistent Room with separately authorized sessions, selected context and attributable contributions |
+| Operate | Current work, evidence, exceptions, next owner and recovery options |
+
+Rooms supports any discussion, not only builds. Saving creates no task, permission to act or launch. Robert decides how often to interact; no usage-frequency condition or demand proof gates collaboration.
+
+### 21.3 Canonical ownership
+
+| Material | Authority | Local build host |
+|---|---|---|
+| Standalone originals, revisions, provenance and capture receipts | Records | Records service, new additive namespace |
+| Existing room-native events and session membership | Existing Rooms ledger | Unchanged tables |
+| Work artifacts and approval/disposition | MiniMoi Work contract (closed eight effects) | Referenced by exact identity only. No new effect and no new field |
+| Assignments, attempts, checkpoints, evidence, exceptions | Guild work-run contract | Separate module and tables inside the Records service (one SQLite writer). Production host decided at A5 |
+| Interpretation | Derived Records item with cited source revisions and freshness. Never an approval authority | Records service |
+| Diagnostic spans, metrics and logs | Replaceable telemetry storage with short retention | Local lab (§21.10) |
+| Agent working memory and indexes | Rebuildable or portable supporting state; never the only evidence | Unchanged |
+
+One logical view may read several owners but never keeps an editable copy of their status. No SQLite file is opened directly by more than one service process; other processes use the authenticated HTTP API. Locally, "central" means the Records service. Receipts continue to say `production: not_connected`.
+
+### 21.4 Standalone capture
+
+**Operations.** CoS tools, HTTP clients, file intake and any later MCP facade call the same governed operations: save, read, search, relate and request interpretation. Provider SDKs never enter the Records core.
+
+**Record envelope.** Stable ID; owner and workspace; kind; immutable revision; bytes or managed attachment reference with SHA-256; media type; source application and reference; capture time; source time when known; coverage (complete or partial, with an explicit list of missing items such as attachments); fidelity; authenticated submitter; separately declared author or speakers; processing state; optional relations. No `room_id`, session or `work_id` is required.
+
+- **Fidelity** is one of `original`, `excerpt`, `extraction` or `reconstruction`.
+  - A model-reconstructed transcript is `reconstruction` and is always displayed as derived.
+  - An incomplete excerpt never becomes complete because its hash matches on receipt.
+  - An imported "Robert approved" remains a declared source claim.
+- **Receipt stages.** The receipt distinguishes four stages: original committed, extraction (done, pending, failed or not applicable), indexing, and central availability. Preservation precedes optional analysis; a failed extraction or interpretation never hides or rolls back the original.
+- **Idempotency.** The operation identity includes the authenticated actor, the operation and its typed destination scope. Access is authorized against the stored resource's scope, never against a client-supplied scope alone.
+  - The same operation ID with the same payload returns the recorded result.
+  - Changed content under the same ID is refused with a conflict.
+  - Identical content under a new ID is a deliberate new capture and is preserved.
+  - Overlapping snapshots are never merged or discarded on semantic similarity.
+- **Limits.** 2,000,000 bytes per revision, as today. Larger sources are refused with an explicit error; nothing is silently truncated.
+- **Corrections.** A correction is a new revision or a `corrects` relation. History is never rewritten.
+- **Nothing automatic.** No spec, backlog item, memory update or agent launch follows a save. Classification is optional and happens after acceptance.
+- **Deferred.** Continuous "keep from here" capture is not part of this build.
+- **Session boundary.** The session import in §8 keeps its active-session rule. A standalone save never impersonates a session or creates a placeholder one. Sharing a saved record into a session is a separate operation under Spec 157 §4 transfer rules: source-disclosure authority, destination write and audience checks.
+
+### 21.5 Retrieval and interpretation
+
+CoS reads actual content through the governed contract, cites `source@revision#segment`, and states coverage gaps.
+
+- **Content of an interpretation.** A "Where we are" view may contain:
+  - the question and the current understanding;
+  - alternatives and open points;
+  - owner decisions.
+
+  It may state that no decision was reached.
+- **Owner decisions.** An owner decision must cite a record that the owner principal created through a direct authenticated decision or confirmation action. An authenticated owner submitter is **necessary but not sufficient**: words inside a transcript or document Robert uploads remain imported claims. For example, a saved transcript saying "Robert approved deployment" stays *reported, unverified* until a separate applicable owner decision is recorded, whoever uploaded it. Both kinds keep exact source and revision links.
+- **Staleness.** A new revision of a cited source, or a correction relation to it, marks the interpretation stale without rewriting it.
+- **Search.** Search uses metadata and full text first, with results typed to the exact source and revision, and truncation stated. Embeddings and graphs are later, evidence-driven additions.
+- **CoS standing read.** CoS reads Robert's standalone records under a named standing role plus a current, non-legacy CoS installation credential, both checked on every request (§4.1). Read, provider processing, disclosure and action remain separate permissions.
+- **Before gate R.** No model process holds the standing credential or the retrieved results.
+- **Interpretation adapters.** Every adapter is labelled `test` or `live`.
+  - A live model interpretation processes only synthetic sources in this build, runs tool-less over an explicitly assembled context, and needs Robert's explicit approval per run because it costs money.
+  - Missing usage or cost is reported as unknown, never zero.
+
+### 21.6 Rooms and collaboration changes
+
+- **Sessions.** A session still has explicit participants and never inherits membership. Selected context enters a session only through the disclosure-checked sharing operation.
+- **Completion after pause or close.** This implements §6 D1.
+  - An existing authorized request may be picked up, answered, submitted, acknowledged or cancelled after pause or close, under full current credential, grant, actor and version checks.
+  - These transitions are recorded as operational activity in `coordination_steps`. No discussion event is added after close.
+  - `minimoi.transcript/1.0` stays valid and unchanged.
+  - A versioned export bundle for post-close activity remains Milestone B. Until then the activity is visible through the API and UI, and exports say it is absent.
+- **Rechecks.** Authorization is rechecked before claiming queued work and before publishing a result. Cancellation and revocation do not erase already delivered copies.
+- **Join evidence.** A join acknowledgment is authenticated contact, not presence. "Working" requires a current observed attempt (§21.7).
+- **Separate capability entries.** Grok CLI, Grok web, Claude Chat, Claude Code and Codex are separate capability entries. A cloud-origin client such as Claude Chat needs a reachable authorized endpoint. It is recorded as unproved until that separately authorized test exists. A CLI process never attaches to an existing chat.
+
+### 21.7 Local execution and the durable work-run record
+
+**Workshop.** A Workshop is a local execution environment, distinct from a development MiniMoi instance. This build has exactly one Workshop. It registers its capabilities, claims authorized work and pushes results; no inbound tunnel is required. Manually started runs are allowed and labelled manual. No heartbeat or live status is ever inferred.
+
+| Record | Required information |
+|---|---|
+| Assignment | Typed reference to existing work (build-queue item, coordination request, Work artifact at an exact digest, or record); approved scope/spec revision; acceptance boundary; requester, builder, reviewer; mandate (operations, host, expiry, limits, retry bound, expected quiet period) |
+| Attempt | Stable ID; assignment; previous attempt; client/runtime/version; adapter and whether it is `real` or `test`; host and environment; repository, worktree, base revision and dirty-patch SHA-256 where relevant; claim token hash, fence and lease; start and end; the four state dimensions (§21.8); diagnostic trace reference |
+| Event/checkpoint | Monotonic per-attempt sequence; source-observed and received times; actor; `observation` or `self_report`; step; wait reason; operation ID; evidence references. Heartbeats are recorded separately from progress |
+| Evidence | Diff/artifact SHA-256; test command and result; reviewed revision; output location; source. No "tested" status from prose |
+| Exception | Category; first and last observation; impact; affected attempts; known and unknown effects; recovery owner; actions tried; next action; state (open, dispositioned or resolved); closure evidence |
+| Observation | Subject (attempt, monitor, store, exporter); observer; time; freshness (current, stale, unavailable or unknown) |
+| Disposition reference | Independent review, Robert's acceptance and release, each by its own authenticated actor with exact-version references. The owner's acceptance is never set by a builder, monitor or model |
+
+**Rules.**
+
+- **Intent and completion.** Intent is recorded before an external effect, and completion after it is observed. A crash in between yields *outcome uncertain*, never a false failure or an automatic retry.
+- **Claims and fencing.** Claims are exclusive. Every write presents the current claim token and fence, so a stale worker is refused. A repository-writer lease keeps one active editor per repository or worktree.
+- **Recoverable claims.** An acquired claim survives a lost response.
+  - The claimant generates its claim secret and stores it durably before dispatch. The server stores only its hash.
+  - A retry under the same operation returns the same attempt and fence, and no secret.
+  - A changed secret or payload conflicts.
+  - Replays still recheck credentials, mandate, assignment scope and lease.
+  - Claim secrets never appear in receipts, evidence, telemetry or roster output.
+- **Outbox.** The Workshop keeps a durable local outbox with idempotent central acceptance. The UI distinguishes three states: saved locally, acknowledgment pending, and centrally recorded. On reconnect, mandate expiry is enforced. Offline operation creates no sharing or launch authority.
+- **Store outage.** If intent cannot be recorded durably, no new controlled effect starts. Already-uncertain effects are preserved for reconciliation.
+- **Checkpoints and commits.** A checkpoint never requires a commit; reviewed-diff approval still governs commits.
+- **Billing.** The billing route is recorded per runtime. There is no silent switch from subscription to metered API. Unknown usage or cost stays unknown.
+
+### 21.8 State dimensions
+
+These are four independent dimensions, never collapsed into a single "done". They are conceptual states mapped onto the records above, not replacement enums for existing contracts.
+
+- **Execution:** queued, claimed, running, waiting, outcome uncertain, finished, failed, cancelled.
+- **Delivery of evidence:** local only, central acknowledgment pending, centrally recorded.
+- **Assurance:** produced, builder-verified, independently reviewed, accepted, released. Each needs its own evidence and authority.
+- **Observation:** current, stale, unavailable, unknown. Last contact and last meaningful progress are shown separately, with the observation source (heartbeat or checkpoint).
+
+Several further rules follow:
+
+- A process exit does not establish business acceptance.
+- A model's completion statement is self-report.
+- Freshness is computed from the receiving clock, so a skewed source clock cannot make stale data look current.
+- Missing instrumentation is shown as *unavailable*, never as inactive.
+
+### 21.9 Exceptions, monitoring and recovery
+
+Monitoring runs outside the agent being monitored. Deterministic checks detect expired leases, stale contact, repeated failures, overdue milestones, resource limits and delivery backlog. Thresholds and quiet periods are configuration per task class; a long test is not automatically a stuck agent, and lost contact is not proof that a process stopped. Master Craftsman interprets evidence and proposes recovery to Robert; CoS may surface the effect on Robert's priorities; neither becomes an enforcing supervisor here.
+
+| Condition | Required response |
+|---|---|
+| Host offline before dispatch | Keep queued; name the unavailable host and last contact; do not claim pickup |
+| Contact lost after possible effect | Outcome uncertain; inspect the saved operation, receipt or artifact before any replacement attempt |
+| Sign-in expired or quota unavailable | Stop automatic attempts; name the prerequisite and recovery owner; no billing fallback |
+| Repeated same error or no meaningful progress | Pause at configured bounds; preserve checkpoint and attempts; request a changed plan or input |
+| Test or review failure | Keep work open; attach findings to the exact diff; assign the correction to the builder |
+| Stale baseline or simultaneous writer | Stop the conflicting write; preserve both patches; resolve ownership; one active repository editor |
+| Durable work-store failure | Fail closed before new controlled effects; preserve local evidence for reconciliation |
+| Telemetry exporter failure | Continue authorized work within bounded buffering; show degraded diagnostics and drops |
+| Monitoring cannot read its source | Show unknown or degraded, never zero exceptions or healthy |
+
+**Unknown is never zero.** This rule includes the existing Guild Operations escalation count, which today reports 0 when its database read fails. The fix returns an explicit unknown with a reason, keeps a true 0 distinct, and shows unknown on the Operate page, in Telegram status and in CoS context.
+
+**Recovery.**
+
+- **Where it appears.** Recovery is a state of Work detail, not a separate page.
+- **Retries.** A retry is allowed only when the mandate covers it and the operation is idempotent or has been reconciled to a known non-effect.
+- **Changed plans.** A changed plan starts a new attempt; it never rewrites history.
+- **Cancellation.** Cancellation records the request and the observed stop separately. It is not a rollback.
+- **Resolution.** Resolving an exception requires verification evidence. Acknowledging or dismissing it does not resolve it.
+- **Notifications.** In this build, exceptions appear in the overview. Routed and deduplicated notifications are later work.
+
+### 21.10 Observability and the operations console
+
+**Boundary.** OpenTelemetry supplies portable traces, metrics and logs over OTLP to a replaceable backend. Assignment, attempt, receipt, disposition and approval truth stays in MiniMoi records; telemetry is never sampled for that evidence and never drives business status.
+
+- **Correlation.** Each attempt has its own trace. Related attempts use span links; one indefinitely open span across queue waits is not used. Spans and logs carry opaque assignment, attempt and operation references, never as metric labels. IDs are correlation only, never authorization. Standard attributes (`service.*`, `deployment.environment`, `host.*`, GenAI conventions where a model call is visible) are kept separate from `minimoi.*` attributes. Versions are pinned in the plan.
+- **Coverage.** The owned boundary is instrumented first. Where a runtime exposes only process start, end and output, only that is shown; no internal spans, tokens or cost are invented.
+- **Privacy.** An allowlist is applied before emission. Diagnostics carry metadata, timings, error classes and authorized evidence links. By default they never contain prompts, transcripts, document bodies, credentials, raw tool arguments, personal paths or customer content. A diagnostic link never bypasses record authorization.
+- **Resilience.** Exporter memory, queue, retry time and disk are bounded from the first instrumented run. Export age, failures and drops are visible. Telemetry buffers are separate from the durable work outbox. A telemetry outage never blocks record preservation, never claims work success and never causes a business operation to repeat. The first synthetic proof retains all test traces. Production sampling, retention, limits and overhead are specified before any deployment.
+- **Console.** The console is a free, self-hosted native console, read-only for investigation. A **separate window is acceptable**; embedding in Guild is optional and needs no JWT or iframe work. Access is local only and controlled: loopback binding, non-default credentials held outside the repository, anonymous access off, and no credentials in URLs. No private content is forwarded to make a demonstration work. No paid feature or hosted vendor is a dependency.
+- **Live roster.** The live roster comes from MiniMoi attempt and checkpoint records through a read-only application endpoint; traces and logs explain it. A configured agent, an old span or a healthy process is never evidence of current useful work. Trace backends show spans after export; that is not presented as streaming internal activity.
+- **Tools.**
+  - Grafana OSS is the starting console.
+  - `grafana/otel-lgtm` is a development lab, not production packaging.
+  - OpenLIT is a candidate second viewer for the exporter swap.
+  - The Grafana `agento11y` local mode is an untested local-console candidate. Its documented default stores full session content locally, so any evaluation uses synthetic material only and verifies data destinations first.
+
+### 21.11 Modular structure
+
+| Responsibility | Owns | Dependency rule |
+|---|---|---|
+| Records | Source, revision, receipt contracts and repositories | No vendor SDK, Room prerequisite or telemetry backend |
+| Policy | Authenticated identity, current grants, standing roles, disclosure and action decisions | Shared by all transports; nothing prompt-controlled |
+| Coordination and execution | Request, attempt and exception transitions; bounded recovery | Narrow persistence and delivery interfaces |
+| Adapters | CoS tool facade, HTTP and file intake, Workshop transport, execution and interpretation adapters | Translate at edges; never own approvals or source truth |
+| Interpretation | Source reading and derived views | Cannot overwrite originals or authorize effects |
+| Observability | OTel setup, attribute allowlist, correlation, export | The only module importing telemetry libraries; observes, never drives status |
+| Presentation | Save, Continue, Collaborate, Work overview and detail | Uses application APIs; no duplicated permission or workflow rules |
+
+Concrete adapters are composed at one entry point per process, with no dependency cycles. UI fixture and real adapters implement the same versioned contract, validated by shared schemas. Every fixture response and screen is marked simulated, and sample data never appears in live results. Mixed modules are refactored only where a tested boundary needs it. There are no sweeping framework changes or broad renames.
+
+### 21.12 Delivery packages
+
+| Package | Required result | Evidence gate |
+|---|---|---|
+| A0 | Code review, this revision and the implementation plan | Codex review; Robert accepts before application edits |
+| U | Save, Continue, Collaborate, Work overview and Work detail over a fixture adapter. Every screen shows sources, receipt coverage, participants, selected context, next owner, unknown, stale and error states, and recovery within detail. All data and actions are marked simulated | Starts after A0 acceptance; local preview and screenshots; Robert's usability review. Not evidence of backend completion |
+| A1 | Standalone save, read, search, relate and interpretation; CoS tool contract; receipts, idempotency, corrections, permissions, additive migration and restore | Tested through the API with the UI disconnected; Codex reviews the bounded diff |
+| A2 | One manually started, instrumented synthetic Python job with assignment, attempt, checkpoints and result evidence. A read-only roster and console with freshness. Killed job, unavailable store and configured-but-idle behavior. The Guild Operations unknown fix | Live local run evidence; Codex review |
+| A3 | One Workshop path with a selected-context session, authenticated pickup, result and acknowledgment. Expiry, revocation and authorized late results. Interruption after a possible effect; idempotent reconciliation; outbox and restart; duplicate-claim fencing; exporter outage and recovery; one execution-adapter swap and one exporter swap | Failures tested directly before UI connection; Codex review. No arbitrary paid model sessions |
+| A4 | Fixture adapter replaced by real services; integrated journeys, refusals, stale state, restart and recovery; per-client capability shown as live, test or unavailable | Codex tests the complete candidate and reviews the diff |
+| A5 | Reviewed candidate, evidence, limitations and proposed release components; for any AWS proposal, access, capacity, backup/restore, rollback and deployed-version verification | Robert accepts and separately authorizes any release |
+
+Every build and review handback names the accepted specification and plan revisions. A discovery that changes required behavior becomes an explicit amendment before it is treated as agreed. Build completion is not release approval. Local service tests are not native-client tests: real-client coverage is recorded separately, and synthetic transport tests never count as client acceptance.
+
+### 21.13 Outside this amendment
+
+- A general multi-agent scheduler.
+- Automated production repair.
+- Multiple Workshops.
+- Universal continuous native-chat capture.
+- A new telemetry database or viewer.
+- Semantic graph or embedding search.
+- A new OpenClaw gateway rollout. Existing OpenClaw capability is preserved.
+- A Master Craftsman runtime.
+- Career migration as a prerequisite.
+- Private Career content as test fixtures.
+- AWS deployment.
+- Record withdrawal/deletion (§8's separate recovery increment).
+- Notification routing.
+
+### 21.14 Acceptance catalog
+
+The plan maps every ID to concrete tests and records deferrals with reasons. Passing a mockup never substitutes for these.
+
+| ID | Passing evidence | Stage |
+|---|---|---|
+| C01 Standalone save | Original, coverage and receipt readable with no Room or session row and no classification | A1 |
+| C02 Fidelity | Distinct original, excerpt, extraction and reconstruction; missing attachments visible; comparison against the source export catches omissions | A1 |
+| C03 Reading and continuation | CoS reads actual content through the contract, cites exact revisions and segments, preserves disagreement and never manufactures an owner decision. An owner-uploaded transcript claiming "Robert approved deployment" stays reported and unverified | A1 |
+| C04 Retry and overlap | Lost response reconciles by the same ID and payload; conflicting payload refused; repeat captures preserve originals | A1 |
+| C05 Permissions | CoS standing read works under role plus credential; disclosure and effect remain separate; forged speaker or approval labels confer nothing | A1 |
+| C06 Sessions | A new session inherits no participants; actual client contribution and acknowledgment demonstrated, or unavailability stated per client | A3 |
+| C07 Revocation and closure | Queued and reply operations recheck grants; authorized late results use their route without reopening discussion | A3 |
+| C08 Offline continuity | Local receipt and outbox survive restart; central acknowledgment shown separately; expiry enforced on reconnect | A3 |
+| C09 Preservation | Existing records, URLs and receipts retained; additive migration and restore prove source hashes and permission behavior | A1 |
+| O01 Work chain | Assignment → attempt → exact diff/artifacts → test/review → disposition followed without a manual recap | A2 |
+| O02 Truthful state | Process exit and model completion grant no verified, accepted or released status; stale data never renders current | A2 |
+| O03 Independent monitoring | Killing the job yields a stale-contact observation from the monitor; stopping the monitor or its read source yields unknown, never zero | A2 |
+| O04 Interruption | Stop after a simulated effect and before the reply; reconcile without repeating the effect or launching a model | A3 |
+| O05 Ownership | Duplicate claims and stale workers cannot produce conflicting accepted results; one repository writer. A claim whose response is lost is recovered by the same operation with the same attempt and fence and runs exactly once | A3 |
+| O06 Bounded effort | Repeated errors, quota or sign-in failure and task limits stop attempts and produce actionable exceptions | A3 |
+| O07 Closure | An exception records owner, evidence and recovery; acknowledgment alone never resolves it | A3 |
+| O08 Record-store outage | No new controlled effect without durable intent; uncertain effects preserved | A3 |
+| O09 Agent roster | During a real synthetic run the roster distinguishes active from configured-but-not-running, shows current step and wait reason, marks missing or stale evidence unknown, and keeps completed runs separate | A2 |
+| T01 Correlation | Test work links to its trace and service versions; asynchronous attempts stay distinguishable | A2 |
+| T02 Exporter outage | Work receipts stay correct; bounded buffering and drops visible; restoring telemetry repeats no effect | A3 |
+| T03 Content protection | Synthetic secrets and content in inputs and error text never appear in exported diagnostics; drill-downs respect audience | A2 |
+| T04 Limited instrumentation | An opaque runtime shows only observed boundaries; missing tokens, cost and internal spans labelled unavailable | A2 |
+| T05 Resource bounds | Measured tracing overhead, queue growth and disk stay within the plan's dev limits | A3 |
+| P01 Replaceability | One execution adapter and one exporter replaced without migrating identities, weakening policy or losing history; real versus test adapters identified | A3 |
+| P02 Local first | Capture, evidence and recovery work without any Microsoft service, public endpoint or cloud dependency; unproved cloud-client integrations labelled | A1–A3 |
+| U01 Usability | Robert identifies the next owner and needed decision on each screen; a second reader resumes from evidence | U, A4 |
+| U02 Accessibility | Keyboard use, status not by color alone, narrow-width reflow, empty, error and stale states verified | U, A4 |
+| U03 Operations console (replacement) | A free self-hosted console, embedded or in a separate window, shows a real synthetic execution's agent/job identity, current observed step, waits, freshness, available measurements and diagnostic drill-down. Missing instrumentation is unavailable, not inferred. Degradation and recovery demonstrated. No paid dependency, fabricated span or anonymous access | A2, A4 |
+
+Overlaps with §13: C06 exercises part of case 3; C07 part of case 6; C05 applies case 1's role-plus-credential rule to the standalone namespace only; case 11 applies to every stage. No §13 case is claimed complete by this amendment. v0.1 references A06 (keep from here), A13 (revocation mid-response, beyond C07), A15 (laptop off), A19 (withdrawal) and A16's remote half are deferred with §21.13.
+
+### 21.15 Supersessions and cross-references
+
+| Clause | Change |
+|---|---|
+| Header: implementation lead Codex; production v0.9 by September 27 | Superseded for this scope (§21.1). Release follows Guild Rev3 D5 component releases and A5 |
+| §12.1 slice labels A0–A3 | Renamed S158-A0…S158-A3; content unchanged |
+| §12.1 "first release is A0 + A1" and its ownership column | Superseded as a delivery plan; S158-A0 placement per §21.1 |
+| §8 "New transcript import uses an active session" | Unchanged for session imports; standalone saves use §21.4's separate route |
+| §3 "Guild owns execution/work items" | Clarified: Guild owns the work-run contract; the local build hosts it in the Records service (§21.3) |
+| §6 recommended default D1 | Now required and implemented in A3 as §21.6 |
+| v0.2 candidate: embedded console requirement, old delivery sequence, review prompts | Not adopted; §§21.10 and 21.12 govern |
+| Claude Chat v0.2 review M1 (drop agento11y) and M3 (JWT only route) | Not adopted; §21.10 |
+| Delivery plan `rooms_beta_to_v09_delivery_plan_2026-09-21.md` | Historical for dates and ownership; its release gates still apply to any Rooms release |
+
+### 21.16 Decision register additions
+
+Settled owner direction (Robert, September 25): D16 capture without a Room; D17 no usage-frequency gate on collaboration; D18 UI built early with labelled sample data, foundation tested independently, then integrated; D19 embedding optional, separate window acceptable; D20 roster from MiniMoi records; D21 unknown never zero, including Guild Operations; D22 recovery within Work detail; D23 proof split A1/A2/A3/A4 with U separate; D24 free self-hosted tooling, Grafana OSS as the starting point; D25 agento11y retained as an untested candidate; D26 no JWT requirement, and no anonymous exposure, URL credentials or content forwarding; D27 existing OpenClaw preserved, new runtime integration later; D28 local UI now, production hosting later; D29 MiniMoi owns identities, records, policy and receipts, and execution and telemetry are replaceable adapters.
+
+Pending owner decisions with recommended values: D-A0-1 through D-A0-14 (A0 implementation review §4). Accepting this revision accepts each recommended value unless Robert records a different choice; he may change any of them before the package it blocks.
