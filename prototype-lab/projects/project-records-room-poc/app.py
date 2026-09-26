@@ -10,13 +10,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from flask import Flask, g, jsonify, request, send_file, session
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, NotFound
 
 from store import Problem, Store
 from platform_access import AccessError, request_credential, request_operation
 
 
-def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
+def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False):
     app=Flask(__name__,static_folder="static",static_url_path="/static")
     store=Store(data_dir)
     app.config.update(SECRET_KEY=store.session_key,MAX_CONTENT_LENGTH=3_000_000,
@@ -47,6 +47,10 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
         origin=request.headers.get("Origin")
         if origin and origin != f"http://{request.host}":
             raise Problem("Cross-origin requests are not allowed",403)
+        if request.path in {"/preview","/preview/"} or request.path.startswith("/static/v2/"):
+            # Opt-in UI preview (package U): simulated fixtures only, no login, never reads the store.
+            if not ui_preview: raise NotFound()
+            return
         if request.path in {"/","/health"} or request.path.startswith("/static/"):
             return
         if request.method in {"POST","PUT","PATCH","DELETE"}:
@@ -113,6 +117,10 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None):
 
     @app.get("/health")
     def health(): return jsonify(status="ok",environment="local-test",production_connected=False)
+
+    if ui_preview:
+        @app.get("/preview/")
+        def ui_preview_page(): return app.send_static_file("v2/preview.html")
 
     @app.post("/api/login")
     def login():
@@ -287,10 +295,13 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir",required=True)
     parser.add_argument("--port",type=int,default=18880)
+    parser.add_argument("--ui-preview",action="store_true",
+                        help="Also serve the simulated-data UI preview at /preview/ (no login, no store reads)")
     args=parser.parse_args()
     if not 1024<=args.port<=65535: parser.error("Use an unprivileged local port")
-    application=create_app(args.data_dir,args.port)
+    application=create_app(args.data_dir,args.port,ui_preview=args.ui_preview)
     print(f"LOCAL TEST ONLY: http://127.0.0.1:{args.port}",flush=True)
+    if args.ui_preview: print(f"UI PREVIEW (simulated data): http://127.0.0.1:{args.port}/preview/",flush=True)
     print(f"Access key file: {application.extensions['records_store'].root/'owner-key.txt'}",flush=True)
     # Avoid recording paths/search terms or request bodies in general access logs.
     logging.getLogger("werkzeug").setLevel(logging.ERROR)

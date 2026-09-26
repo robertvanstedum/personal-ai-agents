@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:,">
+<title>Preview (simulated) · mini moi</title>
+<link rel="stylesheet" href="/static/v2/v2.css">
+<script type="module" src="/static/v2/main.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="preview-banner" aria-label="Preview notice">
+  <p class="banner-text"><strong>Preview · simulated data · actions change nothing</strong><span class="banner-detail">Fixture adapter only: no live services, no API calls, no model calls.</span></p>
+  <div class="banner-controls">
+    <label for="scenario-select">Scenario</label>
+    <select id="scenario-select"></select>
+    <button type="button" id="reset-sim" class="btn btn--small">Reset simulated changes</button>
+  </div>
+</header>
+<div class="shell">
+  <nav class="side-nav" aria-label="Preview screens">
+    <p class="brand">mini moi <span class="brand-sub">Robert's workspace</span></p>
+    <ul>
+      <li><a href="#save" data-view="save">Save</a></li>
+      <li><a href="#continue" data-view="continue">Continue</a></li>
+      <li><a href="#collaborate" data-view="collaborate">Collaborate</a></li>
+      <li><a href="#work" data-view="work">Work overview</a></li>
+      <li><a href="#work-detail" data-view="work-detail">Work detail</a></li>
+    </ul>
+    <p class="nav-note">Package U preview · synthetic data. Evidence lives in Records; this page reads only fixtures.</p>
+  </nav>
+  <main id="main" tabindex="-1">
+    <p id="announcer" class="announcer" role="status" aria-live="polite" aria-atomic="true"></p>
+    <div id="view" aria-busy="true">
+      <noscript><p>This preview needs JavaScript modules. It shows simulated data only.</p></noscript>
+    </div>
+  </main>
+</div>
+<footer class="page-footer">
+  <p>Proposed interface · simulated data · no live services or agent calls</p>
+  <p>Evidence in Records · diagnostics in a separate console</p>
+</footer>
+</body>
+</html>
