@@ -8,6 +8,8 @@
 
 **Authority:** Robert requested this full version. Reviews inform the design; they do not select options on Robert's behalf. Requirements below capture the requested product behavior. Implementation defaults are proposals until selected. Robert has now authorized implementation and spec registration. No production credential changes, live agent launches, merge or deployment are authorized by that instruction.
 
+**Amendment (proposed September 25, 2026; effective only on Robert's acceptance):** §15 adds typed non-room destinations for standalone records and work runs, Workshop executor identity, and implementation ownership for the Spec 158 §21 scope. Nothing above is relaxed.
+
 **Relationship:** This candidate consolidates collaborator-invite v0.3/v0.4, Codex's review, Claude Code's returned review, both chat reviews, Robert's multi-room and platform-ownership requirements, and the independent-client workflow in Records & Rooms v6 §§7.1–7.3. It extends that substrate; it does not replace Records durability, lifecycle, privacy, export, or Work effect rules. Earlier invite drafts remain historical inputs. v0.6 is the current consolidated adoption candidate, superseding v0.5 as the working text. The adoption includes the controls below; options outside the selected initial increment remain open. It is the official invite specification following Robert’s adoption; source candidates and reviews remain preserved.
 
 ## 1. Purpose and user workflow
@@ -333,3 +335,24 @@ Source files are retained in the v0.6 review packet: Claude Code's exact v0.4 re
 The earlier Codex review checked primary OpenClaw/protocol documentation. Thus the chat assertion that no reviewer checked any third-party behavior is too broad: source/document verification exists, while no live runtime, compatibility or billing proof is claimed. Keep those evidence levels distinct.
 
 This adoption candidate does not modify the parent Records v6 document or historical build packets. Align implementation contracts against the selected source baseline before coding. Continue the filesystem handoff convention until Robert selects its replacement/coexistence; no automatic migration or private transfer is authorized.
+
+## 15. Amendment — September 25, 2026 (proposed)
+
+**Status:** proposed by Claude Code under package A0, together with Spec 158 v0.7 §21. It takes effect only on Robert's acceptance after Codex's review. It extends this specification. It does not relax any rule above.
+
+1. **Typed non-room scopes.** Spec 158 §21 adds standalone records and work-run records. Neither is a meeting session. For them:
+   - **Named destination.** Every request names an explicit typed destination: `workspace:<id>` for records and `work:<assignment_id>` for work runs. A UI default never selects it on the caller's behalf.
+   - **Grants.** Installation-credential grants use the same typed destinations, with the operations named in the implementation plan. The server authorizes against the scope stored with the resource, never against the client-supplied destination alone.
+   - **Idempotency identity.** The typed scope and the operation are part of the idempotency identity.
+   - **Receipts.** Receipts carry the typed scope and are rechecked against current access. This implements §10's requirement that "non-room platform receipts need an explicit typed authorization context, not a guessed room".
+   - **What stays the same.** Session destinations and their tests are unchanged.
+2. **Workshop executor identity.**
+   - **Principal and grants.** A local Workshop executor is a collaborator principal with its own client installation and expiring credential. Its grants are limited to the assignment and session it serves.
+   - **Manual runs.** A manually started local synthetic executor is not a launch under §9. It is labelled `manual` and `real` or `test`.
+   - **Vendor runtimes.** Launching a vendor runtime remains governed by §9 and Spec 158 gate L.
+3. **Standing read.** CoS standing read over standalone records follows Spec 158 §4.1. Both the owner-assigned role and a current non-legacy credential are required on every request. Neither grants disclosure into a session or any effect.
+4. **Implementation ownership.** For the Spec 158 §21 scope, Claude Code implements and Codex validates. This supersedes, for that scope, the "Implementation defaults chosen by Codex" ownership in the build disposition. The defaults themselves remain in force:
+   - no cross-request authentication cache;
+   - explicit source-disclosure authority;
+   - destination grants checked by the server.
+5. **Capability entries.** Client support continues to be recorded per interface and tested build (§§3, 12). A cloud-origin chat client requires a reachable authorized endpoint and remains unproved until separately tested. A local synthetic transport test is not client acceptance.
