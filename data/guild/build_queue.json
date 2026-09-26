@@ -69,12 +69,12 @@
     "id": 125,
     "spec_title": "Domain Standardization Phase 2 — Model Name Centralization",
     "spec_file": "spec_125_model_standardization_2026-07-05.md",
-    "status": "backlog",
+    "status": "superseded",
     "github_issue": 78,
     "priority": "normal",
-    "blocked_reason": "Prerequisite: #120 Domain Standardization Phase 1 complete. Grok review required before build.",
-    "notes": "Centralize all LLM model names to config/models.json — 16 files currently hardcoded across all domains (Curator, German, Portuguese, Guild). Gold standard already exists: domains/german/reviewer.py + domains/guild/config/challenger_config.json. Requires full regression test before deploy. Standalone spec — do not fold into #120.",
-    "last_transition_at": "2026-07-06T00:39:47Z"
+    "blocked_reason": null,
+    "notes": "Centralize all LLM model names to config/models.json — 16 files currently hardcoded across all domains (Curator, German, Portuguese, Guild). Gold standard already exists: domains/german/reviewer.py + domains/guild/config/challenger_config.json. Requires full regression test before deploy. Standalone spec — do not fold into #120. SUPERSEDED 2026-09-23 by #159 (Model Baseline 2026 H2) at Robert's direction; inventory, config mechanism and regression plan carried forward into Spec 159.",
+    "last_transition_at": "2026-09-23T14:33:21.024168+00:00"
   },
   {
     "id": 126,
@@ -1089,5 +1089,40 @@
     "last_transition_at": "2026-09-04T00:16:00Z",
     "summary": "Fourth Guild landing card 'Experiment': a read-only working page with an Operational section (IoT Connect: launch, admin and billing workbenches, Swagger, live health) and a working matrix projected from Planning Studio records (Idea → Tinkering → Built → Operational). G1 only; notes/stage writes (G2) need the Central Personal Repository write contract.",
     "notes": "Closed after the three reviewed G1 chunks merged through PR #195; subsequent Prototype Lab table and artwork refinements merged through PRs #196 and #197. G2 notes/stage writes remain a separate future capability requiring the Central Personal Repository write contract."
+  },
+  {
+    "id": 157,
+    "spec_title": "MiniMoi Collaborator Access and Invitations",
+    "spec_file": "spec_157_collaborator_access_and_invitations_2026-09-20.md",
+    "status": "in_build",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-09-20T16:28:31.017599+00:00",
+    "notes": "Robert adopted v0.6 and authorized build 2026-09-20. Initial slice: Claude Code CLI, shared HTTP adapter, multi-room access, platform credential lifecycle, transcript/handoff attribution and receipts; combined with remaining initial Records work. No launch/MCP/CoS widening, merge or deployment authorized. Independent Claude Code implementation review returned: no security defect, reproduced 242 backend/17 browser. Four nonblocking test gaps closed in a test-only supplement: backend total 246; application source unchanged. Awaiting Robert reviewed-diff disposition; manual owner-provisioned native-client walkthrough not performed."
+  },
+  {
+    "id": 158,
+    "spec_title": "Collaboration Rooms + CoS — light beta to production v0.9",
+    "spec_file": "spec_158_collaboration_rooms_cos_beta_v09_2026-09-21.md",
+    "status": "spec_ready",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": null,
+    "last_transition_at": "2026-09-21T04:19:30.915208+00:00",
+    "summary": "MiniMoi login permissions → Rooms; light presentation 2/build beta this week, production v0.9 by Sep 27 or sooner.",
+    "notes": "Robert explicitly requested docs registration and production build-queue entry. Codex leads; independent implementation review before shipping. First release A0+A1: existing MiniMoi login -> account permissions -> Rooms enforcement, then daily desktop UI/Inbox/client read-post-receipt and minimum usable presentation checkpoint/artifact workflow. A2 isolated Records standing read and A3 bound portal filing are separate follow-on slices; full CoS runtime/convening requires its own R/L evidence. No new human rollout or multi-workspace migration this week; Track B remains separate. Learn from several days of presentation 2 and build-task use. Target v0.9 production 2026-09-27 America/Chicago or sooner when ready, not an unattended scheduled deploy. Preserve meetings/receipts; require permission, independent review, usage, backup and rollback evidence. Delivery plan: docs/design/rooms_beta_to_v09_delivery_plan_2026-09-21.md. Queue registration is not a claim that implementation is built or deployed."
+  },
+  {
+    "id": 159,
+    "spec_title": "Model Baseline 2026 H2 — tiers, house models, local-first",
+    "spec_file": "spec_159_model_baseline_2026h2_2026-09-23.md",
+    "status": "design",
+    "github_issue": null,
+    "priority": "high",
+    "blocked_reason": "Awaiting review comments from Claude.ai, OpenAI and Grok, then Robert decisions D1-D7.",
+    "last_transition_at": "2026-09-23T14:33:21.024168+00:00",
+    "summary": "New model baseline for the rest of 2026: five tiers (T0 no-model, local, economy, workhorse, premium), house model family per domain with a cross-provider counterpoint for review roles, local-first on Mac and (proposed) prod, configuration not code.",
+    "notes": "Registered 2026-09-23 at Robert's explicit request. Supersedes #125. Builds on the shared LiteLLM gateway spec, Spec 146 and Track B (feat/cos-guild-model-roles @ 021a1bb). Motivated by the 2026-05-15 xAI retirement (grok-4-1-fast IDs now bill as grok-4.3) and unattributed OpenClaw xAI spend. Implementation targeted Fri 2026-09-25 or week of 2026-09-28, after review. Phase 0 (personal OpenClaw config) may proceed ahead of approval at Robert's say-so. Queue registration is not a claim that anything is built."
   }
 ]
