@@ -21,9 +21,22 @@ function readScenario() {
   return SCENARIOS.includes(requested) ? requested : 'normal';
 }
 
+/**
+ * Resolve the URL fragment to a known screen. A malformed fragment (bad percent-encoding) or an unknown
+ * or inherited name ("#constructor", "#__proto__") falls back to the default screen instead of failing.
+ */
 function parseHash() {
-  const [view, ...params] = location.hash.replace(/^#/, '').split('/').map((part) => decodeURIComponent(part));
-  return VIEWS[view] ? { view, params: params.filter(Boolean) } : { view: DEFAULT_VIEW, params: [] };
+  const raw = location.hash.replace(/^#/, '');
+  if (!raw) return { view: DEFAULT_VIEW, params: [], fallback: false };
+  let parts;
+  try {
+    parts = raw.split('/').map((part) => decodeURIComponent(part));
+  } catch {
+    return { view: DEFAULT_VIEW, params: [], fallback: true };
+  }
+  const [view, ...params] = parts;
+  if (!Object.hasOwn(VIEWS, view)) return { view: DEFAULT_VIEW, params: [], fallback: true };
+  return { view, params: params.filter(Boolean), fallback: false };
 }
 
 function announce(message) {
@@ -68,9 +81,14 @@ function updateNav(view) {
 
 async function render({ focus = 'title', keys = [] } = {}) {
   const generation = ++state.generation;
-  const { view, params } = parseHash();
+  const { view, params, fallback } = parseHash();
   const module = VIEWS[view];
   const container = document.getElementById('view');
+  if (fallback) {
+    // Show the screen actually rendered in the address bar; replaceState fires no hashchange.
+    history.replaceState(null, '', `${location.pathname}${location.search}#${view}`);
+    announce(`That link did not match a preview screen, so ${module.title} is shown instead.`);
+  }
   updateNav(view);
   document.title = `${module.title} · Preview (simulated) · mini moi`;
   container.setAttribute('aria-busy', 'true');

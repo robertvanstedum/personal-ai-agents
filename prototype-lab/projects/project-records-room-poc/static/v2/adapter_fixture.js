@@ -73,6 +73,9 @@ export class FixtureAdapterError extends Error {
   constructor(message) { super(message); this.name = 'FixtureAdapterError'; }
 }
 
+/** Own-property lookup: ids come from the URL, so inherited names like "constructor" must not resolve. */
+function own(map, key) { return map && Object.hasOwn(map, key) ? map[key] : undefined; }
+
 function isoSeconds(ms) { return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z'); }
 
 async function sha256Hex(text) {
@@ -145,7 +148,7 @@ export function createFixtureAdapter({ scenario = 'normal', fetchImpl = globalTh
       await gate();
       const unavailable = await readUnavailable('attempt');
       if (unavailable) return { ...unavailable, subject: attemptId };
-      const file = plan.attempts[attemptId];
+      const file = own(plan.attempts, attemptId);
       if (!file) return notFound(SCHEMA_IDS.attempt, attemptId, 'No attempt with this id exists in the current scenario.');
       return copy(await load(file));
     },
@@ -173,11 +176,11 @@ export function createFixtureAdapter({ scenario = 'normal', fetchImpl = globalTh
         if (revision && Number(revision) !== record.revision) return notFound(SCHEMA_IDS.record, `${recordId}@${revision}`, 'That revision does not exist.');
         return copy(record);
       }
-      const files = plan.recordFiles[recordId];
+      const files = own(plan.recordFiles, recordId);
       if (!files) return notFound(SCHEMA_IDS.record, recordId, 'No record with this id exists in the current scenario.');
       const wanted = revision ? Number(revision) : Math.max(...Object.keys(files).map(Number));
-      if (!files[wanted]) return notFound(SCHEMA_IDS.record, `${recordId}@${wanted}`, 'That revision is not part of this preview.');
-      return copy(await load(files[wanted]));
+      if (!own(files, wanted)) return notFound(SCHEMA_IDS.record, `${recordId}@${wanted}`, 'That revision is not part of this preview.');
+      return copy(await load(own(files, wanted)));
     },
 
     async getInterpretation(recordId) {
@@ -224,7 +227,7 @@ export function createFixtureAdapter({ scenario = 'normal', fetchImpl = globalTh
   };
 
   async function recoveryFor(attemptId) {
-    const file = plan.attempts?.[attemptId];
+    const file = own(plan.attempts, attemptId);
     if (!file) return null;
     const detail = await load(file);
     return detail.recovery ? detail : null;

@@ -250,6 +250,32 @@ def test_keyboard_only_journey(tab, evidence_dir):
     expect(announcer).to_contain_text("Recovery paused · simulated")
 
 
+# ------------------------------------------------------------------ malformed links (Codex review of #226)
+
+@pytest.mark.parametrize("fragment", ["%E0%A4%A", "%", "constructor", "__proto__", "toString", "does-not-exist", "work%2Fdetail"])
+def test_malformed_fragment_falls_back_to_work_overview(tab, fragment):
+    page = tab().show("normal", fragment)
+    expect(page.locator("#view-title")).to_have_text("Work in progress")
+    expect(page).to_have_url(re.compile(r"#work$"))
+    expect(page.locator("#announcer")).to_contain_text("did not match a preview screen")
+    assert page.locator(".panel--error").count() == 0
+
+
+@pytest.mark.parametrize("fragment,title", [
+    ("work-detail/constructor", "Work detail"),
+    ("work-detail/toString", "Work detail"),
+    ("continue/constructor/r1/s1", "Continue where you left off"),
+    ("continue/__proto__", "Continue where you left off"),
+    ("continue/rec-7f1c/r99", "Continue where you left off"),
+    ("collaborate/constructor", "Collaborate"),
+])
+def test_unknown_ids_show_not_found_not_an_error(tab, fragment, title):
+    page = tab().show("normal", fragment)
+    expect(page.locator("#view-title")).to_have_text(title)
+    expect(page.locator('[data-status="not_found"]').first).to_be_visible()
+    assert page.locator(".panel--error").count() == 0
+
+
 def test_status_chips_have_text(tab):
     t = tab()
     for scenario in ("normal", "recovery", "stale", "store_unavailable", "empty"):
