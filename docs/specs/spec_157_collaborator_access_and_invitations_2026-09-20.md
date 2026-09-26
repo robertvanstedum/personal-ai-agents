@@ -8,7 +8,7 @@
 
 **Authority:** Robert requested this full version. Reviews inform the design; they do not select options on Robert's behalf. Requirements below capture the requested product behavior. Implementation defaults are proposals until selected. Robert has now authorized implementation and spec registration. No production credential changes, live agent launches, merge or deployment are authorized by that instruction.
 
-**Amendment (proposed September 25, 2026; effective only on Robert's acceptance):** §15 adds typed non-room destinations for standalone records and work runs, Workshop executor identity, and implementation ownership for the Spec 158 §21 scope. Nothing above is relaxed.
+**Amendment (accepted by Robert on September 25, 2026; merged to main in PR #224):** §15 adds typed non-room destinations for standalone records and work runs, Workshop executor identity, and implementation ownership for the Spec 158 §21 scope. Nothing above is relaxed.
 
 **Relationship:** This candidate consolidates collaborator-invite v0.3/v0.4, Codex's review, Claude Code's returned review, both chat reviews, Robert's multi-room and platform-ownership requirements, and the independent-client workflow in Records & Rooms v6 §§7.1–7.3. It extends that substrate; it does not replace Records durability, lifecycle, privacy, export, or Work effect rules. Earlier invite drafts remain historical inputs. v0.6 is the current consolidated adoption candidate, superseding v0.5 as the working text. The adoption includes the controls below; options outside the selected initial increment remain open. It is the official invite specification following Robert’s adoption; source candidates and reviews remain preserved.
 
@@ -336,9 +336,9 @@ The earlier Codex review checked primary OpenClaw/protocol documentation. Thus t
 
 This adoption candidate does not modify the parent Records v6 document or historical build packets. Align implementation contracts against the selected source baseline before coding. Continue the filesystem handoff convention until Robert selects its replacement/coexistence; no automatic migration or private transfer is authorized.
 
-## 15. Amendment — September 25, 2026 (proposed)
+## 15. Amendment — September 25, 2026
 
-**Status:** proposed by Claude Code under package A0, together with Spec 158 v0.7 §21. It takes effect only on Robert's acceptance after Codex's review. It extends this specification. It does not relax any rule above.
+**Status:** accepted by Robert on September 25, 2026, together with Spec 158 v0.7 §21, after Codex's review, and merged to main in PR #224. Prepared by Claude Code under package A0. It extends this specification. It does not relax any rule above.
 
 1. **Typed non-room scopes.** Spec 158 §21 adds standalone records and work-run records. Neither is a meeting session. For them:
    - **Named destination.** Every request names an explicit typed destination: `workspace:<id>` for records and `work:<assignment_id>` for work runs. A UI default never selects it on the caller's behalf.
