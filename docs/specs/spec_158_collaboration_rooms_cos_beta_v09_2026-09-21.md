@@ -8,7 +8,7 @@
 **Delivery plan:** [Beta → v0.9 plan](https://minimoi.ai/guild/build/spec/rooms_beta_to_v09_delivery_plan_2026-09-21.md).
 **Provenance:** frozen source v0.6 SHA256 `72ba28dca8434d90fc4e56b40d6e0c39db3624a7afc0345e89e8985168b58677`. Review dispositions remain in §§16/18/20. This docs registration supersedes the candidate’s earlier pending-registration/adoption language; it preserves all technical requirements and Robert’s platform-first direction. Spec 157 remains the historical collaborator-access baseline; this self-contained spec adds the Rooms/CoS product and delivery contract.
 
-**Amendment v0.7 (proposed September 25, 2026; effective only on Robert's acceptance):** §21 adds standalone capture, local execution visibility and the September 25 build packages. For that scope it supersedes the implementation-lead assignment and the September 27 production target above, renames §12.1's slices S158-A0…S158-A3, and leaves §§1–20 otherwise in force. Every supersession is listed in §21.15.
+**Amendment v0.7 (accepted by Robert on September 25, 2026; merged to main in PR #224):** §21 adds standalone capture, local execution visibility and the September 25 build packages. For that scope it supersedes the implementation-lead assignment and the September 27 production target above, renames §12.1's slices S158-A0…S158-A3, and leaves §§1–20 otherwise in force. Every supersession is listed in §21.15.
 
 
 This is the single document needed for the next review. Version 0.6 retains Claude Code’s findings in §16, records the reconciled decisions in §17, dispositions Claude Chat’s findings in §18 and defines Robert’s platform-first direction in §19 and reconciles Grok’s final comments in §20. The room review has been acknowledged, so no repeat Claude Code review is pending. It incorporates the earlier UI draft, Claude Chat revision 2, Codex's factual corrections, and Robert's subsequent CoS direction. It supersedes the earlier UI draft as the working candidate; source reviews remain unchanged. It proposes additions/amendments to official Spec 157 rather than silently replacing that approved document. Creating this candidate does not change live access or deploy code.
@@ -580,7 +580,7 @@ Local reconciliation evidence: approved Spec 157 §§8 and cross-room transfer p
 
 ## 21. Amendment v0.7 — standalone capture, local execution visibility and the September 25 build
 
-**Status:** proposed September 25, 2026 by Claude Code under package A0. It takes effect only when Robert accepts it after Codex's review. Sources: the reviewed v0.2 candidate (`REVISED_SPEC_v0.2.md`, SHA-256 `5b1fd8d2…76a7`) as amended by the shared build handoff Revision 2 §3, and the A0 implementation review. Both live in `planning-studio/initiatives/INIT-2026-0006-working-room/review-packets/2026-09-25-design-revision-v02/`. The candidate, Claude Chat's and Grok's reviews and Codex's reconciliation remain unchanged there as evidence. A builder reads this section and the implementation plan it links, not those sources.
+**Status:** accepted by Robert on September 25, 2026, after Codex's review (confirm with amendments, all incorporated), and merged to main in PR #224. Prepared by Claude Code under package A0. Sources: the reviewed v0.2 candidate (`REVISED_SPEC_v0.2.md`, SHA-256 `5b1fd8d2…76a7`) as amended by the shared build handoff Revision 2 §3, and the A0 implementation review. Both live in `planning-studio/initiatives/INIT-2026-0006-working-room/review-packets/2026-09-25-design-revision-v02/`. The candidate, Claude Chat's and Grok's reviews and Codex's reconciliation remain unchanged there as evidence. A builder reads this section and the implementation plan it links, not those sources.
 
 ### 21.1 Authority, ownership and relationship to this specification
 
@@ -857,4 +857,10 @@ Overlaps with §13: C06 exercises part of case 3; C07 part of case 6; C05 applie
 
 Settled owner direction (Robert, September 25): D16 capture without a Room; D17 no usage-frequency gate on collaboration; D18 UI built early with labelled sample data, foundation tested independently, then integrated; D19 embedding optional, separate window acceptable; D20 roster from MiniMoi records; D21 unknown never zero, including Guild Operations; D22 recovery within Work detail; D23 proof split A1/A2/A3/A4 with U separate; D24 free self-hosted tooling, Grafana OSS as the starting point; D25 agento11y retained as an untested candidate; D26 no JWT requirement, and no anonymous exposure, URL credentials or content forwarding; D27 existing OpenClaw preserved, new runtime integration later; D28 local UI now, production hosting later; D29 MiniMoi owns identities, records, policy and receipts, and execution and telemetry are replaceable adapters.
 
-Pending owner decisions with recommended values: D-A0-1 through D-A0-14 (A0 implementation review §4). Accepting this revision accepts each recommended value unless Robert records a different choice; he may change any of them before the package it blocks.
+Owner decisions from the A0 implementation review §4, recorded September 25:
+
+- **Decided by Robert as recommended:** D-A0-2 (S158-A0 required before any production Rooms route or additional person, not before the local proofs), D-A0-6 (Rooms merged to main, redeploying cos-bot and cos-scheduler; done in PR #223), D-A0-9 (no paid model run without his approval at the time) and D-A0-11 (this amendment merged after PR #221, in its own docs PR).
+- **Robert's direction:** D-A0-5 (main is the build baseline; each package is one short-lived branch and PR).
+- **Routine defaults accepted with the revision:** D-A0-1, -3, -4, -7, -8, -10, -12, -13 and -14.
+
+Robert may change any of these before the package it affects.
