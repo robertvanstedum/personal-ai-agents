@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:interpretation",
+  "title": "Interpretation (\"Where we are\")",
+  "description": "A derived Records item with exact citations and freshness (Spec 158 §21.5). Owner decisions come only from direct authenticated owner decision records; words inside uploads stay reported and unverified. Never an approval authority.",
+  "oneOf": [
+    { "$ref": "#/$defs/interpretation" },
+    {
+      "allOf": [{ "$ref": "urn:minimoi:contract:common#/$defs/absent" }],
+      "properties": { "schema": { "const": "minimoi.records.interpretation/1" } }
+    }
+  ],
+  "$defs": {
+    "cited_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "citations"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "citations": { "$ref": "urn:minimoi:contract:common#/$defs/citations" }
+      }
+    },
+    "owner_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "authorship", "decided_by", "decided_at", "decision_record"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "authorship": { "const": "direct" },
+        "decided_by": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "decided_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "decision_record": { "$ref": "urn:minimoi:contract:common#/$defs/citation" }
+      }
+    },
+    "reported_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "status", "declared_by", "uploaded_by", "citations", "note"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "status": { "const": "reported_unverified" },
+        "declared_by": { "type": "string", "minLength": 1 },
+        "uploaded_by": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_principal_id" },
+        "citations": { "$ref": "urn:minimoi:contract:common#/$defs/citations" },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "disagreement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic", "positions"],
+      "properties": {
+        "topic": { "type": "string", "minLength": 1 },
+        "positions": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["holder", "holder_basis", "position", "citations"],
+            "properties": {
+              "holder": { "type": "string", "minLength": 1 },
+              "holder_basis": { "enum": ["declared_speaker", "authenticated_contributor"] },
+              "position": { "type": "string", "minLength": 1 },
+              "citations": { "$ref": "urn:minimoi:contract:common#/$defs/citations" }
+            }
+          }
+        }
+      }
+    },
+    "interpretation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "id", "workspace", "question", "state", "stale_reason", "stale_since", "adapter", "adapter_kind",
+        "usage", "requested_by", "created", "cited", "body"
+      ],
+      "properties": {
+        "schema": { "const": "minimoi.records.interpretation/1" },
+        "simulated": { "$ref": "urn:minimoi:contract:common#/$defs/simulated" },
+        "id": { "type": "string", "pattern": "^int-[a-z0-9-]{1,40}$" },
+        "workspace": { "type": "string", "pattern": "^workspace:[a-z0-9-]+$" },
+        "question": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["current", "stale"] },
+        "stale_reason": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "source_id", "cited_revision", "current_revision"],
+              "properties": {
+                "kind": { "enum": ["new_revision", "correction"] },
+                "source_id": { "$ref": "urn:minimoi:contract:common#/$defs/source_id" },
+                "cited_revision": { "type": "integer", "minimum": 1 },
+                "current_revision": { "type": "integer", "minimum": 1 }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "stale_since": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+        "adapter": { "type": "string", "minLength": 1 },
+        "adapter_kind": { "enum": ["test", "live"] },
+        "usage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "cost_usd"],
+          "properties": {
+            "status": { "enum": ["none", "reported", "verified", "unavailable"] },
+            "cost_usd": { "type": ["number", "null"], "minimum": 0 }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "status": { "enum": ["none", "unavailable"] } } },
+              "then": { "properties": { "cost_usd": { "type": "null" } } },
+              "description": "Missing usage or cost is unknown, never zero."
+            }
+          ]
+        },
+        "requested_by": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "created": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "cited": { "type": "array", "minItems": 1, "items": { "$ref": "urn:minimoi:contract:common#/$defs/citation" } },
+        "body": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["understanding", "alternatives", "disagreements", "owner_decisions", "reported_decisions", "open_points", "no_decision_reached"],
+          "properties": {
+            "understanding": { "type": "string", "minLength": 1 },
+            "alternatives": { "type": "array", "items": { "$ref": "#/$defs/cited_point" } },
+            "disagreements": { "type": "array", "items": { "$ref": "#/$defs/disagreement" } },
+            "owner_decisions": { "type": "array", "items": { "$ref": "#/$defs/owner_decision" } },
+            "reported_decisions": { "type": "array", "items": { "$ref": "#/$defs/reported_decision" } },
+            "open_points": { "type": "array", "items": { "$ref": "#/$defs/cited_point" } },
+            "no_decision_reached": { "type": "array", "items": { "$ref": "#/$defs/cited_point" } }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "stale" } } },
+          "then": { "properties": { "stale_reason": { "type": "object" }, "stale_since": { "type": "string" } } },
+          "else": { "properties": { "stale_reason": { "type": "null" }, "stale_since": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "adapter_kind": { "const": "test" } } },
+          "then": { "properties": { "usage": { "properties": { "status": { "const": "none" } } } } },
+          "description": "A test adapter makes no model call, so it has no usage to report."
+        }
+      ]
+    }
+  }
+}

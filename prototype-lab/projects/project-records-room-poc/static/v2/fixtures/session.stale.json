@@ -1,0 +1,233 @@
+{
+  "schema": "minimoi.rooms.session_view/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "principals": [
+    {
+      "id": "robert",
+      "label": "Robert",
+      "kind": "person"
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "kind": "agent"
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "kind": "agent"
+    },
+    {
+      "id": "workshop",
+      "label": "Workshop (mac-workshop-1)",
+      "kind": "agent"
+    },
+    {
+      "id": "master-craftsman",
+      "label": "Master Craftsman",
+      "kind": "agent"
+    },
+    {
+      "id": "cos",
+      "label": "Robert's CoS",
+      "kind": "agent"
+    }
+  ],
+  "session": {
+    "id": "ses-handoff-review",
+    "room": {
+      "id": "room-workshop",
+      "title": "Workshop"
+    },
+    "title": "Room handoff review",
+    "purpose": "Review the Room handoff adapter result and agree who owns the next step.",
+    "state": "recording",
+    "created": "2026-09-25T14:40:00Z"
+  },
+  "viewer": "robert",
+  "participants": [
+    {
+      "principal": "robert",
+      "membership": {
+        "role": "owner",
+        "since": "2026-09-25T14:40:00Z"
+      },
+      "contact": {
+        "state": "joined",
+        "receipt_id": "join-robert-01",
+        "at": "2026-09-25T14:40:30Z",
+        "note": null
+      },
+      "working": {
+        "state": "not_working",
+        "attempt_id": null,
+        "observed_at": null,
+        "source": null,
+        "freshness": null,
+        "wait_reason": null,
+        "note": null
+      }
+    },
+    {
+      "principal": "claude-code",
+      "membership": {
+        "role": "contributor",
+        "since": "2026-09-25T14:41:00Z"
+      },
+      "contact": {
+        "state": "joined",
+        "receipt_id": "join-cc-01",
+        "at": "2026-09-25T14:52:10Z",
+        "note": null
+      },
+      "working": {
+        "state": "not_working",
+        "attempt_id": "att-c2c-003-1",
+        "observed_at": "2026-09-25T15:11:40Z",
+        "source": "checkpoint",
+        "freshness": "stale",
+        "wait_reason": null,
+        "note": "Last observation is stale"
+      }
+    },
+    {
+      "principal": "workshop",
+      "membership": {
+        "role": "contributor",
+        "since": "2026-09-25T14:45:00Z"
+      },
+      "contact": {
+        "state": "joined",
+        "receipt_id": "join-ws-01",
+        "at": "2026-09-25T15:02:00Z",
+        "note": null
+      },
+      "working": {
+        "state": "not_working",
+        "attempt_id": "att-room-021-2",
+        "observed_at": "2026-09-25T15:11:50Z",
+        "source": "heartbeat",
+        "freshness": "stale",
+        "wait_reason": null,
+        "note": "Last observation is stale"
+      }
+    },
+    {
+      "principal": "codex",
+      "membership": {
+        "role": "reviewer",
+        "since": "2026-09-25T14:41:00Z"
+      },
+      "contact": {
+        "state": "not_joined",
+        "receipt_id": null,
+        "at": null,
+        "note": "Access ready, not joined"
+      },
+      "working": {
+        "state": "not_working",
+        "attempt_id": null,
+        "observed_at": null,
+        "source": null,
+        "freshness": null,
+        "wait_reason": null,
+        "note": null
+      }
+    }
+  ],
+  "standing_visibility": [
+    {
+      "principal": "cos",
+      "role": "cos_knowledge",
+      "membership": false,
+      "note": "Standing read of Robert-visible records. This is not membership: CoS is not a participant here, is not shown as present, and cannot post."
+    }
+  ],
+  "selected_context": [
+    {
+      "source": {
+        "source_id": "rec-7f1c",
+        "revision": 2
+      },
+      "title": "Synthetic review exchange",
+      "fidelity": "excerpt",
+      "coverage_state": "partial",
+      "shared_by": "robert",
+      "grant": {
+        "id": "dg-0412",
+        "kind": "source_disclosure",
+        "scope": "rec-7f1c@2 to this session's current audience"
+      },
+      "shared_at": "2026-09-25T15:01:00Z",
+      "disclosure_note": "Participants see this copy. The source record's other context is not disclosed."
+    },
+    {
+      "source": {
+        "source_id": "rec-5d31",
+        "revision": 1
+      },
+      "title": "Owner decision: recovery stays inside Work detail",
+      "fidelity": "original",
+      "coverage_state": "complete",
+      "shared_by": "robert",
+      "grant": {
+        "id": "dg-0413",
+        "kind": "source_disclosure",
+        "scope": "rec-5d31@1 to this session's current audience"
+      },
+      "shared_at": "2026-09-25T15:03:00Z",
+      "disclosure_note": "Participants see this copy. The source record's other context is not disclosed."
+    }
+  ],
+  "requests": [
+    {
+      "id": "REQ-32",
+      "kind": "person_input",
+      "title": "Accept partial coverage for the synthetic export?",
+      "body": "The export omitted the first three turns and diagram.png. Proceed with the excerpt, or wait for a full export?",
+      "requester": "codex",
+      "assignee": "robert",
+      "state": "requested",
+      "next_owner": "robert",
+      "next_action": "Answer",
+      "created": "2026-09-25T15:10:00Z",
+      "updated": "2026-09-25T15:10:00Z",
+      "answer": null
+    },
+    {
+      "id": "REQ-31",
+      "kind": "review",
+      "title": "Review the Room handoff adapter result",
+      "body": null,
+      "requester": "robert",
+      "assignee": "claude-code",
+      "state": "picked_up",
+      "next_owner": "claude-code",
+      "next_action": "Submit the review",
+      "created": "2026-09-25T14:50:00Z",
+      "updated": "2026-09-25T14:55:00Z",
+      "answer": null
+    },
+    {
+      "id": "REQ-30",
+      "kind": "handoff",
+      "title": "Hand off the capture connector checks",
+      "body": null,
+      "requester": "robert",
+      "assignee": "workshop",
+      "state": "acknowledged",
+      "next_owner": null,
+      "next_action": null,
+      "created": "2026-09-25T14:30:00Z",
+      "updated": "2026-09-25T14:49:00Z",
+      "answer": null
+    }
+  ],
+  "inbox": {
+    "viewer": "robert",
+    "for_you": [
+      "REQ-32"
+    ]
+  }
+}

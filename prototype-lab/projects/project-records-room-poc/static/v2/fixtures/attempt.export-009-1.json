@@ -1,0 +1,260 @@
+{
+  "schema": "minimoi.work.attempt/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "principals": [
+    {
+      "id": "robert",
+      "label": "Robert",
+      "kind": "person"
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code",
+      "kind": "agent"
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "kind": "agent"
+    },
+    {
+      "id": "workshop",
+      "label": "Workshop (mac-workshop-1)",
+      "kind": "agent"
+    },
+    {
+      "id": "master-craftsman",
+      "label": "Master Craftsman",
+      "kind": "agent"
+    },
+    {
+      "id": "ops-monitor",
+      "label": "Operations monitor",
+      "kind": "service"
+    }
+  ],
+  "attempt": {
+    "attempt_id": "att-export-009-1",
+    "assignment_id": "asg-export-009",
+    "number": 1,
+    "previous_attempt": null,
+    "runtime": {
+      "client": "codex",
+      "runtime": "codex-cli",
+      "version": "fixture-1.0",
+      "adapter": "manual",
+      "adapter_kind": "real",
+      "manual": true
+    },
+    "host": "mac-workshop-1",
+    "environment": "local-proof",
+    "repo": {
+      "repository": "personal-ai-agents",
+      "worktree": "rooms-build",
+      "base_rev": "0df6a4b",
+      "dirty_patch_sha256": null
+    },
+    "fence": 1,
+    "execution": "finished",
+    "delivery": "centrally_recorded",
+    "wait_reason": null,
+    "step": null,
+    "started_at": "2026-09-25T14:10:00Z",
+    "ended_at": "2026-09-25T14:48:00Z",
+    "last_contact_at": "2026-09-25T14:48:00Z",
+    "last_contact_source": "checkpoint",
+    "last_progress_at": "2026-09-25T14:48:00Z",
+    "freshness": "current",
+    "trace_id": "695dbef98a39ef9541df456e1f409e9a"
+  },
+  "assignment": {
+    "assignment_id": "asg-export-009",
+    "title": "Source export validation",
+    "summary": "Compare a synthetic export against its source and flag omitted turns.",
+    "work_ref": {
+      "kind": "build_queue",
+      "ref": "EXPORT-009"
+    },
+    "spec_revision": "Spec 158 v0.7 §21.4 (proposed)",
+    "acceptance_boundary": "Omitted turns and attachments are flagged; nothing is silently completed.",
+    "requester": "robert",
+    "builder": "codex",
+    "reviewer": "claude-code",
+    "mandate": {
+      "operations": [
+        "record_save",
+        "record_read",
+        "work_report"
+      ],
+      "host": "mac-workshop-1",
+      "expires_at": "2026-09-26T03:00:00Z",
+      "retry_limit": 2,
+      "quiet_period_s": 600,
+      "stale_after_s": 120,
+      "offline_allowed": false
+    }
+  },
+  "assurance": {
+    "produced": {
+      "state": "done",
+      "by": "codex",
+      "at": "2026-09-25T14:40:00Z",
+      "evidence_ref": "ev-diff-009",
+      "note": "Diff preserved",
+      "authority": "builder"
+    },
+    "builder_verified": {
+      "state": "done",
+      "by": "codex",
+      "at": "2026-09-25T14:46:00Z",
+      "evidence_ref": "ev-test-009",
+      "note": "Local checks attached",
+      "authority": "builder"
+    },
+    "independently_reviewed": {
+      "state": "done",
+      "by": "claude-code",
+      "at": "2026-09-25T14:58:00Z",
+      "evidence_ref": "ev-review-009",
+      "note": "Reviewed the exact diff",
+      "authority": "reviewer"
+    },
+    "accepted": {
+      "state": "done",
+      "by": "robert",
+      "at": "2026-09-25T15:05:00Z",
+      "evidence_ref": "disp-0091",
+      "note": "Accepted by Robert",
+      "authority": "owner"
+    },
+    "released": {
+      "state": "not_requested",
+      "by": null,
+      "at": null,
+      "evidence_ref": null,
+      "note": "Release not requested"
+    }
+  },
+  "timeline": [
+    {
+      "seq": 1,
+      "kind": "checkpoint",
+      "basis": "observation",
+      "title": "Assignment claimed",
+      "detail": "Authenticated claim receipt · fence 1",
+      "actor": "codex",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T14:10:00Z",
+      "received_at": "2026-09-25T14:10:01Z",
+      "operation_id": null,
+      "evidence_refs": []
+    },
+    {
+      "seq": 2,
+      "kind": "result",
+      "basis": "observation",
+      "title": "Local checks passed",
+      "detail": "Test evidence attached",
+      "actor": "codex",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T14:46:00Z",
+      "received_at": "2026-09-25T14:46:01Z",
+      "operation_id": null,
+      "evidence_refs": [
+        "ev-test-009"
+      ]
+    },
+    {
+      "seq": 3,
+      "kind": "self_report",
+      "basis": "self_report",
+      "title": "Builder reported complete",
+      "detail": "Self-report · not verification",
+      "actor": "codex",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T14:47:58Z",
+      "received_at": "2026-09-25T14:48:00Z",
+      "operation_id": null,
+      "evidence_refs": []
+    },
+    {
+      "seq": 4,
+      "kind": "result",
+      "basis": "observation",
+      "title": "Independent review recorded",
+      "detail": "Claude Code reviewed diff SHA-256 238e4275074f…",
+      "actor": "claude-code",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T14:58:00Z",
+      "received_at": "2026-09-25T14:58:01Z",
+      "operation_id": null,
+      "evidence_refs": [
+        "ev-review-009"
+      ]
+    },
+    {
+      "seq": 5,
+      "kind": "result",
+      "basis": "observation",
+      "title": "Accepted by Robert",
+      "detail": "Owner disposition disp-0091 on the exact reviewed diff",
+      "actor": "robert",
+      "step": null,
+      "wait_reason": null,
+      "source_observed_at": "2026-09-25T15:05:00Z",
+      "received_at": "2026-09-25T15:05:01Z",
+      "operation_id": null,
+      "evidence_refs": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev-diff-009",
+      "kind": "diff",
+      "sha256": "238e4275074fcfb60ea24700db59bbc3b944a1a7994372d7681516e5db6fc97f",
+      "command": null,
+      "result": null,
+      "reviewed_revision": null,
+      "location": "Candidate diff against base 0df6a4b (fixture)",
+      "source": "builder upload",
+      "created": "2026-09-25T14:40:00Z"
+    },
+    {
+      "id": "ev-test-009",
+      "kind": "test",
+      "sha256": null,
+      "command": "python -m pytest -q tests/test_source_comparison.py",
+      "result": "6 passed (synthetic)",
+      "reviewed_revision": null,
+      "location": null,
+      "source": "builder run",
+      "created": "2026-09-25T14:46:00Z"
+    },
+    {
+      "id": "ev-review-009",
+      "kind": "review",
+      "sha256": "238e4275074fcfb60ea24700db59bbc3b944a1a7994372d7681516e5db6fc97f",
+      "command": null,
+      "result": "No blocking findings",
+      "reviewed_revision": "238e4275074f",
+      "location": null,
+      "source": "Claude Code review record",
+      "created": "2026-09-25T14:58:00Z"
+    }
+  ],
+  "next_owner": {
+    "principal": null,
+    "action": null
+  },
+  "diagnostics": {
+    "console_connected": false,
+    "trace_id": "695dbef98a39ef9541df456e1f409e9a",
+    "note": "The diagnostics console is a separate local window (A2). It is not connected in this preview."
+  },
+  "recovery": null
+}

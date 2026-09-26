@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:session_view",
+  "title": "Collaboration session view",
+  "description": "Purpose, participants with separate evidence (membership, authenticated contact from a join receipt, working only with a current observed attempt), standing visibility shown apart from membership, selected context with its disclosure, requests with next owner, and the viewer's inbox.",
+  "oneOf": [
+    { "$ref": "#/$defs/session_view" },
+    {
+      "allOf": [{ "$ref": "urn:minimoi:contract:common#/$defs/absent" }],
+      "properties": { "schema": { "const": "minimoi.rooms.session_view/1" } }
+    }
+  ],
+  "$defs": {
+    "participant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal", "membership", "contact", "working"],
+      "properties": {
+        "principal": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "membership": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "since"],
+          "properties": {
+            "role": { "enum": ["owner", "moderator", "contributor", "reviewer", "observer"] },
+            "since": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" }
+          }
+        },
+        "contact": {
+          "description": "Authenticated contact from a join acknowledgment receipt. Contact is not presence.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "receipt_id", "at", "note"],
+          "properties": {
+            "state": { "enum": ["joined", "not_joined"] },
+            "receipt_id": { "type": ["string", "null"] },
+            "at": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+            "note": { "type": ["string", "null"] }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "state": { "const": "joined" } } },
+              "then": { "properties": { "receipt_id": { "type": "string", "minLength": 1 }, "at": { "type": "string" } } },
+              "else": { "properties": { "receipt_id": { "type": "null" }, "at": { "type": "null" } } }
+            }
+          ]
+        },
+        "working": {
+          "description": "working/waiting only with a current observed attempt; otherwise not_working, optionally with the last (stale or ended) observation.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "attempt_id", "observed_at", "source", "freshness", "wait_reason", "note"],
+          "properties": {
+            "state": { "enum": ["working", "waiting", "not_working"] },
+            "attempt_id": { "type": ["string", "null"] },
+            "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+            "source": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_contact_source" },
+            "freshness": { "enum": ["current", "stale", "unavailable", "unknown", null] },
+            "wait_reason": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_wait_reason" },
+            "note": { "type": ["string", "null"] }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "state": { "enum": ["working", "waiting"] } } },
+              "then": {
+                "properties": {
+                  "attempt_id": { "type": "string", "minLength": 1 },
+                  "observed_at": { "type": "string" },
+                  "source": { "$ref": "urn:minimoi:contract:common#/$defs/contact_source" },
+                  "freshness": { "const": "current" }
+                }
+              }
+            },
+            {
+              "if": { "properties": { "state": { "const": "waiting" } } },
+              "then": { "properties": { "wait_reason": { "$ref": "urn:minimoi:contract:common#/$defs/wait_reason" } } }
+            }
+          ]
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title", "body", "requester", "assignee", "state", "next_owner", "next_action", "created", "updated", "answer"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^REQ-[0-9]{1,6}$" },
+        "kind": { "enum": ["review", "handoff", "person_input"] },
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": ["string", "null"] },
+        "requester": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "assignee": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "state": { "enum": ["requested", "picked_up", "submitted", "answered", "acknowledged", "cancelled"] },
+        "next_owner": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_principal_id" },
+        "next_action": { "type": ["string", "null"] },
+        "created": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "updated": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "answer": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["by", "at", "text"],
+              "properties": {
+                "by": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+                "at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+                "text": { "type": "string", "minLength": 1 }
+              }
+            },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "answered" } } },
+          "then": { "properties": { "answer": { "type": "object" }, "kind": { "const": "person_input" } } }
+        },
+        {
+          "if": { "properties": { "state": { "enum": ["acknowledged", "cancelled"] } } },
+          "then": { "properties": { "next_owner": { "type": "null" } } },
+          "else": { "properties": { "next_owner": { "type": "string" } } }
+        }
+      ]
+    },
+    "selected_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "title", "fidelity", "coverage_state", "shared_by", "grant", "shared_at", "disclosure_note"],
+      "properties": {
+        "source": { "$ref": "urn:minimoi:contract:common#/$defs/source_revision" },
+        "title": { "type": "string", "minLength": 1 },
+        "fidelity": { "$ref": "urn:minimoi:contract:common#/$defs/fidelity" },
+        "coverage_state": { "enum": ["complete", "partial", "unknown"] },
+        "shared_by": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "grant": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "scope"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^dg-[a-z0-9-]{1,40}$" },
+            "kind": { "const": "source_disclosure" },
+            "scope": { "type": "string", "minLength": 1 }
+          }
+        },
+        "shared_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "disclosure_note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "session_view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "observed_at", "principals", "session", "viewer", "participants", "standing_visibility", "selected_context", "requests", "inbox"],
+      "properties": {
+        "schema": { "const": "minimoi.rooms.session_view/1" },
+        "simulated": { "$ref": "urn:minimoi:contract:common#/$defs/simulated" },
+        "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "principals": { "type": "array", "items": { "$ref": "urn:minimoi:contract:common#/$defs/principal" } },
+        "session": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "room", "title", "purpose", "state", "created"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^ses-[a-z0-9-]{1,40}$" },
+            "room": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "title"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^room-[a-z0-9-]{1,40}$" },
+                "title": { "type": "string", "minLength": 1 }
+              }
+            },
+            "title": { "type": "string", "minLength": 1 },
+            "purpose": { "type": ["string", "null"] },
+            "state": { "enum": ["recording", "paused", "closed"] },
+            "created": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" }
+          }
+        },
+        "viewer": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "participants": { "type": "array", "items": { "$ref": "#/$defs/participant" } },
+        "standing_visibility": {
+          "description": "Standing read (for example CoS's knowledge role) is listed here, never as membership or presence.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["principal", "role", "membership", "note"],
+            "properties": {
+              "principal": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+              "role": { "const": "cos_knowledge" },
+              "membership": { "const": false },
+              "note": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "selected_context": { "type": "array", "items": { "$ref": "#/$defs/selected_context" } },
+        "requests": { "type": "array", "items": { "$ref": "#/$defs/request" } },
+        "inbox": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["viewer", "for_you"],
+          "properties": {
+            "viewer": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+            "for_you": { "type": "array", "items": { "type": "string", "pattern": "^REQ-[0-9]{1,6}$" } }
+          }
+        }
+      }
+    }
+  }
+}

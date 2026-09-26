@@ -1,0 +1,13 @@
+{
+  "description": "Contract registry (package U, first version). Maps each response's \"schema\" identifier to the JSON Schema file that validates it. The fixture adapter (U) and the HTTP adapter (A4) both honor these; common.schema.json holds shared definitions.",
+  "contracts": {
+    "minimoi.work.overview/1": "overview.schema.json",
+    "minimoi.work.attempt/1": "attempt_detail.schema.json",
+    "minimoi.records.record/1": "record.schema.json",
+    "minimoi.records.list/1": "record.schema.json",
+    "minimoi.records.interpretation/1": "interpretation.schema.json",
+    "minimoi.rooms.session_view/1": "session_view.schema.json",
+    "minimoi.ui.action_result/1": "action_result.schema.json"
+  },
+  "shared": ["common.schema.json"]
+}

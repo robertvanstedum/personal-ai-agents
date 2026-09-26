@@ -1,0 +1,111 @@
+{
+  "schema": "minimoi.records.record/1",
+  "simulated": true,
+  "source_id": "rec-7f1c",
+  "workspace": "workspace:robert",
+  "owner": "robert",
+  "kind": "conversation",
+  "title": "Synthetic review exchange",
+  "revision": 2,
+  "current_revision": 3,
+  "revisions": [
+    {
+      "revision": 1,
+      "created": "2026-09-25T14:45:00Z",
+      "note": "First save"
+    },
+    {
+      "revision": 2,
+      "created": "2026-09-25T15:02:00Z",
+      "note": "Replaced with a later export that includes the placement exchange"
+    },
+    {
+      "revision": 3,
+      "created": "2026-09-25T15:30:00Z",
+      "note": "Correction added from a follow-up export"
+    }
+  ],
+  "sha256": "ce183cebb92da8323c932489aa5170bf1fbf22b842820aeaa516324979c7381e",
+  "media_type": "text/markdown",
+  "size": 476,
+  "fidelity": "excerpt",
+  "coverage": {
+    "state": "partial",
+    "missing": [
+      "the first three turns of the conversation (omitted by the export)",
+      "attachment: diagram.png"
+    ],
+    "note": "The export omitted the opening turns and the attached diagram."
+  },
+  "capture": {
+    "source_application": "Claude Chat export",
+    "source_reference": "conv-synthetic-0412",
+    "captured_at": "2026-09-25T15:02:00Z",
+    "source_time": "2026-09-25T14:40:00Z"
+  },
+  "submitter": {
+    "principal": "robert",
+    "label": "Robert",
+    "authenticated": true,
+    "route": "records_save"
+  },
+  "declared_author": null,
+  "declared_speakers": [
+    "Robert",
+    "Codex",
+    "Claude Code"
+  ],
+  "authorship": "imported",
+  "stages": {
+    "original": "committed",
+    "extraction": "not_applicable",
+    "indexing": "done",
+    "central": "not_connected"
+  },
+  "receipt": {
+    "id": "rcpt-7f1c-2",
+    "actor": "robert",
+    "committed_at": "2026-09-25T15:02:00Z",
+    "durability": "local_sqlite",
+    "production": "not_connected",
+    "scope": "workspace:robert"
+  },
+  "segments": [
+    {
+      "ordinal": 1,
+      "declared_speaker": "Robert",
+      "source_time": "2026-09-25T14:40:00Z",
+      "text": "Where should recovery live: its own page, or inside the work detail?",
+      "sha256": "2b30728e0738f92ec274c3b364fa3bc9f0f644965e29f4ead9a3d0438d61daf2"
+    },
+    {
+      "ordinal": 2,
+      "declared_speaker": "Codex",
+      "source_time": "2026-09-25T14:41:00Z",
+      "text": "A separate Recovery page keeps an exception visible even when nobody opens the detail.",
+      "sha256": "1189bc39197b4403c323a7f621f616c8f23eaf4380459b89e29e228b0e974923"
+    },
+    {
+      "ordinal": 3,
+      "declared_speaker": "Claude Code",
+      "source_time": "2026-09-25T14:42:00Z",
+      "text": "Recovery is a state of the attempt. Inside Work detail it sits next to the evidence and the next safe action.",
+      "sha256": "086800c1a7d9d48c34dc5d2ca76ed726f0eb09f5ea0a77e883efd4a1a872a412"
+    },
+    {
+      "ordinal": 4,
+      "declared_speaker": "Codex",
+      "source_time": "2026-09-25T14:43:00Z",
+      "text": "Then the overview must list open exceptions first, or they will be missed.",
+      "sha256": "0de09a4432cec6be89484466cbb6b448de811f3a3ee5ecacae12961b1cae1560"
+    },
+    {
+      "ordinal": 5,
+      "declared_speaker": "Robert",
+      "source_time": "2026-09-25T14:44:00Z",
+      "text": "Agreed that the overview surfaces them. I will record the placement decision separately.",
+      "sha256": "b3c06e342c21f7a0cda98e9953eeed2671d821e64a2e0b8bcd254e7c4d298ca3"
+    }
+  ],
+  "relations": []
+}

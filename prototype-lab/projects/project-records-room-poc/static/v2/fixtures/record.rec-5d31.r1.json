@@ -1,0 +1,66 @@
+{
+  "schema": "minimoi.records.record/1",
+  "simulated": true,
+  "source_id": "rec-5d31",
+  "workspace": "workspace:robert",
+  "owner": "robert",
+  "kind": "owner_decision",
+  "title": "Owner decision: recovery stays inside Work detail",
+  "revision": 1,
+  "current_revision": 1,
+  "revisions": [
+    {
+      "revision": 1,
+      "created": "2026-09-25T14:58:00Z",
+      "note": "Recorded through the owner decision route"
+    }
+  ],
+  "sha256": "ca3f8209704f34f2438f0c11208a83c62462f9a7d62aeebaa5ba8e9f26e54b7a",
+  "media_type": "text/markdown",
+  "size": 103,
+  "fidelity": "original",
+  "coverage": {
+    "state": "complete",
+    "missing": [],
+    "note": null
+  },
+  "capture": {
+    "source_application": "MiniMoi owner decision (direct)",
+    "source_reference": null,
+    "captured_at": "2026-09-25T14:58:00Z",
+    "source_time": "2026-09-25T14:58:00Z"
+  },
+  "submitter": {
+    "principal": "robert",
+    "label": "Robert",
+    "authenticated": true,
+    "route": "owner_decision"
+  },
+  "declared_author": null,
+  "declared_speakers": [],
+  "authorship": "direct",
+  "stages": {
+    "original": "committed",
+    "extraction": "not_applicable",
+    "indexing": "done",
+    "central": "not_connected"
+  },
+  "receipt": {
+    "id": "rcpt-5d31-1",
+    "actor": "robert",
+    "committed_at": "2026-09-25T14:58:00Z",
+    "durability": "local_sqlite",
+    "production": "not_connected",
+    "scope": "workspace:robert"
+  },
+  "segments": [
+    {
+      "ordinal": 1,
+      "declared_speaker": null,
+      "source_time": "2026-09-25T14:58:00Z",
+      "text": "Recovery is a state of Work detail, not a separate page. The Work overview lists open exceptions first.",
+      "sha256": "ca3f8209704f34f2438f0c11208a83c62462f9a7d62aeebaa5ba8e9f26e54b7a"
+    }
+  ],
+  "relations": []
+}

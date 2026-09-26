@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:minimoi:contract:overview",
+  "title": "Work overview",
+  "description": "Attention-first work overview: the live roster (plan §5 shape, schema minimoi.work.roster/1), open exceptions and decisions, and a health footer. When the work store cannot be read the roster is replaced by a store_unavailable object and attention is unknown; consumers render Unknown, never 0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "observed_at", "roster", "attention", "health"],
+  "properties": {
+    "schema": { "const": "minimoi.work.overview/1" },
+    "simulated": { "$ref": "urn:minimoi:contract:common#/$defs/simulated" },
+    "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+    "roster": {
+      "oneOf": [{ "$ref": "#/$defs/roster" }, { "$ref": "#/$defs/roster_unavailable" }]
+    },
+    "attention": {
+      "oneOf": [{ "$ref": "#/$defs/attention_known" }, { "$ref": "#/$defs/attention_unknown" }]
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["central_records", "local_workshop", "diagnostics"],
+      "properties": {
+        "central_records": { "$ref": "#/$defs/health_entry" },
+        "local_workshop": { "$ref": "#/$defs/health_entry" },
+        "diagnostics": { "$ref": "#/$defs/health_entry" }
+      }
+    }
+  },
+  "$defs": {
+    "roster": {
+      "description": "GET /api/v1/work/roster (plan §5).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "observed_at", "refresh_s", "monitor", "principals", "agents", "attempts", "completed_recent"],
+      "properties": {
+        "schema": { "const": "minimoi.work.roster/1" },
+        "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "refresh_s": { "type": "integer", "minimum": 1 },
+        "monitor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["last_run_at", "freshness", "observer"],
+          "properties": {
+            "last_run_at": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+            "freshness": { "$ref": "urn:minimoi:contract:common#/$defs/freshness" },
+            "observer": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "last_run_at": { "type": "null" } } },
+              "then": { "properties": { "freshness": { "enum": ["unavailable", "unknown"] } } }
+            }
+          ]
+        },
+        "principals": { "type": "array", "items": { "$ref": "urn:minimoi:contract:common#/$defs/principal" } },
+        "agents": { "type": "array", "items": { "$ref": "#/$defs/agent" } },
+        "attempts": { "type": "array", "items": { "$ref": "#/$defs/attempt" } },
+        "completed_recent": { "type": "array", "items": { "$ref": "#/$defs/completed" } }
+      }
+    },
+    "roster_unavailable": {
+      "description": "The roster endpoint's 503 store_unavailable body.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "code", "observed_at", "detail"],
+      "properties": {
+        "status": { "const": "unavailable" },
+        "code": { "const": "store_unavailable" },
+        "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal", "role", "status", "wait_reason", "step", "current_attempt", "last_contact_at", "last_contact_source", "runtime"],
+      "properties": {
+        "principal": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "role": { "enum": ["builder", "reviewer", "oversight", "monitor", "knowledge"] },
+        "status": {
+          "description": "running and waiting need a current observed attempt; configured_not_running means registered with no current attempt.",
+          "enum": ["running", "waiting", "configured_not_running", "stale", "unknown"]
+        },
+        "wait_reason": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_wait_reason" },
+        "step": { "type": ["string", "null"] },
+        "current_attempt": { "type": ["string", "null"] },
+        "last_contact_at": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+        "last_contact_source": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_contact_source" },
+        "runtime": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "enum": ["running", "waiting"] } } },
+          "then": {
+            "properties": {
+              "current_attempt": { "type": "string" },
+              "last_contact_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+              "last_contact_source": { "$ref": "urn:minimoi:contract:common#/$defs/contact_source" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "waiting" } } },
+          "then": { "properties": { "wait_reason": { "$ref": "urn:minimoi:contract:common#/$defs/wait_reason" } } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "configured_not_running" } } },
+          "then": { "properties": { "current_attempt": { "type": "null" } } }
+        }
+      ]
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id", "assignment_id", "work_ref", "title", "agent", "adapter_kind", "manual", "execution", "delivery",
+        "assurance", "wait_reason", "step", "started_at", "elapsed_s", "last_contact_at", "last_contact_source",
+        "last_progress_at", "last_progress_basis", "freshness", "latest_evidence", "next_owner", "next_action", "trace_id"
+      ],
+      "properties": {
+        "attempt_id": { "type": "string", "pattern": "^att-[a-z0-9-]{1,40}$" },
+        "assignment_id": { "type": "string", "pattern": "^asg-[a-z0-9-]{1,40}$" },
+        "work_ref": { "$ref": "urn:minimoi:contract:common#/$defs/work_ref" },
+        "title": { "type": "string", "minLength": 1 },
+        "agent": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "adapter_kind": { "enum": ["real", "test"] },
+        "manual": { "type": "boolean" },
+        "execution": { "$ref": "urn:minimoi:contract:common#/$defs/execution" },
+        "delivery": { "$ref": "urn:minimoi:contract:common#/$defs/delivery" },
+        "assurance": { "$ref": "urn:minimoi:contract:common#/$defs/assurance_level" },
+        "wait_reason": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_wait_reason" },
+        "step": { "type": ["string", "null"] },
+        "started_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "elapsed_s": { "type": ["integer", "null"], "minimum": 0 },
+        "last_contact_at": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+        "last_contact_source": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_contact_source" },
+        "last_progress_at": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+        "last_progress_basis": { "enum": ["observation", "self_report", null] },
+        "freshness": { "$ref": "urn:minimoi:contract:common#/$defs/freshness" },
+        "latest_evidence": { "type": "string", "minLength": 1 },
+        "next_owner": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_principal_id" },
+        "next_action": { "type": ["string", "null"] },
+        "trace_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{32}$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "execution": { "const": "waiting" } } },
+          "then": { "properties": { "wait_reason": { "$ref": "urn:minimoi:contract:common#/$defs/wait_reason" } } }
+        },
+        {
+          "if": { "properties": { "last_contact_at": { "type": "null" } } },
+          "then": { "properties": { "freshness": { "enum": ["unavailable", "unknown"] }, "last_contact_source": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "last_contact_at": { "type": "string" } } },
+          "then": { "properties": { "last_contact_source": { "$ref": "urn:minimoi:contract:common#/$defs/contact_source" } } }
+        },
+        {
+          "if": { "properties": { "assurance": { "enum": ["accepted", "released"] } } },
+          "then": false,
+          "description": "Current attempts never carry owner acceptance; accepted work appears in completed_recent with who and when."
+        }
+      ]
+    },
+    "completed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_id", "assignment_id", "work_ref", "title", "agent", "execution", "finished_at", "assurance", "accepted", "released", "note"],
+      "properties": {
+        "attempt_id": { "type": "string", "pattern": "^att-[a-z0-9-]{1,40}$" },
+        "assignment_id": { "type": "string", "pattern": "^asg-[a-z0-9-]{1,40}$" },
+        "work_ref": { "$ref": "urn:minimoi:contract:common#/$defs/work_ref" },
+        "title": { "type": "string", "minLength": 1 },
+        "agent": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "execution": { "enum": ["finished", "failed", "cancelled"] },
+        "finished_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "assurance": { "$ref": "urn:minimoi:contract:common#/$defs/assurance_level" },
+        "accepted": {
+          "oneOf": [
+            {
+              "allOf": [
+                { "$ref": "urn:minimoi:contract:common#/$defs/disposition" },
+                { "properties": { "authority": { "const": "owner" } } }
+              ]
+            },
+            { "type": "null" }
+          ]
+        },
+        "released": {
+          "oneOf": [{ "$ref": "urn:minimoi:contract:common#/$defs/disposition" }, { "type": "null" }]
+        },
+        "note": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "assurance": { "enum": ["accepted", "released"] } } },
+          "then": { "properties": { "accepted": { "type": "object" } } }
+        },
+        {
+          "if": { "properties": { "assurance": { "const": "released" } } },
+          "then": { "properties": { "released": { "type": "object" } } }
+        },
+        {
+          "if": { "properties": { "accepted": { "type": "object" } } },
+          "then": { "properties": { "assurance": { "enum": ["accepted", "released"] } } }
+        }
+      ]
+    },
+    "attention_known": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "observed_at", "observer", "exceptions", "decisions"],
+      "properties": {
+        "status": { "const": "known" },
+        "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "observer": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "exceptions": { "type": "array", "items": { "$ref": "#/$defs/exception_item" } },
+        "decisions": { "type": "array", "items": { "$ref": "#/$defs/decision_item" } }
+      }
+    },
+    "attention_unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason", "observed_at", "detail"],
+      "properties": {
+        "status": { "const": "unknown" },
+        "reason": { "enum": ["store_unavailable", "monitor_unavailable"] },
+        "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["view", "ref"],
+          "properties": {
+            "view": { "enum": ["work-detail", "collaborate", "continue"] },
+            "ref": { "type": "string", "minLength": 1 }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "exception_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "title", "summary", "impact", "state", "first_observed_at", "last_observed_at", "detected_by", "recovery_owner", "next_action", "target"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^exc-[a-z0-9-]{1,40}$" },
+        "category": {
+          "enum": ["outcome_uncertain", "stale_contact", "monitor_stale", "lease_expired", "repeated_failure", "sign_in_or_quota", "store_unavailable", "exporter_degraded"]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "impact": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["open", "dispositioned", "resolved"] },
+        "first_observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "last_observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "detected_by": { "type": "string", "minLength": 1 },
+        "recovery_owner": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "next_action": { "type": ["string", "null"] },
+        "target": { "$ref": "#/$defs/target" }
+      }
+    },
+    "decision_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title", "summary", "since", "next_owner", "next_action", "target"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^dec-[a-z0-9-]{1,40}$" },
+        "kind": { "enum": ["owner_question", "review_waiting", "acceptance_waiting"] },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "since": { "$ref": "urn:minimoi:contract:common#/$defs/timestamp" },
+        "next_owner": { "$ref": "urn:minimoi:contract:common#/$defs/principal_id" },
+        "next_action": { "type": "string", "minLength": 1 },
+        "target": { "$ref": "#/$defs/target" }
+      }
+    },
+    "health_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "detail", "observed_at", "source"],
+      "properties": {
+        "status": { "enum": ["available", "degraded", "stale", "unavailable", "unknown"] },
+        "detail": { "type": "string", "minLength": 1 },
+        "observed_at": { "$ref": "urn:minimoi:contract:common#/$defs/nullable_timestamp" },
+        "source": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "observed_at": { "type": "null" } } },
+          "then": { "properties": { "status": { "const": "unknown" }, "source": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["available", "degraded", "stale", "unavailable"] } } },
+          "then": { "properties": { "observed_at": { "type": "string" }, "source": { "type": "string" } } }
+        }
+      ]
+    }
+  }
+}

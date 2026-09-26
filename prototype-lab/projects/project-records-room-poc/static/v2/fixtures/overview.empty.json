@@ -1,0 +1,111 @@
+{
+  "schema": "minimoi.work.overview/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "roster": {
+    "schema": "minimoi.work.roster/1",
+    "observed_at": "2026-09-25T15:42:00Z",
+    "refresh_s": 5,
+    "monitor": {
+      "last_run_at": "2026-09-25T15:41:55Z",
+      "freshness": "current",
+      "observer": "ops-monitor"
+    },
+    "principals": [
+      {
+        "id": "robert",
+        "label": "Robert",
+        "kind": "person"
+      },
+      {
+        "id": "claude-code",
+        "label": "Claude Code",
+        "kind": "agent"
+      },
+      {
+        "id": "codex",
+        "label": "Codex",
+        "kind": "agent"
+      },
+      {
+        "id": "workshop",
+        "label": "Workshop (mac-workshop-1)",
+        "kind": "agent"
+      },
+      {
+        "id": "master-craftsman",
+        "label": "Master Craftsman",
+        "kind": "agent"
+      },
+      {
+        "id": "ops-monitor",
+        "label": "Operations monitor",
+        "kind": "service"
+      }
+    ],
+    "agents": [
+      {
+        "principal": "claude-code",
+        "role": "builder",
+        "status": "configured_not_running",
+        "wait_reason": null,
+        "step": null,
+        "current_attempt": null,
+        "last_contact_at": null,
+        "last_contact_source": null,
+        "runtime": "Claude Code CLI · manual run"
+      },
+      {
+        "principal": "workshop",
+        "role": "builder",
+        "status": "configured_not_running",
+        "wait_reason": null,
+        "step": null,
+        "current_attempt": null,
+        "last_contact_at": null,
+        "last_contact_source": null,
+        "runtime": "Python 3.11.9 · subprocess_python (real adapter)"
+      },
+      {
+        "principal": "codex",
+        "role": "reviewer",
+        "status": "configured_not_running",
+        "wait_reason": null,
+        "step": null,
+        "current_attempt": null,
+        "last_contact_at": null,
+        "last_contact_source": null,
+        "runtime": "Codex · check-in on request"
+      }
+    ],
+    "attempts": [],
+    "completed_recent": []
+  },
+  "attention": {
+    "status": "known",
+    "observed_at": "2026-09-25T15:41:55Z",
+    "observer": "ops-monitor",
+    "exceptions": [],
+    "decisions": []
+  },
+  "health": {
+    "central_records": {
+      "status": "available",
+      "detail": "Records service answered",
+      "observed_at": "2026-09-25T15:41:55Z",
+      "source": "ops-monitor"
+    },
+    "local_workshop": {
+      "status": "unavailable",
+      "detail": "No Workshop contact recorded · not running",
+      "observed_at": "2026-09-25T15:41:55Z",
+      "source": "ops-monitor"
+    },
+    "diagnostics": {
+      "status": "available",
+      "detail": "No exports queued",
+      "observed_at": "2026-09-25T15:41:55Z",
+      "source": "exporter counters"
+    }
+  }
+}

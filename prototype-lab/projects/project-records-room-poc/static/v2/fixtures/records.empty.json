@@ -1,0 +1,8 @@
+{
+  "schema": "minimoi.records.list/1",
+  "simulated": true,
+  "observed_at": "2026-09-25T15:42:00Z",
+  "limit": 50,
+  "truncated": false,
+  "records": []
+}

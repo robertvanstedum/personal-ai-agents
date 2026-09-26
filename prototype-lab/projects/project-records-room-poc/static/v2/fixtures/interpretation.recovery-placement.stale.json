@@ -1,0 +1,179 @@
+{
+  "schema": "minimoi.records.interpretation/1",
+  "simulated": true,
+  "id": "int-0007",
+  "workspace": "workspace:robert",
+  "question": "Where should recovery appear in the Work screens, and what has actually been decided?",
+  "state": "stale",
+  "stale_reason": {
+    "kind": "new_revision",
+    "source_id": "rec-7f1c",
+    "cited_revision": 2,
+    "current_revision": 3
+  },
+  "stale_since": "2026-09-25T15:30:00Z",
+  "adapter": "test_markers",
+  "adapter_kind": "test",
+  "usage": {
+    "status": "none",
+    "cost_usd": null
+  },
+  "requested_by": "robert",
+  "created": "2026-09-25T15:20:00Z",
+  "cited": [
+    {
+      "source_id": "rec-7f1c",
+      "revision": 2,
+      "ordinal": 1
+    },
+    {
+      "source_id": "rec-7f1c",
+      "revision": 2,
+      "ordinal": 2
+    },
+    {
+      "source_id": "rec-7f1c",
+      "revision": 2,
+      "ordinal": 3
+    },
+    {
+      "source_id": "rec-7f1c",
+      "revision": 2,
+      "ordinal": 4
+    },
+    {
+      "source_id": "rec-7f1c",
+      "revision": 2,
+      "ordinal": 5
+    },
+    {
+      "source_id": "rec-5d31",
+      "revision": 1,
+      "ordinal": 1
+    },
+    {
+      "source_id": "rec-2b90",
+      "revision": 1,
+      "ordinal": 4
+    },
+    {
+      "source_id": "rec-2b90",
+      "revision": 1,
+      "ordinal": 5
+    }
+  ],
+  "body": {
+    "understanding": "Recovery is treated as a state of the attempt: it appears inside Work detail, and the overview lists open exceptions first so they are not missed.",
+    "alternatives": [
+      {
+        "summary": "A separate Recovery page that stays visible even when nobody opens the detail.",
+        "citations": [
+          {
+            "source_id": "rec-7f1c",
+            "revision": 2,
+            "ordinal": 2
+          }
+        ]
+      },
+      {
+        "summary": "Recovery as a state inside Work detail, next to the evidence and the next safe action.",
+        "citations": [
+          {
+            "source_id": "rec-7f1c",
+            "revision": 2,
+            "ordinal": 3
+          }
+        ]
+      }
+    ],
+    "disagreements": [
+      {
+        "topic": "Whether a separate page is needed to keep exceptions visible",
+        "positions": [
+          {
+            "holder": "Codex",
+            "holder_basis": "declared_speaker",
+            "position": "Yes: a separate page keeps exceptions visible.",
+            "citations": [
+              {
+                "source_id": "rec-7f1c",
+                "revision": 2,
+                "ordinal": 2
+              }
+            ]
+          },
+          {
+            "holder": "Claude Code",
+            "holder_basis": "declared_speaker",
+            "position": "No: keep recovery with its evidence; the overview surfaces exceptions first.",
+            "citations": [
+              {
+                "source_id": "rec-7f1c",
+                "revision": 2,
+                "ordinal": 3
+              },
+              {
+                "source_id": "rec-7f1c",
+                "revision": 2,
+                "ordinal": 4
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "owner_decisions": [
+      {
+        "summary": "Recovery stays inside Work detail; the Work overview lists open exceptions first.",
+        "authorship": "direct",
+        "decided_by": "robert",
+        "decided_at": "2026-09-25T14:58:00Z",
+        "decision_record": {
+          "source_id": "rec-5d31",
+          "revision": 1,
+          "ordinal": 1
+        }
+      }
+    ],
+    "reported_decisions": [
+      {
+        "summary": "Robert approved deployment",
+        "status": "reported_unverified",
+        "declared_by": "Claude Code (declared speaker)",
+        "uploaded_by": "robert",
+        "citations": [
+          {
+            "source_id": "rec-2b90",
+            "revision": 1,
+            "ordinal": 4
+          }
+        ],
+        "note": "This sentence is inside a transcript Robert uploaded. Uploading it does not make it an owner decision; it stays reported until Robert records a decision directly."
+      }
+    ],
+    "open_points": [
+      {
+        "summary": "Whether the overview should link straight into the recovery state.",
+        "citations": [
+          {
+            "source_id": "rec-7f1c",
+            "revision": 2,
+            "ordinal": 4
+          }
+        ]
+      }
+    ],
+    "no_decision_reached": [
+      {
+        "summary": "No decision was reached on deployment timing.",
+        "citations": [
+          {
+            "source_id": "rec-2b90",
+            "revision": 1,
+            "ordinal": 5
+          }
+        ]
+      }
+    ]
+  }
+}
