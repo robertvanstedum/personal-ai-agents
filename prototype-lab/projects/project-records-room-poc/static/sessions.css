@@ -1,0 +1,71 @@
+.room-group { margin-bottom: 14px; }
+.parent-link { font-weight: 700; border-bottom: 1px solid #dedbd5; }
+.session-link { padding-left: 22px; }
+.parent-link, .session-link, #parent-sessions button { overflow-wrap: anywhere; white-space: normal; }
+#parent-workspace { margin-bottom: 24px; }
+#parent-title, #parent-purpose { overflow-wrap: anywhere; }
+#parent-sessions { margin-top: 24px; }
+.page-header > .room-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) { .page-header { flex-wrap: wrap; gap: 12px; } }
+
+/* First practical UI: familiar rooms, conversation, context, and catch-up. */
+.activity-scope{margin:20px 32px}.activity-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:18px;padding:0 32px 32px}.activity-card{min-width:0;border:1px solid var(--line);border-radius:9px;background:var(--paper);padding:22px}.activity-heading{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}.activity-open{border:0;background:transparent;color:var(--ink);text-align:left;font-size:18px;font-weight:650;padding:0;overflow-wrap:anywhere}.activity-open:hover{text-decoration:underline}.activity-card h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px;color:var(--muted)}.activity-card small{display:block;color:var(--muted);margin-top:12px}.activity-excerpt{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}.activity-proposals{margin-top:14px;padding:8px 12px;background:#f4eadc;color:#78502b;border-radius:5px;font-size:12px}.cos-controls{margin:12px 24px;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}.cos-controls button{margin-right:12px;margin-bottom:8px;white-space:normal}.cos-controls p{margin:5px 0;font-size:12px}.room-brief{max-height:calc(100vh - 155px);overflow:auto}.room-heading{padding-top:20px;padding-bottom:16px}.event{padding:16px 0}.messages{max-height:calc(100vh - 440px);min-height:240px}.composer{margin-top:14px}.page-header{padding-top:22px;padding-bottom:20px}.room-controls{gap:14px}.participant small{line-height:1.7}@media(max-width:850px){.room-brief{max-height:none}.messages{max-height:480px}}@media(max-width:600px){.activity-scope{margin:18px}.activity-list{padding:0 18px 24px}.cos-controls{margin:12px 18px}.nav-item{font-size:10px}.activity-heading{flex-wrap:wrap}}
+
+.coordination-card{border:1px solid var(--line);border-radius:6px;padding:12px;margin-top:12px;background:var(--paper);overflow-wrap:anywhere}.coordination-card strong,.coordination-card small{display:block}.coordination-card small{color:var(--muted);font-size:10px;margin:5px 0}.coordination-card p{font-size:12px;white-space:pre-wrap;margin:8px 0}.coordination-card button{margin:10px 12px 0 0}.coordination-card summary{font-size:11px;cursor:pointer}#coordination-inbox{position:fixed;right:18px;top:40px;z-index:15;box-shadow:var(--shadow)}.snapshot-selection{max-height:300px;overflow:auto}.snapshot-selection label{display:flex!important;gap:8px;align-items:flex-start}.snapshot-selection input{flex-shrink:0}.room-brief #coordination-panel{margin-top:0;padding-top:0;border:0}
+
+@media(max-width:600px){.room-brief{display:block}.room-brief section{margin-bottom:24px}}
+
+/* Keep the primary conversation action in reach with a populated transcript. */
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) .workspace{height:calc(100dvh - 30px);min-height:0}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #main{min-height:0}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #rooms-view{height:100%;display:flex;flex-direction:column}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #rooms-view>.page-header{padding:8px 20px;flex-shrink:0}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #rooms-view>.page-header h1{font-size:17px;margin:0}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #rooms-view>.page-header .eyebrow{display:none}
+#room-workspace:not(.hidden){flex:1;min-height:0;overflow:hidden}
+.conversation-panel{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.conversation-panel .room-heading{padding:12px 20px;flex-shrink:0}
+.conversation-panel .room-heading h2{font-size:22px;margin:6px 0}
+.conversation-panel .room-heading p{margin:4px 0}
+.conversation-panel .messages{flex:1;min-height:60px;max-height:none;overflow:auto}
+.conversation-panel .transcript-label{padding-top:8px;padding-bottom:8px}
+.conversation-panel .cos-controls{flex-shrink:0;margin:6px 16px;padding:8px 12px}
+.conversation-panel .cos-controls button{font-size:11px;margin-bottom:2px;padding:5px 8px}
+.conversation-panel .cos-controls p{font-size:10px;margin:3px 0}
+.conversation-panel .composer{flex-shrink:0;margin:6px 16px 12px}
+.conversation-panel .composer-controls{padding:8px 12px}
+.conversation-panel .composer textarea{height:64px;min-height:44px;padding:10px 12px}
+.conversation-panel .composer-bottom{padding:8px 12px}
+.room-brief{max-height:100%;min-height:0;overflow:auto}
+@media(max-width:850px){#room-workspace:not(.hidden){display:flex;flex-direction:column;overflow:auto}.conversation-panel{height:calc(100dvh - 105px);min-height:calc(100dvh - 105px);flex-shrink:0}.room-brief{max-height:none;overflow:visible;flex-shrink:0}}
+@media(max-width:600px){body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) .workspace{height:auto}.conversation-panel{height:calc(100dvh - 55px);min-height:calc(100dvh - 55px)}#room-workspace:not(.hidden){overflow:visible}.conversation-panel .room-heading{padding:10px 16px}.conversation-panel .composer{margin:6px 12px 10px}.conversation-panel .room-heading h2{font-size:18px}}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)):has(#pending-operation:not(.hidden)) .workspace{height:calc(100dvh - 134px)}
+.pending-operation{max-height:100px;overflow:auto}
+@media(max-width:850px){body:has(#pending-operation:not(.hidden)) .conversation-panel{height:calc(100dvh - 205px);min-height:calc(100dvh - 205px)}}
+@media(min-width:601px){body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) .workspace{grid-template-rows:minmax(0,1fr)}body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) .sidebar{height:100%;min-height:0;overflow:auto}}
+
+.formatted-message{white-space:normal}.formatted-message>div{white-space:pre-wrap}.formatted-message pre{white-space:pre;overflow:auto;background:#eeeee7;padding:12px;border-radius:5px;max-width:100%}.formatted-message code{font-family:monospace;background:#eeeee7;padding:1px 3px}.formatted-message ul,.formatted-message ol{padding-left:24px;margin:6px 0}.formatted-message a{color:var(--accent);text-decoration:underline}
+
+.unread-badge{display:inline-block;background:var(--accent);color:white;border-radius:8px;padding:2px 6px;font-size:10px;margin:5px 0}.unread-divider{border-top:1px solid var(--accent);color:var(--accent);padding:8px;font-size:11px}#jump-latest{flex-shrink:0;text-align:center;background:#e6eee6;padding:6px}#mobile-rooms{display:none}
+@media(max-width:600px){body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) .sidebar{display:none}body.room-nav-open:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) .sidebar{display:flex;position:fixed;inset:34px auto 0 0;width:260px;height:calc(100dvh - 34px);z-index:30;overflow:auto;box-shadow:5px 0 20px #0003}body.room-nav-open .sidebar .room-list{display:block;overflow:auto}#mobile-rooms{display:block}body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) .workspace{height:calc(100dvh - 34px)}#room-workspace:not(.hidden){overflow:auto}.conversation-panel{height:calc(100dvh - 110px);min-height:calc(100dvh - 110px)}.conversation-panel .room-heading p{font-size:11px}.conversation-panel .room-heading .room-controls{gap:8px}.conversation-panel .composer-controls{gap:5px}.conversation-panel .composer-controls select{max-width:120px;font-size:11px}body:has(#pending-operation:not(.hidden)) .conversation-panel{height:calc(100dvh - 210px);min-height:calc(100dvh - 210px)}}
+
+#mobile-room-close{display:none}@media(max-width:600px){#mobile-room-close{display:block;margin-bottom:10px}}
+
+/* Give the discussion most of the viewport, not just a visible send button. */
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #rooms-view>.page-header{padding:4px 16px;min-height:38px;gap:8px}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #rooms-view>.page-header h1{display:none}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #rooms-view>.page-header .room-controls{margin:0 0 0 auto}
+body:has(#rooms-view:not(.hidden) #room-workspace:not(.hidden)) #rooms-view>.page-header button{padding:5px 8px;font-size:11px}
+.conversation-panel .room-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:8px 16px}
+.conversation-panel .room-heading h2{grid-column:1;grid-row:1;margin:0;font-size:18px}
+.conversation-panel .room-heading .room-meta{grid-column:1;grid-row:2;margin:0}
+.conversation-panel .room-heading .room-controls{grid-column:2;grid-row:1 / span 2;margin:0;gap:8px;align-items:center}
+.room-purpose-details{grid-column:1 / -1;font-size:10px}.room-purpose-details summary{cursor:pointer;color:var(--muted)}
+.conversation-panel .cos-controls{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px}
+.cos-controls #toggle-cos-auto{grid-column:1;grid-row:1 / span 2;margin:0;align-self:center}.cos-controls details{grid-column:1 / -1;font-size:10px}
+.cos-controls[data-available="false"] #toggle-cos-auto,.cos-controls[data-available="false"] #cos-auto-status,.cos-controls[data-available="false"] details{display:none}
+.cos-controls[data-available="false"] #cos-request-status{grid-column:1 / -1}
+@media(max-width:600px){.conversation-panel .room-heading{grid-template-columns:1fr}.conversation-panel .room-heading .room-controls{grid-column:1;grid-row:3}.room-purpose-details{grid-row:4}.conversation-panel{height:calc(100dvh - 82px);min-height:calc(100dvh - 82px)}}
+@media(min-width:601px) and (max-width:1100px){#room-workspace:not(.hidden){display:flex;flex-direction:column;overflow:auto}.conversation-panel{height:calc(100dvh - 72px);min-height:calc(100dvh - 72px);flex-shrink:0}.room-brief{max-height:none;overflow:visible;flex-shrink:0}.conversation-panel .room-heading{grid-template-columns:minmax(0,1fr) auto}.conversation-panel .composer-controls{gap:10px}}
+@media(min-width:601px) and (max-height:650px){.conversation-panel .room-heading{display:flex;flex-wrap:wrap;gap:3px 12px;padding:5px 16px}.conversation-panel .room-heading h2{flex-basis:100%;font-size:16px}.conversation-panel .room-heading .room-controls{margin-left:auto}.room-purpose-details{flex-basis:100%}.conversation-panel .composer textarea{height:44px;padding:6px 12px}.conversation-panel .composer-controls{padding:4px 12px}.conversation-panel .composer-bottom{padding:4px 12px}.conversation-panel .composer-bottom span{font-size:9px;white-space:nowrap}.conversation-panel .transcript-label{padding-top:4px;padding-bottom:4px}.conversation-panel .cos-controls{margin-top:3px;margin-bottom:3px;padding:5px 12px}}
+@media(min-width:601px) and (max-height:650px){.conversation-panel .room-heading h2{order:0}.conversation-panel .room-heading .room-meta{order:1}.conversation-panel .room-heading .room-controls{order:2}.room-purpose-details{order:3}}
