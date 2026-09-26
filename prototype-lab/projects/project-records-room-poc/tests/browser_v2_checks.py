@@ -250,6 +250,21 @@ def test_keyboard_only_journey(tab, evidence_dir):
     expect(announcer).to_contain_text("Recovery paused · simulated")
 
 
+def test_attention_separates_decisions_from_exceptions(tab):
+    """Robert's walkthrough: "none open" for exceptions must not read as "nothing waiting" beside decisions."""
+    page = tab().show("normal", "work")
+    section = page.locator("#attention-h").locator("xpath=..")
+    groups = section.locator(".attention-group > h3")
+    expect(groups).to_have_text(["Decisions waiting (2)"])
+    zero = section.locator(".true-zero")
+    expect(zero).to_contain_text("Exceptions:")
+    expect(zero).to_contain_text("No open exceptions · checked by Operations monitor")
+    # Waiting decisions lead; the exceptions all-clear sits below them.
+    assert section.locator(".attention-group").bounding_box()["y"] < zero.bounding_box()["y"]
+    recovery = tab().show("recovery", "work").locator("#attention-h").locator("xpath=..")
+    expect(recovery.locator(".attention-group > h3").first).to_have_text(re.compile(r"^Exceptions \(\d+\)$"))
+
+
 # ------------------------------------------------------------------ malformed links (Codex review of #226)
 
 @pytest.mark.parametrize("fragment", ["%E0%A4%A", "%", "constructor", "__proto__", "toString", "does-not-exist", "work%2Fdetail"])

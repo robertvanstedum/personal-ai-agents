@@ -52,22 +52,28 @@ function attention(att, label, agentStatus) {
   }
   const exceptionCards = att.exceptions.map((x) => item('article', { class: 'card card--warn' },
     h('div', { class: 'card-head' },
-      h('h3', null, x.title),
+      h('h4', null, x.title),
       chip(x.category === 'outcome_uncertain' ? 'Outcome uncertain' : x.category.replaceAll('_', ' '), 'warn', { 'data-status': x.category })),
     h('p', null, x.summary),
     h('p', { class: 'small' },
       `Impact: ${x.impact} · recovery owner: ${label(x.recovery_owner)}${notRunning(agentStatus, x.recovery_owner)} · open since ${time(x.first_observed_at)} · detected by ${x.detected_by}`),
     x.target ? h('p', null, h('a', { class: 'btn btn--primary', href: `#${x.target.view}/${x.target.ref}` }, x.next_action || 'Open')) : null));
   const decisionCards = att.decisions.map((d) => item('article', { class: 'card' },
-    h('div', { class: 'card-head' }, h('h3', null, d.title), chip('Decision waiting', 'warn', { 'data-status': d.kind })),
+    h('div', { class: 'card-head' }, h('h4', null, d.title), chip('Decision waiting', 'warn', { 'data-status': d.kind })),
     h('p', null, d.summary),
     h('p', { class: 'small' }, `Next owner: ${label(d.next_owner)}${notRunning(agentStatus, d.next_owner)} · since ${time(d.since)}`),
     d.target ? h('p', null, h('a', { class: 'link-button', href: `#${d.target.view}/${d.target.ref}` }, d.next_action)) : null));
+  // Exceptions and decisions are separate, labelled groups so "none open" for one never reads as "nothing waiting".
+  const exceptionsGroup = exceptionCards.length
+    ? h('div', { class: 'attention-group' }, h('h3', null, `Exceptions (${exceptionCards.length})`), h('div', { class: 'card-list' }, exceptionCards))
+    : item('p', { class: 'true-zero' }, h('strong', null, 'Exceptions: '), chip('None open', 'ok', { 'data-status': 'none' }),
+      ` No open exceptions · checked by ${label(att.observer)} at ${time(att.observed_at)}.`);
+  const decisionsGroup = decisionCards.length
+    ? h('div', { class: 'attention-group' }, h('h3', null, `Decisions waiting (${decisionCards.length})`), h('div', { class: 'card-list' }, decisionCards))
+    : item('p', { class: 'true-zero' }, h('strong', null, 'Decisions waiting: '), `none · checked by ${label(att.observer)} at ${time(att.observed_at)}.`);
+  // Open exceptions come first; when there are none, the waiting decisions lead and the all-clear sits below them.
   return section('attention', 'Needs attention',
-    att.exceptions.length ? exceptionCards
-      : item('p', { class: 'true-zero' }, chip('None open', 'ok', { 'data-status': 'none' }),
-        ` No open exceptions · checked by ${label(att.observer)} at ${time(att.observed_at)}.`),
-    decisionCards.length ? h('div', { class: 'card-list' }, decisionCards) : null);
+    ...(exceptionCards.length ? [exceptionsGroup, decisionsGroup] : [decisionsGroup, exceptionsGroup]));
 }
 
 function notRunning(agentStatus, principal) {
