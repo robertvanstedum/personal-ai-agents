@@ -33,6 +33,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    send_from_directory,
     session,
     url_for,
 )
@@ -1787,6 +1788,35 @@ def guild_experiment_unavailable(initiative_id):
         health=health,
         health_url=_cfg.IOTCONNECT_HEALTH_URL,
     ), (503 if row else 404)
+
+
+# Rooms UI preview (Rooms package U): owner-only, simulated fixtures only.
+# Serves the prototype's static preview straight from the image, so there is one
+# source (prototype-lab/projects/project-records-room-poc/static/v2). It reads no
+# Records store and calls no API; every screen and action is labelled simulated.
+_ROOMS_PREVIEW_DIR = (Path(__file__).resolve().parent.parent / "prototype-lab" / "projects"
+                      / "project-records-room-poc" / "static" / "v2")
+_ROOMS_PREVIEW_ASSETS = "/guild/rooms-preview/assets/"
+
+
+@app.route("/guild/rooms-preview/")
+@_require_owner
+def guild_rooms_preview():
+    page = _ROOMS_PREVIEW_DIR / "preview.html"
+    if not page.is_file():
+        return Response("The Rooms preview is not included in this build.", status=404, mimetype="text/plain")
+    html = page.read_text(encoding="utf-8").replace("/static/v2/", _ROOMS_PREVIEW_ASSETS)
+    return Response(html, mimetype="text/html")
+
+
+@app.route("/guild/rooms-preview/assets/<path:filename>")
+@_require_owner
+def guild_rooms_preview_asset(filename):
+    # The live HTTP adapter is never part of the preview; send_from_directory
+    # refuses any path that escapes the preview directory (404).
+    if filename.endswith("adapter_http.js"):
+        return Response("Not part of the preview.", status=404, mimetype="text/plain")
+    return send_from_directory(_ROOMS_PREVIEW_DIR, filename)
 
 
 @app.route("/guild/career")

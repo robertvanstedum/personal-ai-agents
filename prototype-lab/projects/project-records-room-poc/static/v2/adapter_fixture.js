@@ -1,9 +1,11 @@
-// Fixture adapter (package U): implements contract.js from synthetic JSON in /static/v2/fixtures/.
+// Fixture adapter (package U): implements contract.js from synthetic JSON in ./fixtures/ beside this module.
 // It never calls the Records API. Every object it returns carries "simulated": true, and act() changes
 // only this page's in-memory copy of the fixtures.
 import { ACTION_TYPES, SCHEMA_IDS, assertAdapter } from './contract.js';
 
-export const FIXTURE_BASE = '/static/v2/fixtures/';
+// Resolved from this module's own URL so the preview works wherever it is served
+// (Records at /static/v2/, the owner-only Guild page at /guild/rooms-preview/assets/).
+export const FIXTURE_BASE = new URL('./fixtures/', import.meta.url).pathname;
 export const SNAPSHOT_AT = '2026-09-25T15:42:00Z';
 export const DEFAULT_SESSION_ID = 'ses-handoff-review';
 export const EFFECTS = 'None. Preview only: nothing outside this page changed.';
@@ -105,7 +107,10 @@ export function createFixtureAdapter({ scenario = 'normal', fetchImpl = globalTh
     if (!cache.has(name)) {
       const url = FIXTURE_BASE + name;
       if (!url.startsWith(FIXTURE_BASE) || url.includes('/api/')) throw new FixtureAdapterError('Fixture adapter may not call the API.');
-      cache.set(name, fetchImpl(url, { cache: 'no-store', credentials: 'omit' }).then(async (response) => {
+      // same-origin: owner-only hosting (the Guild page) authorizes fixture reads with the session
+      // cookie; the cookie is never sent cross-origin. A redirect means the sign-in was not accepted.
+      cache.set(name, fetchImpl(url, { cache: 'no-store', credentials: 'same-origin' }).then(async (response) => {
+        if (response.redirected) throw new FixtureAdapterError(`Fixture ${name} was redirected; sign in again to view the preview.`);
         if (!response.ok) throw new FixtureAdapterError(`Fixture ${name} could not be loaded (HTTP ${response.status}).`);
         const data = await response.json();
         if (data?.simulated !== true) throw new FixtureAdapterError(`Fixture ${name} is not marked simulated; refusing to show it.`);
