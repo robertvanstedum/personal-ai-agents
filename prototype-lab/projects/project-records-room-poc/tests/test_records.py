@@ -294,7 +294,7 @@ def test_recovery_receipt_requires_current_room_access(store):
 def test_artifact_version_to_supporting_reason_and_scope(store):
     room=create(store); private=create(store); agent(store,room)
     reason=post(store,room,"We added the order flow to show CRM handoffs",context_class="robert_source")
-    payload=dict(kind="sha256",value="a"*64,revision="v9",label="Synthetic Oracle deck",event_id=reason["id"])
+    payload=dict(kind="sha256",value="a"*64,revision="v9",label="Synthetic Concept to Cash",event_id=reason["id"])
     receipt=store.link_artifact("robert","artifact",room,payload)
     assert store.link_artifact("robert","artifact",room,payload)==receipt
     assert store.artifact_history("reviewer","sha256","a"*64,"v9")[0]["body"]==reason["body"]
