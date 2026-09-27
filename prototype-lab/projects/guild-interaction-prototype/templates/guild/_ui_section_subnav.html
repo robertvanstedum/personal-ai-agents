@@ -1,0 +1,13 @@
+{# Portal section strip (same classes as _section_subnav.html) with one signal dot per door. #}
+<div class="guild-subnav guild-sections">
+  {% for s in layout.sections %}
+    {% set door = (layout.doors | selectattr('id', 'equalto', s.id) | first) %}
+    {% if not loop.first %}<span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>{% endif %}
+    <a href="{{ urls[s.id] }}"
+       class="subnav-link{% if area.startswith(s.label) or (s.id == 'build' and area == 'Build Queue') %} subnav-active{% endif %}"
+       data-section="{{ s.id }}"{% if area.startswith(s.label) or (s.id == 'build' and area == 'Build Queue') %} aria-current="page"{% endif %}>
+      {{ s.label }}
+      <span class="sig-dot" data-state="{{ door.state }}" data-signal="{{ door.state_text }}" title="{{ door.state_text }}"><span class="visually-hidden">({{ door.state_text }})</span></span>
+    </a>
+  {% endfor %}
+</div>

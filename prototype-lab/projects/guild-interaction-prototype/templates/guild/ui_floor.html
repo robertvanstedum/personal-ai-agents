@@ -1,0 +1,62 @@
+{% extends 'guild/_ui_base.html' %}
+{% from 'guild/_ui_macros.html' import sw with context %}
+{% from 'guild/_ui_light.html' import shape %}
+{% block title %}{{ floor_cfg.title }} · Master Craftsman{% endblock %}
+
+{% block above %}
+<section class="zone zone-status" data-zone="status" aria-labelledby="z-status">
+  <h2 class="zone-h" id="z-status"><span class="crumb">Build → </span>{{ floor_cfg.title }} · Status</h2>
+  <button type="button" class="status-compact" data-lights-toggle aria-expanded="false" aria-controls="lights-full">
+    {% for l in lights %}{% for v in l.variants %}
+    <span class="lc" data-light-state="{{ v.state }}"{{ sw(v.when) }}>{{ shape(v) }}<span class="lc-name">{{ l.short }}</span> <span class="lc-word">{{ v.word }}</span></span>
+    {% endfor %}{% endfor %}
+    <span class="lc-more" data-lights-more>Details ▾</span>
+  </button>
+  <ul class="lights" id="lights-full" data-lights-full>
+    {% for l in lights %}{% for v in l.variants %}
+    <li class="light" data-light="{{ l.id }}" data-light-state="{{ v.state }}"{{ sw(v.when) }}>
+      {{ shape(v) }}
+      <span class="light-body">
+        <a class="light-name" href="{{ l.href }}" data-light-link>{{ l.label }}{% if l.sub %} <span class="light-sub">{{ l.sub }}</span>{% endif %}</a>
+        <span class="light-word" data-light-word>{{ v.word }}</span>
+        <span class="light-reason">{{ v.reason }} <span class="light-src" data-source="{{ v.source }}">{{ v.source_mark }}</span></span>
+      </span>
+      <button type="button" class="btn-mini light-ask" data-ask="Tell me about {{ l.label }}" aria-label="Ask Master Craftsman about {{ l.label }}">Ask</button>
+    </li>
+    {% endfor %}{% endfor %}
+  </ul>
+</section>
+{% endblock %}
+
+{% block main %}
+<div class="floor-rail" data-floor-rail>
+  <p class="floor-urgent" data-floor-urgent><span class="floor-urgent-label">Needs you:</span> <a href="#" data-urgent-link></a></p>
+  <button type="button" class="floor-chip" data-sheet-toggle aria-expanded="false" aria-controls="floor-sheet">
+    Needs you <span data-reminder-count>0</span> · Post-its <span data-note-count>{{ postits|length }}</span> ▾
+  </button>
+  <div class="floor-sheet" id="floor-sheet" data-floor-sheet>
+    <section class="zone zone-needs" data-zone="needs" aria-labelledby="z-needs">
+      <h2 class="zone-h" id="z-needs">Needs you</h2>
+      <ol class="reminders" data-reminders data-cap="{{ floor_cfg.max_reminders }}">
+        {% for r in reminders %}
+        <li class="reminder" data-reminder{{ sw(r.show_when) }}>
+          <span class="reminder-tag">{{ r.tag }}</span>
+          <a href="{{ r.href }}" data-reminder-link>{{ r.text }}{% if r.decision_text %}: <span data-decision-text></span>{% endif %}</a>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+    <section class="zone zone-continue" data-zone="continue" aria-labelledby="z-cont">
+      <h2 class="zone-h" id="z-cont">Continue</h2>
+      <p><a href="{{ urls.bench }}" data-floor-continue>Build · workbench</a></p>
+      <p><a href="{{ urls.bench }}" class="open-bench" data-open-bench>Open the bench →</a></p>
+    </section>
+    <section class="zone zone-postits" data-zone="postits" aria-labelledby="z-notes">
+      <h2 class="zone-h" id="z-notes">Post-its</h2>
+      <ul class="notes">
+        {% for n in postits %}<li class="note" data-note>{{ n }}</li>{% endfor %}
+      </ul>
+    </section>
+  </div>
+</div>
+{% endblock %}

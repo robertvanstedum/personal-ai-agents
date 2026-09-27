@@ -1,0 +1,32 @@
+{% extends 'guild/_ui_base.html' %}
+{% from 'guild/_ui_macros.html' import src_badge with context %}
+{% block title %}Guild{% endblock %}
+{% block main %}
+<div class="hero">
+  <hr class="hero-rule">
+  <h1 class="hero-title">Guild</h1>
+  <hr class="hero-rule">
+  <p class="hero-tagline">Craft the work. Sharpen the craft.</p>
+</div>
+<ul class="doors" aria-label="Guild areas">
+  {% for d in doors %}
+  <li class="door" data-door="{{ d.id }}">
+    <a class="door-link" href="{{ urls[d.id] }}">
+      <span class="door-tab">{{ d.title }}</span>
+      <span class="door-body">
+        <span class="door-kicker">{{ d.kicker }}</span>
+        <span class="door-desc">{{ d.desc }}</span>
+        <span class="door-signal">
+          <span class="sig-dot" data-state="{{ d.state }}" data-signal="{{ d.state_text }}" aria-hidden="true"></span>
+          <span class="sig-text">{{ d.state_text }}</span>
+          {% for part in d.parts %}<span class="door-part">· {{ part.text }} {{ src_badge(part.badge) }}</span>{% endfor %}
+        </span>
+        <span class="door-observed">observed {{ d.observed }}</span>
+      </span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+<p class="continue"><a href="{{ urls.floor }}" data-continue>Continue where you were → <span data-continue-label>Shop floor</span></a></p>
+<p class="small center">Nothing on this page calls a model.</p>
+{% endblock %}

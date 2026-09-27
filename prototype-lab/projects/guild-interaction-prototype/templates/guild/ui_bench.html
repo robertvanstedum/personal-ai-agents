@@ -1,0 +1,153 @@
+{% extends 'guild/_ui_base.html' %}
+{% from 'guild/_ui_macros.html' import src_badge, src_note, unknown_row, sw, mark with context %}
+{% block title %}Build · workbench{% endblock %}
+
+{% macro panel(id) -%}
+{% set p = panels_cfg[id] %}
+<section class="panel" data-panel="{{ id }}" aria-labelledby="ph-{{ id }}">
+  <header class="panel-head">
+    <span class="panel-handle" data-drag-handle draggable="true" title="Drag to reorder">⠿<span class="visually-hidden">Drag handle (pointer only; use Up and Down on the keyboard)</span></span>
+    <h2 class="panel-title" id="ph-{{ id }}"><span class="panel-focus-label" data-focus-label hidden>☆ In focus · </span>{{ p.kicker or p.title }}</h2>
+    <span class="panel-state" data-panel-state></span>
+    <span class="panel-actions" role="group" aria-label="Arrange {{ p.title }}">
+      <button type="button" class="btn-mini" data-act="up" aria-label="Move {{ p.title }} up">↑</button>
+      <button type="button" class="btn-mini" data-act="down" aria-label="Move {{ p.title }} down">↓</button>
+      <button type="button" class="btn-mini" data-act="fold" aria-expanded="true" aria-label="Fold {{ p.title }}">Fold</button>
+      <button type="button" class="btn-mini" data-act="focus" aria-pressed="false" aria-label="Bring {{ p.title }} to focus">☆ Focus</button>
+    </span>
+  </header>
+  <div class="panel-body" data-panel-body>
+    {{ caller() }}
+  </div>
+  <p class="panel-empty" data-empty-reason hidden>{{ p.title }} · nothing to show — {{ p.empty_reason }}</p>
+</section>
+{%- endmacro %}
+
+{% block main %}
+<div class="page-head">
+  <h1 class="page-title">Build · workbench</h1>
+  <p class="page-meta">⠿ drag · ↑↓ move · Fold · ☆ focus — <strong>Master Craftsman fills panels, never moves them.</strong> <span data-clock-label>Sat 9:12</span></p>
+  <p class="page-actions">
+    <a class="btn-quiet" href="{{ urls.queue }}">Build Queue →</a>
+    <button type="button" class="btn-quiet" data-bench-reset>Reset to MC default</button>
+    {% if prototype %}<button type="button" class="btn-quiet" data-return-monday data-consequential-ui>Return Monday · simulated clock</button>{% endif %}
+  </p>
+</div>
+<p class="bench-note small" data-bench-note>Your arrangement is kept in this browser · <span data-folded-summary></span></p>
+
+<div class="bench" data-bench>
+
+{% call panel('subject') %}
+  {% set s = data.subject %}
+  <div class="decision-card" data-decision-card data-row hidden>
+    <p class="dc-head"><span class="tag" data-tag="decision">decision</span> <span data-dc-when></span> · receipt <strong data-dc-receipt></strong> · session <span data-dc-session></span></p>
+    <p class="dc-text" data-dc-text></p>
+    <p class="small">Owners: <span data-dc-owners></span></p>
+    <ul class="dc-steps" data-dc-steps></ul>
+    <p class="small" data-dc-participants></p>
+    <p class="small" data-dc-note></p>
+  </div>
+  <p class="dc-none small" data-decision-none hidden></p>
+  <div class="rollout" data-row>
+    <p class="rollout-head"><strong>{{ s.rollout.data.title }}</strong>{% for clock, v in s.rollout.data.by_clock.items() %} <span class="tag" data-tag="stuck"{{ sw({'clock': clock}) }}>{{ v.state_text }}</span>{% endfor %} {{ src_badge(badge(s.rollout)) }}</p>
+    {% for clock, v in s.rollout.data.by_clock.items() %}
+    <div class="rollout-variant"{{ sw({'clock': clock}) }}>
+      <ul class="counts">
+        {% for c in v.counts %}<li class="count"><span class="count-label">{{ c.label }}</span><span class="count-n">{{ c.n }}</span><span class="count-note">{{ c.note }}</span></li>{% endfor %}
+      </ul>
+      <p class="rollout-line">{{ v.line }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  <ul class="evidence" data-row aria-label="Field evidence">
+    {% for e in s.evidence.data %}<li{{ sw(e.show_when) }}>{{ mark(e.mark) }} {{ e.text }}</li>{% endfor %}
+  </ul>
+  <p class="small">{{ s.rollout.data.recent_change }}</p>
+  <p class="panel-links">
+    {% if s.work_item.ok and s.work_item.data %}
+      <a href="{{ url_for('guild_ui.item', item_id=s.work_item_id) }}" data-queue-link>Open #{{ s.work_item_id }} in Build Queue →</a> {{ src_badge(badge(s.work_item)) }}
+    {% elif s.work_item.ok %}
+      <span class="unknown-line">#{{ s.work_item_id }} not found in {{ badge(s.work_item).text }} queue · treat as unknown</span>
+    {% else %}
+      <span class="unknown-line">#{{ s.work_item_id }}: queue {{ badge(s.work_item).text }} — treat as unknown ({{ s.work_item.error }})</span>
+    {% endif %}
+    · <a href="{{ urls.operate }}">See Operate evidence →</a>
+  </p>
+  <div class="receipts">
+    <h3 class="h3">Receipts on #{{ s.work_item_id }}</h3>
+    <ul data-receipts-for="{{ s.work_item_id }}"><li class="small">No receipts yet.</li></ul>
+  </div>
+{% endcall %}
+
+{% call panel('needs') %}
+  <ul class="rows">
+  {% for r in data.needs.rows %}
+    <li class="row" data-row{{ sw(r.show_when) }}>
+      <span><span class="tag" data-tag="needs">{{ r.tag }}</span> {{ r.text }}</span>
+      <span class="row-src">
+        {% if r.queue_link %}<a href="{{ urls.queue }}?focus={{ scenario.work_item }}" data-queue-link>in Build Queue →</a>{% endif %}
+        <span class="small">{{ r.src }}</span> {{ src_badge({'text': 'sample', 'source': 'sample', 'status': 'ok'}) }}
+      </span>
+    </li>
+  {% endfor %}
+  </ul>
+{% endcall %}
+
+{% call panel('motion') %}
+  {% set m = data.motion %}
+  {% if not m.res.ok %}{{ unknown_row(badge(m.res)) }}{% else %}
+  {% if m.points %}
+  <figure class="hill" data-row>
+    <svg viewBox="0 0 460 104" class="hill-svg" role="img" aria-label="Hill chart: figuring out on the left, executing on the right">
+      <path d="M10 84 C 110 84, 160 16, 230 16 S 350 84, 450 84" class="hill-line"/>
+      <text x="40" y="100" class="hill-axis">figuring out</text><text x="360" y="100" class="hill-axis">executing</text>
+      {% for pt in m.points %}<circle cx="{{ pt.x }}" cy="{{ pt.y }}" r="6" class="hill-dot" data-phase="{{ pt.phase }}"/><text x="{{ pt.x + 9 }}" y="{{ pt.y - 6 }}" class="hill-label">#{{ pt.id }}</text>{% endfor %}
+    </svg>
+    <figcaption class="small">{{ src_badge(badge(m.res)) }} position derived from queue status {{ src_note(badge(m.res)) }}</figcaption>
+  </figure>
+  <ul class="rows compact">
+    {% for pt in m.points %}<li class="row" data-row><span>#{{ pt.id }} {{ pt.title|truncate(60, true, '…') }}</span><span class="small">{{ pt.phase }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}{% endif %}
+{% endcall %}
+
+{% call panel('discussions') %}
+  {% set d = data.discussions %}
+  <ul class="rows">
+    <li class="row" data-row{{ sw({'invited': true}) }}><span>{{ scenario.session.title }} — <span data-s023-people>Robert, MC</span></span><span class="row-src"><span class="small">{{ scenario.session.id }}</span> {{ src_badge({'text': 'simulated', 'source': 'sample', 'status': 'ok'}) }}</span></li>
+    {% if d.res.ok %}
+      {% for s in d.res.data %}<li class="row" data-row><span>{{ s.title }}{% if s.people %} — {{ s.people }}{% endif %}</span><span class="row-src"><span class="small">{{ s.id }}</span> {{ src_badge(badge(d.res)) }}</span></li>{% endfor %}
+    {% endif %}
+  </ul>
+  {% if d.optin %}<p class="small">{{ src_badge(badge(d.res)) }} no Records source configured (GUILD_RECORDS_DB unset) — sample by this panel's opt-in</p>{% endif %}
+  {% if not d.res.ok %}{{ unknown_row(badge(d.res)) }}{% endif %}
+{% endcall %}
+
+{% call panel('since') %}
+  {% set c = data.since %}
+  <p class="small">Since you were here · {{ c.label }} {{ src_badge(badge(c.res)) }}</p>
+  {% if not c.res.ok %}{{ unknown_row(badge(c.res)) }}{% else %}
+  <ul class="rows compact">
+    {% for cm in c.res.data %}<li class="row" data-row><span>{{ cm.title|truncate(72, true, '…') }}</span><span class="small">{{ cm.ref }} · {{ hhmm(cm.at) }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+{% endcall %}
+
+{% call panel('blocked') %}
+  {% set b = data.blocked %}
+  <ul class="rows">
+    {% for r in b.rows %}<li class="row" data-row{{ sw(r.show_when) }}><span>{{ mark('blocker') }} {{ r.text }}</span>{{ src_badge({'text': 'sample', 'source': 'sample', 'status': 'ok'}) }}</li>{% endfor %}
+    {% if b.res.ok %}{% for it in b.res.data %}<li class="row" data-row><span>#{{ it.id }} {{ it.title }}{% if it.blocked_reason %} — {{ it.blocked_reason }}{% endif %}</span>{{ src_badge(badge(b.res)) }}</li>{% endfor %}{% endif %}
+  </ul>
+  {% if not b.res.ok %}{{ unknown_row(badge(b.res)) }}{% endif %}
+{% endcall %}
+
+{% call panel('postits') %}
+  <ul class="postits">
+    {% for n in data.postits.notes %}<li class="postit" data-row>{{ n }}</li>{% endfor %}
+  </ul>
+  <p class="small">{{ src_badge({'text': 'sample', 'source': 'sample', 'status': 'ok'}) }}</p>
+{% endcall %}
+
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{# Prototype-only. Rendered only when PROTOTYPE is true. #}
+<div class="proto-banner" data-proto-banner>
+  {% if page_id == 'floor' %}
+  <strong>Prototype · simulated replies · some sample data</strong>
+  {% else %}
+  <strong>{% if sources_mode == 'live' %}Prototype · live + sample · simulated{% else %}Prototype · sample data · simulated actions{% endif %}</strong>
+  <span class="proto-sources">sources: {{ sources_mode }}</span>
+  {% endif %}
+  <span class="proto-reset">
+    <button type="button" class="btn-quiet" data-proto-reset>Reset fixtures</button>
+    <span data-proto-reset-confirm hidden>
+      Clear all prototype state in this browser?
+      <button type="button" class="btn-quiet" data-proto-reset-yes>Reset now</button>
+      <button type="button" class="btn-quiet" data-proto-reset-no>Keep</button>
+    </span>
+  </span>
+</div>

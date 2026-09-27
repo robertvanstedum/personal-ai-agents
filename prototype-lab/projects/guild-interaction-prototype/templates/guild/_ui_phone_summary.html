@@ -1,0 +1,21 @@
+{# Phone (≤ 640 px) priority summary: Needs you + four numbers (SPEC §9, C6/B6). Hidden on desktop by CSS. #}
+{% from 'guild/_ui_macros.html' import src_badge, sw with context %}
+<section class="phone-summary" aria-label="Priority summary">
+  <div class="ps-needs">
+    <h2 class="ps-h">Needs you · <span data-needs-count>{{ needs_rows | length }}</span></h2>
+    <ul class="ps-list">
+      {% for r in needs_rows %}<li data-needs-row{{ sw(r.show_when) }}><span class="tag" data-tag="needs">{{ r.tag }}</span> {{ r.text }}</li>{% endfor %}
+    </ul>
+  </div>
+  <ul class="ps-numbers" aria-label="Four numbers">
+    {% for n in phone_numbers %}
+    <li class="ps-num" data-unknown="{{ 'true' if n.unknown else 'false' }}">
+      <span class="ps-label">{{ n.label }}</span>
+      {% if n.variants %}{% for v in n.variants %}<span class="ps-value"{{ sw(v.when) }}>{{ v.value }} · {{ v.word }}</span>{% endfor %}
+      {% else %}<span class="ps-value">{{ n.value }}</span>{% endif %}
+      {{ src_badge(n.badge) }}
+    </li>
+    {% endfor %}
+  </ul>
+  <button type="button" class="ps-open" data-phone-open aria-expanded="false" aria-controls="main">Open {{ area }} ▸</button>
+</section>

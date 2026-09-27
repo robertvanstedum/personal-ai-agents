@@ -1,0 +1,105 @@
+{# Floating Master Craftsman conversation (SPEC §4). Behaviour in js/conversation.js; message markup in the templates below. #}
+<button type="button" class="mc-pill" data-mc-pill aria-controls="mc-panel" aria-expanded="false">
+  <span class="sig-dot" data-state="attention" aria-hidden="true"></span>
+  <span>Master Craftsman · floating</span>
+  <span class="mc-unread" data-mc-unread hidden></span>
+</button>
+<aside id="mc-panel" class="mc-panel" data-mc-panel data-mode="pill" data-pos="right" aria-label="Master Craftsman conversation">
+  <header class="mc-head" data-mc-drag>
+    <span class="mc-grip" aria-hidden="true">⠿</span>
+    <h2 class="mc-title">Master Craftsman</h2>
+    <div class="mc-head-actions" role="group" aria-label="Panel position and mode">
+      <button type="button" class="btn-mini" data-mc-preset="right">Right</button>
+      <button type="button" class="btn-mini" data-mc-preset="left">Left</button>
+      <button type="button" class="btn-mini" data-mc-preset="top">Top</button>
+      <button type="button" class="btn-mini" data-mc-dock aria-pressed="false">Dock</button>
+      <button type="button" class="btn-mini" data-mc-min>Minimize</button>
+    </div>
+  </header>
+  <p class="mc-context" data-mc-context></p>
+  <ul class="mc-participants" data-mc-participants aria-label="Participants"></ul>
+  <ol class="mc-thread" data-mc-thread role="log" aria-live="polite" aria-label="Conversation thread"></ol>
+  <p class="visually-hidden" aria-live="polite" data-mc-announcer></p>
+  {% if prototype %}
+  <ul class="mc-suggest" data-mc-suggest aria-label="Suggested lines"></ul>
+  {% else %}
+  <p class="mc-offline">Master Craftsman is not connected.</p>
+  {% endif %}
+  <p class="mc-refusal" data-mc-refusal role="status" hidden></p>
+  <div class="mc-dock-bottom" data-mc-dock-bottom>
+  <form class="mc-composer" data-mc-composer>
+    <label class="visually-hidden" for="mc-input">Message Master Craftsman</label>
+    <input id="mc-input" class="mc-input" data-mc-input autocomplete="off" placeholder="Message · attach + say “file this” to file">
+    <button type="submit" class="btn" data-mc-send>Send</button>
+    <div class="mc-tools">
+      <button type="button" class="btn-quiet" data-mc-attach data-consequential-ui>Attach</button>
+      <input type="file" class="visually-hidden" data-mc-file tabindex="-1" aria-hidden="true">
+      {% if prototype %}
+      {% for a in scenario.sample_attachments %}
+      <button type="button" class="btn-quiet chip-file" data-mc-sample-attach="{{ loop.index0 }}" data-consequential-ui>📎 {{ a.name }} <span class="small">(sample)</span></button>
+      {% endfor %}
+      {% endif %}
+      <button type="button" class="btn-quiet" data-mc-invite data-consequential-ui>Invite Claude + Codex</button>
+      <button type="button" class="btn-quiet" data-mc-record aria-pressed="false">Off the record</button>
+      {% if prototype %}
+      <button type="button" class="btn-quiet mc-voice-desk" data-mc-voice>Voice <span class="small">· simulated</span></button>
+      {% endif %}
+    </div>
+    {% if prototype %}<p class="mc-voice-label">Simulated voice · not speech recognition · inserts a scripted line</p>{% endif %}
+    <p class="mc-hints">Say “confirm” · “off the record” · “file this”</p>
+  </form>
+  {% if prototype %}
+  <div class="mc-phone-bar">
+    <button type="button" class="btn mc-hold" data-mc-voice>Hold to talk <span class="small">simulated · not speech recognition</span></button>
+    <button type="button" class="btn-quiet mc-type" data-mc-type aria-expanded="false">Type</button>
+  </div>
+  {% endif %}
+  </div>
+</aside>
+
+<template id="tpl-msg">
+  <li class="msg" data-kind="turn">
+    <p class="msg-meta"><span data-slot="who"></span> · <span data-slot="when"></span> <span class="msg-label" data-slot="label"></span></p>
+    <p class="msg-text" data-slot="text"></p>
+    <p class="msg-link" data-slot="linkwrap" hidden><a data-slot="link" href="#"></a></p>
+    <p class="msg-prov" data-slot="prov"></p>
+  </li>
+</template>
+<template id="tpl-system">
+  <li class="msg msg-system" data-kind="system"><p data-slot="text"></p></li>
+</template>
+<template id="tpl-attachment">
+  <li class="msg msg-attach" data-kind="attachment">
+    <p class="msg-meta"><span data-slot="who"></span> · <span data-slot="when"></span></p>
+    <p class="attach-chip" data-slot="chip"></p>
+    <p class="attach-state" data-slot="state"></p>
+  </li>
+</template>
+<template id="tpl-proposal">
+  <li class="msg msg-proposal" data-kind="proposal">
+    <section class="proposal" data-proposal aria-labelledby="">
+      <h3 class="proposal-title" data-slot="title"></h3>
+      <p class="msg-label">Master Craftsman · proposal · Simulated reply</p>
+      <dl class="proposal-fields" data-slot="fields"></dl>
+      <p class="proposal-note" data-slot="note"></p>
+      <p class="proposal-state" data-slot="state"></p>
+      <div class="proposal-actions" data-slot="actions">
+        <button type="button" class="btn" data-proposal-act="confirm" data-consequential-ui>Confirm</button>
+        <button type="button" class="btn-quiet" data-proposal-act="edit" data-consequential-ui>Edit</button>
+        <button type="button" class="btn-quiet" data-proposal-act="cancel" data-consequential-ui>Cancel</button>
+      </div>
+      <form class="proposal-edit" data-slot="editform" hidden>
+        <div data-slot="editfields"></div>
+        <button type="submit" class="btn">Save edit</button>
+        <button type="button" class="btn-quiet" data-proposal-act="edit-cancel">Close</button>
+      </form>
+      <p class="proposal-hint">Nothing happens until you confirm.</p>
+    </section>
+  </li>
+</template>
+<template id="tpl-receipt">
+  <li class="msg msg-receipt" data-kind="receipt"><p><strong data-slot="id"></strong> · <span data-slot="text"></span> · <span data-slot="when"></span> · <span class="msg-label">local receipt · simulated</span></p></li>
+</template>
+<template id="tpl-participant">
+  <li class="participant" data-state=""><span data-slot="text"></span></li>
+</template>

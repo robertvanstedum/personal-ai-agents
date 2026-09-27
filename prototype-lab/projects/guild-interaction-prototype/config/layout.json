@@ -1,0 +1,241 @@
+{
+  "_about": "Flow layer: sections, doors, bench panels, Operate tiles and phone numbers. Editing this file changes order, labels and defaults without code changes (SPEC §8.2). Links come from the blueprint's url_for (prefix-aware), keyed by section id.",
+  "layout_version": 1,
+  "sections": [
+    {
+      "id": "build",
+      "label": "Build"
+    },
+    {
+      "id": "operate",
+      "label": "Operate"
+    },
+    {
+      "id": "improve",
+      "label": "Improve"
+    },
+    {
+      "id": "experiment",
+      "label": "Experiment"
+    }
+  ],
+  "doors": [
+    {
+      "id": "build",
+      "title": "Build",
+      "kicker": "Shop floor · Bench · Queue",
+      "desc": "spec → build → ship",
+      "state": "attention",
+      "state_text": "needs you",
+      "observed": "Sat 9:12",
+      "signals": [
+        {
+          "text": "2 need you",
+          "source": "sample"
+        },
+        {
+          "live": "queue_active",
+          "template": "{n} active in queue"
+        }
+      ]
+    },
+    {
+      "id": "operate",
+      "title": "Operate",
+      "kicker": "Monitor · Maintain",
+      "desc": "monitor → maintain",
+      "state": "attention",
+      "state_text": "stalled",
+      "observed": "Sat 9:15",
+      "signals": [
+        {
+          "text": "1 stalled · “file this”",
+          "source": "sample"
+        }
+      ]
+    },
+    {
+      "id": "improve",
+      "title": "Improve",
+      "kicker": "Review · Analyze",
+      "desc": "review → analyze → improve",
+      "state": "quiet",
+      "state_text": "quiet",
+      "observed": "Sat 9:12",
+      "signals": []
+    },
+    {
+      "id": "experiment",
+      "title": "Experiment",
+      "kicker": "Ideas · Tinkering",
+      "desc": "try → prove → keep",
+      "state": "quiet",
+      "state_text": "quiet",
+      "observed": "Sat 9:12",
+      "signals": []
+    }
+  ],
+  "bench": {
+    "panels": [
+      {
+        "id": "subject",
+        "title": "“file this” rollout",
+        "kicker": "Capabilities → “file this”",
+        "empty_reason": "no subject pinned"
+      },
+      {
+        "id": "needs",
+        "title": "Needs you",
+        "empty_reason": "nothing waiting on you"
+      },
+      {
+        "id": "motion",
+        "title": "In motion",
+        "empty_reason": "nothing in Spec Ready or In Build"
+      },
+      {
+        "id": "discussions",
+        "title": "Discussions",
+        "empty_reason": "no open discussions",
+        "when_not_configured": "sample"
+      },
+      {
+        "id": "since",
+        "title": "Since you were here",
+        "empty_reason": "no new commits"
+      },
+      {
+        "id": "blocked",
+        "title": "Blocked",
+        "empty_reason": "grant issued r-4491; no blocked queue items"
+      },
+      {
+        "id": "postits",
+        "title": "Post-its",
+        "empty_reason": "no post-its"
+      }
+    ],
+    "default_order": [
+      "subject",
+      "needs",
+      "motion",
+      "discussions",
+      "since",
+      "blocked",
+      "postits"
+    ],
+    "default_folded": [
+      "blocked",
+      "postits"
+    ],
+    "default_focus": "subject"
+  },
+  "operate": {
+    "tiles": [
+      {
+        "id": "capabilities",
+        "label": "Capabilities",
+        "drilldown": true
+      },
+      {
+        "id": "sites",
+        "label": "Sites"
+      },
+      {
+        "id": "systems",
+        "label": "Systems"
+      },
+      {
+        "id": "disk",
+        "label": "Disk"
+      },
+      {
+        "id": "tickets",
+        "label": "Tickets"
+      },
+      {
+        "id": "build_queue",
+        "label": "Build queue",
+        "live": "queue_tile"
+      },
+      {
+        "id": "agent_work",
+        "label": "Agent work"
+      },
+      {
+        "id": "usage",
+        "label": "Usage & limits",
+        "rule": "usage",
+        "drilldown": true
+      }
+    ],
+    "default_selected": "capabilities"
+  },
+  "phone": {
+    "numbers": [
+      "capabilities",
+      "disk",
+      "agent_work",
+      "usage"
+    ],
+    "labels": {
+      "capabilities": "Capabilities",
+      "disk": "Disk",
+      "agent_work": "Agent work",
+      "usage": "Usage"
+    }
+  },
+  "floor": {
+    "_about": "Shop floor (arrival). Light rules live in guild_ui/lights.py; this sets which lights, their order, labels and detail links.",
+    "title": "Shop floor",
+    "lights": [
+      {
+        "id": "build_queue",
+        "label": "Build queue",
+        "short": "Queue",
+        "rule": "queue",
+        "detail": "queue"
+      },
+      {
+        "id": "rollouts",
+        "label": "Rollouts",
+        "short": "Rollouts",
+        "sub": "“file this”",
+        "rule": "rollout",
+        "detail": "operate:capabilities"
+      },
+      {
+        "id": "systems",
+        "label": "Systems",
+        "short": "Systems",
+        "rule": "tile",
+        "tile": "systems",
+        "detail": "operate:systems"
+      },
+      {
+        "id": "agents",
+        "label": "Agents",
+        "short": "Agents",
+        "rule": "agents",
+        "tile": "agent_work",
+        "detail": "operate:agent_work"
+      },
+      {
+        "id": "usage",
+        "label": "Usage & limits",
+        "short": "Usage",
+        "rule": "usage",
+        "detail": "operate:usage",
+        "precedence": [
+          "red",
+          "yellow",
+          "unknown",
+          "green"
+        ],
+        "_precedence_note": "SPEC rev 3.1: red > yellow > unknown > green. The brief's alternative is [\"red\",\"unknown\",\"yellow\",\"green\"]."
+      }
+    ],
+    "max_reminders": 3,
+    "max_postits": 4
+  }
+}

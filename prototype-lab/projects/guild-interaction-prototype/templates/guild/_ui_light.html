@@ -1,0 +1,9 @@
+{# One stoplight state: shape + word + reason; colour is never the only signal. #}
+{% macro shape(v) -%}
+<svg class="lshape" data-shape="{{ v.shape }}" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+{%- if v.shape == 'circle' %}<circle cx="8" cy="8" r="6.5"/>
+{%- elif v.shape == 'triangle' %}<polygon points="8,1.2 15.2,14.6 0.8,14.6"/>
+{%- elif v.shape == 'square' %}<rect x="1.8" y="1.8" width="12.4" height="12.4"/>
+{%- else %}<circle cx="8" cy="8" r="6.2" class="lshape-ring"/><text x="8" y="11.6" text-anchor="middle" class="lshape-q">?</text>
+{%- endif %}</svg>
+{%- endmacro %}

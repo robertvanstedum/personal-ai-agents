@@ -1,0 +1,7 @@
+{"id":"guild-proto-shop-floor-phone","domain":"guild","device_profile":"mobile","auth_profile":"none","start_path":"/guild",
+ "steps":[
+  {"goto":"/guild/build"},{"wait_for":"body"},
+  {"screenshot":"after-phone-shop-floor","title":"After · Phone Shop floor","description":"Lights strip, one urgent Needs-you line, the conversation, and Hold to talk / Type pinned at the bottom.","alt":"Phone Shop floor, revision 3"},
+  {"click":"[data-sheet-toggle]"},{"wait_for":"[data-floor-sheet]"},
+  {"screenshot":"after-phone-sheet","title":"After · Phone Needs you and Post-its sheet","description":"Everything else sits behind one chip.","alt":"Phone sheet open"}
+ ]}

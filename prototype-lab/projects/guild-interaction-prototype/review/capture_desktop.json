@@ -1,0 +1,66 @@
+{
+ "id": "guild-proto-shop-floor-desktop",
+ "domain": "guild",
+ "device_profile": "desktop",
+ "auth_profile": "none",
+ "start_path": "/guild",
+ "viewport": {
+  "name": "laptop",
+  "width": 1280,
+  "height": 800,
+  "device_scale_factor": 2
+ },
+ "steps": [
+  {
+   "goto": "/guild"
+  },
+  {
+   "wait_for": "body"
+  },
+  {
+   "screenshot": "after-landing",
+   "title": "After \u00b7 Guild landing",
+   "description": "Four doors kept; Build now leads to the Shop floor. Deeper page tone.",
+   "alt": "Guild landing, revision 3"
+  },
+  {
+   "goto": "/guild/build"
+  },
+  {
+   "wait_for": "[data-sheet-toggle], .floor-chip, body"
+  },
+  {
+   "screenshot": "after-shop-floor",
+   "title": "After \u00b7 Shop floor (arrival)",
+   "description": "Status strip of five lights (shape + word; grey = unknown), with Usage & limits in place of Spend. Master Craftsman is docked as the main surface, with a rail of Needs you, Continue and Post-its. Detail is one tap away.",
+   "alt": "Shop floor, revision 3"
+  },
+  {
+   "goto": "/guild/operate?tile=usage"
+  },
+  {
+   "wait_for": "body"
+  },
+  {
+   "scroll_to": "[data-usage-table]"
+  },
+  {
+   "screenshot": "after-usage-detail",
+   "title": "After \u00b7 Usage & limits per agent (the Spend light's detail)",
+   "description": "Each agent against its plan or prepaid balance: used, reset or refill, projected time to limit, headroom, vendor-reported warnings, and a shift-work hint. Overall spend is secondary. Sample data.",
+   "alt": "Usage and limits per agent"
+  },
+  {
+   "goto": "/guild/build/bench"
+  },
+  {
+   "wait_for": "body"
+  },
+  {
+   "screenshot": "after-bench",
+   "title": "After \u00b7 The bench, one step away",
+   "description": "Same bench, now with bounded sections from the new tokens; layouts unchanged.",
+   "alt": "Build workbench after the token change"
+  }
+ ]
+}

@@ -1,0 +1,6 @@
+{% extends 'guild/_ui_base.html' %}
+{% block title %}Not found · Build Queue{% endblock %}
+{% block main %}
+<div class="page-head"><h1 class="page-title">Item #{{ item_id }} not found</h1></div>
+<p>The queue has no item with this id. <a href="{{ urls.queue }}">Back to Build Queue</a></p>
+{% endblock %}

@@ -1,0 +1,14 @@
+{
+  "sample": true,
+  "_about": "Sample build queue, same shape as data/guild/build_queue.json plus a history array. Neutral data.",
+  "observed_at": "2026-09-26T09:12:00-05:00",
+  "items": [
+    {"id": 158, "status": "spec_ready", "spec_title": "Collaboration Rooms + CoS — light beta to production v0.9", "summary": "Includes attach + “file this” (Spec 158 §8)", "spec_file": "spec_158_collaboration_rooms_cos_beta_v09_2026-09-21.md", "github_issue": "", "last_transition_at": "2026-09-21T04:19:30Z",
+     "history": [{"at": "Sep 20 16:02", "from": "design", "to": "spec_ready", "by": "robert", "reason": ""}]},
+    {"id": 146, "status": "spec_ready", "spec_title": "OpenClaw Gateway for Master Craftsman", "summary": "Gateway spec; two blockers open", "spec_file": "", "github_issue": "", "last_transition_at": "2026-09-15T10:00:00Z", "history": []},
+    {"id": 157, "status": "in_build", "spec_title": "MiniMoi Collaborator Access and Invitations", "summary": "", "spec_file": "spec_157_collaborator_access_and_invitations_2026-09-20.md", "github_issue": "", "last_transition_at": "2026-09-20T16:28:31Z",
+     "history": [{"at": "Sep 20 16:28", "from": "spec_ready", "to": "in_build", "by": "robert", "reason": ""}]},
+    {"id": 117, "status": "in_build", "spec_title": "Guild Navigation & Build Queue Redesign", "summary": "", "spec_file": "", "github_issue": "", "last_transition_at": "2026-09-06T03:40:55Z", "history": []},
+    {"id": 161, "status": "idea", "spec_title": "Workshop registration", "summary": "", "spec_file": "", "github_issue": "", "last_transition_at": "2026-09-24T12:00:00Z", "history": []}
+  ]
+}

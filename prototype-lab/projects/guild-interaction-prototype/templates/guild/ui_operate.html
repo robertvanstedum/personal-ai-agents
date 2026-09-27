@@ -1,0 +1,125 @@
+{% extends 'guild/_ui_base.html' %}
+{% from 'guild/_ui_macros.html' import src_badge, sw, mark with context %}
+{% from 'guild/_ui_light.html' import shape %}
+{% block title %}Operate · Guild{% endblock %}
+{% block main %}
+<div class="page-head">
+  <h1 class="page-title">Operate</h1>
+  <p class="page-meta">Current as of <span data-clock-label>Sat 9:15</span> · no model call · badges: <span class="src-badge" data-source="live" data-status="ok">live</span> <span class="src-badge" data-source="sample" data-status="ok">sample</span> <span class="src-badge" data-source="not_instrumented" data-status="unknown">not instrumented</span></p>
+</div>
+<ul class="tiles" aria-label="Operate measures">
+  {% for t in layout.operate.tiles %}{% set tv = tiles[t.id] %}
+  <li>
+    <button type="button" class="tile" data-tile="{{ t.id }}" data-tile-label="{{ t.label }}" aria-pressed="{{ 'true' if t.id == selected_tile else 'false' }}"
+            data-unknown="{{ 'true' if tv.unknown else 'false' }}">
+      <span class="tile-label">{{ t.label }}{% if t.id == selected_tile %}<span class="tile-sel"> · selected</span>{% endif %}</span>
+      {% if tv.variants %}
+      {% for v in tv.variants %}
+      <span class="tile-variant" data-light-state="{{ v.state }}"{{ sw(v.when) }}>
+        <span class="tile-value">{{ shape(v) }} {{ v.value }}</span>
+        <span class="tile-word">{{ v.word }}</span>
+        <span class="tile-sub">{{ v.sub }}</span>
+        <span class="tile-sub">observed {{ v.observed }}</span>
+      </span>
+      {% endfor %}
+      {% else %}
+      <span class="tile-value">{{ tv.value }}</span>
+      <span class="tile-sub">{{ tv.sub }}</span>
+      {% endif %}
+      {% if tv.unknown %}<span class="tile-unknown">treat as unknown{% if tv.stale_reason %} — {{ tv.stale_reason }}{% elif tv.badge.error %} — {{ tv.badge.error }}{% endif %}</span>{% endif %}
+      <span class="tile-foot">{% if tv.observed %}observed {{ tv.observed }} · {% endif %}{{ src_badge(tv.badge) }}</span>
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+
+<div class="drill" data-drill-for="capabilities">
+  <section class="card" aria-labelledby="rollout-h">
+    <h2 class="h2" id="rollout-h">{{ rollout.data.title }}{% for clock, v in rollout.data.by_clock.items() %} <span class="tag" data-tag="stuck"{{ sw({'clock': clock}) }}>{{ v.state_text }}</span>{% endfor %} {{ src_badge(badge(rollout)) }}</h2>
+    {% for clock, v in rollout.data.by_clock.items() %}
+    <div{{ sw({'clock': clock}) }}>
+      <ul class="counts">{% for c in v.counts %}<li class="count"><span class="count-label">{{ c.label }}</span><span class="count-n">{{ c.n }}</span><span class="count-note">{{ c.note }}</span></li>{% endfor %}</ul>
+      <p class="rollout-line">{{ v.line }}</p>
+    </div>
+    {% endfor %}
+    <p class="small">Owner: Robert · source: {{ rollout.evidence }}</p>
+  </section>
+  <section class="card" aria-labelledby="ev-h">
+    <h2 class="h2" id="ev-h">Field evidence · “file this” {{ src_badge(badge(evidence)) }}</h2>
+    <ul class="evidence" data-evidence>{% for e in evidence.data %}<li{{ sw(e.show_when) }}>{{ mark(e.mark) }} {{ e.text }}</li>{% endfor %}</ul>
+    <p class="small">{{ rollout.data.recent_change }}</p>
+    <p class="panel-links"><a href="{{ urls.bench }}">Open on the bench →</a></p>
+  </section>
+  <section class="card" aria-labelledby="ns-h">
+    <h2 class="h2" id="ns-h">Next step</h2>
+    <p class="next-steps">{% for n in next_steps.data %}<button type="button" class="btn-quiet" data-propose="{{ n.proposal }}" data-consequential-ui>{{ n.label }}</button>{% endfor %}</p>
+    <p class="small">Each is a proposal you confirm.</p>
+  </section>
+</div>
+<div class="drill-usage" data-drill-for="usage" hidden>
+  {% for clock, u in usage.items() %}
+  <section class="card usage-card" data-usage-clock="{{ clock }}"{{ sw({'clock': clock}) }} aria-labelledby="usage-h-{{ clock }}">
+    <h2 class="h2" id="usage-h-{{ clock }}">Usage &amp; limits · per agent <span class="src-badge" data-source="sample" data-status="ok">sample</span></h2>
+    <p class="usage-light" data-light-state="{{ u.light.state }}">{{ shape(u.light) }} <strong data-usage-word>{{ u.light.word }}</strong> · {{ u.light.reason }} · observed {{ u.observed }}</p>
+    <div class="table-wrap">
+    <table class="usage-table" data-usage-table>
+      <thead><tr><th scope="col">Agent</th><th scope="col">Draws on</th><th scope="col">Used / balance</th><th scope="col">Reset / refill</th><th scope="col">Projected (window)</th><th scope="col">Headroom</th><th scope="col">Reported (vendor, receipts)</th><th scope="col">Status</th><th scope="col">Source</th></tr></thead>
+      <tbody>
+      {% for r in u.rows %}
+        <tr data-usage-row data-agent="{{ r.agent }}" data-light-state="{{ r.item.state }}">
+          <th scope="row">{{ r.agent }}<span class="usage-use">{{ r.use }}</span></th>
+          <td>{{ r.draws_on }}</td>
+          <td>{{ r.item.used_text }}{% if r.item.bar_pct is not none %}
+            <svg class="ubar" viewBox="0 0 100 6" aria-hidden="true" focusable="false"><rect class="ubar-track" x="0" y="0" width="100" height="6"/><rect class="ubar-fill" x="0" y="0" width="{{ r.item.bar_pct }}" height="6"/></svg>{% endif %}</td>
+          <td>{{ r.item.reset_text }}</td>
+          <td data-projection>{{ r.item.projection_text }}</td>
+          <td>{{ r.item.headroom_text }}</td>
+          <td class="usage-reported" data-reported>
+            {% if r.item.vendor %}<span class="mark" data-mark="reported">reported</span>
+              {% if r.item.vendor.ignored %}<span class="usage-ignored" data-vendor-ignored>{{ r.item.vendor.summary }} — {{ r.item.vendor.ignored }}</span>
+              {% else %}<span data-vendor-fresh>{{ r.item.vendor.summary }}</span>{% endif %}
+              <span class="usage-origin">{{ 'filed here' if r.item.vendor.filed else 'sample' }}</span>
+            {% endif %}
+            {% for e in r.item.refills %}<span class="usage-refill" data-refill><span class="mark" data-mark="reported">reported (receipt)</span> {{ e.summary }} <span class="usage-origin">{{ 'filed here' if e.filed else 'sample' }}</span></span>{% endfor %}
+            {% if not r.item.vendor and not r.item.refills %}—{% endif %}
+          </td>
+          <td class="usage-status">{{ shape(r) }} <span data-usage-status-word>{{ r.word }}</span></td>
+          <td><span class="light-src" data-source="{{ 'not_instrumented' if r.item.source_mark == 'not instrumented' else 'sample' }}">{{ r.item.source_mark }}</span>
+            {% if r.vendor_capture %}<span class="light-src usage-capture" data-source="not_instrumented">warnings: not instrumented — {{ r.vendor_capture }}</span>{% endif %}
+          </td>
+        </tr>
+        {% for m in r.item.mismatches %}<tr class="usage-mismatch" data-usage-mismatch data-agent="{{ r.agent }}"><td colspan="10"><span class="mark" data-mark="unknown">mismatch</span> {{ m }}</td></tr>{% endfor %}
+        {% if r.shift %}<tr class="usage-shift" data-usage-shift><td colspan="10">Shift work: {{ r.shift }}</td></tr>{% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if u.overall %}<p class="small usage-overall" data-usage-overall>Overall: ${{ '%.2f'|format(u.overall.mtd) }} {{ u.overall.note }} (sample){% if u.overall.refill_count %} · refills recorded: ${{ '%.2f'|format(u.overall.refills) }} ({{ u.overall.refill_count }} receipt{{ 's' if u.overall.refill_count != 1 }}, reported){% endif %}</p>{% endif %}
+    <p class="small">Balances: refill receipts are captured by pasting a receipt into the conversation and saying “file this” (vendor, amount and time only; payment details are removed). Planned: forwarded receipt emails or a billing API — not instrumented.</p>
+    <p class="small">Projections are linear over the stated recent window; "no projection" means too little data, and no time is guessed.</p>
+  </section>
+  {% endfor %}
+</div>
+<p class="drill-none card" data-drill-none hidden>No drill-down in this prototype for <span data-drill-none-label></span>.</p>
+
+<section class="health card" data-health aria-labelledby="health-h">
+  <h2 class="h2" id="health-h">Journey health · sample layout, not instrumented</h2>
+  <p class="small">User impact and component risk are separate: a component risk does not turn a journey red by itself. No value here is measured.</p>
+  <div class="table-wrap">
+  <table class="health-table">
+    <thead><tr><th scope="col">Journey</th><th scope="col">User impact</th><th scope="col">Component / agent risk</th><th scope="col">Observed</th><th scope="col">Evidence path</th></tr></thead>
+    <tbody>
+    {% for j in journeys.data %}
+      <tr>
+        <th scope="row">{{ j.journey }}</th>
+        {% for cell in [j.impact, j.risk, j.observed] %}
+        <td class="hcell" data-tag="{{ cell.tag }}" data-stale="{{ 'true' if cell.stale else 'false' }}"><span class="htag">{{ cell.tag }}</span> {{ cell.text }}{% if cell.stale %} <span class="tile-unknown">treat as unknown</span>{% endif %}</td>
+        {% endfor %}
+        <td class="small">{{ j.evidence }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}
