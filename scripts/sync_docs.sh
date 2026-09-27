@@ -81,7 +81,7 @@ if [[ "$PUBLISH_QUEUE" == "1" ]]; then
   LINES+=(
     "mkdir -p /opt/minimoi/data/guild/backups"
     "if [ -s ${QUEUE_DEST} ]; then cp -p ${QUEUE_DEST} /opt/minimoi/data/guild/backups/build_queue.\$(date -u +%Y%m%dT%H%M%SZ).before-publish.json; fi"
-    "curl -fsSL '${RAW_BASE}/data/guild/build_queue.json' -o ${QUEUE_DEST}.publish && python3 -m json.tool ${QUEUE_DEST}.publish >/dev/null && mv ${QUEUE_DEST}.publish ${QUEUE_DEST} && echo 'OK: build_queue.json published (live copy backed up)'"
+    "curl -fsSL '${RAW_BASE}/data/guild/build_queue.json' -o ${QUEUE_DEST}.publish && python3 -m json.tool ${QUEUE_DEST}.publish >/dev/null && cat ${QUEUE_DEST}.publish > ${QUEUE_DEST} && rm -f ${QUEUE_DEST}.publish && echo 'OK: build_queue.json published in place (live copy backed up; single-file mount kept attached)'"
   )
 else
   echo "Build Queue: live copy on EC2 left untouched (use --publish-queue to publish the repository copy deliberately)"

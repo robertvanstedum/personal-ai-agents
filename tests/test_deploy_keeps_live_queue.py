@@ -55,12 +55,16 @@ def test_existing_live_queue_is_kept_and_backed_up(tmp_path, repo_copy):
     assert "not overwritten" in result.stdout
 
 
-def test_empty_live_file_is_seeded(tmp_path, repo_copy):
+def test_empty_live_file_is_seeded_in_place(tmp_path, repo_copy):
+    # The live file may be a single-file bind mount: it must keep its inode.
     dest = tmp_path / "build_queue.json"
     dest.write_text("")
+    inode = dest.stat().st_ino
     result = run_seed(repo_copy, dest, tmp_path / "backups")
     assert result.returncode == 0, result.stderr
     assert json.loads(dest.read_text())[0]["id"] == 1
+    assert dest.stat().st_ino == inode, "seed replaced the file; a single-file mount would detach"
+    assert not list(tmp_path.glob("*.seed.*"))
 
 
 def test_invalid_seed_source_writes_nothing(tmp_path):
@@ -103,6 +107,9 @@ def test_sync_docs_publish_queue_backs_up_before_replacing():
     publish = next(i for i, l in enumerate(lines) if "build_queue.json.publish" in l)
     assert backup < publish
     assert "json.tool" in lines[publish], "published copy must be validated before it replaces the live file"
+    # Publish writes into the existing file (keeps a single-file bind mount attached), never mv.
+    assert "cat /opt/minimoi/data/guild/build_queue.json.publish > /opt/minimoi/data/guild/build_queue.json" in lines[publish]
+    assert " mv " not in lines[publish]
 
 
 def test_sync_docs_rejects_unknown_arguments():
