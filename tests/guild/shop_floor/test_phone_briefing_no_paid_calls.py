@@ -34,10 +34,13 @@ def test_phone_css_never_hides_the_composer():
     assert ".mc-phone-bar { display: flex;" in phone
 
 
-def test_send_is_disabled_and_says_notes_are_not_connected(staging):
+def test_send_is_enabled_and_the_notes_line_is_honest_without_a_database(staging):
+    """(c): Send keeps notes on the record. With no floor database the page
+    says so, and a Send is refused by the server with "not saved"."""
     body = staging.owner().get("/guild-next/guild/build").get_data(as_text=True)
-    assert re.search(r'<button type="submit" class="btn" data-mc-send disabled', body)
-    assert "Notes are not connected yet. Nothing you type is sent or kept." in body
+    assert re.search(r'<button type="submit" class="btn" data-mc-send aria-describedby', body)
+    assert "Notes unavailable — the floor database is not configured on this portal. Nothing you send is kept." in body
+    assert "Master Craftsman is off · notes unavailable, nothing you send is kept" in body
     assert "file this" not in body.lower()
 
 

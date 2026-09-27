@@ -9,6 +9,7 @@ EXPECTED = {
     "/guild-next/guild/build/bench",
     "/guild-next/guild/build/queue",
     "/guild-next/guild/build/items/<int:item_id>",
+    "/guild-next/guild/build/postits",
     "/guild-next/guild/operate",
     "/guild-next/guild/ui-assets/<path:filename>",
     "/guild-next/api/v1/session",
@@ -18,6 +19,12 @@ EXPECTED = {
     "/guild-next/api/v1/queue/items/<int:item_id>/history",
     "/guild-next/api/v1/queue/items/<int:item_id>/status",
     "/guild-next/api/v1/queue/journal/<op_id>/checked",
+    "/guild-next/api/v1/notes",
+    "/guild-next/api/v1/postits",
+    "/guild-next/api/v1/postits/bin",
+    "/guild-next/api/v1/postits/<int:postit_id>/bin",
+    "/guild-next/api/v1/postits/<int:postit_id>/restore",
+    "/guild-next/api/v1/continue",
     "/guild-next/api/v1/",
     "/guild-next/api/v1/<path:rest>",
 }
@@ -35,6 +42,16 @@ def test_writes_are_post_only_and_reads_get_only(staging):
     assert by_rule["/guild-next/api/v1/queue/items/<int:item_id>/status"] >= {"POST"}
     assert "GET" not in by_rule["/guild-next/api/v1/queue/items/<int:item_id>/status"]
     assert "POST" not in by_rule["/guild-next/api/v1/floor"]
+    for rule in ("/guild-next/api/v1/postits/<int:postit_id>/bin", "/guild-next/api/v1/postits/<int:postit_id>/restore"):
+        assert by_rule[rule] >= {"POST"} and "GET" not in by_rule[rule]
+    methods = {}
+    for r in staging.app.url_map.iter_rules():
+        if r.rule in ("/guild-next/api/v1/notes", "/guild-next/api/v1/postits", "/guild-next/api/v1/continue"):
+            methods.setdefault(r.rule, set()).update(r.methods)
+    assert methods["/guild-next/api/v1/notes"] >= {"GET", "POST"}
+    assert methods["/guild-next/api/v1/postits"] >= {"GET", "POST"}
+    assert methods["/guild-next/api/v1/continue"] >= {"GET", "PUT"}
+    assert "DELETE" not in set().union(*methods.values())  # nothing is ever deleted
 
 
 def test_portal_routes_and_headers_are_untouched(staging):

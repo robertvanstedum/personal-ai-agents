@@ -34,7 +34,7 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' 
        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'self'")
 
-ALL_ROUTES = ("floor", "bench", "queue", "item", "operate", "assets", "api")
+ALL_ROUTES = ("floor", "bench", "queue", "item", "postits", "operate", "assets", "api")
 B1_ROUTES = ALL_ROUTES   # the landing page, improve, experiment and any reset are not in this package
 
 
@@ -107,6 +107,7 @@ def _make_blueprint(name: str, routes) -> Blueprint:
         "bench": [("/guild/build/bench", "bench", pages.bench)],
         "queue": [("/guild/build/queue", "queue", pages.queue)],
         "item": [("/guild/build/items/<int:item_id>", "item", pages.item)],
+        "postits": [("/guild/build/postits", "postits", pages.postits)],
         "operate": [("/guild/operate", "operate", pages.operate)],
         "assets": [("/guild/ui-assets/<path:filename>", "asset", asset)],
     }

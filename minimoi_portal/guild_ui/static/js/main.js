@@ -7,6 +7,9 @@ import { initFloorState } from './floor.js';
 import { initBench } from './bench.js';
 import { initQueue } from './queue.js';
 import { initOperate } from './operate.js';
+import { initPostits } from './postits.js';
+import { continueFromItem } from './continue.js';
+import { initZones } from './zones.js';
 
 const page = JSON.parse(document.getElementById('guild-page').textContent);
 configure(page.storage_ns);
@@ -16,8 +19,15 @@ initFloorState(page);
 if ($('[data-bench]')) initBench(page);
 if (page.page === 'queue' || page.page === 'item') initQueue(page);
 if (page.page === 'operate') initOperate();
+initZones(page.floor);
+initPostits(page);
+continueFromItem(page);
 
 const openBtn = $('[data-phone-open]');
+if (openBtn && document.body.dataset.pageOpen === 'true') {
+  openBtn.setAttribute('aria-expanded', 'true');
+  openBtn.textContent = `Hide ${page.area} ▴`;
+}
 if (openBtn) openBtn.addEventListener('click', () => {
   const on = document.body.dataset.pageOpen !== 'true';
   document.body.dataset.pageOpen = String(on);

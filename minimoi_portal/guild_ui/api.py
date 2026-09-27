@@ -9,11 +9,15 @@ from __future__ import annotations
 import re
 
 from flask import jsonify, request
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from . import cfg, floor_state, owner_api
 from .adapters import STATUSES, normalize
 from .adapters.contract import now_iso
+from .payment_scrub import scrub
 from .security import OFF_RECORD_TEXT, check_write, csrf_token, json_error
+from .stores import (GUILD_PLATFORM, NOTE_MAX, POSTIT_MAX, Author, FloorStoreNotConfigured,
+                     FloorStoreUnavailable)
 
 API_VERSION = 1
 ALL_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -51,6 +55,14 @@ def save_message(result: str, item_id, receipt=None, audit=None) -> str:
 def _principal() -> str:
     user = cfg()["current_user"]() or {}
     return user.get("username") or "owner"
+
+
+def _author() -> Author:
+    """The signed-in owner as a writer. The API never lets a caller write as
+    anyone else: Master Craftsman's post-its come through its own tool (B3)."""
+    user = cfg()["current_user"]() or {}
+    username = user.get("username") or "owner"
+    return Author(username, "owner", user.get("display_name") or username)
 
 
 @owner_api
@@ -155,6 +167,8 @@ def save_status(item_id: int):
         "observed_at": now_iso(),
         "message": save_message(result.result, item_id, result.receipt_id, result.audit),
     }
+    if result.result == "saved" and not result.repeated:
+        payload["notes_line"] = _platform_line(payload["message"], result.receipt_id, item_id)
     status = SAVE_HTTP.get(result.result, 500)
     if status >= 400:
         payload["error"] = "unavailable" if result.result == "refused" else result.result
@@ -165,6 +179,20 @@ def save_status(item_id: int):
     if result.result == "busy":
         response.headers["Retry-After"] = "5"
     return response
+
+
+def _platform_line(text: str, receipt_id: str | None, item_id: int) -> str:
+    """The Save receipt as a platform line in the thread (review N3): written
+    after the receipt exists, and its failure is only reported."""
+    floor = cfg()["services"].floor
+    if floor is None or not floor.configured() or not receipt_id:
+        return "skipped"
+    try:
+        done = floor.add_note(f"receipt-{receipt_id}", text, GUILD_PLATFORM, area="Build Queue", item_ref=item_id,
+                              page="save")
+    except FloorStoreUnavailable:
+        return "failed"
+    return "ok" if done.outcome == "kept" else "failed"
 
 
 @owner_api
@@ -188,6 +216,241 @@ def mark_checked(op_id: str):
     return json_error("failed", "The journal could not be written. Nothing was changed.", 500)
 
 
+# ── Notes, post-its and Continue (deliverable (c)) ──────────────────────────
+NOTE_WORDS = {
+    "kept": "Kept as a note",
+    "unavailable": "Not saved — notes unavailable",
+    "not_configured": "Not saved — notes are not configured on this portal",
+}
+POSTIT_WORDS = {
+    "added": "Post-it added",
+    "binned": "Post-it moved to the bin",
+    "already_binned": "That post-it was already in the bin",
+    "restored": "Post-it restored from the bin",
+    "already_active": "That post-it is already on the board",
+    "unavailable": "Post-its unavailable — nothing was changed",
+    "not_configured": "Post-its are not configured on this portal — nothing was changed",
+}
+
+
+def _store_down(exc: FloorStoreUnavailable, words: dict):
+    code = "not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"
+    return json_error("unavailable", words[code], 503, reason=code)
+
+
+def _source(res) -> dict:
+    """A floor-store read's meta, with "unavailable" spelled out for front ends."""
+    meta = res.meta()
+    meta["available"] = res.ok
+    return meta
+
+
+def _floor():
+    return cfg()["services"].floor
+
+
+# The largest body a notes, post-its or Continue write may carry (review B1c #1):
+# a 2,000-character note is at most ~12 KB of JSON even with every character
+# escaped, so 32 KB is ample, and nothing larger is ever read or scrubbed.
+MAX_BODY = 32 * 1024
+
+
+def _too_large():
+    return json_error("too_large", f"This request is larger than {MAX_BODY // 1024} KB. Nothing was changed.", 413)
+
+
+def _write_body():
+    """(refusal, body): body size, CSRF, record mode, a JSON object, and its
+    idempotency key (one per opened form or change, not per click)."""
+    if request.content_length is not None and request.content_length > MAX_BODY:
+        return _too_large(), None
+    request.max_content_length = MAX_BODY      # also bounds a body sent without a length
+    try:
+        if request.content_length is None and len(request.get_data(cache=True)) >= MAX_BODY:
+            return _too_large(), None          # read stopped at the limit: the body was longer
+        refusal = check_write(cfg()["base_url"])
+        if refusal is not None:
+            return refusal, None
+        body = request.get_json(silent=True)
+    except RequestEntityTooLarge:
+        return _too_large(), None
+    if not isinstance(body, dict):
+        return json_error("invalid", "The request body must be a JSON object.", 422), None
+    key = body.get("idempotency_key", body.get("request_id"))
+    if not isinstance(key, str) or not _IDEMPOTENCY.fullmatch(key):
+        return json_error("invalid", "Every write needs an idempotency key (8 to 64 letters, digits, - or _).",
+                          422), None
+    if key.startswith("receipt-"):
+        return json_error("invalid", "Keys starting with receipt- are the platform's own.", 422), None
+    if "request_id" in body and "idempotency_key" in body and body["request_id"] != body["idempotency_key"]:
+        return json_error("invalid", "request_id and idempotency_key disagree.", 422), None
+    body["_key"] = key
+    return None, body
+
+
+MISMATCH = "This form was already used for a different change. Nothing was changed; reload and try again"
+
+
+def _mismatch():
+    return json_error("idempotency_mismatch", MISMATCH, 409, result="idempotency_mismatch")
+
+
+def _clean_text(value, limit: int, what: str):
+    """Refuse over-long text before the scrub ever sees it, then check the
+    scrubbed text again: removing payment details can make it longer, and
+    that is the writer's problem to fix (422), never a store outage."""
+    if not isinstance(value, str) or not value.strip():
+        return None, json_error("invalid", f"The {what} is empty.", 422)
+    if len(value) > limit:
+        return None, json_error("invalid", f"The {what} is longer than {limit} characters.", 422)
+    clean = scrub(value.strip())
+    if len(clean) > limit:
+        return None, json_error(
+            "invalid", f"The {what} is too long after removing payment details ({len(clean)} characters, "
+                       f"at most {limit}). Nothing was kept; shorten it and send it again.", 422)
+    return clean, None
+
+
+def _short(value, limit: int = 60):
+    """A short context field: cut to its limit before the scrub, and again after."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return scrub(value.strip()[:limit])[:limit]
+
+
+@owner_api
+def notes_list():
+    before = request.args.get("before", type=int)
+    limit = request.args.get("limit", default=50, type=int)
+    res = _floor().list_notes(before=before, limit=max(1, min(limit or 50, 200)))
+    data = res.data if res.ok else {}
+    return jsonify({**_source(res), "notes": data.get("notes") if res.ok else None,
+                    "more": data.get("more") if res.ok else None,
+                    "message": None if res.ok else floor_state.notes_zone(res)["text"]})
+
+
+@owner_api
+def notes_add():
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    request_id = body["_key"]   # a note's request id is its idempotency key
+    text, bad = _clean_text(body.get("text"), NOTE_MAX, "note")
+    if bad is not None:
+        return bad
+    context = body.get("context") if isinstance(body.get("context"), dict) else {}
+    item_ref = context.get("item_ref")
+    item_ref = item_ref if isinstance(item_ref, int) and not isinstance(item_ref, bool) and 0 < item_ref < 10**9 else None
+    try:
+        done = _floor().add_note(request_id, text, _author(), area=_short(context.get("area")),
+                                 item_ref=item_ref, page=_short(context.get("page"), 40))
+    except FloorStoreUnavailable as exc:
+        return _store_down(exc, NOTE_WORDS)
+    if done.outcome == "idempotency_mismatch":
+        return _mismatch()
+    return jsonify({"result": "kept", "repeated": done.repeated, "note": done.value, "message": NOTE_WORDS["kept"],
+                    "observed_at": now_iso()})
+
+
+@owner_api
+def postits_list():
+    res = _floor().list_postits()
+    cap = cfg()["layout"]["floor"].get("postit_cap", 4)
+    return jsonify({**_source(res), "postits": res.data["postits"] if res.ok else None,
+                    "bin_total": res.data["bin_total"] if res.ok else None, "cap": cap,
+                    "message": None if res.ok else floor_state.postits_zone(res, cap)["text"]})
+
+
+@owner_api
+def postits_bin_list():
+    limit = request.args.get("limit", default=100, type=int)
+    res = _floor().list_bin(limit=max(1, min(limit or 100, 500)))
+    return jsonify({**_source(res), "bin": res.data["bin"] if res.ok else None,
+                    "total": res.data["total"] if res.ok else None,
+                    "message": None if res.ok else "Bin unavailable — treat as unknown"})
+
+
+def _postit_answer(done):
+    if done.outcome == "idempotency_mismatch":
+        return _mismatch()
+    if done.outcome == "not_found":
+        return json_error("not_found", "No such post-it on this floor. Nothing was changed.", 404)
+    return jsonify({"result": done.outcome, "repeated": done.repeated, "postit": done.value,
+                    "message": POSTIT_WORDS[done.outcome], "observed_at": now_iso()})
+
+
+@owner_api
+def postit_add():
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    text, bad = _clean_text(body.get("text"), POSTIT_MAX, "post-it")
+    if bad is not None:
+        return bad
+    try:
+        done = _floor().add_postit(text, _author(), idempotency_key=body["_key"])
+    except FloorStoreUnavailable as exc:
+        return _store_down(exc, POSTIT_WORDS)
+    return _postit_answer(done)
+
+
+def _postit_move(postit_id: int, action: str):
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    store = _floor()
+    try:
+        done = (store.bin_postit if action == "bin" else store.restore_postit)(
+            postit_id, _author(), idempotency_key=body["_key"])
+    except FloorStoreUnavailable as exc:
+        return _store_down(exc, POSTIT_WORDS)
+    return _postit_answer(done)
+
+
+@owner_api
+def postit_bin(postit_id: int):
+    return _postit_move(postit_id, "bin")
+
+
+@owner_api
+def postit_restore(postit_id: int):
+    return _postit_move(postit_id, "restore")
+
+
+@owner_api
+def continue_get():
+    res = _floor().get_continue(_principal())
+    zone = floor_state.continue_zone(res, res.data if res.ok else None)
+    return jsonify({**_source(res), "continue": zone["target"], "text": zone["text"], "state": zone["state"]})
+
+
+@owner_api
+def continue_put():
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    ref = body.get("ref")
+    if body.get("kind") != "item" or not isinstance(ref, int) or isinstance(ref, bool) or not 0 < ref < 10**9:
+        return json_error("invalid", "Continue takes a queue item: {\"kind\": \"item\", \"ref\": <id>}.", 422)
+    item = cfg()["services"].queue.get_item(ref)
+    if not item.ok:
+        return json_error("unavailable", "The queue can't be read, so Continue was not changed.", 503)
+    if item.data is None:
+        return json_error("not_found", f"#{ref} is not in the queue. Continue was not changed.", 404)
+    label = f"#{ref} {item.data.get('title') or ''}".strip()[:200]
+    try:
+        done = _floor().set_continue(_principal(), kind="item", ref=str(ref), label=label,
+                                     idempotency_key=body["_key"])
+    except FloorStoreUnavailable as exc:
+        return _store_down(exc, {"unavailable": "Continue unavailable — nothing was changed",
+                                 "not_configured": "Continue is not configured on this portal — nothing was changed"})
+    if done.outcome == "idempotency_mismatch":
+        return _mismatch()
+    zone = floor_state.continue_zone(item, done.value)
+    return jsonify({"result": "set", "repeated": done.repeated, "continue": zone["target"], "text": zone["text"],
+                    "state": "ok", "message": f"Continue: {zone['text']}", "observed_at": now_iso()})
+
+
 @owner_api
 def not_found(rest: str = ""):
     return json_error("not_found", "No such Guild API resource.", 404)
@@ -201,6 +464,15 @@ RULES = [
     ("/queue/items/<int:item_id>/history", "api_history", history_view, ["GET"]),
     ("/queue/items/<int:item_id>/status", "api_save_status", save_status, ["POST"]),
     ("/queue/journal/<op_id>/checked", "api_mark_checked", mark_checked, ["POST"]),
+    ("/notes", "api_notes", notes_list, ["GET"]),
+    ("/notes", "api_notes_add", notes_add, ["POST"]),
+    ("/postits", "api_postits", postits_list, ["GET"]),
+    ("/postits", "api_postit_add", postit_add, ["POST"]),
+    ("/postits/bin", "api_postits_bin", postits_bin_list, ["GET"]),
+    ("/postits/<int:postit_id>/bin", "api_postit_bin", postit_bin, ["POST"]),
+    ("/postits/<int:postit_id>/restore", "api_postit_restore", postit_restore, ["POST"]),
+    ("/continue", "api_continue", continue_get, ["GET"]),
+    ("/continue", "api_continue_put", continue_put, ["PUT"]),
     ("/", "api_root", not_found, ALL_METHODS),
     ("/<path:rest>", "api_not_found", not_found, ALL_METHODS),
 ]

@@ -1,9 +1,12 @@
 // The conversation, real mode. Master Craftsman is off: nothing here produces
-// a reply. The thread shows the opening briefing and platform lines (explain
-// cards, Save results), labelled as platform rules and kept only on this page.
-// Notes arrive with the next deliverable; until then Send stays disabled.
-import { $, clone, slot, setSlot, el, announce, localTime } from './dom.js';
+// a reply. The thread shows the opening briefing, platform lines (explain
+// cards, Save results) and Robert's notes. On the record, Send keeps the
+// message on the server as a note. Off the record, what is typed stays in
+// this page's memory only: it is never sent, and it is cleared on return.
+import { $, $$, clone, slot, setSlot, el, announce, localTime } from './dom.js';
 import { live, setOff, onChange } from './state.js';
+import { apiPost, recordMode } from './api.js';
+import { newKey } from './actions.js';
 
 let page, panel, thread, pill;
 const inPage = () => document.body.dataset.page === 'floor';
@@ -63,6 +66,57 @@ export function setBriefing(briefing) {
   if (text) text.textContent = briefing.text.replace(/^As of [^·]+·/, `As of ${localTime(briefing.observed_at)} ·`);
 }
 
+function appendNote(note) {
+  const li = clone('tpl-note');
+  li.dataset.note = note.id;
+  setSlot(li, 'label', note.author_label);
+  setSlot(li, 'when', localTime(note.created_at));
+  const ctx = note.context || {};
+  setSlot(li, 'context', `${ctx.area ? ` · ${ctx.area}` : ''}${ctx.item_ref ? ` · #${ctx.item_ref}` : ''}`);
+  setSlot(li, 'text', note.text);
+  thread.append(li);
+  follow();
+}
+
+function appendOffRecord(text) {
+  const li = clone('tpl-off-record');
+  setSlot(li, 'when', localTime(new Date().toISOString()));
+  setSlot(li, 'text', text);
+  thread.append(li);
+  follow();
+}
+
+let noteKey = null;   // one key per composed note; a new one when the text changes
+
+async function sendNote(input, send) {
+  const text = input.value.trim();
+  if (!text) return;
+  if (live.off) {       // memory only: never sent, never kept
+    appendOffRecord(text);
+    input.value = '';
+    return;
+  }
+  if (!noteKey) noteKey = newKey();
+  send.disabled = true;
+  const r = await apiPost('/notes', {
+    request_id: noteKey, text, record_mode: recordMode(),
+    context: { area: document.body.dataset.area || null, item_ref: page.item_id || null, page: page.page },
+  });
+  send.disabled = false;
+  const body = r.body || {};
+  if (r.ok && body.result === 'kept') {
+    if (!$(`[data-note="${body.note.id}"]`)) appendNote(body.note);
+    input.value = '';
+    noteKey = null;
+    for (const n of $$('[data-notes-unavailable]')) n.remove();
+    const r2 = $('[data-mc-refusal]');
+    if (!live.off) { r2.hidden = true; r2.textContent = ''; }
+    announce(body.message);
+  } else {
+    refuse(body.message || 'Not saved — notes unavailable');
+  }
+}
+
 export function refuse(text) {
   const r = $('[data-mc-refusal]');
   r.hidden = false;
@@ -74,6 +128,8 @@ function renderRecord() {
   const btn = $('[data-mc-record]');
   btn.setAttribute('aria-pressed', String(live.off));
   btn.textContent = live.off ? 'Back on the record' : 'Off the record';
+  const confirm = $('[data-mc-record-confirm]');
+  if (confirm) confirm.hidden = live.known;
   const ctx = $('[data-mc-context]');
   const area = document.body.dataset.area || 'Guild';
   const item = document.body.dataset.contextItem || '';
@@ -94,15 +150,26 @@ export function initConversation(p) {
   });
   const form = $('[data-mc-composer]');
   const input = $('[data-mc-input]');
+  const send = $('[data-mc-send]');
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (live.off) { refuse(page.off_record_text); return; }
-    refuse(page.floor.notes.text);
+    sendNote(input, send);
   });
+  input.addEventListener('input', () => { noteKey = null; });
+  const confirm = $('[data-mc-record-confirm]');
+  if (confirm) {
+    confirm.addEventListener('click', () => {
+      setOff(false);
+      addPlatform('Guild platform', 'On the record in this tab');
+    });
+  }
   $('[data-mc-record]').addEventListener('click', () => {
     const wasOff = live.off;
     setOff(!live.off);
-    if (wasOff) addPlatform('Guild platform', 'Back on the record · nothing from the off-the-record stretch was kept');
+    if (wasOff) {
+      for (const n of $$('[data-off-record-line]')) n.remove();
+      addPlatform('Guild platform', 'Back on the record · nothing from the off-the-record stretch was kept');
+    }
   });
   const typeBtn = $('[data-mc-type]');
   typeBtn.addEventListener('click', () => {
@@ -111,6 +178,9 @@ export function initConversation(p) {
     input.focus();
   });
   onChange(renderRecord);
+  if (!live.known) {
+    addPlatform('Guild platform', 'This tab does not know whether you are on the record (it may have been opened from a tab that is off the record, or the setting could not be read). Continue is not updated automatically until you choose: Confirm on the record, or go Off the record.');
+  }
   setBriefing(page.floor && page.floor.briefing);
   applyMode();
   renderRecord();

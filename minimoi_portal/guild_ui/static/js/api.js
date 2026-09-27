@@ -18,6 +18,12 @@ function signedOut() {
 }
 
 async function call(method, path, body, etag) {
+  // Off the record, no write leaves the page (review B1c #3); the server
+  // would refuse it too (409), but nothing is even sent.
+  if (method !== 'GET' && live.off) {
+    return { ok: false, status: 409, offline: true,
+      body: { error: 'not_listening', result: 'not_listening', message: page.off_record_text } };
+  }
   const headers = { Accept: 'application/json' };
   if (method !== 'GET') {
     headers['Content-Type'] = 'application/json';
@@ -43,3 +49,4 @@ async function call(method, path, body, etag) {
 
 export const apiGet = (path, etag) => call('GET', path, null, etag);
 export const apiPost = (path, body) => call('POST', path, body || {});
+export const apiPut = (path, body) => call('PUT', path, body || {});

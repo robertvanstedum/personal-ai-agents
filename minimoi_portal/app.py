@@ -69,11 +69,16 @@ def _init_sentry():
                 dsn = get_secret('SENTRY_DSN')
             except Exception:
                 return
+        # Guild Shop floor API bodies (notes, post-its) never go to Sentry.
+        from minimoi_portal.guild_mounts import sentry_before_send
         sentry_sdk.init(
             dsn=dsn,
             integrations=[FlaskIntegration()],
             traces_sample_rate=0.1,
             environment=os.environ.get('FLASK_ENV', 'production'),
+            before_send=sentry_before_send,
+            before_send_transaction=sentry_before_send,
+            include_local_variables=False,   # frame locals could hold a note's raw text
         )
     except ImportError:
         pass

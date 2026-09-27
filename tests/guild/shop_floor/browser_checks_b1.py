@@ -23,6 +23,7 @@ from werkzeug.serving import make_server
 from domains.guild import queue_store as qs
 
 from floor_helpers import OWNER, QUEUE_ITEMS, REPO, write_queue
+from floor_db_helpers import SqliteFloor
 
 OFF_TEXT = "Off the record · nothing is kept. Save, notes and post-its are paused."
 
@@ -63,7 +64,7 @@ def server():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
     srv = make_server("127.0.0.1", port, app, threaded=True)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    yield {"url": f"http://127.0.0.1:{port}", "queue": queue}
+    yield {"url": f"http://127.0.0.1:{port}", "queue": queue, "app": app}
     srv.shutdown()
     qs._running_in_container = saved[3]
 
@@ -147,7 +148,7 @@ def test_phone_type_is_reachable(browser, server, fresh_queue, width):
         expect(field).to_be_in_viewport()
         field.fill("a typed line")
         expect(page.locator("text=Hold to talk")).to_have_count(0)
-        expect(page.locator("[data-mc-send]")).to_be_disabled()
+        expect(page.locator("[data-mc-send]")).to_be_enabled()
     width_ok = page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
     assert width_ok
     assert not errors, errors
@@ -371,4 +372,279 @@ def test_one_idempotency_key_per_change_and_a_retry_reuses_it(browser, server, f
     journal = [json.loads(l) for l in (fresh_queue.parent / qs.JOURNAL_NAME).read_text().splitlines() if l.strip()]
     assert len([l for l in journal if l.get("kind") == "intent"]) == 1
     assert form.get_attribute("data-idem-key") != key   # the next change gets a new key
+    ctx.close()
+
+
+# ── Deliverable (c): Continue, post-its with the bin, notes (W4, W6, W7) ──────
+
+PHONE = {"width": 390, "height": 780}
+
+
+@pytest.fixture
+def floor(server, fresh_queue, tmp_path):
+    """A fresh floor database behind the running portal."""
+    db = SqliteFloor(tmp_path / "floor")
+    server["app"].extensions["guild_ui_next"]["services"].floor = db.store()
+    return db
+
+
+def _requests(page, fragment):
+    seen = []
+    page.on("request", lambda r: seen.append((r.method, r.url)) if fragment in r.url else None)
+    return seen
+
+
+def test_w4_opening_an_item_sets_continue_and_the_phone_shows_it(browser, server, floor):
+    desk, page = _context(browser, server)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator('[data-zone="continue"] [data-continue]')).to_have_text("Nothing to continue — open a queue item")
+    go(page, f"{server['url']}/guild-next/guild/build/items/12")
+    expect(page.locator("[data-continue]").first).to_have_attribute("data-continue-state", "ok")
+    page.wait_for_function("() => [...document.querySelectorAll('[data-continue-link]')].some(a => a.textContent === '#12 Floor API')")
+    assert floor.rows("floor_continue")[0]["ref"] == "12"
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator('[data-zone="continue"] [data-continue-link]')).to_have_text("#12 Floor API")
+    assert not errors, errors
+    desk.close()
+
+    phone, ppage = _context(browser, server, **PHONE)     # another session and viewport, same owner
+    go(ppage, f"{server['url']}/guild-next/guild/build")
+    ppage.click("[data-sheet-toggle]")
+    link = ppage.locator('[data-zone="continue"] [data-continue-link]')
+    expect(link).to_be_visible()
+    expect(link).to_have_text("#12 Floor API")
+    go(ppage, f"{server['url']}/guild-next/guild/build/queue")
+    expect(ppage.locator(".ps-continue [data-continue-link]")).to_have_text("#12 Floor API")
+    phone.close()
+
+
+def _w6(page, server, floor, phone):
+    go(page, f"{server['url']}/guild-next/guild/build")
+    if phone:
+        page.click("[data-sheet-toggle]")
+    rail = page.locator('[data-postits][data-mode="rail"]')
+    rail.locator("[data-postit-input]").fill("Ask about the lock timeout")
+    rail.locator("[data-postit-add-btn]").click()
+    row = rail.locator("[data-postit]")
+    expect(row).to_have_count(1)
+    expect(row.locator("[data-postit-author]")).to_have_text("Robert")
+    expect(rail.locator("[data-postit-result]")).to_have_text("Post-it added")
+    row.locator("[data-postit-bin]").click()
+    expect(rail.locator("[data-postit]")).to_have_count(0)
+    expect(rail.locator("[data-postits-bin-link]")).to_have_text("Bin (1) →")
+    rail.locator("[data-postits-bin-link]").click()
+    page.wait_for_selector("body[data-ready=true]")
+    binned = page.locator('[data-postits][data-mode="bin"] [data-bin-item]')
+    expect(binned).to_have_count(1)
+    expect(binned).to_be_visible()
+    expect(binned).to_contain_text("Ask about the lock timeout")
+    expect(binned).to_contain_text("binned")
+    binned.locator("[data-postit-restore]").click()
+    expect(page.locator('[data-postits][data-mode="bin"] [data-bin-item]')).to_have_count(0)
+    board = page.locator('[data-postits][data-mode="board"] [data-postit]')
+    expect(board).to_have_count(1)
+    expect(board).to_be_visible()
+    rows = floor.rows("floor_postits")
+    assert len(rows) == 1 and rows[0]["binned_at"] is None and rows[0]["restored_at"]
+
+
+def test_w6_post_it_add_remove_restore_on_desktop(browser, server, floor):
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    before = server["queue"].read_bytes()
+    _w6(page, server, floor, phone=False)
+    assert server["queue"].read_bytes() == before                     # nothing else triggered
+    assert not (server["queue"].parent / qs.JOURNAL_NAME).exists()
+    assert floor.count("floor_messages") == 0
+    go(page, f"{server['url']}/guild-next/guild/build/bench")         # the desktop bench shows the board and bin
+    expect(page.locator('[data-panel="postits"] [data-mode="board"] [data-postit]')).to_have_count(1)
+    expect(page.locator('[data-panel="postits"] [data-mode="bin"]')).to_contain_text("The bin is empty")
+    assert not errors, errors
+    ctx.close()
+
+
+def test_w6_post_it_add_remove_restore_on_the_phone(browser, server, floor):
+    ctx, page = _context(browser, server, **PHONE)
+    errors = _errors(page)
+    _w6(page, server, floor, phone=True)
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+    assert not errors, errors
+    ctx.close()
+
+
+def test_the_rail_shows_four_and_links_the_rest(browser, server, floor):
+    from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN
+    store = floor.store()
+    for n in range(6):
+        store.add_postit(f"note {n}", MASTER_CRAFTSMAN, idempotency_key=f"rail-cap-{n:04d}")
+    ctx, page = _context(browser, server)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    rail = page.locator('[data-postits][data-mode="rail"]')
+    expect(rail.locator("[data-postit]")).to_have_count(4)
+    expect(rail.locator("[data-postit-author]").first).to_have_text("Master Craftsman")
+    expect(rail.locator("[data-postits-more]")).to_have_text("2 more →")
+    ctx.close()
+
+
+def test_w7_notes_on_the_record_and_nothing_sent_off_the_record(browser, server, floor):
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    sent = _requests(page, "/api/v1/notes")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("[data-mc-header]")).to_have_text("Master Craftsman is off · your messages are kept as notes")
+    page.fill("#mc-input", "Kept: check the EC2 queue checksum")
+    page.click("[data-mc-send]")
+    note = page.locator('[data-mc-thread] [data-kind="note"]')
+    expect(note).to_have_count(1)
+    expect(note).to_contain_text("Kept: check the EC2 queue checksum")
+    expect(note).to_contain_text("kept as a note")
+    assert floor.count("floor_messages") == 1 and len(sent) == 1
+
+    page.click("[data-mc-record]")
+    expect(page.locator("[data-mc-refusal]")).to_have_text(OFF_TEXT)
+    page.fill("#mc-input", "private: not for the record")
+    page.click("[data-mc-send]")
+    off = page.locator("[data-off-record-line]")
+    expect(off).to_have_count(1)
+    expect(off).to_contain_text("not sent, not kept")
+    rail = page.locator('[data-postits][data-mode="rail"]')
+    rail.locator("[data-postit-input]").fill("private post-it")
+    rail.locator("[data-postit-add-btn]").click()
+    expect(rail.locator("[data-postit-result]")).to_have_text(OFF_TEXT)
+    assert len(sent) == 1                                          # nothing sent while off
+    assert floor.count("floor_messages") == 1 and floor.count("floor_postits") == 0
+    assert "private" not in floor.all_text()
+
+    page.click("[data-mc-record]")
+    expect(page.locator("[data-off-record-line]")).to_have_count(0)
+    expect(page.locator("[data-mc-thread]")).to_contain_text("Back on the record")
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator('[data-mc-thread] [data-kind="note"]')).to_have_count(1)
+    assert "private" not in page.content()
+    assert not errors, errors
+    ctx.close()
+
+
+def test_a_failed_poll_marks_the_floor_zones_with_the_floors_freshness(browser, server, floor):
+    """(c)'s zones follow (b)'s freshness rules: stale after one failed poll,
+    unknown after two, and live again on the next good read."""
+    floor.store().set_continue("robert", kind="item", ref="12", label="#12 Floor API", idempotency_key="fresh-cont-01")
+    ctx, page = _context(browser, server)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.route(FLOOR_API, lambda route: route.abort())
+    poll(page)
+    mark = page.locator('[data-zone="continue"] [data-zone-fresh]')
+    expect(mark).to_contain_text("Stale · last good read")
+    expect(page.locator('[data-postits][data-mode="rail"]')).to_have_attribute("data-stale", "stale")
+    expect(page.locator("[data-notes-line]")).to_have_attribute("data-stale", "stale")
+    expect(page.locator('[data-zone="continue"] [data-continue-link]')).to_have_text("#12 Floor API")
+    poll(page)
+    expect(mark).to_contain_text("Unknown · no good read since")
+    page.unroute(FLOOR_API)
+    poll(page)
+    expect(page.locator("[data-zone-fresh]")).to_have_count(0)
+    assert page.locator('[data-postits][data-mode="rail"]').get_attribute("data-stale") is None
+    ctx.close()
+
+
+# ── Review B1c fixes: off the record across pages, lists kept current ─────────
+
+def test_off_the_record_survives_navigation_and_nothing_is_written(browser, server, floor):
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    writes = []
+    page.on("request", lambda r: writes.append((r.method, r.url))
+            if r.method != "GET" and ("/api/v1/continue" in r.url or "/api/v1/notes" in r.url
+                                      or "/api/v1/postits" in r.url) else None)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.click("[data-mc-record]")
+    expect(page.locator("[data-mc-record]")).to_have_text("Back on the record")
+    go(page, f"{server['url']}/guild-next/guild/build/items/12")        # a new page load, still off
+    expect(page.locator("[data-mc-record]")).to_have_text("Back on the record")
+    expect(page.locator("[data-mc-refusal]")).to_have_text(OFF_TEXT)
+    page.wait_for_timeout(500)
+    go(page, f"{server['url']}/guild-next/guild/build/items/7")
+    page.wait_for_timeout(500)
+    assert writes == [] and floor.count("floor_continue") == 0 and floor.count("floor_messages") == 0
+    stored = page.evaluate("sessionStorage.getItem('guild.guild-next.record_mode')")
+    assert json.loads(stored)["off"] is True and set(json.loads(stored)) <= {"off", "since"}   # a flag, no content
+    page.click("[data-mc-pill]")
+    page.click("[data-mc-record]")                                       # back on the record, by choice
+    go(page, f"{server['url']}/guild-next/guild/build/items/7")
+    page.wait_for_function("() => document.querySelector('[data-continue-link]')?.textContent === '#7 Queue lock hardening'")
+    assert floor.rows("floor_continue")[0]["ref"] == "7"
+    assert not errors, errors
+    ctx.close()
+
+
+def test_an_unreadable_record_mode_makes_no_automatic_write(browser, server, floor):
+    ctx, page = _context(browser, server)
+    sent = _requests(page, "/api/v1/continue")
+    page.evaluate("sessionStorage.setItem('guild.guild-next.record_mode', 'garbled')")
+    go(page, f"{server['url']}/guild-next/guild/build/items/12")
+    expect(page.locator("[data-mc-thread]")).to_contain_text("does not know whether you are on the record")
+    page.wait_for_timeout(500)
+    assert sent == [] and floor.count("floor_continue") == 0
+    ctx.close()
+
+
+def test_the_board_and_bin_follow_a_change_made_elsewhere(browser, server, floor):
+    from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN, Author
+    store = floor.store()
+    kept = store.add_postit("stays", MASTER_CRAFTSMAN, idempotency_key="elsewhere-01").value
+    moved = store.add_postit("binned elsewhere", MASTER_CRAFTSMAN, idempotency_key="elsewhere-02").value
+    ctx, page = _context(browser, server)
+    go(page, f"{server['url']}/guild-next/guild/build/postits")
+    board = page.locator('[data-postits][data-mode="board"] [data-postit]')
+    expect(board).to_have_count(2)
+    store.bin_postit(moved["id"], Author("robert_phone", "owner", "Robert"), idempotency_key="elsewhere-03")
+    poll(page)                                                           # the floor poll (or returning to the tab)
+    expect(board).to_have_count(1)
+    expect(board).to_contain_text("stays")
+    expect(page.locator('[data-postits][data-mode="bin"] [data-bin-item]')).to_contain_text("binned elsewhere")
+
+    # A list that cannot be re-read stays on screen, marked stale, never as current.
+    page.route("**/guild-next/api/v1/postits**", lambda route: route.abort())
+    store.restore_postit(moved["id"], Author("robert_phone", "owner", "Robert"), idempotency_key="elsewhere-04")
+    poll(page)
+    expect(page.locator('[data-postits][data-mode="board"]')).to_have_attribute("data-list-stale", "true")
+    expect(page.locator('[data-postits][data-mode="board"] [data-list-fresh]')).to_contain_text("Stale")
+    expect(board).to_have_count(1)
+    page.unroute("**/guild-next/api/v1/postits**")
+    page.evaluate("window.dispatchEvent(new Event('focus'))")           # focus re-reads the lists
+    expect(board).to_have_count(2)
+    expect(page.locator("[data-list-fresh]")).to_have_count(0)
+    assert kept["id"] != moved["id"]
+    ctx.close()
+
+
+def test_a_tab_opened_from_an_off_record_tab_writes_nothing_by_itself(browser, server, floor):
+    """Re-check residual: a fresh tab (e.g. a middle-click) starts with empty
+    sessionStorage; while another tab is off the record it must not assume
+    "on the record" and write Continue."""
+    ctx, first = _context(browser, server)
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first.click("[data-mc-record]")                                   # tab 1 goes off the record
+    second = ctx.new_page()                                           # same browser, fresh tab
+    sent = _requests(second, "/api/v1/continue")
+    go(second, f"{server['url']}/guild-next/guild/build/items/12")
+    expect(second.locator("[data-mc-thread]")).to_contain_text("does not know whether you are on the record")
+    second.wait_for_timeout(500)
+    assert sent == [] and floor.count("floor_continue") == 0
+    second.click("[data-mc-pill]")
+    confirm = second.locator("[data-mc-record-confirm]")
+    expect(confirm).to_be_visible()
+    confirm.click()                                                   # Robert chooses: on the record here
+    expect(confirm).to_be_hidden()
+    go(second, f"{server['url']}/guild-next/guild/build/items/7")
+    second.wait_for_function("() => document.querySelector('[data-continue-link]')?.textContent === '#7 Queue lock hardening'")
+    assert floor.rows("floor_continue")[0]["ref"] == "7"
+
+    first.click("[data-mc-record]")                                   # tab 1 back on the record
+    third = ctx.new_page()                                            # now a fresh tab is simply on the record
+    go(third, f"{server['url']}/guild-next/guild/build/items/12")
+    third.wait_for_function("() => document.querySelector('[data-continue-link]')?.textContent === '#12 Floor API'")
+    expect(third.locator("[data-mc-record-confirm]")).to_be_hidden()
     ctx.close()

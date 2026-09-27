@@ -1,0 +1,79 @@
+{# Post-its (S7, decision 4): reference notes, added and removed directly, no
+   proposal, confirm or receipt. Removed ones go to the kept bin and can be
+   restored. Each shows its writer. They trigger nothing. postits.js renders
+   the same markup after every change, from the server's answer. #}
+
+{% macro postit_row(p) -%}
+<li class="postit" data-postit="{{ p.id }}" data-row>
+  <p class="postit-text">{{ p.text }}</p>
+  <p class="postit-meta"><span data-postit-author data-author-kind="{{ p.author_kind }}">{{ p.author_label }}</span> · <span data-iso="{{ p.created_at }}">{{ hhmm(p.created_at) }}</span></p>
+  <button type="button" class="btn-mini postit-act" data-postit-bin="{{ p.id }}" aria-label="Remove post-it to the bin: {{ p.text|truncate(40, true, '…') }}">Remove</button>
+</li>
+{%- endmacro %}
+
+{% macro bin_row(p) -%}
+<li class="postit is-binned" data-bin-item="{{ p.id }}" data-row>
+  <p class="postit-text">{{ p.text }}</p>
+  <p class="postit-meta"><span data-postit-author data-author-kind="{{ p.author_kind }}">{{ p.author_label }}</span> · binned <span data-iso="{{ p.binned_at }}">{{ hhmm(p.binned_at) }}</span>{% if p.binned_by_label %} by {{ p.binned_by_label }}{% endif %}</p>
+  <button type="button" class="btn-mini postit-act" data-postit-restore="{{ p.id }}" aria-label="Restore post-it: {{ p.text|truncate(40, true, '…') }}">Restore</button>
+</li>
+{%- endmacro %}
+
+{% macro add_form(enabled, scope) -%}
+<form class="postit-add" data-postit-add>
+  <label class="visually-hidden" for="postit-input-{{ scope }}">New post-it</label>
+  <input id="postit-input-{{ scope }}" class="postit-input" data-postit-input maxlength="{{ postit_max }}" autocomplete="off" placeholder="Add a post-it"{% if not enabled %} disabled{% endif %}>
+  <button type="submit" class="btn-mini" data-postit-add-btn{% if not enabled %} disabled{% endif %}>Add</button>
+</form>
+<p class="postit-result" data-postit-result role="status" hidden></p>
+{%- endmacro %}
+
+{# The rail on the Shop floor: the newest four, then "more" and the bin. #}
+{% macro rail(z) -%}
+<div class="postits" data-postits data-mode="rail" data-cap="{{ z.cap }}">
+  {{ add_form(z.state == 'ok', 'rail') }}
+  <div data-postits-body>
+    {% if z.state != 'ok' %}
+      <p class="unknown-line" data-postits-line data-row>{{ z.text }}</p>
+    {% else %}
+      {% if not z.shown %}<p class="small" data-postits-line>{{ z.text }}</p>{% endif %}
+      <ul class="postit-list">{% for p in z.shown %}{{ postit_row(p) }}{% endfor %}</ul>
+      <p class="postit-links small" data-postits-links>{% if z.more %}<a href="{{ urls.postits }}" data-postits-more>{{ z.more }} more →</a> · {% endif %}<a href="{{ urls.postits }}#bin" data-postits-bin-link>Bin ({{ z.bin_total }}) →</a></p>
+    {% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{# Every post-it on the board (post-its page, bench). #}
+{% macro board(res) -%}
+<div class="postits" data-postits data-mode="board">
+  {{ add_form(res.ok, 'board') }}
+  <div data-postits-body>
+    {% if not res.ok %}
+      <p class="unknown-line" data-postits-line data-row>{{ unavailable_text(res, 'Post-its unavailable — add and remove are paused') }}</p>
+    {% else %}
+      {% if not res.data.postits %}<p class="small" data-postits-line>No post-its on the board</p>{% endif %}
+      <ul class="postit-list">{% for p in res.data.postits %}{{ postit_row(p) }}{% endfor %}</ul>
+    {% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{# The kept bin, newest first, with Restore. #}
+{% macro bin(res) -%}
+<div class="postits" data-postits data-mode="bin">
+  <p class="postit-result" data-postit-result role="status" hidden></p>
+  <div data-postits-body>
+    {% if not res.ok %}
+      <p class="unknown-line" data-postits-line data-row>{{ unavailable_text(res, 'Bin unavailable — treat as unknown') }}</p>
+    {% else %}
+      <p class="small" data-postits-line>{% if res.data.total %}{{ res.data.total }} in the bin{% if res.data.total > res.data.bin|length %} · newest {{ res.data.bin|length }} shown{% endif %}{% else %}The bin is empty{% endif %} · kept, never emptied</p>
+      <ul class="postit-list">{% for p in res.data.bin %}{{ bin_row(p) }}{% endfor %}</ul>
+    {% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro unavailable_text(res, text) -%}
+{% if res.reason == 'not_configured' %}{{ text.split(' — ')[0] }} — the floor database is not configured on this portal{% else %}{{ text }}{% endif %}
+{%- endmacro %}

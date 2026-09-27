@@ -10,6 +10,7 @@ import { $, $$, el, shapeSvg, localTime, localizeTimes } from './dom.js';
 import { apiGet } from './api.js';
 import { explain, setBriefing } from './conversation.js';
 import { freshnessOf, lightView, needsView, bannerText, briefingText, sinceText } from './freshness.js';
+import { applyFloorZones } from './zones.js';
 
 let page;
 let current = null;
@@ -127,6 +128,7 @@ function render() {
     if (text && fresh.mode !== 'live') text.textContent = briefingText(fresh.mode, since(), text.textContent);
   }
   renderFreshness();
+  applyFloorZones(current, fresh.mode, since());
   document.body.dataset.observedAt = current.observed_at;
   localizeTimes();
 }
