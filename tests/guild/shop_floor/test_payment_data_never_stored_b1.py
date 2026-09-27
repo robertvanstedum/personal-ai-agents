@@ -43,9 +43,19 @@ def test_each_pattern_is_removed(text):
 
 
 @pytest.mark.parametrize("text", ["I like Visa", "Discover what blocks #31", "see #12 at 10:42 on 2026-09-27",
-                                  "Queue item 158 is in build", "ping x@y later", "x" * 140])
+                                  "Queue item 158 is in build", "ping x@y later", "x" * 140,
+                                  # review B1c #6: ordinary build notes stay as written
+                                  "sprint ending in 30 minutes", "we discover 3 bugs", "Step 2 discover the cause",
+                                  "My visa 2027 renewal", "**42** items", "FIXXX 100",
+                                  "ts 1727450000123", "run id 20260927103000123"])
 def test_ordinary_text_is_left_alone(text):
     assert scrub(text) == text
+
+
+def test_a_card_number_is_removed_only_when_it_passes_the_card_check():
+    from minimoi_portal.guild_ui.payment_scrub import _luhn_ok
+    assert _luhn_ok("4242424242424242") and not _luhn_ok("1727450000123")
+    assert scrub("card 4000 0566 5566 5556 ok") == f"card {REMOVED} ok"
 
 
 def test_scrub_is_idempotent():
@@ -54,7 +64,8 @@ def test_scrub_is_idempotent():
 
 
 @pytest.mark.parametrize("text", ["x" * 2000, "*" * 2000, "Visa " + "x" * 2000, "1 " * 1000, "Visa " + "* " * 999,
-                                  "1-" * 1000 + "Visa", "a@" * 1000, "xx " * 700, "ending in " * 200])
+                                  "1-" * 1000 + "Visa", "a@" * 1000, "xx " * 700, "ending in " * 200,
+                                  "a" * 32000, "a@" * 16000, "1" * 32000])
 def test_scrub_is_fast_on_hostile_input(text):
     start = time.perf_counter()
     scrub(text)

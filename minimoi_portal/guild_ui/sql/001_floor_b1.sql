@@ -48,10 +48,15 @@ CREATE TABLE IF NOT EXISTS guild.floor_postits (
     author_label    TEXT NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL,
     binned_at       TIMESTAMPTZ,
-    binned_by       TEXT,
+    binned_by       TEXT,             -- who last binned it; kept after a restore
     binned_by_label TEXT,
-    restored_at     TIMESTAMPTZ
+    restored_at     TIMESTAMPTZ,
+    restored_by     TEXT,
+    restored_by_label TEXT
 );
+-- For a database that ran an earlier draft of this file (no-ops otherwise).
+ALTER TABLE guild.floor_postits ADD COLUMN IF NOT EXISTS restored_by TEXT;
+ALTER TABLE guild.floor_postits ADD COLUMN IF NOT EXISTS restored_by_label TEXT;
 CREATE INDEX IF NOT EXISTS floor_postits_floor_binned ON guild.floor_postits (floor, binned_at, id);
 
 CREATE TABLE IF NOT EXISTS guild.floor_continue (
@@ -64,7 +69,8 @@ CREATE TABLE IF NOT EXISTS guild.floor_continue (
     PRIMARY KEY (floor, principal)
 );
 
--- One row per write's idempotency key, claimed in the same transaction as the
+-- One row per post-it or Continue write's idempotency key (a note's key is its
+-- own request_id, unique above), claimed in the same transaction as the
 -- change: a retried request is applied once, a replayed old one changes
 -- nothing, and one key used for two different changes is refused.
 CREATE TABLE IF NOT EXISTS guild.floor_requests (

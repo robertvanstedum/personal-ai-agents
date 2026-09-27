@@ -8,6 +8,7 @@ import { live } from './state.js';
 import { newKey } from './actions.js';
 
 let page;
+let lastListRead = new Date().toISOString();
 const addKeys = new Map();   // one key per composed post-it, dropped when its text changes
 
 const KINDS = { added: 'ok', binned: 'ok', restored: 'ok', already_binned: 'warn', already_active: 'warn' };
@@ -107,6 +108,40 @@ function renderBin(r) {
   }
 }
 
+const LISTS = '[data-postits][data-mode="board"], [data-postits][data-mode="bin"]';
+
+function markListsStale() {
+  for (const c of $$(LISTS)) {
+    c.dataset.listStale = 'true';
+    if (!$('[data-list-fresh]', c)) {
+      c.prepend(el('span', { class: 'stale-mark', 'data-list-fresh': true }, `Stale · this list could not be re-read; last read ${localTime(lastListRead)}. `));
+    }
+  }
+}
+
+function clearListsStale() {
+  lastListRead = new Date().toISOString();
+  for (const c of $$(LISTS)) {
+    delete c.dataset.listStale;
+    for (const m of $$('[data-list-fresh]', c)) m.remove();
+  }
+}
+
+// The full board and the bin (bench, Post-its page), re-read from the server.
+// A failed read keeps the lists on screen, marked stale, never as current.
+const unread = (r) => r.status === 0 || r.status === 401 || (r.status >= 500 && !(r.body && 'available' in r.body));
+
+export async function reloadLists() {
+  if (!$(LISTS)) return;
+  const board = await apiGet('/postits');
+  if (unread(board)) { markListsStale(); return; }
+  const bin = $('[data-postits][data-mode="bin"]') ? await apiGet('/postits/bin') : null;
+  if (bin && unread(bin)) { markListsStale(); return; }
+  renderBoard(board);
+  if (bin) renderBin(bin);
+  clearListsStale();
+}
+
 export async function reloadPostits() {
   const board = await apiGet('/postits');
   const ok = board.ok && board.body.available;
@@ -155,6 +190,7 @@ async function onMove(btn, action) {
 
 export function initPostits(p) {
   page = p;
+  window.addEventListener('focus', () => { reloadLists(); });
   document.addEventListener('submit', (e) => {
     const form = e.target.closest('[data-postit-add]');
     if (!form) return;

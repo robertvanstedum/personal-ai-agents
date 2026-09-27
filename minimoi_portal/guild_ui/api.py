@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 from flask import jsonify, request
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from . import cfg, floor_state, owner_api
 from .adapters import STATUSES, normalize
@@ -187,11 +188,11 @@ def _platform_line(text: str, receipt_id: str | None, item_id: int) -> str:
     if floor is None or not floor.configured() or not receipt_id:
         return "skipped"
     try:
-        floor.add_note(f"receipt-{receipt_id}", text, GUILD_PLATFORM, area="Build Queue", item_ref=item_id,
-                       page="save")
-        return "ok"
+        done = floor.add_note(f"receipt-{receipt_id}", text, GUILD_PLATFORM, area="Build Queue", item_ref=item_id,
+                              page="save")
     except FloorStoreUnavailable:
         return "failed"
+    return "ok" if done.outcome == "kept" else "failed"
 
 
 @owner_api
@@ -248,19 +249,39 @@ def _floor():
     return cfg()["services"].floor
 
 
+# The largest body a notes, post-its or Continue write may carry (review B1c #1):
+# a 2,000-character note is at most ~12 KB of JSON even with every character
+# escaped, so 32 KB is ample, and nothing larger is ever read or scrubbed.
+MAX_BODY = 32 * 1024
+
+
+def _too_large():
+    return json_error("too_large", f"This request is larger than {MAX_BODY // 1024} KB. Nothing was changed.", 413)
+
+
 def _write_body():
-    """(refusal, body): CSRF, record mode, a JSON object, and its idempotency
-    key (one per opened form or change, not per click)."""
-    refusal = check_write(cfg()["base_url"])
-    if refusal is not None:
-        return refusal, None
-    body = request.get_json(silent=True)
+    """(refusal, body): body size, CSRF, record mode, a JSON object, and its
+    idempotency key (one per opened form or change, not per click)."""
+    if request.content_length is not None and request.content_length > MAX_BODY:
+        return _too_large(), None
+    request.max_content_length = MAX_BODY      # also bounds a body sent without a length
+    try:
+        if request.content_length is None and len(request.get_data(cache=True)) >= MAX_BODY:
+            return _too_large(), None          # read stopped at the limit: the body was longer
+        refusal = check_write(cfg()["base_url"])
+        if refusal is not None:
+            return refusal, None
+        body = request.get_json(silent=True)
+    except RequestEntityTooLarge:
+        return _too_large(), None
     if not isinstance(body, dict):
         return json_error("invalid", "The request body must be a JSON object.", 422), None
     key = body.get("idempotency_key", body.get("request_id"))
     if not isinstance(key, str) or not _IDEMPOTENCY.fullmatch(key):
         return json_error("invalid", "Every write needs an idempotency key (8 to 64 letters, digits, - or _).",
                           422), None
+    if key.startswith("receipt-"):
+        return json_error("invalid", "Keys starting with receipt- are the platform's own.", 422), None
     if "request_id" in body and "idempotency_key" in body and body["request_id"] != body["idempotency_key"]:
         return json_error("invalid", "request_id and idempotency_key disagree.", 422), None
     body["_key"] = key
@@ -275,17 +296,26 @@ def _mismatch():
 
 
 def _clean_text(value, limit: int, what: str):
+    """Refuse over-long text before the scrub ever sees it, then check the
+    scrubbed text again: removing payment details can make it longer, and
+    that is the writer's problem to fix (422), never a store outage."""
     if not isinstance(value, str) or not value.strip():
         return None, json_error("invalid", f"The {what} is empty.", 422)
     if len(value) > limit:
         return None, json_error("invalid", f"The {what} is longer than {limit} characters.", 422)
-    return scrub(value.strip()), None
+    clean = scrub(value.strip())
+    if len(clean) > limit:
+        return None, json_error(
+            "invalid", f"The {what} is too long after removing payment details ({len(clean)} characters, "
+                       f"at most {limit}). Nothing was kept; shorten it and send it again.", 422)
+    return clean, None
 
 
 def _short(value, limit: int = 60):
+    """A short context field: cut to its limit before the scrub, and again after."""
     if not isinstance(value, str) or not value.strip():
         return None
-    return scrub(value.strip())[:limit]
+    return scrub(value.strip()[:limit])[:limit]
 
 
 @owner_api

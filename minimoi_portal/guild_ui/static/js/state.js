@@ -1,25 +1,56 @@
 // Browser state for the real floor. Only view settings are stored here (bench
 // order and folds, per device; decision 5). Everything that matters lives on
-// the server. "Off the record" is memory only and never stored.
+// the server. "Off the record" is a view state of this tab (review B1c #3):
+// a bare on/off flag in sessionStorage, so it survives moving between pages
+// of the floor. It is never sent as data and holds no content.
 const memory = new Map();
 let namespace = 'guild';
 let storageOk = true;
 const pendingNotices = [];
 const listeners = new Set();
 
-export const live = { off: false, offSince: null };
+// known is false when this tab's record mode could not be read: the page then
+// makes no automatic write (Continue) until Robert chooses a mode.
+export const live = { off: false, offSince: null, known: true };
 
 export function onChange(fn) { listeners.add(fn); }
 export function changed() { for (const fn of listeners) fn(); }
 
+const RECORD_KEY = () => `${namespace}.record_mode`;
+
+function saveRecordMode() {
+  try {
+    window.sessionStorage.setItem(RECORD_KEY(), JSON.stringify({ off: live.off, since: live.offSince }));
+  } catch (e) { /* the mode then lasts only for this page */ }
+}
+
+function loadRecordMode() {
+  let raw;
+  try { raw = window.sessionStorage.getItem(RECORD_KEY()); } catch (e) { live.known = false; return; }
+  if (raw == null) { live.off = false; live.offSince = null; live.known = true; saveRecordMode(); return; }
+  try {
+    const v = JSON.parse(raw);
+    if (v && typeof v.off === 'boolean') {
+      live.off = v.off;
+      live.offSince = v.off && typeof v.since === 'string' ? v.since : null;
+      live.known = true;
+      return;
+    }
+  } catch (e) { /* unreadable: unknown */ }
+  live.known = false;
+}
+
 export function setOff(on) {
   live.off = !!on;
   live.offSince = on ? new Date().toISOString() : null;
+  live.known = true;
+  saveRecordMode();
   changed();
 }
 
 export function configure(ns) {
   namespace = ns || 'guild';
+  loadRecordMode();
   try {
     const probe = `${namespace}.__probe`;
     window.localStorage.setItem(probe, '1');

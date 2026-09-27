@@ -3,7 +3,7 @@
 No Postgres runs on the test machine or in CI, so the tests run the store's
 own SQL against SQLite. The schema is not written twice: ``sqlite_ddl()``
 derives it from the package's Postgres migration (sql/001_floor_b1.sql) by
-four mechanical substitutions, and the ``guild`` schema is an attached SQLite
+five mechanical substitutions, and the ``guild`` schema is an attached SQLite
 database, so ``guild.floor_postits`` means the same table in both. Every
 statement the store runs is therefore executed against the migration's own
 tables, columns, keys and CHECK constraints.
@@ -33,6 +33,9 @@ def sqlite_ddl(sql: str | None = None) -> str:
     sql = MIGRATION.read_text() if sql is None else sql
     sql = "\n".join(line for line in sql.splitlines() if not line.lstrip().startswith("--"))
     sql = sql.replace("CREATE SCHEMA IF NOT EXISTS guild;", "")
+    # SQLite has no ADD COLUMN IF NOT EXISTS; those lines only upgrade an
+    # earlier draft, and the CREATE TABLE above already has the columns.
+    sql = re.sub(r"(?m)^ALTER TABLE guild\.\w+ ADD COLUMN IF NOT EXISTS .*$", "", sql)
     sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
     sql = sql.replace("TIMESTAMPTZ", "TEXT")
     sql = re.sub(r"CREATE INDEX IF NOT EXISTS (\w+) ON guild\.(\w+)", r"CREATE INDEX IF NOT EXISTS guild.\1 ON \2", sql)

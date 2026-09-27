@@ -439,7 +439,7 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
 .postit-links { margin-top: 2px; }
 .postit-bin-h { margin-top: var(--gu-s3); font-size: var(--gu-size-sm); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gu-text-muted); }
 .stale-mark { display: block; font-size: var(--gu-size-xs); font-weight: 700; color: var(--gu-unknown-ink); }
-[data-postits][data-stale] .postit, [data-continue][data-stale] a, [data-notes-line][data-stale] { opacity: 0.6; }
+[data-postits][data-stale] .postit, [data-postits][data-list-stale] .postit, [data-continue][data-stale] a, [data-notes-line][data-stale] { opacity: 0.6; }
 .ps-continue { overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   .postit-act { min-height: var(--gu-target-phone); }

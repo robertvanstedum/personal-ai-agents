@@ -82,7 +82,9 @@ def test_bin_and_restore_racing_always_leave_a_consistent_row(floor_db):
     outcomes = [o for batch in _together(THREADS, flip) for o in batch]
     assert set(outcomes) <= {"binned", "already_binned", "restored", "already_active"}
     row = floor_db.rows("floor_postits")[0]
-    assert (row["binned_at"] is None) == (row["binned_by"] is None)
+    # Binned rows name who binned them; binned_by is kept after a restore (review B1c #8).
+    assert row["binned_at"] is None or row["binned_by"] == "robert"
+    assert row["binned_at"] is not None or row["restored_by"] in (None, "robert")
     assert floor_db.count("floor_postits") == 1
     # Every successful move alternated the state: binned and restored differ by at most one.
     assert abs(outcomes.count("binned") - outcomes.count("restored")) <= 1

@@ -56,6 +56,8 @@ def test_add_remove_restore_round_trip(floored):
     assert client.get(f"{API}/postits/bin").get_json()["total"] == 0
     row = db.rows("floor_postits")[0]
     assert row["binned_at"] is None and row["restored_at"]
+    assert row["binned_by"] == "robert" and row["restored_by"] == "robert"   # history kept (review B1c #8)
+    assert restored.get_json()["postit"]["restored_by_label"] == "Robert"
     assert db.count("floor_postits") == 1
 
 

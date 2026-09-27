@@ -547,3 +547,74 @@ def test_a_failed_poll_marks_the_floor_zones_with_the_floors_freshness(browser, 
     expect(page.locator("[data-zone-fresh]")).to_have_count(0)
     assert page.locator('[data-postits][data-mode="rail"]').get_attribute("data-stale") is None
     ctx.close()
+
+
+# ── Review B1c fixes: off the record across pages, lists kept current ─────────
+
+def test_off_the_record_survives_navigation_and_nothing_is_written(browser, server, floor):
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    writes = []
+    page.on("request", lambda r: writes.append((r.method, r.url))
+            if r.method != "GET" and ("/api/v1/continue" in r.url or "/api/v1/notes" in r.url
+                                      or "/api/v1/postits" in r.url) else None)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.click("[data-mc-record]")
+    expect(page.locator("[data-mc-record]")).to_have_text("Back on the record")
+    go(page, f"{server['url']}/guild-next/guild/build/items/12")        # a new page load, still off
+    expect(page.locator("[data-mc-record]")).to_have_text("Back on the record")
+    expect(page.locator("[data-mc-refusal]")).to_have_text(OFF_TEXT)
+    page.wait_for_timeout(500)
+    go(page, f"{server['url']}/guild-next/guild/build/items/7")
+    page.wait_for_timeout(500)
+    assert writes == [] and floor.count("floor_continue") == 0 and floor.count("floor_messages") == 0
+    stored = page.evaluate("sessionStorage.getItem('guild.guild-next.record_mode')")
+    assert json.loads(stored)["off"] is True and set(json.loads(stored)) <= {"off", "since"}   # a flag, no content
+    page.click("[data-mc-pill]")
+    page.click("[data-mc-record]")                                       # back on the record, by choice
+    go(page, f"{server['url']}/guild-next/guild/build/items/7")
+    page.wait_for_function("() => document.querySelector('[data-continue-link]')?.textContent === '#7 Queue lock hardening'")
+    assert floor.rows("floor_continue")[0]["ref"] == "7"
+    assert not errors, errors
+    ctx.close()
+
+
+def test_an_unreadable_record_mode_makes_no_automatic_write(browser, server, floor):
+    ctx, page = _context(browser, server)
+    sent = _requests(page, "/api/v1/continue")
+    page.evaluate("sessionStorage.setItem('guild.guild-next.record_mode', 'garbled')")
+    go(page, f"{server['url']}/guild-next/guild/build/items/12")
+    expect(page.locator("[data-mc-thread]")).to_contain_text("could not read whether you are on the record")
+    page.wait_for_timeout(500)
+    assert sent == [] and floor.count("floor_continue") == 0
+    ctx.close()
+
+
+def test_the_board_and_bin_follow_a_change_made_elsewhere(browser, server, floor):
+    from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN, Author
+    store = floor.store()
+    kept = store.add_postit("stays", MASTER_CRAFTSMAN, idempotency_key="elsewhere-01").value
+    moved = store.add_postit("binned elsewhere", MASTER_CRAFTSMAN, idempotency_key="elsewhere-02").value
+    ctx, page = _context(browser, server)
+    go(page, f"{server['url']}/guild-next/guild/build/postits")
+    board = page.locator('[data-postits][data-mode="board"] [data-postit]')
+    expect(board).to_have_count(2)
+    store.bin_postit(moved["id"], Author("robert_phone", "owner", "Robert"), idempotency_key="elsewhere-03")
+    poll(page)                                                           # the floor poll (or returning to the tab)
+    expect(board).to_have_count(1)
+    expect(board).to_contain_text("stays")
+    expect(page.locator('[data-postits][data-mode="bin"] [data-bin-item]')).to_contain_text("binned elsewhere")
+
+    # A list that cannot be re-read stays on screen, marked stale, never as current.
+    page.route("**/guild-next/api/v1/postits**", lambda route: route.abort())
+    store.restore_postit(moved["id"], Author("robert_phone", "owner", "Robert"), idempotency_key="elsewhere-04")
+    poll(page)
+    expect(page.locator('[data-postits][data-mode="board"]')).to_have_attribute("data-list-stale", "true")
+    expect(page.locator('[data-postits][data-mode="board"] [data-list-fresh]')).to_contain_text("Stale")
+    expect(board).to_have_count(1)
+    page.unroute("**/guild-next/api/v1/postits**")
+    page.evaluate("window.dispatchEvent(new Event('focus'))")           # focus re-reads the lists
+    expect(board).to_have_count(2)
+    expect(page.locator("[data-list-fresh]")).to_have_count(0)
+    assert kept["id"] != moved["id"]
+    ctx.close()

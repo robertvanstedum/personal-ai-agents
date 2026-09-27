@@ -169,6 +169,9 @@ export function initConversation(p) {
     input.focus();
   });
   onChange(renderRecord);
+  if (!live.known) {
+    addPlatform('Guild platform', 'This tab could not read whether you are on the record. Continue is not updated automatically until you choose; Send and post-its work as shown.');
+  }
   setBriefing(page.floor && page.floor.briefing);
   applyMode();
   renderRecord();

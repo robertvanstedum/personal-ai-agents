@@ -32,10 +32,12 @@ templates ``guild_floor/*``. Neither is ever imported as a top-level
 from __future__ import annotations
 
 import importlib.util
+import re
 import logging
 import sys
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlsplit
 
 from flask import Blueprint, Response, current_app, jsonify
 
@@ -215,3 +217,27 @@ def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict
         "guild_next": mount_guild_next(app, environ=environ, owner_guard=owner_guard, current_user=current_user,
                                        **next_kwargs),
     }
+
+
+_GUILD_API_PATH = re.compile(r"/guild[\w-]*/api/")
+
+
+def sentry_before_send(event, hint=None):
+    """Sentry hook (review B1c #5): an error event from a Shop floor API call
+    never carries the request body, which can hold a note or post-it before
+    its payment details are scrubbed, nor its query string, cookies or CSRF
+    header. Every other portal event passes unchanged."""
+    try:
+        request = event.get("request") or {}
+        url = str(request.get("url") or "")
+        if _GUILD_API_PATH.search(urlsplit(url).path or url):
+            for key in ("data", "query_string", "cookies"):
+                request.pop(key, None)
+            headers = request.get("headers")
+            if isinstance(headers, dict):
+                for name in list(headers):
+                    if name.lower() in ("cookie", "x-csrf-token"):
+                        headers.pop(name)
+    except Exception:  # the hook never drops a report
+        pass
+    return event

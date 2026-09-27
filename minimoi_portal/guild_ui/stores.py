@@ -97,16 +97,18 @@ def _default_connect(url: str):
 
 
 _POSTIT_COLS = ("id, text, author, author_kind, author_label, created_at, "
-                "binned_at, binned_by, binned_by_label, restored_at")
+                "binned_at, binned_by, binned_by_label, restored_at, restored_by, restored_by_label")
 _NOTE_COLS = "id, request_id, author, author_kind, author_label, text, area, item_ref, page, created_at"
 _CONTINUE_COLS = "kind, ref, label, updated_at"
 
 
 def _postit(row) -> dict:
-    (pid, text, author, kind, label, created, binned, binned_by, binned_by_label, restored) = row
+    (pid, text, author, kind, label, created, binned, binned_by, binned_by_label, restored,
+     restored_by, restored_by_label) = row
     return {"id": int(pid), "text": text, "author": author, "author_kind": kind, "author_label": label,
             "created_at": iso(created), "binned_at": iso(binned), "binned_by": binned_by,
-            "binned_by_label": binned_by_label, "restored_at": iso(restored),
+            "binned_by_label": binned_by_label, "restored_at": iso(restored), "restored_by": restored_by,
+            "restored_by_label": restored_by_label,
             "state": "binned" if binned is not None else "active"}
 
 
@@ -274,12 +276,12 @@ class FloorStores:
                  "RETURNING idempotency_key", [self.floor, key, principal, op, target, now])
         if rows:
             return None
-        rows = q("SELECT op, target, outcome, result_ref FROM guild.floor_requests "
+        rows = q("SELECT op, target, outcome, result_ref, principal FROM guild.floor_requests "
                  "WHERE floor = %s AND idempotency_key = %s", [self.floor, key])
         if not rows:
             raise FloorStoreUnavailable("idempotency key neither claimed nor found")
-        op0, target0, outcome, ref = rows[0]
-        return {"same": op0 == op and target0 == target, "outcome": outcome, "ref": ref}
+        op0, target0, outcome, ref, principal0 = rows[0]
+        return {"same": op0 == op and target0 == target and principal0 == principal, "outcome": outcome, "ref": ref}
 
     def _settle(self, q, key: str, outcome: str, ref) -> None:
         q("UPDATE guild.floor_requests SET outcome = %s, result_ref = %s WHERE floor = %s AND idempotency_key = %s",
@@ -324,9 +326,11 @@ class FloorStores:
                          [now, by.id, by.label, int(postit_id), self.floor])
                 done, already = "binned", "already_binned"
             else:
-                rows = q(f"UPDATE guild.floor_postits SET binned_at = NULL, binned_by = NULL, "
-                         f"binned_by_label = NULL, restored_at = %s WHERE id = %s AND floor = %s "
-                         f"AND binned_at IS NOT NULL RETURNING {_POSTIT_COLS}", [now, int(postit_id), self.floor])
+                # binned_by stays: who last binned it is kept beside who restored it.
+                rows = q(f"UPDATE guild.floor_postits SET binned_at = NULL, restored_at = %s, restored_by = %s, "
+                         f"restored_by_label = %s WHERE id = %s AND floor = %s "
+                         f"AND binned_at IS NOT NULL RETURNING {_POSTIT_COLS}",
+                         [now, by.id, by.label, int(postit_id), self.floor])
                 done, already = "restored", "already_active"
             if rows:
                 outcome, postit = done, _postit(rows[0])

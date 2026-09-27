@@ -9,6 +9,7 @@ import { initQueue } from './queue.js';
 import { initOperate } from './operate.js';
 import { initPostits } from './postits.js';
 import { continueFromItem } from './continue.js';
+import { initZones } from './zones.js';
 
 const page = JSON.parse(document.getElementById('guild-page').textContent);
 configure(page.storage_ns);
@@ -18,6 +19,7 @@ initFloorState(page);
 if ($('[data-bench]')) initBench(page);
 if (page.page === 'queue' || page.page === 'item') initQueue(page);
 if (page.page === 'operate') initOperate();
+initZones(page.floor);
 initPostits(page);
 continueFromItem(page);
 

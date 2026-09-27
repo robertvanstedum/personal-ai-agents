@@ -90,3 +90,30 @@ def test_off_record_rows_are_refused_by_postgres(store):
         conn.rollback()
     finally:
         conn.close()
+
+
+def test_the_migration_runs_twice_on_postgres():
+    """Review B1c #12: applying the migration again (or over an earlier draft)
+    changes nothing and fails nothing."""
+    import psycopg2
+    from pathlib import Path
+    sql = (Path(__file__).resolve().parents[3] / "minimoi_portal" / "guild_ui" / "sql" / "001_floor_b1.sql").read_text()
+    conn = psycopg2.connect(URL, connect_timeout=2)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            cur.execute(sql)
+        conn.rollback()           # leave the database exactly as it was
+    finally:
+        conn.close()
+
+
+def test_scrubbed_text_never_meets_the_length_check(store):
+    """The API refuses text the scrub lengthens past its limit (422), so the
+    table's CHECK is never the thing that says no."""
+    from minimoi_portal.guild_ui.payment_scrub import scrub
+    from minimoi_portal.guild_ui.stores import POSTIT_MAX
+    text = scrub(" ".join(f"see a{n}@ex.io" for n in range(12))[:140])
+    assert len(text) > POSTIT_MAX                    # the case the API refuses before the store
+    kept = store.add_postit(text[:POSTIT_MAX], ROBERT, idempotency_key=uuid.uuid4().hex)
+    assert kept.outcome == "added"
