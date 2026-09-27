@@ -64,7 +64,7 @@ There are no inline styles in templates or JS. The one exception is the floating
 |---|---|
 | Shop floor lights (which, order, labels, detail links, Usage & limits precedence), Needs-you cap, post-it cap | `config/layout.json` → `floor`; light rules in `guild_ui/lights.py`; usage rules and projection in `guild_ui/usage.py` |
 | Usage & limits sample data (plans, balances, agents, shift targets, sample vendor warnings, sample refill receipt, tolerances) | `fixtures/usage.sample.json` |
-| Vendor-warning / receipt capture patterns and payment-detail stripping | `static/guild-ui/js/capture.js` (browser) and `guild_ui/evidence.py` (server re-check) |
+| Vendor-warning / receipt capture; safe summaries for recognized pasted receipts | `static/guild-ui/js/capture.js` and `scenario.js` (browser), `guild_ui/evidence.py` (structured cookie validation) |
 | Shop floor Needs-you rows and Ask replies | `config/scenario.json` → `reminders`, `turns` (`TA-*`) |
 | Panel set, default order, default folds, default focus, empty-panel reasons | `config/layout.json` → `bench` |
 | Door signals, section strip, Operate tile set and order, phone four numbers | `config/layout.json` → `doors`, `sections`, `operate`, `phone` |

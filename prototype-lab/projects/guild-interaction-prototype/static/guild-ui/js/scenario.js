@@ -2,7 +2,7 @@
 // "Simulated reply"; nothing calls a model. Turns live in config/scenario.json.
 import { world, addMessage, persist, changed, nowLabel, tick, flags, newId } from './world.js';
 import { propose, proposeFile, proposeRefill, proposeVendor, confirm, cancel, pending, OFF_REASON } from './proposals.js';
-import { stripPayment, stripCard, looksLikeReceipt, looksLikeWarning, parseReceipt, parseWarning } from './capture.js';
+import { stripCard, looksLikeReceipt, looksLikeWarning, parseReceipt, parseWarning, receiptSummary } from './capture.js';
 
 const CONSEQUENTIAL = new Set(['confirm', 'edit', 'cancel', 'file', 'invite', 'propose']);
 let ui = { openEdit: () => {}, refuse: () => {} };
@@ -35,8 +35,10 @@ export function goOnRecord() {
 
 export function handle(rawText, via = 'text') {
   const raw = String(rawText || '').trim();
-  // Payment-method details never reach the thread or storage (rev 3.1).
-  const text = looksLikeReceipt(raw) ? stripPayment(raw) : stripCard(raw);
+  // Parse a pasted receipt in memory and keep only its whitelisted fields.
+  // Regex redaction cannot safely remove every payment-method detail.
+  const receipt = looksLikeReceipt(raw) ? parseReceipt(raw, world.page?.capture?.balances || []) : null;
+  const text = receipt ? receiptSummary(receipt) : stripCard(raw);
   if (!text || !world.page.prototype) return;
   const turn = findTurn(text);
   if (world.off) {

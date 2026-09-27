@@ -1085,7 +1085,7 @@ def test_capture_refill_receipt_strips_payment_details(ctx, base):
     go(page, base + "/guild/build")
     say(page, "Receipt from xAI. Amount paid $30.00 on Sat 9:30. Paid with Mastercard - 1234. Billing: robert.sample@example.com")
     thread = page.locator("[data-mc-thread]")
-    expect(thread).to_contain_text("[payment detail removed]")
+    expect(thread).to_contain_text("original receipt text not stored")
     say(page, "file this")
     card = page.locator(".msg-proposal").last
     expect(card).to_contain_text("Record refill: xAI API balance +$30.00 · Sat 9:30")
@@ -1103,6 +1103,29 @@ def test_capture_refill_receipt_strips_payment_details(ctx, base):
     expect(sat.locator('[data-usage-row][data-agent="CoS Agent A"] [data-refill]')).to_contain_text("+$30.00 · xAI · paid Sat 9:30")
     expect(sat.locator("[data-usage-overall]")).to_contain_text("refills recorded: $30.00")
     assert "1234" not in page.evaluate("document.documentElement.outerHTML")
+
+
+def test_capture_receipt_never_keeps_ach_details(ctx, base):
+    page = ctx.new_page()
+    go(page, base + "/guild/build")
+    say(page, "Receipt from xAI. Amount paid $30.00 on Sat 9:30 by ACH, routing 021000021, account 123456789.")
+    thread = page.locator("[data-mc-thread]")
+    expect(thread).to_contain_text("Receipt · xAI · $30.00 · Sat 9:30 · original receipt text not stored")
+    for secret in ("021000021", "123456789", "ACH"):
+        assert secret not in storage(page) + page.evaluate("document.cookie")
+        assert secret not in page.evaluate("document.documentElement.outerHTML")
+    say(page, "file this")
+    expect(page.locator(".msg-proposal").last).to_contain_text("Record refill: xAI API balance +$30.00 · Sat 9:30")
+
+
+def test_generic_payment_question_remains_conversation(ctx, base):
+    page = ctx.new_page()
+    go(page, base + "/guild/build")
+    say(page, "How do payments work?")
+    expect(page.locator("[data-mc-thread]")).to_contain_text("How do payments work?")
+    say(page, "How did payments work in 2026?")
+    expect(page.locator("[data-mc-thread]")).to_contain_text("How did payments work in 2026?")
+    expect(page.locator("[data-mc-thread]")).not_to_contain_text("original receipt text not stored")
 
 
 def test_receipt_without_amount_asks_instead_of_guessing(ctx, base):

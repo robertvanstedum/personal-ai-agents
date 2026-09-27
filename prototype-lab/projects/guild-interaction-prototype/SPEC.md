@@ -7,7 +7,7 @@
 | # | Feedback | Change | Sections |
 |---|---|---|---|
 | R3.1-2 | "claude codex and grok also send the warning, can you capture that so it can be used too or as a reset sanity if there is a difference" | Vendor-reported warnings are a second evidence source per plan (REPORTED): fresh warning → at least yellow, "limit reached" → red; stale ones ignored with the reason; reset and remaining-amount sanity checks (tolerance 30 min / 10 %) with a mismatch row and a Needs-you "Check" item; capture by pasting + "file this" | §2a "Vendor-reported evidence" |
-| R3.1-3 | Robert pasted a prepaid top-up receipt | Refill receipts are a third evidence source for balances, REPORTED (receipt): vendor, amount, time only; a refill after the reading raises the balance and restarts the projection; it adds to overall spend. Payment-method details are stripped before anything is kept or shown. No real receipt values anywhere. | §2a "Refill receipts" |
+| R3.1-3 | Robert pasted a prepaid top-up receipt | Refill receipts are a third evidence source for balances, REPORTED (receipt): vendor, amount, time only; a refill after the reading raises the balance and restarts the projection; it adds to overall spend. A recognized pasted receipt is parsed in memory; only a summary rebuilt from vendor, amount and time reaches the conversation or browser storage. No real receipt values anywhere. | §2a "Refill receipts" |
 | R3.1-1 | "I care about spend any time an api token bucket needs to be re-filled, or when a plan usage is near its limit … the usage per agent lets me shift work before I hit a limit … that's what Master Craftsman should be accountable for"; "if we have date/time to limit reached that's good too" | The Spend light becomes **Usage & limits**: computed over prepaid API balances and subscription plan windows, with a projected time-to-limit per source. Its detail (and the Operate tile that replaces Build model spend) is a per-agent table with a "Shift work" hint; overall month-to-date spend is a secondary line. Ask gives a simulated reply naming the tightest limit and a shift **proposal** (Confirm → local receipt, "simulated · no routing changed"). A red or yellow light adds a Needs-you item that outranks Approve items. | §2a "Usage & limits" |
 
 
@@ -210,10 +210,7 @@ The brief's order is one config edit away, and both orders are tested.
   - Parsing reads only vendor, amount and time.
   - With no amount, Master Craftsman asks for it instead of guessing.
   - With no time, the proposal says it uses the filing time.
-- **Payment details are never kept.** Card brand, card digits (masked, "ending in", or full numbers) and billing email are removed as follows:
-  - from the recorded message, before anything reaches the thread or localStorage;
-  - again on the server when it reads the evidence cookie;
-  - and no proposal, receipt or table carries them.
+- **Recognized pasted receipts keep no original text.** The browser parses vendor, amount and time in memory, then rebuilds a short conversation summary from those fields before adding a message or writing localStorage. The original receipt, including card, bank-account, address and transaction details, is not retained in that path. The evidence cookie is limited to structured fields and validated again by the server. This is a prototype receipt path, not general sensitive-data detection for arbitrary conversation text; do not invite real receipt use until that broader boundary is reviewed.
 - **Planned real capture.** Forwarded receipt emails or a billing API where one exists, shown as not instrumented; manual "file this" today. Robert's real receipt values appear nowhere in the repository, the tests or the screenshots.
 
 **Where filed evidence lives.** Filed evidence stays in the browser: localStorage keeps the receipts, and one small namespaced cookie (base64 JSON, at most 6 items each) lets the stateless server render the light, table, Needs you and tile with it. The server validates the cookie and drops anything malformed. Reset fixtures clears it. On the simulated clock, the clock's "now" advances to include evidence filed during the session (up to 6 h). The first reminder becomes the recorded decision (r-4490) when one exists.
@@ -539,7 +536,7 @@ Server tests `tests/test_app.py` (pytest, Flask test client); browser tests `tes
   - `test_shop_floor_same_thread_as_floating_panel`;
   - `test_phone_shop_floor_first_viewport` (390 and 360: strip, conversation and pinned composer inside the first viewport; no horizontal scroll; sheet opens);
   - `test_text_contrast_aa_on_zones`;
-  - rev 3.1: `test_usage_ask_proposal_confirm_receipt`, `test_usage_needs_you_item_when_yellow`, `test_usage_light_monday_state`, `test_capture_parsers`, `test_capture_vendor_warning_file_this_updates_row`, `test_capture_refill_receipt_strips_payment_details` (pastes "Mastercard - 1234" and asserts the digits appear nowhere in storage, cookie or DOM), `test_receipt_without_amount_asks_instead_of_guessing`, `test_capture_off_record_not_recorded`.
+  - rev 3.1: `test_usage_ask_proposal_confirm_receipt`, `test_usage_needs_you_item_when_yellow`, `test_usage_light_monday_state`, `test_capture_parsers`, `test_capture_vendor_warning_file_this_updates_row`, `test_capture_refill_receipt_strips_payment_details` (pastes "Mastercard - 1234" and asserts the digits appear nowhere in storage, cookie or DOM), `test_capture_receipt_never_keeps_ach_details`, `test_generic_payment_question_remains_conversation`, `test_receipt_without_amount_asks_instead_of_guessing`, `test_capture_off_record_not_recorded`.
 
 Rev 2 tests whose assumptions change (the Build door and strip now lead to the Shop floor) are updated in place.
 

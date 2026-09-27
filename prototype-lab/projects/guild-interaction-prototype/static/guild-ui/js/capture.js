@@ -27,7 +27,10 @@ export function stripCard(text) {
 }
 
 export function looksLikeReceipt(text) {
-  return /\b(receipt|paid|payment|top[- ]?up|invoice|credits?\s+(?:purchased|added)|amount\s+paid)\b/i.test(text);
+  const t = String(text || '');
+  if (/^\s*(?:what|how|why|can|could|where|when|which|is|are|do|does)\b.*\?\s*$/i.test(t)
+      && !/(?:\$\s*\d|\b(?:routing|account|ach|iban|swift|card|ending)\b|\b\d{5,}\b)/i.test(t)) return false;
+  return /\b(receipt|paid|payment|top[- ]?up|invoice|credits?\s+(?:purchased|added)|amount\s+paid)\b/i.test(t);
 }
 
 export function looksLikeWarning(text) {
@@ -68,6 +71,16 @@ export function parseReceipt(text, balances) {
   else if (/openai/i.test(t)) { vendor = 'OpenAI'; }
   if (source && !balances.some((b) => b.id === source)) source = null;
   return { source, vendor, amount: parseAmount(t), paid_at: parseDayTime(t) };
+}
+
+// Keep only the fields the prototype needs. The original receipt is never a
+// conversation turn or browser-storage value; pattern redaction alone cannot
+// safely recognize every account, routing, address or transaction detail.
+export function receiptSummary(receipt) {
+  const vendor = receipt.vendor || 'vendor not recognised';
+  const amount = receipt.amount == null ? 'amount not read' : `$${receipt.amount.toFixed(2)}`;
+  const paid = receipt.paid_at == null ? 'time not read' : label(receipt.paid_at);
+  return `Receipt · ${vendor} · ${amount} · ${paid} · original receipt text not stored`;
 }
 
 // Vendor warning → {tool, kind, stated_reset_at, stated_remaining_pct}.
