@@ -1,5 +1,6 @@
 {% extends 'guild_floor/_base.html' %}
-{% from 'guild_floor/_macros.html' import shape %}
+{% from 'guild_floor/_macros.html' import shape, continue_line %}
+{% import 'guild_floor/_postits.html' as pz with context %}
 {% block title %}{{ floor_cfg.title }} · Guild{% endblock %}
 
 {% block above %}
@@ -31,7 +32,7 @@
 <div class="floor-rail" data-floor-rail>
   <p class="floor-urgent" data-floor-urgent{% if not state.needs['items'] %} hidden{% endif %}><span class="floor-urgent-label">Needs you:</span> <a href="{{ state.needs['items'][0].href if state.needs['items'] else '#' }}" data-urgent-link>{% if state.needs['items'] %}{{ state.needs['items'][0].tag }} · {{ state.needs['items'][0].text }}{% endif %}</a></p>
   <button type="button" class="floor-chip" data-sheet-toggle aria-expanded="false" aria-controls="floor-sheet">
-    Needs you <span data-reminder-count>{{ state.needs.total if state.needs.total is not none else '?' }}</span> ▾
+    Needs you <span data-reminder-count>{{ state.needs.total if state.needs.total is not none else '?' }}</span> · Continue · Post-its ▾
   </button>
   <div class="floor-sheet" id="floor-sheet" data-floor-sheet>
     <section class="zone zone-needs" data-zone="needs" aria-labelledby="z-needs">
@@ -48,13 +49,13 @@
     </section>
     <section class="zone zone-continue" data-zone="continue" aria-labelledby="z-cont">
       <h2 class="zone-h" id="z-cont">Continue</h2>
-      <p class="zone-next" data-continue-next>{{ state['continue'].text }}</p>
+      <p class="zone-next">{{ continue_line(state['continue']) }}</p>
       <p><a href="{{ urls.bench }}" class="open-bench" data-open-bench>Open the bench →</a></p>
       <p><a href="{{ urls.queue }}">Build Queue →</a></p>
     </section>
     <section class="zone zone-postits" data-zone="postits" aria-labelledby="z-notes">
-      <h2 class="zone-h" id="z-notes">Post-its</h2>
-      <p class="zone-next" data-postits-next>{{ state.postits.text }}</p>
+      <h2 class="zone-h" id="z-notes">Post-its <span class="small" data-postits-count>{% if state.postits.state == 'ok' %}· {{ state.postits.active_total }} on the board{% else %}· unavailable{% endif %}</span></h2>
+      {{ pz.rail(state.postits) }}
     </section>
   </div>
 </div>

@@ -87,12 +87,14 @@ def test_package_never_imports_the_prototype():
 
 PAGES = ["/guild-next/guild/build", "/guild-next/guild/build/bench", "/guild-next/guild/build/queue",
          "/guild-next/guild/build/items/12", "/guild-next/guild/build/items/31",
-         "/guild-next/guild/operate", "/guild-next/guild/operate?tile=systems"]
+         "/guild-next/guild/operate", "/guild-next/guild/operate?tile=systems", "/guild-next/guild/build/postits"]
 API = ["/guild-next/api/v1/session", "/guild-next/api/v1/floor", "/guild-next/api/v1/queue",
-       "/guild-next/api/v1/queue/items/12", "/guild-next/api/v1/queue/items/12/history"]
+       "/guild-next/api/v1/queue/items/12", "/guild-next/api/v1/queue/items/12/history",
+       "/guild-next/api/v1/notes", "/guild-next/api/v1/postits", "/guild-next/api/v1/postits/bin",
+       "/guild-next/api/v1/continue"]
 ASSETS = ["tokens.css", "components.css", "js/main.js", "js/api.js", "js/conversation.js",
           "js/floor.js", "js/bench.js", "js/queue.js", "js/actions.js", "js/operate.js",
-          "js/state.js", "js/dom.js"]
+          "js/state.js", "js/dom.js", "js/postits.js", "js/continue.js", "js/zones.js"]
 
 
 def test_no_page_api_or_asset_response_shows_sample_text(staging):

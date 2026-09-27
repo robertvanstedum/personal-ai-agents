@@ -33,8 +33,12 @@ def test_every_value_carries_observed_at(staging):
     assert floor["needs"]["observed_at"] and floor["briefing"]["observed_at"]
 
 
-def test_continue_notes_and_postits_say_they_arrive_next(staging):
+def test_floor_store_zones_without_a_database_say_unavailable_never_zero(staging):
+    """No floor database configured: the (c) zones are "unavailable", with a
+    reason, never an empty board or a zero (B2). The rest is unaffected."""
     floor = staging.owner().get("/guild-next/api/v1/floor").get_json()
     for zone in ("continue", "postits", "notes"):
-        assert floor[zone]["state"] == "not_connected" and floor[zone]["text"]
+        assert floor[zone]["state"] == "unavailable" and "not configured" in floor[zone]["text"]
+    assert floor["postits"]["active_total"] is None and floor["postits"]["shown"] is None
+    assert floor["postits"]["bin_total"] is None and floor["continue"]["target"] is None
     assert floor["mc_state"] == "off"

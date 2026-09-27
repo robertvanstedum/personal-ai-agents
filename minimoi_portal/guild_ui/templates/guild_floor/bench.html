@@ -1,5 +1,6 @@
 {% extends 'guild_floor/_base.html' %}
 {% from 'guild_floor/_macros.html' import src_badge, src_note, unknown_row with context %}
+{% import 'guild_floor/_postits.html' as pz with context %}
 {% block title %}Build · workbench{% endblock %}
 
 {% macro panel(id) -%}
@@ -74,7 +75,9 @@
 {% endcall %}
 
 {% call panel('postits') %}
-  <p class="zone-next">{{ state.postits.text }}</p>
+  {{ pz.board(data.postits.board) }}
+  <h3 class="h3 postit-bin-h" id="bench-bin">Bin</h3>
+  {{ pz.bin(data.postits.bin) }}
 {% endcall %}
 
 </div>

@@ -1,0 +1,21 @@
+{% extends 'guild_floor/_base.html' %}
+{% import 'guild_floor/_postits.html' as pz with context %}
+{% block title %}Post-its · Build{% endblock %}
+{% block main %}
+<nav class="crumbs" aria-label="Back">
+  <a class="btn-quiet" href="{{ urls.floor }}">Shop floor</a>
+  <a class="btn-quiet" href="{{ urls.bench }}">Workbench</a>
+</nav>
+<div class="page-head">
+  <h1 class="page-title">Post-its</h1>
+  <p class="page-meta">Reference notes, added and removed directly. They trigger nothing. Removed ones are kept in the bin and can be restored.</p>
+</div>
+<section class="card" aria-labelledby="board-h">
+  <h2 class="h2" id="board-h">On the board</h2>
+  {{ pz.board(board_res) }}
+</section>
+<section class="card" id="bin" aria-labelledby="bin-h">
+  <h2 class="h2" id="bin-h">Bin</h2>
+  {{ pz.bin(bin_res) }}
+</section>
+{% endblock %}

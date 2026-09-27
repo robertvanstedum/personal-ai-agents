@@ -77,3 +77,12 @@ export function briefingText(mode, since, liveText) {
   if (mode === 'signed_out') return `Signed out · the floor is not being read (last good read ${since})`;
   return `Floor unknown · no good read since ${since}`;
 }
+
+// The mark on a floor-store zone (post-its, Continue, notes line) in a given
+// mode: empty when live, otherwise the same words as the lights.
+export function zoneMarkText(mode, since) {
+  if (mode === 'live') return '';
+  if (mode === 'stale') return `Stale · last good read ${since}`;
+  if (mode === 'signed_out') return `Signed out · last good read ${since}`;
+  return `Unknown · no good read since ${since}`;
+}

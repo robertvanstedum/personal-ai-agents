@@ -43,3 +43,4 @@ async function call(method, path, body, etag) {
 
 export const apiGet = (path, etag) => call('GET', path, null, etag);
 export const apiPost = (path, body) => call('POST', path, body || {});
+export const apiPut = (path, body) => call('PUT', path, body || {});

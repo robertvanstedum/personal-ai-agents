@@ -23,3 +23,8 @@
 {%- else %}<circle cx="8" cy="8" r="6.2" class="lshape-ring"/><text x="8" y="11.6" text-anchor="middle" class="lshape-q">?</text>
 {%- endif %}</svg>
 {%- endmacro %}
+
+{# Continue (S6): the server's target for this principal, the same on every front end. #}
+{% macro continue_line(z) -%}
+<span data-continue data-continue-state="{{ z.state }}">{% if z.target %}<a href="{{ z.target.href }}" data-continue-link>{{ z.text }}</a>{% else %}<span data-continue-text>{{ z.text }}</span>{% endif %}</span>
+{%- endmacro %}

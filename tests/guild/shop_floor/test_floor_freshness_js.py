@@ -36,6 +36,7 @@ const needs = { status: 'ok', total: 0, items: [] };
 out.needs = Object.fromEntries(['live', 'stale', 'unknown', 'signed_out'].map((m) => [m, f.needsView(needs, m, since, 'Nothing needs you · checked 12:00')]));
 out.banners = Object.fromEntries(['live', 'stale', 'unknown', 'signed_out'].map((m) => [m, f.bannerText(m, since, 'the server answered 503')]));
 out.briefing = Object.fromEntries(['live', 'stale', 'unknown', 'signed_out'].map((m) => [m, f.briefingText(m, since, 'As of 12:00 · nothing needs you · Queue OK')]));
+out.zones = Object.fromEntries(['live', 'stale', 'unknown', 'signed_out'].map((m) => [m, f.zoneMarkText(m, since)]));
 console.log(JSON.stringify(out));
 """
 
@@ -90,3 +91,11 @@ def test_banner_and_briefing_say_why(result):
     assert result["briefing"]["live"].startswith("As of")
     assert result["briefing"]["stale"].startswith("Stale, last good read t0")
     assert result["briefing"]["unknown"].startswith("Floor unknown")
+
+
+def test_floor_store_zones_use_the_same_words(result):
+    """(c): post-its, Continue and the notes line carry the lights' marks."""
+    z = result["zones"]
+    assert z["live"] == ""
+    assert z["stale"].startswith("Stale · last good read") and z["unknown"].startswith("Unknown · no good read since")
+    assert z["signed_out"].startswith("Signed out")

@@ -8,6 +8,7 @@
   "floor": {
     "title": "Shop floor",
     "max_reminders": 3,
+    "postit_cap": 4,
     "lights": [
       {"id": "build_queue", "label": "Build queue", "short": "Queue", "rule": "queue", "link": "queue"},
       {"id": "systems", "label": "Systems", "short": "Systems", "rule": "systems", "link": "operate:systems"},
@@ -22,7 +23,7 @@
       {"id": "motion", "title": "In motion", "empty_reason": "nothing in Spec Ready or In Build"},
       {"id": "blocked", "title": "Blocked", "empty_reason": "no blocked queue items"},
       {"id": "discussions", "title": "Discussions", "empty_reason": "no open discussions"},
-      {"id": "postits", "title": "Post-its", "empty_reason": "post-its arrive next"}
+      {"id": "postits", "title": "Post-its", "empty_reason": "no post-its on the board and the bin is empty"}
     ],
     "default_order": ["needs", "motion", "blocked", "discussions", "postits"],
     "default_folded": [],

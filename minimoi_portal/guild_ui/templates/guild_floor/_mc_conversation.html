@@ -1,6 +1,15 @@
 {# The conversation, real mode. Master Craftsman is off: no reply of any kind,
    no suggested lines, no voice, no attach, no invite, no filing. The opening
-   briefing and the explain cards are platform rules, labelled as such. #}
+   briefing and the explain cards are platform rules, labelled as such.
+   On the record, what Robert sends is kept on the server as a note (S1) and
+   shown with its time and context. Off the record, what he types stays in
+   this page's memory only and is never sent (S2). #}
+{% macro note_row(n) -%}
+<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-note="{{ n.id }}">
+  <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span>{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</p>
+  <p class="msg-text">{{ n.text }}</p>
+</li>
+{%- endmacro %}
 <button type="button" class="mc-pill" data-mc-pill aria-controls="mc-panel" aria-expanded="false">
   <span class="sig-dot" data-state="quiet" aria-hidden="true"></span>
   <span>Conversation · Master Craftsman off</span>
@@ -20,20 +29,29 @@
       <p class="msg-meta"><span class="msg-label" data-briefing-label>{{ state.briefing.display_label }}</span></p>
       <p class="msg-text" data-briefing-text>{{ state.briefing.text }}</p>
     </li>
+    {% if state.notes.state != 'ok' %}
+    <li class="msg msg-platform" data-kind="platform" data-notes-unavailable>
+      <p class="msg-meta"><span class="msg-label">Guild platform</span></p>
+      <p class="msg-text">{{ state.notes.text }}</p>
+    </li>
+    {% else %}
+    {% if state.notes.more %}<li class="msg msg-platform" data-kind="platform" data-notes-earlier><p class="msg-text small">Earlier notes are kept; the latest {{ state.notes.recent|length }} are shown.</p></li>{% endif %}
+    {% for n in state.notes.recent %}{{ note_row(n) }}{% endfor %}
+    {% endif %}
   </ol>
   <p class="visually-hidden" aria-live="polite" data-mc-announcer></p>
   <p class="mc-refusal" data-mc-refusal role="status" hidden></p>
   <div class="mc-dock-bottom" data-mc-dock-bottom>
   <form class="mc-composer" data-mc-composer>
     <label class="visually-hidden" for="mc-input">Type a note</label>
-    <input id="mc-input" class="mc-input" data-mc-input autocomplete="off" placeholder="Type a note">
-    <button type="submit" class="btn" data-mc-send disabled aria-describedby="mc-notes-off">Send</button>
+    <input id="mc-input" class="mc-input" data-mc-input autocomplete="off" maxlength="{{ page_json.note_max }}" placeholder="Type a note">
+    <button type="submit" class="btn" data-mc-send aria-describedby="mc-notes-line">Send</button>
     <div class="mc-tools">
       <button type="button" class="btn-quiet" data-mc-record aria-pressed="false">Off the record</button>
       <button type="button" class="btn-quiet" data-mc-invite disabled>Invite</button>
     </div>
     <div class="mc-off-lines">
-      <span id="mc-notes-off" data-notes-off>{{ state.notes.text }}</span>
+      <span id="mc-notes-line" data-notes-line data-notes-state="{{ state.notes.state }}">{{ state.notes.text }}</span>
       <span data-filing-off>{{ filing_off }}</span>
       <span data-invite-off>{{ invite_off }}</span>
     </div>
@@ -47,6 +65,18 @@
 <template id="tpl-platform">
   <li class="msg msg-platform" data-kind="platform">
     <p class="msg-meta"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span></p>
+    <p class="msg-text" data-slot="text"></p>
+  </li>
+</template>
+<template id="tpl-note">
+  <li class="msg msg-note" data-kind="note">
+    <p class="msg-meta"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span><span data-slot="context"></span> · kept as a note</p>
+    <p class="msg-text" data-slot="text"></p>
+  </li>
+</template>
+<template id="tpl-off-record">
+  <li class="msg msg-off" data-kind="off-record" data-off-record-line>
+    <p class="msg-meta"><span class="msg-label">Off the record · not sent, not kept</span> · <span data-slot="when"></span></p>
     <p class="msg-text" data-slot="text"></p>
   </li>
 </template>

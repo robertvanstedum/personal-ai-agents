@@ -13,6 +13,7 @@ from . import cfg, floor_state, owner_page
 from .adapters import ACTIVE, STATUSES, by_recent
 from .briefing import LABEL as RULES_LABEL
 from .security import OFF_RECORD_TEXT, csrf_token
+from .stores import NOTE_MAX, POSTIT_MAX
 
 FILING_OFF = "Filing is off until the Record is specified (#235). Nothing is filed."
 INVITE_OFF = "Inviting agents needs Rooms; not connected"
@@ -54,13 +55,16 @@ def badge(res) -> dict:
             "reason": res.reason, "note": res.note}
 
 
+NOTES_ON_PAGE = 30
+
+
 def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
     c = cfg()
-    state = floor_state.compute(c)
+    state = floor_state.compute(c, notes_limit=NOTES_ON_PAGE)
     layout = c["layout"]
     urls = {
         "floor": url_for(".floor"), "build": url_for(".floor"), "bench": url_for(".bench"),
-        "queue": url_for(".queue"), "operate": url_for(".operate"),
+        "queue": url_for(".queue"), "operate": url_for(".operate"), "postits": url_for(".postits"),
         "item": url_for(".item", item_id=987654321).replace("987654321", "__ID__"),
         "api": f"{c['url_prefix']}/api/v1",
         "legacy_build": "/guild/build",
@@ -73,9 +77,12 @@ def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
         "csrf_token": csrf_token(), "mc_state": state["mc_state"],
         "layout": {"version": layout["layout_version"], "bench": layout["bench"]},
         "floor": state, "off_record_text": OFF_RECORD_TEXT, "rules_label": RULES_LABEL,
+        "postit_max": POSTIT_MAX, "note_max": NOTE_MAX,
     }
     page.update(extra.pop("page_extra", {}))
+    page_open = extra.pop("page_open", False)
     return dict(area=area, page_id=page_id, context_item=context_item, layout=layout, state=state,
+                page_open=page_open, postit_max=POSTIT_MAX,
                 user=c["current_user"](), page_json=page, urls=urls, phone_numbers=phone_numbers,
                 filing_off=FILING_OFF, invite_off=INVITE_OFF, rules_label=RULES_LABEL,
                 hhmm=hhmm, age=age, badge=badge, statuses=STATUSES, **extra)
@@ -100,6 +107,7 @@ def bench():
         "blocked": {"res": queue_res,
                     "rows": [i for i in (queue_res.data or []) if i["status_known"] and i["status"] == "blocked"]},
         "discussions": {"res": services.sessions.list_sessions()},
+        "postits": {"board": services.floor.list_postits(), "bin": services.floor.list_bin(limit=20)},
     }
     return render_template("guild_floor/bench.html", panels_cfg=panels_cfg, data=data, **ctx)
 
@@ -132,6 +140,15 @@ def item(item_id: int):
     return render_template("guild_floor/item.html", res=res, it=res.data, item_id=item_id,
                            history=services.history.history(item_id), checks=checks, checks_res=checks_res,
                            **ctx)
+
+
+@owner_page
+def postits():
+    """Every post-it on the board and the kept bin, with Restore. The same
+    page on desktop and phone (review: the phone must reach the bin)."""
+    ctx = _context("postits", "Build", "Post-its", page_open=True)
+    return render_template("guild_floor/postits.html", bin_res=cfg()["services"].floor.list_bin(),
+                           board_res=cfg()["services"].floor.list_postits(), **ctx)
 
 
 @owner_page

@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('.asset', filename='components.css') }}">
   <script type="module" src="{{ url_for('.asset', filename='js/main.js') }}"></script>
 </head>
-<body class="gu" data-page="{{ page_id }}" data-area="{{ area }}" data-context-item="{{ context_item }}" data-mc-state="{{ state.mc_state }}">
+<body class="gu" data-page="{{ page_id }}" data-area="{{ area }}" data-context-item="{{ context_item }}" data-mc-state="{{ state.mc_state }}"{% if page_open %} data-page-open="true"{% endif %}>
 <a class="gu-skip" href="#main">Skip to content</a>
 {{ portal_nav_html(user, '/guild') | safe }}
 <nav class="guild-nav" aria-label="Guild sections">
