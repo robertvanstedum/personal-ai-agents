@@ -1,0 +1,9 @@
+{
+  "sample": true,
+  "observed_at": "2026-09-26T09:12:00-05:00",
+  "branch": "main",
+  "commits": [
+    {"ref": "a-19", "title": "Standalone capture — checks passed", "at": "2026-09-25T19:02:00-05:00"},
+    {"ref": "r-4468", "title": "Handoff adapter — reconciled, no rerun", "at": "2026-09-25T18:55:00-05:00"}
+  ]
+}

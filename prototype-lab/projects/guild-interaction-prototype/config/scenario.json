@@ -1,0 +1,492 @@
+{
+  "simulated": true,
+  "_about": "Flow layer for the one scenario: scripted turns, proposal templates, reserved receipts, voice lines and the Monday return. Every reply generated from this file is labelled 'Simulated reply' (SPEC §4.6). Edit this file to change the walkthrough.",
+  "session": {
+    "id": "s-023",
+    "title": "“file this” rollout"
+  },
+  "work_item": 158,
+  "clock": {
+    "sat": {
+      "label": "Sat",
+      "start_minute": 552
+    },
+    "mon": {
+      "label": "Mon",
+      "start_minute": 480
+    }
+  },
+  "receipts": {
+    "first": 4486,
+    "reserved": [
+      "r-4490",
+      "r-4491"
+    ]
+  },
+  "participants": [
+    {
+      "id": "robert",
+      "label": "Robert",
+      "note": "owner"
+    },
+    {
+      "id": "mc",
+      "label": "Master Craftsman",
+      "note": ""
+    },
+    {
+      "id": "claude",
+      "label": "Claude",
+      "invitable": true,
+      "joins_after_ms": 1500
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "invitable": true,
+      "joins_after_ms": null
+    }
+  ],
+  "sample_attachments": [
+    {
+      "name": "admin-s021-note.txt",
+      "content": "Admin, s-021: attach isn't on the phone, only the form.\n"
+    },
+    {
+      "name": "u02-check-output.txt",
+      "content": "U02 check: attach control hidden below 360 px.\n"
+    }
+  ],
+  "sessions_for_filing": [
+    "s-023",
+    "s-021"
+  ],
+  "hints": [
+    "confirm",
+    "off the record",
+    "file this"
+  ],
+  "suggestions": [
+    "Why did usage stall here?",
+    "Bring Claude and Codex in.",
+    "What did we decide about file this?"
+  ],
+  "off_record_refusal": "Off the record — go back on the record to attach, invite or act.",
+  "turns": [
+    {
+      "id": "T5-confirm",
+      "match": [
+        "^\\s*confirm\\b"
+      ],
+      "do": "confirm"
+    },
+    {
+      "id": "T5-edit",
+      "match": [
+        "^\\s*edit\\b"
+      ],
+      "do": "edit"
+    },
+    {
+      "id": "T5-cancel",
+      "match": [
+        "^\\s*cancel\\b"
+      ],
+      "do": "cancel"
+    },
+    {
+      "id": "T6-on",
+      "match": [
+        "back on (the )?record",
+        "^\\s*on the record"
+      ],
+      "do": "on_record"
+    },
+    {
+      "id": "T6-off",
+      "match": [
+        "off the record"
+      ],
+      "do": "off_record"
+    },
+    {
+      "id": "T7-recall",
+      "match": [
+        "what did we decide"
+      ],
+      "do": "recall",
+      "none_text": "No owner decision recorded on “file this” yet."
+    },
+    {
+      "id": "T4-file",
+      "match": [
+        "file this"
+      ],
+      "do": "file",
+      "none_text": "Nothing is attached to file. Attach it, then say “file this”."
+    },
+    {
+      "id": "T2-invite",
+      "match": [
+        "bring .*(claude|codex).* in",
+        "\\binvite\\b"
+      ],
+      "do": "invite",
+      "text": "Invited Claude and Codex with this discussion's context only (simulated invitation). I'll show each here when they join, not before.",
+      "again_text": "Both are already invited. I show a join only when it happens.",
+      "join_text": {
+        "claude": "Grant first, then the mobile fix — the grant is a one-minute receipted action and it changes the denominator today. Coach Admin only after attach is visible on the phone."
+      }
+    },
+    {
+      "id": "T3-decide",
+      "match": [
+        "\\bagreed\\b",
+        "grant guest",
+        "\\bdecide\\b",
+        "\\bdecision\\b"
+      ],
+      "do": "propose",
+      "proposal": "decision",
+      "done_text": "Already recorded as an owner decision · r-4490."
+    },
+    {
+      "id": "TA-queue",
+      "match": [
+        "tell me about (the )?build queue"
+      ],
+      "do": "status"
+    },
+    {
+      "id": "TA-systems",
+      "match": [
+        "tell me about (the )?systems?"
+      ],
+      "do": "reply",
+      "text": "Systems has no probe in this prototype, so its light is grey (unknown), not green. The planned source is the Operations agent status check."
+    },
+    {
+      "id": "TA-agents",
+      "match": [
+        "tell me about (the )?agents?"
+      ],
+      "do": "reply",
+      "text": "Sample data: 2 agent runs are going and 1 needs you, so the light is yellow (watch). Nothing has failed."
+    },
+    {
+      "id": "TA-usage",
+      "match": [
+        "tell me about (the )?(usage|limits|spend)",
+        "usage (&|and) limits"
+      ],
+      "do": "usage"
+    },
+    {
+      "id": "T1-ask",
+      "match": [
+        "\\bwhy\\b.*\\b(stall|stalled|usage)\\b",
+        "tell me about this",
+        "tell me about (the )?rollouts?"
+      ],
+      "do": "reply",
+      "flag": "asked",
+      "text": "Intended for three, enabled for two, used by one. Verified: Guest has no Rooms grant, so cannot reach it; Admin opened it once on a phone, where attach is hidden below 360 px — that matches the s-021 comment. Not verified: whether either had anything to file this week. So: a grant plus a product fix, not training.",
+      "then_propose": "post_needs"
+    },
+    {
+      "id": "T8-status",
+      "match": [
+        "what'?s in build",
+        "what is in build"
+      ],
+      "do": "status"
+    },
+    {
+      "id": "T0-fallback",
+      "match": [
+        ".*"
+      ],
+      "do": "reply",
+      "text": "This prototype only has scripted turns. Try: “Why did usage stall here?”, “Bring Claude and Codex in.”, attach + “file this”, “What did we decide about file this?”"
+    }
+  ],
+  "proposals": {
+    "post_needs": {
+      "title": "Post to Build → Needs you",
+      "effect": "needs_posted",
+      "once": true,
+      "fields": [
+        {
+          "label": "Item",
+          "value": "Approve “attach on mobile” as a queue Idea"
+        },
+        {
+          "label": "Evidence",
+          "value": "s-021 + U02"
+        },
+        {
+          "label": "Destination",
+          "value": "Build → Needs you"
+        }
+      ],
+      "note": "The grant is yours to issue; I'll show its receipt here.",
+      "receipt_text": "posted to Needs you"
+    },
+    "decision": {
+      "title": "Record as owner decision",
+      "effect": "decision",
+      "once": true,
+      "receipt": "r-4490",
+      "fields": [
+        {
+          "key": "text",
+          "label": "Decision",
+          "value": "grant Guest → mobile fix (Idea) → coach Admin",
+          "editable": true
+        },
+        {
+          "label": "Owners",
+          "value": "Robert (grant, today), MC (follow-up Mon)"
+        },
+        {
+          "label": "Session",
+          "value": "s-023"
+        }
+      ],
+      "note": "Confirm to record it with a receipt.",
+      "receipt_text": "owner decision recorded"
+    },
+    "file": {
+      "title": "File this attachment",
+      "effect": "file",
+      "note": "Simulated filing: the file stays in this browser and is not uploaded.",
+      "receipt_text": "simulated filing · file not uploaded"
+    },
+    "next_training": {
+      "title": "Next step · Training · show Admin",
+      "effect": "next_step",
+      "fields": [
+        {
+          "label": "Action",
+          "value": "Walk Admin through “file this”"
+        },
+        {
+          "label": "Owner",
+          "value": "Robert"
+        }
+      ],
+      "note": "Simulated: confirming records a local receipt; nothing is executed.",
+      "receipt_text": "next step recorded · nothing executed"
+    },
+    "next_grant": {
+      "title": "Next step · Config · grant Guest",
+      "effect": "next_step",
+      "fields": [
+        {
+          "label": "Action",
+          "value": "Issue Rooms grant to Guest for “file this”"
+        },
+        {
+          "label": "Owner",
+          "value": "Robert"
+        }
+      ],
+      "note": "Simulated: confirming records a local receipt; no grant is issued.",
+      "receipt_text": "next step recorded · nothing executed"
+    },
+    "next_product": {
+      "title": "Next step · Product · attach on mobile",
+      "effect": "next_step",
+      "fields": [
+        {
+          "label": "Action",
+          "value": "Open queue Idea “attach on mobile”"
+        },
+        {
+          "label": "Owner",
+          "value": "Claude Code"
+        }
+      ],
+      "note": "Simulated: confirming records a local receipt; the real queue is not written.",
+      "receipt_text": "next step recorded · nothing executed"
+    },
+    "next_investigate": {
+      "title": "Next step · Investigate",
+      "effect": "next_step",
+      "fields": [
+        {
+          "label": "Action",
+          "value": "Ask Guest whether they want “file this” (the unknown)"
+        },
+        {
+          "label": "Owner",
+          "value": "MC"
+        }
+      ],
+      "note": "Simulated: confirming records a local receipt; nothing is executed.",
+      "receipt_text": "next step recorded · nothing executed"
+    },
+    "usage_shift": {
+      "title": "Shift work before a limit",
+      "effect": "usage_shift",
+      "note": "Simulated: confirming records a local receipt; no routing is changed.",
+      "receipt_text": "simulated · no routing changed"
+    }
+  },
+  "voice_script": [
+    {
+      "when": "pending",
+      "say": "confirm"
+    },
+    {
+      "when": "unfiled",
+      "say": "file this"
+    },
+    {
+      "when": "mon",
+      "say": "What did we decide about file this?"
+    },
+    {
+      "when": "!asked",
+      "say": "Why did usage stall here?"
+    },
+    {
+      "when": "!invited",
+      "say": "Bring Claude and Codex in."
+    },
+    {
+      "when": "!decision",
+      "say": "Agreed. Grant Guest now, mobile fix as an Idea, coach Admin after."
+    },
+    {
+      "when": "",
+      "say": "What's in build?"
+    }
+  ],
+  "monday": {
+    "mc_message": "Morning. Grant done, Guest reached “file this” Sunday, nothing filed yet. The mobile fix is an Idea waiting for you.",
+    "steps": [
+      {
+        "state": "done",
+        "text": "Grant issued Sat 9:27 · r-4491 · Robert"
+      },
+      {
+        "state": "open",
+        "text": "Idea q-91 “attach on mobile” · owner Claude Code · next: spec"
+      },
+      {
+        "state": "done",
+        "text": "MC follow-up Mon 8:00 · Guest reached it Sun · not yet active"
+      }
+    ],
+    "note": "Grant and follow-up are simulated between Saturday and Monday.",
+    "no_decision": "No owner decision was recorded on Saturday.",
+    "sat_steps": [
+      {
+        "state": "open",
+        "text": "Grant Guest · owner Robert · today"
+      },
+      {
+        "state": "open",
+        "text": "Idea q-91 “attach on mobile” · owner Claude Code · next: spec"
+      },
+      {
+        "state": "open",
+        "text": "MC follow-up Mon 8:00 · owner MC"
+      }
+    ]
+  },
+  "bench": {
+    "needs": [
+      {
+        "tag": "Decide",
+        "text": "“file this” stalled — grant, fix or training?",
+        "src": "s-021",
+        "queue_link": true,
+        "show_when": {
+          "decision": false
+        }
+      },
+      {
+        "tag": "Approve",
+        "text": "“attach on mobile” as a queue Idea · posted by MC",
+        "src": "receipt",
+        "show_when": {
+          "needs_posted": true,
+          "decision": false
+        }
+      },
+      {
+        "tag": "Approve",
+        "text": "Idea q-91 “attach on mobile” → spec",
+        "src": "r-4490",
+        "queue_link": true,
+        "show_when": {
+          "decision": true
+        }
+      },
+      {
+        "tag": "Approve",
+        "text": "PR #212 — Codex review passed",
+        "src": "r-4471"
+      }
+    ],
+    "blocked": [
+      {
+        "text": "Rooms grant for Guest not issued · owner Robert",
+        "show_when": {
+          "clock": "sat"
+        }
+      }
+    ],
+    "postits": [
+      "Agents glance: usage per agent, not spend",
+      "Keep the hero on the doors",
+      "Ask MC before opening four windows",
+      "Phone: voice first, bench optional"
+    ],
+    "since_label_sample": "Fri 18:40"
+  },
+  "reminders": [
+    {
+      "tag": "Decision",
+      "text": "r-4490 recorded",
+      "decision_text": true,
+      "detail": "decision",
+      "show_when": {
+        "decision": true,
+        "clock": "mon"
+      }
+    },
+    {
+      "tag": "Decide",
+      "text": "“file this” stalled — grant, fix or training?",
+      "detail": "queue_item",
+      "show_when": {
+        "decision": false
+      }
+    },
+    {
+      "tag": "Approve",
+      "text": "“attach on mobile” as a queue Idea · posted by MC",
+      "detail": "bench",
+      "show_when": {
+        "needs_posted": true,
+        "decision": false
+      }
+    },
+    {
+      "tag": "Approve",
+      "text": "Idea q-91 “attach on mobile” → spec",
+      "detail": "queue_item",
+      "show_when": {
+        "decision": true
+      }
+    },
+    {
+      "tag": "Approve",
+      "text": "PR #212 — Codex review passed",
+      "detail": "bench"
+    }
+  ]
+}

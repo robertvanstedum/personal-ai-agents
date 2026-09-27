@@ -1,0 +1,186 @@
+{
+  "sample": true,
+  "_about": "Sample usage and limits (SPEC rev 3.1). Neutral numbers, no real account figures. Times are minutes from Sat 00:00 of the scenario week. Plans: used % of a usage window with a reset; balances: prepaid API token buckets with a refill threshold. Each clock (sat/mon) has its own reading. Vendor-reported warnings (what the tools themselves say) are REPORTED evidence, neutral sample text only; our own numbers are measured or projected. Refill receipts are REPORTED (receipt) evidence: vendor, amount and time only; payment-method details are never stored.",
+  "observed": {
+    "sat": "Sat 9:15",
+    "mon": "Mon 8:00"
+  },
+  "now": {
+    "sat": 555,
+    "mon": 3360
+  },
+  "min_window_hours": 6,
+  "balance_horizon_hours": 48,
+  "overall_spend": {
+    "mtd": 42.8,
+    "note": "metered API spend this month · plans are flat-rate"
+  },
+  "sources": [
+    {
+      "id": "claude_plan",
+      "kind": "plan",
+      "label": "Claude plan",
+      "warn_pct": 80,
+      "sat": {
+        "used_pct": 58,
+        "reset_at": 840,
+        "window_hours": 24,
+        "window_pct": 30
+      },
+      "mon": {
+        "used_pct": 12,
+        "reset_at": 3420,
+        "window_hours": 6,
+        "window_pct": 4
+      },
+      "vendor": [
+        {
+          "tool": "Claude Code",
+          "kind": "warning",
+          "text": "Close to your usage limit (sample text)",
+          "seen_at": -300,
+          "stated_reset_at": null,
+          "stated_remaining_pct": null
+        }
+      ]
+    },
+    {
+      "id": "codex_plan",
+      "kind": "plan",
+      "label": "ChatGPT / Codex plan",
+      "short": "Codex plan",
+      "warn_pct": 80,
+      "sat": {
+        "used_pct": 72,
+        "reset_at": 3300,
+        "window_hours": 24,
+        "window_pct": 24
+      },
+      "mon": {
+        "used_pct": 6,
+        "reset_at": 13380,
+        "window_hours": 1,
+        "window_pct": 6
+      },
+      "vendor": [
+        {
+          "tool": "Codex",
+          "kind": "warning",
+          "text": "Approaching your usage limit (sample text)",
+          "seen_at": 520,
+          "stated_reset_at": 3240,
+          "stated_remaining_pct": null
+        }
+      ]
+    },
+    {
+      "id": "grok_plan",
+      "kind": "plan",
+      "label": "Grok plan",
+      "instrumented": false,
+      "planned_source": "no usage API; manual entry planned"
+    },
+    {
+      "id": "xai_api",
+      "kind": "balance",
+      "label": "xAI API balance",
+      "short": "xAI API",
+      "refill_at": 5.0,
+      "warn_at": 10.0,
+      "sat": {
+        "balance": 14.2,
+        "window_hours": 24,
+        "window_spent": 2.4,
+        "read_at": 540
+      },
+      "mon": {
+        "balance": 4.8,
+        "read_at": 3300,
+        "window_hours": 24,
+        "window_spent": 1.2
+      },
+      "refills": [
+        {
+          "vendor": "Sample vendor (xAI top-up)",
+          "amount": 20.0,
+          "paid_at": 3340,
+          "sample": true
+        }
+      ],
+      "refill_capture": "receipt capture planned (forwarded receipt emails or a billing API); manual “file this” today"
+    },
+    {
+      "id": "anthropic_api",
+      "kind": "balance",
+      "label": "Anthropic API balance",
+      "short": "Anthropic API",
+      "refill_at": 5.0,
+      "warn_at": 10.0,
+      "sat": {
+        "balance": 22.0,
+        "window_hours": 24,
+        "window_spent": 0.0
+      },
+      "mon": {
+        "balance": 22.0,
+        "window_hours": 24,
+        "window_spent": 0.0
+      },
+      "refill_capture": "receipt capture planned (forwarded receipt emails or a billing API); manual “file this” today"
+    }
+  ],
+  "agents": [
+    {
+      "agent": "Claude Code",
+      "source": "claude_plan",
+      "use": "builds, reviews",
+      "vendor_capture": "warning capture planned (hook or log); manual “file this” today"
+    },
+    {
+      "agent": "Codex",
+      "source": "codex_plan",
+      "use": "reviews",
+      "vendor_capture": "warning capture planned (log); manual “file this” today"
+    },
+    {
+      "agent": "Grok CLI",
+      "source": "grok_plan",
+      "use": "review-only passes",
+      "vendor_capture": "warning capture planned (log); manual “file this” today"
+    },
+    {
+      "agent": "CoS Agent A",
+      "source": "xai_api",
+      "use": "gateway, metered",
+      "vendor_capture": null
+    },
+    {
+      "agent": "Master Craftsman",
+      "source": "anthropic_api",
+      "use": "planned · not deployed yet",
+      "vendor_capture": null
+    },
+    {
+      "agent": "Curator scoring (scheduled)",
+      "source": "xai_api",
+      "use": "daily job",
+      "vendor_capture": null
+    }
+  ],
+  "shift": {
+    "codex_plan": {
+      "work": "reviews",
+      "from_agent": "Codex",
+      "to_agent": "Claude Code",
+      "to_source": "claude_plan"
+    }
+  },
+  "vendor_fresh_hours": 12,
+  "reset_tolerance_min": 30,
+  "remaining_tolerance_pct": 10,
+  "vendor_tools": {
+    "Claude Code": "claude_plan",
+    "Codex": "codex_plan",
+    "Grok CLI": "grok_plan"
+  }
+}

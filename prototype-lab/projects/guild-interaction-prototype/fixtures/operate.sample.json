@@ -1,0 +1,207 @@
+{
+  "sample": true,
+  "_about": "Sample Operate values. Nothing here is measured. Systems has no entry on purpose: it renders as not instrumented.",
+  "tiles": {
+    "capabilities": {
+      "value": "5 / 3",
+      "sub": "1 stalled · “file this”",
+      "observed": "Sat 9:15",
+      "phone": "1 stalled"
+    },
+    "sites": {
+      "value": "2",
+      "sub": "laptop offline since Thu",
+      "observed": "Sat 9:15"
+    },
+    "disk": {
+      "value": "18% free",
+      "sub": "recurring alert",
+      "observed": "Sat 9:15",
+      "phone": "18%"
+    },
+    "tickets": {
+      "value": "5 open",
+      "sub": "measured 2 h ago",
+      "observed": "Sat 7:10",
+      "stale": true,
+      "stale_reason": "measured 2 h ago; freshness limit 30 min"
+    },
+    "agent_work": {
+      "value": "2 running",
+      "sub": "1 needs Robert",
+      "observed": "Sat 9:15",
+      "phone": "2 · 1 needs you",
+      "running": 2,
+      "needs_robert": 1,
+      "failed": 0
+    },
+    "spend": {
+      "value": "$42.80",
+      "sub": "MTD · +$9.10 wk",
+      "observed": "Sat 9:15",
+      "phone": "$42.80",
+      "mtd": 42.8,
+      "budget": 60.0
+    }
+  },
+  "rollout": {
+    "title": "“File this” · rollout",
+    "observed": "Sat 9:15",
+    "by_clock": {
+      "sat": {
+        "counts": [
+          {
+            "label": "Intended",
+            "n": 3,
+            "note": "Robert, Admin, Guest"
+          },
+          {
+            "label": "Enabled",
+            "n": 2,
+            "note": "Guest: no Rooms grant"
+          },
+          {
+            "label": "Reached",
+            "n": 2,
+            "note": "both opened it"
+          },
+          {
+            "label": "Active",
+            "n": 1,
+            "note": "Robert · 6× this week"
+          }
+        ],
+        "line": "Adoption 1 of 2 enabled · access gap 1 · observed Sat 9:15",
+        "state_text": "stuck"
+      },
+      "mon": {
+        "counts": [
+          {
+            "label": "Intended",
+            "n": 3,
+            "note": "Robert, Admin, Guest"
+          },
+          {
+            "label": "Enabled",
+            "n": 3,
+            "note": "grant r-4491 · Sat 9:27"
+          },
+          {
+            "label": "Reached",
+            "n": 3,
+            "note": "Guest reached it Sun"
+          },
+          {
+            "label": "Active",
+            "n": 1,
+            "note": "Robert · Guest not yet active"
+          }
+        ],
+        "line": "Adoption 1 of 3 enabled · access gap 0 · observed Mon 8:00",
+        "state_text": "reached · not yet active"
+      }
+    },
+    "recent_change": "Recent change: PR #212 merged to dev Sat 08:50 · Spec 158 §8"
+  },
+  "evidence": [
+    {
+      "mark": "reported",
+      "text": "Admin, s-021: “attach isn't on the phone, only the form.”"
+    },
+    {
+      "mark": "verified",
+      "text": "Attach control hidden below 360 px · U02 check"
+    },
+    {
+      "mark": "unknown",
+      "text": "Whether Guest wants it at all"
+    },
+    {
+      "mark": "blocker",
+      "text": "Rooms grant for Guest not issued · owner Robert",
+      "show_when": {
+        "clock": "sat"
+      }
+    },
+    {
+      "mark": "verified",
+      "text": "Rooms grant for Guest issued Sat 9:27 · r-4491 (simulated between sessions)",
+      "show_when": {
+        "clock": "mon"
+      }
+    }
+  ],
+  "next_steps": [
+    {
+      "id": "training",
+      "label": "Training · show Admin",
+      "proposal": "next_training"
+    },
+    {
+      "id": "grant",
+      "label": "Config · grant Guest",
+      "proposal": "next_grant"
+    },
+    {
+      "id": "product",
+      "label": "Product · attach on mobile",
+      "proposal": "next_product"
+    },
+    {
+      "id": "investigate",
+      "label": "Investigate",
+      "proposal": "next_investigate"
+    }
+  ],
+  "journeys": [
+    {
+      "journey": "Sign in and open Guild",
+      "impact": {
+        "text": "no end-to-end probe",
+        "tag": "not instrumented"
+      },
+      "risk": {
+        "text": "disk 18% free on the host (component risk, not user impact)",
+        "tag": "sample"
+      },
+      "observed": {
+        "text": "never measured",
+        "tag": "not instrumented"
+      },
+      "evidence": "scripts/tools/health_check.py — checks three localhost URLs; not an end-to-end probe"
+    },
+    {
+      "journey": "Ask Master Craftsman",
+      "impact": {
+        "text": "MC agent not deployed",
+        "tag": "not instrumented"
+      },
+      "risk": {
+        "text": "OpenClaw gateway spec #146 has two open blockers",
+        "tag": "sample"
+      },
+      "observed": {
+        "text": "never measured",
+        "tag": "not instrumented"
+      },
+      "evidence": "planned: gateway health + a scripted ask probe (OQ §1 fast follow)"
+    },
+    {
+      "journey": "Save and retrieve a record",
+      "impact": {
+        "text": "1 of 2 enabled users used “file this” this week",
+        "tag": "sample"
+      },
+      "risk": {
+        "text": "attach hidden below 360 px (U02)",
+        "tag": "sample"
+      },
+      "observed": {
+        "text": "Sat 9:15 · stale after 30 min",
+        "tag": "sample",
+        "stale": true
+      },
+      "evidence": "Records rooms/documents tables; U02 check (sample)"
+    }
+  ]
+}

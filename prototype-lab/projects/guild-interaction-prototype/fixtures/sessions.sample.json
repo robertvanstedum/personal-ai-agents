@@ -1,0 +1,7 @@
+{
+  "sample": true,
+  "observed_at": "2026-09-26T09:12:00-05:00",
+  "sessions": [
+    {"id": "s-021", "title": "Operate matrix density", "people": "Admin, Codex", "state": "open", "updated": "2026-09-25T17:30:00-05:00"}
+  ]
+}

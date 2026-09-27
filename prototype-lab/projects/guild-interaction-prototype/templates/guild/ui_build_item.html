@@ -1,0 +1,48 @@
+{% extends 'guild/_ui_base.html' %}
+{% from 'guild/_ui_macros.html' import src_badge, status_mark, unknown_row with context %}
+{% block title %}#{{ item_id }} · Build Queue{% endblock %}
+{% block main %}
+<nav class="crumbs" aria-label="Back">
+  <button type="button" class="btn-quiet" data-back data-fallback="{{ urls.bench }}">← Back</button>
+  <a class="btn-quiet" href="{{ urls.bench }}" data-back-bench>Back to workbench</a>
+  <a class="btn-quiet" href="{{ urls.queue }}">Build Queue</a>
+</nav>
+{% if not res.ok %}
+  <div class="page-head"><h1 class="page-title">Item #{{ item_id }}</h1></div>
+  {{ unknown_row(badge(res)) }}
+{% else %}
+<div class="page-head">
+  <h1 class="page-title">#{{ it.id }} {{ it.title }}</h1>
+  <p class="page-meta">{{ src_badge(badge(res)) }} · status <strong data-effective-status>{{ it.status_label }}</strong> {{ status_mark(it) }} <span class="chip" data-pending hidden></span></p>
+</div>
+<div class="item-grid" data-item-id="{{ it.id }}">
+  <section class="card">
+    <h2 class="h2">Status</h2>
+    {% set form_scope = 'i' %}{% include 'guild/_ui_status_form.html' %}
+    <dl class="kv">
+      {% if it.summary %}<dt>Summary</dt><dd>{{ it.summary }}</dd>{% endif %}
+      {% if it.spec_file %}<dt>Spec file</dt><dd><code>{{ it.spec_file }}</code></dd>{% endif %}
+      {% if it.github_issue %}<dt>GitHub issue</dt><dd>{{ it.github_issue }}</dd>{% endif %}
+      <dt>Last transition</dt><dd>{{ age(it.last_transition_at) or '—' }}</dd>
+      {% if it.id == scenario.work_item %}<dt>Discussion</dt><dd>{{ scenario.session.id }} · {{ scenario.session.title }}</dd>{% endif %}
+    </dl>
+    <p><button type="button" class="btn-quiet" data-discuss>Discuss this with Master Craftsman</button></p>
+  </section>
+  <section class="card">
+    <h2 class="h2">Receipts on this item</h2>
+    <ul data-receipts-for="{{ it.id }}"><li class="small">No receipts yet.</li></ul>
+  </section>
+  <section class="card">
+    <h2 class="h2">History</h2>
+    <ul class="history" data-history>
+      {% if history.ok %}
+        {% for h in history.data %}<li>{{ h.at }} · {{ h.from }} → {{ h.to }} · {{ h.by }} {{ src_badge(badge(history)) }}</li>{% endfor %}
+      {% else %}
+        <li>{{ unknown_row(badge(history)) }}</li>
+      {% endif %}
+    </ul>
+    <ul class="history" data-history-local aria-label="Local history (pending real write)"></ul>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

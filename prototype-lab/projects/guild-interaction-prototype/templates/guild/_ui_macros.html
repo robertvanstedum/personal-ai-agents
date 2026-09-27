@@ -1,0 +1,24 @@
+{# Shared macros: source badges, unknown lines and show-when conditions. #}
+{% macro src_badge(b) -%}
+<span class="src-badge" data-source="{{ b.source }}" data-status="{{ b.status }}"{% if b.error %} title="{{ b.error }}"{% endif %}>{{ b.text }}</span>
+{%- endmacro %}
+
+{% macro src_note(b) -%}
+{% if b.note %}<span class="src-note" data-src-note>{{ b.note }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro status_mark(it) -%}
+{% if not it.status_known %}<span class="mark" data-mark="unknown" data-status-unknown>{{ it.status_label }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro unknown_row(b) -%}
+<p class="unknown-line" data-row>{{ src_badge(b) }} <span>{% if b.reason == 'not_configured' %}not instrumented{% else %}treat as unknown{% endif %}{% if b.error %} — {{ b.error }}{% endif %}</span></p>
+{%- endmacro %}
+
+{% macro sw(cond) -%}
+{% if cond %} data-show-when="{{ cond|tojson|forceescape }}"{% if not show(cond, world) %} hidden{% endif %}{% endif %}
+{%- endmacro %}
+
+{% macro mark(m) -%}
+<span class="mark" data-mark="{{ m }}">{{ m }}</span>
+{%- endmacro %}
