@@ -15,10 +15,17 @@ from .auth import ensure_authenticated, storage_state_path
 from .imaging import build_contact_sheet, optimize_png
 from .manifest import CapturedScene, write_manifest, write_report, write_review_page
 from .readiness import wait_for_checkpoint
-from .scenario import DEVICE_PROFILES, SUPPORTED_ACTIONS, DeviceProfile, output_filename
+from .scenario import (
+    LOCAL_ONLY_AUTH_PROFILES,
+    SUPPORTED_ACTIONS,
+    DeviceProfile,
+    output_filename,
+    resolve_device_profile,
+)
 
 
 ALLOWED_CAPTURE_HOSTS = {"localhost", "127.0.0.1", "dev.minimoi.ai"}
+LOCAL_CAPTURE_HOSTS = {"localhost", "127.0.0.1"}
 CAPTURE_STYLE = """
 html { scrollbar-width: none !important; }
 ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
@@ -100,6 +107,17 @@ def validate_base_url(base_url: str) -> str:
     return base_url.rstrip("/")
 
 
+def validate_auth_for_base_url(auth_profile: str, base_url: str) -> None:
+    """Refuse unauthenticated capture anywhere but this machine's loopback."""
+    if auth_profile in LOCAL_ONLY_AUTH_PROFILES:
+        host = urlparse(base_url).hostname
+        if host not in LOCAL_CAPTURE_HOSTS:
+            raise CaptureRunError(
+                f"auth_profile {auth_profile!r} is allowed only for localhost or "
+                f"127.0.0.1, not {host or base_url!r}; use owner_session for dev"
+            )
+
+
 def _valid_storage_state(path: Path) -> bool:
     if not path.exists():
         return False
@@ -143,14 +161,20 @@ class CaptureRunner:
         timeout_ms: int = 20_000,
         quality: int = 92,
         clean_web: bool = False,
+        browser_channel: str | None = None,
     ) -> None:
         self.scenario = scenario
         self.base_url = validate_base_url(base_url)
+        validate_auth_for_base_url(scenario.get("auth_profile", ""), self.base_url)
+        self.authenticated = scenario.get("auth_profile") not in LOCAL_ONLY_AUTH_PROFILES
         self.output_root = output_root
         self.headless = headless
         self.timeout_ms = timeout_ms
         self.quality = quality
         self.clean_web = clean_web
+        if browser_channel not in (None, "chrome", "msedge"):
+            raise CaptureRunError("browser channel must be 'chrome' or 'msedge'")
+        self.browser_channel = browser_channel
         self.repo_root = Path(__file__).resolve().parents[3]
         self.records: dict[str, dict[str, str]] = {}
         self.last_action = "not started"
@@ -392,15 +416,24 @@ class CaptureRunner:
         raw_dir = run_dir / "raw"
         optimized_dir = run_dir / "optimized"
         diagnostics_dir = run_dir / "diagnostics"
-        state_path = storage_state_path(self.repo_root, self.scenario["auth_profile"])
-        profile = DEVICE_PROFILES[self.scenario["device_profile"]]
+        state_path = (
+            storage_state_path(self.repo_root, self.scenario["auth_profile"])
+            if self.authenticated
+            else None
+        )
+        profile = resolve_device_profile(self.scenario)
         captured_specs: list[tuple[int, dict, Path]] = []
         current_url = "unavailable"
         started_at = datetime.now(timezone.utc).isoformat()
 
         try:
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=self.headless)
+                launch_args = {"headless": self.headless}
+                if self.browser_channel:
+                    # Use an installed Chrome/Edge instead of Playwright's
+                    # downloaded build (avoids a browser download per venv).
+                    launch_args["channel"] = self.browser_channel
+                browser = playwright.chromium.launch(**launch_args)
                 context_args = {
                     "viewport": {"width": profile.width, "height": profile.height},
                     "device_scale_factor": profile.device_scale_factor,
@@ -408,7 +441,7 @@ class CaptureRunner:
                     "color_scheme": "light",
                     "reduced_motion": "reduce",
                 }
-                if _valid_storage_state(state_path):
+                if state_path is not None and _valid_storage_state(state_path):
                     state_path.chmod(0o600)
                     context_args["storage_state"] = str(state_path)
                 context = browser.new_context(**context_args)
@@ -419,14 +452,21 @@ class CaptureRunner:
                 page = context.new_page()
                 page.set_default_timeout(self.timeout_ms)
                 try:
-                    ensure_authenticated(
-                        page,
-                        context,
-                        self.base_url,
-                        self.scenario["start_path"],
-                        self.scenario["auth_profile"],
-                        state_path,
-                    )
+                    if self.authenticated:
+                        ensure_authenticated(
+                            page,
+                            context,
+                            self.base_url,
+                            self.scenario["start_path"],
+                            self.scenario["auth_profile"],
+                            state_path,
+                        )
+                    else:
+                        page.goto(
+                            self._url(self.scenario["start_path"]),
+                            wait_until="domcontentloaded",
+                            timeout=self.timeout_ms,
+                        )
 
                     order = 0
                     for index, step in enumerate(self.scenario["steps"], start=1):
@@ -519,11 +559,24 @@ class CaptureRunner:
                     width=profile.output_dimensions[0],
                     height=profile.output_dimensions[1],
                     bytes=optimized_path.stat().st_size,
+                    captured_at=datetime.fromtimestamp(
+                        raw_path.stat().st_mtime, timezone.utc
+                    ).isoformat(timespec="seconds"),
                 )
                 scenes.append(scene)
                 contact_inputs.append((f"{order:02d} {scene.title}", optimized_path))
 
-            write_manifest(run_dir, self.scenario, scenes, self.records)
+            write_manifest(
+                run_dir,
+                self.scenario,
+                scenes,
+                self.records,
+                viewport={
+                    "width": profile.width,
+                    "height": profile.height,
+                    "device_scale_factor": profile.device_scale_factor,
+                },
+            )
             build_contact_sheet(contact_inputs, run_dir / "contact-sheet.webp")
             review_path = write_review_page(run_dir, self.scenario, scenes)
             write_report(
