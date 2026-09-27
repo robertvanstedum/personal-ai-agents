@@ -26,10 +26,18 @@ export function stripCard(text) {
   return out;
 }
 
+// Payment-method or account detail that must never be kept as typed. The same
+// signals exempt a plain question from being read as a receipt.
+const PAYMENT_DETAIL = /(?:\b(?:routing|account|ach|iban|swift|card|ending)\b|\b\d{5,}\b)/i;
+
+export function hasPaymentDetail(text) {
+  return PAYMENT_DETAIL.test(String(text || ''));
+}
+
 export function looksLikeReceipt(text) {
   const t = String(text || '');
   if (/^\s*(?:what|how|why|can|could|where|when|which|is|are|do|does)\b.*\?\s*$/i.test(t)
-      && !/(?:\$\s*\d|\b(?:routing|account|ach|iban|swift|card|ending)\b|\b\d{5,}\b)/i.test(t)) return false;
+      && !/\$\s*\d/.test(t) && !hasPaymentDetail(t)) return false;
   return /\b(receipt|paid|payment|top[- ]?up|invoice|credits?\s+(?:purchased|added)|amount\s+paid)\b/i.test(t);
 }
 
