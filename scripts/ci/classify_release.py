@@ -43,7 +43,23 @@ def _is_release_only(path: str) -> bool:
         or path.startswith("prototype-lab/")
         or path.startswith("planning-studio/")
         or path in {"requirements.test.txt", "pytest.ini", ".gitignore"}
+        or _is_staging_only(path)
     )
+
+
+# The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).
+# Production never reads these paths: EC2 receives only docker-compose.prod.yml
+# and the model-gateway image bakes litellm.prod.yaml. docker-compose.prod.yml
+# itself is NOT staging-only and keeps the full-deploy fallback.
+STAGING_ONLY_FILES = frozenset({
+    "docker-compose.staging.yml",
+    "services/model_gateway/litellm.staging.yaml",
+})
+STAGING_ONLY_PREFIXES = ("scripts/staging/",)
+
+
+def _is_staging_only(path: str) -> bool:
+    return path in STAGING_ONLY_FILES or path.startswith(STAGING_ONLY_PREFIXES)
 
 
 def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:

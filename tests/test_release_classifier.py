@@ -84,3 +84,17 @@ def test_guild_context_change_includes_portal_and_cos_consumers():
 
 def test_unknown_path_falls_back_to_full_release():
     assert classify(["unexpected/runtime_file.py"]) == ("full", ALL_SERVICES)
+
+
+def test_staging_only_changes_do_not_mask_a_real_service_change():
+    """Mac staging files (issue #234) are release-only; a portal change beside
+    them still deploys the portal."""
+    assert classify([
+        "docker-compose.staging.yml",
+        "scripts/staging/build.sh",
+        "services/model_gateway/litellm.staging.yaml",
+    ]) == ("documents", ())
+    assert classify([
+        "scripts/staging/verify.sh",
+        "minimoi_portal/app.py",
+    ]) == ("domain", ("portal",))

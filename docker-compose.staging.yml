@@ -1,0 +1,121 @@
+# Staging override — dev.minimoi.ai on Robert's Mac (issue #234).
+#
+# Layered on top of docker-compose.prod.yml. Use ONLY through
+# scripts/staging/*.sh (lib.sh builds the one compose command line):
+#   docker compose -p minimoi-staging \
+#     --env-file $MINIMOI_ROOT/.env --env-file $MINIMOI_ROOT/release.env \
+#     -f docker-compose.prod.yml -f docker-compose.staging.yml ...
+#
+# What changes against production, and nothing else:
+#   * images: built locally from the pinned release commit (native arm64),
+#     named minimoi-staging/<ECR repository>:<tag>, never pulled
+#     (pull_policy: never). postgres keeps the local postgres:latest image
+#     (PG 18.4): never pulled, so it cannot jump a major version.
+#   * MINIMOI_ROLE=standby on every Python service, so bots, crons and
+#     token lookups use the test path (production also defaults to
+#     "production" when the variable is unset).
+#   * portal: BASE_URL https://dev.minimoi.ai, in-network backends, and the
+#     two Guild dev surfaces (/guild-next, /guild-proto) switched on. The
+#     flags are set here only; docker-compose.prod.yml never sets them.
+#   * system-bot and cos-bot sit behind the "bots" profile: off unless
+#     scripts/staging/up.sh finds $MINIMOI_ROOT/state/bots.on, i.e. after the
+#     native test-bot pollers are retired (one poller per token).
+#   * extra loopback ports kept for the Mac-only Records beta: the model
+#     gateway on 127.0.0.1:14000 and Agent A on 127.0.0.1:18790.
+#   * the model gateway reads $MINIMOI_ROOT/config/litellm.staging.yaml
+#     (production logical names, lower-cost CoS model) instead of the baked
+#     production config.
+#   * volumes are external and staging-named: `compose down -v` cannot touch
+#     them, and they never collide with the old dev volumes.
+#   * the IoT Connect stack is not part of staging; the portal's edge network
+#     gets a staging-only name so it never joins a local iotconnect network.
+#     /app/iotconnect answers "unavailable" on staging, as expected.
+#
+# Host paths come from docker-compose.prod.yml's ${MINIMOI_ROOT:-/opt/minimoi};
+# this file adds no host path of its own except the gateway config, which
+# also lives under ${MINIMOI_ROOT}.
+
+services:
+  postgres:
+    pull_policy: never
+
+  model-gateway:
+    image: minimoi-staging/cos-scheduler:model-gateway-${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    volumes:
+      - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/config/litellm.staging.yaml:/app/config.yaml:ro
+    ports:
+      - "127.0.0.1:14000:4000"
+
+  cos-agent-a:
+    image: minimoi-staging/cos-scheduler:agent-a-${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    ports:
+      - "127.0.0.1:18790:18789"
+
+  curator:
+    image: minimoi-staging/curator:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    environment:
+      - MINIMOI_ROLE=standby
+
+  german:
+    image: minimoi-staging/mein-deutsch:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    environment:
+      - MINIMOI_ROLE=standby
+
+  portuguese:
+    image: minimoi-staging/portuguese:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    environment:
+      - MINIMOI_ROLE=standby
+
+  portal:
+    image: minimoi-staging/portal:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    environment:
+      - MINIMOI_ROLE=standby
+      - BASE_URL=https://dev.minimoi.ai
+      - CURATOR_BACKEND=http://curator:8766
+      - GERMAN_BACKEND=http://german:8767
+      - PORTUGUESE_BACKEND=http://portuguese:8770
+      # B1 deliverable (b): the Shop floor at /guild-next and the frozen
+      # prototype at /guild-proto. Staging only; unset in production.
+      - MINIMOI_GUILD_NEXT=1
+      - MINIMOI_GUILD_PROTO=1
+
+  system-bot:
+    image: minimoi-staging/system-bot:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    profiles: [bots]
+    environment:
+      - MINIMOI_ROLE=standby
+
+  cos-bot:
+    image: minimoi-staging/cos-bot:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    profiles: [bots]
+    environment:
+      - MINIMOI_ROLE=standby
+
+  cos-scheduler:
+    image: minimoi-staging/cos-scheduler:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    environment:
+      - MINIMOI_ROLE=standby
+
+volumes:
+  postgres-data:
+    external: true
+    name: minimoi-staging-postgres-data
+  cos-agent-a-state:
+    external: true
+    name: minimoi-staging-cos-agent-a-state
+  cos-agent-a-auth:
+    external: true
+    name: minimoi-staging-cos-agent-a-auth
+
+networks:
+  iotconnect-edge:
+    name: minimoi-staging-iotconnect-edge
