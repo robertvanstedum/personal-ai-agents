@@ -165,10 +165,11 @@ jobs:
           CURATOR_CRON_SETUP=$(base64 -w 0 scripts/setup_ec2_cron.sh)
           COS_SECRET_SYNC=$(base64 -w 0 scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh)
           SCOPED_DEPLOY=$(base64 -w 0 scripts/operations/deploy_scoped_release.sh)
+          SEED_QUEUE=$(base64 -w 0 scripts/operations/seed_build_queue.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $COS_SECRET_SYNC | base64 -d > /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"echo $SCOPED_DEPLOY | base64 -d > /opt/minimoi/scripts/deploy_scoped_release.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/scripts/deploy_scoped_release.sh\"]" \
+            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $COS_SECRET_SYNC | base64 -d > /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"echo $SCOPED_DEPLOY | base64 -d > /opt/minimoi/scripts/deploy_scoped_release.sh\",\"echo $SEED_QUEUE | base64 -d > /opt/minimoi/scripts/seed_build_queue.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/scripts/deploy_scoped_release.sh /opt/minimoi/scripts/seed_build_queue.sh\"]" \
             --query 'Command.CommandId' \
             --output text)
 
@@ -210,7 +211,7 @@ jobs:
               "mkdir -p /opt/minimoi/data/german",
               "mkdir -p /opt/minimoi/data/guild",
               "touch /opt/minimoi/data/model_gateway_receipts.jsonl",
-              "curl -sf https://raw.githubusercontent.com/robertvanstedum/personal-ai-agents/main/data/guild/build_queue.json -o /opt/minimoi/data/guild/build_queue.json",
+              "/opt/minimoi/scripts/seed_build_queue.sh https://raw.githubusercontent.com/robertvanstedum/personal-ai-agents/${{ github.sha }}/data/guild/build_queue.json /opt/minimoi/data/guild/build_queue.json",
               "cd /opt/minimoi",
               "/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env",
               "/opt/minimoi/scripts/deploy_scoped_release.sh ${{ needs.build-push.outputs.image_tag }} ${{ needs.classify.outputs.services }}"

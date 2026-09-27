@@ -8,19 +8,36 @@
 # EC2 side pulls files from GitHub raw URLs pinned to the current commit.
 # Files must be committed before running this script.
 #
-# Usage: ./scripts/sync_docs.sh
+# Usage: ./scripts/sync_docs.sh [--publish-queue]
+#   Default: docs/design and docs/specs only. The live Build Queue on EC2
+#   (/opt/minimoi/data/guild/build_queue.json) is written by the production
+#   portal when Robert saves a status, so it is NOT overwritten by default.
+#   --publish-queue: deliberately replace the live queue with the committed
+#   repository copy, after saving a timestamped backup of the live file on EC2.
+#   CI never passes this flag.
 # Requires: aws CLI configured with minimoi-deploy credentials
 #           (same credential used for ECR push and SSM parameter store)
+# Test hook: SYNC_DOCS_DRY_RUN=1 prints the EC2 command lines and exits
+#            before any AWS call.
 
 set -euo pipefail
+
+PUBLISH_QUEUE=0
+for arg in "$@"; do
+  case "$arg" in
+    --publish-queue) PUBLISH_QUEUE=1 ;;
+    *) echo "unknown argument: $arg (usage: sync_docs.sh [--publish-queue])" >&2; exit 2 ;;
+  esac
+done
 
 INSTANCE_ID="i-0d13db821169627e2"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GITHUB_REPO="robertvanstedum/personal-ai-agents"
 
 # Guard: EC2 pulls from GitHub, not local disk — files must be committed.
-DIRTY=$(git -C "$REPO_ROOT" diff --name-only HEAD -- \
-  data/guild/build_queue.json docs/design/ docs/specs/ 2>/dev/null || true)
+GUARDED=(docs/design/ docs/specs/)
+[[ "$PUBLISH_QUEUE" == "1" ]] && GUARDED+=(data/guild/build_queue.json)
+DIRTY=$(git -C "$REPO_ROOT" diff --name-only HEAD -- "${GUARDED[@]}" 2>/dev/null || true)
 if [[ -n "$DIRTY" ]]; then
   echo "ERROR: uncommitted changes in synced paths — commit first, then run sync_docs.sh"
   echo "$DIRTY"
@@ -36,8 +53,6 @@ echo "=== sync_docs.sh: SSM push (commit ${COMMIT:0:7}) ==="
 SRCS=()
 DSTS=()
 
-SRCS+=("${RAW_BASE}/data/guild/build_queue.json")
-DSTS+=("/opt/minimoi/data/guild/build_queue.json")
 
 for f in "${REPO_ROOT}"/docs/design/*; do
   [[ -f "$f" ]] || continue
@@ -61,10 +76,25 @@ LINES=(
   "set -e"
   "mkdir -p /opt/minimoi/data/guild /opt/minimoi/docs/design /opt/minimoi/docs/specs"
 )
+QUEUE_DEST="/opt/minimoi/data/guild/build_queue.json"
+if [[ "$PUBLISH_QUEUE" == "1" ]]; then
+  LINES+=(
+    "mkdir -p /opt/minimoi/data/guild/backups"
+    "if [ -s ${QUEUE_DEST} ]; then cp -p ${QUEUE_DEST} /opt/minimoi/data/guild/backups/build_queue.\$(date -u +%Y%m%dT%H%M%SZ).before-publish.json; fi"
+    "curl -fsSL '${RAW_BASE}/data/guild/build_queue.json' -o ${QUEUE_DEST}.publish && python3 -m json.tool ${QUEUE_DEST}.publish >/dev/null && cat ${QUEUE_DEST}.publish > ${QUEUE_DEST} && rm -f ${QUEUE_DEST}.publish && echo 'OK: build_queue.json published in place (live copy backed up; single-file mount kept attached)'"
+  )
+else
+  echo "Build Queue: live copy on EC2 left untouched (use --publish-queue to publish the repository copy deliberately)"
+fi
 for i in "${!SRCS[@]}"; do
   LINES+=("curl -fsSL '${SRCS[$i]}' -o '${DSTS[$i]}' && echo \"OK ($(( i + 1 ))/${TOTAL}): $(basename "${DSTS[$i]}")\"")
 done
 LINES+=("echo '=== done: ${TOTAL} files ==='")
+
+if [[ "${SYNC_DOCS_DRY_RUN:-0}" == "1" ]]; then
+  printf '%s\n' "${LINES[@]}"
+  exit 0
+fi
 
 # Encode as a JSON array of command lines (each line is a shell command)
 CMD_JSON=$(python3 -c "
