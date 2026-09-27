@@ -464,6 +464,24 @@ def test_w6_post_it_add_remove_restore_on_desktop(browser, server, floor):
     ctx.close()
 
 
+def test_the_first_post_it_can_be_added_on_an_empty_bench(browser, server, floor):
+    """Robert's walkthrough, W6: with no post-its and an empty bin, the bench
+    must still show the Add box (it used to fold the whole panel away)."""
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build/bench")
+    panel = page.locator('[data-panel="postits"]')
+    expect(panel.locator("[data-postit-input]")).to_be_visible()
+    expect(panel.locator("[data-panel-state]")).not_to_have_text("nothing to show")
+    expect(panel).to_contain_text("No post-its on the board")
+    panel.locator("[data-postit-input]").fill("First one, from the bench")
+    panel.locator("[data-postit-add-btn]").click()
+    expect(panel.locator('[data-mode="board"] [data-postit]')).to_have_count(1)
+    assert len(floor.rows("floor_postits")) == 1
+    assert not errors, errors
+    ctx.close()
+
+
 def test_w6_post_it_add_remove_restore_on_the_phone(browser, server, floor):
     ctx, page = _context(browser, server, **PHONE)
     errors = _errors(page)

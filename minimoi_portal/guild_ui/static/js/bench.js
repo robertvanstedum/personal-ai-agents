@@ -40,7 +40,9 @@ function applyBench() {
     const folded = st.folded.includes(id);
     const focused = st.focus === id;
     const rows = $$('[data-row]', $('[data-panel-body]', p)).filter((r) => !r.hidden);
-    const empty = rows.length === 0 && !$('.zone-next', p);
+    // A panel you can add to is never "empty": folding it away would hide its
+    // Add box, and there would be no way to add the first post-it here.
+    const empty = rows.length === 0 && !$('.zone-next', p) && !$('[data-postit-add]', p);
     p.dataset.folded = String(folded);
     p.dataset.focused = String(focused);
     p.dataset.empty = String(empty && !folded);
