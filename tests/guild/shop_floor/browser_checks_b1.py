@@ -464,6 +464,24 @@ def test_w6_post_it_add_remove_restore_on_desktop(browser, server, floor):
     ctx.close()
 
 
+def test_the_first_post_it_can_be_added_on_an_empty_bench(browser, server, floor):
+    """Robert's walkthrough, W6: with no post-its and an empty bin, the bench
+    must still show the Add box (it used to fold the whole panel away)."""
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build/bench")
+    panel = page.locator('[data-panel="postits"]')
+    expect(panel.locator("[data-postit-input]")).to_be_visible()
+    expect(panel.locator("[data-panel-state]")).not_to_have_text("nothing to show")
+    expect(panel).to_contain_text("No post-its on the board")
+    panel.locator("[data-postit-input]").fill("First one, from the bench")
+    panel.locator("[data-postit-add-btn]").click()
+    expect(panel.locator('[data-mode="board"] [data-postit]')).to_have_count(1)
+    assert len(floor.rows("floor_postits")) == 1
+    assert not errors, errors
+    ctx.close()
+
+
 def test_w6_post_it_add_remove_restore_on_the_phone(browser, server, floor):
     ctx, page = _context(browser, server, **PHONE)
     errors = _errors(page)
@@ -647,4 +665,32 @@ def test_a_tab_opened_from_an_off_record_tab_writes_nothing_by_itself(browser, s
     go(third, f"{server['url']}/guild-next/guild/build/items/12")
     third.wait_for_function("() => document.querySelector('[data-continue-link]')?.textContent === '#12 Floor API'")
     expect(third.locator("[data-mc-record-confirm]")).to_be_hidden()
+    ctx.close()
+
+
+
+def test_dragging_a_box_moves_it_up_or_down_and_releases_focus(browser, server, fresh_queue):
+    """Robert's walkthrough: dragging did nothing. Dropping on a box below put
+    yours back before it (no move), and a box in focus stayed pinned on top."""
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build/bench")
+    order = lambda: page.eval_on_selector_all("[data-bench] > [data-panel]", "els => els.map(e => e.dataset.panel)")
+    handle = lambda pid: page.locator(f'[data-panel="{pid}"] [data-drag-handle]')
+    box = lambda pid: page.locator(f'[data-panel="{pid}"]')
+    a, b, c, d, e = order()
+    handle(a).drag_to(box(b))                                   # down one: now after b
+    assert order() == [b, a, c, d, e]
+    handle(b).drag_to(box(d))                                   # down further: lands after d
+    assert order() == [a, c, d, b, e]
+    handle(d).drag_to(box(a))                                   # up: lands before a
+    assert order() == [d, a, c, b, e]
+    box(e).locator('[data-act="focus"]').click()                # e in focus, pinned on top
+    assert order()[0] == e
+    handle(e).drag_to(box(c))                                   # dragging it moves it and ends the pin
+    assert order()[0] != e and order().index(e) == order().index(c) + 1
+    expect(box(e).locator('[data-act="focus"]')).to_have_text("☆ Focus")
+    page.reload()
+    assert order().index(e) == order().index(c) + 1             # the arrangement is kept
+    assert not errors, errors
     ctx.close()
