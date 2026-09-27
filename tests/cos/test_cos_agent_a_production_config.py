@@ -68,6 +68,19 @@ def test_production_agent_runtime_has_memory_cap_and_never_self_updates():
     assert "OPENCLAW_NO_AUTO_UPDATE=1" in agent
 
 
+def test_production_agent_runtime_has_a_fast_compose_healthcheck():
+    service = yaml.safe_load(PROD_COMPOSE.read_text())["services"]["cos-agent-a"]
+    check = service["healthcheck"]
+
+    # Faster than the image's 180 s cadence, well inside the deploy's 360 s wait.
+    assert check["test"][:3] == ["CMD", "node", "-e"]
+    assert "http://127.0.0.1:18789/healthz" in check["test"][3]
+    assert "Authorization" not in check["test"][3]
+    assert check["interval"] == "15s"
+    assert check["start_period"] == "60s"
+    assert check["retries"] == 3
+
+
 def test_staging_inherits_the_production_agent_runtime_limits():
     staging = yaml.safe_load(
         (ROOT / "docker-compose.staging.yml").read_text()
@@ -160,9 +173,11 @@ def test_deploy_snapshots_agent_a_volumes_before_recreating_it():
     assert "umask 077" in body
     assert "previous_image=" in body
     assert "sha256sum" in body
-    # A failed snapshot restarts the old container and aborts the deploy.
-    failure = body[body.index("snapshot FAILED"):]
-    assert failure.index('docker start "$AGENT_A_CONTAINER"') < failure.index("return 1")
+    # Any failure while Agent A is stopped restarts it (EXIT trap), cleared
+    # only after `up -d`; behaviour is exercised in test_agent_a_deploy_snapshot.
+    assert "trap restart_agent_a_on_exit EXIT" in script
+    assert script.index("AGENT_A_STOPPED=1") < script.index('docker stop --time 30')
+    assert up < script.rindex("\nAGENT_A_STOPPED=0\n")
     # backup_local.sh prunes only dated folders (20*-*-*) under backups/, and
     # the S3/Dropbox syncs read only those, so this folder is left alone.
     assert "-name '20*-*-*'" in (ROOT / "scripts/backup_local.sh").read_text()

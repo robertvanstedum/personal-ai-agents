@@ -298,8 +298,8 @@ every start, and keeps the previous file beside it as
 
 **What to expect.** The image is about 4.9 GB (7.1: 1.7 GB), and the gateway
 idles at about 0.9 GB RSS (7.1: about 0.3 GB) under a 1200m `mem_limit`.
-The image health check still runs every 180 s, so Agent A can show
-`health: starting` for up to 3 minutes before `verify.sh` passes.
+Compose adds its own health check (`/healthz` every 15 s, 60 s start
+period); the image's own runs only every 180 s.
 
 ### 1. Snapshot both staging Agent A volumes (container stopped)
 
@@ -333,6 +333,7 @@ scripts/staging/up.sh && scripts/staging/verify.sh
 Then check the upgrade itself:
 
 ```bash
+docker inspect -f '{{.State.Health.Status}}' minimoi-cos-agent-a          # healthy (no-spend probe: about 12 s); note the time
 docker exec minimoi-cos-agent-a node openclaw.mjs --version                 # OpenClaw 2026.9.6 (eb377ac)
 docker logs minimoi-cos-agent-a 2>&1 | head -3                               # "applied the image's pinned openclaw.json" once
 docker exec minimoi-cos-agent-a node openclaw.mjs config validate --json     # valid, no warnings
@@ -371,10 +372,18 @@ existing state volume. `scripts/operations/deploy_scoped_release.sh` now
 snapshots both Agent A volumes on every release that includes `cos-agent-a`:
 after the image pull, it stops the old container, writes
 `/opt/minimoi/backups/cos-agent-a/<UTC stamp>/cos-agent-a-{state,auth}.tar.gz`
-(root-only, with a `SNAPSHOT` file holding the previous image and checksums,
-newest 5 kept), and only then recreates it. A failed snapshot restarts the
-old container and fails the deploy. Before merging, check free disk on EC2
-(`df -h /var/lib/docker /opt/minimoi`): the 9.6 image needs about 5 GB.
+(root-only, with a `SNAPSHOT` file holding the previous image, its OpenClaw
+version line and checksums), and only then recreates it. If anything fails
+while Agent A is stopped, including `up -d` itself, an exit trap starts the
+old container again and the deploy fails; the size report and pruning are
+best effort.
+
+Retention: a set taken from a different OpenClaw major.minor than the image
+being deployed (the pre-9.6 set, taken under 2026.7) gets a `KEEP` file and
+is never pruned automatically; delete it by hand once 9.6 has run cleanly
+for a few weeks. Of the sets from the same major.minor, the newest 5 are
+kept. Before merging, check free disk on EC2 (`df -h /var/lib/docker
+/opt/minimoi`): the 9.6 image needs about 5 GB.
 
 Production restore, on EC2 (the archive root is the folder name, for example
 `.openclaw/`, hence `--strip-components=1`):
