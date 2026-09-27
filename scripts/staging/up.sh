@@ -1,14 +1,36 @@
 #!/bin/bash
 # up.sh — start (or update to the pinned release) the staging stack.
 #
-# Usage: up.sh [service ...]
+# Usage: up.sh [--allow-holder PORT[,PORT...]] [service ...]
 #
 # Runs `compose up -d --no-build --remove-orphans` with the local images from
 # build.sh. The two Telegram bots (profile "bots") start only when
-# $STAGING_ROOT/state/bots.on exists and their native launchd pollers are
-# gone (one poller per token); otherwise any running bot container is stopped.
+# $STAGING_ROOT/state/bots.on exists, their native launchd pollers are gone
+# (one poller per token), and env.sh wrote their Keychain test tokens;
+# otherwise any running bot container is stopped.
+#
+# Before compose runs, every staging host port ($STAGING_HOST_PORTS) must be
+# free or held only through a staging container. Anything else (a native
+# process, another project's container, a stale forward) refuses, naming the
+# holder: Colima's forwarder skips a busy port and never retries, so the stack
+# would come up without serving it. --allow-holder accepts a named holder on
+# the listed ports only (cutover step 5: 5001, 8767, 8770 until steps 6/7c/7d).
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+ALLOW=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --allow-holder) ALLOW="$ALLOW,${2:?--allow-holder needs PORT[,PORT...]}"; shift 2 ;;
+    --allow-holder=*) ALLOW="$ALLOW,${1#--allow-holder=}"; shift ;;
+    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    --) shift; break ;;
+    -*) die "unknown option: $1" ;;
+    *) break ;;
+  esac
+done
+check_allow_list "$ALLOW"
+
 require_absolute_root
 require_release
 require_env
@@ -41,12 +63,36 @@ for name in "${names[@]}"; do
 done
 
 if bots_enabled; then
-  if launchctl list 2>/dev/null | grep -Eq 'com\.vanstedum\.(cos-bot|system-bot)$'; then
+  # Capture first, then match: `launchctl list | grep -q` under pipefail
+  # returns 141 (SIGPIPE) whenever grep matches before launchctl finishes,
+  # which made this guard pass while a native poller was loaded.
+  if ! jobs=$(launchctl list 2>/dev/null); then
+    die "bots.on is set but 'launchctl list' failed; refusing to start the bots"
+  fi
+  if grep -Eq 'com\.vanstedum\.(cos-bot|system-bot)$' <<< "$jobs"; then
     die "bots.on is set but a native test-bot poller is still loaded; boot it out first (README step 7a/7b)"
   fi
+  problems=$(bot_token_problems)
+  [[ -z "$problems" ]] || die "bots.on is set but the bot tokens are not ready: $problems"
   note "bots profile ON"
 else
-  note "bots profile off (touch $STAGING_BOTS_FLAG to enable after the native pollers are retired)"
+  note "bots profile off (touch $STAGING_BOTS_FLAG and rerun env.sh --force to enable, after the native pollers are retired)"
+fi
+
+refused=""
+for port in $STAGING_HOST_PORTS; do
+  holder=$(foreign_port_holder "$port")
+  [[ -n "$holder" ]] || continue
+  if port_allowed "$port" "$ALLOW"; then
+    note "port $port is held by $holder (allowed by --allow-holder; it will not forward until that holder is retired and the staging container restarted)"
+  else
+    refused="$refused
+  $port: $holder"
+  fi
+done
+if [[ -n "$refused" ]]; then
+  die "these staging host ports are held by something other than a staging container:$refused
+retire the holder, or pass --allow-holder PORT for a native holder the runbook retires later"
 fi
 
 if bots_enabled; then

@@ -17,6 +17,8 @@ Design and reasoning: `planning-studio/initiatives/INIT-2026-0007-interaction-vi
 |---|---|
 | State root (`MINIMOI_ROOT`, laid out like `/opt/minimoi`) | `~/minimoi-staging` (mode 700; override with `STAGING_ROOT`, absolute) |
 | Secrets + settings for compose and every container | `~/minimoi-staging/.env` (mode 600, written by `env.sh`) |
+| Where each `.env` name came from (names and sources, no values) | `~/minimoi-staging/env.sources` (mode 600, written by `env.sh`, read by `verify.sh`) |
+| Last failed build, if any | `~/minimoi-staging/state/build.failed` (shown by `status.sh`) |
 | Image tag | `~/minimoi-staging/release.env` (`MINIMOI_IMAGE_TAG`, written by `build.sh`) |
 | Release record | `~/minimoi-staging/RELEASE` (SHA, ref, time, image IDs and architectures) |
 | Seed record | `~/minimoi-staging/SEEDED_FROM.txt`, `SHA256SUMS.sources`, `SHA256SUMS.seed` |
@@ -64,17 +66,17 @@ Run them from any checkout of this repository (the root checkout is fine).
 
 | Script | Does |
 |---|---|
-| `build.sh <ref> [--reviewed-branch] [--no-fetch] [--allow-emulated]` | fetch, pin `~/.worktrees/staging-release` at `<ref>` (must be on `origin/main` unless `--reviewed-branch`), build the 9 images with deploy.yml's service map, fail if any image is not native, write `RELEASE`, `release.env`, the gateway config |
+| `build.sh <ref> [--reviewed-branch] [--no-fetch] [--allow-emulated]` | fetch, pin `~/.worktrees/staging-release` at `<ref>` (must be on `origin/main` unless `--reviewed-branch`), build the 9 images with deploy.yml's service map, fail if any image is not native, write `RELEASE`, `release.env`, the gateway config. Refuses a `STAGING_RELEASE_DIR` that is not the dedicated release worktree it created (marker in its git folder). On a failed build it puts the worktree back on the commit `RELEASE` pins and writes `state/build.failed` |
 | `seed.sh [--ref R] [--queue-ref R]` | copy the dev data into `~/minimoi-staging` (refuses a non-empty target); queue from `origin/main:data/guild/build_queue.json` |
 | `seed.sh --postgres` | copy the dev Postgres volume into `minimoi-staging-postgres-data` (only while no container uses the source), prove it by digest, create the two fresh Agent A volumes |
 | `seed.sh --docs-only` | refresh `docs/specs` and `docs/design` from the pinned release (like `sync_docs.sh`: add/update, never delete) |
 | `seed.sh --drift` | list source files that changed since the seed (a writer that was missed); exit 1 if any |
-| `env.sh [--force]` | write `~/minimoi-staging/.env` (600) from the root checkout's `.env` by name; Keychain only for a missing value |
-| `up.sh [service ...]` | `up -d --no-build --remove-orphans`; bots only with `state/bots.on` and no native poller loaded |
+| `env.sh [--force]` | write `~/minimoi-staging/.env` (600) from the root checkout's `.env` by name, Keychain only for a missing value, and `env.sources` (names and sources). The two bot tokens are **never** taken from the root `.env`: only from the Keychain test accounts `telegram/cos_test_bot_token` and `telegram/system_test_bot_token`, and only while `state/bots.on` exists |
+| `up.sh [--allow-holder PORT[,PORT]] [service ...]` | `up -d --no-build --remove-orphans`; refuses when a staging host port is held by anything but a staging container (names the holder) unless that port is listed in `--allow-holder`; bots only with `state/bots.on`, no native poller loaded and the Keychain bot tokens in `.env` |
 | `down.sh [service ...]` | whole stack down (volumes and files kept), or stop named services |
 | `status.sh` | containers, images vs `RELEASE`, health, port holders |
-| `verify.sh [--no-guild-routes]` | the acceptance checks below; non-zero on any failure |
-| `jobs.sh lesen\|curator\|intelligence\|leitura` | run one background job by hand, logged to `logs/` (Spec 159: dev jobs run only when triggered) |
+| `verify.sh [--no-guild-routes] [--allow-holder PORT[,PORT]]` | the acceptance checks below; non-zero on any failure |
+| `jobs.sh lesen\|intelligence\|leitura` | run one background job by hand, logged to `logs/` (Spec 159: dev jobs run only when triggered). `jobs.sh curator` refuses (exit 3): the curator skips every run outside `MINIMOI_ROLE=production`, and staging never runs as production |
 
 ### What `verify.sh` proves
 
@@ -83,8 +85,10 @@ Run them from any checkout of this repository (the root checkout is fine).
 2. `/health` is 200 in-network for portal, curator, german, portuguese and
    cos-scheduler; the gateway (`127.0.0.1:14000`) and Agent A
    (`127.0.0.1:18790`) answer from the host;
-3. the portal answers on `127.0.0.1:5001` and **no native process holds 5001**
-   (only Colima's forwarder);
+3. the portal answers on `127.0.0.1:5001`, and **every staging host port** is
+   listened on and held only through a staging container (no native process,
+   no other project's container); `--allow-holder` turns a listed port into a
+   warning during the cutover;
 4. the queue folder is mounted and **Save is on**: inside the portal,
    `QueueStore(GUILD_QUEUE_PATH).write_problem()` returns `None`, the queue
    reads, and the host file's checksum equals the container's
@@ -95,7 +99,10 @@ Run them from any checkout of this repository (the root checkout is fine).
    from `~/Projects`, `~/.worktrees` or `~/.codex`;
 7. `MINIMOI_ROLE=standby` in every Python container; no `AWS_*`,
    `TELEGRAM_BOT_TOKEN`, `TELEGRAM_POLLING_BOT_TOKEN` anywhere; the Guild flags
-   only on the portal (names only);
+   only on the portal; `TELEGRAM_COS_BOT_TOKEN` and `TELEGRAM_SYSTEM_BOT_TOKEN`
+   are in `.env` (and the containers) only while `state/bots.on` exists, and
+   `env.sources` records each as `keychain:telegram/<test account>` (names
+   and sources only);
 8. Postgres has the `guild` and `research` schemas.
 
 ## Cutover runbook (one sitting; every runtime step needs Robert's go-ahead)
@@ -104,7 +111,15 @@ Run them from any checkout of this repository (the root checkout is fine).
 checkout (`~/Projects/personal-ai-agents`) or in any worktree that has them.
 Expected dev.minimoi.ai outage: from step 3 to step 6, about 15 minutes.
 
-### 1. Seed the files (nothing stops)
+**Freeze window, step 1 through step 7d.** Do not use dev German, Portuguese,
+Curator, the queue Save, or the German/system **test** bot while the cutover
+runs. The seed copies the dev data in step 1, but the native writers (the old
+curator container, the native portal with its German and Portuguese servers,
+the native system-bot) keep running until steps 4, 6, 7b, 7c and 7d. Anything
+written there after the seed does not reach staging. Step 5 checks this with
+`seed.sh --drift` right before `up.sh`, and step 7 checks it again.
+
+### 1. Seed the files (nothing stops; the freeze window starts)
 
 ```bash
 scripts/staging/seed.sh                       # --ref origin/main --queue-ref origin/main by default
@@ -123,7 +138,10 @@ scripts/staging/env.sh                        # names and sources only are print
 ```
 
 Verify: `stat -f %Lp ~/minimoi-staging/.env` is `600`; the report lists no
-`MISSING`. Rollback: delete `~/minimoi-staging/.env` (it only holds copies).
+`MISSING`; both bot tokens say "not written (bots off)", and any
+`TELEGRAM*TOKEN*` in the root `.env` says "IGNORED" (the staging bot tokens
+never come from the root `.env`). Rollback: delete `~/minimoi-staging/.env`
+and `env.sources` (they only hold copies and labels).
 
 ### 3. Build and pin the release (nothing stops)
 
@@ -157,11 +175,24 @@ verified"; `SEEDED_FROM.txt` has the volume line.
 Rollback: `for c in postgres-ai-agents minimoi-curator minimoi-german minimoi-model-gateway minimoi-cos-agent-a; do docker rename "$c-pre-staging" "$c"; done; docker start $OLD`;
 rename the plist back (it need not be reloaded). The staging volume copy can stay.
 
-### 5. Start staging (bots off)
+### 5. Re-check the seed, then start staging (bots off)
 
 ```bash
-scripts/staging/up.sh && scripts/staging/status.sh
+scripts/staging/seed.sh --drift               # must print "0 changed, 0 added, 0 removed" and exit 0
+scripts/staging/up.sh --allow-holder 5001,8767,8770 && scripts/staging/status.sh
 ```
+
+If `--drift` reports anything, something wrote a source after step 1: do not
+start. Move the seeded parts aside
+(`mkdir ~/minimoi-staging/rollback/stale-seed && mv ~/minimoi-staging/{data,auth,docs,agent_logs,cos_memory.md,SEEDED_FROM.txt,SHA256SUMS.sources,SHA256SUMS.seed} ~/minimoi-staging/rollback/stale-seed/`),
+run `seed.sh` again (the Postgres volume, `.env`, `RELEASE` and `config/`
+stay), and repeat this step.
+
+`up.sh` refuses when any staging host port (5001, 5432, 8766, 8767, 8769,
+8770, 14000, 18790) is held by anything other than a staging container, and
+names the holder. At this step only the native portal (5001), German (8767)
+and Portuguese (8770) servers are expected, hence `--allow-holder`; any other
+holder (for example an old container still running) is a stop.
 
 Verify: 8 containers up under `minimoi-staging`, images match `RELEASE`,
 gateway and Agent A healthy. Ports 5001, 8767 and 8770 do not forward yet
@@ -178,7 +209,7 @@ mv com.vanstedum.minimoi-portal.plist com.vanstedum.minimoi-portal.plist.disable
 mv com.vanstedum.portal-boot-restart.plist com.vanstedum.portal-boot-restart.plist.disabled-2026-09-27
 lsof -nP -iTCP:5001 -sTCP:LISTEN              # expect nothing
 docker restart minimoi-portal
-scripts/staging/verify.sh                     # all checks; 5001 held only by the Colima forwarder
+scripts/staging/verify.sh --allow-holder 8767,8770   # 5001 held only through the staging portal
 curl -s -o /dev/null -w '%{http_code}\n' https://dev.minimoi.ai/health          # 200 through the tunnel
 ```
 
@@ -194,13 +225,15 @@ Rollback: `docker stop minimoi-portal`; rename both plists back;
 
 For each: boot out, rename the plist to `.disabled-2026-09-27`, bring up the
 staging replacement, verify, and run `seed.sh --drift` for that source.
+After 7d, `scripts/staging/verify.sh` with no `--allow-holder` must pass and
+`seed.sh --drift` must be clean: the freeze window ends there.
 Rollback for each: stop the staging service (`down.sh <service>`), rename the
 plist back, `launchctl bootstrap`, and for a port, `docker restart` the staging
 container only **after** the native one has bound (order matters).
 
 | # | Native job | Replacement | Verify |
 |---|---|---|---|
-| 7a | `com.vanstedum.cos-bot` | `touch ~/minimoi-staging/state/bots.on; scripts/staging/up.sh` | `docker logs minimoi-cos-bot`: polling, no `Conflict`/409 |
+| 7a | `com.vanstedum.cos-bot` | `touch ~/minimoi-staging/state/bots.on; scripts/staging/env.sh --force; scripts/staging/up.sh` (env.sh now writes the two test tokens from the Keychain) | `docker logs minimoi-cos-bot`: polling, no `Conflict`/409; `verify.sh` check 7 shows both tokens from `keychain:telegram/...` |
 | 7b | `com.vanstedum.system-bot` | same profile (both bots start together; boot out both natives before 7a's `up.sh`) | `/status` to the system **test** bot says `role=standby`; no 409 |
 | 7c | `com.vanstedum.german-html-server` | `docker restart minimoi-german` | `lsof :8767` is the forwarder; `/app/german` loads; `seed.sh --drift` |
 | 7d | `com.user.portuguese` | `docker restart minimoi-portuguese` | `lsof :8770` is the forwarder; `/app/portuguese` loads |
@@ -208,8 +241,9 @@ container only **after** the native one has bound (order matters).
 | 7f | `com.user.portuguese-leitura` | `scripts/staging/jobs.sh leitura` (manual) | exits 0 against the staging DB |
 | 7g | `com.vanstedum.curator-priority-feed` | none (no active priorities, no prod equivalent) | nothing writes the root `priorities.json` |
 
-Bots rollback: `rm ~/minimoi-staging/state/bots.on; scripts/staging/down.sh system-bot cos-bot`,
-then rename the native plists back and `launchctl bootstrap` them.
+Bots rollback: `rm ~/minimoi-staging/state/bots.on; scripts/staging/down.sh system-bot cos-bot; scripts/staging/env.sh --force; scripts/staging/up.sh`
+(drops the token names from `.env` and the other containers), then rename the
+native plists back and `launchctl bootstrap` them.
 
 Kept local on purpose: Records x3 (use `127.0.0.1:18790` and `:14000`),
 `com.vanstedum.cloudflared`, both Colima plists, `ai.openclaw.gateway`,
@@ -243,6 +277,13 @@ scripts/staging/up.sh && scripts/staging/verify.sh
 
 Rollback: `build.sh <previous sha>` (from `RELEASE`), then `up.sh`.
 
+If `build.sh` fails, the running containers are untouched and the release
+worktree is put back on the commit `RELEASE` still pins; `status.sh` shows
+"LAST BUILD FAILED". If that restore also failed, `status.sh` shows
+"MISMATCH" and `up.sh`, `down.sh` and `verify.sh` refuse until `build.sh`
+succeeds. Curator runs cannot be triggered on staging (`jobs.sh curator`
+refuses): the curator only runs as production.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes
@@ -252,7 +293,13 @@ Rollback: `build.sh <previous sha>` (from `RELEASE`), then `up.sh`.
 - Never `down -v`, never delete the external volumes or the
   `personal-ai-agents_*` volumes (the rollback copy).
 - The staging bots use the **test** bot tokens; start them only after their
-  native pollers are booted out (one poller per token).
+  native pollers are booted out (one poller per token). `up.sh` captures
+  `launchctl list` before matching, so the check cannot pass by accident.
+- The staging bot tokens come **only** from the Keychain test accounts, never
+  from the root `.env` (it may hold a production token, and the environment
+  variable wins over the role in `utils/telegram.py`). `env.sh` has no
+  `TELEGRAM*TOKEN*` name in its copy list, reports any in the root `.env` as
+  ignored, and records every name's source in `env.sources`.
 - Staging `.env` never holds `TELEGRAM_BOT_TOKEN`, `TELEGRAM_POLLING_BOT_TOKEN`,
   any `AWS_*` or production token; `env.sh` refuses to write them.
 

@@ -10,7 +10,11 @@
 # Steps:
 #   1. git fetch origin (skip with --no-fetch), resolve <ref> to a SHA.
 #   2. Create or reset the detached release worktree $RELEASE_DIR at the SHA.
-#      Refuses when that worktree has local changes.
+#      Refuses when that worktree has local changes, and refuses any
+#      $RELEASE_DIR that is not the dedicated release worktree build.sh made
+#      (a folder inside some checkout, a main checkout, another worktree): it
+#      must be a linked worktree of this repository, its own top level, and
+#      carry the minimoi-staging-release marker in its private git folder.
 #   3. Build the 9 images with the SAME service map as .github/workflows/
 #      deploy.yml (tests/test_staging_environment.py enforces parity), tagged
 #      minimoi-staging/<repository>:<tag>. No --platform: native arm64. Any
@@ -21,6 +25,10 @@
 #      IDs and architectures) and $STAGING_ROOT/release.env (MINIMOI_IMAGE_TAG).
 #
 # Building does not touch running containers; up.sh starts the new images.
+# If a step fails after the worktree moved, the worktree is put back on the
+# commit RELEASE still pins and $STAGING_ROOT/state/build.failed records the
+# attempt (status.sh shows it). If that restore fails too, up.sh, down.sh and
+# verify.sh refuse (lib.sh require_release) until build.sh succeeds.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -29,7 +37,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 if [[ -z "${STAGING_BUILD_REEXEC:-}" ]]; then
   COPY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/staging-build.XXXXXX")
   cp "$STAGING_SCRIPTS_DIR/lib.sh" "$STAGING_SCRIPTS_DIR/build.sh" "$COPY_DIR/"
-  STAGING_BUILD_REEXEC=1 STAGING_REPO="$STAGING_REPO" exec bash "$COPY_DIR/build.sh" "$@"
+  STAGING_BUILD_REEXEC=1 STAGING_REPO="$STAGING_REPO" exec "$BASH" "$COPY_DIR/build.sh" "$@"
 fi
 
 REF=""
@@ -41,7 +49,7 @@ while [[ $# -gt 0 ]]; do
     --reviewed-branch) REVIEWED=1 ;;
     --no-fetch) FETCH=0 ;;
     --allow-emulated) ALLOW_EMULATED=1 ;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *) [[ -z "$REF" ]] || die "only one <ref> may be given"; REF="$1" ;;
   esac
@@ -64,16 +72,64 @@ fi
 SHA="${FULL_SHA:0:7}"
 
 # ── the release worktree ─────────────────────────────────────────────────────
+physical() { ( cd "$1" 2>/dev/null && pwd -P ); }
+git_common_dir() { ( cd "$1" && cd "$(git rev-parse --git-common-dir)" && pwd -P ); }
+
+REPO_COMMON=$(git_common_dir "$STAGING_REPO") || die "cannot read the git folder of $STAGING_REPO"
 if [[ -e "$RELEASE_DIR" ]]; then
-  git -C "$RELEASE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+  [[ -d "$RELEASE_DIR" ]] || die "$RELEASE_DIR exists but is not a folder; move it aside"
+  top=$(git -C "$RELEASE_DIR" rev-parse --show-toplevel 2>/dev/null) \
     || die "$RELEASE_DIR exists but is not a git worktree; move it aside"
+  [[ "$(physical "$top")" == "$(physical "$RELEASE_DIR")" ]] \
+    || die "$RELEASE_DIR is inside the checkout $top, not a dedicated release worktree; refusing (check STAGING_RELEASE_DIR)"
+  gitdir=$(cd "$RELEASE_DIR" && cd "$(git rev-parse --git-dir)" && pwd -P)
+  common=$(git_common_dir "$RELEASE_DIR")
+  [[ "$gitdir" != "$common" ]] || die "$RELEASE_DIR is a main checkout, not the release worktree; refusing (check STAGING_RELEASE_DIR)"
+  [[ "$common" == "$REPO_COMMON" ]] || die "$RELEASE_DIR is a worktree of another repository; refusing"
+  [[ -f "$gitdir/$STAGING_RELEASE_MARKER" ]] || die "$RELEASE_DIR is a git worktree but not the staging release worktree (no marker $gitdir/$STAGING_RELEASE_MARKER); refusing to reset it. If build.sh created it before the marker existed, run: touch '$gitdir/$STAGING_RELEASE_MARKER'"
   if [[ -n "$(git -C "$RELEASE_DIR" status --porcelain)" ]]; then
     die "release worktree $RELEASE_DIR has local changes; refusing to reset it"
   fi
+else
+  # Never create it inside an existing checkout or worktree.
+  probe=$(dirname "$RELEASE_DIR")
+  while [[ ! -e "$probe" ]]; do probe=$(dirname "$probe"); done
+  if outer=$(git -C "$probe" rev-parse --show-toplevel 2>/dev/null); then
+    die "$RELEASE_DIR would be created inside the checkout $outer; refusing (check STAGING_RELEASE_DIR)"
+  fi
+fi
+
+# From here on the worktree may move: on failure, put it back on the pinned release.
+PREV_SHA=""
+[[ -f "$STAGING_RELEASE_FILE" ]] && PREV_SHA=$(sed -n 's/^sha=//p' "$STAGING_RELEASE_FILE" | tail -n 1)
+BUILD_DONE=0
+on_exit() {
+  local status=$?
+  [[ "$BUILD_DONE" == 1 ]] && return 0
+  mkdir -p "$STAGING_ROOT/state"
+  {
+    echo "attempted_sha=$FULL_SHA"
+    echo "ref=$REF"
+    echo "failed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "exit=$status"
+  } > "$STAGING_BUILD_FAILED"
+  if [[ -n "$PREV_SHA" && -e "$RELEASE_DIR" ]] \
+     && git -C "$RELEASE_DIR" checkout --quiet --force --detach "$PREV_SHA" 2>/dev/null; then
+    echo "restored_to=$PREV_SHA" >> "$STAGING_BUILD_FAILED"
+    echo "staging: build of ${FULL_SHA:0:7} failed; release worktree restored to the pinned release ${PREV_SHA:0:7}" >&2
+  else
+    echo "restored_to=none" >> "$STAGING_BUILD_FAILED"
+    echo "staging: build of ${FULL_SHA:0:7} failed and the release worktree does not match RELEASE; up.sh, down.sh and verify.sh refuse until build.sh succeeds" >&2
+  fi
+}
+trap on_exit EXIT
+
+if [[ -e "$RELEASE_DIR" ]]; then
   git -C "$RELEASE_DIR" checkout --quiet --detach "$FULL_SHA"
 else
   mkdir -p "$(dirname "$RELEASE_DIR")"
   git -C "$STAGING_REPO" worktree add --detach "$RELEASE_DIR" "$FULL_SHA"
+  touch "$(cd "$RELEASE_DIR" && cd "$(git rev-parse --git-dir)" && pwd -P)/$STAGING_RELEASE_MARKER"
 fi
 [[ "$(git -C "$RELEASE_DIR" rev-parse HEAD)" == "$FULL_SHA" ]] || die "release worktree is not at $FULL_SHA"
 [[ -f "$RELEASE_DIR/docker-compose.staging.yml" ]] \
@@ -133,4 +189,6 @@ chmod 644 "$STAGING_ROOT/config/litellm.staging.yaml"
   printf 'image %s\n' "${IMAGE_LINES[@]}"
 } > "$STAGING_RELEASE_FILE"
 printf 'MINIMOI_IMAGE_TAG=%s\n' "$SHA" > "$STAGING_RELEASE_ENV"
+rm -f "$STAGING_BUILD_FAILED"
+BUILD_DONE=1
 note "release $SHA pinned; images built. Next: scripts/staging/up.sh (see README.md)"

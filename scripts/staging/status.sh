@@ -1,13 +1,25 @@
 #!/bin/bash
-# status.sh — containers, image tags against RELEASE, health, port holders.
+# status.sh — release state, containers, image tags against RELEASE, health,
+# port holders. Unlike up/down/verify it still runs when the release worktree
+# does not match RELEASE, and says so.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_absolute_root
-require_release
+require_release_files
 TAG=$(release_tag)
 
 echo "== release"
 sed -n -E 's/^(sha|tag|ref|built_at)=/  \1=/p' "$STAGING_RELEASE_FILE"
+mismatch=$(release_mismatch)
+if [[ -n "$mismatch" ]]; then
+  echo "  MISMATCH: $mismatch"
+else
+  echo "  release worktree: at the pinned sha"
+fi
+if [[ -f "$STAGING_BUILD_FAILED" ]]; then
+  echo "  LAST BUILD FAILED:"
+  sed 's/^/    /' "$STAGING_BUILD_FAILED"
+fi
 echo "  bots profile: $(bots_enabled && echo on || echo off)"
 
 echo "== containers (project $STAGING_PROJECT)"
@@ -28,7 +40,8 @@ for name in "${STAGING_CORE_CONTAINERS[@]}" "${STAGING_BOT_CONTAINERS[@]}"; do
 done
 
 echo "== host port holders (127.0.0.1)"
-for port in 5001 5432 8766 8767 8769 8770 14000 18790; do
-  holders=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {print $1"("$2")"}' | sort -u | tr '\n' ' ' || true)
-  printf '  %-6s %s\n' "$port" "${holders:-none}"
+for port in $STAGING_HOST_PORTS; do
+  holders=$(port_listeners "$port" | tr '\n' ' ')
+  foreign=$(foreign_port_holder "$port")
+  printf '  %-6s %s%s\n' "$port" "${holders:-none}" "${foreign:+  (NOT staging: $foreign)}"
 done

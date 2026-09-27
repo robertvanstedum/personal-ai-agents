@@ -3,9 +3,12 @@
 # production, and safe. Exits non-zero on any failed check. Prints names and
 # status codes only, never a secret value.
 #
-# Usage: verify.sh [--no-guild-routes]
+# Usage: verify.sh [--no-guild-routes] [--allow-holder PORT[,PORT...]]
 #   --no-guild-routes  skip the /guild-next and /guild-proto checks, for a
 #                      release that predates B1 deliverable (b)
+#   --allow-holder     warn instead of fail when a listed host port is still
+#                      held by a native process the runbook retires later
+#                      (cutover step 6: 8767,8770)
 #
 # Checks:
 #   1. every staging container runs the release image, under this project,
@@ -13,8 +16,9 @@
 #   2. /health answers 200 inside the network for portal, curator, german,
 #      portuguese and cos-scheduler; the gateway (127.0.0.1:14000) and
 #      Agent A (127.0.0.1:18790) answer from the host
-#   3. the portal answers on 127.0.0.1:5001, and no native (non-Docker)
-#      process holds port 5001
+#   3. the portal answers on 127.0.0.1:5001, and every staging host port is
+#      listened on and held only through a staging container (no native
+#      process, no other project's container)
 #   4. the queue folder is mounted and Save is on: the portal's own
 #      queue_store.write_problem() returns None, the queue reads, and the
 #      host file's checksum equals the container's
@@ -23,7 +27,10 @@
 #   6. every bind mount comes from $STAGING_ROOT (or the Docker socket),
 #      never from a git checkout
 #   7. MINIMOI_ROLE=standby everywhere it is read; no AWS_*, production
-#      Telegram token or Guild flag outside the portal (names only)
+#      Telegram token or Guild flag outside the portal (names only); the
+#      staging bot token names are in .env (and the containers) only while
+#      bots.on is set, and env.sources records them as coming from their
+#      Keychain test accounts, never the root .env
 #   8. Postgres has the guild and research schemas
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -32,12 +39,17 @@ require_release
 S="$STAGING_ROOT"
 TAG=$(release_tag)
 GUILD_ROUTES=1
-for arg in "$@"; do
-  case "$arg" in
+ALLOW=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --no-guild-routes) GUILD_ROUTES=0 ;;
-    *) die "unknown argument: $arg" ;;
+    --allow-holder) ALLOW="$ALLOW,${2:?--allow-holder needs PORT[,PORT...]}"; shift ;;
+    --allow-holder=*) ALLOW="$ALLOW,${1#--allow-holder=}" ;;
+    *) die "unknown argument: $1" ;;
   esac
+  shift
 done
+check_allow_list "$ALLOW"
 
 FAILS=0
 pass() { echo "  ok   $*"; }
@@ -92,7 +104,7 @@ for x in ('minimoi-portal:5001','minimoi-curator:8766','minimoi-german:8767','mi
     except Exception as e:
         print(x, 'error', type(e).__name__)
 " 2>&1) || true
-[[ "$(echo "$health" | grep -c ' 200$')" -eq 5 ]] || fail "in-network health probe did not report 5 x 200"
+[[ "$(grep -c ' 200$' <<< "$health" || true)" -eq 5 ]] || fail "in-network health probe did not report 5 x 200"
 while read -r target code _rest; do
   [[ -n "$target" ]] || continue
   [[ "$code" == 200 ]] && pass "$target/health 200" || fail "$target/health $code"
@@ -102,20 +114,22 @@ code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:14000/health
 code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:18790/ || true)
 [[ "$code" != 000 ]] && pass "Agent A answers on 127.0.0.1:18790 (HTTP $code)" || fail "Agent A does not answer on 127.0.0.1:18790"
 
-echo "== 3. portal on 5001"
+echo "== 3. portal on 5001, host port holders"
 code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:5001/health || true)
 [[ "$code" == 200 ]] && pass "127.0.0.1:5001/health 200" || fail "127.0.0.1:5001/health $code"
-holders=$(lsof -nP -iTCP:5001 -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {print $1"("$2")"}' | sort -u || true)
-if [[ -z "$holders" ]]; then
-  fail "nothing listens on 5001"
-else
-  native=$(echo "$holders" | grep -Ev '^(ssh|limactl|colima|com\.docke|vpnkit|docker)' || true)
-  if [[ -n "$native" ]]; then
-    fail "a native process holds 5001: $(echo "$native" | tr '\n' ' ')(retire it: README step 4)"
+for port in $STAGING_HOST_PORTS; do
+  holders=$(port_listeners "$port" | tr '\n' ' ')
+  foreign=$(foreign_port_holder "$port")
+  if [[ -z "$holders" ]]; then
+    fail "nothing listens on $port (restart its staging container once the port is free)"
+  elif [[ -z "$foreign" ]]; then
+    pass "$port held only through a staging container: $holders"
+  elif port_allowed "$port" "$ALLOW"; then
+    warn "$port held by $foreign (allowed by --allow-holder; retire it, then restart the staging container)"
   else
-    pass "5001 held only by the Colima forwarder: $(echo "$holders" | tr '\n' ' ')"
+    fail "$port held by $foreign (retire it, then restart the staging container)"
   fi
-fi
+done
 
 echo "== 4. Build Queue folder and Save"
 queue=$(docker exec minimoi-portal python -c "
@@ -130,10 +144,11 @@ print('save', 'on' if problem is None else 'off: ' + problem)
 print('items', len(store.read_items()))
 " 2>&1) || true
 echo "$queue" | sed 's/^/       /'
-echo "$queue" | grep -qx 'path /app/runtime/guild/build_queue.json' && pass "GUILD_QUEUE_PATH points into /app/runtime/guild" || fail "GUILD_QUEUE_PATH is wrong"
-echo "$queue" | grep -qx 'mount True' && pass "/app/runtime/guild is a mount" || fail "/app/runtime/guild is not a mount"
-echo "$queue" | grep -qx 'save on' && pass "write_problem() is None: Save is on" || fail "Save is off"
-echo "$queue" | grep -Eq '^items [1-9]' && pass "queue reads" || fail "queue does not read"
+# Here-strings, not `echo | grep -q`: no pipeline, so no SIGPIPE under pipefail.
+grep -qx 'path /app/runtime/guild/build_queue.json' <<< "$queue" && pass "GUILD_QUEUE_PATH points into /app/runtime/guild" || fail "GUILD_QUEUE_PATH is wrong"
+grep -qx 'mount True' <<< "$queue" && pass "/app/runtime/guild is a mount" || fail "/app/runtime/guild is not a mount"
+grep -qx 'save on' <<< "$queue" && pass "write_problem() is None: Save is on" || fail "Save is off"
+grep -Eq '^items [1-9]' <<< "$queue" && pass "queue reads" || fail "queue does not read"
 if "$RELEASE_DIR/scripts/operations/check_queue_mount.sh" "$S/data/guild/build_queue.json" minimoi-portal \
      /app/runtime/guild/build_queue.json >/dev/null 2>&1; then
   pass "host queue file == portal's queue file (checksum)"
@@ -186,6 +201,10 @@ for name in "${CONTAINERS[@]}"; do
   names=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$name" | cut -d= -f1)
   bad=$(echo "$names" | grep -E '^(AWS_.*|TELEGRAM_BOT_TOKEN|TELEGRAM_POLLING_BOT_TOKEN|.*_PROD)$' | tr '\n' ' ' || true)
   [[ -z "$bad" ]] || fail "$name carries forbidden names: $bad"
+  if ! bots_enabled; then
+    tokens=$(echo "$names" | grep -E '^(TELEGRAM_COS_BOT_TOKEN|TELEGRAM_SYSTEM_BOT_TOKEN)$' | tr '\n' ' ' || true)
+    [[ -z "$tokens" ]] || fail "$name carries bot token names while the bots are off: $tokens(recreate it: up.sh)"
+  fi
   flags=$(echo "$names" | grep -E '^MINIMOI_GUILD_(NEXT|PROTO)$' | tr '\n' ' ' || true)
   if [[ "$name" == minimoi-portal ]]; then
     [[ "$flags" == *MINIMOI_GUILD_NEXT* && "$flags" == *MINIMOI_GUILD_PROTO* ]] \
@@ -194,6 +213,17 @@ for name in "${CONTAINERS[@]}"; do
     [[ -z "$flags" ]] || fail "$name carries Guild flags: $flags"
   fi
 done
+
+problems=$(bot_token_problems)
+if [[ -z "$problems" ]]; then
+  if bots_enabled; then
+    pass "bot token names in .env, recorded as from their Keychain test accounts (env.sources)"
+  else
+    pass "no bot token names in .env (bots off)"
+  fi
+else
+  while read -r line; do fail "$line"; done <<< "$problems"
+fi
 
 echo "== 8. database"
 schemas=$(docker exec postgres-ai-agents psql -U postgres -d personal_agents -tAc \
