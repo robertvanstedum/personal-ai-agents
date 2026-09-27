@@ -1929,10 +1929,11 @@ def update_position_status(opp_id):
                 if close_reason == "accepted":
                     try:
                         import requests as _req
-                        _req.post("http://localhost:8769/event",
+                        _req.post(f"{_cfg.COS_BACKEND.rstrip('/')}/event",
                                   json={"type": "search_complete"}, timeout=2)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).warning("CoS event post failed: %s", e)
             else:
                 _guild_db_execute(
                     "UPDATE pipeline.items SET status=%s WHERE id=%s",
