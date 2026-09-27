@@ -244,9 +244,11 @@
   </div>
 </nav>
 
+{% include 'guild/_queue_notices.html' %}
+
 <div class="page-header">
   <h1 class="page-title">Build Log</h1>
-  <span class="page-meta">{{ items | length }} spec{{ 's' if items | length != 1 else '' }}</span>
+  <span class="page-meta">{% if queue_state and queue_state.unreadable %}queue unknown{% else %}{{ items | length }} spec{{ 's' if items | length != 1 else '' }}{% endif %}</span>
   <div class="header-actions">
     <button class="new-spec-toggle" onclick="toggleNewSpec()">+ New spec</button>
     <a href="https://github.com/robertvanstedum/personal-ai-agents/issues" target="_blank" rel="noopener" class="gh-link">View GitHub Issues →</a>
@@ -375,6 +377,9 @@
       <tr class="edit-row" id="edit-row-{{ item.id }}">
         <td colspan="4">
           <form method="POST" action="/guild/build/items/{{ item.id }}/edit">
+            <input type="hidden" name="expect_item_digest" value="{{ queue_item_digest(item) }}">
+            <input type="hidden" name="csrf_token" value="{{ queue_csrf_token() }}">
+            <input type="hidden" name="idempotency_key" value="{{ queue_idempotency_key() }}">
             <div class="edit-inner">
               <div>
                 <label>Title</label>

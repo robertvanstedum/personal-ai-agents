@@ -177,3 +177,7 @@ scripts/.curator_dev_cron_on
 
 # Private local Career workspace — never publish personal/client material
 /private/career/
+
+# Guild Build Queue store runtime files (journal and sidecar lock)
+data/guild/queue_journal.jsonl
+data/guild/.build_queue.json.lock

@@ -1,0 +1,48 @@
+{# Build Queue Save result and store state (B1 deliverable (a)). Every
+   sentence is fixed text chosen by a result code; nothing the user typed is
+   echoed. #}
+<style>
+  .queue-notices { max-width: 1200px; margin: 10px auto 0; padding: 0 16px; }
+  .queue-banner {
+    font-family: 'DM Mono', monospace; font-size: 12px; line-height: 1.5;
+    padding: 8px 12px; margin-bottom: 6px; border-radius: 3px;
+    border: 1px solid rgba(221,214,200,0.9); background: rgba(255,255,255,0.6);
+  }
+  .queue-banner-ok   { border-color: #6d8b5a; color: #3f5a2f; }
+  .queue-banner-warn { border-color: #b8860b; color: #6b4e08; }
+  .queue-banner-bad  { border-color: #8b2020; color: #8b2020; }
+  .queue-banner form { display: inline; margin-left: 8px; }
+  .queue-banner button {
+    font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer;
+    background: none; border: 1px solid currentColor; color: inherit; padding: 1px 6px;
+  }
+</style>
+<div class="queue-notices">
+  {% if save_banner %}
+  <div class="queue-banner queue-banner-{{ save_banner.kind }}" role="status" id="queue-save-result">{{ save_banner.text }}</div>
+  {% endif %}
+  {% if queue_state and queue_state.unreadable %}
+  <div class="queue-banner queue-banner-bad" role="alert" id="queue-unreadable">
+    The queue can't be read: {{ queue_state.unreadable }}. Treat the queue as unknown, not empty; nothing below is its real state.
+  </div>
+  {% endif %}
+  {% if queue_state and queue_state.checks_unreadable %}
+  <div class="queue-banner queue-banner-bad" id="queue-checks-unreadable">
+    The Save journal can't be read, so unverified Saves may not be listed here.
+  </div>
+  {% endif %}
+  {% if queue_state and not queue_state.writable %}
+  <div class="queue-banner queue-banner-warn" id="queue-save-off">
+    Save is off: {{ queue_state.reason }}.{% if queue_state.source != 'live' %} Showing the repository copy, read-only.{% endif %}
+  </div>
+  {% endif %}
+  {% if queue_state %}{% for check in queue_state.checks %}
+  <div class="queue-banner queue-banner-bad">
+    Save not verified — check #{{ check.item_id }}.
+    <form method="POST" action="/guild/build/checks/{{ check.op_id }}/checked">
+      <input type="hidden" name="csrf_token" value="{{ queue_csrf_token() }}">
+      <button type="submit">Mark checked</button>
+    </form>
+  </div>
+  {% endfor %}{% endif %}
+</div>
