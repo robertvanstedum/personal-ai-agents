@@ -98,3 +98,71 @@ def test_payment_details_never_reach_a_row_a_log_an_answer_or_a_page(floored, ca
         for bit in ("4242 4242", "billing@example.com", "021000021", "GB82 WEST"):
             assert bit not in hay, (where, bit)
     assert REMOVED in stored
+
+
+# ── Re-check at 3d75415e, R1: full card numbers must never survive ───────────
+import re as _re  # noqa: E402
+
+LEAKS = [
+    "Visa 4242 4242 4242 4242",
+    "Mastercard 5555 5555 5555 4444",
+    "visa 4242-4242-4242-4242",
+    "4242 4242 4242 4242 Visa",
+    "Amex 3782 822463 10005",
+    "4242 4242 4242 4242 123",
+    "card 4242 4242 4242 4242 12/27",
+    "Visa 4242 4242 4242",
+    "4242 4242 4242 Visa",
+    "paid 4242 4242 4242 4242 and 5555 5555 5555 4444 ok",
+    "order -4242424242424242 today",
+]
+
+
+def _old_scrub_c9ea596c(text: str) -> str:
+    """The scrub as it was at c9ea596c, frozen here as the baseline: whatever it
+    removed from a card number must stay removed."""
+    brand = r"(?:visa|master\s?card|amex|american\s+express|discover|jcb|diners(?:\s+club)?|union\s?pay)"
+    sep = r"[\s:#.\-–—]*+"
+    mask = r"(?:[•*xX]{2,}+" + sep + r")*+"
+    patterns = [
+        _re.compile(r"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}\b"),
+        _re.compile(r"[A-Za-z0-9._%+\-]++@[A-Za-z0-9\-]++(?:\.[A-Za-z0-9\-]++)++"),
+        _re.compile(r"\b(?:routing|aba|rtn)(?:\s*+(?:number|no\.?|#))?\s*+[:#]?\s*+\d{9}\b", _re.IGNORECASE),
+        _re.compile(rf"\b{brand}\b{sep}(?:ending\s++(?:in|with)\s*+)?{mask}\d(?:[\s\-]?+\d)*+", _re.IGNORECASE),
+        _re.compile(rf"\b\d[\d\s\-]*+[:#.–—]*+\s*+{brand}\b", _re.IGNORECASE),
+        _re.compile(r"\bending\s++(?:in|with)\s*+[:#]?\s*+\d{2,4}\b", _re.IGNORECASE),
+        _re.compile(r"\blast\s++(?:four|4)(?:\s++digits)?\s*+[:#]?\s*+\d{2,4}\b", _re.IGNORECASE),
+        _re.compile(r"[•*xX]{2,}+(?:[\s\-]++[•*xX]++)*+[\s\-]*+\d{2,4}\b"),
+        _re.compile(r"(?<!\d)(?:\d[ \-]?){12,18}\d(?!\d)"),
+    ]
+    for pattern in patterns:
+        text = pattern.sub(REMOVED, text)
+    return text
+
+
+def _card_digits_left(text: str) -> list[str]:
+    return _re.findall(r"\d{4,}", text)
+
+
+@pytest.mark.parametrize("text", LEAKS)
+def test_no_group_of_a_card_number_survives(text):
+    out = scrub(text)
+    assert _card_digits_left(out) == [], (text, out)
+    assert REMOVED in out
+
+
+@pytest.mark.parametrize("text", LEAKS)
+def test_nothing_the_old_scrub_removed_comes_back(text):
+    old, new = _old_scrub_c9ea596c(text), scrub(text)
+    assert _card_digits_left(old) == []                    # the baseline removed every group
+    assert set(_card_digits_left(new)) <= set(_card_digits_left(old)), (text, old, new)
+
+
+def test_a_card_is_found_inside_a_longer_run_of_groups():
+    assert scrub("ref 12 4242 4242 4242 4242 99") == f"ref 12 {REMOVED} 99"
+    assert scrub("Amex 3782 822463 10005 exp 09/28") == f"{REMOVED} exp 09/28"
+
+
+def test_ordinary_numbers_next_to_each_other_stay():
+    for text in ("order 1234 5678 then 99", "build 2026 0927 steps", "ts 1727450000123 and 1727450000999"):
+        assert scrub(text) == text

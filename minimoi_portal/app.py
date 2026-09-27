@@ -78,6 +78,7 @@ def _init_sentry():
             environment=os.environ.get('FLASK_ENV', 'production'),
             before_send=sentry_before_send,
             before_send_transaction=sentry_before_send,
+            include_local_variables=False,   # frame locals could hold a note's raw text
         )
     except ImportError:
         pass

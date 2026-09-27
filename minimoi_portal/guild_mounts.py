@@ -225,12 +225,20 @@ _GUILD_API_PATH = re.compile(r"/guild[\w-]*/api/")
 def sentry_before_send(event, hint=None):
     """Sentry hook (review B1c #5): an error event from a Shop floor API call
     never carries the request body, which can hold a note or post-it before
-    its payment details are scrubbed, nor its query string, cookies or CSRF
-    header. Every other portal event passes unchanged."""
+    its payment details are scrubbed, nor stack-frame local variables, its
+    query string, cookies or CSRF header. Every other portal event passes unchanged."""
     try:
         request = event.get("request") or {}
         url = str(request.get("url") or "")
         if _GUILD_API_PATH.search(urlsplit(url).path or url):
+            # Stack-frame locals could hold the body or a note's text (the
+            # portal also turns them off at init; this holds if that changes).
+            for exc in ((event.get("exception") or {}).get("values") or []):
+                for frame in ((exc.get("stacktrace") or {}).get("frames") or []):
+                    frame.pop("vars", None)
+            for thread in ((event.get("threads") or {}).get("values") or []):
+                for frame in ((thread.get("stacktrace") or {}).get("frames") or []):
+                    frame.pop("vars", None)
             for key in ("data", "query_string", "cookies"):
                 request.pop(key, None)
             headers = request.get("headers")

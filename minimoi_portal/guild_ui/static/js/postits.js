@@ -151,7 +151,9 @@ export async function reloadPostits() {
     bin_total: board.body.bin_total, text: rows.length ? `${rows.length} on the board` : 'No post-its on the board' }
     : { state: 'unavailable', text: (board.body && board.body.message) || 'Post-its unavailable — add and remove are paused' });
   renderBoard(board);
-  if ($('[data-postits][data-mode="bin"]')) renderBin(await apiGet('/postits/bin'));
+  const bin = $('[data-postits][data-mode="bin"]') ? await apiGet('/postits/bin') : null;
+  if (bin) renderBin(bin);
+  if (!unread(board) && !(bin && unread(bin))) clearListsStale();
 }
 
 async function onAdd(form) {

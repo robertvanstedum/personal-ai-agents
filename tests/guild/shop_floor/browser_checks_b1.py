@@ -584,7 +584,7 @@ def test_an_unreadable_record_mode_makes_no_automatic_write(browser, server, flo
     sent = _requests(page, "/api/v1/continue")
     page.evaluate("sessionStorage.setItem('guild.guild-next.record_mode', 'garbled')")
     go(page, f"{server['url']}/guild-next/guild/build/items/12")
-    expect(page.locator("[data-mc-thread]")).to_contain_text("could not read whether you are on the record")
+    expect(page.locator("[data-mc-thread]")).to_contain_text("does not know whether you are on the record")
     page.wait_for_timeout(500)
     assert sent == [] and floor.count("floor_continue") == 0
     ctx.close()
@@ -617,4 +617,34 @@ def test_the_board_and_bin_follow_a_change_made_elsewhere(browser, server, floor
     expect(board).to_have_count(2)
     expect(page.locator("[data-list-fresh]")).to_have_count(0)
     assert kept["id"] != moved["id"]
+    ctx.close()
+
+
+def test_a_tab_opened_from_an_off_record_tab_writes_nothing_by_itself(browser, server, floor):
+    """Re-check residual: a fresh tab (e.g. a middle-click) starts with empty
+    sessionStorage; while another tab is off the record it must not assume
+    "on the record" and write Continue."""
+    ctx, first = _context(browser, server)
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first.click("[data-mc-record]")                                   # tab 1 goes off the record
+    second = ctx.new_page()                                           # same browser, fresh tab
+    sent = _requests(second, "/api/v1/continue")
+    go(second, f"{server['url']}/guild-next/guild/build/items/12")
+    expect(second.locator("[data-mc-thread]")).to_contain_text("does not know whether you are on the record")
+    second.wait_for_timeout(500)
+    assert sent == [] and floor.count("floor_continue") == 0
+    second.click("[data-mc-pill]")
+    confirm = second.locator("[data-mc-record-confirm]")
+    expect(confirm).to_be_visible()
+    confirm.click()                                                   # Robert chooses: on the record here
+    expect(confirm).to_be_hidden()
+    go(second, f"{server['url']}/guild-next/guild/build/items/7")
+    second.wait_for_function("() => document.querySelector('[data-continue-link]')?.textContent === '#7 Queue lock hardening'")
+    assert floor.rows("floor_continue")[0]["ref"] == "7"
+
+    first.click("[data-mc-record]")                                   # tab 1 back on the record
+    third = ctx.new_page()                                            # now a fresh tab is simply on the record
+    go(third, f"{server['url']}/guild-next/guild/build/items/12")
+    third.wait_for_function("() => document.querySelector('[data-continue-link]')?.textContent === '#12 Floor API'")
+    expect(third.locator("[data-mc-record-confirm]")).to_be_hidden()
     ctx.close()

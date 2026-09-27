@@ -17,17 +17,65 @@ export function onChange(fn) { listeners.add(fn); }
 export function changed() { for (const fn of listeners) fn(); }
 
 const RECORD_KEY = () => `${namespace}.record_mode`;
+const TAB_KEY = () => `${namespace}.tab_id`;
+// Which tabs of this browser are off the record right now: tab ids and times
+// only, no content. A tab opened fresh (a middle-click from an off-the-record
+// tab starts with empty sessionStorage) reads this to know it cannot assume
+// "on the record". Entries older than 12 hours are ignored.
+const OFF_TABS_KEY = () => `${namespace}.off_tabs`;
+const OFF_TABS_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+function tabId() {
+  try {
+    let id = window.sessionStorage.getItem(TAB_KEY());
+    if (!id) {
+      id = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+      window.sessionStorage.setItem(TAB_KEY(), id);
+    }
+    return id;
+  } catch (e) { return null; }
+}
+
+function offTabs() {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(OFF_TABS_KEY()) || '{}');
+    if (!isObj(v)) return {};
+    const now = Date.now();
+    return Object.fromEntries(Object.entries(v).filter(([, at]) =>
+      typeof at === 'string' && now - Date.parse(at) < OFF_TABS_MAX_AGE_MS));
+  } catch (e) { return {}; }
+}
+
+function markOffTab(off) {
+  const id = tabId();
+  if (!id) return;
+  try {
+    const tabs = offTabs();
+    if (off) tabs[id] = new Date().toISOString(); else delete tabs[id];
+    window.localStorage.setItem(OFF_TABS_KEY(), JSON.stringify(tabs));
+  } catch (e) { /* other tabs then cannot see this one */ }
+}
 
 function saveRecordMode() {
   try {
     window.sessionStorage.setItem(RECORD_KEY(), JSON.stringify({ off: live.off, since: live.offSince }));
-  } catch (e) { /* the mode then lasts only for this page */ }
+    return true;
+  } catch (e) { return false; }   // the mode then lasts only for this page
 }
 
 function loadRecordMode() {
   let raw;
   try { raw = window.sessionStorage.getItem(RECORD_KEY()); } catch (e) { live.known = false; return; }
-  if (raw == null) { live.off = false; live.offSince = null; live.known = true; saveRecordMode(); return; }
+  if (raw == null) {
+    // A fresh tab. If another tab of this browser is off the record, this one
+    // may have been opened from it: unknown until Robert chooses.
+    live.off = false;
+    live.offSince = null;
+    const others = Object.keys(offTabs()).filter((id) => id !== tabId());
+    if (others.length) { live.known = false; return; }
+    live.known = saveRecordMode();
+    return;
+  }
   try {
     const v = JSON.parse(raw);
     if (v && typeof v.off === 'boolean') {
@@ -45,6 +93,7 @@ export function setOff(on) {
   live.offSince = on ? new Date().toISOString() : null;
   live.known = true;
   saveRecordMode();
+  markOffTab(live.off);
   changed();
 }
 

@@ -128,6 +128,8 @@ function renderRecord() {
   const btn = $('[data-mc-record]');
   btn.setAttribute('aria-pressed', String(live.off));
   btn.textContent = live.off ? 'Back on the record' : 'Off the record';
+  const confirm = $('[data-mc-record-confirm]');
+  if (confirm) confirm.hidden = live.known;
   const ctx = $('[data-mc-context]');
   const area = document.body.dataset.area || 'Guild';
   const item = document.body.dataset.contextItem || '';
@@ -154,6 +156,13 @@ export function initConversation(p) {
     sendNote(input, send);
   });
   input.addEventListener('input', () => { noteKey = null; });
+  const confirm = $('[data-mc-record-confirm]');
+  if (confirm) {
+    confirm.addEventListener('click', () => {
+      setOff(false);
+      addPlatform('Guild platform', 'On the record in this tab');
+    });
+  }
   $('[data-mc-record]').addEventListener('click', () => {
     const wasOff = live.off;
     setOff(!live.off);
@@ -170,7 +179,7 @@ export function initConversation(p) {
   });
   onChange(renderRecord);
   if (!live.known) {
-    addPlatform('Guild platform', 'This tab could not read whether you are on the record. Continue is not updated automatically until you choose; Send and post-its work as shown.');
+    addPlatform('Guild platform', 'This tab does not know whether you are on the record (it may have been opened from a tab that is off the record, or the setting could not be read). Continue is not updated automatically until you choose: Confirm on the record, or go Off the record.');
   }
   setBriefing(page.floor && page.floor.briefing);
   applyMode();

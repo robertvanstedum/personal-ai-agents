@@ -27,6 +27,17 @@ def test_guild_api_bodies_are_dropped():
         assert request["headers"] == {"User-Agent": "ua"}
 
 
+def test_guild_api_frame_locals_are_dropped():
+    event = _event("https://dev.minimoi.ai/guild-next/api/v1/postits")
+    event["exception"] = {"values": [{"type": "RuntimeError", "stacktrace": {"frames": [
+        {"function": "postit_add", "vars": {"body": {"text": "Visa 4242 4242 4242 4242"}, "value": "raw"}},
+        {"function": "scrub", "vars": {"text": "raw"}}]}}]}
+    event["threads"] = {"values": [{"stacktrace": {"frames": [{"function": "x", "vars": {"text": "raw"}}]}}]}
+    out = sentry_before_send(event, None)
+    frames = out["exception"]["values"][0]["stacktrace"]["frames"] + out["threads"]["values"][0]["stacktrace"]["frames"]
+    assert all("vars" not in f for f in frames) and "4242" not in repr(out)
+
+
 def test_other_portal_events_pass_unchanged():
     for url in ("https://dev.minimoi.ai/guild/build/items/3/status", "https://minimoi.ai/api/curator/x"):
         assert sentry_before_send(_event(url), None) == _event(url)
@@ -48,4 +59,5 @@ def test_the_portal_installs_the_hook(load_portal, monkeypatch):
     assert calls, "the portal did not initialise Sentry with a DSN present"
     assert calls[-1]["before_send"] is sentry_before_send
     assert calls[-1]["before_send_transaction"] is sentry_before_send
+    assert calls[-1]["include_local_variables"] is False
     assert portal.module.GUILD_MOUNTS["guild_next"] == "on"
