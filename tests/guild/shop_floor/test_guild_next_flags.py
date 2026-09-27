@@ -120,3 +120,12 @@ def test_an_explicit_allowed_host_override_admits_only_that_host(load_portal, mo
 def test_production_compose_sets_no_allowed_hosts_override():
     text = (REPO / "docker-compose.prod.yml").read_text()
     assert "MINIMOI_GUILD_ALLOWED_HOSTS" not in text
+
+
+def test_allowed_hosts_override_can_never_allow_production(load_portal, monkeypatch):
+    """Review re-check note: MINIMOI_GUILD_ALLOWED_HOSTS naming minimoi.ai must not open production."""
+    monkeypatch.setenv("MINIMOI_GUILD_ALLOWED_HOSTS", "minimoi.ai,www.minimoi.ai")
+    portal = load_portal(next_flag="1", proto_flag="1", base_url="https://minimoi.ai")
+    assert portal.module.GUILD_MOUNTS == {"guild_proto": "refused_not_staging",
+                                          "guild_next": "refused_not_staging"}
+    assert _rules(portal.app, "/guild-next") == [] and _rules(portal.app, "/guild-proto") == []

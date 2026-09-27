@@ -175,6 +175,7 @@ def mount_guild_proto(app, *, environ, owner_guard, current_user) -> str:
 
 
 STAGING_HOSTS = frozenset({"dev.minimoi.ai", "localhost", "127.0.0.1"})
+NEVER_ALLOWED_HOSTS = frozenset({"minimoi.ai", "www.minimoi.ai"})
 ALLOWED_HOSTS_VAR = "MINIMOI_GUILD_ALLOWED_HOSTS"
 
 
@@ -188,7 +189,9 @@ def origin_host(base_url) -> str:
 
 def allowed_hosts(environ) -> frozenset:
     extra = {h.strip().lower() for h in str(environ.get(ALLOWED_HOSTS_VAR, "")).split(",") if h.strip()}
-    return STAGING_HOSTS | extra
+    # Production hosts can never be allowed, even if listed: one stray override
+    # line plus one stray switch must not expose these routes on minimoi.ai.
+    return (STAGING_HOSTS | extra) - NEVER_ALLOWED_HOSTS
 
 
 def is_staging_origin(base_url, environ) -> bool:
