@@ -27,6 +27,7 @@ class CapturedScene:
     width: int
     height: int
     bytes: int
+    captured_at: str = ""
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> Path:
@@ -83,6 +84,7 @@ def write_manifest(
     scenario: dict[str, Any],
     scenes: list[CapturedScene],
     records: dict[str, Any],
+    viewport: dict[str, int] | None = None,
 ) -> Path:
     profile = scenario["device_profile"]
     _validate_scenes(run_dir, profile, scenes)
@@ -99,6 +101,8 @@ def write_manifest(
         "records": records,
         "scenes": manifest_scenes,
     }
+    if viewport:
+        payload["viewport"] = viewport
     return _write_json(run_dir / "manifest.json", payload)
 
 

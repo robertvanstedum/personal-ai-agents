@@ -3,11 +3,17 @@ from pathlib import Path
 
 import pytest
 
-from scripts.tools.tour_capture.runner import CaptureRunError, validate_base_url
+from scripts.tools.tour_capture.runner import (
+    CaptureRunError,
+    CaptureRunner,
+    validate_auth_for_base_url,
+    validate_base_url,
+)
 from scripts.tools.tour_capture.scenario import (
     ScenarioValidationError,
     load_scenario,
     output_filename,
+    resolve_device_profile,
     validate_scenario,
 )
 
@@ -183,3 +189,98 @@ def test_production_or_unknown_capture_origins_are_rejected(url):
 )
 def test_dev_and_local_capture_origins_are_allowed(url):
     assert validate_base_url(url) == url
+
+
+def _local_scenario(**overrides):
+    scenario = {
+        "id": "prototype-review",
+        "domain": "prototype",
+        "device_profile": "desktop",
+        "auth_profile": "none",
+        "start_path": "/index.html",
+        "steps": [
+            {"goto": "/prototype/page.html"},
+            {"wait_for": "body"},
+            {"screenshot": "landing", "title": "t", "description": "d", "alt": "a"},
+        ],
+    }
+    scenario.update(overrides)
+    return scenario
+
+
+def test_auth_none_accepts_any_absolute_start_and_goto_paths():
+    scenario = validate_scenario(_local_scenario())
+    assert scenario["_summary"] == {"screenshots": 1, "operator_pauses": 0}
+
+
+@pytest.mark.parametrize("path", ["index.html", "//evil.example/x", "https://example.com/"])
+def test_auth_none_rejects_relative_or_host_start_paths(path):
+    with pytest.raises(ScenarioValidationError, match="start_path must be an absolute path"):
+        validate_scenario(_local_scenario(start_path=path))
+
+
+@pytest.mark.parametrize("path", ["page.html", "//evil.example/x", "http://127.0.0.1:1/"])
+def test_auth_none_rejects_non_absolute_goto_targets(path):
+    scenario = _local_scenario()
+    scenario["steps"][0] = {"goto": path}
+    with pytest.raises(ScenarioValidationError, match="goto must be an absolute path"):
+        validate_scenario(scenario)
+
+
+@pytest.mark.parametrize("path", ["/", "/index.html", "/prototype/"])
+def test_owner_session_keeps_strict_start_path_rule(path):
+    with pytest.raises(ScenarioValidationError, match="portal-proxied"):
+        validate_scenario(_local_scenario(auth_profile="owner_session", start_path=path))
+
+
+def test_owner_session_still_accepts_app_start_path():
+    scenario = validate_scenario(
+        _local_scenario(auth_profile="owner_session", start_path="/app/portuguese")
+    )
+    assert scenario["start_path"] == "/app/portuguese"
+
+
+@pytest.mark.parametrize("url", ["http://localhost:18895", "http://127.0.0.1:18895"])
+def test_auth_none_is_allowed_on_loopback(url):
+    validate_auth_for_base_url("none", url)
+    runner = CaptureRunner(validate_scenario(_local_scenario()), url, Path("/nonexistent"))
+    assert runner.authenticated is False
+
+
+def test_auth_none_is_refused_on_dev():
+    with pytest.raises(CaptureRunError, match="only for localhost or 127.0.0.1"):
+        validate_auth_for_base_url("none", "https://dev.minimoi.ai")
+    with pytest.raises(CaptureRunError, match="only for localhost or 127.0.0.1"):
+        CaptureRunner(
+            validate_scenario(_local_scenario()), "https://dev.minimoi.ai", Path("/nonexistent")
+        )
+
+
+def test_owner_session_is_unaffected_by_local_only_rule():
+    validate_auth_for_base_url("owner_session", "https://dev.minimoi.ai")
+
+
+def test_viewport_override_builds_a_named_profile():
+    scenario = validate_scenario(
+        _local_scenario(
+            device_profile="laptop",
+            viewport={"width": 1280, "height": 800, "device_scale_factor": 2},
+        )
+    )
+    profile = resolve_device_profile(scenario)
+    assert (profile.name, profile.output_dimensions) == ("laptop", (2560, 1600))
+    assert resolve_device_profile(_local_scenario()).output_dimensions == (2880, 1800)
+
+
+@pytest.mark.parametrize(
+    "viewport",
+    [{"width": 1280, "height": 800}, {"width": 0, "height": 800, "device_scale_factor": 2}, []],
+)
+def test_invalid_viewport_is_rejected(viewport):
+    with pytest.raises(ScenarioValidationError, match="viewport"):
+        validate_scenario(_local_scenario(device_profile="laptop", viewport=viewport))
+
+
+def test_unknown_profile_without_viewport_is_still_rejected():
+    with pytest.raises(ScenarioValidationError, match="unknown device profile"):
+        validate_scenario(_local_scenario(device_profile="laptop"))

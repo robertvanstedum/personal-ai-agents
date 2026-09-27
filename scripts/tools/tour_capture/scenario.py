@@ -21,7 +21,10 @@ SUPPORTED_ACTIONS = {
     "screenshot",
     "free_capture",
 }
-AUTH_PROFILES = {"owner_session"}
+AUTH_PROFILES = {"owner_session", "none"}
+# auth_profile "none" skips login entirely; the runner only permits it against
+# localhost or 127.0.0.1 so an unauthenticated run can never reach dev.
+LOCAL_ONLY_AUTH_PROFILES = {"none"}
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,35 @@ def output_filename(
     return f"{order:02d}-{domain}-{scene}-{profile}.{extension}"
 
 
+def _is_local_absolute_path(value: Any) -> bool:
+    """Accept '/path' but never a scheme-relative '//host' or a full URL."""
+    return isinstance(value, str) and value.startswith("/") and not value.startswith("//")
+
+
+def _validate_viewport(value: Any) -> None:
+    if not isinstance(value, dict):
+        raise ScenarioValidationError("viewport must be an object")
+    for key, upper in (("width", 3840), ("height", 3840), ("device_scale_factor", 4)):
+        item = value.get(key)
+        if not isinstance(item, int) or isinstance(item, bool) or not 1 <= item <= upper:
+            raise ScenarioValidationError(
+                f"viewport {key} must be an integer between 1 and {upper}"
+            )
+
+
+def resolve_device_profile(scenario: dict[str, Any]) -> DeviceProfile:
+    """Return the scenario's viewport override, or its named built-in profile."""
+    viewport = scenario.get("viewport")
+    if viewport:
+        return DeviceProfile(
+            scenario["device_profile"],
+            viewport["width"],
+            viewport["height"],
+            viewport["device_scale_factor"],
+        )
+    return DEVICE_PROFILES[scenario["device_profile"]]
+
+
 def _action_key(step: dict[str, Any], index: int) -> str:
     actions = [key for key in SUPPORTED_ACTIONS if key in step]
     if len(actions) != 1:
@@ -87,11 +119,25 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
     for key in ("id", "domain"):
         if not isinstance(data[key], str) or not SLUG_RE.fullmatch(data[key]):
             raise ScenarioValidationError(f"scenario {key} must be a lowercase hyphenated slug")
-    if data["device_profile"] not in DEVICE_PROFILES:
+    if "viewport" in data:
+        _validate_viewport(data["viewport"])
+        if not isinstance(data["device_profile"], str) or not SLUG_RE.fullmatch(
+            data["device_profile"]
+        ):
+            raise ScenarioValidationError(
+                "device_profile must be a lowercase hyphenated slug when viewport is set"
+            )
+    elif data["device_profile"] not in DEVICE_PROFILES:
         raise ScenarioValidationError(f"unknown device profile: {data['device_profile']!r}")
     if data["auth_profile"] not in AUTH_PROFILES:
         raise ScenarioValidationError(f"unknown auth profile: {data['auth_profile']!r}")
-    if not isinstance(data["start_path"], str) or not (
+    unauthenticated = data["auth_profile"] in LOCAL_ONLY_AUTH_PROFILES
+    if unauthenticated:
+        if not _is_local_absolute_path(data["start_path"]):
+            raise ScenarioValidationError(
+                "start_path must be an absolute path beginning with '/'"
+            )
+    elif not isinstance(data["start_path"], str) or not (
         data["start_path"].startswith("/app/")
         or data["start_path"] == "/guild"
         or data["start_path"].startswith("/guild/")
@@ -116,6 +162,10 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
         if action in {"goto", "click", "operator", "scroll_to"}:
             if not isinstance(value, str) or not value.strip():
                 raise ScenarioValidationError(f"step {index} {action} must be a non-empty string")
+            if action == "goto" and unauthenticated and not _is_local_absolute_path(value):
+                raise ScenarioValidationError(
+                    f"step {index} goto must be an absolute path beginning with '/'"
+                )
         elif action == "wait_for":
             if isinstance(value, str):
                 if not value.strip():
