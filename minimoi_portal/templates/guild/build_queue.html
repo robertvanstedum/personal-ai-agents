@@ -271,6 +271,9 @@
 
   <div class="card-actions">
     <form method="POST" action="/guild/build/items/{{ item_id }}/status" id="bf-{{ item_id }}" style="display:contents">
+      <input type="hidden" name="expect_item_digest" value="{{ queue_item_digest(item) }}">
+      <input type="hidden" name="csrf_token" value="{{ queue_csrf_token() }}">
+      <input type="hidden" name="idempotency_key" value="{{ queue_idempotency_key() }}">
 
       <input type="hidden" name="note" id="bn-{{ item_id }}" value="">
       <select class="card-select" name="status" id="bs-{{ item_id }}"
@@ -306,6 +309,9 @@
 
     {# ── Inline edit form ── #}
     <form class="edit-form" method="POST" action="/guild/build/items/{{ item_id }}/edit">
+      <input type="hidden" name="expect_item_digest" value="{{ queue_item_digest(item) }}">
+      <input type="hidden" name="csrf_token" value="{{ queue_csrf_token() }}">
+      <input type="hidden" name="idempotency_key" value="{{ queue_idempotency_key() }}">
       <input name="spec_title"   value="{{ item.spec_title   or '' }}" placeholder="Title">
       <input name="summary"      value="{{ item.summary      or '' }}" placeholder="Summary (one line)">
       <input name="github_issue" value="{{ item.github_issue or '' }}" placeholder="GitHub issue  e.g. #41">
@@ -337,6 +343,8 @@
     <a href="/guild/career" class="subnav-link">Career Focus</a>
   </div>
 </nav>
+
+{% include 'guild/_queue_notices.html' %}
 
 {% set spec_ready_items = items | selectattr('status', 'equalto', 'spec_ready') | list %}
 {% set in_build_items   = items | selectattr('status', 'equalto', 'in_build') | list %}

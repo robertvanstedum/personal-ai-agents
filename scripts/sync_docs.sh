@@ -13,8 +13,21 @@
 #   (/opt/minimoi/data/guild/build_queue.json) is written by the production
 #   portal when Robert saves a status, so it is NOT overwritten by default.
 #   --publish-queue: deliberately replace the live queue with the committed
-#   repository copy, after saving a timestamped backup of the live file on EC2.
-#   CI never passes this flag.
+#   repository copy. It is a two-step, checked action:
+#     1. `sync_docs.sh --publish-queue` alone publishes NOTHING. It prints the
+#        live queue's SHA-256 and the verified Saves journalled since the last
+#        seed/publish (seed_build_queue.sh --status on EC2).
+#     2. After confirming those Saves are in the committed copy, run
+#        `sync_docs.sh --publish-queue --expect-live-sha256=<that digest>`.
+#        On EC2, seed_build_queue.sh --publish then takes the portal's queue
+#        lock, refuses if the live file changed since step 1, refuses unless
+#        the running portal mounts the queue folder, backs up the live file,
+#        replaces it atomically (mode and owner kept), reads it back and
+#        journals a `replaced` line.
+#   A shell on the Mac cannot hold the EC2 lock across the two steps, so the
+#   digest is the compare-and-swap: any Save between step 1 and step 2 changes
+#   it and the publish is refused. Requires seed_build_queue.sh from the B1(a)
+#   release on EC2. CI never passes this flag.
 # Requires: aws CLI configured with minimoi-deploy credentials
 #           (same credential used for ECR push and SSM parameter store)
 # Test hook: SYNC_DOCS_DRY_RUN=1 prints the EC2 command lines and exits
@@ -23,12 +36,18 @@
 set -euo pipefail
 
 PUBLISH_QUEUE=0
+EXPECT_LIVE=""
 for arg in "$@"; do
   case "$arg" in
     --publish-queue) PUBLISH_QUEUE=1 ;;
-    *) echo "unknown argument: $arg (usage: sync_docs.sh [--publish-queue])" >&2; exit 2 ;;
+    --expect-live-sha256=*) EXPECT_LIVE="${arg#--expect-live-sha256=}" ;;
+    *) echo "unknown argument: $arg (usage: sync_docs.sh [--publish-queue [--expect-live-sha256=HEX]])" >&2; exit 2 ;;
   esac
 done
+if [[ -n "$EXPECT_LIVE" ]]; then
+  [[ "$PUBLISH_QUEUE" == "1" ]] || { echo "--expect-live-sha256 only applies with --publish-queue" >&2; exit 2; }
+  [[ "$EXPECT_LIVE" =~ ^[0-9a-f]{64}$ ]] || { echo "--expect-live-sha256 needs a 64-character lowercase hex digest" >&2; exit 2; }
+fi
 
 INSTANCE_ID="i-0d13db821169627e2"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -77,11 +96,17 @@ LINES=(
   "mkdir -p /opt/minimoi/data/guild /opt/minimoi/docs/design /opt/minimoi/docs/specs"
 )
 QUEUE_DEST="/opt/minimoi/data/guild/build_queue.json"
-if [[ "$PUBLISH_QUEUE" == "1" ]]; then
+QUEUE_WRITER="/opt/minimoi/scripts/seed_build_queue.sh"
+if [[ "$PUBLISH_QUEUE" == "1" && -z "$EXPECT_LIVE" ]]; then
+  echo "Build Queue: NOT published. Step 1 of 2 prints the live queue's digest and recent Saves."
+  echo "Build Queue: check those Saves are in the committed copy, then rerun with --expect-live-sha256=<digest>."
   LINES+=(
-    "mkdir -p /opt/minimoi/data/guild/backups"
-    "if [ -s ${QUEUE_DEST} ]; then cp -p ${QUEUE_DEST} /opt/minimoi/data/guild/backups/build_queue.\$(date -u +%Y%m%dT%H%M%SZ).before-publish.json; fi"
-    "curl -fsSL '${RAW_BASE}/data/guild/build_queue.json' -o ${QUEUE_DEST}.publish && python3 -m json.tool ${QUEUE_DEST}.publish >/dev/null && cat ${QUEUE_DEST}.publish > ${QUEUE_DEST} && rm -f ${QUEUE_DEST}.publish && echo 'OK: build_queue.json published in place (live copy backed up; single-file mount kept attached)'"
+    "${QUEUE_WRITER} --status ${QUEUE_DEST}"
+  )
+elif [[ "$PUBLISH_QUEUE" == "1" ]]; then
+  # The locked, checked, atomic, journalled publish (same lock as the portal).
+  LINES+=(
+    "${QUEUE_WRITER} --publish --expect-live-sha256 ${EXPECT_LIVE} '${RAW_BASE}/data/guild/build_queue.json' ${QUEUE_DEST} /opt/minimoi/data/guild/backups"
   )
 else
   echo "Build Queue: live copy on EC2 left untouched (use --publish-queue to publish the repository copy deliberately)"

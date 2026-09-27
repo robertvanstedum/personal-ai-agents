@@ -244,6 +244,8 @@
   </div>
 </nav>
 
+{% include 'guild/_queue_notices.html' %}
+
 <div class="page-header">
   <h1 class="page-title">Build Log</h1>
   <span class="page-meta">{{ items | length }} spec{{ 's' if items | length != 1 else '' }}</span>
@@ -375,6 +377,9 @@
       <tr class="edit-row" id="edit-row-{{ item.id }}">
         <td colspan="4">
           <form method="POST" action="/guild/build/items/{{ item.id }}/edit">
+            <input type="hidden" name="expect_item_digest" value="{{ queue_item_digest(item) }}">
+            <input type="hidden" name="csrf_token" value="{{ queue_csrf_token() }}">
+            <input type="hidden" name="idempotency_key" value="{{ queue_idempotency_key() }}">
             <div class="edit-inner">
               <div>
                 <label>Title</label>

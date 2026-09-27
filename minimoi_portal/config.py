@@ -52,6 +52,13 @@ GUILD_EXPERIMENT_PROJECTION = os.environ.get(
     str(Path(__file__).resolve().parent.parent / "data" / "guild" / "experiment_projection.json"),
 )
 
+# ── Guild Build Queue (B1 deliverable (a)) ───────────────────────────────────
+# The live queue file, in a mounted state folder (production and Docker dev
+# staging: /app/runtime/guild/build_queue.json). REQUIRED for Saves: when it is
+# unset the portal only shows the repository copy, marked read-only, and
+# domains/guild/queue_store.py refuses every write (review M2).
+GUILD_QUEUE_PATH = os.environ.get("GUILD_QUEUE_PATH") or None
+
 # Per-environment surface configuration for the IoT Connect reference demo —
 # deployment-owned, never derived from repository content (spec §4.2).
 # Defaults are the AWS values; the Mac overrides them locally.

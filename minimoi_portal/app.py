@@ -1253,36 +1253,149 @@ def score_color(score):
     return '#9e9080'
 
 
-# File-first build queue — source of truth for UI; DB is analytics/archive only
-_BQ_PATH = Path(__file__).parent.parent / "data" / "guild" / "build_queue.json"
-_BUILD_QUEUE_STATUSES = (
-    "idea",
-    "design",
-    "backlog",
-    "spec_ready",
-    "in_build",
-    "blocked",
-    "deferred",
-    "cancelled",
-    "superseded",
-    "done",
-)
+# File-first build queue — source of truth for UI; DB is analytics/archive only.
+# Every write goes through domains/guild/queue_store.py (lock, unchanged-check,
+# atomic replace, read-back, receipt); there is no plain writer in the portal.
+from domains.guild import queue_store as _qstore  # noqa: E402
+
+# Read-only fallback when GUILD_QUEUE_PATH is unset: the repository copy, shown
+# with a "Save is off" notice. The store refuses writes in that case (M2).
+_BQ_REPO_COPY = Path(__file__).parent.parent / "data" / "guild" / "build_queue.json"
+_GUILD_QUEUE_PATH = _cfg.GUILD_QUEUE_PATH
+_BUILD_QUEUE_STATUSES = _qstore.STATUSES
 _BUILD_QUEUE_ACTIVE_STATUSES = ("spec_ready", "in_build")
+
+
+def _bq_read_path() -> Path:
+    return Path(_GUILD_QUEUE_PATH) if _GUILD_QUEUE_PATH else _BQ_REPO_COPY
+
+
+def _queue_store() -> "_qstore.QueueStore":
+    return _qstore.QueueStore(_GUILD_QUEUE_PATH)
 
 
 def _load_build_queue() -> list:
     """Load build items from JSON. Returns [] with a warning if file is missing."""
     try:
-        return json.loads(_BQ_PATH.read_text())
+        return json.loads(_bq_read_path().read_text())
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("build_queue.json missing or invalid: %s", e)
         return []
 
 
-def _save_build_queue(items: list):
-    """Write build items back to JSON."""
-    _BQ_PATH.write_text(json.dumps(items, indent=2, ensure_ascii=False))
+def _queue_state() -> dict:
+    """Where the queue pages read from, whether Save is on, and open Checks."""
+    store = _queue_store()
+    problem = store.write_problem()
+    return {
+        "writable": problem is None,
+        "reason": problem,
+        "source": "live" if _GUILD_QUEUE_PATH else "repository copy",
+        "checks": store.unresolved_checks() if _GUILD_QUEUE_PATH else [],
+    }
+
+
+def _queue_csrf_token() -> str:
+    token = session.get("queue_csrf")
+    if not token:
+        token = secrets.token_urlsafe(24)
+        session["queue_csrf"] = token
+    return token
+
+
+def _queue_csrf_ok() -> bool:
+    token = session.get("queue_csrf")
+    sent = request.form.get("csrf_token", "")
+    return bool(token) and secrets.compare_digest(sent, token)
+
+
+app.jinja_env.globals.update(
+    queue_item_digest=_qstore.item_digest,
+    queue_csrf_token=_queue_csrf_token,
+    queue_idempotency_key=lambda: secrets.token_hex(12),
+)
+
+# Fixed sentences only: the redirect carries a result code, an item id and a
+# receipt id, never user text (spec §6.4).
+_QUEUE_BANNERS = {
+    "saved": ("ok", "Saved · verified · receipt {receipt}"),
+    "conflict": ("warn", "#{item} changed since you opened it. Here is the current state; Save again if you still want it"),
+    "busy": ("warn", "Another save is in progress. Nothing was changed. Try again in a moment"),
+    "uncertain": ("bad", "Save not verified — check #{item}."),
+    "unavailable": ("bad", "The queue can't be read, so nothing was saved"),
+    "refused": ("bad", "Save is off on this portal: the live queue folder is not attached. Nothing was saved"),
+    "stale": ("warn", "This page was out of date; reload and try again"),
+    "csrf": ("warn", "This form could not be verified; reload the page and try again. Nothing was changed"),
+    "not_found": ("warn", "#{item} is not in the queue. Nothing was saved"),
+    "invalid": ("warn", "That change is not allowed. Nothing was saved"),
+    "unchanged": ("ok", "Nothing to save"),
+    "checked": ("ok", "Marked checked"),
+}
+_QUEUE_RESULT_PARAMS = ("save", "receipt", "item", "audit")
+
+
+def _queue_banner() -> dict | None:
+    import re
+    code = request.args.get("save", "")
+    if code not in _QUEUE_BANNERS:
+        return None
+    kind, text = _QUEUE_BANNERS[code]
+    item = request.args.get("item", "")
+    item = item if item.isdigit() else "?"
+    receipt = request.args.get("receipt", "")
+    if not re.fullmatch(r"q-\d{8}T\d{6}Z-[0-9a-f]{6}", receipt):
+        receipt = "?"
+    text = text.format(item=item, receipt=receipt)
+    if code == "saved" and request.args.get("audit") == "failed":
+        text += " · history not recorded"
+    return {"kind": kind, "text": text}
+
+
+def _queue_redirect(code: str, item_id: int | None = None,
+                    receipt: str | None = None, audit: str | None = None):
+    """Back to the page the form came from, with the result.
+
+    Only the referrer's path and query are reused, and only under /guild/build,
+    so the redirect is always relative to this site (the Host header behind
+    nginx or the tunnel need not match the browser's)."""
+    from urllib.parse import parse_qsl, urlencode, urlparse
+    ref = urlparse(request.referrer or "")
+    if ref.path.startswith("/guild/build"):
+        path = ref.path
+        query = [(k, v) for k, v in parse_qsl(ref.query) if k not in _QUEUE_RESULT_PARAMS]
+    else:
+        path, query = url_for("guild_build"), []
+    query.append(("save", code))
+    if item_id is not None:
+        query.append(("item", str(item_id)))
+    if receipt:
+        query.append(("receipt", receipt))
+    if audit == "failed":
+        query.append(("audit", "failed"))
+    return redirect(path + "?" + urlencode(query))
+
+
+def _queue_audit_insert(item_id: int, from_status, to_status, note) -> str:
+    """Best-effort audit row, bounded to ~2 s. The queue store reports and logs
+    a failure beside the receipt; it is never a condition of "saved"."""
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        return "skipped"
+    import psycopg2
+    conn = psycopg2.connect(db_url, connect_timeout=2, options="-c statement_timeout=2000")
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO guild.design_log_transitions "
+                "(design_log_id, from_status, to_status, triggered_by, reason) "
+                "VALUES (%s,%s,%s,'robert',%s)",
+                (item_id, from_status, to_status, note),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return "ok"
 
 
 def _guild_db_query(sql, params=None):
@@ -2080,7 +2193,8 @@ def guild_build():
     # Sort: most recently transitioned first (items without timestamp go last)
     items.sort(key=lambda i: i.get('last_transition_at') or '', reverse=True)
     return render_template("guild/build_log.html", items=items,
-                           status_filter=status_filter, user=_current_user())
+                           status_filter=status_filter, user=_current_user(),
+                           queue_state=_queue_state(), save_banner=_queue_banner())
 
 
 @app.route("/guild/build/queue")
@@ -2095,7 +2209,8 @@ def guild_build_queue():
     items.sort(key=lambda item: item.get("last_transition_at") or "", reverse=True)
     items.sort(key=lambda item: status_rank[item["status"]])
     return render_template("guild/build_queue.html", items=items,
-                           user=_current_user())
+                           user=_current_user(),
+                           queue_state=_queue_state(), save_banner=_queue_banner())
 
 
 @app.route("/guild/build/spec/<path:filename>")
@@ -2295,35 +2410,32 @@ def guild_build_roadmap():
 @app.route("/guild/build/items/<int:item_id>/status", methods=["POST"])
 @_require_owner
 def update_build_status(item_id):
+    """Owner status Save through the queue store: verified, with a receipt."""
+    if not _queue_csrf_ok():
+        return _queue_redirect("csrf", item_id)
     new_status = request.form.get('status')
     note = request.form.get('note') or None
     if new_status not in _BUILD_QUEUE_STATUSES:
-        return redirect(url_for('guild_build_queue'))
+        return _queue_redirect("invalid", item_id)
+    expect = request.form.get('expect_item_digest') or None
+    if not expect:
+        return _queue_redirect("stale", item_id)
+    user = _current_user() or {}
+    result = _queue_store().save_status(
+        item_id, new_status,
+        expect_item_digest=expect,
+        note=note,
+        principal=user.get("username", "owner"),
+        via="legacy",
+        idempotency_key=request.form.get("idempotency_key") or None,
+        audit=lambda _item, old, new: _queue_audit_insert(item_id, old, new, note),
+    )
 
-    # ── 1. Update JSON (source of truth) ──────────────────────────────────────
-    items = _load_build_queue()
-    item = next((i for i in items if i.get('id') == item_id), None)
-    current_status = item.get('status') if item else None
-    if item:
-        item['status'] = new_status
-        item['last_transition_at'] = datetime.now(timezone.utc).isoformat()
-        item['blocked_reason'] = (note if new_status == 'blocked' else None)
-        _save_build_queue(items)
-
-    # ── 2. DB audit log (write-only, non-blocking) ────────────────────────────
-    try:
-        if current_status is not None:
-            _guild_db_execute(
-                "INSERT INTO guild.design_log_transitions "
-                "(design_log_id, from_status, to_status, triggered_by, reason) "
-                "VALUES (%s,%s,%s,'robert',%s)",
-                (item_id, current_status, new_status, note)
-            )
-    except Exception:
-        pass
-
-    # ── 3. On done/deferred, ask dev_agent to archive the spec file ───────────
-    if new_status in ('done', 'deferred') and item and item.get('spec_file'):
+    # On done/deferred, ask dev_agent to archive the spec file. Runs after the
+    # store released its lock, and only for a new verified Save.
+    item = result.current_item or {}
+    if result.ok and not result.repeated and new_status in ('done', 'deferred') \
+            and item.get('spec_file'):
         try:
             _requests.post(
                 'http://localhost:8771/archive-spec',
@@ -2333,27 +2445,51 @@ def update_build_status(item_id):
         except Exception:
             pass
 
-    return redirect(request.referrer or url_for('guild_build'))
+    return _queue_redirect(result.result, item_id, receipt=result.receipt_id,
+                           audit=result.audit)
 
 
 @app.route("/guild/build/items/<int:item_id>/edit", methods=["POST"])
 @_require_owner
 def edit_build_item(item_id):
-    """Update spec_title, summary, github_issue — the human-editable metadata fields."""
-    spec_title   = request.form.get('spec_title',   '').strip() or None
-    summary      = request.form.get('summary',      '').strip() or None
-    github_issue = request.form.get('github_issue', '').strip() or None
-    items = _load_build_queue()
-    item = next((i for i in items if i.get('id') == item_id), None)
-    if item:
-        if spec_title is not None:
-            item['spec_title'] = spec_title
-        if summary is not None:
-            item['summary'] = summary
-        if github_issue is not None:
-            item['github_issue'] = github_issue
-        _save_build_queue(items)
-    return redirect(request.referrer or url_for('guild_build'))
+    """Update spec_title, summary, github_issue — the human-editable metadata fields.
+
+    Same store and journal as the status Save; no audit row, as before. An
+    empty field is left unchanged, as before."""
+    if not _queue_csrf_ok():
+        return _queue_redirect("csrf", item_id)
+    expect = request.form.get('expect_item_digest') or None
+    if not expect:
+        return _queue_redirect("stale", item_id)
+    fields = {}
+    for name in _qstore.EDITABLE_FIELDS:
+        value = request.form.get(name, '').strip() or None
+        if value is not None:
+            fields[name] = value
+    if not fields:
+        return _queue_redirect("unchanged", item_id)
+    user = _current_user() or {}
+    result = _queue_store().edit_metadata(
+        item_id, fields,
+        expect_item_digest=expect,
+        principal=user.get("username", "owner"),
+        via="legacy",
+        idempotency_key=request.form.get("idempotency_key") or None,
+    )
+    return _queue_redirect(result.result, item_id, receipt=result.receipt_id)
+
+
+@app.route("/guild/build/checks/<op_id>/checked", methods=["POST"])
+@_require_owner
+def mark_build_queue_check(op_id):
+    """Clear an unverified-Save Check after the owner has looked at the item."""
+    import re
+    if not _queue_csrf_ok() or not re.fullmatch(r"[0-9a-f]{32}", op_id):
+        return _queue_redirect("csrf")
+    user = _current_user() or {}
+    if _queue_store().mark_checked(op_id, user.get("username", "owner")):
+        return _queue_redirect("checked")
+    return _queue_redirect("invalid")
 
 
 @app.route("/guild/build/items/<int:item_id>/history")

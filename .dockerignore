@@ -19,6 +19,12 @@ curator_archive/
 curator_cache/
 curator_history.json
 
+# The live Guild Build Queue is state, not code. Keep the repository copy out
+# of every image so a portal without its folder mount cannot read or Save a
+# stale baked copy (review M2). Only this file: data/guild/
+# experiment_projection.json must stay in the portal image (C17).
+data/guild/build_queue.json
+
 # Docs and design — exclude large/binary subdirs, keep root .md files needed at runtime
 docs/screenshots/
 docs/workspace-templates/

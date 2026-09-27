@@ -149,8 +149,17 @@ services:
       # Name must match what minimoi_portal/config.py actually reads — the
       # variable this replaced was never read by the portal at all.
       - IOTCONNECT_RELEASE_LABEL=${IOTCONNECT_RELEASE_LABEL:-iotconnect-v0.9.0-beta.1}
+      # The live Build Queue. domains/guild/queue_store.py refuses to Save
+      # unless this is set and its folder is a mount (never the image's copy).
+      - GUILD_QUEUE_PATH=/app/runtime/guild/build_queue.json
     volumes:
-      - /opt/minimoi/data/guild/build_queue.json:/app/data/guild/build_queue.json
+      # Mount the queue FOLDER, not the file: an atomic replace (the verified
+      # Save, the deploy seed, --publish-queue) changes the file's inode, which
+      # would detach a single-file mount. The folder also holds the sidecar
+      # lock and the journal. It is mounted at /app/runtime/guild, not
+      # /app/data/guild, so the image's data/guild/experiment_projection.json
+      # stays visible (C17). cos-bot and cos-scheduler never read the queue.
+      - /opt/minimoi/data/guild:/app/runtime/guild
       - /opt/minimoi/docs/design:/app/docs/design
       - /opt/minimoi/docs/specs:/app/docs/specs
       - /opt/minimoi/auth/users.json:/app/minimoi_portal/auth/users.json

@@ -27,9 +27,12 @@ def _login_owner(client):
 @pytest.fixture
 def queue_file(tmp_path, monkeypatch):
     import minimoi_portal.app as portal_app
+    from domains.guild import queue_store
 
     path = tmp_path / "build_queue.json"
-    monkeypatch.setattr(portal_app, "_BQ_PATH", path)
+    monkeypatch.setattr(portal_app, "_GUILD_QUEUE_PATH", str(path))
+    monkeypatch.setattr(queue_store, "_running_in_container", lambda: False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     def write(items):
         path.write_text(json.dumps(items), encoding="utf-8")
@@ -138,15 +141,22 @@ def test_build_log_defaults_to_active_work_and_keeps_all_history_available(
 def test_status_transition_accepts_non_queue_destinations(
     portal_client, queue_file, status
 ):
+    from domains.guild import queue_store
+
     path = queue_file([_item(1, "in_build", "Move me")])
     _login_owner(portal_client)
+    with portal_client.session_transaction() as session:
+        session["queue_csrf"] = "t"
 
     response = portal_client.post(
         "/guild/build/items/1/status",
-        data={"status": status, "note": "waiting" if status == "blocked" else ""},
+        data={"status": status, "note": "waiting" if status == "blocked" else "",
+              "csrf_token": "t",
+              "expect_item_digest": queue_store.item_digest(_item(1, "in_build", "Move me"))},
     )
 
     assert response.status_code == 302
+    assert "save=saved" in response.headers["Location"]
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved[0]["status"] == status
     assert saved[0]["blocked_reason"] == ("waiting" if status == "blocked" else None)

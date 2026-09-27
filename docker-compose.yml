@@ -67,9 +67,19 @@ services:
       # not a Docker container — host.docker.internal reaches back out to
       # the host machine from inside this container.
       - PORTUGUESE_BACKEND=http://host.docker.internal:8770
+      # The dev staging Build Queue, same pattern as production.
+      - GUILD_QUEUE_PATH=/app/runtime/guild/build_queue.json
     ports:
       - "5001:5001"
     volumes:
+      # Dev staging queue state lives OUTSIDE every git worktree, so Saves are
+      # never dirtied or reverted by git and survive worktree removal. The
+      # default is under $HOME because Colima shares $HOME into its VM by
+      # default; a folder elsewhere would appear empty inside the container.
+      # Seed it once (copy a build_queue.json into it) before starting: the
+      # queue store never creates the file and Save reports "unavailable".
+      # Only this container may write it: flock does not cross the Colima VM.
+      - ${MINIMOI_STAGING_DATA:-~/minimoi-staging}/guild:/app/runtime/guild
       # Local credentials are intentionally gitignored. Bind them into the
       # dev portal so rebuilding the image cannot silently remove sign-in.
       - ./minimoi_portal/auth/users.json:/app/minimoi_portal/auth/users.json
