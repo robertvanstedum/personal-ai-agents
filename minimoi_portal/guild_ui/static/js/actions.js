@@ -11,14 +11,17 @@ const KIND = {
 
 export const kindOf = (code) => KIND[code] || 'bad';
 
-function newKey() {
+// One idempotency key per opened form or change, not per click (review F9):
+// the server requires it, and a repeated click or a retry after a lost answer
+// sends the same key, so the server replays the first receipt.
+export function newKey() {
   if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID().replace(/-/g, '');
   return `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
 }
 
-export async function saveStatus(itemId, to, note, digest) {
+export async function saveStatus(itemId, to, note, digest, key) {
   const r = await apiPost(`/queue/items/${itemId}/status`, {
-    to, note: note || null, expect_item_digest: digest, idempotency_key: newKey(), record_mode: recordMode(),
+    to, note: note || null, expect_item_digest: digest, idempotency_key: key, record_mode: recordMode(),
   });
   const body = r.body || {};
   const code = body.result || body.error || 'failed';

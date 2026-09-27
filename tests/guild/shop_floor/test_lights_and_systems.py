@@ -26,6 +26,8 @@ def _status(state="running", minutes_ago=2, escalations=0):
     (_status(state="starting"), "unknown"),
     (_status(state="stopped", escalations=0), "unknown"),
     (_status(minutes_ago=None), "unknown"),
+    (_status(minutes_ago=-5), "unknown"),     # a check-in in the future is clock skew, not fresh
+    (_status(minutes_ago=-600), "unknown"),
     (live_unknown("read_failed", "unreachable", "probe"), "unknown"),
     (not_configured("GUILD_OPERATIONS_STATUS_URL", "x"), "unknown"),
 ])
@@ -35,6 +37,19 @@ def test_systems_rule(res, state):
     assert len(light["reason"]) <= lights.REASON_MAX
     if state != "green":
         assert light["word"] == "Unknown"
+
+
+def test_a_future_check_in_is_clock_skew_never_green():
+    """Review F6: never green unless reachable, running and checked in within
+    10 minutes; a check-in ahead of this portal's clock is unknown, with the reason."""
+    light = lights.systems_light(_status(minutes_ago=-5), NOW)
+    assert light["state"] == "unknown" and light["word"] == "Unknown"
+    assert "clock skew" in light["reason"]
+    assert any("in the future" in line for line in light["detail"])
+    # a few seconds ahead (the same clock, rounding) is still a fresh check-in
+    near = live_ok({"state": "running", "last_checkin": (NOW + timedelta(seconds=20)).isoformat(),
+                    "open_escalations": 0}, "probe")
+    assert lights.systems_light(near, NOW)["state"] == "green"
 
 
 def test_escalation_count_is_shown_as_reported_only():

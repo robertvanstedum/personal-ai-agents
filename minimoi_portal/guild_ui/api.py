@@ -73,7 +73,8 @@ def session_view():
 def floor_view():
     state = floor_state.compute(cfg())
     tag = floor_state.etag(state)
-    if request.if_none_match and tag in request.if_none_match:
+    # Only a real tag match is "not modified"; "*" never is (review F11).
+    if tag in request.if_none_match.as_set(include_weak=True):
         response = jsonify({})
         response.status_code = 304
         response.set_etag(tag)
@@ -87,8 +88,10 @@ def floor_view():
 def queue_view():
     services = cfg()["services"]
     res = services.queue.list_items()
+    checks_res = services.queue.checks()
     return jsonify({**res.meta(), "items": res.data if res.ok else None,
-                    "checks": services.queue.checks(), "statuses": list(STATUSES)})
+                    "checks": checks_res.data if checks_res.ok else None, "checks_source": checks_res.meta(),
+                    "statuses": list(STATUSES)})
 
 
 @owner_api
@@ -124,8 +127,11 @@ def save_status(item_id: int):
         return json_error("invalid", "The note must be text of at most 500 characters.", 422, result="invalid")
     if not isinstance(expect, str) or not _HEX64.fullmatch(expect):
         return json_error("invalid", "This page was out of date; reload and try again", 422, result="invalid")
-    if key is not None and (not isinstance(key, str) or not _IDEMPOTENCY.fullmatch(key)):
-        return json_error("invalid", "The idempotency key is malformed.", 422, result="invalid")
+    # Required (review F9): the page sends one key per opened form or change, so a
+    # repeated click or a retry replays the first receipt instead of writing twice.
+    if not isinstance(key, str) or not _IDEMPOTENCY.fullmatch(key):
+        return json_error("invalid", "Every Save needs an idempotency key (8 to 64 letters, digits, - or _). "
+                          "Nothing was saved.", 422, result="invalid")
     note = (note or "").strip() or None
     services = c["services"]
 

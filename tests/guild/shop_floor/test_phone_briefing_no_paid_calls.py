@@ -76,33 +76,130 @@ def test_the_package_imports_no_model_provider():
             assert not re.search(rf"^\s*(import|from)\s+{re.escape(name)}\b", text, re.M), (path, name)
 
 
+class OutboundBlocked(OSError):
+    """Raised by the guard in place of any outbound connection or name lookup."""
+
+
 @pytest.fixture
 def no_outbound(monkeypatch):
-    real = socket.create_connection
+    """Block outbound network at the socket layer that requests (urllib3),
+    urllib and http.client all go through (review F4): every name lookup
+    (socket.getaddrinfo) and every connect (socket.socket.connect /
+    connect_ex, socket.create_connection) is recorded and refused. Nothing is
+    allowed through, not even loopback: the Flask test client needs no socket.
+    (psycopg2 connects through libpq in C, below Python sockets; the history
+    read is kept off it by leaving DATABASE_URL unset, which load_portal does.)"""
     attempts = []
 
-    def guarded(address, *args, **kwargs):
-        host = address[0]
-        if host not in ("127.0.0.1", "localhost", "::1"):
-            attempts.append(address)
-            raise OSError("outbound connections are blocked in this test")
-        return real(address, *args, **kwargs)
+    def refuse(kind, target):
+        attempts.append((kind, target))
+        raise OutboundBlocked(f"outbound {kind} to {target!r} is blocked in this test")
 
-    monkeypatch.setattr(socket, "create_connection", guarded)
+    def getaddrinfo(host, port, *args, **kwargs):
+        refuse("getaddrinfo", (host, port))
+
+    def connect(self, address):
+        refuse("connect", address)
+
+    def connect_ex(self, address):
+        refuse("connect", address)
+
+    def create_connection(address, *args, **kwargs):
+        refuse("create_connection", address)
+
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    monkeypatch.setattr(socket, "create_connection", create_connection)
     return attempts
 
 
-def test_every_page_and_api_call_works_with_outbound_connections_blocked(load_portal, no_outbound):
-    portal = load_portal(ops_url="http://ops.invalid:8768/status")
+def assert_no_outbound(attempts):
+    assert attempts == [], f"outbound network attempted: {attempts}"
+
+
+URLS = ["/guild-next/guild/build", "/guild-next/guild/build/bench", "/guild-next/guild/build/queue",
+        "/guild-next/guild/build/items/12", "/guild-next/guild/operate",
+        "/guild-next/api/v1/session", "/guild-next/api/v1/floor", "/guild-next/api/v1/queue",
+        "/guild-next/api/v1/queue/items/12", "/guild-next/api/v1/queue/items/12/history"]
+OPS_URL = "http://ops.invalid:8768/status"
+
+
+def _mock_probe(portal):
+    """The Systems probe to the configured Operations URL is the one call the
+    floor may make; here it is mocked, so the page makes no network call at all."""
+    calls = []
+
+    class Answer:
+        status_code = 200
+
+        def json(self):
+            from datetime import datetime, timezone
+            return {"state": "running", "last_checkin": datetime.now(timezone.utc).isoformat(),
+                    "open_escalations": 0}
+
+    def fake_get(url, timeout):
+        calls.append(url)
+        return Answer()
+
+    portal.app.extensions["guild_ui_next"]["services"].systems._get = fake_get
+    return calls
+
+
+def test_the_floor_briefing_and_ask_make_no_outbound_call(load_portal, no_outbound):
+    """W3: rendering every page, the floor state, the rules briefing and the
+    data behind Ask (the explain card is built in the browser from /floor)
+    makes zero outbound calls; the only permitted call, the Systems probe, is
+    mocked and goes only to the configured Operations URL."""
+    portal = load_portal(ops_url=OPS_URL)
+    probe_calls = _mock_probe(portal)
     client = portal.owner()
     before = set(sys.modules)
-    urls = ["/guild-next/guild/build", "/guild-next/guild/build/bench", "/guild-next/guild/build/queue",
-            "/guild-next/guild/build/items/12", "/guild-next/guild/operate",
-            "/guild-next/api/v1/session", "/guild-next/api/v1/floor", "/guild-next/api/v1/queue",
-            "/guild-next/api/v1/queue/items/12", "/guild-next/api/v1/queue/items/12/history"]
-    for url in urls:
+    for url in URLS:
         assert client.get(url).status_code == 200, url
+    floor = client.get("/guild-next/api/v1/floor").get_json()
+    assert floor["briefing"]["label"] == "platform rules"
+    systems = {l["id"]: l for l in floor["lights"]}["systems"]
+    assert systems["state"] == "green" and systems["detail"]    # what Ask explains
     new = set(sys.modules) - before
     assert not [m for m in new if m.split(".")[0] in {p.split(".")[0] for p in PROVIDER_MODULES}]
-    # The only outbound attempt is the configured Operations probe, and it failed closed to unknown.
-    assert all(addr[0] == "ops.invalid" for addr in no_outbound)
+    assert probe_calls and set(probe_calls) == {OPS_URL}
+    assert_no_outbound(no_outbound)
+
+
+def test_meta_the_guard_catches_requests_urllib_and_http_client(no_outbound):
+    """The guard is real: each client library's attempt is seen and refused."""
+    import http.client
+    import urllib.request
+
+    import requests
+
+    with pytest.raises(requests.exceptions.ConnectionError):
+        requests.get("http://127.0.0.2:9/status", timeout=1)
+    with pytest.raises(OSError):
+        urllib.request.urlopen("http://api.anthropic.com/v1/messages", timeout=1)
+    with pytest.raises(OSError):
+        conn = http.client.HTTPConnection("api.x.ai", 80, timeout=1)
+        conn.request("GET", "/")
+    with pytest.raises(OSError):
+        socket.create_connection(("127.0.0.1", 9), timeout=1)
+    kinds = {kind for kind, _ in no_outbound}
+    targets = " ".join(repr(t) for _, t in no_outbound)
+    assert "127.0.0.2" in targets and "api.anthropic.com" in targets and "api.x.ai" in targets
+    assert kinds & {"getaddrinfo", "connect"}
+    with pytest.raises(AssertionError):
+        assert_no_outbound(no_outbound)
+
+
+def test_meta_an_unmocked_probe_makes_the_no_outbound_test_fail(load_portal, no_outbound):
+    """Prove the assertion above can fail: with the real probe (requests) and an
+    address outside any allowlist, the attempt is recorded, the light fails
+    closed to unknown, and assert_no_outbound raises."""
+    portal = load_portal(ops_url="http://127.0.0.2:8768/status")
+    floor = portal.owner().get("/guild-next/api/v1/floor")
+    assert floor.status_code == 200
+    systems = {l["id"]: l for l in floor.get_json()["lights"]}["systems"]
+    assert systems["state"] == "unknown" and systems["reason"] == "Operations agent unreachable"
+    assert any("127.0.0.2" in repr(target) for _, target in no_outbound)
+    with pytest.raises(AssertionError):
+        assert_no_outbound(no_outbound)

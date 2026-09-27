@@ -2,7 +2,7 @@
 // writes the live queue (lock, unchanged-check, atomic replace, read-back) and
 // answers with a receipt or a plain reason. Nothing is kept in the browser.
 import { $, $$, el, notice } from './dom.js';
-import { saveStatus, markChecked } from './actions.js';
+import { saveStatus, markChecked, newKey } from './actions.js';
 import { addPlatform } from './conversation.js';
 import { refresh } from './floor.js';
 
@@ -15,6 +15,15 @@ function showResult(node, kind, text) {
   node.dataset.kind = kind;
   node.textContent = text;
 }
+
+// A new key when the form opens and whenever the change in it changes; the
+// same key for every click and retry of that one change (review F9).
+function rotateKey(form) { form.dataset.idemKey = newKey(); }
+
+// After these the change is settled (or the item moved under it), so the next
+// Save is a new change. After anything else (network, busy, uncertain, ...)
+// a retry reuses the key and gets the first receipt if the write happened.
+const SETTLED = ['saved', 'conflict', 'idempotency_mismatch', 'invalid', 'not_found'];
 
 function applyForm(form) {
   const sel = $('[data-status-select]', form);
@@ -63,9 +72,13 @@ async function onSubmit(form) {
   const note = $('[data-note]', form).value;
   const button = $('[data-save]', form);
   const out = $('[data-save-result]', form);
+  if (form.dataset.saving === 'true') return;   // a second click while the first is in flight
+  form.dataset.saving = 'true';
   button.disabled = true;
-  const res = await saveStatus(Number(form.dataset.itemId), sel.value, note, form.dataset.digest);
+  const res = await saveStatus(Number(form.dataset.itemId), sel.value, note, form.dataset.digest, form.dataset.idemKey);
   button.disabled = false;
+  form.dataset.saving = 'false';
+  if (SETTLED.includes(res.code)) rotateKey(form);
   showResult(out, res.kind, res.message || 'Nothing was saved');
   if (res.code === 'saved') {
     applyItemToForm(form, res.item, res.item_digest);
@@ -81,7 +94,9 @@ export function initQueue(p) {
   page = p;
   for (const form of $$('[data-status-form]')) {
     const sel = $('[data-status-select]', form);
-    sel.addEventListener('change', () => applyForm(form));
+    rotateKey(form);
+    sel.addEventListener('change', () => { rotateKey(form); applyForm(form); });
+    $('[data-note]', form).addEventListener('input', () => rotateKey(form));
     form.addEventListener('submit', (e) => { e.preventDefault(); onSubmit(form); });
     applyForm(form);
   }

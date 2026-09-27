@@ -10,6 +10,12 @@ Unset (production) means nothing is registered, so both prefixes fall through
 to the portal's own routes and answer 404. Only "1", "true", "on" or "yes"
 switch a mount on; any other value is off.
 
+The switches count only on a staging origin (review F8): ``BASE_URL``'s host
+must be ``dev.minimoi.ai``, ``localhost`` or ``127.0.0.1``, or be named in
+``MINIMOI_GUILD_ALLOWED_HOSTS`` (comma-separated; for tests or a future
+always-on staging host). An empty, unknown or production ``BASE_URL`` refuses
+both mounts, whatever the switches say.
+
 Both mounts use the portal's real owner guard. A mount that is switched on but
 fails to register never falls back to anything: its prefix answers 503 (JSON
 under /api/, a short page otherwise), still behind the owner guard, so an
@@ -104,12 +110,30 @@ def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, ope
         register_guild_ui(app, owner_guard=owner_guard, current_user=current_user, url_prefix=NEXT_PREFIX,
                           blueprint_name=NEXT_NAME, services=services, base_url=base_url)
         log.info("guild mount: /guild-next registered")
-        return "on"
     except Exception:
         log.exception("guild mount: /guild-next failed to register; answering 503 there")
         register_unavailable(app, url_prefix=NEXT_PREFIX, name=NEXT_NAME, owner_guard=owner_guard,
                              current_user=current_user, label="Guild next")
         return "unavailable"
+    reconcile_once(services.store)
+    return "on"
+
+
+def reconcile_once(store) -> list | None:
+    """Spec §6.3 "at store start" (review F10): settle any Save a crash left
+    half-done, so its Check shows before the next write. Best effort: a
+    failure is logged and never stops the mount."""
+    try:
+        outcomes = store.reconcile()
+    except Exception:
+        log.exception("guild mount: queue reconcile at start failed; the next Save reconciles instead")
+        return None
+    if outcomes:
+        log.warning("guild mount: reconciled %d unfinished Save(s) at start: %s", len(outcomes),
+                    ", ".join(f"{o.get('op_id')}={o.get('outcome', o.get('kind'))}" for o in outcomes))
+    else:
+        log.info("guild mount: queue journal reconciled at start; nothing unfinished")
+    return outcomes
 
 
 def _load_prototype():
@@ -150,24 +174,39 @@ def mount_guild_proto(app, *, environ, owner_guard, current_user) -> str:
         return "unavailable"
 
 
-PRODUCTION_HOSTS = {"minimoi.ai", "www.minimoi.ai"}
+STAGING_HOSTS = frozenset({"dev.minimoi.ai", "localhost", "127.0.0.1"})
+ALLOWED_HOSTS_VAR = "MINIMOI_GUILD_ALLOWED_HOSTS"
 
 
-def is_production_origin(base_url) -> bool:
-    """True when the portal serves the production site. The Guild switches are
-    ignored there even if set: /opt/minimoi/.env is shared by every production
-    service, so one stray line must not expose these routes."""
+def origin_host(base_url) -> str:
     from urllib.parse import urlsplit
-    host = (urlsplit(str(base_url or "")).hostname or "").lower()
-    return host in PRODUCTION_HOSTS
+    try:
+        return (urlsplit(str(base_url or "")).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def allowed_hosts(environ) -> frozenset:
+    extra = {h.strip().lower() for h in str(environ.get(ALLOWED_HOSTS_VAR, "")).split(",") if h.strip()}
+    return STAGING_HOSTS | extra
+
+
+def is_staging_origin(base_url, environ) -> bool:
+    """True only for a staging origin (an allowlist, review F8). The Guild
+    switches are ignored anywhere else even if set: /opt/minimoi/.env is
+    shared by every production service, so one stray line must not expose
+    these routes, and a missing or unfamiliar BASE_URL is not staging."""
+    host = origin_host(base_url)
+    return bool(host) and host in allowed_hosts(environ)
 
 
 def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict:
     base_url = next_kwargs.get("base_url") or environ.get("BASE_URL")
-    if is_production_origin(base_url):
+    if not is_staging_origin(base_url, environ):
         if flag_on(environ, NEXT_FLAG) or flag_on(environ, PROTO_FLAG):
-            log.warning("guild mounts: MINIMOI_GUILD_NEXT/PROTO ignored on the production origin %s", base_url)
-        return {"guild_proto": "refused_production", "guild_next": "refused_production"}
+            log.warning("guild mounts: MINIMOI_GUILD_NEXT/PROTO ignored; %r is not a staging origin "
+                        "(allowed: %s)", base_url, ", ".join(sorted(allowed_hosts(environ))))
+        return {"guild_proto": "refused_not_staging", "guild_next": "refused_not_staging"}
     return {
         "guild_proto": mount_guild_proto(app, environ=environ, owner_guard=owner_guard, current_user=current_user),
         "guild_next": mount_guild_next(app, environ=environ, owner_guard=owner_guard, current_user=current_user,

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import threading
+import uuid
 
 from domains.guild import queue_store as qs
 
@@ -20,9 +21,8 @@ def _digest(portal, item_id):
 
 
 def _save(portal, client, token, item_id=12, to="done", digest=None, key=None, note=None):
-    body = {"to": to, "expect_item_digest": digest or _digest(portal, item_id)}
-    if key:
-        body["idempotency_key"] = key
+    body = {"to": to, "expect_item_digest": digest or _digest(portal, item_id),
+            "idempotency_key": key or uuid.uuid4().hex}
     if note is not None:
         body["note"] = note
     return client.post(URL.format(item_id), json=body, headers=write_headers(token))
@@ -120,7 +120,8 @@ def test_invalid_not_found_and_stale_page(staging):
     bad = client.post(URL.format(12), json={"to": "shipped", "expect_item_digest": _digest(staging, 12)},
                       headers=write_headers(token))
     assert bad.status_code == 422 and bad.get_json()["result"] == "invalid"
-    missing = client.post(URL.format(999), json={"to": "done", "expect_item_digest": "0" * 64},
+    missing = client.post(URL.format(999), json={"to": "done", "expect_item_digest": "0" * 64,
+                                                 "idempotency_key": "missing-item-key"},
                           headers=write_headers(token))
     assert missing.status_code == 404 and missing.get_json()["message"] == "#999 is not in the queue. Nothing was saved"
     stale = client.post(URL.format(12), json={"to": "done"}, headers=write_headers(token))
@@ -217,3 +218,32 @@ def test_an_os_error_while_writing_is_failed_and_the_queue_is_unchanged(staging,
     assert body["result"] == "failed" and body["verified"] is False and body["receipt_id"] is None
     assert body["message"] == "The queue could not be written, so nothing was saved. The live queue is unchanged"
     assert staging.queue_path.read_bytes() == before
+
+
+def test_a_save_without_an_idempotency_key_is_refused_and_writes_nothing(staging):
+    """Review F9: the key is required, so a repeated click can always replay."""
+    client = staging.owner()
+    token = staging.csrf(client)
+    before = staging.queue_path.read_bytes()
+    for key in (None, "", "short", "has spaces in it", 12345678, "x" * 65):
+        body = {"to": "done", "expect_item_digest": _digest(staging, 12)}
+        if key is not None:
+            body["idempotency_key"] = key
+        response = client.post(URL.format(12), json=body, headers=write_headers(token))
+        assert response.status_code == 422, key
+        assert response.get_json()["result"] == "invalid"
+        assert "idempotency key" in response.get_json()["message"]
+    assert staging.queue_path.read_bytes() == before
+    assert staging.journal() == []
+
+
+def test_a_double_click_with_the_form_key_writes_once_and_replays_the_receipt(staging):
+    """The page sends one key per opened form or change: two clicks, one write."""
+    client = staging.owner()
+    token = staging.csrf(client)
+    digest = _digest(staging, 12)
+    first = _save(staging, client, token, digest=digest, key="form-key-12-done").get_json()
+    second = _save(staging, client, token, digest=digest, key="form-key-12-done").get_json()
+    assert first["result"] == second["result"] == "saved"
+    assert second["receipt_id"] == first["receipt_id"] and second["repeated"] is True
+    assert len([l for l in staging.journal() if l.get("kind") == "intent"]) == 1

@@ -243,3 +243,132 @@ def test_a_broken_queue_reads_unknown_in_the_browser(browser, server, fresh_queu
         ctx.close()
     finally:
         write_queue(fresh_queue, QUEUE_ITEMS)
+
+
+FLOOR_API = "**/guild-next/api/v1/floor"
+
+
+def poll(page):
+    """Run one floor poll now, the way returning to the tab does."""
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+
+
+def _page_errors(page):
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    return errors
+
+
+def test_a_failed_poll_turns_the_floor_stale_then_unknown_and_recovers(browser, server, fresh_queue):
+    """Review F1: a failed poll never leaves the last values looking current."""
+    ctx, page = _context(browser, server)
+    errors = _page_errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    queue = page.locator('[data-light="build_queue"]')
+    expect(queue).to_have_attribute("data-light-state", "red")
+    expect(queue.locator("[data-light-src]")).to_have_text("live")
+    page.route(FLOOR_API, lambda route: route.fulfill(status=503, content_type="application/json",
+                                                        body='{"error": "unavailable", "message": "down"}'))
+    poll(page)
+    # one miss: stale, with a word, its own shape and the time since the last good read
+    expect(queue).to_have_attribute("data-light-state", "stale")
+    expect(queue.locator("[data-light-word]")).to_have_text("Stale · was Problem")
+    expect(queue.locator("svg.lshape")).to_have_attribute("data-shape", "stale")
+    expect(queue.locator("[data-light-src]")).to_contain_text("stale · last good read")
+    expect(queue.locator("[data-light-src]")).to_contain_text("ago)")
+    expect(page.locator('[data-lc="build_queue"] [data-lc-word]')).to_have_text("Stale")
+    expect(page.locator("[data-stale-banner]")).to_contain_text("the server answered 503")
+    expect(page.locator("[data-needs-line]")).to_contain_text("stale, last good read")
+    expect(page.locator("[data-briefing-text]")).to_contain_text("Stale, last good read")
+    expect(page.locator('[data-zone="needs"]')).to_have_attribute("data-stale", "stale")
+    for light in page.locator("[data-light]").all():
+        expect(light.locator("[data-light-src]")).not_to_have_text("live")
+    # two misses (here a network error): grey unknown, never "live"
+    page.unroute(FLOOR_API)
+    page.route(FLOOR_API, lambda route: route.abort())
+    poll(page)
+    expect(queue).to_have_attribute("data-light-state", "unknown")
+    expect(queue.locator("[data-light-word]")).to_have_text("Unknown")
+    expect(queue.locator("svg.lshape")).to_have_attribute("data-shape", "ring")
+    expect(queue.locator("[data-light-src]")).to_contain_text("unknown · no good read since")
+    expect(page.locator("[data-needs-line]")).to_contain_text("Needs you · unknown — no good read since")
+    expect(page.locator("[data-reminder-count]")).to_have_text("?")
+    expect(page.locator("[data-briefing-text]")).to_contain_text("Floor unknown")
+    expect(page.locator("[data-stale-banner]")).to_contain_text("could not be reached")
+    assert page.evaluate("document.body.dataset.freshness") == "unknown"
+    # the server answers again (304 on the old tag): live values come back
+    page.unroute(FLOOR_API)
+    poll(page)
+    expect(queue).to_have_attribute("data-light-state", "red")
+    expect(queue.locator("[data-light-src]")).to_have_text("live")
+    expect(queue.locator("svg.lshape")).to_have_attribute("data-shape", "square")
+    expect(page.locator("[data-stale-banner]")).to_be_hidden()
+    expect(page.locator("[data-reminder-count]")).to_have_text("1")
+    assert page.locator('[data-zone="needs"]').get_attribute("data-stale") is None
+    assert not errors, errors
+    ctx.close()
+
+
+def test_three_minutes_without_a_good_read_is_unknown(browser, server, fresh_queue):
+    """The time rule alone: no poll fails (they never answer), only the page's
+    clock moves: stale after 90 s, grey unknown after 3 minutes."""
+    ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+    page = ctx.new_page()
+    page.clock.install()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    queue = page.locator('[data-light="build_queue"]')
+    page.route(FLOOR_API, lambda route: None)   # a hung server: no answer, so no miss is counted
+    page.clock.fast_forward("01:40")
+    expect(queue).to_have_attribute("data-light-state", "stale")
+    expect(queue.locator("[data-light-src]")).to_contain_text("1 min ago")
+    page.clock.fast_forward("01:25")
+    expect(queue).to_have_attribute("data-light-state", "unknown")
+    expect(queue.locator("[data-light-src]")).to_contain_text("3 min ago")
+    ctx.close()
+
+
+def test_a_401_greys_the_floor_as_signed_out(browser, server, fresh_queue):
+    ctx, page = _context(browser, server)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.route(FLOOR_API, lambda route: route.fulfill(status=401, content_type="application/json",
+                                                        body='{"error": "not_signed_in", "message": "Sign in first."}'))
+    poll(page)
+    queue = page.locator('[data-light="build_queue"]')
+    expect(queue).to_have_attribute("data-light-state", "unknown")
+    expect(queue.locator("[data-light-word]")).to_have_text("Signed out")
+    expect(queue.locator("[data-light-src]")).to_contain_text("signed out · last good read")
+    expect(page.locator("[data-needs-line]")).to_have_text("Needs you · unknown — signed out")
+    expect(page.locator("[data-stale-banner]")).to_contain_text("Signed out")
+    ctx.close()
+
+
+def test_one_idempotency_key_per_change_and_a_retry_reuses_it(browser, server, fresh_queue):
+    """Review F9: the key belongs to the opened form and its change, not the click."""
+    ctx, page = _context(browser, server)
+    go(page, f"{server['url']}/guild-next/guild/build/items/12")
+    form = page.locator("[data-status-form]")
+    opened = form.get_attribute("data-idem-key")
+    assert opened and len(opened) >= 8
+    form.locator("[data-status-select]").select_option("done")
+    key = form.get_attribute("data-idem-key")
+    assert key != opened
+    sent = []
+    status_api = "**/guild-next/api/v1/queue/items/12/status"
+
+    def lose_the_answer(route):
+        sent.append(json.loads(route.request.post_data)["idempotency_key"])
+        route.abort()
+    page.route(status_api, lose_the_answer)
+    form.locator("[data-save]").click()
+    expect(form.locator("[data-save-result]")).to_contain_text("could not be reached")
+    page.unroute(status_api)
+    page.on("request", lambda r: sent.append(json.loads(r.post_data)["idempotency_key"])
+            if r.url.endswith("/queue/items/12/status") else None)
+    form.locator("[data-save]").click()
+    expect(form.locator("[data-save-result]")).to_contain_text("Saved · verified · receipt q-")
+    assert sent == [key, key]
+    journal = [json.loads(l) for l in (fresh_queue.parent / qs.JOURNAL_NAME).read_text().splitlines() if l.strip()]
+    assert len([l for l in journal if l.get("kind") == "intent"]) == 1
+    assert form.get_attribute("data-idem-key") != key   # the next change gets a new key
+    ctx.close()

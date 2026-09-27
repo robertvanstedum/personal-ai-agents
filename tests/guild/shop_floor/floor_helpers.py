@@ -105,6 +105,7 @@ def load_portal(monkeypatch, tmp_path):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("GUILD_RECORDS_DB", raising=False)
     monkeypatch.delenv("SENTRY_DSN", raising=False)
+    monkeypatch.delenv("MINIMOI_GUILD_ALLOWED_HOSTS", raising=False)
 
     def _load(*, next_flag: str | None = "1", proto_flag: str | None = None,
               queue: str | Path | None | bool = True, base_url="https://dev.minimoi.ai",

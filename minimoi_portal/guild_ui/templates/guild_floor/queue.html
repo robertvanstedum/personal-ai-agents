@@ -38,7 +38,7 @@
 </div>
 {% if unknown_rows %}
 <section class="card unknown-rows" data-unknown-rows aria-labelledby="unk-h">
-  <h2 class="h2" id="unk-h">Rows with unknown status · not counted as active {{ src_badge(badge(res)) }}</h2>
+  <h2 class="h2" id="unk-h">Unknown rows (status or fields unreadable) · not counted {{ src_badge(badge(res)) }}</h2>
   <ul class="rows">
     {% for it in unknown_rows %}
     <li class="row" data-unknown-row data-item-id="{{ it.id }}"><span><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title|truncate(70, true, '…') }}</a></span>{{ status_mark(it) }}</li>

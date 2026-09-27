@@ -1,5 +1,11 @@
-{# Saves left unverified (spec §6.3): shown until Robert marks them checked. #}
-{% if checks %}
+{# Saves left unverified (spec §6.3): shown until Robert marks them checked.
+   An unreadable journal is shown as unknown, never as "no Checks" (review F3). #}
+{% if checks_res is defined and not checks_res.ok %}
+<section class="card" data-checks data-checks-unknown aria-labelledby="checks-h">
+  <h2 class="h2" id="checks-h">Check · unknown</h2>
+  <p class="unknown-line" data-row>Checks unknown — journal unreadable{% if checks_res.error %} ({{ checks_res.error }}){% endif %}. A Save may be waiting to be checked.</p>
+</section>
+{% elif checks %}
 <section class="card" data-checks aria-labelledby="checks-h">
   <h2 class="h2" id="checks-h">Check · Save not verified</h2>
   <ul class="checks-list">

@@ -19,9 +19,13 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 from pathlib import Path
 
 from flask import Blueprint, current_app, request, send_from_directory
+from werkzeug.exceptions import HTTPException
+
+log = logging.getLogger(__name__)
 
 PACKAGE = Path(__file__).resolve().parent
 STATIC = PACKAGE / "static"
@@ -73,6 +77,20 @@ def _headers(response):
     return response
 
 
+def _api_error(exc):
+    """Unexpected errors under <mount>/api/ answer JSON, never Flask's HTML 500
+    (spec §5.1, review F11). Pages and HTTP errors keep their usual answers."""
+    if isinstance(exc, HTTPException):
+        return exc
+    prefix = current_app.extensions.get(request.blueprint, {}).get("url_prefix", "")
+    if not request.path.startswith(f"{prefix}/api/"):
+        raise exc
+    log.exception("guild floor API: unexpected error on %s %s", request.method, request.path)
+    from .security import json_error
+    return json_error("server_error", "Something went wrong on the server. Reload to see the current "
+                      "state before trying again.", 500)
+
+
 @owner_page
 def asset(filename):
     return send_from_directory(STATIC, filename, max_age=0)
@@ -83,6 +101,7 @@ def _make_blueprint(name: str, routes) -> Blueprint:
 
     bp = Blueprint(name, __name__, template_folder=str(PACKAGE / "templates"))
     bp.after_request(_headers)
+    bp.register_error_handler(Exception, _api_error)
     page_rules = {
         "floor": [("/guild/build", "floor", pages.floor)],
         "bench": [("/guild/build/bench", "bench", pages.bench)],

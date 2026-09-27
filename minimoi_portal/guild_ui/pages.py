@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from flask import render_template, request, url_for
 
 from . import cfg, floor_state, owner_page
-from .adapters import ACTIVE, STATUSES
+from .adapters import ACTIVE, STATUSES, by_recent
 from .briefing import LABEL as RULES_LABEL
 from .security import OFF_RECORD_TEXT, csrf_token
 
@@ -110,11 +110,12 @@ def queue():
     res = services.queue.list_items()
     ctx = _context("queue", "Build Queue", "Build Queue")
     rows = res.data or []
-    items = sorted([i for i in rows if i["status_known"] and i["status"] in ACTIVE],
-                   key=lambda i: i["last_transition_at"] or "", reverse=True)
+    items = sorted([i for i in rows if i["status_known"] and i["status"] in ACTIVE], key=by_recent, reverse=True)
     unknown_rows = [i for i in rows if not i["status_known"]]
+    checks_res = services.queue.checks()
     return render_template("guild_floor/queue.html", res=res, items=items, unknown_rows=unknown_rows,
-                           checks=services.queue.checks(), focus_id=request.args.get("focus", type=int), **ctx)
+                           checks=checks_res.data or [], checks_res=checks_res,
+                           focus_id=request.args.get("focus", type=int), **ctx)
 
 
 @owner_page
@@ -126,9 +127,11 @@ def item(item_id: int):
         return render_template("guild_floor/not_found.html", item_id=item_id, **ctx), 404
     title = res.data["title"] if res.ok else "unknown"
     ctx = _context("item", "Build Queue", f"#{item_id} {title}", page_extra={"item_id": item_id})
-    checks = [ch for ch in services.queue.checks() if ch.get("item_id") == item_id]
+    checks_res = services.queue.checks()
+    checks = [ch for ch in (checks_res.data or []) if ch.get("item_id") == item_id]
     return render_template("guild_floor/item.html", res=res, it=res.data, item_id=item_id,
-                           history=services.history.history(item_id), checks=checks, **ctx)
+                           history=services.history.history(item_id), checks=checks, checks_res=checks_res,
+                           **ctx)
 
 
 @owner_page

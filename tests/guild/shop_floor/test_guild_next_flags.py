@@ -81,17 +81,42 @@ def test_the_portal_image_keeps_the_prototype_folder_for_the_staging_mount():
     assert not any(line.strip().startswith("prototype-lab") for line in ignore)
 
 
-@pytest.mark.parametrize("base_url", ["https://minimoi.ai", "https://www.minimoi.ai/", "https://MINIMOI.AI"])
-def test_switches_are_ignored_on_the_production_origin(load_portal, base_url):
-    """/opt/minimoi/.env is shared by every production service: a stray switch there
-    must not expose /guild-next or /guild-proto on minimoi.ai."""
+@pytest.mark.parametrize("base_url", [
+    "https://minimoi.ai", "https://www.minimoi.ai/", "https://MINIMOI.AI",   # production
+    "", None, "not a url", "https://10.0.0.5", "https://staging.minimoi.ai",  # empty or unknown
+    "https://dev.minimoi.ai.evil.example", "https://minimoi.ai/dev.minimoi.ai",
+])
+def test_switches_are_refused_off_a_staging_origin(load_portal, monkeypatch, base_url):
+    """Review F8: an allowlist, not a production blocklist. /opt/minimoi/.env is
+    shared by every production service, so a stray switch must not expose
+    /guild-next or /guild-proto anywhere but a staging origin; an empty or
+    unfamiliar BASE_URL is not staging."""
+    monkeypatch.delenv("BASE_URL", raising=False)
+    monkeypatch.delenv("MINIMOI_GUILD_ALLOWED_HOSTS", raising=False)
     portal = load_portal(next_flag="1", proto_flag="1", base_url=base_url)
-    assert portal.module.GUILD_MOUNTS == {"guild_proto": "refused_production",
-                                          "guild_next": "refused_production"}
+    assert portal.module.GUILD_MOUNTS == {"guild_proto": "refused_not_staging",
+                                          "guild_next": "refused_not_staging"}
     assert _rules(portal.app, "/guild-next") == [] and _rules(portal.app, "/guild-proto") == []
+    assert portal.owner().get("/guild-next/guild/build").status_code == 404
 
 
-def test_switches_work_on_the_staging_origin(load_portal):
-    portal = load_portal(next_flag="1", proto_flag="1", base_url="https://dev.minimoi.ai")
-    assert portal.module.GUILD_MOUNTS["guild_next"] not in ("off", "refused_production")
+@pytest.mark.parametrize("base_url", ["https://dev.minimoi.ai", "http://localhost:5001", "http://127.0.0.1:5001",
+                                      "https://DEV.minimoi.ai/"])
+def test_switches_work_on_a_staging_origin(load_portal, monkeypatch, base_url):
+    monkeypatch.delenv("MINIMOI_GUILD_ALLOWED_HOSTS", raising=False)
+    portal = load_portal(next_flag="1", proto_flag="1", base_url=base_url)
+    assert portal.module.GUILD_MOUNTS == {"guild_proto": "on", "guild_next": "on"}
     assert _rules(portal.app, "/guild-next")
+
+
+def test_an_explicit_allowed_host_override_admits_only_that_host(load_portal, monkeypatch):
+    monkeypatch.setenv("MINIMOI_GUILD_ALLOWED_HOSTS", " staging.example.test , other.test")
+    portal = load_portal(next_flag="1", base_url="https://staging.example.test")
+    assert portal.module.GUILD_MOUNTS["guild_next"] == "on"
+    portal = load_portal(next_flag="1", base_url="https://minimoi.ai")
+    assert portal.module.GUILD_MOUNTS["guild_next"] == "refused_not_staging"
+
+
+def test_production_compose_sets_no_allowed_hosts_override():
+    text = (REPO / "docker-compose.prod.yml").read_text()
+    assert "MINIMOI_GUILD_ALLOWED_HOSTS" not in text

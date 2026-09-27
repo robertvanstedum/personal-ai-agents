@@ -22,6 +22,7 @@ PRECEDENCE = ("unknown", "red", "yellow", "green")
 SOURCE_MARK = {"live": "live", NOT_INSTRUMENTED: "not instrumented"}
 REASON_MAX = 40
 SYSTEMS_FRESH_S = 600  # the Operations agent must have checked in within 10 minutes
+SYSTEMS_SKEW_S = 60    # a check-in further ahead of this portal's clock is clock skew, not fresh
 
 
 def short(text: str, limit: int = REASON_MAX) -> str:
@@ -51,11 +52,11 @@ def queue_light(res: SourceResult) -> dict:
     active = sum(1 for i in rows if i.get("status_known") and i.get("status") in ("spec_ready", "in_build"))
     detail = [f"{active} active (Spec Ready + In Build)", f"{blocked} blocked", f"{len(rows)} rows in the queue file"]
     if odd:
-        detail.append(f"{odd} row{'s' if odd != 1 else ''} with unknown status")
+        detail.append(f"{odd} unknown row{'s' if odd != 1 else ''} (status or fields unreadable)")
     if blocked:
         return make("red", f"{blocked} blocked · {active} active", res, detail)
     if odd:
-        return make("yellow", f"{odd} row{'s' if odd != 1 else ''} with unknown status", res, detail)
+        return make("yellow", f"{odd} unknown row{'s' if odd != 1 else ''}", res, detail)
     return make("green", f"{active} active · 0 blocked", res, detail)
 
 
@@ -73,7 +74,8 @@ def _parse_time(value) -> datetime | None:
 
 def systems_light(res: SourceResult, now: datetime | None = None) -> dict:
     """Green only when the Operations agent is reachable, running and checked in
-    within 10 minutes. Everything else is unknown (grey), never green. The
+    within 10 minutes. Everything else is unknown (grey), never green, with
+    the reason; a check-in time in the future is clock skew (review F6). The
     agent's escalation count is shown as reported and never counts toward
     green, because it reads 0 when the agent's own database read fails (C22)."""
     if res.source == NOT_INSTRUMENTED:
@@ -95,9 +97,14 @@ def systems_light(res: SourceResult, now: datetime | None = None) -> dict:
     if checkin is None:
         detail.append("last check-in: missing or unreadable")
         return make("unknown", "no readable check-in time", res, detail)
-    age_min = max(0, int((now - checkin).total_seconds() // 60))
+    age_s = (now - checkin).total_seconds()
+    if age_s < -SYSTEMS_SKEW_S:
+        ahead_min = int(-age_s // 60)
+        detail.append(f"last check-in: {ahead_min} min in the future (clock skew; not fresh)")
+        return make("unknown", "clock skew · check-in in the future", res, detail)
+    age_min = max(0, int(age_s // 60))
     detail.append(f"last check-in: {age_min} min ago")
-    if (now - checkin).total_seconds() > SYSTEMS_FRESH_S:
+    if age_s > SYSTEMS_FRESH_S:
         return make("unknown", f"last check-in {age_min} min ago", res, detail)
     return make("green", f"running · checked in {age_min} min ago", res, detail)
 

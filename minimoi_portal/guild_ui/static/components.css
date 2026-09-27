@@ -352,6 +352,13 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
 [data-light-state="unknown"] .lshape { fill: none; }
 .lshape-ring { fill: none; stroke: var(--gu-light-unknown); stroke-width: 1.6; stroke-dasharray: 2.4 1.8; }
 .lshape-q { fill: var(--gu-light-unknown); font-size: 9px; font-weight: 700; }
+/* Stale (review F1): a clock shape, no colour, and a dashed edge on every zone it touches. */
+[data-light-state="stale"] .lshape { fill: none; }
+.lshape-clock { fill: none; stroke: var(--gu-light-unknown); stroke-width: 1.6; stroke-linecap: round; }
+[data-stale="stale"], [data-stale="unknown"], [data-stale="signed_out"] { outline: 1px dashed var(--gu-unknown-border); outline-offset: -1px; }
+[data-stale="unknown"] .light-word, [data-stale="signed_out"] .light-word, [data-stale="unknown"] .lc-word, [data-stale="signed_out"] .lc-word { color: var(--gu-unknown-ink); }
+.gu-stale { display: flex; gap: 6px; align-items: flex-start; border-style: dashed; }
+.gu-stale .lshape { margin-top: 1px; }
 .floor-rail { display: flex; flex-direction: column; gap: var(--gu-gutter); }
 .floor-urgent, .floor-chip { display: none; }
 .floor-sheet { display: flex; flex-direction: column; gap: var(--gu-gutter); }

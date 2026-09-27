@@ -52,6 +52,7 @@ export function localizeTimes(root = document) {
 }
 
 // The light's shape, built as SVG nodes (colour is never the only signal).
+// 'stale' is a clock: the value is from an earlier read (floor.js, review F1).
 const SVG = 'http://www.w3.org/2000/svg';
 export function shapeSvg(shape) {
   const svg = document.createElementNS(SVG, 'svg');
@@ -69,6 +70,7 @@ export function shapeSvg(shape) {
   if (shape === 'circle') add('circle', { cx: 8, cy: 8, r: 6.5 });
   else if (shape === 'triangle') add('polygon', { points: '8,1.2 15.2,14.6 0.8,14.6' });
   else if (shape === 'square') add('rect', { x: 1.8, y: 1.8, width: 12.4, height: 12.4 });
+  else if (shape === 'stale') { add('circle', { cx: 8, cy: 8, r: 6.2, class: 'lshape-clock' }); add('path', { d: 'M8 4.2V8l2.6 1.8', class: 'lshape-clock' }); }
   else { add('circle', { cx: 8, cy: 8, r: 6.2, class: 'lshape-ring' }); add('text', { x: 8, y: 11.6, 'text-anchor': 'middle', class: 'lshape-q' }, '?'); }
   return svg;
 }

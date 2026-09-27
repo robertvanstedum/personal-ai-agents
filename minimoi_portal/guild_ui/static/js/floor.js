@@ -1,37 +1,55 @@
 // Shop floor state on screen: lights, Needs you and the opening briefing, kept
 // current by polling the API every 60 s while the page is visible (and once
 // after each Save). Rules only; nothing here calls a model.
+//
+// A failed poll never leaves old values looking current (review F1): the
+// floor turns "stale" (word, clock shape, time since the last good read), then
+// grey "unknown" after two missed polls or 3 minutes; a 401 greys it at once
+// as "signed out". The rules are in freshness.js.
 import { $, $$, el, shapeSvg, localTime, localizeTimes } from './dom.js';
 import { apiGet } from './api.js';
 import { explain, setBriefing } from './conversation.js';
+import { freshnessOf, lightView, needsView, bannerText, briefingText, sinceText } from './freshness.js';
 
 let page;
 let current = null;
 let etag = null;
 let timer = null;
+let ticker = null;
 const POLL_MS = 60000;
+const TICK_MS = 15000;
 
-function setLight(node, light) {
-  node.dataset.lightState = light.state;
+const fresh = { mode: 'live', missed: 0, signedOut: false, lastGoodMs: Date.now(), why: '' };
+const clock = (ms) => localTime(new Date(ms).toISOString());
+const since = () => sinceText(fresh.lastGoodMs, Date.now(), clock);
+
+function setShape(node, shape) {
   const old = node.querySelector('svg.lshape');
-  if (old) old.replaceWith(shapeSvg(light.shape));
+  if (old && old.dataset.shape !== shape) old.replaceWith(shapeSvg(shape));
 }
 
 function renderLights(lights) {
+  const at = since();
   for (const l of lights) {
+    const v = lightView(l, fresh.mode, at);
     for (const node of $$(`[data-light="${l.id}"], [data-lc="${l.id}"]`)) {
-      setLight(node, l);
-      const word = node.querySelector('[data-light-word], [data-lc-word]');
-      if (word) word.textContent = l.word;
+      node.dataset.lightState = v.state;
+      if (fresh.mode === 'live') delete node.dataset.stale; else node.dataset.stale = fresh.mode;
+      setShape(node, v.shape);
+      const word = node.querySelector('[data-light-word]');
+      if (word) word.textContent = v.word;
+      const lcWord = node.querySelector('[data-lc-word]');
+      if (lcWord) lcWord.textContent = v.compactWord;
       const reason = node.querySelector('[data-light-reason]');
-      if (reason) reason.textContent = l.reason;
+      if (reason) reason.textContent = v.reason;
       const src = node.querySelector('[data-light-src]');
-      if (src) { src.textContent = l.source_mark; src.dataset.source = l.source; }
+      if (src) { src.textContent = v.src; src.dataset.source = v.source; }
     }
     for (const node of $$(`[data-ps-light="${l.id}"]`)) {
-      node.dataset.unknown = String(l.state === 'unknown');
-      node.querySelector('[data-ps-word]').textContent = l.word;
-      node.querySelector('[data-ps-reason]').textContent = l.reason;
+      node.dataset.unknown = String(v.unknown);
+      if (fresh.mode === 'live') delete node.dataset.stale; else node.dataset.stale = fresh.mode;
+      node.querySelector('[data-ps-word]').textContent = fresh.mode === 'live' ? v.word : v.compactWord;
+      node.querySelector('[data-ps-reason]').textContent = fresh.mode === 'live' ? v.reason : v.src;
     }
   }
 }
@@ -54,10 +72,10 @@ function renderNeeds(needs) {
       list.append(li);
     }
   }
-  for (const line of $$('[data-needs-line]')) line.textContent = needsLineText(needs);
-  const count = needs.total == null ? '?' : String(needs.total);
-  for (const c of $$('[data-reminder-count]')) c.textContent = count;
-  for (const c of $$('[data-needs-count]')) c.textContent = needs.total == null ? 'unknown' : String(needs.total);
+  const v = needsView(needs, fresh.mode, since(), needsLineText(needs));
+  for (const line of $$('[data-needs-line]')) line.textContent = v.line;
+  for (const c of $$('[data-reminder-count]')) c.textContent = v.count;
+  for (const c of $$('[data-needs-count]')) c.textContent = v.countWord;
   const phone = $('[data-needs-list]');
   if (phone) {
     phone.replaceChildren();
@@ -79,23 +97,85 @@ function renderNeeds(needs) {
   }
 }
 
+function renderFreshness() {
+  document.body.dataset.freshness = fresh.mode;
+  for (const zone of $$('[data-zone], [data-floor-urgent], .phone-summary, [data-panel="needs"]')) {
+    if (fresh.mode === 'live') delete zone.dataset.stale; else zone.dataset.stale = fresh.mode;
+  }
+  let banner = $('[data-stale-banner]');
+  if (!banner && fresh.mode !== 'live') {
+    banner = el('p', { class: 'gu-notice gu-stale', 'data-stale-banner': true, role: 'status' });
+    const anchor = $('[data-notice]');
+    if (anchor) anchor.after(banner); else document.body.prepend(banner);
+  }
+  if (!banner) return;
+  banner.hidden = fresh.mode === 'live';
+  banner.dataset.stale = fresh.mode;
+  banner.replaceChildren();
+  if (fresh.mode !== 'live') {
+    banner.append(shapeSvg(fresh.mode === 'stale' ? 'stale' : 'ring'), document.createTextNode(` ${bannerText(fresh.mode, since(), fresh.why)}`));
+  }
+}
+
+function render() {
+  if (!current) return;
+  renderLights(current.lights || []);
+  renderNeeds(current.needs);
+  if (current.briefing) {
+    setBriefing(current.briefing);
+    const text = $('[data-briefing-text]');
+    if (text && fresh.mode !== 'live') text.textContent = briefingText(fresh.mode, since(), text.textContent);
+  }
+  renderFreshness();
+  document.body.dataset.observedAt = current.observed_at;
+  localizeTimes();
+}
+
+// Re-derive the mode (failures and age) and redraw when it changes, or while
+// it is not live, so "N min ago" keeps counting.
+function applyFreshness(force = false) {
+  const mode = freshnessOf({ missed: fresh.missed, lastGoodMs: fresh.lastGoodMs, nowMs: Date.now(), signedOut: fresh.signedOut });
+  const changed = mode !== fresh.mode;
+  fresh.mode = mode;
+  if (force || changed || mode !== 'live') render();
+}
+
 export function applyState(state) {
   current = state;
   page.floor = state;
-  renderLights(state.lights);
-  renderNeeds(state.needs);
-  setBriefing(state.briefing);
-  document.body.dataset.observedAt = state.observed_at;
-  localizeTimes();
+  render();
+}
+
+function goodRead() {
+  fresh.missed = 0;
+  fresh.signedOut = false;
+  fresh.why = '';
+  fresh.lastGoodMs = Date.now();
 }
 
 export async function refresh() {
   const r = await apiGet('/floor', etag);
-  if (r.notModified) return current;
-  if (r.ok && r.body && r.body.lights) {
-    etag = r.etag;
-    applyState(r.body);
+  if (r.notModified) {
+    goodRead();
+    applyFreshness(true);
+    return current;
   }
+  if (r.ok && r.body && Array.isArray(r.body.lights)) {
+    etag = r.etag;
+    current = r.body;
+    page.floor = r.body;
+    goodRead();
+    applyFreshness(true);
+    return current;
+  }
+  if (r.status === 401) {
+    fresh.signedOut = true;
+    fresh.why = 'signed out';
+  } else {
+    fresh.missed += 1;
+    fresh.why = r.status ? `the server answered ${r.status}` : 'the server could not be reached';
+  }
+  applyFreshness(true);
   return current;
 }
 
@@ -116,8 +196,15 @@ function toggle(attr, btn, openText, closedText) {
 export function initFloorState(p) {
   page = p;
   current = p.floor;
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); schedule(); });
+  fresh.lastGoodMs = Date.now();
+  document.body.dataset.freshness = 'live';
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { applyFreshness(); refresh(); }
+    schedule();
+  });
   schedule();
+  window.clearInterval(ticker);
+  ticker = window.setInterval(() => applyFreshness(), TICK_MS);
   if (page.page !== 'floor') return;
   const lightsBtn = $('[data-lights-toggle]');
   lightsBtn.addEventListener('click', () => toggle('lightsOpen', lightsBtn, 'Hide ▴', 'Details ▾'));
@@ -126,7 +213,11 @@ export function initFloorState(p) {
   for (const b of $$('[data-ask]')) {
     b.addEventListener('click', () => {
       const light = (current.lights || []).find((l) => l.id === b.dataset.ask);
-      if (light) explain(light);
+      if (!light) return;
+      if (fresh.mode === 'live') { explain(light); return; }
+      const v = lightView(light, fresh.mode, since());
+      explain({ ...light, word: v.word, reason: v.reason, source_mark: v.src, detail: [v.src, ...(light.detail || [])] });
     });
   }
 }
+
