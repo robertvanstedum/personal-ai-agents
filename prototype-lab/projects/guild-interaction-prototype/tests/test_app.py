@@ -416,11 +416,13 @@ def test_portal_nav_global_not_overridden(tmp_path):
     app = host_app(tmp_path)
 
     def real_nav(user, active):
-        return "REAL-PORTAL-NAV"
+        return '<div id="portal-nav-bar">REAL-PORTAL-NAV</div>'
     app.jinja_env.globals["portal_nav_html"] = real_nav
     register_guild_ui(app, prototype=True, url_prefix="/guild-proto", sources="sample")
     assert app.jinja_env.globals["portal_nav_html"] is real_nav
-    assert "REAL-PORTAL-NAV" in app.test_client().get("/guild-proto/guild").get_data(as_text=True)
+    html = app.test_client().get("/guild-proto/guild").get_data(as_text=True)
+    assert '<div id="portal-nav-bar">REAL-PORTAL-NAV</div>' in html
+    assert "&lt;div id=" not in html
 
 
 def test_csp_absent_on_host_routes(tmp_path):
