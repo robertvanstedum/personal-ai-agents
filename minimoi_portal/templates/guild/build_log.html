@@ -248,7 +248,7 @@
 
 <div class="page-header">
   <h1 class="page-title">Build Log</h1>
-  <span class="page-meta">{{ items | length }} spec{{ 's' if items | length != 1 else '' }}</span>
+  <span class="page-meta">{% if queue_state and queue_state.unreadable %}queue unknown{% else %}{{ items | length }} spec{{ 's' if items | length != 1 else '' }}{% endif %}</span>
   <div class="header-actions">
     <button class="new-spec-toggle" onclick="toggleNewSpec()">+ New spec</button>
     <a href="https://github.com/robertvanstedum/personal-ai-agents/issues" target="_blank" rel="noopener" class="gh-link">View GitHub Issues →</a>

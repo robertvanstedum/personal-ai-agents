@@ -21,6 +21,16 @@
   {% if save_banner %}
   <div class="queue-banner queue-banner-{{ save_banner.kind }}" role="status" id="queue-save-result">{{ save_banner.text }}</div>
   {% endif %}
+  {% if queue_state and queue_state.unreadable %}
+  <div class="queue-banner queue-banner-bad" role="alert" id="queue-unreadable">
+    The queue can't be read: {{ queue_state.unreadable }}. Treat the queue as unknown, not empty; nothing below is its real state.
+  </div>
+  {% endif %}
+  {% if queue_state and queue_state.checks_unreadable %}
+  <div class="queue-banner queue-banner-bad" id="queue-checks-unreadable">
+    The Save journal can't be read, so unverified Saves may not be listed here.
+  </div>
+  {% endif %}
   {% if queue_state and not queue_state.writable %}
   <div class="queue-banner queue-banner-warn" id="queue-save-off">
     Save is off: {{ queue_state.reason }}.{% if queue_state.source != 'live' %} Showing the repository copy, read-only.{% endif %}

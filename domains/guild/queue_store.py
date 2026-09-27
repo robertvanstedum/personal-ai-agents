@@ -6,12 +6,19 @@ the lock survives the file's inode changing on replace) a write does:
 
     reconcile earlier unfinished intents
     -> read and parse the file (the store never creates it)
+    -> a reused idempotency key returns the first receipt only for the SAME
+       change (``change_hash``); a different change under that key is refused
     -> per-item unchanged-check (compare-and-swap on the item's digest)
     -> append an ``intent`` journal line
     -> temp file in the same folder, fsync, os.replace, folder fsync
     -> read back and compare the file digest
     -> optional audit callback (reported, never a condition of "saved")
     -> append a ``completed`` journal line with the receipt
+
+An operating-system error (lock, read, journal, temp file, replace) never
+escapes as an exception: the Save returns ``failed`` and the intent, if one was
+written, is resolved in the journal as ``failed`` with the error's class, as
+long as the live file still has its old digest (otherwise ``uncertain``).
 
 The lock is ``fcntl.flock`` on the sidecar file. The host-side seed and publish
 script (``scripts/operations/seed_build_queue.sh``) takes the same flock on the
@@ -67,6 +74,8 @@ UNAVAILABLE = "unavailable"
 REFUSED = "refused"          # M2: this process may not write the queue
 NOT_FOUND = "not_found"
 INVALID = "invalid"
+FAILED = "failed"            # an OS error; the live file was left untouched
+IDEMPOTENCY_MISMATCH = "idempotency_mismatch"  # key reused for another change
 
 _THREAD_LOCKS: dict[str, threading.Lock] = {}
 _THREAD_LOCKS_GUARD = threading.Lock()
@@ -108,6 +117,21 @@ def _iso(moment: datetime) -> str:
 
 def receipt_id(moment: datetime, after_digest: str) -> str:
     return f"q-{moment.strftime('%Y%m%dT%H%M%SZ')}-{after_digest[:6]}"
+
+
+def change_hash(op: str, item_id: int, change: dict) -> str:
+    """SHA-256 of what a Save asks for: the operation, the item and the target
+    field values. An idempotency key is only a repeat of the SAME change."""
+    canonical = json.dumps({"op": op, "item_id": item_id, "change": change},
+                           sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                           default=str)
+    return sha256_bytes(canonical.encode("utf-8"))
+
+
+def reason_class(exc: BaseException) -> str:
+    """A short, stable class for an OS error, e.g. ``PermissionError/EACCES``."""
+    code = errno.errorcode.get(getattr(exc, "errno", None) or 0)
+    return f"{type(exc).__name__}/{code}" if code else type(exc).__name__
 
 
 # ── Where writes are allowed (M2) ─────────────────────────────────────────────
@@ -279,8 +303,13 @@ class QueueStore:
         tlock, fd = held
         try:
             fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            log.exception("queue_store: unlocking the queue failed (closing releases it)")
         finally:
-            os.close(fd)
+            try:
+                os.close(fd)
+            except OSError:
+                log.exception("queue_store: closing the queue lock failed")
             tlock.release()
 
     # journal
@@ -315,6 +344,41 @@ class QueueStore:
             os.fsync(fd)
         finally:
             os.close(fd)
+
+    def _try_append(self, record: dict) -> bool:
+        """Append, but never raise: used on paths already reporting an error."""
+        try:
+            self._append(record)
+            return True
+        except OSError:
+            log.exception("queue_store: could not append a %s line to the journal",
+                          record.get("kind"))
+            return False
+
+    def find_receipt(self, receipt: str | None, item_id: int | None = None) -> dict | None:
+        """The journal's ``completed`` line for this receipt (and item), or None.
+
+        The portal shows "Saved · verified" only when this finds the receipt,
+        so a hand-made ``?receipt=`` link cannot fake a Save."""
+        if not self.path or not receipt:
+            return None
+        try:
+            lines = self._journal_lines()
+        except OSError:
+            return None
+        intents = {r.get("op_id"): r for r in lines if r.get("kind") == "intent"}
+        for record in lines:
+            if record.get("kind") != "completed" or record.get("receipt_id") != receipt:
+                continue
+            intent = intents.get(record.get("op_id"))
+            if intent is None:
+                continue
+            if item_id is not None and intent.get("item_id") != item_id:
+                continue
+            return {"op_id": record.get("op_id"), "item_id": intent.get("item_id"),
+                    "op": intent.get("op"), "audit": record.get("audit"),
+                    "at": record.get("at"), "recovered": bool(record.get("recovered"))}
+        return None
 
     # reconciliation of every unfinished intent (not only the last line)
     def _reconcile_locked(self, current_digest: str | None) -> list[dict]:
@@ -384,21 +448,40 @@ class QueueStore:
                                "at": record.get("at")})
         return checks
 
-    def mark_checked(self, op_id: str, principal: str) -> bool:
+    def mark_checked(self, op_id: str, principal: str) -> str:
+        """Clear a Check. Returns ``checked``, ``refused``, ``invalid``, ``busy``
+        or ``failed``; never raises on a busy lock or an OS error."""
         if self.write_problem():
-            return False
-        if op_id not in {c["op_id"] for c in self.unresolved_checks()}:
-            return False
-        held = self._acquire()
+            return REFUSED
+        try:
+            if op_id not in {c["op_id"] for c in self.unresolved_checks()}:
+                return INVALID
+            held = self._acquire()
+        except QueueBusy:
+            return BUSY
+        except OSError:
+            log.exception("queue_store: could not open the journal or lock to mark a Check")
+            return FAILED
         try:
             self._append({"kind": "checked", "op_id": op_id, "principal": principal,
                           "at": _iso(self._clock())})
-            return True
+            return "checked"
+        except OSError:
+            log.exception("queue_store: could not append the checked line")
+            return FAILED
         finally:
             self._release(held)
 
     # the write
-    def _find_repeat(self, lines: Iterable[dict], idempotency_key: str | None):
+    def _find_repeat(self, lines: Iterable[dict], idempotency_key: str | None, *,
+                     op: str, item_id: int, requested_hash: str):
+        """An earlier Save under this idempotency key, if it counts as a repeat.
+
+        Only the SAME change (equal ``change_hash``) gets the first receipt
+        back. The same key with a different change (a restored form, Back, an
+        old hidden field) is refused as ``idempotency_mismatch``: never the
+        earlier receipt, and nothing is written. An intent without a
+        ``change_hash`` cannot be tied to a change, so it is a mismatch too."""
         if not idempotency_key:
             return None
         lines = list(lines)
@@ -411,6 +494,11 @@ class QueueStore:
         for record in lines:
             if record.get("op_id") != intent["op_id"]:
                 continue
+            may_have_applied = record.get("kind") == "completed" or (
+                record.get("kind") == "outcome" and record.get("outcome") == UNCERTAIN)
+            if may_have_applied and intent.get("change_hash") != requested_hash:
+                return SaveResult(IDEMPOTENCY_MISMATCH, item_id=item_id, op=op,
+                                  reason="the idempotency key was already used for a different change")
             if record.get("kind") == "completed":
                 return SaveResult(SAVED, item_id=intent.get("item_id"), op=intent.get("op"),
                                   old=intent.get("from"), new=intent.get("to"),
@@ -435,21 +523,28 @@ class QueueStore:
         fd, tmp = tempfile.mkstemp(prefix=f".{os.path.basename(self.path)}.tmp-",
                                    dir=self.folder)
         try:
-            # mkstemp creates 0600; keep the live file's mode and owner instead.
-            os.fchmod(fd, template_stat.st_mode & 0o7777)
             try:
-                os.fchown(fd, template_stat.st_uid, template_stat.st_gid)
-            except PermissionError:
-                if os.fstat(fd).st_uid != template_stat.st_uid:
-                    log.warning("queue_store: could not keep the queue file's owner uid=%s",
-                                template_stat.st_uid)
-            view = memoryview(data)
-            while view:
-                written = os.write(fd, view)
-                view = view[written:]
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+                # mkstemp creates 0600; keep the live file's mode and owner instead.
+                os.fchmod(fd, template_stat.st_mode & 0o7777)
+                try:
+                    os.fchown(fd, template_stat.st_uid, template_stat.st_gid)
+                except PermissionError:
+                    if os.fstat(fd).st_uid != template_stat.st_uid:
+                        log.warning("queue_store: could not keep the queue file's owner uid=%s",
+                                    template_stat.st_uid)
+                view = memoryview(data)
+                while view:
+                    written = os.write(fd, view)
+                    view = view[written:]
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except BaseException:
+            try:
+                os.unlink(tmp)  # a half-written temp never lingers
+            except OSError:
+                pass
+            raise
         try:
             _replace(tmp, self.path)
         except BaseException:
@@ -463,8 +558,8 @@ class QueueStore:
             os.close(dir_fd)
 
     def _update(self, *, op: str, item_id: int, expect_item_digest: str | None,
-                mutate: Callable[[dict], tuple[Any, Any]], principal: str, via: str,
-                idempotency_key: str | None,
+                mutate: Callable[[dict], tuple[Any, Any]], change: dict, principal: str,
+                via: str, idempotency_key: str | None,
                 audit: Callable[[dict, Any, Any], str] | None = None) -> SaveResult:
         problem = self.write_problem()
         if problem:
@@ -476,82 +571,157 @@ class QueueStore:
             held = self._acquire()
         except QueueBusy:
             return SaveResult(BUSY, item_id=item_id, op=op)
+        except OSError as exc:  # the lock file could not be opened or locked
+            log.exception("queue_store: could not take the queue lock for item %s", item_id)
+            return SaveResult(FAILED, item_id=item_id, op=op, reason=reason_class(exc))
         try:
-            try:
-                raw = _read_bytes(self.path)
-            except FileNotFoundError:
-                return SaveResult(UNAVAILABLE, item_id=item_id, op=op,
-                                  reason="the queue file does not exist")
-            before_digest = sha256_bytes(raw)
+            return self._update_locked(
+                op=op, item_id=item_id, expect_item_digest=expect_item_digest,
+                mutate=mutate, change=change, principal=principal, via=via,
+                idempotency_key=idempotency_key, audit=audit)
+        finally:
+            self._release(held)
+
+    def _update_locked(self, *, op, item_id, expect_item_digest, mutate, change,
+                       principal, via, idempotency_key, audit) -> SaveResult:
+        # ── Before the intent: an OS error writes nothing and needs no outcome.
+        try:
+            raw = _read_bytes(self.path)
+        except FileNotFoundError:
+            return SaveResult(UNAVAILABLE, item_id=item_id, op=op,
+                              reason="the queue file does not exist")
+        except OSError as exc:
+            log.exception("queue_store: could not read the queue for item %s", item_id)
+            return SaveResult(FAILED, item_id=item_id, op=op, reason=reason_class(exc))
+        before_digest = sha256_bytes(raw)
+        requested_hash = change_hash(op, item_id, change)
+        try:
             reconciled = self._reconcile_locked(before_digest)
             self._clean_stale_temps()
-            repeat = self._find_repeat(self._journal_lines(), idempotency_key)
-            if repeat is not None:
-                repeat.reconciled = reconciled
-                return repeat
-            try:
-                items = self._parse(raw)
-            except QueueUnavailable as exc:
-                return SaveResult(UNAVAILABLE, item_id=item_id, op=op, reason=str(exc),
-                                  reconciled=reconciled)
-            index = next((i for i, it in enumerate(items)
-                          if isinstance(it, dict) and it.get("id") == item_id), None)
-            if index is None or item_id == 0:
-                return SaveResult(NOT_FOUND, item_id=item_id, op=op, reconciled=reconciled)
-            current = items[index]
-            current_digest = item_digest(current)
-            if current_digest != expect_item_digest:
-                return SaveResult(CONFLICT, item_id=item_id, op=op, current_item=current,
-                                  current_item_digest=current_digest, reconciled=reconciled)
-            updated = json.loads(json.dumps(current))
-            try:
-                old, new = mutate(updated)
-            except ValueError as exc:
-                return SaveResult(INVALID, item_id=item_id, op=op, reason=str(exc),
-                                  reconciled=reconciled)
-            items[index] = updated
-            data = serialize(items)
-            after_digest = sha256_bytes(data)
-            op_id = uuid.uuid4().hex
-            moment = self._clock()
+            lines = self._journal_lines()
+        except OSError as exc:
+            log.exception("queue_store: could not reconcile the journal for item %s", item_id)
+            return SaveResult(FAILED, item_id=item_id, op=op, reason=reason_class(exc))
+        repeat = self._find_repeat(lines, idempotency_key, op=op, item_id=item_id,
+                                   requested_hash=requested_hash)
+        if repeat is not None:
+            repeat.reconciled = reconciled
+            return repeat
+        try:
+            items = self._parse(raw)
+        except QueueUnavailable as exc:
+            return SaveResult(UNAVAILABLE, item_id=item_id, op=op, reason=str(exc),
+                              reconciled=reconciled)
+        index = next((i for i, it in enumerate(items)
+                      if isinstance(it, dict) and it.get("id") == item_id), None)
+        if index is None or item_id == 0:
+            return SaveResult(NOT_FOUND, item_id=item_id, op=op, reconciled=reconciled)
+        current = items[index]
+        current_digest = item_digest(current)
+        if current_digest != expect_item_digest:
+            return SaveResult(CONFLICT, item_id=item_id, op=op, current_item=current,
+                              current_item_digest=current_digest, reconciled=reconciled)
+        updated = json.loads(json.dumps(current))
+        try:
+            old, new = mutate(updated)
+        except ValueError as exc:
+            return SaveResult(INVALID, item_id=item_id, op=op, reason=str(exc),
+                              reconciled=reconciled)
+        items[index] = updated
+        data = serialize(items)
+        after_digest = sha256_bytes(data)
+        op_id = uuid.uuid4().hex
+        moment = self._clock()
+        try:
             self._append({
                 "kind": "intent", "op_id": op_id, "op": op, "item_id": item_id,
                 "from": old, "to": new, "before_digest": before_digest,
                 "after_digest": after_digest, "item_before_digest": current_digest,
+                "change_hash": requested_hash,
                 "principal": principal, "via": via, "idempotency_key": idempotency_key,
                 "at": _iso(moment),
             })
+        except OSError as exc:
+            log.exception("queue_store: could not journal the intent for item %s", item_id)
+            self._try_append({"kind": "outcome", "op_id": op_id, "outcome": FAILED,
+                              "item_id": item_id, "reason_class": reason_class(exc),
+                              "at": _iso(self._clock())})
+            return SaveResult(FAILED, item_id=item_id, op=op, reason=reason_class(exc),
+                              reconciled=reconciled)
+
+        # ── After the intent: temp file, replace, folder fsync.
+        try:
             self._write_atomic(data, os.stat(self.path))
-            try:
-                readback = sha256_bytes(_read_bytes(self.path))
-            except OSError:
-                readback = None
-            if readback != after_digest:
-                self._append({"kind": "outcome", "op_id": op_id, "outcome": UNCERTAIN,
+        except OSError as exc:
+            return self._resolve_write_error(exc, op=op, op_id=op_id, item_id=item_id,
+                                             before_digest=before_digest,
+                                             after_digest=after_digest, old=old, new=new,
+                                             moment=moment, reconciled=reconciled)
+        try:
+            readback = sha256_bytes(_read_bytes(self.path))
+        except OSError:
+            readback = None
+        if readback != after_digest:
+            self._try_append({"kind": "outcome", "op_id": op_id, "outcome": UNCERTAIN,
                               "item_id": item_id, "at": _iso(self._clock()),
                               "reason": "read-back did not match"})
-                return SaveResult(UNCERTAIN, item_id=item_id, op=op, old=old, new=new,
-                                  at=_iso(moment), before_digest=before_digest,
-                                  after_digest=after_digest, reconciled=reconciled,
-                                  reason="read-back did not match")
-            audit_state = "none"
-            if audit is not None:
-                try:
-                    audit_state = audit(updated, old, new) or "ok"
-                except Exception:  # reported, never a condition of "saved"
-                    log.exception("queue_store: audit insert failed for item %s", item_id)
-                    audit_state = "failed"
-            rid = receipt_id(moment, after_digest)
+            return SaveResult(UNCERTAIN, item_id=item_id, op=op, old=old, new=new,
+                              at=_iso(moment), before_digest=before_digest,
+                              after_digest=after_digest, reconciled=reconciled,
+                              reason="read-back did not match")
+        audit_state = "none"
+        if audit is not None:
+            try:
+                audit_state = audit(updated, old, new) or "ok"
+            except Exception:  # reported, never a condition of "saved"
+                log.exception("queue_store: audit insert failed for item %s", item_id)
+                audit_state = "failed"
+        rid = receipt_id(moment, after_digest)
+        try:
             self._append({"kind": "completed", "op_id": op_id, "receipt_id": rid,
                           "audit": audit_state, "at": _iso(self._clock())})
-            return SaveResult(SAVED, item_id=item_id, op=op, old=old, new=new,
-                              at=_iso(moment), receipt_id=rid, verified=True,
-                              audit=audit_state, before_digest=before_digest,
-                              after_digest=after_digest, current_item=updated,
-                              current_item_digest=item_digest(updated),
-                              reconciled=reconciled)
-        finally:
-            self._release(held)
+        except OSError as exc:
+            # The file holds the change and read back correctly, but there is no
+            # receipt to show. The next write reconciles it as a recovered
+            # completion; until then the owner is told to check the item.
+            log.exception("queue_store: could not journal the receipt for item %s", item_id)
+            return SaveResult(UNCERTAIN, item_id=item_id, op=op, old=old, new=new,
+                              at=_iso(moment), before_digest=before_digest,
+                              after_digest=after_digest, reconciled=reconciled,
+                              reason=f"the receipt could not be journalled ({reason_class(exc)})")
+        return SaveResult(SAVED, item_id=item_id, op=op, old=old, new=new,
+                          at=_iso(moment), receipt_id=rid, verified=True,
+                          audit=audit_state, before_digest=before_digest,
+                          after_digest=after_digest, current_item=updated,
+                          current_item_digest=item_digest(updated),
+                          reconciled=reconciled)
+
+    def _resolve_write_error(self, exc: OSError, *, op, op_id, item_id, before_digest,
+                             after_digest, old, new, moment, reconciled) -> SaveResult:
+        """An OS error during temp file, replace or folder fsync.
+
+        If the live file still has its old digest, nothing changed: the intent
+        is resolved ``failed`` with the error's class. Anything else (the
+        replace happened but the folder fsync failed, or the file cannot be
+        read) is ``uncertain`` and becomes a Check."""
+        cls = reason_class(exc)
+        log.error("queue_store: writing the queue failed for item %s: %s", item_id, cls)
+        try:
+            current = sha256_bytes(_read_bytes(self.path))
+        except OSError:
+            current = None
+        if current == before_digest:
+            self._try_append({"kind": "outcome", "op_id": op_id, "outcome": FAILED,
+                              "item_id": item_id, "reason_class": cls,
+                              "at": _iso(self._clock())})
+            return SaveResult(FAILED, item_id=item_id, op=op, reason=cls,
+                              before_digest=before_digest, reconciled=reconciled)
+        self._try_append({"kind": "outcome", "op_id": op_id, "outcome": UNCERTAIN,
+                          "item_id": item_id, "reason_class": cls,
+                          "at": _iso(self._clock())})
+        return SaveResult(UNCERTAIN, item_id=item_id, op=op, old=old, new=new,
+                          at=_iso(moment), before_digest=before_digest,
+                          after_digest=after_digest, reconciled=reconciled, reason=cls)
 
     def save_status(self, item_id: int, to: str, *, expect_item_digest: str | None,
                     principal: str, note: str | None = None, via: str = "legacy",
@@ -565,8 +735,9 @@ class QueueStore:
             item["last_transition_at"] = _iso(self._clock())
             item["blocked_reason"] = note if to == "blocked" else None
             return old, to
+        change = {"status": to, "blocked_reason": note if to == "blocked" else None}
         return self._update(op="status", item_id=item_id, expect_item_digest=expect_item_digest,
-                            mutate=mutate, principal=principal, via=via,
+                            mutate=mutate, change=change, principal=principal, via=via,
                             idempotency_key=idempotency_key, audit=audit)
 
     def edit_metadata(self, item_id: int, fields: dict, *, expect_item_digest: str | None,
@@ -580,5 +751,5 @@ class QueueStore:
             item.update(fields)
             return old, dict(fields)
         return self._update(op="edit", item_id=item_id, expect_item_digest=expect_item_digest,
-                            mutate=mutate, principal=principal, via=via,
+                            mutate=mutate, change=dict(fields), principal=principal, via=via,
                             idempotency_key=idempotency_key)

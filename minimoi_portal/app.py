@@ -1274,25 +1274,39 @@ def _queue_store() -> "_qstore.QueueStore":
     return _qstore.QueueStore(_GUILD_QUEUE_PATH)
 
 
-def _load_build_queue() -> list:
-    """Load build items from JSON. Returns [] with a warning if file is missing."""
+def _read_build_queue() -> tuple[list, str | None]:
+    """Validating read for the queue pages: ``(items, None)``, or ``([], why)``
+    when the file is missing, unreadable or corrupt. The pages then show the
+    queue as UNKNOWN, never as an empty queue with zero items."""
     try:
-        return json.loads(_bq_read_path().read_text())
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("build_queue.json missing or invalid: %s", e)
-        return []
+        items = _qstore.QueueStore(str(_bq_read_path())).read_items()
+    except _qstore.QueueUnavailable as exc:
+        return [], str(exc)
+    except OSError as exc:
+        return [], f"the queue file could not be opened ({_qstore.reason_class(exc)})"
+    if not all(isinstance(item, dict) for item in items):
+        return [], "the queue file has an entry that is not an item"
+    return items, None
 
 
-def _queue_state() -> dict:
-    """Where the queue pages read from, whether Save is on, and open Checks."""
+def _queue_state(unreadable: str | None = None) -> dict:
+    """Where the queue pages read from, whether Save is on, open Checks, and
+    whether the queue file could be read at all."""
     store = _queue_store()
     problem = store.write_problem()
+    checks, checks_unreadable = [], False
+    if _GUILD_QUEUE_PATH:
+        try:
+            checks = store.unresolved_checks()
+        except OSError:
+            checks_unreadable = True
     return {
         "writable": problem is None,
         "reason": problem,
         "source": "live" if _GUILD_QUEUE_PATH else "repository copy",
-        "checks": store.unresolved_checks() if _GUILD_QUEUE_PATH else [],
+        "checks": checks,
+        "checks_unreadable": checks_unreadable,
+        "unreadable": unreadable,
     }
 
 
@@ -1328,11 +1342,16 @@ _QUEUE_BANNERS = {
     "stale": ("warn", "This page was out of date; reload and try again"),
     "csrf": ("warn", "This form could not be verified; reload the page and try again. Nothing was changed"),
     "not_found": ("warn", "#{item} is not in the queue. Nothing was saved"),
+    "failed": ("bad", "The queue could not be written, so nothing was saved. The live queue is unchanged"),
+    "idempotency_mismatch": ("warn", "This form was already used to save a different change. Nothing was saved; reload the page and try again"),
     "invalid": ("warn", "That change is not allowed. Nothing was saved"),
     "unchanged": ("ok", "Nothing to save"),
     "checked": ("ok", "Marked checked"),
 }
 _QUEUE_RESULT_PARAMS = ("save", "receipt", "item", "audit")
+# Shown instead of "Saved · verified" when the link's receipt is not a
+# completed Save in the journal (a hand-made or stale link): neutral, no claim.
+_QUEUE_UNCONFIRMED = ("warn", "This link's Save result could not be confirmed in the journal, so no result is shown")
 
 
 def _queue_banner() -> dict | None:
@@ -1346,8 +1365,19 @@ def _queue_banner() -> dict | None:
     receipt = request.args.get("receipt", "")
     if not re.fullmatch(r"q-\d{8}T\d{6}Z-[0-9a-f]{6}", receipt):
         receipt = "?"
+    audit_failed = False
+    if code == "saved":
+        # "Saved · verified" only for a receipt the journal shows as completed
+        # for this item; the URL alone proves nothing (review S4).
+        found = None
+        if receipt != "?" and item != "?":
+            found = _queue_store().find_receipt(receipt, int(item))
+        if found is None:
+            kind, text = _QUEUE_UNCONFIRMED
+            return {"kind": kind, "text": text}
+        audit_failed = found.get("audit") == "failed"
     text = text.format(item=item, receipt=receipt)
-    if code == "saved" and request.args.get("audit") == "failed":
+    if audit_failed:
         text += " · history not recorded"
     return {"kind": kind, "text": text}
 
@@ -2183,7 +2213,7 @@ def guild_build():
     status_filter = request.args.get('status', 'active')
     if status_filter not in {'active', 'all', *_BUILD_QUEUE_STATUSES}:
         status_filter = 'active'
-    all_items = _load_build_queue()
+    all_items, unreadable = _read_build_queue()
     items = all_items
     if status_filter == 'active':
         terminal = {'done', 'cancelled', 'superseded', 'deferred'}
@@ -2194,15 +2224,16 @@ def guild_build():
     items.sort(key=lambda i: i.get('last_transition_at') or '', reverse=True)
     return render_template("guild/build_log.html", items=items,
                            status_filter=status_filter, user=_current_user(),
-                           queue_state=_queue_state(), save_banner=_queue_banner())
+                           queue_state=_queue_state(unreadable), save_banner=_queue_banner())
 
 
 @app.route("/guild/build/queue")
 @_require_owner
 def guild_build_queue():
     status_rank = {status: rank for rank, status in enumerate(_BUILD_QUEUE_ACTIVE_STATUSES)}
+    all_items, unreadable = _read_build_queue()
     items = [
-        item for item in _load_build_queue()
+        item for item in all_items
         if item.get("status") in _BUILD_QUEUE_ACTIVE_STATUSES
     ]
     # Newest first within each of the two deliberately small active columns.
@@ -2210,7 +2241,7 @@ def guild_build_queue():
     items.sort(key=lambda item: status_rank[item["status"]])
     return render_template("guild/build_queue.html", items=items,
                            user=_current_user(),
-                           queue_state=_queue_state(), save_banner=_queue_banner())
+                           queue_state=_queue_state(unreadable), save_banner=_queue_banner())
 
 
 @app.route("/guild/build/spec/<path:filename>")
@@ -2270,7 +2301,10 @@ def guild_build_spec_raw(filename):
 def guild_build_check(item_id):
     """Re-run the spec readiness check and return current failures as JSON."""
     from pathlib import Path
-    items = _load_build_queue()
+    items, unreadable = _read_build_queue()
+    if unreadable:
+        return jsonify({"error": "the queue can't be read; treat it as unknown",
+                        "reason": unreadable}), 503
     item = next((i for i in items if i.get('id') == item_id), None)
     if not item:
         return jsonify({"error": "not found"}), 404
@@ -2487,9 +2521,8 @@ def mark_build_queue_check(op_id):
     if not _queue_csrf_ok() or not re.fullmatch(r"[0-9a-f]{32}", op_id):
         return _queue_redirect("csrf")
     user = _current_user() or {}
-    if _queue_store().mark_checked(op_id, user.get("username", "owner")):
-        return _queue_redirect("checked")
-    return _queue_redirect("invalid")
+    code = _queue_store().mark_checked(op_id, user.get("username", "owner"))
+    return _queue_redirect(code if code in _QUEUE_BANNERS else "invalid")
 
 
 @app.route("/guild/build/items/<int:item_id>/history")

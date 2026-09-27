@@ -252,8 +252,9 @@ jobs:
         run: |
           # The portal must Save into the host's live queue, never into a copy
           # in its own image: the folder must be mounted at /app/runtime/guild,
-          # GUILD_QUEUE_PATH must point into it, and the queue checksum inside
-          # the container must equal the host file's.
+          # GUILD_QUEUE_PATH must point into it, the store's write_problem()
+          # run inside the container must say Save is on, and the queue
+          # checksum inside the container must equal the host file's.
           QUEUE_CHECK=$(base64 -w 0 scripts/operations/check_queue_mount.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \

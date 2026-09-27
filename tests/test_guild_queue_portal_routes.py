@@ -236,3 +236,144 @@ def test_no_plain_queue_writer_is_left_in_the_portal():
     assert "_BQ_PATH.write_text" not in source
     assert source.count("_queue_store().save_status(") == 1
     assert source.count("_queue_store().edit_metadata(") == 1
+
+
+# ── Review fixes: B1 key reuse, S2 OS errors, S3 unreadable queue, S4 receipts ─
+
+def test_resubmitted_form_with_a_different_change_is_not_shown_as_saved(portal_client, live):
+    """B1: the same rendered form (same idempotency key) posted twice with a
+    different status: the second gets an honest sentence, never the receipt."""
+    page = portal_client.get("/guild/build/queue").data.decode()
+    fields = form_fields(page, "/guild/build/items/1/status")
+    first = result_of(portal_client.post("/guild/build/items/1/status",
+                                         data={**fields, "status": "blocked", "note": "wait"}))
+    assert first["save"] == "saved"
+    after_first = live.read_bytes()
+    response = portal_client.post("/guild/build/items/1/status",
+                                  data={**fields, "status": "done", "note": ""},
+                                  headers={"Referer": "http://localhost/guild/build/queue"})
+    result = result_of(response)
+    assert result["save"] == "idempotency_mismatch" and "receipt" not in result
+    assert live.read_bytes() == after_first
+    assert json.loads(live.read_text())[0]["status"] == "blocked"
+    shown = portal_client.get(response.headers["Location"]).data.decode()
+    assert "This form was already used to save a different change. Nothing was saved" in shown
+    assert "Saved · verified" not in shown
+    assert ARCHIVE_POSTS == []
+
+
+def test_resubmitted_form_with_the_same_change_shows_the_first_receipt(portal_client, live):
+    page = portal_client.get("/guild/build/queue").data.decode()
+    fields = form_fields(page, "/guild/build/items/1/status")
+    data = {**fields, "status": "in_build", "note": ""}
+    first = result_of(portal_client.post("/guild/build/items/1/status", data=data))
+    response = portal_client.post("/guild/build/items/1/status", data=data)
+    second = result_of(response)
+    assert second["save"] == "saved" and second["receipt"] == first["receipt"]
+    assert [l["kind"] for l in journal(live)] == ["intent", "completed"]
+    shown = portal_client.get(response.headers["Location"]).data.decode()
+    assert f"Saved · verified · receipt {first['receipt']}" in shown
+
+
+def test_os_error_during_save_is_a_fixed_sentence_not_a_500(portal_client, live, monkeypatch):
+    """S2: a read-only folder at replace time. No HTTP 500; the file is unchanged."""
+    import errno
+
+    def read_only(src, dst):
+        raise OSError(errno.EROFS, "Read-only file system")
+    monkeypatch.setattr(qs, "_replace", read_only)
+    before = live.read_bytes()
+    page = portal_client.get("/guild/build/queue").data.decode()
+    fields = form_fields(page, "/guild/build/items/1/status")
+    response = portal_client.post("/guild/build/items/1/status",
+                                  data={**fields, "status": "in_build"})
+    result = result_of(response)
+    assert result["save"] == "failed" and "receipt" not in result
+    assert live.read_bytes() == before
+    lines = journal(live)
+    assert lines[-1]["outcome"] == "failed" and lines[-1]["reason_class"] == "OSError/EROFS"
+    shown = portal_client.get(response.headers["Location"])
+    assert shown.status_code == 200
+    assert ("The queue could not be written, so nothing was saved. "
+            "The live queue is unchanged") in shown.data.decode()
+
+
+def test_os_error_on_the_lock_during_edit_is_a_fixed_sentence(portal_client, live, monkeypatch):
+    import os as _os
+    page = portal_client.get("/guild/build").data.decode()
+    fields = form_fields(page, "/guild/build/items/2/edit")
+    lock = str(live.parent / f".{live.name}.lock")
+    real_open = _os.open
+
+    def deny(path, *a, **k):
+        if str(path) == lock:
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, *a, **k)
+    monkeypatch.setattr(qs.os, "open", deny)
+    before = live.read_bytes()
+    response = portal_client.post("/guild/build/items/2/edit",
+                                  data={**fields, "summary": "new"})
+    monkeypatch.setattr(qs.os, "open", real_open)
+    assert result_of(response)["save"] == "failed"
+    assert live.read_bytes() == before
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt", "not_a_list"])
+@pytest.mark.parametrize("url", ["/guild/build", "/guild/build/queue"])
+def test_unreadable_live_queue_is_shown_as_unknown_not_empty(portal_client, live, damage, url):
+    """S3: a missing or corrupt live file is a visible notice, never "0 items"."""
+    if damage == "missing":
+        live.unlink()
+    elif damage == "corrupt":
+        live.write_text("{not json")
+    else:
+        live.write_text('{"id": 1}')
+    page = portal_client.get(url)
+    assert page.status_code == 200
+    text = page.data.decode()
+    assert 'id="queue-unreadable"' in text
+    assert "The queue can't be read" in text
+    assert "Treat the queue as unknown, not empty" in text
+    assert "queue unknown" in text
+    assert "0 spec" not in text and "0 active item" not in text
+
+
+def test_readable_queue_shows_no_unreadable_notice(portal_client, live):
+    text = portal_client.get("/guild/build/queue").data.decode()
+    assert 'id="queue-unreadable"' not in text and "queue unknown" not in text
+    assert "1 active item" in text or "2 active items" in text
+
+
+def test_spec_check_endpoint_reports_an_unreadable_queue(portal_client, live):
+    live.write_text("{not json")
+    response = portal_client.get("/guild/build/items/1/check")
+    assert response.status_code == 503
+    assert "unknown" in response.get_json()["error"]
+
+
+def test_fabricated_receipt_link_does_not_show_saved(portal_client, live):
+    """S4: "Saved · verified" only for a receipt the journal shows as completed."""
+    fake = "/guild/build/queue?save=saved&item=1&receipt=q-20260101T000000Z-abcdef"
+    text = portal_client.get(fake).data.decode()
+    assert "Saved · verified" not in text
+    assert "could not be confirmed in the journal" in text
+    # A real receipt, but for another item, is not confirmed either.
+    page = portal_client.get("/guild/build/queue").data.decode()
+    fields = form_fields(page, "/guild/build/items/1/status")
+    real = result_of(portal_client.post("/guild/build/items/1/status",
+                                        data={**fields, "status": "in_build"}))["receipt"]
+    other = portal_client.get(f"/guild/build/queue?save=saved&item=2&receipt={real}").data.decode()
+    assert "Saved · verified" not in other
+    mine = portal_client.get(f"/guild/build/queue?save=saved&item=1&receipt={real}").data.decode()
+    assert f"Saved · verified · receipt {real}" in mine
+
+
+def test_fabricated_audit_flag_is_ignored_in_favour_of_the_journal(portal_client, live):
+    page = portal_client.get("/guild/build/queue").data.decode()
+    fields = form_fields(page, "/guild/build/items/1/status")
+    real = result_of(portal_client.post("/guild/build/items/1/status",
+                                        data={**fields, "status": "in_build"}))["receipt"]
+    text = portal_client.get(
+        f"/guild/build/queue?save=saved&item=1&receipt={real}&audit=failed").data.decode()
+    assert f"Saved · verified · receipt {real}" in text
+    assert "history not recorded" not in text

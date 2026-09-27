@@ -4,7 +4,10 @@
 # Run on EC2 after every deploy (.github/workflows/deploy.yml). Fails the
 # release unless:
 #   * the portal container mounts the host queue FOLDER at /app/runtime/guild,
-#   * its GUILD_QUEUE_PATH points into that mount, and
+#   * its GUILD_QUEUE_PATH points into that mount,
+#   * Save is ON: the store's own gate, QueueStore.write_problem(), run inside
+#     the running container, returns None (it checks os.path.ismount on the
+#     real bind mount, which no unit test can), and
 #   * the queue's SHA-256 inside the container equals the host file's.
 # A portal that lost its mount would otherwise Save into its own image layer
 # while /health stays green.
@@ -30,6 +33,24 @@ if [ "$ENV_PATH" != "$CONTAINER_QUEUE" ]; then
   echo "queue check FAILED: GUILD_QUEUE_PATH in $CONTAINER is '$ENV_PATH', expected $CONTAINER_QUEUE" >&2
   exit 1
 fi
+
+# Ask the store itself whether Save is on in the running portal. The Python is
+# in single quotes and uses only double quotes inside, and this script reaches
+# EC2 base64-encoded, so no SSM or JSON quoting touches it.
+SAVE_PROBE='import os, sys
+from domains.guild.queue_store import QueueStore
+problem = QueueStore(os.environ.get("GUILD_QUEUE_PATH")).write_problem()
+print(problem or "writable")
+sys.exit(1 if problem else 0)'
+if ! SAVE_STATE=$(docker exec "$CONTAINER" python3 -c "$SAVE_PROBE"); then
+  echo "queue check FAILED: Save is off in $CONTAINER: $SAVE_STATE" >&2
+  exit 1
+fi
+if [ "$SAVE_STATE" != "writable" ]; then
+  echo "queue check FAILED: unexpected Save state from $CONTAINER: $SAVE_STATE" >&2
+  exit 1
+fi
+echo "queue check: Save is on in $CONTAINER"
 
 # A Save can land between the two reads; retry a few times before failing.
 for attempt in 1 2 3; do

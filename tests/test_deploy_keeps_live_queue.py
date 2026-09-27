@@ -255,14 +255,25 @@ def test_workflow_checks_the_portal_queue_after_deploy():
     assert 'if [ "$STATUS" != "Success" ]' in run and "exit 1" in run
 
 
-def _fake_portal(tmp_path, host_queue: Path, container_file: Path, mounts: str, env_path: str):
+def _fake_portal(tmp_path, host_queue: Path, container_file: Path, mounts: str, env_path: str,
+                 in_container: bool = False):
+    """A fake `docker` for the post-deploy check. `docker exec … python3 -c`
+    really runs the check's Python probe against the store in this repository,
+    with GUILD_QUEUE_PATH pointing at the host queue; `in_container` makes the
+    store apply its in-container rule (the folder must be a mount)."""
+    import sys
     bin_dir = tmp_path / "cbin"
     bin_dir.mkdir()
     script = bin_dir / "docker"
+    flask_env = "production" if in_container else "development"
     script.write_text(f"""#!/bin/bash
 if [ "$1" = inspect ]; then echo '{mounts}'; exit 0; fi
 if [ "$1" = exec ] && [ "$3" = printenv ]; then echo '{env_path}'; exit 0; fi
 if [ "$1" = exec ] && [ "$3" = sha256sum ]; then sha256sum '{container_file}'; exit 0; fi
+if [ "$1" = exec ] && [ "$3" = python3 ]; then
+  shift 3
+  cd '{REPO}' && GUILD_QUEUE_PATH='{host_queue}' FLASK_ENV={flask_env} exec '{sys.executable}' "$@"
+fi
 exit 1
 """)
     script.chmod(0o755)
@@ -281,7 +292,30 @@ def test_post_deploy_check_passes_when_the_portal_sees_the_live_file(tmp_path, l
                        "/app/runtime/guild/build_queue.json")
     result = run_check(live_queue, env)
     assert result.returncode == 0, result.stderr
+    assert "Save is on in minimoi-portal" in result.stdout
     assert "queue check OK" in result.stdout
+
+
+def test_post_deploy_check_fails_when_save_is_off_in_the_container(tmp_path, live_queue):
+    """S1: mount, env and checksum all pass, but the store's own gate says the
+    folder is not a mount inside the container, so every Save would be refused.
+    The check must fail rather than go green."""
+    env = _fake_portal(tmp_path, live_queue, live_queue,
+                       f"{live_queue.parent}=/app/runtime/guild;",
+                       "/app/runtime/guild/build_queue.json", in_container=True)
+    result = run_check(live_queue, env)
+    assert result.returncode == 1
+    assert "Save is off in minimoi-portal: the queue folder is not a mounted host folder" \
+        in result.stderr
+    assert "queue check OK" not in result.stdout
+
+
+def test_post_deploy_check_asks_the_store_inside_the_container():
+    text = CHECK.read_text()
+    assert 'docker exec "$CONTAINER" python3 -c "$SAVE_PROBE"' in text
+    assert "QueueStore(os.environ.get(\"GUILD_QUEUE_PATH\")).write_problem()" in text
+    # The probe must come before the checksum loop's `exit 0`.
+    assert text.index("SAVE_PROBE=") < text.index("queue check OK")
 
 
 def test_post_deploy_check_fails_on_a_single_file_mount(tmp_path, live_queue):

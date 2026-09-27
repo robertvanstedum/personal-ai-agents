@@ -151,6 +151,210 @@ def test_idempotent_repeat_returns_the_first_receipt(queue):
     assert [r["kind"] for r in journal(queue)] == ["intent", "completed"]
 
 
+def test_same_key_different_change_is_refused_never_the_old_receipt(queue):
+    """Review B1 repro: "blocked" then "done" under one idempotency key. The
+    second must NOT be "saved" with the first receipt; the file stays blocked."""
+    s = store(queue)
+    d = digest_of(queue, 1)
+    first = s.save_status(1, "blocked", expect_item_digest=d, principal="r",
+                          idempotency_key="k")
+    assert first.ok
+    after_first = queue.read_bytes()
+    second = s.save_status(1, "done", expect_item_digest=d, principal="r",
+                           idempotency_key="k")
+    assert second.result == qs.IDEMPOTENCY_MISMATCH
+    assert not second.ok and not second.verified and second.receipt_id is None
+    assert "different change" in second.reason
+    assert queue.read_bytes() == after_first
+    assert json.loads(queue.read_text())[0]["status"] == "blocked"
+    assert [r["kind"] for r in journal(queue)] == ["intent", "completed"]
+    # Even with a fresh, correct digest the reused key is refused.
+    third = s.save_status(1, "done", expect_item_digest=digest_of(queue, 1), principal="r",
+                          idempotency_key="k")
+    assert third.result == qs.IDEMPOTENCY_MISMATCH
+    assert json.loads(queue.read_text())[0]["status"] == "blocked"
+
+
+def test_same_key_different_note_or_fields_is_a_different_change(queue):
+    s = store(queue)
+    d = digest_of(queue, 1)
+    assert s.save_status(1, "blocked", expect_item_digest=d, note="a", principal="r",
+                         idempotency_key="k1").ok
+    assert s.save_status(1, "blocked", expect_item_digest=d, note="b", principal="r",
+                         idempotency_key="k1").result == qs.IDEMPOTENCY_MISMATCH
+    d2 = digest_of(queue, 2)
+    assert s.edit_metadata(2, {"summary": "x"}, expect_item_digest=d2, principal="r",
+                           idempotency_key="k2").ok
+    assert s.edit_metadata(2, {"summary": "y"}, expect_item_digest=d2, principal="r",
+                           idempotency_key="k2").result == qs.IDEMPOTENCY_MISMATCH
+    assert s.save_status(2, "done", expect_item_digest=d2, principal="r",
+                         idempotency_key="k2").result == qs.IDEMPOTENCY_MISMATCH
+    assert json.loads(queue.read_text())[1]["summary"] == "x"
+
+
+def test_intent_records_the_change_hash(queue):
+    store(queue).save_status(1, "blocked", expect_item_digest=digest_of(queue, 1),
+                             note="why", principal="r", idempotency_key="k")
+    intent = journal(queue)[0]
+    assert intent["change_hash"] == qs.change_hash(
+        "status", 1, {"status": "blocked", "blocked_reason": "why"})
+
+
+def test_legacy_intent_without_a_change_hash_is_never_a_repeat(queue):
+    s = store(queue)
+    first = s.save_status(1, "done", expect_item_digest=digest_of(queue, 1), principal="r",
+                          idempotency_key="k")
+    jpath = queue.parent / qs.JOURNAL_NAME
+    lines = journal(queue)
+    del lines[0]["change_hash"]
+    jpath.write_text("".join(json.dumps(r) + "\n" for r in lines))
+    again = s.save_status(1, "done", expect_item_digest=digest_of(queue, 1), principal="r",
+                          idempotency_key="k")
+    assert again.result == qs.IDEMPOTENCY_MISMATCH and again.receipt_id != first.receipt_id
+
+
+def test_not_applied_key_may_be_retried_with_any_change(queue):
+    s = store(queue)
+    fd = os.open(s.journal_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+    os.write(fd, (json.dumps({"kind": "intent", "op_id": "e" * 32, "op": "status", "item_id": 1,
+                              "idempotency_key": "k", "change_hash": "0" * 64,
+                              "before_digest": qs.sha256_bytes(queue.read_bytes()),
+                              "after_digest": "9" * 64}) + "\n").encode())
+    os.close(fd)
+    result = s.save_status(1, "done", expect_item_digest=digest_of(queue, 1), principal="r",
+                           idempotency_key="k")
+    assert result.ok and not result.repeated
+    assert [o["outcome"] for o in result.reconciled] == ["not_applied"]
+
+
+# ── S2: OS errors give a fixed result, never an exception ────────────────────
+
+def _no_temps(path):
+    return not list(path.parent.glob(".build_queue.json.tmp-*"))
+
+
+def test_os_error_on_the_lock_is_failed_and_writes_nothing(queue, monkeypatch):
+    s = store(queue)
+    real_open = os.open
+
+    def deny_lock(path, *args, **kw):
+        if str(path) == s.lock_path:
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, *args, **kw)
+    monkeypatch.setattr(qs.os, "open", deny_lock)
+    before = queue.read_bytes()
+    result = s.save_status(1, "done", expect_item_digest=digest_of(queue, 1), principal="r")
+    monkeypatch.undo()
+    assert result.result == qs.FAILED and result.reason == "PermissionError/EACCES"
+    assert queue.read_bytes() == before
+    assert not (queue.parent / qs.JOURNAL_NAME).exists()
+    # The thread lock was released: the next Save works.
+    assert store(queue).save_status(1, "done", expect_item_digest=digest_of(queue, 1),
+                                    principal="r").ok
+
+
+@pytest.mark.parametrize("where", ["mkstemp", "write", "replace"])
+def test_os_error_on_temp_or_replace_is_failed_and_journalled(queue, monkeypatch, where):
+    import errno as _errno
+    import tempfile
+    before = queue.read_bytes()
+    if where == "mkstemp":
+        def boom(*a, **k):
+            raise OSError(_errno.ENOSPC, "No space left on device")
+        monkeypatch.setattr(qs.tempfile, "mkstemp", boom)
+        expected = "OSError/ENOSPC"
+    elif where == "write":
+        real_fsync = os.fsync
+        real_mkstemp = tempfile.mkstemp
+        temps = []
+
+        def track(*a, **k):
+            fd, name = real_mkstemp(*a, **k)
+            temps.append(fd)
+            return fd, name
+
+        def fsync(fd):
+            if fd in temps:
+                raise OSError(_errno.EIO, "Input/output error")
+            return real_fsync(fd)
+        monkeypatch.setattr(qs.tempfile, "mkstemp", track)
+        monkeypatch.setattr(qs.os, "fsync", fsync)
+        expected = "OSError/EIO"
+    else:
+        def boom(src, dst):
+            raise OSError(_errno.EROFS, "Read-only file system")
+        monkeypatch.setattr(qs, "_replace", boom)
+        expected = "OSError/EROFS"
+    result = store(queue).save_status(1, "done", expect_item_digest=digest_of(queue, 1),
+                                      principal="r", idempotency_key="k")
+    monkeypatch.undo()
+    assert result.result == qs.FAILED and result.reason == expected
+    assert not result.verified and result.receipt_id is None
+    assert queue.read_bytes() == before, "the live file must be untouched"
+    assert _no_temps(queue)
+    lines = journal(queue)
+    assert [r["kind"] for r in lines] == ["intent", "outcome"]
+    assert lines[1]["outcome"] == qs.FAILED and lines[1]["reason_class"] == expected
+    assert lines[1]["op_id"] == lines[0]["op_id"]
+    assert store(queue).unresolved_checks() == []
+    # A failed attempt did not take effect, so the same key may be retried.
+    retry = store(queue).save_status(1, "done", expect_item_digest=digest_of(queue, 1),
+                                     principal="r", idempotency_key="k")
+    assert retry.ok and not retry.repeated and retry.reconciled == []
+
+
+def test_os_error_after_the_replace_is_uncertain_not_failed(queue, monkeypatch):
+    """The folder fsync fails after the file was replaced: the change IS on
+    disk, so "failed … unchanged" would be a lie. It is uncertain and a Check."""
+    import errno as _errno
+    real_open = os.open
+
+    def no_dir_open(path, flags, *a, **k):
+        if str(path) == str(queue.parent) and flags == os.O_RDONLY:
+            raise OSError(_errno.EIO, "Input/output error")
+        return real_open(path, flags, *a, **k)
+    monkeypatch.setattr(qs.os, "open", no_dir_open)
+    result = store(queue).save_status(1, "done", expect_item_digest=digest_of(queue, 1),
+                                      principal="r")
+    monkeypatch.undo()
+    assert result.result == qs.UNCERTAIN and result.receipt_id is None
+    assert json.loads(queue.read_text())[0]["status"] == "done"
+    assert journal(queue)[-1]["outcome"] == qs.UNCERTAIN
+    assert [c["item_id"] for c in store(queue).unresolved_checks()] == [1]
+
+
+def test_mark_checked_reports_busy_instead_of_raising(queue, monkeypatch):
+    def replace_then_corrupt(src, dst):
+        os.replace(src, dst)
+        with open(dst, "ab") as stream:
+            stream.write(b" ")
+    monkeypatch.setattr(qs, "_replace", replace_then_corrupt)
+    s = store(queue, lock_timeout_s=0.2)
+    s.save_status(1, "done", expect_item_digest=digest_of(queue, 1), principal="r")
+    monkeypatch.undo()
+    op_id = s.unresolved_checks()[0]["op_id"]
+    fd = os.open(s.lock_path, os.O_RDWR | os.O_CREAT)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        assert s.mark_checked(op_id, "robert") == qs.BUSY
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    assert s.mark_checked(op_id, "robert") == "checked"
+
+
+# ── S4: receipts can be looked up in the journal ─────────────────────────────
+
+def test_find_receipt_only_for_a_completed_save_of_that_item(queue):
+    s = store(queue)
+    result = s.save_status(1, "done", expect_item_digest=digest_of(queue, 1), principal="r")
+    found = s.find_receipt(result.receipt_id, 1)
+    assert found and found["item_id"] == 1 and found["op"] == "status"
+    assert s.find_receipt(result.receipt_id, 2) is None
+    assert s.find_receipt("q-20260101T000000Z-abcdef", 1) is None
+    assert qs.QueueStore(None).find_receipt(result.receipt_id, 1) is None
+
+
 def test_busy_when_another_writer_holds_the_lock(queue):
     s = store(queue, lock_timeout_s=0.2)
     before = queue.read_bytes()
@@ -255,7 +459,7 @@ def test_read_back_mismatch_is_uncertain_and_becomes_a_check(queue, monkeypatch)
     assert journal(queue)[-1]["outcome"] == qs.UNCERTAIN
     checks = s.unresolved_checks()
     assert [c["item_id"] for c in checks] == [1]
-    assert s.mark_checked(checks[0]["op_id"], "robert")
+    assert s.mark_checked(checks[0]["op_id"], "robert") == "checked"
     assert s.unresolved_checks() == []
 
 
