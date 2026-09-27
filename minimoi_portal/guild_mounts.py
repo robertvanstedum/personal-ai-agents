@@ -150,7 +150,24 @@ def mount_guild_proto(app, *, environ, owner_guard, current_user) -> str:
         return "unavailable"
 
 
+PRODUCTION_HOSTS = {"minimoi.ai", "www.minimoi.ai"}
+
+
+def is_production_origin(base_url) -> bool:
+    """True when the portal serves the production site. The Guild switches are
+    ignored there even if set: /opt/minimoi/.env is shared by every production
+    service, so one stray line must not expose these routes."""
+    from urllib.parse import urlsplit
+    host = (urlsplit(str(base_url or "")).hostname or "").lower()
+    return host in PRODUCTION_HOSTS
+
+
 def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict:
+    base_url = next_kwargs.get("base_url") or environ.get("BASE_URL")
+    if is_production_origin(base_url):
+        if flag_on(environ, NEXT_FLAG) or flag_on(environ, PROTO_FLAG):
+            log.warning("guild mounts: MINIMOI_GUILD_NEXT/PROTO ignored on the production origin %s", base_url)
+        return {"guild_proto": "refused_production", "guild_next": "refused_production"}
     return {
         "guild_proto": mount_guild_proto(app, environ=environ, owner_guard=owner_guard, current_user=current_user),
         "guild_next": mount_guild_next(app, environ=environ, owner_guard=owner_guard, current_user=current_user,
