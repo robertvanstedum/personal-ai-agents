@@ -36,6 +36,7 @@ import logging
 import os
 import threading
 import time
+import uuid
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
@@ -164,8 +165,10 @@ class ModelCallBudget:
 
     try_acquire() reserves one call or refuses it. A refused call is dropped,
     never queued. Limits are read from config on every call. The day is the UTC
-    date; seed_from_receipts() counts today's receipts at startup so a launchd
-    KeepAlive restart does not hand out a fresh daily allowance.
+    date; seed_from_receipts() counts today's durable reservations at startup so
+    a launchd KeepAlive restart does not hand out a fresh daily allowance. A
+    reservation is written (and fsynced) before every paid request, so a crash
+    or a failed outcome write after the request cannot lower the count.
     """
 
     def __init__(self):
@@ -214,7 +217,11 @@ class ModelCallBudget:
             return self._day_count if self._day == self._utc_day(now) else 0
 
     def seed_from_receipts(self, path: Path, now: float | None = None) -> int:
-        """Count today's (UTC) receipt lines toward the daily cap."""
+        """Count today's (UTC) paid calls toward the daily cap.
+
+        Counts reservation lines (written before each request). Outcome lines
+        are not counted again. Legacy lines without a "kind" (written before
+        reservations existed) each stand for one call and are counted."""
         now = time.time() if now is None else now
         day = self._utc_day(now)
         count = 0
@@ -222,7 +229,10 @@ class ModelCallBudget:
             with open(path, encoding="utf-8") as fh:
                 for line in fh:
                     try:
-                        if str(json.loads(line).get("ts", "")).startswith(day):
+                        rec = json.loads(line)
+                        if not str(rec.get("ts", "")).startswith(day):
+                            continue
+                        if rec.get("kind", "reservation") == "reservation":
                             count += 1
                     except Exception:
                         continue
@@ -242,11 +252,44 @@ def _int_or_none(value):
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def _write_receipt(file_path: str, model: str, effort: str, usage, outcome: str) -> None:
-    """One JSON line per paid model call. Never includes file content."""
+def _append_durable(record: dict) -> bool:
+    """Append one JSON line to the receipt log and fsync it. False on any failure."""
+    try:
+        path = _receipt_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _receipt_lock, open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        return True
+    except Exception as e:
+        log.warning("Model receipt write failed: %s", e)
+        return False
+
+
+def _reserve_call(file_path: str, model: str, effort: str) -> str | None:
+    """Durably record a paid call BEFORE it is made. None means: do not call."""
+    reservation_id = uuid.uuid4().hex
+    ok = _append_durable({
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "kind": "reservation",
+        "id": reservation_id,
+        "path": _rel(file_path),
+        "model": model,
+        "reasoning_effort": effort,
+    })
+    return reservation_id if ok else None
+
+
+def _write_receipt(file_path: str, model: str, effort: str, usage, outcome: str,
+                   reservation_id: str | None = None) -> None:
+    """Outcome line for a reserved paid call. Never includes file content.
+    A failure here is logged only: the reservation already counts the call."""
     details = getattr(usage, "completion_tokens_details", None)
     record = {
         "ts": datetime.now(timezone.utc).isoformat(),
+        "kind": "outcome",
+        "reservation_id": reservation_id,
         "path": _rel(file_path),
         "model": model,
         "reasoning_effort": effort,
@@ -255,13 +298,7 @@ def _write_receipt(file_path: str, model: str, effort: str, usage, outcome: str)
         "reasoning_tokens": _int_or_none(getattr(details, "reasoning_tokens", None)),
         "outcome": outcome,
     }
-    try:
-        path = _receipt_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with _receipt_lock, open(path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record) + "\n")
-    except Exception as e:
-        log.warning("Model receipt write failed: %s", e)
+    _append_durable(record)
 
 
 # ── File watcher ──────────────────────────────────────────────────────────────
@@ -477,7 +514,8 @@ def classify_doc(file_path: str, content: str, content_hash: str | None = None) 
 
 
 def _call_classify_model(file_path: str, content: str) -> dict | None:
-    """One paid classification call. Writes a receipt whenever the request is sent.
+    """One paid classification call. A durable reservation is written before the
+    request (no reservation, no call); an outcome line follows whenever it is sent.
     Returns the parsed JSON dict, or None on any failure."""
     model = cfg("classify_model", DEFAULT_CLASSIFY_MODEL)
     effort = cfg("classify_reasoning_effort", DEFAULT_CLASSIFY_REASONING_EFFORT)
@@ -488,6 +526,15 @@ def _call_classify_model(file_path: str, content: str) -> dict | None:
         )
     except Exception as e:
         log.debug("LLM client unavailable (%s) — using filename heuristic", e)
+        return None
+
+    # Fail closed: no durable reservation, no paid request.
+    reservation_id = _reserve_call(file_path, model, effort)
+    if reservation_id is None:
+        with _state_lock:
+            _state["model_calls_refused_unrecorded"] = _state.get("model_calls_refused_unrecorded", 0) + 1
+        log.error("Could not record a model-call reservation in %s — no paid call made "
+                  "(fail closed); using filename heuristic", _receipt_path())
         return None
 
     resp = None
@@ -534,7 +581,8 @@ def _call_classify_model(file_path: str, content: str) -> dict | None:
         log.debug("LLM classify failed (%s) — using filename heuristic", e)
         return None
     finally:
-        _write_receipt(file_path, model, effort, getattr(resp, "usage", None), outcome)
+        _write_receipt(file_path, model, effort, getattr(resp, "usage", None), outcome,
+                       reservation_id)
 
 
 def _classify_by_filename(file_path: str, content: str) -> dict:

@@ -255,6 +255,65 @@ def test_daily_cap_survives_restart_via_receipts(agent):
     assert _calls(agent) == 0
 
 
+def test_reservation_is_durable_before_the_paid_request(agent):
+    seen = []
+
+    def create(*a, **k):
+        # At request time the reservation must already be on disk.
+        seen.append([json.loads(l) for l in agent.receipts.read_text().splitlines()])
+        return _fake_response()
+
+    agent.client.chat.completions.create.side_effect = create
+    dev_agent.process_doc(agent.write("_working/spec_reserve.md", "# R\n"), "doc_created")
+    assert len(seen) == 1 and [r["kind"] for r in seen[0]] == ["reservation"]
+
+
+def test_unwritable_receipt_log_means_no_paid_call(agent, caplog):
+    # The receipt path is a directory: nothing can be appended to it.
+    agent.receipts.mkdir(parents=True)
+    path = agent.write("_working/spec_no_log.md", "# No log\n")
+    with caplog.at_level("ERROR", logger=dev_agent.log.name):
+        cl = dev_agent.process_doc(path, "doc_created")
+    assert _calls(agent) == 0                            # fail closed
+    assert cl["doc_type"] == "spec"                      # filename heuristic
+    assert dev_agent._state["model_calls_refused_unrecorded"] == 1
+    assert "no paid call made" in caplog.text
+
+
+def test_outcome_write_failure_still_counts_after_restart(agent, monkeypatch):
+    dev_agent._cfg["model_calls_per_day"] = 2
+    real = dev_agent._append_durable
+    # Reservations succeed; every outcome write fails (e.g. disk full mid-call).
+    monkeypatch.setattr(dev_agent, "_append_durable",
+                        lambda rec: real(rec) if rec.get("kind") == "reservation" else False)
+    for i in range(2):
+        dev_agent.process_doc(agent.write(f"_working/spec_o{i}.md", f"# O{i}\n"), "doc_created")
+    assert _calls(agent) == 2
+    # Restart: a fresh budget seeded from disk still sees both calls.
+    monkeypatch.setattr(dev_agent, "_budget", dev_agent.ModelCallBudget())
+    assert dev_agent._budget.seed_from_receipts(agent.receipts) == 2
+    cl = dev_agent.process_doc(agent.write("_working/spec_o2.md", "# O2\n"), "doc_created")
+    assert cl["rate_limited"] and cl["limit"] == "day"
+    assert _calls(agent) == 2
+
+
+def test_crash_between_request_and_outcome_still_counts(agent):
+    # A process that died after reserving (no outcome line) still used the call.
+    agent.receipts.parent.mkdir(parents=True)
+    today = datetime.now(timezone.utc).isoformat()
+    agent.receipts.write_text(json.dumps({"ts": today, "kind": "reservation", "id": "x"}) + "\n")
+    assert dev_agent._budget.seed_from_receipts(agent.receipts) == 1
+
+
+def test_outcome_lines_are_not_double_counted(agent):
+    for i in range(3):
+        dev_agent.process_doc(agent.write(f"_working/spec_d{i}.md", f"# D{i}\n"), "doc_created")
+    lines = agent.receipts.read_text().strip().splitlines()
+    assert len(lines) == 6                               # 3 reservations + 3 outcomes
+    fresh = dev_agent.ModelCallBudget()
+    assert fresh.seed_from_receipts(agent.receipts) == 3
+
+
 # ── 5. Dedupe and debounce ───────────────────────────────────────────────────
 
 def test_identical_content_is_classified_once(agent):
@@ -293,15 +352,18 @@ def test_receipt_line_written_without_content(agent):
     text = agent.receipts.read_text()
     assert secret not in text
     lines = text.strip().splitlines()
-    assert len(lines) == 1
-    rec = json.loads(lines[0])
+    assert len(lines) == 2                               # reservation, then outcome
+    res, rec = json.loads(lines[0]), json.loads(lines[1])
+    assert set(res) == {"ts", "kind", "id", "path", "model", "reasoning_effort"}
+    assert res["kind"] == "reservation" and res["path"] == "_working/spec_receipt.md"
+    assert rec["kind"] == "outcome" and rec["reservation_id"] == res["id"]
     assert rec["path"] == "_working/spec_receipt.md"
     assert rec["model"] == "grok-4.3"
     assert rec["reasoning_effort"] == "none"
     assert (rec["input_tokens"], rec["output_tokens"]) == (412, 37)
     assert rec["outcome"] == "ok"
-    assert set(rec) == {"ts", "path", "model", "reasoning_effort", "input_tokens",
-                        "output_tokens", "reasoning_tokens", "outcome"}
+    assert set(rec) == {"ts", "kind", "reservation_id", "path", "model", "reasoning_effort",
+                        "input_tokens", "output_tokens", "reasoning_tokens", "outcome"}
 
 
 def test_failed_call_still_writes_receipt_and_falls_back(agent):
@@ -309,7 +371,7 @@ def test_failed_call_still_writes_receipt_and_falls_back(agent):
     path = agent.write("_working/spec_fail.md", "# Fail\n")
     cl = dev_agent.process_doc(path, "doc_created")
     assert cl["doc_type"] == "spec"                      # filename heuristic
-    rec = json.loads(agent.receipts.read_text().strip())
+    rec = json.loads(agent.receipts.read_text().strip().splitlines()[-1])
     assert rec["outcome"] == "error: RuntimeError"
     assert rec["input_tokens"] is None
 
