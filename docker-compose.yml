@@ -133,6 +133,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.cos
     container_name: minimoi-cos-dev
+    restart: unless-stopped
     env_file: .env
     environment:
       - MINIMOI_ROLE=standby
