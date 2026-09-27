@@ -1,0 +1,20 @@
+{# Phone (≤ 640 px) priority summary: Needs you and the two live numbers. Hidden on desktop by CSS. #}
+<section class="phone-summary" aria-label="Priority summary">
+  <div class="ps-needs">
+    <h2 class="ps-h">Needs you · <span data-needs-count>{{ state.needs.total if state.needs.total is not none else 'unknown' }}</span></h2>
+    <ul class="ps-list" data-needs-list>
+      {% for r in state.needs['items'] %}<li data-needs-row><span class="tag" data-tag="needs">{{ r.tag }}</span> <a href="{{ r.href }}">{{ r.text }}</a></li>{% endfor %}
+    </ul>
+    {% if not state.needs['items'] %}<p class="needs-line" data-needs-line>{{ state.needs.text }}</p>{% endif %}
+  </div>
+  <ul class="ps-numbers" aria-label="Live numbers">
+    {% for n in phone_numbers %}
+    <li class="ps-num" data-ps-light="{{ n.id }}" data-unknown="{{ 'true' if n.state == 'unknown' else 'false' }}">
+      <span class="ps-label">{{ n.label }}</span>
+      <span class="ps-value" data-ps-word>{{ n.word }}</span>
+      <span class="small" data-ps-reason>{{ n.reason }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <button type="button" class="ps-open" data-phone-open aria-expanded="false" aria-controls="main">Open {{ area }} ▸</button>
+</section>

@@ -1,0 +1,81 @@
+{% extends 'guild_floor/_base.html' %}
+{% from 'guild_floor/_macros.html' import src_badge, src_note, unknown_row with context %}
+{% block title %}Build · workbench{% endblock %}
+
+{% macro panel(id) -%}
+{% set p = panels_cfg[id] %}
+<section class="panel" data-panel="{{ id }}" aria-labelledby="ph-{{ id }}">
+  <header class="panel-head">
+    <span class="panel-handle" data-drag-handle draggable="true" title="Drag to reorder">⠿<span class="visually-hidden">Drag handle (pointer only; use Up and Down on the keyboard)</span></span>
+    <h2 class="panel-title" id="ph-{{ id }}"><span class="panel-focus-label" data-focus-label hidden>☆ In focus · </span>{{ p.title }}</h2>
+    <span class="panel-state" data-panel-state></span>
+    <span class="panel-actions" role="group" aria-label="Arrange {{ p.title }}">
+      <button type="button" class="btn-mini" data-act="up" aria-label="Move {{ p.title }} up">↑</button>
+      <button type="button" class="btn-mini" data-act="down" aria-label="Move {{ p.title }} down">↓</button>
+      <button type="button" class="btn-mini" data-act="fold" aria-expanded="true" aria-label="Fold {{ p.title }}">Fold</button>
+      <button type="button" class="btn-mini" data-act="focus" aria-pressed="false" aria-label="Bring {{ p.title }} to focus">☆ Focus</button>
+    </span>
+  </header>
+  <div class="panel-body" data-panel-body>
+    {{ caller() }}
+  </div>
+  <p class="panel-empty" data-empty-reason hidden>{{ p.title }} · nothing to show — {{ p.empty_reason }}</p>
+</section>
+{%- endmacro %}
+
+{% block main %}
+<div class="page-head">
+  <h1 class="page-title">Build · workbench</h1>
+  <p class="page-meta">⠿ drag · ↑↓ move · Fold · ☆ focus · current as of <span data-iso="{{ state.observed_at }}">{{ hhmm(state.observed_at) }}</span></p>
+  <p class="page-actions">
+    <a class="btn-quiet" href="{{ urls.queue }}">Build Queue →</a>
+    <button type="button" class="btn-quiet" data-bench-reset>Reset arrangement</button>
+  </p>
+</div>
+<p class="bench-note small" data-bench-note>Your arrangement is kept in this browser only (a view setting, per device) · <span data-folded-summary></span></p>
+
+<div class="bench" data-bench>
+
+{% call panel('needs') %}
+  <ul class="rows">
+  {% for r in state.needs['items'] %}
+    <li class="row" data-row><span><span class="tag" data-tag="needs">{{ r.tag }}</span> <a href="{{ r.href }}">{{ r.text }}</a></span></li>
+  {% endfor %}
+  </ul>
+  {% if state.needs.status != 'ok' %}<p class="unknown-line" data-row>{{ state.needs.text }}</p>{% endif %}
+{% endcall %}
+
+{% call panel('motion') %}
+  {% set m = data.motion %}
+  {% if not m.res.ok %}{{ unknown_row(badge(m.res)) }}{% else %}
+  <ul class="rows compact">
+    {% for it in m.rows %}<li class="row" data-row><span><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title|truncate(60, true, '…') }}</a></span><span class="small">{{ it.status_label }}</span></li>{% endfor %}
+  </ul>
+  <p class="small">{{ src_badge(badge(m.res)) }} {{ src_note(badge(m.res)) }}</p>
+  {% endif %}
+{% endcall %}
+
+{% call panel('blocked') %}
+  {% set b = data.blocked %}
+  {% if not b.res.ok %}{{ unknown_row(badge(b.res)) }}{% else %}
+  <ul class="rows">
+    {% for it in b.rows %}<li class="row" data-row><span><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title }}</a>{% if it.blocked_reason %} — {{ it.blocked_reason }}{% endif %}</span>{{ src_badge(badge(b.res)) }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+{% endcall %}
+
+{% call panel('discussions') %}
+  {% set d = data.discussions %}
+  {% if d.res.ok %}
+  <ul class="rows">
+    {% for s in d.res.data %}<li class="row" data-row><span>{{ s.title }}</span><span class="row-src"><span class="small">{{ s.id }}</span> {{ src_badge(badge(d.res)) }}</span></li>{% endfor %}
+  </ul>
+  {% else %}{{ unknown_row(badge(d.res)) }}{% endif %}
+{% endcall %}
+
+{% call panel('postits') %}
+  <p class="zone-next">{{ state.postits.text }}</p>
+{% endcall %}
+
+</div>
+{% endblock %}

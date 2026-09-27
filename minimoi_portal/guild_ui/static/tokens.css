@@ -1,0 +1,89 @@
+/* Guild UI tokens — the ONLY place for colours, type, spacing, radii and chip styles.
+   Swapping a theme = editing this file. Values start from the existing Guild palette
+   (minimoi_portal/templates/guild/*.html, static/guild.css) and the Round 3 boards. */
+:root {
+  /* surfaces (rev 3: deeper, warmer page; each zone a distinct tone with a visible edge) */
+  --gu-bg: #d9ccb5;
+  --gu-surface: #f5efe4;
+  --gu-surface-2: #ebe2d2;
+  --gu-border: #bfae92;
+  --gu-border-strong: #9c8a6c;
+  --gu-zone-conv: #fffaf1;      /* the one light reading surface */
+  --gu-zone-status: #ece3d3;
+  --gu-zone-needs: #f5ecdc;
+  --gu-zone-continue: #efe7d8;
+  --gu-zone-notes: #f6ecc4;
+  --gu-zone-edge: #a8977a;
+  --gu-zone-h-ink: #54473a;
+  --gu-gutter: 14px;
+  --gu-row-rule: #d8ccb6;
+  --gu-msg-bg: #f3ebdd;
+  /* text: AA on every zone (text 10.9:1+, muted 5.6:1+ on the page, higher on zones); dim is decoration only */
+  --gu-text: #1f1a12;
+  --gu-text-muted: #54473a;
+  --gu-text-dim: #8a7b66;
+  --gu-accent: #6f4718;
+  --gu-accent-strong: #563610;
+  --gu-on-dark: #f5ede0;
+  --gu-on-dark-line: rgba(255, 255, 255, 0.3);
+  --gu-on-dark-fill: rgba(255, 255, 255, 0.18);
+  --gu-msg-own-bg: #e8dcc6;
+  --gu-input-bg: #ffffff;
+  --gu-portal-ink: #e8e8e8;
+  --gu-portal-dim: rgba(255, 255, 255, 0.55);
+  --gu-portal-active: #ffffff;
+  --gu-nav-sep: rgba(198, 138, 94, 0.3);
+  --gu-shadow-door: 0 1px 4px rgba(42, 26, 14, 0.07);
+  /* chrome */
+  --gu-portal-bg: #12122a;
+  --gu-portal-link: #c68a5e;
+  --gu-nav-bg: #2a1f14;
+  --gu-nav-link: #c9ab85;
+  --gu-nav-active: #f5ede0;
+  --gu-nav-underline: #d49a6a;
+  --gu-banner-bg: #f3dcc2;
+  --gu-banner-ink: #5c330c;
+  /* stoplights: shape + word always accompany colour; unknown is grey, never green */
+  --gu-light-green: #2f6b34;
+  --gu-light-yellow: #9a6a00;
+  --gu-light-red: #a3322a;
+  --gu-light-unknown: #77716a;
+  --gu-size-floor: 16px;
+  /* signals (always paired with text) */
+  --gu-sig-attention: #c7802f;
+  --gu-sig-quiet: #b3a896;
+  --gu-sig-unknown: #8a857c;
+  /* evidence marks and tags */
+  --gu-mark-reported-bg: #fbe9a6; --gu-mark-reported-ink: #5a4200;
+  --gu-mark-verified-bg: #e6e9dc; --gu-mark-verified-ink: #3b4630;
+  --gu-mark-unknown-bg: #e6e2dc;  --gu-mark-unknown-ink: #5f5a52;
+  --gu-mark-blocker-bg: #f3dcc2;  --gu-mark-blocker-ink: #7a3f0d;
+  --gu-tag-needs-bg: #f3dcc2;     --gu-tag-needs-ink: #7a3f0d;
+  --gu-tag-decision-bg: #2a1f14;  --gu-tag-decision-ink: #f5f0e8;
+  --gu-postit-bg: #fbe9a6; --gu-postit-border: #e6cf7a;
+  /* source badges: live is not green; unknown is grey + dashed */
+  --gu-badge-live-bg: #e8e2f0;    --gu-badge-live-ink: #3d3252;
+  --gu-badge-neutral-bg: #f0ebe0;  --gu-badge-neutral-ink: #5b4f3e;
+  --gu-badge-ni-bg: #ecebe8;      --gu-badge-ni-ink: #5f5a52;
+  --gu-unknown-ink: #6f6a62;
+  --gu-unknown-border: #9a948a;
+  /* type */
+  --gu-font-body: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --gu-font-mono: 'DM Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --gu-font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --gu-size-xs: 11px; --gu-size-sm: 12.5px; --gu-size-md: 14px; --gu-size-lg: 16px;
+  --gu-size-h1: 1.6rem; --gu-size-h2: 0.875rem; --gu-size-big: 24px;
+  --gu-size-hero: clamp(2.2rem, 6vw, 3.8rem);
+  /* spacing, radii, shadows */
+  --gu-s1: 4px; --gu-s2: 8px; --gu-s3: 12px; --gu-s4: 16px; --gu-s5: 24px; --gu-s6: 36px;
+  --gu-radius: 6px; --gu-radius-pill: 999px;
+  --gu-shadow-float: 0 8px 28px rgba(42, 31, 20, 0.22);
+  --gu-shadow-pill: 0 4px 14px rgba(42, 31, 20, 0.25);
+  --gu-focus: 3px solid #1f4f8f;
+  /* geometry */
+  --gu-portal-h: 38px;
+  --gu-mc-width: 420px;
+  --gu-target: 24px;
+  --gu-target-phone: 44px;
+  color-scheme: light;
+}

@@ -2820,6 +2820,27 @@ def guild_users():
     return render_template("guild/users.html", users=users, user=_current_user())
 
 
+# ── Guild Shop floor (/guild-next) and prototype (/guild-proto), staging only ──
+# Registered only when MINIMOI_GUILD_NEXT / MINIMOI_GUILD_PROTO are set (the
+# staging override); unset in production, so nothing is registered and both
+# prefixes answer 404. A switched-on mount that fails answers 503 there and
+# never falls back. See minimoi_portal/guild_mounts.py.
+from minimoi_portal import guild_mounts as _guild_mounts  # noqa: E402
+
+GUILD_MOUNTS = _guild_mounts.mount_all(
+    app,
+    environ=os.environ,
+    owner_guard=_require_owner,
+    current_user=_current_user,
+    queue_path=_GUILD_QUEUE_PATH,
+    operations_status_url=_cfg.GUILD_OPERATIONS_STATUS_URL,
+    records_db=_cfg.GUILD_RECORDS_DB,
+    base_url=_cfg.BASE_URL,
+    audit=lambda item_id, old, new, note: _queue_audit_insert(item_id, old, new, note),
+    database_url=lambda: os.environ.get("DATABASE_URL"),
+)
+
+
 @app.route("/health")
 def health():
     return {"status": "ok", "service": "portal"}

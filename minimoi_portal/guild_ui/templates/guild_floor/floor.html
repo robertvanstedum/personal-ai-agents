@@ -1,0 +1,61 @@
+{% extends 'guild_floor/_base.html' %}
+{% from 'guild_floor/_macros.html' import shape %}
+{% block title %}{{ floor_cfg.title }} · Guild{% endblock %}
+
+{% block above %}
+<section class="zone zone-status" data-zone="status" aria-labelledby="z-status">
+  <h2 class="zone-h" id="z-status"><span class="crumb">Build → </span>{{ floor_cfg.title }} · Status <span class="small">· {{ rules_label }}</span></h2>
+  <button type="button" class="status-compact" data-lights-toggle aria-expanded="false" aria-controls="lights-full">
+    {% for l in state.lights %}
+    <span class="lc" data-lc="{{ l.id }}" data-light-state="{{ l.state }}">{{ shape(l) }}<span class="lc-name">{{ l.short }}</span> <span class="lc-word" data-lc-word>{{ l.word }}</span></span>
+    {% endfor %}
+    <span class="lc-more" data-lights-more>Details ▾</span>
+  </button>
+  <ul class="lights" id="lights-full" data-lights-full>
+    {% for l in state.lights %}
+    <li class="light" data-light="{{ l.id }}" data-light-state="{{ l.state }}">
+      {{ shape(l) }}
+      <span class="light-body">
+        <a class="light-name" href="{{ l.href }}" data-light-link>{{ l.label }}</a>
+        <span class="light-word" data-light-word>{{ l.word }}</span>
+        <span class="light-reason"><span data-light-reason>{{ l.reason }}</span> <span class="light-src" data-light-src data-source="{{ l.source }}">{{ l.source_mark }}</span></span>
+      </span>
+      <button type="button" class="btn-mini light-ask" data-ask="{{ l.id }}" aria-label="Explain {{ l.label }} (platform rules, no model)">Ask</button>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}
+
+{% block main %}
+<div class="floor-rail" data-floor-rail>
+  <p class="floor-urgent" data-floor-urgent{% if not state.needs['items'] %} hidden{% endif %}><span class="floor-urgent-label">Needs you:</span> <a href="{{ state.needs['items'][0].href if state.needs['items'] else '#' }}" data-urgent-link>{% if state.needs['items'] %}{{ state.needs['items'][0].tag }} · {{ state.needs['items'][0].text }}{% endif %}</a></p>
+  <button type="button" class="floor-chip" data-sheet-toggle aria-expanded="false" aria-controls="floor-sheet">
+    Needs you <span data-reminder-count>{{ state.needs.total if state.needs.total is not none else '?' }}</span> ▾
+  </button>
+  <div class="floor-sheet" id="floor-sheet" data-floor-sheet>
+    <section class="zone zone-needs" data-zone="needs" aria-labelledby="z-needs">
+      <h2 class="zone-h" id="z-needs">Needs you</h2>
+      <ol class="reminders" data-reminders>
+        {% for r in state.needs['items'] %}
+        <li class="reminder" data-reminder>
+          <span class="reminder-tag">{{ r.tag }}</span>
+          <a href="{{ r.href }}" data-reminder-link>{{ r.text }}</a>
+        </li>
+        {% endfor %}
+      </ol>
+      <p class="needs-line" data-needs-line>{% if state.needs.status != 'ok' %}{{ state.needs.text }}{% elif state.needs.total %}{{ state.needs.total }} in all{% if state.needs.total > state.needs['items']|length %} · {{ state.needs['items']|length }} shown{% endif %} · checked <span data-iso="{{ state.needs.observed_at }}">{{ hhmm(state.needs.observed_at) }}</span>{% else %}Nothing needs you · checked <span data-iso="{{ state.needs.observed_at }}">{{ hhmm(state.needs.observed_at) }}</span>{% endif %}</p>
+    </section>
+    <section class="zone zone-continue" data-zone="continue" aria-labelledby="z-cont">
+      <h2 class="zone-h" id="z-cont">Continue</h2>
+      <p class="zone-next" data-continue-next>{{ state['continue'].text }}</p>
+      <p><a href="{{ urls.bench }}" class="open-bench" data-open-bench>Open the bench →</a></p>
+      <p><a href="{{ urls.queue }}">Build Queue →</a></p>
+    </section>
+    <section class="zone zone-postits" data-zone="postits" aria-labelledby="z-notes">
+      <h2 class="zone-h" id="z-notes">Post-its</h2>
+      <p class="zone-next" data-postits-next>{{ state.postits.text }}</p>
+    </section>
+  </div>
+</div>
+{% endblock %}

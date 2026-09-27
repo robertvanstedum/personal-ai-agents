@@ -1,0 +1,64 @@
+{# The conversation, real mode. Master Craftsman is off: no reply of any kind,
+   no suggested lines, no voice, no attach, no invite, no filing. The opening
+   briefing and the explain cards are platform rules, labelled as such. #}
+<button type="button" class="mc-pill" data-mc-pill aria-controls="mc-panel" aria-expanded="false">
+  <span class="sig-dot" data-state="quiet" aria-hidden="true"></span>
+  <span>Conversation · Master Craftsman off</span>
+</button>
+<aside id="mc-panel" class="mc-panel" data-mc-panel data-mode="pill" data-pos="right" aria-label="Conversation">
+  <header class="mc-head">
+    <h2 class="mc-title">Master Craftsman</h2>
+    <div class="mc-head-actions" role="group" aria-label="Panel mode">
+      <button type="button" class="btn-mini" data-mc-dock aria-pressed="false">Dock</button>
+      <button type="button" class="btn-mini" data-mc-min>Minimize</button>
+    </div>
+  </header>
+  <p class="mc-state" data-mc-header>{{ state.mc_header }}</p>
+  <p class="mc-context" data-mc-context>Context: {{ area }} · {{ context_item }} · on the record</p>
+  <ol class="mc-thread" data-mc-thread role="log" aria-live="polite" aria-label="Conversation thread">
+    <li class="msg msg-platform" data-kind="briefing" data-briefing>
+      <p class="msg-meta"><span class="msg-label" data-briefing-label>{{ state.briefing.display_label }}</span></p>
+      <p class="msg-text" data-briefing-text>{{ state.briefing.text }}</p>
+    </li>
+  </ol>
+  <p class="visually-hidden" aria-live="polite" data-mc-announcer></p>
+  <p class="mc-refusal" data-mc-refusal role="status" hidden></p>
+  <div class="mc-dock-bottom" data-mc-dock-bottom>
+  <form class="mc-composer" data-mc-composer>
+    <label class="visually-hidden" for="mc-input">Type a note</label>
+    <input id="mc-input" class="mc-input" data-mc-input autocomplete="off" placeholder="Type a note">
+    <button type="submit" class="btn" data-mc-send disabled aria-describedby="mc-notes-off">Send</button>
+    <div class="mc-tools">
+      <button type="button" class="btn-quiet" data-mc-record aria-pressed="false">Off the record</button>
+      <button type="button" class="btn-quiet" data-mc-invite disabled>Invite</button>
+    </div>
+    <div class="mc-off-lines">
+      <span id="mc-notes-off" data-notes-off>{{ state.notes.text }}</span>
+      <span data-filing-off>{{ filing_off }}</span>
+      <span data-invite-off>{{ invite_off }}</span>
+    </div>
+  </form>
+  <div class="mc-phone-bar">
+    <button type="button" class="btn mc-type" data-mc-type aria-controls="mc-input">Type</button>
+  </div>
+  </div>
+</aside>
+
+<template id="tpl-platform">
+  <li class="msg msg-platform" data-kind="platform">
+    <p class="msg-meta"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span></p>
+    <p class="msg-text" data-slot="text"></p>
+  </li>
+</template>
+<template id="tpl-explain">
+  <li class="msg msg-platform explain-card" data-kind="explain">
+    <p class="msg-meta"><span class="msg-label" data-slot="label"></span></p>
+    <p class="msg-text"><strong data-slot="title"></strong> · <span data-slot="word"></span> — <span data-slot="reason"></span></p>
+    <dl>
+      <dt>Source</dt><dd data-slot="source"></dd>
+      <dt>Observed</dt><dd data-slot="observed"></dd>
+      <dt>Evidence</dt><dd data-slot="evidence"></dd>
+    </dl>
+    <ul data-slot="detail"></ul>
+  </li>
+</template>

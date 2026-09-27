@@ -1,0 +1,25 @@
+{# Shared macros: source marks, unknown lines, the light shape. #}
+{% macro src_badge(b) -%}
+<span class="src-badge" data-source="{{ b.source }}" data-status="{{ b.status }}"{% if b.error %} title="{{ b.error }}"{% endif %}>{{ b.text }}</span>
+{%- endmacro %}
+
+{% macro src_note(b) -%}
+{% if b.note %}<span class="src-note" data-src-note>{{ b.note }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro status_mark(it) -%}
+{% if not it.status_known %}<span class="mark" data-mark="unknown" data-status-unknown>{{ it.status_label }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro unknown_row(b) -%}
+<p class="unknown-line" data-row>{{ src_badge(b) }} <span>{% if b.reason == 'not_configured' %}not instrumented{% else %}treat as unknown{% endif %}{% if b.error %} — {{ b.error }}{% endif %}</span></p>
+{%- endmacro %}
+
+{% macro shape(v) -%}
+<svg class="lshape" data-shape="{{ v.shape }}" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+{%- if v.shape == 'circle' %}<circle cx="8" cy="8" r="6.5"/>
+{%- elif v.shape == 'triangle' %}<polygon points="8,1.2 15.2,14.6 0.8,14.6"/>
+{%- elif v.shape == 'square' %}<rect x="1.8" y="1.8" width="12.4" height="12.4"/>
+{%- else %}<circle cx="8" cy="8" r="6.2" class="lshape-ring"/><text x="8" y="11.6" text-anchor="middle" class="lshape-q">?</text>
+{%- endif %}</svg>
+{%- endmacro %}

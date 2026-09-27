@@ -1,0 +1,32 @@
+{% extends 'guild_floor/_base.html' %}
+{% from 'guild_floor/_macros.html' import shape %}
+{% block title %}Operate · Guild{% endblock %}
+{% block main %}
+<div class="page-head">
+  <h1 class="page-title">Operate</h1>
+  <p class="page-meta">Current as of <span data-iso="{{ state.observed_at }}">{{ hhmm(state.observed_at) }}</span> · {{ rules_label }} · marks: <span class="src-badge" data-source="live" data-status="ok">live</span> <span class="src-badge" data-source="not_instrumented" data-status="unknown">not instrumented</span></p>
+</div>
+<ul class="tiles" aria-label="Operate measures">
+  {% for t in layout.operate.tiles %}{% set l = tile_lights[t.id] %}
+  <li>
+    <button type="button" class="tile" data-tile="{{ t.id }}" data-tile-label="{{ t.label }}" aria-pressed="{{ 'true' if t.id == selected_tile else 'false' }}"
+            data-unknown="{{ 'true' if l.state == 'unknown' else 'false' }}" data-light-state="{{ l.state }}">
+      <span class="tile-label">{{ t.label }}</span>
+      <span class="tile-value">{{ shape(l) }} <span data-tile-word>{{ l.word }}</span></span>
+      <span class="tile-sub" data-tile-reason>{{ l.reason }}</span>
+      <span class="tile-foot">{% if l.observed_at and l.source == 'live' %}observed <span data-iso="{{ l.observed_at }}">{{ hhmm(l.observed_at) }}</span> · {% endif %}<span class="src-badge" data-source="{{ l.source }}" data-status="{{ 'ok' if l.state != 'unknown' else 'unknown' }}">{{ l.source_mark }}</span></span>
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+{% for t in layout.operate.tiles %}{% set l = tile_lights[t.id] %}
+<section class="card tile-detail" data-drill-for="{{ t.id }}"{% if t.id != selected_tile %} hidden{% endif %} aria-labelledby="drill-{{ t.id }}">
+  <h2 class="h2" id="drill-{{ t.id }}">{{ t.label }} · {{ l.word }}</h2>
+  <p>{{ l.reason }}</p>
+  <ul class="light-detail">{% for line in l.detail %}<li>{{ line }}</li>{% endfor %}</ul>
+  <p class="small">Source: {{ l.source_mark }}{% if l.evidence %} · {{ l.evidence }}{% endif %}</p>
+  {% if t.id == 'build_queue' %}<p class="panel-links"><a href="{{ urls.queue }}">Open the Build Queue →</a></p>{% endif %}
+</section>
+{% endfor %}
+<p class="small">No next steps, journeys or administration here yet; guest and reset administration stays on the <a href="/guild/operate">current Operate page</a>.</p>
+{% endblock %}

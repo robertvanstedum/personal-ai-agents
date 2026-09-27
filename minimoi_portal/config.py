@@ -59,6 +59,16 @@ GUILD_EXPERIMENT_PROJECTION = os.environ.get(
 # domains/guild/queue_store.py refuses every write (review M2).
 GUILD_QUEUE_PATH = os.environ.get("GUILD_QUEUE_PATH") or None
 
+# ── Guild Shop floor at /guild-next (B1 deliverable (b)) ─────────────────────
+# The Operations agent's status endpoint, read by the Shop floor's Systems
+# light (2 s timeout, cached 60 s). Unset means the light says "not
+# configured" (grey), never green. The legacy /guild/operate page keeps its
+# own hard-coded address.
+GUILD_OPERATIONS_STATUS_URL = os.environ.get("GUILD_OPERATIONS_STATUS_URL") or None
+# Records SQLite for the Discussions panel, opened read-only. Unset means
+# "not instrumented".
+GUILD_RECORDS_DB = os.environ.get("GUILD_RECORDS_DB") or None
+
 # Per-environment surface configuration for the IoT Connect reference demo —
 # deployment-owned, never derived from repository content (spec §4.2).
 # Defaults are the AWS values; the Mac overrides them locally.

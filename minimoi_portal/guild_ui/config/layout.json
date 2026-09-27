@@ -1,0 +1,44 @@
+{
+  "_about": "Layout of the real Shop floor: which lights, their order and labels, bench panels, Operate tiles and phone numbers. No values live here: every value comes from a live source or says not instrumented. Light rules are in guild_ui/lights.py.",
+  "layout_version": 2,
+  "sections": [
+    {"id": "build", "label": "Build"},
+    {"id": "operate", "label": "Operate"}
+  ],
+  "floor": {
+    "title": "Shop floor",
+    "max_reminders": 3,
+    "lights": [
+      {"id": "build_queue", "label": "Build queue", "short": "Queue", "rule": "queue", "link": "queue"},
+      {"id": "systems", "label": "Systems", "short": "Systems", "rule": "systems", "link": "operate:systems"},
+      {"id": "agents", "label": "Agents", "short": "Agents", "rule": "not_instrumented", "link": "operate:agents"},
+      {"id": "usage", "label": "Usage & limits", "short": "Usage", "rule": "not_instrumented", "link": "operate:usage"},
+      {"id": "rollouts", "label": "Rollouts", "short": "Rollouts", "rule": "not_instrumented", "link": "operate:rollouts"}
+    ]
+  },
+  "bench": {
+    "panels": [
+      {"id": "needs", "title": "Needs you", "empty_reason": "nothing waiting on you"},
+      {"id": "motion", "title": "In motion", "empty_reason": "nothing in Spec Ready or In Build"},
+      {"id": "blocked", "title": "Blocked", "empty_reason": "no blocked queue items"},
+      {"id": "discussions", "title": "Discussions", "empty_reason": "no open discussions"},
+      {"id": "postits", "title": "Post-its", "empty_reason": "post-its arrive next"}
+    ],
+    "default_order": ["needs", "motion", "blocked", "discussions", "postits"],
+    "default_folded": [],
+    "default_focus": null
+  },
+  "operate": {
+    "tiles": [
+      {"id": "build_queue", "label": "Build queue"},
+      {"id": "systems", "label": "Systems"},
+      {"id": "agents", "label": "Agents"},
+      {"id": "usage", "label": "Usage & limits"},
+      {"id": "rollouts", "label": "Rollouts"}
+    ],
+    "default_selected": "build_queue"
+  },
+  "phone": {
+    "numbers": ["build_queue", "systems"]
+  }
+}
