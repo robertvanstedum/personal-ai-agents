@@ -64,10 +64,14 @@ services:
       - OPENCLAW_STATE_DIR=/home/node/.openclaw
       - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
       - OPENCLAW_DISABLE_BONJOUR=1
+      - OPENCLAW_NO_AUTO_UPDATE=1
       - TZ=${COS_AGENT_TIMEZONE:-America/Chicago}
     volumes:
       - cos-agent-a-state:/home/node/.openclaw
       - cos-agent-a-auth:/home/node/.config/openclaw
+    # OpenClaw 2026.9.x idles at about 0.9 GB; cap it so it can never starve
+    # the rest of the host. The staging override inherits this limit.
+    mem_limit: 1200m
     security_opt:
       - no-new-privileges:true
     cap_drop:

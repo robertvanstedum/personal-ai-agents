@@ -6,6 +6,7 @@ supported Chat Completions endpoint and returns assistant-visible text.
 """
 
 import hashlib
+import json
 import logging
 import os
 import re
@@ -23,6 +24,11 @@ _DEFAULT_RUNTIME_URL = "http://cos-agent-a:18789/v1"
 _DEFAULT_AGENT_ID = "cos-agent-a"
 _CONNECT_TIMEOUT_SECONDS = 5
 _TURN_TIMEOUT_SECONDS = 120
+# Request-body cap for one turn. OpenClaw 2026.7.1 enforced this in the gateway
+# (chatCompletions.maxBodyBytes); 2026.9.x retired that setting and only has a
+# fixed 20 MB built-in limit, so the adapter enforces the old 256 KB cap itself,
+# before anything is sent.
+MAX_REQUEST_BODY_BYTES = 262_144
 _DEFAULT_OWNER_TIMEZONE = "America/Chicago"
 _RELATIVE_DATE_PATTERN = re.compile(
     r"\b(today|tonight|yesterday|tomorrow|this morning|this afternoon|"
@@ -37,6 +43,10 @@ class AgentRuntimeError(RuntimeError):
 
 class AgentSessionRecoveryRequired(AgentRuntimeError):
     """The current runtime session must be explicitly reset before reuse."""
+
+
+class AgentRequestTooLarge(AgentRuntimeError):
+    """The turn exceeds the request-body cap and was not sent."""
 
 
 @dataclass(frozen=True)
@@ -176,6 +186,26 @@ class OpenClawBackend:
             "invalid conversation history",
         ))
 
+    @staticmethod
+    def _enforce_request_cap(body: dict) -> None:
+        """Refuse a turn whose JSON body exceeds the cap; nothing is sent.
+
+        The size is measured exactly as ``requests`` serializes ``json=``
+        (``json.dumps`` defaults, ``allow_nan=False``, UTF-8), so the check
+        matches the bytes that would go on the wire.
+        """
+        size = len(json.dumps(body, allow_nan=False).encode("utf-8"))
+        if size > MAX_REQUEST_BODY_BYTES:
+            log.warning(
+                "COS Agent A request refused before sending: %d bytes > %d byte cap",
+                size,
+                MAX_REQUEST_BODY_BYTES,
+            )
+            raise AgentRequestTooLarge(
+                "COS Agent A request is too large to send "
+                f"(limit {MAX_REQUEST_BODY_BYTES // 1024} KB); shorten the message."
+            )
+
     def _post_turn(
         self,
         *,
@@ -188,16 +218,18 @@ class OpenClawBackend:
             "Authorization": f"Bearer {self._gateway_token}",
             "Content-Type": "application/json",
         }
+        body = {
+            "model": f"openclaw/{self._agent_id}",
+            "user": self._session_user(conversation_id),
+            "messages": messages,
+            "stream": False,
+        }
+        self._enforce_request_cap(body)
         try:
             response = self._http_post(
                 url,
                 headers=headers,
-                json={
-                    "model": f"openclaw/{self._agent_id}",
-                    "user": self._session_user(conversation_id),
-                    "messages": messages,
-                    "stream": False,
-                },
+                json=body,
                 timeout=(_CONNECT_TIMEOUT_SECONDS, _TURN_TIMEOUT_SECONDS),
                 allow_redirects=False,
             )

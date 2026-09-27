@@ -20,8 +20,65 @@ aws ecr get-login-password --region us-east-1 |
 
 export MINIMOI_IMAGE_TAG="$IMAGE_TAG"
 
+# Snapshot COS Agent A's two volumes before its container is recreated.
+# A newer OpenClaw migrates the config and state database in place on first
+# start (one-way), so the only rollback is: old image + these files. The
+# container is stopped first so the SQLite state is copied at rest; if the
+# snapshot fails, the old container is started again and nothing is
+# recreated. Snapshots are root-only and the newest AGENT_A_SNAPSHOT_KEEP sets
+# are kept. Restore steps: scripts/staging/README.md, "Agent A OpenClaw upgrade".
+AGENT_A_CONTAINER="minimoi-cos-agent-a"
+AGENT_A_SNAPSHOT_DIR="/opt/minimoi/backups/cos-agent-a"
+AGENT_A_SNAPSHOT_KEEP=5
+
+snapshot_agent_a_volumes() {
+  if ! docker inspect "$AGENT_A_CONTAINER" >/dev/null 2>&1; then
+    echo "No existing $AGENT_A_CONTAINER; no Agent A volumes to snapshot."
+    return 0
+  fi
+  local stamp previous_image dest name path archive
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  previous_image="$(docker inspect --format='{{.Config.Image}}' "$AGENT_A_CONTAINER")"
+  dest="$AGENT_A_SNAPSHOT_DIR/$stamp"
+  ( umask 077 && mkdir -p "$dest" )
+  chmod 700 "$AGENT_A_SNAPSHOT_DIR"
+
+  echo "Stopping $AGENT_A_CONTAINER to snapshot its volumes into $dest"
+  docker stop --time 30 "$AGENT_A_CONTAINER" >/dev/null
+  for name in state auth; do
+    case "$name" in
+      state) path=/home/node/.openclaw ;;
+      auth) path=/home/node/.config/openclaw ;;
+    esac
+    archive="$dest/cos-agent-a-$name.tar.gz"
+    # docker cp reads the stopped container's mounted volume; no extra image.
+    if ! ( umask 077 && docker cp "$AGENT_A_CONTAINER:$path" - | gzip -c > "$archive.partial" ); then
+      echo "Agent A $name snapshot FAILED; restarting the previous container and aborting."
+      rm -f "$archive.partial"
+      docker start "$AGENT_A_CONTAINER" >/dev/null || true
+      return 1
+    fi
+    mv "$archive.partial" "$archive"
+  done
+  {
+    echo "taken_at=$stamp"
+    echo "previous_image=$previous_image"
+    echo "new_image_tag=$IMAGE_TAG"
+    ( cd "$dest" && sha256sum cos-agent-a-state.tar.gz cos-agent-a-auth.tar.gz )
+  } > "$dest/SNAPSHOT"
+  chmod 600 "$dest/SNAPSHOT"
+  echo "Agent A volumes snapshotted: $dest ($(du -sh "$dest" | cut -f1)); previous image $previous_image"
+
+  # Keep only the newest snapshot sets (directory names sort by time).
+  ls -1d "$AGENT_A_SNAPSHOT_DIR"/*/ 2>/dev/null | sort | head -n "-$AGENT_A_SNAPSHOT_KEEP" |
+    while read -r old; do rm -rf -- "$old"; done
+}
+
 # Preserve unaffected containers: pull and recreate only the selected services.
 "${COMPOSE[@]}" pull "${SERVICES[@]}"
+if [[ " ${SERVICES[*]} " == *" cos-agent-a "* ]]; then
+  snapshot_agent_a_volumes
+fi
 "${COMPOSE[@]}" up -d --no-deps --remove-orphans "${SERVICES[@]}"
 
 expected_image() {

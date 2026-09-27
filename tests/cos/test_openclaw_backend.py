@@ -3,7 +3,11 @@
 import requests
 import pytest
 
+import json
+
 from domains.cos.backends.openclaw_backend import (
+    MAX_REQUEST_BODY_BYTES,
+    AgentRequestTooLarge,
     AgentRuntimeError,
     AgentSessionRecoveryRequired,
     OpenClawBackend,
@@ -221,3 +225,71 @@ def test_empty_prompt_is_rejected_without_calling_runtime():
     backend = _backend(lambda *args, **kwargs: pytest.fail("runtime was called"))
     with pytest.raises(ValueError, match="prompt must not be empty"):
         backend.call_backend("   ", _context(), {})
+
+
+def test_request_cap_is_the_256_kb_gateway_limit_from_openclaw_2026_7():
+    assert MAX_REQUEST_BODY_BYTES == 256 * 1024
+
+
+def test_oversized_turn_is_refused_before_any_request():
+    backend = _backend(lambda *args, **kwargs: pytest.fail("runtime was called"))
+    prompt = "x" * (MAX_REQUEST_BODY_BYTES + 1)
+
+    with pytest.raises(AgentRequestTooLarge, match="too large") as caught:
+        backend.call_backend(prompt, _context(), {})
+
+    assert isinstance(caught.value, AgentRuntimeError)
+    assert "256 KB" in str(caught.value)
+    assert "test-secret-token" not in str(caught.value)
+
+
+def test_oversized_system_context_is_refused_before_any_request():
+    backend = _backend(lambda *args, **kwargs: pytest.fail("runtime was called"))
+    context = _context()
+    context["system_prompt"] = "c" * MAX_REQUEST_BODY_BYTES
+
+    with pytest.raises(AgentRequestTooLarge):
+        backend.call_backend("hello", context, {})
+
+
+def test_reset_is_also_subject_to_the_cap(monkeypatch):
+    monkeypatch.setattr(
+        "domains.cos.backends.openclaw_backend.MAX_REQUEST_BODY_BYTES", 16
+    )
+    backend = _backend(lambda *args, **kwargs: pytest.fail("runtime was called"))
+
+    with pytest.raises(AgentRequestTooLarge):
+        backend.reset_conversation("conversation-a")
+
+
+def test_cap_measures_the_exact_serialized_body_and_allows_the_boundary():
+    calls = []
+
+    def post(url, **kwargs):
+        calls.append(kwargs)
+        return StubResponse(payload={"choices": [{"message": {"content": "ok"}}]})
+
+    # Non-ASCII text is escaped by json.dumps (as requests sends it), so the
+    # wire size is larger than the character count.
+    backend = _backend(post)
+    assert backend.call_backend("Olá " * 100, _context(), {}) == "ok"
+    sent = json.dumps(calls[0]["json"], allow_nan=False).encode("utf-8")
+    assert len(sent) <= MAX_REQUEST_BODY_BYTES
+
+    # Grow a prompt until the body is exactly at the cap: it is sent.
+    probe_backend = _backend(post)
+    calls.clear()
+    probe_backend.call_backend("y", _context(), {})
+    base = len(json.dumps(calls[0]["json"], allow_nan=False).encode("utf-8")) - 1
+    calls.clear()
+    at_cap = "y" * (MAX_REQUEST_BODY_BYTES - base)
+    assert probe_backend.call_backend(at_cap, _context(), {}) == "ok"
+    assert len(json.dumps(calls[0]["json"], allow_nan=False).encode("utf-8")) == (
+        MAX_REQUEST_BODY_BYTES
+    )
+
+    # One byte more is refused, and nothing further is sent.
+    calls.clear()
+    with pytest.raises(AgentRequestTooLarge):
+        probe_backend.call_backend(at_cap + "y", _context(), {})
+    assert calls == []

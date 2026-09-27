@@ -284,6 +284,119 @@ worktree is put back on the commit `RELEASE` still pins; `status.sh` shows
 succeeds. Curator runs cannot be triggered on staging (`jobs.sh curator`
 refuses): the curator only runs as production.
 
+## Agent A OpenClaw upgrade (2026.7.1 to 2026.9.6)
+
+Upgrade to current stable OpenClaw 2026.9.6; 2026.7.1 is outside supported
+security fixes. Staging first; every runtime step needs Robert's go-ahead.
+
+**Why a snapshot first.** On its first start, 9.6 rewrites the state database
+(schema v18) in place, and 7.1 cannot read it afterwards. An image swap alone
+is not a rollback. The config file is not the problem: the image's
+`apply-config.sh` copies the pinned `openclaw.json` over the volume's copy on
+every start, and keeps the previous file beside it as
+`openclaw.json.replaced-by-image`.
+
+**What to expect.** The image is about 4.9 GB (7.1: 1.7 GB), and the gateway
+idles at about 0.9 GB RSS (7.1: about 0.3 GB) under a 1200m `mem_limit`.
+The image health check still runs every 180 s, so Agent A can show
+`health: starting` for up to 3 minutes before `verify.sh` passes.
+
+### 1. Snapshot both staging Agent A volumes (container stopped)
+
+```bash
+S=~/minimoi-staging; STAMP=$(date +%Y%m%d-%H%M%S)
+AGENT_A_IMG=$(docker inspect -f '{{.Config.Image}}' minimoi-cos-agent-a)   # the running 7.1 image (instead of alpine: no pull)
+echo "$AGENT_A_IMG" > "$S/rollback/agent-a-image-before-9.6.txt"
+cp "$S/RELEASE" "$S/rollback/RELEASE-before-9.6"                             # the release to go back to
+echo "$STAMP" > "$S/rollback/agent-a-pre96-stamp.txt"
+scripts/staging/down.sh cos-agent-a                                          # SQLite is copied at rest
+for v in state auth; do
+  docker volume create "minimoi-staging-cos-agent-a-$v-pre96-$STAMP"
+  docker run --rm --network none --user 0:0 \
+    -v "minimoi-staging-cos-agent-a-$v:/from:ro" -v "minimoi-staging-cos-agent-a-$v-pre96-$STAMP:/to" \
+    --entrypoint cp "$AGENT_A_IMG" -a /from/. /to/
+done
+```
+
+Or, as files: the same loop with
+`--entrypoint tar "$AGENT_A_IMG" -C /from -czf - . > "$S/rollback/cos-agent-a-$v-pre96-$STAMP.tar.gz"`
+(and only `-v …:/from:ro`). Verify: `docker volume ls | grep pre96` lists
+both copies (or both tarballs are non-empty).
+
+### 2. Build, start, verify
+
+```bash
+scripts/staging/build.sh claude/agent-a-openclaw-2026-9-6 --reviewed-branch
+scripts/staging/up.sh && scripts/staging/verify.sh
+```
+
+Then check the upgrade itself:
+
+```bash
+docker exec minimoi-cos-agent-a node openclaw.mjs --version                 # OpenClaw 2026.9.6 (eb377ac)
+docker logs minimoi-cos-agent-a 2>&1 | head -3                               # "applied the image's pinned openclaw.json" once
+docker exec minimoi-cos-agent-a node openclaw.mjs config validate --json     # valid, no warnings
+docker exec minimoi-cos-agent-a node openclaw.mjs gateway call cron.status --json   # "enabled": false
+```
+
+`cron.list` shows two jobs (heartbeat, skill-collection-review), both
+`enabled: false`, and no "Memory Dreaming Promotion" job. Then one real
+Agent A turn from the CoS surface (this one costs a model call).
+
+### 3. Rollback (back to 7.1)
+
+```bash
+S=~/minimoi-staging; STAMP=$(cat "$S/rollback/agent-a-pre96-stamp.txt")
+PREV=$(cat "$S/rollback/agent-a-image-before-9.6.txt")
+scripts/staging/down.sh cos-agent-a
+for v in state auth; do
+  docker run --rm --network none --user 0:0 \
+    -v "minimoi-staging-cos-agent-a-$v-pre96-$STAMP:/from:ro" -v "minimoi-staging-cos-agent-a-$v:/to" \
+    --entrypoint sh "$PREV" -c 'find /to -mindepth 1 -delete && cp -a /from/. /to/'
+done
+scripts/staging/build.sh "$(sed -n 's/^sha=//p' "$S/rollback/RELEASE-before-9.6" | tail -n 1)"
+scripts/staging/up.sh && scripts/staging/verify.sh
+```
+
+Wipe before copy: 9.6 leaves SQLite `-wal`/`-shm` files and new state
+beside the database, and a merge-restore would mix them with the 7.1 files.
+From tarballs, replace the `cp -a` with
+`tar xzf - -C /to < "$S/rollback/cos-agent-a-$v-pre96-$STAMP.tar.gz"` (run
+with `-i`). Keep the `pre96` copies until 9.6 has run cleanly for a week.
+
+### Production
+
+Production deploys on push to `main` and recreates `cos-agent-a` against its
+existing state volume. `scripts/operations/deploy_scoped_release.sh` now
+snapshots both Agent A volumes on every release that includes `cos-agent-a`:
+after the image pull, it stops the old container, writes
+`/opt/minimoi/backups/cos-agent-a/<UTC stamp>/cos-agent-a-{state,auth}.tar.gz`
+(root-only, with a `SNAPSHOT` file holding the previous image and checksums,
+newest 5 kept), and only then recreates it. A failed snapshot restarts the
+old container and fails the deploy. Before merging, check free disk on EC2
+(`df -h /var/lib/docker /opt/minimoi`): the 9.6 image needs about 5 GB.
+
+Production restore, on EC2 (the archive root is the folder name, for example
+`.openclaw/`, hence `--strip-components=1`):
+
+```bash
+cd /opt/minimoi
+SNAP=/opt/minimoi/backups/cos-agent-a/<stamp>; PREV=$(sed -n 's/^previous_image=//p' $SNAP/SNAPSHOT)
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com
+docker pull "$PREV"                                   # the deploy pruned it locally; needs the tag still in ECR
+docker stop minimoi-cos-agent-a
+for pair in "state:/home/node/.openclaw" "auth:/home/node/.config/openclaw"; do
+  v=${pair%%:*}; path=${pair#*:}
+  vol=$(docker inspect -f "{{range .Mounts}}{{if eq .Destination \"$path\"}}{{.Name}}{{end}}{{end}}" minimoi-cos-agent-a)
+  docker run --rm -i --network none --user 0:0 -v "$vol:/to" --entrypoint sh "$PREV" \
+    -c 'find /to -mindepth 1 -delete && tar xzf - -C /to --strip-components=1' < "$SNAP/cos-agent-a-$v.tar.gz"
+done
+MINIMOI_IMAGE_TAG=${PREV##*:agent-a-} docker-compose -f /opt/minimoi/docker-compose.prod.yml up -d --no-deps cos-agent-a
+```
+
+Then revert the upgrade on `main`; its deploy snapshots the restored volume
+again and recreates the 7.1 image, which reads it.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes
