@@ -1361,9 +1361,11 @@ def _queue_banner() -> dict | None:
         return None
     kind, text = _QUEUE_BANNERS[code]
     item = request.args.get("item", "")
-    item = item if item.isdigit() else "?"
+    # ASCII digits only: str.isdigit() and \d accept Unicode digits such as
+    # "²", which int() rejects (review R1).
+    item = item if re.fullmatch(r"[0-9]{1,9}", item) else "?"
     receipt = request.args.get("receipt", "")
-    if not re.fullmatch(r"q-\d{8}T\d{6}Z-[0-9a-f]{6}", receipt):
+    if not re.fullmatch(r"q-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}", receipt):
         receipt = "?"
     audit_failed = False
     if code == "saved":

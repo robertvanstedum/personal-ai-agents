@@ -377,3 +377,15 @@ def test_fabricated_audit_flag_is_ignored_in_favour_of_the_journal(portal_client
         f"/guild/build/queue?save=saved&item=1&receipt={real}&audit=failed").data.decode()
     assert f"Saved · verified · receipt {real}" in text
     assert "history not recorded" not in text
+
+
+@pytest.mark.parametrize("item,receipt", [
+    ("²", "q-20260101T000000Z-abcdef"),          # superscript two: isdigit() but not int()
+    ("١", "q-20260101T000000Z-abcdef"),          # Arabic-Indic one
+    ("1", "q-٢٠٢٦٠١٠١T000000Z-abcdef"),  # Unicode digits in the receipt
+])
+def test_crafted_non_ascii_digits_never_break_the_queue_page(portal_client, live, item, receipt):
+    """Review R1: a crafted link with Unicode digits must not 500 the owner's page."""
+    resp = portal_client.get(f"/guild/build/queue?save=saved&item={item}&receipt={receipt}")
+    assert resp.status_code == 200
+    assert "Saved · verified" not in resp.data.decode()
