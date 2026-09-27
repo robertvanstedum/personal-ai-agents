@@ -117,8 +117,15 @@ export function initBench(page) {
     dragging = null;
     for (const x of panels()) x.dataset.dragover = 'false';
     if (!p || !src || p.dataset.panel === src || !st.order.includes(src)) return;
-    st.order = st.order.filter((x) => x !== src);
-    st.order.splice(st.order.indexOf(p.dataset.panel), 0, src);
+    // Work in the order you see: dropped on a box above, yours goes before it;
+    // dropped on a box below, it goes after it (before, it went back where it was).
+    const seen = panels().map((x) => x.dataset.panel);
+    const down = seen.indexOf(src) < seen.indexOf(p.dataset.panel);
+    const next = seen.filter((x) => x !== src);
+    next.splice(next.indexOf(p.dataset.panel) + (down ? 1 : 0), 0, src);
+    st.order = [...next.filter((x) => st.order.includes(x)), ...st.order.filter((x) => !next.includes(x))];
+    // Dragging the box in focus moves it, so it stops being pinned to the top.
+    if (st.focus === src) st.focus = null;
     persist(); applyBench();
     announce(`${titleOf(src)} moved`);
   });
