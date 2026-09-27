@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Guild{% endblock %} — mini-moi</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('.asset', filename='tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('.asset', filename='components.css') }}">
+  <script type="module" src="{{ url_for('.asset', filename='js/main.js') }}"></script>
+</head>
+<body class="gu" data-page="{{ page_id }}" data-area="{{ area }}" data-context-item="{{ context_item }}" data-mc-state="{{ state.mc_state }}">
+<a class="gu-skip" href="#main">Skip to content</a>
+{{ portal_nav_html(user, '/guild') | safe }}
+<nav class="guild-nav" aria-label="Guild sections">
+  {% include 'guild_floor/_section_subnav.html' %}
+</nav>
+<p class="gu-notice" data-notice role="status" hidden></p>
+{% block above %}{% endblock %}
+{% if page_id != 'floor' %}{% include 'guild_floor/_phone_summary.html' %}{% endif %}
+<div class="gu-layout" data-layout>
+  <main id="main" class="gu-main" tabindex="-1" data-page-content>
+    {% block main %}{% endblock %}
+  </main>
+  {% include 'guild_floor/_mc_conversation.html' %}
+</div>
+<script type="application/json" id="guild-page">{{ page_json|tojson }}</script>
+</body>
+</html>

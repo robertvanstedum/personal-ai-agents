@@ -1,0 +1,141 @@
+"""Pages of the real Shop floor: floor, bench, queue, item, operate.
+
+Pages are one front end of the API (binding rule B8): they render the same
+state the API serves, and their scripts write only through the API.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from flask import render_template, request, url_for
+
+from . import cfg, floor_state, owner_page
+from .adapters import ACTIVE, STATUSES
+from .briefing import LABEL as RULES_LABEL
+from .security import OFF_RECORD_TEXT, csrf_token
+
+FILING_OFF = "Filing is off until the Record is specified (#235). Nothing is filed."
+INVITE_OFF = "Inviting agents needs Rooms; not connected"
+
+
+def hhmm(iso) -> str:
+    if not iso:
+        return ""
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%H:%M UTC")
+    except ValueError:
+        return str(iso)
+
+
+def age(iso) -> str:
+    if not iso:
+        return ""
+    try:
+        moment = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    days = int((datetime.now(timezone.utc) - moment).total_seconds() // 86400)
+    return "today" if days <= 0 else f"{days}d"
+
+
+def badge(res) -> dict:
+    """Source mark for a read: live · time | not instrumented, plus unknown/stale."""
+    if res.source == "live":
+        text = f"live · read {hhmm(res.observed_at)}"
+    else:
+        text = "not instrumented"
+    if res.status == "unknown" and res.source != "not_instrumented":
+        text += " · unknown"
+    elif res.status == "stale":
+        text += " · stale"
+    return {"text": text, "source": res.source, "status": res.status, "error": res.error,
+            "reason": res.reason, "note": res.note}
+
+
+def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
+    c = cfg()
+    state = floor_state.compute(c)
+    layout = c["layout"]
+    urls = {
+        "floor": url_for(".floor"), "build": url_for(".floor"), "bench": url_for(".bench"),
+        "queue": url_for(".queue"), "operate": url_for(".operate"),
+        "item": url_for(".item", item_id=987654321).replace("987654321", "__ID__"),
+        "api": f"{c['url_prefix']}/api/v1",
+        "legacy_build": "/guild/build",
+    }
+    lights_by_id = {l["id"]: l for l in state["lights"]}
+    phone_numbers = [lights_by_id[n] for n in layout["phone"]["numbers"] if n in lights_by_id]
+    page = {
+        "base": c["url_prefix"], "urls": urls, "storage_ns": c["storage_ns"],
+        "area": area, "page": page_id, "item": context_item,
+        "csrf_token": csrf_token(), "mc_state": state["mc_state"],
+        "layout": {"version": layout["layout_version"], "bench": layout["bench"]},
+        "floor": state, "off_record_text": OFF_RECORD_TEXT, "rules_label": RULES_LABEL,
+    }
+    page.update(extra.pop("page_extra", {}))
+    return dict(area=area, page_id=page_id, context_item=context_item, layout=layout, state=state,
+                user=c["current_user"](), page_json=page, urls=urls, phone_numbers=phone_numbers,
+                filing_off=FILING_OFF, invite_off=INVITE_OFF, rules_label=RULES_LABEL,
+                hhmm=hhmm, age=age, badge=badge, statuses=STATUSES, **extra)
+
+
+@owner_page
+def floor():
+    ctx = _context("floor", "Build", "Shop floor")
+    return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], **ctx)
+
+
+@owner_page
+def bench():
+    c = cfg()
+    services = c["services"]
+    ctx = _context("bench", "Build", "workbench")
+    panels_cfg = {p["id"]: p for p in ctx["layout"]["bench"]["panels"]}
+    queue_res = services.queue.list_items()
+    data = {
+        "motion": {"res": queue_res,
+                   "rows": [i for i in (queue_res.data or []) if i["status_known"] and i["status"] in ACTIVE]},
+        "blocked": {"res": queue_res,
+                    "rows": [i for i in (queue_res.data or []) if i["status_known"] and i["status"] == "blocked"]},
+        "discussions": {"res": services.sessions.list_sessions()},
+    }
+    return render_template("guild_floor/bench.html", panels_cfg=panels_cfg, data=data, **ctx)
+
+
+@owner_page
+def queue():
+    services = cfg()["services"]
+    res = services.queue.list_items()
+    ctx = _context("queue", "Build Queue", "Build Queue")
+    rows = res.data or []
+    items = sorted([i for i in rows if i["status_known"] and i["status"] in ACTIVE],
+                   key=lambda i: i["last_transition_at"] or "", reverse=True)
+    unknown_rows = [i for i in rows if not i["status_known"]]
+    return render_template("guild_floor/queue.html", res=res, items=items, unknown_rows=unknown_rows,
+                           checks=services.queue.checks(), focus_id=request.args.get("focus", type=int), **ctx)
+
+
+@owner_page
+def item(item_id: int):
+    services = cfg()["services"]
+    res = services.queue.get_item(item_id)
+    if res.ok and res.data is None:
+        ctx = _context("item", "Build Queue", f"#{item_id} (not found)")
+        return render_template("guild_floor/not_found.html", item_id=item_id, **ctx), 404
+    title = res.data["title"] if res.ok else "unknown"
+    ctx = _context("item", "Build Queue", f"#{item_id} {title}", page_extra={"item_id": item_id})
+    checks = [ch for ch in services.queue.checks() if ch.get("item_id") == item_id]
+    return render_template("guild_floor/item.html", res=res, it=res.data, item_id=item_id,
+                           history=services.history.history(item_id), checks=checks, **ctx)
+
+
+@owner_page
+def operate():
+    ctx = _context("operate", "Operate", "Operate")
+    tile_ids = [t["id"] for t in ctx["layout"]["operate"]["tiles"]]
+    wanted = request.args.get("tile")
+    selected = wanted if wanted in tile_ids else ctx["layout"]["operate"]["default_selected"]
+    lights = {l["id"]: l for l in ctx["state"]["lights"]}
+    return render_template("guild_floor/operate.html", selected_tile=selected, tile_lights=lights, **ctx)

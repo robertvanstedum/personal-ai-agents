@@ -1,0 +1,10 @@
+{# Section strip: Build and Operate of the real Shop floor, plus the legacy Build Log. #}
+<div class="guild-subnav guild-sections">
+  {% for s in layout.sections %}
+    {% if not loop.first %}<span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>{% endif %}
+    {% set on = (s.id == 'build' and area in ('Build', 'Build Queue')) or (s.id == 'operate' and area == 'Operate') %}
+    <a href="{{ urls[s.id] }}" class="subnav-link{% if on %} subnav-active{% endif %}" data-section="{{ s.id }}"{% if on %} aria-current="page"{% endif %}>{{ s.label }}</a>
+  {% endfor %}
+  <span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>
+  <a href="{{ urls.legacy_build }}" class="subnav-link" data-section="legacy">Build Log (current)</a>
+</div>

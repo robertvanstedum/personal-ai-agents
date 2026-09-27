@@ -1,0 +1,44 @@
+{% extends 'guild_floor/_base.html' %}
+{% from 'guild_floor/_macros.html' import src_badge, status_mark, unknown_row with context %}
+{% block title %}#{{ item_id }} · Build Queue{% endblock %}
+{% block main %}
+<nav class="crumbs" aria-label="Back">
+  <a class="btn-quiet" href="{{ urls.bench }}" data-back-bench>Workbench</a>
+  <a class="btn-quiet" href="{{ urls.queue }}">Build Queue</a>
+  <a class="btn-quiet" href="{{ urls.floor }}">Shop floor</a>
+</nav>
+{% if not res.ok %}
+  <div class="page-head"><h1 class="page-title">Item #{{ item_id }}</h1></div>
+  {{ unknown_row(badge(res)) }}
+{% else %}
+<div class="page-head">
+  <h1 class="page-title">#{{ it.id }} {{ it.title }}</h1>
+  <p class="page-meta">{{ src_badge(badge(res)) }} · status <strong data-effective-status>{{ it.status_label }}</strong> {{ status_mark(it) }}</p>
+</div>
+{% include 'guild_floor/_checks.html' %}
+<div class="item-grid" data-item-id="{{ it.id }}">
+  <section class="card">
+    <h2 class="h2">Status</h2>
+    {% set form_scope = 'i' %}{% include 'guild_floor/_status_form.html' %}
+    <dl class="kv">
+      {% if it.summary %}<dt>Summary</dt><dd>{{ it.summary }}</dd>{% endif %}
+      {% if it.spec_file %}<dt>Spec file</dt><dd><code>{{ it.spec_file }}</code></dd>{% endif %}
+      {% if it.github_issue %}<dt>GitHub issue</dt><dd>{{ it.github_issue }}</dd>{% endif %}
+      {% if it.blocked_reason %}<dt>Blocked because</dt><dd>{{ it.blocked_reason }}</dd>{% endif %}
+      <dt>Last transition</dt><dd>{{ age(it.last_transition_at) or '—' }}</dd>
+    </dl>
+  </section>
+  <section class="card">
+    <h2 class="h2">History {{ src_badge(badge(history)) }}</h2>
+    <ul class="history" data-history>
+      {% if history.ok %}
+        {% for h in history.data %}<li>{{ hhmm(h.at) }} · {{ h.from }} → {{ h.to }} · {{ h.by }}{% if h.reason %} · {{ h.reason }}{% endif %}</li>{% endfor %}
+        {% if not history.data %}<li>No transitions recorded for this item.</li>{% endif %}
+      {% else %}
+        <li>{{ unknown_row(badge(history)) }}</li>
+      {% endif %}
+    </ul>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

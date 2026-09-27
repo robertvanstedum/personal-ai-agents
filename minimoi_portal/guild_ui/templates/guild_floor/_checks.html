@@ -1,0 +1,13 @@
+{# Saves left unverified (spec §6.3): shown until Robert marks them checked. #}
+{% if checks %}
+<section class="card" data-checks aria-labelledby="checks-h">
+  <h2 class="h2" id="checks-h">Check · Save not verified</h2>
+  <ul class="checks-list">
+    {% for ch in checks %}
+    <li data-check="{{ ch.op_id }}">Save not verified — check <a href="{{ urls.item.replace('__ID__', ch.item_id|string) }}">#{{ ch.item_id }}</a> ({{ hhmm(ch.at) }})
+      <button type="button" class="btn-quiet" data-mark-checked="{{ ch.op_id }}">Mark checked</button>
+      <span class="save-result" data-check-result role="status" hidden></span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}

@@ -1,0 +1,50 @@
+{% extends 'guild_floor/_base.html' %}
+{% from 'guild_floor/_macros.html' import src_badge, src_note, status_mark, unknown_row with context %}
+{% block title %}Build Queue — Guild{% endblock %}
+{% block main %}
+<div class="page-head">
+  <h1 class="page-title">Build Queue</h1>
+  {% if res.ok %}
+  <p class="page-meta" data-queue-meta><span data-active-count>{{ items|length }}</span> active item{{ 's' if items|length != 1 else '' }} · {{ src_badge(badge(res)) }} {{ src_note(badge(res)) }}</p>
+  {% else %}
+  <p class="page-meta" data-queue-meta>Active items: <strong>unknown</strong> · read failed · {{ src_badge(badge(res)) }}</p>
+  {% endif %}
+  <p class="page-actions"><a class="btn-quiet" href="{{ urls.bench }}" data-back-bench>← Back to workbench</a></p>
+</div>
+<p class="small">Save writes the live queue on the server: locked, checked against the version you see, read back, with a receipt.</p>
+<p class="gu-notice" data-queue-moved role="status" hidden></p>
+{% include 'guild_floor/_checks.html' %}
+{% if not res.ok %}
+  {{ unknown_row(badge(res)) }}
+{% else %}
+<div class="board">
+  {% for col, label in [('spec_ready', 'Spec Ready'), ('in_build', 'In Build')] %}
+  <section class="board-col" data-col="{{ col }}" aria-labelledby="col-{{ col }}">
+    <h2 class="col-header" id="col-{{ col }}">{{ label }} <span class="col-count" data-col-count>{{ items|selectattr('status', 'equalto', col)|list|length }}</span></h2>
+    <div class="col-cards" data-col-cards>
+    {% for it in items if it.status == col %}
+      <article class="q-card{% if focus_id == it.id %} is-highlight{% endif %}" id="card-{{ it.id }}" data-queue-card data-item-id="{{ it.id }}">
+        <h3 class="q-title"><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title|truncate(70, true, '…') }}</a></h3>
+        {% if it.summary %}<p class="q-summary">{{ it.summary|truncate(70, true, '…') }}</p>{% endif %}
+        <p class="q-meta"><span>{{ age(it.last_transition_at) }}</span>{% if it.github_issue %} <span class="tag">#{{ it.github_issue|string|replace('#','') }}</span>{% endif %}</p>
+        {% set form_scope = 'q' %}{% include 'guild_floor/_status_form.html' %}
+        <p class="q-open"><a href="{{ url_for('.item', item_id=it.id) }}">Open item →</a></p>
+      </article>
+    {% endfor %}
+    </div>
+    <p class="col-empty" data-col-empty{% if items|selectattr('status', 'equalto', col)|list %} hidden{% endif %}>—</p>
+  </section>
+  {% endfor %}
+</div>
+{% if unknown_rows %}
+<section class="card unknown-rows" data-unknown-rows aria-labelledby="unk-h">
+  <h2 class="h2" id="unk-h">Rows with unknown status · not counted as active {{ src_badge(badge(res)) }}</h2>
+  <ul class="rows">
+    {% for it in unknown_rows %}
+    <li class="row" data-unknown-row data-item-id="{{ it.id }}"><span><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title|truncate(70, true, '…') }}</a></span>{{ status_mark(it) }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

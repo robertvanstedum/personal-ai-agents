@@ -1,0 +1,15 @@
+{# Status select + Save. Save goes to the server through the API: a verified
+   write with a receipt, or its failure in plain words. #}
+<form class="status-form" data-status-form data-item-id="{{ it.id }}" data-digest="{{ it.item_digest }}" data-source-status="{{ it.status or it.raw_status or '' }}">
+  <label class="visually-hidden" for="st-{{ it.id }}-{{ form_scope }}">Status of #{{ it.id }}</label>
+  <select id="st-{{ it.id }}-{{ form_scope }}" class="status-select" data-status-select>
+    {% if not it.status_known %}<option value="{{ it.raw_status or '' }}" selected disabled>{{ it.status_label }}</option>{% endif %}
+    {% for st in statuses %}<option value="{{ st }}"{% if st == it.status %} selected{% endif %}>{{ st.replace('_', ' ').title() }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn" data-save hidden>Save</button>
+  <span class="note-wrap" data-note-wrap hidden>
+    <label class="visually-hidden" for="nt-{{ it.id }}-{{ form_scope }}">Reason for blocking</label>
+    <input id="nt-{{ it.id }}-{{ form_scope }}" data-note maxlength="500" placeholder="Reason for blocking…">
+  </span>
+  <p class="save-result" data-save-result role="status" hidden></p>
+</form>
