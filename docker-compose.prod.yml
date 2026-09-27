@@ -2,6 +2,10 @@
 # Uses one immutable ECR commit tag per release. CI exports MINIMOI_IMAGE_TAG;
 # manual use defaults to latest unless scripts/deploy.sh receives a tag.
 # Data files must exist under /opt/minimoi/data/ on the host.
+# Every host path is ${MINIMOI_ROOT:-/opt/minimoi}/...: EC2 never sets
+# MINIMOI_ROOT, so production renders exactly as /opt/minimoi. The Mac staging
+# stack (dev.minimoi.ai) sets it to its own root through scripts/staging/ and
+# docker-compose.staging.yml; see scripts/staging/README.md.
 # Run: docker-compose -f docker-compose.prod.yml up -d
 # Update images: scripts/deploy.sh
 
@@ -10,7 +14,7 @@ services:
     image: postgres:latest
     container_name: postgres-ai-agents
     restart: unless-stopped
-    env_file: /opt/minimoi/.env
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - POSTGRES_DB=personal_agents
     volumes:
@@ -76,7 +80,7 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/curator:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-curator
     restart: unless-stopped
-    env_file: /opt/minimoi/.env
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - FLASK_ENV=production
       - PORT=8766
@@ -87,12 +91,12 @@ services:
       # EC2 host files to be moved from /opt/minimoi/data/curator_*.json into
       # /opt/minimoi/data/curator/curator_*.json before this deploys, or the
       # container will find no data at startup.
-      - /opt/minimoi/data/curator:/app/data/curator
-      - /opt/minimoi/data/curator_archive:/app/curator_archive
-      - /opt/minimoi/data/curator_history.json:/app/curator_history.json
-      - /opt/minimoi/data/curator_costs.json:/app/curator_costs.json
-      - /opt/minimoi/data/interests:/app/interests
-      - /opt/minimoi/data/research-intelligence:/app/_NewDomains/research-intelligence/data
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator:/app/data/curator
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_archive:/app/curator_archive
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_history.json:/app/curator_history.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_costs.json:/app/curator_costs.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/interests:/app/interests
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-intelligence:/app/_NewDomains/research-intelligence/data
     ports:
       - "127.0.0.1:8766:8766"
     depends_on:
@@ -102,7 +106,7 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/mein-deutsch:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-german
     restart: unless-stopped
-    env_file: /opt/minimoi/.env
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - FLASK_ENV=production
       - MINIMOI_ROLE=production
@@ -111,7 +115,7 @@ services:
       # only for an explicit rollback to the older session UI.
       - VOICE_REALTIME_UI_ENABLED=${VOICE_REALTIME_UI_ENABLED:-1}
     volumes:
-      - /opt/minimoi/data/german:/app/domains/german/data
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/german:/app/domains/german/data
     ports:
       - "127.0.0.1:8767:8767"
 
@@ -119,7 +123,7 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portuguese:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-portuguese
     restart: unless-stopped
-    env_file: /opt/minimoi/.env
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - FLASK_ENV=production
       - MINIMOI_ROLE=production
@@ -127,7 +131,7 @@ services:
       # Keep Portuguese on the same shared voice layer and release state.
       - VOICE_REALTIME_UI_ENABLED=${VOICE_REALTIME_UI_ENABLED:-1}
     volumes:
-      - /opt/minimoi/data/portuguese:/app/domains/portuguese/data
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/portuguese:/app/domains/portuguese/data
     ports:
       - "127.0.0.1:8770:8770"
     depends_on:
@@ -137,7 +141,7 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-portal
     restart: unless-stopped
-    env_file: /opt/minimoi/.env
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - FLASK_ENV=production
       - PORT=5001
@@ -159,12 +163,12 @@ services:
       # lock and the journal. It is mounted at /app/runtime/guild, not
       # /app/data/guild, so the image's data/guild/experiment_projection.json
       # stays visible (C17). cos-bot and cos-scheduler never read the queue.
-      - /opt/minimoi/data/guild:/app/runtime/guild
-      - /opt/minimoi/docs/design:/app/docs/design
-      - /opt/minimoi/docs/specs:/app/docs/specs
-      - /opt/minimoi/auth/users.json:/app/minimoi_portal/auth/users.json
-      - /opt/minimoi/auth/guests.json:/app/minimoi_portal/auth/guests.json
-      - /opt/minimoi/agent_logs:/app/agent_logs
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild:/app/runtime/guild
+      - ${MINIMOI_ROOT:-/opt/minimoi}/docs/design:/app/docs/design
+      - ${MINIMOI_ROOT:-/opt/minimoi}/docs/specs:/app/docs/specs
+      - ${MINIMOI_ROOT:-/opt/minimoi}/auth/users.json:/app/minimoi_portal/auth/users.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/auth/guests.json:/app/minimoi_portal/auth/guests.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/app/agent_logs
     ports:
       - "127.0.0.1:5001:5001"
     networks:
@@ -181,14 +185,14 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/system-bot:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-system-bot
     restart: unless-stopped
-    env_file: /opt/minimoi/.env
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - MINIMOI_ROLE=production
       - TELEGRAM_CHAT_ID=8379221702
     # Shares the German data volume with the web container so drills, phrasebook,
     # progress and session files are the same store the Gespräche UI reads/writes.
     volumes:
-      - /opt/minimoi/data/german:/app/domains/german/data
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/german:/app/domains/german/data
     depends_on:
       - curator
       - portal
@@ -198,7 +202,7 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-bot:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-cos-bot
     restart: unless-stopped
-    env_file: /opt/minimoi/.env
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - MINIMOI_ROLE=production
       - COS_BACKEND_TYPE=${COS_BACKEND_TYPE:-openclaw}
@@ -208,9 +212,9 @@ services:
       - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
       - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
     volumes:
-      - /opt/minimoi/cos_memory.md:/app/data/cos_memory.md
-      - /opt/minimoi/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
-      - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
     depends_on:
       - postgres
       - cos-scheduler
@@ -220,7 +224,7 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-cos-scheduler
     restart: unless-stopped
-    env_file: /opt/minimoi/.env
+    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - MINIMOI_ROLE=production
       - TELEGRAM_CHAT_ID=8379221702
@@ -233,9 +237,9 @@ services:
       - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
       - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
     volumes:
-      - /opt/minimoi/cos_memory.md:/app/data/cos_memory.md
-      - /opt/minimoi/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
-      - /opt/minimoi/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "127.0.0.1:8769:8769"

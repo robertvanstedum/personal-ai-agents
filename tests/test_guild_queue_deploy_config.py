@@ -15,8 +15,14 @@ def _compose(name):
     return yaml.safe_load((REPO / name).read_text())["services"]
 
 
+PROD_ROOT = "${MINIMOI_ROOT:-/opt/minimoi}"
+
+
 def _volumes(service):
-    return [v for v in service.get("volumes", []) if isinstance(v, str)]
+    # The production host root is parameterized for the Mac staging stack; with
+    # MINIMOI_ROOT unset it renders as /opt/minimoi. Resolve that default here
+    # so the colon inside ${VAR:-default} cannot shift the host:container split.
+    return [v.replace(PROD_ROOT, "/opt/minimoi") for v in service.get("volumes", []) if isinstance(v, str)]
 
 
 def test_prod_portal_mounts_the_queue_folder_not_the_file():
