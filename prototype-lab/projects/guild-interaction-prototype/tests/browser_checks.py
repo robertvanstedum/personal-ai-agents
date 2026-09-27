@@ -1134,7 +1134,9 @@ def test_ordinary_talk_mentioning_payment_words_stays_as_typed(ctx, base):
     thread = page.locator("[data-mc-thread]")
     for line in ("The invoice module needs a spec before Monday.",
                  "I paid attention to the Codex review, looks fine.",
-                 "Payment failed for the Codex plan, what now?"):
+                 "Payment failed for the Codex plan, what now?",
+                 "I paid attention to the account management slide.",
+                 "The invoice account screen needs a spec."):
         say(page, line)
         expect(thread).to_contain_text(line)
     expect(thread).not_to_contain_text("original receipt text not stored")
@@ -1143,12 +1145,14 @@ def test_ordinary_talk_mentioning_payment_words_stays_as_typed(ctx, base):
 def test_receipt_without_amount_but_with_account_detail_is_summarised(ctx, base):
     page = ctx.new_page()
     go(page, base + "/guild/build")
-    say(page, "Receipt from xAI, paid by ACH from account 123456789.")
     thread = page.locator("[data-mc-thread]")
-    expect(thread).to_contain_text("original receipt text not stored")
-    for secret in ("123456789", "ACH"):
+    for line, secret in (("Receipt from xAI, paid by ACH from account 123456789.", "123456789"),
+                         ("Receipt from xAI, paid from account 1234.", "1234")):
+        say(page, line)
+        expect(thread).to_contain_text("original receipt text not stored")
         assert secret not in storage(page) + page.evaluate("document.cookie")
         assert secret not in page.evaluate("document.documentElement.outerHTML")
+    assert "ACH" not in storage(page) + page.evaluate("document.cookie")
 
 
 def test_receipt_without_amount_asks_instead_of_guessing(ctx, base):

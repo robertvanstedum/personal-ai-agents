@@ -28,7 +28,7 @@ export function stripCard(text) {
 
 // Payment-method or account detail that must never be kept as typed. The same
 // signals exempt a plain question from being read as a receipt.
-const PAYMENT_DETAIL = /(?:\b(?:routing|account|ach|iban|swift|card|ending)\b|\b\d{5,}\b)/i;
+const PAYMENT_DETAIL = /(?:\b(?:routing|ach|iban|swift)\b|\b(?:account|card)\s*(?:(?:no\.?|number|#|:)\s*)?\d{4,}\b|\bending\s+(?:in|with)\s*\d{2,6}\b|\b\d{5,}\b)/i;
 
 export function hasPaymentDetail(text) {
   return PAYMENT_DETAIL.test(String(text || ''));
