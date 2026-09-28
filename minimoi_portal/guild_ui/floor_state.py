@@ -15,8 +15,12 @@ from flask import url_for
 from .adapters.contract import now_iso
 from .briefing import opening_briefing
 from .lights import derive_lights
+from .mc import OffBackend
+from .mc import view as mc_view_of
 from .needs import needs_you
 
+# Master Craftsman's state comes from the backend switch (mc/backend.py); these
+# are the "off" texts, kept for readers of B1.
 MC_STATE = "off"
 MC_HEADER = "Master Craftsman is off · your messages are kept as notes"
 MC_HEADER_NO_NOTES = "Master Craftsman is off · notes unavailable, nothing you send is kept"
@@ -70,11 +74,19 @@ def postits_zone(res, cap: int) -> dict:
             "bin_total": res.data["bin_total"], "cap": cap, "observed_at": res.observed_at}
 
 
-def notes_zone(res) -> dict:
+def notes_zone(res, notes_text: str = NOTES_ON) -> dict:
     if not res.ok:
         text = UNAVAILABLE["notes"] if res.reason != "not_configured" else f"Notes unavailable — {NOT_CONFIGURED}. Nothing you send is kept."
         return {"state": "unavailable", "reason": res.reason, "text": text, "recent": None, "more": None}
-    return {"state": "ok", "text": NOTES_ON, "recent": res.data.get("notes"), "more": res.data.get("notes_more")}
+    return {"state": "ok", "text": notes_text, "recent": res.data.get("notes"), "more": res.data.get("notes_more")}
+
+
+def mc_view(services, *, notes_ok: bool) -> dict:
+    """Master Craftsman's state for this request: the switch's backend and its
+    cached health (60 s). Never a model call: health reads readiness only."""
+    cached = getattr(services, "mc_health", None)
+    health = cached.get() if cached is not None else OffBackend().health()
+    return mc_view_of(health, notes_ok=notes_ok)
 
 
 def compute(c: dict, *, notes_limit: int = 0) -> dict:
@@ -92,11 +104,13 @@ def compute(c: dict, *, notes_limit: int = 0) -> dict:
         if queue_res.ok else None
     cap = layout["floor"].get("postit_cap", 4)
     floor_res = services.floor.summary(principal_of(c), rail_cap=cap, notes_limit=notes_limit)
-    notes = notes_zone(floor_res)
+    mc = mc_view(services, notes_ok=floor_res.ok)
+    notes = notes_zone(floor_res, mc["notes_text"])
     return {
         "observed_at": observed_at,
-        "mc_state": MC_STATE,
-        "mc_header": MC_HEADER if notes["state"] == "ok" else MC_HEADER_NO_NOTES,
+        "mc_state": mc["state"],
+        "mc_header": mc["header"],
+        "mc": {"state": mc["state"], "reason": mc["reason"], "turns": mc["turns"], "observed_at": mc["observed_at"]},
         "lights": lights,
         "needs": needs,
         "briefing": opening_briefing(lights, needs, observed_at),

@@ -17,14 +17,18 @@
 #   * portal: BASE_URL https://dev.minimoi.ai, in-network backends, and the
 #     two Guild dev surfaces (/guild-next, /guild-proto) switched on. The
 #     flags are set here only; docker-compose.prod.yml never sets them.
+#     MINIMOI_GUILD_MC (Master Craftsman's backend) comes from state/mc.mode.
 #   * system-bot and cos-bot sit behind the "bots" profile: off unless
 #     scripts/staging/up.sh finds $MINIMOI_ROOT/state/bots.on, i.e. after the
 #     native test-bot pollers are retired (one poller per token).
+#   * Master Craftsman as a second agent in cos-agent-a is a further overlay,
+#     docker-compose.staging-mc.yml, added only while state/mc.agent is on.
 #   * extra loopback ports kept for the Mac-only Records beta: the model
 #     gateway on 127.0.0.1:14000 and Agent A on 127.0.0.1:18790.
 #   * the model gateway reads $MINIMOI_ROOT/config/litellm.staging.yaml
-#     (production logical names, lower-cost CoS model) instead of the baked
-#     production config.
+#     (production logical names, lower-cost CoS model, plus Master
+#     Craftsman's route) instead of the baked production config, and gets
+#     MC's provider key (a placeholder until stage 1b).
 #   * volumes are external and staging-named: `compose down -v` cannot touch
 #     them, and they never collide with the old dev volumes.
 #   * the IoT Connect stack is not part of staging; the portal's edge network
@@ -42,6 +46,12 @@ services:
   model-gateway:
     image: minimoi-staging/cos-scheduler:model-gateway-${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
     pull_policy: never
+    environment:
+      # Master Craftsman's own provider key for the minimoi-mc-agent route in
+      # litellm.staging.yaml. Never empty: an empty key could let LiteLLM fall
+      # back to ANTHROPIC_API_KEY (CoS's; review RB-H3). Until Robert creates
+      # MC's key (stage 1b, via mc.env) it is a placeholder Anthropic refuses.
+      - MC_ANTHROPIC_API_KEY=${MC_ANTHROPIC_API_KEY:-mc-anthropic-placeholder-not-a-key}
     volumes:
       - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/config/litellm.staging.yaml:/app/config.yaml:ro
     ports:
@@ -84,6 +94,9 @@ services:
       # prototype at /guild-proto. Staging only; unset in production.
       - MINIMOI_GUILD_NEXT=1
       - MINIMOI_GUILD_PROTO=1
+      # Master Craftsman's backend on /guild-next: off | stub | openclaw | grok,
+      # from $STAGING_ROOT/state/mc.mode (scripts/staging/lib.sh sets it).
+      - MINIMOI_GUILD_MC=${MINIMOI_GUILD_MC:-off}
 
   system-bot:
     image: minimoi-staging/system-bot:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}

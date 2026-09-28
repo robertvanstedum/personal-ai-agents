@@ -32,6 +32,15 @@
 #      bots.on is set, and env.sources records them as coming from their
 #      Keychain test accounts, never the root .env
 #   8. Postgres has the guild and research schemas
+#   9. Master Craftsman (MC spec v0.7 §8, checks 9a-9p; names and codes only):
+#      9a the portal's MINIMOI_GUILD_MC equals state/mc.mode; 9b cos-agent-a's
+#      start matches state/mc.agent (combined config applied and serving, or
+#      #244's CoS-only config), and the CoS self-check failure marker is shown
+#      loudly if present; 9f MC variable names only on their holders;
+#      9j a no-key gateway request gets 401 (and MC's key too, while it is the
+#      1a placeholder); 9k per-agent effective tools, this start's marker, no
+#      paired devices; 9m scheduler off, every job disabled; 9o CoS callers
+#      pinned to cos-agent-a; 9p the CoS regression (no spend)
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_absolute_root
@@ -229,6 +238,92 @@ echo "== 8. database"
 schemas=$(docker exec postgres-ai-agents psql -U postgres -d personal_agents -tAc \
   "select string_agg(schema_name, ',' order by schema_name) from information_schema.schemata where schema_name in ('guild','research')" 2>/dev/null || true)
 [[ "$schemas" == "guild,research" ]] && pass "schemas guild and research present" || fail "schemas: '${schemas}'"
+
+echo "== 9. Master Craftsman (mc.agent=$(mc_agent_on && echo on || echo off), mc.mode=$(mc_mode))"
+AGENT=minimoi-cos-agent-a
+oc_call() {  # oc_call METHOD PARAMS: the gateway's JSON answer (loopback, inside the container)
+  docker exec "$AGENT" node /app/openclaw.mjs gateway call "$1" --timeout 90000 --params "$2" --json 2>/dev/null || true
+}
+json_get() {  # json_get EXPR: evaluate a JS expression over stdin JSON as `d`
+  docker exec -i "$AGENT" node -e "let t='';process.stdin.on('data',c=>t+=c).on('end',()=>{let d={};try{d=JSON.parse(t.slice(t.indexOf('{')))}catch(e){};let v;try{v=($1)}catch(e){v='error'};console.log(typeof v==='string'?v:JSON.stringify(v))})"
+}
+mode=$(mc_mode)
+portal_mc=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' minimoi-portal 2>/dev/null | sed -n 's/^MINIMOI_GUILD_MC=//p' | tail -n 1)
+[[ "${portal_mc:-off}" == "$mode" ]] && pass "9a portal MINIMOI_GUILD_MC=${portal_mc:-unset} matches state/mc.mode ($mode)" \
+  || fail "9a portal MINIMOI_GUILD_MC=${portal_mc:-unset} but state/mc.mode is $mode (recreate the portal: up.sh)"
+
+if docker exec "$AGENT" test -f /home/node/.openclaw/.cos-selfcheck-failed 2>/dev/null; then
+  fail "9b !!! CoS SELF-CHECK FAILED: /home/node/.openclaw/.cos-selfcheck-failed exists; CoS and MC are DOWN. Read it (docker exec $AGENT cat /home/node/.openclaw/.cos-selfcheck-failed), fix the cause, delete it, restart cos-agent-a"
+fi
+agent_flag=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$AGENT" 2>/dev/null | sed -n 's/^MINIMOI_MC_AGENT=//p' | tail -n 1)
+if mc_agent_on; then
+  [[ "$agent_flag" == on ]] && pass "9b cos-agent-a has MINIMOI_MC_AGENT=on" || fail "9b cos-agent-a lacks MINIMOI_MC_AGENT=on (recreate it: up.sh)"
+  run_state=$(docker exec "$AGENT" cat /tmp/minimoi-mc/state 2>/dev/null || echo none)
+  case "$run_state" in
+    serving-combined) pass "9b start-with-mc: serving CoS and MC, self-check passed on this start" ;;
+    serving-cos-only) fail "9b start-with-mc fell back to CoS ALONE: MC's self-check failed (docker exec $AGENT cat /home/node/.openclaw/.mc-selfcheck-failed)" ;;
+    *) fail "9b start-with-mc state is '$run_state' (still checking, or failed)" ;;
+  esac
+  if docker exec "$AGENT" cmp -s /opt/minimoi/cos-agent-a/openclaw.cos-mc.json /home/node/.openclaw/openclaw.json; then
+    pass "9b applied openclaw.json == the image's combined config"
+  else
+    [[ "$run_state" == serving-cos-only ]] || fail "9b applied openclaw.json differs from the image's combined config"
+  fi
+else
+  [[ -z "$agent_flag" ]] && pass "9b cos-agent-a runs without MINIMOI_MC_AGENT (CoS-only start)" || fail "9b cos-agent-a has MINIMOI_MC_AGENT=$agent_flag while state/mc.agent is off"
+  docker exec "$AGENT" cmp -s /opt/minimoi/cos-agent-a/openclaw.json /home/node/.openclaw/openclaw.json \
+    && pass "9b applied openclaw.json == the image's CoS-only config (#244)" || fail "9b applied openclaw.json is not the image's CoS-only config"
+fi
+
+before=$FAILS
+for name in "${CONTAINERS[@]}"; do
+  docker inspect "$name" >/dev/null 2>&1 || continue
+  names=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$name" | cut -d= -f1)
+  for var in MC_MODEL_GATEWAY_KEY MC_ANTHROPIC_API_KEY MINIMOI_GUILD_MC MINIMOI_MC_AGENT; do
+    grep -qx "$var" <<< "$names" || continue
+    case "$var:$name" in
+      MC_MODEL_GATEWAY_KEY:minimoi-cos-agent-a|MINIMOI_MC_AGENT:minimoi-cos-agent-a|MC_ANTHROPIC_API_KEY:minimoi-model-gateway|MINIMOI_GUILD_MC:minimoi-portal) ;;
+      *) fail "9f $name carries $var" ;;
+    esac
+  done
+done
+if grep -Eq '^(MC_MODEL_GATEWAY_KEY|MC_ANTHROPIC_API_KEY)=' "$S/.env" 2>/dev/null; then
+  fail "9f an MC key name is in $S/.env (eight services load it whole); MC keys belong in $S/mc.env only"
+fi
+[[ "$FAILS" -eq "$before" ]] && pass "9f MC variable names only on their holders, none in .env"
+
+code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:14000/v1/models || true)
+[[ "$code" == 401 ]] && pass "9j gateway /v1/models without a key -> 401" || fail "9j gateway /v1/models without a key -> $code"
+if mc_agent_on; then
+  code=$(docker exec "$AGENT" node -e "fetch('http://model-gateway:4000/v1/models',{headers:{Authorization:'Bearer '+(process.env.MC_MODEL_GATEWAY_KEY||'')}}).then(r=>console.log(r.status),()=>console.log('error'))" 2>/dev/null || echo error)
+  [[ "$code" == 401 ]] && pass "9j MC's key -> 401 at the gateway (stage 1a: no MC key exists, so no MC spend is possible)" \
+    || warn "9j MC's key -> $code at the gateway (expected 401 in 1a; in 1b this is MC's real key)"
+fi
+
+cos_tools=$(oc_call sessions.create '{"agentId":"cos-agent-a","key":"agent:cos-agent-a:minimoi-selfcheck"}' >/dev/null; \
+  oc_call tools.effective '{"sessionKey":"agent:cos-agent-a:minimoi-selfcheck"}' | json_get "(d.groups||[]).flatMap(g=>(g.tools||[]).map(t=>t.id)).sort().join(',')")
+[[ "$cos_tools" == "session_status,web_search" ]] && pass "9k/9p CoS effective tools: $cos_tools" || fail "9k/9p CoS effective tools: '${cos_tools}'"
+if mc_agent_on; then
+  mc_tools=$(oc_call sessions.create '{"agentId":"mc-agent","key":"agent:mc-agent:minimoi-selfcheck"}' >/dev/null; \
+    oc_call tools.effective '{"sessionKey":"agent:mc-agent:minimoi-selfcheck"}' | json_get "(d.groups||[]).flatMap(g=>(g.tools||[]).map(t=>t.id)).sort().join(',')")
+  [[ "$mc_tools" == "session_status" ]] && pass "9k MC effective tools: $mc_tools" || fail "9k MC effective tools: '${mc_tools}'"
+  docker exec "$AGENT" test -f /tmp/minimoi-mc/serving && pass "9k self-check marker is from this container start" || fail "9k no self-check marker for this start"
+fi
+pairs=$(oc_call device.pair.list '{}' | json_get "((d.pending||[]).length)+'/'+((d.paired||[]).length)")
+[[ "$pairs" == "0/0" ]] && pass "9k no pending or paired devices (0/0)" || warn "9k device pairing pending/paired: $pairs"
+
+cron_enabled=$(oc_call cron.status '{}' | json_get "String(d.enabled)")
+[[ "$cron_enabled" == false ]] && pass "9m scheduler disabled" || fail "9m scheduler enabled: '$cron_enabled'"
+jobs_on=$(oc_call cron.list '{"includeDisabled":true,"limit":200}' | json_get "(d.jobs||[]).filter(j=>j.enabled!==false).map(j=>j.name||j.id).join(',')")
+[[ -z "$jobs_on" ]] && pass "9m every job disabled" || fail "9m enabled jobs: $jobs_on"
+
+for name in minimoi-cos-scheduler minimoi-cos-bot; do
+  docker inspect "$name" >/dev/null 2>&1 || continue
+  id=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$name" | sed -n 's/^COS_AGENT_RUNTIME_AGENT_ID=//p' | tail -n 1)
+  [[ "$id" == cos-agent-a ]] && pass "9o $name COS_AGENT_RUNTIME_AGENT_ID=cos-agent-a" || fail "9o $name COS_AGENT_RUNTIME_AGENT_ID=${id:-unset}"
+done
+sessions=$(oc_call sessions.list '{"agentId":"cos-agent-a","limit":500}' | json_get "(d.sessions||d.items||[]).length")
+note "9p CoS session count now: ${sessions:-unknown} (compare with the count recorded before the step; it must not be lower)"
 
 echo "== native writers under $S (advisory)"
 others=$(lsof +D "$S" 2>/dev/null | awk 'NR>1 {print $1"("$2")"}' | sort -u | grep -Ev '^(ssh|limactl|colima|com\.docke|virtiofsd|vz)' || true)

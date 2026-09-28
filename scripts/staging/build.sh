@@ -154,8 +154,14 @@ for service in $SERVICES; do
     *) echo "Unknown service $service"; exit 1 ;;
   esac
   image="minimoi-staging/$repository:$tag"
+  # cos-agent-a bakes the release into the image: start-with-mc.sh keys a
+  # sticky Master Craftsman self-check failure on it (the digest is not
+  # readable inside the container). Other Dockerfiles take no build args.
+  build_args=()
+  [[ "$service" != cos-agent-a ]] || build_args=(--build-arg "MINIMOI_RELEASE_SHA=$FULL_SHA")
   note "building $service from $dockerfile as $image"
   docker build -f "$RELEASE_DIR/$dockerfile" -t "$image" \
+    ${build_args[@]+"${build_args[@]}"} \
     --label "minimoi.staging.release=$FULL_SHA" "$RELEASE_DIR"
   info=$(docker image inspect --format '{{.Id}} {{.Architecture}}' "$image")
   IMAGE_LINES+=("$service $image $info")

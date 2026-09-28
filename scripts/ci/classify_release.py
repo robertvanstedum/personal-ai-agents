@@ -53,6 +53,7 @@ def _is_release_only(path: str) -> bool:
 # itself is NOT staging-only and keeps the full-deploy fallback.
 STAGING_ONLY_FILES = frozenset({
     "docker-compose.staging.yml",
+    "docker-compose.staging-mc.yml",
     "services/model_gateway/litellm.staging.yaml",
 })
 STAGING_ONLY_PREFIXES = ("scripts/staging/",)

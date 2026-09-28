@@ -1,0 +1,53 @@
+# Staging-only Master Craftsman overlay (MC spec v0.7, stage 1a).
+#
+# Added by scripts/staging/lib.sh AFTER docker-compose.prod.yml and
+# docker-compose.staging.yml, only while $STAGING_ROOT/state/mc.agent says
+# "on". Production never reads this file (scripts/ci/classify_release.py lists
+# it as staging-only) and never runs start-with-mc.sh.
+#
+# What it changes, and nothing else:
+#   * cos-agent-a starts through start-with-mc.sh under `tini -g`: the combined
+#     CoS + Master Craftsman config (openclaw.cos-mc.json), checked on every
+#     start BEFORE anything outside the container can reach it (the gateway
+#     runs on loopback during the check), split by agent (N11). The CoS-only
+#     config and #244's start stay in the image for rollback (mc.agent=off).
+#   * its healthcheck also needs /tmp/minimoi-mc/serving (this start passed
+#     its self-check), with a start period long enough for the check phase;
+#   * MC_MODEL_GATEWAY_KEY: MC's own model-gateway key. Absent in stage 1a, so
+#     a placeholder that the gateway refuses (401): MC turns fail closed and
+#     nothing can be spent on MC. The real key comes from mc.env in 1b.
+#     CoS keeps MINIMOI_MODEL_GATEWAY_KEY (Robert's N8 = no); MC's provider in
+#     openclaw.cos-mc.json names only MC_MODEL_GATEWAY_KEY;
+#   * mem_limit 1536m for both agents in one process (real single-agent turns
+#     peaked at about 1,031 MB; MEM); MALLOC_ARENA_MAX=2 comes from prod;
+#   * stop_grace_period 30s, so docker stop lets OpenClaw drain;
+#   * the network alias openclaw-agents, for new callers (the stage-2 front door).
+# The Control UI stays as CoS has it: on, reachable only on 127.0.0.1:18790
+# (Robert's N10: on for dev, localhost only; off in production is a separate
+# production change).
+
+services:
+  cos-agent-a:
+    entrypoint: ["tini", "-g", "--", "/opt/minimoi/cos-agent-a/start-with-mc.sh"]
+    command: []
+    environment:
+      - MINIMOI_MC_AGENT=on
+      - MC_MODEL_GATEWAY_KEY=${MC_MODEL_GATEWAY_KEY:-mc-placeholder-not-a-key}
+    mem_limit: 1536m
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:18789/healthz').then(r => process.exit(r.ok && require('fs').existsSync('/tmp/minimoi-mc/serving') ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 240s
+    networks:
+      default:
+        aliases:
+          - openclaw-agents
+    labels:
+      - minimoi.runtime.agents=cos-agent-a,mc-agent

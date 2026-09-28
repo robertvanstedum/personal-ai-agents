@@ -175,6 +175,7 @@ def test_every_prod_host_path_is_parameterized_one_way_only():
 def test_prod_compose_sets_neither_guild_flag():
     text = PROD.read_text()
     assert "MINIMOI_GUILD_NEXT" not in text and "MINIMOI_GUILD_PROTO" not in text
+    assert "MINIMOI_GUILD_MC" not in text
 
 
 def _compose_config(*files, env_extra=None, profiles=()):
@@ -378,7 +379,10 @@ def _routes(path):
 
 def test_staging_gateway_keeps_production_names_and_settings():
     prod, staging = _load(GATEWAY_PROD), _load(GATEWAY_STAGING)
-    assert [m["model_name"] for m in staging["model_list"]] == [m["model_name"] for m in prod["model_list"]]
+    # Production's names, plus exactly one staging-only route: Master
+    # Craftsman's (MC spec v0.6 §4 parity amendment; tests/test_staging_mc_overlay.py).
+    assert [m["model_name"] for m in staging["model_list"]] == \
+        [m["model_name"] for m in prod["model_list"]] + ["minimoi-mc-agent"]
     for block in ("router_settings", "litellm_settings", "general_settings"):
         assert staging[block] == prod[block], block
 
@@ -393,7 +397,7 @@ def test_staging_cos_agent_route_is_haiku_and_the_rest_follow_the_dev_gateway():
     assert set(agent["model_info"]) == set(prod["minimoi-cos-agent"]["model_info"])
     assert agent["model_info"]["fallback_position"] == 0
     for name in staging:
-        if name != "minimoi-cos-agent":
+        if name != "minimoi-cos-agent" and not name.startswith("minimoi-mc-"):
             assert staging[name] == dev[name], name
 
 

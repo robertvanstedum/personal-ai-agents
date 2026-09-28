@@ -21,6 +21,22 @@ COPY --chown=node:node docker/cos-agent-a/SOUL.md /home/node/.openclaw/workspace
 COPY --chown=node:node docker/cos-agent-a/MEMORY.md /home/node/.openclaw/workspace-cos-agent-a/MEMORY.md
 COPY --chown=node:node docker/cos-agent-a/plugins/cos-bounded-search /opt/minimoi/openclaw-plugins/cos-bounded-search
 
+# Staging only (Master Craftsman stage 1a, MC spec v0.7 §1.2 and §1.4): the
+# combined CoS + MC config, MC's workspace seed, and the start script with its
+# self-check. Dormant here: nothing below changes production's start path.
+# Production keeps apply-config.sh and the CoS-only openclaw.json; only the
+# staging overlay docker-compose.staging-mc.yml selects start-with-mc.sh.
+COPY --chown=root:root docker/cos-agent-a/openclaw.cos-mc.json /opt/minimoi/cos-agent-a/openclaw.cos-mc.json
+COPY --chown=root:root docker/cos-agent-a/start-with-mc.sh /opt/minimoi/cos-agent-a/start-with-mc.sh
+COPY --chown=root:root docker/cos-agent-a/selfcheck.mjs /opt/minimoi/cos-agent-a/selfcheck.mjs
+COPY --chown=root:root docker/cos-agent-a/mc-agent/workspace/ /opt/minimoi/cos-agent-a/mc-agent/workspace/
+
 # Same init and command as the upstream image, with the config step in front.
 ENTRYPOINT ["tini", "-s", "--", "/opt/minimoi/cos-agent-a/apply-config.sh"]
 CMD ["node", "openclaw.mjs", "gateway"]
+
+# The release this image was built from (scripts/staging/build.sh passes it;
+# "unknown" elsewhere). start-with-mc.sh keys a sticky MC self-check failure
+# on it, because the image digest cannot be read inside the container.
+ARG MINIMOI_RELEASE_SHA=unknown
+ENV MINIMOI_RELEASE_SHA=${MINIMOI_RELEASE_SHA}
