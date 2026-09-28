@@ -16,7 +16,7 @@ import pytest
 import yaml
 
 from test_staging_environment import (  # noqa: F401  (shell is a fixture)
-    FAKE_DOCKER, PROD, SCRIPTS, STAGING, _compose_config, _load, _staging_world, _up, _write_exe, shell)
+    FAKE_DOCKER, PROD, SCRIPTS, STAGING, _compose_config, _git, _load, _staging_world, _up, _write_exe, shell)
 
 REPO = Path(__file__).resolve().parent.parent
 MC_FILE = REPO / "docker-compose.mc.yml"
@@ -219,8 +219,9 @@ def _mc_world(tmp_path, *, enabled=True, mc_env=None, dot_env_extra=""):
     _write_exe(Path(env["PATH"].split(":")[0]) / "docker", FAKE_DOCKER_MC)
     root = Path(env["STAGING_ROOT"])
     (release / "docker-compose.mc.yml").write_text("services: {}\n")
-    subprocess.run(["git", "-C", str(release), "add", "-A"], check=True)
-    subprocess.run(["git", "-C", str(release), "commit", "-qm", "mc"], check=True)
+    # An explicit identity: CI runners have no global git user (#250 CI).
+    _git(release, "add", "-A")
+    _git(release, "commit", "-qm", "mc")
     sha = subprocess.run(["git", "-C", str(release), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     (root / "RELEASE").write_text(f"sha={sha}\ntag=abc1234\n")
     with (root / ".env").open("a") as f:
