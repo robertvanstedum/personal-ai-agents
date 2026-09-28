@@ -1124,5 +1124,17 @@
     "last_transition_at": "2026-09-23T14:33:21.024168+00:00",
     "summary": "New model baseline for the rest of 2026: five tiers (T0 no-model, local, economy, workhorse, premium), house model family per domain with a cross-provider counterpoint for review roles, local-first on Mac and (proposed) prod, configuration not code.",
     "notes": "Registered 2026-09-23 at Robert's explicit request. Supersedes #125. Builds on the shared LiteLLM gateway spec, Spec 146 and Track B (feat/cos-guild-model-roles @ 021a1bb). Motivated by the 2026-05-15 xAI retirement (grok-4-1-fast IDs now bill as grok-4.3) and unattributed OpenClaw xAI spend. Implementation targeted Fri 2026-09-25 or week of 2026-09-28, after review. Phase 0 (personal OpenClaw config) may proceed ahead of approval at Robert's say-so. Queue registration is not a claim that anything is built."
+  },
+  {
+    "id": 160,
+    "spec_title": "Agent memory owned by MiniMoi — turn log + agent memory copies (file-first)",
+    "spec_file": "spec_160_agent_memory_owned_by_minimoi_2026-09-28.md",
+    "status": "design",
+    "priority": "high",
+    "github_issue": "#246",
+    "summary": "MiniMoi owns agent memory so models and agent runtimes stay swappable: (a) a daily file of CoS turns with a sticky Private mode; (b) daily snapshots of each agent's .md memory into a MiniMoi data folder. File-first; Postgres only if a later use needs it.",
+    "blocked_reason": "Final Claude Code review pending (Claude Chat and Codex reviews folded into v0.4). Build after Master Craftsman stage 1 works (Robert, 2026-09-28).",
+    "notes": "v0.4 (SHA-256 baaab1ab…). Owner direction: planning-studio INIT-2026-0007 documents/OWNER_DIRECTION_AGENT_MEMORY_V04_2026-09-28.md.",
+    "last_transition_at": "2026-09-28T17:30:00+00:00"
   }
 ]
