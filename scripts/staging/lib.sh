@@ -60,6 +60,76 @@ STAGING_CORE_CONTAINERS=(
 )
 STAGING_BOT_CONTAINERS=(minimoi-system-bot minimoi-cos-bot)
 
+# Compose service -> container name for the main staging project.
+container_of() {
+  case "$1" in
+    postgres) echo postgres-ai-agents ;;
+    model-gateway) echo minimoi-model-gateway ;;
+    cos-agent-a) echo minimoi-cos-agent-a ;;
+    curator) echo minimoi-curator ;;
+    german) echo minimoi-german ;;
+    portuguese) echo minimoi-portuguese ;;
+    portal) echo minimoi-portal ;;
+    cos-scheduler) echo minimoi-cos-scheduler ;;
+    system-bot) echo minimoi-system-bot ;;
+    cos-bot) echo minimoi-cos-bot ;;
+  esac
+}
+STAGING_CORE_SERVICES="postgres model-gateway cos-agent-a curator german portuguese portal cos-scheduler"
+STAGING_BOT_SERVICES="system-bot cos-bot"
+
+# Focus (Robert, 2026-09-28): on the 8 GB Mac, run only the containers under
+# test. scripts/staging/focus.sh writes the set's name to state/focus and the
+# services it keeps stopped to state/focus.stopped; up.sh and verify.sh read
+# them, so a later up.sh never silently restarts a stopped service.
+STAGING_FOCUS_FILE="$STAGING_ROOT/state/focus"
+STAGING_FOCUS_STOPPED="$STAGING_ROOT/state/focus.stopped"
+focus_name() { [[ -f "$STAGING_FOCUS_FILE" ]] && tr -d '[:space:]' < "$STAGING_FOCUS_FILE" || echo all; }
+focus_stopped() { [[ -f "$STAGING_FOCUS_STOPPED" ]] && tr -s '[:space:]' ' ' < "$STAGING_FOCUS_STOPPED" | sed 's/^ //; s/ $//' || true; }
+# is_focus_stopped SERVICE: true when the focus set keeps it stopped.
+is_focus_stopped() { [[ " $(focus_stopped) " == *" $1 "* ]]; }
+# Container name -> service (for verify.sh).
+service_of() {
+  local s
+  for s in $STAGING_CORE_SERVICES $STAGING_BOT_SERVICES; do
+    [[ "$(container_of "$s")" != "$1" ]] || { echo "$s"; return 0; }
+  done
+}
+
+# Master Craftsman (MC spec v0.9 §3): its OWN Compose project, never in the
+# main one. scripts/staging/mc.sh is the only place that runs it.
+STAGING_MC_PROJECT="minimoi-staging-mc"
+STAGING_MC_FILE="docker-compose.mc.yml"
+STAGING_MC_ENABLED="$STAGING_ROOT/state/mc.enabled"
+STAGING_MC_ENV="$STAGING_ROOT/mc.env"
+STAGING_MC_NET="minimoi-staging-mc-net"
+STAGING_MC_CONTAINER="minimoi-mc-agent"
+STAGING_MC_VOLUMES=(minimoi-staging-mc-agent-state minimoi-staging-mc-agent-auth)
+mc_enabled() { [[ -f "$STAGING_MC_ENABLED" ]]; }
+
+# A network's IPAM gateways, one per line, without Docker's renderings of
+# "none": an isolated bridge (gateway_mode_ipv4=isolated) has no gateway, and
+# Docker 29 prints "invalid IP" (older versions "<no value>" or nothing).
+network_gateways() {
+  local line
+  docker network inspect -f '{{range .IPAM.Config}}{{printf "%s\n" .Gateway}}{{end}}' "$1" 2>/dev/null \
+    | while IFS= read -r line; do
+        case "$line" in ""|"invalid IP"|"<no value>") ;; *) echo "$line" ;; esac
+      done
+}
+
+# IPv4 addresses on a network's bridge interface inside the Docker VM, one per
+# line (empty = the bridge has no host address). Needs colima; prints
+# "unknown" when the VM cannot be asked.
+bridge_ipv4() {
+  local id name
+  id=$(docker network inspect -f '{{.Id}}' "$1" 2>/dev/null) || { echo unknown; return 0; }
+  name=$(docker network inspect -f '{{index .Options "com.docker.network.bridge.name"}}' "$1" 2>/dev/null || true)
+  case "$name" in ""|"<no value>") name="br-${id:0:12}" ;; esac
+  command -v colima >/dev/null 2>&1 || { echo unknown; return 0; }
+  colima ssh -- ip -4 -o addr show dev "$name" 2>/dev/null | awk '{print $4}' || echo unknown
+}
+
 # External volumes (docker-compose.staging.yml). `compose down -v` cannot
 # remove external volumes, and down.sh refuses -v anyway.
 STAGING_VOLUMES=(minimoi-staging-postgres-data minimoi-staging-cos-agent-a-state minimoi-staging-cos-agent-a-auth)

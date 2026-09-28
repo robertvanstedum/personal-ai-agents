@@ -1,0 +1,77 @@
+# Master Craftsman: its OWN Compose project (MC spec v0.9 §3), never part of
+# the main stack. Staging runs it as project "minimoi-staging-mc" through
+# scripts/staging/mc.sh only; production has no MC project until the
+# production MC spec (scripts/ci/classify_release.py: staging-only).
+#
+# Why a separate project: the main project's deploys (up --remove-orphans,
+# image prune) can then never start, restart or remove MC, and MC's up/down
+# never touches CoS Agent A or the gateway. The main stack only provides the
+# fixed-name internal network MC joins (docker-compose.staging.yml attaches
+# model-gateway to it permanently, so enabling MC recreates nothing there).
+#
+# The MC_* name variables exist only so the no-spend probe
+# (scripts/staging/mc_probe/stage_a.py) can run this exact file under
+# throwaway names; mc.sh never sets them.
+#
+# Boundaries (checked by scripts/staging/mc_probe/boundary.py, C1-C8):
+#   * only mc-net (internal: no egress, no route to CoS, Postgres, the portal
+#     or the host); no published port; no env_file; only its own volumes;
+#   * its own OpenClaw token and model-gateway key; no CoS name in its env.
+#     Stage A: the key is a placeholder the gateway refuses (401): no spend;
+#   * restart on-failure:3 and oom_score_adj 1000: a failing or OOM-killed MC
+#     retries at most three times, and the VM's OOM killer takes MC before CoS.
+
+services:
+  mc-agent:
+    image: ${MC_IMAGE_REPO:-minimoi-staging/mc-agent}:${MINIMOI_IMAGE_TAG:?run scripts/staging/mc.sh build}
+    pull_policy: never
+    container_name: ${MC_CONTAINER_NAME:-minimoi-mc-agent}
+    restart: on-failure:3
+    environment:
+      - OPENCLAW_GATEWAY_TOKEN=${MC_OPENCLAW_GATEWAY_TOKEN:?set MC_OPENCLAW_GATEWAY_TOKEN in mc.env (scripts/staging/mc.sh token)}
+      - MC_MODEL_GATEWAY_KEY=${MC_MODEL_GATEWAY_KEY:-mc-placeholder-not-a-key}
+      - OPENCLAW_STATE_DIR=/home/node/.openclaw
+      - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
+      - OPENCLAW_DISABLE_BONJOUR=1
+      - OPENCLAW_NO_AUTO_UPDATE=1
+      - MALLOC_ARENA_MAX=2
+      - MC_START_DELAY_S=${MC_START_DELAY_S:-0}
+      - TZ=${COS_AGENT_TIMEZONE:-America/Chicago}
+    volumes:
+      - mc-agent-state:/home/node/.openclaw
+      - mc-agent-auth:/home/node/.config/openclaw
+    networks:
+      - mc-net
+    mem_limit: 1200m
+    oom_score_adj: 1000
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:18789/healthz').then(r => process.exit(r.ok && require('fs').existsSync('/tmp/minimoi-mc/serving') ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 600s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    labels:
+      - minimoi.runtime.role=guild-mc
+      - minimoi.runtime.implementation=openclaw
+
+volumes:
+  mc-agent-state:
+    external: true
+    name: ${MC_STATE_VOLUME:-minimoi-staging-mc-agent-state}
+  mc-agent-auth:
+    external: true
+    name: ${MC_AUTH_VOLUME:-minimoi-staging-mc-agent-auth}
+
+networks:
+  mc-net:
+    external: true
+    name: ${MC_NET_NAME:-minimoi-staging-mc-net}

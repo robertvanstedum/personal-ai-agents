@@ -1,0 +1,150 @@
+#!/bin/bash
+# mc.sh — Master Craftsman's own Compose project on staging (MC spec v0.9 §3,
+# stage A: no spend). The ONLY script that starts, stops or builds MC. It never
+# touches the main project's containers (CoS Agent A, the gateway, the portal).
+#
+# Usage:
+#   mc.sh token            write a random MC_OPENCLAW_GATEWAY_TOKEN into
+#                          $STAGING_ROOT/mc.env (mode 600) if it has none; the
+#                          value is never printed
+#   mc.sh build [--allow-running]
+#                          build minimoi-staging/mc-agent:<release tag> from the
+#                          pinned release worktree (build.sh's RELEASE). Build
+#                          BEFORE stopping anything, with MC stopped (BuildKit
+#                          shares the VM's memory); --allow-running overrides
+#   mc.sh up               start MC; needs state/mc.enabled, the image, mc.env
+#                          with MC's own token, and the main stack's mc-net.
+#                          Waits until CoS Agent A (if running) and the gateway
+#                          are healthy first, so MC never starts beside another
+#                          OpenClaw start on the 2-CPU VM
+#   mc.sh down             stop and remove MC's container (volumes kept)
+#   mc.sh status           MC's state, health, restarts and self-check state
+#   mc.sh clear-selfcheck  remove a sticky .mc-selfcheck-failed from MC's state
+#                          volume and start MC again (CoS is never involved)
+#
+# MC's secrets live only in mc.env (mode 600), passed as an interpolation-only
+# --env-file to MC's project; never in .env, which the main services load
+# whole. Stage A: no MC_MODEL_GATEWAY_KEY, so MC gets a placeholder the gateway
+# refuses (401). The script compares MC's key and token with CoS's values
+# without printing any of them.
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+MC_WAIT_S="${MC_WAIT_S:-420}"
+
+mc_compose() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      -v|--volumes|--volumes=*) die "refusing 'compose $*': MC's volumes are never removed by a script" ;;
+    esac
+  done
+  require_absolute_root
+  require_release
+  [[ -f "$RELEASE_DIR/$STAGING_MC_FILE" ]] || die "the pinned release has no $STAGING_MC_FILE (it predates MC stage A)"
+  local extra=()
+  if [[ -f "$STAGING_MC_ENV" ]]; then
+    [[ "$(file_mode "$STAGING_MC_ENV")" == 600 ]] || die "$STAGING_MC_ENV must be mode 600"
+    extra=(--env-file "$STAGING_MC_ENV")
+  fi
+  docker compose -p "$STAGING_MC_PROJECT" --env-file "$STAGING_RELEASE_ENV" ${extra[@]+"${extra[@]}"} \
+    -f "$RELEASE_DIR/$STAGING_MC_FILE" "$@"
+}
+
+# env_value FILE NAME: a variable's value from an env file, for comparison only.
+env_value() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -n 1 | sed "s/^'\\(.*\\)'\$/\\1/; s/^\"\\(.*\\)\"\$/\\1/"; }
+
+# Refuses when MC's key or token equals one of CoS's (values never printed).
+key_problems() {
+  local mc_key mc_token cos_key cos_token problems=""
+  mc_key=$(env_value "$STAGING_MC_ENV" MC_MODEL_GATEWAY_KEY)
+  mc_token=$(env_value "$STAGING_MC_ENV" MC_OPENCLAW_GATEWAY_TOKEN)
+  cos_key=$(env_value "$STAGING_ENV_FILE" MINIMOI_MODEL_GATEWAY_KEY)
+  cos_token=$(env_value "$STAGING_ENV_FILE" COS_AGENT_A_GATEWAY_TOKEN)
+  [[ -n "$mc_token" ]] || problems="$problems MC_OPENCLAW_GATEWAY_TOKEN is missing from mc.env (run: mc.sh token);"
+  if [[ -n "$mc_key" && ( "$mc_key" == "$cos_key" || "$mc_key" == "$cos_token" ) ]]; then
+    problems="$problems MC_MODEL_GATEWAY_KEY equals one of CoS's credentials;"
+  fi
+  if [[ -n "$mc_token" && ( "$mc_token" == "$cos_token" || "$mc_token" == "$cos_key" ) ]]; then
+    problems="$problems MC_OPENCLAW_GATEWAY_TOKEN equals one of CoS's credentials;"
+  fi
+  if grep -Eq '^(MC_MODEL_GATEWAY_KEY|MC_OPENCLAW_GATEWAY_TOKEN|MC_ANTHROPIC_API_KEY)=' "$STAGING_ENV_FILE" 2>/dev/null; then
+    problems="$problems an MC secret name is in .env (the main services load it whole; use mc.env);"
+  fi
+  echo "${problems# }"
+}
+
+health_of() { docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$1" 2>/dev/null || echo absent; }
+
+# Wait until NAME is healthy, or is not running at all (then nothing to wait for).
+wait_healthy_or_absent() {
+  local name="$1" i=0 h
+  while [[ "$i" -lt "$MC_WAIT_S" ]]; do
+    h=$(health_of "$name")
+    case "$h" in healthy|absent|exited|created) return 0 ;; esac
+    [[ "$i" -gt 0 ]] || note "waiting for $name ($h) before starting MC"
+    sleep 5; i=$((i + 5))
+  done
+  die "$name is still '$h' after ${MC_WAIT_S}s; not starting MC beside it"
+}
+
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+  token)
+    require_absolute_root
+    umask 077
+    touch "$STAGING_MC_ENV"; chmod 600 "$STAGING_MC_ENV"
+    if grep -q '^MC_OPENCLAW_GATEWAY_TOKEN=.' "$STAGING_MC_ENV"; then
+      note "mc.env already has MC_OPENCLAW_GATEWAY_TOKEN (unchanged)"
+    else
+      printf 'MC_OPENCLAW_GATEWAY_TOKEN=%s\n' "$(openssl rand -hex 32)" >> "$STAGING_MC_ENV"
+      note "wrote a new MC_OPENCLAW_GATEWAY_TOKEN to $STAGING_MC_ENV (not printed)"
+    fi ;;
+  build)
+    require_absolute_root
+    require_release
+    if [[ "${1:-}" != --allow-running ]] \
+       && [[ "$(docker inspect -f '{{.State.Running}}' "$STAGING_MC_CONTAINER" 2>/dev/null || echo false)" == true ]]; then
+      die "MC is running; build with MC stopped (mc.sh down) or pass --allow-running"
+    fi
+    sha=$(release_sha); tag=$(release_tag)
+    image="minimoi-staging/mc-agent:$tag"
+    note "building $image from $RELEASE_DIR at ${sha:0:7}"
+    docker build -f "$RELEASE_DIR/docker/Dockerfile.mc-agent" -t "$image" \
+      --build-arg "MINIMOI_RELEASE_SHA=$sha" --label "minimoi.staging.release=$sha" "$RELEASE_DIR"
+    note "built $image" ;;
+  up)
+    require_absolute_root
+    require_release
+    require_env
+    mc_enabled || die "MC is not enabled on staging: touch $STAGING_MC_ENABLED first (stage A needs Robert's go-ahead)"
+    docker image inspect "minimoi-staging/mc-agent:$(release_tag)" >/dev/null 2>&1 || die "no MC image for this release; run mc.sh build"
+    docker network inspect "$STAGING_MC_NET" >/dev/null 2>&1 || die "network $STAGING_MC_NET is missing; up.sh with a release that has it creates it"
+    problems=$(key_problems)
+    [[ -z "$problems" ]] || die "$problems"
+    for v in "${STAGING_MC_VOLUMES[@]}"; do
+      docker volume inspect "$v" >/dev/null 2>&1 || { docker volume create "$v" >/dev/null; note "created volume $v"; }
+    done
+    wait_healthy_or_absent minimoi-model-gateway
+    wait_healthy_or_absent minimoi-cos-agent-a
+    mc_compose up -d --no-build
+    note "MC starting (its self-check runs on loopback first; about 30-60 s, up to 10 min on a busy VM or after a hard kill). Then: mc.sh status" ;;
+  down)
+    mc_compose down
+    note "MC down; volumes ${STAGING_MC_VOLUMES[*]} kept" ;;
+  status)
+    h=$(health_of "$STAGING_MC_CONTAINER")
+    echo "mc-agent: $h, restarts $(docker inspect -f '{{.RestartCount}}' "$STAGING_MC_CONTAINER" 2>/dev/null || echo -)"
+    echo "self-check: $(docker exec "$STAGING_MC_CONTAINER" cat /tmp/minimoi-mc/state 2>/dev/null || echo unknown)"
+    echo "enabled: $(mc_enabled && echo yes || echo no)" ;;
+  clear-selfcheck)
+    require_absolute_root
+    require_release
+    mc_compose stop >/dev/null 2>&1 || true
+    docker run --rm --network none --user 0:0 -v "${STAGING_MC_VOLUMES[0]}:/state" --entrypoint rm \
+      "minimoi-staging/mc-agent:$(release_tag)" -f /state/.mc-selfcheck-failed
+    note "cleared MC's self-check marker; starting MC again"
+    exec "$0" up ;;
+  *) die "usage: mc.sh token | build [--allow-running] | up | down | status | clear-selfcheck" ;;
+esac

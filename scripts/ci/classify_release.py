@@ -52,11 +52,13 @@ def _is_release_only(path: str) -> bool:
 
 
 # Files that no production service is built from or mounts yet. Master
-# Craftsman's own OpenClaw config, workspace seed and key check (separate-
-# container plan, PR 1) are dormant until a later PR adds an MC service;
-# tests/test_release_classifier.py fails if any Dockerfile, compose file or
-# deploy script starts referencing them, so that PR must classify them anew.
-DORMANT_PREFIXES = ("docker/mc-agent/",)
+# Craftsman's own image (docker/Dockerfile.mc-agent) and its config, workspace
+# seed and scripts run only in MC's own staging Compose project
+# (docker-compose.mc.yml, scripts/staging/mc.sh); production has no MC service
+# until the production MC spec. tests/test_release_classifier.py fails if
+# deploy.yml, the deploy script or docker-compose.prod.yml starts using them,
+# so that change must classify them as a real production service.
+DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent")
 
 
 # The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).
@@ -65,6 +67,8 @@ DORMANT_PREFIXES = ("docker/mc-agent/",)
 # itself is NOT staging-only and keeps the full-deploy fallback.
 STAGING_ONLY_FILES = frozenset({
     "docker-compose.staging.yml",
+    # Master Craftsman's own Compose project (MC spec v0.9 §3), staging only.
+    "docker-compose.mc.yml",
     "services/model_gateway/litellm.staging.yaml",
 })
 STAGING_ONLY_PREFIXES = ("scripts/staging/",)

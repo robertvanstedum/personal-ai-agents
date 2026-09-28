@@ -95,11 +95,16 @@ def test_workspace_seed_says_what_mc_cannot_see_and_holds_no_memory_file():
     assert "Never include secrets" in agents
 
 
-def test_nothing_builds_or_runs_the_mc_files_yet():
-    """Dormant: no Dockerfile, compose file or deploy script uses docker/mc-agent/,
-    and CoS Agent A's image and config are untouched."""
-    for path in list((REPO / "docker").glob("Dockerfile*")) + list(REPO.glob("docker-compose*.yml")):
-        assert "mc-agent" not in path.read_text(), path.name
+def test_production_never_builds_or_runs_mc():
+    """MC runs only in its own staging project (docker-compose.mc.yml via
+    scripts/staging/mc.sh). No production compose file, deploy path or CoS
+    image uses it, and CoS Agent A's image and config are untouched."""
+    for name in ("docker-compose.prod.yml", "docker-compose.yml", "docker-compose.staging.yml"):
+        code = "\n".join(l for l in (REPO / name).read_text().splitlines() if not l.lstrip().startswith("#"))
+        assert "mc-agent" not in code, name
+    for name in ("Dockerfile.cos-agent-a",):
+        assert "mc-agent" not in (REPO / "docker" / name).read_text()
+    assert "mc-agent" not in (REPO / ".github/workflows/deploy.yml").read_text()
     assert "MINIMOI_GUILD_MC" not in (REPO / "docker-compose.prod.yml").read_text()
 
 

@@ -20,6 +20,9 @@
 #   * system-bot and cos-bot sit behind the "bots" profile: off unless
 #     scripts/staging/up.sh finds $MINIMOI_ROOT/state/bots.on, i.e. after the
 #     native test-bot pollers are retired (one poller per token).
+#   * the model gateway is also on the internal network minimoi-staging-mc-net,
+#     permanently, for Master Craftsman's own Compose project
+#     (docker-compose.mc.yml, scripts/staging/mc.sh). Production has no MC.
 #   * extra loopback ports kept for the Mac-only Records beta: the model
 #     gateway on 127.0.0.1:14000 and Agent A on 127.0.0.1:18790.
 #   * the model gateway reads $MINIMOI_ROOT/config/litellm.staging.yaml
@@ -46,6 +49,12 @@ services:
       - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/config/litellm.staging.yaml:/app/config.yaml:ro
     ports:
       - "127.0.0.1:14000:4000"
+    # Permanently on mc-net (MC spec v0.9 §3), so starting or stopping Master
+    # Craftsman's own project never recreates the gateway. The gateway keeps
+    # `default` for CoS and provider egress.
+    networks:
+      - default
+      - mc-net
 
   cos-agent-a:
     image: minimoi-staging/cos-scheduler:agent-a-${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
@@ -119,3 +128,15 @@ volumes:
 networks:
   iotconnect-edge:
     name: minimoi-staging-iotconnect-edge
+  # Master Craftsman's only network (MC spec v0.9 §3): internal, so no egress.
+  # Members: model-gateway (here, permanently) and, from MC's own project
+  # (docker-compose.mc.yml), mc-agent. Nothing else of the main stack joins it.
+  mc-net:
+    name: minimoi-staging-mc-net
+    internal: true
+    # No host address on the bridge (Docker 28+; #250 review F1): otherwise a
+    # container on this internal network can still reach the Colima VM itself
+    # (for example its sshd on :22) through the bridge's own IP. Containers on
+    # the network still reach each other (MC -> model-gateway).
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated

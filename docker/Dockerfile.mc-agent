@@ -1,0 +1,22 @@
+# Master Craftsman's own OpenClaw runtime (MC spec v0.8 §2.1, v0.9), separate
+# from CoS Agent A: same OpenClaw 2026.9.6 index digest as
+# docker/Dockerfile.cos-agent-a, its own config, workspace, volumes and token.
+# Staging only until the production MC spec: no production service builds it
+# (scripts/ci/classify_release.py: no production service).
+FROM ghcr.io/openclaw/openclaw:2026.9.6@sha256:0a5ff5e682e62afa19149df126aa50063bf65ef885b5c94713ce32dc0eb12e15
+
+# Never self-update inside the container; releases move only through this pin.
+ENV OPENCLAW_NO_AUTO_UPDATE=1
+
+# Root-owned in the image (read-only to the node user); start-mc.sh applies the
+# config and workspace to the state volume on every start, after its checks.
+COPY --chown=root:root docker/mc-agent/openclaw.json /opt/minimoi/mc-agent/openclaw.json
+COPY --chown=root:root docker/mc-agent/workspace/ /opt/minimoi/mc-agent/workspace/
+COPY --chown=root:root docker/mc-agent/start-mc.sh docker/mc-agent/selfcheck.mjs docker/mc-agent/mc-key-check.sh /opt/minimoi/mc-agent/
+
+# tini -g: docker stop reaches the whole process group, so OpenClaw drains.
+ENTRYPOINT ["tini", "-g", "--", "/opt/minimoi/mc-agent/start-mc.sh"]
+
+# The release this image was built from (scripts/staging/mc.sh build passes it).
+ARG MINIMOI_RELEASE_SHA=unknown
+ENV MINIMOI_RELEASE_SHA=${MINIMOI_RELEASE_SHA}
