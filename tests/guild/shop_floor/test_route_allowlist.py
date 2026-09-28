@@ -25,6 +25,8 @@ EXPECTED = {
     "/guild-next/api/v1/postits/<int:postit_id>/bin",
     "/guild-next/api/v1/postits/<int:postit_id>/restore",
     "/guild-next/api/v1/continue",
+    # Master Craftsman's owner route: a seam, disabled (always refuses; tests/guild/shop_floor/test_mc_backend_switch.py).
+    "/guild-next/api/v1/mc/turns",
     "/guild-next/api/v1/",
     "/guild-next/api/v1/<path:rest>",
 }

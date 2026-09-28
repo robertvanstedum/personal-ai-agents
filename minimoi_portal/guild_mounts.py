@@ -5,6 +5,8 @@ portal starts:
 
     MINIMOI_GUILD_NEXT=1    the real Shop floor (minimoi_portal/guild_ui) at /guild-next
     MINIMOI_GUILD_PROTO=1   the Guild interaction prototype, prototype data, at /guild-proto
+    MINIMOI_GUILD_MC=...    Master Craftsman's backend on /guild-next: off (default),
+                            stub, openclaw or grok (minimoi_portal/guild_ui/mc)
 
 Unset (production) means nothing is registered, so both prefixes fall through
 to the portal's own routes and answer 404. Only "1", "true", "on" or "yes"
@@ -106,9 +108,14 @@ def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, ope
         return "off"
     try:
         from minimoi_portal.guild_ui import register_guild_ui
+        from minimoi_portal.guild_ui.mc import backend_from_env
         from minimoi_portal.guild_ui.services import build_services
+        # MINIMOI_GUILD_MC (off | stub | openclaw | grok); never raises, and an
+        # MC problem never fails this mount (it shows "unavailable").
+        mc = backend_from_env(environ)
+        log.info("guild mount: Master Craftsman backend %s", mc.kind)
         services = build_services(queue_path=queue_path, operations_status_url=operations_status_url,
-                                  records_db=records_db, database_url=database_url, audit=audit)
+                                  records_db=records_db, database_url=database_url, audit=audit, mc=mc)
         register_guild_ui(app, owner_guard=owner_guard, current_user=current_user, url_prefix=NEXT_PREFIX,
                           blueprint_name=NEXT_NAME, services=services, base_url=base_url)
         log.info("guild mount: /guild-next registered")

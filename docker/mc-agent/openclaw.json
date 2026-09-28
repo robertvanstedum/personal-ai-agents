@@ -1,0 +1,188 @@
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "lan",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    },
+    "controlUi": {
+      "enabled": false
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "update": {
+    "checkOnStart": false
+  },
+  "models": {
+    "mode": "replace",
+    "catalogRefresh": {
+      "enabled": false
+    },
+    "providers": {
+      "minimoi-gateway-mc": {
+        "baseUrl": "http://model-gateway:4000/v1",
+        "apiKey": "${MC_MODEL_GATEWAY_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "minimoi-mc-agent",
+            "name": "Master Craftsman",
+            "input": [
+              "text"
+            ],
+            "contextWindow": 32768,
+            "maxTokens": 2048
+          }
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "allow": [
+      "memory-core"
+    ],
+    "entries": {
+      "memory-core": {
+        "config": {
+          "dreaming": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  },
+  "skills": {
+    "workshop": {
+      "autonomous": {
+        "mode": "off"
+      }
+    }
+  },
+  "cron": {
+    "enabled": false
+  },
+  "tools": {
+    "sessions": {
+      "visibility": "self"
+    },
+    "agentToAgent": {
+      "enabled": false
+    },
+    "codeMode": false,
+    "toolSearch": false,
+    "links": {
+      "enabled": false
+    },
+    "swarm": false
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "minimoi-gateway-mc/minimoi-mc-agent"
+      },
+      "modelPolicy": {
+        "allow": [
+          "minimoi-gateway-mc/minimoi-mc-agent"
+        ]
+      }
+    },
+    "entries": {
+      "mc-agent": {
+        "name": "Master Craftsman",
+        "workspace": "/home/node/.openclaw/workspace-mc",
+        "agentDir": "/home/node/.openclaw/agents/mc-agent",
+        "model": {
+          "primary": "minimoi-gateway-mc/minimoi-mc-agent",
+          "fallbacks": []
+        },
+        "modelPolicy": {
+          "allow": [
+            "minimoi-gateway-mc/minimoi-mc-agent"
+          ]
+        },
+        "utilityModel": "",
+        "decisionModel": "",
+        "memory": {
+          "search": {
+            "enabled": false,
+            "rememberAcrossConversations": false
+          }
+        },
+        "skills": [],
+        "heartbeat": {
+          "every": "0m"
+        },
+        "sandbox": {
+          "mode": "off"
+        },
+        "tools": {
+          "allow": [
+            "session_status"
+          ],
+          "deny": [
+            "group:fs",
+            "group:runtime",
+            "read",
+            "write",
+            "edit",
+            "apply_patch",
+            "ls",
+            "exec",
+            "process",
+            "code_execution",
+            "terminal",
+            "computer",
+            "file_fetch",
+            "file_write",
+            "dir_fetch",
+            "dir_list",
+            "memory_search",
+            "memory_get",
+            "group:memory",
+            "web_search",
+            "web_fetch",
+            "x_search",
+            "sessions_list",
+            "sessions_history",
+            "sessions_search",
+            "sessions_send",
+            "sessions_spawn",
+            "sessions",
+            "conversations_send",
+            "conversations_turn",
+            "conversations_list",
+            "subagents",
+            "agents_list",
+            "agents_wait",
+            "automations",
+            "gateway",
+            "nodes",
+            "plugins",
+            "openclaw",
+            "secrets",
+            "group:ui",
+            "group:messaging",
+            "group:automation",
+            "group:nodes",
+            "group:agents",
+            "group:media",
+            "group:plugins"
+          ],
+          "codeMode": false,
+          "swarm": false,
+          "elevated": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  }
+}

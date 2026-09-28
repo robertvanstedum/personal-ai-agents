@@ -1,5 +1,6 @@
 """The release classifier must minimize restarts without guessing ownership."""
 
+from pathlib import Path
 from scripts.ci.classify_release import ALL_SERVICES, classify
 
 
@@ -42,9 +43,14 @@ def test_project_home_documents_do_not_mask_a_real_service_change():
 
 
 def test_release_pipeline_changes_bootstrap_with_full_deployment():
+    # The workflow and the deploy script change how every service is deployed,
+    # so they still bootstrap with a full deployment. The classifier itself no
+    # longer does (PR #248 review F2): it only chooses the service list, never
+    # ships in an image, and CI runs this test file before any deploy, so a
+    # classifier edit alone redeploys nothing
+    # (test_the_classifier_itself_redeploys_nothing).
     for path in (
         ".github/workflows/deploy.yml",
-        "scripts/ci/classify_release.py",
         "scripts/operations/deploy_scoped_release.sh",
     ):
         assert classify([path]) == ("full", ALL_SERVICES)
@@ -98,3 +104,25 @@ def test_staging_only_changes_do_not_mask_a_real_service_change():
         "scripts/staging/verify.sh",
         "minimoi_portal/app.py",
     ]) == ("domain", ("portal",))
+
+
+def test_the_classifier_itself_redeploys_nothing():
+    """Its own edits used to fall through to a full nine-service deploy (PR #248 review F2)."""
+    assert classify(["scripts/ci/classify_release.py"]) == ("documents", ())
+    assert classify(["scripts/ci/classify_release.py", "minimoi_portal/app.py"]) == ("domain", ("portal",))
+    assert classify(["scripts/ci/other_script.py"]) == ("full", ALL_SERVICES)   # only the exact path
+
+
+def test_dormant_master_craftsman_files_redeploy_nothing_until_a_service_uses_them():
+    assert classify(["docker/mc-agent/openclaw.json", "docker/mc-agent/workspace/AGENTS.md",
+                     "docker/mc-agent/mc-key-check.sh"]) == ("documents", ())
+    # Guard: the day a Dockerfile, compose file or deploy script uses docker/mc-agent/,
+    # this test fails and that change must classify the path as a real service.
+    root = Path(__file__).resolve().parent.parent
+    users = []
+    candidates = list((root / "docker").glob("Dockerfile*")) + list(root.glob("docker-compose*.yml")) + [
+        root / ".github/workflows/deploy.yml", root / "scripts/operations/deploy_scoped_release.sh"]
+    for path in candidates:
+        if path.exists() and "docker/mc-agent" in path.read_text():
+            users.append(path.name)
+    assert users == []
