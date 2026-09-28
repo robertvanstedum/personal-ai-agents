@@ -152,7 +152,7 @@ def probe_file(path: str) -> str:
     return r.stdout if r.returncode == 0 else ""
 
 
-def wait_state(targets=("serving-",), fail=("failed",), timeout=420) -> str:
+def wait_state(targets=("serving-",), fail=("failed", "inconclusive"), timeout=600) -> str:
     end = time.time() + timeout
     state = ""
     while time.time() < end:
@@ -603,6 +603,11 @@ def main() -> int:
     try:
         env.setup()
         gate_readiness_and_exact_config(env)
+        if not RESULTS[0]["pass"]:
+            for name in ("state", "selfcheck-static-combined.json", "selfcheck-runtime-combined.json"):
+                print(f"  {name}: {probe_file('/tmp/minimoi-mc/' + name).strip()}")
+            record("abort", "the combined start did not serve; the remaining gates were not run", False)
+            return 1
         gate_a_tools(env)
         combined_cos = cos_request("cos-gate-g")
         gate_a2_model_switch(env)

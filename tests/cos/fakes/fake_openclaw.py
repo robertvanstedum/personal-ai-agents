@@ -15,6 +15,10 @@ config = json.loads(open(os.environ["OPENCLAW_CONFIG_PATH"]).read())
 agents = ",".join(sorted(config.get("agents", {}).get("entries", {})))
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(f"start bind={bind} agents={agents}\n")
+# FAKE_CRASH_AGENTS: the gateway exits at once when these agents are configured
+# (a config OpenClaw cannot start).
+if os.environ.get("FAKE_CRASH_AGENTS") == agents:
+    sys.exit(1)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

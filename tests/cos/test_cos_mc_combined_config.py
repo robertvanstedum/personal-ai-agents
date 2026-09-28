@@ -208,7 +208,9 @@ const answers = (tools, jobs) => (method, params) => {{
 }};
 const ok = {{ "cos-agent-a": ["web_search", "session_status"], "mc-agent": ["session_status"] }};
 const leak = {{ "cos-agent-a": ok["cos-agent-a"], "mc-agent": ["session_status", "tool_search"] }};
+const slow = () => {{ const e = new Error("tools.effective: ETIMEDOUT"); e.name = "Inconclusive"; throw e; }};
 const out = {{
+  slow: verdict(runtimeCheck("combined", slow)).code,
   ok: verdict(runtimeCheck("combined", answers(ok, [{{ name: "hb", enabled: false }}]))).code,
   mcLeak: verdict(runtimeCheck("combined", answers(leak, []))).code,
   cosLeak: verdict(runtimeCheck("combined", answers({{ ...ok, "cos-agent-a": ["web_search"] }}, []))).code,
@@ -219,4 +221,5 @@ console.log(JSON.stringify(out));
 """
     result = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"ok": 0, "mcLeak": 3, "cosLeak": 2, "job": 3, "cosOnlyJob": 2}
+    # A timeout is "inconclusive" (4), never a CoS or MC failure (review of the 1a probe).
+    assert json.loads(result.stdout) == {"slow": 4, "ok": 0, "mcLeak": 3, "cosLeak": 2, "job": 3, "cosOnlyJob": 2}

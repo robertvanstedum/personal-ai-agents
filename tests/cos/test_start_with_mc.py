@@ -254,6 +254,32 @@ def test_run_markers_belong_to_this_start(tmp_path):
     assert not (w.run / "serving").exists()
 
 
+def test_a_check_that_cannot_complete_serves_nothing_writes_nothing_sticky_and_exits(tmp_path):
+    """A slow host (the gateway call times out, twice) is not a verdict: the
+    container exits so Docker restarts it and checks again. Never serves."""
+    w = World(tmp_path)
+    w.env["FAKE_TRANSPORT_ERROR"] = "tools.effective"
+    code, err = w.run_to_end()
+    assert code == 1
+    assert w.starts() == [f"start bind=loopback {COMBINED}"]
+    assert w.state_now() == "check-inconclusive-combined"
+    assert not (w.state / ".cos-selfcheck-failed").exists() and not (w.state / ".mc-selfcheck-failed").exists()
+    assert not (w.run / "serving").exists() and not (w.run / "checked").exists()
+    assert "could not complete" in err
+    result = json.loads((w.run / "selfcheck-runtime-combined.json").read_text())
+    assert result["inconclusive"] and result["cos"]["ok"] and result["mc"]["ok"]
+
+
+def test_a_combined_config_that_cannot_start_costs_mc_not_cos(tmp_path):
+    w = World(tmp_path)
+    w.env["FAKE_CRASH_AGENTS"] = "cos-agent-a,mc-agent"
+    code, err = w.run_to_end()
+    assert code == 0, err
+    assert w.starts() == [f"start bind=loopback {COMBINED}", f"start bind=loopback {COS_ONLY}",
+                          f"start bind=lan {COS_ONLY}"]
+    assert "exited before it was ready" in (w.state / ".mc-selfcheck-failed").read_text()
+
+
 def test_script_is_posix_sh_and_executable():
     script = AGENT_DIR / "start-with-mc.sh"
     assert os.access(script, os.X_OK)

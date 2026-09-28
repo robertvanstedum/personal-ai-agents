@@ -9,6 +9,11 @@ const params = JSON.parse(args[args.indexOf("--params") + 1] || "{}");
 const tools = { "cos-agent-a": ["session_status", "web_search"], "mc-agent": ["session_status"],
   ...JSON.parse(process.env.FAKE_TOOLS_JSON || "{}") };
 let out;
+// FAKE_TRANSPORT_ERROR: a method that never gets an answer (a slow, busy host).
+if (process.env.FAKE_TRANSPORT_ERROR === method) {
+  console.log(JSON.stringify({ ok: false, error: { type: "gateway_transport_error", kind: "timeout" } }));
+  process.exit(1);
+}
 if (method === "sessions.create") out = { ok: true, key: params.key, runStarted: false };
 else if (method === "tools.effective") {
   const agent = String(params.sessionKey).split(":")[1];

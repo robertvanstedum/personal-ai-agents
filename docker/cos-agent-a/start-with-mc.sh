@@ -120,6 +120,8 @@ on_signal() {
 }
 trap on_signal TERM INT
 
+# 0 ready; 1 the gateway process exited (the config did not start);
+# 2 still not ready after READY_WAIT_S (a slow host, not a verdict).
 wait_ready() {
   i=0
   while [ "$i" -lt "$READY_WAIT_S" ]; do
@@ -128,7 +130,7 @@ wait_ready() {
     i=$((i + 2))
     sleep 2
   done
-  return 1
+  return 2
 }
 
 # run_selfcheck static|runtime cos-only|combined -> sets CHECK_CODE
@@ -149,7 +151,8 @@ write_marker() {
   } > "$marker"
 }
 
-# CHECK phase for one config. Returns 0 pass, 2 CoS failure, 3 MC failure.
+# CHECK phase for one config. Returns 0 pass, 2 CoS failure, 3 MC failure,
+# 4 inconclusive (the check could not complete: nothing sticky is written).
 check_config() {
   mode="$1"; src="$2"
   if ! apply_file "$src" "$CONFIG_DEST"; then
@@ -162,9 +165,15 @@ check_config() {
   log "CHECK phase ($mode): OpenClaw on loopback only; callers are refused until the check passes"
   $OPENCLAW gateway --bind loopback &
   GW_PID=$!
-  if ! wait_ready; then
+  ready=0
+  wait_ready || ready=$?
+  if [ "$ready" -ne 0 ]; then
     stop_gateway
-    echo "{\"phase\":\"runtime\",\"mode\":\"$mode\",\"error\":\"gateway not ready within ${READY_WAIT_S}s\"}" > "$RUN_DIR/selfcheck-runtime-$mode.json"
+    if [ "$ready" -eq 2 ]; then
+      echo "{\"phase\":\"runtime\",\"mode\":\"$mode\",\"inconclusive\":[\"gateway not ready within ${READY_WAIT_S}s\"]}" > "$RUN_DIR/selfcheck-runtime-$mode.json"
+      return 4
+    fi
+    echo "{\"phase\":\"runtime\",\"mode\":\"$mode\",\"error\":\"the gateway exited before it was ready\"}" > "$RUN_DIR/selfcheck-runtime-$mode.json"
     [ "$mode" = combined ] && return 3 || return 2
   fi
   run_selfcheck runtime "$mode"
@@ -207,6 +216,7 @@ serve() {
 cos_only() {
   code=0
   check_config cos-only "$COS_ONLY_CONFIG" || code=$?
+  [ "$code" -ne 4 ] || inconclusive cos-only
   if [ "$code" -ne 0 ]; then
     write_marker "$COS_FAILED" cos-only "$(last_result cos-only)"
     stay_down
@@ -218,6 +228,15 @@ cos_only() {
 last_result() {
   if [ -s "$RUN_DIR/selfcheck-runtime-$1.json" ]; then echo "$RUN_DIR/selfcheck-runtime-$1.json"
   else echo "$RUN_DIR/selfcheck-static-$1.json"; fi
+}
+
+# The check could not complete (a slow or overloaded host). Never serve an
+# unchecked config and never write a sticky marker for it: exit, and let
+# Docker's restart policy run the whole start again.
+inconclusive() {
+  state "check-inconclusive-$1"
+  loud "the $1 self-check could not complete (see $(last_result "$1")); nothing is served; exiting so Docker restarts the container and checks again"
+  exit 1
 }
 
 mc_failed() {
@@ -246,6 +265,7 @@ check_config combined "$COMBINED_CONFIG" || code=$?
 case "$code" in
   0) serve combined "$COMBINED_CONFIG" ;;
   3) mc_failed ;;
+  4) inconclusive combined ;;
   *)
     write_marker "$COS_FAILED" combined "$(last_result combined)"
     stay_down

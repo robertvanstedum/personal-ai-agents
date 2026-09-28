@@ -9,11 +9,15 @@
 // gateway starts. "runtime" asks the running gateway, over loopback, for each
 // agent's effective tools and for the scheduler state.
 //
-// Prints one JSON line {"cos": {"ok", "failures"}, "mc": {...}} and exits:
+// Prints one JSON line {"cos": {"ok", "failures"}, "mc": {...}, "inconclusive": [...]} and exits:
 //   0  every check passed
 //   2  a CoS check failed   (the container must not serve CoS)
 //   3  only an MC check failed (serve CoS alone, MC off)
-// Never prints a secret value: keys are compared, not shown.
+//   4  the check could not complete (the gateway did not answer in time, twice):
+//      nothing is served and nothing sticky is written; the container restarts
+// A slow or busy host is not a policy failure: a call that times out is retried
+// once, and is "inconclusive", never "failed". Never prints a secret value:
+// keys are compared, not shown.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -25,7 +29,13 @@ export const MC_TOOLS = ["session_status"];
 export const COS_ROUTE = "minimoi-gateway/minimoi-cos-agent";
 export const MC_ROUTE = "minimoi-gateway-mc/minimoi-mc-agent";
 const OPENCLAW = process.env.MINIMOI_OPENCLAW_CLI || "/app/openclaw.mjs";
-const CALL_TIMEOUT_MS = "90000";
+const CALL_TIMEOUT_MS = "120000";
+const CALL_ATTEMPTS = 2;
+
+// The gateway could not be asked (timeout, transport error, no JSON answer).
+export class Inconclusive extends Error {
+  constructor(message) { super(message); this.name = "Inconclusive"; }
+}
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const sorted = (xs) => [...xs].sort();
@@ -102,15 +112,33 @@ export function staticCheck(config, mode, env = process.env) {
   return { cos, mc };
 }
 
-function call(method, params = {}) {
-  const out = execFileSync(
-    process.execPath,
-    [OPENCLAW, "gateway", "call", method, "--timeout", CALL_TIMEOUT_MS, "--params", JSON.stringify(params), "--json"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024, timeout: 120000 },
-  );
+function callOnce(method, params) {
+  let out;
+  try {
+    out = execFileSync(
+      process.execPath,
+      [OPENCLAW, "gateway", "call", method, "--timeout", CALL_TIMEOUT_MS, "--params", JSON.stringify(params), "--json"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024, timeout: 180000 },
+    );
+  } catch (error) {
+    throw new Inconclusive(`${method}: ${String(error?.code || error?.message || error).split("\n")[0].slice(0, 120)}`);
+  }
   const start = out.indexOf("{");
-  if (start < 0) throw new Error(`${method}: no JSON answer`);
-  return JSON.parse(out.slice(start));
+  if (start < 0) throw new Inconclusive(`${method}: no JSON answer`);
+  let answer;
+  try { answer = JSON.parse(out.slice(start)); } catch { throw new Inconclusive(`${method}: unreadable answer`); }
+  if (answer?.ok === false && answer?.error?.type === "gateway_transport_error") {
+    throw new Inconclusive(`${method}: ${answer.error.kind || "transport error"}`);
+  }
+  return answer;
+}
+
+function call(method, params = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    try { return callOnce(method, params); } catch (error) {
+      if (!(error instanceof Inconclusive) || attempt >= CALL_ATTEMPTS) throw error;
+    }
+  }
 }
 
 export function effectiveToolIds(answer) {
@@ -122,6 +150,11 @@ export function effectiveToolIds(answer) {
 export function runtimeCheck(mode, rpc = call) {
   const cos = [];
   const mc = [];
+  const inconclusive = [];
+  const blame = (failures, prefix, error) => {
+    if (error instanceof Inconclusive || error?.name === "Inconclusive") inconclusive.push(`${prefix}${error.message}`);
+    else failures.push(`${prefix}${String(error?.message || error).split("\n")[0].slice(0, 200)}`);
+  };
   const agents = mode === "combined" ? [[COS_ID, COS_TOOLS, cos], [MC_ID, MC_TOOLS, mc]] : [[COS_ID, COS_TOOLS, cos]];
   for (const [id, want, failures] of agents) {
     try {
@@ -131,7 +164,7 @@ export function runtimeCheck(mode, rpc = call) {
       const got = effectiveToolIds(rpc("tools.effective", { sessionKey: key }));
       if (!same(sorted(got), sorted(want))) failures.push(`${id}: effective tools ${JSON.stringify(sorted(got))} != ${JSON.stringify(sorted(want))}`);
     } catch (error) {
-      failures.push(`${id}: ${String(error?.message || error).split("\n")[0].slice(0, 200)}`);
+      blame(failures, `${id}: `, error);
     }
   }
   // A scheduled job is MC's failure in combined mode (spec §1.4), CoS's otherwise.
@@ -143,13 +176,14 @@ export function runtimeCheck(mode, rpc = call) {
     const enabled = (list?.jobs ?? []).filter((job) => job.enabled !== false).map((job) => job.name || job.id);
     if (enabled.length) jobFailures.push(`enabled jobs: ${enabled.join(", ")}`);
   } catch (error) {
-    jobFailures.push(`cron: ${String(error?.message || error).split("\n")[0].slice(0, 200)}`);
+    blame(jobFailures, "cron: ", error);
   }
-  return { cos, mc };
+  return { cos, mc, inconclusive };
 }
 
-export function verdict({ cos, mc }) {
-  return { code: cos.length ? 2 : mc.length ? 3 : 0, cos: { ok: !cos.length, failures: cos }, mc: { ok: !mc.length, failures: mc } };
+export function verdict({ cos, mc, inconclusive = [] }) {
+  const code = cos.length ? 2 : mc.length ? 3 : inconclusive.length ? 4 : 0;
+  return { code, cos: { ok: !cos.length, failures: cos }, mc: { ok: !mc.length, failures: mc }, inconclusive };
 }
 
 function main(argv) {
@@ -164,14 +198,14 @@ function main(argv) {
     const first = staticCheck(config, mode);
     result = phase === "static" ? first : (() => {
       const second = runtimeCheck(mode);
-      return { cos: [...first.cos, ...second.cos], mc: [...first.mc, ...second.mc] };
+      return { cos: [...first.cos, ...second.cos], mc: [...first.mc, ...second.mc], inconclusive: second.inconclusive };
     })();
   } catch (error) {
     const reason = `config unreadable: ${String(error?.message || error).slice(0, 160)}`;
     result = mode === "combined" ? { cos: [], mc: [reason] } : { cos: [reason], mc: [] };
   }
   const v = verdict(result);
-  console.log(JSON.stringify({ phase, mode, cos: v.cos, mc: v.mc }));
+  console.log(JSON.stringify({ phase, mode, cos: v.cos, mc: v.mc, inconclusive: v.inconclusive }));
   return v.code;
 }
 
