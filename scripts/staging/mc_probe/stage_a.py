@@ -162,7 +162,9 @@ class Probe:
     def setup(self):
         self.cleanup()
         docker("network", "create", "--internal", NET_DEFAULT, check=True)
-        docker("network", "create", "--internal", NET_MC, check=True)
+        # The same options as staging's mc-net: internal and no host address on the bridge.
+        docker("network", "create", "--internal", "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated",
+               NET_MC, check=True)
         for v in (*MC_VOLS, f"{P}-cos-state", f"{P}-cos-auth"):
             docker("volume", "create", v, check=True)
         standin = ("const net=require('net');for(const p of [5432,8769,5001,18789])"
@@ -259,13 +261,29 @@ class Probe:
         vm_ip = self.a.vm_ip
         targets = [{"kind": "dns", "host": "example.com"}, {"kind": "https", "host": "example.com"},
                    {"kind": "tcp", "host": "host.docker.internal", "port": 443}]
-        for ip in ("172.17.0.1", vm_ip, "192.168.5.2"):
-            for port in (5001, 5432, 14000, 18790, 22):
+        # mc-net's own bridge: with gateway_mode_ipv4=isolated it has no address;
+        # test the IPAM gateway if one exists, and the subnet's first host either way.
+        ipam = json.loads(docker("network", "inspect", NET_MC, "-f", "{{json .IPAM.Config}}").stdout or "[]")
+        bridge_ips = sorted({c.get("Gateway") for c in ipam if c.get("Gateway")} |
+                            {c["Subnet"].split("/")[0].rsplit(".", 1)[0] + ".1" for c in ipam if c.get("Subnet")})
+        self.bridge_ips = bridge_ips
+        for ip in ("172.17.0.1", vm_ip, "192.168.5.2", *bridge_ips):
+            for port in (22, 53, 5001, 5432, 14000, 18790):
                 targets.append({"kind": "tcp", "host": ip, "port": port})
         res = reach(targets)
         leaks = [r for r in res if r.get("ok") or "error" in r]
-        record("C4", "no outbound path: public DNS, HTTPS, host.docker.internal, docker0 and the VM's addresses on 5001/5432/14000/18790/22",
-               not leaks, f"{len(res)} targets; reached: {leaks}")
+        record("C4", "no outbound path: public DNS, HTTPS, host.docker.internal, docker0, the VM's addresses and mc-net's own bridge "
+               f"({', '.join(bridge_ips)}) on 22/53/5001/5432/14000/18790", not leaks, f"{len(res)} targets; reached: {leaks}")
+        opts = json.loads(docker("network", "inspect", NET_MC, "-f", "{{json .Options}}").stdout or "{}")
+        record("C4", "mc-net's bridge has no host address (gateway_mode_ipv4=isolated)",
+               opts.get("com.docker.network.bridge.gateway_mode_ipv4") == "isolated"
+               and not any(c.get("Gateway") for c in ipam), json.dumps({"options": opts, "ipam": ipam}))
+        # Positive control: the refusals below come from authentication, not a broken gateway.
+        ok = docker("exec", GW, "python", "-c", "import urllib.request,os,json;r=urllib.request.urlopen(urllib.request.Request("
+                    "'http://127.0.0.1:4000/v1/models',headers={'Authorization':'Bearer '+os.environ['LITELLM_MASTER_KEY']}),timeout=10);"
+                    "print(r.status, 'minimoi-cos-agent' in r.read().decode())")
+        record("C5", "positive control: the master key gets 200 on /v1/models listing minimoi-cos-agent",
+               ok.stdout.strip() == "200 True", ok.stdout.strip() or ok.stderr[-200:])
         # C5
         mc_reqs = [{"path": p, "key": True} for p in ("/v1/models", "/health", "/model/info", "/spend/logs", "/key/list",
                                                      "/key/info")]

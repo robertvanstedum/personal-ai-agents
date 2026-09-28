@@ -1,7 +1,8 @@
 // Start-up self-check for Master Craftsman's own OpenClaw container
 // (MC spec v0.8 §2.1, v0.9 §5 C8 and §9). Run by start-mc.sh.
 //
-//   node selfcheck.mjs static  <config>   the config file only (before any gateway)
+//   node selfcheck.mjs static  <config>   the config file (MiniMoi's rules, then OpenClaw's
+//                                         own `config validate`), before any gateway
 //   node selfcheck.mjs runtime <config>   asks the running, loopback-only gateway:
 //                                         effective tools, loaded plugins (the
 //                                         gateway's own `health` answer, not the
@@ -133,6 +134,15 @@ function call(method, params = {}) {
   }
 }
 
+// `openclaw config validate --json` answer: {"valid", "warnings": [...]}.
+export function validateVerdict(answer) {
+  const f = [];
+  if (answer?.valid !== true) f.push(`config validate: invalid ${JSON.stringify(answer?.errors ?? answer?.issues ?? "").slice(0, 200)}`);
+  const warnings = answer?.warnings ?? [];
+  if (warnings.length) f.push(`config validate: ${warnings.length} warning(s): ${JSON.stringify(warnings).slice(0, 200)}`);
+  return f;
+}
+
 export function effectiveToolIds(answer) {
   const ids = [];
   for (const group of answer?.groups ?? []) for (const tool of group.tools ?? []) ids.push(tool.id);
@@ -191,6 +201,15 @@ function main(argv) {
   try {
     if (phase === "static") {
       result.failures = staticCheck(JSON.parse(readFileSync(configPath, "utf8")));
+      // OpenClaw's own schema check of the exact file (#250 review F3): an
+      // invalid config or any warning is a verdict, never an in-start retry.
+      const run = cli(["config", "validate", "--json"]);
+      try {
+        result.failures.push(...validateVerdict(interpret("config validate", run.status === 1 ? 0 : run.status, run.stdout, run.error?.code)));
+      } catch (error) {
+        if (error?.name === "Inconclusive") result.inconclusive.push(error.message);
+        else result.failures.push(String(error?.message || error).slice(0, 200));
+      }
     } else if (phase === "runtime") {
       result = runtimeCheck();
     } else {

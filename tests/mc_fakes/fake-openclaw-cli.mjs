@@ -6,6 +6,14 @@
 //   FAKE_PLUGINS=a,b          plugins the gateway's health answer reports loaded (default memory-core)
 //   FAKE_ENABLED_JOB=name     a job reported enabled
 const args = process.argv.slice(2);
+//   FAKE_CONFIG_INVALID=1 / FAKE_CONFIG_WARNING=1   `config validate` answers invalid / with a warning
+if (args[0] === "config" && args[1] === "validate") {
+  const invalid = process.env.FAKE_CONFIG_INVALID === "1";
+  const warnings = process.env.FAKE_CONFIG_WARNING === "1" ? [{ path: "tools.x", message: "Unrecognized key" }] : [];
+  console.log(JSON.stringify({ valid: !invalid, path: process.env.OPENCLAW_CONFIG_PATH, warnings,
+    ...(invalid ? { errors: [{ path: "agents", message: "bad" }] } : {}) }));
+  process.exit(invalid ? 1 : 0);
+}
 const method = args[2];
 if (process.env.FAKE_TRANSPORT_ERROR === method) {
   console.log(JSON.stringify({ ok: false, error: { type: "gateway_transport_error", kind: "timeout" } }));

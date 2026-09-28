@@ -17,10 +17,14 @@ if os.environ.get("FAKE_GATEWAY_EXIT") == bind:
     sys.exit(1)
 if os.environ.get("FAKE_GATEWAY_KILLED") == bind:
     os.kill(os.getpid(), signal.SIGKILL)       # as the OOM killer would
-# FAKE_GATEWAY_EXIT_ONCE: the first loopback start exits (a lease still held).
-marker = os.environ["FAKE_LOG"] + ".exited-once"
-if os.environ.get("FAKE_GATEWAY_EXIT_ONCE") and bind == "loopback" and not os.path.exists(marker):
+# FAKE_GATEWAY_LEASE=always|once: the loopback start fails with OpenClaw's
+# owner-lease message (a lease still held after a hard kill).
+LEASE = "Gateway failed to start: Another Gateway owner lease is still active for this state directory."
+marker = os.environ["FAKE_LOG"] + ".lease-once"
+lease = os.environ.get("FAKE_GATEWAY_LEASE")
+if bind == "loopback" and (lease == "always" or (lease == "once" and not os.path.exists(marker))):
     open(marker, "w").close()
+    print(LEASE, file=sys.stderr)
     sys.exit(1)
 
 

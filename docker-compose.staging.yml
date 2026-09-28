@@ -134,3 +134,9 @@ networks:
   mc-net:
     name: minimoi-staging-mc-net
     internal: true
+    # No host address on the bridge (Docker 28+; #250 review F1): otherwise a
+    # container on this internal network can still reach the Colima VM itself
+    # (for example its sshd on :22) through the bridge's own IP. Containers on
+    # the network still reach each other (MC -> model-gateway).
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated

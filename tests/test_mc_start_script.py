@@ -115,6 +115,8 @@ def test_checked_on_loopback_then_served(tmp_path):
     ({"MINIMOI_MODEL_GATEWAY_KEY": "cos-key"}, "MINIMOI_MODEL_GATEWAY_KEY is in MC's environment"),
     ({"MC_MODEL_GATEWAY_KEY": "mc-openclaw-token-1111"}, "OPENCLAW_GATEWAY_TOKEN"),
     ({"MC_MODEL_GATEWAY_KEY": ""}, "empty"),
+    ({"FAKE_CONFIG_INVALID": "1"}, "config validate: invalid"),       # #250 review F3: a verdict, not 40 boots
+    ({"FAKE_CONFIG_WARNING": "1"}, "config validate: 1 warning"),
 ])
 def test_a_verdict_is_sticky_never_served_and_never_loops(tmp_path, fake, needle):
     w = World(tmp_path, **fake)
@@ -132,13 +134,14 @@ def test_a_verdict_is_sticky_never_served_and_never_loops(tmp_path, fake, needle
     assert state == "selfcheck-failed" and running and w.starts() == []
 
 
-@pytest.mark.parametrize("fake", [
-    {"FAKE_TRANSPORT_ERROR": "tools.effective"},
-    # A start that keeps failing (owner lease still held after a hard kill, or
-    # the start-up lease deadline missed under CPU contention): bounded retries.
-    {"FAKE_GATEWAY_EXIT": "loopback", "MINIMOI_MC_START_ATTEMPTS": "3", "MINIMOI_MC_RETRY_PAUSE_S": "0"},
+@pytest.mark.parametrize("fake,starts", [
+    ({"FAKE_TRANSPORT_ERROR": "tools.effective"}, 1),
+    # Any early exit other than the owner lease: inconclusive at once, no in-start retry.
+    ({"FAKE_GATEWAY_EXIT": "loopback", "MINIMOI_MC_RETRY_PAUSE_S": "0"}, 1),
+    # The owner lease still held after the retries: bounded (here 3), then inconclusive.
+    ({"FAKE_GATEWAY_LEASE": "always", "MINIMOI_MC_START_ATTEMPTS": "3", "MINIMOI_MC_RETRY_PAUSE_S": "0"}, 3),
 ])
-def test_inconclusive_exits_for_the_restart_policy_and_is_not_sticky(tmp_path, fake):
+def test_inconclusive_exits_for_the_restart_policy_and_is_not_sticky(tmp_path, fake, starts):
     w = World(tmp_path, **fake)
     code, err = w.run_to_end()
     assert code == 1
@@ -147,8 +150,7 @@ def test_inconclusive_exits_for_the_restart_policy_and_is_not_sticky(tmp_path, f
     assert not (w.run / "serving").exists()
     assert "could not complete" in err
     assert "bind=lan" not in "".join(w.starts())
-    if fake.get("FAKE_GATEWAY_EXIT"):
-        assert w.starts() == ["start bind=loopback"] * 3
+    assert w.starts() == ["start bind=loopback"] * starts
 
 
 def test_a_gateway_killed_while_starting_is_not_retried_in_the_start(tmp_path):
@@ -157,16 +159,16 @@ def test_a_gateway_killed_while_starting_is_not_retried_in_the_start(tmp_path):
     code, err = w.run_to_end()
     assert code == 1
     assert w.starts() == ["start bind=loopback"]
-    assert "killed while starting (status 137)" in err
+    assert "exited while starting (status 137; not the owner-lease case)" in err
     assert not (w.state / ".mc-selfcheck-failed").exists()
 
 
-def test_a_start_that_fails_once_is_retried_within_the_same_start(tmp_path):
-    w = World(tmp_path, FAKE_GATEWAY_EXIT_ONCE="1", MINIMOI_MC_RETRY_PAUSE_S="0")
+def test_only_the_owner_lease_case_is_retried_within_the_same_start(tmp_path):
+    w = World(tmp_path, FAKE_GATEWAY_LEASE="once", MINIMOI_MC_RETRY_PAUSE_S="0")
     code, err = w.run_to_end()
     assert code == 0, err
     assert w.starts() == ["start bind=loopback", "start bind=loopback", "start bind=lan"]
-    assert "retrying" in err
+    assert "owner lease on MC's state is still held; retrying" in err
 
 
 def test_start_delay_staggers_the_gateway_start(tmp_path):

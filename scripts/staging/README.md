@@ -426,7 +426,7 @@ the stopped ones as "off (focus: <set>)" instead of failing.
 
 | Set | Running | Use |
 |---|---|---|
-| `mc` | postgres, model-gateway, portal (+ MC's own project via `mc.sh`) | Master Craftsman work |
+| `mc` | postgres, model-gateway, portal (+ MC's own project via `mc.sh`); **CoS Agent A and cos-scheduler are stopped** | Master Craftsman work |
 | `mc+cos` | the same + cos-agent-a, cos-scheduler | CoS regression checks beside MC |
 | `all` | everything (the bots follow `state/bots.on`) | normal staging |
 
@@ -445,8 +445,10 @@ MC runs in **its own Compose project**, `minimoi-staging-mc`
 `up --remove-orphans` and image pruning can never touch it, and MC's up and
 down never touch CoS Agent A, the gateway or the portal. `scripts/staging/mc.sh`
 is the only script that runs it. **CoS Agent A is unchanged** (image, config and
-service). The one main-stack change is permanent: the model gateway is also
-on the internal network `minimoi-staging-mc-net`.
+service). The one main-stack definition change is permanent: the model
+gateway is also on the internal network `minimoi-staging-mc-net` (no host
+address on its bridge). Rolling out this release still recreates every
+main-stack container once, because every image gets the new tag (see Steps).
 
 **What stage A proves, with no model call:** MC starts and restarts on its
 own; it is checked on a loopback-only gateway before anything can reach it; it
@@ -471,38 +473,75 @@ once CoS is healthy.
 
 ### Steps (the coordinator runs them after review; each runtime step needs Robert's go-ahead)
 
-0. **Before (no change):** `colima ssh -- free -m`; the CoS regression question
-   below; note `docker inspect -f '{{.State.StartedAt}}' minimoi-cos-agent-a minimoi-model-gateway`.
+What restarts, honestly (#250 review F2): `build.sh` gives **every** image the
+new release tag, so step 3's `up.sh` recreates **every running main-stack
+container**, CoS Agent A included (identical CoS content: same OpenClaw, same
+config, no migration; about a minute without CoS on dev). The gateway is also
+recreated onto `minimoi-staging-mc-net`. Raising Colima's CPUs (step 2)
+restarts the whole VM, so both happen in one window and CoS restarts there,
+not again later. After that window, MC's up, down, restart and failures never
+touch CoS or the gateway.
+
+**Focus `mc` stops CoS Agent A and cos-scheduler** (CoS is down on dev while
+that set is active). Focus `mc+cos` keeps CoS up.
+
+0. **Before the window (no change):**
+   - the CoS regression question (step 8) — the "before" answer;
+   - `colima ssh -- free -m`;
+   - recommended: snapshot both CoS Agent A volumes as in "Agent A OpenClaw
+     upgrade" step 1 (CoS is Robert's daily assistant; the volumes do not
+     change, but the container restarts).
 1. **Build first, nothing stopped:**
-   `scripts/staging/build.sh claude/mc-separate-pr2-stage-a --reviewed-branch`, then
-   `scripts/staging/mc.sh build` (the MC image, from the same pinned release).
-2. **The one main-stack change** (the gateway joins `minimoi-staging-mc-net`;
-   this recreates the gateway once, and nothing else changes):
-   `scripts/staging/up.sh && scripts/staging/verify.sh`. Then the CoS regression
-   question again.
-3. **Focus, then MC:**
+   `scripts/staging/build.sh claude/mc-separate-pr2-stage-a --reviewed-branch`
+   (after merge: `origin/main`), then `scripts/staging/mc.sh build`.
+2. **Colima to 3 CPUs** (Robert approved; the Mac has 8 cores; vCPUs cost no
+   memory). This restarts the VM and all of staging:
    ```bash
-   scripts/staging/focus.sh mc+cos                # or mc
+   colima stop && colima start --cpu 3 --memory 4
+   colima list                                    # CPUS 3, MEMORY 4GiB
+   ```
+3. **The main-stack change:** `scripts/staging/up.sh && scripts/staging/verify.sh`.
+   Every main-stack container is recreated with the new tag (CoS with
+   identical content) and the gateway joins `minimoi-staging-mc-net`.
+   Then **the CoS regression question** — the "after" answer, once CoS is
+   healthy again. It also proves the gateway still has provider egress on two
+   networks, which the probe cannot.
+4. **Baseline for independence** (after step 3, not before):
+   `docker inspect -f '{{.Name}} {{.State.StartedAt}}' minimoi-cos-agent-a minimoi-model-gateway`.
+5. **Focus, then MC:**
+   ```bash
+   scripts/staging/focus.sh mc+cos                # keeps CoS up; `mc` stops CoS
    scripts/staging/mc.sh token                    # MC's own OpenClaw token into mc.env (not printed)
    touch ~/minimoi-staging/state/mc.enabled
    scripts/staging/mc.sh up                       # waits for the gateway and CoS, then starts MC
    scripts/staging/mc.sh status                   # self-check: serving
    scripts/staging/verify.sh                      # section 9: MC checks; CoS as before
    ```
-4. **Boundary tests on staging** (C1-C8): `verify.sh` section 9 covers the
-   running MC; the full set runs in a throwaway probe beside staging:
+6. **Boundary tests** (C1-C8): `verify.sh` section 9 covers the running MC,
+   including that it reaches no host address; the full set runs in a
+   throwaway probe beside staging:
    `python3 scripts/staging/mc_probe/stage_a.py --mc-image minimoi-staging/mc-agent:<sha7> --cos-image minimoi-staging/cos-scheduler:agent-a-<sha7> --gateway-image minimoi-staging/cos-scheduler:model-gateway-<sha7>`
-   (needs about 1.5 GB free in the VM; with focus `mc` it fits easily).
-5. **Memory:** `docker stats --no-stream` with focus `mc` and `mc+cos`; stop if
-   the VM's available memory is under 0.5 GB with MC up and idle (v0.9 §7).
-6. **Independence on staging:** `docker restart minimoi-mc-agent`, then
-   `docker kill minimoi-mc-agent && scripts/staging/mc.sh up`; CoS Agent A's and
-   the gateway's `StartedAt` must be unchanged and CoS must answer throughout.
-7. **The CoS regression question** (before step 2, after step 2, after step 6;
-   costs one CoS call each, with Robert's go-ahead): one real CoS question with
-   web search from `https://dev.minimoi.ai/app/cos`. Pass: a cited answer **and**
-   a new line with `"logical_model":"minimoi-cos-web-search"` in
+   (needs about 1.5 GB free in the VM; run it under focus `mc`).
+7. **Memory and independence:**
+   - `docker stats --no-stream` with focus `mc` and with `mc+cos`; stop if the
+     VM's available memory is under 0.5 GB with MC up and idle (v0.9 §7);
+   - `docker restart minimoi-mc-agent`, then
+     `docker kill minimoi-mc-agent && scripts/staging/mc.sh up`: CoS Agent A's
+     and the gateway's `StartedAt` must equal step 4's, and CoS must answer
+     throughout.
+8. **The CoS regression question** (step 0, step 3 and after step 7; costs one
+   CoS call each, with Robert's go-ahead): one real CoS question with web search
+   from `https://dev.minimoi.ai/app/cos`. Pass: a cited answer **and** a new line
+   with `"logical_model":"minimoi-cos-web-search"` in
    `~/minimoi-staging/data/model_gateway_receipts.jsonl`.
+
+**For stage C (recorded now).** In stage A, with no key database, LiteLLM
+refuses a non-master key with `400 no_db_connection`, and C5 and check 9j
+accept exactly that as a refusal. **That exception ends in stage C:** once the
+key database exists, a `no_db_connection` means the database is down or
+misconfigured, and C5 must then accept only 401/403, with a positive control
+first (MC's own `/key/info` 200 with its real key, and the master key's
+`/v1/models` 200), re-run with the real key before any paid turn.
 
 ### Rollback
 

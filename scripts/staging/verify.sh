@@ -276,6 +276,13 @@ nets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{
   || fail "gateway is not on $STAGING_MC_NET (networks: ${nets:-none})"
 internal=$(docker network inspect -f '{{.Internal}}' "$STAGING_MC_NET" 2>/dev/null || echo missing)
 [[ "$internal" == true ]] && pass "$STAGING_MC_NET is internal (no egress)" || fail "$STAGING_MC_NET internal=$internal"
+gwmode=$(docker network inspect -f '{{index .Options "com.docker.network.bridge.gateway_mode_ipv4"}}' "$STAGING_MC_NET" 2>/dev/null || echo missing)
+ipamgw=$(docker network inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' "$STAGING_MC_NET" 2>/dev/null || true)
+[[ "$gwmode" == isolated && -z "$ipamgw" ]] && pass "$STAGING_MC_NET bridge has no host address (isolated)" \
+  || fail "$STAGING_MC_NET bridge mode='$gwmode' gateway='${ipamgw}' (MC could reach the VM through it)"
+subnet=$(docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' "$STAGING_MC_NET" 2>/dev/null || true)
+# The address the bridge would have (the IPAM gateway, else the subnet's first host).
+if [[ -n "$ipamgw" ]]; then bridge_ip=$ipamgw; else net0=${subnet%/*}; bridge_ip="${net0%.*}.1"; fi
 MC=$STAGING_MC_CONTAINER
 if mc_enabled; then
   fmt='{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} {{.Config.Image}} {{index .Config.Labels "com.docker.compose.project"}} {{.RestartCount}}'
@@ -290,6 +297,11 @@ if mc_enabled; then
     mnames=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$MC" | cut -d= -f1)
     bad=$(grep -Ex 'MINIMOI_MODEL_GATEWAY_KEY|COS_AGENT_A_GATEWAY_TOKEN|ANTHROPIC_API_KEY|XAI_API_KEY|OPENAI_API_KEY|DATABASE_URL|LITELLM_MASTER_KEY|MINIMOI_MODEL_GATEWAY_RECEIPT_KEY|TELEGRAM.*' <<< "$mnames" | tr '\n' ' ' || true)
     [[ -z "$bad" ]] && pass "$MC carries no CoS or provider credential name" || fail "$MC carries: $bad"
+    reached=$(docker exec "$MC" node -e "
+const net=require('net');const t=[22,53,5001,5432,14000,18790].map(p=>['$bridge_ip',p]).concat([['192.168.5.1',22],['172.17.0.1',22]]);
+Promise.all(t.map(([h,p])=>new Promise(r=>{const s=net.connect({host:h,port:p,timeout:3000});s.on('connect',()=>{s.destroy();r(h+':'+p)});s.on('timeout',()=>{s.destroy();r('')});s.on('error',()=>r(''))}))).then(x=>console.log(x.filter(Boolean).join(' ')))" 2>/dev/null || echo error)
+    [[ -z "$reached" ]] && pass "$MC reaches no host address (mc-net bridge $bridge_ip, VM, docker0) on 22/53/5001/5432/14000/18790" \
+      || fail "$MC reached host addresses: $reached"
     run_state=$(docker exec "$MC" cat /tmp/minimoi-mc/state 2>/dev/null || echo unknown)
     [[ "$run_state" == serving ]] && pass "$MC self-check passed on this start (serving)" || fail "$MC self-check state: $run_state (mc.sh status)"
     if grep -q '^MC_MODEL_GATEWAY_KEY=.' "$STAGING_MC_ENV" 2>/dev/null; then

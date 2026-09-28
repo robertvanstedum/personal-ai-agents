@@ -9,17 +9,19 @@
 #   1. optional start delay (MC_START_DELAY_S; staggers MC behind other
 #      runtimes on a small VM);
 #   2. key check (MC's key set, never its own OpenClaw token), apply the
-#      image's config and workspace, static check of the config;
+#      image's config and workspace, static check of the config (MiniMoi's
+#      rules and OpenClaw's own `config validate`);
 #   3. CHECK phase: OpenClaw on --bind loopback only, so nothing on the network
 #      reaches an unchecked MC; the runtime check (effective tools, the
 #      plugins actually loaded, scheduler, pairing); the config must not have
 #      been rewritten;
 #   4. SERVE: the checked config on the LAN bind; /tmp/minimoi-mc/serving marks
 #      this start as checked (the healthcheck requires it).
-# A VERDICT (a wrong value, or the gateway refusing a request) writes the
-# sticky marker and stays down (step 0 on the next start too). INCONCLUSIVE (a
-# timeout, a gateway that exits or is not ready while starting, e.g. under CPU
-# contention) exits 1, and `restart: on-failure:3` bounds the retries.
+# A VERDICT (a wrong value, an invalid config, or the gateway refusing a
+# request) writes the sticky marker and stays down (step 0 on the next start
+# too). INCONCLUSIVE (a timeout, a gateway that exits or is not ready while
+# starting) exits 1, and `restart: on-failure:3` bounds the retries. Only the
+# owner-lease case is retried inside the start (bounded).
 set -eu
 
 IMAGE_DIR="${MINIMOI_MC_IMAGE_DIR:-/opt/minimoi/mc-agent}"
@@ -35,7 +37,7 @@ RUN_DIR="${MINIMOI_MC_RUN_DIR:-/tmp/minimoi-mc}"
 PORT="${MINIMOI_MC_PORT:-18789}"
 READY_WAIT_S="${MINIMOI_MC_READY_WAIT_S:-300}"
 START_DELAY_S="${MC_START_DELAY_S:-0}"
-START_ATTEMPTS="${MINIMOI_MC_START_ATTEMPTS:-10}"
+START_ATTEMPTS="${MINIMOI_MC_START_ATTEMPTS:-6}"
 RETRY_PAUSE_S="${MINIMOI_MC_RETRY_PAUSE_S:-30}"
 OPENCLAW="${MINIMOI_MC_OPENCLAW:-node /app/openclaw.mjs}"
 RELEASE="${MINIMOI_RELEASE_SHA:-unknown}"
@@ -136,32 +138,35 @@ mkdir -p "$WORKSPACE"
 for f in "$WORKSPACE_SRC"/*.md; do apply_file "$f" "$WORKSPACE/$(basename "$f")"; done
 check static "$CONFIG_DEST"
 
-# A gateway that exits while starting is retried here, a bounded number of
-# times: after a hard kill OpenClaw's owner lease on the state directory stays
-# active for a few minutes ("Another Gateway owner lease is still active"), and
-# on the 2-CPU VM a start beside another OpenClaw start can miss its start-up
-# lease deadline. Both clear on their own. A gateway killed by a signal (an
-# OOM kill) is not retried here. Still failing after the retries:
-# inconclusive (exit 1, and on-failure:3 retries the whole start).
+# Only ONE early exit is retried here, a bounded number of times: OpenClaw's
+# owner lease on MC's state directory, which stays held for a few minutes
+# after a hard kill ("Another Gateway owner lease is still active") and clears
+# on its own. Any other early exit (a boot failure, a missed start-up lease
+# under CPU contention, an OOM kill) is inconclusive at once: exit 1, and
+# restart: on-failure:3 bounds the whole start. Config errors never get here:
+# the static phase ran OpenClaw's own `config validate` as a verdict.
+LEASE_MESSAGE="owner lease is still active"
 attempt=1
 while :; do
-  log "CHECK phase (attempt $attempt of $START_ATTEMPTS): OpenClaw on loopback only; nothing on the network reaches MC until the check passes"
-  $OPENCLAW gateway --bind loopback &
+  log "CHECK phase (attempt $attempt): OpenClaw on loopback only; nothing on the network reaches MC until the check passes"
+  $OPENCLAW gateway --bind loopback > "$RUN_DIR/gateway-check.log" 2>&1 &
   GW_PID=$!
   ready=0
   wait_ready || ready=$?
   [ "$ready" -ne 0 ] || break
   stop_gateway
+  cat "$RUN_DIR/gateway-check.log" >&2 || true
   if [ "$ready" -eq 2 ]; then inconclusive "the loopback gateway was not ready in ${READY_WAIT_S}s"; fi
-  # Killed by a signal (for example the OOM killer): no in-start retry; the
-  # restart policy (on-failure:3) bounds it.
-  if [ "$GW_STATUS" -ge 128 ]; then inconclusive "the loopback gateway was killed while starting (status $GW_STATUS)"; fi
-  if [ "$attempt" -ge "$START_ATTEMPTS" ]; then inconclusive "the loopback gateway exited while starting, $attempt times"; fi
-  log "the loopback gateway exited while starting; retrying in ${RETRY_PAUSE_S}s"
+  if ! grep -q "$LEASE_MESSAGE" "$RUN_DIR/gateway-check.log" 2>/dev/null; then
+    inconclusive "the loopback gateway exited while starting (status $GW_STATUS; not the owner-lease case)"
+  fi
+  if [ "$attempt" -ge "$START_ATTEMPTS" ]; then inconclusive "the owner lease was still held after $attempt attempts"; fi
+  log "the previous owner lease on MC's state is still held; retrying in ${RETRY_PAUSE_S}s"
   sleep "$RETRY_PAUSE_S"
   attempt=$((attempt + 1))
 done
 check runtime "$CONFIG_DEST"
+cat "$RUN_DIR/gateway-check.log" >&2 2>/dev/null || true
 cmp -s "$CONFIG_SRC" "$CONFIG_DEST" || { stop_gateway; verdict "OpenClaw rewrote the config file at start"; }
 stop_gateway
 

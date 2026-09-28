@@ -332,7 +332,8 @@ def test_staging_volumes_are_external_and_staging_named():
     assert data["networks"] == {
         "iotconnect-edge": {"name": "minimoi-staging-iotconnect-edge"},
         # Master Craftsman's internal network (MC spec v0.9 §3; tests/test_staging_mc_stage_a.py).
-        "mc-net": {"name": "minimoi-staging-mc-net", "internal": True},
+        "mc-net": {"name": "minimoi-staging-mc-net", "internal": True,
+                   "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
     }
 
 

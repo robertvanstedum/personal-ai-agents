@@ -96,7 +96,10 @@ def test_mc_image_uses_cos_s_pinned_openclaw_and_none_of_cos_s_files():
 def test_staging_gateway_is_permanently_on_the_internal_mc_net():
     staging = _load(STAGING)
     assert staging["services"]["model-gateway"]["networks"] == ["default", "mc-net"]
-    assert staging["networks"]["mc-net"] == {"name": "minimoi-staging-mc-net", "internal": True}
+    assert staging["networks"]["mc-net"] == {
+        "name": "minimoi-staging-mc-net", "internal": True,
+        # No host address: without it MC could reach the VM through the bridge IP (#250 review F1).
+        "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}}
     for name, service in staging["services"].items():
         if name != "model-gateway":
             assert "mc-net" not in (service.get("networks") or []), name
