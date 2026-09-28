@@ -18,15 +18,21 @@
 # start), so a marker always belongs to this start. The staging healthcheck
 # requires /tmp/minimoi-mc/serving.
 #
-# N11, split by agent:
-#   * CoS's check fails  -> .cos-selfcheck-failed on the state volume; OpenClaw
-#     is NOT started; the container stays up and unhealthy with no restart loop
-#     until Robert deletes the file.
-#   * only MC's check fails -> .mc-selfcheck-failed (release, config hash,
-#     failing names); CoS starts alone on the CoS-only config (#244's), after
-#     its own CHECK phase. Sticky for this release and config: a new release
-#     or config tries the combined config again.
-# CoS never goes down because of MC.
+# N11, split by agent. CoS never goes down because of MC:
+#   * the combined config fails ANY check (MC's set, CoS's set under the
+#     combined config, a gateway request error on either agent, a scheduled
+#     job, a config OpenClaw cannot start or rewrites) -> .mc-selfcheck-failed
+#     (release, config hash, failing agent and names), then CoS starts alone on
+#     the CoS-only config (#244's, production's), after its own CHECK phase.
+#     Sticky for this release and config: a new release or config tries the
+#     combined config again.
+#   * a combined check that cannot complete (a timeout on a busy host) -> CoS
+#     alone for THIS start (checked), nothing sticky; the next start retries.
+#   * only when CoS fails under the CoS-only config too -> .cos-selfcheck-failed;
+#     OpenClaw is NOT started; the container stays up and unhealthy, with no
+#     restart loop, until Robert deletes the file.
+#   * a CoS-only check that cannot complete exits for a Docker restart at most
+#     MINIMOI_MC_MAX_RETRIES (3) times in a row, then stays down the same way.
 #
 # Signals: tini -g sends TERM to the whole process group; docker stop gives
 # OpenClaw its grace period (stop_grace_period in the overlay).
@@ -49,6 +55,9 @@ PORT="${MINIMOI_MC_PORT:-18789}"
 READY_WAIT_S="${MINIMOI_MC_READY_WAIT_S:-300}"
 OPENCLAW="${MINIMOI_MC_OPENCLAW:-node /app/openclaw.mjs}"
 RELEASE="${MINIMOI_RELEASE_SHA:-unknown}"
+RETRIES_FILE="$STATE_DIR/.selfcheck-retries"
+MAX_RETRIES="${MINIMOI_MC_MAX_RETRIES:-3}"
+COS_ONLY_REASON=""
 
 log() { echo "cos-agent-a[start-with-mc]: $*" >&2; }
 loud() { log "********** $* **********"; }
@@ -141,9 +150,10 @@ run_selfcheck() {
 }
 
 write_marker() {
-  marker="$1"; mode="$2"; json="$3"
+  marker="$1"; mode="$2"; json="$3"; agent="${4:-}"
   {
     echo "failed_at=$(now)"
+    [ -z "$agent" ] || echo "failing_agent=$agent"
     echo "release=$RELEASE"
     echo "combined_sha256=$HASH"
     echo "mode=$mode"
@@ -151,8 +161,11 @@ write_marker() {
   } > "$marker"
 }
 
-# CHECK phase for one config. Returns 0 pass, 2 CoS failure, 3 MC failure,
-# 4 inconclusive (the check could not complete: nothing sticky is written).
+# CHECK phase for one config. Returns selfcheck.mjs's codes: 0 pass, 2 CoS
+# failure, 3 MC failure, 4 a CoS call could not complete, 5 only MC calls
+# could not complete. A gateway that exits before it is ready counts against
+# the config's owner (combined: MC; CoS-only: CoS); one never ready in time is
+# inconclusive.
 check_config() {
   mode="$1"; src="$2"
   if ! apply_file "$src" "$CONFIG_DEST"; then
@@ -196,16 +209,21 @@ serve() {
   GW_PID=$!
   if wait_ready && cmp -s "$src" "$CONFIG_DEST"; then
     printf 'mode=%s\nserving_since=%s\nrelease=%s\ncombined_sha256=%s\n' "$mode" "$(now)" "$RELEASE" "$HASH" > "$RUN_DIR/serving"
+    [ -z "$COS_ONLY_REASON" ] || printf 'mc_off_reason=%s\n' "$COS_ONLY_REASON" >> "$RUN_DIR/serving"
+    rm -f "$RETRIES_FILE"
     state "serving-$mode"
     if [ "$mode" = cos-only ]; then
-      loud "Master Craftsman is OFF: its self-check failed ($MC_FAILED). CoS runs alone. Delete the file to retry."
+      loud "Master Craftsman is OFF ($COS_ONLY_REASON). CoS runs alone, checked on this start."
     else
       log "serving CoS and Master Craftsman (checked on this start)"
     fi
   else
-    log "the checked config did not come up cleanly on the LAN bind; exiting so Docker restarts the container"
     stop_gateway
-    exit 1
+    if [ "$mode" = combined ]; then
+      echo "{\"phase\":\"serve\",\"mode\":\"combined\",\"error\":\"the checked combined config did not come up cleanly on the LAN bind\"}" > "$RUN_DIR/selfcheck-runtime-combined.json"
+      mc_failed mc
+    fi
+    retry_or_stay_down "the checked CoS-only config did not come up cleanly on the LAN bind"
   fi
   status=0
   wait "$GW_PID" || status=$?
@@ -213,15 +231,18 @@ serve() {
   exit "$status"
 }
 
+# CoS alone on the CoS-only config (#244's), after its own loopback check.
 cos_only() {
   code=0
   check_config cos-only "$COS_ONLY_CONFIG" || code=$?
-  [ "$code" -ne 4 ] || inconclusive cos-only
-  if [ "$code" -ne 0 ]; then
-    write_marker "$COS_FAILED" cos-only "$(last_result cos-only)"
-    stay_down
-  fi
-  serve cos-only "$COS_ONLY_CONFIG"
+  case "$code" in
+    0) serve cos-only "$COS_ONLY_CONFIG" ;;
+    4|5) retry_or_stay_down "the CoS-only self-check could not complete" ;;
+    *)
+      write_marker "$COS_FAILED" cos-only "$(last_result cos-only)" cos
+      stay_down
+      ;;
+  esac
 }
 
 # The file with the last check result for a mode (runtime if it ran).
@@ -230,24 +251,44 @@ last_result() {
   else echo "$RUN_DIR/selfcheck-static-$1.json"; fi
 }
 
-# The check could not complete (a slow or overloaded host). Never serve an
-# unchecked config and never write a sticky marker for it: exit, and let
-# Docker's restart policy run the whole start again.
-inconclusive() {
-  state "check-inconclusive-$1"
-  loud "the $1 self-check could not complete (see $(last_result "$1")); nothing is served; exiting so Docker restarts the container and checks again"
+# CoS could not be checked (a slow or overloaded host). Never serve unchecked:
+# exit for Docker's restart policy, at most MAX_RETRIES times in a row (counted
+# on the state volume, cleared when anything is served), then stay down with a
+# marker, so there is never an endless restart loop.
+retry_or_stay_down() {
+  count=$(cat "$RETRIES_FILE" 2>/dev/null || echo 0)
+  case "$count" in ''|*[!0-9]*) count=0 ;; esac
+  count=$((count + 1))
+  if [ "$count" -ge "$MAX_RETRIES" ]; then
+    rm -f "$RETRIES_FILE"
+    {
+      echo "failed_at=$(now)"
+      echo "failing_agent=cos"
+      echo "release=$RELEASE"
+      echo "reason=$1 ($count starts in a row)"
+      echo "result=$(tr -d '\n' < "$(last_result cos-only)" 2>/dev/null || echo unknown)"
+    } > "$COS_FAILED"
+    stay_down
+  fi
+  echo "$count" > "$RETRIES_FILE"
+  state "check-inconclusive-cos-only"
+  loud "$1; nothing is served; exiting so Docker restarts the container (attempt $count of $MAX_RETRIES)"
   exit 1
 }
 
+# The combined config failed a check: MC off (sticky for this release and
+# config), CoS alone after its own check. $1 names the failing agent.
 mc_failed() {
-  write_marker "$MC_FAILED" combined "$(last_result combined)"
-  loud "Master Craftsman self-check FAILED; starting CoS alone. Details: $MC_FAILED"
+  write_marker "$MC_FAILED" combined "$(last_result combined)" "$1"
+  COS_ONLY_REASON="the combined config failed its self-check ($1); see $MC_FAILED"
+  loud "Master Craftsman self-check FAILED under the combined config (failing: $1); starting CoS alone on the CoS-only config. Details: $MC_FAILED"
   cos_only
 }
 
 # A sticky MC failure for this exact release and combined config: CoS alone.
 if [ -f "$MC_FAILED" ]; then
   if grep -qx "release=$RELEASE" "$MC_FAILED" && grep -qx "combined_sha256=$HASH" "$MC_FAILED"; then
+    COS_ONLY_REASON="$MC_FAILED names this release and config; delete it to retry"
     loud "Master Craftsman stays OFF: $MC_FAILED names this release and config. Delete it to retry."
     cos_only
   fi
@@ -256,7 +297,7 @@ if [ -f "$MC_FAILED" ]; then
 fi
 
 for f in "$COMBINED_CONFIG" "$SELFCHECK" "$MC_WORKSPACE_SRC/AGENTS.md"; do
-  [ -f "$f" ] || { echo "{\"error\":\"missing $f\"}" > "$RUN_DIR/selfcheck-static-combined.json"; mc_failed; }
+  [ -f "$f" ] || { echo "{\"error\":\"missing $f\"}" > "$RUN_DIR/selfcheck-static-combined.json"; mc_failed mc; }
 done
 apply_mc_workspace
 
@@ -264,10 +305,11 @@ code=0
 check_config combined "$COMBINED_CONFIG" || code=$?
 case "$code" in
   0) serve combined "$COMBINED_CONFIG" ;;
-  3) mc_failed ;;
-  4) inconclusive combined ;;
-  *)
-    write_marker "$COS_FAILED" combined "$(last_result combined)"
-    stay_down
+  2) mc_failed cos ;;   # CoS's set is wrong under the COMBINED config: the combined config is at fault
+  4|5)
+    COS_ONLY_REASON="the combined self-check could not complete on this start (not sticky; the next start retries)"
+    loud "the combined self-check could not complete ($(last_result combined)); CoS starts alone for this start, nothing sticky"
+    cos_only
     ;;
+  *) mc_failed mc ;;
 esac

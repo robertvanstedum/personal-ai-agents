@@ -9,17 +9,22 @@
 // gateway starts. "runtime" asks the running gateway, over loopback, for each
 // agent's effective tools and for the scheduler state.
 //
-// Prints one JSON line {"cos": {"ok", "failures"}, "mc": {...}, "inconclusive": [...]} and exits:
+// Prints one JSON line {"cos": {...}, "mc": {...}, "inconclusive": {"cos": [...], "mc": [...]}} and exits:
 //   0  every check passed
-//   2  a CoS check failed   (the container must not serve CoS)
-//   3  only an MC check failed (serve CoS alone, MC off)
-//   4  the check could not complete (the gateway did not answer in time, twice):
-//      nothing is served and nothing sticky is written; the container restarts
-// A slow or busy host is not a policy failure: a call that times out is retried
-// once, and is "inconclusive", never "failed". Never prints a secret value:
-// keys are compared, not shown.
+//   2  a CoS check failed (a verdict: CoS's own set is wrong, or the gateway
+//      refused a CoS request, e.g. INVALID_REQUEST)
+//   3  only an MC check failed (a verdict, including a gateway request error
+//      on an MC-scoped call, or a scheduled job in the combined config)
+//   4  a CoS-scoped call could not be answered (timeout / transport error, twice)
+//   5  only MC-scoped calls could not be answered (CoS's calls completed and passed)
+// A gateway answer of {"ok": false, "error": {"type": "gateway_request_error"}}
+// (for example "Unknown agent id", exit 1 from `gateway call`) is a VERDICT
+// against the agent the call was for, never "inconclusive": repeating it
+// would give the same answer. Only a timeout or transport error, retried once,
+// is inconclusive. start-with-mc.sh never lets an MC-side result keep CoS
+// down (N11). Never prints a secret value: keys are compared, not shown.
 
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 export const COS_ID = "cos-agent-a";
@@ -112,25 +117,35 @@ export function staticCheck(config, mode, env = process.env) {
   return { cos, mc };
 }
 
+// Thrown for a call the gateway answered with a refusal: a verdict.
+export class RequestRefused extends Error {
+  constructor(message) { super(message); this.name = "RequestRefused"; }
+}
+
+export function interpret(method, status, stdout, errorCode) {
+  const start = (stdout || "").indexOf("{");
+  let answer = null;
+  if (start >= 0) {
+    try { answer = JSON.parse(stdout.slice(start)); } catch { answer = null; }
+  }
+  if (answer?.ok === false) {
+    const err = answer.error || {};
+    if (err.type === "gateway_transport_error") throw new Inconclusive(`${method}: ${err.kind || "transport error"}`);
+    throw new RequestRefused(`${method}: ${err.code || err.type || "refused"}: ${String(err.message || "").slice(0, 120)}`);
+  }
+  if (status === 0 && answer) return answer;
+  if (errorCode === "ETIMEDOUT" || status === null) throw new Inconclusive(`${method}: ${errorCode || "timed out"}`);
+  if (!answer) throw new Inconclusive(`${method}: no JSON answer (exit ${status})`);
+  throw new RequestRefused(`${method}: exit ${status}`);
+}
+
 function callOnce(method, params) {
-  let out;
-  try {
-    out = execFileSync(
-      process.execPath,
-      [OPENCLAW, "gateway", "call", method, "--timeout", CALL_TIMEOUT_MS, "--params", JSON.stringify(params), "--json"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024, timeout: 180000 },
-    );
-  } catch (error) {
-    throw new Inconclusive(`${method}: ${String(error?.code || error?.message || error).split("\n")[0].slice(0, 120)}`);
-  }
-  const start = out.indexOf("{");
-  if (start < 0) throw new Inconclusive(`${method}: no JSON answer`);
-  let answer;
-  try { answer = JSON.parse(out.slice(start)); } catch { throw new Inconclusive(`${method}: unreadable answer`); }
-  if (answer?.ok === false && answer?.error?.type === "gateway_transport_error") {
-    throw new Inconclusive(`${method}: ${answer.error.kind || "transport error"}`);
-  }
-  return answer;
+  const run = spawnSync(
+    process.execPath,
+    [OPENCLAW, "gateway", "call", method, "--timeout", CALL_TIMEOUT_MS, "--params", JSON.stringify(params), "--json"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024, timeout: 180000 },
+  );
+  return interpret(method, run.status, run.stdout, run.error?.code);
 }
 
 function call(method, params = {}) {
@@ -150,13 +165,15 @@ export function effectiveToolIds(answer) {
 export function runtimeCheck(mode, rpc = call) {
   const cos = [];
   const mc = [];
-  const inconclusive = [];
-  const blame = (failures, prefix, error) => {
-    if (error instanceof Inconclusive || error?.name === "Inconclusive") inconclusive.push(`${prefix}${error.message}`);
+  const inconclusive = { cos: [], mc: [] };
+  const blame = (failures, side, prefix, error) => {
+    if (error instanceof Inconclusive || error?.name === "Inconclusive") inconclusive[side].push(`${prefix}${error.message}`);
     else failures.push(`${prefix}${String(error?.message || error).split("\n")[0].slice(0, 200)}`);
   };
-  const agents = mode === "combined" ? [[COS_ID, COS_TOOLS, cos], [MC_ID, MC_TOOLS, mc]] : [[COS_ID, COS_TOOLS, cos]];
-  for (const [id, want, failures] of agents) {
+  const agents = mode === "combined"
+    ? [[COS_ID, COS_TOOLS, cos, "cos"], [MC_ID, MC_TOOLS, mc, "mc"]]
+    : [[COS_ID, COS_TOOLS, cos, "cos"]];
+  for (const [id, want, failures, side] of agents) {
     try {
       const key = `agent:${id}:minimoi-selfcheck`;
       const created = rpc("sessions.create", { agentId: id, key });
@@ -164,11 +181,13 @@ export function runtimeCheck(mode, rpc = call) {
       const got = effectiveToolIds(rpc("tools.effective", { sessionKey: key }));
       if (!same(sorted(got), sorted(want))) failures.push(`${id}: effective tools ${JSON.stringify(sorted(got))} != ${JSON.stringify(sorted(want))}`);
     } catch (error) {
-      blame(failures, `${id}: `, error);
+      blame(failures, side, `${id}: `, error);
     }
   }
-  // A scheduled job is MC's failure in combined mode (spec §1.4), CoS's otherwise.
-  const jobFailures = mode === "combined" ? mc : cos;
+  // Scheduled jobs: MC's side in combined mode (spec §1.4: the combined config
+  // is at fault, and the CoS-only fallback is checked on its own), CoS's otherwise.
+  const jobSide = mode === "combined" ? "mc" : "cos";
+  const jobFailures = jobSide === "mc" ? mc : cos;
   try {
     const status = rpc("cron.status");
     if (status?.enabled !== false) jobFailures.push("scheduler is enabled");
@@ -176,13 +195,13 @@ export function runtimeCheck(mode, rpc = call) {
     const enabled = (list?.jobs ?? []).filter((job) => job.enabled !== false).map((job) => job.name || job.id);
     if (enabled.length) jobFailures.push(`enabled jobs: ${enabled.join(", ")}`);
   } catch (error) {
-    blame(jobFailures, "cron: ", error);
+    blame(jobFailures, jobSide, "cron: ", error);
   }
   return { cos, mc, inconclusive };
 }
 
-export function verdict({ cos, mc, inconclusive = [] }) {
-  const code = cos.length ? 2 : mc.length ? 3 : inconclusive.length ? 4 : 0;
+export function verdict({ cos, mc, inconclusive = { cos: [], mc: [] } }) {
+  const code = cos.length ? 2 : mc.length ? 3 : inconclusive.cos.length ? 4 : inconclusive.mc.length ? 5 : 0;
   return { code, cos: { ok: !cos.length, failures: cos }, mc: { ok: !mc.length, failures: mc }, inconclusive };
 }
 
