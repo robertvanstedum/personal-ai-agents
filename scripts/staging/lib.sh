@@ -103,9 +103,28 @@ STAGING_MC_FILE="docker-compose.mc.yml"
 STAGING_MC_ENABLED="$STAGING_ROOT/state/mc.enabled"
 STAGING_MC_ENV="$STAGING_ROOT/mc.env"
 STAGING_MC_NET="minimoi-staging-mc-net"
+STAGING_MC_FRONT="minimoi-staging-mc-front"
 STAGING_MC_CONTAINER="minimoi-mc-agent"
 STAGING_MC_VOLUMES=(minimoi-staging-mc-agent-state minimoi-staging-mc-agent-auth)
 mc_enabled() { [[ -f "$STAGING_MC_ENABLED" ]]; }
+
+# The portal's Master Craftsman switches (stage B), from state files; both
+# default to off. mc.mode: off | stub | openclaw | grok. mc.turns: on | off.
+STAGING_MC_MODE_FILE="$STAGING_ROOT/state/mc.mode"
+STAGING_MC_TURNS_FILE="$STAGING_ROOT/state/mc.turns"
+STAGING_MC_MODES="off stub openclaw grok"
+mc_mode() {
+  local mode=off
+  [[ ! -f "$STAGING_MC_MODE_FILE" ]] || mode=$(tr -d '[:space:]' < "$STAGING_MC_MODE_FILE")
+  [[ -n "$mode" ]] || mode=off
+  [[ " $STAGING_MC_MODES " == *" $mode "* ]] || die "$STAGING_MC_MODE_FILE says '$mode'; use one of: $STAGING_MC_MODES"
+  echo "$mode"
+}
+mc_turns() {
+  local turns=off
+  [[ ! -f "$STAGING_MC_TURNS_FILE" ]] || turns=$(tr -d '[:space:]' < "$STAGING_MC_TURNS_FILE")
+  case "$turns" in on) echo on ;; ""|off) echo off ;; *) die "$STAGING_MC_TURNS_FILE says '$turns'; use on or off" ;; esac
+}
 
 # A network's IPAM gateways, one per line, without Docker's renderings of
 # "none": an isolated bridge (gateway_mode_ipv4=isolated) has no gateway, and
@@ -206,10 +225,20 @@ staging_compose() {
   require_absolute_root
   require_release
   require_env
-  MINIMOI_ROOT="$STAGING_ROOT" docker compose \
+  local extra=() mode turns
+  # MC's relay caller token reaches the portal only through interpolation of
+  # its explicit MC_RUNTIME_TOKEN entry: mc.env is never an env_file.
+  if [[ -f "$STAGING_MC_ENV" ]]; then
+    [[ "$(file_mode "$STAGING_MC_ENV")" == 600 ]] || die "$STAGING_MC_ENV must be mode 600"
+    extra=(--env-file "$STAGING_MC_ENV")
+  fi
+  mode=$(mc_mode)
+  turns=$(mc_turns)
+  MINIMOI_ROOT="$STAGING_ROOT" MINIMOI_GUILD_MC="$mode" MINIMOI_GUILD_MC_TURNS="$turns" docker compose \
     -p "$STAGING_PROJECT" \
     --env-file "$STAGING_ENV_FILE" \
     --env-file "$STAGING_RELEASE_ENV" \
+    ${extra[@]+"${extra[@]}"} \
     -f "$RELEASE_DIR/docker-compose.prod.yml" \
     -f "$RELEASE_DIR/docker-compose.staging.yml" \
     "$@"

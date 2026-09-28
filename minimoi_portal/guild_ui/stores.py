@@ -244,6 +244,15 @@ class FloorStores:
             return out
         return self._read(work)
 
+    def get_note(self, request_id: str) -> dict | None:
+        """One kept note by its request id on this floor, or None. Raises
+        FloorStoreUnavailable / FloorStoreNotConfigured like every write."""
+        def work(q):
+            rows = q(f"SELECT {_NOTE_COLS} FROM guild.floor_messages WHERE floor = %s AND request_id = %s",
+                     [self.floor, request_id])
+            return _note(rows[0]) if rows else None
+        return self._run(work, write=False)
+
     def list_postits(self) -> SourceResult:
         return self._read(lambda q: {"postits": self._active(q), "bin_total": self._count(q, binned=True)})
 

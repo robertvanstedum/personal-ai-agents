@@ -1,8 +1,10 @@
-// The conversation, real mode. Master Craftsman is off: nothing here produces
-// a reply. The thread shows the opening briefing, platform lines (explain
-// cards, Save results) and Robert's notes. On the record, Send keeps the
-// message on the server as a note. Off the record, what is typed stays in
-// this page's memory only: it is never sent, and it is cleared on return.
+// The conversation, real mode. The thread shows the opening briefing,
+// platform lines (explain cards, Save results) and Robert's notes. On the
+// record, Send keeps the message on the server as a note; then, only when the
+// server says Master Craftsman takes turns (data-mc-turns), the kept note is
+// sent to it server side (POST /mc/turns) and its answer, or an honest
+// "did not answer", is shown. Off the record, what is typed stays in this
+// page's memory only: it is never sent, never kept, never reaches MC.
 import { $, $$, clone, slot, setSlot, el, announce, localTime } from './dom.js';
 import { live, setOff, onChange } from './state.js';
 import { apiPost, recordMode } from './api.js';
@@ -78,6 +80,22 @@ function appendNote(note) {
   follow();
 }
 
+async function askMasterCraftsman(note) {
+  if (live.off || document.body.dataset.mcTurns !== 'true') return;
+  const waiting = addPlatform('Guild platform', 'Asking Master Craftsman · your note is kept');
+  const r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode() });
+  waiting.remove();
+  const body = r.body || {};
+  if (body.mc_header) for (const n of $$('[data-mc-header]')) n.textContent = body.mc_header;
+  if (body.mc_state) document.body.dataset.mcState = body.mc_state;
+  if (r.ok && body.status === 'answered' && body.reply_note) {
+    if (!$(`[data-note="${body.reply_note.id}"]`)) appendNote(body.reply_note);
+    announce(body.message || 'Master Craftsman answered');
+  } else {
+    addPlatform('Guild platform', body.message || 'Master Craftsman did not answer. Your note is kept.');
+  }
+}
+
 function appendOffRecord(text) {
   const li = clone('tpl-off-record');
   setSlot(li, 'when', localTime(new Date().toISOString()));
@@ -112,6 +130,7 @@ async function sendNote(input, send) {
     const r2 = $('[data-mc-refusal]');
     if (!live.off) { r2.hidden = true; r2.textContent = ''; }
     announce(body.message);
+    if (!body.repeated) askMasterCraftsman(body.note);
   } else {
     refuse(body.message || 'Not saved — notes unavailable');
   }

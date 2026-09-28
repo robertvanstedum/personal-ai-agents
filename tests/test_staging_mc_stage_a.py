@@ -31,19 +31,21 @@ def _main(path):
 
 def _mc_render(env=None):
     return yaml.safe_load(_compose_config(MC_FILE, env_extra={"MINIMOI_IMAGE_TAG": "abc1234",
-                                                                "MC_OPENCLAW_GATEWAY_TOKEN": "t", **(env or {})}))
+                                                                "MC_OPENCLAW_GATEWAY_TOKEN": "t",
+                                                                "MC_RELAY_TOKEN": "r", **(env or {})}))
 
 
 # ── MC's own project: C1, C2 on the render ────────────────────────────────────
 
 def test_mc_project_is_one_isolated_service():
     rendered = _mc_render()
-    assert set(rendered["services"]) == {"mc-agent"}
+    assert set(rendered["services"]) == {"mc-agent", "mc-relay"}      # the relay is stage B
     mc = rendered["services"]["mc-agent"]
     assert mc["image"] == "minimoi-staging/mc-agent:abc1234" and mc["pull_policy"] == "never"
     assert mc["container_name"] == "minimoi-mc-agent"
     assert list(mc["networks"]) == ["mc-net"]
     assert rendered["networks"]["mc-net"] == {"name": "minimoi-staging-mc-net", "external": True}
+    assert rendered["networks"]["mc-front"] == {"name": "minimoi-staging-mc-front", "external": True}
     assert "ports" not in mc and "env_file" not in mc and "depends_on" not in mc
     assert "privileged" not in mc and "cap_add" not in mc
     assert mc["cap_drop"] == ["ALL"] and mc["security_opt"] == ["no-new-privileges:true"]
@@ -120,9 +122,17 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     before = _staging_render([tmp_path / "docker-compose.prod.yml", tmp_path / "docker-compose.staging.yml"])
     after = _staging_render([PROD, STAGING])
     for name in before["services"]:
-        if name == "model-gateway":
+        if name in ("model-gateway", "portal"):
             continue
         assert after["services"][name] == before["services"][name], name
+    # Stage B: the portal gains exactly mc-front and the four MC settings (off by default).
+    p_before, p_after = before["services"]["portal"], after["services"]["portal"]
+    assert set(p_after["networks"]) == set(p_before["networks"]) | {"mc-front"}
+    added = {k: v for k, v in p_after["environment"].items() if k not in p_before["environment"]}
+    assert set(added) == {"MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MC_RUNTIME_URL", "MC_RUNTIME_TOKEN"}
+    assert added["MC_RUNTIME_URL"] == "http://mc-relay:8790/v1"
+    assert {k: v for k, v in p_after.items() if k not in ("networks", "environment")} == \
+        {k: v for k, v in p_before.items() if k not in ("networks", "environment")}
     gw_before, gw_after = before["services"]["model-gateway"], after["services"]["model-gateway"]
     assert set(gw_after["networks"]) == {"default", "mc-net"}
     gw_after = {k: v for k, v in gw_after.items() if k != "networks"}
@@ -240,7 +250,7 @@ def _mc(shell, env, *args):
 
 
 def test_mc_up_uses_its_own_project_and_only_mc_env(tmp_path, shell):
-    env, fake, root = _mc_world(tmp_path, mc_env="MC_OPENCLAW_GATEWAY_TOKEN=mc-token\n")
+    env, fake, root = _mc_world(tmp_path, mc_env="MC_OPENCLAW_GATEWAY_TOKEN=mc-token\nMC_RELAY_TOKEN=relay-token\n")
     result = _mc(shell, env, "up")
     assert result.returncode == 0, result.stderr
     line = (fake / "compose.log").read_text().strip()
@@ -285,8 +295,11 @@ def test_mc_token_writes_mc_env_600_and_prints_nothing(tmp_path, shell):
     result = _mc(shell, env, "token")
     assert result.returncode == 0, result.stderr
     content = (root / "mc.env").read_text()
-    token = content.split("=", 1)[1].strip()
-    assert len(token) == 64 and token not in result.stdout + result.stderr
+    values = dict(line.split("=", 1) for line in content.splitlines())
+    assert set(values) == {"MC_OPENCLAW_GATEWAY_TOKEN", "MC_RELAY_TOKEN"}
+    assert values["MC_OPENCLAW_GATEWAY_TOKEN"] != values["MC_RELAY_TOKEN"]
+    for token in values.values():
+        assert len(token) == 64 and token not in result.stdout + result.stderr
     assert oct((root / "mc.env").stat().st_mode & 0o777) == "0o600"
     assert _mc(shell, env, "token").returncode == 0
     assert (root / "mc.env").read_text() == content          # never replaced
@@ -357,3 +370,54 @@ def test_verify_uses_the_normalized_gateway_and_the_bridge_interface():
     assert 'ipamgw=$(network_gateways "$STAGING_MC_NET"' in text
     assert 'bridge_addr=$(bridge_ipv4 "$STAGING_MC_NET"' in text
     assert "{{range .IPAM.Config}}{{.Gateway}}{{end}}" not in text
+
+
+# ── stage B: the relay and the portal's side ─────────────────────────────────
+
+def test_the_relay_is_one_way_small_and_holds_mcs_token_only():
+    relay = _mc_render()["services"]["mc-relay"]
+    assert relay["entrypoint"] == ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/relay.mjs"]
+    assert sorted(relay["networks"]) == ["mc-front", "mc-net"]
+    assert "ports" not in relay and "env_file" not in relay and "volumes" not in relay
+    assert set(relay["environment"]) == {"MC_RELAY_TOKEN", "MC_OPENCLAW_GATEWAY_TOKEN", "MC_RELAY_TARGET"}
+    assert relay["environment"]["MC_RELAY_TARGET"] == "http://mc-agent:18789"
+    assert relay["read_only"] is True and relay["cap_drop"] == ["ALL"] and relay["oom_score_adj"] == 1000
+    assert int(relay["mem_limit"]) == 128 * 1024 * 1024
+    assert relay["restart"] == "on-failure:3"
+    mc = _mc_render()["services"]["mc-agent"]
+    assert list(mc["networks"]) == ["mc-net"]            # MC never on mc-front: it cannot reach the portal
+    text = MC_FILE.read_text()
+    assert "${MC_RELAY_TOKEN:?" in text
+
+
+def test_the_portal_holds_only_the_relay_caller_token_and_the_switches_default_off():
+    staging = _load(STAGING)
+    portal = staging["services"]["portal"]
+    env = dict(item.split("=", 1) for item in portal["environment"])
+    assert env["MINIMOI_GUILD_MC"] == "${MINIMOI_GUILD_MC:-off}"
+    assert env["MINIMOI_GUILD_MC_TURNS"] == "${MINIMOI_GUILD_MC_TURNS:-off}"
+    assert env["MC_RUNTIME_URL"] == "http://mc-relay:8790/v1"
+    assert env["MC_RUNTIME_TOKEN"] == "${MC_RELAY_TOKEN:-}"
+    assert "MC_OPENCLAW_GATEWAY_TOKEN" not in STAGING.read_text()
+    assert portal["networks"] == ["default", "iotconnect-edge", "mc-front"]
+    assert staging["networks"]["mc-front"]["internal"] is True
+    assert "MC_RUNTIME" not in PROD.read_text() and "MINIMOI_GUILD_MC" not in PROD.read_text()
+
+
+def test_lib_passes_mc_env_for_interpolation_and_the_turn_switch(tmp_path, shell):
+    env, fake, release = _staging_world(tmp_path)
+    root = Path(env["STAGING_ROOT"])
+    (root / "mc.env").write_text("MC_RELAY_TOKEN=r\n")
+    (root / "mc.env").chmod(0o600)
+    (root / "state" / "mc.mode").write_text("openclaw\n")
+    (root / "state" / "mc.turns").write_text("on\n")
+    _write_exe(Path(env["PATH"].split(":")[0]) / "docker", FAKE_DOCKER.replace(
+        'compose) echo "$*" >> "$FAKE/compose.log"; exit 0 ;;',
+        'compose) echo "MC=$MINIMOI_GUILD_MC TURNS=$MINIMOI_GUILD_MC_TURNS $*" >> "$FAKE/compose.log"; exit 0 ;;'))
+    assert _up(shell, env).returncode == 0
+    line = (fake / "compose.log").read_text().splitlines()[0]
+    assert line.startswith("MC=openclaw TURNS=on ")
+    assert f"--env-file {root}/mc.env" in line
+    (root / "state" / "mc.turns").write_text("maybe\n")
+    bad = _up(shell, env)
+    assert bad.returncode != 0 and "use on or off" in bad.stderr

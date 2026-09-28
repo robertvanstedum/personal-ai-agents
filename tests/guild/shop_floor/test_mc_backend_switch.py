@@ -256,23 +256,27 @@ def test_cancel_and_size_cap_send_nothing():
     assert calls["post"] == []
 
 
-def test_health_needs_readyz_and_the_optional_ready_path():
+def test_health_needs_readyz_and_is_live_only_after_an_answer():
     def get(ready, marker):
         return lambda url, **_k: Resp(ready if url.endswith("/readyz") else marker)
 
-    assert _oc(get=get(200, 404))[0].health().state == "ready"          # no extra path configured
-    assert _oc(get=get(503, 200))[0].health().reason == "not_ready"
-    backend, calls = _oc(get=get(200, 200))
-    backend.health()
+    backend, calls = _oc(get=get(200, 404), post=Resp(200, ANSWER))
+    first = backend.health()
+    # Reachable, but never "live" before a real answer (PR 249 review 3b).
+    assert (first.state, first.reason, first.reachable) == ("unavailable", "not_verified", True)
     assert [u for u, _ in calls["get"]] == ["http://mc-agent:18789/readyz"]
-    assert "Authorization" not in calls["get"][0][1].get("headers", {})
+    assert calls["get"][0][1]["headers"]["Authorization"] == "Bearer mc-caller-token"   # the relay needs its caller token
+    assert backend.turn(REQ).status == "answered"
+    assert backend.health().state == "ready"
+    refused, _ = _oc(get=get(200, 404), post=Resp(500, '{"error":{"message":"LLM request failed: 400 No connected db."}}'))
+    refused.turn(REQ)
+    after = refused.health()
+    assert (after.state, after.reason, after.reachable) == ("unavailable", "key_refused", True)
+    assert _oc(get=get(503, 200))[0].health().reason == "not_ready"
 
     marked = OpenClawMasterCraftsman("http://mc-agent:18789/v1", "mc-token", ready_path="/mc-ready",
-                                     http_get=get(200, 404), http_post=None or (lambda *a, **k: None))
-    assert marked.health().reason == "starting"                          # /readyz alone is not enough then
-    marked_ok = OpenClawMasterCraftsman("http://mc-agent:18789/v1", "mc-token", ready_path="/mc-ready",
-                                        http_get=get(200, 200), http_post=lambda *a, **k: None)
-    assert marked_ok.health().state == "ready"
+                                     http_get=get(200, 404), http_post=lambda *a, **k: None)
+    assert marked.health().reason == "starting"
     with pytest.raises(ValueError):
         OpenClawMasterCraftsman("http://mc-agent:18789/v1", "t", ready_path="mc-ready",
                                 http_get=lambda *a, **k: None, http_post=lambda *a, **k: None)
@@ -318,19 +322,30 @@ def test_only_real_answers_are_master_craftsmans_and_failures_are_never_kept():
         TurnResult("maybe", "openclaw")
 
 
-def test_turns_are_not_wired_yet():
-    assert mc_backend.TURNS_WIRED is False
+def test_the_turn_gate_is_explicit_and_off_by_default():
+    assert mc_backend.turns_enabled({}) is False
+    for value in ("0", "off", "no", "", "maybe"):
+        assert mc_backend.turns_enabled({"MINIMOI_GUILD_MC_TURNS": value}) is False
+    for value in ("1", "on", "true", "YES"):
+        assert mc_backend.turns_enabled({"MINIMOI_GUILD_MC_TURNS": value}) is True
+    reachable = Health("unavailable", "not_verified", reachable=True)
+    assert view(reachable, notes_ok=True, turns_on=False)["turns"] is False
+    assert view(reachable, notes_ok=True, turns_on=True)["turns"] is True
+    assert view(Health("unavailable", "not_connected"), notes_ok=True, turns_on=True)["turns"] is False
+    assert view(reachable, notes_ok=False, turns_on=True)["turns"] is False
+    assert view(Health("off"), notes_ok=True, turns_on=True)["turns"] is False
 
 
-# ── the owner route seam: present, owner-only, disabled ───────────────────────
+# ── the owner route with the gate off ─────────────────────────────────────────
 
 def _write(client, token, body=None, **headers):
-    return client.post(f"{API}/mc/turns", json=body or {"note_request_id": "n-1", "idempotency_key": "mc-abcdefgh"},
+    return client.post(f"{API}/mc/turns", json=body or {"note_request_id": "n-12345678", "idempotency_key": "turn-abcdefgh"},
                        headers={"X-CSRF-Token": token, "X-Record-Mode": "on_record", **headers})
 
 
 @pytest.mark.parametrize("switch", [None, "stub", "openclaw", "grok"])
-def test_owner_route_always_refuses_and_calls_nothing(load_portal, monkeypatch, switch):
+def test_with_the_gate_off_the_route_refuses_and_calls_nothing(load_portal, monkeypatch, switch):
+    monkeypatch.delenv("MINIMOI_GUILD_MC_TURNS", raising=False)
     if switch is None:
         monkeypatch.delenv("MINIMOI_GUILD_MC", raising=False)
     else:
@@ -344,7 +359,8 @@ def test_owner_route_always_refuses_and_calls_nothing(load_portal, monkeypatch, 
     response = _write(client, token)
     assert response.status_code == 409
     body = response.get_json()
-    assert body["error"] == "mc_turns_off" and "nothing was sent" in body["message"]
+    assert body["error"] == "mc_turns_off" and body["message"].endswith("Nothing was sent to Master Craftsman.")
+    assert "kept" not in body["message"]     # the route never claims a note it did not check (PR 249 review 3a)
     assert calls == []
 
 

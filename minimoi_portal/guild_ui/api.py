@@ -280,8 +280,8 @@ def _write_body():
     if not isinstance(key, str) or not _IDEMPOTENCY.fullmatch(key):
         return json_error("invalid", "Every write needs an idempotency key (8 to 64 letters, digits, - or _).",
                           422), None
-    if key.startswith("receipt-"):
-        return json_error("invalid", "Keys starting with receipt- are the platform's own.", 422), None
+    if key.startswith(("receipt-", "mc-")):
+        return json_error("invalid", "Keys starting with receipt- or mc- are the platform's own.", 422), None
     if "request_id" in body and "idempotency_key" in body and body["request_id"] != body["idempotency_key"]:
         return json_error("invalid", "request_id and idempotency_key disagree.", 422), None
     body["_key"] = key
@@ -456,24 +456,109 @@ def not_found(rest: str = ""):
     return json_error("not_found", "No such Guild API resource.", 404)
 
 
+MC_WORDS = {
+    "off": "Master Craftsman turns are not switched on on this portal. Nothing was sent to Master Craftsman.",
+    "no_note": "There is no kept note with that id on this floor. Nothing was sent to Master Craftsman.",
+    "not_yours": "That note is not yours to send. Nothing was sent to Master Craftsman.",
+    "notes_down": "Notes are unavailable, so nothing was sent to Master Craftsman.",
+    "busy": "Master Craftsman is still answering your previous note. Nothing new was sent.",
+    "not_kept": "Master Craftsman answered, but the answer could not be kept, so it is not shown. Treat it as unknown.",
+}
+_MC_INFLIGHT: set = set()
+_MC_LOCK = __import__("threading").Lock()
+
+
+def _mc_log():
+    import logging
+    return logging.getLogger("guild_ui.mc")
+
+
 @owner_api
 def mc_turn():
-    """The owner-only, server-side route for a Master Craftsman turn: a seam,
-    DISABLED. It checks the write as every floor write does (CSRF, same
-    origin, on the record), then refuses: turns are not wired
-    (mc.backend.TURNS_WIRED is False; plan stage B wires them behind an
-    explicit environment gate). It never calls a backend, a runtime or a
-    model, and never stores anything."""
-    from .mc import backend as mc_backend
+    """Send one kept, on-the-record note to Master Craftsman, server side
+    (separate-container plan stage B; MC spec v0.9 §4 relay).
 
+    Order: the write guard (JSON, same origin, CSRF, on the record: an
+    off-the-record request is refused 409 before anything else); the
+    environment's turn gate; the note must be kept on this floor by this
+    owner; Master Craftsman's state must allow turns; one turn in flight per
+    owner. The note's text is scrubbed again before it leaves. Only an
+    answered turn is kept, with the author its backend decides (a stub reply
+    is the stub's, never Master Craftsman's). The answer to the browser is
+    allow-listed: never a token, URL, trace or runtime id. Logs carry the
+    turn id and outcome only, never text or tokens."""
+    import hashlib
+    import uuid
+    from datetime import datetime, timezone
+
+    from .mc import NotAnAnswer, TurnRequest, keep_reply
+
+    if request.content_length is not None and request.content_length > MAX_BODY:
+        return _too_large()
     refusal = check_write(cfg()["base_url"])
     if refusal is not None:
         return refusal
-    if not mc_backend.TURNS_WIRED:
-        state = floor_state.mc_view(cfg()["services"], notes_ok=True)["state"]
-        return json_error("mc_turns_off", "Master Craftsman turns are not switched on on this portal. "
-                          "Your note is kept; nothing was sent.", 409, mc_state=state)
-    return json_error("mc_turns_off", "Master Craftsman turns are not switched on on this portal.", 409)
+    services = cfg()["services"]
+    if not services.mc_turns:
+        state = floor_state.mc_view(services, notes_ok=True)["state"]
+        return json_error("mc_turns_off", MC_WORDS["off"], 409, mc_state=state)
+    body = request.get_json(silent=True)
+    note_id = body.get("note_request_id") if isinstance(body, dict) else None
+    if not isinstance(note_id, str) or not _IDEMPOTENCY.fullmatch(note_id):
+        return json_error("invalid", "Name the kept note to send (note_request_id). Nothing was sent to Master Craftsman.", 422)
+    principal = _principal()
+    try:
+        note = _floor().get_note(note_id)
+    except FloorStoreUnavailable as exc:
+        return json_error("unavailable", MC_WORDS["notes_down"], 503,
+                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
+    if note is None:
+        return json_error("not_found", MC_WORDS["no_note"], 404)
+    if note.get("author_kind") != "owner" or note.get("who") != principal:
+        return json_error("not_allowed", MC_WORDS["not_yours"], 403)
+    shown = floor_state.mc_view(services, notes_ok=True)
+    if not shown["turns"]:
+        return json_error("mc_unavailable", f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
+                          503, mc_state=shown["state"], reason=shown["reason"])
+    with _MC_LOCK:
+        if principal in _MC_INFLIGHT:
+            return json_error("busy", MC_WORDS["busy"], 409, mc_state=shown["state"])
+        _MC_INFLIGHT.add(principal)
+    turn_id = uuid.uuid4().hex
+    try:
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        ctx = note.get("context") or {}
+        req = TurnRequest(conversation_id=f"{services.floor.floor}:{principal}:{day}", text=scrub(note["text"]),
+                          note_request_id=note_id, correlation_id=turn_id,
+                          context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
+        _mc_log().info("mc turn %s start backend=%s", turn_id, services.mc.kind)
+        result = services.mc.turn(req)
+        trace = result.trace or {}
+        _mc_log().info("mc turn %s end status=%s class=%s echo=%s response=%s", turn_id, result.status,
+                       result.failure_class, trace.get("correlation_echo") == turn_id, bool(trace.get("response_id")))
+    finally:
+        with _MC_LOCK:
+            _MC_INFLIGHT.discard(principal)
+        if services.mc_health is not None:
+            services.mc_health.invalidate()
+    answer = {"turn_id": turn_id, "status": result.status, "backend_kind": result.backend_kind,
+              "failure_class": result.failure_class, "reply_note": None, "observed_at": now_iso()}
+    if result.status == "answered":
+        reply_key = "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
+        try:
+            kept = keep_reply(_floor(), result, request_id=reply_key, area=ctx.get("area"),
+                              item_ref=ctx.get("item_ref"), page=ctx.get("page"))
+        except (FloorStoreUnavailable, NotAnAnswer):
+            _mc_log().warning("mc turn %s answered but not kept", turn_id)
+            shown = floor_state.mc_view(services, notes_ok=True)
+            return jsonify({**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
+                            "mc_state": shown["state"], "mc_header": shown["header"]}), 200
+        answer["reply_note"] = kept.value
+    shown = floor_state.mc_view(services, notes_ok=True)
+    answer.update({"mc_state": shown["state"], "mc_header": shown["header"],
+                   "message": "Master Craftsman answered · kept on the record" if result.status == "answered"
+                   else f"{shown['header']}. Your note is kept; Master Craftsman did not answer."})
+    return jsonify(answer)
 
 
 RULES = [

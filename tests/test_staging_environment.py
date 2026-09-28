@@ -334,6 +334,8 @@ def test_staging_volumes_are_external_and_staging_named():
         # Master Craftsman's internal network (MC spec v0.9 §3; tests/test_staging_mc_stage_a.py).
         "mc-net": {"name": "minimoi-staging-mc-net", "internal": True,
                    "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
+        "mc-front": {"name": "minimoi-staging-mc-front", "internal": True,
+                     "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
     }
 
 

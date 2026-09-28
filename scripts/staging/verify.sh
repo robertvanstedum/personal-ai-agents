@@ -274,6 +274,14 @@ echo "== 9. Master Craftsman (own project $STAGING_MC_PROJECT; enabled: $(mc_ena
 nets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' minimoi-model-gateway 2>/dev/null || true)
 [[ " $nets " == *" $STAGING_MC_NET "* ]] && pass "gateway is on $STAGING_MC_NET (permanent; MC never recreates it)" \
   || fail "gateway is not on $STAGING_MC_NET (networks: ${nets:-none})"
+for net in "$STAGING_MC_FRONT"; do
+  fi_=$(docker network inspect -f '{{.Internal}} {{index .Options "com.docker.network.bridge.gateway_mode_ipv4"}}' "$net" 2>/dev/null || echo missing)
+  fgw=$(network_gateways "$net" | tr '\n' ' ' | sed 's/ $//')
+  [[ "$fi_" == "true isolated" && -z "$fgw" ]] && pass "$net is internal with no host address" || fail "$net: '$fi_' gateway='${fgw:-none}'"
+done
+pnets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' minimoi-portal 2>/dev/null || true)
+[[ " $pnets " == *" $STAGING_MC_FRONT "* && " $pnets " != *" $STAGING_MC_NET "* ]] \
+  && pass "portal is on mc-front (the relay's side) and not on mc-net" || fail "portal networks: $pnets"
 internal=$(docker network inspect -f '{{.Internal}}' "$STAGING_MC_NET" 2>/dev/null || echo missing)
 [[ "$internal" == true ]] && pass "$STAGING_MC_NET is internal (no egress)" || fail "$STAGING_MC_NET internal=$internal"
 gwmode=$(docker network inspect -f '{{index .Options "com.docker.network.bridge.gateway_mode_ipv4"}}' "$STAGING_MC_NET" 2>/dev/null || echo missing)
@@ -331,6 +339,38 @@ Promise.all(t.map(([h,p])=>new Promise(r=>{const s=net.connect({host:h,port:p,ti
     [[ "$pairs" == 0/0 ]] && pass "MC device pairing 0/0" || fail "MC device pairing: $pairs (an error answer fails)"
   else
     fail "$MC is absent although state/mc.enabled exists (mc.sh up)"
+  fi
+  # Stage B: the one-way relay (MC spec v0.9 §4). Names and codes only.
+  RELAY=minimoi-mc-relay
+  if docker inspect "$RELAY" >/dev/null 2>&1; then
+    rstate=$(docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$RELAY")
+    [[ "$rstate" == "running healthy" ]] && pass "$RELAY running (healthy)" || fail "$RELAY $rstate"
+    rnets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$RELAY" | xargs -n1 | sort | xargs)
+    [[ "$rnets" == "$STAGING_MC_FRONT $STAGING_MC_NET" ]] && pass "$RELAY only on mc-front and mc-net" || fail "$RELAY networks: $rnets"
+    mcnets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$MC" 2>/dev/null | xargs)
+    [[ " $mcnets " != *" $STAGING_MC_FRONT "* ]] && pass "$MC is not on mc-front (it cannot reach the portal)" || fail "$MC is on $STAGING_MC_FRONT"
+    # From the portal (the relay's only caller): allowed readiness, refused everything else.
+    relay_codes=$(docker exec minimoi-portal python -c "
+import json, os, urllib.request as u
+base = 'http://mc-relay:8790'
+tok = os.environ.get('MC_RUNTIME_TOKEN', '')
+def code(path, method='GET', body=None, token=True, extra=None):
+    h = {'Content-Type': 'application/json', **(extra or {})}
+    if token: h['Authorization'] = 'Bearer ' + tok
+    try:
+        return u.urlopen(u.Request(base + path, data=body, headers=h, method=method), timeout=10).status
+    except u.HTTPError as e:
+        return e.code
+    except Exception as e:
+        return type(e).__name__
+chat = lambda m: json.dumps({'model': m, 'user': 'guild-mc:verify', 'messages': [{'role': 'user', 'content': 'x'}]}).encode()
+print(code('/readyz'), code('/readyz', token=False), code('/tools/invoke', 'POST', b'{}'),
+      code('/v1/chat/completions', 'POST', chat('openclaw/default')), code('/v1/models'))
+" 2>/dev/null || echo error)
+    [[ "$relay_codes" == "200 401 403 403 403" ]] && pass "relay from the portal: readyz 200; no token 401; /tools/invoke, model alias, /v1/models 403" \
+      || fail "relay from the portal answered '$relay_codes' (expected 200 401 403 403 403)"
+  else
+    fail "$RELAY is absent although state/mc.enabled exists (mc.sh up)"
   fi
 else
   if docker inspect "$MC" >/dev/null 2>&1 && [[ "$(docker inspect -f '{{.State.Running}}' "$MC")" == true ]]; then

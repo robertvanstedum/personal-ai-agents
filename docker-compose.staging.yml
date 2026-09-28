@@ -93,6 +93,21 @@ services:
       # prototype at /guild-proto. Staging only; unset in production.
       - MINIMOI_GUILD_NEXT=1
       - MINIMOI_GUILD_PROTO=1
+      # Master Craftsman (MC spec v0.9 §4, stage B), staging only. From
+      # $STAGING_ROOT/state/mc.mode and state/mc.turns (lib.sh); off by
+      # default. The portal reaches MC only through the relay, with the relay's
+      # caller token from mc.env (interpolation only); it never holds MC's own
+      # OpenClaw token.
+      - MINIMOI_GUILD_MC=${MINIMOI_GUILD_MC:-off}
+      - MINIMOI_GUILD_MC_TURNS=${MINIMOI_GUILD_MC_TURNS:-off}
+      - MC_RUNTIME_URL=http://mc-relay:8790/v1
+      - MC_RUNTIME_TOKEN=${MC_RELAY_TOKEN:-}
+    # Permanently on mc-front (portal + MC's relay only), so enabling MC never
+    # recreates the portal (MC spec v0.9 §3).
+    networks:
+      - default
+      - iotconnect-edge
+      - mc-front
 
   system-bot:
     image: minimoi-staging/system-bot:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
@@ -138,5 +153,13 @@ networks:
     # container on this internal network can still reach the Colima VM itself
     # (for example its sshd on :22) through the bridge's own IP. Containers on
     # the network still reach each other (MC -> model-gateway).
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+  # The portal's side of the one-way relay (MC spec v0.9 §3-§4): members are
+  # the portal (here, permanently) and, from MC's own project, mc-relay only.
+  # Internal, and no host address on the bridge.
+  mc-front:
+    name: minimoi-staging-mc-front
+    internal: true
     driver_opts:
       com.docker.network.bridge.gateway_mode_ipv4: isolated

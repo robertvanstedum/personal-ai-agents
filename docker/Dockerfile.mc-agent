@@ -12,7 +12,7 @@ ENV OPENCLAW_NO_AUTO_UPDATE=1
 # config and workspace to the state volume on every start, after its checks.
 COPY --chown=root:root docker/mc-agent/openclaw.json /opt/minimoi/mc-agent/openclaw.json
 COPY --chown=root:root docker/mc-agent/workspace/ /opt/minimoi/mc-agent/workspace/
-COPY --chown=root:root docker/mc-agent/start-mc.sh docker/mc-agent/selfcheck.mjs docker/mc-agent/mc-key-check.sh /opt/minimoi/mc-agent/
+COPY --chown=root:root docker/mc-agent/start-mc.sh docker/mc-agent/selfcheck.mjs docker/mc-agent/mc-key-check.sh docker/mc-agent/relay.mjs /opt/minimoi/mc-agent/
 
 # tini -g: docker stop reaches the whole process group, so OpenClaw drains.
 ENTRYPOINT ["tini", "-g", "--", "/opt/minimoi/mc-agent/start-mc.sh"]
