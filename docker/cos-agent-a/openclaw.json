@@ -17,13 +17,18 @@
     "http": {
       "endpoints": {
         "chatCompletions": {
-          "enabled": true,
-          "maxBodyBytes": 262144
+          "enabled": true
         }
       }
     }
   },
+  "update": {
+    "checkOnStart": false
+  },
   "models": {
+    "catalogRefresh": {
+      "enabled": false
+    },
     "providers": {
       "minimoi-gateway": {
         "baseUrl": "http://model-gateway:4000/v1",
@@ -52,8 +57,25 @@
     "entries": {
       "cos-bounded-search": {
         "enabled": true
+      },
+      "memory-core": {
+        "config": {
+          "dreaming": {
+            "enabled": false
+          }
+        }
       }
     }
+  },
+  "skills": {
+    "workshop": {
+      "autonomous": {
+        "mode": "off"
+      }
+    }
+  },
+  "cron": {
+    "enabled": false
   },
   "tools": {
     "web": {
@@ -67,10 +89,13 @@
     }
   },
   "agents": {
-    "list": [
-      {
-        "id": "cos-agent-a",
-        "default": true,
+    "defaults": {
+      "model": {
+        "primary": "minimoi-gateway/minimoi-cos-agent"
+      }
+    },
+    "entries": {
+      "cos-agent-a": {
         "name": "COS Agent A",
         "workspace": "/home/node/.openclaw/workspace-cos-agent-a",
         "model": {
@@ -100,13 +125,22 @@
             "gateway",
             "nodes",
             "sessions_spawn",
-            "subagents"
+            "subagents",
+            "group:automation",
+            "group:nodes",
+            "group:agents",
+            "group:media",
+            "group:memory",
+            "group:plugins",
+            "sessions_send",
+            "conversations_send",
+            "conversations_turn"
           ],
           "elevated": {
             "enabled": false
           }
         }
       }
-    ]
+    }
   }
 }

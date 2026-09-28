@@ -54,7 +54,43 @@ def test_production_uses_immutable_application_images_and_isolated_state():
     assert "COS_AGENT_A_GATEWAY_TOKEN:?" in agent
     assert "XAI_API_KEY" not in agent
     assert "ANTHROPIC_API_KEY" not in agent
+    assert "OPENAI_API_KEY" not in agent
     assert "ports:" not in agent
+
+
+def test_production_agent_runtime_has_memory_cap_and_never_self_updates():
+    agent = _service_block("cos-agent-a")
+    service = yaml.safe_load(PROD_COMPOSE.read_text())["services"]["cos-agent-a"]
+
+    # OpenClaw 2026.9.x idles at about 0.9 GB (7.1: about 0.3 GB).
+    assert service["mem_limit"] == "1200m"
+    assert "OPENCLAW_NO_AUTO_UPDATE=1" in service["environment"]
+    assert "OPENCLAW_NO_AUTO_UPDATE=1" in agent
+
+
+def test_production_agent_runtime_has_a_fast_compose_healthcheck():
+    service = yaml.safe_load(PROD_COMPOSE.read_text())["services"]["cos-agent-a"]
+    check = service["healthcheck"]
+
+    # Faster than the image's 180 s cadence, well inside the deploy's 360 s wait.
+    assert check["test"][:3] == ["CMD", "node", "-e"]
+    assert "http://127.0.0.1:18789/healthz" in check["test"][3]
+    assert "Authorization" not in check["test"][3]
+    assert check["interval"] == "15s"
+    assert check["start_period"] == "60s"
+    assert check["retries"] == 3
+
+
+def test_staging_inherits_the_production_agent_runtime_limits():
+    staging = yaml.safe_load(
+        (ROOT / "docker-compose.staging.yml").read_text()
+    )["services"]["cos-agent-a"]
+
+    # The staging override only swaps the image and adds the loopback port;
+    # it must not loosen or replace the memory cap or the environment.
+    assert "mem_limit" not in staging
+    assert "deploy" not in staging
+    assert "environment" not in staging
 
 
 def test_production_cos_consumers_select_agent_runtime_and_share_receipts():
@@ -112,3 +148,36 @@ def test_ssm_sync_uses_named_parameters_without_printing_values():
         assert parameter in script
     assert "--with-decryption" in script
     assert 'echo "$secret_value"' not in script
+
+
+def test_deploy_snapshots_agent_a_volumes_before_recreating_it():
+    script = (
+        ROOT / "scripts/operations/deploy_scoped_release.sh"
+    ).read_text()
+    pull = script.index('"${COMPOSE[@]}" pull "${SERVICES[@]}"')
+    snapshot_call = script.index("\n  snapshot_agent_a_volumes\n")
+    up = script.index('"${COMPOSE[@]}" up -d --no-deps')
+
+    # Pull first (a failed pull changes nothing), then stop + snapshot, then
+    # recreate. Only when cos-agent-a is in the release.
+    assert pull < snapshot_call < up
+    guard = script[pull:snapshot_call]
+    assert '*" cos-agent-a "*' in guard
+
+    body = script[script.index("snapshot_agent_a_volumes() {"):pull]
+    assert 'AGENT_A_SNAPSHOT_DIR="/opt/minimoi/backups/cos-agent-a"' in script
+    assert 'docker stop --time 30 "$AGENT_A_CONTAINER"' in body
+    assert body.index("docker stop") < body.index("docker cp")
+    for path in ("/home/node/.openclaw", "/home/node/.config/openclaw"):
+        assert path in body
+    assert "umask 077" in body
+    assert "previous_image=" in body
+    assert "sha256sum" in body
+    # Any failure while Agent A is stopped restarts it (EXIT trap), cleared
+    # only after `up -d`; behaviour is exercised in test_agent_a_deploy_snapshot.
+    assert "trap restart_agent_a_on_exit EXIT" in script
+    assert script.index("AGENT_A_STOPPED=1") < script.index('docker stop --time 30')
+    assert up < script.rindex("\nAGENT_A_STOPPED=0\n")
+    # backup_local.sh prunes only dated folders (20*-*-*) under backups/, and
+    # the S3/Dropbox syncs read only those, so this folder is left alone.
+    assert "-name '20*-*-*'" in (ROOT / "scripts/backup_local.sh").read_text()

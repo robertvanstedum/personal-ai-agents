@@ -1,6 +1,8 @@
 """Fail-closed structural checks for the isolated COS Agent A runtime."""
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 
@@ -8,6 +10,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
 CONFIG_PATH = REPO_ROOT / "docker" / "cos-agent-a" / "openclaw.json"
 DOCKERFILE_PATH = REPO_ROOT / "docker" / "Dockerfile.cos-agent-a"
+APPLY_CONFIG_PATH = REPO_ROOT / "docker" / "cos-agent-a" / "apply-config.sh"
+PINNED_IMAGE = (
+    "ghcr.io/openclaw/openclaw:2026.9.6"
+    "@sha256:0a5ff5e682e62afa19149df126aa50063bf65ef885b5c94713ce32dc0eb12e15"
+)
+AGENT_A_TOOLS = ["session_status", "web_search"]
 SEARCH_PLUGIN_PATH = (
     REPO_ROOT / "docker/cos-agent-a/plugins/cos-bounded-search/index.ts"
 )
@@ -19,6 +27,13 @@ SEARCH_MANIFEST_PATH = (
 
 def _config() -> dict:
     return json.loads(CONFIG_PATH.read_text())
+
+
+def _agent(config: dict | None = None) -> dict:
+    config = config or _config()
+    entries = config["agents"]["entries"]
+    assert list(entries) == ["cos-agent-a"]
+    return entries["cos-agent-a"]
 
 
 def _compose_service_block() -> str:
@@ -37,7 +52,9 @@ def _cos_service_block() -> str:
 
 def test_runtime_image_is_pinned_and_seeds_config_and_agent_policy():
     dockerfile = DOCKERFILE_PATH.read_text()
-    assert "FROM ghcr.io/openclaw/openclaw:2026.7.1" in dockerfile
+    from_lines = [line for line in dockerfile.splitlines() if line.startswith("FROM ")]
+    assert from_lines == [f"FROM {PINNED_IMAGE}"]
+    assert "2026.7.1" not in dockerfile
     assert ":latest" not in dockerfile
     assert "COPY --chown=node:node docker/cos-agent-a/openclaw.json" in dockerfile
     assert "COPY --chown=node:node docker/cos-agent-a/AGENTS.md" in dockerfile
@@ -50,7 +67,7 @@ def test_runtime_image_is_pinned_and_seeds_config_and_agent_policy():
 def test_gateway_is_internal_token_authenticated_and_not_model_hardcoded():
     config = _config()
     gateway = config["gateway"]
-    agent = config["agents"]["list"][0]
+    agent = _agent(config)
 
     assert gateway["mode"] == "local"
     assert gateway["bind"] == "lan"
@@ -65,11 +82,11 @@ def test_gateway_is_internal_token_authenticated_and_not_model_hardcoded():
             "http://localhost:18790",
         ],
     }
-    assert gateway["http"]["endpoints"]["chatCompletions"] == {
-        "enabled": True,
-        "maxBodyBytes": 262144,
+    assert gateway["http"]["endpoints"]["chatCompletions"] == {"enabled": True}
+    assert "id" not in agent and "default" not in agent
+    assert config["agents"]["defaults"]["model"] == {
+        "primary": "minimoi-gateway/minimoi-cos-agent",
     }
-    assert agent["id"] == "cos-agent-a"
     assert agent["model"] == {
         "primary": "minimoi-gateway/minimoi-cos-agent",
         "fallbacks": [],
@@ -83,16 +100,23 @@ def test_gateway_is_internal_token_authenticated_and_not_model_hardcoded():
 
 def test_runtime_starts_with_no_channels_skills_or_dangerous_tools():
     config = _config()
-    agent = config["agents"]["list"][0]
+    agent = _agent(config)
     tools = agent["tools"]
 
     assert "channels" not in config
     assert agent["skills"] == []
     assert agent["heartbeat"]["every"] == "0m"
-    assert tools["allow"] == ["session_status", "web_search"]
-    # Deny wins in OpenClaw; group:sessions would accidentally block the one
-    # explicitly allowed status tool along with the dangerous session tools.
-    assert "group:sessions" not in tools["deny"]
+    # On 2026.9.x the allow list is the only real gate: deny groups do not
+    # cover plugin tools or most of the new 9.x core tools. It must stay
+    # exactly Agent A's 2026.7.1 inventory.
+    assert tools["allow"] == AGENT_A_TOOLS
+    assert "alsoAllow" not in tools and "profile" not in tools
+    # Deny wins in OpenClaw; these groups would block an allowed tool
+    # (session_status is in group:sessions and group:openclaw, web_search in
+    # group:web and group:openclaw).
+    for group in ("group:sessions", "group:openclaw", "group:web"):
+        assert group not in tools["deny"]
+    assert not set(tools["deny"]) & set(AGENT_A_TOOLS)
     assert tools["elevated"]["enabled"] is False
     for denied in (
         "group:fs",
@@ -106,6 +130,13 @@ def test_runtime_starts_with_no_channels_skills_or_dangerous_tools():
         "nodes",
         "sessions_spawn",
         "subagents",
+        # 2026.9.x groups and tools (cron is an alias of automations).
+        "group:automation",
+        "group:nodes",
+        "group:plugins",
+        "group:memory",
+        "sessions_send",
+        "conversations_send",
     ):
         assert denied in tools["deny"]
 
@@ -116,7 +147,7 @@ def test_search_is_bounded_and_does_not_receive_provider_credentials():
     config = _config()
     search = config["tools"]["web"]["search"]
     plugin_entry = config["plugins"]["entries"]["cos-bounded-search"]
-    agent = config["agents"]["list"][0]
+    agent = _agent(config)
 
     assert search == {
         "enabled": True,
@@ -129,13 +160,133 @@ def test_search_is_bounded_and_does_not_receive_provider_credentials():
     assert config["plugins"]["load"]["paths"] == [
         "/opt/minimoi/openclaw-plugins/cos-bounded-search"
     ]
-    assert agent["tools"]["allow"] == ["session_status", "web_search"]
+    assert agent["tools"]["allow"] == AGENT_A_TOOLS
     assert "web_fetch" in agent["tools"]["deny"]
     assert "x_search" in agent["tools"]["deny"]
 
     text = CONFIG_PATH.read_text()
     assert "XAI_API_KEY" not in text
     assert "ANTHROPIC_API_KEY" not in text
+
+
+def test_no_retired_or_unsupported_keys_for_openclaw_2026_9():
+    config = _config()
+    text = CONFIG_PATH.read_text()
+
+    # 2026.9.x rejects chatCompletions.maxBodyBytes (the file fails validation);
+    # the 256 KB cap now lives in domains/cos/backends/openclaw_backend.py.
+    assert "maxBodyBytes" not in text
+    assert "maxImageParts" not in text and "maxTotalImageBytes" not in text
+    # agents.list with a default marker is the pre-9.x form; 9.x rewrites it in
+    # place on the state volume at start, which 7.1 can then no longer read.
+    assert "list" not in config["agents"]
+    assert '"default"' not in text
+    assert "meta" not in config
+
+
+def test_every_model_calling_background_job_is_disabled():
+    config = _config()
+
+    # 2026.8.1+ turns on a nightly model-backed "Memory Dreaming Promotion"
+    # turn (toolsAllow ["*"]) and a weekly Skill Workshop review turn by
+    # default. Agent A must never spend on the real key unasked.
+    memory_core = config["plugins"]["entries"]["memory-core"]
+    assert memory_core == {"config": {"dreaming": {"enabled": False}}}
+    assert config["skills"]["workshop"]["autonomous"]["mode"] == "off"
+    assert config["cron"] == {"enabled": False}
+    assert _agent(config)["heartbeat"]["every"] == "0m"
+
+
+def test_update_check_and_hosted_catalog_refresh_are_off():
+    config = _config()
+
+    assert config["update"] == {"checkOnStart": False}
+    assert config["models"]["catalogRefresh"] == {"enabled": False}
+    assert "ENV OPENCLAW_NO_AUTO_UPDATE=1" in DOCKERFILE_PATH.read_text()
+
+
+def test_image_applies_the_pinned_config_on_every_start():
+    dockerfile = DOCKERFILE_PATH.read_text()
+
+    assert (
+        "COPY --chown=root:root docker/cos-agent-a/openclaw.json "
+        "/opt/minimoi/cos-agent-a/openclaw.json"
+    ) in dockerfile
+    assert (
+        "COPY --chown=root:root docker/cos-agent-a/apply-config.sh "
+        "/opt/minimoi/cos-agent-a/apply-config.sh"
+    ) in dockerfile
+    assert (
+        'ENTRYPOINT ["tini", "-s", "--", "/opt/minimoi/cos-agent-a/apply-config.sh"]'
+    ) in dockerfile
+    assert 'CMD ["node", "openclaw.mjs", "gateway"]' in dockerfile
+    assert os.access(APPLY_CONFIG_PATH, os.X_OK)
+
+
+def _run_apply_config(tmp_path: Path, state_dir: Path) -> subprocess.CompletedProcess:
+    pinned = tmp_path / "image" / "openclaw.json"
+    pinned.parent.mkdir(exist_ok=True)
+    pinned.write_bytes(CONFIG_PATH.read_bytes())
+    script = tmp_path / "apply-config.sh"
+    script.write_text(
+        APPLY_CONFIG_PATH.read_text().replace(
+            "PINNED_CONFIG=/opt/minimoi/cos-agent-a/openclaw.json",
+            f"PINNED_CONFIG={pinned}",
+        )
+    )
+    marker = tmp_path / "gateway-started"
+    return subprocess.run(
+        ["sh", str(script), "sh", "-c", f'touch "{marker}"'],
+        env={
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "OPENCLAW_CONFIG_PATH": str(state_dir / "openclaw.json"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_existing_volume_with_old_config_gets_the_new_one_on_start(tmp_path):
+    state = tmp_path / "state"
+    (state / "agents" / "cos-agent-a" / "sessions").mkdir(parents=True)
+    old_config = json.dumps({
+        "gateway": {"http": {"endpoints": {"chatCompletions": {
+            "enabled": True, "maxBodyBytes": 262144,
+        }}}},
+        "agents": {"list": [{"id": "cos-agent-a", "default": True}]},
+    })
+    (state / "openclaw.json").write_text(old_config)
+    session = state / "agents" / "cos-agent-a" / "sessions" / "sessions.json"
+    session.write_text('{"kept": true}')
+    database = state / "openclaw.sqlite"
+    database.write_bytes(b"SQLite format 3\x00 kept")
+
+    result = _run_apply_config(tmp_path, state)
+
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "gateway-started").exists()
+    assert (state / "openclaw.json").read_bytes() == CONFIG_PATH.read_bytes()
+    assert (state / "openclaw.json").stat().st_mode & 0o777 == 0o600
+    assert (state / "openclaw.json.replaced-by-image").read_text() == old_config
+    assert session.read_text() == '{"kept": true}'
+    assert database.read_bytes() == b"SQLite format 3\x00 kept"
+    assert "applied the image's pinned openclaw.json" in result.stderr
+    assert not list(state.glob("*.image-apply.*"))
+
+
+def test_unchanged_or_fresh_volume_starts_without_a_replaced_copy(tmp_path):
+    fresh = tmp_path / "fresh"
+    result = _run_apply_config(tmp_path, fresh)
+    assert result.returncode == 0, result.stderr
+    assert (fresh / "openclaw.json").read_bytes() == CONFIG_PATH.read_bytes()
+
+    (tmp_path / "gateway-started").unlink()
+    result = _run_apply_config(tmp_path, fresh)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "gateway-started").exists()
+    assert not (fresh / "openclaw.json.replaced-by-image").exists()
+    assert result.stderr == ""
 
 
 def test_search_plugin_has_fixed_destination_and_bounded_inputs():
@@ -184,6 +335,9 @@ def test_compose_service_has_isolated_state_and_local_only_ui_access():
     assert "OLLAMA_API" not in service
     assert "cos-agent-a-state:/home/node/.openclaw" in service
     assert "cos-agent-a-auth:/home/node/.config/openclaw" in service
+    assert "image: minimoi/cos-agent-a:openclaw-2026.9.6" in service
+    assert "OPENCLAW_NO_AUTO_UPDATE=1" in service
+    assert "mem_limit: 1200m" in service
     assert '"127.0.0.1:18790:18789"' in service
     assert "0.0.0.0:18790" not in service
     assert "env_file:" not in service

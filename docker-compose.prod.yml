@@ -64,10 +64,26 @@ services:
       - OPENCLAW_STATE_DIR=/home/node/.openclaw
       - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
       - OPENCLAW_DISABLE_BONJOUR=1
+      - OPENCLAW_NO_AUTO_UPDATE=1
       - TZ=${COS_AGENT_TIMEZONE:-America/Chicago}
     volumes:
       - cos-agent-a-state:/home/node/.openclaw
       - cos-agent-a-auth:/home/node/.config/openclaw
+    # OpenClaw 2026.9.x idles at about 0.9 GB; cap it so it can never starve
+    # the rest of the host. The staging override inherits this limit.
+    mem_limit: 1200m
+    # The image's own check runs only every 180 s; the deploy waits 360 s.
+    # Probe the unauthenticated liveness endpoint with the image's node.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:18789/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     security_opt:
       - no-new-privileges:true
     cap_drop:

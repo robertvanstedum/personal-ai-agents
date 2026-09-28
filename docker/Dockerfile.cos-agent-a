@@ -1,10 +1,26 @@
-FROM ghcr.io/openclaw/openclaw:2026.7.1
+# OpenClaw current stable, pinned by multi-arch index digest.
+FROM ghcr.io/openclaw/openclaw:2026.9.6@sha256:0a5ff5e682e62afa19149df126aa50063bf65ef885b5c94713ce32dc0eb12e15
 
-# Seed only the isolated COS Agent A state volume. Docker copies this file into
-# a newly-created named volume on first use; credentials remain runtime env vars.
+# Never self-update inside the container; releases move only through this pin.
+ENV OPENCLAW_NO_AUTO_UPDATE=1
+
+# The pinned gateway config lives in the image, root-owned (read-only to the
+# node user), and apply-config.sh (git mode 755; COPY keeps it executable)
+# copies it over the state volume's openclaw.json on every start (Docker seeds
+# image files only into a newly created volume, so existing staging and
+# production volumes would otherwise keep an old config). Credentials remain
+# runtime env vars; the config only names them.
+COPY --chown=root:root docker/cos-agent-a/openclaw.json /opt/minimoi/cos-agent-a/openclaw.json
+COPY --chown=root:root docker/cos-agent-a/apply-config.sh /opt/minimoi/cos-agent-a/apply-config.sh
+
+# Seed a newly created state volume (config + agent workspace policy).
 COPY --chown=node:node docker/cos-agent-a/openclaw.json /home/node/.openclaw/openclaw.json
 COPY --chown=node:node docker/cos-agent-a/AGENTS.md /home/node/.openclaw/workspace-cos-agent-a/AGENTS.md
 COPY --chown=node:node docker/cos-agent-a/IDENTITY.md /home/node/.openclaw/workspace-cos-agent-a/IDENTITY.md
 COPY --chown=node:node docker/cos-agent-a/SOUL.md /home/node/.openclaw/workspace-cos-agent-a/SOUL.md
 COPY --chown=node:node docker/cos-agent-a/MEMORY.md /home/node/.openclaw/workspace-cos-agent-a/MEMORY.md
 COPY --chown=node:node docker/cos-agent-a/plugins/cos-bounded-search /opt/minimoi/openclaw-plugins/cos-bounded-search
+
+# Same init and command as the upstream image, with the config step in front.
+ENTRYPOINT ["tini", "-s", "--", "/opt/minimoi/cos-agent-a/apply-config.sh"]
+CMD ["node", "openclaw.mjs", "gateway"]
