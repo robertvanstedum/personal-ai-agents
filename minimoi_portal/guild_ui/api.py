@@ -463,6 +463,7 @@ MC_WORDS = {
     "notes_down": "Notes are unavailable, so nothing was sent to Master Craftsman.",
     "busy": "Master Craftsman is still answering your previous note. Nothing new was sent.",
     "not_kept": "Master Craftsman answered, but the answer could not be kept, so it is not shown. Treat it as unknown.",
+    "already": "Master Craftsman already answered this note · shown from the record; nothing was sent again.",
 }
 _MC_INFLIGHT: set = set()
 _MC_LOCK = __import__("threading").Lock()
@@ -516,6 +517,22 @@ def mc_turn():
         return json_error("not_found", MC_WORDS["no_note"], 404)
     if note.get("author_kind") != "owner" or note.get("who") != principal:
         return json_error("not_allowed", MC_WORDS["not_yours"], 403)
+    # One reply per note (#251 review F1): a note that already has a kept
+    # reply is answered from the store, and Master Craftsman is not called
+    # again (from stage C every call is paid).
+    reply_key = "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
+    try:
+        existing = _floor().get_note(reply_key)
+    except FloorStoreUnavailable as exc:
+        return json_error("unavailable", MC_WORDS["notes_down"], 503,
+                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
+    if existing is not None:
+        shown = floor_state.mc_view(services, notes_ok=True)
+        return jsonify({"turn_id": None, "status": "answered", "repeated": True,
+                        "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
+                        "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
+                        "mc_state": shown["state"], "mc_header": shown["header"],
+                        "message": MC_WORDS["already"]})
     shown = floor_state.mc_view(services, notes_ok=True)
     if not shown["turns"]:
         return json_error("mc_unavailable", f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
@@ -544,12 +561,16 @@ def mc_turn():
     answer = {"turn_id": turn_id, "status": result.status, "backend_kind": result.backend_kind,
               "failure_class": result.failure_class, "reply_note": None, "observed_at": now_iso()}
     if result.status == "answered":
-        reply_key = "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
         try:
             kept = keep_reply(_floor(), result, request_id=reply_key, area=ctx.get("area"),
                               item_ref=ctx.get("item_ref"), page=ctx.get("page"))
+            outcome = getattr(kept, "outcome", None)
         except (FloorStoreUnavailable, NotAnAnswer):
-            _mc_log().warning("mc turn %s answered but not kept", turn_id)
+            kept, outcome = None, "store_failed"
+        if outcome != "kept" or kept is None or not getattr(kept, "value", None):
+            # Anything but a clean keep (a store failure, an idempotency
+            # mismatch, a missing row) is "not kept", said as such.
+            _mc_log().warning("mc turn %s answered but not kept (%s)", turn_id, outcome)
             shown = floor_state.mc_view(services, notes_ok=True)
             return jsonify({**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
                             "mc_state": shown["state"], "mc_header": shown["header"]}), 200

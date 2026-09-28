@@ -203,3 +203,17 @@ def test_the_relay_refuses_to_start_without_distinct_tokens():
         r = subprocess.run(["node", str(RELAY)], env={"PATH": os.environ["PATH"], "MC_RELAY_PORT": str(_port()), **env},
                            capture_output=True, text=True, timeout=10)
         assert r.returncode == 1 and "refusing to start" in r.stderr
+
+
+def test_the_caller_token_is_compared_in_constant_time():
+    text = RELAY.read_text()
+    assert "timingSafeEqual" in text and "got.length === EXPECTED.length" in text
+    assert "header === `Bearer" not in text
+
+
+def test_a_token_of_the_right_length_but_wrong_value_is_refused(relay):
+    base, up, _ = relay
+    wrong = CALLER[:-1] + ("x" if CALLER[-1] != "x" else "y")
+    assert call(base, "/readyz", token=wrong)[0] == 401
+    assert call(base, "/readyz", token=CALLER + "extra")[0] == 401
+    assert up.seen == []

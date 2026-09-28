@@ -20,6 +20,7 @@
 //   trace     X-MC-Correlation-Id (32 hex) is logged and echoed back, never
 //             forwarded; logs never carry a token or message text
 import http from "node:http";
+import { timingSafeEqual } from "node:crypto";
 
 const PORT = Number(process.env.MC_RELAY_PORT || 8790);
 const TARGET = process.env.MC_RELAY_TARGET || "http://mc-agent:18789";
@@ -85,9 +86,13 @@ export function checkBody(body) {
   return null;
 }
 
-function authorized(req) {
-  const header = String(req.headers.authorization || "");
-  return CALLER_TOKEN.length >= 16 && header === `Bearer ${CALLER_TOKEN}`;
+// Constant-time comparison of the caller token (lengths first: timingSafeEqual
+// needs equal lengths, and the length itself is not secret).
+const EXPECTED = Buffer.from(`Bearer ${CALLER_TOKEN}`);
+export function authorized(req) {
+  if (CALLER_TOKEN.length < 16) return false;
+  const got = Buffer.from(String(req.headers.authorization || ""));
+  return got.length === EXPECTED.length && timingSafeEqual(got, EXPECTED);
 }
 
 async function forward(path, init) {

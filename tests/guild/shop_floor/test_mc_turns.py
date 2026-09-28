@@ -266,3 +266,35 @@ def test_the_page_tells_the_front_end_whether_turns_are_on(turned):
           / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
     assert "document.body.dataset.mcTurns !== 'true'" in js and "if (live.off" in js
     assert "apiPost('/mc/turns'" in js
+
+
+# ── #251 review F1: one reply per note, and "kept" means kept ────────────────
+
+def test_resending_a_note_with_a_reply_makes_no_second_mc_call(turned):
+    client = turned.owner()
+    token = turned.csrf(client)
+    note = _keep(client, token, "What is stuck?")
+    first = _ask(client, token, note["request_id"]).get_json()
+    assert first["status"] == "answered" and len(turned.extra["runtime"].sent) == 1
+    again = _ask(client, token, note["request_id"])
+    body = again.get_json()
+    assert again.status_code == 200 and body["repeated"] is True and body["status"] == "answered"
+    assert body["reply_note"]["id"] == first["reply_note"]["id"]
+    assert "nothing was sent again" in body["message"]
+    assert len(turned.extra["runtime"].sent) == 1                       # MC was not called again
+    rows = turned.extra["floor"].rows("floor_messages")
+    assert [r["author"] for r in rows] == ["robert", "master_craftsman"]
+
+
+@pytest.mark.parametrize("outcome", ["idempotency_mismatch", "not_found", None])
+def test_a_reply_the_store_did_not_keep_is_reported_as_not_kept(turned, monkeypatch, outcome):
+    from minimoi_portal.guild_ui import api
+    from minimoi_portal.guild_ui.stores import WriteResult
+    monkeypatch.setattr("minimoi_portal.guild_ui.mc.keep_reply",
+                        lambda *a, **k: WriteResult(outcome, None, True) if outcome else None)
+    client = turned.owner()
+    token = turned.csrf(client)
+    body = _ask(client, token, _keep(client, token, "q")["request_id"]).get_json()
+    assert body["status"] == "error" and body["failure_class"] == "not_kept" and body["reply_note"] is None
+    assert "could not be kept" in body["message"] and "kept on the record" not in body["message"]
+    assert api  # imported for the patch target's module
