@@ -433,7 +433,10 @@ checked config on the LAN. Expect about 1 to 2 minutes (probe: 44 to 52 s)
 before `127.0.0.1:18790` and in-network CoS callers answer after any restart;
 the health check has a 240 s start period. If CoS's own check fails, the
 container stays up and unhealthy and OpenClaw is not started (no loop). If
-only MC's check fails, CoS starts alone and `verify.sh` fails 9b loudly.
+only MC's check fails, CoS starts alone and `verify.sh` fails 9b loudly. If
+the check cannot complete (a gateway call times out twice on a busy host),
+nothing is served and nothing sticky is written: the container exits and
+Docker restarts it (`state` shows `check-inconclusive-*` meanwhile).
 
 Switches (both under `~/minimoi-staging/state/`, read by `lib.sh`):
 
@@ -511,6 +514,11 @@ Robert opens `https://dev.minimoi.ai/guild-next/guild/build`: the conversation
 header reads "Master Craftsman is unavailable · not connected yet".
 
 ### 4. One real CoS turn with web search (N13; costs one CoS call)
+
+This turn matters more than usual: the combined config turns Tool Search off
+(`tools.toolSearch: false`), so CoS's model now gets `web_search` and
+`session_status` directly instead of through `tool_search`/`tool_call`, as it
+does in production today (probe gate (g)). The answer must show a real search.
 
 With Robert's go-ahead, from the CoS surface (`https://dev.minimoi.ai/app/cos`),
 ask something that needs a search, for example "What is today's date in

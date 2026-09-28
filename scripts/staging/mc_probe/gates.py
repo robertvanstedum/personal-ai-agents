@@ -513,23 +513,28 @@ def gate_n11_and_g(env: Env, combined_cos: dict):
     cos_only = cos_request("cos-gate-g")
     record("N11", "with MC off, CoS answers", bool(cos_only))
     if combined_cos and cos_only:
-        only_in_cos_only = sorted(set(cos_only["tool_names"]) - set(combined_cos["tool_names"]))
-        only_in_combined = sorted(set(combined_cos["tool_names"]) - set(cos_only["tool_names"]))
-        record("g", "CoS tool schemas: the only difference is Tool Search, removed by the hardening line tools.toolSearch=false",
-               not only_in_combined and set(only_in_cos_only) <= TOOL_SEARCH_TOOLS
-               and set(combined_cos["tool_names"]) == set(COS_TOOLS),
+        # Expected and explained (spec gate g): under the CoS-only config (production today) Tool Search is on
+        # by default, so CoS's model is sent only Tool Search's tools and reaches session_status and web_search
+        # through them; the combined config's hardening line tools.toolSearch=false sends the two tools directly.
+        record("g", "CoS tool schemas: CoS-only = Tool Search's tools only; combined = exactly session_status, web_search",
+               set(cos_only["tool_names"]) <= TOOL_SEARCH_TOOLS and set(combined_cos["tool_names"]) == set(COS_TOOLS),
                f"CoS-only config sends {cos_only['tool_names']}; combined sends {combined_cos['tool_names']}")
         changed = diff_lines(cos_only["system"], combined_cos["system"])
-        unexplained = [l for l in changed if l.startswith("+")
-                       or not any(k in l for k in ("tool_call", "tool_describe", "tool_search", "Deferred Tool",
-                                                   "deferred-schema", "(core):", "(plugin):", "Tool Search"))]
+        removed_ok = ("tool_call", "tool_describe", "tool_search", "Deferred Tool", "deferred-schema",
+                      "(core):", "(plugin):", "discoverable through search", "Tool Search")
+        added_ok = tuple(f"+- {tool}:" for tool in COS_TOOLS)
+        unexplained = [l for l in changed if l.strip() not in ("-", "+")
+                       and not (l.startswith("-") and any(k in l for k in removed_ok))
+                       and not (l.startswith("+") and l.startswith(added_ok))]
         mentions_mc = "Master Craftsman" in combined_cos["system"] or "mc-agent" in combined_cos["system"]
-        record("g", "CoS system prompt: no mention of MC; every diff line is the removed Tool Search listing",
-               not mentions_mc and not unexplained, f"{len(changed)} removed lines, unexplained: {unexplained[:4]}")
+        record("g", "CoS system prompt: no mention of MC; every diff line is Tool Search's listing swapped for the two tools",
+               not mentions_mc and not unexplained, f"{len(changed)} diff lines, unexplained: {unexplained[:4]}")
+        env.g_diff = changed
         record("g", "CoS uses its own key in both configs", combined_cos["key"] == cos_only["key"] == "cos-key")
-        record("g", "FINDING for N12 (production CoS, informational)", True,
-               f"the CoS-only config (production today) exposes Tool Search's {only_in_cos_only} to CoS's model "
-               "(tools.toolSearch defaults on); the combined config's hardening removes them")
+        record("g", "FINDING for N12 and N13 (informational)", True,
+               f"production CoS today reaches its tools through Tool Search ({cos_only['tool_names']}, "
+               "tools.toolSearch defaults on); in the combined config CoS gets session_status and web_search "
+               "directly. A CoS behaviour change on staging: the N13 real CoS turn must confirm web search still works")
     docker("exec", PROBE, "rm", "-f", "/home/node/.openclaw/.mc-selfcheck-failed")
 
 
@@ -609,7 +614,6 @@ def main() -> int:
             record("abort", "the combined start did not serve; the remaining gates were not run", False)
             return 1
         gate_a_tools(env)
-        combined_cos = cos_request("cos-gate-g")
         gate_a2_model_switch(env)
         gate_b_sessions(env)
         gate_c_workspace(env)
@@ -617,6 +621,9 @@ def main() -> int:
         gate_f_keys(env)
         stats = docker("stats", "--no-stream", "--format", "{{.MemUsage}}", PROBE).stdout.strip()
         record("memory", "probe memory after the gates (informational)", True, stats)
+        # Gate (g): CoS's request under the combined config, captured with the same workspace state
+        # as the CoS-only capture that follows (after gate (c)'s canaries), so only the config differs.
+        combined_cos = cos_request("cos-gate-g")
         gate_n11_and_g(env, combined_cos)
         s = time.time()
         docker("stop", "-t", "30", PROBE)
@@ -628,6 +635,7 @@ def main() -> int:
         gate_negative_controls(env)
     finally:
         (out / "results.json").write_text(json.dumps({"image": a.image, "startup_s": getattr(env, "startup_s", None),
+                                                      "gate_g_cos_prompt_diff": getattr(env, "g_diff", None),
                                                       "results": RESULTS}, indent=2))
         if not a.keep:
             env.cleanup()
