@@ -190,12 +190,14 @@ services:
       - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
       - OPENCLAW_DISABLE_BONJOUR=1
       - OPENCLAW_NO_AUTO_UPDATE=1
+      # Fewer glibc malloc arenas: about -60 MB idle, the only measured lever.
+      - MALLOC_ARENA_MAX=2
       - OPENCLAW_DEBUG_MODEL_PAYLOAD=${OPENCLAW_DEBUG_MODEL_PAYLOAD:-off}
       - TZ=${COS_AGENT_TIMEZONE:-America/Chicago}
     volumes:
       - cos-agent-a-state:/home/node/.openclaw
       - cos-agent-a-auth:/home/node/.config/openclaw
-    mem_limit: 1200m
+    mem_limit: 1400m
     # The image's own check runs only every 180 s; the deploy waits 360 s.
     # Probe the unauthenticated liveness endpoint with the image's node.
     healthcheck:

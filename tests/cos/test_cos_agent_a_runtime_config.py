@@ -289,6 +289,39 @@ def test_unchanged_or_fresh_volume_starts_without_a_replaced_copy(tmp_path):
     assert result.stderr == ""
 
 
+COS_MODEL_ROUTES = ["minimoi-gateway/minimoi-cos-agent"]
+
+
+def test_sessions_may_only_use_the_cos_agent_model_route():
+    config = _config()
+    agent = _agent(config)
+
+    # On 2026.9.x session_status accepts a `model` argument; without a
+    # policy it pins any model, even routes not listed under the provider.
+    # An empty list means allow-any, so the lists must be non-empty and exact.
+    agent_allow = agent["modelPolicy"]["allow"]
+    default_allow = config["agents"]["defaults"]["modelPolicy"]["allow"]
+    assert agent_allow == COS_MODEL_ROUTES
+    assert default_allow == COS_MODEL_ROUTES
+    assert agent_allow and default_allow
+    assert agent["model"]["primary"] in agent_allow
+    assert agent["model"]["fallbacks"] == []
+    assert config["agents"]["defaults"]["model"]["primary"] in default_allow
+    assert not any("*" in ref for ref in agent_allow + default_allow)
+    provider = config["models"]["providers"]["minimoi-gateway"]
+    assert [f"minimoi-gateway/{m['id']}" for m in provider["models"]] == COS_MODEL_ROUTES
+
+
+def test_search_plugin_calls_its_route_directly_not_through_model_selection():
+    plugin = SEARCH_PLUGIN_PATH.read_text()
+
+    # The web-search route never goes through OpenClaw's model selection, so it
+    # needs no modelPolicy entry (and must not get one).
+    assert 'const GATEWAY_RESPONSES_URL = "http://model-gateway:4000/v1/responses";' in plugin
+    assert "model: SEARCH_MODEL_ROUTE" in plugin
+    assert "minimoi-cos-web-search" not in CONFIG_PATH.read_text()
+
+
 def test_search_plugin_has_fixed_destination_and_bounded_inputs():
     plugin = SEARCH_PLUGIN_PATH.read_text()
     manifest = json.loads(SEARCH_MANIFEST_PATH.read_text())
@@ -337,7 +370,9 @@ def test_compose_service_has_isolated_state_and_local_only_ui_access():
     assert "cos-agent-a-auth:/home/node/.config/openclaw" in service
     assert "image: minimoi/cos-agent-a:openclaw-2026.9.6" in service
     assert "OPENCLAW_NO_AUTO_UPDATE=1" in service
-    assert "mem_limit: 1200m" in service
+    assert "mem_limit: 1400m" in service
+    assert "MALLOC_ARENA_MAX=2" in service
+    assert "NODE_OPTIONS" not in service
     assert '"127.0.0.1:18790:18789"' in service
     assert "0.0.0.0:18790" not in service
     assert "env_file:" not in service

@@ -92,6 +92,11 @@
     "defaults": {
       "model": {
         "primary": "minimoi-gateway/minimoi-cos-agent"
+      },
+      "modelPolicy": {
+        "allow": [
+          "minimoi-gateway/minimoi-cos-agent"
+        ]
       }
     },
     "entries": {
@@ -101,6 +106,11 @@
         "model": {
           "primary": "minimoi-gateway/minimoi-cos-agent",
           "fallbacks": []
+        },
+        "modelPolicy": {
+          "allow": [
+            "minimoi-gateway/minimoi-cos-agent"
+          ]
         },
         "skills": [],
         "heartbeat": {
