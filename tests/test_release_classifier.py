@@ -115,14 +115,18 @@ def test_the_classifier_itself_redeploys_nothing():
 
 def test_dormant_master_craftsman_files_redeploy_nothing_until_a_service_uses_them():
     assert classify(["docker/mc-agent/openclaw.json", "docker/mc-agent/workspace/AGENTS.md",
-                     "docker/mc-agent/mc-key-check.sh"]) == ("documents", ())
-    # Guard: the day a Dockerfile, compose file or deploy script uses docker/mc-agent/,
-    # this test fails and that change must classify the path as a real service.
+                     "docker/mc-agent/mc-key-check.sh", "docker/mc-agent/start-mc.sh",
+                     "docker/Dockerfile.mc-agent", "docker-compose.mc.yml"]) == ("documents", ())
+    # Guard: the day production's deploy path uses MC's image or files, this
+    # test fails and that change must classify them as a real service.
     root = Path(__file__).resolve().parent.parent
     users = []
-    candidates = list((root / "docker").glob("Dockerfile*")) + list(root.glob("docker-compose*.yml")) + [
-        root / ".github/workflows/deploy.yml", root / "scripts/operations/deploy_scoped_release.sh"]
-    for path in candidates:
-        if path.exists() and "docker/mc-agent" in path.read_text():
+    for path in (root / ".github/workflows/deploy.yml", root / "scripts/operations/deploy_scoped_release.sh",
+                 root / "docker-compose.prod.yml", root / "docker-compose.yml", root / "scripts/staging/build.sh"):
+        text = path.read_text()
+        if "docker/mc-agent" in text or "Dockerfile.mc-agent" in text or "mc-agent" in text:
             users.append(path.name)
     assert users == []
+    # Only MC's own Dockerfile builds from docker/mc-agent/.
+    builders = sorted(p.name for p in (root / "docker").glob("Dockerfile*") if "docker/mc-agent" in p.read_text())
+    assert builders == ["Dockerfile.mc-agent"]

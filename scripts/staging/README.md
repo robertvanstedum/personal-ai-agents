@@ -76,6 +76,8 @@ Run them from any checkout of this repository (the root checkout is fine).
 | `down.sh [service ...]` | whole stack down (volumes and files kept), or stop named services |
 | `status.sh` | containers, images vs `RELEASE`, health, port holders |
 | `verify.sh [--no-guild-routes] [--allow-holder PORT[,PORT]]` | the acceptance checks below; non-zero on any failure |
+| `focus.sh mc\|mc+cos\|all\|show` | run only the containers under test; the set is persisted and `up.sh`/`verify.sh` respect it (section "Focus") |
+| `mc.sh token\|build\|up\|down\|status\|clear-selfcheck` | Master Craftsman's own Compose project `minimoi-staging-mc` (section "Master Craftsman stage A"); never touches the main project |
 | `jobs.sh lesen\|intelligence\|leitura` | run one background job by hand, logged to `logs/` (Spec 159: dev jobs run only when triggered). `jobs.sh curator` refuses (exit 3): the curator skips every run outside `MINIMOI_ROLE=production`, and staging never runs as production |
 
 ### What `verify.sh` proves
@@ -103,7 +105,15 @@ Run them from any checkout of this repository (the root checkout is fine).
    are in `.env` (and the containers) only while `state/bots.on` exists, and
    `env.sources` records each as `keychain:telegram/<test account>` (names
    and sources only);
-8. Postgres has the `guild` and `research` schemas.
+8. Postgres has the `guild` and `research` schemas;
+9. Master Craftsman: the gateway is on the internal `minimoi-staging-mc-net`;
+   with `state/mc.enabled`, MC runs the release's image in its own project,
+   healthy after its self-check, only on that network, with no published port
+   and no CoS credential name, and its stage-A key gets 401 (anything else
+   fails).
+
+With a focus set (`focus.sh`), the services it keeps stopped are reported as
+"off (focus: <set>)" and everything running is checked in full.
 
 ## Cutover runbook (one sitting; every runtime step needs Robert's go-ahead)
 
@@ -405,6 +415,108 @@ MINIMOI_IMAGE_TAG=${PREV##*:agent-a-} docker-compose -f /opt/minimoi/docker-comp
 
 Then revert the upgrade on `main`; its deploy snapshots the restored volume
 again and recreates the 7.1 image, which reads it.
+
+## Focus: run only the containers under test (focus.sh)
+
+On the 8 GB Mac, run only what a test needs. The set is persisted in
+`~/minimoi-staging/state/focus` (its name) and `state/focus.stopped` (the
+services kept stopped). `up.sh` then starts only the kept services (with
+`--no-deps`, so the portal's dependencies stay stopped), and `verify.sh` reports
+the stopped ones as "off (focus: <set>)" instead of failing.
+
+| Set | Running | Use |
+|---|---|---|
+| `mc` | postgres, model-gateway, portal (+ MC's own project via `mc.sh`) | Master Craftsman work |
+| `mc+cos` | the same + cos-agent-a, cos-scheduler | CoS regression checks beside MC |
+| `all` | everything (the bots follow `state/bots.on`) | normal staging |
+
+```bash
+scripts/staging/focus.sh mc          # stops the rest with down.sh <service>; volumes and files untouched
+scripts/staging/focus.sh show
+scripts/staging/focus.sh all         # clears the focus and runs up.sh
+```
+
+`focus.sh` addresses only the staging project and never MC's own project.
+
+## Master Craftsman stage A: MC's own container, no spend (MC spec v0.9)
+
+MC runs in **its own Compose project**, `minimoi-staging-mc`
+(`docker-compose.mc.yml`), never in the main one, so the main project's
+`up --remove-orphans` and image pruning can never touch it, and MC's up and
+down never touch CoS Agent A, the gateway or the portal. `scripts/staging/mc.sh`
+is the only script that runs it. **CoS Agent A is unchanged** (image, config and
+service). The one main-stack change is permanent: the model gateway is also
+on the internal network `minimoi-staging-mc-net`.
+
+**What stage A proves, with no model call:** MC starts and restarts on its
+own; it is checked on a loopback-only gateway before anything can reach it; it
+reaches only the gateway, where its placeholder key is refused (401); it
+cannot reach CoS, Postgres, cos-scheduler, the portal, the host or the
+internet; a failed MC never affects CoS. The Shop floor stays "off" (turns are
+stage B; the first real reply is stage C, after Robert's key and cap).
+
+MC's secrets live only in `~/minimoi-staging/mc.env` (mode 600): in stage A,
+only `MC_OPENCLAW_GATEWAY_TOKEN` (MC's own OpenClaw token). `mc.sh up` refuses
+if an MC value equals one of CoS's (compared, never printed) or if an MC name
+is in `.env`.
+
+**Start-up on the 2-CPU VM.** Two OpenClaw starts at once can make one fail
+its start-up lease (seen in the #249 probe). `mc.sh up` waits until the gateway
+and CoS Agent A are healthy before starting MC; a start that still fails is
+retried inside the start (up to 10 times, 30 s apart: after a hard kill
+OpenClaw's owner lease on MC's state stays held for a few minutes) and then by
+`restart: on-failure:3`; the healthcheck allows 10 minutes. MC's
+failures never restart CoS. After a Colima restart, start MC with `mc.sh up`
+once CoS is healthy.
+
+### Steps (the coordinator runs them after review; each runtime step needs Robert's go-ahead)
+
+0. **Before (no change):** `colima ssh -- free -m`; the CoS regression question
+   below; note `docker inspect -f '{{.State.StartedAt}}' minimoi-cos-agent-a minimoi-model-gateway`.
+1. **Build first, nothing stopped:**
+   `scripts/staging/build.sh claude/mc-separate-pr2-stage-a --reviewed-branch`, then
+   `scripts/staging/mc.sh build` (the MC image, from the same pinned release).
+2. **The one main-stack change** (the gateway joins `minimoi-staging-mc-net`;
+   this recreates the gateway once, and nothing else changes):
+   `scripts/staging/up.sh && scripts/staging/verify.sh`. Then the CoS regression
+   question again.
+3. **Focus, then MC:**
+   ```bash
+   scripts/staging/focus.sh mc+cos                # or mc
+   scripts/staging/mc.sh token                    # MC's own OpenClaw token into mc.env (not printed)
+   touch ~/minimoi-staging/state/mc.enabled
+   scripts/staging/mc.sh up                       # waits for the gateway and CoS, then starts MC
+   scripts/staging/mc.sh status                   # self-check: serving
+   scripts/staging/verify.sh                      # section 9: MC checks; CoS as before
+   ```
+4. **Boundary tests on staging** (C1-C8): `verify.sh` section 9 covers the
+   running MC; the full set runs in a throwaway probe beside staging:
+   `python3 scripts/staging/mc_probe/stage_a.py --mc-image minimoi-staging/mc-agent:<sha7> --cos-image minimoi-staging/cos-scheduler:agent-a-<sha7> --gateway-image minimoi-staging/cos-scheduler:model-gateway-<sha7>`
+   (needs about 1.5 GB free in the VM; with focus `mc` it fits easily).
+5. **Memory:** `docker stats --no-stream` with focus `mc` and `mc+cos`; stop if
+   the VM's available memory is under 0.5 GB with MC up and idle (v0.9 §7).
+6. **Independence on staging:** `docker restart minimoi-mc-agent`, then
+   `docker kill minimoi-mc-agent && scripts/staging/mc.sh up`; CoS Agent A's and
+   the gateway's `StartedAt` must be unchanged and CoS must answer throughout.
+7. **The CoS regression question** (before step 2, after step 2, after step 6;
+   costs one CoS call each, with Robert's go-ahead): one real CoS question with
+   web search from `https://dev.minimoi.ai/app/cos`. Pass: a cited answer **and**
+   a new line with `"logical_model":"minimoi-cos-web-search"` in
+   `~/minimoi-staging/data/model_gateway_receipts.jsonl`.
+
+### Rollback
+
+- **MC off:** `scripts/staging/mc.sh down; rm ~/minimoi-staging/state/mc.enabled`.
+  CoS, the gateway and the portal are not touched.
+- **MC's self-check failed** (`mc.sh status` says `selfcheck-failed`; it stays
+  up, unhealthy, and never loops): read it with
+  `docker exec minimoi-mc-agent cat /home/node/.openclaw/.mc-selfcheck-failed`,
+  fix the cause, then `scripts/staging/mc.sh clear-selfcheck`.
+- **The gateway network change:** build and `up.sh` the previous release; the
+  gateway is recreated once without `minimoi-staging-mc-net` (MC must be down).
+- **Focus:** `scripts/staging/focus.sh all`.
+- MC's volumes (`minimoi-staging-mc-agent-{state,auth}`) are never removed by a
+  script; remove them by hand only when MC is retired.
 
 ## Rules
 

@@ -4,7 +4,8 @@
 # Usage: up.sh [--allow-holder PORT[,PORT...]] [service ...]
 #
 # Runs `compose up -d --no-build --remove-orphans` with the local images from
-# build.sh. The two Telegram bots (profile "bots") start only when
+# build.sh. With a focus set (focus.sh; state/focus.stopped), only the kept
+# services start, with --no-deps, and the stopped ones stay stopped. The two Telegram bots (profile "bots") start only when
 # $STAGING_ROOT/state/bots.on exists, their native launchd pollers are gone
 # (one poller per token), and env.sh wrote their Keychain test tokens;
 # otherwise any running bot container is stopped.
@@ -95,7 +96,23 @@ if [[ -n "$refused" ]]; then
 retire the holder, or pass --allow-holder PORT for a native holder the runbook retires later"
 fi
 
-if bots_enabled; then
+# Focus (focus.sh): start only the kept services, without their dependencies
+# (the portal's depends_on would otherwise start curator, German, Portuguese
+# and cos-scheduler), and keep the stopped ones stopped.
+if [[ -n "$(focus_stopped)" ]]; then
+  for service in "$@"; do
+    ! is_focus_stopped "$service" || die "$service is kept stopped by focus '$(focus_name)'; run scripts/staging/focus.sh all first"
+  done
+  kept=()
+  for service in $STAGING_CORE_SERVICES; do
+    is_focus_stopped "$service" || kept+=("$service")
+  done
+  [[ $# -gt 0 ]] && kept=("$@")
+  note "focus '$(focus_name)': starting ${kept[*]} only; kept stopped: $(focus_stopped)"
+  staging_compose up -d --no-build --no-deps "${kept[@]}"
+  # shellcheck disable=SC2046
+  staging_compose --profile bots stop $(focus_stopped) >/dev/null 2>&1 || true
+elif bots_enabled; then
   staging_compose --profile bots up -d --no-build --remove-orphans "$@"
 else
   staging_compose up -d --no-build --remove-orphans "$@"

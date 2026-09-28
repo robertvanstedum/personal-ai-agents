@@ -329,7 +329,11 @@ def test_staging_volumes_are_external_and_staging_named():
     assert set(data["volumes"]) == set(_load(PROD)["volumes"])
     for key, volume in data["volumes"].items():
         assert volume == {"external": True, "name": f"minimoi-staging-{key}"}
-    assert data["networks"] == {"iotconnect-edge": {"name": "minimoi-staging-iotconnect-edge"}}
+    assert data["networks"] == {
+        "iotconnect-edge": {"name": "minimoi-staging-iotconnect-edge"},
+        # Master Craftsman's internal network (MC spec v0.9 §3; tests/test_staging_mc_stage_a.py).
+        "mc-net": {"name": "minimoi-staging-mc-net", "internal": True},
+    }
 
 
 def test_staging_override_holds_no_production_path_or_secret():
