@@ -74,7 +74,7 @@ def session_view():
         "user": {"username": user.get("username"), "display_name": user.get("display_name"),
                  "tier": user.get("tier")},
         "csrf_token": csrf_token(),
-        "mc_state": floor_state.MC_STATE,
+        "mc_state": floor_state.mc_view(c["services"], notes_ok=True)["state"],
         "record_modes": ["on_record", "off_record"],
         "server_time": now_iso(),
         "base": f"{c['url_prefix']}/api/v1",
@@ -456,6 +456,26 @@ def not_found(rest: str = ""):
     return json_error("not_found", "No such Guild API resource.", 404)
 
 
+@owner_api
+def mc_turn():
+    """The owner-only, server-side route for a Master Craftsman turn: a seam,
+    DISABLED. It checks the write as every floor write does (CSRF, same
+    origin, on the record), then refuses: turns are not wired
+    (mc.backend.TURNS_WIRED is False; plan stage B wires them behind an
+    explicit environment gate). It never calls a backend, a runtime or a
+    model, and never stores anything."""
+    from .mc import backend as mc_backend
+
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    if not mc_backend.TURNS_WIRED:
+        state = floor_state.mc_view(cfg()["services"], notes_ok=True)["state"]
+        return json_error("mc_turns_off", "Master Craftsman turns are not switched on on this portal. "
+                          "Your note is kept; nothing was sent.", 409, mc_state=state)
+    return json_error("mc_turns_off", "Master Craftsman turns are not switched on on this portal.", 409)
+
+
 RULES = [
     ("/session", "api_session", session_view, ["GET"]),
     ("/floor", "api_floor", floor_view, ["GET"]),
@@ -473,6 +493,7 @@ RULES = [
     ("/postits/<int:postit_id>/restore", "api_postit_restore", postit_restore, ["POST"]),
     ("/continue", "api_continue", continue_get, ["GET"]),
     ("/continue", "api_continue_put", continue_put, ["PUT"]),
+    ("/mc/turns", "api_mc_turn", mc_turn, ["POST"]),
     ("/", "api_root", not_found, ALL_METHODS),
     ("/<path:rest>", "api_not_found", not_found, ALL_METHODS),
 ]

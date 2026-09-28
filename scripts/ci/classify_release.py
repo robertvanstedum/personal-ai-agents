@@ -28,6 +28,9 @@ def _is_release_only(path: str) -> bool:
         "README.md", "README.pdf", "ARCHITECTURE.md", "ARCHITECTURE.pdf",
         "OPERATIONS.md", "OPERATIONS.pdf", "ROADMAP.md", "ROADMAP.pdf",
         "data/guild/build_queue.json", "scripts/sync_docs.sh",
+        # The classifier itself runs in CI (deploy.yml) and is never part of a
+        # service image, so changing it redeploys nothing.
+        "scripts/ci/classify_release.py",
     }
     return (
         path in exact
@@ -44,7 +47,16 @@ def _is_release_only(path: str) -> bool:
         or path.startswith("planning-studio/")
         or path in {"requirements.test.txt", "pytest.ini", ".gitignore"}
         or _is_staging_only(path)
+        or path.startswith(DORMANT_PREFIXES)
     )
+
+
+# Files that no production service is built from or mounts yet. Master
+# Craftsman's own OpenClaw config, workspace seed and key check (separate-
+# container plan, PR 1) are dormant until a later PR adds an MC service;
+# tests/test_release_classifier.py fails if any Dockerfile, compose file or
+# deploy script starts referencing them, so that PR must classify them anew.
+DORMANT_PREFIXES = ("docker/mc-agent/",)
 
 
 # The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).
