@@ -20,6 +20,7 @@ from typing import Callable
 from domains.guild import queue_store as qs
 
 from .adapters import DbHistory, LiveBuildQueue, LiveSessions, NotInstrumented, OperationsProbe
+from .mc import CachedHealth, MasterCraftsmanBackend, OffBackend
 from .stores import DEFAULT_FLOOR, FloorStores
 
 GREY_SOURCES = ("agents", "usage", "rollouts")
@@ -35,6 +36,14 @@ class Services:
     floor: FloorStores | None = None
     not_instrumented: dict = field(default_factory=dict)
     audit: Callable | None = None   # (item_id, old, new, note) -> "ok" | "skipped"; may raise
+    # Master Craftsman (MINIMOI_GUILD_MC). ready() never checks it: an MC
+    # problem shows as "unavailable" on the floor and never fails the mount.
+    mc: MasterCraftsmanBackend = field(default_factory=OffBackend)
+    mc_health: CachedHealth | None = None
+
+    def __post_init__(self):
+        if self.mc_health is None or self.mc_health.backend is not self.mc:
+            self.mc_health = CachedHealth(self.mc)
 
     def ready(self) -> list[str]:
         problems = []
@@ -57,7 +66,8 @@ def build_services(*, queue_path: str | None, operations_status_url: str | None 
                    records_db: str | None = None, database_url: Callable[[], str | None] = lambda: None,
                    audit: Callable | None = None, http_get: Callable | None = None,
                    db_connect: Callable | None = None, store: "qs.QueueStore | None" = None,
-                   floor: FloorStores | None = None, floor_key: str = DEFAULT_FLOOR) -> Services:
+                   floor: FloorStores | None = None, floor_key: str = DEFAULT_FLOOR,
+                   mc: MasterCraftsmanBackend | None = None) -> Services:
     store = store or qs.QueueStore(queue_path)
     return Services(
         store=store,
@@ -68,4 +78,5 @@ def build_services(*, queue_path: str | None, operations_status_url: str | None 
         floor=floor or FloorStores(database_url, connect=db_connect, floor=floor_key),
         not_instrumented={name: NotInstrumented(name) for name in GREY_SOURCES},
         audit=audit,
+        mc=mc or OffBackend(),
     )

@@ -60,6 +60,41 @@ STAGING_CORE_CONTAINERS=(
 )
 STAGING_BOT_CONTAINERS=(minimoi-system-bot minimoi-cos-bot)
 
+# Master Craftsman (MC spec v0.7, stage 1a). Two switches, both staging-only:
+#   state/mc.agent  "on" adds docker-compose.staging-mc.yml: CoS Agent A's
+#                   container starts through start-with-mc.sh with MC as a
+#                   second agent (absent or anything else: off, #244's start)
+#   state/mc.mode   the portal's MINIMOI_GUILD_MC: off (default) | stub |
+#                   openclaw | grok
+# MC secrets (MC_MODEL_GATEWAY_KEY, MC_ANTHROPIC_API_KEY; stage 1b) live only in
+# $STAGING_ROOT/mc.env (mode 600), passed as an interpolation-only --env-file:
+# never in .env, which eight services load whole.
+STAGING_MC_AGENT_FILE="$STAGING_ROOT/state/mc.agent"
+STAGING_MC_MODE_FILE="$STAGING_ROOT/state/mc.mode"
+STAGING_MC_ENV="$STAGING_ROOT/mc.env"
+STAGING_MC_OVERLAY="docker-compose.staging-mc.yml"
+STAGING_MC_MODES="off stub openclaw grok"
+
+mc_agent_on() { [[ -f "$STAGING_MC_AGENT_FILE" && "$(tr -d '[:space:]' < "$STAGING_MC_AGENT_FILE")" == on ]]; }
+
+# Prints the portal's MC mode; dies on a value that is not one of STAGING_MC_MODES.
+mc_mode() {
+  local mode=off
+  if [[ -f "$STAGING_MC_MODE_FILE" ]]; then
+    mode=$(tr -d '[:space:]' < "$STAGING_MC_MODE_FILE")
+    [[ -n "$mode" ]] || mode=off
+  fi
+  [[ " $STAGING_MC_MODES " == *" $mode "* ]] || die "$STAGING_MC_MODE_FILE says '$mode'; use one of: $STAGING_MC_MODES"
+  echo "$mode"
+}
+
+require_mc_env() {
+  [[ -f "$STAGING_MC_ENV" ]] || return 0
+  local mode
+  mode=$(file_mode "$STAGING_MC_ENV")
+  [[ "$mode" == "600" ]] || die "$STAGING_MC_ENV must be mode 600 (is $mode)"
+}
+
 # External volumes (docker-compose.staging.yml). `compose down -v` cannot
 # remove external volumes, and down.sh refuses -v anyway.
 STAGING_VOLUMES=(minimoi-staging-postgres-data minimoi-staging-cos-agent-a-state minimoi-staging-cos-agent-a-auth)
@@ -136,12 +171,23 @@ staging_compose() {
   require_absolute_root
   require_release
   require_env
-  MINIMOI_ROOT="$STAGING_ROOT" docker compose \
+  require_mc_env
+  local mode
+  mode=$(mc_mode)
+  local extra=()
+  if mc_agent_on; then
+    [[ -f "$RELEASE_DIR/$STAGING_MC_OVERLAY" ]] \
+      || die "state/mc.agent is on but the pinned release has no $STAGING_MC_OVERLAY (it predates MC stage 1a); set it to off"
+    extra+=(-f "$RELEASE_DIR/$STAGING_MC_OVERLAY")
+  fi
+  [[ -f "$STAGING_MC_ENV" ]] && extra+=(--env-file "$STAGING_MC_ENV")
+  MINIMOI_ROOT="$STAGING_ROOT" MINIMOI_GUILD_MC="$mode" docker compose \
     -p "$STAGING_PROJECT" \
     --env-file "$STAGING_ENV_FILE" \
     --env-file "$STAGING_RELEASE_ENV" \
     -f "$RELEASE_DIR/docker-compose.prod.yml" \
     -f "$RELEASE_DIR/docker-compose.staging.yml" \
+    ${extra[@]+"${extra[@]}"} \
     "$@"
 }
 

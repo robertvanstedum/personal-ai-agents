@@ -16,7 +16,17 @@
 #   minimoi-cos-agent-anthropic  same as prod and the dev gateway on main
 #
 # The dev gateway's Mac-only Ollama route (minimoi-cos-agent-local) is left
-# out, as in production: staging mirrors production's route set.
+# out, as in production: staging mirrors production's route set, plus one
+# staging-only route:
+#
+#   minimoi-mc-agent             Master Craftsman (MC spec v0.7, stage 1a):
+#                                anthropic/claude-haiku-4-5-20251001 on MC's
+#                                OWN provider key (MC_ANTHROPIC_API_KEY, never
+#                                ANTHROPIC_API_KEY), no fallback. Only MC's own
+#                                capped virtual key may call it (stage 1b); in
+#                                1a that key does not exist, and the provider
+#                                key is a placeholder (docker-compose.staging.yml).
+#
 # tests/test_staging_environment.py enforces this shape.
 
 model_list:
@@ -68,6 +78,17 @@ model_list:
       mode: chat
       supports_function_calling: true
       fallback_position: 2
+
+  - model_name: minimoi-mc-agent
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/MC_ANTHROPIC_API_KEY
+      timeout: 120
+    model_info:
+      id: mc-anthropic-haiku
+      base_model: anthropic/claude-haiku-4-5-20251001
+      mode: chat
+      supports_function_calling: true
 
 router_settings:
   fallbacks:

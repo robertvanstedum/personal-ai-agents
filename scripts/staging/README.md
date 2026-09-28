@@ -103,7 +103,12 @@ Run them from any checkout of this repository (the root checkout is fine).
    are in `.env` (and the containers) only while `state/bots.on` exists, and
    `env.sources` records each as `keychain:telegram/<test account>` (names
    and sources only);
-8. Postgres has the `guild` and `research` schemas.
+8. Postgres has the `guild` and `research` schemas;
+9. Master Craftsman (checks 9a-9p): the portal's `MINIMOI_GUILD_MC` matches
+   `state/mc.mode`; `cos-agent-a`'s start matches `state/mc.agent` (and a CoS
+   or MC self-check failure is shown loudly); MC key names only on their
+   holders and never in `.env`; a no-key gateway call gets 401; per-agent
+   effective tools; scheduler off; CoS callers pinned to `cos-agent-a`.
 
 ## Cutover runbook (one sitting; every runtime step needs Robert's go-ahead)
 
@@ -405,6 +410,167 @@ MINIMOI_IMAGE_TAG=${PREV##*:agent-a-} docker-compose -f /opt/minimoi/docker-comp
 
 Then revert the upgrade on `main`; its deploy snapshots the restored volume
 again and recreates the 7.1 image, which reads it.
+
+## Master Craftsman stage 1a (MC beside CoS in Agent A's OpenClaw, no MC spend)
+
+Spec: MC spec v0.7 (`SPEC_MASTER_CRAFTSMAN_OPENCLAW_BACKEND_v0.7_2026-09-27.md`)
+with Robert's September 28 decisions. Staging only; production keeps #244's
+start path and the CoS-only config. **The coordinator runs these steps after
+review; every runtime step needs Robert's go-ahead.**
+
+What 1a turns on: `cos-agent-a` starts through `start-with-mc.sh` (overlay
+`docker-compose.staging-mc.yml`) with a second agent, `mc-agent`: its own
+workspace, only `session_status`, pinned to its own route and key. MC's key
+does not exist yet, so the container gets a placeholder the gateway refuses
+(401): **no MC turn can spend anything**. The Shop floor shows
+"Master Craftsman is unavailable · not connected yet". CoS keeps its current
+gateway key (N8 = no).
+
+**The readiness gate.** On every start the script checks the config on a
+loopback-only gateway first (nothing outside the container can connect; CoS
+callers get "connection refused", like a stopped container), then serves the
+checked config on the LAN. Expect about 1 to 2 minutes (probe: 44 to 52 s)
+before `127.0.0.1:18790` and in-network CoS callers answer after any restart;
+the health check has a 240 s start period. If CoS's own check fails, the
+container stays up and unhealthy and OpenClaw is not started (no loop). If
+only MC's check fails, CoS starts alone and `verify.sh` fails 9b loudly. If
+the check cannot complete (a gateway call times out twice on a busy host),
+nothing is served and nothing sticky is written: the container exits and
+Docker restarts it (`state` shows `check-inconclusive-*` meanwhile).
+
+Switches (both under `~/minimoi-staging/state/`, read by `lib.sh`):
+
+| File | Values | Effect |
+|---|---|---|
+| `mc.agent` | `on` / absent or `off` | adds `docker-compose.staging-mc.yml` (combined start) |
+| `mc.mode` | `off` (default), `stub`, `openclaw`, `grok` | the portal's `MINIMOI_GUILD_MC`; `openclaw` needs `mc.agent` on; `grok` shows "not built yet" |
+
+MC's secrets (1b) go only in `~/minimoi-staging/mc.env` (mode 600), never in
+`.env`.
+
+### 0. Before (no change)
+
+```bash
+colima ssh -- free -m                                   # "available" >= about 1.7 GB with staging idle; stop below 1.2 GB
+ps -axo rss=,command= | grep -i '[o]penclaw' | head -5 # Robert's personal OpenClaw on the Mac: record its RSS (KB); spec 1a entry
+docker exec minimoi-cos-agent-a node /app/openclaw.mjs gateway call sessions.list --params '{"agentId":"cos-agent-a","limit":500}' --json \
+  | python3 -c 'import json,sys; t=sys.stdin.read(); d=json.loads(t[t.index("{"):]); print("cos sessions:", len(d.get("sessions") or d.get("items") or []))'   # baseline for 9p
+```
+
+Optional, no spend, staging untouched (needs about 1.3 GB free in Colima):
+re-run the isolation gates on the image `build.sh` makes in step 2:
+`python3 scripts/staging/mc_probe/gates.py --image minimoi-staging/cos-scheduler:agent-a-<sha7>`.
+
+### 1. Snapshot both Agent A volumes (container stopped)
+
+Adding a second agent with `agents.ownership: "explicit"` may migrate state
+(V17), so snapshot first, as for the 9.6 upgrade:
+
+```bash
+S=~/minimoi-staging; STAMP=$(date +%Y%m%d-%H%M%S)
+AGENT_A_IMG=$(docker inspect -f '{{.Config.Image}}' minimoi-cos-agent-a)
+echo "$AGENT_A_IMG" > "$S/rollback/agent-a-image-before-mc.txt"
+cp "$S/RELEASE" "$S/rollback/RELEASE-before-mc"
+echo "$STAMP" > "$S/rollback/agent-a-premc-stamp.txt"
+scripts/staging/down.sh cos-agent-a
+for v in state auth; do
+  docker volume create "minimoi-staging-cos-agent-a-$v-premc-$STAMP"
+  docker run --rm --network none --user 0:0 \
+    -v "minimoi-staging-cos-agent-a-$v:/from:ro" -v "minimoi-staging-cos-agent-a-$v-premc-$STAMP:/to" \
+    --entrypoint cp "$AGENT_A_IMG" -a /from/. /to/
+done
+docker volume ls | grep premc                            # both copies listed
+```
+
+### 2. Build the reviewed branch, MC still off
+
+```bash
+printf 'off\n' > ~/minimoi-staging/state/mc.agent; printf 'off\n' > ~/minimoi-staging/state/mc.mode
+scripts/staging/build.sh claude/mc-stage-1a --reviewed-branch
+scripts/staging/up.sh && scripts/staging/verify.sh      # 9b: CoS-only start, image's CoS-only config
+```
+
+### 3. Turn Master Craftsman on (the CoS-changing step)
+
+```bash
+printf 'on\n' > ~/minimoi-staging/state/mc.agent; printf 'openclaw\n' > ~/minimoi-staging/state/mc.mode
+scripts/staging/up.sh                                   # recreates cos-agent-a (combined start) and the portal
+until [ "$(docker inspect -f '{{.State.Health.Status}}' minimoi-cos-agent-a)" = healthy ]; do sleep 5; done
+docker exec minimoi-cos-agent-a cat /tmp/minimoi-mc/state          # serving-combined
+docker logs minimoi-cos-agent-a 2>&1 | grep start-with-mc          # CHECK phase, then "serving CoS and Master Craftsman"
+scripts/staging/verify.sh                               # all checks, including 9a-9p
+colima ssh -- free -m                                   # record; stop if "available" < 0.5 GB
+```
+
+Then, no spend: an MC turn over loopback must answer **401** (the gateway
+refuses MC's placeholder key; nothing reaches a provider):
+
+```bash
+docker exec minimoi-cos-agent-a node -e "fetch('http://127.0.0.1:18789/v1/chat/completions',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+process.env.OPENCLAW_GATEWAY_TOKEN},body:JSON.stringify({model:'openclaw/mc-agent',user:'guild-mc:stage-1a-check',messages:[{role:'user',content:'stage 1a check'}]})}).then(async r=>console.log(r.status,(await r.text()).slice(0,160)))"
+# expect: 401 {"error":{...,"type":"authentication_error"}}
+```
+
+Robert opens `https://dev.minimoi.ai/guild-next/guild/build`: the conversation
+header reads "Master Craftsman is unavailable · not connected yet".
+
+### 4. One real CoS turn with web search (N13; costs one CoS call)
+
+This turn matters more than usual: the combined config turns Tool Search off
+(`tools.toolSearch: false`), so CoS's model now gets `web_search` and
+`session_status` directly instead of through `tool_search`/`tool_call`, as it
+does in production today (probe gate (g)). The answer must show a real search.
+
+With Robert's go-ahead, from the CoS surface (`https://dev.minimoi.ai/app/cos`),
+ask something that needs a search, for example "What is today's date in
+Chicago, and one headline from today? Search the web." Expect a cited answer
+and a new line in `~/minimoi-staging/data/model_gateway_receipts.jsonl`. Then
+`scripts/staging/verify.sh` again; the CoS session count (9p) must not be
+lower than step 0's.
+
+### 5. Clean stop, then the rollback round trip (tested once)
+
+```bash
+time docker stop -t 30 minimoi-cos-agent-a              # well under 30 s; exit code 0
+printf 'off\n' > ~/minimoi-staging/state/mc.agent; printf 'off\n' > ~/minimoi-staging/state/mc.mode
+scripts/staging/up.sh && scripts/staging/verify.sh      # CoS-only start (#244's apply-config.sh); 9b passes
+printf 'on\n' > ~/minimoi-staging/state/mc.agent; printf 'openclaw\n' > ~/minimoi-staging/state/mc.mode
+scripts/staging/up.sh && scripts/staging/verify.sh      # combined again
+```
+
+### Rollback
+
+- **MC off, CoS untouched:** `printf 'off\n' > ~/minimoi-staging/state/mc.agent; printf 'off\n' > ~/minimoi-staging/state/mc.mode; scripts/staging/up.sh`.
+  `cos-agent-a` is recreated on #244's start and the CoS-only config.
+- **Back to the previous release:** `scripts/staging/build.sh "$(sed -n 's/^sha=//p' ~/minimoi-staging/rollback/RELEASE-before-mc | tail -n 1)"` then `up.sh && verify.sh`.
+- **If CoS misbehaves after MC was on** (state migrated, V17): restore the
+  snapshot with the previous image, as in the 9.6 rollback:
+
+```bash
+S=~/minimoi-staging; STAMP=$(cat "$S/rollback/agent-a-premc-stamp.txt"); PREV=$(cat "$S/rollback/agent-a-image-before-mc.txt")
+printf 'off\n' > "$S/state/mc.agent"; printf 'off\n' > "$S/state/mc.mode"
+scripts/staging/down.sh cos-agent-a
+for v in state auth; do
+  docker run --rm --network none --user 0:0 \
+    -v "minimoi-staging-cos-agent-a-$v-premc-$STAMP:/from:ro" -v "minimoi-staging-cos-agent-a-$v:/to" \
+    --entrypoint sh "$PREV" -c 'find /to -mindepth 1 -delete && cp -a /from/. /to/'
+done
+scripts/staging/build.sh "$(sed -n 's/^sha=//p' "$S/rollback/RELEASE-before-mc" | tail -n 1)"
+scripts/staging/up.sh && scripts/staging/verify.sh
+```
+
+- **Self-check markers** (sticky, on the state volume): read, fix, clear, restart.
+  - MC's check failed (CoS runs alone): `docker exec minimoi-cos-agent-a cat /home/node/.openclaw/.mc-selfcheck-failed`, then `docker exec minimoi-cos-agent-a rm /home/node/.openclaw/.mc-selfcheck-failed && docker restart minimoi-cos-agent-a`. A new release retries by itself.
+  - CoS's check failed (both down, container unhealthy): the same with `.cos-selfcheck-failed`. With `mc.agent` off the marker is ignored (#244's start), which is the fast way back.
+
+Keep the `premc` copies until MC has run cleanly for a week.
+
+### Stage 1b (not in 1a)
+
+Robert creates MC's own capped key (about $15/month) and MC's own Anthropic
+key with a console limit, and stores them himself; they go into
+`~/minimoi-staging/mc.env` (`MC_MODEL_GATEWAY_KEY`, `MC_ANTHROPIC_API_KEY`).
+1b also needs the gateway's key database, the known-invalid-key 401 proof
+(H3), K1/K1b, and the receipt-callback change (RB-H1) before any paid MC turn.
 
 ## Rules
 

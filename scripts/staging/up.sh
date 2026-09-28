@@ -4,7 +4,10 @@
 # Usage: up.sh [--allow-holder PORT[,PORT...]] [service ...]
 #
 # Runs `compose up -d --no-build --remove-orphans` with the local images from
-# build.sh. The two Telegram bots (profile "bots") start only when
+# build.sh. With $STAGING_ROOT/state/mc.agent = on, lib.sh adds
+# docker-compose.staging-mc.yml (Master Craftsman beside CoS in cos-agent-a);
+# state/mc.mode sets the portal's MINIMOI_GUILD_MC, and "openclaw" is refused
+# while the agent is off. The two Telegram bots (profile "bots") start only when
 # $STAGING_ROOT/state/bots.on exists, their native launchd pollers are gone
 # (one poller per token), and env.sh wrote their Keychain test tokens;
 # otherwise any running bot container is stopped.
@@ -78,6 +81,19 @@ if bots_enabled; then
 else
   note "bots profile off (touch $STAGING_BOTS_FLAG and rerun env.sh --force to enable, after the native pollers are retired)"
 fi
+
+# Master Craftsman (state/mc.agent, state/mc.mode; lib.sh adds the overlay).
+MC_MODE=$(mc_mode)
+if mc_agent_on; then
+  [[ -f "$RELEASE_DIR/$STAGING_MC_OVERLAY" ]] \
+    || die "state/mc.agent is on but the pinned release has no $STAGING_MC_OVERLAY; set it to off or build a release that has it"
+  note "Master Craftsman agent ON: cos-agent-a starts through start-with-mc.sh (combined CoS + MC, checked before it serves)"
+else
+  note "Master Craftsman agent off: cos-agent-a keeps the CoS-only start (#244)"
+  [[ "$MC_MODE" != openclaw ]] \
+    || die "state/mc.mode is openclaw but state/mc.agent is not on; turn the agent on first (or set mc.mode to off)"
+fi
+note "portal MINIMOI_GUILD_MC=$MC_MODE"
 
 refused=""
 for port in $STAGING_HOST_PORTS; do

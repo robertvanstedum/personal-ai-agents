@@ -74,7 +74,7 @@ def session_view():
         "user": {"username": user.get("username"), "display_name": user.get("display_name"),
                  "tier": user.get("tier")},
         "csrf_token": csrf_token(),
-        "mc_state": floor_state.MC_STATE,
+        "mc_state": floor_state.mc_view(c["services"], notes_ok=True)["state"],
         "record_modes": ["on_record", "off_record"],
         "server_time": now_iso(),
         "base": f"{c['url_prefix']}/api/v1",
