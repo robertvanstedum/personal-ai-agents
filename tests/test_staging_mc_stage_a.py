@@ -301,3 +301,58 @@ def test_mc_build_bakes_the_release_and_never_removes_volumes(tmp_path, shell):
     text = (SCRIPTS / "mc.sh").read_text()
     assert "never removed by a script" in text
     assert "minimoi-staging\" " not in text   # never addresses the main project
+
+
+# ── verify.sh: the isolated bridge check (a false FAIL on the first rollout) ──
+
+FAKE_DOCKER_NET = """#!/bin/sh
+# docker network inspect answers as Docker 29.5.2 does for an isolated bridge.
+case "$*" in
+  *"network inspect -f {{range .IPAM.Config}}"*) printf '%s\\n' "$FAKE_GATEWAY_LINE"; exit 0 ;;
+  *"network inspect -f {{.Id}}"*) echo 3bc2e61a2209f00dfeedfacecafe0123456789abcdef0123456789abcdef01; exit 0 ;;
+  *"com.docker.network.bridge.name"*) echo "<no value>"; exit 0 ;;
+esac
+exit 0
+"""
+FAKE_COLIMA = """#!/bin/sh
+echo "$*" >> "$FAKE/colima.log"
+[ -n "$FAKE_BRIDGE_ADDR" ] && echo "5: br-3bc2e61a2209    inet $FAKE_BRIDGE_ADDR brd 172.25.255.255 scope global br-3bc2e61a2209"
+exit 0
+"""
+
+
+@pytest.mark.parametrize("line,expected", [
+    ("invalid IP", ""),          # Docker 29.5.2, isolated bridge (the rollout's false FAIL)
+    ("<no value>", ""),
+    ("", ""),
+    ("172.25.0.1", "172.25.0.1"),
+])
+def test_network_gateways_ignores_docker_renderings_of_no_gateway(tmp_path, shell, line, expected):
+    from test_staging_environment import _lib
+    bin_dir = tmp_path / "bin"
+    _write_exe(bin_dir / "docker", FAKE_DOCKER_NET)
+    result = _lib(shell, tmp_path, "network_gateways minimoi-staging-mc-net",
+                  {"PATH": f"{bin_dir}:{os.environ['PATH']}", "FAKE_GATEWAY_LINE": line})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
+
+
+@pytest.mark.parametrize("addr,expected", [("", ""), ("172.25.0.1/16", "172.25.0.1/16")])
+def test_bridge_ipv4_reads_the_bridge_interface_in_the_vm(tmp_path, shell, addr, expected):
+    from test_staging_environment import _lib
+    bin_dir, fake = tmp_path / "bin", tmp_path / "fake"
+    fake.mkdir()
+    _write_exe(bin_dir / "docker", FAKE_DOCKER_NET)
+    _write_exe(bin_dir / "colima", FAKE_COLIMA)
+    result = _lib(shell, tmp_path, "bridge_ipv4 minimoi-staging-mc-net",
+                  {"PATH": f"{bin_dir}:{os.environ['PATH']}", "FAKE": str(fake), "FAKE_BRIDGE_ADDR": addr})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
+    assert "ip -4 -o addr show dev br-3bc2e61a2209" in (fake / "colima.log").read_text()
+
+
+def test_verify_uses_the_normalized_gateway_and_the_bridge_interface():
+    text = (SCRIPTS / "verify.sh").read_text()
+    assert 'ipamgw=$(network_gateways "$STAGING_MC_NET"' in text
+    assert 'bridge_addr=$(bridge_ipv4 "$STAGING_MC_NET"' in text
+    assert "{{range .IPAM.Config}}{{.Gateway}}{{end}}" not in text

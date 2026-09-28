@@ -107,6 +107,29 @@ STAGING_MC_CONTAINER="minimoi-mc-agent"
 STAGING_MC_VOLUMES=(minimoi-staging-mc-agent-state minimoi-staging-mc-agent-auth)
 mc_enabled() { [[ -f "$STAGING_MC_ENABLED" ]]; }
 
+# A network's IPAM gateways, one per line, without Docker's renderings of
+# "none": an isolated bridge (gateway_mode_ipv4=isolated) has no gateway, and
+# Docker 29 prints "invalid IP" (older versions "<no value>" or nothing).
+network_gateways() {
+  local line
+  docker network inspect -f '{{range .IPAM.Config}}{{printf "%s\n" .Gateway}}{{end}}' "$1" 2>/dev/null \
+    | while IFS= read -r line; do
+        case "$line" in ""|"invalid IP"|"<no value>") ;; *) echo "$line" ;; esac
+      done
+}
+
+# IPv4 addresses on a network's bridge interface inside the Docker VM, one per
+# line (empty = the bridge has no host address). Needs colima; prints
+# "unknown" when the VM cannot be asked.
+bridge_ipv4() {
+  local id name
+  id=$(docker network inspect -f '{{.Id}}' "$1" 2>/dev/null) || { echo unknown; return 0; }
+  name=$(docker network inspect -f '{{index .Options "com.docker.network.bridge.name"}}' "$1" 2>/dev/null || true)
+  case "$name" in ""|"<no value>") name="br-${id:0:12}" ;; esac
+  command -v colima >/dev/null 2>&1 || { echo unknown; return 0; }
+  colima ssh -- ip -4 -o addr show dev "$name" 2>/dev/null | awk '{print $4}' || echo unknown
+}
+
 # External volumes (docker-compose.staging.yml). `compose down -v` cannot
 # remove external volumes, and down.sh refuses -v anyway.
 STAGING_VOLUMES=(minimoi-staging-postgres-data minimoi-staging-cos-agent-a-state minimoi-staging-cos-agent-a-auth)

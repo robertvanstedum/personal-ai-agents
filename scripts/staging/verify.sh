@@ -277,9 +277,15 @@ nets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{
 internal=$(docker network inspect -f '{{.Internal}}' "$STAGING_MC_NET" 2>/dev/null || echo missing)
 [[ "$internal" == true ]] && pass "$STAGING_MC_NET is internal (no egress)" || fail "$STAGING_MC_NET internal=$internal"
 gwmode=$(docker network inspect -f '{{index .Options "com.docker.network.bridge.gateway_mode_ipv4"}}' "$STAGING_MC_NET" 2>/dev/null || echo missing)
-ipamgw=$(docker network inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' "$STAGING_MC_NET" 2>/dev/null || true)
-[[ "$gwmode" == isolated && -z "$ipamgw" ]] && pass "$STAGING_MC_NET bridge has no host address (isolated)" \
-  || fail "$STAGING_MC_NET bridge mode='$gwmode' gateway='${ipamgw}' (MC could reach the VM through it)"
+ipamgw=$(network_gateways "$STAGING_MC_NET" | tr '\n' ' ' | sed 's/ $//')
+bridge_addr=$(bridge_ipv4 "$STAGING_MC_NET" | tr '\n' ' ' | sed 's/ $//')
+if [[ "$gwmode" == isolated && -z "$ipamgw" && -z "$bridge_addr" ]]; then
+  pass "$STAGING_MC_NET bridge has no host address (isolated; no IPAM gateway, no IPv4 on the bridge)"
+elif [[ "$gwmode" == isolated && -z "$ipamgw" && "$bridge_addr" == unknown ]]; then
+  warn "$STAGING_MC_NET isolated with no IPAM gateway; the bridge interface could not be read in the VM (colima)"
+else
+  fail "$STAGING_MC_NET bridge mode='$gwmode' gateway='${ipamgw:-none}' bridge IPv4='${bridge_addr:-none}' (MC could reach the VM through it)"
+fi
 subnet=$(docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' "$STAGING_MC_NET" 2>/dev/null || true)
 # The address the bridge would have (the IPAM gateway, else the subnet's first host).
 if [[ -n "$ipamgw" ]]; then bridge_ip=$ipamgw; else net0=${subnet%/*}; bridge_ip="${net0%.*}.1"; fi
