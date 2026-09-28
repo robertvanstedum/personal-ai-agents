@@ -9,7 +9,7 @@ Branch `claude/mc-stage-1a`, based on origin/main `66c5350f`. Not a PR yet.
   runbook in `scripts/staging/README.md`.
 - Portal `MasterCraftsmanBackend` switch (off/stub/openclaw/grok-not-built), honest states, stub never kept as MC.
 - No-spend gates `scripts/staging/mc_probe/gates.py`: final run 63/63 pass on image `mc-probe:stage1a-final`
-  (built from 2cfd... see git log; raw results were in the session scratchpad).
+  (built from 5034b6d6; the later commits change only host-side docs and the gate script). Raw results were in the session scratchpad.
 - Full suite: 2119 passed, 24 skipped.
 - Deviations note (untracked, root checkout): `planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MC_STAGE1A_DEVIATIONS_2026-09-28.md`.
 
