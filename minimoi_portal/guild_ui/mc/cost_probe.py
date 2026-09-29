@@ -156,9 +156,17 @@ def main(argv=None, *, services=None) -> int:
     ap.add_argument("--label", default="Robert")
     ap.add_argument("--turns", type=int, choices=(3, 4), default=3)
     ap.add_argument("--cap", type=float, default=HARD_CAP, help=f"stop once spend passes this (at most ${HARD_CAP:.2f})")
+    ap.add_argument("--stream", action="store_true",
+                    help="streaming S1: turn A (streaming and usage), then turn B (Stop) if A's cost is known")
+    ap.add_argument("--stop-after-first-text", action="store_true",
+                    help="with --stream: turn B alone (Stop after the first text)")
     a = ap.parse_args(argv)
+    if a.stop_after_first_text and not a.stream:
+        print("Refused: --stop-after-first-text goes with --stream.")
+        return 2
     if not a.yes_spend:
-        print(f"Refused: this sends {a.turns} paid Master Craftsman turns. Add --yes-spend to run it "
+        n = (1 if a.stop_after_first_text else 2) if a.stream else a.turns
+        print(f"Refused: this sends {n} paid Master Craftsman turn{'s' if n != 1 else ''}. Add --yes-spend to run it "
               f"(stops past ${min(a.cap, HARD_CAP):.2f}).")
         return 2
     if services is None:
@@ -168,6 +176,15 @@ def main(argv=None, *, services=None) -> int:
         print("Refused: Master Craftsman's turns are off, or its backend is not the real one; nothing was sent.")
         return 3
     from ..conversations import conversations_of
+    if a.stream:
+        if not getattr(services, "mc_stream", False) or not getattr(services.mc, "supports_streaming", False):
+            print("Refused: streaming is not switched on (MINIMOI_GUILD_MC_STREAM), or the backend cannot stream; "
+                  "nothing was sent.")
+            return 3
+        from .stream_probe import run as run_stream
+        run_stream(services, conversations_of(services), principal=a.principal, label=a.label,
+                   stop_only=a.stop_after_first_text, cap=a.cap, usage_dir=os.environ.get("MINIMOI_USAGE_DIR"))
+        return 0
     run(services, conversations_of(services), principal=a.principal, label=a.label, turns=a.turns, cap=a.cap,
         usage_dir=os.environ.get("MINIMOI_USAGE_DIR"))
     return 0

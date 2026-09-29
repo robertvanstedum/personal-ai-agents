@@ -631,17 +631,9 @@ def mc_turn_stream():
     """The streamed Master Craftsman turn (streaming spec v0.2 §3, v0.3):
     the same guards as /mc/turns, then these pre-dispatch refusals, each a
     normal JSON answer the browser may fall back on or show: the switch
-    (``stream_off``) and the backend (``stream_unsupported``); an existing
-    reply is answered from the record; an earlier dispatch of the same
-    ``request_id`` (``already_dispatched``); Master Craftsman's state; the
-    backend's own checks; one turn in flight. Then NDJSON: ``ack`` first,
-    and only then the worker dispatches (mc/streaming.py)."""
-    import uuid
-
-    from .markdown_render import render_markdown
-    from .mc.stream import StreamRefused
-    from .mc.streaming import DISPATCHED, StreamContext, StreamRun, browser_events
-
+    (``stream_off``) and the backend (``stream_unsupported``); then
+    ``open_mc_stream``. NDJSON: ``ack`` first, and only then the worker
+    dispatches (mc/streaming.py)."""
     refusal, found = _mc_prelude()
     if refusal is not None:
         return refusal
@@ -652,38 +644,70 @@ def mc_turn_stream():
         return json_error("stream_unsupported", "This Master Craftsman backend does not stream. Nothing was sent.", 409)
     if not request_id:
         return json_error("invalid", "A streamed turn needs a request_id. Nothing was sent to Master Craftsman.", 422)
+    opened = open_mc_stream(services, conversations=_conversations(), floor=floor, conv=conv, principal=principal,
+                            note=note, note_id=note_id, request_id=request_id)
+    if opened[0] == "refused":
+        _, body, status = opened
+        return jsonify(body), status
+    _, run, body = opened
+    response = current_app.response_class(body, mimetype="application/x-ndjson")
+    response.headers["Content-Type"] = "application/x-ndjson; charset=utf-8"
+    response.headers["X-Accel-Buffering"] = "no"
+    response.call_on_close(run.abandon_if_not_started)
+    return response
+
+
+def open_mc_stream(services, *, conversations, floor, conv, principal, note, note_id, request_id, observe=None):
+    """Everything /mc/turns/stream does after its request guards, with no
+    request context: an existing reply answered from the record; an earlier
+    dispatch of the same ``request_id`` (``already_dispatched``); Master
+    Craftsman's state; the backend's own pre-dispatch checks; one turn in
+    flight. Returns ("refused", body, status) or ("stream", run, events):
+    ``events`` is the NDJSON generator the browser reads (ack first; the
+    worker dispatches only after it). ``observe`` wraps the backend's raw
+    events (the operator-only cost probe counts finish and usage with it).
+    Used by the route and by mc/cost_probe.py."""
+    import threading
+    import uuid
+
+    from .conversations import session_conversation_id
+    from .markdown_render import render_markdown
+    from .mc import TurnRequest
+    from .mc.stream import StreamRefused
+    from .mc.streaming import DISPATCHED, StreamContext, StreamRun, browser_events
+
     reply_key = _reply_key(note_id)
     try:
         existing = floor.get_note(reply_key)
     except FloorStoreUnavailable as exc:
-        return json_error("unavailable", MC_WORDS["notes_down"], 503,
-                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
+        return "refused", {"error": "unavailable", "message": MC_WORDS["notes_down"],
+                           "reason": "not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"}, 503
     if existing is not None:
-        return jsonify(_repeated_answer(services, existing)), 200
+        return "refused", _repeated_answer(services, existing), 200
     shown = floor_state.mc_view(services, notes_ok=True)
     if not shown["turns"]:
-        return json_error("mc_unavailable", f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
-                          503, mc_state=shown["state"], reason=shown["reason"])
-    from .conversations import session_conversation_id
-    from .mc import TurnRequest
+        return "refused", {"error": "mc_unavailable", "mc_state": shown["state"], "reason": shown["reason"],
+                           "message": f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman."}, 503
     turn_id = uuid.uuid4().hex
     ctx = note.get("context") or {}
     turn_req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=scrub(note["text"]),
                            note_request_id=note_id, correlation_id=turn_id,
                            context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
-    cancel = __import__("threading").Event()
+    cancel = threading.Event()
     try:
         events = services.mc.stream_turn(turn_req, cancel)
     except StreamRefused as exc:
-        return json_error("mc_unavailable", f"{exc.message or 'Master Craftsman cannot take this turn'}. Nothing was sent.",
-                          413 if exc.failure_class == "request_too_large" else 503, reason=exc.failure_class)
+        return "refused", {"error": "mc_unavailable", "reason": exc.failure_class,
+                           "message": f"{exc.message or 'Master Craftsman cannot take this turn'}. Nothing was sent."}, \
+            413 if exc.failure_class == "request_too_large" else 503
+    if observe is not None:
+        events = observe(events)
     if not _mc_acquire(principal):
-        return json_error("busy", MC_WORDS["busy"], 409, mc_state=shown["state"])
+        return "refused", {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
     earlier = DISPATCHED.claim(request_id, principal, turn_id)
     if earlier is not None:
         _mc_release(principal)
-        return jsonify(DISPATCHED.refusal(earlier, principal)), 409
-    conversations = _conversations()
+        return "refused", DISPATCHED.refusal(earlier, principal), 409
     turns = turn_log_of(services)
 
     def annotate(reply):
@@ -697,12 +721,7 @@ def mc_turn_stream():
         header=lambda: floor_state.mc_view(services, notes_ok=True),
         touch=lambda: _touch_in(conversations, conv, principal), annotate=annotate,
         usage_folder=os.environ.get("MINIMOI_USAGE_DIR") or None, cancel=cancel))
-    body = browser_events(run, render=render_markdown.__wrapped__)
-    response = current_app.response_class(body, mimetype="application/x-ndjson")
-    response.headers["Content-Type"] = "application/x-ndjson; charset=utf-8"
-    response.headers["X-Accel-Buffering"] = "no"
-    response.call_on_close(run.abandon_if_not_started)
-    return response
+    return "stream", run, browser_events(run, render=render_markdown.__wrapped__)
 
 
 @owner_api

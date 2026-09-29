@@ -44,4 +44,13 @@ def record_run(*, turn_id: str, status: str, prompt_tokens: int | None = None,
         return False
 
 
-__all__ = ["record_run", "EMITTER", "ACTOR", "ROUTE"]
+def flush(timeout: float = 5.0) -> None:
+    """Wait for queued records to reach the store (the operator probe reads them back)."""
+    try:
+        from services.usage import usage_record
+        usage_record.flush(timeout)
+    except Exception:
+        pass
+
+
+__all__ = ["record_run", "flush", "EMITTER", "ACTOR", "ROUTE"]

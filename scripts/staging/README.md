@@ -970,6 +970,28 @@ every 500 ms, only on change, and none past 32 KB.
   - A caller that left did not stop the run.
 - The gateway-to-provider hop on abort is not probed yet (stage C).
 
+**Two real turns, without a browser** (paid; they run after rollout, with
+Robert's budget). These go through the same server path as the Shop floor,
+inside the portal container:
+
+```bash
+scripts/staging/mc_cost_probe.sh --stream --yes-spend                          # turn A, then turn B
+scripts/staging/mc_cost_probe.sh --stream --yes-spend --stop-after-first-text  # turn B alone
+```
+
+- **Turn A** (streaming and usage) prints:
+  - the time to the first delta and to the finish;
+  - the event counts;
+  - the `mc_turns.jsonl` line;
+  - the `runtime-stream` record;
+  - the gateway's records in the turn's window, with output tokens compared.
+- **Turn B** stops after the first text, and prints:
+  - the stopped status;
+  - the `runtime-stream` error line;
+  - whether the gateway recorded the aborted call, and with what tokens.
+- Spend is never above $1, and a turn whose cost cannot be read stops the
+  probe.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes
