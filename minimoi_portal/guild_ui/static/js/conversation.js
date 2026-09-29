@@ -7,7 +7,7 @@
 // page's memory only: it is never sent, never kept, never reaches MC.
 import { $, $$, clone, slot, setSlot, el, announce, localTime } from './dom.js';
 import { live, setOff, onChange } from './state.js';
-import { apiPost, recordMode } from './api.js';
+import { apiGet, apiPost, recordMode } from './api.js';
 import { newKey } from './actions.js';
 
 let page, panel, thread, pill;
@@ -81,12 +81,42 @@ function noteLine(note) {
   const ctx = note.context || {};
   setSlot(li, 'context', `${ctx.area ? ` · ${ctx.area}` : ''}${ctx.item_ref ? ` · #${ctx.item_ref}` : ''}`);
   setSlot(li, 'text', note.text);
-  if (note.turn && note.turn.done_text) {      // a live MC reply: "Done in 1.2s" (tokens later, from the gateway)
+  if (note.turn && note.turn.done_text) {      // a live MC reply: "Done in 1.2s · 96 output tokens"
     const foot = clone('tpl-note-foot');
     foot.querySelector('[data-turn-done]').textContent = note.turn.done_text;
+    setTokens(foot, note.turn);
     li.append(foot);
+    if (note.turn.tokens_text == null) askForTokens();
   }
   return li;
+}
+
+// Tokens come from the gateway's usage record (usage-record U3), which lands
+// a moment after the reply: until then the slot stays empty, and the page asks
+// the notes list again, a few times, then leaves it (the server says "tokens
+// unknown" once the turn is old enough).
+function setTokens(scope, turn) {
+  const span = scope.querySelector('[data-turn-usage]');
+  if (span) span.textContent = turn && turn.tokens_text ? ` · ${turn.tokens_text}` : '';
+}
+
+let tokenAsks = 0;
+let tokenTimer = null;
+function askForTokens() {
+  if (tokenTimer || tokenAsks >= 4) return;
+  tokenTimer = window.setTimeout(async () => {
+    tokenTimer = null;
+    tokenAsks += 1;
+    const r = await apiGet('/notes?limit=20');
+    let pending = false;
+    for (const n of ((r.ok && r.body && r.body.notes) || [])) {
+      if (!n.turn) continue;
+      const row = $(`[data-note="${n.id}"]`);
+      if (row) setTokens(row, n.turn);
+      if (n.turn.tokens_text == null) pending = true;
+    }
+    if (pending) askForTokens(); else tokenAsks = 0;
+  }, 4000);
 }
 
 function appendNote(note) {
