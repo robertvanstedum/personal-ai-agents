@@ -203,10 +203,40 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
 """
 
 
+def _forward_headers(user: dict | None, strip_header_prefixes: tuple[str, ...] = ()) -> dict:
+    """The headers a backend receives: the client's, minus hop-by-hop and Host,
+    minus EVERY client-supplied X-Minimoi-* header, plus the portal's own
+    identity headers for the signed-in user.
+
+    SECURITY: only portal-derived X-Minimoi-* values may ever reach a backend.
+    Without the strip, a request lacking a session auth_id could smuggle a
+    spoofed X-Minimoi-Auth-Id straight through to the domain apps.
+    strip_header_prefixes: extra client header prefixes (lower-case) that must
+    never reach this backend (for example ("x-demo-",) for IoT Connect).
+    """
+    headers = {
+        k: v for k, v in request.headers
+        if k.lower() not in _HOP_BY_HOP
+        and k.lower() != "host"
+        and not k.lower().startswith("x-minimoi-")
+        and not any(k.lower().startswith(p) for p in strip_header_prefixes)
+    }
+    if user:
+        headers["X-Minimoi-User-Tier"] = user.get("tier", "guest")
+        if user.get("display_name"):
+            headers["X-Minimoi-Display-Name"] = user["display_name"]
+        if user.get("auth_id"):
+            headers["X-Minimoi-Auth-Id"] = str(user["auth_id"])
+        if user.get("username"):
+            headers["X-Minimoi-Username"] = user["username"]
+    return headers
+
+
 def proxy_to(backend_url: str, path: str, portal_prefix: str,
              user: dict | None = None,
              strip_header_prefixes: tuple[str, ...] = (),
-             forward_prefix: bool = False) -> Response:
+             forward_prefix: bool = False,
+             head_meta: dict[str, str] | None = None) -> Response:
     """
     Forward the current Flask request to backend_url/path.
     Rewrites URLs in HTML, CSS, and JS responses so they resolve
@@ -223,6 +253,8 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
                    Required for backends configured with a root path (IoT Connect
                    with IOTCONNECT_ROOT_PATH): Starlette matches routes on either
                    form but serves mounted static files only under the prefix.
+    head_meta:     <meta name=… content=…> tags the portal adds to an HTML
+                   page's <head> (for example the page's write-guard token).
     """
     if forward_prefix:
         target = f"{backend_url}{portal_prefix}/{path.lstrip('/')}"
@@ -231,26 +263,8 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     if request.query_string:
         target += f"?{request.query_string.decode()}"
 
-    # Forward request headers minus hop-by-hop.
-    # SECURITY: strip any client-supplied X-Minimoi-* identity headers — only
-    # portal-derived values (set below) may ever reach a backend. Without this,
-    # a request lacking a session auth_id could smuggle a spoofed
-    # X-Minimoi-Auth-Id straight through to the domain apps (identity/IDOR).
-    fwd_headers = {
-        k: v for k, v in request.headers
-        if k.lower() not in _HOP_BY_HOP
-        and k.lower() != "host"
-        and not k.lower().startswith("x-minimoi-")
-        and not any(k.lower().startswith(p) for p in strip_header_prefixes)
-    }
-    if user:
-        fwd_headers["X-Minimoi-User-Tier"] = user.get("tier", "guest")
-        if user.get("display_name"):
-            fwd_headers["X-Minimoi-Display-Name"] = user["display_name"]
-        if user.get("auth_id"):
-            fwd_headers["X-Minimoi-Auth-Id"] = str(user["auth_id"])
-        if user.get("username"):
-            fwd_headers["X-Minimoi-Username"] = user["username"]
+    # Forward request headers minus hop-by-hop; identity is the portal's own.
+    fwd_headers = _forward_headers(user, strip_header_prefixes)
 
     try:
         resp = requests.request(
@@ -323,6 +337,17 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
         for script in soup.find_all("script"):
             if script.string:
                 script.string = _rewrite_js(script.string, portal_prefix)
+
+        # Portal-supplied <meta> tags (for example the page's write-guard token).
+        if head_meta:
+            head = soup.find("head")
+            if head is None:
+                head = soup.new_tag("head")
+                (soup.html or soup).insert(0, head)
+            for name, content in head_meta.items():
+                for old in head.find_all("meta", attrs={"name": name}):
+                    old.decompose()                  # the backend can never supply its own
+                head.append(soup.new_tag("meta", attrs={"name": name, "content": content}))
 
         # Inject portal nav bar + any guest-specific overrides right after <body>
         body = soup.find("body")

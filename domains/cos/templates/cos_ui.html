@@ -93,6 +93,25 @@
 
 <script>
 const INITIAL_TAB = '{{ initial_tab }}';
+// The portal's write guard: its token arrives in the page bootstrap (absent
+// when CoS is opened directly, not through the portal). Every write this page
+// makes to its own origin carries it: text send, the voice bootstrap, the
+// voice send and any later write. It is never sent to another origin (the
+// voice providers).
+const CSRF_TOKEN = document.querySelector('meta[name="minimoi-csrf-token"]')?.content || '';
+if (CSRF_TOKEN) {
+  const pageFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const method = String(init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
+    if (method !== 'GET' && method !== 'HEAD' && url.origin === window.location.origin) {
+      const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+      headers.set('X-CSRF-Token', CSRF_TOKEN);
+      init = { ...init, headers };
+    }
+    return pageFetch(input, init);
+  };
+}
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
 const tabBtns   = document.querySelectorAll('.tab-btn');

@@ -139,6 +139,7 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 # Lazy imports
 from minimoi_portal import auth as _auth          # noqa: E402
 from minimoi_portal import proxy as _proxy        # noqa: E402
+from minimoi_portal import csrf as _csrf          # noqa: E402
 from minimoi_portal import guest_data as _gdata   # noqa: E402
 from minimoi_portal import domain_auth as _dauth  # noqa: E402
 from minimoi_portal.workspaces import (           # noqa: E402
@@ -656,20 +657,50 @@ def curator_static_passthrough(filename):
 
 
 # ── Chief of Staff proxy (owner only — no auth at CoS service layer yet) ─────
+# Browser writes use the portal's write guard, the same one as the Shop floor
+# API (minimoi_portal/csrf.py): the per-session token in X-CSRF-Token, a
+# same-origin Sec-Fetch-Site, a matching Origin, and the expected content
+# type (JSON; multipart for the audio upload). The token reaches Confer in
+# its page bootstrap as <meta name="minimoi-csrf-token">. A write that fails
+# the guard never reaches cos-scheduler. Reads are unchanged.
+
+COS_CSRF_SESSION_KEY = "cos_web_csrf"
+COS_CSRF_META = "minimoi-csrf-token"
+_COS_MULTIPART_PATHS = {"ui/transcribe"}
+
+
+def _cos_page_meta():
+    return {COS_CSRF_META: _csrf.token(COS_CSRF_SESSION_KEY)}
+
+
+def _cos_write_refused(path: str):
+    """None when this /app/cos write may be forwarded; otherwise the 403."""
+    kind = _csrf.MULTIPART if path.strip("/") in _COS_MULTIPART_PATHS else _csrf.JSON
+    why = _csrf.refusal(COS_CSRF_SESSION_KEY, _cfg.BASE_URL, content=kind)
+    if not why:
+        return None
+    message = f"This request could not be verified ({why}). Reload the page and try again."
+    return jsonify({"error": "csrf", "message": message, "reply": message}), 403
+
 
 @app.route("/app/cos")
 @app.route("/app/cos/")
 @_require_owner
 def cos_root():
     user = _current_user()
-    return _proxy.proxy_to(_cfg.COS_BACKEND, "ui", "/app/cos", user=user)
+    return _proxy.proxy_to(_cfg.COS_BACKEND, "ui", "/app/cos", user=user, head_meta=_cos_page_meta())
 
 
 @app.route("/app/cos/<path:path>", methods=["GET", "POST"])
 @_require_owner
 def cos_proxy(path):
     user = _current_user()
-    return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
+    if request.method != "GET":
+        refused = _cos_write_refused(path)
+        if refused is not None:
+            return refused
+        return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
+    return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user, head_meta=_cos_page_meta())
 
 
 # ── IoT Connect reference demo (owner only in v0.9 — Spec #154 §4.1) ────────
