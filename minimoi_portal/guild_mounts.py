@@ -216,6 +216,24 @@ def is_staging_origin(base_url, environ) -> bool:
     return bool(host) and host in allowed_hosts(environ)
 
 
+MC_LOGGER = "guild_ui.mc"
+
+
+def staging_mc_logging() -> logging.Logger:
+    """Master Craftsman's turn lines (``mc turn <id> start`` / ``end``) at INFO
+    on a staging origin. The portal configures no logging, so INFO would
+    otherwise be dropped (stage B evidence). Idempotent; never logs text or
+    tokens (the route logs only ids and outcomes)."""
+    logger = logging.getLogger(MC_LOGGER)
+    if not any(getattr(h, "_minimoi_mc", False) for h in logger.handlers):
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        handler._minimoi_mc = True
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    return logger
+
+
 def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict:
     base_url = next_kwargs.get("base_url") or environ.get("BASE_URL")
     if not is_staging_origin(base_url, environ):
@@ -223,6 +241,7 @@ def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict
             log.warning("guild mounts: MINIMOI_GUILD_NEXT/PROTO ignored; %r is not a staging origin "
                         "(allowed: %s)", base_url, ", ".join(sorted(allowed_hosts(environ))))
         return {"guild_proto": "refused_not_staging", "guild_next": "refused_not_staging"}
+    staging_mc_logging()
     return {
         "guild_proto": mount_guild_proto(app, environ=environ, owner_guard=owner_guard, current_user=current_user),
         "guild_next": mount_guild_next(app, environ=environ, owner_guard=owner_guard, current_user=current_user,

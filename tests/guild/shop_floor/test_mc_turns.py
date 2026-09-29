@@ -298,3 +298,35 @@ def test_a_reply_the_store_did_not_keep_is_reported_as_not_kept(turned, monkeypa
     assert body["status"] == "error" and body["failure_class"] == "not_kept" and body["reply_note"] is None
     assert "could not be kept" in body["message"] and "kept on the record" not in body["message"]
     assert api  # imported for the patch target's module
+
+
+def test_turn_lines_reach_the_portal_log_at_info_on_staging(turned, capfd):
+    """Stage B evidence: the portal configures no logging, so INFO was dropped.
+    On a staging origin the MC logger emits at INFO, ids and outcomes only."""
+    import logging
+    from minimoi_portal.guild_mounts import staging_mc_logging
+    logger = logging.getLogger("guild_ui.mc")
+    for h in [h for h in logger.handlers if getattr(h, "_minimoi_mc", False)]:
+        logger.removeHandler(h)          # rebind to this test's captured stderr
+    assert staging_mc_logging() is logger and logger.level == logging.INFO
+    client = turned.owner()
+    token = turned.csrf(client)
+    body = _ask(client, token, _keep(client, token, "What is stuck?")["request_id"]).get_json()
+    err = capfd.readouterr().err
+    assert f"INFO guild_ui.mc: mc turn {body['turn_id']} start" in err
+    assert f"mc turn {body['turn_id']} end status=answered" in err
+    assert RELAY_TOKEN not in err and "What is stuck" not in err
+
+
+def test_the_mc_logger_is_configured_on_staging_and_not_elsewhere(load_portal, monkeypatch):
+    import logging
+    logger = logging.getLogger("guild_ui.mc")
+    for h in [h for h in logger.handlers if getattr(h, "_minimoi_mc", False)]:
+        logger.removeHandler(h)
+    logger.setLevel(logging.NOTSET)
+    load_portal(base_url="https://minimoi.ai")
+    assert not any(getattr(h, "_minimoi_mc", False) for h in logger.handlers)
+    load_portal()                                       # dev.minimoi.ai
+    assert sum(getattr(h, "_minimoi_mc", False) for h in logger.handlers) == 1 and logger.level == logging.INFO
+    load_portal()                                       # idempotent: still one handler
+    assert sum(getattr(h, "_minimoi_mc", False) for h in logger.handlers) == 1

@@ -590,9 +590,12 @@ browser --(owner session, CSRF)--> portal --(relay caller token, mc-front)--> mc
 
 ### Steps (after review; each runtime step needs Robert's go-ahead)
 
-1. Build first, nothing stopped: `build.sh <branch> --reviewed-branch`, then
+1. **`mc.sh token` first** (adds `MC_RELAY_TOKEN` to `mc.env` if missing; not
+   printed). MC's project interpolates `MC_RELAY_TOKEN` for `mc-relay`, so
+   every `mc.sh down`/`up` (and any compose call on MC's project) fails
+   without it (stage B rollout finding).
+2. Build first, nothing stopped: `build.sh <branch> --reviewed-branch`, then
    `mc.sh build`.
-2. `mc.sh token` (adds `MC_RELAY_TOKEN` to `mc.env` if missing; not printed).
 3. **Roll the release out:** `scripts/staging/up.sh && scripts/staging/verify.sh`.
    As in stage A, the new image tag recreates every running main-stack
    container once (CoS with identical content), and the portal joins
