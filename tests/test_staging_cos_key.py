@@ -194,3 +194,39 @@ def test_classifier_treats_the_cos_key_overlay_and_script_as_staging_only():
     sys.path.insert(0, str(REPO / "scripts" / "ci"))
     from classify_release import classify
     assert classify(["docker-compose.staging-cos-key.yml", "scripts/staging/cos.sh", "scripts/staging/mc_keys.sh"]) == ("documents", ())
+
+
+def test_verify_fails_on_refused_usage_records_with_coss_key_since_it_was_made(tmp_path):
+    """#258 review: a route CoS uses that its key misses shows up as a refused
+    record with a cos-agent-* key_ref; verify.sh section 10 must fail on it."""
+    import json
+    import os
+    import re
+    text = (SCRIPTS / "verify.sh").read_text()
+    code = re.search(r'refused=\$\(COS_ENV="\$STAGING_COS_ENV" USAGE_DIR="\$S/data/usage" python3 -c "\n(.*?)\n" 2>/dev/null', text, re.S).group(1)
+    cos_env = tmp_path / "cos.env"
+    cos_env.write_text("COS_MODEL_GATEWAY_KEY=x\n")
+    os.utime(cos_env, (1790000000, 1790000000))                   # 2026-09-21T...Z
+    usage = tmp_path / "usage"
+    usage.mkdir()
+
+    def line(at, status, key_ref, route="minimoi-cos-web-search", code_=403):
+        return json.dumps({"v": 1, "occurred_at": at, "status": status, "key_ref": key_ref, "route": route, "http_status": code_})
+    (usage / "usage-2026-09.jsonl").write_text("\n".join([
+        line("2026-09-01T00:00:00+00:00", "refused", "cos-agent-aaa111"),          # before the key: ignored
+        line("2026-09-29T10:00:00+00:00", "ok", "cos-agent-aaa111"),
+        line("2026-09-29T10:00:01+00:00", "refused", "mc-agent-bbb222"),           # MC's: not this check
+        line("2026-09-29T10:00:02+00:00", "refused", "cos-agent-aaa111", "minimoi-cos-agent-xai-fast"),
+        line("2026-09-29T10:00:03+00:00", "refused", "cos-agent-aaa111", "minimoi-cos-agent-xai-fast"),
+        '{"torn": ']) + "\n")
+    run = lambda: subprocess.run(["python3", "-c", code], env={**os.environ, "COS_ENV": str(cos_env), "USAGE_DIR": str(usage)},  # noqa: E731
+                                 capture_output=True, text=True).stdout.strip()
+    assert run() == "minimoi-cos-agent-xai-fast 403 x2"
+    os.utime(cos_env, None)                                        # a new key made now: the old refusals no longer count
+    assert run() == ""
+    assert "a route CoS uses is missing from its scope" in text
+
+
+def test_runbook_says_cos_off_before_the_key_database_goes_away():
+    text = (SCRIPTS / "README.md").read_text()
+    assert "run `cos.sh off` **before**" in text and "run `scripts/staging/cos.sh off` first" in text

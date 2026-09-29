@@ -746,8 +746,9 @@ CoS's xAI chat fallback, which a normal question never reaches, is proven in
 
 - **Stop MC's turns:** `printf 'off\n' > ~/minimoi-staging/state/mc.turns;
   scripts/staging/up.sh portal`. `mc.sh down` stops MC and the relay.
-- **Take the key database away** (every virtual key stops working; CoS stays on
-  the master key): `printf 'off\n' > ~/minimoi-staging/state/gateway.keys;
+- **Take the key database away** (every virtual key stops working; if CoS has
+  its own key, run `scripts/staging/cos.sh off` first so CoS is back on the
+  master key): `printf 'off\n' > ~/minimoi-staging/state/gateway.keys;
   scripts/staging/up.sh model-gateway`, then the CoS regression question with
   its receipt line. The database,
   its role and `gateway.env` are kept; `mc.sh gateway-keys` turns it back on
@@ -841,6 +842,15 @@ the master key (production later, as its own step with Robert's OK).
 
 Rollback: `scripts/staging/cos.sh off` (state/cos.key off; Agent A is recreated
 with the master key; the key stays in `cos.env` and the gateway, unused).
+
+**Order when taking the key database away:** run `cos.sh off` **before**
+turning `state/gateway.keys` off. With CoS's own key and no key database,
+every CoS call is refused (and `up.sh` refuses to start with state/cos.key on
+and the key database off).
+
+`verify.sh` section 10 also fails when any usage record since the latest
+`cos.sh key` shows a **refused** call on CoS's key (`key_ref` `cos-agent-…`):
+that is a route CoS uses that its key's scope misses.
 
 ## Rules
 
