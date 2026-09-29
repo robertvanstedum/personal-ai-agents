@@ -79,6 +79,7 @@ Run them from any checkout of this repository (the root checkout is fine).
 | `focus.sh mc\|mc+cos\|all\|show` | run only the containers under test; the set is persisted and `up.sh`/`verify.sh` respect it (section "Focus") |
 | `mc.sh token\|build\|up\|down\|status\|clear-selfcheck` | Master Craftsman's own Compose project `minimoi-staging-mc` (section "Master Craftsman stage A"); never touches the main project |
 | `mc.sh gateway-keys\|key` | Stage C, **Robert runs these**: the gateway's key database (recreates only `model-gateway` in the main project), then MC's capped key (recreates only `mc-agent`); nothing secret is printed (section "Master Craftsman stage C") |
+| `cos.sh key\|off\|status` | CoS's own capped gateway key, **Robert runs `cos.sh key`**: CoS's routes only, monthly cap, recreates only `cos-agent-a`; `off` goes back to the master key (section "CoS's own capped gateway key") |
 | `jobs.sh lesen\|intelligence\|leitura` | run one background job by hand, logged to `logs/` (Spec 159: dev jobs run only when triggered). `jobs.sh curator` refuses (exit 3): the curator skips every run outside `MINIMOI_ROLE=production`, and staging never runs as production |
 
 ### What `verify.sh` proves
@@ -793,6 +794,53 @@ one standard usage record: `~/minimoi-staging/data/usage/usage-YYYY-MM.jsonl`
   the spent budget), and that no content or key reaches the store.
 - **Rollback:** build and `up.sh model-gateway` the previous release; the
   records already written stay.
+
+## CoS's own capped gateway key (cos.sh key; staging only)
+
+Robert, September 28 2026: CoS gets its own capped gateway key too, instead of
+the master key (production later, as its own step with Robert's OK).
+
+- **What changes:** only Agent A's `MINIMOI_MODEL_GATEWAY_KEY` (its provider
+  config and its bounded web-search plugin both read it). With `state/cos.key`
+  on, `docker-compose.staging-cos-key.yml` gives it CoS's own virtual key from
+  `~/minimoi-staging/cos.env` (mode 600, interpolation only). The gateway keeps
+  the master key; staging's provider keys are reused (nothing new from a
+  provider).
+- **The key:** CoS's four routes (`minimoi-cos-agent`, `-xai-fast`,
+  `-web-search`, `-anthropic`); chat completions and responses only (not
+  `/key/info`, not embeddings, not the pass-through); a monthly budget (`30d`);
+  rpm 60 (a CoS turn can make several calls); alias `cos-agent-…`.
+- **The trade-off:** with its own key CoS depends on the gateway's key
+  database: with Postgres down, CoS's key is refused after the gateway's 60 s
+  key cache (the MC stage C probe). `cos.sh off` goes back to the master key.
+
+### Steps (each needs Robert's go-ahead)
+
+1. **Before** (coordinator): the CoS regression question. It passes only with
+   a cited answer **and** a new usage line in
+   `~/minimoi-staging/data/usage/usage-*.jsonl` with
+   `"route":"minimoi-cos-web-search"`, `"actor":"cos"`, `"status":"ok"` (and
+   the receipt line in `data/model_gateway_receipts.jsonl`). Note its
+   `key_ref`: `null` (the master key).
+2. **Robert, one number** (about 5 minutes): `scripts/staging/cos.sh key`. It
+   asks for CoS's monthly cap in dollars (Enter for 30), makes the key inside
+   the gateway, writes it to `cos.env` without printing it, and recreates
+   **only** `cos-agent-a` (CoS's turns fail for about a minute). It prints only
+   the cap, period, models, routes, rpm and the last four characters of the
+   key id. A re-run asks before rotating. It needs the key database
+   (`mc.sh gateway-keys`, done in MC stage C).
+3. **Checks** (coordinator; no spend): `verify.sh` section 10: from inside
+   Agent A, its key is not the master key and is refused (401/403 only) on
+   `/key/list`, `/v1/models`, MC's route, embeddings and the pass-through;
+   with the master key, its record shows CoS's four routes, chat and responses
+   only, `30d` and the cap (and what it has spent).
+4. **After** (coordinator): the CoS regression question again. Pass: a cited
+   answer **and** a new usage line with `"route":"minimoi-cos-web-search"`,
+   `"actor":"cos"`, `"status":"ok"` and `"key_ref":"cos-agent-…"`. A 401/403
+   from the gateway in Agent A's log means the key's scope is wrong: `cos.sh off`.
+
+Rollback: `scripts/staging/cos.sh off` (state/cos.key off; Agent A is recreated
+with the master key; the key stays in `cos.env` and the gateway, unused).
 
 ## Rules
 

@@ -319,6 +319,36 @@ def main():
                f"status {fb['status']}, upstream {fb_up}")
         cap_reset()
 
+        # CoS's own capped key (cos.sh key), made by the code cos.sh runs.
+        cos_made = gw_python(keys_fn("cos_keygen_py"), {"COS_CAP": "30"}).stdout.strip().splitlines()
+        cos_key = cos_made[0] if cos_made else ""
+        cap_reset()
+        cos_calls = client([
+            {"name": "chat", "path": "/v1/chat/completions", "method": "POST", "key": cos_key, "body": chat("minimoi-cos-agent-anthropic")},
+            {"name": "web", "path": "/v1/responses", "method": "POST", "key": cos_key,
+             "body": {"model": "minimoi-cos-web-search", "input": "x", "max_output_tokens": 16}}])
+        cos_up = sorted({e.get("api_key_label") if e["path"].startswith("/v1/messages") else e.get("auth_label") for e in cap_log()})
+        record("cos.sh's key: CoS's own key answers on CoS's chat and web-search routes, on CoS's provider keys",
+               cos_key.startswith("sk-") and cos_calls["chat"]["status"] == 200 and cos_calls["web"]["status"] == 200
+               and cos_up == ["gw-anthropic", "gw-xai"],
+               f"chat {cos_calls['chat']['status']}, web {cos_calls['web']['status']}, upstream {cos_up}")
+        cap_reset()
+        cos_no = client([{"name": n2, "path": p2, "method": m2, "key": cos_key, "body": b2} for n2, p2, m2, b2 in (
+            ("mc_route", "/v1/chat/completions", "POST", chat("minimoi-mc-agent")), ("key_list", "/key/list", "GET", None),
+            ("key_info", "/key/info?key=" + mc_key, "GET", None), ("models", "/v1/models", "GET", None),
+            ("embeddings", "/v1/embeddings", "POST", {"model": "minimoi-cos-agent", "input": "x"}),
+            ("anthropic_passthrough", "/anthropic/v1/messages", "POST", chat("claude-haiku-4-5-20251001")))])
+        bad_cos = {k: v["status"] for k, v in cos_no.items() if v["status"] not in (401, 403)}
+        record("cos.sh's key: refused (401/403 only) on MC's route, admin routes, embeddings and the pass-through",
+               not bad_cos and not [e for e in cap_log() if not e["path"].startswith("/log")], f"not refused: {bad_cos}")
+        cinfo = client([{"name": "i", "path": "/key/info?key=" + cos_key, "key": master}])["i"]
+        ci = json.loads(cinfo["body"]).get("info", {}) if cinfo["status"] == 200 else {}
+        record("cos.sh's key: $30 monthly, CoS's four routes, chat and responses only, alias cos-agent-*",
+               ci.get("max_budget") == 30 and ci.get("budget_duration") == "30d" and len(ci.get("models") or []) == 4
+               and sorted(ci.get("allowed_routes") or []) == sorted(["/v1/chat/completions", "/chat/completions", "/v1/responses", "/responses"])
+               and str(ci.get("key_alias") or "").startswith("cos-agent-"),
+               json.dumps({k: ci.get(k) for k in ("max_budget", "budget_duration", "models", "allowed_routes", "rpm_limit", "key_alias")}))
+
         # usage-record U1: every route and outcome above left one standard record.
         time.sleep(4)                                   # the refusal hook's short delay, and the writer thread
         recs = []
@@ -331,6 +361,10 @@ def main():
                and all(r["input_tokens"] == 50 and r["output_tokens"] == 5 and abs((r["cost_usd"] or 0) - expected) <= 1e-9
                        for r in mc_ok),
                f"{len(mc_ok)} records; first {json.dumps({k: mc_ok[0].get(k) for k in ('key_ref', 'input_tokens', 'output_tokens', 'cost_usd', 'cost_source')}) if mc_ok else '-'}")
+        record("usage: CoS's own key's calls are recorded as CoS's, with its key alias",
+               any(r["actor"] == "cos" and str(r.get("key_ref") or "").startswith("cos-agent-") and r["status"] == "ok"
+                   and r["route"] == "minimoi-cos-web-search" for r in recs),
+               f"{[(r['route'], r['key_ref']) for r in recs if str(r.get('key_ref') or '').startswith('cos-agent-')]}")
         cos_ok = by(actor="cos", status="ok")
         record("usage: CoS's calls are recorded on every route it used (chat, xAI fast, web search)",
                {r["route"] for r in cos_ok} >= {"minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search"},

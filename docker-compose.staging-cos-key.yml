@@ -1,0 +1,16 @@
+# Staging-only: CoS's own capped gateway key (Robert, September 28 2026: "we
+# should do this for CoS as well"). Added by scripts/staging/lib.sh only while
+# $STAGING_ROOT/state/cos.key says "on" (scripts/staging/cos.sh key turns it on).
+#
+# Agent A's provider config (docker/cos-agent-a/openclaw.json) and its bounded
+# web-search plugin read MINIMOI_MODEL_GATEWAY_KEY. This gives them CoS's own
+# virtual key (CoS's four routes; chat completions and responses; a monthly
+# cap) instead of the gateway's master key. The key lives only in
+# $STAGING_ROOT/cos.env (mode 600), an interpolation-only --env-file.
+# The gateway itself keeps the master key (LITELLM_MASTER_KEY from .env).
+# Production is unchanged (docker-compose.prod.yml).
+
+services:
+  cos-agent-a:
+    environment:
+      - MINIMOI_MODEL_GATEWAY_KEY=${COS_MODEL_GATEWAY_KEY:?set by scripts/staging/cos.sh key (cos.env)}
