@@ -8,6 +8,9 @@
 #   1. the merge-base with origin/<BASE_REF> (a pull request's base branch),
 #   2. else the merge-base with origin/main,
 #   3. else HEAD^ (a push to main, where HEAD is already on main).
+# Exception: on a push to main (no BASE_REF) a non-empty BEFORE that is gone
+# means main's history was rewritten, so HEAD^ could hide changed services.
+# Then it exits 3 and deploy.yml classifies a full release.
 # Prints the chosen commit; says on stderr which fallback it took.
 set -euo pipefail
 before="${1:-}"
@@ -19,7 +22,13 @@ if [[ -n "$before" && "$before" != "$zero" ]] && git cat-file -e "${before}^{com
   echo "$before"
   exit 0
 fi
-[[ -z "$before" || "$before" == "$zero" ]] || echo "release_base: before=$before is not in this clone (a rebase or force-push); using a fallback" >&2
+if [[ -n "$before" && "$before" != "$zero" ]]; then
+  if [[ -z "$base_ref" ]]; then
+    echo "release_base: before=$before is gone on a push to main (history rewritten); full release" >&2
+    exit 3
+  fi
+  echo "release_base: before=$before is not in this clone (a rebase or force-push); using a fallback" >&2
+fi
 
 head_sha=$(git rev-parse "${head}^{commit}")
 refs=()
