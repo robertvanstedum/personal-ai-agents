@@ -184,7 +184,21 @@ def _oc(post=None, get=None):
     return backend, calls
 
 
-ANSWER = '{"choices":[{"message":{"role":"assistant","content":"Item 12 is in build."}}],"usage":{"prompt_tokens":9,"completion_tokens":5}}'
+# The real OpenClaw 2026.9.6 non-streaming shape (dist/openai-http, the
+# chat.completion it sends): usage is always zeros, even for a real, paid
+# answer (staging stage C, turn 1b714b06: gateway 200 from Anthropic, key spend
+# $0.00409, OpenClaw usage all 0).
+def oc_answer(content, finish="stop", usage=None, **extra):
+    import json
+    body = {"id": "d3f1c2a4-5b6e-4f70-8a91-b2c3d4e5f607", "object": "chat.completion", "created": 1790640000,
+            "model": "openclaw/mc-agent",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": finish}],
+            "usage": usage if usage is not None else {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            **extra}
+    return json.dumps(body)
+
+
+ANSWER = oc_answer("Item 12 is in build.")
 
 
 def test_not_connected_refuses_every_turn_without_a_call():
@@ -196,7 +210,9 @@ def test_not_connected_refuses_every_turn_without_a_call():
 def test_answered_only_with_text_and_usage_and_pinned_to_mc_agent():
     backend, calls = _oc(post=Resp(200, ANSWER))
     result = backend.turn(REQ)
-    assert result.status == "answered" and result.text == "Item 12 is in build." and result.usage["prompt_tokens"] == 9
+    assert result.status == "answered" and result.text == "Item 12 is in build."
+    assert result.usage is None                      # OpenClaw's zeros are "not reported", never a signal
+    assert result.trace["response_id"] == "d3f1c2a4-5b6e-4f70-8a91-b2c3d4e5f607"
     url, kw = calls["post"][0]
     assert url == "http://mc-agent:18789/v1/chat/completions"
     import json
@@ -207,11 +223,19 @@ def test_answered_only_with_text_and_usage_and_pinned_to_mc_agent():
 
 
 @pytest.mark.parametrize("status,text,turn_status,failure", [
-    (200, '{"choices":[{"message":{"content":"hi"}}]}', "error", "no_run_status"),
-    # Stage C honesty guard: text with zero completion tokens is not an answer.
-    (200, '{"choices":[{"message":{"content":"Budget has been exceeded"}}],"usage":{"prompt_tokens":5,"completion_tokens":0}}',
-     "error", "no_run_status"),
-    (200, '{"choices":[{"message":{"content":""}}],"usage":{}}', "error", "no_run_status"),
+    # Answered on content, not usage: OpenClaw 9.6's zero usage, a missing usage, no finish_reason, a "length" stop.
+    (200, oc_answer("Item 12 is in build."), "answered", None),
+    (200, '{"choices":[{"message":{"content":"hi"}}]}', "answered", None),
+    (200, oc_answer("A long answer, cut at the limit", finish="length"), "answered", None),
+    # Not answers: empty or blank text, OpenClaw's no-reply placeholder, an error field, an odd finish_reason.
+    (200, oc_answer(""), "error", "no_run_status"),
+    (200, oc_answer("   \n "), "error", "no_run_status"),
+    (200, oc_answer(None), "error", "no_run_status"),
+    (200, oc_answer("No response from OpenClaw."), "error", "no_run_status"),
+    (200, oc_answer("Budget has been exceeded", error={"message": "Budget has been exceeded"}), "error", "no_run_status"),
+    (200, oc_answer("partial", finish="tool_calls"), "error", "no_run_status"),
+    (200, oc_answer("filtered", finish="content_filter"), "error", "no_run_status"),
+    (200, '{"choices":[]}', "error", "malformed_answer"),
     (200, "not json", "error", "malformed_answer"),
     (408, '{"error":{"message":"upstream provider timeout"}}', "unavailable", "model_gateway_down"),
     (500, '{"error":{"message":"LLM request failed: 401 invalid api key"}}', "unavailable", "key_refused"),
@@ -224,11 +248,15 @@ def test_answered_only_with_text_and_usage_and_pinned_to_mc_agent():
     (429, '{"error":{"message":"Budget has been exceeded"}}', "unavailable", "cap_reached"),
     (502, "bad gateway", "error", "runtime_error"),
 ])
-def test_errors_are_never_answers(status, text, turn_status, failure):
+def test_answers_by_content_and_errors_are_never_answers(status, text, turn_status, failure):
     backend, _ = _oc(post=Resp(status, text))
     result = backend.turn(REQ)
     assert (result.status, result.failure_class) == (turn_status, failure)
-    assert result.text is None
+    assert result.usage is None
+    if turn_status == "answered":
+        assert result.text and result.text.strip()
+    else:
+        assert result.text is None
 
 
 def test_timeouts_and_connection_errors():

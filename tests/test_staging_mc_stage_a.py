@@ -132,6 +132,9 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     # and MC's own provider key (a placeholder until Robert's).
     env_before, env_after = gw_before["environment"], gw_after["environment"]
     assert env_after["ANTHROPIC_API_KEY"] == "" and env_after["XAI_API_KEY"] == ""
+    if "GATEWAY_ANTHROPIC_API_KEY" in env_before:       # main already has stage C (#252): identical
+        assert gw_after == gw_before
+        return
     assert env_after["GATEWAY_ANTHROPIC_API_KEY"] == env_before["ANTHROPIC_API_KEY"]
     assert env_after["GATEWAY_XAI_API_KEY"] == env_before["XAI_API_KEY"]
     assert env_after["MC_ANTHROPIC_API_KEY"] == "mc-anthropic-placeholder-not-a-key"
