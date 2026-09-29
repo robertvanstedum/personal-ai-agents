@@ -1010,7 +1010,7 @@ def test_slice1_navigation_reaches_every_guild_page_and_the_truthful_labs_page(b
     ctx, page = _context(browser, server, 1440, 900)
     go(page, f"{server['url']}/guild-next/guild/build")
     nav = page.locator(".guild-subnav")
-    expect(nav.locator("a")).to_have_text(["Shop floor", "Wall", "Queue", "Operate", "Build Log", "Planning Studio", "Prototype Lab"])
+    expect(nav.locator("a")).to_have_text(["Shop floor", "Wall", "Queue", "Workshop", "Operate", "Build Log", "Planning Studio", "Prototype Lab"])
     for label, where in (("Wall", "/guild-next/guild/build/bench"), ("Queue", "/guild-next/guild/build/queue"),
                          ("Operate", "/guild-next/guild/operate"), ("Planning Studio", "/guild-next/guild/labs")):
         nav.get_by_text(label, exact=True).click()
@@ -1288,4 +1288,99 @@ def test_slice2_phone_the_drawer_holds_the_same_actions(browser, server, floor):
     menu_btn = page.locator(f'[data-conv="{cid}"] [data-conv-menu]')
     assert menu_btn.bounding_box()["width"] >= 28 and menu_btn.bounding_box()["height"] >= 28
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+    ctx.close()
+
+
+# ── Slice 4a: the local Workshop (read only, model free) ─────────────────────
+
+SHOTS = os.environ.get("GUILD_SHOTS")     # a folder: save the Workshop screenshots there
+
+
+@pytest.fixture
+def workshop(server, floor, tmp_path):
+    from minimoi_portal.workshop.observer import Observation, health_event
+    from minimoi_portal.workshop.record import Workshop, iso, now
+    saved = {k: os.environ.get(k) for k in ("MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID")}
+    os.environ["MINIMOI_WORKSHOPS_DIR"] = str(tmp_path / "workshops")
+    os.environ["MINIMOI_WORKSHOP_ID"] = "mac"
+    w = Workshop(str(tmp_path / "workshops"), "mac")
+    obs = Observation(observed_at=iso(now()), memory_free_pct=46.0, swap_used_gb=1.2, disk_free_gb=80.0, load_1m=2.1,
+                      clients=[{"kind": "codex", "pid": 11, "elapsed": "05:00"}], clients_known=True)
+    w.append(health_event(obs, "mac"))
+    w.append({"workshop": "mac", "actor": "claude-code", "kind": "started", "item": "queue:12", "stage": "build",
+              "text": "Slice 4a: tests and screenshots", "next_actor": "codex"})
+    w.append({"workshop": "mac", "actor": "claude-code", "kind": "needs_you", "item": "queue:12",
+              "text": "Choose the refresh cadence", "next_actor": "robert"})
+    w.append({"workshop": "mac", "actor": "claude-code", "kind": "next", "item": "spec:streaming",
+              "text": "Streaming S1 after the reviews"})
+    yield {"workshop": w, "Observation": Observation, "health_event": health_event, "iso": iso, "now": now}
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+
+def _visible_order(page, selectors):
+    return [page.locator(s).first.bounding_box()["y"] for s in selectors]
+
+
+def test_slice4a_the_workshop_opens_from_a_queue_item_and_refreshes_honestly(browser, server, workshop):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    model_calls = _requests(page, "/mc/turns")
+    go(page, f"{server['url']}/guild-next/guild/build/items/12")
+    with page.expect_navigation():
+        page.click("[data-open-workshop]")
+    page.wait_for_selector("body[data-ready=true]")
+    assert "/guild-next/guild/workshop?item=12" in page.url
+    expect(page.locator(".guild-subnav [aria-current='page']")).to_have_text("Workshop")
+    expect(page.locator("[data-ws-admission]")).to_have_attribute("data-verdict", "tight")
+    expect(page.locator("[data-ws-runs]")).to_contain_text("1 agent client running")
+    expect(page.locator("[data-ws-next]")).to_contain_text("robert")
+    expect(page.locator("[data-ws-needs]")).to_contain_text("Choose the refresh cadence")
+    expect(page.locator("[data-ws-scope]")).to_contain_text("Approved for build")
+    expect(page.locator("[data-ws-more]")).to_have_attribute("open", "")
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/1-desktop-workshop-item-12.png", full_page=True)
+    # A check-in: the host is quiet now; the refresh shows it (files only).
+    w = workshop
+    w["workshop"].append(w["health_event"](w["Observation"](observed_at=w["iso"](w["now"]()), memory_free_pct=50.0,
+                                                           swap_used_gb=1.0, disk_free_gb=80.0, clients=[],
+                                                           clients_known=True), "mac"))
+    with page.expect_response(lambda r: "/api/v1/workshop" in r.url):
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(page.locator("[data-ws-admission]")).to_have_attribute("data-verdict", "ok")
+    expect(page.locator("[data-ws-runs]")).to_have_text("No agent client running")
+    # A failed refresh is unknown, never "nothing running".
+    page.route("**/api/v1/workshop*", lambda route: route.fulfill(status=503, body="{}", content_type="application/json"))
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(page.locator("[data-ws-admission]")).to_have_attribute("data-verdict", "unknown")
+    expect(page.locator("[data-ws-verdict]")).to_have_text("Host unknown")
+    expect(page.locator("[data-ws-runs]")).to_have_text("Running agents unknown (refresh failed)")
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/2-desktop-refresh-failed-unknown.png")
+    assert not model_calls, model_calls
+    assert not [e for e in errors if "status of 503" not in e], errors      # the 503 is the one we injected
+    ctx.close()
+
+
+def test_slice4a_phone_shows_now_needs_you_budget_then_the_chat(browser, server, workshop):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    errors = _errors(page)
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/workshop?item=12")
+    expect(page.locator(".phone-summary")).to_have_count(0)                  # the Workshop leads with Now
+    ys = _visible_order(page, ["[data-ws-now]", "[data-ws-needs]", "[data-ws-budget]", "[data-ws-more]", ".mc-panel"])
+    assert ys == sorted(ys), ys
+    expect(page.locator("[data-ws-more]")).not_to_have_attribute("open", "")   # scope, queue and recovery folded
+    expect(page.locator("[data-ws-scope]")).to_be_hidden()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/3-phone-workshop-first-screen.png")
+        page.screenshot(path=f"{SHOTS}/4-phone-workshop-full.png", full_page=True)
+    page.click("[data-ws-more] summary")
+    expect(page.locator("[data-ws-scope]")).to_be_visible()
+    assert not errors, errors
     ctx.close()

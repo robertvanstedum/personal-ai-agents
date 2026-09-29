@@ -9,6 +9,8 @@ EXPECTED = {
     "/guild-next/guild/build/bench",
     # Planning Studio and Prototype Lab: truthful entry points (Guild 1.1 dev, slice 1).
     "/guild-next/guild/labs",
+    # The local Workshop (4a: read only, no model calls).
+    "/guild-next/guild/workshop",
     "/guild-next/guild/build/queue",
     "/guild-next/guild/build/items/<int:item_id>",
     "/guild-next/guild/build/postits",
@@ -31,6 +33,7 @@ EXPECTED = {
     "/guild-next/api/v1/mc/turns",
     # Conversations (Guild 1.1 slice 2): owner only, CSRF-checked writes, no model calls.
     "/guild-next/api/v1/conversations",
+    "/guild-next/api/v1/workshop",
     "/guild-next/api/v1/conversations/<cid>/rename",
     "/guild-next/api/v1/conversations/<cid>/pin",
     "/guild-next/api/v1/conversations/<cid>/unpin",

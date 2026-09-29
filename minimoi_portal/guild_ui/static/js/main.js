@@ -12,6 +12,7 @@ import { continueFromItem } from './continue.js';
 import { initZones } from './zones.js';
 import { initFloorLayout } from './floorlayout.js';
 import { initConversations } from './conversations.js';
+import { initWorkshop } from './workshop.js';
 
 const page = JSON.parse(document.getElementById('guild-page').textContent);
 configure(page.storage_ns);
@@ -20,6 +21,7 @@ initConversation(page);
 initFloorState(page);
 initFloorLayout(page);
 initConversations(page);
+initWorkshop(page);
 if ($('[data-bench]')) initBench(page);
 if (page.page === 'queue' || page.page === 'item') initQueue(page);
 if (page.page === 'operate') initOperate();

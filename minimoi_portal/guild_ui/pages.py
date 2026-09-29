@@ -69,7 +69,7 @@ def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
         "queue": url_for(".queue"), "operate": url_for(".operate"), "postits": url_for(".postits"),
         "item": url_for(".item", item_id=987654321).replace("987654321", "__ID__"),
         "api": f"{c['url_prefix']}/api/v1",
-        "legacy_build": "/guild/build", "labs": url_for(".labs"),
+        "legacy_build": "/guild/build", "labs": url_for(".labs"), "workshop": url_for(".workshop"),
     }
     lights_by_id = {l["id"]: l for l in state["lights"]}
     phone_numbers = [lights_by_id[n] for n in layout["phone"]["numbers"] if n in lights_by_id]
@@ -123,6 +123,17 @@ def floor():
         conv_list = {"state": "unavailable", "rows": [], "unreadable": 0}
     return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], conv_list=conv_list,
                            conv_view=view, **ctx)
+
+
+@owner_page
+def workshop():
+    """The focused Workshop (4a: read only; zero model calls): opened from a
+    queue item (?item=<id>), or the whole workshop without one."""
+    from .workshop_view import view
+    item_id = request.args.get("item", type=int)
+    ctx = _context("workshop", "Workshop", f"Workshop · #{item_id}" if item_id else "Workshop", page_open=True,
+                   page_extra={"workshop_item": item_id})
+    return render_template("guild_floor/workshop.html", ws=view(cfg()["services"], item_id), ws_item=item_id, **ctx)
 
 
 @owner_page

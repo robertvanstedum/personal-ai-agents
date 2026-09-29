@@ -87,7 +87,7 @@ def test_chat_blockers_are_mc_down_and_a_bad_cost_level_only():
 
 def test_navigation_and_the_truthful_labs_page(staging):
     page = _floor(staging)
-    for label in ("Shop floor", "Wall", "Queue", "Operate", "Build Log", "Planning Studio", "Prototype Lab"):
+    for label in ("Shop floor", "Wall", "Queue", "Workshop", "Operate", "Build Log", "Planning Studio", "Prototype Lab"):
         assert f">{label}</a>" in page, label
     labs = staging.owner().get("/guild-next/guild/labs")
     body = labs.get_data(as_text=True)

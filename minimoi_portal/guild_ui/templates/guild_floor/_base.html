@@ -18,7 +18,7 @@
 </nav>
 <p class="gu-notice" data-notice role="status" hidden></p>
 {% block above %}{% endblock %}
-{% if page_id not in ('floor', 'bench') %}{% include 'guild_floor/_phone_summary.html' %}{% endif %}{# the wall's first cards are Needs you and Continue #}
+{% if page_id not in ('floor', 'bench', 'workshop') %}{% include 'guild_floor/_phone_summary.html' %}{% endif %}{# the wall's first cards are Needs you and Continue; the Workshop leads with Now and its own Needs you #}
 <div class="gu-layout" data-layout>
   {% block before_main %}{% endblock %}
   <main id="main" class="gu-main" tabindex="-1" data-page-content>

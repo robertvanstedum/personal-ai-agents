@@ -859,6 +859,48 @@ and the key database off).
 `cos.sh key` shows a **refused** call on CoS's key (`key_ref` `cos-agent-…`):
 that is a route CoS uses that its key's scope misses.
 
+## The local Workshop (slice 4a: observe and record, read only; staging only)
+
+The Workshop screen (`/guild-next/guild/workshop?item=<id>`, or **Open in
+Workshop** on a queue item) shows what the Mac is doing: the item's approved
+scope, the next actor, the agent clients running, the last event, the host's
+admission verdict for a new run, queued work, this month's gateway spend,
+Needs you, and recovery steps. It is read only and model free: the page and
+its one-minute refresh read files and the queue, never a model, and nothing
+launches (the launcher is 4b). On a phone it leads with Now, Needs you and
+Budget, folds the rest, then the chat.
+
+**Where the data comes from.** `scripts/workshop/workshop.py` runs on the Mac
+from the repository (no container, no key):
+
+```bash
+venv/bin/python3 scripts/workshop/workshop.py observe   # one host reading: memory, swap, disk, agent clients
+venv/bin/python3 scripts/workshop/workshop.py event --actor claude-code --item pr:265 \
+    --kind needs_you --stage review --text "Review slice 2" --next-actor robert
+venv/bin/python3 scripts/workshop/workshop.py state     # the derived state
+venv/bin/python3 scripts/workshop/workshop.py sync      # to ~/minimoi-staging/data/workshops/
+```
+
+The record is `~/minimoi-workshops/<id>/events.jsonl` (append only) plus
+`state.json` (derived, written atomically under a lock). `sync` appends the
+new whole lines and replaces `state.json`; only those two files go. The portal
+mounts `data/workshops` read only (`MINIMOI_WORKSHOPS_DIR`, id
+`MINIMOI_WORKSHOP_ID=mac`).
+
+**The admission verdict.** `ok` (room for one run), `tight` (another agent
+client is running, or a resource is near its limit), `blocked` (memory free
+under 10%, swap over 6 GB, disk free under 10 GB, or three or more agent
+clients), `unknown` (a probe failed). Agent clients are the `claude`, `codex`
+and `openclaw` processes, whoever started them; their arguments are read to
+classify and never kept. A missing, unreadable or stale record (the host
+reading is over 15 minutes old) shows as unknown, never as "nothing running".
+`observe` writes a health event when the verdict, the reasons or the clients
+change, and every 10 minutes otherwise, so a quiet host stays fresh.
+
+**Not installed yet.** Nothing runs `observe` and `sync` on a schedule: until a
+launchd job is added (with Robert's go-ahead), run them by hand before looking
+at the screen, or the page shows unknown after 15 minutes.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes

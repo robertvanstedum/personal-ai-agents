@@ -127,8 +127,13 @@ services:
       # The usage store, read-only (usage-record U3): the Shop floor footer's
       # output tokens, joined from MC's gateway records by turn window.
       - MINIMOI_USAGE_DIR=/app/data/usage
+      # The local Workshop's record, read-only (4a): synced from the Mac by
+      # scripts/workshop/workshop.py sync; the portal never writes it.
+      - MINIMOI_WORKSHOPS_DIR=/app/data/workshops
+      - MINIMOI_WORKSHOP_ID=mac
     volumes:
       - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
+      - ${MINIMOI_ROOT}/data/workshops:/app/data/workshops:ro
     # Permanently on mc-front (portal + MC's relay only), so enabling MC never
     # recreates the portal (MC spec v0.9 §3).
     networks:

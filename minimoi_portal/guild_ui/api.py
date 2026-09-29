@@ -775,6 +775,13 @@ def _touch_in(conversations, conv, principal):
         return conv
 
 
+@owner_api
+def workshop_view_api():
+    """The Workshop's status refresh: files and the queue only, never a model."""
+    from .workshop_view import api_view, view
+    return jsonify({**api_view(view(cfg()["services"], request.args.get("item", type=int))), "observed_at": now_iso()})
+
+
 RULES = [
     ("/session", "api_session", session_view, ["GET"]),
     ("/floor", "api_floor", floor_view, ["GET"]),
@@ -794,6 +801,7 @@ RULES = [
     ("/continue", "api_continue_put", continue_put, ["PUT"]),
     ("/mc/turns", "api_mc_turn", mc_turn, ["POST"]),
     ("/conversations", "api_conversations", conversations_list, ["GET"]),
+    ("/workshop", "api_workshop", workshop_view_api, ["GET"]),
     ("/conversations", "api_conversation_create", conversation_create, ["POST"]),
     ("/conversations/<cid>/rename", "api_conversation_rename", conversation_rename, ["POST"]),
     ("/conversations/<cid>/pin", "api_conversation_pin", conversation_pin, ["POST"]),

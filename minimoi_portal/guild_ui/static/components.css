@@ -626,3 +626,21 @@ body.gu[data-page="floor"][data-lights-open="true"] .floor-strip .lights { displ
   body.gu[data-page="floor"][data-keyboard="open"] .mc-dock-bottom { bottom: var(--gu-kb, 0px); }
   .bench > [data-panel="postits"] { grid-column: auto; }
 }
+
+/* ── The local Workshop (4a: read only) ── */
+.ws-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gu-s3); align-items: start; }
+.ws-more { grid-column: 1 / -1; }
+.ws-more-sum { cursor: pointer; font-size: var(--gu-size-sm); color: var(--gu-accent); margin-bottom: var(--gu-s2); }
+.ws-more-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gu-s3); }
+.ws-admission { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.ws-verdict { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--gu-size-sm); padding: 1px 8px; border-radius: var(--gu-radius-pill); border: 1px solid currentColor; }
+.ws-admission[data-verdict="ok"] .ws-verdict { color: var(--gu-light-green); }
+.ws-admission[data-verdict="tight"] .ws-verdict { color: var(--gu-tag-needs-ink); }
+.ws-admission[data-verdict="blocked"] .ws-verdict { color: var(--gu-mark-blocker-ink); background: var(--gu-mark-blocker-bg); }
+.ws-admission[data-verdict="unknown"] .ws-verdict { color: var(--gu-unknown-ink); border-style: dashed; }
+.ws-runs[data-known="false"] { color: var(--gu-unknown-ink); }
+.ws-reasons { margin: 4px 0 0 1.2em; list-style: disc; }
+.ws-recovery { list-style: disc; margin-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 900px) {
+  .ws-grid, .ws-more-grid { grid-template-columns: 1fr; }
+}
