@@ -422,6 +422,44 @@ else
   fi
 fi
 
+echo "== 10. CoS's own gateway key (cos.sh key)"
+if cos_key_on; then
+  if is_focus_stopped cos-agent-a; then
+    pass "CoS's key checks skipped: cos-agent-a is stopped (focus: $FOCUS)"
+  else
+    # From inside Agent A with the key it actually holds (never printed): the
+    # master key would get 200 on /key/list; CoS's key must be refused there,
+    # on MC's route and on embeddings. Only 401/403 count as a refusal.
+    ck=$(docker exec minimoi-cos-agent-a node -e "
+const k = process.env.MINIMOI_MODEL_GATEWAY_KEY || '', g = 'http://model-gateway:4000';
+const chat = m => JSON.stringify({ model: m, max_tokens: 1, messages: [{ role: 'user', content: 'x' }] });
+const reqs = [['GET','/key/list'],['GET','/v1/models'],['POST','/v1/chat/completions',chat('minimoi-mc-agent')],
+  ['POST','/v1/embeddings',JSON.stringify({model:'minimoi-cos-agent',input:'x'})],['POST','/anthropic/v1/messages',chat('claude-haiku-4-5-20251001')]];
+if (!k.startsWith('sk-')) { console.log('not-a-virtual-key'); process.exit(0); }
+Promise.all(reqs.map(([m,p,b]) => fetch(g+p,{method:m,headers:{authorization:'Bearer '+k,'content-type':'application/json'},body:b})
+  .then(r => (r.status===401||r.status===403) ? '' : p+'='+r.status, () => p+'=error'))).then(x => console.log(x.filter(Boolean).join(' ')))" 2>/dev/null || echo error)
+    [[ -z "$ck" ]] && pass "CoS's key (inside Agent A) is not the master key and is refused (401/403) on admin routes, MC's route, embeddings and the pass-through" \
+      || fail "CoS's key check: $ck"
+    cctrl=$(COSK=$(sed -n 's/^COS_MODEL_GATEWAY_KEY=//p' "$STAGING_COS_ENV" | tail -n 1) docker exec -e COSK minimoi-model-gateway python -c "
+import json, os, urllib.request as u
+m = os.environ['LITELLM_MASTER_KEY']
+try:
+    with u.urlopen(u.Request('http://127.0.0.1:4000/key/info?key=' + os.environ['COSK'], headers={'Authorization': 'Bearer ' + m}), timeout=15) as r:
+        i = json.loads(r.read()).get('info', {})
+except Exception as e:
+    print('bad', type(e).__name__); raise SystemExit
+ok = (sorted(i.get('models') or []) == sorted(['minimoi-cos-agent', 'minimoi-cos-agent-xai-fast', 'minimoi-cos-web-search', 'minimoi-cos-agent-anthropic'])
+      and sorted(i.get('allowed_routes') or []) == sorted(['/v1/chat/completions', '/chat/completions', '/v1/responses', '/responses'])
+      and i.get('budget_duration') == '30d' and (i.get('max_budget') or 0) > 0 and (i.get('key_alias') or '').startswith('cos-agent-'))
+print(('ok' if ok else 'bad'), i.get('max_budget'), i.get('budget_duration'), round(float(i.get('spend') or 0), 4))
+" 2>/dev/null || echo error)
+    [[ "$cctrl" == ok* ]] && pass "CoS's key: cap \$$(awk '{print $2}' <<< "$cctrl") per $(awk '{print $3}' <<< "$cctrl"), spent \$$(awk '{print $4}' <<< "$cctrl"); CoS's four routes; chat and responses only" \
+      || fail "CoS's key record: $cctrl (expected CoS's four routes, chat and responses only, a monthly cap)"
+  fi
+else
+  pass "CoS uses the gateway's master key (state/cos.key off)"
+fi
+
 echo "== native writers under $S (advisory)"
 others=$(lsof +D "$S" 2>/dev/null | awk 'NR>1 {print $1"("$2")"}' | sort -u | grep -Ev '^(ssh|limactl|colima|com\.docke|virtiofsd|vz)' || true)
 [[ -z "$others" ]] && pass "no native process has files open under $S" || warn "native processes with files open under $S: $(echo "$others" | tr '\n' ' ')"

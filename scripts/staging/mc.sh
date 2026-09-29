@@ -84,7 +84,8 @@ key_problems() {
   if [[ -n "$relay_token" && ( "$relay_token" == "$mc_token" || "$relay_token" == "$cos_token" || "$relay_token" == "$cos_key" ) ]]; then
     problems="$problems MC_RELAY_TOKEN equals another credential (MC's own token or one of CoS's);"
   fi
-  if [[ -n "$mc_key" && ( "$mc_key" == "$cos_key" || "$mc_key" == "$cos_token" ) ]]; then
+  if [[ -n "$mc_key" && ( "$mc_key" == "$cos_key" || "$mc_key" == "$cos_token" \
+        || "$mc_key" == "$(env_value "$STAGING_COS_ENV" COS_MODEL_GATEWAY_KEY)" ) ]]; then
     problems="$problems MC_MODEL_GATEWAY_KEY equals one of CoS's credentials;"
   fi
   if [[ -n "$mc_token" && ( "$mc_token" == "$cos_token" || "$mc_token" == "$cos_key" ) ]]; then

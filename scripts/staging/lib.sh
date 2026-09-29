@@ -113,6 +113,13 @@ STAGING_KEYS_FILE="$STAGING_ROOT/state/gateway.keys"
 STAGING_KEYS_OVERLAY="docker-compose.staging-keys.yml"
 STAGING_GATEWAY_ENV="$STAGING_ROOT/gateway.env"
 gateway_keys_on() { [[ -f "$STAGING_KEYS_FILE" && "$(tr -d '[:space:]' < "$STAGING_KEYS_FILE")" == on ]]; }
+# CoS's own capped gateway key (cos.sh key): cos.env (600, interpolation only)
+# and an overlay that gives Agent A that key instead of the master key, only
+# while state/cos.key says "on".
+STAGING_COS_ENV="$STAGING_ROOT/cos.env"
+STAGING_COS_KEY_FILE="$STAGING_ROOT/state/cos.key"
+STAGING_COS_KEY_OVERLAY="docker-compose.staging-cos-key.yml"
+cos_key_on() { [[ -f "$STAGING_COS_KEY_FILE" && "$(tr -d '[:space:]' < "$STAGING_COS_KEY_FILE")" == on ]]; }
 
 # The portal's Master Craftsman switches (stage B), from state files; both
 # default to off. mc.mode: off | stub | openclaw | grok. mc.turns: on | off.
@@ -247,6 +254,16 @@ staging_compose() {
       || die "state/gateway.keys is on but $STAGING_GATEWAY_ENV is missing or not mode 600 (mc.sh gateway-keys)"
     extra+=(--env-file "$STAGING_GATEWAY_ENV")
     files=(-f "$RELEASE_DIR/$STAGING_KEYS_OVERLAY")
+  fi
+  # CoS's own capped key (cos.sh key): only with the key database on.
+  if cos_key_on; then
+    gateway_keys_on || die "state/cos.key is on but the gateway has no key database (state/gateway.keys)"
+    [[ -f "$RELEASE_DIR/$STAGING_COS_KEY_OVERLAY" ]] \
+      || die "state/cos.key is on but the pinned release has no $STAGING_COS_KEY_OVERLAY"
+    [[ -f "$STAGING_COS_ENV" && "$(file_mode "$STAGING_COS_ENV")" == 600 ]] \
+      || die "state/cos.key is on but $STAGING_COS_ENV is missing or not mode 600 (cos.sh key)"
+    extra+=(--env-file "$STAGING_COS_ENV")
+    files+=(-f "$RELEASE_DIR/$STAGING_COS_KEY_OVERLAY")
   fi
   mode=$(mc_mode)
   turns=$(mc_turns)
