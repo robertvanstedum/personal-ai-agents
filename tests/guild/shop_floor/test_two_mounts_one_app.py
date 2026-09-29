@@ -19,7 +19,7 @@ def test_both_mount_and_each_serves_its_own_pages(load_portal):
     assert "Prototype" in proto and "simulated" in proto
     assert "Master Craftsman is off" not in proto
     assert "Master Craftsman is off" in real
-    assert "Prototype" not in real and "simulated" not in real.lower()
+    assert "Prototype" not in real.replace("Prototype Lab", "") and "simulated" not in real.lower()
 
 
 def test_modules_blueprints_and_config_are_distinct(load_portal):

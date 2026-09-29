@@ -9,6 +9,8 @@ import { $, $$, clone, slot, setSlot, el, announce, localTime } from './dom.js';
 import { live, setOff, onChange } from './state.js';
 import { apiGet, apiPost, recordMode } from './api.js';
 import { newKey } from './actions.js';
+import { answerFailed, answerArrived } from './floorlayout.js';
+import { applyConversation } from './conversations.js';
 
 let page, panel, thread, pill;
 const inPage = () => document.body.dataset.page === 'floor';
@@ -80,7 +82,13 @@ function noteLine(note) {
   setSlot(li, 'when', localTime(note.created_at));
   const ctx = note.context || {};
   setSlot(li, 'context', `${ctx.area ? ` · ${ctx.area}` : ''}${ctx.item_ref ? ` · #${ctx.item_ref}` : ''}`);
-  setSlot(li, 'text', note.text);
+  li.dataset.authorKind = note.author_kind || '';
+  const body = slot(li, 'text');
+  // The server renders Markdown and sanitises it with an allow-list
+  // (markdown_render.py: no raw HTML, scripts, handlers, javascript: URLs or
+  // images). Without it, the note's own text is shown as plain text.
+  if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;
+  else body.textContent = note.text;
   if (note.turn && note.turn.done_text) {      // a live MC reply: "Done in 1.2s · 96 output tokens"
     const foot = clone('tpl-note-foot');
     foot.querySelector('[data-turn-done]').textContent = note.turn.done_text;
@@ -107,7 +115,8 @@ function askForTokens() {
   tokenTimer = window.setTimeout(async () => {
     tokenTimer = null;
     tokenAsks += 1;
-    const r = await apiGet('/notes?limit=20');
+    const conv = page.conversation ? `&conversation=${encodeURIComponent(page.conversation.id)}` : '';
+    const r = await apiGet(`/notes?limit=20${conv}`);
     let pending = false;
     for (const n of ((r.ok && r.body && r.body.notes) || [])) {
       if (!n.turn) continue;
@@ -147,7 +156,8 @@ async function askMasterCraftsman(note) {
   const waiting = waitingLine();
   let r;
   try {
-    r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode() });
+    r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode(),
+      conversation_id: page.conversation ? page.conversation.id : undefined });
   } finally {
     waiting.stopTicking();
   }
@@ -158,10 +168,12 @@ async function askMasterCraftsman(note) {
     if ($(`[data-note="${body.reply_note.id}"]`)) waiting.remove();
     else waiting.replaceWith(noteLine(body.reply_note));
     announce(body.message || 'Master Craftsman answered');
+    answerArrived();
   } else {
     const text = body.message || 'Master Craftsman did not answer. Your note is kept.';
     waiting.replaceWith(platformLine('Guild platform', text));
     announce(text);
+    answerFailed(body.mc_header || 'Master Craftsman did not answer');
   }
   follow();
 }
@@ -187,13 +199,14 @@ async function sendNote(input, send) {
   if (!noteKey) noteKey = newKey();
   send.disabled = true;
   const r = await apiPost('/notes', {
-    request_id: noteKey, text, record_mode: recordMode(),
+    request_id: noteKey, text, record_mode: recordMode(), conversation_id: page.conversation ? page.conversation.id : undefined,
     context: { area: document.body.dataset.area || null, item_ref: page.item_id || null, page: page.page },
   });
   send.disabled = false;
   const body = r.body || {};
   if (r.ok && body.result === 'kept') {
     if (!$(`[data-note="${body.note.id}"]`)) appendNote(body.note);
+    applyConversation(body.conversation);
     input.value = '';
     noteKey = null;
     for (const n of $$('[data-notes-unavailable]')) n.remove();
@@ -260,6 +273,15 @@ export function initConversation(p) {
       addPlatform('Guild platform', 'Back on the record · nothing from the off-the-record stretch was kept');
     }
   });
+  // The three explanatory lines under the composer fold behind ⓘ.
+  const info = $('[data-mc-info]');
+  const lines = $('[data-mc-off-lines]');
+  if (info && lines) {
+    info.addEventListener('click', () => {
+      lines.hidden = !lines.hidden;
+      info.setAttribute('aria-expanded', String(!lines.hidden));
+    });
+  }
   const typeBtn = $('[data-mc-type]');
   typeBtn.addEventListener('click', () => {
     document.body.dataset.typing = 'true';
