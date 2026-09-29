@@ -1020,3 +1020,185 @@ def test_slice1_navigation_reaches_every_guild_page_and_the_truthful_labs_page(b
     expect(page.locator("#planning-studio")).to_contain_text("planning-studio/")
     expect(page.locator(".page-meta")).to_contain_text("neither is served on dev yet")
     ctx.close()
+
+
+# ── Slice 1, review fix round (#263 review F1-F8, and the coordinator's polish) ──
+
+@pytest.mark.parametrize("width,height", [(390, 844), (860, 800)], ids=["phone", "tablet"])
+def test_fix_the_history_drawer_closes_by_button_and_by_tapping_outside(browser, server, floor, width, height):
+    ctx = browser.new_context(viewport={"width": width, "height": height}, is_mobile=width < 640, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    drawer, toggle = page.locator("[data-floor-history]"), page.locator("[data-history-toggle]")
+    toggle.click()
+    expect(drawer).to_be_visible()
+    expect(page.locator("[data-history-close]")).to_be_focused()                  # focus moves into the drawer
+    tb = toggle.bounding_box()
+    hit = page.evaluate(f"document.elementFromPoint({tb['x'] + tb['width'] / 2}, {tb['y'] + tb['height'] / 2}).closest('[data-history-toggle]') !== null")
+    assert hit, "the drawer (or its scrim) covers the ☰ button"
+    page.locator("[data-history-close]").click()                                  # a close button
+    expect(drawer).to_be_hidden()
+    expect(toggle).to_be_focused()                                                # focus goes back to ☰
+    toggle.click()
+    expect(drawer).to_be_visible()
+    page.mouse.click(width - 10, height - 200)                                    # a tap outside, on the scrim
+    expect(drawer).to_be_hidden()
+    expect(page.locator("[data-floor-scrim]")).to_be_hidden()
+    ctx.close()
+
+
+def test_fix_a_failed_poll_never_leaves_a_live_looking_zero_or_the_quiet_line(browser, server, floor):
+    write_queue(server["queue"], [i for i in QUEUE_ITEMS if i.get("status") != "blocked"])
+    try:
+        ctx, page = _context(browser, server, 1440, 900)
+        go(page, f"{server['url']}/guild-next/guild/build")
+        badge, quiet = page.locator("[data-needs-badge]"), page.locator("[data-rail-quiet]")
+        expect(badge).to_be_hidden()
+        expect(quiet).to_be_visible()
+        page.route(FLOOR_API, lambda route: route.fulfill(status=503, content_type="application/json",
+                                                            body='{"error": "unavailable", "message": "down"}'))
+        poll(page)
+        expect(page.locator("[data-stale-banner]")).to_be_visible()
+        expect(badge).to_be_visible()                                              # a stale badge, not a live zero
+        expect(badge.locator("[data-reminder-count]")).to_have_text("?")
+        expect(badge).to_have_attribute("data-fresh", "stale")
+        assert page.evaluate("getComputedStyle(document.querySelector('[data-needs-badge]')).borderTopStyle") == "dashed"
+        expect(quiet).to_be_hidden()                                               # no "right now" on a failed read
+        expect(page.locator("[data-rail-wall]")).to_be_visible()
+        page.unroute(FLOOR_API)
+        poll(page)
+        expect(badge).to_be_hidden()
+        expect(quiet).to_be_visible()
+        ctx.close()
+    finally:
+        write_queue(server["queue"], QUEUE_ITEMS)
+
+
+def test_fix_the_history_count_follows_what_is_kept(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    count = page.locator("[data-fh-count]")
+    expect(count).to_have_text("0 kept")
+    page.fill("#mc-input", "one")
+    page.click("[data-mc-send]")
+    expect(count).to_have_text("1 kept")
+    page.fill("#mc-input", "two")
+    page.click("[data-mc-send]")
+    expect(count).to_have_text("2 kept")
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator("[data-fh-count]")).to_have_text("2 kept")
+    ctx.close()
+
+
+def test_fix_the_blocker_line_follows_the_live_server_state(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    live = page.request.get(f"{server['url']}/guild-next/api/v1/floor").json()
+    states = [dict(live, blockers=[{"kind": "mc_down", "text": "Master Craftsman is unavailable · not answering"}], observed_at="2026-09-29T10:00:01+00:00"),
+              dict(live, blockers=[], observed_at="2026-09-29T10:00:02+00:00")]
+    page.route(FLOOR_API, lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(states.pop(0))))
+    blocker = page.locator("[data-mc-blocker]")
+    poll(page)
+    expect(blocker).to_have_text("Master Craftsman is unavailable · not answering")
+    poll(page)
+    expect(blocker).to_be_hidden()                                                  # MC recovered
+    page.unroute(FLOOR_API)
+    page.route("**/api/v1/mc/turns", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({
+        "status": "timeout_uncertain", "failure_class": "deadline", "mc_state": "unavailable",
+        "message": "No answer within the deadline", "mc_header": "No answer within the deadline"})))
+    _mc_turns_on(page)
+    page.fill("#mc-input", "still there?")
+    page.click("[data-mc-send]")
+    expect(blocker).to_have_text("Last answer failed · No answer within the deadline")   # not the old "MC down"
+    ctx.close()
+
+
+def test_fix_the_rail_toggle_moves_focus_in_and_back(browser, server, floor):
+    ctx, page = _context(browser, server, 1100, 800)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    toggle = page.locator("[data-rail-toggle]")
+    toggle.click()
+    expect(page.locator("#main")).to_be_visible()
+    assert page.evaluate("document.querySelector('#main').contains(document.activeElement)")
+    page.keyboard.press("Escape")
+    expect(page.locator("#main")).to_be_hidden()
+    expect(toggle).to_be_focused()
+    toggle.click()
+    page.mouse.click(40, 700)                                                       # a tap outside closes the overlay too
+    expect(page.locator("#main")).to_be_hidden()
+    ctx.close()
+
+
+def test_fix_rotating_a_phone_to_landscape_keeps_the_context_reachable(browser, server, floor):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    assert page.locator("[data-floor-context]").get_attribute("open") is None
+    page.set_viewport_size({"width": 844, "height": 390})
+    expect(page.locator("[data-floor-context]")).to_have_attribute("open", "")
+    page.click("[data-rail-toggle]")
+    expect(page.locator("[data-floor-urgent]")).to_be_visible()
+    ctx.close()
+
+
+def test_fix_polish_bubbles_folded_help_and_no_platform_card_in_the_chat(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("[data-mc-thread] [data-briefing]")).to_have_count(0)       # the chat holds only conversation
+    expect(page.locator("#main [data-briefing-text]")).to_contain_text("needs you")
+    lines = page.locator("[data-mc-off-lines]")
+    expect(lines).to_be_hidden()
+    expect(page.locator("[data-mc-record]")).to_be_visible()
+    expect(page.locator("[data-mc-invite]")).to_be_visible()
+    page.click("[data-mc-info]")
+    expect(lines).to_be_visible()
+    expect(page.locator("[data-mc-info]")).to_have_attribute("aria-expanded", "true")
+    page.click("[data-mc-info]")
+    expect(lines).to_be_hidden()
+    page.route("**/api/v1/mc/turns", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({
+        "status": "answered", "mc_state": "live", "message": "Master Craftsman answered",
+        "mc_header": "Master Craftsman is live · your messages are kept as notes",
+        "reply_note": {"id": 7101, "request_id": "mc-b", "author_kind": "agent", "author_label": "Master Craftsman",
+                       "who": "master_craftsman", "text": "Left side.", "html": "<p>Left side.</p>",
+                       "created_at": "2026-09-29T09:00:00+00:00", "context": {}}})))
+    _mc_turns_on(page)
+    page.fill("#mc-input", "Right side?")
+    page.click("[data-mc-send]")
+    mine = page.locator('[data-mc-thread] [data-author-kind="owner"]').last
+    theirs = page.locator('[data-note="7101"]')
+    expect(theirs).to_be_visible()
+    t, m, a = _box(page, "[data-mc-thread]"), mine.bounding_box(), theirs.bounding_box()
+    assert abs((m["x"] + m["width"]) - (t["x"] + t["width"])) < 12 and m["x"] > t["x"] + 40     # mine: right
+    assert abs(a["x"] - t["x"]) < 4                                                              # theirs: left
+    assert m["width"] < t["width"] * 0.85
+    assert page.evaluate("getComputedStyle(document.querySelector('[data-author-kind=owner]')).backgroundColor") != \
+        page.evaluate("getComputedStyle(document.querySelector('[data-note=\"7101\"]')).backgroundColor")
+    assert not errors, errors
+    ctx.close()
+
+
+def test_fix_phone_the_type_bar_covers_neither_the_composer_nor_the_newest_note(browser, server, floor):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    for n in range(6):
+        page.fill("#mc-input", f"note {n}")
+        page.click("[data-mc-send]")
+        expect(page.locator('[data-mc-thread] [data-kind="note"]')).to_have_count(n + 1)
+    page.wait_for_timeout(200)
+    # On the floor the Type bar sits inside the composer's block, under the form: it covers neither.
+    typebar, form, dock = _box(page, ".mc-phone-bar"), _box(page, "[data-mc-composer]"), _box(page, "[data-mc-dock-bottom]")
+    assert form["y"] + form["height"] <= typebar["y"] + 1, (form, typebar)
+    assert typebar["y"] + typebar["height"] <= 844 + 1
+    newest = page.locator('[data-mc-thread] [data-kind="note"]').last.bounding_box()
+    assert newest["y"] + newest["height"] <= dock["y"] + 2
+    signout = page.locator(".portal-nav-signout")
+    if signout.count() and signout.is_visible():
+        assert signout.bounding_box()["height"] < 24                                 # "Sign out" on one line
+    assert page.evaluate("getComputedStyle(document.querySelector('.guild-subnav')).overflowX") == "auto"
+    ctx.close()

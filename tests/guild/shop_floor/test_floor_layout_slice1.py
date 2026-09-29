@@ -66,7 +66,7 @@ def test_the_floor_api_carries_the_conversation_focus_and_chat_blockers(floored)
     floor = client.get("/guild-next/api/v1/floor").get_json()
     assert floor["focus"]["target"]["label"] == "#12 Floor API"
     page = client.get("/guild-next/guild/build").get_data(as_text=True)
-    assert "This conversation is about" in page and "#12 Floor API" in page
+    assert "Last opened" in page and "#12 Floor API" in page      # labelled as what it is until slice 2 (review F4)
 
 
 def test_the_conversation_focus_seam_prefers_a_conversations_own_work_item():

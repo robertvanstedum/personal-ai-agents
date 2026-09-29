@@ -81,6 +81,7 @@ function noteLine(note) {
   setSlot(li, 'when', localTime(note.created_at));
   const ctx = note.context || {};
   setSlot(li, 'context', `${ctx.area ? ` · ${ctx.area}` : ''}${ctx.item_ref ? ` · #${ctx.item_ref}` : ''}`);
+  li.dataset.authorKind = note.author_kind || '';
   const body = slot(li, 'text');
   // The server renders Markdown and sanitises it with an allow-list
   // (markdown_render.py: no raw HTML, scripts, handlers, javascript: URLs or
@@ -268,6 +269,15 @@ export function initConversation(p) {
       addPlatform('Guild platform', 'Back on the record · nothing from the off-the-record stretch was kept');
     }
   });
+  // The three explanatory lines under the composer fold behind ⓘ.
+  const info = $('[data-mc-info]');
+  const lines = $('[data-mc-off-lines]');
+  if (info && lines) {
+    info.addEventListener('click', () => {
+      lines.hidden = !lines.hidden;
+      info.setAttribute('aria-expanded', String(!lines.hidden));
+    });
+  }
   const typeBtn = $('[data-mc-type]');
   typeBtn.addEventListener('click', () => {
     document.body.dataset.typing = 'true';

@@ -13,17 +13,21 @@
 
 {% block before_main %}
 <aside class="floor-history" id="floor-history" aria-labelledby="fh-h" data-floor-history>
-  <h2 class="fh-h" id="fh-h">Conversations</h2>
+  <div class="fh-head">
+    <h2 class="fh-h" id="fh-h">Conversations</h2>
+    <button type="button" class="fb-btn fh-close" data-history-close aria-label="Close conversations">✕</button>
+  </div>
   {# One real thread today; conversation history (new, rename, pin, archive) is slice 2. #}
   <ol class="fh-list">
     <li class="fh-row" aria-current="true" data-fh-current>
       <span class="fh-title">Shop floor thread</span>
-      <span class="fh-meta small">{% if state.notes.state == 'ok' %}{{ state.notes.recent|length }}{% if state.notes.more %}+{% endif %} kept{% else %}notes unavailable{% endif %}</span>
+      <span class="fh-meta small" data-fh-count data-more="{{ 'true' if state.notes.more else 'false' }}">{% if state.notes.state == 'ok' %}{{ state.notes.recent|length }}{% if state.notes.more %}+{% endif %} kept{% else %}notes unavailable{% endif %}</span>
     </li>
   </ol>
 </aside>
 {# Phone only: the card's dark title strip with a small thumbnail, above the chat. #}
 <div class="floor-phone-strip" aria-hidden="true">{{ build_card('strip') }}</div>
+<div class="floor-scrim" data-floor-scrim hidden></div>
 {% endblock %}
 
 {% block main %}
@@ -38,13 +42,15 @@
   <summary class="floor-context-sum">Context</summary>
   <div class="fc-body">
     <p class="fc-item fc-about" data-rail-continue{% if focus.state == 'ok' and not focus.target %} hidden{% endif %}>
-      <span class="fc-label">This conversation is about</span>
+      {# Slice 1 has no conversation records: this is the item last opened (Continue), labelled as such. #}
+      <span class="fc-label">Last opened</span>
       {{ continue_line(state['continue']) }}
     </p>
     <p class="fc-item fc-urgent" data-floor-urgent{% if not top %} hidden{% endif %}>
       <span class="fc-label">Most urgent</span>
       <a href="{{ top.href if top else '#' }}" data-urgent-link>{% if top %}{{ top.tag }} · {{ top.text }}{% endif %}</a>
     </p>
+    <p class="fc-brief small" data-briefing><span class="visually-hidden" data-briefing-label>{{ state.briefing.display_label }}</span><span data-briefing-text>{{ state.briefing.text }}</span></p>
     {% set quiet = state.needs.status == 'ok' and not top and focus.state == 'ok' and not focus.target %}
     <p class="fc-quiet small" data-rail-quiet{% if not quiet %} hidden{% endif %}>{% if quiet %}Nothing needs you right now · <a href="{{ urls.bench }}" data-open-wall>Open wall</a>{% endif %}</p>
     <p class="fc-wall small" data-rail-wall{% if state.needs.status == 'ok' and not top and focus.state == 'ok' and not focus.target %} hidden{% endif %}><a href="{{ urls.bench }}" data-open-wall>Open wall →</a></p>

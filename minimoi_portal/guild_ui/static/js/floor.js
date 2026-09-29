@@ -123,7 +123,7 @@ function render() {
   if (!current) return;
   renderLights(current.lights || []);
   renderNeeds(current.needs);
-  renderFloorNeeds(current.needs, fresh.mode);
+  renderFloorNeeds(current.needs, fresh.mode, since());
   if (current.briefing) {
     setBriefing(current.briefing);
     const text = $('[data-briefing-text]');
@@ -216,9 +216,7 @@ export function initFloorState(p) {
   lightsBtn.addEventListener('click', () => toggle('lightsOpen', lightsBtn, 'Hide ▴', 'Details ▾'));
   const sheetBtn = $('[data-sheet-toggle]');     // the pre-1.1 floor's post-it sheet; gone from the 1.1 layout
   if (sheetBtn) sheetBtn.addEventListener('click', () => toggle('sheetOpen', sheetBtn));
-  // Phone: the context rail starts folded below the conversation, so chat comes first.
-  const context = $('[data-floor-context]');
-  if (context && window.matchMedia('(max-width: 640px)').matches) context.open = false;
+  // (The context rail's folding follows the width: floorlayout.js.)
   for (const b of $$('[data-ask]')) {
     b.addEventListener('click', () => {
       const light = (current.lights || []).find((l) => l.id === b.dataset.ask);

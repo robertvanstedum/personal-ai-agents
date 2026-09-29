@@ -5,7 +5,7 @@
    shown with its time and context. Off the record, what he types stays in
    this page's memory only and is never sent (S2). #}
 {% macro note_row(n) -%}
-<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-note="{{ n.id }}">
+<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}">
   <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span>{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</p>
   {%- if n.html %}
   <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
@@ -44,10 +44,12 @@
   <p class="mc-current small" data-mc-current>Current conversation · Shop floor thread</p>
   {% endif %}
   <ol class="mc-thread" data-mc-thread role="log" aria-live="polite" aria-label="Conversation thread">
+    {% if page_id != 'floor' %}{# on the Shop floor the platform's status line sits in the rail: the chat holds only conversation #}
     <li class="msg msg-platform" data-kind="briefing" data-briefing>
       <p class="msg-meta"><span class="msg-label" data-briefing-label>{{ state.briefing.display_label }}</span></p>
       <p class="msg-text" data-briefing-text>{{ state.briefing.text }}</p>
     </li>
+    {% endif %}
     {% if state.notes.state != 'ok' %}
     <li class="msg msg-platform" data-kind="platform" data-notes-unavailable>
       <p class="msg-meta"><span class="msg-label">Guild platform</span></p>
@@ -71,8 +73,9 @@
       <button type="button" class="btn-quiet" data-mc-record-confirm hidden>Confirm on the record</button>
       <button type="button" class="btn-quiet" data-mc-record aria-pressed="false">Off the record</button>
       <button type="button" class="btn-quiet" data-mc-invite disabled>Invite</button>
+      <button type="button" class="btn-quiet mc-info-btn" data-mc-info aria-expanded="false" aria-controls="mc-off-lines" title="How notes, filing and inviting work here">ⓘ<span class="visually-hidden"> About notes, filing and inviting</span></button>
     </div>
-    <div class="mc-off-lines">
+    <div class="mc-off-lines" id="mc-off-lines" data-mc-off-lines hidden>
       <span id="mc-notes-line" data-notes-line data-notes-state="{{ state.notes.state }}">{{ state.notes.text }}</span>
       <span data-filing-off>{{ filing_off }}</span>
       <span data-invite-off>{{ invite_off }}</span>
