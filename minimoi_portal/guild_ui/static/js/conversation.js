@@ -235,10 +235,13 @@ function renderRecord() {
   const ctx = $('[data-mc-context]');
   const area = document.body.dataset.area || 'Guild';
   const item = document.body.dataset.contextItem || '';
-  ctx.textContent = `Context: ${area}${item ? ` · ${item}` : ''} · ${live.off ? `off the record since ${localTime(live.offSince)}` : 'on the record'}`;
+  const mode = !live.known ? 'record mode unknown: nothing is sent until you choose'
+    : live.off ? `off the record since ${localTime(live.offSince)}` : 'on the record';
+  ctx.textContent = `Context: ${area}${item ? ` · ${item}` : ''} · ${mode}`;
   const r = $('[data-mc-refusal]');
   if (live.off) { r.hidden = false; r.textContent = page.off_record_text; } else { r.hidden = true; r.textContent = ''; }
   document.body.dataset.offRecord = String(live.off);
+  document.body.dataset.recordKnown = String(live.known);
 }
 
 export function initConversation(p) {
@@ -290,7 +293,7 @@ export function initConversation(p) {
   });
   onChange(renderRecord);
   if (!live.known) {
-    addPlatform('Guild platform', 'This tab does not know whether you are on the record (it may have been opened from a tab that is off the record, or the setting could not be read). Continue is not updated automatically until you choose: Confirm on the record, or go Off the record.');
+    addPlatform('Guild platform', 'This tab does not know whether you are on the record (it may have been opened from a tab that is off the record, or the setting could not be read). Nothing is sent from it, and Continue is not updated, until you choose: Confirm on the record, or go Off the record.');
   }
   setBriefing(page.floor && page.floor.briefing);
   applyMode();
