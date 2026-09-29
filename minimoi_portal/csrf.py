@@ -63,11 +63,23 @@ def refusal(session_key: str, base_url: str | None, *, content: str = JSON) -> s
             allowed.add(base)
         if host_of(origin) not in allowed:
             return "other origin"
-    expected = session.get(session_key)
-    sent = request.headers.get("X-CSRF-Token", "")
-    if not expected or not sent or not hmac.compare_digest(sent, expected):
+    if not _token_matches(session.get(session_key), request.headers.get("X-CSRF-Token", "")):
         return "token"
     return None
 
 
-__all__ = ["token", "refusal", "host_of", "JSON", "MULTIPART"]
+TOKEN_MAX = 256
+HEADER = "X-CSRF-Token"
+
+
+def _token_matches(expected, sent) -> bool:
+    """A constant-time match; anything malformed (not a string, empty, too
+    long, not ASCII) is simply no match, never an error."""
+    if not isinstance(expected, str) or not isinstance(sent, str):
+        return False
+    if not expected or not sent or len(sent) > TOKEN_MAX or not sent.isascii() or not expected.isascii():
+        return False
+    return hmac.compare_digest(sent.encode("ascii"), expected.encode("ascii"))
+
+
+__all__ = ["token", "refusal", "host_of", "JSON", "MULTIPART", "HEADER", "TOKEN_MAX"]

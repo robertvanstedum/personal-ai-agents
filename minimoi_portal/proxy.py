@@ -203,8 +203,13 @@ def _portal_nav_html(user: dict, portal_prefix: str) -> str:
 """
 
 
+# Headers that stop at the portal: Host, and the portal's own write-guard token.
+_PORTAL_ONLY = {"host", "x-csrf-token"}
+
+
 def _forward_headers(user: dict | None, strip_header_prefixes: tuple[str, ...] = ()) -> dict:
-    """The headers a backend receives: the client's, minus hop-by-hop and Host,
+    """The headers a backend receives: the client's, minus hop-by-hop, Host and
+    the portal's write-guard token,
     minus EVERY client-supplied X-Minimoi-* header, plus the portal's own
     identity headers for the signed-in user.
 
@@ -217,7 +222,7 @@ def _forward_headers(user: dict | None, strip_header_prefixes: tuple[str, ...] =
     headers = {
         k: v for k, v in request.headers
         if k.lower() not in _HOP_BY_HOP
-        and k.lower() != "host"
+        and k.lower() not in _PORTAL_ONLY
         and not k.lower().startswith("x-minimoi-")
         and not any(k.lower().startswith(p) for p in strip_header_prefixes)
     }

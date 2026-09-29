@@ -97,7 +97,7 @@ const INITIAL_TAB = '{{ initial_tab }}';
 // when CoS is opened directly, not through the portal). Every write this page
 // makes to its own origin carries it: text send, the voice bootstrap, the
 // voice send and any later write. It is never sent to another origin (the
-// voice providers).
+// voice providers), and a guarded request never follows a redirect.
 const CSRF_TOKEN = document.querySelector('meta[name="minimoi-csrf-token"]')?.content || '';
 if (CSRF_TOKEN) {
   const pageFetch = window.fetch.bind(window);
@@ -107,7 +107,7 @@ if (CSRF_TOKEN) {
     if (method !== 'GET' && method !== 'HEAD' && url.origin === window.location.origin) {
       const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
       headers.set('X-CSRF-Token', CSRF_TOKEN);
-      init = { ...init, headers };
+      init = { ...init, headers, redirect: 'manual' };
     }
     return pageFetch(input, init);
   };

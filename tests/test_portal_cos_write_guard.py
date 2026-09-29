@@ -142,6 +142,33 @@ def test_a_token_from_another_session_is_refused(portal_client, backend):
     assert r.status_code == 403 and backend == []
 
 
+@pytest.mark.parametrize("sent", ["\u00e9" * 43, "a" * 5000, " ", "tok\u00ffen"],
+                         ids=["non-ascii", "oversized", "blank", "latin-1"])
+def test_malformed_tokens_are_refused_not_errors(portal_client, backend, sent):
+    _login(portal_client)
+    _open_confer(portal_client)
+    backend.clear()
+    r = portal_client.post("/app/cos/ui/send", json={"text": "hi"}, headers=_same_origin(sent))
+    assert r.status_code == 403 and r.get_json()["error"] == "csrf" and backend == []
+
+
+@pytest.mark.parametrize("stored", [12345, ["a"], {"t": "x"}, "", "\u00e9" * 43], ids=["int", "list", "dict", "empty", "non-ascii"])
+def test_a_malformed_session_token_is_refused_not_an_error(portal_client, backend, stored):
+    _login(portal_client)
+    with portal_client.session_transaction() as sess:
+        sess[KEY] = stored
+    r = portal_client.post("/app/cos/ui/send", json={"text": "hi"}, headers=_same_origin("x" * 43))
+    assert r.status_code == 403 and backend == []
+
+
+def test_the_shared_guard_never_raises_on_malformed_input():
+    from minimoi_portal import csrf
+    for expected, sent in [(None, "x"), (1, "1"), ("abc", None), ("abc", 3), ("abc", "\u00e9bc"), ("\u00e9bc", "\u00e9bc"),
+                           ("abc", "a" * (csrf.TOKEN_MAX + 1)), (b"abc", "abc"), ("abc", "")]:
+        assert csrf._token_matches(expected, sent) is False, (expected, sent)
+    assert csrf._token_matches("abc", "abc") is True
+
+
 def test_non_owners_are_still_turned_away_first(portal_client, backend):
     for user in (None, GUEST):
         if user:
@@ -164,6 +191,7 @@ def test_text_send_with_the_token_is_forwarded_with_the_portals_identity(portal_
     assert call["method"] == "POST" and call["url"].endswith("/ui/send")
     assert json.loads(call["data"]) == body
     assert call["headers"]["X-Minimoi-Auth-Id"] == "1" and call["headers"]["X-Minimoi-User-Tier"] == "owner"
+    assert not [k for k in call["headers"] if k.lower() == "x-csrf-token"]          # the token stops at the portal
 
 
 def test_voice_send_and_bootstrap_keep_their_identity_path(portal_client, backend):
@@ -231,13 +259,13 @@ def test_client_sent_minimoi_headers_never_reach_cos_scheduler(portal_client, ba
         sent = {k.lower(): v for k, v in call["headers"].items()}
         assert sent["x-minimoi-auth-id"] == "1" and sent["x-minimoi-user-tier"] == "owner"
         assert sent["x-minimoi-username"] == "robert" and sent["x-minimoi-display-name"] == "Robert"
-        assert "x-minimoi-anything" not in sent
+        assert "x-minimoi-anything" not in sent and "x-csrf-token" not in sent
 
 
 def test_forward_headers_strips_client_identity_and_adds_the_portals(portal_client):
     from minimoi_portal.app import app
     from minimoi_portal.proxy import _forward_headers
-    with app.test_request_context("/app/cos/ui", headers={**SPOOFED, "Connection": "keep-alive",
+    with app.test_request_context("/app/cos/ui", headers={**SPOOFED, "Connection": "keep-alive", "X-CSRF-Token": "t",
                                                           "X-Demo-Role": "admin", "Accept": "text/html"}):
         plain = _forward_headers(OWNER)
         stripped = _forward_headers(OWNER, ("x-demo-",))
@@ -246,6 +274,7 @@ def test_forward_headers_strips_client_identity_and_adds_the_portals(portal_clie
         "X-Minimoi-User-Tier": "owner", "X-Minimoi-Display-Name": "Robert", "X-Minimoi-Auth-Id": "1",
         "X-Minimoi-Username": "robert"}
     assert "Connection" not in plain and "Host" not in plain and plain["Accept"] == "text/html"
+    assert "X-CSRF-Token" not in plain and "X-CSRF-Token" not in stripped and "X-CSRF-Token" not in anonymous
     assert plain["X-Demo-Role"] == "admin" and "X-Demo-Role" not in stripped
     assert not [k for k in anonymous if k.lower().startswith("x-minimoi-")]
 

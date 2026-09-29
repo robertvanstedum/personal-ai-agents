@@ -75,6 +75,16 @@ def _stand_in_cos(seen: list):
         note()
         return jsonify({"reply": f"Noted: {request.get_json()['text']}"})
 
+    @app.route("/ui/bounce", methods=["POST"])
+    def bounce():
+        note()
+        return "", 307, {"Location": "/ui/catch"}
+
+    @app.route("/ui/catch", methods=["POST"])
+    def catch():
+        note()
+        return jsonify({"caught": True})
+
     @app.route("/ui/transcribe", methods=["POST"])
     def transcribe():
         note()
@@ -92,15 +102,12 @@ def stack():
     saved = cfg.COS_BACKEND
     cfg.COS_BACKEND = cos_url
     portal.config["SESSION_COOKIE_SECURE"] = False
-
-    def sign_in():
-        from flask import session
-        session["user"] = dict(OWNER)
-        return "signed in"
-    if "confer_test_sign_in" not in portal.view_functions:
-        portal.add_url_rule("/__confer_test_sign_in", "confer_test_sign_in", sign_in)
+    # Signed in by a session cookie the portal itself would issue (no test route on the shared app).
+    cookie = portal.session_interface.get_signing_serializer(portal).dumps({"user": dict(OWNER)})
     portal_srv, portal_url = _serve(portal)
-    yield {"url": portal_url, "cos_url": cos_url, "seen": seen}
+    yield {"url": portal_url, "cos_url": cos_url, "seen": seen,
+           "cookie": {"name": portal.config.get("SESSION_COOKIE_NAME", "session"), "value": cookie,
+                      "url": portal_url}}
     portal_srv.shutdown()
     cos_srv.shutdown()
     cfg.COS_BACKEND = saved
@@ -119,7 +126,7 @@ def _confer(browser, stack):
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(f"{stack['url']}/__confer_test_sign_in")
+    ctx.add_cookies([stack["cookie"]])
     page.goto(f"{stack['url']}/app/cos/ui/confer")
     token = page.locator('meta[name="minimoi-csrf-token"]').get_attribute("content")
     assert token and len(token) >= 40
@@ -140,8 +147,8 @@ def test_confer_text_send_and_voice_bootstrap_carry_the_token(browser, stack):
     sends = [s for s in stack["seen"] if s["path"] == "/ui/send"]
     boots = [s for s in stack["seen"] if s["path"].endswith("/confer/bootstrap")]
     assert len(sends) == 1 and len(boots) == 1
-    for s in sends + boots:
-        assert s["csrf"] == token and s["auth_id"] == "1" and s["ctype"] == "application/json"
+    for s in sends + boots:          # they passed the portal's guard; the token itself stops at the portal
+        assert s["csrf"] is None and s["auth_id"] == "1" and s["ctype"] == "application/json"
     assert not errors, errors
     ctx.close()
 
@@ -173,7 +180,7 @@ def test_transcribe_upload_carries_the_token_and_without_it_is_refused(browser, 
     assert result["ok"] == 200 and result["okBody"] == {"transcript": "64 bytes"}
     assert result["bad"] == 403 and result["badBody"]["error"] == "csrf"
     assert [s["path"] for s in stack["seen"]] == ["/ui/transcribe"]                  # only the good one arrived
-    assert stack["seen"][0]["csrf"] == token and stack["seen"][0]["ctype"] == "multipart/form-data"
+    assert stack["seen"][0]["csrf"] is None and stack["seen"][0]["ctype"] == "multipart/form-data"
     assert not errors, errors
     ctx.close()
 
@@ -196,4 +203,15 @@ def test_the_token_is_never_sent_to_another_origin(browser, stack):
     }}); }} catch (e) {{}} }}""")
     page.wait_for_timeout(300)
     assert [(s["path"], s["csrf"]) for s in stack["seen"]] == [("/ui/transcribe", None)]
+    ctx.close()
+
+
+def test_a_guarded_request_does_not_follow_a_redirect(browser, stack):
+    stack["seen"].clear()
+    ctx, page, token, errors = _confer(browser, stack)
+    kind = page.evaluate("""async () => (await fetch('/app/cos/ui/bounce', {method: 'POST',
+        headers: {'Content-Type': 'application/json'}, body: '{}'})).type""")
+    page.wait_for_timeout(300)
+    assert kind == "opaqueredirect"
+    assert [s["path"] for s in stack["seen"]] == ["/ui/bounce"]                    # /ui/catch was never requested
     ctx.close()
