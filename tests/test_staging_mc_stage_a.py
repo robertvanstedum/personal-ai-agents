@@ -173,7 +173,9 @@ def test_production_compose_and_cos_files_are_byte_identical_to_main():
     for path in ("docker-compose.prod.yml", "docker-compose.yml", "docker/Dockerfile.cos-agent-a",
                  "docker/cos-agent-a/openclaw.json", "docker/cos-agent-a/apply-config.sh",
                  "services/model_gateway/litellm.prod.yaml",
-                 ".github/workflows/deploy.yml", "scripts/operations/deploy_scoped_release.sh"):
+                 "scripts/operations/deploy_scoped_release.sh"):
+        # deploy.yml may change (its classify step); that it never builds or
+        # deploys MC is guarded by tests/test_release_classifier.py.
         main = _main(path)
         if main is None:
             pytest.skip("origin/main is not available")
