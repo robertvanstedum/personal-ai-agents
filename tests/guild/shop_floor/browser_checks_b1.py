@@ -760,3 +760,116 @@ def test_dragging_a_box_moves_it_up_or_down_and_releases_focus(browser, server, 
     assert order().index(e) == order().index(c) + 1             # the arrangement is kept
     assert not errors, errors
     ctx.close()
+
+
+# ── #242: the off-the-record tab list is fail-safe ────────────────────────────
+
+UNKNOWN_TEXT = "Not sent: this tab does not know whether you are on the record."
+OFF_TABS = "guild.guild-next.off_tabs"
+
+
+def _writes(page):
+    seen = []
+    page.on("request", lambda r: seen.append(r.url.split("/api/v1")[-1])
+            if r.method != "GET" and "/api/v1/" in r.url else None)
+    return seen
+
+
+def _unknown_tab_sends_nothing(page, server, floor):
+    """On a tab whose mode is unknown: it says so, and a note and a post-it stay here."""
+    sent = _writes(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("[data-mc-context]")).to_contain_text("record mode unknown")
+    expect(page.locator("body")).to_have_attribute("data-record-known", "false")
+    page.fill("[data-mc-input]", "a note while unknown")
+    page.click("[data-mc-send]")
+    expect(page.locator("[data-mc-refusal]")).to_contain_text(UNKNOWN_TEXT)
+    add = page.locator("[data-postits] [data-postit-add]").first
+    add.locator("[data-postit-input]").fill("a post-it while unknown")
+    add.locator("[data-postit-add-btn]").click()
+    expect(page.locator("[data-postits]").first).to_contain_text(UNKNOWN_TEXT)
+    page.wait_for_timeout(300)
+    assert sent == [] and floor.count("floor_messages") == 0 and floor.count("floor_postits") == 0
+    page.click("[data-mc-record-confirm]")                            # Robert chooses: on the record
+    expect(page.locator("[data-mc-context]")).to_contain_text("on the record")
+    page.click("[data-mc-send]")
+    expect(page.locator('[data-mc-thread] [data-kind="note"]')).to_have_count(1)
+    assert sent == ["/notes"]
+
+
+@pytest.mark.parametrize("stored", ["{garbled", '{"t1": 5}', '{"t1": "not a time"}', '["t1"]'],
+                         ids=["corrupt-json", "not-a-time", "bad-time", "not-an-object"])
+def test_242_a_damaged_off_tab_list_makes_a_fresh_tab_unknown(browser, server, floor, stored):
+    ctx, first = _context(browser, server)
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first.evaluate(f"localStorage.setItem('{OFF_TABS}', {json.dumps(stored)})")
+    fresh = ctx.new_page()
+    _unknown_tab_sends_nothing(fresh, server, floor)
+    ctx.close()
+
+
+def test_242_unreadable_browser_storage_makes_a_fresh_tab_unknown(browser, server, floor):
+    ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+    ctx.add_init_script("""Object.defineProperty(window, 'localStorage', {
+        configurable: true, get() { throw new DOMException('blocked', 'SecurityError'); } });""")
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    _unknown_tab_sends_nothing(page, server, floor)
+    ctx.close()
+
+
+def _tab_id(page):
+    return page.evaluate("sessionStorage.getItem('guild.guild-next.tab_id')")
+
+
+def test_242_a_duplicated_tab_takes_its_own_id_and_is_still_counted(browser, server, floor):
+    ctx, first = _context(browser, server)
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first_id = _tab_id(first)
+    go(first, f"{server['url']}/guild-next/guild/build/bench")
+    assert _tab_id(first) == first_id                                  # moving between pages keeps the id
+    first.click("[data-mc-pill]")
+    first.click("[data-mc-record]")                                    # off the record
+    with ctx.expect_page() as opened:
+        first.evaluate("window.open(location.href)")                   # a copy of this tab's sessionStorage
+    dup = opened.value
+    dup.wait_for_selector("body[data-ready=true]")
+    assert dup.evaluate("JSON.parse(sessionStorage.getItem('guild.guild-next.record_mode')).off") is True
+    dup_id = _tab_id(dup)
+    assert dup_id and dup_id != first_id
+    first.click("[data-mc-record]")                                    # the original goes back on the record
+    tabs = json.loads(first.evaluate(f"localStorage.getItem('{OFF_TABS}')"))
+    assert list(tabs) == [dup_id]                                      # the copy is still counted
+    fresh = ctx.new_page()
+    go(fresh, f"{server['url']}/guild-next/guild/build")
+    expect(fresh.locator("[data-mc-context]")).to_contain_text("record mode unknown")
+    ctx.close()
+
+
+def test_242_a_closed_off_tab_stops_counting(browser, server, floor):
+    ctx, first = _context(browser, server)
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first.click("[data-mc-record]")
+    keeper = ctx.new_page()                                            # keeps the browser context's storage open
+    keeper.goto(f"{server['url']}/__b1_test_sign_in")
+    first.close(run_before_unload=True)
+    keeper.wait_for_timeout(200)
+    assert json.loads(keeper.evaluate(f"localStorage.getItem('{OFF_TABS}')")) == {}
+    fresh = ctx.new_page()
+    go(fresh, f"{server['url']}/guild-next/guild/build/items/12")
+    expect(fresh.locator("[data-mc-context]")).to_contain_text("on the record")
+    expect(fresh.locator("[data-mc-record-confirm]")).to_be_hidden()
+    fresh.wait_for_function("() => document.querySelector('[data-continue-link]')?.textContent === '#12 Floor API'")
+    ctx.close()
+
+
+@pytest.mark.parametrize("minutes,known", [(11, True), (5, False)], ids=["crashed-11-min-ago", "live-5-min-ago"])
+def test_242_a_crashed_off_tab_stops_counting_after_ten_minutes(browser, server, floor, minutes, known):
+    ctx, first = _context(browser, server)
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first.evaluate(f"""localStorage.setItem('{OFF_TABS}',
+        JSON.stringify({{tgone: new Date(Date.now() - {minutes} * 60000).toISOString()}}))""")
+    fresh = ctx.new_page()
+    go(fresh, f"{server['url']}/guild-next/guild/build")
+    expect(fresh.locator("body")).to_have_attribute("data-record-known", "true" if known else "false")
+    ctx.close()

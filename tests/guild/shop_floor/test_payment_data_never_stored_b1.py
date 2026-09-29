@@ -166,3 +166,60 @@ def test_a_card_is_found_inside_a_longer_run_of_groups():
 def test_ordinary_numbers_next_to_each_other_stay():
     for text in ("order 1234 5678 then 99", "build 2026 0927 steps", "ts 1727450000123 and 1727450000999"):
         assert scrub(text) == text
+
+
+# ── #242: wider card-group separators, mistyped cards, fewer false positives ──
+# Values are the well-known synthetic test numbers. Test ids are indexes and
+# failure messages mask every digit, so no card-like number is printed.
+
+def _masked(text: str) -> str:
+    return _re.sub(r"\d", "#", text)
+
+
+_CARD_GROUPS = [["4242", "4242", "4242", "4242"], ["5555", "5555", "5555", "4444"], ["3782", "822463", "10005"],
+                ["4000", "0566", "5566", "5556"]]
+_WIDE_SEPARATORS = [".", "  ", " - ", "\n", "\t", "–", "—", "_", "/", ",", ", ", " . ", "\r\n", "-  "]
+LEAKS_WIDE = [f"paid {sep.join(g)} today" for sep in _WIDE_SEPARATORS for g in _CARD_GROUPS] + [
+    f"Visa {'.'.join(_CARD_GROUPS[0][:3])}",               # 12 digits beside a brand: the brand rule, widened
+    f"{'/'.join(_CARD_GROUPS[0][:3])} Visa",
+    "card 4242 4242 4242 4243",                             # mistyped (fails Luhn), grouped
+    "4242 4242 4242 4243",                                  # mistyped, starts like a card, no word needed
+    "4242424242424243",                                     # mistyped, a single 16-digit group
+    "378282246310006",                                      # mistyped, a single 15-digit group
+    "cc 1234.5678.9012.3456",                               # a card grouping with a card word near
+]
+
+
+@pytest.mark.parametrize("n", range(len(LEAKS_WIDE)))
+def test_no_group_of_a_card_survives_any_separator(n):
+    text = LEAKS_WIDE[n]
+    out = scrub(text)
+    assert _card_digits_left(out) == [], _masked(out)
+    assert REMOVED in out and scrub(out) == out, _masked(out)
+
+
+STAYS = [
+    "ports 8766 8767 8768 8769",                            # a card grouping, no Luhn, no card start, no card word
+    "ports 8766, 8767, 8768, 8769",
+    "ports 8080\n8081\n8082\n8083",
+    "ids 1234-5678-9012-3457 in the log",
+    "micros 1727450000123456",                              # a 16-digit time: starts with 1
+    "release 2026.2027.2028.2029",
+    "v1.2.3 on 2026/09/27 at 10:42",
+    "call 312.555.0100 or 312-555-0199",
+    "invoice 1,234,567 and 7,654,321",
+    "run id 20260927103000123",
+]
+
+
+@pytest.mark.parametrize("n", range(len(STAYS)))
+def test_ordinary_numbers_stay_with_the_wider_separators(n):
+    assert scrub(STAYS[n]) == STAYS[n], _masked(scrub(STAYS[n]))
+
+
+@pytest.mark.parametrize("text", ["1." * 1000, "1 - " * 500, "1\n" * 1000, "4242, " * 400, "Visa " + "1/" * 1000,
+                                  "1_2" * 700, "1 , " * 500], ids=lambda s: f"{len(s)}-chars")
+def test_scrub_stays_fast_with_the_wider_separators(text):
+    start = time.perf_counter()
+    scrub(text)
+    assert time.perf_counter() - start < 0.5
