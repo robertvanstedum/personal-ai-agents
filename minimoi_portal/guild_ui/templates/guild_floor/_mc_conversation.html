@@ -8,6 +8,9 @@
 <li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-note="{{ n.id }}">
   <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span>{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</p>
   <p class="msg-text">{{ n.text }}</p>
+  {%- if n.turn %}
+  <p class="msg-foot" data-turn-foot><span data-turn-done>{{ n.turn.done_text }}</span><span data-turn-usage hidden></span></p>
+  {%- endif %}
 </li>
 {%- endmacro %}
 <button type="button" class="mc-pill" data-mc-pill aria-controls="mc-panel" aria-expanded="false">
@@ -73,6 +76,16 @@
   <li class="msg msg-note" data-kind="note">
     <p class="msg-meta"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span><span data-slot="context"></span> · kept as a note</p>
     <p class="msg-text" data-slot="text"></p>
+  </li>
+</template>
+<template id="tpl-note-foot">
+  <p class="msg-foot" data-turn-foot><span data-turn-done></span><span data-turn-usage hidden></span></p>
+</template>
+<template id="tpl-mc-waiting">
+  <li class="msg msg-waiting" data-kind="mc-waiting" data-mc-waiting>
+    <span class="mc-mark" aria-hidden="true">MC</span>
+    <span class="mc-waiting-text">Waiting for a response…</span>
+    <span class="mc-elapsed" data-slot="elapsed" aria-hidden="true">0s</span>
   </li>
 </template>
 <template id="tpl-off-record">

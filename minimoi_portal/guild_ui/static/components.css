@@ -397,6 +397,13 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
   body.gu[data-page="floor"] .mc-phone-bar { position: static; padding: 0; background: transparent; }
 }
 
+/* MC's waiting line: in the thread where its reply will appear, replaced in
+   place by the reply or an honest failure line; quiet, no box, no border. */
+.mc-thread .msg-waiting { background: none; border: 0; box-shadow: none; display: flex; align-items: center; gap: 6px; font-size: var(--gu-size-sm); color: var(--gu-text-muted); }
+.mc-mark { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font: 700 9px/1 var(--gu-font-mono); color: var(--gu-text-muted); border: 1px solid var(--gu-border-strong); }
+.mc-elapsed { font-variant-numeric: tabular-nums; }
+.msg-foot { margin-top: 2px; font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }

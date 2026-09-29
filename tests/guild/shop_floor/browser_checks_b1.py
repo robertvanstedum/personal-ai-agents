@@ -545,6 +545,65 @@ def test_w7_notes_on_the_record_and_nothing_sent_off_the_record(browser, server,
     ctx.close()
 
 
+def _mc_turns_on(page):
+    page.evaluate("document.body.dataset.mcTurns = 'true'")
+
+
+def test_mc_waiting_line_sits_where_the_reply_goes_and_is_replaced_in_place(browser, server, floor):
+    """Robert, 2026-09-29 (after his own OpenClaw chat): no "Asking Master
+    Craftsman" platform entry. Under the note, MC's mark, "Waiting for a
+    response…" and a seconds counter; the reply (with "Done in Ns") or the
+    honest failure line replaces it in place. The note shows first."""
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    held = []
+    page.route("**/api/v1/mc/turns", lambda route: held.append(route))   # the turn waits until released
+    go(page, f"{server['url']}/guild-next/guild/build")
+    _mc_turns_on(page)
+    thread = page.locator("[data-mc-thread]")
+    page.fill("#mc-input", "What is stuck on the board?")
+    page.click("[data-mc-send]")
+    note = thread.locator('[data-kind="note"]')
+    expect(note).to_have_count(1)                                   # shown while MC is still working
+    waiting = thread.locator("[data-mc-waiting]")
+    expect(waiting).to_have_count(1)
+    expect(waiting).to_contain_text("Waiting for a response…")
+    expect(waiting.locator(".mc-mark")).to_have_text("MC")
+    expect(waiting.locator('[data-slot="elapsed"]')).to_have_attribute("aria-hidden", "true")
+    expect(waiting.locator('[data-slot="elapsed"]')).to_have_text("1s", timeout=3000)   # the counter ticks
+    assert thread.locator("li").last.get_attribute("data-kind") == "mc-waiting"        # right under the note
+    assert "Asking Master Craftsman" not in thread.inner_text()
+    platform_before = thread.locator('[data-kind="platform"]').count()
+    assert len(held) == 1
+    reply = {"id": 9001, "request_id": "mc-reply-1", "author_kind": "agent", "author_label": "Master Craftsman",
+             "who": "master_craftsman", "text": "Item 12 is waiting on review.", "created_at": "2026-09-29T09:00:00+00:00",
+             "context": {}, "turn": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None}}
+    held[0].fulfill(status=200, content_type="application/json", body=json.dumps({
+        "status": "answered", "reply_note": reply, "message": "Master Craftsman answered · kept on the record",
+        "mc_state": "live", "mc_header": "Master Craftsman is live · your messages are kept as notes"}))
+    expect(waiting).to_have_count(0)
+    answered = thread.locator('[data-note="9001"]')
+    expect(answered).to_contain_text("Item 12 is waiting on review.")
+    expect(answered.locator("[data-turn-done]")).to_have_text("Done in 1.2s")
+    assert thread.locator("li").last.get_attribute("data-note") == "9001"             # in the waiting line's place
+    assert thread.locator('[data-kind="platform"]').count() == platform_before        # no platform line added
+
+    # An honest failure replaces the waiting line with its platform line.
+    page.fill("#mc-input", "And the bin?")
+    page.click("[data-mc-send]")
+    expect(waiting).to_have_count(1)
+    held[1].fulfill(status=200, content_type="application/json", body=json.dumps({
+        "status": "unavailable", "failure_class": "key_refused", "mc_state": "unavailable",
+        "message": "Master Craftsman is unavailable · its model key was refused. Your note is kept; Master Craftsman did not answer.",
+        "mc_header": "Master Craftsman is unavailable · its model key was refused"}))
+    expect(waiting).to_have_count(0)
+    last = thread.locator("li").last
+    expect(last).to_have_attribute("data-kind", "platform")
+    expect(last).to_contain_text("its model key was refused")
+    assert not errors, errors
+    ctx.close()
+
+
 def test_a_failed_poll_marks_the_floor_zones_with_the_floors_freshness(browser, server, floor):
     """(c)'s zones follow (b)'s freshness rules: stale after one failed poll,
     unknown after two, and live again on the next good read."""

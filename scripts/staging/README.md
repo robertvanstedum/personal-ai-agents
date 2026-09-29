@@ -607,7 +607,8 @@ browser --(owner session, CSRF)--> portal --(relay caller token, mc-front)--> mc
 5. Turn it on: `printf 'openclaw\n' > ~/minimoi-staging/state/mc.mode;
    printf 'on\n' > ~/minimoi-staging/state/mc.turns; scripts/staging/up.sh portal`.
 6. **Exit check on staging:** Robert keeps a note on `/guild-next/guild/build`;
-   the thread shows "Asking Master Craftsman", then "Master Craftsman is
+   under the note a quiet "MC · Waiting for a response… Ns" line appears (not a
+   platform message), then it is replaced in place by "Master Craftsman is
    unavailable · its model key was refused … Your note is kept; Master
    Craftsman did not answer." `docker logs minimoi-portal` shows
    `mc turn <id> start` / `end status=unavailable class=key_refused echo=True`
