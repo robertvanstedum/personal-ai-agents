@@ -112,6 +112,11 @@ litellm_settings:
   set_verbose: false
   callbacks:
     - receipt_callback.receipt_callback
+    # Staging only (usage-record U1): one standard usage record per call, on
+    # every route and outcome, to $MINIMOI_USAGE_DIR. Mounted from
+    # services/usage/ by docker-compose.staging.yml; the production image and
+    # litellm.prod.yaml do not have it.
+    - usage_recorder.usage_recorder
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

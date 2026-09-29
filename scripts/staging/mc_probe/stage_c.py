@@ -88,6 +88,7 @@ def main():
     ap.add_argument("--out", type=Path)
     a = ap.parse_args()
     share = Path(tempfile.mkdtemp(prefix=".mcpc-share-", dir=Path.home()))
+    usage_evidence: list[dict] = []
     master = "probe-master-" + secrets.token_hex(16)          # like staging's: not an sk- key
     gw_anthropic, gw_xai = "cos-anthropic-probe-" + secrets.token_hex(8), "cos-xai-probe-" + secrets.token_hex(8)
     mc_anthropic = "mc-anthropic-probe-" + secrets.token_hex(8)
@@ -156,8 +157,17 @@ def main():
                "-c", "while :; do sleep 3600; done", check=True)
         url = keys_fn("keydb_url", db_pw, "postgres").strip()
         t0 = time.time()
+        # The usage recorder, mounted as docker-compose.staging.yml does (usage-record U1).
+        usage_dir = share / "usage"
+        usage_dir.mkdir()
+        for src, dst in (("usage_record.py", "usage_record.py"), ("litellm_recorder.py", "usage_recorder.py")):
+            shutil.copy(REPO / "services/usage" / src, share / dst)
+            os.chmod(share / dst, 0o644)
         docker("run", "-d", "--name", GW, "--network", NET, "--memory", "1100m", "--oom-score-adj", "1000",
                "-v", f"{cfg}:/app/config.yaml:ro",
+               "-v", f"{share / 'usage_record.py'}:/app/usage_record.py:ro",
+               "-v", f"{share / 'usage_recorder.py'}:/app/usage_recorder.py:ro",
+               "-v", f"{usage_dir}:/app/usage-data", "-e", "MINIMOI_USAGE_DIR=/app/usage-data", "-e", "MINIMOI_ENV=staging",
                "-e", f"LITELLM_MASTER_KEY={master}", "-e", f"GATEWAY_ANTHROPIC_API_KEY={gw_anthropic}",
                "-e", f"GATEWAY_XAI_API_KEY={gw_xai}", "-e", f"ANTHROPIC_API_KEY={a.default_key}", "-e", f"XAI_API_KEY={a.default_key}",
                "-e", f"MC_ANTHROPIC_API_KEY={mc_anthropic}", "-e", f"DATABASE_URL={url}",
@@ -309,6 +319,43 @@ def main():
                f"status {fb['status']}, upstream {fb_up}")
         cap_reset()
 
+        # usage-record U1: every route and outcome above left one standard record.
+        time.sleep(4)                                   # the refusal hook's short delay, and the writer thread
+        recs = []
+        for f in sorted(usage_dir.glob("usage-*.jsonl")):
+            recs += [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+        by = lambda **k: [r for r in recs if all(r.get(x) == y for x, y in k.items())]  # noqa: E731
+        mc_ok = by(actor="mc", route="minimoi-mc-agent", status="ok")
+        record("usage: MC's answered calls are recorded (actor mc, its key alias, tokens and cost as priced)",
+               bool(mc_ok) and all(r["key_ref"] and r["key_ref"].startswith("mc-agent-") for r in mc_ok)
+               and all(r["input_tokens"] == 50 and r["output_tokens"] == 5 and abs((r["cost_usd"] or 0) - expected) <= 1e-9
+                       for r in mc_ok),
+               f"{len(mc_ok)} records; first {json.dumps({k: mc_ok[0].get(k) for k in ('key_ref', 'input_tokens', 'output_tokens', 'cost_usd', 'cost_source')}) if mc_ok else '-'}")
+        cos_ok = by(actor="cos", status="ok")
+        record("usage: CoS's calls are recorded on every route it used (chat, xAI fast, web search)",
+               {r["route"] for r in cos_ok} >= {"minimoi-cos-agent", "minimoi-cos-agent-xai-fast", "minimoi-cos-web-search"},
+               f"routes {sorted({r['route'] for r in cos_ok})}")
+        fb_err = [r for r in by(status="error", actor="cos") if r["route"] == "minimoi-cos-agent"]
+        record("usage: the fallback's failed Anthropic attempt is recorded as an error on its deployment, with no cost",
+               bool(fb_err) and all(r["cost_usd"] is None and r["deployment_id"] for r in fb_err),
+               f"{[(r['route'], r['deployment_id'], r['http_status'], r['error_class']) for r in fb_err]}")
+        refused = by(status="refused")
+        mc_refused = {r["route"] for r in refused if r["actor"] == "mc"}
+        record("usage: refusals of model calls are recorded (MC's key on CoS's models, the spent budget), with no cost",
+               {"minimoi-cos-agent", "minimoi-cos-agent-anthropic"} <= mc_refused
+               and any(r["http_status"] == 429 and r["error_class"] == "BudgetExceededError" for r in refused)
+               and all(r["cost_usd"] is None and r["deployment_id"] is None for r in refused),
+               f"{len(refused)} refused; routes {sorted(mc_refused)}; codes {sorted({r['http_status'] for r in refused if r['http_status']})}")
+        record("usage (informational): what else was recorded", True,
+               f"{[(r['status'], r['http_status'], r['route'], r['actor']) for r in recs if r['status'] != 'ok' and r not in refused]}")
+        dump = "".join(f.read_text() for f in usage_dir.glob("usage-*.jsonl"))
+        usage_evidence.extend(recs)
+        record("usage: no content, no key, no master key in the store; files are owner-only",
+               mc_key not in dump and master not in dump and gw_anthropic not in dump and mc_anthropic not in dump
+               and "capture ok" not in dump and '"x"' not in dump
+               and all(oct(f.stat().st_mode & 0o777) == "0o600" for f in usage_dir.glob("usage-*.jsonl")),
+               f"{len(recs)} records, {len(dump)} bytes")
+
         # The key database down (the #252 review, condition B). First let the
         # stored spend catch up, so the undercount can be measured afterwards.
         unit = expected
@@ -379,6 +426,8 @@ def main():
         out = a.out or Path(tempfile.mkdtemp(prefix="mc-stage-c-"))
         out.mkdir(parents=True, exist_ok=True)
         (out / "results.json").write_text(json.dumps(RESULTS, indent=2))
+        if usage_evidence:
+            (out / "usage-records.json").write_text(json.dumps(usage_evidence, indent=1))
         cleanup()
         shutil.rmtree(share, ignore_errors=True)
     failed = [r for r in RESULTS if not r["pass"]]
