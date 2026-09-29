@@ -89,6 +89,32 @@ def mc_view(services, *, notes_ok: bool) -> dict:
     return mc_view_of(health, notes_ok=notes_ok, turns_on=bool(getattr(services, "mc_turns", False)))
 
 
+def conversation_focus(continue_zone_: dict, conversation: dict | None = None) -> dict:
+    """What the current conversation is about (the Shop floor's context rail).
+
+    Slice 1 (no conversation records yet): the item Robert last opened from
+    the wall or the queue (Continue). Slice 2 binds a work item to each
+    conversation: pass that conversation's record and its ``work_item`` wins.
+    """
+    if conversation and conversation.get("work_item"):
+        item = conversation["work_item"]
+        return {"source": "conversation", "state": "ok", "target": item, "text": item.get("label", "")}
+    return {"source": "continue", "state": continue_zone_["state"], "target": continue_zone_.get("target"),
+            "text": continue_zone_["text"]}
+
+
+def chat_blockers(mc: dict, cost_level: str | None = None) -> list[dict]:
+    """What blocks chat, shown as one short line above the composer: MC down
+    (turns on, runtime unavailable) and the cost level at act or stop. The
+    cost level has no source yet (usage levels come later), so it is None."""
+    out = []
+    if mc.get("turns") and mc.get("state") == "unavailable":
+        out.append({"kind": "mc_down", "text": mc.get("header") or "Master Craftsman is unavailable"})
+    if cost_level in ("act", "stop"):
+        out.append({"kind": "cost", "text": f"Cost level: {cost_level}"})
+    return out
+
+
 def compute(c: dict, *, notes_limit: int = 0) -> dict:
     services, layout = c["services"], c["layout"]
     observed_at = now_iso()
@@ -111,7 +137,7 @@ def compute(c: dict, *, notes_limit: int = 0) -> dict:
         turn_log_of(services).annotate(notes["recent"])
         from .markdown_render import with_html
         with_html(notes["recent"])
-    return {
+    out = {
         "observed_at": observed_at,
         "mc_state": mc["state"],
         "mc_header": mc["header"],
@@ -124,10 +150,14 @@ def compute(c: dict, *, notes_limit: int = 0) -> dict:
                   "active": len(active) if active is not None else None},
         "continue": continue_zone(floor_res, floor_res.data["continue"] if floor_res.ok else None),
         "postits": postits_zone(floor_res, cap),
+        "cost_level": None,              # no source yet; the strip shows cost only when it is not good
         "notes": notes,
         "floor_store": {"status": floor_res.status, "source": floor_res.source, "reason": floor_res.reason,
                         "error": floor_res.error, "observed_at": floor_res.observed_at},
     }
+    out["focus"] = conversation_focus(out["continue"])
+    out["blockers"] = chat_blockers({**out["mc"], "header": out["mc_header"]}, out["cost_level"])
+    return out
 
 
 def _strip_times(value):

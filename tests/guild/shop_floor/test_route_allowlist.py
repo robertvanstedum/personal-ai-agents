@@ -7,6 +7,8 @@ from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 EXPECTED = {
     "/guild-next/guild/build",
     "/guild-next/guild/build/bench",
+    # Planning Studio and Prototype Lab: truthful entry points (Guild 1.1 dev, slice 1).
+    "/guild-next/guild/labs",
     "/guild-next/guild/build/queue",
     "/guild-next/guild/build/items/<int:item_id>",
     "/guild-next/guild/build/postits",
