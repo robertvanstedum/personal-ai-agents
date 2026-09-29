@@ -109,6 +109,8 @@ def compute(c: dict, *, notes_limit: int = 0) -> dict:
     if notes.get("recent"):
         from .mc.turn_log import turn_log_of
         turn_log_of(services).annotate(notes["recent"])
+        from .markdown_render import with_html
+        with_html(notes["recent"])
     return {
         "observed_at": observed_at,
         "mc_state": mc["state"],

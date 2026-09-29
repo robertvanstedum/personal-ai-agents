@@ -7,7 +7,11 @@
 {% macro note_row(n) -%}
 <li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-note="{{ n.id }}">
   <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span>{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</p>
+  {%- if n.html %}
+  <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
+  {%- else %}
   <p class="msg-text">{{ n.text }}</p>
+  {%- endif %}
   {%- if n.turn %}
   <p class="msg-foot" data-turn-foot><span data-turn-done>{{ n.turn.done_text }}</span><span data-turn-usage>{% if n.turn.tokens_text %} · {{ n.turn.tokens_text }}{% endif %}</span></p>
   {%- endif %}
@@ -75,7 +79,7 @@
 <template id="tpl-note">
   <li class="msg msg-note" data-kind="note">
     <p class="msg-meta"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span><span data-slot="context"></span> · kept as a note</p>
-    <p class="msg-text" data-slot="text"></p>
+    <div class="msg-text msg-md" data-slot="text"></div>
   </li>
 </template>
 <template id="tpl-note-foot">

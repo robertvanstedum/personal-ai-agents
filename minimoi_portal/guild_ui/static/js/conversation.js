@@ -80,7 +80,12 @@ function noteLine(note) {
   setSlot(li, 'when', localTime(note.created_at));
   const ctx = note.context || {};
   setSlot(li, 'context', `${ctx.area ? ` · ${ctx.area}` : ''}${ctx.item_ref ? ` · #${ctx.item_ref}` : ''}`);
-  setSlot(li, 'text', note.text);
+  const body = slot(li, 'text');
+  // The server renders Markdown and sanitises it with an allow-list
+  // (markdown_render.py: no raw HTML, scripts, handlers, javascript: URLs or
+  // images). Without it, the note's own text is shown as plain text.
+  if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;
+  else body.textContent = note.text;
   if (note.turn && note.turn.done_text) {      // a live MC reply: "Done in 1.2s · 96 output tokens"
     const foot = clone('tpl-note-foot');
     foot.querySelector('[data-turn-done]').textContent = note.turn.done_text;

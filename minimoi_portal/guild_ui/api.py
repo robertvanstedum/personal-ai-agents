@@ -15,6 +15,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from . import cfg, floor_state, owner_api
 from .adapters import STATUSES, normalize
 from .adapters.contract import now_iso
+from .markdown_render import with_html
 from .mc.turn_log import turn_log_of
 from .payment_scrub import scrub
 from .security import OFF_RECORD_TEXT, check_write, csrf_token, json_error
@@ -328,6 +329,7 @@ def notes_list():
     data = res.data if res.ok else {}
     if res.ok:
         turn_log_of(cfg()["services"]).annotate(data.get("notes"))
+        with_html(data.get("notes"))
     return jsonify({**_source(res), "notes": data.get("notes") if res.ok else None,
                     "more": data.get("more") if res.ok else None,
                     "message": None if res.ok else floor_state.notes_zone(res)["text"]})
@@ -352,6 +354,7 @@ def notes_add():
         return _store_down(exc, NOTE_WORDS)
     if done.outcome == "idempotency_mismatch":
         return _mismatch()
+    with_html([done.value] if done.value else None)
     return jsonify({"result": "kept", "repeated": done.repeated, "note": done.value, "message": NOTE_WORDS["kept"],
                     "observed_at": now_iso()})
 
@@ -533,6 +536,7 @@ def mc_turn():
     if existing is not None:
         shown = floor_state.mc_view(services, notes_ok=True)
         turn_log_of(services).annotate([existing])
+        with_html([existing])
         return jsonify({"turn_id": None, "status": "answered", "repeated": True,
                         "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
                         "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
@@ -588,6 +592,7 @@ def mc_turn():
                  reply_request_id=reply_key if answer["reply_note"] else None)
     if answer["reply_note"]:
         turns.annotate([answer["reply_note"]])
+        with_html([answer["reply_note"]])
     shown = floor_state.mc_view(services, notes_ok=True)
     answer.update({"mc_state": shown["state"], "mc_header": shown["header"],
                    "message": "Master Craftsman answered · kept on the record" if result.status == "answered"

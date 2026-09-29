@@ -549,6 +549,59 @@ def _mc_turns_on(page):
     page.evaluate("document.body.dataset.mcTurns = 'true'")
 
 
+def test_a_long_markdown_reply_renders_as_structure_live_and_after_a_reload(browser, server, floor):
+    """Robert, September 29: MC's Markdown replies must read like OpenClaw's,
+    Codex's or Grok's, not one run-on block with ** showing. The reply goes
+    through the real /mc/turns route (a stand-in runtime), so the HTML is the
+    server's sanitised render, live and after a reload."""
+    import minimoi_portal.guild_ui.mc.openclaw as oc
+    from minimoi_portal.guild_ui.mc import CachedHealth
+    services = server["app"].extensions["guild_ui_next"]["services"]
+    reply = ("Here is where things stand:\n## Build queue\n**Three items** need you:\n1. **#12** waits on review\n"
+             "   - the relay change\n   - the portal change\n2. **#14** is in build\n### Next\n- run `verify.sh`\n"
+             "<img src=x onerror=\"window.__pwned=1\">")
+
+    class Resp:
+        def __init__(self, status, text, headers=None):
+            self.status_code, self.text, self.headers = status, text, headers or {}
+
+    def post(url, data=None, headers=None, timeout=None):
+        return Resp(200, json.dumps({"id": "chatcmpl_md", "object": "chat.completion", "model": "openclaw/mc-agent",
+                                     "choices": [{"index": 0, "message": {"role": "assistant", "content": reply},
+                                                  "finish_reason": "stop"}],
+                                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}),
+                    {"X-MC-Correlation-Id": (headers or {}).get("X-MC-Correlation-Id")})
+    saved = (services.mc, services.mc_health, services.mc_turns)
+    backend = oc.OpenClawMasterCraftsman("http://mc-relay:8790/v1", "t" * 40, http_get=lambda *a, **k: Resp(200, "{}"),
+                                         http_post=post)
+    services.mc, services.mc_health, services.mc_turns = backend, CachedHealth(backend), True
+    try:
+        ctx, page = _context(browser, server)
+        errors = _errors(page)
+        go(page, f"{server['url']}/guild-next/guild/build")
+        page.fill("#mc-input", "Where do things stand?")
+        page.click("[data-mc-send]")
+        answered = page.locator('[data-mc-thread] [data-kind="note"]').last
+        expect(answered).to_contain_text("Three items", timeout=10000)
+        body = answered.locator(".msg-md")
+        expect(body.locator("h2")).to_have_text("Build queue")
+        expect(body.locator("ol > li")).to_have_count(2)
+        expect(body.locator("ol > li").first.locator("ul > li")).to_have_count(2)
+        expect(body.locator("strong").first).to_have_text("Three items")
+        expect(body.locator("code")).to_have_text("verify.sh")
+        assert "**" not in body.inner_text() and body.locator("img").count() == 0
+        assert page.evaluate("window.__pwned === undefined")
+        page.reload()
+        page.wait_for_selector("body[data-ready=true]")
+        again = page.locator('[data-mc-thread] [data-kind="note"]').last.locator(".msg-md")
+        expect(again.locator("h2")).to_have_text("Build queue")
+        assert "**" not in again.inner_text()
+        assert not errors, errors
+        ctx.close()
+    finally:
+        services.mc, services.mc_health, services.mc_turns = saved
+
+
 def test_mc_waiting_line_sits_where_the_reply_goes_and_is_replaced_in_place(browser, server, floor):
     """Robert, 2026-09-29 (after his own OpenClaw chat): no "Asking Master
     Craftsman" platform entry. Under the note, MC's mark, "Waiting for a
