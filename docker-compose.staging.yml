@@ -124,6 +124,11 @@ services:
       - MINIMOI_GUILD_MC_TURNS=${MINIMOI_GUILD_MC_TURNS:-off}
       - MC_RUNTIME_URL=http://mc-relay:8790/v1
       - MC_RUNTIME_TOKEN=${MC_RELAY_TOKEN:-}
+      # The usage store, read-only (usage-record U3): the Shop floor footer's
+      # output tokens, joined from MC's gateway records by turn window.
+      - MINIMOI_USAGE_DIR=/app/data/usage
+    volumes:
+      - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
     # Permanently on mc-front (portal + MC's relay only), so enabling MC never
     # recreates the portal (MC spec v0.9 §3).
     networks:

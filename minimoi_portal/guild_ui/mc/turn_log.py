@@ -20,7 +20,7 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 FILE_NAME = "mc_turns.jsonl"
 READ_TAIL_BYTES = 512 * 1024          # the recent turns only; old replies simply show no footer
@@ -28,6 +28,23 @@ SHOWN_KINDS = ("openclaw",)           # a live MC reply; a stub reply gets no fo
 
 _LOCK = threading.Lock()
 _log = logging.getLogger("guild_ui.mc")
+
+
+def _window(line: dict, duration_ms: int):
+    """(start, end) of a traced turn as aware datetimes, or None."""
+    def parse(v):
+        try:
+            d = datetime.fromisoformat(str(v))
+            return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    end = parse(line.get("ended_at")) or parse(line.get("at"))
+    if end is None:
+        return None
+    start = parse(line.get("started_at")) or (end - timedelta(milliseconds=duration_ms))
+    if not line.get("ended_at"):
+        end = end + timedelta(seconds=1)          # an older line: "at" is to the second
+    return start, end
 
 
 def done_text(duration_ms: int) -> str:
@@ -43,7 +60,12 @@ class TurnLog:
                reply_request_id: str | None = None, failure_class: str | None = None) -> None:
         if not self.path:
             return
-        line = {"turn_id": turn_id, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        ended = datetime.now(timezone.utc)
+        line = {"turn_id": turn_id, "at": ended.isoformat(timespec="seconds"),
+                # The turn's window, to the millisecond (usage-record U3: MC's gateway
+                # calls inside it are this turn's, since MC takes one turn at a time).
+                "started_at": (ended - timedelta(milliseconds=int(duration_ms))).isoformat(timespec="milliseconds"),
+                "ended_at": ended.isoformat(timespec="milliseconds"),
                 "status": status, "failure_class": failure_class, "backend_kind": backend_kind,
                 "duration_ms": int(duration_ms), "reply_request_id": reply_request_id,
                 "usage": None}
@@ -78,15 +100,20 @@ class TurnLog:
             if rid in wanted and line.get("status") == "answered" and line.get("backend_kind") in SHOWN_KINDS:
                 ms = line.get("duration_ms")
                 if isinstance(ms, int):
-                    found[rid] = {"duration_ms": ms, "done_text": done_text(ms), "usage": line.get("usage")}
+                    found[rid] = {"duration_ms": ms, "done_text": done_text(ms), "usage": line.get("usage"),
+                                  "window": _window(line, ms)}
         return found
 
     def annotate(self, notes):
-        """Add ``turn`` to each kept MC reply that has a trace; others get none."""
+        """Add ``turn`` to each kept MC reply that has a trace; others get none.
+        Output tokens are joined from the usage store (usage-record U3)."""
         if not notes:
             return notes
         turns = self.turns_for(n.get("request_id") for n in notes
                                if isinstance(n, dict) and str(n.get("request_id") or "").startswith("mc-"))
+        if turns:
+            from .usage_join import add_tokens
+            add_tokens(turns)
         for n in notes:
             if isinstance(n, dict) and n.get("request_id") in turns:
                 n["turn"] = turns[n["request_id"]]

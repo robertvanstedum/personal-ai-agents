@@ -456,6 +456,36 @@ print(('ok' if ok else 'bad'), i.get('max_budget'), i.get('budget_duration'), ro
     [[ "$cctrl" == ok* ]] && pass "CoS's key: cap \$$(awk '{print $2}' <<< "$cctrl") per $(awk '{print $3}' <<< "$cctrl"), spent \$$(awk '{print $4}' <<< "$cctrl"); CoS's four routes; chat and responses only" \
       || fail "CoS's key record: $cctrl (expected CoS's four routes, chat and responses only, a monthly cap)"
   fi
+  # A route CoS uses but its key misses shows up as a refused usage record with
+  # CoS's key alias (#258 review). Only records since cos.env last changed
+  # (the latest cos.sh key) count, so a fixed scope stops failing.
+  refused=$(COS_ENV="$STAGING_COS_ENV" USAGE_DIR="$S/data/usage" python3 -c "
+import glob, json, os
+since = os.path.getmtime(os.environ['COS_ENV'])
+from datetime import datetime
+bad = {}
+for f in sorted(glob.glob(os.path.join(os.environ['USAGE_DIR'], 'usage-*.jsonl')))[-2:]:
+    for line in open(f, encoding='utf-8', errors='replace'):
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(r, dict) or r.get('status') != 'refused' or not str(r.get('key_ref') or '').startswith('cos-agent-'):
+            continue
+        try:
+            at = datetime.fromisoformat(str(r.get('occurred_at'))).timestamp()
+        except ValueError:
+            continue
+        if at >= since:
+            k = '%s %s' % (r.get('route'), r.get('http_status'))
+            bad[k] = bad.get(k, 0) + 1
+print(' '.join('%s x%d' % (k, v) for k, v in sorted(bad.items())))
+" 2>/dev/null || echo "unreadable")
+  if [[ -z "$refused" ]]; then
+    pass "no refused call on CoS's key since it was made (usage records)"
+  else
+    fail "CoS's key was refused on: $refused (a route CoS uses is missing from its scope: fix and re-run cos.sh key, or cos.sh off)"
+  fi
 else
   pass "CoS uses the gateway's master key (state/cos.key off)"
 fi
