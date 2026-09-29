@@ -106,6 +106,9 @@ def compute(c: dict, *, notes_limit: int = 0) -> dict:
     floor_res = services.floor.summary(principal_of(c), rail_cap=cap, notes_limit=notes_limit)
     mc = mc_view(services, notes_ok=floor_res.ok)
     notes = notes_zone(floor_res, mc["notes_text"])
+    if notes.get("recent"):
+        from .mc.turn_log import turn_log_of
+        turn_log_of(services).annotate(notes["recent"])
     return {
         "observed_at": observed_at,
         "mc_state": mc["state"],

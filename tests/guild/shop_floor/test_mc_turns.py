@@ -272,6 +272,90 @@ def test_the_page_tells_the_front_end_whether_turns_are_on(turned):
           / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
     assert "document.body.dataset.mcTurns !== 'true'" in js and "if (live.off" in js
     assert "apiPost('/mc/turns'" in js
+    # Waiting is a transient line where the reply will appear, replaced in place;
+    # never an "Asking Master Craftsman" platform entry (Robert, 2026-09-29).
+    assert "Asking Master Craftsman" not in js and "waiting.replaceWith(noteLine(body.reply_note))" in js
+    assert "waiting.replaceWith(platformLine(" in js and "waiting.stopTicking()" in js
+    assert 'id="tpl-mc-waiting"' in page and "Waiting for a response…" in page
+    assert 'data-slot="elapsed" aria-hidden="true"' in page                 # seconds are never read out
+    # The note is shown before the turn is asked, and the turn is not awaited.
+    assert js.index("appendNote(body.note)") < js.index("askMasterCraftsman(body.note)")
+    assert "await askMasterCraftsman" not in js
+
+
+# ── The turn trace: "Done in Ns" under a live reply, file first ─────────────
+
+def _trace(portal):
+    import pathlib
+    folder = portal.app.extensions["guild_ui_next"]["services"].store.folder
+    path = pathlib.Path(folder) / "mc_turns.jsonl"
+    return [json.loads(l) for l in path.read_text().splitlines()] if path.exists() else []
+
+
+def test_a_live_reply_carries_its_measured_duration_and_it_survives_a_reload(turned):
+    client = turned.owner()
+    token = turned.csrf(client)
+    note = _keep(client, token, "How long?")
+    body = _ask(client, token, note["request_id"]).get_json()
+    turn = body["reply_note"]["turn"]
+    assert isinstance(turn["duration_ms"], int) and turn["done_text"].startswith("Done in ") and turn["done_text"].endswith("s")
+    assert turn["usage"] is None                                   # tokens/cost come later, from the gateway
+    lines = _trace(turned)
+    assert len(lines) == 1 and lines[0]["turn_id"] == body["turn_id"] and lines[0]["status"] == "answered"
+    assert lines[0]["reply_request_id"] == body["reply_note"]["request_id"] and lines[0]["backend_kind"] == "openclaw"
+    assert "How long" not in json.dumps(lines)                     # no note text in the trace
+    listed = client.get(f"{API}/notes").get_json()["notes"]
+    reply = [n for n in listed if n["request_id"] == body["reply_note"]["request_id"]][0]
+    assert reply["turn"]["done_text"] == turn["done_text"]
+    assert all("turn" not in n for n in listed if n["who"] == "robert")
+    page = client.get("/guild-next/guild/build").get_data(as_text=True)
+    assert f'<span data-turn-done>{turn["done_text"]}</span>' in page and page.count("data-turn-foot") == 2   # the row + the template
+    again = _ask(client, token, note["request_id"]).get_json()
+    assert again["repeated"] is True and again["reply_note"]["turn"]["done_text"] == turn["done_text"]
+
+
+def test_failed_turns_are_traced_but_get_no_footer_and_a_stub_reply_gets_none(floored):
+    runtime = FakeRuntime(lambda body, headers: Resp(500, '{"error":{"message":"LLM request failed: 401 invalid api key"}}'))
+    _turn_on(floored, _openclaw(runtime))
+    client = floored.owner()
+    token = floored.csrf(client)
+    note = _keep(client, token, "hello")
+    body = _ask(client, token, note["request_id"]).get_json()
+    assert body["status"] == "unavailable" and body["reply_note"] is None
+    lines = _trace(floored)
+    assert len(lines) == 1 and lines[0]["failure_class"] == "key_refused" and lines[0]["reply_request_id"] is None
+    _turn_on(floored, StubBackend())
+    note2 = _keep(client, token, "stub please")
+    stub = _ask(client, token, note2["request_id"]).get_json()
+    assert stub["status"] == "answered" and "turn" not in stub["reply_note"]
+
+
+def test_the_trace_never_blocks_a_turn(turned, monkeypatch):
+    import os
+    folder = turned.app.extensions["guild_ui_next"]["services"].store.folder
+    os.makedirs(os.path.join(folder, "mc_turns.jsonl"))           # a directory where the file should be: writes fail
+    client = turned.owner()
+    token = turned.csrf(client)
+    note = _keep(client, token, "still answered?")
+    body = _ask(client, token, note["request_id"]).get_json()
+    assert body["status"] == "answered" and body["reply_note"]["text"] == "Item 12 is in build."
+    assert "turn" not in body["reply_note"]
+    assert client.get(f"{API}/notes").status_code == 200
+
+
+def test_turn_log_reads_only_live_answered_lines_and_skips_torn_ones(tmp_path):
+    from minimoi_portal.guild_ui.mc.turn_log import TurnLog, done_text
+    log = TurnLog(str(tmp_path))
+    log.record(turn_id="t1", status="answered", backend_kind="openclaw", duration_ms=1234, reply_request_id="mc-a")
+    log.record(turn_id="t2", status="answered", backend_kind="stub", duration_ms=5, reply_request_id="mc-b")
+    log.record(turn_id="t3", status="error", backend_kind="openclaw", duration_ms=90000, reply_request_id=None)
+    with open(tmp_path / "mc_turns.jsonl", "a") as f:
+        f.write('{"torn": ')
+    assert oct((tmp_path / "mc_turns.jsonl").stat().st_mode & 0o777) == "0o600"
+    got = log.turns_for(["mc-a", "mc-b", "mc-c"])
+    assert got == {"mc-a": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None}}
+    assert done_text(15400) == "Done in 15s" and done_text(900) == "Done in 0.9s"
+    assert TurnLog(None).turns_for(["mc-a"]) == {} and TurnLog(str(tmp_path / "missing")).turns_for(["mc-a"]) == {}
 
 
 # ── #251 review F1: one reply per note, and "kept" means kept ────────────────

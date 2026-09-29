@@ -7,6 +7,7 @@ Base: <mount>/api/v1. Every answer is JSON; guard refusals are 401/403 JSON
 from __future__ import annotations
 
 import re
+import time
 
 from flask import jsonify, request
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -14,6 +15,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from . import cfg, floor_state, owner_api
 from .adapters import STATUSES, normalize
 from .adapters.contract import now_iso
+from .mc.turn_log import turn_log_of
 from .payment_scrub import scrub
 from .security import OFF_RECORD_TEXT, check_write, csrf_token, json_error
 from .stores import (GUILD_PLATFORM, NOTE_MAX, POSTIT_MAX, Author, FloorStoreNotConfigured,
@@ -324,6 +326,8 @@ def notes_list():
     limit = request.args.get("limit", default=50, type=int)
     res = _floor().list_notes(before=before, limit=max(1, min(limit or 50, 200)))
     data = res.data if res.ok else {}
+    if res.ok:
+        turn_log_of(cfg()["services"]).annotate(data.get("notes"))
     return jsonify({**_source(res), "notes": data.get("notes") if res.ok else None,
                     "more": data.get("more") if res.ok else None,
                     "message": None if res.ok else floor_state.notes_zone(res)["text"]})
@@ -528,6 +532,7 @@ def mc_turn():
                           reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
     if existing is not None:
         shown = floor_state.mc_view(services, notes_ok=True)
+        turn_log_of(services).annotate([existing])
         return jsonify({"turn_id": None, "status": "answered", "repeated": True,
                         "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
                         "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
@@ -549,7 +554,9 @@ def mc_turn():
                           note_request_id=note_id, correlation_id=turn_id,
                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
         _mc_log().info("mc turn %s start backend=%s", turn_id, services.mc.kind)
+        started = time.monotonic()
         result = services.mc.turn(req)
+        duration_ms = int((time.monotonic() - started) * 1000)
         trace = result.trace or {}
         _mc_log().info("mc turn %s end status=%s class=%s echo=%s response=%s", turn_id, result.status,
                        result.failure_class, trace.get("correlation_echo") == turn_id, bool(trace.get("response_id")))
@@ -575,6 +582,12 @@ def mc_turn():
             return jsonify({**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
                             "mc_state": shown["state"], "mc_header": shown["header"]}), 200
         answer["reply_note"] = kept.value
+    turns = turn_log_of(services)
+    turns.record(turn_id=turn_id, status=result.status, backend_kind=result.backend_kind, duration_ms=duration_ms,
+                 failure_class=result.failure_class,
+                 reply_request_id=reply_key if answer["reply_note"] else None)
+    if answer["reply_note"]:
+        turns.annotate([answer["reply_note"]])
     shown = floor_state.mc_view(services, notes_ok=True)
     answer.update({"mc_state": shown["state"], "mc_header": shown["header"],
                    "message": "Master Craftsman answered · kept on the record" if result.status == "answered"

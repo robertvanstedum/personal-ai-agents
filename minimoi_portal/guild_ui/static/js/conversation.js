@@ -32,11 +32,16 @@ function setMode(next) { mode = next; applyMode(); }
 
 function follow() { thread.scrollTop = thread.scrollHeight; }
 
-export function addPlatform(label, text) {
+function platformLine(label, text) {
   const li = clone('tpl-platform');
   setSlot(li, 'label', label);
   setSlot(li, 'when', localTime(new Date().toISOString()));
   setSlot(li, 'text', text);
+  return li;
+}
+
+export function addPlatform(label, text) {
+  const li = platformLine(label, text);
   thread.append(li);
   follow();
   announce(text);
@@ -68,7 +73,7 @@ export function setBriefing(briefing) {
   if (text) text.textContent = briefing.text.replace(/^As of [^·]+·/, `As of ${localTime(briefing.observed_at)} ·`);
 }
 
-function appendNote(note) {
+function noteLine(note) {
   const li = clone('tpl-note');
   li.dataset.note = note.id;
   setSlot(li, 'label', note.author_label);
@@ -76,24 +81,59 @@ function appendNote(note) {
   const ctx = note.context || {};
   setSlot(li, 'context', `${ctx.area ? ` · ${ctx.area}` : ''}${ctx.item_ref ? ` · #${ctx.item_ref}` : ''}`);
   setSlot(li, 'text', note.text);
+  if (note.turn && note.turn.done_text) {      // a live MC reply: "Done in 1.2s" (tokens later, from the gateway)
+    const foot = clone('tpl-note-foot');
+    foot.querySelector('[data-turn-done]').textContent = note.turn.done_text;
+    li.append(foot);
+  }
+  return li;
+}
+
+function appendNote(note) {
+  thread.append(noteLine(note));
+  follow();
+}
+
+// While Master Craftsman works, a quiet line sits in the thread exactly where
+// its reply will appear (Robert, 2026-09-29, after his own OpenClaw chat): MC's
+// mark, "Waiting for a response…" and the seconds so far. It is not a platform
+// message and never persists: the reply, or the honest failure line, replaces
+// it in place. The thread (role=log, polite) announces its arrival and the
+// result; the counter is aria-hidden, so seconds are never read out.
+function waitingLine() {
+  const li = clone('tpl-mc-waiting');
+  const elapsed = li.querySelector('[data-slot="elapsed"]');
+  const started = Date.now();
+  const tick = () => { elapsed.textContent = `${Math.floor((Date.now() - started) / 1000)}s`; };
+  li.stopTicking = () => window.clearInterval(li.ticker);
+  li.ticker = window.setInterval(tick, 1000);
   thread.append(li);
   follow();
+  return li;
 }
 
 async function askMasterCraftsman(note) {
   if (live.off || document.body.dataset.mcTurns !== 'true') return;
-  const waiting = addPlatform('Guild platform', 'Asking Master Craftsman · your note is kept');
-  const r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode() });
-  waiting.remove();
+  const waiting = waitingLine();
+  let r;
+  try {
+    r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode() });
+  } finally {
+    waiting.stopTicking();
+  }
   const body = r.body || {};
   if (body.mc_header) for (const n of $$('[data-mc-header]')) n.textContent = body.mc_header;
   if (body.mc_state) document.body.dataset.mcState = body.mc_state;
   if (r.ok && body.status === 'answered' && body.reply_note) {
-    if (!$(`[data-note="${body.reply_note.id}"]`)) appendNote(body.reply_note);
+    if ($(`[data-note="${body.reply_note.id}"]`)) waiting.remove();
+    else waiting.replaceWith(noteLine(body.reply_note));
     announce(body.message || 'Master Craftsman answered');
   } else {
-    addPlatform('Guild platform', body.message || 'Master Craftsman did not answer. Your note is kept.');
+    const text = body.message || 'Master Craftsman did not answer. Your note is kept.';
+    waiting.replaceWith(platformLine('Guild platform', text));
+    announce(text);
   }
+  follow();
 }
 
 function appendOffRecord(text) {
