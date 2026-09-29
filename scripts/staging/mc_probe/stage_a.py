@@ -38,7 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 P = "mcp"
-NET_DEFAULT, NET_MC = f"{P}-default", f"{P}-mc"
+NET_DEFAULT, NET_MC, NET_FRONT = f"{P}-default", f"{P}-mc", f"{P}-front"
 MC_PROJECT, MC = f"{P}-mc", f"{P}-mc-agent"
 MC_VOLS = (f"{P}-mc-state", f"{P}-mc-auth")
 GW, COS, STANDINS, CLIENT_DEF, CLIENT_MC, CAP = (f"{P}-gateway", f"{P}-cos-agent-a", f"{P}-standins",
@@ -137,7 +137,9 @@ class Probe:
         self.cos_token = secrets.token_hex(32)
         self.cos_key = "cos-probe-key-" + secrets.token_hex(8)
         self.master = "probe-master-" + secrets.token_hex(8)
-        self.mc_env = {"MC_OPENCLAW_GATEWAY_TOKEN": self.mc_token, "MC_IMAGE_REPO": a.mc_image.split(":")[0],
+        self.mc_env = {"MC_OPENCLAW_GATEWAY_TOKEN": self.mc_token, "MC_RELAY_TOKEN": secrets.token_hex(32),
+                       "MC_FRONT_NAME": NET_FRONT, "MC_RELAY_CONTAINER_NAME": f"{P}-mc-relay",
+                       "MC_IMAGE_REPO": a.mc_image.split(":")[0],
                        "MINIMOI_IMAGE_TAG": a.mc_image.split(":")[1], "MC_CONTAINER_NAME": MC, "MC_NET_NAME": NET_MC,
                        "MC_STATE_VOLUME": MC_VOLS[0], "MC_AUTH_VOLUME": MC_VOLS[1]}
         self.env_file = self.tmp / "cos.env"
@@ -156,15 +158,17 @@ class Probe:
             docker("rm", "-f", name)
         for v in (*MC_VOLS, f"{P}-mc-verdict", f"{P}-mc-oom", f"{P}-cos-state", f"{P}-cos-auth"):
             docker("volume", "rm", "-f", v)
-        for n in (NET_DEFAULT, NET_MC):
+        docker("rm", "-f", f"{P}-mc-relay")
+        for n in (NET_DEFAULT, NET_MC, NET_FRONT):
             docker("network", "rm", n)
 
     def setup(self):
         self.cleanup()
         docker("network", "create", "--internal", NET_DEFAULT, check=True)
         # The same options as staging's mc-net: internal and no host address on the bridge.
-        docker("network", "create", "--internal", "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated",
-               NET_MC, check=True)
+        for net in (NET_MC, NET_FRONT):
+            docker("network", "create", "--internal", "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated",
+                   net, check=True)
         for v in (*MC_VOLS, f"{P}-cos-state", f"{P}-cos-auth"):
             docker("volume", "create", v, check=True)
         standin = ("const net=require('net');for(const p of [5432,8769,5001,18789])"

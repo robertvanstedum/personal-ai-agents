@@ -18,10 +18,12 @@ fake answer. Only an ``answered`` result is ever kept as a reply, and the
 author of a kept reply comes from the backend kind (``reply_author``): a stub
 reply can never be stored as Master Craftsman's.
 
-Dormant (separate-container plan, PR 1): the default is off, nothing is wired
-to run a turn (``TURNS_WIRED`` is False; the owner route ``POST /mc/turns``
-exists but always refuses), and no MC container or credential exists. The
-Shop floor shows the state (``view``). Turn wiring is stage B of the plan.
+Turns (stage B of the separate-container plan): the owner-only route
+``POST /mc/turns`` sends a kept, on-the-record note to the backend, server
+side, only when the environment's gate ``MINIMOI_GUILD_MC_TURNS`` is on
+(staging only; production never sets it, and /guild-next never mounts
+there). "Live" is shown only after an answered turn: a reachable runtime
+that has not answered yet is "unavailable · connected, no answer yet".
 """
 from __future__ import annotations
 
@@ -45,9 +47,13 @@ STATUSES = ("answered", "unavailable", "timeout_uncertain", "cancelled", "refuse
 MASTER_CRAFTSMAN_STUB = Author("master_craftsman_stub", "platform", "Master Craftsman stub · scripted")
 REAL_KINDS = ("openclaw", "grok")
 HEALTH_TTL_S = 60
-# Turn wiring is stage B. Until then no surface sends a turn, whatever the state,
-# and the owner route POST /mc/turns refuses every request.
-TURNS_WIRED = False
+# The per-environment turn gate, read once when /guild-next mounts. Off unless
+# exactly one of FLAG_VALUES_ON; production never sets it.
+TURNS_VAR = "MINIMOI_GUILD_MC_TURNS"
+
+
+def turns_enabled(environ) -> bool:
+    return str(environ.get(TURNS_VAR, "") or "").strip().lower() in ("1", "true", "on", "yes")
 
 
 @dataclass(frozen=True)
@@ -56,6 +62,7 @@ class TurnRequest:
     text: str                                  # the stored, scrubbed note
     note_request_id: str
     context: dict = field(default_factory=dict)   # {about, item_ref, page}
+    correlation_id: str | None = None          # the portal's turn id, echoed by the relay
 
 
 @dataclass(frozen=True)
@@ -66,6 +73,7 @@ class TurnResult:
     failure_class: str | None = None
     message: str = ""
     usage: dict | None = None
+    trace: dict | None = None     # server-side only (correlation echo, runtime response id); never sent to the browser
 
     def __post_init__(self):
         if self.status not in STATUSES:
@@ -79,6 +87,7 @@ class Health:
     state: str                 # off | stub | ready | unavailable
     reason: str | None = None  # why unavailable: not_connected, not_ready, starting, not_built, ...
     observed_at: str = field(default_factory=now_iso)
+    reachable: bool = False    # the runtime answers even though it is not "live" (turns may be tried)
 
 
 class MasterCraftsmanBackend(abc.ABC):
@@ -125,6 +134,10 @@ class CachedHealth:
         self._value: Health | None = None
         self._at = 0.0
         self._lock = threading.Lock()
+
+    def invalidate(self):
+        with self._lock:
+            self._value = None
 
     def get(self) -> Health:
         with self._lock:
@@ -189,16 +202,25 @@ UNAVAILABLE_WHY = {
     "caller_refused": "the runtime refused the Shop floor's token",
     "health_check_failed": "its health could not be read",
     "misconfigured": "its connection settings are invalid",
+    "not_verified": "connected, no answer yet",
+    "deadline": "no answer within the deadline",
+    "runtime_error": "its last answer was an error",
+    "malformed_answer": "its last answer could not be read",
+    "no_run_status": "its last answer was not a real answer",
+    "caller_refused": "the relay refused the Shop floor",
+    "one_turn_in_flight": "another turn is still running",
 }
 NOTES_TEXT = "On the record, your messages are kept as notes."
 
 
-def view(health: Health, *, notes_ok: bool) -> dict:
+def view(health: Health, *, notes_ok: bool, turns_on: bool = False) -> dict:
     """The Shop floor's Master Craftsman state, header and notes line.
 
     ``state`` is one of off, stub, live, unavailable. ``turns`` says whether a
-    turn may be sent: never while notes are down (a turn needs a kept note),
-    never before stage 2 wires /mc/turns, never when off or unavailable."""
+    turn may be sent: only with the environment's gate on (``turns_on``),
+    never while notes are down (a turn needs a kept note), never when off, and
+    when unavailable only if the runtime is reachable (for example connected
+    but not yet answered, or its key was refused)."""
     if health.state == "off":
         state, header = "off", HEADER_OFF if notes_ok else HEADER_OFF_NO_NOTES
     elif health.state == "stub":
@@ -211,12 +233,14 @@ def view(health: Health, *, notes_ok: bool) -> dict:
         header = f"Master Craftsman is unavailable · {why}"
     if not notes_ok and state != "off":
         header = HEADER_NO_NOTES
-    replies = state in ("stub", "live") and TURNS_WIRED and notes_ok
+    replies = bool(turns_on and notes_ok and (state in ("stub", "live") or (state == "unavailable" and health.reachable)))
     if state == "stub":
         notes = f"{NOTES_TEXT} " + ("Scripted stub replies, never Master Craftsman's." if replies
                                     else "Stub replies are not switched on yet.")
     elif state == "live":
         notes = f"{NOTES_TEXT} Master Craftsman {'replies on the record' if replies else 'does not reply yet'}."
+    elif replies:
+        notes = f"{NOTES_TEXT} Master Craftsman is asked, but has not answered yet on this portal."
     else:
         notes = f"{NOTES_TEXT} Master Craftsman does not reply."
     return {"state": state, "reason": health.reason if state == "unavailable" else None, "header": header,

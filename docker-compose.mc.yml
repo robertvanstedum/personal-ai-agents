@@ -63,6 +63,44 @@ services:
       - minimoi.runtime.role=guild-mc
       - minimoi.runtime.implementation=openclaw
 
+  # The one-way relay (MC spec v0.9 §4; stage B): the portal reaches MC only
+  # through it, with its own caller token. It holds MC's OpenClaw token, which
+  # the portal never does, and forwards only POST /v1/chat/completions (model
+  # openclaw/mc-agent) and GET /readyz to mc-agent. MC is not on mc-front, so
+  # it can reach nothing of the portal.
+  mc-relay:
+    image: ${MC_IMAGE_REPO:-minimoi-staging/mc-agent}:${MINIMOI_IMAGE_TAG:?run scripts/staging/mc.sh build}
+    pull_policy: never
+    container_name: ${MC_RELAY_CONTAINER_NAME:-minimoi-mc-relay}
+    entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/relay.mjs"]
+    restart: on-failure:3
+    environment:
+      - MC_RELAY_TOKEN=${MC_RELAY_TOKEN:?set MC_RELAY_TOKEN in mc.env (scripts/staging/mc.sh token)}
+      - MC_OPENCLAW_GATEWAY_TOKEN=${MC_OPENCLAW_GATEWAY_TOKEN:?set MC_OPENCLAW_GATEWAY_TOKEN in mc.env (scripts/staging/mc.sh token)}
+      - MC_RELAY_TARGET=http://mc-agent:18789
+    networks:
+      - mc-net
+      - mc-front
+    mem_limit: 128m
+    oom_score_adj: 1000
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8790/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    labels:
+      - minimoi.runtime.role=guild-mc-relay
+
 volumes:
   mc-agent-state:
     external: true
@@ -75,3 +113,6 @@ networks:
   mc-net:
     external: true
     name: ${MC_NET_NAME:-minimoi-staging-mc-net}
+  mc-front:
+    external: true
+    name: ${MC_FRONT_NAME:-minimoi-staging-mc-front}

@@ -86,7 +86,7 @@ def mc_view(services, *, notes_ok: bool) -> dict:
     cached health (60 s). Never a model call: health reads readiness only."""
     cached = getattr(services, "mc_health", None)
     health = cached.get() if cached is not None else OffBackend().health()
-    return mc_view_of(health, notes_ok=notes_ok)
+    return mc_view_of(health, notes_ok=notes_ok, turns_on=bool(getattr(services, "mc_turns", False)))
 
 
 def compute(c: dict, *, notes_limit: int = 0) -> dict:

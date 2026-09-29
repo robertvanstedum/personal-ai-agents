@@ -56,19 +56,24 @@ env_value() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -n 1 | sed "s/^'\\(.*\\
 
 # Refuses when MC's key or token equals one of CoS's (values never printed).
 key_problems() {
-  local mc_key mc_token cos_key cos_token problems=""
+  local mc_key mc_token relay_token cos_key cos_token problems=""
   mc_key=$(env_value "$STAGING_MC_ENV" MC_MODEL_GATEWAY_KEY)
   mc_token=$(env_value "$STAGING_MC_ENV" MC_OPENCLAW_GATEWAY_TOKEN)
+  relay_token=$(env_value "$STAGING_MC_ENV" MC_RELAY_TOKEN)
   cos_key=$(env_value "$STAGING_ENV_FILE" MINIMOI_MODEL_GATEWAY_KEY)
   cos_token=$(env_value "$STAGING_ENV_FILE" COS_AGENT_A_GATEWAY_TOKEN)
   [[ -n "$mc_token" ]] || problems="$problems MC_OPENCLAW_GATEWAY_TOKEN is missing from mc.env (run: mc.sh token);"
+  [[ -n "$relay_token" ]] || problems="$problems MC_RELAY_TOKEN is missing from mc.env (run: mc.sh token);"
+  if [[ -n "$relay_token" && ( "$relay_token" == "$mc_token" || "$relay_token" == "$cos_token" || "$relay_token" == "$cos_key" ) ]]; then
+    problems="$problems MC_RELAY_TOKEN equals another credential (MC's own token or one of CoS's);"
+  fi
   if [[ -n "$mc_key" && ( "$mc_key" == "$cos_key" || "$mc_key" == "$cos_token" ) ]]; then
     problems="$problems MC_MODEL_GATEWAY_KEY equals one of CoS's credentials;"
   fi
   if [[ -n "$mc_token" && ( "$mc_token" == "$cos_token" || "$mc_token" == "$cos_key" ) ]]; then
     problems="$problems MC_OPENCLAW_GATEWAY_TOKEN equals one of CoS's credentials;"
   fi
-  if grep -Eq '^(MC_MODEL_GATEWAY_KEY|MC_OPENCLAW_GATEWAY_TOKEN|MC_ANTHROPIC_API_KEY)=' "$STAGING_ENV_FILE" 2>/dev/null; then
+  if grep -Eq '^(MC_MODEL_GATEWAY_KEY|MC_OPENCLAW_GATEWAY_TOKEN|MC_RELAY_TOKEN|MC_ANTHROPIC_API_KEY)=' "$STAGING_ENV_FILE" 2>/dev/null; then
     problems="$problems an MC secret name is in .env (the main services load it whole; use mc.env);"
   fi
   echo "${problems# }"
@@ -95,12 +100,14 @@ case "$cmd" in
     require_absolute_root
     umask 077
     touch "$STAGING_MC_ENV"; chmod 600 "$STAGING_MC_ENV"
-    if grep -q '^MC_OPENCLAW_GATEWAY_TOKEN=.' "$STAGING_MC_ENV"; then
-      note "mc.env already has MC_OPENCLAW_GATEWAY_TOKEN (unchanged)"
-    else
-      printf 'MC_OPENCLAW_GATEWAY_TOKEN=%s\n' "$(openssl rand -hex 32)" >> "$STAGING_MC_ENV"
-      note "wrote a new MC_OPENCLAW_GATEWAY_TOKEN to $STAGING_MC_ENV (not printed)"
-    fi ;;
+    for name in MC_OPENCLAW_GATEWAY_TOKEN MC_RELAY_TOKEN; do
+      if grep -q "^$name=." "$STAGING_MC_ENV"; then
+        note "mc.env already has $name (unchanged)"
+      else
+        printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" >> "$STAGING_MC_ENV"
+        note "wrote a new $name to $STAGING_MC_ENV (not printed)"
+      fi
+    done ;;
   build)
     require_absolute_root
     require_release
@@ -120,7 +127,9 @@ case "$cmd" in
     require_env
     mc_enabled || die "MC is not enabled on staging: touch $STAGING_MC_ENABLED first (stage A needs Robert's go-ahead)"
     docker image inspect "minimoi-staging/mc-agent:$(release_tag)" >/dev/null 2>&1 || die "no MC image for this release; run mc.sh build"
-    docker network inspect "$STAGING_MC_NET" >/dev/null 2>&1 || die "network $STAGING_MC_NET is missing; up.sh with a release that has it creates it"
+    for net in "$STAGING_MC_NET" "$STAGING_MC_FRONT"; do
+      docker network inspect "$net" >/dev/null 2>&1 || die "network $net is missing; up.sh with a release that has it creates it"
+    done
     problems=$(key_problems)
     [[ -z "$problems" ]] || die "$problems"
     for v in "${STAGING_MC_VOLUMES[@]}"; do
@@ -137,6 +146,8 @@ case "$cmd" in
     h=$(health_of "$STAGING_MC_CONTAINER")
     echo "mc-agent: $h, restarts $(docker inspect -f '{{.RestartCount}}' "$STAGING_MC_CONTAINER" 2>/dev/null || echo -)"
     echo "self-check: $(docker exec "$STAGING_MC_CONTAINER" cat /tmp/minimoi-mc/state 2>/dev/null || echo unknown)"
+    echo "mc-relay: $(health_of minimoi-mc-relay)"
+    echo "portal: MINIMOI_GUILD_MC=$(mc_mode), MINIMOI_GUILD_MC_TURNS=$(mc_turns) (state/mc.mode, state/mc.turns; up.sh applies them)"
     echo "enabled: $(mc_enabled && echo yes || echo no)" ;;
   clear-selfcheck)
     require_absolute_root

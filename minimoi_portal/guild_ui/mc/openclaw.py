@@ -1,12 +1,20 @@
-"""Master Craftsman on OpenClaw: MC's own OpenClaw container, separate from
-CoS Agent A's (separate-container plan; spec v0.8).
+"""Master Craftsman on OpenClaw: MC's own OpenClaw container, reached only
+through the one-way relay (MC spec v0.9 §4; separate-container plan stage B).
 
-The portal reaches it server-side only: ``MC_RUNTIME_URL`` (for example
-``http://mc-agent:18789/v1``) and MC's own OpenClaw token ``MC_RUNTIME_TOKEN``.
-The browser never receives either. Neither is set anywhere yet (dormant), so
-this backend reports "unavailable · not connected yet" and refuses every turn.
-``MC_RUNTIME_READY_PATH`` (optional) names an extra readiness path the runtime
-must answer 200 on, for example a start-up self-check marker.
+The portal talks to the relay (``MC_RUNTIME_URL``, for example
+``http://mc-relay:8790/v1``) with the relay's caller token
+(``MC_RUNTIME_TOKEN``). The relay holds MC's own full-operator OpenClaw token;
+the portal never does. Neither token reaches the browser, HTML or logs.
+
+Honest states:
+* not connected (no URL or token): "unavailable · not connected yet", no turns;
+* the relay's ``/readyz`` fails: "unavailable · its runtime is not answering";
+* reachable but no answered turn yet on this portal process: "unavailable ·
+  connected, no answer yet" (turns may be tried) — never "live" before a
+  real answer (PR 249 review 3b);
+* after an answered turn: ready ("live"); after a failed one: unavailable with
+  that failure's reason (for example "its model key was refused", which is
+  what every stage-A/B turn on staging ends in: MC's key is a placeholder).
 
 Rules carried from spec v0.5 §2:
 * Errors are never answers: ``answered`` only with reply text and a ``usage``
@@ -37,9 +45,17 @@ def _root(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
+KEY_REFUSED_MARKERS = ("401", "invalid api key", "authentication", "unauthorized",
+                       # LiteLLM with no key database (stages A and B): a non-master key
+                       # cannot be looked up and is refused before routing.
+                       "no connected db", "no_db_connection")
+
+
 def classify_failure(status: int, body: str) -> tuple[str, str]:
     """(turn status, failure class) for a non-200 answer from the runtime."""
     text = (body or "").lower()
+    if status == 403 and "relay_" in text:
+        return "unavailable", "caller_refused"
     if status == 408 or "upstream provider timeout" in text:
         return "unavailable", "model_gateway_down"
     # OpenClaw 9.6 answers 401 "authentication_error" when the MODEL key was
@@ -55,7 +71,7 @@ def classify_failure(status: int, body: str) -> tuple[str, str]:
         return "unavailable", "rate_limited"
     if status == 429:
         return "duplicate_in_progress", "one_turn_in_flight"
-    if "401" in text or "invalid api key" in text or "authentication" in text or "unauthorized" in text:
+    if any(marker in text for marker in KEY_REFUSED_MARKERS):
         return "unavailable", "key_refused"
     return "error", "runtime_error"
 
@@ -79,6 +95,7 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
             http_get = http_get or requests.get
             http_post = http_post or requests.post
         self._get, self._post = http_get, http_post
+        self._last = None          # the last completed turn on this process (for honest "live")
 
     @classmethod
     def from_env(cls, environ, *, http_get=None, http_post=None):
@@ -89,27 +106,43 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
     def connected(self) -> bool:
         return bool(self.url and self._token)
 
+    def _auth(self) -> dict:
+        return {"Authorization": f"Bearer {self._token}"}
+
     def health(self) -> Health:
         if not self.connected:
             return Health("unavailable", "not_connected")
         root = _root(self.url)
         try:
-            ready = self._get(f"{root}/readyz", timeout=HEALTH_TIMEOUT_S)
+            ready = self._get(f"{root}/readyz", timeout=HEALTH_TIMEOUT_S, headers=self._auth())
             if getattr(ready, "status_code", None) != 200:
                 return Health("unavailable", "not_ready")
             if self.ready_path:
-                marker = self._get(f"{root}{self.ready_path}", timeout=HEALTH_TIMEOUT_S,
-                                   headers={"Authorization": f"Bearer {self._token}"})
+                marker = self._get(f"{root}{self.ready_path}", timeout=HEALTH_TIMEOUT_S, headers=self._auth())
                 if getattr(marker, "status_code", None) != 200:
                     return Health("unavailable", "starting")
         except Exception:
             return Health("unavailable", "not_ready")
-        return Health("ready")
+        last = self._last
+        if last is None:
+            return Health("unavailable", "not_verified", reachable=True)
+        if last.status == "answered":
+            return Health("ready", reachable=True)
+        return Health("unavailable", last.failure_class or "not_verified", reachable=True)
 
     def _user(self, conversation_id: str) -> str:
         return USER_PREFIX + hashlib.sha256(conversation_id.encode("utf-8")).hexdigest()[:32]
 
     def turn(self, req, cancel=None) -> TurnResult:
+        result = self._turn(req, cancel)
+        # Only an attempt that reached (or tried to reach) the runtime changes
+        # what the header says; a refused, cancelled or busy turn does not.
+        if result.status in ("answered", "unavailable", "error", "timeout_uncertain") \
+                and result.failure_class not in ("not_connected", "one_turn_in_flight"):
+            self._last = result
+        return result
+
+    def _turn(self, req, cancel=None) -> TurnResult:
         if not self.connected:
             return TurnResult("unavailable", self.kind, failure_class="not_connected",
                               message="Master Craftsman is not connected yet")
@@ -123,9 +156,11 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         if len(payload) > MAX_REQUEST_BODY_BYTES:
             return TurnResult("refused", self.kind, failure_class="request_too_large",
                               message="The turn is larger than 256 KB; nothing was sent")
+        headers = {**self._auth(), "Content-Type": "application/json"}
+        if req.correlation_id:
+            headers["X-MC-Correlation-Id"] = req.correlation_id
         try:
-            response = self._post(f"{self.url}/chat/completions", data=payload,
-                                  headers={"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"},
+            response = self._post(f"{self.url}/chat/completions", data=payload, headers=headers,
                                   timeout=(CONNECT_TIMEOUT_S, TURN_DEADLINE_S))
         except Exception as exc:
             name = type(exc).__name__
@@ -138,16 +173,20 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
             return TurnResult("cancelled", self.kind)
         status = getattr(response, "status_code", 0)
         text = getattr(response, "text", "") or ""
+        echoed = (getattr(response, "headers", None) or {}).get("X-MC-Correlation-Id")
+        trace = {"correlation_echo": echoed, "relay_status": status}
         if status != 200:
             turn_status, failure = classify_failure(status, text)
-            return TurnResult(turn_status, self.kind, failure_class=failure, message=f"runtime answered {status}")
+            return TurnResult(turn_status, self.kind, failure_class=failure, message=f"runtime answered {status}",
+                              trace=trace)
         try:
             data = json.loads(text)
             reply = data["choices"][0]["message"].get("content") or ""
             usage = data.get("usage")
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             return TurnResult("error", self.kind, failure_class="malformed_answer", message="unreadable answer")
+        trace["response_id"] = str(data.get("id") or "")[:80]
         if data.get("error") or not isinstance(usage, dict) or not reply.strip():
             return TurnResult("error", self.kind, failure_class="no_run_status",
-                              message="the runtime's answer carried no run status; not treated as an answer")
-        return TurnResult("answered", self.kind, text=reply, usage=usage)
+                              message="the runtime's answer carried no run status; not treated as an answer", trace=trace)
+        return TurnResult("answered", self.kind, text=reply, usage=usage, trace=trace)

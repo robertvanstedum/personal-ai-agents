@@ -18,6 +18,8 @@ function draw(state) {
     for (const n of $$('[data-notes-line]')) { n.textContent = state.notes.text; n.dataset.notesState = state.notes.state; }
   }
   for (const n of $$('[data-mc-header]')) if (state.mc_header) n.textContent = state.mc_header;
+  if (state.mc_state) document.body.dataset.mcState = state.mc_state;
+  document.body.dataset.mcTurns = String(Boolean(state.mc && state.mc.turns));
 }
 
 // The page arrives drawn from its own server state.

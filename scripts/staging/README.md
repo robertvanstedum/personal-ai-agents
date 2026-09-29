@@ -557,6 +557,64 @@ first (MC's own `/key/info` 200 with its real key, and the master key's
 - MC's volumes (`minimoi-staging-mc-agent-{state,auth}`) are never removed by a
   script; remove them by hand only when MC is retired.
 
+## Master Craftsman stage B: turns through the one-way relay (no spend)
+
+The Shop floor's owner route `POST /guild-next/api/v1/mc/turns` sends a
+**kept, on-the-record** note to Master Craftsman, server side, through
+`mc-relay` (MC's own project; MC spec v0.9 §4):
+
+```
+browser --(owner session, CSRF)--> portal --(relay caller token, mc-front)--> mc-relay --(MC's OpenClaw token, mc-net)--> mc-agent --> model gateway
+```
+
+- **One way.** The portal and the relay share `minimoi-staging-mc-front`
+  (internal, no host address); MC is only on `minimoi-staging-mc-net` with the
+  relay and the gateway, so MC can reach nothing of the portal. The relay
+  forwards only `POST /v1/chat/completions` (model exactly `openclaw/mc-agent`,
+  `user` `guild-mc:*`, 256 KB, no streaming, one at a time) and `GET /readyz`
+  to MC; everything else is 403, and it drops every `x-openclaw-*` header.
+- **Tokens.** The portal holds only the relay's caller token
+  (`MC_RELAY_TOKEN` → the portal's `MC_RUNTIME_TOKEN`); the relay holds MC's
+  own OpenClaw token. Both live only in `mc.env` (interpolation only) and never
+  reach the browser, the HTML or a log line.
+- **The gate.** `state/mc.turns` (`on`/`off`, default off) sets the portal's
+  `MINIMOI_GUILD_MC_TURNS`; `state/mc.mode` sets `MINIMOI_GUILD_MC`. Production
+  never sets either, and never mounts `/guild-next`.
+- **Honest states.** Before any answer the header reads "unavailable ·
+  connected, no answer yet", never "live". On staging, MC's key is still a
+  placeholder (stage C adds the real one), so a real turn ends
+  **"unavailable · its model key was refused"**: the note stays kept, and
+  nothing is shown as an answer. Off-the-record notes never reach MC; the
+  payment scrub runs again before a note leaves; a stub reply is kept as the
+  stub's, never Master Craftsman's.
+
+### Steps (after review; each runtime step needs Robert's go-ahead)
+
+1. **`mc.sh token` first** (adds `MC_RELAY_TOKEN` to `mc.env` if missing; not
+   printed). MC's project interpolates `MC_RELAY_TOKEN` for `mc-relay`, so
+   every `mc.sh down`/`up` (and any compose call on MC's project) fails
+   without it (stage B rollout finding).
+2. Build first, nothing stopped: `build.sh <branch> --reviewed-branch`, then
+   `mc.sh build`.
+3. **Roll the release out:** `scripts/staging/up.sh && scripts/staging/verify.sh`.
+   As in stage A, the new image tag recreates every running main-stack
+   container once (CoS with identical content), and the portal joins
+   `mc-front` in that same recreate. Then the CoS regression question (stage A
+   step 8).
+4. `mc.sh up` (starts `mc-agent` and `mc-relay`), `mc.sh status`,
+   `verify.sh` (section 9: relay, networks, codes from the portal).
+5. Turn it on: `printf 'openclaw\n' > ~/minimoi-staging/state/mc.mode;
+   printf 'on\n' > ~/minimoi-staging/state/mc.turns; scripts/staging/up.sh portal`.
+6. **Exit check on staging:** Robert keeps a note on `/guild-next/guild/build`;
+   the thread shows "Asking Master Craftsman", then "Master Craftsman is
+   unavailable · its model key was refused … Your note is kept; Master
+   Craftsman did not answer." `docker logs minimoi-portal` shows
+   `mc turn <id> start` / `end status=unavailable class=key_refused echo=True`
+   and no token; `docker logs minimoi-mc-relay` shows the same id.
+
+Rollback: `printf 'off\n' > ~/minimoi-staging/state/mc.turns; scripts/staging/up.sh portal`
+(turns off; nothing else changes); `mc.sh down` stops MC and the relay.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes
