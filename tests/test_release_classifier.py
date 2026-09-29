@@ -130,3 +130,15 @@ def test_dormant_master_craftsman_files_redeploy_nothing_until_a_service_uses_th
     # Only MC's own Dockerfile builds from docker/mc-agent/.
     builders = sorted(p.name for p in (root / "docker").glob("Dockerfile*") if "docker/mc-agent" in p.read_text())
     assert builders == ["Dockerfile.mc-agent"]
+
+
+def test_production_builds_exactly_the_classifier_services():
+    """A new build entry in deploy.yml (for example MC under another name) must
+    be a classified service first (PR #260 review F2)."""
+    import re
+    root = Path(__file__).resolve().parent.parent
+    text = (root / ".github/workflows/deploy.yml").read_text()
+    built = tuple(re.findall(r"^\s+([a-z][a-z-]*)\) dockerfile=", text, re.M))
+    assert built == ALL_SERVICES
+    listed = re.search(r'ALL_SERVICES="([^"]+)"', text).group(1).split()
+    assert tuple(listed) == ALL_SERVICES

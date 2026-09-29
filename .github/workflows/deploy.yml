@@ -26,17 +26,25 @@ jobs:
           # can take the lightweight document-release path when every changed
           # file is documentation, generated documentation, or the release
           # plumbing/tests that govern that path.
+          ALL_SERVICES="portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "release_class=full" >> "$GITHUB_OUTPUT"
-            echo "services=portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway" >> "$GITHUB_OUTPUT"
+            echo "services=$ALL_SERVICES" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          BEFORE="${{ github.event.before }}"
-          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-            BEFORE="${{ github.event.repository.default_branch }}"
-            git rev-parse "HEAD^" >/dev/null 2>&1 && BEFORE="HEAD^"
+          # github.event.before can name a commit a rebase and force-push
+          # removed ("fatal: bad object"); release_base.sh then falls back to
+          # the merge-base with the PR's base branch (or main), else HEAD^.
+          # Exit 3: main's history was rewritten, so deploy everything.
+          rc=0
+          BEFORE=$(bash scripts/ci/release_base.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.base_ref }}") || rc=$?
+          if [ "$rc" = 3 ]; then
+            echo "release_class=full" >> "$GITHUB_OUTPUT"
+            echo "services=$ALL_SERVICES" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          [ "$rc" = 0 ] || exit "$rc"
 
           git diff --name-only "$BEFORE" "${{ github.sha }}" |
             python3 scripts/ci/classify_release.py --github-output "$GITHUB_OUTPUT"
