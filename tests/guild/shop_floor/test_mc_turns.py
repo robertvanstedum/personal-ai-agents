@@ -353,6 +353,8 @@ def test_turn_log_reads_only_live_answered_lines_and_skips_torn_ones(tmp_path):
         f.write('{"torn": ')
     assert oct((tmp_path / "mc_turns.jsonl").stat().st_mode & 0o777) == "0o600"
     got = log.turns_for(["mc-a", "mc-b", "mc-c"])
+    start, end = got["mc-a"].pop("window")                     # the turn's window (usage-record U3)
+    assert abs((end - start).total_seconds() - 1.234) < 0.002
     assert got == {"mc-a": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None}}
     assert done_text(15400) == "Done in 15s" and done_text(900) == "Done in 0.9s"
     assert TurnLog(None).turns_for(["mc-a"]) == {} and TurnLog(str(tmp_path / "missing")).turns_for(["mc-a"]) == {}
@@ -420,3 +422,65 @@ def test_the_mc_logger_is_configured_on_staging_and_not_elsewhere(load_portal, m
     assert sum(getattr(h, "_minimoi_mc", False) for h in logger.handlers) == 1 and logger.level == logging.INFO
     load_portal()                                       # idempotent: still one handler
     assert sum(getattr(h, "_minimoi_mc", False) for h in logger.handlers) == 1
+
+
+# ── usage-record U3: the footer's output tokens, from the usage store ────────
+
+def _usage_line(folder, *, at, output_tokens=96, actor="mc", status="ok", emitter="gateway"):
+    import pathlib
+    path = pathlib.Path(folder) / f"usage-{at[:7]}.jsonl"
+    rec = {"v": 1, "record_id": "00000000-0000-4000-8000-%012d" % (hash(at) % 10**12), "occurred_at": at, "env": "staging",
+           "emitter": emitter, "actor": actor, "kind": "model", "route": "minimoi-mc-agent", "status": status,
+           "input_tokens": 900, "output_tokens": output_tokens, "cost_usd": 0.0012, "cost_source": "price_table"}
+    with open(path, "a") as f:
+        f.write(json.dumps(rec) + "\n")
+
+
+def _now_iso(delta_s=0.0):
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) + timedelta(seconds=delta_s)).isoformat(timespec="milliseconds")
+
+
+def test_the_footer_joins_mcs_gateway_records_inside_the_turn_window(turned, tmp_path, monkeypatch):
+    monkeypatch.setenv("MINIMOI_USAGE_DIR", str(tmp_path))
+    client = turned.owner()
+    token = turned.csrf(client)
+    _usage_line(tmp_path, at=_now_iso(-600), output_tokens=999)                 # an earlier turn: outside
+    note = _keep(client, token, "tokens?")
+    body = _ask(client, token, note["request_id"]).get_json()
+    assert body["reply_note"]["turn"]["tokens_text"] is None                     # not recorded yet: asked again later
+    _usage_line(tmp_path, at=_now_iso(0.5), output_tokens=60)                   # MC's calls for this turn
+    _usage_line(tmp_path, at=_now_iso(0.6), output_tokens=36)
+    _usage_line(tmp_path, at=_now_iso(0.7), output_tokens=500, actor="cos")    # CoS at the same time: not MC's
+    _usage_line(tmp_path, at=_now_iso(0.8), output_tokens=None, status="refused")
+    listed = client.get(f"{API}/notes").get_json()["notes"]
+    turn = [n for n in listed if n["request_id"] == body["reply_note"]["request_id"]][0]["turn"]
+    assert turn["output_tokens"] == 96 and turn["tokens_text"] == "96 output tokens"
+    assert "window" not in turn
+    page = client.get("/guild-next/guild/build").get_data(as_text=True)
+    assert f'{turn["done_text"]}</span><span data-turn-usage> · 96 output tokens</span>' in page
+
+
+def test_the_footer_says_tokens_unknown_with_no_store_or_no_match_once_the_turn_is_old(turned, tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from minimoi_portal.guild_ui.mc.usage_join import add_tokens
+    monkeypatch.delenv("MINIMOI_USAGE_DIR", raising=False)
+    client = turned.owner()
+    token = turned.csrf(client)
+    note = _keep(client, token, "no store")
+    body = _ask(client, token, note["request_id"]).get_json()
+    assert body["reply_note"]["turn"]["tokens_text"] == "tokens unknown"
+    now = datetime.now(timezone.utc)
+    old = {"r": {"window": (now - timedelta(minutes=5, seconds=2), now - timedelta(minutes=5))}}
+    assert add_tokens(old, folder=str(tmp_path))["r"]["tokens_text"] == "tokens unknown"
+    recent = {"r": {"window": (now - timedelta(seconds=2), now)}}
+    assert add_tokens(recent, folder=str(tmp_path))["r"]["tokens_text"] is None
+    _usage_line(tmp_path, at=(now - timedelta(seconds=1)).isoformat(timespec="milliseconds"), output_tokens=None)
+    recent = {"r": {"window": (now - timedelta(seconds=2), now)}}
+    assert add_tokens(recent, folder=str(tmp_path))["r"]["tokens_text"] == "tokens unknown"   # a record without a count
+
+
+def test_the_page_asks_again_for_pending_tokens_a_few_times_only():
+    import pathlib
+    js = (pathlib.Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
+    assert "apiGet('/notes?limit=20')" in js and "tokenAsks >= 4" in js and "turn.tokens_text == null" in js

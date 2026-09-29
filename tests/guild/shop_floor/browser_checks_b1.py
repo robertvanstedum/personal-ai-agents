@@ -577,7 +577,8 @@ def test_mc_waiting_line_sits_where_the_reply_goes_and_is_replaced_in_place(brow
     assert len(held) == 1
     reply = {"id": 9001, "request_id": "mc-reply-1", "author_kind": "agent", "author_label": "Master Craftsman",
              "who": "master_craftsman", "text": "Item 12 is waiting on review.", "created_at": "2026-09-29T09:00:00+00:00",
-             "context": {}, "turn": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None}}
+             "context": {}, "turn": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None,
+                                      "output_tokens": None, "tokens_text": None}}      # tokens not recorded yet
     held[0].fulfill(status=200, content_type="application/json", body=json.dumps({
         "status": "answered", "reply_note": reply, "message": "Master Craftsman answered · kept on the record",
         "mc_state": "live", "mc_header": "Master Craftsman is live · your messages are kept as notes"}))
@@ -585,6 +586,12 @@ def test_mc_waiting_line_sits_where_the_reply_goes_and_is_replaced_in_place(brow
     answered = thread.locator('[data-note="9001"]')
     expect(answered).to_contain_text("Item 12 is waiting on review.")
     expect(answered.locator("[data-turn-done]")).to_have_text("Done in 1.2s")
+    expect(answered.locator("[data-turn-usage]")).to_have_text("")
+    # usage-record U3: the page asks the notes list again; the gateway's record has landed by then.
+    later = dict(reply, turn={**reply["turn"], "output_tokens": 96, "tokens_text": "96 output tokens"})
+    page.route("**/api/v1/notes?limit=20", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=json.dumps({"notes": [later], "more": False})))
+    expect(answered.locator("[data-turn-foot]")).to_have_text("Done in 1.2s · 96 output tokens", timeout=8000)
     assert thread.locator("li").last.get_attribute("data-note") == "9001"             # in the waiting line's place
     assert thread.locator('[data-kind="platform"]').count() == platform_before        # no platform line added
 

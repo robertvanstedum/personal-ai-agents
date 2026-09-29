@@ -790,6 +790,13 @@ one standard usage record: `~/minimoi-staging/data/usage/usage-YYYY-MM.jsonl`
   `data/usage/` with `MINIMOI_USAGE_DIR` set. No query, prompt or answer is
   recorded. (The loops' Tavily key is read from the Mac Keychain, so inside
   staging's containers the loops skip search, and write no search record.)
+- **The Shop floor footer (U3):** under each live MC reply, "Done in 1.2s ·
+  96 output tokens". The portal reads `data/usage/` read-only and sums the
+  output tokens of MC's gateway records inside that turn's window (MC takes
+  one turn at a time, so that is exactly the turn's calls; OpenClaw's own
+  usage is zeros and is never used). The record lands a moment after the
+  reply, so the page asks again a few times; with no store or no matching
+  record it says "tokens unknown", never a guess.
 - **Proof without spend:** `mc_probe/stage_c.py` checks MC and CoS records,
   every CoS route, the fallback's error, refusals (MC's key on CoS's models,
   the spent budget), and that no content or key reaches the store.
