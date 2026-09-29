@@ -907,6 +907,69 @@ change, and every 9 minutes otherwise, so a quiet host stays fresh.
 launchd job is added (with Robert's go-ahead), run them by hand before looking
 at the screen, or the page shows unknown after 15 minutes.
 
+## Master Craftsman streaming (S1; staging only)
+
+**What it is.** MC's replies on the Shop floor stream: "Working… Ns", then the
+text as it is written, then "Done in Ns · N output tokens". The spec is
+`SPEC_STREAMING_CHAT_COS_MC_v0.2` with the v0.3/v0.3.1 amendment (in
+planning-studio). CoS does not stream yet (that is S2).
+
+**Switches.** Streaming happens only when both are true, and the server decides:
+- `MINIMOI_GUILD_MC_STREAM` is on. The code default is off; `docker-compose.staging.yml`
+  sets it on. `/guild-next` never mounts in production.
+- The MC backend supports streaming (openclaw and the stub do; grok does not).
+
+With either one false, the page uses the non-streaming `/mc/turns`, unchanged.
+
+**Path.** browser → portal `POST /guild-next/api/v1/mc/turns/stream` → mc-relay
+(`stream: true`) → MC → gateway.
+- The relay emits its own NDJSON, and nothing of MC's JSON passes.
+- The portal sends `ack` only after its guards, and dispatches only after
+  `ack`.
+- One dispatch per turn: a `request_id` already sent is refused on both
+  endpoints for 10 minutes.
+- A browser that leaves does not stop the run. The relay and the portal read
+  to the end, and a real answer is kept (a reload shows it).
+- Only the limits and the owner's **Stop** (`POST …/mc/turns/<turn_id>/stop`,
+  then the relay's `POST /v1/turns/stop`) end a run early.
+- The UI says what Stop cannot save: what was already generated may still be
+  billed.
+
+**Limits.**
+
+| Hop | Wall clock | Idle | Text | Line |
+|---|---|---|---|---|
+| Relay | 120 s | 30 s | 256 KB | 64 KB |
+| Portal | 125 s | 30 s | 256 KB | 64 KB |
+
+The portal also sends `render` (server-rendered, sanitised Markdown) at most
+every 500 ms, only on change, and none past 32 KB.
+
+**Usage.**
+- The portal's usage mount is now **read-write**, for one kind of line only:
+  `emitter: runtime-stream`, `actor: mc`, `route: openclaw/mc-agent`, keyed by
+  the turn id (`correlation_id`), with `cost_usd` null.
+- A test holds that `minimoi_portal/guild_ui/mc/stream_usage.py` is the
+  portal's only writer.
+- The gateway's own record stays the source for cost. An interrupted or stopped
+  run leaves a `status: error` line and an `mc_turns.jsonl` line.
+
+**Rollout.**
+- The portal and the relay both changed. The relay is `docker/mc-agent/relay.mjs`,
+  in the MC image, so a staging rollout rebuilds the portal and MC's image.
+- **No-spend probe first:** `scripts/staging/mc_probe/stage_b.py` (throwaway
+  containers; it mounts this branch's relay). It checks P4 (text, finish,
+  usage, timings), P1 (a mid-stream failure), P2 (Stop, and whether OpenClaw
+  cancels its own upstream call) and a caller that leaves.
+- **First run** (2026-09-29, MC image `fa1e9ec`, OpenClaw 2026.9.6): 22/22.
+  - P4: first text at 1.8 s, finish at 3.4 s, with usage passed through.
+  - P1: after a mid-stream failure, OpenClaw retried its upstream call five
+    times, then went quiet. The relay's 30 s idle limit ended it as a failure;
+    it may have been paid, several times.
+  - P2: Stop made OpenClaw close its own call to the model endpoint.
+  - A caller that left did not stop the run.
+- The gateway-to-provider hop on abort is not probed yet (stage C).
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes

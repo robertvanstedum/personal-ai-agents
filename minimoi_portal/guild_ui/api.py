@@ -6,10 +6,11 @@ Base: <mount>/api/v1. Every answer is JSON; guard refusals are 401/403 JSON
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 
-from flask import jsonify, request, url_for
+from flask import current_app, jsonify, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from . import cfg, floor_state, owner_api
@@ -537,6 +538,55 @@ def _mc_log():
     return logging.getLogger("guild_ui.mc")
 
 
+def _mc_acquire(principal) -> bool:
+    with _MC_LOCK:
+        if principal in _MC_INFLIGHT:
+            return False
+        _MC_INFLIGHT.add(principal)
+        return True
+
+
+def _mc_release(principal) -> None:
+    with _MC_LOCK:
+        _MC_INFLIGHT.discard(principal)
+
+
+def _mc_prelude():
+    """The guards both turn endpoints share. Returns (refusal, None) or
+    (None, (services, principal, conv, floor, note, note_id, request_id))."""
+    if request.content_length is not None and request.content_length > MAX_BODY:
+        return _too_large(), None
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal, None
+    services = cfg()["services"]
+    if not services.mc_turns:
+        state = floor_state.mc_view(services, notes_ok=True)["state"]
+        return json_error("mc_turns_off", MC_WORDS["off"], 409, mc_state=state), None
+    body = request.get_json(silent=True)
+    note_id = body.get("note_request_id") if isinstance(body, dict) else None
+    if not isinstance(note_id, str) or not _IDEMPOTENCY.fullmatch(note_id):
+        return json_error("invalid", "Name the kept note to send (note_request_id). Nothing was sent to Master Craftsman.", 422), None
+    request_id = body.get("request_id")
+    if request_id is not None and (not isinstance(request_id, str) or not _IDEMPOTENCY.fullmatch(request_id)):
+        return json_error("invalid", "request_id is an idempotency key. Nothing was sent to Master Craftsman.", 422), None
+    principal = _principal()
+    conv, refusal = _conversation(body.get("conversation_id"))
+    if refusal is not None:
+        return refusal, None
+    floor = _conv_floor(conv)
+    try:
+        note = floor.get_note(note_id)
+    except FloorStoreUnavailable as exc:
+        return json_error("unavailable", MC_WORDS["notes_down"], 503,
+                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"), None
+    if note is None:
+        return json_error("not_found", MC_WORDS["no_note"], 404), None
+    if note.get("author_kind") != "owner" or note.get("who") != principal:
+        return json_error("not_allowed", MC_WORDS["not_yours"], 403), None
+    return None, (services, principal, conv, floor, note, note_id, request_id)
+
+
 @owner_api
 def mc_turn():
     """Send one kept, on-the-record note to Master Craftsman, server side
@@ -550,37 +600,127 @@ def mc_turn():
     answered turn is kept, with the author its backend decides (a stub reply
     is the stub's, never Master Craftsman's). The answer to the browser is
     allow-listed: never a token, URL, trace or runtime id. Logs carry the
-    turn id and outcome only, never text or tokens."""
-    if request.content_length is not None and request.content_length > MAX_BODY:
-        return _too_large()
-    refusal = check_write(cfg()["base_url"])
+    turn id and outcome only, never text or tokens. A ``request_id`` already
+    dispatched (on this endpoint or the stream) is never sent again."""
+    refusal, found = _mc_prelude()
     if refusal is not None:
         return refusal
-    services = cfg()["services"]
-    if not services.mc_turns:
-        state = floor_state.mc_view(services, notes_ok=True)["state"]
-        return json_error("mc_turns_off", MC_WORDS["off"], 409, mc_state=state)
-    body = request.get_json(silent=True)
-    note_id = body.get("note_request_id") if isinstance(body, dict) else None
-    if not isinstance(note_id, str) or not _IDEMPOTENCY.fullmatch(note_id):
-        return json_error("invalid", "Name the kept note to send (note_request_id). Nothing was sent to Master Craftsman.", 422)
-    principal = _principal()
-    conv, refusal = _conversation(body.get("conversation_id"))
+    services, principal, conv, floor, note, note_id, request_id = found
+    answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
+                                 principal=principal, note=note, note_id=note_id, request_id=request_id)
+    return jsonify(answer), status
+
+
+def _reply_key(note_id: str) -> str:
+    import hashlib
+    return "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
+
+
+def _repeated_answer(services, existing) -> dict:
+    shown = floor_state.mc_view(services, notes_ok=True)
+    turn_log_of(services).annotate([existing])
+    with_html([existing])
+    return {"turn_id": None, "status": "answered", "repeated": True,
+            "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
+            "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
+            "mc_state": shown["state"], "mc_header": shown["header"], "message": MC_WORDS["already"]}
+
+
+@owner_api
+def mc_turn_stream():
+    """The streamed Master Craftsman turn (streaming spec v0.2 §3, v0.3):
+    the same guards as /mc/turns, then these pre-dispatch refusals, each a
+    normal JSON answer the browser may fall back on or show: the switch
+    (``stream_off``) and the backend (``stream_unsupported``); an existing
+    reply is answered from the record; an earlier dispatch of the same
+    ``request_id`` (``already_dispatched``); Master Craftsman's state; the
+    backend's own checks; one turn in flight. Then NDJSON: ``ack`` first,
+    and only then the worker dispatches (mc/streaming.py)."""
+    import uuid
+
+    from .markdown_render import render_markdown
+    from .mc.stream import StreamRefused
+    from .mc.streaming import DISPATCHED, StreamContext, StreamRun, browser_events
+
+    refusal, found = _mc_prelude()
     if refusal is not None:
         return refusal
-    floor = _conv_floor(conv)
+    services, principal, conv, floor, note, note_id, request_id = found
+    if not getattr(services, "mc_stream", False):
+        return json_error("stream_off", "Streaming is not switched on on this portal. Nothing was sent.", 409)
+    if not getattr(services.mc, "supports_streaming", False):
+        return json_error("stream_unsupported", "This Master Craftsman backend does not stream. Nothing was sent.", 409)
+    if not request_id:
+        return json_error("invalid", "A streamed turn needs a request_id. Nothing was sent to Master Craftsman.", 422)
+    reply_key = _reply_key(note_id)
     try:
-        note = floor.get_note(note_id)
+        existing = floor.get_note(reply_key)
     except FloorStoreUnavailable as exc:
         return json_error("unavailable", MC_WORDS["notes_down"], 503,
                           reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
-    if note is None:
-        return json_error("not_found", MC_WORDS["no_note"], 404)
-    if note.get("author_kind") != "owner" or note.get("who") != principal:
-        return json_error("not_allowed", MC_WORDS["not_yours"], 403)
-    answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
-                                 principal=principal, note=note, note_id=note_id)
-    return jsonify(answer), status
+    if existing is not None:
+        return jsonify(_repeated_answer(services, existing)), 200
+    shown = floor_state.mc_view(services, notes_ok=True)
+    if not shown["turns"]:
+        return json_error("mc_unavailable", f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
+                          503, mc_state=shown["state"], reason=shown["reason"])
+    from .conversations import session_conversation_id
+    from .mc import TurnRequest
+    turn_id = uuid.uuid4().hex
+    ctx = note.get("context") or {}
+    turn_req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=scrub(note["text"]),
+                           note_request_id=note_id, correlation_id=turn_id,
+                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
+    cancel = __import__("threading").Event()
+    try:
+        events = services.mc.stream_turn(turn_req, cancel)
+    except StreamRefused as exc:
+        return json_error("mc_unavailable", f"{exc.message or 'Master Craftsman cannot take this turn'}. Nothing was sent.",
+                          413 if exc.failure_class == "request_too_large" else 503, reason=exc.failure_class)
+    if not _mc_acquire(principal):
+        return json_error("busy", MC_WORDS["busy"], 409, mc_state=shown["state"])
+    earlier = DISPATCHED.claim(request_id, principal, turn_id)
+    if earlier is not None:
+        _mc_release(principal)
+        return jsonify(DISPATCHED.refusal(earlier, principal)), 409
+    conversations = _conversations()
+    turns = turn_log_of(services)
+
+    def annotate(reply):
+        turns.annotate([reply])
+        with_html([reply])
+
+    run = StreamRun(StreamContext(
+        turn_id=turn_id, principal=principal, backend=services.mc, events=events, floor=floor, reply_key=reply_key,
+        context={"area": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")},
+        release=lambda: _mc_release(principal), request_id=request_id, turn_log=turns, mc_health=services.mc_health,
+        header=lambda: floor_state.mc_view(services, notes_ok=True),
+        touch=lambda: _touch_in(conversations, conv, principal), annotate=annotate,
+        usage_folder=os.environ.get("MINIMOI_USAGE_DIR") or None, cancel=cancel))
+    body = browser_events(run, render=render_markdown.__wrapped__)
+    response = current_app.response_class(body, mimetype="application/x-ndjson")
+    response.headers["Content-Type"] = "application/x-ndjson; charset=utf-8"
+    response.headers["X-Accel-Buffering"] = "no"
+    response.call_on_close(run.abandon_if_not_started)
+    return response
+
+
+@owner_api
+def mc_turn_stop(turn_id):
+    """The owner's Stop for a streamed turn: the write guard's JSON, origin
+    and token checks, but not its record-mode check (streaming spec v0.3 N1),
+    so Stop works while off the record. Ends MiniMoi's side at once and asks
+    the relay to abort Master Craftsman's call."""
+    from .mc.streaming import MESSAGES, RUNS
+    refusal = check_write(cfg()["base_url"], record_mode=False)
+    if refusal is not None:
+        return refusal
+    run = RUNS.get(turn_id) if re.fullmatch(r"[0-9a-f]{32}", turn_id or "") else None
+    if run is None or run.ctx.principal != _principal():
+        return json_error("not_running", "No such Master Craftsman turn is running. Nothing was changed.", 404)
+    reached = run.stop()
+    return jsonify({"result": "stopping", "runtime_told": reached, "message": MESSAGES["stopped"],
+                    "observed_at": now_iso()})
 
 
 @owner_api
@@ -673,7 +813,8 @@ def conversation_restore(cid):
     return _flag(cid, lambda st: st.set_archived(cid, _principal(), False), "restored")
 
 
-def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_id) -> tuple[dict, int]:
+def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_id,
+                request_id: str | None = None) -> tuple[dict, int]:
     """One Master Craftsman turn for a kept owner note, after the route's
     guards (write guard, turn gate, the note is this owner's): one reply per
     note, MC's state must allow turns, one turn in flight per owner, the note
@@ -688,30 +829,27 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     # One reply per note (#251 review F1): a note that already has a kept
     # reply is answered from the store, and Master Craftsman is not called
     # again (from stage C every call is paid).
-    reply_key = "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
+    from .mc.streaming import DISPATCHED
+    reply_key = _reply_key(note_id)
     try:
         existing = floor.get_note(reply_key)
     except FloorStoreUnavailable as exc:
         return {"error": "unavailable", "message": MC_WORDS["notes_down"],
                 "reason": "not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"}, 503
     if existing is not None:
-        shown = floor_state.mc_view(services, notes_ok=True)
-        turn_log_of(services).annotate([existing])
-        with_html([existing])
-        return {"turn_id": None, "status": "answered", "repeated": True,
-                "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
-                "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
-                "mc_state": shown["state"], "mc_header": shown["header"],
-                "message": MC_WORDS["already"]}, 200
+        return _repeated_answer(services, existing), 200
     shown = floor_state.mc_view(services, notes_ok=True)
     if not shown["turns"]:
         return {"error": "mc_unavailable", "message": f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
                 "mc_state": shown["state"], "reason": shown["reason"]}, 503
-    with _MC_LOCK:
-        if principal in _MC_INFLIGHT:
-            return {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
-        _MC_INFLIGHT.add(principal)
+    if not _mc_acquire(principal):
+        return {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
     turn_id = uuid.uuid4().hex
+    if request_id:
+        earlier = DISPATCHED.claim(request_id, principal, turn_id)
+        if earlier is not None:
+            _mc_release(principal)
+            return DISPATCHED.refusal(earlier, principal), 409
     try:
         from .conversations import session_conversation_id
         ctx = note.get("context") or {}
@@ -729,8 +867,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         _mc_log().info("mc turn %s end status=%s class=%s echo=%s response=%s", turn_id, result.status,
                        result.failure_class, trace.get("correlation_echo") == turn_id, bool(trace.get("response_id")))
     finally:
-        with _MC_LOCK:
-            _MC_INFLIGHT.discard(principal)
+        _mc_release(principal)
         if services.mc_health is not None:
             services.mc_health.invalidate()
     answer = {"turn_id": turn_id, "status": result.status, "backend_kind": result.backend_kind,
@@ -747,8 +884,10 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             # mismatch, a missing row) is "not kept", said as such.
             _mc_log().warning("mc turn %s answered but not kept (%s)", turn_id, outcome)
             shown = floor_state.mc_view(services, notes_ok=True)
-            return {**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
-                    "mc_state": shown["state"], "mc_header": shown["header"]}, 200
+            refused = {**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
+                       "mc_state": shown["state"], "mc_header": shown["header"]}
+            DISPATCHED.finish(request_id, refused)
+            return refused, 200
         answer["reply_note"] = kept.value
         _touch_in(conversations, conv, principal)
     turns = turn_log_of(services)
@@ -762,6 +901,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     answer.update({"mc_state": shown["state"], "mc_header": shown["header"],
                    "message": "Master Craftsman answered · kept on the record" if result.status == "answered"
                    else f"{shown['header']}. Your note is kept; Master Craftsman did not answer."})
+    DISPATCHED.finish(request_id, answer)
     return answer, 200
 
 
@@ -800,6 +940,8 @@ RULES = [
     ("/continue", "api_continue", continue_get, ["GET"]),
     ("/continue", "api_continue_put", continue_put, ["PUT"]),
     ("/mc/turns", "api_mc_turn", mc_turn, ["POST"]),
+    ("/mc/turns/stream", "api_mc_turn_stream", mc_turn_stream, ["POST"]),
+    ("/mc/turns/<turn_id>/stop", "api_mc_turn_stop", mc_turn_stop, ["POST"]),
     ("/conversations", "api_conversations", conversations_list, ["GET"]),
     ("/workshop", "api_workshop", workshop_view_api, ["GET"]),
     ("/conversations", "api_conversation_create", conversation_create, ["POST"]),

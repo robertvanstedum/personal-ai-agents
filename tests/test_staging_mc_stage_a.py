@@ -122,7 +122,8 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     (tmp_path / "docker-compose.staging.yml").write_text(main_staging)
     before = _staging_render([tmp_path / "docker-compose.prod.yml", tmp_path / "docker-compose.staging.yml"])
     after = _staging_render([PROD, STAGING])
-    usage_env = {"MINIMOI_USAGE_DIR", "MINIMOI_ENV", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID"}
+    usage_env = {"MINIMOI_USAGE_DIR", "MINIMOI_ENV", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID",
+                 "MINIMOI_GUILD_MC_STREAM"}
     usage_targets = {"/app/usage_record.py", "/app/usage_recorder.py", "/app/usage-data", "/app/data/usage",
                      "/app/data/workshops"}
 
@@ -134,7 +135,11 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
             out["environment"] = {k: v for k, v in out["environment"].items() if k not in usage_env or k in env_b}
         targets_b = {v["target"] for v in before_svc.get("volumes", [])}
         if "volumes" in out:
-            out["volumes"] = [v for v in out["volumes"] if v["target"] not in usage_targets or v["target"] in targets_b]
+            # The usage store's mounts are compared by their own tests (the
+            # portal's became read-write for its runtime-stream records, S1).
+            before_usage = {v["target"]: v for v in before_svc.get("volumes", []) if v["target"] in usage_targets}
+            out["volumes"] = [before_usage.get(v["target"], v) for v in out["volumes"]
+                              if v["target"] not in usage_targets or v["target"] in targets_b]
             if not out["volumes"] and "volumes" not in before_svc:
                 del out["volumes"]
         return out

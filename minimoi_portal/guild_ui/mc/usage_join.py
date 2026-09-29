@@ -38,7 +38,7 @@ def _parse(value):
         return None
 
 
-def _mc_records(folder: str) -> list[tuple[datetime, dict]]:
+def _mc_records(folder: str, emitter: str = "gateway") -> list[tuple[datetime, dict]]:
     try:
         names = sorted(n for n in os.listdir(folder) if re.fullmatch(r"usage-\d{4}-\d{2}\.jsonl", n))[-2:]
     except OSError:
@@ -58,7 +58,7 @@ def _mc_records(folder: str) -> list[tuple[datetime, dict]]:
             except ValueError:
                 continue
             if (isinstance(rec, dict) and rec.get("v") == 1 and rec.get("actor") == "mc" and rec.get("kind") == "model"
-                    and rec.get("emitter") == "gateway" and rec.get("status") == "ok"):
+                    and rec.get("emitter") == emitter and rec.get("status") == "ok"):
                 at = _parse(rec.get("occurred_at"))
                 if at is not None:
                     out.append((at, rec))
@@ -74,9 +74,23 @@ def add_tokens(turns: dict, *, now: datetime | None = None, folder: str | None =
     now = now or datetime.now(timezone.utc)
     folder = folder if folder is not None else _store()
     records = _mc_records(folder) if folder else []
+    # A streamed run's own record first (streaming spec v0.2 §6: the footer
+    # after a reload shows the number the stream's "done" showed), keyed by
+    # the turn id; then the gateway join below.
+    streamed = {}
+    if folder and any(t.get("turn_id") for t in turns.values()):
+        for _, rec in _mc_records(folder, emitter="runtime-stream"):
+            count = rec.get("output_tokens")
+            if rec.get("correlation_id") and isinstance(count, int) and not isinstance(count, bool):
+                streamed[rec["correlation_id"]] = count
     for turn in turns.values():
         window = turn.pop("window", None)
+        turn_id = turn.pop("turn_id", None)
         turn["output_tokens"], turn["tokens_text"] = None, "tokens unknown"
+        if turn_id in streamed:
+            turn["output_tokens"] = streamed[turn_id]
+            turn["tokens_text"] = tokens_text(streamed[turn_id])
+            continue
         if window is None or not folder:
             continue
         start, end = window

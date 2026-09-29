@@ -86,7 +86,10 @@ def mc_view(services, *, notes_ok: bool) -> dict:
     cached health (60 s). Never a model call: health reads readiness only."""
     cached = getattr(services, "mc_health", None)
     health = cached.get() if cached is not None else OffBackend().health()
-    return mc_view_of(health, notes_ok=notes_ok, turns_on=bool(getattr(services, "mc_turns", False)))
+    backend = getattr(services, "mc", None)
+    stream_on = bool(getattr(services, "mc_stream", False) and getattr(backend, "supports_streaming", False))
+    return mc_view_of(health, notes_ok=notes_ok, turns_on=bool(getattr(services, "mc_turns", False)),
+                      stream_on=stream_on)
 
 
 class _NotesRead:
@@ -154,7 +157,8 @@ def compute(c: dict, *, notes_limit: int = 0, conversation: dict | None = None) 
         "observed_at": observed_at,
         "mc_state": mc["state"],
         "mc_header": mc["header"],
-        "mc": {"state": mc["state"], "reason": mc["reason"], "turns": mc["turns"], "observed_at": mc["observed_at"]},
+        "mc": {"state": mc["state"], "reason": mc["reason"], "turns": mc["turns"], "stream": mc["stream"],
+               "observed_at": mc["observed_at"]},
         "lights": lights,
         "needs": needs,
         "briefing": opening_briefing(lights, needs, observed_at),

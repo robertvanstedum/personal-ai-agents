@@ -70,8 +70,11 @@ def _host_of(url: str | None) -> str | None:
         return None
 
 
-def check_write(base_url: str | None):
-    """None when the write may proceed; otherwise the JSON refusal."""
+def check_write(base_url: str | None, *, record_mode: bool = True):
+    """None when the write may proceed; otherwise the JSON refusal. With
+    ``record_mode=False`` (Master Craftsman's Stop, streaming spec v0.3 N1)
+    the record-mode check is skipped, so Stop works while off the record; the
+    JSON, same-origin and token checks still apply."""
     refuse = lambda why: json_error("csrf", f"This request could not be verified ({why}). Nothing was changed.", 403)  # noqa: E731
     if not request.is_json:
         return refuse("not JSON")
@@ -90,6 +93,8 @@ def check_write(base_url: str | None):
     sent = request.headers.get("X-CSRF-Token", "")
     if not expected or not sent or not hmac.compare_digest(sent, expected):
         return refuse("token")
+    if not record_mode:
+        return None
     mode = request.headers.get("X-Record-Mode")
     if mode == "off_record":
         return json_error("not_listening", OFF_RECORD_TEXT, 409)

@@ -1397,3 +1397,191 @@ def test_slice4a_phone_shows_now_needs_you_budget_then_the_chat(browser, server,
     expect(page.locator("[data-ws-scope]")).to_be_visible()
     assert not errors, errors
     ctx.close()
+
+
+# ── Streaming S1: Master Craftsman streams on the Shop floor ──────────────────
+# The real OpenClaw adapter over a scripted relay (test_mc_streaming.StreamRuntime):
+# no network, no model call.
+
+@pytest.fixture
+def streaming_mc(server, floor):
+    from minimoi_portal.guild_ui.mc import CachedHealth
+    from test_mc_streaming import StreamRuntime
+    from test_mc_turns import _openclaw
+    services = server["app"].extensions["guild_ui_next"]["services"]
+    saved = (services.mc, services.mc_health, services.mc_turns, services.mc_stream)
+    runtime = StreamRuntime()
+    backend = _openclaw(runtime)
+    services.mc, services.mc_health, services.mc_turns, services.mc_stream = backend, CachedHealth(backend), True, True
+    from minimoi_portal.guild_ui.api import _MC_INFLIGHT
+    from minimoi_portal.guild_ui.mc.streaming import DISPATCHED
+    DISPATCHED._items.clear()
+    _MC_INFLIGHT.clear()
+    yield {"runtime": runtime, "services": services}
+    runtime.gate.set()
+    services.mc, services.mc_health, services.mc_turns, services.mc_stream = saved
+
+
+def _script(*items):
+    from test_mc_streaming import nd
+    out = []
+    for item in items:
+        if isinstance(item, (int, float)):
+            out.append(("sleep", item))
+        elif isinstance(item, dict) or item == "WAIT":
+            out.append(nd(item) if isinstance(item, dict) else item)
+        else:
+            out.append(nd({"t": "delta", "text": item}))
+    return out
+
+
+FINISH = [{"t": "finish", "reason": "stop"}, {"t": "usage", "prompt_tokens": 50, "completion_tokens": 7}]
+
+
+def _send(page, server, text="Where do things stand?"):
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("body")).to_have_attribute("data-mc-stream", "true")
+    page.fill("#mc-input", text)
+    page.click("[data-mc-send]")
+    return page.locator("[data-mc-thread] [data-mc-stream-line]")
+
+
+def test_s1_a_streamed_reply_works_writes_and_ends_with_its_footer(browser, server, streaming_mc):
+    streaming_mc["runtime"].script = _script(0.4, "## Plan\n", 0.5, "- **one**\n", 0.8, "- two", 0.3, *FINISH)
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    line = _send(page, server)
+    expect(line).to_have_count(1)
+    expect(line.locator('[data-slot="state"]')).to_have_text("Working…")
+    expect(line).to_have_attribute("aria-busy", "true")
+    expect(line).to_contain_text("one")                                   # the text grows in place
+    expect(line.locator("[data-mc-stop]")).to_be_visible()
+    expect(line.locator("h2")).to_have_text("Plan")                       # the server's safe render, while writing
+    reply = page.locator('[data-mc-thread] [data-kind="note"]').last
+    expect(reply).to_contain_text("two", timeout=8000)
+    expect(line).to_have_count(0)                                         # replaced by done's kept text
+    expect(reply.locator(".msg-md h2")).to_have_text("Plan")
+    expect(reply.locator(".msg-md strong")).to_have_text("one")
+    expect(reply.locator("[data-turn-foot]")).to_contain_text("Done in")
+    expect(reply.locator("[data-turn-foot]")).to_contain_text("7 output tokens")
+    assert reply.inner_text().count("two") == 1
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/s1-desktop-streamed-reply.png")
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    again = page.locator('[data-mc-thread] [data-kind="note"]').last
+    expect(again.locator(".msg-md h2")).to_have_text("Plan")              # kept: it is there after a reload
+    assert not errors, errors
+    ctx.close()
+
+
+def test_s1_stop_ends_it_and_says_what_it_cannot_save(browser, server, streaming_mc):
+    runtime = streaming_mc["runtime"]
+    runtime.script = _script("A partial ", "WAIT", "answer.", *FINISH)
+    ctx, page = _context(browser, server)
+    errors = _errors(page)
+    line = _send(page, server)
+    expect(line).to_contain_text("A partial")
+    expect(line.locator('[data-slot="stopnote"]')).to_contain_text("may still be billed")
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/s1-desktop-writing-with-stop.png")
+    line.locator("[data-mc-stop]").click()
+    expect(line.locator('[data-slot="state"]')).to_have_text("Stopped")
+    expect(line).to_contain_text("A partial")                             # shown once, never kept
+    expect(line).not_to_have_attribute("aria-busy", "true")
+    platform = page.locator('[data-mc-thread] [data-kind="platform"]').last
+    expect(platform).to_contain_text("you may still be billed")
+    assert any(p["url"].endswith("/turns/stop") for p in runtime.posts)
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    assert "A partial" not in page.locator("[data-mc-thread]").inner_text()
+    assert not errors, errors
+    ctx.close()
+
+
+def test_s1_a_failure_mid_stream_is_interrupted_and_honest(browser, server, streaming_mc):
+    streaming_mc["runtime"].script = _script("Half an ", 0.3, {"t": "error", "class": "idle"})
+    ctx, page = _context(browser, server)
+    line = _send(page, server)
+    expect(line.locator('[data-slot="state"]')).to_have_text("(interrupted)")
+    expect(line).to_contain_text("Half an")
+    expect(page.locator('[data-mc-thread] [data-kind="platform"]').last).to_contain_text("it may still have run")
+    ctx.close()
+
+
+def test_s1_off_the_record_mid_stream_still_keeps_the_answer_and_says_so(browser, server, streaming_mc):
+    runtime = streaming_mc["runtime"]
+    runtime.script = _script("Sent ", "WAIT", "on the record.", *FINISH)
+    ctx, page = _context(browser, server)
+    line = _send(page, server)
+    expect(line).to_contain_text("Sent")
+    page.click("[data-mc-record]")                                       # off the record, mid-stream
+    runtime.gate.set()
+    reply = page.locator('[data-mc-thread] [data-kind="note"]').last
+    expect(reply).to_contain_text("on the record.")
+    expect(page.locator('[data-mc-thread] [data-kind="platform"]').last).to_contain_text(
+        "asked for on the record, so it is kept")
+    ctx.close()
+
+
+def test_s1_the_page_falls_back_only_on_a_declared_refusal(browser, server, streaming_mc):
+    services = streaming_mc["services"]
+    ctx, page = _context(browser, server)
+    bodies = []
+    page.on("request", lambda r: bodies.append((r.url.rsplit("/api/v1", 1)[-1], r.post_data))
+            if "/api/v1/mc/turns" in r.url else None)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("body")).to_have_attribute("data-mc-stream", "true")
+    services.mc_stream = False                                            # switched off after the page loaded
+    page.fill("#mc-input", "Fall back, please")
+    page.click("[data-mc-send]")
+    expect(page.locator('[data-mc-thread] [data-kind="note"]').last).to_contain_text("ok")
+    assert [b[0] for b in bodies] == ["/mc/turns/stream", "/mc/turns"]
+    first, second = (json.loads(b[1]) for b in bodies)
+    assert first["request_id"] == second["request_id"]                   # the same turn: nothing was sent twice
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("body")).to_have_attribute("data-mc-stream", "false")
+    ctx.close()
+
+
+def test_s1_unsafe_markdown_never_executes_while_streaming_or_after(browser, server, streaming_mc):
+    streaming_mc["runtime"].script = _script(
+        "Look: <img src=x onerror=\"window.__pwned=1\"> ", 0.3, "[click](javascript:window.__pwned=2) ", 0.3,
+        "<script>window.__pwned=3</script> **safe**", 0.3, *FINISH)
+    ctx, page = _context(browser, server)
+    line = _send(page, server)
+    expect(line).to_contain_text("Look:")
+    reply = page.locator('[data-mc-thread] [data-kind="note"]').last
+    expect(reply.locator(".msg-md strong")).to_have_text("safe", timeout=8000)
+    thread = page.locator("[data-mc-thread]")
+    assert thread.locator("img").count() == 0 and thread.locator("script").count() == 0
+    assert all("javascript" not in (a.get_attribute("href") or "") for a in thread.locator("a").all())
+    assert page.evaluate("window.__pwned === undefined")
+    ctx.close()
+
+
+def test_s1_reduced_motion_has_no_animation_and_the_text_still_appears(browser, server, streaming_mc):
+    streaming_mc["runtime"].script = _script("Calm ", 0.4, "text.", 0.2, *FINISH)
+    ctx = browser.new_context(viewport={"width": 1280, "height": 800}, reduced_motion="reduce")
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    line = _send(page, server)
+    expect(line).to_contain_text("Calm")
+    assert line.evaluate("el => getComputedStyle(el).animationName") == "none"
+    expect(page.locator('[data-mc-thread] [data-kind="note"]').last).to_contain_text("Calm text.")
+    ctx.close()
+
+
+def test_s1_phone_shows_the_stream_and_stop(browser, server, streaming_mc):
+    streaming_mc["runtime"].script = _script("A reply ", "WAIT", "on a phone.", *FINISH)
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    line = _send(page, server)
+    expect(line.locator("[data-mc-stop]")).to_be_visible()
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/s1-phone-writing-with-stop.png")
+    streaming_mc["runtime"].gate.set()
+    expect(page.locator('[data-mc-thread] [data-kind="note"]').last).to_contain_text("on a phone.")
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+    ctx.close()

@@ -10,7 +10,7 @@
   <script type="module" src="{{ url_for('.asset', filename='js/main.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
-<body class="gu" data-page="{{ page_id }}" data-area="{{ area }}" data-context-item="{{ context_item }}" data-mc-state="{{ state.mc_state }}" data-mc-turns="{{ 'true' if state.mc and state.mc.turns else 'false' }}"{% if page_open %} data-page-open="true"{% endif %}>
+<body class="gu" data-page="{{ page_id }}" data-area="{{ area }}" data-context-item="{{ context_item }}" data-mc-state="{{ state.mc_state }}" data-mc-turns="{{ 'true' if state.mc and state.mc.turns else 'false' }}" data-mc-stream="{{ 'true' if state.mc and state.mc.stream else 'false' }}"{% if page_open %} data-page-open="true"{% endif %}>
 <a class="gu-skip" href="{{ '#mc-input' if page_id == 'floor' else '#main' }}">{{ 'Skip to the chat' if page_id == 'floor' else 'Skip to content' }}</a>
 {{ portal_nav_html(user, '/guild') | safe }}
 <nav class="guild-nav" aria-label="Guild sections">
