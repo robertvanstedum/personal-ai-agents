@@ -117,6 +117,8 @@ export class OpenAIWebRTCAdapter {
   }
 
   end(reason) {
+    if (this._ended) return;                 // idempotent: the controller and a provider close may both end it
+    this._ended = true;
     for (const track of this._micStream?.getAudioTracks() || []) track.stop();
     this._dc?.close();
     this._pc?.close();

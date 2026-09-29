@@ -122,7 +122,7 @@ def test_german_dev_ui_makes_realtime_primary(monkeypatch, german_client):
     # the portal's /app/german proxy prefix, leaving the Start button inert.
     assert (
         'from "./static/realtime-voice/realtime-voice-controller.js'
-        '?v=20260809-ga1"' in page
+        '?v=20260929-mic1"' in page
     )
     assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
     assert "source: session.source || 'ki_sitzung'" in page
@@ -152,7 +152,7 @@ def test_portuguese_dev_ui_makes_realtime_primary(monkeypatch, portuguese_client
     assert "realtime-transcript" in page
     assert (
         'from "./static/realtime-voice/realtime-voice-controller.js'
-        '?v=20260809-ga1"' in page
+        '?v=20260929-mic1"' in page
     )
     assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
     assert "source: session.source || 'ki_sessao'" in page

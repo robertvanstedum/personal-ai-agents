@@ -217,5 +217,194 @@
       "rapport_level": "neutral"
     },
     "archived_rounds": []
+  },
+  "1_maria": {
+    "user": "1",
+    "persona": "maria",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "1_frau_berger": {
+    "user": "1",
+    "persona": "frau_berger",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "1_herr_fischer": {
+    "user": "1",
+    "persona": "herr_fischer",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "1_dr._huber": {
+    "user": "1",
+    "persona": "dr._huber",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "1_stefan": {
+    "user": "1",
+    "persona": "stefan",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "1_frau_novak": {
+    "user": "1",
+    "persona": "frau_novak",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "1_klaus": {
+    "user": "1",
+    "persona": "klaus",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "1_georg": {
+    "user": "1",
+    "persona": "georg",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
+  },
+  "1_anna": {
+    "user": "1",
+    "persona": "anna",
+    "persona_type": "casual",
+    "current_round": 1,
+    "round_default": 5,
+    "round_extended": false,
+    "ready_to_archive": false,
+    "active_memory": {
+      "round_number": 1,
+      "sessions_this_round": 0,
+      "last_seen": null,
+      "topics_discussed": [],
+      "errors_noted": [],
+      "strengths": [],
+      "vocabulary_introduced": [],
+      "notes": "",
+      "rapport_level": "neutral"
+    },
+    "archived_rounds": []
   }
 }
