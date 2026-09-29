@@ -340,21 +340,26 @@ const stateLabels = {
   ending: 'Stopping…',
   ended: 'Stopped',
   reconnecting: 'Reconnecting…',
+  idle: 'Voice did not start',
 };
+
+// One place draws the voice button. A failed start (the controller goes back
+// to idle without a session) or an ended session returns it to 🎤.
+function renderVoice(state) {
+  if (state === 'ended' || state === 'idle') voiceRunning = false;
+  const voiceActive = voiceRunning && state !== 'ended' && state !== 'idle';
+  voiceStatus.textContent = stateLabels[state] || state;
+  voiceButton.classList.toggle('recording', voiceActive);
+  voiceButton.textContent = voiceActive ? '■' : '🎤';
+  voiceButton.title = voiceActive ? 'Stop voice conversation' : 'Start voice conversation';
+  voiceButton.setAttribute('aria-label', voiceButton.title);
+  voiceProviderSelect.disabled = voiceActive;
+}
 
 const voiceController = new RealtimeVoiceController({
   bootstrapUrl: '../api/realtime-voice/confer/bootstrap',
   openingInstruction: null,
-  onStateChange: (state) => {
-    if (state === 'ended') voiceRunning = false;
-    const voiceActive = voiceRunning && state !== 'ended';
-    voiceStatus.textContent = stateLabels[state] || state;
-    voiceButton.classList.toggle('recording', voiceActive);
-    voiceButton.textContent = voiceActive ? '■' : '🎤';
-    voiceButton.title = voiceActive ? 'Stop voice conversation' : 'Start voice conversation';
-    voiceButton.setAttribute('aria-label', voiceButton.title);
-    voiceProviderSelect.disabled = voiceActive;
-  },
+  onStateChange: renderVoice,
   onInputState: (state) => {
     const labels = {
       speech_started: 'Listening',
@@ -462,8 +467,11 @@ voiceButton.addEventListener('click', async () => {
       scene: 'confer',
       learner_name: 'Robert',
     });
-  } catch (_) {
+  } catch (err) {
+    voiceController.endSession('start_failed');   // no-op unless a session got as far as connecting
     voiceRunning = false;
+    renderVoice('idle');
+    voiceTranscript.textContent = `Voice error: ${err?.message || 'the voice session could not start'}`;
   }
 });
 </script>
