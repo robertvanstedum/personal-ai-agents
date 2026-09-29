@@ -88,6 +88,13 @@ def test_it_refuses_without_yes_spend_or_with_turns_off(floored, tmp_path, capsy
 
 def test_the_wrapper_runs_only_inside_the_portal_container():
     text = (REPO / "scripts/staging/mc_cost_probe.sh").read_text()
-    assert "docker exec -i minimoi-portal python -m minimoi_portal.guild_ui.mc.cost_probe" in text
+    assert "docker exec -i minimoi-portal python -m minimoi_portal.mc_cost_probe" in text
     body = "\n".join(l for l in text.splitlines() if not l.startswith("#"))
     assert "dev.minimoi" not in body and "curl" not in body and "http" not in body
+
+
+def test_the_entry_point_uses_the_running_portals_own_services(capsys):
+    text = (REPO / "minimoi_portal/mc_cost_probe.py").read_text()
+    assert 'portal_app.app.extensions["guild_ui_next"]["services"]' in text and "cost_probe.main(argv, services=services)" in text
+    assert cost_probe.main(["--yes-spend"], services=None) == 4          # never builds its own services
+    assert "mc_cost_probe.sh" in capsys.readouterr().out

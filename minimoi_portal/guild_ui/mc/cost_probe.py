@@ -129,17 +129,6 @@ def run(services, conversations, *, principal: str, label: str, turns: int = 3, 
     return {"rows": rows, "spent": spent, "fresh": fresh["id"], "run_id": run_id}
 
 
-def _load_services():
-    """The running portal's own services, from inside its container."""
-    import importlib.util
-    here = os.path.dirname(os.path.abspath(__file__))
-    app_path = os.path.normpath(os.path.join(here, "..", "..", "app.py"))
-    spec = importlib.util.spec_from_file_location("portal_app_cost_probe", app_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.app.extensions["guild_ui_next"]["services"]
-
-
 def main(argv=None, *, services=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--yes-spend", action="store_true", help="really send the turns (each is a paid model call)")
@@ -152,7 +141,9 @@ def main(argv=None, *, services=None) -> int:
         print(f"Refused: this sends {a.turns} paid Master Craftsman turns. Add --yes-spend to run it "
               f"(stops past ${min(a.cap, HARD_CAP):.2f}).")
         return 2
-    services = services or _load_services()
+    if services is None:
+        print("Refused: run it through scripts/staging/mc_cost_probe.sh (python -m minimoi_portal.mc_cost_probe).")
+        return 4
     if not getattr(services, "mc_turns", False) or getattr(services.mc, "kind", None) != "openclaw":
         print("Refused: Master Craftsman's turns are off, or its backend is not the real one; nothing was sent.")
         return 3

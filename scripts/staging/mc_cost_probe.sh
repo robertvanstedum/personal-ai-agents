@@ -13,4 +13,4 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 [[ "$(docker inspect -f '{{.State.Running}}' minimoi-portal 2>/dev/null)" == true ]] || die "minimoi-portal is not running"
-exec docker exec -i minimoi-portal python -m minimoi_portal.guild_ui.mc.cost_probe "$@"
+exec docker exec -i minimoi-portal python -m minimoi_portal.mc_cost_probe "$@"
