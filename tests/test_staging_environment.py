@@ -987,8 +987,6 @@ def test_jobs_curator_refuses_instead_of_a_silent_no_op(tmp_path, shell):
     "scripts/staging/up.sh",
     "scripts/staging/README.md",
     "services/model_gateway/litellm.staging.yaml",
-    "services/usage/usage_record.py",          # dormant in production until an image or config uses it
-    "services/usage/litellm_recorder.py",
 ])
 def test_staging_only_paths_never_deploy_production(path):
     assert classify([path]) == ("documents", ())

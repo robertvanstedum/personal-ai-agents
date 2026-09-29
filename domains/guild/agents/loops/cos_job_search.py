@@ -251,6 +251,8 @@ def _search_tavily(ctx: dict) -> list[dict]:
         return []
 
     from tavily import TavilyClient
+
+    from domains.guild.agents.loops.usage import tavily_search
     client = TavilyClient(api_key=api_key)
 
     cf = ctx["career_focus"]
@@ -272,8 +274,8 @@ def _search_tavily(ctx: dict) -> list[dict]:
         seen: set[str] = set()
         for q in queries:
             try:
-                response = client.search(
-                    q,
+                response = tavily_search(
+                    client, "cos-job-search", q,
                     max_results=8,
                     search_depth="basic",
                     days=day_limit,

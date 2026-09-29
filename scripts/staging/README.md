@@ -780,6 +780,14 @@ one standard usage record: `~/minimoi-staging/data/usage/usage-YYYY-MM.jsonl`
   `data/usage/usage-*.jsonl` with `"route":"minimoi-cos-web-search"`,
   `"actor":"cos"`, `"status":"ok"` (as well as the receipt line). One MC note
   on the Shop floor leaves an `"actor":"mc"` line with its tokens and cost.
+- **Direct calls (U2):** calls that skip the gateway record through
+  `services/usage/direct.py` into the same store: the CoS loops' Tavily
+  searches (`kind: search`, `units: {"searches": 1}`, no cost on the free
+  tier) and CoS's direct Grok backend (tokens from the SDK's `usage`; cost not
+  priced yet, `cost_source: none`). cos-bot and cos-scheduler mount
+  `data/usage/` with `MINIMOI_USAGE_DIR` set. No query, prompt or answer is
+  recorded. (The loops' Tavily key is read from the Mac Keychain, so inside
+  staging's containers the loops skip search, and write no search record.)
 - **Proof without spend:** `mc_probe/stage_c.py` checks MC and CoS records,
   every CoS route, the fallback's error, refusals (MC's key on CoS's models,
   the spent budget), and that no content or key reaches the store.

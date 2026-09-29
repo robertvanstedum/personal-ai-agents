@@ -144,12 +144,22 @@ services:
     profiles: [bots]
     environment:
       - MINIMOI_ROLE=standby
+      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend).
+      - MINIMOI_USAGE_DIR=/app/data/usage
+      - MINIMOI_ENV=staging
+    volumes:
+      - ${MINIMOI_ROOT}/data/usage:/app/data/usage
 
   cos-scheduler:
     image: minimoi-staging/cos-scheduler:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
     pull_policy: never
     environment:
       - MINIMOI_ROLE=standby
+      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend).
+      - MINIMOI_USAGE_DIR=/app/data/usage
+      - MINIMOI_ENV=staging
+    volumes:
+      - ${MINIMOI_ROOT}/data/usage:/app/data/usage
 
 volumes:
   postgres-data:

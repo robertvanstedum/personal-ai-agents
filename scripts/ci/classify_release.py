@@ -58,13 +58,7 @@ def _is_release_only(path: str) -> bool:
 # until the production MC spec. tests/test_release_classifier.py fails if
 # deploy.yml, the deploy script or docker-compose.prod.yml starts using them,
 # so that change must classify them as a real production service.
-#
-# services/usage/ (the usage record, U1) is staging-only for now: the staging
-# gateway mounts it (docker-compose.staging.yml); no production Dockerfile
-# copies it and litellm.prod.yaml does not load it. The day a production image
-# or config uses it, tests/test_release_classifier.py fails and this entry must
-# become a real service mapping.
-DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent", "services/usage/")
+DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent")
 
 
 # The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).
@@ -103,6 +97,12 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith("minimoi_portal/"):
             services.add("portal")
+        elif path.startswith("services/usage/"):
+            # The usage record (usage-record U1/U2): the CoS images copy it
+            # (Dockerfile.cos*). The production gateway image does not; the
+            # staging gateway mounts it. Production writes nothing until its
+            # environment sets MINIMOI_USAGE_DIR.
+            services.update(("cos-bot", "cos-scheduler"))
         elif path.startswith("services/model_gateway/"):
             services.update(("model-gateway", "cos-bot", "cos-scheduler"))
         elif path.startswith("docker/cos-agent-a/") or path == "docker/Dockerfile.cos-agent-a":

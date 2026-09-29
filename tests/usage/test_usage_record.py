@@ -202,17 +202,103 @@ def test_actor_of():
 
 # ── staging only ──────────────────────────────────────────────────────────────
 
-def test_production_never_builds_or_loads_the_usage_recorder_yet():
-    """The day a production image or config uses services/usage/, this fails,
-    and scripts/ci/classify_release.py must map it to a real service."""
-    users = []
-    for path in list((REPO / "docker").glob("Dockerfile.*")) + [
-            REPO / "docker-compose.prod.yml", REPO / "docker-compose.yml",
-            REPO / "services/model_gateway/litellm.prod.yaml", REPO / "services/model_gateway/litellm.yaml",
-            REPO / ".github/workflows/deploy.yml", REPO / "scripts/operations/deploy_scoped_release.sh"]:
+def test_production_never_loads_the_gateway_recorder_and_only_cos_images_copy_the_library():
+    """U2: the CoS images copy services/usage/ (the classifier maps it to
+    cos-bot and cos-scheduler). The production gateway never loads the
+    recorder, and production writes nothing: it sets no MINIMOI_USAGE_DIR."""
+    copiers, loaders = [], []
+    for path in (REPO / "docker").glob("Dockerfile.*"):
+        if "services/usage" in path.read_text():
+            copiers.append(path.name)
+    for path in (REPO / "docker-compose.prod.yml", REPO / "docker-compose.yml",
+                 REPO / "services/model_gateway/litellm.prod.yaml", REPO / "services/model_gateway/litellm.yaml",
+                 REPO / "docker/Dockerfile.model-gateway", REPO / ".github/workflows/deploy.yml",
+                 REPO / "scripts/operations/deploy_scoped_release.sh"):
         text = path.read_text()
-        if "services/usage" in text or "usage_recorder" in text or "usage_record" in text:
-            users.append(path.name)
-    assert users == []
+        if "usage_recorder" in text or "MINIMOI_USAGE_DIR" in text or "usage_record.py" in text:
+            loaders.append(path.name)
+    assert sorted(copiers) == ["Dockerfile.cos", "Dockerfile.cos-bot", "Dockerfile.cos-scheduler"]
+    assert loaders == []
     staging = (REPO / "services/model_gateway/litellm.staging.yaml").read_text()
     assert "usage_recorder.usage_recorder" in staging
+
+
+# ── U2: the direct-call helper (Tavily, CoS's Grok backend) ──────────────────
+
+def test_classifier_maps_the_usage_library_to_the_cos_images():
+    sys.path.insert(0, str(REPO / "scripts" / "ci"))
+    from classify_release import classify
+    assert classify(["services/usage/usage_record.py"]) == ("domain", ("cos-bot", "cos-scheduler"))
+
+
+class _Usage:
+    prompt_tokens, completion_tokens = 120, 30
+    prompt_tokens_details = type("D", (), {"cached_tokens": 64})()
+
+
+class _Resp:
+    usage = _Usage()
+
+
+def test_the_helper_records_a_direct_model_call_and_a_search(store):
+    from services.usage import direct
+    from services.usage import usage_record as ur2
+    assert direct.model_call(name="cos-grok-backend", actor="cos", route="cos-grok-direct:chat", provider="xai",
+                             model="grok-4.3", response=_Resp(), latency_ms=812.5)
+    assert direct.search(name="cos-novelty-watch", actor="cos", latency_ms=300)
+    err = type("RateLimitError", (Exception,), {"status_code": 429})()
+    assert direct.model_call(name="cos-grok-backend", actor="cos", route="cos-grok-direct:chat", provider="xai",
+                             model="grok-4.3", error=err)
+    ur2.flush()
+    got = ur2.read(str(store))
+    assert [(r["emitter"], r["kind"], r["status"]) for r in got] == [
+        ("helper:cos-grok-backend", "model", "ok"), ("helper:cos-novelty-watch", "search", "ok"),
+        ("helper:cos-grok-backend", "model", "refused")]
+    assert got[0]["input_tokens"] == 120 and got[0]["output_tokens"] == 30 and got[0]["cached_tokens"] == 64
+    assert got[0]["cost_usd"] is None and got[0]["cost_source"] == "none"
+    assert got[1]["units"] == {"searches": 1} and got[1]["route"] == "tavily:search"
+    assert got[2]["input_tokens"] is None and got[2]["http_status"] == 429
+
+
+def test_the_helper_never_raises(monkeypatch):
+    from services.usage import direct
+    monkeypatch.setattr(direct.usage_record, "record", lambda **k: 1 / 0)
+    assert direct.search(name="x", actor="cos") is False
+
+
+def test_tavily_search_passes_results_and_errors_through_and_records_no_query(store):
+    from domains.guild.agents.loops.usage import tavily_search
+    from services.usage import usage_record as ur2
+
+    class Client:
+        def search(self, q, **kw):
+            if q == "boom":
+                raise RuntimeError("quota")
+            return {"results": [{"title": "t", "url": "u", "content": "c"}], "kw": kw}
+    assert tavily_search(Client(), "cos-curator-watch", "private query text", max_results=6)["kw"] == {"max_results": 6}
+    with pytest.raises(RuntimeError, match="quota"):
+        tavily_search(Client(), "cos-curator-watch", "boom")
+    ur2.flush()
+    got = ur2.read(str(store))
+    assert [(r["emitter"], r["status"]) for r in got] == [("helper:cos-curator-watch", "ok"),
+                                                           ("helper:cos-curator-watch", "error")]
+    assert "private query text" not in "".join(p.read_text() for p in store.iterdir())
+
+
+def test_the_grok_backend_records_each_call_and_returns_the_sdks_answer(store):
+    from domains.cos.backends import grok_backend
+    from services.usage import usage_record as ur2
+    msg = type("M", (), {"content": "Hello Robert", "tool_calls": None})()
+    resp = type("R", (), {"choices": [type("C", (), {"message": msg})()], "usage": _Usage()})()
+
+    class Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    return resp
+    assert grok_backend._create(Client(), "cos-grok-direct:chat", model="grok-4.3", messages=[]) is resp
+    ur2.flush()
+    got = ur2.read(str(store))
+    assert len(got) == 1 and got[0]["route"] == "cos-grok-direct:chat" and got[0]["output_tokens"] == 30
+    assert "Hello Robert" not in "".join(p.read_text() for p in store.iterdir())
