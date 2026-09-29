@@ -17,7 +17,10 @@ The turns (each a paid model call):
 Per turn it prints the conversation, input and output tokens and the cost,
 read from the environment's usage store (the gateway's records for actor mc,
 inside the turn's window). It refuses without --yes-spend, and stops before
-the next turn once the spend passes the cap ($1 by default, never more).
+the next turn once the spend passes the cap ($1 by default, never more). A
+turn whose usage cannot be read (no record, or a record without a cost) is
+unknown, never $0: the probe stops there, and it refuses to start without a
+usage store to read.
 """
 from __future__ import annotations
 
@@ -81,16 +84,20 @@ def run(services, conversations, *, principal: str, label: str, turns: int = 3, 
     from ..stores import Author
 
     cap = min(float(cap), HARD_CAP)
+    if not usage_dir or not os.path.isdir(usage_dir):
+        out("Refused: no usage store to read (MINIMOI_USAGE_DIR); each turn's cost would be unknown. Nothing was sent.")
+        return {"rows": [], "spent": 0.0, "fresh": None, "run_id": None, "stopped": "no_usage_store"}
     run_id = secrets.token_hex(4)
     author = Author(principal, "owner", label)
     thread = conversations.get(LEGACY_ID, principal)
     fresh, _ = conversations.create(principal, key=f"costprobe-{run_id}")
     conversations.rename(fresh["id"], principal, f"Cost probe {run_id} (fresh)")
-    rows, spent = [], 0.0
+    rows, spent, stopped = [], 0.0, None
     counted: set[str] = set()      # usage records already counted for an earlier turn
     for i, (where, prompt) in enumerate(PROMPTS[:turns], start=1):
         if spent > cap:
             out(f"STOP: spent ${spent:.4f}, over the ${cap:.2f} cap; turn {i} not sent.")
+            stopped = "cap"
             break
         conv = thread if where == "thread" else fresh
         floor = services.floor if conv.get("notes_floor") in (None, services.floor.floor) else \
@@ -111,22 +118,35 @@ def run(services, conversations, *, principal: str, label: str, turns: int = 3, 
                 sleep(1.0)
                 waited += 1.0
         counted.update(r.get("record_id") for r in recs)
-        cost = _sum(recs, "cost_usd") or 0.0
-        spent += cost
+        answered = answer.get("status") == "answered"
+        known = bool(recs) and all(isinstance(r.get("cost_usd"), (int, float)) and not isinstance(r.get("cost_usd"), bool)
+                                   for r in recs)
+        cost = _sum(recs, "cost_usd") if known else None
+        spent += cost or 0.0
         row = {"turn": i, "conversation": conv["id"], "where": where, "status": answer.get("status", status),
                "calls": len(recs), "input_tokens": _sum(recs, "input_tokens"),
-               "output_tokens": _sum(recs, "output_tokens"), "cost_usd": round(cost, 6)}
+               "output_tokens": _sum(recs, "output_tokens"),
+               "cost_usd": round(cost, 6) if cost is not None else None}
         rows.append(row)
         out(f"turn {i} · {where:6} · {conv['id']:18} · {row['status']:10} · calls {row['calls']} · "
-            f"in {row['input_tokens']} · out {row['output_tokens']} · ${row['cost_usd']:.6f}")
-        if answer.get("status") != "answered":
+            f"in {row['input_tokens']} · out {row['output_tokens']} · "
+            + (f"${row['cost_usd']:.6f}" if cost is not None else "cost unknown"))
+        if answered and not known:
+            why = f"no usage record arrived within {wait_s:.0f} s" if not recs else "a usage record has no cost"
+            out(f"STOP: turn {i}'s usage could not be read ({why}); its cost is unknown, "
+                f"so no further turns are sent. Spent at least ${spent:.4f}.")
+            stopped = "usage_unknown"
+            break
+        if not answered:
+            stopped = "not_answered"
             out(f"turn {i} did not answer ({answer.get('failure_class') or answer.get('error')}); stopping.")
             break
     by_turn = {r["turn"]: r for r in rows}
     if 2 in by_turn and 3 in by_turn and by_turn[2]["input_tokens"] is not None and by_turn[3]["input_tokens"] is not None:
         out(f"long (turn 2) minus fresh (turn 3) input tokens: {by_turn[2]['input_tokens'] - by_turn[3]['input_tokens']}")
-    out(f"total spent: ${spent:.6f} (cap ${cap:.2f}) · fresh conversation {fresh['id']}")
-    return {"rows": rows, "spent": spent, "fresh": fresh["id"], "run_id": run_id}
+    lower = " at least" if stopped == "usage_unknown" else ""
+    out(f"total spent:{lower} ${spent:.6f} (cap ${cap:.2f}) · fresh conversation {fresh['id']}")
+    return {"rows": rows, "spent": spent, "fresh": fresh["id"], "run_id": run_id, "stopped": stopped}
 
 
 def main(argv=None, *, services=None) -> int:
