@@ -385,7 +385,10 @@ def _routes(path):
 
 def test_staging_gateway_keeps_production_names_and_settings():
     prod, staging = _load(GATEWAY_PROD), _load(GATEWAY_STAGING)
-    assert [m["model_name"] for m in staging["model_list"]] == [m["model_name"] for m in prod["model_list"]]
+    # Production's names, plus exactly one staging-only route: Master
+    # Craftsman's (MC stage C; tests/test_staging_mc_stage_c.py).
+    assert [m["model_name"] for m in staging["model_list"]] == \
+        [m["model_name"] for m in prod["model_list"]] + ["minimoi-mc-agent"]
     for block in ("router_settings", "litellm_settings", "general_settings"):
         assert staging[block] == prod[block], block
 
@@ -395,13 +398,19 @@ def test_staging_cos_agent_route_is_haiku_and_the_rest_follow_the_dev_gateway():
     agent = staging["minimoi-cos-agent"]
     haiku = "anthropic/claude-haiku-4-5-20251001"
     assert agent["litellm_params"]["model"] == haiku
-    assert agent["litellm_params"]["api_key"] == "os.environ/ANTHROPIC_API_KEY"
+    # Gateway-only provider key names on staging (the pass-through gap; MC stage C).
+    assert agent["litellm_params"]["api_key"] == "os.environ/GATEWAY_ANTHROPIC_API_KEY"
     assert agent["model_info"]["base_model"] == haiku
     assert set(agent["model_info"]) == set(prod["minimoi-cos-agent"]["model_info"])
     assert agent["model_info"]["fallback_position"] == 0
+    renamed = {"os.environ/GATEWAY_ANTHROPIC_API_KEY": "os.environ/ANTHROPIC_API_KEY",
+               "os.environ/GATEWAY_XAI_API_KEY": "os.environ/XAI_API_KEY"}
     for name in staging:
-        if name != "minimoi-cos-agent":
-            assert staging[name] == dev[name], name
+        if name == "minimoi-cos-agent" or name.startswith("minimoi-mc-"):
+            continue
+        route = __import__("copy").deepcopy(staging[name])
+        route["litellm_params"]["api_key"] = renamed[route["litellm_params"]["api_key"]]
+        assert route == dev[name], name
 
 
 # ── seed safety ───────────────────────────────────────────────────────────────

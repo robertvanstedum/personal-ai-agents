@@ -78,6 +78,7 @@ Run them from any checkout of this repository (the root checkout is fine).
 | `verify.sh [--no-guild-routes] [--allow-holder PORT[,PORT]]` | the acceptance checks below; non-zero on any failure |
 | `focus.sh mc\|mc+cos\|all\|show` | run only the containers under test; the set is persisted and `up.sh`/`verify.sh` respect it (section "Focus") |
 | `mc.sh token\|build\|up\|down\|status\|clear-selfcheck` | Master Craftsman's own Compose project `minimoi-staging-mc` (section "Master Craftsman stage A"); never touches the main project |
+| `mc.sh gateway-keys\|key` | Stage C, **Robert runs these**: the gateway's key database (recreates only `model-gateway` in the main project), then MC's capped key (recreates only `mc-agent`); nothing secret is printed (section "Master Craftsman stage C") |
 | `jobs.sh lesen\|intelligence\|leitura` | run one background job by hand, logged to `logs/` (Spec 159: dev jobs run only when triggered). `jobs.sh curator` refuses (exit 3): the curator skips every run outside `MINIMOI_ROLE=production`, and staging never runs as production |
 
 ### What `verify.sh` proves
@@ -535,7 +536,7 @@ that set is active). Focus `mc+cos` keeps CoS up.
    with `"logical_model":"minimoi-cos-web-search"` in
    `~/minimoi-staging/data/model_gateway_receipts.jsonl`.
 
-**For stage C (recorded now).** In stage A, with no key database, LiteLLM
+**For stage C (recorded now; done in stage C below).** In stage A, with no key database, LiteLLM
 refuses a non-master key with `400 no_db_connection`, and C5 and check 9j
 accept exactly that as a refusal. **That exception ends in stage C:** once the
 key database exists, a `no_db_connection` means the database is down or
@@ -614,6 +615,100 @@ browser --(owner session, CSRF)--> portal --(relay caller token, mc-front)--> mc
 
 Rollback: `printf 'off\n' > ~/minimoi-staging/state/mc.turns; scripts/staging/up.sh portal`
 (turns off; nothing else changes); `mc.sh down` stops MC and the relay.
+
+## Master Craftsman stage C: first real reply (Robert's key and cap)
+
+Stage C gives MC a real, capped model key. Everything before Robert's two
+commands is no-spend; the first paid call is Robert's own first note.
+
+- **The gateway's key database.** A `litellm_keys` database with its own
+  `litellm_keys` role (random password, never printed) in the existing
+  Postgres. Its URL lives only in `~/minimoi-staging/gateway.env` (mode 600,
+  interpolation only, read by the gateway alone), and the
+  `docker-compose.staging-keys.yml` overlay applies only while
+  `state/gateway.keys` reads `on`. Production has no key database and is
+  unchanged.
+- **MC's route** `minimoi-mc-agent` (staging only): Claude Haiku 4.5 on
+  **MC's own** Anthropic key (`MC_ANTHROPIC_API_KEY` in `mc.env`; a
+  placeholder until Robert pastes it), no fallback.
+- **MC's virtual key:** that route only; chat completions only (not
+  `/key/info`: LiteLLM answers `/key/info?key=<another key>` for any key allowed
+  to call it); a monthly cap (`30d`); rpm 10.
+- **The `/anthropic/*` pass-through is closed on staging.** LiteLLM's
+  pass-through routes sign upstream calls with the default names
+  `ANTHROPIC_API_KEY` / `XAI_API_KEY`, so any key holder could spend CoS's
+  provider key there. Staging's gateway now reads `GATEWAY_ANTHROPIC_API_KEY` /
+  `GATEWAY_XAI_API_KEY` (same values from `.env`) and gets the default names
+  **empty**. Production still has the gap, but only master-key holders can
+  reach it there (production has no virtual keys); closing it in production is
+  its own PR and needs Robert's OK.
+- **What a refusal looks like.** OpenClaw 2026.9.6 turns an upstream budget
+  400, a 500 and a 429 alike into its own `500 internal error`, so the Shop
+  floor says "unavailable" without naming the cap. It never shows a failure as
+  an answer (probe `stage_b.py`, ERROR_SURFACE).
+
+### Steps (after review; each runtime step needs Robert's go-ahead)
+
+1. **Roll the release out** (coordinator): `build.sh <branch> --reviewed-branch`,
+   `mc.sh build`, `mc.sh token`, `up.sh && verify.sh`. The gateway is recreated
+   with the renamed provider keys and MC's route (placeholder key). Then the CoS
+   regression question (stage A step 8): CoS's route now reads
+   `GATEWAY_ANTHROPIC_API_KEY`, so this is the check that it still answers.
+2. **RB-H3: a known-invalid key gets Anthropic's own refusal** (coordinator; no
+   spend, the placeholder is still in place):
+   ```
+   docker exec minimoi-model-gateway python -c "
+   import json,os,urllib.request as u,urllib.error as e
+   r=u.Request('http://127.0.0.1:4000/v1/chat/completions',method='POST',data=json.dumps({'model':'minimoi-mc-agent','max_tokens':1,'messages':[{'role':'user','content':'x'}]}).encode(),headers={'Authorization':'Bearer '+os.environ['LITELLM_MASTER_KEY'],'Content-Type':'application/json'})
+   try: u.urlopen(r,timeout=60); print('ANSWERED: stop, this must not happen')
+   except e.HTTPError as x: print(x.code, x.read()[:300])"
+   ```
+   Pass: `401` with an Anthropic authentication error naming an invalid
+   x-api-key. Anything else: stop.
+3. **Robert, command 1** (one paste): `scripts/staging/mc.sh gateway-keys`.
+   It makes the key database and its role, asks for **Master Craftsman's own
+   Anthropic key** (hidden; it refuses CoS's key; give that key its own console
+   limit first), then recreates **only** the model gateway (CoS's calls fail
+   for about 30 s) and checks that the key tables exist. Then the CoS
+   regression question again (coordinator).
+4. **Robert, command 2** (one number): `scripts/staging/mc.sh key`. It asks for
+   MC's monthly cap in dollars (Enter for 15), makes MC's key inside the
+   gateway, writes it to `mc.env` without printing it, and recreates only
+   `mc-agent`. It prints only the cap, period, model, routes, rpm and the last
+   four characters of the key id. Running it again asks before rotating.
+5. **Checks** (coordinator; no spend): `scripts/staging/verify.sh`. Section 9
+   now runs the stage C checks with MC's real key:
+   - **C5/K1:** from inside MC, every route but chat on MC's own model must be
+     refused with **401 or 403 only** (the stage-A `no_db_connection`
+     exception is gone): `/v1/models`, `/health`, `/model/info`, `/spend/logs`,
+     `/key/list`, `/key/info` (another key's too), `/key/generate`,
+     embeddings, `/v1/responses`, `/v1/messages`, `/anthropic/*`, `/openai/*`,
+     and every `minimoi-cos-*` model.
+   - **Positive controls** (inside the gateway, master key): MC's key info
+     `200` with the model, routes, `30d` and the cap; `/v1/models` `200`.
+   - The gateway's `ANTHROPIC_API_KEY` and `XAI_API_KEY` are empty (no
+     pass-through spend); `MC_ANTHROPIC_API_KEY` is set.
+   - `mc.sh status`: MC healthy, self-check passed.
+   K1b (a spent budget refuses the next call) is proven in the throwaway
+   `mc_probe/stage_c.py`, not on staging: it would cost a real call.
+6. **Robert's first note.** Turn MC on (stage B step 5, if not already), keep
+   one short note on `/guild-next/guild/build`. Pass: a reply kept as
+   **Master Craftsman's**, the header then reads **live**, and verify.sh's
+   check 9 shows MC's spend above $0 and far below the cap.
+   `docker logs minimoi-portal` shows `mc turn <id> end status=answered`.
+
+### Rollback
+
+- **Stop MC's turns:** `printf 'off\n' > ~/minimoi-staging/state/mc.turns;
+  scripts/staging/up.sh portal`. `mc.sh down` stops MC and the relay.
+- **Take the key database away** (every virtual key stops working; CoS stays on
+  the master key): `printf 'off\n' > ~/minimoi-staging/state/gateway.keys;
+  scripts/staging/up.sh model-gateway`, then the CoS question. The database,
+  its role and `gateway.env` are kept; `mc.sh gateway-keys` turns it back on
+  without a new password.
+- **The key database down** (probe finding): CoS's master-key route keeps
+  working, and so did MC's already-cached key, so it is not a spend stop. Use
+  the turn gate or `mc.sh down` for that.
 
 ## Rules
 

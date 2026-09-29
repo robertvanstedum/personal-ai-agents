@@ -1,0 +1,24 @@
+# Staging-only: the shared gateway's key database (MC spec v0.9 §6, stage C).
+#
+# Added by scripts/staging/lib.sh only while $STAGING_ROOT/state/gateway.keys
+# says "on" (scripts/staging/mc.sh gateway-keys turns it on). It gives the
+# gateway DATABASE_URL for its own database, litellm_keys, owned by its own
+# role in the existing Postgres. The URL (with a random password mc.sh made)
+# lives only in $STAGING_ROOT/gateway.env (mode 600), passed as an
+# interpolation-only --env-file: never in .env, which the main services load.
+#
+# With it, LiteLLM keeps virtual keys (MC's capped key). CoS keeps the master
+# key, which never needs the database (probe: CoS's route answers with the
+# database stopped). Production has no key database until a later explicit
+# step; docker-compose.prod.yml is unchanged.
+
+services:
+  model-gateway:
+    environment:
+      - DATABASE_URL=${LITELLM_DATABASE_URL:?set by scripts/staging/mc.sh gateway-keys (gateway.env)}
+    healthcheck:
+      # Prisma migrations run at start (about 20 s in the probe).
+      start_period: 120s
+    depends_on:
+      postgres:
+        condition: service_started

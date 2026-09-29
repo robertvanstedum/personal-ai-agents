@@ -22,6 +22,22 @@
 #   mc.sh clear-selfcheck  remove a sticky .mc-selfcheck-failed from MC's state
 #                          volume and start MC again (CoS is never involved)
 #
+# Stage C (Robert runs these two; never an agent):
+#   mc.sh gateway-keys     the shared gateway's key database: a new database
+#                          litellm_keys with its own role in the existing Postgres
+#                          (random password, in gateway.env only, never printed);
+#                          asks for MC's own Anthropic key (hidden input) for
+#                          mc.env; turns state/gateway.keys on and recreates ONLY
+#                          the model gateway (a CoS-touching step: CoS's calls
+#                          fail for about 30 s; ask the CoS question after)
+#   mc.sh key              MC's capped virtual key: asks for the monthly cap in
+#                          dollars (default 15); makes the key inside the gateway
+#                          (MC's route only, chat completions only, monthly
+#                          budget, rpm 10); writes it to mc.env unprinted;
+#                          recreates only mc-agent. Prints the cap, routes,
+#                          models and the last 4 characters of the key's id.
+#                          A re-run asks before rotating.
+#
 # MC's secrets live only in mc.env (mode 600), passed as an interpolation-only
 # --env-file to MC's project; never in .env, which the main services load
 # whole. Stage A: no MC_MODEL_GATEWAY_KEY, so MC gets a placeholder the gateway
@@ -29,6 +45,7 @@
 # without printing any of them.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/mc_keys.sh"
 
 MC_WAIT_S="${MC_WAIT_S:-420}"
 
@@ -157,5 +174,90 @@ case "$cmd" in
       "minimoi-staging/mc-agent:$(release_tag)" -f /state/.mc-selfcheck-failed
     note "cleared MC's self-check marker; starting MC again"
     exec "$0" up ;;
-  *) die "usage: mc.sh token | build [--allow-running] | up | down | status | clear-selfcheck" ;;
+  gateway-keys)
+    require_absolute_root
+    require_release
+    require_env
+    [[ -f "$RELEASE_DIR/$STAGING_KEYS_OVERLAY" ]] || die "the pinned release has no $STAGING_KEYS_OVERLAY (it predates stage C)"
+    for c in postgres-ai-agents minimoi-model-gateway; do
+      [[ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" == true ]] || die "$c is not running"
+    done
+    umask 077
+    touch "$STAGING_GATEWAY_ENV" "$STAGING_MC_ENV"
+    chmod 600 "$STAGING_GATEWAY_ENV" "$STAGING_MC_ENV"
+    if grep -q '^LITELLM_DATABASE_URL=.' "$STAGING_GATEWAY_ENV"; then
+      note "gateway.env already has the key database URL (unchanged)"
+    else
+      pw=$(openssl rand -hex 24)
+      keydb_sql "$pw" | docker exec -i postgres-ai-agents psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q >/dev/null \
+        || die "could not create the key database (nothing written)"
+      printf 'LITELLM_DATABASE_URL=%s\n' "$(keydb_url "$pw" postgres)" >> "$STAGING_GATEWAY_ENV"
+      pw=""
+      note "created role and database $KEYDB_NAME (random password in $STAGING_GATEWAY_ENV, not printed)"
+    fi
+    if grep -q '^MC_ANTHROPIC_API_KEY=.' "$STAGING_MC_ENV"; then
+      note "mc.env already has MC's own Anthropic key (unchanged)"
+    else
+      printf "Paste Master Craftsman's OWN Anthropic API key (input hidden; Enter to skip for now): " >&2
+      IFS= read -r -s akey || akey=""
+      echo >&2
+      if [[ -n "$akey" ]]; then
+        [[ "$akey" != "$(env_value "$STAGING_ENV_FILE" ANTHROPIC_API_KEY)" ]] \
+          || die "that is CoS's Anthropic key (ANTHROPIC_API_KEY); MC needs its own key with its own console limit"
+        printf 'MC_ANTHROPIC_API_KEY=%s\n' "$akey" >> "$STAGING_MC_ENV"
+        akey=""
+        note "MC's Anthropic key written to mc.env (not printed)"
+      else
+        note "no Anthropic key entered: MC's route keeps its placeholder, so MC's turns stay refused"
+      fi
+    fi
+    mkdir -p "$STAGING_ROOT/state"
+    printf 'on\n' > "$STAGING_KEYS_FILE"
+    note "recreating ONLY the model gateway with its key database (CoS's calls fail for about 30 s)"
+    staging_compose up -d --no-build --no-deps model-gateway
+    i=0
+    until [[ "$(health_of minimoi-model-gateway)" == healthy ]]; do
+      i=$((i + 5)); [[ "$i" -lt 240 ]] || die "the gateway is not healthy after 240 s (docker logs minimoi-model-gateway)"
+      sleep 5
+    done
+    tables=$(docker exec postgres-ai-agents psql -U postgres -d "$KEYDB_NAME" -tAc \
+      "select count(*) from information_schema.tables where table_name = 'LiteLLM_VerificationToken'" 2>/dev/null || echo 0)
+    [[ "$tables" == 1 ]] && note "gateway healthy; its key tables exist. Next: the CoS question, then mc.sh key" \
+      || die "the gateway is healthy but its key tables are missing"
+    ;;
+  key)
+    require_absolute_root
+    require_release
+    require_env
+    mc_enabled || die "MC is not enabled (state/mc.enabled)"
+    gateway_keys_on || die "the gateway has no key database yet: run mc.sh gateway-keys first"
+    [[ "$(health_of minimoi-model-gateway)" == healthy ]] || die "the model gateway is not healthy"
+    touch "$STAGING_MC_ENV"; chmod 600 "$STAGING_MC_ENV"
+    old=$(env_value "$STAGING_MC_ENV" MC_MODEL_GATEWAY_KEY)
+    if [[ -n "$old" ]]; then
+      printf 'MC already has a key. Rotate it (the old key stops working)? [y/N] ' >&2
+      IFS= read -r answer || answer=""
+      [[ "$answer" == y || "$answer" == Y ]] || { note "kept the existing key"; exit 0; }
+    fi
+    printf "Master Craftsman's monthly cap in dollars [15]: " >&2
+    IFS= read -r cap || cap=""
+    cap=${cap:-15}
+    valid_cap "$cap" || die "'$cap' is not a dollar amount between 0 and 500"
+    out=$(mc_keygen_py | MC_OLD_KEY="$old" MC_CAP="$cap" docker exec -i -e MC_OLD_KEY -e MC_CAP minimoi-model-gateway python -) \
+      || die "the gateway did not make the key (nothing written)"
+    key=$(sed -n 1p <<< "$out")
+    last4=$(sed -n 2p <<< "$out")
+    out=""
+    [[ "$key" == sk-* ]] || die "the gateway's answer was not a key (nothing written)"
+    tmp="$STAGING_MC_ENV.tmp.$$"
+    { grep -v '^MC_MODEL_GATEWAY_KEY=' "$STAGING_MC_ENV" || true; printf 'MC_MODEL_GATEWAY_KEY=%s\n' "$key"; } > "$tmp"
+    chmod 600 "$tmp"; mv -f "$tmp" "$STAGING_MC_ENV"
+    key=""
+    problems=$(key_problems)
+    [[ -z "$problems" ]] || die "$problems"
+    note "recreating only mc-agent with its key (the relay and CoS are untouched)"
+    mc_compose up -d --no-build
+    echo "MC's key: monthly cap \$$cap ($MC_KEY_BUDGET_DURATION), models $MC_KEY_MODELS, routes $MC_KEY_ROUTES, rpm $MC_KEY_RPM, key id …$last4"
+    ;;
+  *) die "usage: mc.sh token | build [--allow-running] | up | down | status | clear-selfcheck | gateway-keys | key" ;;
 esac

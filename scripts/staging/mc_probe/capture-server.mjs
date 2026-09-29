@@ -23,12 +23,25 @@ const log = [];
 const scripts = new Map();
 const hung = new Set();
 
+// CAPTURE_KEYS: {"label": "value", ...} labels more keys (for example the
+// gateway's provider keys when this server stands in for Anthropic).
+const EXTRA_KEYS = JSON.parse(process.env.CAPTURE_KEYS || "{}");
 function keyLabel(header) {
   const value = String(header || "").replace(/^Bearer\s+/i, "");
   if (!value) return "none";
   if (COS_KEY && value === COS_KEY) return "cos-key";
   if (MC_KEY && value === MC_KEY) return "mc-key";
+  for (const [label, v] of Object.entries(EXTRA_KEYS)) if (v && value === v) return label;
   return "other";
+}
+
+// Anthropic Messages API shape, for when this server stands in for api.anthropic.com.
+function anthropicMessage(model, step) {
+  return {
+    id: `msg_cap_${log.length}`, type: "message", role: "assistant", model,
+    content: [{ type: "text", text: step.text ?? "capture ok" }], stop_reason: "end_turn", stop_sequence: null,
+    usage: { input_tokens: step.usage_prompt_tokens ?? 50, output_tokens: step.output_tokens ?? 5 },
+  };
 }
 
 function readBody(req) {
@@ -71,7 +84,9 @@ const api = http.createServer(async (req, res) => {
   try { body = raw ? JSON.parse(raw) : null; } catch { body = null; }
   const model = body?.model ?? null;
   const entry = {
-    seq: log.length, at: new Date().toISOString(), method: req.method, path: req.url, key: keyLabel(req.headers.authorization),
+    seq: log.length, at: new Date().toISOString(), method: req.method, path: req.url,
+    key: keyLabel(req.headers.authorization || req.headers["x-api-key"]),
+    api_key_label: keyLabel(req.headers["x-api-key"]), auth_label: keyLabel(req.headers.authorization),
     model, stream: body?.stream === true, tools: (body?.tools || []).map((t) => t?.function?.name || t?.name || "?"),
     body: raw.slice(0, 400000),
   };
@@ -82,7 +97,12 @@ const api = http.createServer(async (req, res) => {
   if (step.hang) { hung.add(res); return; }            // never answer
   if (step.status) {
     res.writeHead(step.status, { "content-type": "application/json" });
-    return res.end(JSON.stringify({ error: { message: `capture status ${step.status}`, type: "auth_error", code: String(step.status) } }));
+    return res.end(JSON.stringify({ error: { message: step.message || `capture status ${step.status}`,
+      type: step.type || "auth_error", code: String(step.status) } }));
+  }
+  if (String(req.url).startsWith("/v1/messages")) {
+    res.writeHead(200, { "content-type": "application/json" });
+    return res.end(JSON.stringify(anthropicMessage(model, step)));
   }
   if (step.malformed) {
     res.writeHead(200, { "content-type": "text/event-stream" });

@@ -319,7 +319,44 @@ Promise.all(t.map(([h,p])=>new Promise(r=>{const s=net.connect({host:h,port:p,ti
     run_state=$(docker exec "$MC" cat /tmp/minimoi-mc/state 2>/dev/null || echo unknown)
     [[ "$run_state" == serving ]] && pass "$MC self-check passed on this start (serving)" || fail "$MC self-check state: $run_state (mc.sh status)"
     if grep -q '^MC_MODEL_GATEWAY_KEY=.' "$STAGING_MC_ENV" 2>/dev/null; then
-      warn "9j MC has its own key in mc.env (stage C): its 401 check is replaced by C5 with the real key"
+      # Stage C (C5/K1 with the real key; no spend: every request below is
+      # refused before any provider call). ONLY 401/403 count as a refusal now;
+      # the stage-A no_db_connection exception is gone.
+      c5=$(docker exec "$MC" node -e "
+const k = process.env.MC_MODEL_GATEWAY_KEY, g = 'http://model-gateway:4000';
+const chat = m => JSON.stringify({ model: m, max_tokens: 1, messages: [{ role: 'user', content: 'x' }] });
+const reqs = [['GET','/v1/models'],['GET','/health'],['GET','/model/info'],['GET','/spend/logs'],['GET','/key/list'],['GET','/key/info'],
+  ['POST','/key/generate','{}'],['POST','/v1/embeddings',JSON.stringify({model:'minimoi-mc-agent',input:'x'})],
+  ['POST','/v1/responses',JSON.stringify({model:'minimoi-cos-web-search',input:'x'})],['POST','/v1/messages',chat('minimoi-mc-agent')],
+  ['POST','/anthropic/v1/messages',chat('claude-haiku-4-5-20251001')],['POST','/openai/v1/chat/completions',chat('gpt-4o-mini')],
+  ['POST','/v1/chat/completions',chat('minimoi-cos-agent')],['POST','/v1/chat/completions',chat('minimoi-cos-agent-xai-fast')],
+  ['POST','/v1/chat/completions',chat('minimoi-cos-agent-anthropic')],['POST','/v1/chat/completions',chat('minimoi-cos-web-search')]];
+Promise.all(reqs.map(([m,p,b]) => fetch(g+p,{method:m,headers:{authorization:'Bearer '+k,'content-type':'application/json'},body:b})
+  .then(r => (r.status===401||r.status===403) ? '' : p+'='+r.status, () => p+'=error'))).then(x => console.log(x.filter(Boolean).join(' ')))" 2>/dev/null || echo error)
+      [[ -z "$c5" ]] && pass "C5/K1: MC's real key refused (401/403 only) on every other route, CoS model, admin endpoint and pass-through" \
+        || fail "C5/K1: MC's key was NOT refused with 401/403 on: $c5"
+      # Positive controls and the budget, read with the master key inside the gateway.
+      ctrl=$(MCK=$(sed -n 's/^MC_MODEL_GATEWAY_KEY=//p' "$STAGING_MC_ENV" | tail -n 1) docker exec -e MCK minimoi-model-gateway python -c "
+import json, os, urllib.request as u
+m = os.environ['LITELLM_MASTER_KEY']
+def get(p):
+    try:
+        with u.urlopen(u.Request('http://127.0.0.1:4000' + p, headers={'Authorization': 'Bearer ' + m}), timeout=15) as r:
+            return r.status, json.loads(r.read())
+    except u.HTTPError as e:
+        return e.code, {}
+s1, info = get('/key/info?key=' + os.environ['MCK'])
+s2, _ = get('/v1/models')
+i = info.get('info', {})
+ok = (s1 == 200 and s2 == 200 and i.get('models') == ['minimoi-mc-agent'] and i.get('budget_duration') == '30d'
+      and (i.get('max_budget') or 0) > 0 and sorted(i.get('allowed_routes') or []) == ['/chat/completions', '/v1/chat/completions'])
+print(('ok' if ok else 'bad'), s1, s2, i.get('max_budget'), i.get('budget_duration'), round(float(i.get('spend') or 0), 4))
+" 2>/dev/null || echo "error")
+      [[ "$ctrl" == ok* ]] && pass "stage C controls: the key database answers; master /v1/models 200; MC's key: cap \$$(awk '{print $4}' <<< "$ctrl") per $(awk '{print $5}' <<< "$ctrl"), spent \$$(awk '{print $6}' <<< "$ctrl"), MC's route only, chat only" \
+        || fail "stage C controls: $ctrl (expected: /key/info 200, /v1/models 200, MC's route only, chat only, a monthly cap)"
+      empty=$(docker exec minimoi-model-gateway sh -c '[ -z "$ANTHROPIC_API_KEY" ] && [ -z "$XAI_API_KEY" ] && [ -n "$MC_ANTHROPIC_API_KEY" ] && echo ok' 2>/dev/null || true)
+      [[ "$empty" == ok ]] && pass "gateway: the default provider key names are empty (no pass-through spend); MC's provider key is set" \
+        || fail "gateway: ANTHROPIC_API_KEY/XAI_API_KEY not empty, or MC_ANTHROPIC_API_KEY empty"
     else
       # Refused: 401, or LiteLLM's 400 no_db_connection (no key database in
       # stage A, so a non-master key cannot even be looked up). Anything else fails.

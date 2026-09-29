@@ -49,6 +49,20 @@ services:
       - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/config/litellm.staging.yaml:/app/config.yaml:ro
     ports:
       - "127.0.0.1:14000:4000"
+    environment:
+      # Provider keys under gateway-only names (litellm.staging.yaml), and the
+      # default names emptied: LiteLLM's pass-through routes (/anthropic/* and
+      # the provider factory routes) sign upstream calls with ANTHROPIC_API_KEY
+      # / XAI_API_KEY, so with those empty no pass-through call can spend on
+      # CoS's provider accounts (v0.8 review finding 1). Staging only.
+      - GATEWAY_ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      - GATEWAY_XAI_API_KEY=${XAI_API_KEY:?set XAI_API_KEY in .env}
+      - ANTHROPIC_API_KEY=
+      - XAI_API_KEY=
+      # Master Craftsman's own provider key, for minimoi-mc-agent only. Never
+      # empty: a placeholder Anthropic refuses until Robert's `mc.sh
+      # gateway-keys` puts MC's real key in mc.env (interpolation only).
+      - MC_ANTHROPIC_API_KEY=${MC_ANTHROPIC_API_KEY:-mc-anthropic-placeholder-not-a-key}
     # Permanently on mc-net (MC spec v0.9 §3), so starting or stopping Master
     # Craftsman's own project never recreates the gateway. The gateway keeps
     # `default` for CoS and provider egress.

@@ -108,6 +108,12 @@ STAGING_MC_CONTAINER="minimoi-mc-agent"
 STAGING_MC_VOLUMES=(minimoi-staging-mc-agent-state minimoi-staging-mc-agent-auth)
 mc_enabled() { [[ -f "$STAGING_MC_ENABLED" ]]; }
 
+# The shared gateway's key database (stage C; mc.sh gateway-keys).
+STAGING_KEYS_FILE="$STAGING_ROOT/state/gateway.keys"
+STAGING_KEYS_OVERLAY="docker-compose.staging-keys.yml"
+STAGING_GATEWAY_ENV="$STAGING_ROOT/gateway.env"
+gateway_keys_on() { [[ -f "$STAGING_KEYS_FILE" && "$(tr -d '[:space:]' < "$STAGING_KEYS_FILE")" == on ]]; }
+
 # The portal's Master Craftsman switches (stage B), from state files; both
 # default to off. mc.mode: off | stub | openclaw | grok. mc.turns: on | off.
 STAGING_MC_MODE_FILE="$STAGING_ROOT/state/mc.mode"
@@ -225,12 +231,22 @@ staging_compose() {
   require_absolute_root
   require_release
   require_env
-  local extra=() mode turns
+  local extra=() files=() mode turns
   # MC's relay caller token reaches the portal only through interpolation of
   # its explicit MC_RUNTIME_TOKEN entry: mc.env is never an env_file.
   if [[ -f "$STAGING_MC_ENV" ]]; then
     [[ "$(file_mode "$STAGING_MC_ENV")" == 600 ]] || die "$STAGING_MC_ENV must be mode 600"
     extra=(--env-file "$STAGING_MC_ENV")
+  fi
+  # The gateway's key database (stage C): an overlay plus gateway.env
+  # (interpolation only), only while state/gateway.keys says "on".
+  if gateway_keys_on; then
+    [[ -f "$RELEASE_DIR/$STAGING_KEYS_OVERLAY" ]] \
+      || die "state/gateway.keys is on but the pinned release has no $STAGING_KEYS_OVERLAY"
+    [[ -f "$STAGING_GATEWAY_ENV" && "$(file_mode "$STAGING_GATEWAY_ENV")" == 600 ]] \
+      || die "state/gateway.keys is on but $STAGING_GATEWAY_ENV is missing or not mode 600 (mc.sh gateway-keys)"
+    extra+=(--env-file "$STAGING_GATEWAY_ENV")
+    files=(-f "$RELEASE_DIR/$STAGING_KEYS_OVERLAY")
   fi
   mode=$(mc_mode)
   turns=$(mc_turns)
@@ -241,6 +257,7 @@ staging_compose() {
     ${extra[@]+"${extra[@]}"} \
     -f "$RELEASE_DIR/docker-compose.prod.yml" \
     -f "$RELEASE_DIR/docker-compose.staging.yml" \
+    ${files[@]+"${files[@]}"} \
     "$@"
 }
 
