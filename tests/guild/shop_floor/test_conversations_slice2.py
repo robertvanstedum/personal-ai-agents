@@ -168,7 +168,7 @@ def test_a_restart_keeps_every_conversation_and_its_state(floored):
     _act(client, token, b["id"], "archive")
     services = floored.app.extensions["guild_ui_next"]["services"]
     fresh = ConversationStore(services.store.folder, base_floor=services.floor.floor)       # a new process's store
-    owner = fresh._read(a["id"])["principal"]
+    owner = json.loads(open(fresh._path(a["id"])).read())["principal"]
     rows = fresh.list(owner)
     assert rows[0]["id"] == a["id"] and rows[0]["title"] == "Kept across restarts" and rows[0]["pinned"]
     assert [r["id"] for r in fresh.list(owner, archived=True)] == [b["id"]]
@@ -297,3 +297,52 @@ def test_unreadable_conversation_files_leave_the_thread_working_and_say_so(floor
     assert client.post(f"{API}/conversations", json=keyed(), headers=write_headers(token)).status_code == 503
     page = client.get("/guild-next/guild/build").get_data(as_text=True)
     assert "Conversations unavailable — treat as unknown." in page and "still kept on the thread" in page
+
+
+# ── #265 review fix round ─────────────────────────────────────────────────────
+
+def test_the_thread_keeps_its_daily_session_and_new_conversations_keep_theirs():
+    """F1 (Robert's decision to confirm): the Shop floor thread starts fresh
+    every day, exactly as before slice 2; a new conversation keeps its
+    context until it is archived."""
+    legacy = {"id": LEGACY_ID, "legacy": True, "notes_floor": "shop"}
+    assert session_conversation_id(legacy, "robert", day="2026-09-29") == "shop:robert:2026-09-29"     # the pre-slice-2 key
+    assert session_conversation_id(legacy, "robert", day="2026-09-30") != session_conversation_id(legacy, "robert", day="2026-09-29")
+    fresh = {"id": "c-0123456789ab", "legacy": False, "notes_floor": "shop/c-0123456789ab"}
+    assert session_conversation_id(fresh, "robert", day="2026-09-29") == session_conversation_id(fresh, "robert", day="2026-10-30")
+
+
+def test_mcs_context_policy_is_explicit_in_its_openclaw_config():
+    from pathlib import Path
+    cfg = json.loads((Path(__file__).resolve().parents[3] / "docker/mc-agent/openclaw.json").read_text())
+    assert cfg["session"] == {"reset": {"mode": "none"}}                  # the portal decides when a session is new
+    comp = cfg["agents"]["defaults"]["compaction"]
+    window = cfg["models"]["providers"]["minimoi-gateway-mc"]["models"][0]["contextWindow"]
+    assert comp["enabled"] is True and comp["keepRecentTokens"] < window // 2   # below the trigger, so it cannot loop
+
+
+def test_a_second_owner_account_has_its_own_thread_record(floored, tmp_path):
+    services = floored.app.extensions["guild_ui_next"]["services"]
+    store = conversations_of(services)
+    robert = store.get(LEGACY_ID, "robert")
+    admin = store.get(LEGACY_ID, "admin")                                  # no "unavailable", no NotFound
+    assert robert["principal"] == "robert" and admin["principal"] == "admin"
+    store.rename(LEGACY_ID, "admin", "Admin's view")
+    assert store.get(LEGACY_ID, "robert")["title"] == "Shop floor thread"   # separate records
+    assert [c["id"] for c in store.list("admin")] == [LEGACY_ID]
+
+
+def test_one_corrupt_file_is_skipped_and_counted_not_fatal(floored):
+    import os
+    client = floored.owner()
+    token = floored.csrf(client)
+    a, b = _new(client, token), _new(client, token)
+    folder = os.path.join(floored.app.extensions["guild_ui_next"]["services"].store.folder, "conversations")
+    with open(os.path.join(folder, f"{b['id']}.json"), "w") as f:
+        f.write("{ not json")
+    listing = client.get(f"{API}/conversations").get_json()
+    assert [c["id"] for c in listing["conversations"]] == [a["id"], LEGACY_ID] and listing["unreadable"] == 1
+    page = client.get("/guild-next/guild/build").get_data(as_text=True)
+    assert "1 conversation couldn't be read." in page and 'data-conv="%s"' % a["id"] in page
+    c = _new(client, token)                                               # creating still works
+    assert c["id"] not in (a["id"], b["id"])

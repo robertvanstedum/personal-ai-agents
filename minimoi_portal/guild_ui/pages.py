@@ -116,10 +116,11 @@ def floor():
     view = "archived" if request.args.get("view") == "archived" else "active"
     principal = (cfg()["current_user"]() or {}).get("username") or "owner"
     try:
-        rows = conversations_of(cfg()["services"]).list(principal, archived=view == "archived")
-        conv_list = {"state": "ok", "rows": rows}
+        store = conversations_of(cfg()["services"])
+        rows = store.list(principal, archived=view == "archived")
+        conv_list = {"state": "ok", "rows": rows, "unreadable": store.unreadable}
     except ConversationStoreUnavailable:
-        conv_list = {"state": "unavailable", "rows": []}
+        conv_list = {"state": "unavailable", "rows": [], "unreadable": 0}
     return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], conv_list=conv_list,
                            conv_view=view, **ctx)
 

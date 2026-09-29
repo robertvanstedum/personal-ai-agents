@@ -590,10 +590,12 @@ def conversations_list():
     if view not in ("active", "archived"):
         return json_error("invalid", "view is active or archived.", 422)
     try:
-        rows = _conversations().list(_principal(), archived=view == "archived")
+        store = _conversations()
+        rows = store.list(_principal(), archived=view == "archived")
     except ConversationStoreUnavailable:
         return json_error("unavailable", CONV_WORDS["unavailable"], 503)
-    return jsonify({"view": view, "conversations": [public(c) for c in rows], "observed_at": now_iso()})
+    return jsonify({"view": view, "conversations": [public(c) for c in rows], "unreadable": store.unreadable,
+                    "observed_at": now_iso()})
 
 
 def _conv_write(action):

@@ -45,6 +45,7 @@
     {% endfor %}
     {% if conv_view == 'archived' and not conv_list.rows %}<li class="fh-empty small">Nothing archived.</li>{% endif %}
   </ol>
+  {% if conv_list.unreadable %}<p class="fh-unavailable small" data-conv-unreadable>{{ conv_list.unreadable }} conversation{{ '' if conv_list.unreadable == 1 else 's' }} couldn't be read.</p>{% endif %}
   <p class="fh-view small">{% if conv_view == 'archived' %}<a href="{{ urls.floor }}" data-conv-view="active">← Conversations</a>{% else %}<a href="{{ urls.floor }}?view=archived" data-conv-view="archived">Archive</a>{% endif %}</p>
 </aside>
 {# Phone only: the card's dark title strip with a small thumbnail, above the chat. #}

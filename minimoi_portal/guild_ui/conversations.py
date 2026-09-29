@@ -19,6 +19,7 @@ exactly as before; a new conversation's notes use ``<floor>/<id>``.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -75,6 +76,7 @@ class ConversationStore:
     def __init__(self, folder: str | None, *, base_floor: str):
         self.dir = os.path.join(folder, FOLDER) if folder else None
         self.base_floor = base_floor
+        self.unreadable = 0          # files skipped by the last list (#265 review F3)
 
     # ── files ──────────────────────────────────────────────────────────
     def _ensure_dir(self):
@@ -99,12 +101,16 @@ class ConversationStore:
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
 
-    def _path(self, cid: str) -> str:
+    def _path(self, cid: str, principal: str | None = None) -> str:
+        if cid == LEGACY_ID:
+            # Each owner account has its own record of the Shop floor thread
+            # (#265 review F2); the thread's notes are the floor's, as before.
+            return os.path.join(self.dir, f"legacy-{hashlib.sha256((principal or '').encode()).hexdigest()[:16]}.json")
         return os.path.join(self.dir, f"{cid}.json")
 
-    def _read(self, cid: str) -> dict | None:
+    def _read(self, cid: str, principal: str | None = None, *, path: str | None = None) -> dict | None:
         try:
-            with open(self._path(cid), encoding="utf-8") as f:
+            with open(path or self._path(cid, principal), encoding="utf-8") as f:
                 data = json.load(f)
         except FileNotFoundError:
             return None
@@ -120,7 +126,7 @@ class ConversationStore:
                 f.flush()
                 os.fsync(f.fileno())
             os.chmod(tmp, 0o600)
-            os.replace(tmp, self._path(conv["id"]))
+            os.replace(tmp, self._path(conv["id"], conv.get("principal")))
         except OSError as exc:
             try:
                 os.unlink(tmp)
@@ -130,18 +136,28 @@ class ConversationStore:
         return conv
 
     def _all(self) -> list[dict]:
+        """Every readable record. One unreadable file is skipped and counted
+        (self.unreadable), never a reason to hide the rest (#265 review F3)."""
         self._ensure_dir()
         try:
             names = [n for n in os.listdir(self.dir) if n.endswith(".json") and not n.startswith(".")]
         except OSError as exc:
             raise ConversationStoreUnavailable(type(exc).__name__) from exc
-        out = []
+        out, bad = [], 0
         for name in names:
-            cid = name[:-5]
-            if ID_RE.fullmatch(cid):
-                conv = self._read(cid)
-                if conv:
-                    out.append(conv)
+            stem = name[:-5]
+            cid = LEGACY_ID if re.fullmatch(r"legacy-[0-9a-f]{16}", stem) else stem
+            if not ID_RE.fullmatch(cid):
+                continue
+            try:
+                conv = self._read(cid, path=os.path.join(self.dir, name))
+            except ConversationStoreUnavailable:
+                conv = None
+            if conv:
+                out.append(conv)
+            else:
+                bad += 1
+        self.unreadable = bad
         return out
 
     def _legacy(self, principal: str) -> dict:
@@ -151,8 +167,12 @@ class ConversationStore:
                 "created_key": None}
 
     def _migrate(self, principal: str):
-        """Today's Shop floor thread becomes the first conversation (once)."""
-        if self._read(LEGACY_ID) is None:
+        """Today's Shop floor thread becomes the first conversation (once per owner account)."""
+        try:
+            existing = self._read(LEGACY_ID, principal)
+        except ConversationStoreUnavailable:
+            existing = None                      # unreadable: rewritten, the thread's notes are untouched
+        if existing is None:
             self._write(self._legacy(principal))
 
     # ── reads ──────────────────────────────────────────────────────────
@@ -171,7 +191,7 @@ class ConversationStore:
         with self._lock():
             if cid == LEGACY_ID:
                 self._migrate(principal)
-            conv = self._read(cid)
+            conv = self._read(cid, principal)
         if conv is None or conv.get("principal") != principal:
             raise ConversationNotFound(cid)
         return conv
@@ -206,7 +226,7 @@ class ConversationStore:
         with self._lock():
             if cid == LEGACY_ID:
                 self._migrate(principal)
-            conv = self._read(cid)
+            conv = self._read(cid, principal)
             if conv is None or conv.get("principal") != principal:
                 raise ConversationNotFound(cid)
             fn(conv)
@@ -253,10 +273,21 @@ def conversations_of(services) -> ConversationStore:
     return ConversationStore(folder, base_floor=floor)
 
 
-def session_conversation_id(conv: dict, principal: str) -> str:
-    """The id the MC backend maps to its own session (OpenClaw: the `user`
-    field, hashed, so each conversation is its own OpenClaw session; another
-    backend may map it differently). One per conversation, never per day."""
+def session_conversation_id(conv: dict, principal: str, *, day: str | None = None) -> str:
+    """The id the MC backend maps to its own session (MiniMoi's OpenClaw
+    adapter hashes it into the `user` field, from which OpenClaw derives its
+    session key; another backend may map it differently).
+
+    Context policy (Robert to confirm, #265 review F1):
+    * the Shop floor thread keeps its daily rollover exactly as before slice 2
+      (``<floor>:<principal>:<UTC day>``): it starts fresh every day;
+    * a new conversation is one session for its whole life: it keeps its
+      context until Robert archives it (OpenClaw compacts older turns past
+      its window: docker/mc-agent/openclaw.json).
+    """
+    if conv.get("legacy"):
+        day = day or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return f"{conv.get('notes_floor')}:{principal}:{day}"
     return f"guild:{principal}:{conv['id']}"
 
 
