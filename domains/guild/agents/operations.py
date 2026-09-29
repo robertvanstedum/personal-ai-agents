@@ -183,10 +183,14 @@ _state = {
 }
 _state_lock = threading.Lock()
 
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _set_state(**kwargs):
     with _state_lock:
         _state.update(kwargs)
-        _state["last_checkin"] = datetime.now(timezone.utc).isoformat()
+        _state["last_checkin"] = _now().isoformat()
 
 # ── File log (fallback when DB unavailable) ───────────────────────────────────
 
@@ -375,45 +379,53 @@ def _ensure_agent_state_constraint():
 
 _last_daily_summary = None
 
-def _health_loop():
+def _health_check_once() -> bool:
+    """One health-loop iteration. A successful check refreshes last_checkin
+    (the Guild Systems light needs one within 10 minutes); a failing one does
+    not, so the light turns unknown while the checks are failing."""
     global _last_daily_summary
+    try:
+        svc_results = _check_services()
+        disk        = _check_disk()
+        healthy     = sum(1 for _, ok, _ in svc_results if ok)
+        total       = len(svc_results)
+
+        with _state_lock:
+            _state["checks_run"] += 1
+            _state["last_action"] = {
+                "type":      "health_check",
+                "at":        _now().isoformat(),
+                "services":  f"{healthy}/{total} healthy",
+                "disk_pct":  disk["pct"],
+            }
+            _state["last_checkin"] = _now().isoformat()
+        _db_update_state("running", _state["last_action"])
+
+        # Daily summary to ops_memory.md
+        today = datetime.now().date()
+        if _last_daily_summary != today:
+            _last_daily_summary = today
+            svc_names = ", ".join(
+                f"{l.split('.')[-1]} {'✅' if ok else '❌'}"
+                for l, ok, _ in svc_results
+            )
+            entry = (
+                f"- Services: {svc_names}\n"
+                f"- Disk: {disk['pct']}% used, {disk['free_gb']} GB free\n"
+                f"- Checks run today: {_state['checks_run']}\n"
+                f"- Open escalations: {_db_open_escalations()}"
+            )
+            _ops_memory_write(entry)
+        return True
+    except Exception as e:
+        _log_file("health_loop_error", str(e))
+        return False
+
+
+def _health_loop():
     while True:
-        try:
-            svc_results = _check_services()
-            disk        = _check_disk()
-            healthy     = sum(1 for _, ok, _ in svc_results if ok)
-            total       = len(svc_results)
-
-            with _state_lock:
-                _state["checks_run"] += 1
-                _state["last_action"] = {
-                    "type":      "health_check",
-                    "at":        datetime.now(timezone.utc).isoformat(),
-                    "services":  f"{healthy}/{total} healthy",
-                    "disk_pct":  disk["pct"],
-                }
-            _db_update_state("running", _state["last_action"])
-
-            # Daily summary to ops_memory.md
-            today = datetime.now().date()
-            if _last_daily_summary != today:
-                _last_daily_summary = today
-                svc_names = ", ".join(
-                    f"{l.split('.')[-1]} {'✅' if ok else '❌'}"
-                    for l, ok, _ in svc_results
-                )
-                entry = (
-                    f"- Services: {svc_names}\n"
-                    f"- Disk: {disk['pct']}% used, {disk['free_gb']} GB free\n"
-                    f"- Checks run today: {_state['checks_run']}\n"
-                    f"- Open escalations: {_db_open_escalations()}"
-                )
-                _ops_memory_write(entry)
-
-        except Exception as e:
-            _log_file("health_loop_error", str(e))
-
-        time.sleep(300)  # 5 minutes
+        _health_check_once()
+        time.sleep(300)  # 5 minutes: well inside the 10-minute check-in window
 
 # ── Audit loop (every hour) ───────────────────────────────────────────────────
 
