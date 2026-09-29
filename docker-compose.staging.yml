@@ -47,6 +47,11 @@ services:
     pull_policy: never
     volumes:
       - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/config/litellm.staging.yaml:/app/config.yaml:ro
+      # The usage recorder (usage-record U1; staging only): its code, copied
+      # from services/usage/ by build.sh, and the environment's usage store.
+      - ${MINIMOI_ROOT}/config/usage/usage_record.py:/app/usage_record.py:ro
+      - ${MINIMOI_ROOT}/config/usage/litellm_recorder.py:/app/usage_recorder.py:ro
+      - ${MINIMOI_ROOT}/data/usage:/app/usage-data
     ports:
       - "127.0.0.1:14000:4000"
     environment:
@@ -63,6 +68,9 @@ services:
       # empty: a placeholder Anthropic refuses until Robert's `mc.sh
       # gateway-keys` puts MC's real key in mc.env (interpolation only).
       - MC_ANTHROPIC_API_KEY=${MC_ANTHROPIC_API_KEY:-mc-anthropic-placeholder-not-a-key}
+      # The usage store (usage-record U1): one file per month, mode 600.
+      - MINIMOI_USAGE_DIR=/app/usage-data
+      - MINIMOI_ENV=staging
     # Permanently on mc-net (MC spec v0.9 §3), so starting or stopping Master
     # Craftsman's own project never recreates the gateway. The gateway keeps
     # `default` for CoS and provider egress.

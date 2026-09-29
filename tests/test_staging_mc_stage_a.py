@@ -132,8 +132,17 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     # and MC's own provider key (a placeholder until Robert's).
     env_before, env_after = gw_before["environment"], gw_after["environment"]
     assert env_after["ANTHROPIC_API_KEY"] == "" and env_after["XAI_API_KEY"] == ""
-    if "GATEWAY_ANTHROPIC_API_KEY" in env_before:       # main already has stage C (#252): identical
-        assert gw_after == gw_before
+    if "GATEWAY_ANTHROPIC_API_KEY" in env_before:       # main already has stage C (#252)
+        # Only the usage recorder's additions (usage-record U1), if main does not have them yet.
+        usage_env = {"MINIMOI_USAGE_DIR", "MINIMOI_ENV"}
+        after_env = {k: v for k, v in env_after.items() if k not in usage_env or k in env_before}
+        assert after_env == env_before
+        usage_mounts = {"/app/usage_record.py", "/app/usage_recorder.py", "/app/usage-data"}
+        before_mounts = {v["target"] for v in gw_before.get("volumes", [])}
+        after_vols = [v for v in gw_after.get("volumes", []) if v["target"] not in usage_mounts or v["target"] in before_mounts]
+        assert after_vols == gw_before.get("volumes", [])
+        rest = lambda g: {k: v for k, v in g.items() if k not in ("environment", "volumes")}  # noqa: E731
+        assert rest(gw_after) == rest(gw_before)
         return
     assert env_after["GATEWAY_ANTHROPIC_API_KEY"] == env_before["ANTHROPIC_API_KEY"]
     assert env_after["GATEWAY_XAI_API_KEY"] == env_before["XAI_API_KEY"]
@@ -148,8 +157,7 @@ def test_production_compose_and_cos_files_are_byte_identical_to_main():
     for path in ("docker-compose.prod.yml", "docker-compose.yml", "docker/Dockerfile.cos-agent-a",
                  "docker/cos-agent-a/openclaw.json", "docker/cos-agent-a/apply-config.sh",
                  "services/model_gateway/litellm.prod.yaml",
-                 ".github/workflows/deploy.yml", "scripts/operations/deploy_scoped_release.sh",
-                 "scripts/staging/build.sh"):
+                 ".github/workflows/deploy.yml", "scripts/operations/deploy_scoped_release.sh"):
         main = _main(path)
         if main is None:
             pytest.skip("origin/main is not available")

@@ -58,7 +58,13 @@ def _is_release_only(path: str) -> bool:
 # until the production MC spec. tests/test_release_classifier.py fails if
 # deploy.yml, the deploy script or docker-compose.prod.yml starts using them,
 # so that change must classify them as a real production service.
-DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent")
+#
+# services/usage/ (the usage record, U1) is staging-only for now: the staging
+# gateway mounts it (docker-compose.staging.yml); no production Dockerfile
+# copies it and litellm.prod.yaml does not load it. The day a production image
+# or config uses it, tests/test_release_classifier.py fails and this entry must
+# become a real service mapping.
+DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent", "services/usage/")
 
 
 # The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).

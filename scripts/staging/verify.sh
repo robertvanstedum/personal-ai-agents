@@ -142,6 +142,11 @@ while read -r target code _rest; do
 done <<< "$health"
 code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:14000/health/liveliness || true)
 [[ "$code" == 200 ]] && pass "gateway 127.0.0.1:14000 liveliness 200" || fail "gateway 127.0.0.1:14000 liveliness $code"
+# usage-record U1: the recorder is loaded and its store is writable (no call is made).
+urec=$(docker exec minimoi-model-gateway sh -c 'test -r /app/usage_recorder.py && test -r /app/usage_record.py \
+  && test -w /app/usage-data && [ "$MINIMOI_USAGE_DIR" = /app/usage-data ] && [ "$MINIMOI_ENV" = staging ] && echo ok' 2>/dev/null || true)
+[[ "$urec" == ok ]] && pass "gateway usage recorder mounted; store $STAGING_ROOT/data/usage writable ($(ls "$STAGING_ROOT/data/usage" 2>/dev/null | grep -c '^usage-' || true) month file(s))" \
+  || fail "gateway usage recorder or its store is missing (build.sh copies services/usage/; up.sh model-gateway)"
 if is_focus_stopped cos-agent-a; then
   pass "Agent A 127.0.0.1:18790 off (focus: $FOCUS)"
 else

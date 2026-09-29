@@ -755,6 +755,37 @@ CoS's xAI chat fallback, which a normal question never reaches, is proven in
   turn gate or `mc.sh down`; do not restart the gateway until Postgres is
   back (it would not start, and CoS would be down with it).
 
+## Usage records (usage-record U1; staging only)
+
+Every call through the staging gateway, on every route and outcome, leaves
+one standard usage record: `~/minimoi-staging/data/usage/usage-YYYY-MM.jsonl`
+(mode 600, one JSON line per call; no prompt, answer or key). The design is
+`planning-studio/.../documents/USAGE_RECORD_DESIGN_NOTE_2026-09-29.md`.
+
+- **What is recorded:** `ok` (tokens and LiteLLM's priced cost), `error` (a
+  deployment was tried and failed; cost null), `refused` (the gateway said no
+  before any deployment: a key, route, model, budget or rate limit; cost null).
+  `actor` is `mc` or `cos` (from the key alias `mc-agent-*`/`cos-agent-*`,
+  else the route name).
+- **How:** `services/usage/litellm_recorder.py` is a second LiteLLM callback
+  next to `receipt_callback` (CoS's receipts are unchanged). build.sh copies
+  it and `services/usage/usage_record.py` to `config/usage/`; the gateway
+  mounts them read-only and writes `data/usage/`. Writing is fire and forget:
+  a full queue or a write error drops the line with a warning and never fails
+  a call. Production is unchanged: no production image or config loads it.
+- **Rollout:** `build.sh <branch> --reviewed-branch`, then
+  `up.sh model-gateway` (the gateway is recreated; CoS's calls fail for
+  about 30 s), `verify.sh` ("gateway usage recorder mounted"), then the CoS
+  regression question: pass is a cited answer **and** a new line in
+  `data/usage/usage-*.jsonl` with `"route":"minimoi-cos-web-search"`,
+  `"actor":"cos"`, `"status":"ok"` (as well as the receipt line). One MC note
+  on the Shop floor leaves an `"actor":"mc"` line with its tokens and cost.
+- **Proof without spend:** `mc_probe/stage_c.py` checks MC and CoS records,
+  every CoS route, the fallback's error, refusals (MC's key on CoS's models,
+  the spent budget), and that no content or key reaches the store.
+- **Rollback:** build and `up.sh model-gateway` the previous release; the
+  records already written stay.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes

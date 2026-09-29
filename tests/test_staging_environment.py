@@ -348,7 +348,11 @@ def test_staging_override_holds_no_production_path_or_secret():
         assert name not in body, name
     gateway = _load(STAGING)["services"]["model-gateway"]
     assert gateway["volumes"] == [
-        "${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/config/litellm.staging.yaml:/app/config.yaml:ro"]
+        "${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/config/litellm.staging.yaml:/app/config.yaml:ro",
+        # usage-record U1 (staging only): the recorder's code, read-only, and the usage store.
+        "${MINIMOI_ROOT}/config/usage/usage_record.py:/app/usage_record.py:ro",
+        "${MINIMOI_ROOT}/config/usage/litellm_recorder.py:/app/usage_recorder.py:ro",
+        "${MINIMOI_ROOT}/data/usage:/app/usage-data"]
 
 
 # ── build map parity with deploy.yml ──────────────────────────────────────────
@@ -389,8 +393,12 @@ def test_staging_gateway_keeps_production_names_and_settings():
     # Craftsman's (MC stage C; tests/test_staging_mc_stage_c.py).
     assert [m["model_name"] for m in staging["model_list"]] == \
         [m["model_name"] for m in prod["model_list"]] + ["minimoi-mc-agent"]
-    for block in ("router_settings", "litellm_settings", "general_settings"):
+    for block in ("router_settings", "general_settings"):
         assert staging[block] == prod[block], block
+    # litellm_settings: production's, plus exactly the staging-only usage recorder (usage-record U1).
+    staged = dict(staging["litellm_settings"])
+    assert staged.pop("callbacks") == prod["litellm_settings"]["callbacks"] + ["usage_recorder.usage_recorder"]
+    assert staged == {k: v for k, v in prod["litellm_settings"].items() if k != "callbacks"}
 
 
 def test_staging_cos_agent_route_is_haiku_and_the_rest_follow_the_dev_gateway():
@@ -744,11 +752,13 @@ def _staging_world(tmp_path, *, launchctl=FAKE_LAUNCHCTL_CLEAN, bots_on=False, t
     sha = _release_repo(release)
     for rel in ("data/curator_history.json", "data/curator_costs.json", "auth/users.json", "auth/guests.json",
                 "cos_memory.md", "data/model_gateway_receipts.jsonl", "data/guild/cos_context.json",
-                "data/guild/build_queue.json", "config/litellm.staging.yaml"):
+                "data/guild/build_queue.json", "config/litellm.staging.yaml",
+                "config/usage/usage_record.py", "config/usage/litellm_recorder.py"):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text("x")
     for rel in ("data/curator", "data/curator_archive", "data/interests", "data/research-intelligence",
-                "data/german", "data/portuguese", "data/guild", "docs/design", "docs/specs", "agent_logs", "state"):
+                "data/german", "data/portuguese", "data/guild", "data/usage", "docs/design", "docs/specs", "agent_logs",
+                "state"):
         (root / rel).mkdir(parents=True, exist_ok=True)
     names = ["XAI_API_KEY='x'"]
     sources = ["XAI_API_KEY root-env"]
@@ -874,6 +884,9 @@ def _source_repo(tmp_path):
     (repo / "docker-compose.staging.yml").write_text("services: {}\n")
     (repo / "services/model_gateway").mkdir(parents=True)
     (repo / "services/model_gateway/litellm.staging.yaml").write_text("model_list: []\n")
+    (repo / "services/usage").mkdir(parents=True)
+    for name in ("usage_record.py", "litellm_recorder.py"):
+        (repo / "services/usage" / name).write_text("# usage\n")
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "one")
@@ -974,6 +987,8 @@ def test_jobs_curator_refuses_instead_of_a_silent_no_op(tmp_path, shell):
     "scripts/staging/up.sh",
     "scripts/staging/README.md",
     "services/model_gateway/litellm.staging.yaml",
+    "services/usage/usage_record.py",          # dormant in production until an image or config uses it
+    "services/usage/litellm_recorder.py",
 ])
 def test_staging_only_paths_never_deploy_production(path):
     assert classify([path]) == ("documents", ())

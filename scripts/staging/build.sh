@@ -177,6 +177,14 @@ chmod 700 "$STAGING_ROOT"
 # the mounted config file must be world-readable (it holds no secrets).
 cp "$RELEASE_DIR/services/model_gateway/litellm.staging.yaml" "$STAGING_ROOT/config/litellm.staging.yaml"
 chmod 644 "$STAGING_ROOT/config/litellm.staging.yaml"
+# The gateway's usage recorder (usage-record U1): code mounted read-only from
+# config/usage/, records written to data/usage/ (one file per month, 600).
+mkdir -p "$STAGING_ROOT/config/usage" "$STAGING_ROOT/data/usage"
+chmod 755 "$STAGING_ROOT/config/usage"
+for f in usage_record.py litellm_recorder.py; do
+  cp "$RELEASE_DIR/services/usage/$f" "$STAGING_ROOT/config/usage/$f"
+  chmod 644 "$STAGING_ROOT/config/usage/$f"
+done
 {
   echo "sha=$FULL_SHA"
   echo "tag=$SHA"
