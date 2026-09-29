@@ -31,6 +31,9 @@ def _is_release_only(path: str) -> bool:
         # The classifier itself runs in CI (deploy.yml) and is never part of a
         # service image, so changing it redeploys nothing.
         "scripts/ci/classify_release.py",
+        # Chooses the commit the classifier diffs against; CI only, like the
+        # classifier, and never in a service image.
+        "scripts/ci/release_base.sh",
     }
     return (
         path in exact
