@@ -218,6 +218,9 @@ def test_verify_fails_on_refused_usage_records_with_coss_key_since_it_was_made(t
         line("2026-09-29T10:00:01+00:00", "refused", "mc-agent-bbb222"),           # MC's: not this check
         line("2026-09-29T10:00:02+00:00", "refused", "cos-agent-aaa111", "minimoi-cos-agent-xai-fast"),
         line("2026-09-29T10:00:03+00:00", "refused", "cos-agent-aaa111", "minimoi-cos-agent-xai-fast"),
+        # verify.sh section 10's own probes (expected refusals), not a missing route
+        line("2026-09-29T10:00:04+00:00", "refused", "cos-agent-aaa111", "minimoi-mc-agent"),
+        line("2026-09-29T10:00:05+00:00", "refused", "cos-agent-aaa111", "claude-haiku-4-5-20251001"),
         '{"torn": ']) + "\n")
     run = lambda: subprocess.run(["python3", "-c", code], env={**os.environ, "COS_ENV": str(cos_env), "USAGE_DIR": str(usage)},  # noqa: E731
                                  capture_output=True, text=True).stdout.strip()
