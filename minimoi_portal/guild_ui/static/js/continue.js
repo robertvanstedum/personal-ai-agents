@@ -14,6 +14,8 @@ export function renderContinue(zone) {
     if (zone.target) slot.replaceChildren(el('a', { href: zone.target.href, 'data-continue-link': true }, zone.text));
     else slot.replaceChildren(el('span', { 'data-continue-text': true }, zone.text));
   }
+  // The Shop floor's context rail shows Continue only when there is somewhere to continue to.
+  for (const rail of $$('[data-rail-continue]')) rail.hidden = zone.state === 'ok' && !zone.target;
 }
 
 export async function continueFromItem(page) {

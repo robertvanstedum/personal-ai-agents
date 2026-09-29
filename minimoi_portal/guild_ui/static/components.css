@@ -484,3 +484,110 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
 .postit-result[data-kind="ok"] { background: var(--gu-mark-verified-bg); color: var(--gu-mark-verified-ink); }
 .postit-result[data-kind="warn"] { background: var(--gu-mark-unknown-bg); color: var(--gu-mark-unknown-ink); }
 .postit-result[data-kind="bad"] { background: var(--gu-mark-blocker-bg); color: var(--gu-mark-blocker-ink); }
+
+/* ── Shop floor, Guild 1.1 dev slice 1 (Robert, September 29) ──────────────
+   Desktop: history | clean chat | the Build card and live context (upper
+   right). >= 1200 px the rail sits beside the chat (collapsible, remembered);
+   below 1200 px it opens over the chat from the Context button; below 900 px
+   the history is a drawer. The chat's text column is capped at about 720 px.
+   Status lights are a compact strip low on the page; detail is in Operate. */
+body.gu[data-page="floor"] .gu-layout {
+  grid-template-columns: 210px minmax(0, 1fr) 290px;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "hist conv rail";
+}
+body.gu[data-page="floor"][data-rail="closed"] .gu-layout { grid-template-columns: 210px minmax(0, 1fr); grid-template-areas: "hist conv"; }
+body.gu[data-page="floor"][data-rail="closed"] .gu-main { display: none; }
+body.gu[data-page="floor"] .gu-main { grid-area: rail; overflow-y: auto; display: flex; flex-direction: column; gap: var(--gu-s3); }
+.floor-history { grid-area: hist; min-height: 0; overflow-y: auto; border-right: 1px solid var(--gu-zone-edge); padding-right: var(--gu-s3); }
+.fh-h { font: 700 var(--gu-size-xs) var(--gu-font-body); text-transform: uppercase; letter-spacing: 0.12em; color: var(--gu-zone-h-ink); margin: var(--gu-s1) 0 var(--gu-s2); }
+.fh-list { display: flex; flex-direction: column; gap: 2px; }
+.fh-row { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: var(--gu-radius); }
+.fh-row[aria-current="true"] { background: var(--gu-surface-2); box-shadow: inset 3px 0 0 var(--gu-accent); }
+.fh-title { font-weight: 700; font-size: var(--gu-size-sm); }
+.floor-phone-strip { display: none; }
+.floor-context { border: 0; }
+.floor-context-sum { display: none; }
+.fc-body { display: flex; flex-direction: column; gap: var(--gu-s2); }
+.fc-item { display: flex; flex-direction: column; gap: 2px; font-size: var(--gu-size-sm); }
+.fc-item[hidden], .fc-quiet[hidden], .fc-wall[hidden] { display: none; }
+.fc-label { font-size: var(--gu-size-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gu-text-muted); font-weight: 700; }
+.fc-urgent .fc-label { color: var(--gu-tag-needs-ink); }
+.fc-quiet { color: var(--gu-text-muted); }
+.fc-wall a { font-weight: 700; }
+/* The chat: messages and composer dominate; little chrome; readable bubbles. */
+body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] { border: 0; background: transparent; padding-bottom: 0; gap: var(--gu-s2); }
+body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] .mc-head { display: none; }
+body.gu[data-page="floor"] .mc-context { display: none; }
+body.gu[data-page="floor"] .mc-thread, body.gu[data-page="floor"] .mc-dock-bottom,
+body.gu[data-page="floor"] .mc-floorbar, body.gu[data-page="floor"] .mc-refusal { width: 100%; max-width: 720px; margin-inline: auto; }
+body.gu[data-page="floor"] .mc-thread .msg { padding: 10px 14px; border-radius: 12px; line-height: 1.5; }
+body.gu[data-page="floor"] .mc-dock-bottom { border-top: 1px solid var(--gu-zone-edge); padding-top: var(--gu-s2); }
+.mc-floorbar { display: flex; align-items: center; gap: var(--gu-s2); padding: 0 var(--gu-s1); }
+.fb-title { flex: 1 1 auto; font: 700 var(--gu-size-sm) var(--gu-font-body); margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-btn { font: inherit; font-size: var(--gu-size-sm); min-height: 32px; min-width: 32px; padding: 2px 10px; border-radius: var(--gu-radius-pill); border: 1px solid var(--gu-border); background: var(--gu-surface); color: var(--gu-text); cursor: pointer; }
+.fb-history { display: none; }
+.fb-needs { font-size: var(--gu-size-sm); text-decoration: none; color: var(--gu-tag-needs-ink); border: 1px solid currentColor; border-radius: var(--gu-radius-pill); padding: 2px 10px; white-space: nowrap; }
+.fb-needs[hidden] { display: none; }
+.fb-needs[data-needs-status]:not([data-needs-status="ok"]) { color: var(--gu-unknown-ink); border-style: dashed; }
+.fb-count { font-weight: 700; }
+.mc-blocker { margin: 0 0 var(--gu-s2); padding: 4px 10px; font-size: var(--gu-size-sm); color: var(--gu-mark-blocker-ink); background: var(--gu-mark-blocker-bg); border-radius: var(--gu-radius); display: flex; flex-direction: column; gap: 2px; }
+.mc-blocker[hidden] { display: none; }
+.mc-current { margin: 0 var(--gu-s3); color: var(--gu-text-muted); }
+/* The status strip, low and compact. */
+.floor-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--gu-s3); margin: 0 var(--gu-gutter) var(--gu-s2); padding: 4px var(--gu-s3); }
+.floor-strip .status-compact { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; flex: 1 1 auto; background: transparent; border: 0; padding: 2px 0; font: inherit; font-size: var(--gu-size-sm); color: var(--gu-text); cursor: pointer; text-align: left; }
+.floor-strip .lc { display: inline-flex; align-items: center; gap: 3px; }
+.floor-strip .lc .lshape { width: 14px; height: 14px; margin: 0; }
+.floor-strip .lc-word { font-weight: 700; font-size: 10.5px; text-transform: uppercase; }
+.floor-strip .lc-more { color: var(--gu-accent); text-decoration: underline; margin-left: auto; }
+.floor-strip .lights { display: none; flex-basis: 100%; margin-top: 6px; }
+body.gu[data-page="floor"][data-lights-open="true"] .floor-strip .lights { display: grid; }
+.strip-cost { color: var(--gu-mark-blocker-ink); font-weight: 700; }
+@media (max-width: 1199px) {
+  body.gu[data-page="floor"] .gu-layout, body.gu[data-page="floor"][data-rail="closed"] .gu-layout { grid-template-columns: 210px minmax(0, 1fr); grid-template-areas: "hist conv"; }
+  body.gu[data-page="floor"] .gu-main { display: none; }
+  body.gu[data-page="floor"][data-rail="open"] .gu-main { display: flex; position: fixed; z-index: 55; top: 150px; right: 12px; width: 300px; max-height: calc(100vh - 120px); background: var(--gu-bg); border: 1px solid var(--gu-zone-edge); border-radius: var(--gu-radius); box-shadow: var(--gu-shadow-float); padding: var(--gu-s3); }
+}
+@media (max-width: 899px) {
+  body.gu[data-page="floor"] .gu-layout, body.gu[data-page="floor"][data-rail="closed"] .gu-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "conv"; }
+  .floor-history { display: none; }
+  body.gu[data-page="floor"][data-history="open"] .floor-history { display: block; position: fixed; z-index: 56; top: 0; bottom: 0; left: 0; width: min(300px, 86vw); background: var(--gu-bg); border-right: 1px solid var(--gu-zone-edge); box-shadow: var(--gu-shadow-float); padding: var(--gu-s4) var(--gu-s3); }
+  .fb-history { display: inline-block; }
+}
+
+/* The wall (Workbench): room for cards, simple filters, one column on a phone. */
+.wall-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--gu-s3); }
+.wall-filter { font: inherit; font-size: var(--gu-size-sm); min-height: 32px; padding: 2px 12px; border-radius: var(--gu-radius-pill); border: 1px solid var(--gu-border-strong); background: var(--gu-surface); color: var(--gu-text); cursor: pointer; }
+.wall-filter[aria-pressed="true"] { background: var(--gu-accent); border-color: var(--gu-accent); color: var(--gu-on-dark); }
+.bench > [data-panel="postits"] { grid-column: 1 / -1; }
+.bench[data-filter] > [data-panel] { display: none; }
+.bench[data-filter="needs"] > [data-panel="needs"], .bench[data-filter="continue"] > [data-panel="continue"],
+.bench[data-filter="postits"] > [data-panel="postits"], .bench[data-filter="motion"] > [data-panel="motion"],
+.bench[data-filter="blocked"] > [data-panel="blocked"], .bench[data-filter="discussions"] > [data-panel="discussions"] { display: block; grid-column: 1 / -1; }
+.lab-card { background: var(--gu-surface); border: 1px solid var(--gu-zone-edge); border-radius: var(--gu-radius); padding: var(--gu-s3); margin-bottom: var(--gu-s3); max-width: 72ch; }
+.subnav-entry { font-style: italic; }
+
+@media (max-width: 640px) {
+  /* The Guild navigation scrolls sideways on a phone instead of breaking words. */
+  .guild-subnav { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .guild-subnav .subnav-link { white-space: nowrap; flex: none; }
+  /* Phone: chat first. The Build card's dark title strip with a thumbnail,
+     the conversation with its composer (kept above the keyboard), then the
+     context (folded) and the status strip below. */
+  body.gu[data-page="floor"] { padding-bottom: 0; }
+  body.gu[data-page="floor"] .gu-layout { display: flex; flex-direction: column; padding: 0; }
+  .floor-phone-strip { display: block; order: 0; }
+  body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] { order: 1; min-height: 0; }
+  body.gu[data-page="floor"] .gu-main, body.gu[data-page="floor"][data-rail] .gu-main { order: 2; display: block; position: static; width: auto; max-height: none; box-shadow: none; border: 0; background: transparent; padding: 4px 12px; overflow: visible; }
+  body.gu[data-page="floor"] .floor-hero { display: none; }
+  .floor-context-sum { display: list-item; cursor: pointer; font-size: var(--gu-size-sm); color: var(--gu-accent); min-height: var(--gu-target-phone); line-height: var(--gu-target-phone); }
+  .fb-rail { display: none; }
+  .floor-strip { margin: 4px 12px; }
+  body.gu[data-page="floor"] .mc-thread .msg { max-width: 100%; }
+  /* The thread scrolls inside the first view, newest at the bottom, above the composer. */
+  body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] .mc-thread { max-height: var(--gu-thread-max, calc(100dvh - 400px)); min-height: 140px; overflow-y: auto; }
+  body.gu[data-page="floor"] .mc-dock-bottom { position: sticky; bottom: var(--gu-kb, 0px); z-index: 40; background: var(--gu-zone-conv); }
+  .bench > [data-panel="postits"] { grid-column: auto; }
+}
+}

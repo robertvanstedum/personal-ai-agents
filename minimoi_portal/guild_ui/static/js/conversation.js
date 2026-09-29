@@ -9,6 +9,7 @@ import { $, $$, clone, slot, setSlot, el, announce, localTime } from './dom.js';
 import { live, setOff, onChange } from './state.js';
 import { apiGet, apiPost, recordMode } from './api.js';
 import { newKey } from './actions.js';
+import { answerFailed, answerArrived } from './floorlayout.js';
 
 let page, panel, thread, pill;
 const inPage = () => document.body.dataset.page === 'floor';
@@ -163,10 +164,12 @@ async function askMasterCraftsman(note) {
     if ($(`[data-note="${body.reply_note.id}"]`)) waiting.remove();
     else waiting.replaceWith(noteLine(body.reply_note));
     announce(body.message || 'Master Craftsman answered');
+    answerArrived();
   } else {
     const text = body.message || 'Master Craftsman did not answer. Your note is kept.';
     waiting.replaceWith(platformLine('Guild platform', text));
     announce(text);
+    answerFailed(body.mc_header || 'Master Craftsman did not answer');
   }
   follow();
 }

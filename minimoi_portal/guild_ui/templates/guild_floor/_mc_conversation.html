@@ -31,6 +31,18 @@
   </header>
   <p class="mc-state" data-mc-header>{{ state.mc_header }}</p>
   <p class="mc-context" data-mc-context>Context: {{ area }} · {{ context_item }} · on the record</p>
+  {% if page_id == 'floor' %}
+  {# The chat's own header (Guild 1.1 slice 1): the conversation, the one place Needs you appears, and the rail toggle. #}
+  <div class="mc-floorbar" data-floorbar>
+    <button type="button" class="fb-btn fb-history" data-history-toggle aria-expanded="false" aria-controls="floor-history">☰<span class="visually-hidden"> Conversations</span></button>
+    <h2 class="fb-title">Shop floor thread</h2>
+    {% set nt = state.needs.total %}
+    <a class="fb-needs" href="{{ urls.bench }}" data-needs-badge data-needs-status="{{ state.needs.status }}"{% if state.needs.status == 'ok' and not nt %} hidden{% endif %} title="{{ state.needs.text if state.needs.status != 'ok' else 'Needs you — open the wall' }}">Needs you <span class="fb-count" data-reminder-count>{{ nt if nt is not none else '?' }}</span><span class="visually-hidden" data-needs-line>{{ state.needs.text }}</span></a>
+    <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main">Context</button>
+  </div>
+  {% else %}
+  <p class="mc-current small" data-mc-current>Current conversation · Shop floor thread</p>
+  {% endif %}
   <ol class="mc-thread" data-mc-thread role="log" aria-live="polite" aria-label="Conversation thread">
     <li class="msg msg-platform" data-kind="briefing" data-briefing>
       <p class="msg-meta"><span class="msg-label" data-briefing-label>{{ state.briefing.display_label }}</span></p>
@@ -49,6 +61,8 @@
   <p class="visually-hidden" aria-live="polite" data-mc-announcer></p>
   <p class="mc-refusal" data-mc-refusal role="status" hidden></p>
   <div class="mc-dock-bottom" data-mc-dock-bottom>
+  {# What blocks chat, one short line right above the composer: MC down, the cost level at act or stop, or a failed answer. #}
+  <p class="mc-blocker" data-mc-blocker role="status"{% if not state.blockers %} hidden{% endif %}>{% for b in state.blockers %}<span data-blocker="{{ b.kind }}">{{ b.text }}</span>{% endfor %}</p>
   <form class="mc-composer" data-mc-composer>
     <label class="visually-hidden" for="mc-input">Type a note</label>
     <input id="mc-input" class="mc-input" data-mc-input autocomplete="off" maxlength="{{ page_json.note_max }}" placeholder="Type a note">

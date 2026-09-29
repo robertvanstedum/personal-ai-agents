@@ -10,12 +10,14 @@ import { initOperate } from './operate.js';
 import { initPostits } from './postits.js';
 import { continueFromItem } from './continue.js';
 import { initZones } from './zones.js';
+import { initFloorLayout } from './floorlayout.js';
 
 const page = JSON.parse(document.getElementById('guild-page').textContent);
 configure(page.storage_ns);
 configureApi(page);
 initConversation(page);
 initFloorState(page);
+initFloorLayout(page);
 if ($('[data-bench]')) initBench(page);
 if (page.page === 'queue' || page.page === 'item') initQueue(page);
 if (page.page === 'operate') initOperate();

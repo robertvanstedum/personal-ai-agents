@@ -1,17 +1,68 @@
 {% extends 'guild_floor/_base.html' %}
 {% from 'guild_floor/_macros.html' import shape, continue_line %}
-{% import 'guild_floor/_postits.html' as pz with context %}
+{% from 'guild/_build_card.html' import build_card %}
 {% block title %}{{ floor_cfg.title }} · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/guild/guild-card.css">{% endblock %}
+{#
+  The Shop floor, slice 1 of the Guild 1.1 dev layout (Robert, September 29):
+  desktop is  history | clean chat | image and live context;  phone is chat
+  first, with a small image header and the context expandable below it.
+  Status lights sit in a compact strip low on the page (detail in Operate);
+  post-its live on the wall (the Workbench), not here.
+#}
 
-{% block above %}
-<section class="zone zone-status" data-zone="status" aria-labelledby="z-status">
-  <h2 class="zone-h" id="z-status"><span class="crumb">Build → </span>{{ floor_cfg.title }} · Status <span class="small">· {{ rules_label }}</span></h2>
+{% block before_main %}
+<aside class="floor-history" id="floor-history" aria-labelledby="fh-h" data-floor-history>
+  <h2 class="fh-h" id="fh-h">Conversations</h2>
+  {# One real thread today; conversation history (new, rename, pin, archive) is slice 2. #}
+  <ol class="fh-list">
+    <li class="fh-row" aria-current="true" data-fh-current>
+      <span class="fh-title">Shop floor thread</span>
+      <span class="fh-meta small">{% if state.notes.state == 'ok' %}{{ state.notes.recent|length }}{% if state.notes.more %}+{% endif %} kept{% else %}notes unavailable{% endif %}</span>
+    </li>
+  </ol>
+</aside>
+{# Phone only: the card's dark title strip with a small thumbnail, above the chat. #}
+<div class="floor-phone-strip" aria-hidden="true">{{ build_card('strip') }}</div>
+{% endblock %}
+
+{% block main %}
+{# The context rail: what this conversation is about and the single most urgent
+   real action; one quiet line otherwise. Needs you itself is only in the chat header. #}
+{% set focus = state.focus %}
+{% set top = state.needs['items'][0] if state.needs['items'] else none %}
+<div class="floor-hero" data-floor-hero>
+  {{ build_card('rail', {'queue': urls.queue, 'log': urls.legacy_build, 'roadmap': '/guild/build/roadmap', 'docs': '/guild/docs'}) }}
+</div>
+<details class="floor-context" data-floor-context open>
+  <summary class="floor-context-sum">Context</summary>
+  <div class="fc-body">
+    <p class="fc-item fc-about" data-rail-continue{% if focus.state == 'ok' and not focus.target %} hidden{% endif %}>
+      <span class="fc-label">This conversation is about</span>
+      {{ continue_line(state['continue']) }}
+    </p>
+    <p class="fc-item fc-urgent" data-floor-urgent{% if not top %} hidden{% endif %}>
+      <span class="fc-label">Most urgent</span>
+      <a href="{{ top.href if top else '#' }}" data-urgent-link>{% if top %}{{ top.tag }} · {{ top.text }}{% endif %}</a>
+    </p>
+    {% set quiet = state.needs.status == 'ok' and not top and focus.state == 'ok' and not focus.target %}
+    <p class="fc-quiet small" data-rail-quiet{% if not quiet %} hidden{% endif %}>{% if quiet %}Nothing needs you right now · <a href="{{ urls.bench }}" data-open-wall>Open wall</a>{% endif %}</p>
+    <p class="fc-wall small" data-rail-wall{% if state.needs.status == 'ok' and not top and focus.state == 'ok' and not focus.target %} hidden{% endif %}><a href="{{ urls.bench }}" data-open-wall>Open wall →</a></p>
+  </div>
+</details>
+{% endblock %}
+
+{% block below %}
+<section class="zone zone-status floor-strip" data-zone="status" aria-labelledby="z-status">
+  <h2 class="visually-hidden" id="z-status">{{ floor_cfg.title }} · Status · {{ rules_label }}</h2>
   <button type="button" class="status-compact" data-lights-toggle aria-expanded="false" aria-controls="lights-full">
     {% for l in state.lights %}
     <span class="lc" data-lc="{{ l.id }}" data-light-state="{{ l.state }}">{{ shape(l) }}<span class="lc-name">{{ l.short }}</span> <span class="lc-word" data-lc-word>{{ l.word }}</span></span>
     {% endfor %}
     <span class="lc-more" data-lights-more>Details ▾</span>
   </button>
+  {% if state.cost_level and state.cost_level != 'good' %}<span class="strip-cost small" data-strip-cost>Cost: {{ state.cost_level }}</span>{% endif %}
+  <a class="strip-operate small" href="{{ urls.operate }}">Operate →</a>
   <ul class="lights" id="lights-full" data-lights-full>
     {% for l in state.lights %}
     <li class="light" data-light="{{ l.id }}" data-light-state="{{ l.state }}">
@@ -26,37 +77,4 @@
     {% endfor %}
   </ul>
 </section>
-{% endblock %}
-
-{% block main %}
-<div class="floor-rail" data-floor-rail>
-  <p class="floor-urgent" data-floor-urgent{% if not state.needs['items'] %} hidden{% endif %}><span class="floor-urgent-label">Needs you:</span> <a href="{{ state.needs['items'][0].href if state.needs['items'] else '#' }}" data-urgent-link>{% if state.needs['items'] %}{{ state.needs['items'][0].tag }} · {{ state.needs['items'][0].text }}{% endif %}</a></p>
-  <button type="button" class="floor-chip" data-sheet-toggle aria-expanded="false" aria-controls="floor-sheet">
-    Needs you <span data-reminder-count>{{ state.needs.total if state.needs.total is not none else '?' }}</span> · Continue · Post-its ▾
-  </button>
-  <div class="floor-sheet" id="floor-sheet" data-floor-sheet>
-    <section class="zone zone-needs" data-zone="needs" aria-labelledby="z-needs">
-      <h2 class="zone-h" id="z-needs">Needs you</h2>
-      <ol class="reminders" data-reminders>
-        {% for r in state.needs['items'] %}
-        <li class="reminder" data-reminder>
-          <span class="reminder-tag">{{ r.tag }}</span>
-          <a href="{{ r.href }}" data-reminder-link>{{ r.text }}</a>
-        </li>
-        {% endfor %}
-      </ol>
-      <p class="needs-line" data-needs-line>{% if state.needs.status != 'ok' %}{{ state.needs.text }}{% elif state.needs.total %}{{ state.needs.total }} in all{% if state.needs.total > state.needs['items']|length %} · {{ state.needs['items']|length }} shown{% endif %} · checked <span data-iso="{{ state.needs.observed_at }}">{{ hhmm(state.needs.observed_at) }}</span>{% else %}Nothing needs you · checked <span data-iso="{{ state.needs.observed_at }}">{{ hhmm(state.needs.observed_at) }}</span>{% endif %}</p>
-    </section>
-    <section class="zone zone-continue" data-zone="continue" aria-labelledby="z-cont">
-      <h2 class="zone-h" id="z-cont">Continue</h2>
-      <p class="zone-next">{{ continue_line(state['continue']) }}</p>
-      <p><a href="{{ urls.bench }}" class="open-bench" data-open-bench>Open the bench →</a></p>
-      <p><a href="{{ urls.queue }}">Build Queue →</a></p>
-    </section>
-    <section class="zone zone-postits" data-zone="postits" aria-labelledby="z-notes">
-      <h2 class="zone-h" id="z-notes">Post-its <span class="small" data-postits-count>{% if state.postits.state == 'ok' %}· {{ state.postits.active_total }} on the board{% else %}· unavailable{% endif %}</span></h2>
-      {{ pz.rail(state.postits) }}
-    </section>
-  </div>
-</div>
 {% endblock %}

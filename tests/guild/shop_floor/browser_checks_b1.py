@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import socket
 import tempfile
 import threading
@@ -124,6 +125,7 @@ def test_desktop_floor_lights_briefing_and_explain_card(browser, server, fresh_q
     expect(page.locator('[data-light="systems"] [data-light-word]')).to_have_text("Unknown")
     expect(page.locator("[data-briefing-label]")).to_have_text("Guild platform · rules · no model")
     expect(page.locator("[data-briefing-text]")).to_contain_text("1 needs you (Decide #31)")
+    page.click("[data-lights-toggle]")          # Guild 1.1: the lights are a compact strip low on the page
     page.click('[data-ask="usage"]')
     card = page.locator('[data-explain="usage"]')
     expect(card).to_contain_text("Guild platform · rules · no model")
@@ -281,7 +283,7 @@ def test_a_failed_poll_turns_the_floor_stale_then_unknown_and_recovers(browser, 
     expect(page.locator("[data-stale-banner]")).to_contain_text("the server answered 503")
     expect(page.locator("[data-needs-line]")).to_contain_text("stale, last good read")
     expect(page.locator("[data-briefing-text]")).to_contain_text("Stale, last good read")
-    expect(page.locator('[data-zone="needs"]')).to_have_attribute("data-stale", "stale")
+    expect(page.locator("[data-needs-badge]")).to_have_attribute("data-stale", "stale")   # Guild 1.1: the one Needs you place
     for light in page.locator("[data-light]").all():
         expect(light.locator("[data-light-src]")).not_to_have_text("live")
     # two misses (here a network error): grey unknown, never "live"
@@ -305,7 +307,7 @@ def test_a_failed_poll_turns_the_floor_stale_then_unknown_and_recovers(browser, 
     expect(queue.locator("svg.lshape")).to_have_attribute("data-shape", "square")
     expect(page.locator("[data-stale-banner]")).to_be_hidden()
     expect(page.locator("[data-reminder-count]")).to_have_text("1")
-    assert page.locator('[data-zone="needs"]').get_attribute("data-stale") is None
+    assert page.locator("[data-needs-badge]").get_attribute("data-stale") is None
     assert not errors, errors
     ctx.close()
 
@@ -398,20 +400,24 @@ def test_w4_opening_an_item_sets_continue_and_the_phone_shows_it(browser, server
     desk, page = _context(browser, server)
     errors = _errors(page)
     go(page, f"{server['url']}/guild-next/guild/build")
-    expect(page.locator('[data-zone="continue"] [data-continue]')).to_have_text("Nothing to continue — open a queue item")
+    # Guild 1.1: nothing to continue and nothing urgent, so the rail is one quiet line.
+    expect(page.locator("[data-rail-continue]")).to_be_hidden()
+    expect(page.locator("[data-floor-urgent]")).to_be_visible()      # #31 needs Robert, so the rail shows it, not the quiet line
     go(page, f"{server['url']}/guild-next/guild/build/items/12")
     expect(page.locator("[data-continue]").first).to_have_attribute("data-continue-state", "ok")
     page.wait_for_function("() => [...document.querySelectorAll('[data-continue-link]')].some(a => a.textContent === '#12 Floor API')")
     assert floor.rows("floor_continue")[0]["ref"] == "12"
     go(page, f"{server['url']}/guild-next/guild/build")
-    expect(page.locator('[data-zone="continue"] [data-continue-link]')).to_have_text("#12 Floor API")
+    about = page.locator("[data-rail-continue]")                    # "This conversation is about"
+    expect(about).to_be_visible()
+    expect(about.locator("[data-continue-link]")).to_have_text("#12 Floor API")
     assert not errors, errors
     desk.close()
 
     phone, ppage = _context(browser, server, **PHONE)     # another session and viewport, same owner
     go(ppage, f"{server['url']}/guild-next/guild/build")
-    ppage.click("[data-sheet-toggle]")
-    link = ppage.locator('[data-zone="continue"] [data-continue-link]')
+    ppage.click("[data-floor-context] > summary")                 # the context, folded below the chat
+    link = ppage.locator('[data-rail-continue] [data-continue-link]')
     expect(link).to_be_visible()
     expect(link).to_have_text("#12 Floor API")
     go(ppage, f"{server['url']}/guild-next/guild/build/queue")
@@ -420,21 +426,22 @@ def test_w4_opening_an_item_sets_continue_and_the_phone_shows_it(browser, server
 
 
 def _w6(page, server, floor, phone):
+    # Guild 1.1: post-its live on the wall (the Workbench), not on the Shop floor.
     go(page, f"{server['url']}/guild-next/guild/build")
+    assert page.locator('[data-postits][data-mode="rail"]').count() == 0
+    page.locator("[data-open-wall]").first.click() if not phone else page.goto(f"{server['url']}/guild-next/guild/build/bench")
+    page.wait_for_selector("body[data-ready=true]")
+    wall = page.locator('[data-panel="postits"]')
     if phone:
-        page.click("[data-sheet-toggle]")
-    rail = page.locator('[data-postits][data-mode="rail"]')
-    rail.locator("[data-postit-input]").fill("Ask about the lock timeout")
-    rail.locator("[data-postit-add-btn]").click()
-    row = rail.locator("[data-postit]")
+        page.click('[data-wall-filter="postits"]')                   # one column; the filter narrows it
+    wall.locator("[data-postit-input]").fill("Ask about the lock timeout")
+    wall.locator("[data-postit-add-btn]").click()
+    row = wall.locator('[data-mode="board"] [data-postit]')
     expect(row).to_have_count(1)
     expect(row.locator("[data-postit-author]")).to_have_text("Robert")
-    expect(rail.locator("[data-postit-result]")).to_have_text("Post-it added")
+    expect(wall.locator("[data-postit-result]").first).to_have_text("Post-it added")
     row.locator("[data-postit-bin]").click()
-    expect(rail.locator("[data-postit]")).to_have_count(0)
-    expect(rail.locator("[data-postits-bin-link]")).to_have_text("Bin (1) →")
-    rail.locator("[data-postits-bin-link]").click()
-    page.wait_for_selector("body[data-ready=true]")
+    expect(wall.locator('[data-mode="board"] [data-postit]')).to_have_count(0)
     binned = page.locator('[data-postits][data-mode="bin"] [data-bin-item]')
     expect(binned).to_have_count(1)
     expect(binned).to_be_visible()
@@ -457,7 +464,8 @@ def test_w6_post_it_add_remove_restore_on_desktop(browser, server, floor):
     assert server["queue"].read_bytes() == before                     # nothing else triggered
     assert not (server["queue"].parent / qs.JOURNAL_NAME).exists()
     assert floor.count("floor_messages") == 0
-    go(page, f"{server['url']}/guild-next/guild/build/bench")         # the desktop bench shows the board and bin
+    page.reload()                                                     # the wall keeps the board and bin
+    page.wait_for_selector("body[data-ready=true]")
     expect(page.locator('[data-panel="postits"] [data-mode="board"] [data-postit]')).to_have_count(1)
     expect(page.locator('[data-panel="postits"] [data-mode="bin"]')).to_contain_text("The bin is empty")
     assert not errors, errors
@@ -491,17 +499,20 @@ def test_w6_post_it_add_remove_restore_on_the_phone(browser, server, floor):
     ctx.close()
 
 
-def test_the_rail_shows_four_and_links_the_rest(browser, server, floor):
+def test_the_wall_shows_every_post_it_and_the_floor_shows_none(browser, server, floor):
+    """Guild 1.1: no permanent post-it stack on the Shop floor; the wall (the
+    Workbench) has room for all of them, with their writers."""
     from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN
     store = floor.store()
     for n in range(6):
         store.add_postit(f"note {n}", MASTER_CRAFTSMAN, idempotency_key=f"rail-cap-{n:04d}")
     ctx, page = _context(browser, server)
     go(page, f"{server['url']}/guild-next/guild/build")
-    rail = page.locator('[data-postits][data-mode="rail"]')
-    expect(rail.locator("[data-postit]")).to_have_count(4)
-    expect(rail.locator("[data-postit-author]").first).to_have_text("Master Craftsman")
-    expect(rail.locator("[data-postits-more]")).to_have_text("2 more →")
+    assert page.locator("[data-postit]").count() == 0
+    go(page, f"{server['url']}/guild-next/guild/build/bench")
+    board = page.locator('[data-panel="postits"] [data-mode="board"]')
+    expect(board.locator("[data-postit]")).to_have_count(6)
+    expect(board.locator("[data-postit-author]").first).to_have_text("Master Craftsman")
     ctx.close()
 
 
@@ -526,10 +537,12 @@ def test_w7_notes_on_the_record_and_nothing_sent_off_the_record(browser, server,
     off = page.locator("[data-off-record-line]")
     expect(off).to_have_count(1)
     expect(off).to_contain_text("not sent, not kept")
-    rail = page.locator('[data-postits][data-mode="rail"]')
-    rail.locator("[data-postit-input]").fill("private post-it")
-    rail.locator("[data-postit-add-btn]").click()
-    expect(rail.locator("[data-postit-result]")).to_have_text(OFF_TEXT)
+    go(page, f"{server['url']}/guild-next/guild/build/bench")      # Guild 1.1: post-its are on the wall
+    wall = page.locator('[data-panel="postits"]')
+    wall.locator("[data-postit-input]").fill("private post-it")
+    wall.locator("[data-postit-add-btn]").click()
+    expect(wall.locator("[data-postit-result]").first).to_have_text(OFF_TEXT)
+    go(page, f"{server['url']}/guild-next/guild/build")
     assert len(sent) == 1                                          # nothing sent while off
     assert floor.count("floor_messages") == 1 and floor.count("floor_postits") == 0
     assert "private" not in floor.all_text()
@@ -672,17 +685,16 @@ def test_a_failed_poll_marks_the_floor_zones_with_the_floors_freshness(browser, 
     go(page, f"{server['url']}/guild-next/guild/build")
     page.route(FLOOR_API, lambda route: route.abort())
     poll(page)
-    mark = page.locator('[data-zone="continue"] [data-zone-fresh]')
+    mark = page.locator('[data-rail-continue] [data-zone-fresh]')
     expect(mark).to_contain_text("Stale · last good read")
-    expect(page.locator('[data-postits][data-mode="rail"]')).to_have_attribute("data-stale", "stale")
     expect(page.locator("[data-notes-line]")).to_have_attribute("data-stale", "stale")
-    expect(page.locator('[data-zone="continue"] [data-continue-link]')).to_have_text("#12 Floor API")
+    expect(page.locator('[data-rail-continue] [data-continue-link]')).to_have_text("#12 Floor API")
     poll(page)
     expect(mark).to_contain_text("Unknown · no good read since")
     page.unroute(FLOOR_API)
     poll(page)
     expect(page.locator("[data-zone-fresh]")).to_have_count(0)
-    assert page.locator('[data-postits][data-mode="rail"]').get_attribute("data-stale") is None
+    assert page.locator("[data-rail-continue] [data-continue]").get_attribute("data-stale") is None
     ctx.close()
 
 
@@ -797,13 +809,13 @@ def test_dragging_a_box_moves_it_up_or_down_and_releases_focus(browser, server, 
     order = lambda: page.eval_on_selector_all("[data-bench] > [data-panel]", "els => els.map(e => e.dataset.panel)")
     handle = lambda pid: page.locator(f'[data-panel="{pid}"] [data-drag-handle]')
     box = lambda pid: page.locator(f'[data-panel="{pid}"]')
-    a, b, c, d, e = order()
+    a, b, c, d, e, f = order()                                  # six boxes since Continue joined the wall
     handle(a).drag_to(box(b))                                   # down one: now after b
-    assert order() == [b, a, c, d, e]
+    assert order() == [b, a, c, d, e, f]
     handle(b).drag_to(box(d))                                   # down further: lands after d
-    assert order() == [a, c, d, b, e]
+    assert order() == [a, c, d, b, e, f]
     handle(d).drag_to(box(a))                                   # up: lands before a
-    assert order() == [d, a, c, b, e]
+    assert order() == [d, a, c, b, e, f]
     box(e).locator('[data-act="focus"]').click()                # e in focus, pinned on top
     assert order()[0] == e
     handle(e).drag_to(box(c))                                   # dragging it moves it and ends the pin
@@ -812,4 +824,199 @@ def test_dragging_a_box_moves_it_up_or_down_and_releases_focus(browser, server, 
     page.reload()
     assert order().index(e) == order().index(c) + 1             # the arrangement is kept
     assert not errors, errors
+    ctx.close()
+
+
+# ── Guild 1.1 dev, slice 1: the Shop floor layout (Robert, September 29) ──────
+
+def _box(page, sel):
+    return page.locator(sel).first.bounding_box()
+
+
+def test_slice1_desktop_history_chat_and_the_build_card_rail(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    history, rail = page.locator("[data-floor-history]"), page.locator("#main")
+    expect(history).to_be_visible()
+    expect(history.locator(".fh-row")).to_have_count(1)                          # one real thread, no fake rows
+    expect(rail).to_be_visible()
+    card = rail.locator("[data-build-card]")
+    expect(card.locator(".card-tab")).to_have_text("Build")
+    expect(card.locator(".card-kicker a")).to_have_text(["Queue", "Log", "Roadmap", "Docs"])
+    expect(card.locator(".card-desc")).to_have_text("spec → build → ship")
+    expect(card.locator("img")).to_have_attribute("alt", re.compile("craftsman"))
+    h, c, r = _box(page, "[data-floor-history]"), _box(page, "[data-mc-thread]"), _box(page, "#main")
+    assert h["x"] < c["x"] < r["x"]                                              # history | chat | rail
+    assert c["width"] <= 730                                                     # the text column is capped
+    # Needs you: exactly one place, the chat header's badge, which opens the wall.
+    badge = page.locator("[data-needs-badge]")
+    expect(badge).to_be_visible()
+    expect(badge.locator("[data-reminder-count]")).to_have_text("1")
+    assert badge.get_attribute("href").endswith("/guild/build/bench")
+    visible_needs = page.locator("text=/Needs you/").filter(visible=True)
+    assert visible_needs.count() == 1
+    expect(rail.locator("[data-floor-urgent]")).to_contain_text("#31 Blocked thing")     # the single most urgent action
+    expect(rail.locator("[data-rail-quiet]")).to_be_hidden()
+    # The status strip sits low, under the chat.
+    assert _box(page, "[data-zone='status']")["y"] > _box(page, "[data-mc-composer]")["y"]
+    # The rail collapses by hand, and that is remembered.
+    page.click("[data-rail-toggle]")
+    expect(rail).to_be_hidden()
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator("#main")).to_be_hidden()
+    page.click("[data-rail-toggle]")
+    expect(page.locator("#main")).to_be_visible()
+    assert not errors, errors
+    ctx.close()
+
+
+def test_slice1_narrower_screens_rail_toggle_and_history_drawer(browser, server, floor):
+    ctx, page = _context(browser, server, 1100, 800)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("#main")).to_be_hidden()                                 # below 1200 px: a toggle
+    expect(page.locator("[data-floor-history]")).to_be_visible()
+    page.click("[data-rail-toggle]")
+    expect(page.locator("#main")).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(page.locator("#main")).to_be_hidden()
+    ctx.close()
+    ctx, page = _context(browser, server, 860, 800)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("[data-floor-history]")).to_be_hidden()                  # below 900 px: a drawer
+    page.click("[data-history-toggle]")
+    expect(page.locator("[data-floor-history]")).to_be_visible()
+    expect(page.locator("[data-history-toggle]")).to_have_attribute("aria-expanded", "true")
+    page.keyboard.press("Escape")
+    expect(page.locator("[data-floor-history]")).to_be_hidden()
+    ctx.close()
+
+
+def test_slice1_quiet_rail_when_nothing_needs_attention(browser, server, floor):
+    write_queue(server["queue"], [i for i in QUEUE_ITEMS if i.get("status") != "blocked"])
+    try:
+        ctx, page = _context(browser, server, 1440, 900)
+        go(page, f"{server['url']}/guild-next/guild/build")
+        expect(page.locator("[data-needs-badge]")).to_be_hidden()                  # hidden at zero
+        expect(page.locator("[data-rail-quiet]")).to_have_text("Nothing needs you right now · Open wall")
+        expect(page.locator("[data-floor-urgent]")).to_be_hidden()
+        expect(page.locator("[data-rail-continue]")).to_be_hidden()
+        ctx.close()
+    finally:
+        write_queue(server["queue"], QUEUE_ITEMS)
+
+
+def test_slice1_a_failed_answer_shows_one_line_above_the_composer_until_the_next_answer(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    replies = []
+    page.route("**/api/v1/mc/turns", lambda route: route.fulfill(status=200, content_type="application/json",
+                                                                 body=json.dumps(replies.pop(0))))
+    go(page, f"{server['url']}/guild-next/guild/build")
+    _mc_turns_on(page)
+    blocker = page.locator("[data-mc-blocker]")
+    expect(blocker).to_be_hidden()
+    replies.append({"status": "unavailable", "failure_class": "key_refused", "mc_state": "unavailable",
+                    "message": "Master Craftsman is unavailable · its model key was refused. Your note is kept.",
+                    "mc_header": "Master Craftsman is unavailable · its model key was refused"})
+    page.fill("#mc-input", "Are you there?")
+    page.click("[data-mc-send]")
+    expect(blocker).to_be_visible()
+    expect(blocker).to_contain_text("Last answer failed · Master Craftsman is unavailable · its model key was refused")
+    b, comp = _box(page, "[data-mc-blocker]"), _box(page, "[data-mc-composer]")
+    assert b["y"] + b["height"] <= comp["y"] + 1                                 # directly above the composer
+    replies.append({"status": "answered", "mc_state": "live", "message": "Master Craftsman answered",
+                    "mc_header": "Master Craftsman is live · your messages are kept as notes",
+                    "reply_note": {"id": 7001, "request_id": "mc-x", "author_kind": "agent", "author_label": "Master Craftsman",
+                                   "who": "master_craftsman", "text": "Here.", "html": "<p>Here.</p>",
+                                   "created_at": "2026-09-29T09:00:00+00:00", "context": {}}})
+    page.fill("#mc-input", "Now?")
+    page.click("[data-mc-send]")
+    expect(page.locator('[data-note="7001"]')).to_contain_text("Here.")
+    expect(blocker).to_be_hidden()
+    assert not errors, errors
+    ctx.close()
+
+
+def test_slice1_phone_chat_first_with_the_composer_and_newest_note_in_view(browser, server, floor):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    # A stand-in visualViewport we can shrink, the way the on-screen keyboard does.
+    ctx.add_init_script("""
+      (() => {
+        const vv = new EventTarget();
+        let kb = 0;
+        Object.defineProperty(vv, 'height', { get: () => window.innerHeight - kb });
+        Object.defineProperty(vv, 'width', { get: () => window.innerWidth });
+        vv.offsetTop = 0; vv.scale = 1;
+        Object.defineProperty(window, 'visualViewport', { get: () => vv });
+        window.__kb = (px) => { kb = px; vv.dispatchEvent(new Event('resize')); };
+      })();
+    """)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    for n in range(8):
+        page.fill("#mc-input", f"phone note {n}")
+        page.click("[data-mc-send]")
+        expect(page.locator('[data-mc-thread] [data-kind="note"]')).to_have_count(n + 1)
+    strip, chat, context = _box(page, "[data-build-strip]"), _box(page, "[data-mc-thread]"), _box(page, "[data-floor-context]")
+    assert strip["y"] < chat["y"] < context["y"]                                  # strip, chat, then context
+    expect(page.locator("[data-build-card]")).to_be_hidden()                      # only the title strip on a phone
+    assert page.locator("[data-floor-context]").get_attribute("open") is None     # context folded below
+    comp = _box(page, "[data-mc-composer]")
+    assert comp["y"] + comp["height"] <= 844                                      # composer in the first view
+    newest = page.locator('[data-mc-thread] [data-kind="note"]').last
+    expect(newest).to_be_in_viewport()
+    nb = newest.bounding_box()
+    assert nb["y"] + nb["height"] <= comp["y"] + 2, (nb, comp)                      # not hidden under the composer
+    # The keyboard opens: the composer stays above it.
+    page.evaluate("window.__kb(300)")
+    page.wait_for_function("document.body.dataset.keyboard === 'open'")
+    comp = _box(page, "[data-mc-composer]")
+    assert comp["y"] + comp["height"] <= 844 - 300 + 2, comp
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+    assert not errors, errors
+    ctx.close()
+
+
+def test_slice1_the_wall_filters_and_carries_the_same_conversation(browser, server, floor):
+    from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN
+    floor.store().add_postit("Check the lock", MASTER_CRAFTSMAN, idempotency_key="wall-f-0001")
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/build/bench")
+    expect(page.locator("[data-bench] > [data-panel]")).to_have_count(6)
+    page.click('[data-wall-filter="postits"]')
+    expect(page.locator("[data-bench] > [data-panel]:visible")).to_have_count(1)
+    expect(page.locator('[data-panel="postits"]')).to_be_visible()
+    page.click('[data-wall-filter="needs"]')
+    expect(page.locator('[data-panel="needs"]')).to_be_visible()
+    expect(page.locator('[data-panel="postits"]')).to_be_hidden()
+    page.click('[data-wall-filter="all"]')
+    expect(page.locator("[data-bench] > [data-panel]:visible")).to_have_count(6)
+    page.click("[data-mc-pill]")                                                  # MC docked/floating on the wall
+    expect(page.locator("[data-mc-current]")).to_have_text("Current conversation · Shop floor thread")
+    ctx.close()
+    phone, ppage = _context(browser, server, **PHONE)
+    go(ppage, f"{server['url']}/guild-next/guild/build/bench")
+    expect(ppage.locator('[data-panel="needs"]')).to_be_visible()                # the wall opens as one column
+    boxes = [ppage.locator(f'[data-panel="{p}"]').bounding_box() for p in ("needs", "continue")]
+    assert abs(boxes[0]["x"] - boxes[1]["x"]) < 2 and boxes[1]["y"] > boxes[0]["y"]
+    phone.close()
+
+
+def test_slice1_navigation_reaches_every_guild_page_and_the_truthful_labs_page(browser, server, fresh_queue):
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    nav = page.locator(".guild-subnav")
+    expect(nav.locator("a")).to_have_text(["Shop floor", "Wall", "Queue", "Operate", "Build Log", "Planning Studio", "Prototype Lab"])
+    for label, where in (("Wall", "/guild-next/guild/build/bench"), ("Queue", "/guild-next/guild/build/queue"),
+                         ("Operate", "/guild-next/guild/operate"), ("Planning Studio", "/guild-next/guild/labs")):
+        nav.get_by_text(label, exact=True).click()
+        page.wait_for_selector("body[data-ready=true]")
+        assert where in page.url, (label, page.url)
+        expect(page.locator(".guild-subnav [aria-current='page']")).to_have_count(1)
+    expect(page.locator("#planning-studio")).to_contain_text("planning-studio/")
+    expect(page.locator(".page-meta")).to_contain_text("neither is served on dev yet")
     ctx.close()

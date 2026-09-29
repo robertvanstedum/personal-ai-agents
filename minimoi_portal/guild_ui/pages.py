@@ -67,7 +67,7 @@ def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
         "queue": url_for(".queue"), "operate": url_for(".operate"), "postits": url_for(".postits"),
         "item": url_for(".item", item_id=987654321).replace("987654321", "__ID__"),
         "api": f"{c['url_prefix']}/api/v1",
-        "legacy_build": "/guild/build",
+        "legacy_build": "/guild/build", "labs": url_for(".labs"),
     }
     lights_by_id = {l["id"]: l for l in state["lights"]}
     phone_numbers = [lights_by_id[n] for n in layout["phone"]["numbers"] if n in lights_by_id]
@@ -95,10 +95,17 @@ def floor():
 
 
 @owner_page
+def labs():
+    """Planning Studio and Prototype Lab: truthful entry points (not served on dev yet)."""
+    ctx = _context("labs", "Labs", "Planning Studio and Prototype Lab")
+    return render_template("guild_floor/labs.html", **ctx)
+
+
+@owner_page
 def bench():
     c = cfg()
     services = c["services"]
-    ctx = _context("bench", "Build", "workbench")
+    ctx = _context("bench", "Build", "workbench", page_open=True)   # the wall: a readable card column on a phone
     panels_cfg = {p["id"]: p for p in ctx["layout"]["bench"]["panels"]}
     queue_res = services.queue.list_items()
     data = {
