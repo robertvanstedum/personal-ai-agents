@@ -8,6 +8,7 @@ let signedOutShown = false;
 
 export function configureApi(p) { page = p; }
 export const recordMode = () => (live.off ? 'off_record' : 'on_record');
+export const RECORD_UNKNOWN_TEXT = 'Not sent: this tab does not know whether you are on the record. Choose Confirm on the record, or Off the record.';
 
 function signedOut() {
   document.body.dataset.signedOut = 'true';
@@ -23,6 +24,12 @@ async function call(method, path, body, etag) {
   if (method !== 'GET' && live.off) {
     return { ok: false, status: 409, offline: true,
       body: { error: 'not_listening', result: 'not_listening', message: page.off_record_text } };
+  }
+  // While this tab does not know whether it is on the record, nothing is sent
+  // either: notes, post-its and Save wait until Robert chooses a mode.
+  if (method !== 'GET' && !live.known) {
+    return { ok: false, status: 409, offline: true,
+      body: { error: 'record_unknown', result: 'record_unknown', message: RECORD_UNKNOWN_TEXT } };
   }
   const headers = { Accept: 'application/json' };
   if (method !== 'GET') {
