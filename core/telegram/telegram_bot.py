@@ -129,11 +129,16 @@ def send_message(token, chat_id, text, parse_mode="HTML", retries=3):
     """Simple fire-and-forget message send with retry on timeout"""
     for attempt in range(1, retries + 1):
         try:
-            requests.post(
+            r = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True},
                 timeout=30
             )
+            # Telegram returns 4xx/5xx (invalid token, chat not found, bot
+            # blocked, etc.) without raising — an unchecked response let the
+            # cron job log "Briefing complete" on days nothing was actually
+            # delivered (issue #35).
+            r.raise_for_status()
             return
         except requests.exceptions.Timeout:
             print(f"⚠️  send_message timeout (attempt {attempt}/{retries})")
@@ -160,7 +165,7 @@ def send_article(token, chat_id, num, title, url, source, category, score):
     
     for attempt in range(1, 4):
         try:
-            requests.post(
+            r = requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={
                     "chat_id": chat_id,
@@ -171,6 +176,7 @@ def send_article(token, chat_id, num, title, url, source, category, score):
                 },
                 timeout=30
             )
+            r.raise_for_status()
             return
         except requests.exceptions.Timeout:
             print(f"⚠️  send_article timeout (attempt {attempt}/3)")
@@ -611,7 +617,10 @@ def run_send_mode():
 
     if not token or not chat_id:
         print("❌ Missing polling token or TELEGRAM_CHAT_ID")
-        return
+        # A bare return here left the process exit 0, so the cron script's
+        # `STATUS=$?` check reported "Briefing complete" on days nothing was
+        # ever sent (issue #35).
+        sys.exit(1)
 
     send_briefing(token, chat_id)
 
