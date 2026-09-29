@@ -38,8 +38,11 @@ class FakeRuntime:
     def __init__(self, answer=None):
         self.sent = []
         self.answer = answer or (lambda body, headers: Resp(
-            200, json.dumps({"id": "chatcmpl_x", "choices": [{"message": {"content": "Item 12 is in build."}}],
-                             "usage": {"prompt_tokens": 9, "completion_tokens": 5}}),
+            # OpenClaw 2026.9.6's real shape: usage is always zeros, even for a real answer.
+            200, json.dumps({"id": "chatcmpl_x", "object": "chat.completion", "model": "openclaw/mc-agent",
+                             "choices": [{"index": 0, "message": {"role": "assistant", "content": "Item 12 is in build."},
+                                          "finish_reason": "stop"}],
+                             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}),
             {"X-MC-Correlation-Id": headers.get("X-MC-Correlation-Id")}))
 
     def get(self, url, **kw):
@@ -128,7 +131,10 @@ def test_on_staging_a_refused_key_is_shown_honestly_and_nothing_is_kept_as_an_an
 @pytest.mark.parametrize("answer,status,failure", [
     (lambda b, h: Resp(408, '{"error":{"message":"upstream provider timeout"}}'), "unavailable", "model_gateway_down"),
     (lambda b, h: Resp(504, '{"error":{"type":"relay_timeout"}}'), "error", "runtime_error"),
-    (lambda b, h: Resp(200, '{"choices":[{"message":{"content":"hi"}}]}'), "error", "no_run_status"),
+    # A 200 with no reply text (OpenClaw 9.6's own placeholder when a run produced none).
+    (lambda b, h: Resp(200, '{"choices":[{"index":0,"message":{"role":"assistant","content":"No response from OpenClaw."},'
+                            '"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}'),
+     "error", "no_run_status"),
     (lambda b, h: Resp(429, '{"error":{"type":"relay_busy"}}'), "duplicate_in_progress", "one_turn_in_flight"),
     (lambda b, h: Resp(401, '{"error":{"type":"relay_unauthorized"}}'), "unavailable", "caller_refused"),
 ])

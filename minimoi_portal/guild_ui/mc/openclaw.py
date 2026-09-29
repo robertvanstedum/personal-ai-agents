@@ -17,8 +17,13 @@ Honest states:
   what every stage-A/B turn on staging ends in: MC's key is a placeholder).
 
 Rules carried from spec v0.5 §2:
-* Errors are never answers: ``answered`` only with reply text and a ``usage``
-  block. 408 (also what a DNS failure to the model gateway looks like) is
+* Errors are never answers: ``answered`` only with HTTP 200, non-blank reply
+  text, no ``error`` field, a normal ``finish_reason`` (stop/length, or none)
+  and not OpenClaw's own "No response from OpenClaw." placeholder. OpenClaw
+  2026.9.6 always reports ``usage`` as zeros, so usage is NOT a signal: it is
+  kept as not reported (None); spend comes from the gateway's key record.
+  Upstream failures reach here as non-200 (key refusal 400/401; budget, 500
+  and 429 as a generic 500). 408 (also what a DNS failure to the model gateway looks like) is
   "unavailable · model gateway down"; a refused key or budget is unavailable
   with its class; a timeout is ``timeout_uncertain``; nothing is retried here.
 * The request is refused before sending above 256 KB.
@@ -37,6 +42,11 @@ MAX_REQUEST_BODY_BYTES = 262_144
 CONNECT_TIMEOUT_S = 5
 TURN_DEADLINE_S = 90
 HEALTH_TIMEOUT_S = 5
+# OpenClaw 2026.9.6 (dist/openai-http: the non-streaming chat completion)
+# answers 200 with this text when the agent run produced no reply text, and
+# sets finish_reason to "stop", "length" or (pending client tools) "tool_calls".
+OPENCLAW_NO_RESPONSE = "No response from OpenClaw."
+ANSWER_FINISH_REASONS = (None, "stop", "length")
 
 
 def _root(url: str) -> str:
@@ -181,16 +191,16 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
                               trace=trace)
         try:
             data = json.loads(text)
-            reply = data["choices"][0]["message"].get("content") or ""
-            usage = data.get("usage")
+            choice = data["choices"][0]
+            reply = choice["message"].get("content") or ""
+            finish = choice.get("finish_reason")
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             return TurnResult("error", self.kind, failure_class="malformed_answer", message="unreadable answer")
         trace["response_id"] = str(data.get("id") or "")[:80]
-        # An "answer" that produced no completion tokens is not a real answer
-        # (for example an upstream error surfaced as assistant text).
-        if isinstance(usage, dict) and usage.get("completion_tokens") == 0:
-            usage = None
-        if data.get("error") or not isinstance(usage, dict) or not reply.strip():
+        # Usage is deliberately ignored: OpenClaw 2026.9.6 always reports zeros
+        # (usage None = not reported). The answer signals are below.
+        if (data.get("error") or not isinstance(reply, str) or not reply.strip()
+                or reply.strip() == OPENCLAW_NO_RESPONSE or finish not in ANSWER_FINISH_REASONS):
             return TurnResult("error", self.kind, failure_class="no_run_status",
-                              message="the runtime's answer carried no run status; not treated as an answer", trace=trace)
-        return TurnResult("answered", self.kind, text=reply, usage=usage, trace=trace)
+                              message="the runtime's answer carried no reply; not treated as an answer", trace=trace)
+        return TurnResult("answered", self.kind, text=reply, usage=None, trace=trace)
