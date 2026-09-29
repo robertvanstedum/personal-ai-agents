@@ -340,21 +340,37 @@ const stateLabels = {
   ending: 'Stopping…',
   ended: 'Stopped',
   reconnecting: 'Reconnecting…',
+  idle: 'Voice did not start',
 };
+
+// A start in progress: { stop: true } once Stop is tapped during it. The
+// session is then ended as soon as the start returns (it may have opened the
+// microphone by then), and until that happens the button reads "Stopping…".
+let voiceStart = null;
+let voiceState = 'idle';          // the controller's last state
+let voiceAvailable = false;       // a provider is offered (capabilities)
+
+// One place draws the voice button. A failed start (the controller goes back
+// to idle without a session) or an ended session returns it to 🎤.
+function renderVoice(state) {
+  voiceState = state;
+  if (state === 'ended' || state === 'idle') voiceRunning = false;
+  const voiceActive = voiceRunning && state !== 'ended' && state !== 'idle';
+  const stopping = Boolean(voiceStart && voiceStart.stop);
+  voiceStatus.textContent = stopping ? 'Stopping…' : (stateLabels[state] || state);
+  voiceButton.classList.toggle('recording', voiceActive);
+  voiceButton.textContent = voiceActive ? '■' : '🎤';
+  voiceButton.title = !voiceActive ? 'Start voice conversation'
+    : voiceStart ? 'Cancel voice start' : 'Stop voice conversation';
+  voiceButton.setAttribute('aria-label', voiceButton.title);
+  voiceButton.disabled = !voiceAvailable || stopping;
+  voiceProviderSelect.disabled = voiceActive || !voiceAvailable;
+}
 
 const voiceController = new RealtimeVoiceController({
   bootstrapUrl: '../api/realtime-voice/confer/bootstrap',
   openingInstruction: null,
-  onStateChange: (state) => {
-    if (state === 'ended') voiceRunning = false;
-    const voiceActive = voiceRunning && state !== 'ended';
-    voiceStatus.textContent = stateLabels[state] || state;
-    voiceButton.classList.toggle('recording', voiceActive);
-    voiceButton.textContent = voiceActive ? '■' : '🎤';
-    voiceButton.title = voiceActive ? 'Stop voice conversation' : 'Start voice conversation';
-    voiceButton.setAttribute('aria-label', voiceButton.title);
-    voiceProviderSelect.disabled = voiceActive;
-  },
+  onStateChange: renderVoice,
   onInputState: (state) => {
     const labels = {
       speech_started: 'Listening',
@@ -437,6 +453,7 @@ try {
   }));
   if (selected) voiceProviderSelect.value = selected.provider;
   voiceProvider.textContent = selected ? `Voice: ${selected.label}` : 'Voice unavailable';
+  voiceAvailable = Boolean(selected);
   voiceButton.disabled = !selected;
   voiceProviderSelect.disabled = !selected;
   voiceProviderSelect.addEventListener('change', () => {
@@ -445,16 +462,27 @@ try {
     voiceProvider.textContent = item ? `Voice: ${item.label}` : 'Voice unavailable';
   });
 } catch (_) {
+  voiceAvailable = false;
   voiceProvider.textContent = 'Voice unavailable';
   voiceButton.disabled = true;
 }
 
+const sessionOpen = () => !['idle', 'ended', 'ending'].includes(voiceState);
+
 voiceButton.addEventListener('click', async () => {
+  if (voiceStart) {                 // Stop during a start: end it the moment the start returns
+    voiceStart.stop = true;
+    renderVoice(voiceState);
+    return;
+  }
   if (voiceRunning) {
     voiceController.endSession('user_ended');
     return;
   }
+  const start = { stop: false };
+  voiceStart = start;
   voiceRunning = true;
+  let error = null;
   try {
     await voiceController.startSession({
       provider: voiceProviderSelect.value,
@@ -462,9 +490,21 @@ voiceButton.addEventListener('click', async () => {
       scene: 'confer',
       learner_name: 'Robert',
     });
-  } catch (_) {
-    voiceRunning = false;
+  } catch (err) {
+    error = err;
   }
+  voiceStart = null;
+  if (error || start.stop) {
+    // A thrown start can leave the controller part way (for example
+    // connecting, with the microphone already open), and a Stop tapped
+    // during the start must win: end whatever opened, then show the result.
+    if (sessionOpen()) voiceController.endSession(error ? 'start_failed' : 'user_ended');
+    voiceRunning = false;
+    renderVoice(error ? 'idle' : 'ended');
+    if (error) voiceTranscript.textContent = `Voice error: ${error?.message || 'the voice session could not start'}`;
+    return;
+  }
+  renderVoice(voiceState);
 });
 </script>
 </body>
