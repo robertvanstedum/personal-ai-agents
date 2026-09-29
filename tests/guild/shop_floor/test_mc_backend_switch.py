@@ -208,6 +208,9 @@ def test_answered_only_with_text_and_usage_and_pinned_to_mc_agent():
 
 @pytest.mark.parametrize("status,text,turn_status,failure", [
     (200, '{"choices":[{"message":{"content":"hi"}}]}', "error", "no_run_status"),
+    # Stage C honesty guard: text with zero completion tokens is not an answer.
+    (200, '{"choices":[{"message":{"content":"Budget has been exceeded"}}],"usage":{"prompt_tokens":5,"completion_tokens":0}}',
+     "error", "no_run_status"),
     (200, '{"choices":[{"message":{"content":""}}],"usage":{}}', "error", "no_run_status"),
     (200, "not json", "error", "malformed_answer"),
     (408, '{"error":{"message":"upstream provider timeout"}}', "unavailable", "model_gateway_down"),

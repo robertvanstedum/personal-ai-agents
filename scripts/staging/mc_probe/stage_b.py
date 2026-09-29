@@ -76,6 +76,23 @@ if len(sys.argv) > 2:
 print(json.dumps(out))
 """
 
+ERROR_SURFACE = r"""
+import json, os, sys
+sys.path.insert(0, "/src")
+from minimoi_portal.guild_ui.mc.openclaw import OpenClawMasterCraftsman
+from minimoi_portal.guild_ui.mc.backend import TurnRequest
+b = OpenClawMasterCraftsman("http://mc-relay:8790/v1", os.environ["MC_RUNTIME_TOKEN"])
+r = b.turn(TurnRequest("guild:robert:probe", "hello", "n-err", correlation_id=sys.argv[1]))
+import urllib.request as u
+body = json.dumps({"model": "openclaw/mc-agent", "user": "guild-mc:err", "messages": [{"role": "user", "content": "again"}]}).encode()
+try:
+    raw = u.urlopen(u.Request("http://mc-relay:8790/v1/chat/completions", data=body, method="POST",
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.environ["MC_RUNTIME_TOKEN"]}), timeout=120).read().decode()
+except u.HTTPError as e:
+    raw = e.read().decode()
+print(json.dumps({"status": r.status, "failure_class": r.failure_class, "text": r.text, "relay_status": (r.trace or {}).get("relay_status"), "runtime_body": raw[:300]}))
+"""
+
 RELAY_RULES = r"""
 import json, os, urllib.request as u
 base = "http://mc-relay:8790"; tok = os.environ["MC_RUNTIME_TOKEN"]
@@ -181,6 +198,28 @@ def main():
         record("every model request came from MC on MC's key, and the stand-in endpoint was the only one (no provider)",
                chat and all(e["key"] == "mc-key" and e["model"] == "minimoi-mc-agent" for e in chat),
                f"{len(chat)} requests")
+        # Error surface (#251 review, stage C entry): an upstream budget refusal, a
+        # 500 and a 429 must reach the Shop floor as failures, never as a 200
+        # answer carrying error text. OpenClaw retries transient errors, so each
+        # case is scripted many times.
+        for label, step, want in (
+                ("budget 400", {"status": 400, "type": "budget_exceeded", "message": "Budget has been exceeded! Current cost: 15.2, Max budget: 15.0"}, "cap_reached"),
+                ("upstream 500", {"status": 500, "type": "internal_error", "message": "upstream exploded"}, None),
+                ("upstream 429", {"status": 429, "type": "rate_limit", "message": "Rate limit reached for rpm 10"}, None)):
+            docker("exec", CAP, "node", "-e", "fetch('http://127.0.0.1:4001/script',{method:'POST',body:JSON.stringify({model:'minimoi-mc-agent',replace:true,"
+                   "steps:Array(12).fill(" + json.dumps(step) + ")})})")
+            out = docker("exec", PORTAL, "python", "-c", ERROR_SURFACE, secrets.token_hex(16), timeout=300)
+            try:
+                got = json.loads(out.stdout.strip().splitlines()[-1])
+            except (json.JSONDecodeError, IndexError):
+                got = {"error": (out.stderr or out.stdout)[-300:]}
+            ok = got.get("status") != "answered" and got.get("text") is None
+            record(f"error surface: an upstream {label} reaches the Shop floor as a failure, never an answer",
+                   ok, json.dumps(got))
+            if want and got.get("failure_class") != want:
+                record(f"FINDING (informational): OpenClaw 9.6 collapses an upstream {label} into its own 500 'internal "
+                       f"error', so the Shop floor cannot name it ({want}); it shows the honest generic failure", True,
+                       f"class {got.get('failure_class')}")
         rules = json.loads(docker("exec", PORTAL, "python", "-c", RELAY_RULES).stdout.strip() or "{}")
         want = {"readyz": 200, "no_token": 401, "tools_invoke": 403, "embeddings": 403, "models": 403,
                 "alias_default": 403, "alias_cos": 403, "stream": 403}

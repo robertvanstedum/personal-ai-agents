@@ -186,6 +186,10 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             return TurnResult("error", self.kind, failure_class="malformed_answer", message="unreadable answer")
         trace["response_id"] = str(data.get("id") or "")[:80]
+        # An "answer" that produced no completion tokens is not a real answer
+        # (for example an upstream error surfaced as assistant text).
+        if isinstance(usage, dict) and usage.get("completion_tokens") == 0:
+            usage = None
         if data.get("error") or not isinstance(usage, dict) or not reply.strip():
             return TurnResult("error", self.kind, failure_class="no_run_status",
                               message="the runtime's answer carried no run status; not treated as an answer", trace=trace)

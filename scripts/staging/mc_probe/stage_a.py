@@ -45,7 +45,8 @@ GW, COS, STANDINS, CLIENT_DEF, CLIENT_MC, CAP = (f"{P}-gateway", f"{P}-cos-agent
                                                  f"{P}-client-default", f"{P}-client-mc", f"{P}-capture")
 RESULTS: list[dict] = []
 COS_ENV_NAMES = {"MINIMOI_MODEL_GATEWAY_KEY", "COS_AGENT_A_GATEWAY_TOKEN", "ANTHROPIC_API_KEY", "XAI_API_KEY",
-                 "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY", "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY"}
+                 "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY", "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY",
+                 "MC_ANTHROPIC_API_KEY", "GATEWAY_ANTHROPIC_API_KEY", "GATEWAY_XAI_API_KEY"}
 
 
 def record(gate, check, ok, detail=""):
@@ -189,8 +190,12 @@ class Probe:
         os.chmod(cfg, 0o644)
         docker("run", "-d", "--name", GW, "--network", NET_DEFAULT, "--network-alias", "model-gateway",
                "--memory", "900m", "--oom-score-adj", "1000", "-v", f"{cfg}:/app/config.yaml:ro",
-               "-e", f"LITELLM_MASTER_KEY={self.master}", "-e", "XAI_API_KEY=probe-not-a-key",
-               "-e", "ANTHROPIC_API_KEY=probe-not-a-key",
+               "-e", f"LITELLM_MASTER_KEY={self.master}",
+               # staging's names (docker-compose.staging.yml): provider keys under
+               # gateway-only names, the pass-through's default names empty.
+               "-e", "GATEWAY_XAI_API_KEY=probe-not-a-key", "-e", "GATEWAY_ANTHROPIC_API_KEY=probe-not-a-key",
+               "-e", "XAI_API_KEY=", "-e", "ANTHROPIC_API_KEY=",
+               "-e", "MC_ANTHROPIC_API_KEY=mc-anthropic-placeholder-not-a-key",
                "-e", "MINIMOI_RECEIPT_ENDPOINT=http://cos-scheduler:8769/internal/model-gateway/receipt",
                "-e", "MINIMOI_RECEIPT_KEY=probe-not-a-key", self.a.gateway_image,
                "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1", check=True)

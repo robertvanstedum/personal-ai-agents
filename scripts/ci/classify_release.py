@@ -69,6 +69,8 @@ STAGING_ONLY_FILES = frozenset({
     "docker-compose.staging.yml",
     # Master Craftsman's own Compose project (MC spec v0.9 §3), staging only.
     "docker-compose.mc.yml",
+    # The gateway's key database overlay (MC stage C), staging only.
+    "docker-compose.staging-keys.yml",
     "services/model_gateway/litellm.staging.yaml",
 })
 STAGING_ONLY_PREFIXES = ("scripts/staging/",)

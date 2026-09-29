@@ -21,7 +21,8 @@ from test_staging_environment import (  # noqa: F401  (shell is a fixture)
 REPO = Path(__file__).resolve().parent.parent
 MC_FILE = REPO / "docker-compose.mc.yml"
 COS_NAMES = {"MINIMOI_MODEL_GATEWAY_KEY", "COS_AGENT_A_GATEWAY_TOKEN", "ANTHROPIC_API_KEY", "XAI_API_KEY",
-             "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY", "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY"}
+             "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY", "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY",
+             "MC_ANTHROPIC_API_KEY", "GATEWAY_ANTHROPIC_API_KEY", "GATEWAY_XAI_API_KEY"}
 
 
 def _main(path):
@@ -122,28 +123,28 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     before = _staging_render([tmp_path / "docker-compose.prod.yml", tmp_path / "docker-compose.staging.yml"])
     after = _staging_render([PROD, STAGING])
     for name in before["services"]:
-        if name in ("model-gateway", "portal"):
+        if name == "model-gateway":
             continue
         assert after["services"][name] == before["services"][name], name
-    # Stage B: the portal gains exactly mc-front and the four MC settings (off by default).
-    p_before, p_after = before["services"]["portal"], after["services"]["portal"]
-    assert set(p_after["networks"]) == set(p_before["networks"]) | {"mc-front"}
-    added = {k: v for k, v in p_after["environment"].items() if k not in p_before["environment"]}
-    assert set(added) == {"MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MC_RUNTIME_URL", "MC_RUNTIME_TOKEN"}
-    assert added["MC_RUNTIME_URL"] == "http://mc-relay:8790/v1"
-    assert {k: v for k, v in p_after.items() if k not in ("networks", "environment")} == \
-        {k: v for k, v in p_before.items() if k not in ("networks", "environment")}
     gw_before, gw_after = before["services"]["model-gateway"], after["services"]["model-gateway"]
     assert set(gw_after["networks"]) == {"default", "mc-net"}
-    gw_after = {k: v for k, v in gw_after.items() if k != "networks"}
-    gw_before = {k: v for k, v in gw_before.items() if k != "networks"}
+    # Stage C: provider keys under gateway-only names, the default names empty,
+    # and MC's own provider key (a placeholder until Robert's).
+    env_before, env_after = gw_before["environment"], gw_after["environment"]
+    assert env_after["ANTHROPIC_API_KEY"] == "" and env_after["XAI_API_KEY"] == ""
+    assert env_after["GATEWAY_ANTHROPIC_API_KEY"] == env_before["ANTHROPIC_API_KEY"]
+    assert env_after["GATEWAY_XAI_API_KEY"] == env_before["XAI_API_KEY"]
+    assert env_after["MC_ANTHROPIC_API_KEY"] == "mc-anthropic-placeholder-not-a-key"
+    assert set(env_after) == set(env_before) | {"GATEWAY_ANTHROPIC_API_KEY", "GATEWAY_XAI_API_KEY", "MC_ANTHROPIC_API_KEY"}
+    gw_after = {k: v for k, v in gw_after.items() if k not in ("networks", "environment")}
+    gw_before = {k: v for k, v in gw_before.items() if k not in ("networks", "environment")}
     assert gw_after == gw_before
 
 
 def test_production_compose_and_cos_files_are_byte_identical_to_main():
     for path in ("docker-compose.prod.yml", "docker-compose.yml", "docker/Dockerfile.cos-agent-a",
                  "docker/cos-agent-a/openclaw.json", "docker/cos-agent-a/apply-config.sh",
-                 "services/model_gateway/litellm.prod.yaml", "services/model_gateway/litellm.staging.yaml",
+                 "services/model_gateway/litellm.prod.yaml",
                  ".github/workflows/deploy.yml", "scripts/operations/deploy_scoped_release.sh",
                  "scripts/staging/build.sh"):
         main = _main(path)

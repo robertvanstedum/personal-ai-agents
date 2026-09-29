@@ -16,14 +16,30 @@
 #   minimoi-cos-agent-anthropic  same as prod and the dev gateway on main
 #
 # The dev gateway's Mac-only Ollama route (minimoi-cos-agent-local) is left
-# out, as in production: staging mirrors production's route set.
+# out, as in production: staging mirrors production's route set, plus one
+# staging-only route (MC spec v0.9 stage C):
+#
+#   minimoi-mc-agent             Master Craftsman: anthropic/claude-haiku-4-5-20251001
+#                                on MC's OWN provider key (MC_ANTHROPIC_API_KEY,
+#                                never empty: docker-compose.staging.yml gives
+#                                it a placeholder Anthropic refuses), no
+#                                fallback. Only MC's capped virtual key may call
+#                                it (scripts/staging/mc.sh key).
+#
+# Provider keys use gateway-only names (GATEWAY_ANTHROPIC_API_KEY,
+# GATEWAY_XAI_API_KEY), and the gateway's ANTHROPIC_API_KEY / XAI_API_KEY are
+# empty: LiteLLM's pass-through routes (/anthropic/*, and the provider
+# factory routes) sign upstream calls with those default names, so with them
+# empty a pass-through call carries no provider key and cannot spend on CoS's
+# account, whichever virtual key makes it (v0.8 review finding 1).
+#
 # tests/test_staging_environment.py enforces this shape.
 
 model_list:
   - model_name: minimoi-cos-agent
     litellm_params:
       model: anthropic/claude-haiku-4-5-20251001
-      api_key: os.environ/ANTHROPIC_API_KEY
+      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
       timeout: 120
     model_info:
       id: cos-anthropic-haiku-primary
@@ -35,7 +51,7 @@ model_list:
   - model_name: minimoi-cos-agent-xai-fast
     litellm_params:
       model: xai/grok-4.3
-      api_key: os.environ/XAI_API_KEY
+      api_key: os.environ/GATEWAY_XAI_API_KEY
       timeout: 120
       reasoning_effort: none
     model_info:
@@ -48,7 +64,7 @@ model_list:
   - model_name: minimoi-cos-web-search
     litellm_params:
       model: xai/grok-4.3
-      api_key: os.environ/XAI_API_KEY
+      api_key: os.environ/GATEWAY_XAI_API_KEY
       timeout: 60
       reasoning_effort: low
     model_info:
@@ -60,7 +76,7 @@ model_list:
   - model_name: minimoi-cos-agent-anthropic
     litellm_params:
       model: anthropic/claude-sonnet-4-6
-      api_key: os.environ/ANTHROPIC_API_KEY
+      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
       timeout: 120
     model_info:
       id: cos-anthropic-secondary
@@ -68,6 +84,17 @@ model_list:
       mode: chat
       supports_function_calling: true
       fallback_position: 2
+
+  - model_name: minimoi-mc-agent
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/MC_ANTHROPIC_API_KEY
+      timeout: 120
+    model_info:
+      id: mc-anthropic-haiku
+      base_model: anthropic/claude-haiku-4-5-20251001
+      mode: chat
+      supports_function_calling: true
 
 router_settings:
   fallbacks:
