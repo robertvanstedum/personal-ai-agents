@@ -888,14 +888,20 @@ mounts `data/workshops` read only (`MINIMOI_WORKSHOPS_DIR`, id
 `MINIMOI_WORKSHOP_ID=mac`).
 
 **The admission verdict.** `ok` (room for one run), `tight` (another agent
-client is running, or a resource is near its limit), `blocked` (memory free
+session is running, or a resource is near its limit), `blocked` (memory free
 under 10%, swap over 6 GB, disk free under 10 GB, or three or more agent
-clients), `unknown` (a probe failed). Agent clients are the `claude`, `codex`
-and `openclaw` processes, whoever started them; their arguments are read to
-classify and never kept. A missing, unreadable or stale record (the host
+sessions), `unknown` (a probe failed). Each verdict names its limit, and the
+screen shows all four. It counts agent **sessions on this Mac, outside
+Docker**: terminal or desktop Claude Code, and the Codex CLI (native or npm),
+whoever started them. A wrapper and its child, or a parent and a child of the
+same client, count as one session. The ChatGPT app's bundled Codex and an
+OpenClaw gateway are listed as background apps and are not counted. The
+staging containers' agents run inside the Colima VM, where the Mac's `ps`
+cannot see them. `ps` is read with the executable path last; arguments are
+read only for `node` processes, to find the script, and are never kept. A missing, unreadable or stale record (the host
 reading is over 15 minutes old) shows as unknown, never as "nothing running".
 `observe` writes a health event when the verdict, the reasons or the clients
-change, and every 10 minutes otherwise, so a quiet host stays fresh.
+change, and every 9 minutes otherwise, so a quiet host stays fresh.
 
 **Not installed yet.** Nothing runs `observe` and `sync` on a schedule: until a
 launchd job is added (with Robert's go-ahead), run them by hand before looking
@@ -906,7 +912,11 @@ at the screen, or the page shows unknown after 15 minutes.
 - **One writer per state folder.** No Mac-native process writes
   `~/minimoi-staging` while staging runs: the queue store's `flock` does not
   cross the Colima VM boundary. `verify.sh` lists native processes with files
-  open there.
+  open there. **One exception:** `scripts/workshop/workshop.py sync` writes
+  `data/workshops/` one way. The portal mounts that folder read only, so the
+  sync is its only writer: `state.json` is replaced atomically, and a torn
+  `events.jsonl` line is skipped. The sync runs for a moment and holds no files
+  open, so `verify.sh` does not list it unless it runs during the check.
 - Never `down -v`, never delete the external volumes or the
   `personal-ai-agents_*` volumes (the rollback copy).
 - The staging bots use the **test** bot tokens; start them only after their

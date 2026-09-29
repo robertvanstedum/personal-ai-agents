@@ -1305,7 +1305,9 @@ def workshop(server, floor, tmp_path):
     os.environ["MINIMOI_WORKSHOP_ID"] = "mac"
     w = Workshop(str(tmp_path / "workshops"), "mac")
     obs = Observation(observed_at=iso(now()), memory_free_pct=46.0, swap_used_gb=1.2, disk_free_gb=80.0, load_1m=2.1,
-                      clients=[{"kind": "codex", "pid": 11, "elapsed": "05:00"}], clients_known=True)
+                      clients=[{"kind": "codex", "pid": 11, "elapsed": "05:00", "counted": True},
+                               {"kind": "codex-desktop", "pid": 12, "elapsed": "09:00", "counted": False}],
+                      clients_known=True)
     w.append(health_event(obs, "mac"))
     w.append({"workshop": "mac", "actor": "claude-code", "kind": "started", "item": "queue:12", "stage": "build",
               "text": "Slice 4a: tests and screenshots", "next_actor": "codex"})
@@ -1336,7 +1338,10 @@ def test_slice4a_the_workshop_opens_from_a_queue_item_and_refreshes_honestly(bro
     assert "/guild-next/guild/workshop?item=12" in page.url
     expect(page.locator(".guild-subnav [aria-current='page']")).to_have_text("Workshop")
     expect(page.locator("[data-ws-admission]")).to_have_attribute("data-verdict", "tight")
-    expect(page.locator("[data-ws-runs]")).to_contain_text("1 agent client running")
+    expect(page.locator("[data-ws-runs]")).to_contain_text("1 agent session running on this Mac (outside Docker)")
+    expect(page.locator("[data-ws-background]")).to_contain_text("Codex desktop (ChatGPT app)")
+    expect(page.locator("[data-ws-limits]")).to_contain_text("agent sessions tight at 1, blocked at 3")
+    expect(page.locator("[data-ws-recovery-list]")).to_contain_text("prefer one at a time")
     expect(page.locator("[data-ws-next]")).to_contain_text("robert")
     expect(page.locator("[data-ws-needs]")).to_contain_text("Choose the refresh cadence")
     expect(page.locator("[data-ws-scope]")).to_contain_text("Approved for build")
@@ -1351,13 +1356,21 @@ def test_slice4a_the_workshop_opens_from_a_queue_item_and_refreshes_honestly(bro
     with page.expect_response(lambda r: "/api/v1/workshop" in r.url):
         page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
     expect(page.locator("[data-ws-admission]")).to_have_attribute("data-verdict", "ok")
-    expect(page.locator("[data-ws-runs]")).to_have_text("No agent client running")
+    expect(page.locator("[data-ws-runs]")).to_have_text("No agent session running on this Mac (outside Docker)")
+    expect(page.locator("[data-ws-background]")).to_have_text("")
+    expect(page.locator("[data-ws-recovery-list] li")).to_have_count(0)            # ok: nothing to recover
     # A failed refresh is unknown, never "nothing running".
     page.route("**/api/v1/workshop*", lambda route: route.fulfill(status=503, body="{}", content_type="application/json"))
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
     expect(page.locator("[data-ws-admission]")).to_have_attribute("data-verdict", "unknown")
     expect(page.locator("[data-ws-verdict]")).to_have_text("Host unknown")
     expect(page.locator("[data-ws-runs]")).to_have_text("Running agents unknown (refresh failed)")
+    expect(page.locator("[data-ws-age]")).to_contain_text("last good read")
+    expect(page.locator("[data-ws-age]")).not_to_contain_text("just now")
+    expect(page.locator("[data-ws-headroom]")).to_have_attribute("data-stale", "true")
+    expect(page.locator("[data-ws-headroom]")).to_contain_text("(last good read")
+    expect(page.locator("[data-ws-recovery-list]")).to_have_text(re.compile("^The refresh failed: reload the page"))
+    expect(page.locator("[data-ws-refreshed]")).to_contain_text("(last good read; the refresh failed)")
     if SHOTS:
         page.screenshot(path=f"{SHOTS}/2-desktop-refresh-failed-unknown.png")
     assert not model_calls, model_calls

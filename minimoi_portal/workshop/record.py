@@ -117,6 +117,9 @@ class Workshop:
         self.state_path = os.path.join(self.dir, "state.json")
 
     def _ensure(self):
+        root = os.path.dirname(self.dir)
+        if not os.path.isdir(root):
+            os.makedirs(root, mode=0o700, exist_ok=True)     # the home too, not only the leaf, is owner-only
         os.makedirs(self.dir, mode=0o700, exist_ok=True)
 
     @contextmanager

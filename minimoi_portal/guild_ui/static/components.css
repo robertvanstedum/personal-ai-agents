@@ -644,3 +644,5 @@ body.gu[data-page="floor"][data-lights-open="true"] .floor-strip .lights { displ
 @media (max-width: 900px) {
   .ws-grid, .ws-more-grid { grid-template-columns: 1fr; }
 }
+.ws-headroom[data-stale="true"], .ws-admission[data-stale="true"] .small, #ws-needs-h ~ .rows [data-stale="true"] { color: var(--gu-unknown-ink); }
+.ws-limits, .ws-background { color: var(--gu-text-muted); }

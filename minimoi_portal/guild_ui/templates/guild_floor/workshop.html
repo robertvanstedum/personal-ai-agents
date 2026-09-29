@@ -20,10 +20,11 @@
     <p class="ws-admission" data-ws-admission data-verdict="{{ adm.verdict }}">
       <span class="ws-verdict" data-ws-verdict>Host {{ adm.verdict }}</span>
       <span class="small" data-ws-reason>{{ adm.reasons[0] if adm.reasons else '' }}</span>
-      <span class="small ws-age" data-ws-age>{% if adm.age %}· read {{ adm.age }}{% endif %}</span>
+      <span class="small ws-age" data-ws-age data-observed="{{ adm.observed_at or '' }}">{% if adm.age %}· read {{ adm.age }}{% endif %}</span>
     </p>
     {% if adm.reasons|length > 1 %}<ul class="ws-reasons small" data-ws-reasons>{% for r in adm.reasons[1:] %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
-    <p class="ws-runs" data-ws-runs data-known="{{ 'true' if ws.runs.known else 'false' }}">{{ ws.runs.text }}{% if ws.runs.runs %}: {% for r in ws.runs.runs %}<span class="ws-run">{{ r.kind }} <span class="small">(up {{ r.elapsed }})</span></span>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+    <p class="ws-runs" data-ws-runs data-known="{{ 'true' if ws.runs.known else 'false' }}">{{ ws.runs.text }}{% if ws.runs.runs %}: {% for r in ws.runs.runs %}<span class="ws-run">{{ r.label }} <span class="small">(up {{ r.elapsed }})</span></span>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+    {% if ws.runs.background %}<p class="ws-background small" data-ws-background>Also running, not counted as build sessions: {% for r in ws.runs.background %}{{ r.label }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
     <p class="ws-last small" data-ws-last>{% if ws.last_event %}Last event ({{ ws.last_event_scope }}): {{ ws.last_event.actor }} · {{ ws.last_event.kind }} · {{ ws.last_event.text }} · <span data-iso="{{ ws.last_event.at }}">{{ hhmm(ws.last_event.at) }}</span>{% else %}No workshop events yet.{% endif %}</p>
     <p class="ws-next small" data-ws-next>Next actor: <strong>{{ ws.next_actor or 'unknown' }}</strong></p>
   </section>
@@ -31,11 +32,12 @@
   <section class="card ws-needs" aria-labelledby="ws-needs-h" data-ws-needs>
     <h2 class="h2" id="ws-needs-h">Needs you</h2>
     {% if ws.needs.status != 'ok' %}<p class="unknown-line">{{ ws.needs.text }}</p>{% endif %}
+    {% if ws.needs.workshop_status != 'ok' %}<p class="unknown-line" data-ws-needs-unknown>{{ ws.needs.workshop_text }}</p>{% endif %}
     <ul class="rows">
       {% for n in ws.needs['items'] %}<li class="row"><span><span class="tag" data-tag="needs">{{ n.tag }}</span> <a href="{{ urls.item | replace('__ID__', n.item_id|string) }}">{{ n.text }}</a></span></li>{% endfor %}
-      {% for n in ws.needs.workshop %}<li class="row"><span><span class="tag" data-tag="needs">{{ n.actor }}</span> {{ n.text }} <span class="small">({{ n.item }})</span></span></li>{% endfor %}
+      {% for n in ws.needs.workshop %}<li class="row"{% if ws.needs.workshop_status != 'ok' %} data-stale="true"{% endif %}><span><span class="tag" data-tag="needs">{{ n.actor }}</span> {{ n.text }} <span class="small">({{ n.item }}{% if ws.needs.workshop_status != 'ok' %}, from a stale record{% endif %})</span></span></li>{% endfor %}
     </ul>
-    {% if ws.needs.status == 'ok' and not ws.needs['items'] and not ws.needs.workshop %}<p class="small">Nothing needs you here right now.</p>{% endif %}
+    {% if ws.needs.status == 'ok' and ws.needs.workshop_status == 'ok' and not ws.needs['items'] and not ws.needs.workshop %}<p class="small">Nothing needs you here right now.</p>{% endif %}
   </section>
 
   <section class="card ws-budget" aria-labelledby="ws-budget-h" data-ws-budget>
@@ -45,10 +47,8 @@
       {% if ws.budget.by_actor %}{% for actor, usd in ws.budget.by_actor.items() %}<strong>{{ actor }}</strong> ${{ '%.2f' % usd }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}none recorded{% endif %}</p>
     {% else %}<p class="unknown-line">Model spend unknown (no usage store here).</p>{% endif %}
     <p class="small">Builder runs: no task budget yet (the launcher arrives in 4b).</p>
-    {% set h = (ws.state or {}).get('host') or {} %}
-    {% if ws.record_status == 'ok' and h %}
-    <p class="small ws-headroom">Headroom: memory free {{ h.memory_free_pct if h.memory_free_pct is not none else 'unknown' }}% · swap used {{ h.swap_used_gb if h.swap_used_gb is not none else 'unknown' }} GB · disk free {{ h.disk_free_gb if h.disk_free_gb is not none else 'unknown' }} GB</p>
-    {% else %}<p class="small ws-headroom">Headroom unknown (no fresh host reading).</p>{% endif %}
+    <p class="small ws-headroom" data-ws-headroom data-stale="{{ 'false' if ws.headroom else 'true' }}">{{ ws.headroom or 'Headroom unknown (no fresh host reading).' }}</p>
+    <p class="small ws-limits" data-ws-limits>{{ ws.limits }}.</p>
   </section>
 
   <details class="ws-more" data-ws-more open>
@@ -73,8 +73,8 @@
       </section>
       <section class="card" aria-labelledby="ws-recover-h" data-ws-recovery>
         <h2 class="h2" id="ws-recover-h">Recovery</h2>
-        <ul class="small ws-recovery">{% for r in ws.recovery %}<li>{{ r }}</li>{% endfor %}
-          <li>No launched runs to recover: the launcher is 4b.</li></ul>
+        <ul class="small ws-recovery" data-ws-recovery-list>{% for r in ws.recovery %}<li>{{ r }}</li>{% endfor %}</ul>
+        <p class="small">No launched runs to recover: the launcher is 4b.</p>
       </section>
     </div>
   </details>

@@ -5,11 +5,11 @@ Runs on the workshop host (the Mac), from the repository, with no model call:
 
   workshop.py event --actor claude-code --item pr:265 --kind needs_you --stage review --text "..." [--next-actor robert] [--ref pr=265]
   workshop.py observe [--force]      one host observation; a health event only when something changed
-                                     (or every 10 minutes as a heartbeat, under the page's 15-minute
+                                     (or every 9 minutes as a heartbeat, under the page's 15-minute
                                      stale limit). Run it with sync every 5 minutes.
   workshop.py state                  print the derived state (in progress, next, needs you, host)
   workshop.py sync [--to DIR]        copy events.jsonl and state.json to the staging data folder
-                                     (default ~/minimoi-staging/data/workshops); code and secrets never go
+                                     (default $STAGING_ROOT/data/workshops, else ~/minimoi-staging/...); code and secrets never go
 
 Files: $MINIMOI_WORKSHOP_HOME (default ~/minimoi-workshops)/<id>/events.jsonl and state.json.
 The workshop id is $MINIMOI_WORKSHOP_ID (default "mac").
@@ -19,7 +19,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import socket
 import sys
 import tempfile
 from datetime import timedelta
@@ -31,8 +30,8 @@ from minimoi_portal.workshop.record import Workshop, now, parse  # noqa: E402
 
 HOME = os.environ.get("MINIMOI_WORKSHOP_HOME") or os.path.expanduser("~/minimoi-workshops")
 WORKSHOP_ID = os.environ.get("MINIMOI_WORKSHOP_ID") or "mac"
-HEARTBEAT = timedelta(minutes=10)    # under the page's 15-minute stale limit (record.STALE_AFTER)
-SYNC_TO = os.path.expanduser("~/minimoi-staging/data/workshops")
+HEARTBEAT = timedelta(minutes=9)     # under the page's 15-minute stale limit, even with a 5-minute run landing late
+SYNC_TO = os.path.join(os.path.expanduser(os.environ.get("STAGING_ROOT") or "~/minimoi-staging"), "data", "workshops")
 
 
 def _last_health(ws: Workshop) -> dict | None:

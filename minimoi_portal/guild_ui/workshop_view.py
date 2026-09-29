@@ -13,6 +13,7 @@ import json
 import os
 from datetime import datetime, timezone
 
+from ..workshop.observer import LABELS, SESSION_KINDS, limits_text
 from ..workshop.record import STALE_AFTER, load_state, now, parse
 from .adapters import ACTIVE, by_recent
 from .needs import needs_you
@@ -56,13 +57,28 @@ def admission(state: dict | None, status: str) -> dict:
             "observed_at": seen, "age": _age(seen)}
 
 
+WHERE = "on this Mac (outside Docker)"
+
+
 def observed_runs(state: dict | None, status: str) -> dict:
+    """Agent sessions on the Mac, and background agent apps, labelled. The
+    staging containers' agents run in the Colima VM, which the Mac's ps cannot
+    see: the text says where it looked."""
     host = (state or {}).get("host") or {}
     if status != "ok" or not host or not host.get("clients_known"):
-        return {"known": False, "runs": [], "text": "Running agents unknown (no fresh host reading)"}
-    runs = host.get("runs") or []
-    text = "No agent client running" if not runs else f"{len(runs)} agent client{'s' if len(runs) != 1 else ''} running"
-    return {"known": True, "runs": runs, "text": text}
+        return {"known": False, "runs": [], "background": [], "sessions": None,
+                "text": f"Running agents {WHERE} unknown (no fresh host reading)"}
+    rows = [{**r, "label": LABELS.get(r.get("kind"), r.get("kind")),
+             "counted": r.get("counted", r.get("kind") in SESSION_KINDS)} for r in host.get("runs") or []]
+    counts = host.get("clients") or {}
+    sessions = host.get("sessions")
+    if sessions is None:
+        sessions = sum(n for k, n in counts.items() if k in SESSION_KINDS)
+    runs = [r for r in rows if r["counted"]]
+    background = [r for r in rows if not r["counted"]]
+    text = (f"No agent session running {WHERE}" if not sessions
+            else f"{sessions} agent session{'s' if sessions != 1 else ''} running {WHERE}")
+    return {"known": True, "runs": runs, "background": background, "sessions": sessions, "text": text}
 
 
 def usage_this_month(folder: str | None) -> dict:
@@ -109,6 +125,11 @@ def view(services, item_id: int | None, *, usage_dir: str | None = None) -> dict
     needs = needs_you(queue_res, checks, cap=100)
     item_needs = [n for n in needs.get("items", []) if item_id and n.get("item_id") == item_id]
     ws_needs = [n for n in (state or {}).get("needs_you", []) if not key or n.get("item") == key]
+    # The workshop's own needs are only as good as its record (never "nothing" when unknown).
+    ws_needs_status = {"ok": "ok", "stale": "stale"}.get(status, "unknown")
+    ws_needs_text = {"ok": None,
+                     "stale": "Workshop needs may be out of date (no fresh workshop record).",
+                     "unknown": "Workshop needs unknown (no workshop record could be read)."}[ws_needs_status]
     queued = sorted([i for i in items if i.get("status_known") and i.get("status") == "spec_ready" and i.get("id") != item_id],
                     key=by_recent, reverse=True)[:5]
     return {
@@ -118,7 +139,9 @@ def view(services, item_id: int | None, *, usage_dir: str | None = None) -> dict
         "last_event_scope": "this item" if item_event else "the workshop",
         "next_actor": (item_event or {}).get("next_actor"),
         "item": item, "item_res": queue_res, "approved": bool(item and item.get("status") in APPROVED),
-        "needs": {"status": needs.get("status"), "text": needs.get("text"), "items": item_needs, "workshop": ws_needs},
+        "needs": {"status": needs.get("status"), "text": needs.get("text"), "items": item_needs, "workshop": ws_needs,
+                  "workshop_status": ws_needs_status, "workshop_text": ws_needs_text},
+        "headroom": headroom(state, status), "limits": limits_text(),
         "queued": queued, "queued_next": (state or {}).get("next", [])[:5],
         "budget": usage_this_month(usage_dir or os.environ.get("MINIMOI_USAGE_DIR")),
         "recovery": RECOVERY.get(adm["verdict"], RECOVERY["unknown"]),
@@ -126,12 +149,23 @@ def view(services, item_id: int | None, *, usage_dir: str | None = None) -> dict
     }
 
 
+def headroom(state: dict | None, status: str) -> str | None:
+    """The host's numbers from a fresh reading, or None (then it says unknown)."""
+    h = (state or {}).get("host") or {}
+    if status != "ok" or not h:
+        return None
+    val = lambda k, unit: f"{h[k]}{unit}" if h.get(k) is not None else "unknown"  # noqa: E731
+    return (f"Headroom {WHERE}: memory free {val('memory_free_pct', '%')} · swap used {val('swap_used_gb', ' GB')} · "
+            f"disk free {val('disk_free_gb', ' GB')}")
+
+
 def api_view(v: dict) -> dict:
     """What the browser's refresh reads (no queue rows, no raw state)."""
     return {"workshop": v["workshop"], "record_status": v["record_status"], "admission": v["admission"],
             "runs": v["runs"], "last_event": v["last_event"], "next_actor": v["next_actor"],
-            "needs": {"status": v["needs"]["status"], "count": len(v["needs"]["items"]) + len(v["needs"]["workshop"])},
-            "budget": v["budget"]}
+            "needs": {"status": v["needs"]["status"], "workshop_status": v["needs"]["workshop_status"],
+                      "count": len(v["needs"]["items"]) + len(v["needs"]["workshop"])},
+            "headroom": v["headroom"], "recovery": v["recovery"], "budget": v["budget"]}
 
 
 __all__ = ["view", "api_view", "admission", "observed_runs", "usage_this_month", "workshop_dir", "workshop_id"]

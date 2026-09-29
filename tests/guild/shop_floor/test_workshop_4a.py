@@ -24,7 +24,9 @@ PAGE = "/guild-next/guild/workshop"
 def _obs(**over):
     base = dict(observed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"), memory_free_pct=46.0,
                 swap_used_gb=1.2, disk_free_gb=80.0, load_1m=2.1,
-                clients=[{"kind": "codex", "pid": 11, "elapsed": "05:00"}], clients_known=True)
+                clients=[{"kind": "codex", "label": "Codex CLI", "pid": 11, "elapsed": "05:00", "counted": True},
+                         {"kind": "codex-desktop", "label": "Codex desktop (ChatGPT app)", "pid": 12, "elapsed": "09:00",
+                          "counted": False}], clients_known=True)
     base.update(over)
     return Observation(**base)
 
@@ -62,11 +64,13 @@ def test_the_workshop_opens_from_a_queue_item_with_its_scope_and_the_host(ws):
     page = client.get(f"{PAGE}?item=12").get_data(as_text=True)
     assert "#12 Floor API" in page and "Approved for build" in page and "spec_floor_api.md" in page
     assert 'data-verdict="tight"' in page and "a new run would share the host" in page
-    assert "1 agent client running" in page and "codex" in page
+    assert "1 agent session running on this Mac (outside Docker)" in page and "Codex CLI" in page
+    assert "Also running, not counted as build sessions: Codex desktop (ChatGPT app)." in page
+    assert "tight at 1" in page and "Limits: memory free tight under 20%, blocked under 10%" in page
     assert "Next actor: <strong>robert</strong>" in page                  # the item's latest event
     assert "Pick the refresh cadence" in page                              # Needs you, from the workshop
     assert "#7 Queue lock hardening" in page and "Streaming S1 after review" in page   # queued work
-    assert "memory free 46.0% · swap used 1.2 GB · disk free 80.0 GB" in page
+    assert "Headroom on this Mac (outside Docker): memory free 46.0% · swap used 1.2 GB · disk free 80.0 GB" in page
     assert "Workshop</a>" in page or ">Workshop<" in page                  # in the section nav
 
 
@@ -95,8 +99,10 @@ def test_missing_unreadable_or_stale_is_unknown_never_nothing_running(ws, setup,
         _record(ws, {"actor": "codex", "kind": "progress", "item": "queue:12", "text": "reviewing"}, obs=False)
     page = ws.owner().get(f"{PAGE}?item=12").get_data(as_text=True)
     assert 'data-verdict="unknown"' in page and reason in page
-    assert "Running agents unknown" in page and "No agent client running" not in page
+    assert "Running agents on this Mac (outside Docker) unknown" in page and "No agent session running" not in page
     assert "Headroom unknown" in page
+    assert "Nothing needs you here" not in page                           # the workshop's needs are not known
+    assert ("Workshop needs unknown" in page) if setup in ("missing", "unreadable") else ("Workshop needs may be out of date" in page)
     body = ws.owner().get(f"{API}/workshop?item=12").get_json()
     assert body["admission"]["verdict"] == "unknown" and body["runs"]["known"] is False and body["runs"]["runs"] == []
 
@@ -104,7 +110,10 @@ def test_missing_unreadable_or_stale_is_unknown_never_nothing_running(ws, setup,
 def test_a_fresh_reading_with_no_clients_says_nothing_is_running(ws):
     _record(ws, obs=_obs(clients=[]))
     body = ws.owner().get(f"{API}/workshop").get_json()
-    assert body["admission"]["verdict"] == "ok" and body["runs"] == {"known": True, "runs": [], "text": "No agent client running"}
+    assert body["admission"]["verdict"] == "ok" and body["runs"]["known"] is True and body["runs"]["runs"] == []
+    assert body["runs"]["text"] == "No agent session running on this Mac (outside Docker)" and body["runs"]["sessions"] == 0
+    page = ws.owner().get(PAGE).get_data(as_text=True)
+    assert "Nothing needs you here right now." in page                     # fresh record, queue read: it may say so
 
 
 def test_budget_is_this_months_gateway_spend_and_unknown_without_a_store(ws):
@@ -137,7 +146,7 @@ def test_the_refresh_carries_no_raw_state_and_the_workshop_is_owner_only(ws):
     _record(ws, {"actor": "claude-code", "kind": "progress", "item": "queue:12", "text": "x"})
     body = ws.owner().get(f"{API}/workshop?item=12").get_json()
     assert set(body) == {"workshop", "record_status", "admission", "runs", "last_event", "next_actor", "needs",
-                         "budget", "observed_at"}
+                         "headroom", "recovery", "budget", "observed_at"}
     assert ws.guest().get(PAGE).status_code in (302, 403)
     assert ws.guest().get(f"{API}/workshop").status_code == 403
 
@@ -148,3 +157,23 @@ def test_the_page_has_no_launch_control(ws):
     assert "launching comes later" in page
     for word in ("data-launch", ">start run<", ">launch<", 'method="post"'):
         assert word not in page
+
+
+def test_needs_from_a_stale_record_are_marked_stale(ws):
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(timespec="seconds")
+    _record(ws, {"actor": "codex", "kind": "needs_you", "item": "queue:12", "text": "Approve the fix round"},
+            obs=_obs(observed_at=old))
+    page = ws.owner().get(f"{PAGE}?item=12").get_data(as_text=True)
+    assert "Approve the fix round" in page and "from a stale record" in page and 'data-stale="true"' in page
+
+
+def test_an_old_health_event_without_session_fields_still_reads(ws):
+    w = Workshop(str(ws.extra["root"]), "mac")
+    ev = health_event(_obs(), "mac")
+    for k in ("sessions", "scope"):
+        ev["health"].pop(k)
+    for r in ev["health"]["runs"]:
+        r.pop("counted")
+    w.append(ev)
+    body = ws.owner().get(f"{API}/workshop").get_json()
+    assert body["runs"]["sessions"] == 1 and [r["kind"] for r in body["runs"]["background"]] == ["codex-desktop"]
