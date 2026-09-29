@@ -45,7 +45,8 @@ GW, COS, STANDINS, CLIENT_DEF, CLIENT_MC, CAP = (f"{P}-gateway", f"{P}-cos-agent
                                                  f"{P}-client-default", f"{P}-client-mc", f"{P}-capture")
 RESULTS: list[dict] = []
 COS_ENV_NAMES = {"MINIMOI_MODEL_GATEWAY_KEY", "COS_AGENT_A_GATEWAY_TOKEN", "ANTHROPIC_API_KEY", "XAI_API_KEY",
-                 "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY", "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY"}
+                 "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY", "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY",
+                 "MC_ANTHROPIC_API_KEY", "GATEWAY_ANTHROPIC_API_KEY", "GATEWAY_XAI_API_KEY"}
 
 
 def record(gate, check, ok, detail=""):

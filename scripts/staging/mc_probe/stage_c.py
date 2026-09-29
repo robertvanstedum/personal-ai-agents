@@ -20,7 +20,10 @@ Checks (stage C only accepts 401/403 as a refusal; no no_db_connection exception
   pass-through carries no provider key even for the master key; CoS's route
   still carries CoS's key; the budget visible in /key/info; K1b (a spend above
   0, priced within 20% of Haiku 4.5's published price, then a refusal with no
-  upstream call); and CoS's master-key route with the key database down.
+  upstream call); CoS's xAI chat, web search and Anthropic-to-xAI fallback on
+  the renamed provider env (XAI_API_BASE also points at the capture server);
+  and the key database down: inside the 60 s key cache, past it, across a
+  gateway restart, and the stored-spend undercount once it is back.
 """
 from __future__ import annotations
 
@@ -110,6 +113,16 @@ def main():
             args += ["-e", f"{k}={v}"]
         return docker(*args, GW, "python", "-", input_text=code, timeout=120)
 
+    def wait_live(seconds):
+        end = time.time() + seconds
+        while time.time() < end:
+            if docker("exec", GW, "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness',timeout=3)").returncode == 0:
+                return True
+            if docker("inspect", "-f", "{{.State.Running}}", GW).stdout.strip() != "true":
+                return False
+            time.sleep(2)
+        return False
+
     def cleanup():
         for n in (PG, GW, CAP, CLIENT):
             docker("rm", "-f", n)
@@ -149,16 +162,10 @@ def main():
                "-e", f"GATEWAY_XAI_API_KEY={gw_xai}", "-e", f"ANTHROPIC_API_KEY={a.default_key}", "-e", f"XAI_API_KEY={a.default_key}",
                "-e", f"MC_ANTHROPIC_API_KEY={mc_anthropic}", "-e", f"DATABASE_URL={url}",
                "-e", "ANTHROPIC_API_BASE=http://anthropic-capture:4000",
+               "-e", "XAI_API_BASE=http://anthropic-capture:4000/v1",
                "-e", "MINIMOI_RECEIPT_ENDPOINT=http://nowhere.invalid/receipt", "-e", "MINIMOI_RECEIPT_KEY=probe",
                a.gateway_image, "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1", check=True)
-        ready = False
-        for _ in range(150):
-            if docker("exec", GW, "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness',timeout=3)").returncode == 0:
-                ready = True
-                break
-            if docker("inspect", "-f", "{{.State.Running}}", GW).stdout.strip() != "true":
-                break
-            time.sleep(2)
+        ready = wait_live(300)
         tables = docker("exec", PG, "psql", "-U", "postgres", "-d", "litellm_keys", "-tAc",
                         "select count(*) from information_schema.tables where table_name='LiteLLM_VerificationToken'").stdout.strip()
         record("the gateway starts with DATABASE_URL on an internal network (Prisma migrations offline) and its key tables exist",
@@ -192,6 +199,7 @@ def main():
         chat = lambda m, **extra: {"model": m, "max_tokens": 16, "messages": [{"role": "user", "content": "x"}], **extra}  # noqa: E731
         own = client([{"name": "own", "path": "/v1/chat/completions", "method": "POST", "key": mc_key, "body": chat("minimoi-mc-agent")}])["own"]
         up = [e for e in cap_log() if e["path"].startswith("/v1/messages")]
+        mc_served = int(own["status"] == 200)          # MC's key calls the provider answered (for the undercount)
         record("MC's key on MC's route reaches the provider with MC's OWN provider key (never CoS's)",
                own["status"] == 200 and len(up) == 1 and up[0]["api_key_label"] == "mc-anthropic",
                f"status {own['status']}, upstream x-api-key {[e['api_key_label'] for e in up]}")
@@ -226,6 +234,7 @@ def main():
         inj = client([{"name": "inj", "path": "/v1/chat/completions", "method": "POST", "key": mc_key,
                        "body": chat("minimoi-mc-agent", api_base="http://cos-agent-a:18789/v1", api_key="stolen")}])["inj"]
         up = [e for e in cap_log() if e["path"].startswith("/v1/messages")]
+        mc_served += int(inj["status"] == 200)
         record("a client-side api_base/api_key in MC's request is never honoured (refused, or ignored: still MC's provider key)",
                inj["status"] in (400, 401, 403) or (inj["status"] == 200 and len(up) == 1 and up[0]["api_key_label"] == "mc-anthropic"),
                f"status {inj['status']}, upstream x-api-key {[e['api_key_label'] for e in up]}")
@@ -269,14 +278,103 @@ def main():
                second["status"] in (400, 401, 403, 429) and "budget" in second["body"].lower() and len(cap_log()) == before,
                f"status {second['status']} {second['body'][:120]}")
 
-        # The key database down: CoS's master-key route is unaffected.
+        # CoS's xAI routes under the renamed provider env (the #252 review, section 2):
+        # XAI_API_BASE points at the capture server, so no provider is reached.
+        # LiteLLM 1.93.1 sends xai/grok-4.3 chat to xAI's /v1/responses too, so
+        # each route is called on its own and every upstream xAI call counted.
+        def xai_up():
+            return [(e["path"].split("?")[0], e.get("auth_label")) for e in cap_log()
+                    if e["path"].startswith(("/v1/chat/completions", "/v1/responses"))]
+        cap_reset()
+        fast = client([{"name": "x", "path": "/v1/chat/completions", "method": "POST", "key": master, "body": chat("minimoi-cos-agent-xai-fast")}])["x"]
+        fast_up = xai_up()
+        record("CoS's xAI chat route (minimoi-cos-agent-xai-fast) carries CoS's xAI key under its gateway-only name",
+               fast["status"] == 200 and len(fast_up) == 1 and fast_up[0][1] == "gw-xai", f"status {fast['status']}, upstream {fast_up}")
+        cap_reset()
+        web = client([{"name": "w", "path": "/v1/responses", "method": "POST", "key": master,
+                       "body": {"model": "minimoi-cos-web-search", "input": "x", "max_output_tokens": 16}}])["w"]
+        web_up = xai_up()
+        record("CoS's web search (minimoi-cos-web-search, /v1/responses) carries CoS's xAI key under its gateway-only name",
+               web["status"] == 200 and web_up == [("/v1/responses", "gw-xai")], f"status {web['status']}, upstream {web_up}")
+        # The real fallback: CoS's primary (Anthropic) fails, the router falls back to xAI chat.
+        cap_reset()
+        docker("exec", CAP, "node", "-e", "fetch('http://127.0.0.1:4001/script',{method:'POST',headers:{'content-type':'application/json'},"
+               "body:JSON.stringify({model:'claude-haiku-4-5-20251001',steps:[{status:500,type:'api_error',message:'overloaded'}]})})")
+        fb = client([{"name": "fb", "path": "/v1/chat/completions", "method": "POST", "key": master, "body": chat("minimoi-cos-agent")}])["fb"]
+        log = cap_log()
+        fb_up = [(e["path"].split("?")[0], e.get("api_key_label") if e["path"].startswith("/v1/messages") else e.get("auth_label")) for e in log]
+        record("CoS's fallback: Anthropic 500 on the primary, the router falls back to xAI chat on CoS's gateway-only xAI key",
+               fb["status"] == 200 and fb_up[:1] == [("/v1/messages", "gw-anthropic")]
+               and any(lbl == "gw-xai" for _p, lbl in fb_up[1:]) and all(lbl in ("gw-anthropic", "gw-xai") for _p, lbl in fb_up),
+               f"status {fb['status']}, upstream {fb_up}")
+        cap_reset()
+
+        # The key database down (the #252 review, condition B). First let the
+        # stored spend catch up, so the undercount can be measured afterwards.
+        unit = expected
+        for _ in range(30):
+            got = client([{"name": "i", "path": "/key/info?key=" + mc_key, "key": master}])["i"]
+            stored = float(json.loads(got["body"]).get("info", {}).get("spend") or 0) if got["status"] == 200 else -1
+            if stored >= mc_served * unit * 0.99:
+                break
+            time.sleep(3)
+        stored_before = stored
         docker("stop", "-t", "5", PG)
+        t_stop = time.time()
         time.sleep(3)
         cap_reset()
         down = client([{"name": "cos", "path": "/v1/chat/completions", "method": "POST", "key": master, "body": chat("minimoi-cos-agent")},
                        {"name": "mc", "path": "/v1/chat/completions", "method": "POST", "key": mc_key, "body": chat("minimoi-mc-agent")}])
+        in_window = [down["mc"]["status"]]
+        for i in range(2):
+            in_window.append(client([{"name": "m", "path": "/v1/chat/completions", "method": "POST", "key": mc_key, "body": chat("minimoi-mc-agent")}])["m"]["status"])
+        mc_served += sum(1 for x in in_window if x == 200)
         record("key database down: CoS's master-key route still answers (recorded)", down["cos"]["status"] == 200,
-               f"CoS {down['cos']['status']}; MC's key {down['mc']['status']} {down['mc'].get('type')}")
+               f"CoS {down['cos']['status']}; MC's cached key, 3 calls inside the cache window: {in_window}")
+        # Past the 60 s key cache, the database still down.
+        time.sleep(max(0, t_stop + 75 - time.time()))
+        before = len([e for e in cap_log() if e.get("api_key_label") == "mc-anthropic"])
+        past = client([{"name": "cos", "path": "/v1/chat/completions", "method": "POST", "key": master, "body": chat("minimoi-cos-agent")},
+                       {"name": "mc", "path": "/v1/chat/completions", "method": "POST", "key": mc_key, "body": chat("minimoi-mc-agent")}])
+        after = len([e for e in cap_log() if e.get("api_key_label") == "mc-anthropic"])
+        mc_served += int(past["mc"]["status"] == 200)
+        record("key database down past the 60 s key cache (75 s): MC's key is refused, with no upstream call",
+               past["mc"]["status"] != 200 and after == before,
+               f"MC {past['mc']['status']} {past['mc'].get('type')} {past['mc'].get('body', '')[:160]}; CoS {past['cos']['status']}")
+        # A gateway restart with the database still down.
+        docker("restart", "-t", "10", GW)
+        t0 = time.time()
+        live = wait_live(180)
+        running = docker("inspect", "-f", "{{.State.Running}} {{.State.ExitCode}}", GW).stdout.strip()
+        if live:
+            rs = client([{"name": "cos", "path": "/v1/chat/completions", "method": "POST", "key": master, "body": chat("minimoi-cos-agent")},
+                         {"name": "mc", "path": "/v1/chat/completions", "method": "POST", "key": mc_key, "body": chat("minimoi-mc-agent")}])
+            mc_served += int(rs["mc"]["status"] == 200)
+            detail = f"gateway live after {round(time.time() - t0)}s; CoS {rs['cos']['status']}; MC {rs['mc']['status']} {rs['mc'].get('type')}"
+            mc_ok = rs["mc"]["status"] != 200
+        else:
+            detail = (f"gateway NOT live within 180 s (running/exit: {running}); CoS and MC both unavailable; "
+                      f"{docker('logs', '--tail', '6', GW).stderr[-400:]}")
+            mc_ok = True
+        record("gateway restarted with the key database down: MC's key is not served (recorded: whether the gateway and CoS come up)",
+               mc_ok, detail)
+        # The database back: does the stored spend include what the outage served?
+        docker("start", PG)
+        for _ in range(60):
+            if docker("exec", PG, "pg_isready", "-U", "postgres").returncode == 0:
+                break
+            time.sleep(1)
+        time.sleep(15)                                   # one batch-write interval
+        docker("restart", "-t", "10", GW)                # a cold cache: the stored spend, not the in-memory one
+        back = wait_live(240)
+        got = client([{"name": "i", "path": "/key/info?key=" + mc_key, "key": master}])["i"] if back else {"status": "down"}
+        stored_after = float(json.loads(got["body"]).get("info", {}).get("spend") or 0) if got.get("status") == 200 else -1
+        real = mc_served * unit
+        lost = max(0.0, real - stored_after)
+        record("key database back: the undercount is bounded to the calls the cache served during the outage (recorded)",
+               back and stored_after >= 0 and lost <= 4 * unit + 1e-12,
+               f"MC calls served {mc_served} (${real:.6f}); stored before the outage ${stored_before:.6f}, after ${stored_after:.6f}; "
+               f"undercount ${lost:.6f} = {round(lost / unit)} call(s)")
     finally:
         out = a.out or Path(tempfile.mkdtemp(prefix="mc-stage-c-"))
         out.mkdir(parents=True, exist_ok=True)

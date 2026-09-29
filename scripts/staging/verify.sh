@@ -309,7 +309,7 @@ if mc_enabled; then
     mports=$(docker inspect -f '{{range $p, $b := .NetworkSettings.Ports}}{{if $b}}{{$p}} {{end}}{{end}}' "$MC")
     [[ -z "$mports" ]] && pass "$MC publishes no port" || fail "$MC publishes $mports"
     mnames=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$MC" | cut -d= -f1)
-    bad=$(grep -Ex 'MINIMOI_MODEL_GATEWAY_KEY|COS_AGENT_A_GATEWAY_TOKEN|ANTHROPIC_API_KEY|XAI_API_KEY|OPENAI_API_KEY|DATABASE_URL|LITELLM_MASTER_KEY|MINIMOI_MODEL_GATEWAY_RECEIPT_KEY|TELEGRAM.*' <<< "$mnames" | tr '\n' ' ' || true)
+    bad=$(grep -Ex 'MINIMOI_MODEL_GATEWAY_KEY|COS_AGENT_A_GATEWAY_TOKEN|ANTHROPIC_API_KEY|XAI_API_KEY|MC_ANTHROPIC_API_KEY|GATEWAY_ANTHROPIC_API_KEY|GATEWAY_XAI_API_KEY|OPENAI_API_KEY|DATABASE_URL|LITELLM_MASTER_KEY|MINIMOI_MODEL_GATEWAY_RECEIPT_KEY|TELEGRAM.*' <<< "$mnames" | tr '\n' ' ' || true)
     [[ -z "$bad" ]] && pass "$MC carries no CoS or provider credential name" || fail "$MC carries: $bad"
     reached=$(docker exec "$MC" node -e "
 const net=require('net');const t=[22,53,5001,5432,14000,18790].map(p=>['$bridge_ip',p]).concat([['192.168.5.1',22],['172.17.0.1',22]]);

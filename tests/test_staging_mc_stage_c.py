@@ -169,7 +169,7 @@ def _mc(shell, env, *args, stdin=""):
 
 def test_gateway_keys_makes_the_database_via_stdin_and_recreates_only_the_gateway(tmp_path, shell):
     env, fake, root = _world(tmp_path)
-    result = _mc(shell, env, "gateway-keys", stdin="mc-own-anthropic-key-xyz\n")
+    result = _mc(shell, env, "gateway-keys", stdin="yes\nmc-own-anthropic-key-xyz\n")
     assert result.returncode == 0, result.stderr
     gw_env = (root / "gateway.env").read_text()
     url = gw_env.split("=", 1)[1].strip()
@@ -193,10 +193,38 @@ def test_gateway_keys_makes_the_database_via_stdin_and_recreates_only_the_gatewa
 
 def test_gateway_keys_refuses_coss_anthropic_key_for_mc(tmp_path, shell):
     env, fake, root = _world(tmp_path)
-    result = _mc(shell, env, "gateway-keys", stdin="cos-anthropic-key\n")
+    result = _mc(shell, env, "gateway-keys", stdin="yes\ncos-anthropic-key\n")
     assert result.returncode != 0 and "that is CoS's Anthropic key" in result.stderr
     assert "MC_ANTHROPIC_API_KEY" not in (root / "mc.env").read_text()
     assert "cos-anthropic-key" not in result.stdout
+    assert not (fake / "psql.stdin").exists() and (root / "gateway.env").read_text() == ""   # nothing changed
+    assert not (root / "state" / "gateway.keys").exists()
+
+
+@pytest.mark.parametrize("answer", ["", "y", "no", "YES please"])
+def test_gateway_keys_needs_a_typed_yes_for_the_console_limit_before_anything_changes(tmp_path, shell, answer):
+    """#252 review, condition A: the console limit on MC's own key is the hard
+    ceiling (a key database outage can undercount the gateway's cap)."""
+    env, fake, root = _world(tmp_path)
+    result = _mc(shell, env, "gateway-keys", stdin=answer + "\nmc-own-anthropic-key-xyz\n")
+    assert result.returncode != 0 and "set the console spend limit on MC's key first (nothing changed)" in result.stderr
+    assert "console spend limit" in result.stderr and "hard ceiling" in result.stderr and "undercount" in result.stderr
+    assert "Paste Master Craftsman's OWN Anthropic API key" not in result.stderr        # asked before the key
+    assert not (fake / "psql.stdin").exists() and not (root / "state" / "gateway.keys").exists()
+    assert "MC_ANTHROPIC_API_KEY" not in (root / "mc.env").read_text()
+    argv = (fake / "argv.log").read_text()
+    assert not [l for l in argv.splitlines() if l.startswith("compose")]
+
+
+def test_key_sets_umask_before_writing_the_key_and_mc_never_carries_provider_keys():
+    mc = (SCRIPTS / "mc.sh").read_text()
+    key_branch = mc.split("\n  key)\n", 1)[1].split("\n    ;;\n", 1)[0]
+    assert key_branch.index("umask 077") < key_branch.index('tmp="$STAGING_MC_ENV.tmp.$$"')
+    selfcheck = (REPO / "docker/mc-agent/selfcheck.mjs").read_text()
+    verify = (SCRIPTS / "verify.sh").read_text()
+    for name in ("MC_ANTHROPIC_API_KEY", "GATEWAY_ANTHROPIC_API_KEY", "GATEWAY_XAI_API_KEY"):
+        assert f'"{name}"' in selfcheck and f"|{name}|" in verify, name
+    assert "MC_ANTHROPIC_API_KEY" not in (REPO / "docker-compose.mc.yml").read_text()
 
 
 def test_key_asks_for_the_cap_writes_the_key_unprinted_and_recreates_only_mc(tmp_path, shell):

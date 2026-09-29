@@ -108,6 +108,15 @@ const api = http.createServer(async (req, res) => {
     res.writeHead(200, { "content-type": "text/event-stream" });
     return res.end("data: {not json\n\ndata: [DONE\n\n");
   }
+  if (String(req.url).startsWith("/v1/responses")) {       // OpenAI/xAI Responses API shape
+    res.writeHead(200, { "content-type": "application/json" });
+    return res.end(JSON.stringify({
+      id: `resp_cap_${log.length}`, object: "response", created_at: Math.floor(Date.now() / 1000), status: "completed", model,
+      output: [{ type: "message", id: `msg_cap_${log.length}`, status: "completed", role: "assistant",
+                 content: [{ type: "output_text", text: step.text ?? "capture ok", annotations: [] }] }],
+      usage: { input_tokens: 50, output_tokens: 5, total_tokens: 55 },
+    }));
+  }
   if (!String(req.url).includes("/chat/completions")) {
     res.writeHead(200, { "content-type": "application/json" });
     return res.end(JSON.stringify({ id: "cap-other", output: [], usage: { input_tokens: 1, output_tokens: 1 } }));

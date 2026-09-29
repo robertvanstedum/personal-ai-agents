@@ -647,13 +647,50 @@ commands is no-spend; the first paid call is Robert's own first note.
   floor says "unavailable" without naming the cap. It never shows a failure as
   an answer (probe `stage_b.py`, ERROR_SURFACE).
 
+### Spend: what bounds it
+
+Measured in `mc_probe/stage_c.py` (throwaway gateway and Postgres, LiteLLM
+1.93.1, stand-in provider; no real key):
+
+- **Normal operation:** the gateway checks MC's cap before every call, so the
+  cap can be passed by at most one call. MC runs one turn at a time, and one
+  Haiku 4.5 turn costs at most about $0.04.
+- **Key database down, inside the 60 s key cache:** MC's key is **still
+  served** (the cached key and the in-memory spend counter still apply the
+  cap). CoS is unaffected (master key).
+- **Key database down, past the 60 s cache:** MC's key is **refused**
+  (`503 no_db_connection`) with no provider call. CoS still answers.
+- **Gateway restarted while the key database is down:** the gateway **does
+  not start** (it exits; `restart: unless-stopped` retries it until Postgres
+  is back). **CoS is down for that time too**, not only MC. So with the key
+  database on, Postgres is a dependency of CoS's gateway; bring Postgres back
+  first.
+- **The undercount:** the calls served inside the cache window were **lost
+  from the stored spend** when the gateway restarted before the database came
+  back (the probe: 3 of 3 lost). The bound is that window: rpm 10 × 60 s =
+  at most **10 turns, about $0.40, per outage**; in practice one or two of
+  Robert's notes, since turns are owner-only and one at a time.
+- **So the Anthropic console limit on MC's own key is the hard ceiling** (step
+  3 asks Robert to confirm it); the gateway cap is the working limit. A
+  database outage is not a spend stop: use the turn gate or `mc.sh down`.
+
 ### Steps (after review; each runtime step needs Robert's go-ahead)
+
+**The CoS regression question, in every step below** (one real CoS call, with
+Robert's go-ahead): one CoS question with web search from
+`https://dev.minimoi.ai/app/cos`. It passes **only** with a cited answer
+**and** a new line with `"logical_model":"minimoi-cos-web-search"` in
+`~/minimoi-staging/data/model_gateway_receipts.jsonl` (count the lines before
+and after). An answer without that new receipt line is a **fail**: it means
+the xAI web-search route under the renamed `GATEWAY_XAI_API_KEY` did not run.
+CoS's xAI chat fallback, which a normal question never reaches, is proven in
+`mc_probe/stage_c.py` (Anthropic 500 on the primary, then xAI on CoS's key).
 
 1. **Roll the release out** (coordinator): `build.sh <branch> --reviewed-branch`,
    `mc.sh build`, `mc.sh token`, `up.sh && verify.sh`. The gateway is recreated
    with the renamed provider keys and MC's route (placeholder key). Then the CoS
-   regression question (stage A step 8): CoS's route now reads
-   `GATEWAY_ANTHROPIC_API_KEY`, so this is the check that it still answers.
+   regression question, **with its receipt line**: CoS's routes now read
+   `GATEWAY_ANTHROPIC_API_KEY` / `GATEWAY_XAI_API_KEY`.
 2. **RB-H3: a known-invalid key gets Anthropic's own refusal** (coordinator; no
    spend, the placeholder is still in place):
    ```
@@ -666,11 +703,17 @@ commands is no-spend; the first paid call is Robert's own first note.
    Pass: `401` with an Anthropic authentication error naming an invalid
    x-api-key. Anything else: stop.
 3. **Robert, command 1** (one paste): `scripts/staging/mc.sh gateway-keys`.
-   It makes the key database and its role, asks for **Master Craftsman's own
-   Anthropic key** (hidden; it refuses CoS's key; give that key its own console
-   limit first), then recreates **only** the model gateway (CoS's calls fail
-   for about 30 s) and checks that the key tables exist. Then the CoS
-   regression question again (coordinator).
+   **Before it, set a monthly spend limit on MC's own Anthropic key in the
+   Anthropic console** (for example $20, just above the cap in step 4). The
+   command first asks Robert to type `yes` to confirm that limit exists, and
+   changes nothing otherwise: the console limit is the hard ceiling, because
+   the gateway's cap can undercount while its key database is down (see
+   "Spend: what bounds it"). Then it makes the key database and its role, asks
+   for **Master Craftsman's own Anthropic key** (hidden; it refuses CoS's
+   key), recreates **only** the model gateway (CoS's calls fail for about
+   30 s) and checks that the key tables exist. A re-run with nothing new
+   leaves the database, its password and the gateway as they are. Then the
+   CoS regression question again, **with its receipt line** (coordinator).
 4. **Robert, command 2** (one number): `scripts/staging/mc.sh key`. It asks for
    MC's monthly cap in dollars (Enter for 15), makes MC's key inside the
    gateway, writes it to `mc.env` without printing it, and recreates only
@@ -703,12 +746,13 @@ commands is no-spend; the first paid call is Robert's own first note.
   scripts/staging/up.sh portal`. `mc.sh down` stops MC and the relay.
 - **Take the key database away** (every virtual key stops working; CoS stays on
   the master key): `printf 'off\n' > ~/minimoi-staging/state/gateway.keys;
-  scripts/staging/up.sh model-gateway`, then the CoS question. The database,
+  scripts/staging/up.sh model-gateway`, then the CoS regression question with
+  its receipt line. The database,
   its role and `gateway.env` are kept; `mc.sh gateway-keys` turns it back on
   without a new password.
-- **The key database down** (probe finding): CoS's master-key route keeps
-  working, and so did MC's already-cached key, so it is not a spend stop. Use
-  the turn gate or `mc.sh down` for that.
+- **The key database down:** see "Spend: what bounds it". Stop MC with the
+  turn gate or `mc.sh down`; do not restart the gateway until Postgres is
+  back (it would not start, and CoS would be down with it).
 
 ## Rules
 

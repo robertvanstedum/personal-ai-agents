@@ -21,7 +21,8 @@ from test_staging_environment import (  # noqa: F401  (shell is a fixture)
 REPO = Path(__file__).resolve().parent.parent
 MC_FILE = REPO / "docker-compose.mc.yml"
 COS_NAMES = {"MINIMOI_MODEL_GATEWAY_KEY", "COS_AGENT_A_GATEWAY_TOKEN", "ANTHROPIC_API_KEY", "XAI_API_KEY",
-             "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY", "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY"}
+             "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY", "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY",
+             "MC_ANTHROPIC_API_KEY", "GATEWAY_ANTHROPIC_API_KEY", "GATEWAY_XAI_API_KEY"}
 
 
 def _main(path):

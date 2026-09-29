@@ -81,7 +81,9 @@ export function staticCheck(config, env = process.env) {
   if (!key) f.push("MC_MODEL_GATEWAY_KEY is empty");
   else if (key === (env.OPENCLAW_GATEWAY_TOKEN || "")) f.push("MC_MODEL_GATEWAY_KEY equals MC's own OpenClaw token");
   for (const name of ["MINIMOI_MODEL_GATEWAY_KEY", "COS_AGENT_A_GATEWAY_TOKEN", "ANTHROPIC_API_KEY", "XAI_API_KEY",
-    "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY"]) {
+    "OPENAI_API_KEY", "DATABASE_URL", "LITELLM_MASTER_KEY",
+    // provider keys belong to the gateway only (mc.env holds MC's for the gateway's interpolation)
+    "MC_ANTHROPIC_API_KEY", "GATEWAY_ANTHROPIC_API_KEY", "GATEWAY_XAI_API_KEY"]) {
     if (env[name]) f.push(`${name} is in MC's environment`);
   }
   return f;

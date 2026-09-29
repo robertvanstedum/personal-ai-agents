@@ -185,6 +185,29 @@ case "$cmd" in
     umask 077
     touch "$STAGING_GATEWAY_ENV" "$STAGING_MC_ENV"
     chmod 600 "$STAGING_GATEWAY_ENV" "$STAGING_MC_ENV"
+    akey=""
+    if ! grep -q '^MC_ANTHROPIC_API_KEY=.' "$STAGING_MC_ENV"; then
+      # Ask everything first, so a "no" changes nothing. The console limit is the
+      # hard ceiling: the gateway's cap lives in its key database, and a
+      # database outage can undercount it (runbook, "Spend: what bounds it").
+      cat >&2 <<'ASK'
+Master Craftsman needs its OWN Anthropic API key, and that key must already
+have its own monthly spend limit set in the Anthropic console.
+Why: the console limit is the hard ceiling. The gateway's cap (mc.sh key) is
+kept in the gateway's key database; if that database is down, the gateway can
+undercount MC's spend, so only the console limit is certain.
+ASK
+      printf "Does MC's Anthropic key already have its own console spend limit? Type yes to continue: " >&2
+      IFS= read -r answer || answer=""
+      [[ "$answer" == yes ]] || die "set the console spend limit on MC's key first (nothing changed)"
+      printf "Paste Master Craftsman's OWN Anthropic API key (input hidden; Enter to skip for now): " >&2
+      IFS= read -r -s akey || akey=""
+      echo >&2
+      if [[ -n "$akey" && "$akey" == "$(env_value "$STAGING_ENV_FILE" ANTHROPIC_API_KEY)" ]]; then
+        akey=""
+        die "that is CoS's Anthropic key (ANTHROPIC_API_KEY); MC needs its own key with its own console limit (nothing changed)"
+      fi
+    fi
     if grep -q '^LITELLM_DATABASE_URL=.' "$STAGING_GATEWAY_ENV"; then
       note "gateway.env already has the key database URL (unchanged)"
     else
@@ -197,19 +220,12 @@ case "$cmd" in
     fi
     if grep -q '^MC_ANTHROPIC_API_KEY=.' "$STAGING_MC_ENV"; then
       note "mc.env already has MC's own Anthropic key (unchanged)"
+    elif [[ -n "$akey" ]]; then
+      printf 'MC_ANTHROPIC_API_KEY=%s\n' "$akey" >> "$STAGING_MC_ENV"
+      akey=""
+      note "MC's Anthropic key written to mc.env (not printed)"
     else
-      printf "Paste Master Craftsman's OWN Anthropic API key (input hidden; Enter to skip for now): " >&2
-      IFS= read -r -s akey || akey=""
-      echo >&2
-      if [[ -n "$akey" ]]; then
-        [[ "$akey" != "$(env_value "$STAGING_ENV_FILE" ANTHROPIC_API_KEY)" ]] \
-          || die "that is CoS's Anthropic key (ANTHROPIC_API_KEY); MC needs its own key with its own console limit"
-        printf 'MC_ANTHROPIC_API_KEY=%s\n' "$akey" >> "$STAGING_MC_ENV"
-        akey=""
-        note "MC's Anthropic key written to mc.env (not printed)"
-      else
-        note "no Anthropic key entered: MC's route keeps its placeholder, so MC's turns stay refused"
-      fi
+      note "no Anthropic key entered: MC's route keeps its placeholder, so MC's turns stay refused"
     fi
     mkdir -p "$STAGING_ROOT/state"
     printf 'on\n' > "$STAGING_KEYS_FILE"
@@ -232,6 +248,7 @@ case "$cmd" in
     mc_enabled || die "MC is not enabled (state/mc.enabled)"
     gateway_keys_on || die "the gateway has no key database yet: run mc.sh gateway-keys first"
     [[ "$(health_of minimoi-model-gateway)" == healthy ]] || die "the model gateway is not healthy"
+    umask 077                                   # the key's temp file is never world-readable, even briefly
     touch "$STAGING_MC_ENV"; chmod 600 "$STAGING_MC_ENV"
     old=$(env_value "$STAGING_MC_ENV" MC_MODEL_GATEWAY_KEY)
     if [[ -n "$old" ]]; then
