@@ -1421,12 +1421,15 @@ def _unknown_tab_sends_nothing(page, server, floor):
     page.fill("[data-mc-input]", "a note while unknown")
     page.click("[data-mc-send]")
     expect(page.locator("[data-mc-refusal]")).to_contain_text(UNKNOWN_TEXT)
+    go(page, f"{server['url']}/guild-next/guild/build/bench")          # slice 1: post-its live on the wall
     add = page.locator("[data-postits] [data-postit-add]").first
     add.locator("[data-postit-input]").fill("a post-it while unknown")
     add.locator("[data-postit-add-btn]").click()
     expect(page.locator("[data-postits]").first).to_contain_text(UNKNOWN_TEXT)
     page.wait_for_timeout(300)
     assert sent == [] and floor.count("floor_messages") == 0 and floor.count("floor_postits") == 0
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.fill("[data-mc-input]", "a note while unknown")
     page.click("[data-mc-record-confirm]")                            # Robert chooses: on the record
     expect(page.locator("[data-mc-context]")).to_contain_text("on the record")
     page.click("[data-mc-send]")
