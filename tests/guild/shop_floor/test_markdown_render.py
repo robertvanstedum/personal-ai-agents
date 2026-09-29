@@ -89,6 +89,55 @@ def test_hostile_markdown_and_html_never_survive(hostile):
     assert "<script" not in html.lower() and "<img" not in html.lower()
 
 
+@pytest.mark.parametrize("href", ["/guild-next/api/v1/notes", "//evil.example/p", "\\javascript:alert(1)",
+                                  "relative/path", "#frag", "HTTPS:/missing-slash", "http:\\\\evil.example",
+                                  "java\tscript:alert(1)", " javascript:alert(1)"])
+def test_only_absolute_http_https_or_mailto_links_keep_their_href(href):
+    """#261 review finding 2: nh3's url_schemes lets relative, protocol-relative
+    and backslash URLs through; the attribute filter drops them."""
+    html = render_markdown(f"[x]({href})")
+    assert "href=" not in html, html
+    assert "x" in html
+
+
+def test_the_render_is_linear_on_pathological_input_at_the_maximum_size():
+    """#261 review finding 1: Python-Markdown took 17.5 s on 2,000 backticks.
+    Every input here, at the maximum rendered size, must stay well under a
+    second (target about 200 ms on the workshop Mac)."""
+    import time
+    from minimoi_portal.guild_ui.markdown_render import MAX_CHARS
+    n = MAX_CHARS
+    cases = {
+        "backticks": "`" * n, "open brackets": "[" * n, "tick a": "`a " * (n // 3), "link opens": "[a](" * (n // 4),
+        "brackets then closes": "[" * (n // 8) + "](x)" * (n // 8), "stars": "*" * n, "underscore a": "_a" * (n // 2),
+        "quotes": "> " * (n // 2), "list markers": "1. " * (n // 3), "image opens": "![x](" * (n // 5),
+        "bold a": "**a" * (n // 3), "table": "|a" * (n // 2) + "\n" + "|-" * (n // 2), "mixed": "[`*_" * (n // 4),
+        "angle a": "<a" * (n // 2), "entities": "&#" * (n // 2),
+    }
+    slow = {}
+    for name, text in cases.items():
+        render_markdown.cache_clear()
+        t0 = time.perf_counter()
+        render_markdown(text + " ")
+        took = time.perf_counter() - t0
+        if took > 0.5:
+            slow[name] = round(took, 3)
+    assert not slow, slow
+
+
+def test_a_long_reply_says_what_was_not_shown():
+    from minimoi_portal.guild_ui.markdown_render import MAX_CHARS
+    html = render_markdown("a" * (MAX_CHARS + 1234))
+    assert "1,234 more characters not shown" in html
+
+
+def test_rendering_is_cached_per_message():
+    render_markdown.cache_clear()
+    render_markdown("**cached**")
+    render_markdown("**cached**")
+    assert render_markdown.cache_info().hits >= 1
+
+
 def test_links_are_http_https_or_mailto_and_open_safely():
     html = render_markdown("[a](https://a.example) [b](http://b.example) [c](mailto:x@y.example) [d](ftp://d.example)")
     assert html.count('rel="noopener noreferrer"') == 4 and html.count('target="_blank"') == 4
@@ -103,4 +152,4 @@ def test_the_text_is_kept_and_html_added():
 
 def test_very_long_input_is_bounded_and_never_raises():
     html = render_markdown("x" * 100_000)
-    assert len(html) < 50_000
+    assert len(html) < 20_000
