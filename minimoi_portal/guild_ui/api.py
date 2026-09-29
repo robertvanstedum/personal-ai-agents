@@ -551,12 +551,6 @@ def mc_turn():
     is the stub's, never Master Craftsman's). The answer to the browser is
     allow-listed: never a token, URL, trace or runtime id. Logs carry the
     turn id and outcome only, never text or tokens."""
-    import hashlib
-    import uuid
-    from datetime import datetime, timezone
-
-    from .mc import NotAnAnswer, TurnRequest, keep_reply
-
     if request.content_length is not None and request.content_length > MAX_BODY:
         return _too_large()
     refusal = check_write(cfg()["base_url"])
@@ -584,84 +578,9 @@ def mc_turn():
         return json_error("not_found", MC_WORDS["no_note"], 404)
     if note.get("author_kind") != "owner" or note.get("who") != principal:
         return json_error("not_allowed", MC_WORDS["not_yours"], 403)
-    # One reply per note (#251 review F1): a note that already has a kept
-    # reply is answered from the store, and Master Craftsman is not called
-    # again (from stage C every call is paid).
-    reply_key = "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
-    try:
-        existing = floor.get_note(reply_key)
-    except FloorStoreUnavailable as exc:
-        return json_error("unavailable", MC_WORDS["notes_down"], 503,
-                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
-    if existing is not None:
-        shown = floor_state.mc_view(services, notes_ok=True)
-        turn_log_of(services).annotate([existing])
-        with_html([existing])
-        return jsonify({"turn_id": None, "status": "answered", "repeated": True,
-                        "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
-                        "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
-                        "mc_state": shown["state"], "mc_header": shown["header"],
-                        "message": MC_WORDS["already"]})
-    shown = floor_state.mc_view(services, notes_ok=True)
-    if not shown["turns"]:
-        return json_error("mc_unavailable", f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
-                          503, mc_state=shown["state"], reason=shown["reason"])
-    with _MC_LOCK:
-        if principal in _MC_INFLIGHT:
-            return json_error("busy", MC_WORDS["busy"], 409, mc_state=shown["state"])
-        _MC_INFLIGHT.add(principal)
-    turn_id = uuid.uuid4().hex
-    try:
-        from .conversations import session_conversation_id
-        ctx = note.get("context") or {}
-        # Each conversation is its own session in the backend (the adapter maps
-        # the id: OpenClaw hashes it into its `user` field). Only this note is
-        # sent: other conversations never reach the model's context.
-        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=scrub(note["text"]),
-                          note_request_id=note_id, correlation_id=turn_id,
-                          context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
-        _mc_log().info("mc turn %s start backend=%s", turn_id, services.mc.kind)
-        started = time.monotonic()
-        result = services.mc.turn(req)
-        duration_ms = int((time.monotonic() - started) * 1000)
-        trace = result.trace or {}
-        _mc_log().info("mc turn %s end status=%s class=%s echo=%s response=%s", turn_id, result.status,
-                       result.failure_class, trace.get("correlation_echo") == turn_id, bool(trace.get("response_id")))
-    finally:
-        with _MC_LOCK:
-            _MC_INFLIGHT.discard(principal)
-        if services.mc_health is not None:
-            services.mc_health.invalidate()
-    answer = {"turn_id": turn_id, "status": result.status, "backend_kind": result.backend_kind,
-              "failure_class": result.failure_class, "reply_note": None, "observed_at": now_iso()}
-    if result.status == "answered":
-        try:
-            kept = keep_reply(floor, result, request_id=reply_key, area=ctx.get("area"),
-                              item_ref=ctx.get("item_ref"), page=ctx.get("page"))
-            outcome = getattr(kept, "outcome", None)
-        except (FloorStoreUnavailable, NotAnAnswer):
-            kept, outcome = None, "store_failed"
-        if outcome != "kept" or kept is None or not getattr(kept, "value", None):
-            # Anything but a clean keep (a store failure, an idempotency
-            # mismatch, a missing row) is "not kept", said as such.
-            _mc_log().warning("mc turn %s answered but not kept (%s)", turn_id, outcome)
-            shown = floor_state.mc_view(services, notes_ok=True)
-            return jsonify({**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
-                            "mc_state": shown["state"], "mc_header": shown["header"]}), 200
-        answer["reply_note"] = kept.value
-        _touch(conv)
-    turns = turn_log_of(services)
-    turns.record(turn_id=turn_id, status=result.status, backend_kind=result.backend_kind, duration_ms=duration_ms,
-                 failure_class=result.failure_class,
-                 reply_request_id=reply_key if answer["reply_note"] else None)
-    if answer["reply_note"]:
-        turns.annotate([answer["reply_note"]])
-        with_html([answer["reply_note"]])
-    shown = floor_state.mc_view(services, notes_ok=True)
-    answer.update({"mc_state": shown["state"], "mc_header": shown["header"],
-                   "message": "Master Craftsman answered · kept on the record" if result.status == "answered"
-                   else f"{shown['header']}. Your note is kept; Master Craftsman did not answer."})
-    return jsonify(answer)
+    answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
+                                 principal=principal, note=note, note_id=note_id)
+    return jsonify(answer), status
 
 
 @owner_api
@@ -750,6 +669,108 @@ def conversation_archive(cid):
 @owner_api
 def conversation_restore(cid):
     return _flag(cid, lambda st: st.set_archived(cid, _principal(), False), "restored")
+
+
+def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_id) -> tuple[dict, int]:
+    """One Master Craftsman turn for a kept owner note, after the route's
+    guards (write guard, turn gate, the note is this owner's): one reply per
+    note, MC's state must allow turns, one turn in flight per owner, the note
+    scrubbed again, only an answered turn kept. Returns (answer, HTTP status).
+    Used by the /mc/turns route and by the operator-only cost probe
+    (mc/cost_probe.py), which reaches it only through docker exec."""
+    import hashlib
+    import uuid
+
+    from .mc import NotAnAnswer, TurnRequest, keep_reply
+
+    # One reply per note (#251 review F1): a note that already has a kept
+    # reply is answered from the store, and Master Craftsman is not called
+    # again (from stage C every call is paid).
+    reply_key = "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
+    try:
+        existing = floor.get_note(reply_key)
+    except FloorStoreUnavailable as exc:
+        return {"error": "unavailable", "message": MC_WORDS["notes_down"],
+                "reason": "not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"}, 503
+    if existing is not None:
+        shown = floor_state.mc_view(services, notes_ok=True)
+        turn_log_of(services).annotate([existing])
+        with_html([existing])
+        return {"turn_id": None, "status": "answered", "repeated": True,
+                "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
+                "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
+                "mc_state": shown["state"], "mc_header": shown["header"],
+                "message": MC_WORDS["already"]}, 200
+    shown = floor_state.mc_view(services, notes_ok=True)
+    if not shown["turns"]:
+        return {"error": "mc_unavailable", "message": f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
+                "mc_state": shown["state"], "reason": shown["reason"]}, 503
+    with _MC_LOCK:
+        if principal in _MC_INFLIGHT:
+            return {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
+        _MC_INFLIGHT.add(principal)
+    turn_id = uuid.uuid4().hex
+    try:
+        from .conversations import session_conversation_id
+        ctx = note.get("context") or {}
+        # Each conversation is its own session in the backend (the adapter maps
+        # the id: OpenClaw hashes it into its `user` field). Only this note is
+        # sent: other conversations never reach the model's context.
+        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=scrub(note["text"]),
+                          note_request_id=note_id, correlation_id=turn_id,
+                          context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
+        _mc_log().info("mc turn %s start backend=%s", turn_id, services.mc.kind)
+        started = time.monotonic()
+        result = services.mc.turn(req)
+        duration_ms = int((time.monotonic() - started) * 1000)
+        trace = result.trace or {}
+        _mc_log().info("mc turn %s end status=%s class=%s echo=%s response=%s", turn_id, result.status,
+                       result.failure_class, trace.get("correlation_echo") == turn_id, bool(trace.get("response_id")))
+    finally:
+        with _MC_LOCK:
+            _MC_INFLIGHT.discard(principal)
+        if services.mc_health is not None:
+            services.mc_health.invalidate()
+    answer = {"turn_id": turn_id, "status": result.status, "backend_kind": result.backend_kind,
+              "failure_class": result.failure_class, "reply_note": None, "observed_at": now_iso()}
+    if result.status == "answered":
+        try:
+            kept = keep_reply(floor, result, request_id=reply_key, area=ctx.get("area"),
+                              item_ref=ctx.get("item_ref"), page=ctx.get("page"))
+            outcome = getattr(kept, "outcome", None)
+        except (FloorStoreUnavailable, NotAnAnswer):
+            kept, outcome = None, "store_failed"
+        if outcome != "kept" or kept is None or not getattr(kept, "value", None):
+            # Anything but a clean keep (a store failure, an idempotency
+            # mismatch, a missing row) is "not kept", said as such.
+            _mc_log().warning("mc turn %s answered but not kept (%s)", turn_id, outcome)
+            shown = floor_state.mc_view(services, notes_ok=True)
+            return {**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
+                    "mc_state": shown["state"], "mc_header": shown["header"]}, 200
+        answer["reply_note"] = kept.value
+        _touch_in(conversations, conv, principal)
+    turns = turn_log_of(services)
+    turns.record(turn_id=turn_id, status=result.status, backend_kind=result.backend_kind, duration_ms=duration_ms,
+                 failure_class=result.failure_class,
+                 reply_request_id=reply_key if answer["reply_note"] else None)
+    if answer["reply_note"]:
+        turns.annotate([answer["reply_note"]])
+        with_html([answer["reply_note"]])
+    shown = floor_state.mc_view(services, notes_ok=True)
+    answer.update({"mc_state": shown["state"], "mc_header": shown["header"],
+                   "message": "Master Craftsman answered · kept on the record" if result.status == "answered"
+                   else f"{shown['header']}. Your note is kept; Master Craftsman did not answer."})
+    return answer, 200
+
+
+def _touch_in(conversations, conv, principal):
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable
+    if conv.get("unfiled"):
+        return conv
+    try:
+        return conversations.touch(conv["id"], principal)
+    except (ConversationNotFound, ConversationStoreUnavailable):
+        return conv
 
 
 RULES = [
