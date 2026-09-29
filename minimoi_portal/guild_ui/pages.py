@@ -14,6 +14,7 @@ from .adapters import ACTIVE, STATUSES, by_recent
 from .briefing import LABEL as RULES_LABEL
 from .security import OFF_RECORD_TEXT, csrf_token
 from .stores import NOTE_MAX, POSTIT_MAX
+from .conversations import public
 
 FILING_OFF = "Filing is off until the Record is specified (#235). Nothing is filed."
 INVITE_OFF = "Inviting agents needs Rooms; not connected"
@@ -60,7 +61,8 @@ NOTES_ON_PAGE = 30
 
 def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
     c = cfg()
-    state = floor_state.compute(c, notes_limit=NOTES_ON_PAGE)
+    conversation, conv_notice = _current_conversation(c)
+    state = floor_state.compute(c, notes_limit=NOTES_ON_PAGE, conversation=conversation)
     layout = c["layout"]
     urls = {
         "floor": url_for(".floor"), "build": url_for(".floor"), "bench": url_for(".bench"),
@@ -78,6 +80,7 @@ def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
         "layout": {"version": layout["layout_version"], "bench": layout["bench"]},
         "floor": state, "off_record_text": OFF_RECORD_TEXT, "rules_label": RULES_LABEL,
         "postit_max": POSTIT_MAX, "note_max": NOTE_MAX,
+        "conversation": public(conversation) if conversation else None, "conv_notice": conv_notice,
     }
     page.update(extra.pop("page_extra", {}))
     page_open = extra.pop("page_open", False)
@@ -85,13 +88,40 @@ def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
                 page_open=page_open, postit_max=POSTIT_MAX,
                 user=c["current_user"](), page_json=page, urls=urls, phone_numbers=phone_numbers,
                 filing_off=FILING_OFF, invite_off=INVITE_OFF, rules_label=RULES_LABEL,
-                hhmm=hhmm, age=age, badge=badge, statuses=STATUSES, **extra)
+                hhmm=hhmm, age=age, badge=badge, statuses=STATUSES, conversation=conversation,
+                conv_notice=conv_notice, **extra)
+
+
+def _current_conversation(c):
+    """(conversation, notice): the one asked for (?c=), else the most recently
+    used; the migrated Shop floor thread at first. Never a model call."""
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable, conversations_of
+    principal = (c["current_user"]() or {}).get("username") or "owner"
+    store = conversations_of(c["services"])
+    try:
+        return store.current(principal, request.args.get("c") or None), None
+    except ConversationNotFound:
+        try:
+            return store.current(principal), "That conversation is not there; showing your latest one."
+        except (ConversationNotFound, ConversationStoreUnavailable):
+            return None, "Conversations are unavailable right now."
+    except ConversationStoreUnavailable:
+        return None, "Conversations are unavailable right now; showing the Shop floor thread."
 
 
 @owner_page
 def floor():
+    from .conversations import ConversationStoreUnavailable, conversations_of
     ctx = _context("floor", "Build", "Shop floor")
-    return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], **ctx)
+    view = "archived" if request.args.get("view") == "archived" else "active"
+    principal = (cfg()["current_user"]() or {}).get("username") or "owner"
+    try:
+        rows = conversations_of(cfg()["services"]).list(principal, archived=view == "archived")
+        conv_list = {"state": "ok", "rows": rows}
+    except ConversationStoreUnavailable:
+        conv_list = {"state": "unavailable", "rows": []}
+    return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], conv_list=conv_list,
+                           conv_view=view, **ctx)
 
 
 @owner_page

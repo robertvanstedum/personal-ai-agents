@@ -10,6 +10,7 @@ import { live, setOff, onChange } from './state.js';
 import { apiGet, apiPost, recordMode } from './api.js';
 import { newKey } from './actions.js';
 import { answerFailed, answerArrived } from './floorlayout.js';
+import { applyConversation } from './conversations.js';
 
 let page, panel, thread, pill;
 const inPage = () => document.body.dataset.page === 'floor';
@@ -114,7 +115,8 @@ function askForTokens() {
   tokenTimer = window.setTimeout(async () => {
     tokenTimer = null;
     tokenAsks += 1;
-    const r = await apiGet('/notes?limit=20');
+    const conv = page.conversation ? `&conversation=${encodeURIComponent(page.conversation.id)}` : '';
+    const r = await apiGet(`/notes?limit=20${conv}`);
     let pending = false;
     for (const n of ((r.ok && r.body && r.body.notes) || [])) {
       if (!n.turn) continue;
@@ -154,7 +156,8 @@ async function askMasterCraftsman(note) {
   const waiting = waitingLine();
   let r;
   try {
-    r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode() });
+    r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode(),
+      conversation_id: page.conversation ? page.conversation.id : undefined });
   } finally {
     waiting.stopTicking();
   }
@@ -196,13 +199,14 @@ async function sendNote(input, send) {
   if (!noteKey) noteKey = newKey();
   send.disabled = true;
   const r = await apiPost('/notes', {
-    request_id: noteKey, text, record_mode: recordMode(),
+    request_id: noteKey, text, record_mode: recordMode(), conversation_id: page.conversation ? page.conversation.id : undefined,
     context: { area: document.body.dataset.area || null, item_ref: page.item_id || null, page: page.page },
   });
   send.disabled = false;
   const body = r.body || {};
   if (r.ok && body.result === 'kept') {
     if (!$(`[data-note="${body.note.id}"]`)) appendNote(body.note);
+    applyConversation(body.conversation);
     input.value = '';
     noteKey = null;
     for (const n of $$('[data-notes-unavailable]')) n.remove();

@@ -483,7 +483,7 @@ def test_the_footer_says_tokens_unknown_with_no_store_or_no_match_once_the_turn_
 def test_the_page_asks_again_for_pending_tokens_a_few_times_only():
     import pathlib
     js = (pathlib.Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
-    assert "apiGet('/notes?limit=20')" in js and "tokenAsks >= 4" in js and "turn.tokens_text == null" in js
+    assert "apiGet(`/notes?limit=20${conv}`)" in js and "tokenAsks >= 4" in js and "turn.tokens_text == null" in js
 
 
 # ── Markdown in the thread (Robert, September 29) ────────────────────────────

@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import time
 
-from flask import jsonify, request
+from flask import jsonify, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from . import cfg, floor_state, owner_api
@@ -252,6 +252,54 @@ def _floor():
     return cfg()["services"].floor
 
 
+# ── conversations (Guild 1.1 slice 2): file first, one owner, no model calls ──
+
+CONV_WORDS = {
+    "unavailable": "Conversations are unavailable right now; nothing was changed.",
+    "not_found": "There is no such conversation. Nothing was changed.",
+}
+
+
+def _conversations():
+    from .conversations import conversations_of
+    return conversations_of(cfg()["services"])
+
+
+def _conversation(cid):
+    """(conversation, refusal). A request that names no conversation is the
+    Shop floor thread, as before conversations existed (older clients, the
+    old thread); the page always names its conversation."""
+    from .conversations import LEGACY_ID, ConversationNotFound, ConversationStoreUnavailable
+    try:
+        return _conversations().get(cid or LEGACY_ID, _principal()), None
+    except ConversationNotFound:
+        return None, json_error("not_found", CONV_WORDS["not_found"], 404)
+    except ConversationStoreUnavailable:
+        if not cid or cid == LEGACY_ID:
+            # The conversation files are unreadable: the Shop floor thread still
+            # works on the floor's own notes (nothing to bump, nothing to title).
+            return {"id": LEGACY_ID, "legacy": True, "notes_floor": _floor().floor, "unfiled": True}, None
+        return None, json_error("unavailable", CONV_WORDS["unavailable"], 503)
+
+
+def _conv_floor(conv):
+    """The floor store for a conversation's notes."""
+    base = _floor()
+    nf = (conv or {}).get("notes_floor")
+    return base if not nf or nf == base.floor else base.for_floor(nf)
+
+
+def _touch(conv, first_text=None):
+    """Bump a conversation after a kept note or reply; never fails the write."""
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable
+    if conv.get("unfiled"):
+        return conv
+    try:
+        return _conversations().touch(conv["id"], _principal(), first_text=first_text)
+    except (ConversationNotFound, ConversationStoreUnavailable):
+        return conv
+
+
 # The largest body a notes, post-its or Continue write may carry (review B1c #1):
 # a 2,000-character note is at most ~12 KB of JSON even with every character
 # escaped, so 32 KB is ample, and nothing larger is ever read or scrubbed.
@@ -325,7 +373,10 @@ def _short(value, limit: int = 60):
 def notes_list():
     before = request.args.get("before", type=int)
     limit = request.args.get("limit", default=50, type=int)
-    res = _floor().list_notes(before=before, limit=max(1, min(limit or 50, 200)))
+    conv, refusal = _conversation(request.args.get("conversation"))
+    if refusal is not None:
+        return refusal
+    res = _conv_floor(conv).list_notes(before=before, limit=max(1, min(limit or 50, 200)))
     data = res.data if res.ok else {}
     if res.ok:
         turn_log_of(cfg()["services"]).annotate(data.get("notes"))
@@ -344,19 +395,24 @@ def notes_add():
     text, bad = _clean_text(body.get("text"), NOTE_MAX, "note")
     if bad is not None:
         return bad
+    conv, refusal = _conversation(body.get("conversation_id"))
+    if refusal is not None:
+        return refusal
     context = body.get("context") if isinstance(body.get("context"), dict) else {}
     item_ref = context.get("item_ref")
     item_ref = item_ref if isinstance(item_ref, int) and not isinstance(item_ref, bool) and 0 < item_ref < 10**9 else None
     try:
-        done = _floor().add_note(request_id, text, _author(), area=_short(context.get("area")),
-                                 item_ref=item_ref, page=_short(context.get("page"), 40))
+        done = _conv_floor(conv).add_note(request_id, text, _author(), area=_short(context.get("area")),
+                                          item_ref=item_ref, page=_short(context.get("page"), 40))
     except FloorStoreUnavailable as exc:
         return _store_down(exc, NOTE_WORDS)
     if done.outcome == "idempotency_mismatch":
         return _mismatch()
     with_html([done.value] if done.value else None)
+    from .conversations import public
+    conv = _touch(conv, first_text=text) if not done.repeated else conv
     return jsonify({"result": "kept", "repeated": done.repeated, "note": done.value, "message": NOTE_WORDS["kept"],
-                    "observed_at": now_iso()})
+                    "conversation": public(conv), "observed_at": now_iso()})
 
 
 @owner_api
@@ -515,8 +571,12 @@ def mc_turn():
     if not isinstance(note_id, str) or not _IDEMPOTENCY.fullmatch(note_id):
         return json_error("invalid", "Name the kept note to send (note_request_id). Nothing was sent to Master Craftsman.", 422)
     principal = _principal()
+    conv, refusal = _conversation(body.get("conversation_id"))
+    if refusal is not None:
+        return refusal
+    floor = _conv_floor(conv)
     try:
-        note = _floor().get_note(note_id)
+        note = floor.get_note(note_id)
     except FloorStoreUnavailable as exc:
         return json_error("unavailable", MC_WORDS["notes_down"], 503,
                           reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
@@ -529,7 +589,7 @@ def mc_turn():
     # again (from stage C every call is paid).
     reply_key = "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
     try:
-        existing = _floor().get_note(reply_key)
+        existing = floor.get_note(reply_key)
     except FloorStoreUnavailable as exc:
         return json_error("unavailable", MC_WORDS["notes_down"], 503,
                           reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
@@ -552,9 +612,12 @@ def mc_turn():
         _MC_INFLIGHT.add(principal)
     turn_id = uuid.uuid4().hex
     try:
-        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        from .conversations import session_conversation_id
         ctx = note.get("context") or {}
-        req = TurnRequest(conversation_id=f"{services.floor.floor}:{principal}:{day}", text=scrub(note["text"]),
+        # Each conversation is its own session in the backend (the adapter maps
+        # the id: OpenClaw hashes it into its `user` field). Only this note is
+        # sent: other conversations never reach the model's context.
+        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=scrub(note["text"]),
                           note_request_id=note_id, correlation_id=turn_id,
                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
         _mc_log().info("mc turn %s start backend=%s", turn_id, services.mc.kind)
@@ -573,7 +636,7 @@ def mc_turn():
               "failure_class": result.failure_class, "reply_note": None, "observed_at": now_iso()}
     if result.status == "answered":
         try:
-            kept = keep_reply(_floor(), result, request_id=reply_key, area=ctx.get("area"),
+            kept = keep_reply(floor, result, request_id=reply_key, area=ctx.get("area"),
                               item_ref=ctx.get("item_ref"), page=ctx.get("page"))
             outcome = getattr(kept, "outcome", None)
         except (FloorStoreUnavailable, NotAnAnswer):
@@ -586,6 +649,7 @@ def mc_turn():
             return jsonify({**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
                             "mc_state": shown["state"], "mc_header": shown["header"]}), 200
         answer["reply_note"] = kept.value
+        _touch(conv)
     turns = turn_log_of(services)
     turns.record(turn_id=turn_id, status=result.status, backend_kind=result.backend_kind, duration_ms=duration_ms,
                  failure_class=result.failure_class,
@@ -598,6 +662,94 @@ def mc_turn():
                    "message": "Master Craftsman answered · kept on the record" if result.status == "answered"
                    else f"{shown['header']}. Your note is kept; Master Craftsman did not answer."})
     return jsonify(answer)
+
+
+@owner_api
+def conversations_list():
+    from .conversations import ConversationStoreUnavailable, public
+    view = request.args.get("view", "active")
+    if view not in ("active", "archived"):
+        return json_error("invalid", "view is active or archived.", 422)
+    try:
+        rows = _conversations().list(_principal(), archived=view == "archived")
+    except ConversationStoreUnavailable:
+        return json_error("unavailable", CONV_WORDS["unavailable"], 503)
+    return jsonify({"view": view, "conversations": [public(c) for c in rows], "observed_at": now_iso()})
+
+
+def _conv_write(action):
+    """Every conversation write: owner (route guard), CSRF, record mode, JSON,
+    an idempotency key; then one file change. Never a model call."""
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable, public
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    try:
+        conv, status = action(_conversations(), body)
+    except ConversationNotFound:
+        return json_error("not_found", CONV_WORDS["not_found"], 404)
+    except ConversationStoreUnavailable:
+        return json_error("unavailable", CONV_WORDS["unavailable"], 503)
+    if not isinstance(conv, dict):       # a refusal (a JSON error response) from the action
+        return conv
+    return jsonify({"result": status, "conversation": public(conv), "observed_at": now_iso()})
+
+
+@owner_api
+def conversation_create():
+    def action(store, body):
+        work_item = None
+        ref = body.get("about_item")
+        if ref is not None:
+            if not isinstance(ref, int) or isinstance(ref, bool) or not 0 < ref < 10**9:
+                return json_error("invalid", "about_item is a queue item number.", 422), None
+            res = cfg()["services"].queue.get_item(ref) if hasattr(cfg()["services"].queue, "get_item") else None
+            item = res.data if res is not None and getattr(res, "ok", False) else None
+            label = f"#{ref} {item.get('title')}" if isinstance(item, dict) and item.get("title") else f"#{ref}"
+            work_item = {"kind": "item", "ref": str(ref), "label": label[:120],
+                         "href": url_for(".item", item_id=ref)}
+        conv, repeated = store.create(_principal(), key=body["_key"], work_item=work_item)
+        return conv, ("repeated" if repeated else "created")
+    return _conv_write(action)
+
+
+@owner_api
+def conversation_rename(cid):
+    from .conversations import clean_title
+
+    def action(store, body):
+        title = clean_title(body.get("title"))
+        if title is None:
+            return json_error("invalid", "A conversation needs a title (1 to 80 characters).", 422), None
+        return store.rename(cid, _principal(), title), "renamed"
+    return _conv_write(action)
+
+
+def _flag(cid, change, status):
+    def action(store, body):
+        return change(store), status
+    return _conv_write(action)
+
+
+@owner_api
+def conversation_pin(cid):
+    return _flag(cid, lambda st: st.set_pinned(cid, _principal(), True), "pinned")
+
+
+@owner_api
+def conversation_unpin(cid):
+    return _flag(cid, lambda st: st.set_pinned(cid, _principal(), False), "unpinned")
+
+
+@owner_api
+def conversation_archive(cid):
+    """Remove from list: archive (a view action; nothing is erased)."""
+    return _flag(cid, lambda st: st.set_archived(cid, _principal(), True), "archived")
+
+
+@owner_api
+def conversation_restore(cid):
+    return _flag(cid, lambda st: st.set_archived(cid, _principal(), False), "restored")
 
 
 RULES = [
@@ -618,6 +770,13 @@ RULES = [
     ("/continue", "api_continue", continue_get, ["GET"]),
     ("/continue", "api_continue_put", continue_put, ["PUT"]),
     ("/mc/turns", "api_mc_turn", mc_turn, ["POST"]),
+    ("/conversations", "api_conversations", conversations_list, ["GET"]),
+    ("/conversations", "api_conversation_create", conversation_create, ["POST"]),
+    ("/conversations/<cid>/rename", "api_conversation_rename", conversation_rename, ["POST"]),
+    ("/conversations/<cid>/pin", "api_conversation_pin", conversation_pin, ["POST"]),
+    ("/conversations/<cid>/unpin", "api_conversation_unpin", conversation_unpin, ["POST"]),
+    ("/conversations/<cid>/archive", "api_conversation_archive", conversation_archive, ["POST"]),
+    ("/conversations/<cid>/restore", "api_conversation_restore", conversation_restore, ["POST"]),
     ("/", "api_root", not_found, ALL_METHODS),
     ("/<path:rest>", "api_not_found", not_found, ALL_METHODS),
 ]

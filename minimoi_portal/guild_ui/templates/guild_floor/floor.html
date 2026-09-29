@@ -14,16 +14,38 @@
 {% block before_main %}
 <aside class="floor-history" id="floor-history" aria-labelledby="fh-h" data-floor-history>
   <div class="fh-head">
-    <h2 class="fh-h" id="fh-h">Conversations</h2>
+    <h2 class="fh-h" id="fh-h">{{ 'Archive' if conv_view == 'archived' else 'Conversations' }}</h2>
     <button type="button" class="fb-btn fh-close" data-history-close aria-label="Close conversations">✕</button>
   </div>
-  {# One real thread today; conversation history (new, rename, pin, archive) is slice 2. #}
-  <ol class="fh-list">
-    <li class="fh-row" aria-current="true" data-fh-current>
-      <span class="fh-title">Shop floor thread</span>
-      <span class="fh-meta small" data-fh-count data-more="{{ 'true' if state.notes.more else 'false' }}">{% if state.notes.state == 'ok' %}{{ state.notes.recent|length }}{% if state.notes.more %}+{% endif %} kept{% else %}notes unavailable{% endif %}</span>
+  {% if conv_view == 'active' %}<button type="button" class="fh-new" data-conv-new>＋ New conversation</button>{% endif %}
+  {# Server-owned, file-first (conversations.py): newest first, pinned on top. Housekeeping never calls a model. #}
+  {% if conv_list.state != 'ok' %}
+  <p class="fh-unavailable small" data-conv-unavailable>Conversations unavailable — treat as unknown.</p>
+  {% endif %}
+  <ol class="fh-list" data-conv-list data-view="{{ conv_view }}">
+    {% for cv in conv_list.rows %}
+    {% set on = conversation and cv.id == conversation.id %}
+    <li class="fh-row" data-conv="{{ cv.id }}" data-pinned="{{ 'true' if cv.pinned else 'false' }}"{% if on %} aria-current="true" data-fh-current{% endif %}>
+      <a class="fh-link" href="{{ urls.floor }}?c={{ cv.id }}" data-conv-link>
+        <span class="fh-title" data-conv-title>{% if cv.pinned %}<span class="fh-pin" aria-label="Pinned">📌 </span>{% endif %}{{ cv.title }}</span>
+        {% if on %}<span class="fh-meta small" data-fh-count data-more="{{ 'true' if state.notes.more else 'false' }}">{% if state.notes.state == 'ok' %}{{ state.notes.recent|length }}{% if state.notes.more %}+{% endif %} kept{% else %}notes unavailable{% endif %}</span>
+        {% else %}<span class="fh-meta small"><span data-iso="{{ cv.updated_at }}">{{ hhmm(cv.updated_at) }}</span></span>{% endif %}
+      </a>
+      <button type="button" class="fh-more" data-conv-menu aria-haspopup="true" aria-expanded="false" aria-label="Actions for {{ cv.title }}">⋯</button>
+      <div class="fh-menu" data-conv-actions role="menu" hidden>
+        {% if conv_view == 'archived' %}
+        <button type="button" role="menuitem" data-conv-act="restore">Restore</button>
+        {% else %}
+        <button type="button" role="menuitem" data-conv-act="rename">Rename</button>
+        <button type="button" role="menuitem" data-conv-act="{{ 'unpin' if cv.pinned else 'pin' }}">{{ 'Unpin' if cv.pinned else 'Pin' }}</button>
+        <button type="button" role="menuitem" data-conv-act="archive">Remove from list</button>
+        {% endif %}
+      </div>
     </li>
+    {% endfor %}
+    {% if conv_view == 'archived' and not conv_list.rows %}<li class="fh-empty small">Nothing archived.</li>{% endif %}
   </ol>
+  <p class="fh-view small">{% if conv_view == 'archived' %}<a href="{{ urls.floor }}" data-conv-view="active">← Conversations</a>{% else %}<a href="{{ urls.floor }}?view=archived" data-conv-view="archived">Archive</a>{% endif %}</p>
 </aside>
 {# Phone only: the card's dark title strip with a small thumbnail, above the chat. #}
 <div class="floor-phone-strip" aria-hidden="true">{{ build_card('strip') }}</div>
@@ -42,9 +64,15 @@
   <summary class="floor-context-sum">Context</summary>
   <div class="fc-body">
     <p class="fc-item fc-about" data-rail-continue{% if focus.state == 'ok' and not focus.target %} hidden{% endif %}>
-      {# Slice 1 has no conversation records: this is the item last opened (Continue), labelled as such. #}
+      {% if focus.source == 'conversation' %}
+      <span class="fc-label">This conversation is about</span>
+      <a href="{{ focus.target.href }}" data-focus-link>{{ focus.target.label }}</a>
+      {% else %}
+      {# No work item linked to this conversation: the item last opened (Continue), labelled as such. #}
       <span class="fc-label">Last opened</span>
       {{ continue_line(state['continue']) }}
+      {% if state['continue'].target and state['continue'].target.kind == 'item' %}<button type="button" class="fc-about-new small" data-conv-new data-about-item="{{ state['continue'].target.ref }}">Start a conversation about this</button>{% endif %}
+      {% endif %}
     </p>
     <p class="fc-item fc-urgent" data-floor-urgent{% if not top %} hidden{% endif %}>
       <span class="fc-label">Most urgent</span>

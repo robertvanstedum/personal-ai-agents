@@ -15,7 +15,8 @@ export function renderContinue(zone) {
     else slot.replaceChildren(el('span', { 'data-continue-text': true }, zone.text));
   }
   // The Shop floor's context rail shows Continue only when there is somewhere to continue to.
-  for (const rail of $$('[data-rail-continue]')) rail.hidden = zone.state === 'ok' && !zone.target;
+  // (A conversation's own work item, when linked, keeps its line.)
+  for (const rail of $$('[data-rail-continue]')) rail.hidden = !rail.querySelector('[data-focus-link]') && zone.state === 'ok' && !zone.target;
 }
 
 export async function continueFromItem(page) {

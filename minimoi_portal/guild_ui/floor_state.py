@@ -89,6 +89,14 @@ def mc_view(services, *, notes_ok: bool) -> dict:
     return mc_view_of(health, notes_ok=notes_ok, turns_on=bool(getattr(services, "mc_turns", False)))
 
 
+class _NotesRead:
+    """A conversation's notes read, shaped like the floor summary for notes_zone."""
+
+    def __init__(self, res):
+        self.ok, self.reason = res.ok, getattr(res, "reason", None)
+        self.data = {"notes": res.data.get("notes"), "notes_more": res.data.get("more")} if res.ok else None
+
+
 def conversation_focus(continue_zone_: dict, conversation: dict | None = None) -> dict:
     """What the current conversation is about (the Shop floor's context rail).
 
@@ -115,7 +123,7 @@ def chat_blockers(mc: dict, cost_level: str | None = None) -> list[dict]:
     return out
 
 
-def compute(c: dict, *, notes_limit: int = 0) -> dict:
+def compute(c: dict, *, notes_limit: int = 0, conversation: dict | None = None) -> dict:
     services, layout = c["services"], c["layout"]
     observed_at = now_iso()
     queue_res = services.queue.list_items()
@@ -131,7 +139,12 @@ def compute(c: dict, *, notes_limit: int = 0) -> dict:
     cap = layout["floor"].get("postit_cap", 4)
     floor_res = services.floor.summary(principal_of(c), rail_cap=cap, notes_limit=notes_limit)
     mc = mc_view(services, notes_ok=floor_res.ok)
-    notes = notes_zone(floor_res, mc["notes_text"])
+    notes_res = floor_res
+    if notes_limit and conversation and conversation.get("notes_floor") not in (None, services.floor.floor):
+        # A conversation's own notes (slice 2) live under its own floor key.
+        conv_res = services.floor.for_floor(conversation["notes_floor"]).list_notes(limit=notes_limit)
+        notes_res = _NotesRead(conv_res)
+    notes = notes_zone(notes_res, mc["notes_text"])
     if notes.get("recent"):
         from .mc.turn_log import turn_log_of
         turn_log_of(services).annotate(notes["recent"])
@@ -155,7 +168,7 @@ def compute(c: dict, *, notes_limit: int = 0) -> dict:
         "floor_store": {"status": floor_res.status, "source": floor_res.source, "reason": floor_res.reason,
                         "error": floor_res.error, "observed_at": floor_res.observed_at},
     }
-    out["focus"] = conversation_focus(out["continue"])
+    out["focus"] = conversation_focus(out["continue"], conversation)
     out["blockers"] = chat_blockers({**out["mc"], "header": out["mc_header"]}, out["cost_level"])
     return out
 

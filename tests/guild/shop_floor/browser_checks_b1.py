@@ -655,7 +655,7 @@ def test_mc_waiting_line_sits_where_the_reply_goes_and_is_replaced_in_place(brow
     expect(answered.locator("[data-turn-usage]")).to_have_text("")
     # usage-record U3: the page asks the notes list again; the gateway's record has landed by then.
     later = dict(reply, turn={**reply["turn"], "output_tokens": 96, "tokens_text": "96 output tokens"})
-    page.route("**/api/v1/notes?limit=20", lambda route: route.fulfill(
+    page.route("**/api/v1/notes?limit=20*", lambda route: route.fulfill(
         status=200, content_type="application/json", body=json.dumps({"notes": [later], "more": False})))
     expect(answered.locator("[data-turn-foot]")).to_have_text("Done in 1.2s · 96 output tokens", timeout=8000)
     assert thread.locator("li").last.get_attribute("data-note") == "9001"             # in the waiting line's place
@@ -996,7 +996,7 @@ def test_slice1_the_wall_filters_and_carries_the_same_conversation(browser, serv
     page.click('[data-wall-filter="all"]')
     expect(page.locator("[data-bench] > [data-panel]:visible")).to_have_count(6)
     page.click("[data-mc-pill]")                                                  # MC docked/floating on the wall
-    expect(page.locator("[data-mc-current]")).to_have_text("Current conversation · Shop floor thread")
+    expect(page.locator("[data-mc-current]")).to_contain_text("Current conversation · Shop floor thread")
     ctx.close()
     phone, ppage = _context(browser, server, **PHONE)
     go(ppage, f"{server['url']}/guild-next/guild/build/bench")
@@ -1201,4 +1201,91 @@ def test_fix_phone_the_type_bar_covers_neither_the_composer_nor_the_newest_note(
     if signout.count() and signout.is_visible():
         assert signout.bounding_box()["height"] < 24                                 # "Sign out" on one line
     assert page.evaluate("getComputedStyle(document.querySelector('.guild-subnav')).overflowX") == "auto"
+    ctx.close()
+
+
+# ── Guild 1.1 dev, slice 2: conversations ─────────────────────────────────────
+
+def _menu(page, cid, action, navigates=True):
+    row = page.locator(f'[data-conv="{cid}"]')
+    row.locator("[data-conv-menu]").click()
+    if not navigates:
+        row.locator(f'[data-conv-act="{action}"]').click()
+        return
+    with page.expect_navigation():
+        row.locator(f'[data-conv-act="{action}"]').click()
+    page.wait_for_selector("body[data-ready=true]")
+
+
+def _nav_click(page, selector):
+    with page.expect_navigation():
+        page.click(selector)
+    page.wait_for_selector("body[data-ready=true]")
+
+
+def test_slice2_conversations_new_rename_pin_remove_archive_restore(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    rows = page.locator("[data-conv-list] [data-conv]")
+    expect(rows).to_have_count(1)
+    expect(rows.first).to_contain_text("Shop floor thread")
+    page.fill("#mc-input", "A note on the old thread")
+    page.click("[data-mc-send]")
+    expect(page.locator('[data-mc-thread] [data-kind="note"]')).to_have_count(1)
+    # New: a fresh, empty conversation opens.
+    _nav_click(page, "[data-conv-new]")
+    assert "?c=c-" in page.url
+    new_id = page.url.split("?c=")[1]
+    expect(page.locator('[data-mc-thread] [data-kind="note"]')).to_have_count(0)
+    expect(page.locator("[data-conv-current-title]")).to_have_text("New conversation")
+    page.fill("#mc-input", "Plan the **Rooms** review")
+    page.click("[data-mc-send]")
+    expect(page.locator("[data-conv-current-title]")).to_have_text("Plan the Rooms review")    # titled by the first message
+    expect(page.locator(f'[data-conv="{new_id}"] [data-conv-title]')).to_have_text("Plan the Rooms review")
+    # Rename.
+    _menu(page, new_id, "rename", navigates=False)
+    field = page.locator("[data-conv-rename]")
+    field.fill("Rooms review")
+    with page.expect_navigation():
+        field.press("Enter")
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator(f'[data-conv="{new_id}"] [data-conv-title]')).to_have_text("Rooms review")
+    # Pin the old thread: it goes on top.
+    _menu(page, "shop-floor-thread", "pin")
+    expect(rows.first).to_have_attribute("data-conv", "shop-floor-thread")
+    expect(rows.first).to_have_attribute("data-pinned", "true")
+    # Switching shows only that conversation's notes.
+    _nav_click(page, '[data-conv="shop-floor-thread"] [data-conv-link]')
+    expect(page.locator("[data-mc-thread]")).to_contain_text("A note on the old thread")
+    expect(page.locator("[data-mc-thread]")).not_to_contain_text("Rooms")
+    # Remove from list, then find it in the Archive and restore it.
+    _menu(page, new_id, "archive")
+    expect(page.locator(f'[data-conv="{new_id}"]')).to_have_count(0)
+    _nav_click(page, '[data-conv-view="archived"]')
+    expect(page.locator(f'[data-conv="{new_id}"]')).to_have_count(1)
+    _menu(page, new_id, "restore")
+    assert f"?c={new_id}" in page.url
+    expect(page.locator("[data-mc-thread]")).to_contain_text("Plan the Rooms review")    # nothing was erased
+    assert not errors, errors
+    ctx.close()
+
+
+def test_slice2_phone_the_drawer_holds_the_same_actions(browser, server, floor):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.click("[data-history-toggle]")
+    drawer = page.locator("[data-floor-history]")
+    expect(drawer.locator("[data-conv-new]")).to_be_visible()
+    _nav_click(page, "[data-floor-history] [data-conv-new]")
+    cid = page.url.split("?c=")[1]
+    page.click("[data-history-toggle]")
+    _menu(page, cid, "pin")
+    page.click("[data-history-toggle]")
+    expect(page.locator("[data-conv-list] [data-conv]").first).to_have_attribute("data-conv", cid)
+    menu_btn = page.locator(f'[data-conv="{cid}"] [data-conv-menu]')
+    assert menu_btn.bounding_box()["width"] >= 28 and menu_btn.bounding_box()["height"] >= 28
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
     ctx.close()

@@ -29,6 +29,13 @@ EXPECTED = {
     "/guild-next/api/v1/continue",
     # Master Craftsman's owner route: a seam, disabled (always refuses; tests/guild/shop_floor/test_mc_backend_switch.py).
     "/guild-next/api/v1/mc/turns",
+    # Conversations (Guild 1.1 slice 2): owner only, CSRF-checked writes, no model calls.
+    "/guild-next/api/v1/conversations",
+    "/guild-next/api/v1/conversations/<cid>/rename",
+    "/guild-next/api/v1/conversations/<cid>/pin",
+    "/guild-next/api/v1/conversations/<cid>/unpin",
+    "/guild-next/api/v1/conversations/<cid>/archive",
+    "/guild-next/api/v1/conversations/<cid>/restore",
     "/guild-next/api/v1/",
     "/guild-next/api/v1/<path:rest>",
 }

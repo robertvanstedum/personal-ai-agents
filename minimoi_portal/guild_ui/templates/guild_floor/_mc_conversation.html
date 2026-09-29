@@ -35,13 +35,13 @@
   {# The chat's own header (Guild 1.1 slice 1): the conversation, the one place Needs you appears, and the rail toggle. #}
   <div class="mc-floorbar" data-floorbar>
     <button type="button" class="fb-btn fb-history" data-history-toggle aria-expanded="false" aria-controls="floor-history">☰<span class="visually-hidden"> Conversations</span></button>
-    <h2 class="fb-title">Shop floor thread</h2>
+    <h2 class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</h2>
     {% set nt = state.needs.total %}
     <a class="fb-needs" href="{{ urls.bench }}" data-needs-badge data-needs-status="{{ state.needs.status }}"{% if state.needs.status == 'ok' and not nt %} hidden{% endif %} title="{{ state.needs.text if state.needs.status != 'ok' else 'Needs you — open the wall' }}">Needs you <span class="fb-count" data-reminder-count>{{ nt if nt is not none else '?' }}</span><span class="visually-hidden" data-needs-line>{{ state.needs.text }}</span></a>
     <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main">Context</button>
   </div>
   {% else %}
-  <p class="mc-current small" data-mc-current>Current conversation · Shop floor thread</p>
+  <p class="mc-current small" data-mc-current>Current conversation · {{ conversation.title if conversation else 'Shop floor thread' }}{% if page_id != 'floor' %} · <a href="{{ urls.floor }}{% if conversation %}?c={{ conversation.id }}{% endif %}">open</a>{% endif %}</p>
   {% endif %}
   <ol class="mc-thread" data-mc-thread role="log" aria-live="polite" aria-label="Conversation thread">
     {% if page_id != 'floor' %}{# on the Shop floor the platform's status line sits in the rail: the chat holds only conversation #}
