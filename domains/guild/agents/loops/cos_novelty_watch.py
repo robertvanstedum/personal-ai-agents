@@ -81,11 +81,12 @@ def _search_tavily(queries: list[str]) -> list[dict]:
     if not api_key:
         return []
     from tavily import TavilyClient
+    from domains.guild.agents.loops.usage import tavily_search
     client = TavilyClient(api_key=api_key)
     all_results: list[dict] = []
     for q in queries:
         try:
-            resp = client.search(q, max_results=5, search_depth="basic")
+            resp = tavily_search(client, "cos-novelty-watch", q, max_results=5, search_depth="basic")
             for r in resp.get("results", []):
                 all_results.append({
                     "title": r.get("title", ""),

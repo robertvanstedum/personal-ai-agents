@@ -122,10 +122,26 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     (tmp_path / "docker-compose.staging.yml").write_text(main_staging)
     before = _staging_render([tmp_path / "docker-compose.prod.yml", tmp_path / "docker-compose.staging.yml"])
     after = _staging_render([PROD, STAGING])
+    usage_env = {"MINIMOI_USAGE_DIR", "MINIMOI_ENV"}
+    usage_targets = {"/app/usage_record.py", "/app/usage_recorder.py", "/app/usage-data", "/app/data/usage"}
+
+    def without_usage(after_svc, before_svc):
+        """after, minus the usage-record additions (U1/U2) that main does not have yet."""
+        out = dict(after_svc)
+        env_b = before_svc.get("environment") or {}
+        if "environment" in out:
+            out["environment"] = {k: v for k, v in out["environment"].items() if k not in usage_env or k in env_b}
+        targets_b = {v["target"] for v in before_svc.get("volumes", [])}
+        if "volumes" in out:
+            out["volumes"] = [v for v in out["volumes"] if v["target"] not in usage_targets or v["target"] in targets_b]
+            if not out["volumes"] and "volumes" not in before_svc:
+                del out["volumes"]
+        return out
+
     for name in before["services"]:
         if name == "model-gateway":
             continue
-        assert after["services"][name] == before["services"][name], name
+        assert without_usage(after["services"][name], before["services"][name]) == before["services"][name], name
     gw_before, gw_after = before["services"]["model-gateway"], after["services"]["model-gateway"]
     assert set(gw_after["networks"]) == {"default", "mc-net"}
     # Stage C: provider keys under gateway-only names, the default names empty,

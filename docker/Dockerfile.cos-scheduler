@@ -10,6 +10,7 @@ COPY utils/ utils/
 COPY domains/guild/ domains/guild/
 COPY domains/cos/ domains/cos/
 COPY services/model_gateway/ services/model_gateway/
+COPY services/usage/ services/usage/
 
 ENV PORT=8769
 ENV PYTHONPATH=/app

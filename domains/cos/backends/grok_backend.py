@@ -13,8 +13,37 @@ Key design points (per cos_interface.md v0.2):
 
 import json
 import logging
+import time
+
+try:                                     # usage-record U2: one record per direct call (never raises)
+    from services.usage import direct as _usage
+except Exception:
+    _usage = None
 
 log = logging.getLogger("cos.grok_backend")
+
+
+def _create(client, route: str, **kwargs):
+    """client.chat.completions.create plus one usage record; the answer and any
+    exception are exactly the SDK's."""
+    started = time.monotonic()
+    try:
+        resp = client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        _record(route, started, None, exc)
+        raise
+    _record(route, started, resp, None)
+    return resp
+
+
+def _record(route, started, resp, error):
+    if _usage is None:
+        return
+    try:
+        _usage.model_call(name="cos-grok-backend", actor="cos", route=route, provider="xai", model=_MODEL,
+                          response=resp, latency_ms=(time.monotonic() - started) * 1000, error=error)
+    except Exception:
+        pass
 
 _MODEL = "grok-4.3"
 _MAX_TOOL_ROUNDS = 3
@@ -155,7 +184,8 @@ class GrokBackend:
         client = self._get_client()
 
         for _ in range(_MAX_TOOL_ROUNDS):
-            resp = client.chat.completions.create(
+            resp = _create(
+                client, "cos-grok-direct:chat",
                 model=_MODEL,
                 messages=[{"role": "system", "content": system_prompt}] + messages,
                 tools=tools,
@@ -216,7 +246,8 @@ class GrokBackend:
                 "If yes: reply with a single sentence starting with the key fact (no preamble).\n"
                 "If no: reply with exactly the word NONE."
             )
-            resp = client.chat.completions.create(
+            resp = _create(
+                client, "cos-grok-direct:memory-check",
                 model=_MODEL,
                 messages=[{"role": "user", "content": check_prompt}],
                 temperature=0.0,

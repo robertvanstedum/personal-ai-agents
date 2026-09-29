@@ -68,9 +68,10 @@ def _search_tavily(term: str) -> list[dict]:
     if not api_key:
         return []
     from tavily import TavilyClient
+    from domains.guild.agents.loops.usage import tavily_search
     client = TavilyClient(api_key=api_key)
     try:
-        resp = client.search(term, max_results=6, search_depth="basic")
+        resp = tavily_search(client, "cos-curator-watch", term, max_results=6, search_depth="basic")
         return [
             {
                 "title": r.get("title", ""),
