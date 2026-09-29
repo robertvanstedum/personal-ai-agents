@@ -873,3 +873,14 @@ def test_242_a_crashed_off_tab_stops_counting_after_ten_minutes(browser, server,
     go(fresh, f"{server['url']}/guild-next/guild/build")
     expect(fresh.locator("body")).to_have_attribute("data-record-known", "true" if known else "false")
     ctx.close()
+
+
+def test_242_repairing_a_damaged_list_keeps_the_valid_entries(browser, server, floor):
+    ctx, first = _context(browser, server)
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first.evaluate(f"""localStorage.setItem('{OFF_TABS}', JSON.stringify({{
+        tother: new Date().toISOString(), tbad: 'not a time' }}))""")
+    first.click("[data-mc-record]")                                    # this tab goes off: it writes the list
+    tabs = json.loads(first.evaluate(f"localStorage.getItem('{OFF_TABS}')"))
+    assert "tother" in tabs and "tbad" not in tabs and len(tabs) == 2  # the other tab's entry survived the repair
+    ctx.close()

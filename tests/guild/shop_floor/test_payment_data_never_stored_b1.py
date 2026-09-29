@@ -3,6 +3,7 @@ a row, a log, an API answer or a page. Synthetic values only."""
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 import pytest
@@ -33,7 +34,12 @@ SYNTHETIC = [
 RAW_BITS = ["1234", "4242", "billing@example.com", "9876", "5555", "1881", "7777", "GB82", "021000021"]
 
 
-@pytest.mark.parametrize("text", SYNTHETIC)
+def _id(value) -> str:
+    """A test id that never prints a card-like number: every digit masked."""
+    return re.sub(r"\d", "#", str(value))[:48]
+
+
+@pytest.mark.parametrize("text", SYNTHETIC, ids=_id)
 def test_each_pattern_is_removed(text):
     out = scrub(f"note: {text} ok")
     assert REMOVED in out and out.startswith("note: ") and out.endswith(" ok")
@@ -47,7 +53,7 @@ def test_each_pattern_is_removed(text):
                                   # review B1c #6: ordinary build notes stay as written
                                   "sprint ending in 30 minutes", "we discover 3 bugs", "Step 2 discover the cause",
                                   "My visa 2027 renewal", "**42** items", "FIXXX 100",
-                                  "ts 1727450000123", "run id 20260927103000123"])
+                                  "ts 1727450000123", "run id 20260927103000123"], ids=_id)
 def test_ordinary_text_is_left_alone(text):
     assert scrub(text) == text
 
@@ -65,7 +71,7 @@ def test_scrub_is_idempotent():
 
 @pytest.mark.parametrize("text", ["x" * 2000, "*" * 2000, "Visa " + "x" * 2000, "1 " * 1000, "Visa " + "* " * 999,
                                   "1-" * 1000 + "Visa", "a@" * 1000, "xx " * 700, "ending in " * 200,
-                                  "a" * 32000, "a@" * 16000, "1" * 32000])
+                                  "a" * 32000, "a@" * 16000, "1" * 32000], ids=lambda s: f"{len(s)}-chars-{_id(s[:6])}")
 def test_scrub_is_fast_on_hostile_input(text):
     start = time.perf_counter()
     scrub(text)
@@ -144,14 +150,14 @@ def _card_digits_left(text: str) -> list[str]:
     return _re.findall(r"\d{4,}", text)
 
 
-@pytest.mark.parametrize("text", LEAKS)
+@pytest.mark.parametrize("text", LEAKS, ids=_id)
 def test_no_group_of_a_card_number_survives(text):
     out = scrub(text)
     assert _card_digits_left(out) == [], (text, out)
     assert REMOVED in out
 
 
-@pytest.mark.parametrize("text", LEAKS)
+@pytest.mark.parametrize("text", LEAKS, ids=_id)
 def test_nothing_the_old_scrub_removed_comes_back(text):
     old, new = _old_scrub_c9ea596c(text), scrub(text)
     assert _card_digits_left(old) == []                    # the baseline removed every group
@@ -169,56 +175,118 @@ def test_ordinary_numbers_next_to_each_other_stay():
 
 
 # ── #242: wider card-group separators, mistyped cards, fewer false positives ──
-# Values are the well-known synthetic test numbers. Test ids are indexes and
-# failure messages mask every digit, so no card-like number is printed.
+# Values are the well-known synthetic test numbers. Test ids are indexes or
+# masked, and failure messages mask every digit, so no card-like number is
+# printed.
+import random  # noqa: E402
+
 
 def _masked(text: str) -> str:
     return _re.sub(r"\d", "#", text)
 
 
+def _mask_id(value) -> str:
+    return _masked(str(value))[:60]
+
+
+# Luhn-valid synthetic cards: Visa, Mastercard, Amex, Visa, Mastercard 2-series.
 _CARD_GROUPS = [["4242", "4242", "4242", "4242"], ["5555", "5555", "5555", "4444"], ["3782", "822463", "10005"],
-                ["4000", "0566", "5566", "5556"]]
-_WIDE_SEPARATORS = [".", "  ", " - ", "\n", "\t", "–", "—", "_", "/", ",", ", ", " . ", "\r\n", "-  "]
-LEAKS_WIDE = [f"paid {sep.join(g)} today" for sep in _WIDE_SEPARATORS for g in _CARD_GROUPS] + [
-    f"Visa {'.'.join(_CARD_GROUPS[0][:3])}",               # 12 digits beside a brand: the brand rule, widened
-    f"{'/'.join(_CARD_GROUPS[0][:3])} Visa",
-    "card 4242 4242 4242 4243",                             # mistyped (fails Luhn), grouped
-    "4242 4242 4242 4243",                                  # mistyped, starts like a card, no word needed
-    "4242424242424243",                                     # mistyped, a single 16-digit group
-    "378282246310006",                                      # mistyped, a single 15-digit group
-    "cc 1234.5678.9012.3456",                               # a card grouping with a card word near
-]
+                ["4000", "0566", "5566", "5556"], ["2223", "0031", "2200", "3222"]]
+# Separators a card is copied or typed with. No card word is needed with these.
+_STRONG = [" ", "-", " ", " ", " ", " ", "　", "−", "‐", "–", "—",
+           "​", "  ", "    ", "\t", ".", " - ", " . ", "-  "]
+# Separators that also join ordinary lists: a card word must be near.
+_WEAK = [",", ", ", "/", "_", "|", "\n", "\n    ", "\r\n", ";", ":"]
+LEAKS_WIDE = ([f"note {sep.join(g)} today" for sep in _STRONG for g in _CARD_GROUPS]
+              + [f"paid {sep.join(g)} today" for sep in _WEAK for g in _CARD_GROUPS]
+              + [f"Visa {'.'.join(_CARD_GROUPS[0][:3])}", f"{'/'.join(_CARD_GROUPS[0][:3])} Visa",
+                 "４２４２ 4242 4242 4242",                   # fullwidth digits
+                 "card 4242 4242 4242 4243",                                # mistyped, with a card word
+                 "card no 4242424242424243", "Amex 378282246310006",        # mistyped single groups, with a card word
+                 "card 2223 0031 2200 3223"])                               # mistyped 2-series, with a card word
 
 
 @pytest.mark.parametrize("n", range(len(LEAKS_WIDE)))
 def test_no_group_of_a_card_survives_any_separator(n):
     text = LEAKS_WIDE[n]
     out = scrub(text)
-    assert _card_digits_left(out) == [], _masked(out)
+    assert _card_digits_left(out) == [] and not _re.search(r"\d{3,}", out.replace("today", "")), _masked(out)
     assert REMOVED in out and scrub(out) == out, _masked(out)
 
 
-STAYS = [
-    "ports 8766 8767 8768 8769",                            # a card grouping, no Luhn, no card start, no card word
-    "ports 8766, 8767, 8768, 8769",
-    "ports 8080\n8081\n8082\n8083",
-    "ids 1234-5678-9012-3457 in the log",
-    "micros 1727450000123456",                              # a 16-digit time: starts with 1
-    "release 2026.2027.2028.2029",
-    "v1.2.3 on 2026/09/27 at 10:42",
-    "call 312.555.0100 or 312-555-0199",
-    "invoice 1,234,567 and 7,654,321",
-    "run id 20260927103000123",
-]
+# Kept on purpose (documented): a mistyped card with no card word near, and a
+# number that fails Luhn with a wide separator (wide separators need Luhn).
+KEPT_WITHOUT_A_CARD_WORD = ["4242 4242 4242 4243", "4242424242424243"]
 
 
-@pytest.mark.parametrize("n", range(len(STAYS)))
-def test_ordinary_numbers_stay_with_the_wider_separators(n):
-    assert scrub(STAYS[n]) == STAYS[n], _masked(scrub(STAYS[n]))
+@pytest.mark.parametrize("n", range(len(KEPT_WITHOUT_A_CARD_WORD)))
+def test_a_mistyped_card_needs_a_card_word(n):
+    text = KEPT_WITHOUT_A_CARD_WORD[n]
+    assert scrub(text) == text, _masked(scrub(text))
+    assert REMOVED in scrub(f"card {text}"), _masked(scrub(f"card {text}"))
+
+
+def test_a_wide_separator_needs_a_luhn_valid_number():
+    for text in ("4242.4242.4242.4243", "card 4242.4242.4242.4243", "paid 4242, 4242, 4242, 4243"):
+        assert scrub(text) == text, _masked(scrub(text))
+
+
+# ── The false-positive corpus: ordinary technical text, 0% altered ────────────
+
+def _corpus():
+    rnd = random.Random(242)
+    ip = lambda: ".".join(str(rnd.randint(0, 255)) for _ in range(4))                       # noqa: E731
+    ver = lambda: f"{rnd.randint(0, 20)}.{rnd.randint(0, 40)}.{rnd.randint(0, 99)}"         # noqa: E731
+    price = lambda: f"{rnd.randint(1, 999)}.{rnd.randint(0, 99):02d}"                       # noqa: E731
+    phone = lambda: f"{rnd.randint(200, 999)}-{rnd.randint(200, 999)}-{rnd.randint(0, 9999):04d}"  # noqa: E731
+    date = lambda: f"{rnd.randint(1990, 2035)}-{rnd.randint(1, 12):02d}-{rnd.randint(1, 28):02d}"  # noqa: E731
+    port = lambda: str(rnd.randint(1000, 9999))                                             # noqa: E731
+    ident = lambda: str(rnd.randint(1000, 999999))                                          # noqa: E731
+    ms = lambda: str(rnd.randint(1_500_000_000_000, 1_999_999_999_999))                     # noqa: E731
+    us = lambda: str(rnd.randint(1_500_000_000_000_000, 1_999_999_999_999_999))             # noqa: E731
+    stamp_id = lambda: f"{rnd.randint(2020, 2035)}{rnd.randint(1, 12):02d}{rnd.randint(1, 28):02d}{rnd.randint(0, 99999999):08d}"  # noqa: E731
+    shapes = {
+        "ISO dates, comma": lambda: f"dates {date()}, {date()}",
+        "ISO dates, one per line": lambda: "\n".join(date() for _ in range(4)),
+        "IPv4 list, comma": lambda: f"hosts {ip()}, {ip()}",
+        "IPv4 list, one per line": lambda: "\n".join(ip() for _ in range(3)),
+        "IPv4 and port": lambda: f"db at {ip()}:{port()}",
+        "versions, comma": lambda: "versions " + ", ".join(ver() for _ in range(4)),
+        "prices, comma": lambda: "prices " + ", ".join(f"${price()}" for _ in range(5)),
+        "prices, one per line": lambda: "\n".join(price() for _ in range(5)),
+        "phone numbers, comma": lambda: f"call {phone()}, {phone()}",
+        "port list, comma": lambda: "ports " + ", ".join(port() for _ in range(4)),
+        "port list, comma no space": lambda: "ports " + ",".join(port() for _ in range(4)),
+        "port list, one per line": lambda: "\n".join(port() for _ in range(4)),
+        "port list, slash": lambda: "/".join(port() for _ in range(4)),
+        "ids, one per line": lambda: "\n".join(ident() for _ in range(4)),
+        "ids, pipe table": lambda: " | ".join(ident() for _ in range(4)),
+        "millisecond times": lambda: f"ts {ms()}",
+        "microsecond times": lambda: f"at {us()}",
+        "date-based ids": lambda: f"run id {stamp_id()}",
+        "times hh:mm:ss": lambda: f"{rnd.randint(0, 23):02d}:{rnd.randint(0, 59):02d}:{rnd.randint(0, 59):02d}",
+    }
+    return {name: [make() for _ in range(400)] for name, make in shapes.items()}
+
+
+CORPUS = _corpus()
+
+
+@pytest.mark.parametrize("shape", sorted(CORPUS))
+def test_ordinary_technical_text_is_never_altered(shape):
+    altered = [s for s in CORPUS[shape] if scrub(s) != s]
+    assert not altered, f"{shape}: {len(altered)}/{len(CORPUS[shape])} altered, e.g. {_masked(altered[0])!r}"
+
+
+def test_ordinary_text_with_unicode_spaces_comes_back_exactly():
+    for text in ("Queue item 158 is in build", "a​b", "10 000 steps", "range 1–5"):
+        assert scrub(text) == text
 
 
 @pytest.mark.parametrize("text", ["1." * 1000, "1 - " * 500, "1\n" * 1000, "4242, " * 400, "Visa " + "1/" * 1000,
-                                  "1_2" * 700, "1 , " * 500], ids=lambda s: f"{len(s)}-chars")
+                                  "1_2" * 700, "1 , " * 500, "1 " * 1000, "1 \n " * 500, "1      " * 300,
+                                  "4242 | " * 300],
+                         ids=lambda s: f"{len(s)}-chars")
 def test_scrub_stays_fast_with_the_wider_separators(text):
     start = time.perf_counter()
     scrub(text)

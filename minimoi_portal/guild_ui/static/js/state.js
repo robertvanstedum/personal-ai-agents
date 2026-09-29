@@ -26,6 +26,9 @@ const ALIVE_KEY = () => `${namespace}.tab_alive`;
 // when its page goes away (pagehide), so a closed tab stops counting at once,
 // and a crashed one after 10 minutes. If the list cannot be read, or is
 // damaged, a fresh tab's mode is unknown: never "on the record" by default.
+// Limits: a tab counts only while a floor page shows in it (leaving for
+// another app is a pagehide), and a background tab the browser freezes
+// (Safari, iOS) stops its heartbeat, so it stops counting after 10 minutes.
 const OFF_TABS_KEY = () => `${namespace}.off_tabs`;
 const OFF_TABS_MAX_AGE_MS = 10 * 60 * 1000;
 const OFF_TABS_HEARTBEAT_MS = 60 * 1000;
@@ -51,25 +54,32 @@ function claimTabId() {
   } catch (e) { return null; }
 }
 
-// The off tabs, or null when the list cannot be read or is damaged (unknown).
-function offTabs() {
+// The list's valid, current entries, and whether anything in it was damaged.
+function readOffTabs() {
   let v;
-  try { v = JSON.parse(window.localStorage.getItem(OFF_TABS_KEY()) || '{}'); } catch (e) { return null; }
-  if (!isObj(v)) return null;
+  try { v = JSON.parse(window.localStorage.getItem(OFF_TABS_KEY()) || '{}'); } catch (e) { return { tabs: {}, damaged: true }; }
+  if (!isObj(v)) return { tabs: {}, damaged: true };
   const now = Date.now();
-  const out = {};
+  const tabs = {};
+  let damaged = false;
   for (const [id, at] of Object.entries(v)) {
     const t = typeof at === 'string' ? Date.parse(at) : NaN;
-    if (Number.isNaN(t)) return null;
-    if (now - t < OFF_TABS_MAX_AGE_MS) out[id] = at;
+    if (Number.isNaN(t)) damaged = true;
+    else if (now - t < OFF_TABS_MAX_AGE_MS) tabs[id] = at;
   }
-  return out;
+  return { tabs, damaged };
+}
+
+// The off tabs, or null when the list cannot be read or is damaged (unknown).
+function offTabs() {
+  const { tabs, damaged } = readOffTabs();
+  return damaged ? null : tabs;
 }
 
 function markOffTab(off) {
   if (!pageTabId) return false;
   try {
-    const tabs = offTabs() || {};          // a damaged list is replaced by a clean one
+    const { tabs } = readOffTabs();        // repairing a damaged list keeps its valid entries
     if (off) tabs[pageTabId] = new Date().toISOString(); else delete tabs[pageTabId];
     window.localStorage.setItem(OFF_TABS_KEY(), JSON.stringify(tabs));
     return true;
