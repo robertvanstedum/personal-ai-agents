@@ -77,6 +77,39 @@ def test_it_stops_before_the_next_turn_once_past_the_cap(floored, tmp_path):
     assert any(l.startswith("STOP: spent $1.2000, over the $1.00 cap") for l in lines)    # the cap is never above $1
 
 
+def test_unreadable_usage_stops_the_probe_and_is_never_counted_as_zero(floored, tmp_path):
+    # The relay answers, but the gateway leaves no usage record: turn 1's cost is unknown.
+    runtime = FakeRuntime()
+    services = _turn_on(floored, _openclaw(runtime))
+    lines, naps = [], []
+    result = cost_probe.run(services, conversations_of(services), principal="robert", label="Robert", turns=4,
+                            usage_dir=str(tmp_path), wait_s=3, out=lines.append, sleep=naps.append)
+    assert len(runtime.sent) == 1 and len(naps) == 3                          # it waited, then stopped: turn 2 never sent
+    assert result["stopped"] == "usage_unknown" and result["rows"][0]["cost_usd"] is None
+    assert any(l.startswith("STOP: turn 1's usage could not be read (no usage record arrived within 3 s)") for l in lines)
+    assert any("cost unknown" in l for l in lines) and any(l.startswith("total spent: at least $0.000000") for l in lines)
+
+
+def test_a_usage_record_without_a_cost_also_stops_the_probe(floored, tmp_path):
+    services, runtime = _setup(floored, tmp_path, None)                       # records arrive, cost_usd is null
+    lines = []
+    result = cost_probe.run(services, conversations_of(services), principal="robert", label="Robert", turns=3,
+                            usage_dir=str(tmp_path), out=lines.append, sleep=lambda s: None)
+    assert len(runtime.sent) == 1 and result["stopped"] == "usage_unknown"
+    assert result["rows"][0]["calls"] == 1 and result["rows"][0]["cost_usd"] is None
+    assert any("(a usage record has no cost)" in l for l in lines)
+
+
+def test_it_refuses_to_start_without_a_usage_store(floored, tmp_path):
+    services, runtime = _setup(floored, tmp_path, 0.01)
+    lines = []
+    for usage_dir in (None, str(tmp_path / "absent")):
+        result = cost_probe.run(services, conversations_of(services), principal="robert", label="Robert",
+                                usage_dir=usage_dir, out=lines.append, sleep=lambda s: None)
+        assert result["stopped"] == "no_usage_store" and result["rows"] == []
+    assert runtime.sent == [] and all(l.startswith("Refused: no usage store") for l in lines)
+
+
 def test_it_refuses_without_yes_spend_or_with_turns_off(floored, tmp_path, capsys):
     services, runtime = _setup(floored, tmp_path, 0.01)
     assert cost_probe.main(["--turns", "3"], services=services) == 2
