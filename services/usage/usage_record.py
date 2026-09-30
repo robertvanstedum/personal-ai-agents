@@ -36,7 +36,10 @@ QUEUE_MAX = 256
 EMITTER_RE = re.compile(r"^(gateway|runtime-stream|helper:[a-z0-9_.-]{1,40})$")
 STATUSES = ("ok", "error", "refused")
 KINDS = ("model", "search", "speech")
-COST_SOURCES = ("provider", "price_table", "none")
+# "unrecorded-abort": a streamed run MiniMoi aborted (Stop or a limit). The
+# gateway (LiteLLM 1.93.1) logs nothing for a client-cancelled stream, so the
+# run's cost is unknown, and possibly billed (streaming S1, staging 2026-09-29).
+COST_SOURCES = ("provider", "price_table", "none", "unrecorded-abort")
 
 FIELDS = {
     "v", "record_id", "occurred_at", "env", "emitter", "actor", "kind", "route", "provider", "model",

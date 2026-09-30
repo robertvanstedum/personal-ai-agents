@@ -352,6 +352,7 @@ def test_stop_ends_the_turn_tells_the_relay_and_keeps_nothing_even_off_the_recor
     assert _turn_lines(streaming)[-1]["status"] == "stopped"
     usage = [u for u in _usage_lines(streaming.extra["usage"]) if u["correlation_id"] == turn_id]
     assert usage and usage[0]["status"] == "error" and usage[0]["output_tokens"] is None
+    assert usage[0]["cost_source"] == "unrecorded-abort"          # the gateway logs nothing for a cancelled stream
     assert client.post(f"{API}/mc/turns/{turn_id}/stop", json={}, headers=write_headers(token)).status_code == 404
 
 
@@ -623,3 +624,51 @@ def test_the_portal_idle_limit_outlasts_the_relays():
     relay = (REPO / "docker/mc-agent/relay.mjs").read_text()
     assert "MC_RELAY_IDLE_MS || 30000" in relay and "MC_RELAY_DEADLINE_MS || 120000" in relay
     assert STREAM_LIMITS.idle_s > 30 and STREAM_LIMITS.deadline_s > 120
+
+
+
+def test_an_all_zero_runtime_usage_is_unknown_and_the_footer_falls_back_to_the_gateway(streaming):
+    """Staging, 2026-09-29: OpenClaw 2026.9.6's stream usage chunk carries zeros
+    (as its compat API does, #252/#253) while the gateway recorded 190 output
+    tokens. Zero is recorded as unknown (null), and the footer joins the
+    gateway's record instead."""
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "hello")
+    streaming.extra["runtime"].script = [nd({"t": "delta", "text": "A real answer."}), nd({"t": "finish", "reason": "stop"}),
+                                         nd({"t": "usage", "prompt_tokens": 0, "completion_tokens": 0})]
+    done = _events(_stream(client, token, note["request_id"]))[-1]
+    assert done["status"] == "answered" and done["output_tokens"] is None
+    assert done["reply_note"]["turn"]["tokens_text"] in (None, "tokens unknown")   # never "0 output tokens"
+    _wait_idle()
+    [rec] = [u for u in _usage_lines(streaming.extra["usage"]) if u["correlation_id"] == done["turn_id"]]
+    assert rec["status"] == "ok" and rec["input_tokens"] is None and rec["output_tokens"] is None
+    from datetime import datetime, timezone
+    gateway = {"v": 1, "record_id": "a" * 32, "occurred_at": datetime.now(timezone.utc).isoformat(), "env": "staging",
+               "emitter": "gateway", "actor": "mc", "kind": "model", "route": "minimoi-mc-agent", "status": "ok",
+               "input_tokens": 900, "output_tokens": 190, "cost_usd": 0.002, "cost_source": "price_table"}
+    month = gateway["occurred_at"][:7]
+    with open(streaming.extra["usage"] / f"usage-{month}.jsonl", "a") as f:
+        f.write(json.dumps(gateway) + "\n")
+    reply = next(n for n in client.get(f"{API}/notes").get_json()["notes"] if n["id"] == done["reply_note"]["id"])
+    assert reply["turn"]["tokens_text"] == "190 output tokens"
+
+
+def test_the_reader_reads_runtime_zeros_as_unknown():
+    assert st.parse_relay_line(json.dumps({"t": "usage", "prompt_tokens": 0, "completion_tokens": 0})) == st.Usage(None, None)
+    assert st.parse_relay_line(json.dumps({"t": "usage", "prompt_tokens": 12, "completion_tokens": 0})) == st.Usage(12, None)
+    line = "data: " + json.dumps({"choices": [], "usage": {"prompt_tokens": 0, "completion_tokens": 0}})
+    assert st.parse_sse_line(line) == [st.Usage(None, None)]
+
+
+def test_a_relay_timeout_before_headers_is_a_deadline_and_an_unrecorded_abort(streaming):
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "hello")
+    runtime = streaming.extra["runtime"]
+    runtime.status, runtime.error_text = 504, '{"error":{"type":"relay_timeout"}}'
+    end = _events(_stream(client, token, note["request_id"]))[-1]
+    assert end["failure_class"] == "deadline"
+    _wait_idle()
+    [rec] = [u for u in _usage_lines(streaming.extra["usage"]) if u["correlation_id"] == end["turn_id"]]
+    assert rec["status"] == "error" and rec["cost_source"] == "unrecorded-abort"

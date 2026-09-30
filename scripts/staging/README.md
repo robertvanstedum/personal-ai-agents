@@ -960,6 +960,32 @@ every 500 ms, only on change, and none past 32 KB.
   or relay-refused-after-dispatch run leaves a `status: error` line and an
   `mc_turns.jsonl` line.
 
+**Two limits found on staging** (release `5fdda07`, 2026-09-29):
+- **Zero usage from the runtime.**
+  - OpenClaw 2026.9.6's stream usage chunk carries zeros, as its compat API
+    does (#252/#253): the stream said 0 output tokens while the gateway
+    recorded 190.
+  - The portal reads a runtime's 0 as unknown. Such a `runtime-stream` record
+    has null tokens, never 0, and the footer then joins the gateway's records
+    (U3), as for a non-streamed turn.
+- **Aborted streams are not logged by the gateway.**
+  - What happens: Stop, or the deadline, idle or size limit, makes the relay
+    cancel MC's call, and OpenClaw then cancels its own call to the gateway.
+  - For a client-cancelled stream, LiteLLM 1.93.1 (the pinned gateway) runs
+    neither its success nor its failure callbacks. `proxy_server.async_data_generator`
+    catches `CancelledError`/`GeneratorExit`, releases the parallel-request
+    slot and tags the request 499. Its deferred stream logging fires only for
+    a completed stream.
+  - So the usage recorder writes no record. Very likely the key's spend
+    tracking (also a success callback) does not count it either, which would
+    mean MC's budget does not see aborted streams.
+  - The provider may still bill what was generated.
+  - What the portal does: its `runtime-stream` record for such a run says so,
+    with `status: error`, null tokens and `cost_source: "unrecorded-abort"`.
+    Budget views can then show "at least N stopped turns with unknown cost".
+  - Not fixable in our recorder: LiteLLM's iterator hook sees the abort only
+    when the generator is garbage-collected, by LiteLLM's own note.
+
 **MC's retry cap.** `docker/mc-agent/agent-settings.json`
 (`{"retry":{"provider":{"maxRetries":0}}}`) is applied to MC's agentDir on
 every start (`start-mc.sh`), so one dispatch makes one model call. Without

@@ -221,6 +221,9 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
                 if status == 409 and "relay_stopped" in text:
                     yield Failure("stopped", "cancelled", http_status=status)
                     return
+                if status == 504 and "relay_timeout" in text:        # the relay's deadline or idle, before MC's headers
+                    yield Failure("deadline", "timeout_uncertain", http_status=status)
+                    return
                 turn_status, failure = classify_failure(status, text) if status != 200 \
                     else ("error", "malformed_answer")
                 yield Failure(failure, turn_status, http_status=status)

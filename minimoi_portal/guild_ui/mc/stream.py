@@ -75,6 +75,15 @@ def _count(value) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
+def _runtime_count(value) -> int | None:
+    """A token count reported by the runtime. Zero means "not reported": OpenClaw
+    2026.9.6's stream usage chunk carries zeros, as its compat API does (#252,
+    #253), so a 0 is unknown (null), never a count (staging, 2026-09-29: the
+    stream said 0 while the gateway recorded 190 output tokens)."""
+    count = _count(value)
+    return count if count else None
+
+
 def parse_relay_line(line: str):
     """One line of the MC relay's NDJSON -> an event, or None (dropped)."""
     try:
@@ -89,7 +98,7 @@ def parse_relay_line(line: str):
     if kind == "finish" and isinstance(obj.get("reason"), str):
         return Finish(obj["reason"][:32])
     if kind == "usage":
-        return Usage(_count(obj.get("prompt_tokens")), _count(obj.get("completion_tokens")))
+        return Usage(_runtime_count(obj.get("prompt_tokens")), _runtime_count(obj.get("completion_tokens")))
     if kind == "error" and isinstance(obj.get("class"), str):
         cls = obj["class"] if obj["class"] in FAILURE_CLASSES else "upstream"
         return Failure(cls)
@@ -122,7 +131,7 @@ def parse_sse_line(line: str):
         events.append(Finish(choice["finish_reason"][:32]))
     usage = chunk.get("usage")
     if isinstance(usage, dict) and ("prompt_tokens" in usage or "completion_tokens" in usage):
-        events.append(Usage(_count(usage.get("prompt_tokens")), _count(usage.get("completion_tokens"))))
+        events.append(Usage(_runtime_count(usage.get("prompt_tokens")), _runtime_count(usage.get("completion_tokens"))))
     return events
 
 
