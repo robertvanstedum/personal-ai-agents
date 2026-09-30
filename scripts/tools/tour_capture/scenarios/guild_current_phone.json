@@ -1,0 +1,74 @@
+{
+  "id": "guild-current-phone",
+  "domain": "guild",
+  "device_profile": "mobile",
+  "auth_profile": "none",
+  "start_path": "/guild",
+  "steps": [
+    {
+      "sample": "reset"
+    },
+    {
+      "goto": "/guild"
+    },
+    {
+      "wait_for": ".guild-card"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Current Guild: the landing",
+      "description": "The /guild landing today: four doors (Build, Operate, Improve, Experiment) with their illustrations and the Build / Operate / Improve / Experiment subnav. Current Guild (as on dev and production today), sample data.",
+      "alt": "Production Guild: the landing"
+    },
+    {
+      "goto": "/guild/build/queue"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "build-queue",
+      "title": "Build: the queue",
+      "description": "The Build Queue, here on the sample queue (#7, #12, #31, #40). Current Guild (as on dev and production today), sample data.",
+      "alt": "Build: the queue"
+    },
+    {
+      "goto": "/guild/operate"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "operate",
+      "title": "Operate",
+      "description": "Operate on a phone: the Operations agent status (unreachable here), guest requests and guests (sample people). Current Guild (as on dev and production today), sample data.",
+      "alt": "Operate"
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#send-input"
+    },
+    {
+      "fill": "#send-input",
+      "value": "Plan the week"
+    },
+    {
+      "click": "#btn-send"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "Noted:"
+      }
+    },
+    {
+      "screenshot": "cos-confer",
+      "title": "CoS: Confer",
+      "description": "Chief of Staff Confer today on a phone: a text reply from a stand-in cos-scheduler (no model). Current Guild (as on dev and production today), sample data.",
+      "alt": "CoS: Confer"
+    }
+  ],
+  "mobile_emulation": true
+}

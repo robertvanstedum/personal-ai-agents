@@ -1,0 +1,346 @@
+{
+  "id": "guild-1-1-phone",
+  "domain": "guild",
+  "device_profile": "mobile",
+  "auth_profile": "none",
+  "start_path": "/guild",
+  "steps": [
+    {
+      "sample": "reset"
+    },
+    {
+      "goto": "/guild"
+    },
+    {
+      "wait_for": ".guild-card"
+    },
+    {
+      "screenshot": "landing",
+      "title": "The /guild landing on a phone",
+      "description": "The landing on a phone: the shared Build card is the first card. Sample data from a local test instance.",
+      "alt": "The /guild landing on a phone"
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "A note on the Shop floor thread"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "A note on the Shop floor thread"
+      }
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "click": "[data-floor-history] [data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Plan the Rooms review"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Plan the Rooms review"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Plan the Rooms review"
+      }
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "click": "[data-floor-history] [data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Hetzner staging checklist"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Hetzner staging checklist"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Hetzner staging checklist"
+      }
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "click": "[data-conv]:has-text(\"Plan the Rooms review\") [data-conv-menu]"
+    },
+    {
+      "click": "[data-conv]:has-text(\"Plan the Rooms review\") [data-conv-act=\"pin\"]",
+      "navigates": true
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "sample": "mc",
+      "args": {
+        "mode": "stream",
+        "tokens": 38,
+        "script": [
+          0.15,
+          "Two things today:\n",
+          0.15,
+          "1. **#31** needs your decision\n",
+          0.15,
+          "2. **#12** is in build, one finding left\n"
+        ]
+      }
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "click": "[data-floor-history] [data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Morning. What needs me?"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Morning. What needs me?"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Morning. What needs me?"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-turn-foot]",
+        "text": "output tokens"
+      }
+    },
+    {
+      "evaluate": "window.scrollTo(0, 0)"
+    },
+    {
+      "screenshot": "floor",
+      "title": "Phone Shop floor: chat first",
+      "description": "Phone: the Build strip is the header, then the chat and the composer in the first view; the context is folded below. MC answers from a scripted relay. Sample data from a local test instance.",
+      "alt": "Phone Shop floor: chat first"
+    },
+    {
+      "click": "[data-floor-context] > summary"
+    },
+    {
+      "scroll_to": "[data-floor-context] [data-floor-urgent]"
+    },
+    {
+      "screenshot": "floor-context",
+      "title": "Phone Shop floor: context expanded",
+      "description": "The Context fold opened: most urgent, the briefing line and Open wall, then the status lights. Sample data from a local test instance.",
+      "alt": "Phone Shop floor: context expanded"
+    },
+    {
+      "evaluate": "window.scrollTo(0, 0)"
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "screenshot": "floor-drawer",
+      "title": "Phone Shop floor: the history drawer",
+      "description": "The menu button opens the conversation drawer: \"+ New conversation\", pinned first, and each row's menu. Sample data from a local test instance.",
+      "alt": "Phone Shop floor: the history drawer"
+    },
+    {
+      "sample": "reset"
+    },
+    {
+      "sample": "postit",
+      "args": {
+        "text": "Check the lock before #7 builds",
+        "author": "mc"
+      }
+    },
+    {
+      "sample": "continue",
+      "args": {
+        "item": 12,
+        "label": "#12 Floor API"
+      }
+    },
+    {
+      "goto": "/guild-next/guild/build/bench"
+    },
+    {
+      "wait_for": "[data-panel=\"needs\"]"
+    },
+    {
+      "screenshot": "wall",
+      "title": "The wall on a phone",
+      "description": "On a phone the wall is one column with the filter chips on top, Needs you first. Sample data from a local test instance.",
+      "alt": "The wall on a phone"
+    },
+    {
+      "goto": "/guild-next/guild/workshop?item=12"
+    },
+    {
+      "wait_for": "[data-ws-now]"
+    },
+    {
+      "screenshot": "workshop",
+      "title": "The Workshop on a phone",
+      "description": "The Workshop on a phone leads with Now, then Needs you, then Budget; scope, queue and recovery are folded below. Sample host readings. Sample data from a local test instance.",
+      "alt": "The Workshop on a phone"
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#send-input"
+    },
+    {
+      "fill": "#send-input",
+      "value": "Plan the week around the Rooms review and the Hetzner checklist"
+    },
+    {
+      "click": "#btn-send"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "Noted:"
+      }
+    },
+    {
+      "screenshot": "confer-text",
+      "title": "CoS Confer on a phone",
+      "description": "Confer on a phone through the portal: the stand-in's text reply and the voice row. No model is called. Sample data from a local test instance.",
+      "alt": "CoS Confer on a phone"
+    },
+    {
+      "sample": "voice",
+      "args": {
+        "boot": "ok",
+        "reply": "Two items today: the Rooms review and the Hetzner checklist."
+      }
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#btn-voice"
+    },
+    {
+      "click": "#btn-voice"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-status",
+        "text": "Listening"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.say('a1', 'Hi Robert, what shall we work on?')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "what shall we work on"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.hear('u1', 'What is on my list today?')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "What is on my list today?"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.call('c1', 'consult_cos_agent', {request: 'What is on my list today?'})"
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.say('a2', 'Two items today: the Rooms review and the Hetzner checklist.')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "Hetzner checklist"
+      }
+    },
+    {
+      "screenshot": "confer-voice-live",
+      "title": "CoS Confer voice on a phone",
+      "description": "Voice Phase A on a phone: CoS greets first and the exchange shows live (sample provider stand-in). Sample data from a local test instance.",
+      "alt": "CoS Confer voice on a phone"
+    }
+  ],
+  "mobile_emulation": true
+}

@@ -1,0 +1,921 @@
+{
+  "id": "guild-1-1-desktop",
+  "domain": "guild",
+  "device_profile": "desktop",
+  "auth_profile": "none",
+  "start_path": "/guild",
+  "steps": [
+    {
+      "sample": "reset"
+    },
+    {
+      "goto": "/guild"
+    },
+    {
+      "wait_for": ".guild-card"
+    },
+    {
+      "screenshot": "landing",
+      "title": "The /guild landing",
+      "description": "The Guild landing. The Build card is now a shared partial (_build_card.html): one link here, and the same card sits in the Shop floor rail. Web fonts are blocked in a loopback capture, so system fonts show. Sample data from a local test instance.",
+      "alt": "The /guild landing"
+    },
+    {
+      "sample": "mc",
+      "args": {
+        "mode": "stream",
+        "script": [
+          0.15,
+          "Here is where things stand this morning.\n\n",
+          0.15,
+          "## Build queue\n**Three items** are open:\n",
+          0.15,
+          "1. **#31 Blocked thing** waits on you\n   - it needs your decision\n   - nothing else is blocked behind it\n",
+          0.15,
+          "2. **#12 Floor API** is in build\n3. **#7 Queue lock hardening** is spec-ready\n\n",
+          0.15,
+          "### Next step\nRun the check before the merge:\n\n```bash\n./scripts/verify.sh --staging\n```\n\n",
+          0.15,
+          "| Item | Status | With |\n|---|---|---|\n| #31 | blocked | Robert |\n| #12 | in build | Claude Code |\n| #7 | spec ready | Codex |\n"
+        ],
+        "tokens": 212
+      }
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Where do things stand this morning? Anything I need to decide?"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Where do things stand this morning? Anything I need to decide?"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-turn-foot]",
+        "text": "output tokens"
+      }
+    },
+    {
+      "screenshot": "floor-reply",
+      "title": "Shop floor: a formatted MC reply",
+      "description": "History | chat | Build-card rail. MC's Markdown reply (headings, nested list, code, table) on the left, Robert's note on the right, the Needs-you badge in the chat header; the rail holds the Build card, the most urgent item and Open wall. MC answers from a scripted relay, no model. The blocker line still reads \"unavailable · connected, no answer yet\" under a live header. Sample data from a local test instance.",
+      "alt": "Shop floor: a formatted MC reply"
+    },
+    {
+      "click": "[data-mc-info]"
+    },
+    {
+      "wait_for": "[data-mc-off-lines]"
+    },
+    {
+      "screenshot": "floor-info-fold",
+      "title": "Shop floor: the (i) fold open",
+      "description": "The (i) button under the composer unfolds the help lines (what is kept, off the record, invite); it is folded by default so the chat holds only conversation. Sample data from a local test instance.",
+      "alt": "Shop floor: the (i) fold open"
+    },
+    {
+      "sample": "reset"
+    },
+    {
+      "sample": "queue",
+      "args": {
+        "variant": "quiet"
+      }
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-rail-quiet]",
+        "text": "Nothing needs you right now"
+      }
+    },
+    {
+      "screenshot": "rail-quiet",
+      "title": "Shop floor: rail quiet",
+      "description": "Nothing is blocked: the Needs-you badge is hidden at zero and the rail says \"Nothing needs you right now · Open wall\". Sample data from a local test instance.",
+      "alt": "Shop floor: rail quiet"
+    },
+    {
+      "route": {
+        "url": "**/guild-next/api/v1/floor",
+        "status": 503,
+        "body": {
+          "error": "unavailable",
+          "message": "down"
+        }
+      }
+    },
+    {
+      "evaluate": "document.dispatchEvent(new Event('visibilitychange'))"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-needs-badge] [data-reminder-count]",
+        "text": "?"
+      }
+    },
+    {
+      "screenshot": "rail-stale",
+      "title": "Shop floor: stale read",
+      "description": "One failed poll (a stubbed 503): the stale banner, a dashed \"?\" badge instead of a live-looking zero, and the quiet line withdrawn; only \"Open wall\" stays. Sample data from a local test instance.",
+      "alt": "Shop floor: stale read"
+    },
+    {
+      "unroute": "**/guild-next/api/v1/floor"
+    },
+    {
+      "sample": "reset"
+    },
+    {
+      "sample": "mc",
+      "args": {
+        "mode": "stream",
+        "tokens": 64,
+        "script": [
+          0.3,
+          "## Where #12 stands\n",
+          0.3,
+          "- the API answers with ETags\n",
+          0.3,
+          "- the Save path is verified\n",
+          "WAIT",
+          "- one review finding left\n"
+        ]
+      }
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Where does #12 stand?"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Where does #12 stand?"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-stream-line]",
+        "text": "Save path"
+      }
+    },
+    {
+      "screenshot": "stream-writing",
+      "title": "Streaming: mid-reply",
+      "description": "MC's reply streams in place under Robert's note: the working state with its timer, the Markdown rendering as it arrives, and Stop with its billing note. Scripted relay stream, no model. Sample data from a local test instance.",
+      "alt": "Streaming: mid-reply"
+    },
+    {
+      "sample": "mc_release"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-turn-foot]",
+        "text": "output tokens"
+      }
+    },
+    {
+      "screenshot": "stream-done",
+      "title": "Streaming: the finished reply",
+      "description": "The streamed text is replaced in place by the kept reply with its footer \"Done in Ns · N output tokens\" (duration and output tokens from the usage record). Sample data from a local test instance.",
+      "alt": "Streaming: the finished reply"
+    },
+    {
+      "sample": "mc",
+      "args": {
+        "mode": "stream",
+        "script": [
+          0.3,
+          "A partial answer about the bin, ",
+          "WAIT",
+          "never finished."
+        ]
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "And the bin?"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-stream-line]",
+        "text": "partial answer"
+      }
+    },
+    {
+      "click": "[data-mc-stream-line] [data-mc-stop]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"platform\"]",
+        "text": "billed"
+      }
+    },
+    {
+      "screenshot": "stream-stopped",
+      "title": "Streaming: a stopped reply",
+      "description": "Stop pressed mid-reply: the partial text is shown once, marked Stopped and never kept; the platform line says it may still be billed. The blocker line then reads \"Last answer failed\": a stop is reported as a failure. Sample data from a local test instance.",
+      "alt": "Streaming: a stopped reply"
+    },
+    {
+      "sample": "reset"
+    },
+    {
+      "sample": "mc",
+      "args": {
+        "mode": "turns",
+        "fail": 502
+      }
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Are you there?"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"platform\"]",
+        "text": "Master Craftsman"
+      }
+    },
+    {
+      "evaluate": "document.dispatchEvent(new Event('visibilitychange'))"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-blocker]",
+        "text": "unavailable"
+      }
+    },
+    {
+      "screenshot": "blocker-mc-down",
+      "title": "Blocker line: MC not answering",
+      "description": "The one-line blocker directly above the composer, from the live floor state after the (stand-in) Master Craftsman runtime failed a turn: reachable, but not answering. Sample data from a local test instance.",
+      "alt": "Blocker line: MC not answering"
+    },
+    {
+      "sample": "reset"
+    },
+    {
+      "route": {
+        "url": "**/guild-next/api/v1/mc/turns",
+        "status": 200,
+        "body": {
+          "status": "unavailable",
+          "failure_class": "key_refused",
+          "mc_state": "unavailable",
+          "message": "Master Craftsman is unavailable · its model key was refused. Your note is kept.",
+          "mc_header": "Master Craftsman is unavailable · its model key was refused"
+        }
+      }
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "evaluate": "document.body.dataset.mcTurns = 'true'"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Are you there?"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-blocker]",
+        "text": "Last answer failed"
+      }
+    },
+    {
+      "screenshot": "blocker-failed",
+      "title": "Blocker line: the last answer failed",
+      "description": "A failed answer: the note is kept, the thread says why, and \"Last answer failed · ...\" sits above the composer until the next answer. Staged: the turn switch is set in the page and the answer (\"model key refused\") is stubbed. Sample data from a local test instance.",
+      "alt": "Blocker line: the last answer failed"
+    },
+    {
+      "unroute": "**/guild-next/api/v1/mc/turns"
+    },
+    {
+      "sample": "reset"
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "A note on the Shop floor thread"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "A note on the Shop floor thread"
+      }
+    },
+    {
+      "click": "[data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Plan the Rooms review"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Plan the Rooms review"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Plan the Rooms review"
+      }
+    },
+    {
+      "click": "[data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Hetzner staging checklist"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Hetzner staging checklist"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Hetzner staging checklist"
+      }
+    },
+    {
+      "click": "[data-conv]:has-text(\"Plan the Rooms review\") [data-conv-menu]"
+    },
+    {
+      "click": "[data-conv]:has-text(\"Plan the Rooms review\") [data-conv-act=\"pin\"]",
+      "navigates": true
+    },
+    {
+      "wait_for": "[data-conv]:has-text(\"Plan the Rooms review\")[data-pinned=\"true\"]"
+    },
+    {
+      "click": "[data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Voice Phase A questions"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Voice Phase A questions"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Voice Phase A questions"
+      }
+    },
+    {
+      "click": "[data-conv=\"shop-floor-thread\"] [data-conv-menu]"
+    },
+    {
+      "click": "[data-conv=\"shop-floor-thread\"] [data-conv-act=\"pin\"]",
+      "navigates": true
+    },
+    {
+      "wait_for": "[data-conv=\"shop-floor-thread\"][data-pinned=\"true\"]"
+    },
+    {
+      "click": "[data-conv]:has-text(\"Hetzner staging checklist\") [data-conv-menu]"
+    },
+    {
+      "wait_for": "[data-conv]:has-text(\"Hetzner staging checklist\") [data-conv-act=\"archive\"]"
+    },
+    {
+      "screenshot": "conversations-menu",
+      "title": "Conversations: history and the row menu",
+      "description": "Four conversations in the history column, the two pinned on top, \"+ New conversation\" at the head, and one row's menu open (Rename, Pin, Remove from list). Titles come from the first message. Sample data from a local test instance.",
+      "alt": "Conversations: history and the row menu"
+    },
+    {
+      "click": "[data-conv]:has-text(\"Hetzner staging checklist\") [data-conv-act=\"archive\"]",
+      "navigates": true
+    },
+    {
+      "goto": "/guild-next/guild/build?view=archived"
+    },
+    {
+      "wait_for": "[data-conv-view=\"active\"]"
+    },
+    {
+      "screenshot": "conversations-archive",
+      "title": "Conversations: the Archive view",
+      "description": "\"Remove from list\" moves a conversation to the Archive; nothing is erased, and the Archive lists it with Restore. Sample data from a local test instance.",
+      "alt": "Conversations: the Archive view"
+    },
+    {
+      "sample": "reset"
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "This one is kept."
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "This one is kept."
+      }
+    },
+    {
+      "click": "[data-mc-record]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-record]",
+        "text": "Back on the record"
+      }
+    },
+    {
+      "screenshot": "off-record",
+      "title": "Off the record: on",
+      "description": "Off the record: the refusal line above the composer and \"Back on the record\"; Save, notes and post-its are paused and nothing is written. Sample data from a local test instance.",
+      "alt": "Off the record: on"
+    },
+    {
+      "click": "[data-mc-record]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-record]",
+        "text": "Off the record"
+      }
+    },
+    {
+      "evaluate": "localStorage.setItem('guild.guild-next.off_tabs', '{garbled'); sessionStorage.clear()"
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-record-known=false] [data-mc-record-confirm]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "a note while unknown"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-refusal]",
+        "text": "does not know whether you are on the record"
+      }
+    },
+    {
+      "screenshot": "record-unknown",
+      "title": "Off the record: mode unknown",
+      "description": "A tab that cannot read the off-the-record tab list (damaged browser storage) holds: \"record mode unknown\", the note is not sent, and Robert chooses Confirm on the record or Off the record. Sample data from a local test instance.",
+      "alt": "Off the record: mode unknown"
+    },
+    {
+      "evaluate": "localStorage.removeItem('guild.guild-next.off_tabs'); sessionStorage.clear()"
+    },
+    {
+      "sample": "reset"
+    },
+    {
+      "sample": "postit",
+      "args": {
+        "text": "Check the lock before #7 builds",
+        "author": "mc"
+      }
+    },
+    {
+      "sample": "postit",
+      "args": {
+        "text": "Ask Codex about the ETag test",
+        "author": "robert"
+      }
+    },
+    {
+      "sample": "continue",
+      "args": {
+        "item": 12,
+        "label": "#12 Floor API"
+      }
+    },
+    {
+      "goto": "/guild-next/guild/build/bench"
+    },
+    {
+      "wait_for": "[data-panel=\"needs\"]"
+    },
+    {
+      "click": "[data-mc-pill]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-current]",
+        "text": "Current conversation"
+      }
+    },
+    {
+      "screenshot": "wall",
+      "title": "The wall with MC open",
+      "description": "The wall (Workbench): six panels with filters and move, fold and focus controls. The same MC conversation opens as a floating panel (with Dock), labelled with the current conversation; it covers half of Blocked. Sample data from a local test instance.",
+      "alt": "The wall with MC open"
+    },
+    {
+      "goto": "/guild-next/guild/build/queue"
+    },
+    {
+      "wait_for": "[data-queue-card]"
+    },
+    {
+      "screenshot": "queue",
+      "title": "Queue",
+      "description": "The Build queue on the Guild 1.1 shell: items by status, each with a verified Save. Sample data from a local test instance.",
+      "alt": "Queue"
+    },
+    {
+      "goto": "/guild-next/guild/build/items/12"
+    },
+    {
+      "wait_for": "[data-open-workshop]"
+    },
+    {
+      "screenshot": "item",
+      "title": "An item page",
+      "description": "Item #12: the status form with a verified Save, the spec file, and \"Open in Workshop\". Opening an item also sets Continue for the Shop floor. Sample data from a local test instance.",
+      "alt": "An item page"
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "[data-conv-new][data-about-item]"
+    },
+    {
+      "screenshot": "conversation-about",
+      "title": "Start a conversation about this",
+      "description": "Back on the Shop floor the rail's context shows \"Last opened #12 Floor API\" with \"Start a conversation about this\". Sample data from a local test instance.",
+      "alt": "Start a conversation about this"
+    },
+    {
+      "click": "[data-conv-new][data-about-item]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-rail-continue]",
+        "text": "This conversation is about"
+      }
+    },
+    {
+      "screenshot": "conversation-about-open",
+      "title": "A conversation about #12",
+      "description": "The new conversation is linked to the item: the context now reads \"This conversation is about #12 Floor API\". Sample data from a local test instance.",
+      "alt": "A conversation about #12"
+    },
+    {
+      "goto": "/guild-next/guild/build/items/12"
+    },
+    {
+      "click": "[data-open-workshop]",
+      "navigates": true
+    },
+    {
+      "wait_for": "[data-ws-admission][data-verdict=\"tight\"]"
+    },
+    {
+      "screenshot": "workshop",
+      "title": "The Workshop from a queue item",
+      "description": "The Workshop for #12 (read only, no model): host admission \"tight\" with named limits (agent sessions tight at 1, blocked at 3), the sessions on this Mac, Needs you and the next actor. Sample host readings. Sample data from a local test instance.",
+      "alt": "The Workshop from a queue item"
+    },
+    {
+      "route": {
+        "url": "**/guild-next/api/v1/workshop*",
+        "status": 503,
+        "body": {}
+      }
+    },
+    {
+      "evaluate": "document.dispatchEvent(new Event('visibilitychange'))"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-ws-verdict]",
+        "text": "Host unknown"
+      }
+    },
+    {
+      "screenshot": "workshop-refresh-failed",
+      "title": "The Workshop: refresh failed",
+      "description": "A failed refresh (a stubbed 503) reads \"Host unknown\" and \"Running agents unknown (refresh failed)\", with the headroom marked \"last good read\"; never \"nothing running\". Sample data from a local test instance.",
+      "alt": "The Workshop: refresh failed"
+    },
+    {
+      "unroute": "**/guild-next/api/v1/workshop*"
+    },
+    {
+      "goto": "/guild-next/guild/operate"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "screenshot": "operate",
+      "title": "Operate",
+      "description": "Operate on the Guild 1.1 shell. The local instance has no operations source, so those lights read unknown, not green. Sample data from a local test instance.",
+      "alt": "Operate"
+    },
+    {
+      "goto": "/guild-next/guild/labs"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "screenshot": "labs",
+      "title": "Labs",
+      "description": "Labs: Planning Studio and Prototype Lab as truthful entry points; the page says where each lives and that neither is served on dev yet. Sample data from a local test instance.",
+      "alt": "Labs"
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#send-input"
+    },
+    {
+      "fill": "#send-input",
+      "value": "Plan the week around the Rooms review and the Hetzner checklist"
+    },
+    {
+      "click": "#btn-send"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "Noted:"
+      }
+    },
+    {
+      "screenshot": "confer-text",
+      "title": "CoS Confer: a text reply",
+      "description": "Chief of Staff Confer through the portal (CSRF write guard on /app/cos). The reply comes from a stand-in cos-scheduler that echoes \"Noted: ...\"; no model is called. Sample data from a local test instance.",
+      "alt": "CoS Confer: a text reply"
+    },
+    {
+      "sample": "voice",
+      "args": {
+        "boot": "ok",
+        "reply": "Two items today: the Rooms review and the Hetzner checklist."
+      }
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#btn-voice"
+    },
+    {
+      "click": "#btn-voice"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-status",
+        "text": "Listening"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.say('a1', 'Hi Robert, what shall we work on?')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "what shall we work on"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.hear('u1', 'What is on my list today?')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "What is on my list today?"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.call('c1', 'consult_cos_agent', {request: 'What is on my list today?'})"
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.say('a2', 'Two items today: the Rooms review and the Hetzner checklist.')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "Hetzner checklist"
+      }
+    },
+    {
+      "screenshot": "confer-voice-live",
+      "title": "CoS Confer: voice, CoS greets first",
+      "description": "Voice Phase A: CoS speaks first, then the owner's turn and CoS's reply appear live in the chat as they are spoken (Speak and write, the default). The provider is a sample stand-in: no microphone, no provider, no model. Sample data from a local test instance.",
+      "alt": "CoS Confer: voice, CoS greets first"
+    },
+    {
+      "evaluate": "(() => { const s = document.querySelector('#voice-reply-mode'); s.value = 'write'; s.dispatchEvent(new Event('change', {bubbles: true})); })()"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-reply-note",
+        "text": "Write only"
+      }
+    },
+    {
+      "screenshot": "confer-write-only",
+      "title": "CoS Confer: Write only",
+      "description": "Write only: replies are written, not played; the note says the provider still generates (and bills) the audio. Sample data from a local test instance.",
+      "alt": "CoS Confer: Write only"
+    },
+    {
+      "click": "#btn-voice"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-transcript",
+        "text": "Transcript saved"
+      }
+    },
+    {
+      "screenshot": "confer-voice-ended",
+      "title": "CoS Confer: voice ended, transcript kept",
+      "description": "Stop ends the session; the transcript is saved to the (sample) CoS history, and the chat keeps the exchange. Sample data from a local test instance.",
+      "alt": "CoS Confer: voice ended, transcript kept"
+    },
+    {
+      "evaluate": "(() => { const s = document.querySelector('#voice-reply-mode'); s.value = 'speak'; s.dispatchEvent(new Event('change', {bubbles: true})); })()"
+    },
+    {
+      "click": "#btn-private"
+    },
+    {
+      "wait_for": {
+        "selector": "#btn-private",
+        "text": "Private: on"
+      }
+    },
+    {
+      "wait_for": "#private-banner"
+    },
+    {
+      "screenshot": "confer-private",
+      "title": "CoS Confer: the Private switch",
+      "description": "Private on: a banner says nothing is kept in the CoS history (the agent itself may still remember it); the switch is sticky and covers text and voice. Sample data from a local test instance.",
+      "alt": "CoS Confer: the Private switch"
+    },
+    {
+      "click": "#btn-private"
+    },
+    {
+      "wait_for": {
+        "selector": "#btn-private",
+        "text": "Private: off"
+      }
+    },
+    {
+      "click": "#btn-voice"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-status",
+        "text": "Listening"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter._emit('recoverable_error', {reason: 'provider_error', code: 'server_error', type: 'server_error_type', detail: 'The server had an error'})"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-transcript",
+        "text": "The server had an error"
+      }
+    },
+    {
+      "screenshot": "confer-provider-error",
+      "title": "CoS Confer: a provider error",
+      "description": "A provider error is shown, not swallowed: \"Voice error: The server had an error. Voice stopped; the microphone is off.\" (the error is the sample stand-in's). Sample data from a local test instance.",
+      "alt": "CoS Confer: a provider error"
+    },
+    {
+      "sample": "voice",
+      "args": {
+        "boot": "fail"
+      }
+    },
+    {
+      "click": "#btn-voice"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-status",
+        "text": "Voice did not start"
+      }
+    },
+    {
+      "screenshot": "confer-voice-failed",
+      "title": "CoS Confer: voice did not start",
+      "description": "A failed voice start (#268): the transcript says why, the status reads \"Voice did not start\" and the button is back at start. Sample data from a local test instance.",
+      "alt": "CoS Confer: voice did not start"
+    }
+  ]
+}

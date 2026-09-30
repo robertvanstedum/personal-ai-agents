@@ -76,6 +76,12 @@ def wait_for_checkpoint(page, value: str | dict[str, Any], timeout_ms: int = 20_
     try:
         page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
         page.locator(selector).first.wait_for(state="visible", timeout=timeout_ms)
+        if rule.get("text"):
+            # An element matching the selector must show this text (a reply that
+            # has arrived, a state word that has changed), not merely exist.
+            page.locator(selector).filter(has_text=rule["text"]).first.wait_for(
+                state="visible", timeout=timeout_ms
+            )
         page.evaluate("async () => { if (document.fonts) await document.fonts.ready; }")
         _wait_for_visible_images(page, timeout_ms)
 

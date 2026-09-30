@@ -1,0 +1,181 @@
+{
+  "id": "guild-current-desktop",
+  "domain": "guild",
+  "device_profile": "desktop",
+  "auth_profile": "none",
+  "start_path": "/guild",
+  "steps": [
+    {
+      "sample": "reset"
+    },
+    {
+      "goto": "/guild"
+    },
+    {
+      "wait_for": ".guild-card"
+    },
+    {
+      "screenshot": "landing",
+      "title": "Current Guild: the landing",
+      "description": "The /guild landing today: four doors (Build, Operate, Improve, Experiment) with their illustrations and the Build / Operate / Improve / Experiment subnav. Current Guild (as on dev and production today), sample data.",
+      "alt": "Production Guild: the landing"
+    },
+    {
+      "goto": "/guild/build/queue"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "build-queue",
+      "title": "Build: the queue",
+      "description": "The Build Queue, here on the sample queue (#7, #12, #31, #40). Current Guild (as on dev and production today), sample data.",
+      "alt": "Build: the queue"
+    },
+    {
+      "goto": "/guild/build"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "build-log",
+      "title": "Build: the build log",
+      "description": "The Build Log page (the Build door's default). Current Guild (as on dev and production today), sample data.",
+      "alt": "Build: the build log"
+    },
+    {
+      "goto": "/guild/build/roadmap"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "roadmap",
+      "title": "Build: the roadmap",
+      "description": "The Roadmap page, rendered from the repository's roadmap. Current Guild (as on dev and production today), sample data.",
+      "alt": "Build: the roadmap"
+    },
+    {
+      "goto": "/guild/docs"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "docs",
+      "title": "Build: docs",
+      "description": "The Docs index: the repository's documents. Current Guild (as on dev and production today), sample data.",
+      "alt": "Build: docs"
+    },
+    {
+      "goto": "/guild/build/spec/spec_125_model_standardization_2026-07-05.md"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "spec-detail",
+      "title": "Build: a spec detail page",
+      "description": "A specification rendered by the spec detail page. Current Guild (as on dev and production today), sample data.",
+      "alt": "Build: a spec detail page"
+    },
+    {
+      "goto": "/guild/operate"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "operate",
+      "title": "Operate",
+      "description": "Operate: the Operations agent status (it reads \"unreachable\": the sample makes no outbound call), guest requests, reset requests and guests, all sample people. Current Guild (as on dev and production today), sample data.",
+      "alt": "Operate"
+    },
+    {
+      "goto": "/guild/improve"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "improve",
+      "title": "Improve",
+      "description": "The Improve door. Current Guild (as on dev and production today), sample data.",
+      "alt": "Improve"
+    },
+    {
+      "goto": "/guild/experiment/"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "experiment",
+      "title": "Experiment",
+      "description": "The Experiment door (Prototype Lab), from the repository's projection file. Current Guild (as on dev and production today), sample data.",
+      "alt": "Experiment"
+    },
+    {
+      "goto": "/guild/career"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "career",
+      "title": "Career",
+      "description": "Career Focus positions. Positions come from the database, which the sample does not have, so the list is empty. Current Guild (as on dev and production today), sample data.",
+      "alt": "Career"
+    },
+    {
+      "goto": "/guild/users"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "users",
+      "title": "Users",
+      "description": "Domain users (sample users; production reads the auth database). Current Guild (as on dev and production today), sample data.",
+      "alt": "Users"
+    },
+    {
+      "goto": "/guild/rooms-preview/"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "rooms-preview",
+      "title": "Rooms preview",
+      "description": "The owner-only Collaboration Rooms preview (simulated). Current Guild (as on dev and production today), sample data.",
+      "alt": "Rooms preview"
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#send-input"
+    },
+    {
+      "fill": "#send-input",
+      "value": "Plan the week"
+    },
+    {
+      "click": "#btn-send"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "Noted:"
+      }
+    },
+    {
+      "screenshot": "cos-confer",
+      "title": "CoS: Confer",
+      "description": "Chief of Staff Confer today: a text reply from a stand-in cos-scheduler (no model). The new voice flow is in section 2. Current Guild (as on dev and production today), sample data.",
+      "alt": "CoS: Confer"
+    }
+  ]
+}

@@ -131,6 +131,11 @@ python -m scripts.tools.tour_capture.review_pdf \
   -o _working/tour-capture/prototype-review.pdf --title "Prototype review"
 ```
 
+`--note "..."` (repeatable) adds an "About this pack" page after the cover,
+for example to explain the sections of a combined pack; `--quality 30-95`
+sets the JPEG quality of the page images (default 90; lower is smaller). A
+scenario may set `"color_scheme": "dark"` to capture a page in dark mode.
+
 The PDF has a cover page (title, date, source URLs, scenarios, and a note
 that local captures may show simulated or sample data), then one page per
 scene in run order: the screenshot scaled to fit without distortion and a
@@ -138,10 +143,97 @@ caption with title, description, device profile, viewport, and capture time.
 
 **Browser.** Add `--browser-channel chrome` (or set `MINIMOI_CAPTURE_BROWSER_CHANNEL=chrome`) to use the installed Google Chrome instead of Playwright's downloaded Chromium. This avoids a browser download when a venv's Playwright expects a different build than the one cached.
 
+## Scripted local review packs (sample data)
+
+For a review pack of pages that normally need Robert's login, serve this
+checkout's portal locally with sample data and capture it with
+`auth_profile: "none"`. Nobody signs in to dev or production, no secret is
+read, and no model is called.
+
+```bash
+# 1. The local sample portal (loopback only; Ctrl-C stops it). It picks a
+#    random free high port and prints its URL; --port chooses one, but 5001
+#    and every staging or service port are refused.
+python -m scripts.tools.tour_capture.local_sample
+
+# 2. Each scenario (the Guild 1.1 pack: scenarios/guild_1_1_*.json)
+for s in desktop narrow tablet phone; do
+  python -m scripts.tools.tour_capture.cli guild-1-1-$s \
+    --base-url http://127.0.0.1:PORT --headless --browser-channel chrome
+done
+
+# 3. One PDF: cover, then one captioned page per scene
+python -m scripts.tools.tour_capture.review_pdf RUN_DIR [RUN_DIR ...] \
+  -o OUT.pdf --title "..."
+```
+
+The Guild pack sits with this tool rather than in `minimoi_portal/guild_ui/`,
+whose files must never mention sample data (`test_no_sample_in_real_mode`).
+
+`local_sample` reuses the Shop floor browser harness's set-up
+(`tests/guild/shop_floor`: the sample queue, the floor store on SQLite, the
+owner). It is a whole portal running as owner, so it admits a request only
+when every one of these holds; otherwise the request is refused:
+- the peer is loopback and the `Host` names this server (127.0.0.1,
+  localhost or [::1] with its port), which defeats DNS rebinding;
+- the request carries no proxy or forwarding header (CF-*, X-Forwarded-*,
+  Forwarded, X-Real-IP, CDN-Loop), so the Cloudflare tunnel never reaches it;
+- the path is one the review scenarios need (`/guild`, `/guild-next/...`,
+  `/app/cos/...`, `/static/...`, `/__tour_sample/...`); anything else is 404.
+
+With `--legacy-guild` it also serves the production Guild pages under
+`/guild/` (build log, queue, roadmap, docs, spec detail, Operate, Improve,
+Experiment, Career, Users, the Rooms preview), **read only**: their POST
+routes grant or revoke guests and send mail, so every non-GET request there
+is refused. They show sample guests, users and guest requests, never the
+checkout's `minimoi_portal/auth/` files or the auth database, and the portal
+module makes no outbound call (Operate's localhost:8768 status reads
+unreachable). Those pages render repository files, so `--legacy-guild`
+starts only on a clean checkout (no uncommitted, untracked or ignored files
+under `docs/`, the root official docs or the Guild config it reads; use a
+worktree), and a spec or doc page opens only a committed file under `docs/`,
+never `_working/`, `private/` or `planning-studio/`. Every other rule below
+still applies.
+
+It binds 127.0.0.1 only and never on 5001 or a staging or service port. It
+signs its session with its own random key, never `PORTAL_SECRET_KEY`. The
+real curator, german, portuguese and IoT Connect backends point at a closed
+address, so nothing real is ever proxied. Master Craftsman talks to
+a scripted relay in the same process; CoS runs behind its real `/app/cos`
+proxy against a stand-in cos-scheduler that echoes the message and a stand-in
+voice adapter (no microphone, no provider). Captions must say the data is
+sample data.
+
+Scenario steps for local captures (refused with `owner_session`, except
+`press`):
+
+| Step | What it does |
+|---|---|
+| `{"sample": "reset"}` | fresh sample: queue, empty floor, no conversations, MC off, seeded Workshop |
+| `{"sample": "queue", "args": {"variant": "quiet"}}` | nothing blocked (`default` restores) |
+| `{"sample": "mc", "args": {"mode": "stream", "script": [0.3, "## Plan\n", "WAIT", "- two"], "tokens": 64}}` | MC on a scripted relay: `off`, `turns`, `stream` or `down`; `"fail": 502` makes every turn fail; text is a delta, a number a pause, `"WAIT"` holds until `mc_release` or Stop |
+| `{"sample": "mc_release"}` | release a held stream |
+| `{"sample": "postit", "args": {"text": "...", "author": "mc"}}`, `{"sample": "continue", "args": {"item": 12, "label": "#12 Floor API"}}` | floor content |
+| `{"sample": "voice", "args": {"boot": "ok"}}` | the CoS voice bootstrap succeeds (`fail` by default) |
+| `{"fill": "#mc-input", "value": "..."}` | type into a field |
+| `{"press": "Escape"}` (optional `"selector"`) | press one key |
+| `{"evaluate": "document.dispatchEvent(new Event('visibilitychange'))"}` | run a script in the page (a poll now, browser storage) |
+| `{"route": {"url": "**/api/v1/floor", "status": 503, "body": {...}}}`, `{"route": {"url": "...", "abort": true}}`, `{"unroute": "**/api/v1/floor"}` | stub or drop one request pattern |
+
+Also: `{"click": "...", "navigates": true}` waits for the page the click
+loads; `wait_for` takes `"text"` (an element matching the selector must show
+it); `"mobile_emulation": true` on a scenario emulates a touch phone. A
+loopback capture refuses every request that is not to localhost or 127.0.0.1
+(web fonts, analytics), so system fonts may show.
+
 ## Safety
 
 - The runner accepts only localhost, `127.0.0.1`, or `dev.minimoi.ai`.
-- `auth_profile: none` is refused for any host other than localhost or `127.0.0.1`.
+- `auth_profile: none` is refused for any host other than localhost or `127.0.0.1`,
+  and such a capture's browser can reach only localhost or `127.0.0.1`.
+- `fill`, `evaluate`, `route`, `unroute` and `sample` steps are refused for
+  `owner_session` scenarios, so a scripted run never types into, scripts or
+  fakes a real dev page.
 - Authentication state and output remain under ignored `_working/`.
 - No production capture or write path exists.
 - A failed run retains a diagnostic screenshot and structured report.

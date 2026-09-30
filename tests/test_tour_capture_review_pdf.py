@@ -244,3 +244,36 @@ def test_long_text_is_wrapped_within_width():
     assert 1 < len(lines) <= 3
     assert all(draw.textlength(line, font=font) <= 1500 for line in lines)
     assert lines[-1].endswith("…")
+
+
+def test_notes_add_an_about_page_after_the_cover(tmp_path):
+    run_dir, _ = _make_run(tmp_path)
+    output = review_pdf.build_review_pdf([run_dir], tmp_path / "notes.pdf", title="Review",
+                                         notes=["Section 1: the current pages.", "Section 2: the new ones."])
+    assert _page_count(output) == len(SCENES) + 2
+
+
+def test_notes_that_do_not_fit_are_refused(tmp_path):
+    run_dir, _ = _make_run(tmp_path)
+    with pytest.raises(review_pdf.ReviewPdfError, match="do not fit"):
+        review_pdf.build_review_pdf([run_dir], tmp_path / "long.pdf", notes=["word " * 3000])
+
+
+def test_lower_quality_makes_a_smaller_file_and_bad_quality_is_refused(tmp_path):
+    from PIL import Image as _Image
+    run_dir, _ = _make_run(tmp_path, sizes={"landing": (1200, 800), "detail": (1200, 800)})
+    noisy = __import__("os").urandom(1200 * 800 * 3)
+    for png in (run_dir / "raw").glob("*.png"):
+        _Image.frombytes("RGB", (1200, 800), noisy).save(png)
+    high = review_pdf.build_review_pdf([run_dir], tmp_path / "high.pdf", quality=90)
+    low = review_pdf.build_review_pdf([run_dir], tmp_path / "low.pdf", quality=60)
+    assert low.stat().st_size < high.stat().st_size
+    with pytest.raises(review_pdf.ReviewPdfError, match="quality"):
+        review_pdf.build_review_pdf([run_dir], tmp_path / "bad.pdf", quality=5)
+
+
+def test_review_pdf_cli_takes_notes_and_quality(tmp_path, capsys):
+    run_dir, _ = _make_run(tmp_path)
+    out = tmp_path / "cli.pdf"
+    assert review_pdf.main([str(run_dir), "-o", str(out), "--note", "About.", "--quality", "70"]) == 0
+    assert _page_count(out) == len(SCENES) + 2

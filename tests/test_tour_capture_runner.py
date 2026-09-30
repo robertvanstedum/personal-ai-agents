@@ -1,3 +1,4 @@
+import pytest
 import builtins
 from pathlib import Path
 
@@ -325,3 +326,94 @@ def test_clean_web_style_only_applies_to_external_pages(tmp_path, monkeypatch):
     assert internal.last_screenshot_kwargs["style"] == CAPTURE_STYLE
     assert CLEAN_WEB_STYLE not in internal.last_screenshot_kwargs["style"]
     assert CLEAN_WEB_STYLE in external.last_screenshot_kwargs["style"]
+
+
+def test_loopback_captures_refuse_every_other_host():
+    from scripts.tools.tour_capture.runner import local_only_request
+    assert local_only_request("http://127.0.0.1:8791/guild")
+    assert local_only_request("http://localhost:8791/static/app.css")
+    assert local_only_request("data:image/png;base64,AAAA")
+    assert not local_only_request("https://fonts.googleapis.com/css2?family=Inter")
+    assert not local_only_request("https://dev.minimoi.ai/guild")
+    assert not local_only_request("http://127.0.0.1.evil.example/x")
+    assert local_only_request("ws://127.0.0.1:8791/socket")
+    assert not local_only_request("wss://relay.example/socket")
+
+
+class _Route:
+    def __init__(self):
+        self.calls = []
+
+    def fulfill(self, **kwargs):
+        self.calls.append(("fulfill", kwargs))
+
+    def abort(self):
+        self.calls.append(("abort", {}))
+
+
+def test_route_steps_stub_an_answer_or_abort():
+    from scripts.tools.tour_capture.runner import _route_handler
+    route = _Route()
+    _route_handler({"url": "**/floor", "status": 503, "body": {"error": "down"}})(route)
+    assert route.calls == [("fulfill", {"status": 503, "body": '{"error": "down"}', "content_type": "application/json"})]
+    route = _Route()
+    _route_handler({"url": "**/floor", "abort": True})(route)
+    assert route.calls == [("abort", {})]
+
+
+class _Response:
+    def __init__(self, ok, status=200, text=""):
+        self.ok, self.status, self._text = ok, status, text
+
+    def text(self):
+        return self._text
+
+
+class _Request:
+    def __init__(self, response):
+        self.response, self.posts = response, []
+
+    def post(self, url, **kwargs):
+        self.posts.append((url, kwargs))
+        return self.response
+
+
+class _SamplePage:
+    def __init__(self, response):
+        self.request = _Request(response)
+
+
+def _local_runner(tmp_path):
+    scenario = {"id": "local-review", "domain": "guild", "device_profile": "desktop", "auth_profile": "none",
+                "start_path": "/guild", "steps": []}
+    return CaptureRunner(scenario, "http://127.0.0.1:8791", tmp_path)
+
+
+def test_a_sample_step_posts_its_arguments_to_the_sample_server(tmp_path):
+    page = _SamplePage(_Response(True))
+    _local_runner(tmp_path)._sample(page, "mc", {"mode": "stream"})
+    url, kwargs = page.request.posts[0]
+    assert url == "http://127.0.0.1:8791/__tour_sample/mc"
+    assert kwargs["data"] == '{"mode": "stream"}'
+
+
+def test_a_refused_sample_step_fails_the_run(tmp_path):
+    import pytest
+    from scripts.tools.tour_capture.runner import CaptureRunError
+    page = _SamplePage(_Response(False, 400, '{"error": "unknown sample action"}'))
+    with pytest.raises(CaptureRunError, match="sample server refused"):
+        _local_runner(tmp_path)._sample(page, "nope", {})
+
+
+@pytest.mark.parametrize("action", ["evaluate", "fill", "route", "unroute", "sample"])
+def test_local_only_steps_are_refused_at_runtime_in_an_owner_session(tmp_path, action):
+    """Even an unvalidated scenario dict cannot script, type into or fake a dev page."""
+    import pytest as _pytest
+    from scripts.tools.tour_capture.runner import CaptureRunError
+    scenario = {"id": "dev-review", "domain": "guild", "device_profile": "desktop",
+                "auth_profile": "owner_session", "start_path": "/guild", "steps": []}
+    runner = CaptureRunner(scenario, "https://dev.minimoi.ai", tmp_path)
+    with _pytest.raises(CaptureRunError, match="only in a local"):
+        runner._check_step_allowed(action)
+    runner._check_step_allowed("click")                     # ordinary steps are unaffected
+    _local_runner(tmp_path)._check_step_allowed(action)     # and a loopback capture may use them
