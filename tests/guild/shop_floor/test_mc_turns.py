@@ -274,8 +274,8 @@ def test_the_page_tells_the_front_end_whether_turns_are_on(turned):
     assert "apiPost('/mc/turns'" in js
     # Waiting is a transient line where the reply will appear, replaced in place;
     # never an "Asking Master Craftsman" platform entry (Robert, 2026-09-29).
-    assert "Asking Master Craftsman" not in js and "waiting.replaceWith(noteLine(body.reply_note))" in js
-    assert "waiting.replaceWith(platformLine(" in js and "waiting.stopTicking()" in js
+    assert "Asking Master Craftsman" not in js and "holder.replaceWith(noteLine(body.reply_note))" in js
+    assert "holder.replaceWith(platformLine(" in js and "waiting.stopTicking()" in js
     assert 'id="tpl-mc-waiting"' in page and "Waiting for a response…" in page
     assert 'data-slot="elapsed" aria-hidden="true"' in page                 # seconds are never read out
     # The note is shown before the turn is asked, and the turn is not awaited.
@@ -355,7 +355,7 @@ def test_turn_log_reads_only_live_answered_lines_and_skips_torn_ones(tmp_path):
     got = log.turns_for(["mc-a", "mc-b", "mc-c"])
     start, end = got["mc-a"].pop("window")                     # the turn's window (usage-record U3)
     assert abs((end - start).total_seconds() - 1.234) < 0.002
-    assert got == {"mc-a": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None}}
+    assert got == {"mc-a": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None, "turn_id": "t1"}}
     assert done_text(15400) == "Done in 15s" and done_text(900) == "Done in 0.9s"
     assert TurnLog(None).turns_for(["mc-a"]) == {} and TurnLog(str(tmp_path / "missing")).turns_for(["mc-a"]) == {}
 

@@ -67,3 +67,13 @@ def check_write(base_url: str | None):
     if isinstance(body, dict) and "record_mode" in body and body["record_mode"] != mode:
         return json_error("invalid", "The record mode in the body and the header disagree.", 422)
     return None
+
+
+def check_stop(base_url: str | None):
+    """The write guard for Master Craftsman's Stop (streaming spec v0.3 N1):
+    the shared guard's JSON, same-origin and token checks, but no record-mode
+    check, so Stop works while off the record."""
+    why = _csrf.refusal(CSRF_SESSION_KEY, base_url, content=_csrf.JSON)
+    if why:
+        return json_error("csrf", f"This request could not be verified ({why}). Nothing was changed.", 403)
+    return None

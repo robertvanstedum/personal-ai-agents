@@ -29,6 +29,11 @@ STATE_DIR="${OPENCLAW_STATE_DIR:-/home/node/.openclaw}"
 CONFIG_DEST="${OPENCLAW_CONFIG_PATH:-$STATE_DIR/openclaw.json}"
 CONFIG_SRC="$IMAGE_DIR/openclaw.json"
 WORKSPACE_SRC="$IMAGE_DIR/workspace"
+# MC's agent settings (streaming S1, #275 review): retry.provider.maxRetries 0,
+# so one dispatch makes one model call; OpenClaw's own transient-retry loop
+# would otherwise repeat a failed upstream call several times.
+AGENT_SETTINGS_SRC="$IMAGE_DIR/agent-settings.json"
+AGENT_SETTINGS="$STATE_DIR/agents/mc-agent/settings.json"
 WORKSPACE="$STATE_DIR/workspace-mc"
 SELFCHECK="$IMAGE_DIR/selfcheck.mjs"
 KEY_CHECK="$IMAGE_DIR/mc-key-check.sh"
@@ -134,6 +139,7 @@ fi
 state checking
 if ! out=$(sh "$KEY_CHECK" OPENCLAW_GATEWAY_TOKEN 2>&1); then verdict "key check: $out"; fi
 apply_file "$CONFIG_SRC" "$CONFIG_DEST"
+[ -f "$AGENT_SETTINGS_SRC" ] && apply_file "$AGENT_SETTINGS_SRC" "$AGENT_SETTINGS"
 mkdir -p "$WORKSPACE"
 for f in "$WORKSPACE_SRC"/*.md; do apply_file "$f" "$WORKSPACE/$(basename "$f")"; done
 check static "$CONFIG_DEST"

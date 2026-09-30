@@ -109,6 +109,14 @@
     <span class="mc-elapsed" data-slot="elapsed" aria-hidden="true">0s</span>
   </li>
 </template>
+<template id="tpl-mc-stream">
+  <li class="msg msg-note msg-stream" data-kind="mc-stream" data-mc-stream-line aria-busy="true">
+    <p class="msg-meta"><span class="mc-mark" aria-hidden="true">MC</span> <span class="msg-label" data-slot="label"></span> · <span data-slot="state">Working…</span> <span class="mc-elapsed" data-slot="elapsed" aria-hidden="true">0s</span></p>
+    <div class="msg-text msg-md" data-slot="rendered"></div>
+    <div class="msg-text msg-stream-tail" data-slot="tail"></div>
+    <p class="msg-foot" data-slot="controls"><button type="button" class="btn-mini" data-mc-stop hidden>Stop</button> <span data-slot="stopnote" hidden>Stop ends it here · what was already generated may still be billed</span></p>
+  </li>
+</template>
 <template id="tpl-off-record">
   <li class="msg msg-off" data-kind="off-record" data-off-record-line>
     <p class="msg-meta"><span class="msg-label">Off the record · not sent, not kept</span> · <span data-slot="when"></span></p>

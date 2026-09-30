@@ -73,7 +73,11 @@ def _headers(response):
     """Scoped to this blueprint's responses; host-app routes are untouched."""
     response.headers["Content-Security-Policy"] = CSP
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Cache-Control"] = "no-store"
+    # A stream is never stored either, and must not be transformed (compressed
+    # or buffered) on its way (streaming spec v0.2 §3; no-store is stricter
+    # than the spec's no-cache).
+    streaming = (response.mimetype or "") == "application/x-ndjson"
+    response.headers["Cache-Control"] = "no-store, no-transform" if streaming else "no-store"
     return response
 
 

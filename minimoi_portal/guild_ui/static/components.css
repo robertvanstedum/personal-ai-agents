@@ -646,3 +646,9 @@ body.gu[data-page="floor"][data-lights-open="true"] .floor-strip .lights { displ
 }
 .ws-headroom[data-stale="true"], .ws-admission[data-stale="true"] .small, #ws-needs-h ~ .rows [data-stale="true"] { color: var(--gu-unknown-ink); }
 .ws-limits, .ws-background { color: var(--gu-text-muted); }
+
+/* ── Streaming Master Craftsman replies (streaming spec v0.2 §6) ── */
+.mc-thread .msg-stream .msg-stream-tail { white-space: pre-wrap; }
+.mc-thread .msg-stream .msg-stream-tail:empty, .mc-thread .msg-stream [data-slot="rendered"]:empty { display: none; }
+.mc-thread .msg-stream[data-ended] .msg-meta [data-slot="state"] { font-style: italic; }
+.mc-thread .msg-stream [data-slot="stopnote"] { margin-left: 6px; }

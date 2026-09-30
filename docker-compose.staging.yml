@@ -122,10 +122,15 @@ services:
       # OpenClaw token.
       - MINIMOI_GUILD_MC=${MINIMOI_GUILD_MC:-off}
       - MINIMOI_GUILD_MC_TURNS=${MINIMOI_GUILD_MC_TURNS:-off}
+      # Streaming (streaming spec v0.2 §5): on for staging; the code default
+      # is off, and /guild-next never mounts in production.
+      - MINIMOI_GUILD_MC_STREAM=${MINIMOI_GUILD_MC_STREAM:-on}
       - MC_RUNTIME_URL=http://mc-relay:8790/v1
       - MC_RUNTIME_TOKEN=${MC_RELAY_TOKEN:-}
       # The usage store, read-only (usage-record U3): the Shop floor footer's
-      # output tokens, joined from MC's gateway records by turn window.
+      # output tokens. MC's own runtime-stream records (streaming S1) go only to
+      # usage/portal, mounted read-write below: the portal never creates or
+      # touches the gateway's shared monthly file (#275 review, finding 4).
       - MINIMOI_USAGE_DIR=/app/data/usage
       # The local Workshop's record, read-only (4a): synced from the Mac by
       # scripts/workshop/workshop.py sync; the portal never writes it.
@@ -133,6 +138,7 @@ services:
       - MINIMOI_WORKSHOP_ID=mac
     volumes:
       - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
+      - ${MINIMOI_ROOT}/data/usage/portal:/app/data/usage/portal
       - ${MINIMOI_ROOT}/data/workshops:/app/data/workshops:ro
     # Permanently on mc-front (portal + MC's relay only), so enabling MC never
     # recreates the portal (MC spec v0.9 §3).
