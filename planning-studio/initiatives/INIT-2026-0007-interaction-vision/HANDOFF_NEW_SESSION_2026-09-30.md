@@ -33,7 +33,7 @@
 - Robert's feedback: `planning-studio/…/documents/ROBERT_DEV_FEEDBACK_2026-09-29.md`.
 - The screen pack: `planning-studio/…/review-package-2026-09-30/Guild_1_1_dev_screens_2026-09-30.pdf`. It predates #281; re-run it via `scripts/tools/tour_capture` (PR #282) for the voice screens.
 - The status log: `planning-studio/…/CLAUDE_CODE_STATUS_2026-09-27.md`.
-- Private security notes: `_working/security/cos-confer-csrf-2026-09-29.md`, and `review-pr267…`.
+- Private security notes: `_working/security/` (local only).
 
 ## Working conventions from this session
 - **Roles:** a builder agent writes code; a different agent reviews every PR; I coordinate, roll out to staging and report.

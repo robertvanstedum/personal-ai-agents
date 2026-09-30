@@ -44,7 +44,7 @@ Staging runs the branch **`staging/integration-2026-09-29`**, which only merges 
 | #282 | 168671a0 | tour_capture: local sample server (hardened) and Guild scenarios | Approve (security re-check) | documents only |
 | #264, #278, #279 | — | verify probe skip, relay test readiness, verify helper advisory | Approve | documents |
 
-Review files: `reviews/CLAUDE_INDEPENDENT_REVIEW_PR<n>_2026-09-29.md`. The security reviews for #267, and the CSRF note, are private in `_working/security/`.
+Review files: `reviews/CLAUDE_INDEPENDENT_REVIEW_PR<n>_2026-09-29.md`. Security reviews and notes are private, in `_working/security/`.
 
 ## 3. Robert's feedback and the refinement list
 
