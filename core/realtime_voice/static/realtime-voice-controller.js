@@ -5,8 +5,15 @@
  * scenes/voices/save callbacks, never their own copy of this session loop.
  *
  * State machine (Section 11):
- *   idle -> requesting_mic -> connecting -> active
- *        -> reconnecting -> ending -> ended
+ *   idle -> requesting_mic -> connecting -> active -> ending -> ended
+ *
+ * Standard options every page shares (Confer, Gespräche, Conversas):
+ *   replyMode        "speak" (default: speak and write) or "write" (write
+ *                    only: the reply's audio is muted, its text still shows);
+ *                    setReplyMode() changes it during a session.
+ *   openingInstruction  the persona greets first (null: nobody speaks first).
+ *   A provider error ends the session visibly (onFatalError) and releases the
+ *   microphone; only benign provider notices keep it (BENIGN_PROVIDER_ERRORS).
  *
  * Usage from a domain page:
  *   import { RealtimeVoiceController } from "/static/realtime-voice/realtime-voice-controller.js";
@@ -21,10 +28,16 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20260809-ga1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20260929-voice3";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260929-voice3";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
+// Provider "error" events that a healthy session also sees; they never end it.
+const BENIGN_PROVIDER_ERRORS = new Set([
+  "conversation_already_has_active_response",
+  "response_cancel_not_active",
+  "input_audio_buffer_commit_empty",
+]);
 const OPENING_INSTRUCTION =
   "Begin in character with one short, natural greeting and one brief question " +
   "inviting the learner to say what they need. Do not give directions, suggest " +
@@ -32,11 +45,17 @@ const OPENING_INSTRUCTION =
 
 export class RealtimeVoiceController {
   constructor({
-    bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
+    bootstrapUrl, outcomeUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall,
     openingInstruction = OPENING_INSTRUCTION,
+    replyMode = "speak",
   }) {
     this._bootstrapUrl = bootstrapUrl;
+    // Where a session-ending provider error's code and type are logged
+    // (never its message): the bootstrap's sibling "outcome" route.
+    this._outcomeUrl = outcomeUrl || String(bootstrapUrl).replace(/bootstrap$/, "outcome");
+    this._sessionContext = null;
+    this._replyMode = replyMode === "write" ? "write" : "speak";
     this._onStateChange = onStateChange || (() => {});
     this._onInputState = onInputState || (() => {});
     this._onWarning = onWarning || (() => {});
@@ -62,7 +81,30 @@ export class RealtimeVoiceController {
     this._provider = null;
     this._model = null;
     this._sessionId = null;
-    this._reconnectAttempted = false;
+  }
+
+  /** "speak" (speak and write) or "write" (write only: audio muted, text shown). */
+  setReplyMode(mode) {
+    this._replyMode = mode === "write" ? "write" : "speak";
+    this._adapter?.setOutputMuted?.(this._replyMode === "write");
+  }
+
+  get replyMode() { return this._replyMode; }
+
+  /** What the bootstrap fixed for this session (CoS: Private mode), or null. */
+  get sessionContext() { return this._sessionContext; }
+
+  _resetTranscript() {
+    // One controller may run several sessions (Confer keeps one): each
+    // session's transcript starts empty.
+    this._items = new Map();
+    this._seenEventIds = new Set();
+    this._seq = 0;
+    this._pendingAssistantTurns = [];
+    this._startedAt = null;
+    this._warned = false;
+    this._lastUsage = null;
+    this._sessionContext = null;
   }
 
   _setState(state) {
@@ -71,6 +113,7 @@ export class RealtimeVoiceController {
   }
 
   async startSession({ provider, persona, scene, learner_name }) {
+    this._resetTranscript();
     this._setState("requesting_mic");
     let resp;
     try {
@@ -96,9 +139,15 @@ export class RealtimeVoiceController {
     this._sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     this._warningMinutes = bootstrap.warning_minutes;
     this._maxMinutes = bootstrap.max_minutes;
+    // Page-level facts the server fixed at the start (CoS: Private mode and
+    // its epoch). Handed back unchanged in onFinalize.
+    this._sessionContext = bootstrap.session_context || null;
 
     this._adapter = bootstrap.provider === "openai" ? new OpenAIWebRTCAdapter() : new XAIWebSocketAdapter();
+    this._adapterEnded = false;
+    this._finalizing = false;
     this._wireAdapterEvents();
+    this._adapter.setOutputMuted?.(this._replyMode === "write");
 
     this._setState("connecting");
     this._adapter.prepareSession(bootstrap.session_config || {});
@@ -163,13 +212,12 @@ export class RealtimeVoiceController {
     this._adapter.on("usage", (usage) => {
       this._lastUsage = usage;
     });
-    this._adapter.on("recoverable_error", (info) => {
-      this._attemptReconnectOrEndVisibly(info);
-    });
+    this._adapter.on("recoverable_error", (info) => this._onProviderError(info));
     this._adapter.on("fatal_error", (info) => {
+      if (info?.reason === "provider_error") this._reportProviderError(info);
       this._onFatalError(info);
       this._setState("ending");
-      this._adapter?.end("fatal_error");
+      this._endAdapter("fatal_error");
       this._finalizeAndEnd("fatal_error");
     });
     this._adapter.on("closed", () => {
@@ -222,31 +270,73 @@ export class RealtimeVoiceController {
   endSession(reason) {
     if (this._state === "ending" || this._state === "ended") return;
     this._setState("ending");
-    this._adapter?.end(reason);
+    this._endAdapter(reason);
     this._finalizeAndEnd(reason);
   }
 
-  _attemptReconnectOrEndVisibly(info) {
-    // Section 11: one automatic reconnect attempt is allowed only before
-    // meaningful state would be lost. Kept conservative for this release
-    // -- one attempt, then end visibly and preserve the partial transcript
-    // rather than loop.
-    if (this._reconnectAttempted) {
-      this._finalizeAndEnd("recoverable_error_no_retry");
-      return;
+  // Releases the provider session and the microphone, once per session. Every
+  // way a session ends goes through here: the owner's stop, a fatal error, the
+  // duration limit, a provider-side close and a provider error.
+  _endAdapter(reason) {
+    if (!this._adapter || this._adapterEnded) return;
+    this._adapterEnded = true;
+    try {
+      this._adapter.end(reason);
+    } catch (_) {
+      // The page still ends the session; the adapter's own end() stops the tracks first.
     }
-    this._reconnectAttempted = true;
-    this._setState("reconnecting");
-    // Actual reconnect (re-running startSession with the same params) is
-    // the domain page's responsibility to trigger via onStateChange
-    // observing "reconnecting" and offering the user "Reconnect" / "Start
-    // a new session" (Section 11) -- the controller does not silently
-    // retry on its own, matching "end visibly... offer Reconnect."
+  }
+
+  // A provider error ends the session visibly and releases the microphone,
+  // never a silent "reconnecting" wait (the controller never reconnects on its
+  // own). Benign notices, which the provider sends in a healthy session, and a
+  // single failed input transcription keep the session.
+  _onProviderError(info) {
+    const code = info?.code || (typeof info?.detail === "object" ? info.detail?.code : null);
+    const type = info?.type || (typeof info?.detail === "object" ? info.detail?.type : null);
+    if (info?.reason === "input_transcription_failed"
+        || BENIGN_PROVIDER_ERRORS.has(code) || BENIGN_PROVIDER_ERRORS.has(type)) return;
+    if (this._state === "ending" || this._state === "ended") return;
+    this._reportProviderError({ ...info, code, type });
+    const detail = typeof info?.detail === "object" ? (info.detail?.message || info.detail?.code) : info?.detail;
+    this._onFatalError({ reason: info?.reason || "provider_error", detail: detail || "the voice provider reported an error" });
+    this._setState("ending");
+    this._endAdapter("provider_error");
+    this._finalizeAndEnd("provider_error");
+  }
+
+  // Logs a session-ending provider error's code and type on the server (one
+  // outcome line; never the message), so a benign notice under a name the
+  // controller does not know, an xAI one say, shows up on staging.
+  _reportProviderError(info) {
+    const body = {
+      outcome: "provider_error",
+      provider: this._provider,
+      reason: info?.reason || "provider_error",
+      code: info?.code || null,
+      type: info?.type || null,
+    };
+    console.warn("[realtime_voice] provider error ended the session", body);
+    try {
+      fetch(this._outcomeUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        keepalive: true,
+      }).catch(() => {});
+    } catch (_) {
+      // Logging never affects the session.
+    }
   }
 
   _finalizeAndEnd(reason) {
-    if (this._state === "ended") return;
+    if (this._state === "ended" || this._finalizing) return;
+    this._finalizing = true;
     clearInterval(this._durationTimer);
+    // The session is over however it ended (#273): a provider-side close or a
+    // provider error arrives here without endSession(), so the
+    // microphone is released here too, never left open behind a "Stopped" page.
+    this._endAdapter(reason);
     const partial = reason !== "user_ended" && reason !== "normal_end";
     const turns = [...this._items.entries()]
       .sort((a, b) => a[1].firstSeq - b[1].firstSeq)
@@ -262,6 +352,7 @@ export class RealtimeVoiceController {
       session_id: this._sessionId,
       duration_seconds: this._startedAt ? (Date.now() - this._startedAt) / 1000 : 0,
       usage: this._lastUsage || null,
+      session_context: this._sessionContext,
     });
   }
 }

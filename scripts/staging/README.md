@@ -878,6 +878,32 @@ that is a route CoS uses that its key's scope misses.
 - Staging `.env` never holds `TELEGRAM_BOT_TOKEN`, `TELEGRAM_POLLING_BOT_TOKEN`,
   any `AWS_*` or production token; `env.sh` refuses to write them.
 
+## CoS turn log: Confer voice transcripts (staging only)
+
+Spec 160 path (a), first part. When Confer voice stops, the page posts the
+session's transcript to cos-scheduler (`POST /ui/voice/transcript`), which
+appends one `html_voice` record to
+`~/minimoi-staging/data/cos-turns/YYYY/YYYY-MM-DD.jsonl` (Robert's local day,
+UTC times inside, files 0600, folders 0700).
+
+- **Off by default; opt-in without a rebuild.** `cos.sh turns on` writes
+  `state/cos.turns` = `on` and recreates only cos-scheduler with the overlay
+  `docker-compose.staging-cos-turns.yml` (`COS_TURNS_DIR` and the
+  `data/cos-turns` mount). `cos.sh turns off` recreates it without; the lines
+  already written stay. `cos.sh status` shows which. `build.sh` makes the
+  folder; `lib.sh` refuses "on" when the pinned release has no overlay.
+- **Private:** Confer's **Private** switch (sticky; off only by the switch)
+  writes `data/cos-turns/_mode.json` for the `owner` conversation. While it is
+  on, or when that file cannot be read, nothing is written, and Confer shows a
+  banner and marks each reply. A voice session whose mode changed while it ran
+  is not kept either. Telegram `/private` is a follow-up.
+- **Scrubbed:** credentials (Spec 160 §3.4, `utils/credential_scrub.py`) and
+  card numbers are replaced before a line is written.
+- **Production** writes nothing: no production compose file sets
+  `COS_TURNS_DIR`, and the page says the history "is not set up here".
+- **Rollback:** build and `up.sh cos-scheduler` the previous release; the
+  lines already written stay.
+
 ## Local development (not staging)
 
 Staging is for proving a release. Day-to-day code changes run **outside**

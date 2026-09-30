@@ -2678,6 +2678,15 @@ body.reading-mode nav {
 .realtime-session-status {
   margin: 0.65rem 0 0;
 }
+.realtime-session-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.realtime-session-error {
+  color: #b3261e;
+  font-weight: 600;
+}
 .legacy-session-fallback {
   margin: 0.75rem 0;
   color: var(--md-text-secondary);
