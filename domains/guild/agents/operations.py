@@ -8,6 +8,14 @@ Two background threads:
   _health_loop  — every 5 min: service health, disk check, Tier 1 actions
   _audit_loop   — every hour: deeper audit, log age, cron history, escalations
 
+On this Mac it runs beside Docker staging (MINIMOI_ROLE=standby):
+  * the database URL comes from get_secret (env, else the dev Keychain item
+    minimoi-dev-db/database_url; SSM on production), and is never logged;
+  * it watches the staging services on their host ports (the portal always;
+    curator, german and portuguese unless focus.sh keeps them stopped:
+    ~/minimoi-staging/state/focus.stopped, read only);
+  * in standby it restarts nothing and sends no Telegram: it only reports.
+
 Build order: memory helper → /status → loop logic
 """
 
@@ -79,15 +87,76 @@ RULES: dict = {}   # populated on startup
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
-DSN = os.environ.get("DATABASE_URL")
-if not DSN:
-    raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
+def _database_url() -> str:
+    """DATABASE_URL from the environment, else (standby) the dev Keychain item
+    minimoi-dev-db/database_url, else (production) SSM. Fails clearly when it
+    is missing; the value itself is never printed or logged."""
+    from core.get_secret import get_secret
+    try:
+        value = get_secret("DATABASE_URL", "minimoi-dev-db", "database_url", environment_scoped=True)
+    except Exception as exc:
+        raise RuntimeError(
+            "DATABASE_URL is not available: set it, or (standby, MINIMOI_ROLE=standby) store the Keychain item "
+            "minimoi-dev-db/database_url — no insecure default (issue #42)") from exc
+    if not value:
+        raise RuntimeError("DATABASE_URL is empty — no insecure default (issue #42)")
+    return value
+
+
+DSN = _database_url()
+
+
+def _dsn_secrets(dsn: str) -> list:
+    """The DSN itself and its password (raw and percent-decoded): text the
+    log must never carry. psycopg2 can echo parts of a malformed DSN in its
+    error messages (#280 review)."""
+    from urllib.parse import unquote, urlsplit
+    out = [dsn]
+    try:
+        pw = urlsplit(dsn).password
+    except Exception:
+        pw = None
+    if not pw and "password=" in dsn:
+        pw = dsn.split("password=", 1)[1].split()[0]
+    for v in (pw, unquote(pw) if pw else None):
+        if v and len(v) >= 3 and v not in out:
+            out.append(v)
+    return out
+
+
+_SECRETS = _dsn_secrets(DSN)
+
+
+def _scrub(text: str) -> str:
+    for secret in _SECRETS:
+        text = text.replace(secret, "***")
+    return text
+
+
+def _check_dsn() -> None:
+    """Fail at start-up on a DSN psycopg2 cannot parse, without echoing it."""
+    failed = None
+    try:
+        psycopg2.extensions.parse_dsn(DSN)
+    except Exception as exc:
+        failed = type(exc).__name__        # raised below, outside the handler: no chained message
+    if failed:
+        raise RuntimeError(f"DATABASE_URL could not be parsed ({failed}); the value is not shown")
+
+
+_check_dsn()
 
 @contextmanager
 def _db():
     conn = None
     try:
-        conn = psycopg2.connect(DSN, cursor_factory=psycopg2.extras.RealDictCursor)
+        failed = None
+        try:
+            conn = psycopg2.connect(DSN, cursor_factory=psycopg2.extras.RealDictCursor)
+        except Exception as exc:        # never let the DSN reach a log via the message
+            failed = f"{type(exc).__name__} {getattr(exc, 'pgcode', None) or ''}".strip()
+        if failed:
+            raise RuntimeError(f"database connect failed: {failed}")
         yield conn
         conn.commit()
     except Exception:
@@ -106,7 +175,7 @@ def _db_log(action: str, tier: int, outcome: str, auto_resolved: bool = False):
                     """INSERT INTO guild.ops_maintenance_log
                        (tier, action, outcome, auto_resolved)
                        VALUES (%s, %s, %s, %s)""",
-                    (tier, action, outcome, auto_resolved)
+                    (tier, action, _scrub(str(outcome)), auto_resolved)
                 )
     except Exception as e:
         _log_file("db_log_error", f"{action}: {e}")
@@ -183,16 +252,20 @@ _state = {
 }
 _state_lock = threading.Lock()
 
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _set_state(**kwargs):
     with _state_lock:
         _state.update(kwargs)
-        _state["last_checkin"] = datetime.now(timezone.utc).isoformat()
+        _state["last_checkin"] = _now().isoformat()
 
 # ── File log (fallback when DB unavailable) ───────────────────────────────────
 
 def _log_file(event: str, detail: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{ts}] {event}: {detail}\n"
+    line = f"[{ts}] {event}: {_scrub(str(detail))}\n"
     try:
         (LOGS_DIR / "operations.log").open("a").write(line)
     except Exception:
@@ -268,8 +341,39 @@ def _action_compress_old_logs() -> bool:
         _db_log("compress_logs_error", 1, str(e), False)
         return False
 
+# launchd labels the agent may restart. None today: the watched services are
+# containers (staging on this Mac, production on EC2), and the old native labels
+# (com.user.curator-server, com.vanstedum.german-html-server,
+# com.vanstedum.minimoi-portal) are retired. launchctl is never run on a label
+# outside this list, nor on one launchd reports as disabled.
+RESTARTABLE_LABELS: tuple = ()
+RETIRED_LABELS = ("com.user.curator-server", "com.vanstedum.german-html-server", "com.vanstedum.minimoi-portal")
+
+
+def _launchd_disabled(label: str) -> bool:
+    """True when launchd reports the label disabled (or the answer can't be read)."""
+    try:
+        out = subprocess.run(["launchctl", "print-disabled", f"gui/{os.getuid()}"], capture_output=True, text=True,
+                             timeout=5).stdout
+    except Exception:
+        return True
+    for line in out.splitlines():
+        if f'"{label}"' in line:
+            return "true" in line or "disabled" in line
+    return False
+
+
 def _action_restart_service(label: str) -> bool:
-    """Restart a launchd service once, wait 2 min, verify."""
+    """Restart a launchd service once, wait 2 min, verify. In standby (this
+    Mac) it restarts nothing and only reports; it never runs launchctl on a
+    retired label, one outside RESTARTABLE_LABELS, or one launchd disables."""
+    from utils.role import is_production
+    if not is_production():
+        _db_log("restart_skipped_standby", 1, f"{label}: standby reports only; nothing restarted", False)
+        return False
+    if label in RETIRED_LABELS or label not in RESTARTABLE_LABELS or _launchd_disabled(label):
+        _db_log("restart_skipped", 1, f"{label}: not a live launchd service (retired, unknown or disabled)", False)
+        return False
     try:
         subprocess.run(["launchctl", "stop", label], timeout=10)
         time.sleep(2)
@@ -289,11 +393,38 @@ def _action_restart_service(label: str) -> bool:
 
 # ── Service health checks ─────────────────────────────────────────────────────
 
+# The services, by their Docker staging (and production) compose names, on the
+# host ports both publish. The portal is always watched; the others only when
+# focus.sh is not keeping them stopped on purpose (a deliberately stopped
+# service must not escalate every loop into Guild's Needs you). A watched
+# service that is down still escalates.
 WATCHED_SERVICES = [
-    ("com.user.curator-server",          "http://localhost:8766/"),
-    ("com.vanstedum.german-html-server", "http://localhost:8767/"),
-    ("com.vanstedum.minimoi-portal",     "http://localhost:5001/"),
+    ("portal",     "http://localhost:5001/"),
+    ("curator",    "http://localhost:8766/"),
+    ("german",     "http://localhost:8767/"),
+    ("portuguese", "http://localhost:8770/"),
 ]
+ALWAYS_WATCHED = ("portal",)
+
+
+def _focus_file() -> Path:
+    root = os.environ.get("STAGING_ROOT") or str(Path.home() / "minimoi-staging")
+    return Path(root) / "state" / "focus.stopped"
+
+
+def _focus_stopped() -> set:
+    """The services focus.sh keeps stopped (scripts/staging/lib.sh focus_stopped),
+    read only. No file, or an unreadable one: none (everything is watched)."""
+    try:
+        return set(_focus_file().read_text(encoding="utf-8").split())
+    except OSError:
+        return set()
+
+
+def _watched_services() -> list:
+    stopped = _focus_stopped()
+    return [(name, url) for name, url in WATCHED_SERVICES if name in ALWAYS_WATCHED or name not in stopped]
+
 
 # Track outage start times
 _outage_start: dict = {}
@@ -302,7 +433,10 @@ def _check_services() -> list:
     """HTTP-check each watched service. Returns list of (label, ok, latency_ms)."""
     results = []
     threshold = RULES.get("service_down_threshold_minutes", 15)
-    for label, url in WATCHED_SERVICES:
+    watched = _watched_services()
+    for name in [n for n in list(_outage_start) if n not in {w for w, _ in watched}]:
+        del _outage_start[name]            # stopped on purpose now: its outage clock stops
+    for label, url in watched:
         ok, latency = False, None
         try:
             t0 = time.time()
@@ -375,45 +509,53 @@ def _ensure_agent_state_constraint():
 
 _last_daily_summary = None
 
-def _health_loop():
+def _health_check_once() -> bool:
+    """One health-loop iteration. A successful check refreshes last_checkin
+    (the Guild Systems light needs one within 10 minutes); a failing one does
+    not, so the light turns unknown while the checks are failing."""
     global _last_daily_summary
+    try:
+        svc_results = _check_services()
+        disk        = _check_disk()
+        healthy     = sum(1 for _, ok, _ in svc_results if ok)
+        total       = len(svc_results)
+
+        with _state_lock:
+            _state["checks_run"] += 1
+            _state["last_action"] = {
+                "type":      "health_check",
+                "at":        _now().isoformat(),
+                "services":  f"{healthy}/{total} healthy",
+                "disk_pct":  disk["pct"],
+            }
+            _state["last_checkin"] = _now().isoformat()
+        _db_update_state("running", _state["last_action"])
+
+        # Daily summary to ops_memory.md
+        today = datetime.now().date()
+        if _last_daily_summary != today:
+            _last_daily_summary = today
+            svc_names = ", ".join(
+                f"{l.split('.')[-1]} {'✅' if ok else '❌'}"
+                for l, ok, _ in svc_results
+            )
+            entry = (
+                f"- Services: {svc_names}\n"
+                f"- Disk: {disk['pct']}% used, {disk['free_gb']} GB free\n"
+                f"- Checks run today: {_state['checks_run']}\n"
+                f"- Open escalations: {_db_open_escalations()}"
+            )
+            _ops_memory_write(entry)
+        return True
+    except Exception as e:
+        _log_file("health_loop_error", str(e))
+        return False
+
+
+def _health_loop():
     while True:
-        try:
-            svc_results = _check_services()
-            disk        = _check_disk()
-            healthy     = sum(1 for _, ok, _ in svc_results if ok)
-            total       = len(svc_results)
-
-            with _state_lock:
-                _state["checks_run"] += 1
-                _state["last_action"] = {
-                    "type":      "health_check",
-                    "at":        datetime.now(timezone.utc).isoformat(),
-                    "services":  f"{healthy}/{total} healthy",
-                    "disk_pct":  disk["pct"],
-                }
-            _db_update_state("running", _state["last_action"])
-
-            # Daily summary to ops_memory.md
-            today = datetime.now().date()
-            if _last_daily_summary != today:
-                _last_daily_summary = today
-                svc_names = ", ".join(
-                    f"{l.split('.')[-1]} {'✅' if ok else '❌'}"
-                    for l, ok, _ in svc_results
-                )
-                entry = (
-                    f"- Services: {svc_names}\n"
-                    f"- Disk: {disk['pct']}% used, {disk['free_gb']} GB free\n"
-                    f"- Checks run today: {_state['checks_run']}\n"
-                    f"- Open escalations: {_db_open_escalations()}"
-                )
-                _ops_memory_write(entry)
-
-        except Exception as e:
-            _log_file("health_loop_error", str(e))
-
-        time.sleep(300)  # 5 minutes
+        _health_check_once()
+        time.sleep(300)  # 5 minutes: well inside the 10-minute check-in window
 
 # ── Audit loop (every hour) ───────────────────────────────────────────────────
 
@@ -479,7 +621,7 @@ def health():
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
+def main(*, serve: bool = True, loops: bool = True):
     global RULES
 
     PORT = int(os.environ.get("PORT", 8768))
@@ -511,15 +653,18 @@ def main():
     _db_update_state("starting")
     print("   DB: agent_state row created")
 
-    # 4. Start health loop thread
-    t1 = threading.Thread(target=_health_loop, daemon=True, name="health-loop")
-    t1.start()
-    print("   Thread started: health-loop (5-min interval)")
+    if loops:
+        # 4. Start health loop thread
+        t1 = threading.Thread(target=_health_loop, daemon=True, name="health-loop")
+        t1.start()
+        print("   Thread started: health-loop (5-min interval)")
 
-    # 5. Start audit loop thread
-    t2 = threading.Thread(target=_audit_loop, daemon=True, name="audit-loop")
-    t2.start()
-    print("   Thread started: audit-loop (1-hour interval)")
+        # 5. Start audit loop thread
+        t2 = threading.Thread(target=_audit_loop, daemon=True, name="audit-loop")
+        t2.start()
+        print("   Thread started: audit-loop (1-hour interval)")
+    print(f"   Watching: {', '.join(n for n, _ in _watched_services())}"
+          + (f" (focus keeps stopped: {', '.join(sorted(_focus_stopped()))})" if _focus_stopped() else ""))
 
     # 6. Update state to running
     _set_state(state="running")
@@ -527,7 +672,8 @@ def main():
     print(f"   State: running — first health check in ~5s\n")
 
     # 7. Serve
-    app.run(host="localhost", port=PORT, debug=False)
+    if serve:
+        app.run(host="localhost", port=PORT, debug=False)
 
 
 if __name__ == "__main__":
