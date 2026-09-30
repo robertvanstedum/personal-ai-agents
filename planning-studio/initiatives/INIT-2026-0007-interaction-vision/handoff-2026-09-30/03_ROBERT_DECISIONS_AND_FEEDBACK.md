@@ -85,7 +85,7 @@
   - Old URLs redirect to their new home.
   - All backend data and write paths are reused.
 - **The new Build Log replaces all of the current production Guild tabs:** queue, log, roadmap, docs, spec detail, improve and experiment. They become its views and filters, and an item's detail when opened.
-  - Legacy career surfaces go to CoS (Spec 156).
+  - Legacy Career surfaces: Spec 156 says **remove, do not relocate or recreate in CoS**. An earlier Claude summary wrongly said "move to CoS"; Robert has not decided a relocation.
   - The admin surfaces (users, detailed operations, the Workshop) sit in secondary navigation, not the daily tabs.
 - **MC gets full access to the Guild backend and tools:** read and write to the Build Log and queue, the Board, operations, and Workshop dispatch.
   - This is assumed to run within its capped key.
