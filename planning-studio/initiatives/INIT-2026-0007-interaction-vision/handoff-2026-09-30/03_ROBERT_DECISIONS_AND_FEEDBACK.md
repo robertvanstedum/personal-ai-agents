@@ -95,3 +95,10 @@
   - Purpose: "a place of reference for the intent and craft and history".
   - It replaces the Roadmap tab. The Build Log is the work, including future roadmap items that are still only thoughts.
   - **The destinations are now Chat · Board · Build Log · Docs · Rooms.**
+- **Docs page shape (Robert, 2026-09-30, pointing at the current production Roadmap page):**
+  - **Main side:** "a version of this" stays visible. That means the roadmap's intro, its Direction section, the loop diagrams (the Guild loop spec → build → operate → improve with "lessons into the next spec", the language loop, and so on) and the roadmap tiers (Committed, Planned, Aspired, Paths not taken).
+  - **Library:** the key document links, each with a short description.
+  - **Reuse:**
+    - The current renderer is `minimoi_portal/app.py` (the route around line 2448), using `templates/guild/build_roadmap.html` to render the tracked root `ROADMAP.md`. Its label "edit in _working/ROADMAP.md" is stale; the source is root `ROADMAP.md`.
+    - The current docs list is `_docs_group_files` and `_DOCS_CORE` in `app.py` (around line 2624), which already pull a title and subtitle from each file.
+    - Turn that into a **curated library**: a small file listing each official document with a one-line description, a version and date, and current or superseded status. Codex's 1.1 alignment supplies it, and agents read the same file.
