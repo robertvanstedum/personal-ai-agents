@@ -353,7 +353,8 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
 #btn-voice.recording { background: #8A3020; border-color: #8A3020; color: #F5F0E8; }
 #btn-voice:disabled { opacity: 0.45; cursor: default; }
 
-#voice-provider-select {
+#voice-provider-select,
+#voice-reply-mode {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -363,7 +364,8 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
   font-size: 0.76rem;
   flex-shrink: 0;
 }
-#voice-provider-select:disabled { opacity: 0.55; }
+#voice-provider-select:disabled,
+#voice-reply-mode:disabled { opacity: 0.55; }
 
 #btn-send {
   background: var(--accent);

@@ -962,6 +962,15 @@ body.arquivo-mode .page {
 .realtime-session-status {
   margin: 0.65rem 0 0;
 }
+.realtime-session-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.realtime-session-error {
+  color: #b3261e;
+  font-weight: 600;
+}
 
 .prompt-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 

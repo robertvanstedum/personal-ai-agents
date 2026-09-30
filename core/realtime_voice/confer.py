@@ -1,11 +1,16 @@
-"""Authenticated bootstrap for chained agent-conversation voice mode."""
+"""Authenticated bootstrap for Confer (CoS) realtime voice.
+
+Every bootstrap logs one outcome line, like Gespräche and Conversas
+(``[realtime_voice] domain=cos … outcome=…``), with the size of the
+server-built instructions when a session starts. No prompt content is logged.
+"""
 
 import os
 
 from flask import Blueprint, jsonify, request
 
 from core.identity import resolve_user_id
-from core.realtime_voice.bootstrap import check_voice_rate_limit
+from core.realtime_voice.bootstrap import _log_outcome, check_voice_rate_limit
 from core.realtime_voice.capabilities import (
     AGENT_CONVERSATION_MODE,
     ProviderUnavailableError,
@@ -17,6 +22,7 @@ from core.realtime_voice.providers import openai_realtime, xai_voice
 from core.realtime_voice.standards import conversation_turn_detection
 
 
+_DOMAIN = "cos"
 _DEFAULT_WARNING_MINUTES = 13
 _DEFAULT_MAX_MINUTES = 15
 _COS_REALTIME_TOOLS = [
@@ -104,16 +110,21 @@ def create_confer_voice_blueprint(
     def bootstrap():
         user_id = resolve_user_id(request)
         if user_id is None:
+            _log_outcome(_DOMAIN, None, None, None, "identity_required")
             return jsonify({"ok": False, "error": "identity required"}), 401
         if not check_voice_rate_limit(user_id):
+            _log_outcome(_DOMAIN, user_id, None, None, "rate_limited")
             return jsonify({"ok": False, "error": "rate limited"}), 429
 
         body = request.get_json(silent=True) or {}
         requested_provider = body.get("provider")
+        provider = requested_provider if isinstance(requested_provider, str) else None
+        instructions = ""
         try:
             capability = resolve_agent_conversation_provider(
                 requested_provider, locale
             )
+            provider = capability.provider
             if build_voice_instructions is None:
                 raise ProviderUnavailableError(
                     "COS realtime voice instructions are unavailable"
@@ -124,7 +135,8 @@ def create_confer_voice_blueprint(
                 f"{capability.label} ({capability.provider}). When Robert asks, "
                 "state that exact provider plainly. Stopping voice ends the "
                 "microphone and realtime-provider session, then adds the "
-                "completed transcript to Confer; typed Confer remains available. "
+                "completed transcript to Confer and, unless Robert is in "
+                "Private mode, to his CoS history; typed Confer remains available. "
                 "Typed and voice inputs may coexist in the page, but they are "
                 "separate live channels, so recommend using one at a time to "
                 "avoid overlapping replies."
@@ -153,12 +165,21 @@ def create_confer_voice_blueprint(
                     f"{capability.provider} Confer transport is not implemented"
                 )
         except ValueError as error:
+            _log_outcome(_DOMAIN, user_id, provider, None, "invalid_provider")
             return jsonify({"ok": False, "error": str(error)}), 400
         except ProviderUnavailableError as error:
+            _log_outcome(_DOMAIN, user_id, provider, None, "provider_unavailable")
             return jsonify({"ok": False, "error": str(error)}), 503
         except (openai_realtime.OpenAIRealtimeError, xai_voice.XAIVoiceError) as error:
+            _log_outcome(_DOMAIN, user_id, provider, None, "provider_error",
+                         instructions_chars=len(instructions))
             return jsonify({"ok": False, "error": str(error)}), 502
+        except Exception:
+            _log_outcome(_DOMAIN, user_id, provider, None, "bootstrap_failed")
+            raise
 
+        _log_outcome(_DOMAIN, user_id, provider, credential.get("model"), "started",
+                     instructions_chars=len(instructions))
         guard = _duration_guard()
         return jsonify({
             "ok": True,

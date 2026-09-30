@@ -878,6 +878,25 @@ that is a route CoS uses that its key's scope misses.
 - Staging `.env` never holds `TELEGRAM_BOT_TOKEN`, `TELEGRAM_POLLING_BOT_TOKEN`,
   any `AWS_*` or production token; `env.sh` refuses to write them.
 
+## CoS turn log: Confer voice transcripts (staging only)
+
+Spec 160 path (a), first part. When Confer voice stops, the page posts the
+session's transcript to cos-scheduler (`POST /ui/voice/transcript`), which
+appends one `html_voice` record to
+`~/minimoi-staging/data/cos-turns/YYYY/YYYY-MM-DD.jsonl` (Robert's local day,
+UTC times inside, files 0600, folders 0700).
+
+- **Mount:** `docker-compose.staging-cos-turns.yml` gives cos-scheduler
+  `COS_TURNS_DIR` and the `data/cos-turns` mount. `lib.sh` includes it
+  whenever the pinned release has it; `build.sh` makes the folder.
+- **Private:** nothing is written while `data/cos-turns/_mode.json` marks the
+  `owner` conversation private, or when that file cannot be read. The page
+  says "Private: not kept in your CoS history".
+- **Production** writes nothing: no production compose file sets
+  `COS_TURNS_DIR`, and the page says the history "is not set up here".
+- **Rollback:** build and `up.sh cos-scheduler` the previous release; the
+  lines already written stay.
+
 ## Local development (not staging)
 
 Staging is for proving a release. Day-to-day code changes run **outside**

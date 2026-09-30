@@ -34,6 +34,15 @@ export class XAIWebSocketAdapter {
     this._micReady = false;
     this._connectedEmitted = false;
     this._playbackSources = new Set();
+    this._outputMuted = false;
+  }
+
+  // Write only: reply audio chunks are dropped on this device (anything
+  // already playing stops); the provider still produces them and the
+  // transcript, which the page shows. Can change during a session.
+  setOutputMuted(muted) {
+    this._outputMuted = !!muted;
+    if (this._outputMuted) this._stopPlayback();
   }
 
   on(eventName, handler) {
@@ -260,6 +269,7 @@ export class XAIWebSocketAdapter {
         const detail = event.error?.message || event.error?.code || JSON.stringify(event.error || event);
         this._emit(this._connected ? "recoverable_error" : "fatal_error", {
           reason: "provider_error",
+          code: event.error?.code || event.error?.type || null,
           detail,
         });
         break;
@@ -272,7 +282,7 @@ export class XAIWebSocketAdapter {
   }
 
   _playAudioChunk(base64Audio) {
-    if (!this._audioContext || !base64Audio) return;
+    if (this._outputMuted || !this._audioContext || !base64Audio) return;
     const float32 = _base64PCM16ToFloat32(base64Audio);
     const buffer = this._audioContext.createBuffer(1, float32.length, 24000);
     buffer.copyToChannel(float32, 0);

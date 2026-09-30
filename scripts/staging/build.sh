@@ -173,6 +173,9 @@ docker image inspect postgres:latest >/dev/null 2>&1 \
 umask 077
 mkdir -p "$STAGING_ROOT/config" "$STAGING_ROOT/state" "$STAGING_ROOT/logs"
 chmod 700 "$STAGING_ROOT"
+# The CoS turn log (Spec 160 path (a)): Confer voice transcripts, folder 0700.
+mkdir -p "$STAGING_ROOT/data/cos-turns"
+chmod 700 "$STAGING_ROOT/data/cos-turns"
 # The gateway image runs as a non-root user with every capability dropped:
 # the mounted config file must be world-readable (it holds no secrets).
 cp "$RELEASE_DIR/services/model_gateway/litellm.staging.yaml" "$STAGING_ROOT/config/litellm.staging.yaml"

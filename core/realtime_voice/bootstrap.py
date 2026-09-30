@@ -263,11 +263,13 @@ def _default_turn_detection(provider: str) -> dict:
     return conversation_turn_detection(provider)
 
 
-def _log_outcome(domain, user_id, provider, model, outcome):
+def _log_outcome(domain, user_id, provider, model, outcome, **extra):
     # Deliberately no credentials, no raw audio, no prompt content --
-    # only the fields Section 6 asks for.
+    # only the fields Section 6 asks for, plus numeric extras (for example
+    # instructions_chars, the size of the server-built instructions).
+    tail = "".join(f" {key}={value}" for key, value in extra.items())
     print(
         f"[realtime_voice] domain={domain} user_id={user_id} provider={provider} "
-        f"model={model} outcome={outcome}",
+        f"model={model} outcome={outcome}{tail}",
         flush=True,
     )

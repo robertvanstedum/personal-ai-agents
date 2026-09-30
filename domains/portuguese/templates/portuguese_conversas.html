@@ -83,7 +83,7 @@
             <div class="realtime-session-launch">
               <div class="realtime-session-heading">Conversa em tempo real</div>
               <p class="realtime-session-note">
-                A persona fala primeiro. A transcrição aparece somente depois do fim.
+                A persona fala primeiro. A transcrição aparece somente depois do fim; com “Só escrever”, as respostas aparecem na hora como texto.
               </p>
               <div class="realtime-session-controls">
                 <label for="realtime-voice-provider" class="gesprache-model-label">Provedor</label>
@@ -91,6 +91,13 @@
                   <option value="openai" selected>OpenAI Realtime</option>
                   <option value="xai">Grok Voice</option>
                 </select>
+                <span class="realtime-session-pair">
+                  <label for="realtime-voice-reply-mode" class="gesprache-model-label">Resposta</label>
+                  <select id="realtime-voice-reply-mode" class="gesprache-model-select">
+                    <option value="speak" selected>Falar e escrever</option>
+                    <option value="write">Só escrever</option>
+                  </select>
+                </span>
                 <button class="btn-session-start" id="realtime-voice-start-btn">
                   🎙️ Iniciar sessão
                 </button>
@@ -99,6 +106,11 @@
                 </button>
               </div>
               <div id="realtime-voice-status" class="detail-description realtime-session-status"></div>
+              <div id="realtime-voice-error" class="detail-description realtime-session-status realtime-session-error" role="alert" hidden></div>
+              <div id="realtime-live-replies" class="prompt-details-block" hidden>
+                <div class="gesprache-model-label">Respostas</div>
+                <pre id="realtime-live-replies-text" class="prompt-text"></pre>
+              </div>
               <details id="realtime-transcript" class="prompt-details-block" style="display:none">
                 <summary class="prompt-details-summary">Transcrição</summary>
                 <pre id="realtime-transcript-text" class="prompt-text"></pre>
@@ -1634,7 +1646,8 @@ document.getElementById('advance-modal').addEventListener('click', e => {
 // Reads current persona/scene from the DOM rather than this page's own
 // script-level state above -- decoupled on purpose, so this beta wiring
 // can't accidentally break the existing session flow's state.
-import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20260929-mic1";
+import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20260929-voice2";
+import { mountReplyModeToggle } from "./static/realtime-voice/voice-reply-mode.js?v=20260929-voice2";
 
 const startBtn = document.getElementById('realtime-voice-start-btn');
 const endBtn = document.getElementById('realtime-voice-end-btn');
@@ -1643,8 +1656,33 @@ const statusEl = document.getElementById('realtime-voice-status');
 const transcriptWrap = document.getElementById('realtime-transcript');
 const transcriptEl = document.getElementById('realtime-transcript-text');
 const learnerName = {{ learner_name|tojson }};
+const errorEl = document.getElementById('realtime-voice-error');
+const liveWrap = document.getElementById('realtime-live-replies');
+const liveEl = document.getElementById('realtime-live-replies-text');
 
 let controller = null;
+// Voice reply: "speak" (speak and write, the default) or "write" (write only:
+// the reply is muted and its text shows live here). Remembered on this device.
+let replyMode = mountReplyModeToggle(document.getElementById('realtime-voice-reply-mode'), {
+  scope: 'portuguese',
+  onChange(mode) {
+    replyMode = mode;
+    controller?.setReplyMode(mode);
+    if (liveWrap) liveWrap.hidden = mode !== 'write' || !liveEl?.textContent;
+  },
+});
+
+function appendLive(speaker, text) {
+  if (!liveEl || !text || !text.trim()) return;
+  liveEl.textContent += `${liveEl.textContent ? '\n\n' : ''}${speaker}: ${text.trim()}`;
+  if (liveWrap) liveWrap.hidden = replyMode !== 'write';
+}
+
+function showError(text) {
+  if (!errorEl) return;
+  errorEl.textContent = text;
+  errorEl.hidden = !text;
+}
 
 function setStatus(text) {
   if (statusEl) statusEl.textContent = text;
@@ -1709,9 +1747,16 @@ startBtn?.addEventListener('click', async () => {
   }
   if (transcriptWrap) transcriptWrap.style.display = 'none';
   if (transcriptEl) transcriptEl.textContent = '';
+  if (liveEl) liveEl.textContent = '';
+  if (liveWrap) liveWrap.hidden = true;
+  showError('');
+  const personaName = personaEl.dataset.name || 'Persona';
 
   controller = new RealtimeVoiceController({
     bootstrapUrl: './api/realtime-voice/bootstrap',
+    replyMode,
+    onUserTurn(text) { appendLive(learnerName, text); },
+    onAssistantTurn(text) { appendLive(personaName, text); },
     onStateChange(state) {
       setStatus(`Status: ${state}`);
       startBtn.style.display = (state === 'idle' || state === 'ended') ? '' : 'none';
@@ -1734,6 +1779,7 @@ startBtn?.addEventListener('click', async () => {
     },
     onFatalError(info) {
       setStatus(`Erro: ${info.reason} — ${info.detail || ''}`);
+      showError(`Erro: ${info.detail || info.reason}. Sessão encerrada por um erro. O microfone foi liberado.`);
     },
     onFinalize: finalizeAndSave,
   });

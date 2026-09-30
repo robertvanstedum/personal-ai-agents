@@ -76,6 +76,8 @@ STAGING_ONLY_FILES = frozenset({
     "docker-compose.staging-keys.yml",
     # CoS's own capped gateway key (cos.sh key), staging only.
     "docker-compose.staging-cos-key.yml",
+    # The CoS turn log mount (Spec 160 path (a)), staging only.
+    "docker-compose.staging-cos-turns.yml",
     "services/model_gateway/litellm.staging.yaml",
 })
 STAGING_ONLY_PREFIXES = ("scripts/staging/",)

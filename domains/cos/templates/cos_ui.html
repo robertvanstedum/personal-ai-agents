@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chief of Staff</title>
-  <link rel="stylesheet" href="/static/cos.css?v=3">
+  <link rel="stylesheet" href="/static/cos.css?v=4">
 </head>
 <body>
 
@@ -44,6 +44,11 @@
         <div class="talk-meta">
           <label for="voice-provider-select">Voice</label>
           <select id="voice-provider-select" aria-label="Voice provider"></select>
+          <label for="voice-reply-mode">Reply</label>
+          <select id="voice-reply-mode" aria-label="Voice reply">
+            <option value="speak" selected>Speak and write</option>
+            <option value="write">Write only</option>
+          </select>
           <span id="voice-status"></span>
           <span id="voice-provider"></span>
           <span>Voice is AI-generated.</span>
@@ -324,7 +329,8 @@ activateTab(INITIAL_TAB, false);
 if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
 </script>
 <script type="module">
-import { RealtimeVoiceController } from "../static/realtime-voice/realtime-voice-controller.js?v=20260929-mic1";
+import { RealtimeVoiceController } from "../static/realtime-voice/realtime-voice-controller.js?v=20260929-voice2";
+import { mountReplyModeToggle } from "../static/realtime-voice/voice-reply-mode.js?v=20260929-voice2";
 
 const voiceButton = document.getElementById('btn-voice');
 const voiceStatus = document.getElementById('voice-status');
@@ -332,6 +338,51 @@ const voiceProvider = document.getElementById('voice-provider');
 const voiceProviderSelect = document.getElementById('voice-provider-select');
 const voiceTranscript = document.getElementById('voice-transcript');
 let voiceRunning = false;
+let voiceError = '';               // this session's provider error, kept visible after it ends
+
+// CoS greets first, in one short line, then listens.
+const CONFER_OPENING =
+  "Greet Robert in one short, natural line as his Chief of Staff and ask what " +
+  "he wants to work on. Do not call a tool or give a briefing before he answers.";
+
+// Voice reply: "speak" (speak and write, the default) or "write" (write only:
+// the spoken reply is muted, its text still appears live). Remembered on this device.
+let replyMode = mountReplyModeToggle(document.getElementById('voice-reply-mode'), {
+  scope: 'cos',
+  onChange(mode) {
+    replyMode = mode;
+    voiceController.setReplyMode(mode);
+  },
+});
+
+// When voice stops, the session's transcript goes to CoS as an html_voice
+// record. CoS keeps nothing while Private mode is on, and says so.
+async function saveVoiceTranscript(result) {
+  const turns = (result.turns || []).filter(turn => String(turn.text || '').trim());
+  if (!turns.length) return 'Nothing to save.';
+  try {
+    const response = await fetch('voice/transcript', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        turns,
+        provider: result.provider,
+        partial: result.partial,
+        partial_reason: result.partial_reason,
+        duration_seconds: result.duration_seconds,
+        session_id: result.session_id,
+        reply_mode: replyMode,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok && body.saved) return 'Transcript saved to your CoS history.';
+    if (body.reason === 'private') return 'Private: not kept in your CoS history.';
+    if (body.reason === 'no_turn_log') return 'Transcript not saved: CoS history is not set up here.';
+    return `Transcript not saved (${body.reason || `HTTP ${response.status}`}).`;
+  } catch (err) {
+    return 'Transcript not saved (network error).';
+  }
+}
 
 const stateLabels = {
   requesting_mic: 'Connecting…',
@@ -339,7 +390,6 @@ const stateLabels = {
   active: 'Listening',
   ending: 'Stopping…',
   ended: 'Stopped',
-  reconnecting: 'Reconnecting…',
   idle: 'Voice did not start',
 };
 
@@ -369,7 +419,8 @@ function renderVoice(state) {
 
 const voiceController = new RealtimeVoiceController({
   bootstrapUrl: '../api/realtime-voice/confer/bootstrap',
-  openingInstruction: null,
+  openingInstruction: CONFER_OPENING,
+  replyMode,
   onStateChange: renderVoice,
   onInputState: (state) => {
     const labels = {
@@ -380,12 +431,13 @@ const voiceController = new RealtimeVoiceController({
     };
     if (labels[state]) voiceStatus.textContent = labels[state];
   },
+  // Both sides of the conversation appear live, as each turn completes.
   onUserTurn: (text) => {
-    // Match Gespräche/Conversas: voice stays primary while the session is
-    // active. The transcript is added to Confer only after voice stops.
+    if (String(text || '').trim()) appendMsg('user', String(text).trim());
   },
   onAssistantTurn: (text) => {
-    // Transcript rendering is intentionally deferred to onFinalize below.
+    if (String(text || '').trim()) appendMsg('cos', String(text).trim());
+    if (voiceState === 'active') voiceStatus.textContent = stateLabels.active;   // replied: listening again
   },
   onFunctionCall: async (call) => {
     const args = JSON.parse(call.arguments || '{}');
@@ -423,16 +475,18 @@ const voiceController = new RealtimeVoiceController({
     voiceStatus.textContent = 'Voice duration limit reached.';
   },
   onFatalError: (error) => {
-    voiceTranscript.textContent = `Voice error: ${error?.detail || error?.reason || 'unknown error'}`;
+    voiceError = `Voice error: ${error?.detail || error?.reason || 'unknown error'}. Voice stopped; the microphone is off.`;
+    voiceTranscript.textContent = voiceError;
   },
-  onFinalize: (result) => {
-    for (const turn of result.turns || []) {
-      const text = String(turn.text || '').trim();
-      if (text) appendMsg(turn.speaker === 'user' ? 'user' : 'cos', text);
-    }
-    voiceTranscript.textContent = result.partial
-      ? `Voice ended with a partial transcript (${result.partial_reason}).`
-      : 'Voice transcript added.';
+  onFinalize: async (result) => {
+    // A session with nothing said leaves the page as it is (an error, or a
+    // failed start's message, stays visible).
+    if (!(result.turns || []).some(turn => String(turn.text || '').trim())) return;
+    const ended = voiceError
+      || (result.partial ? `Voice ended (${result.partial_reason}).` : 'Voice ended.');
+    voiceTranscript.textContent = `${ended} Saving transcript…`;
+    const saved = await saveVoiceTranscript(result);
+    voiceTranscript.textContent = `${ended} ${saved}`;
   },
 });
 
@@ -441,7 +495,8 @@ try {
   const capabilities = await response.json();
   if (!response.ok || !capabilities.ok) throw new Error(capabilities.error || 'Voice unavailable');
   const providers = capabilities.providers || [];
-  const savedProvider = localStorage.getItem('minimoi.cos.voice.provider');
+  let savedProvider = null;
+  try { savedProvider = localStorage.getItem('minimoi.cos.voice.provider'); } catch (_) {}   // storage may be blocked
   const selected = providers.find(item => item.provider === savedProvider)
     || providers.find(item => item.provider === capabilities.default_provider)
     || providers[0];
@@ -457,7 +512,7 @@ try {
   voiceButton.disabled = !selected;
   voiceProviderSelect.disabled = !selected;
   voiceProviderSelect.addEventListener('change', () => {
-    localStorage.setItem('minimoi.cos.voice.provider', voiceProviderSelect.value);
+    try { localStorage.setItem('minimoi.cos.voice.provider', voiceProviderSelect.value); } catch (_) {}
     const item = providers.find(provider => provider.provider === voiceProviderSelect.value);
     voiceProvider.textContent = item ? `Voice: ${item.label}` : 'Voice unavailable';
   });
@@ -481,6 +536,8 @@ voiceButton.addEventListener('click', async () => {
   }
   const start = { stop: false };
   voiceStart = start;
+  voiceError = '';
+  voiceTranscript.textContent = '';
   voiceRunning = true;
   let error = null;
   try {

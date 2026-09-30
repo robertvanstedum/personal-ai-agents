@@ -148,3 +148,73 @@ def test_openai_speech_translates_secret_store_failure():
             match="OpenAI API key not configured",
         ):
             openai_speech.create_speech_stream(text="Reply.", user_id="42")
+
+
+# ── Phase A: every Confer bootstrap logs one outcome line, like Gespräche ────
+
+def _outcome_lines(capsys):
+    return [line for line in capsys.readouterr().out.splitlines() if line.startswith("[realtime_voice] domain=cos")]
+
+
+def test_confer_bootstrap_logs_started_with_instruction_size(capsys):
+    with patch(
+        "core.realtime_voice.confer.openai_realtime.mint_ephemeral_credential",
+        return_value={"provider": "openai", "client_secret": "ephemeral", "model": "gpt-realtime-2.1"},
+    ) as mint:
+        response = _client().post(
+            "/api/realtime-voice/confer/bootstrap",
+            json={"provider": "openai"},
+            headers={"X-Minimoi-Auth-Id": "42"},
+        )
+    assert response.status_code == 200
+    size = len(mint.call_args.kwargs["instructions"])
+    lines = _outcome_lines(capsys)
+    assert lines == [
+        f"[realtime_voice] domain=cos user_id=42 provider=openai model=gpt-realtime-2.1 "
+        f"outcome=started instructions_chars={size}"
+    ]
+    assert "COS voice for" not in "\n".join(lines)          # sizes only, never content
+    assert "ephemeral" not in "\n".join(lines)
+
+
+def test_confer_bootstrap_logs_every_refusal(capsys):
+    client = _client()
+    assert client.post("/api/realtime-voice/confer/bootstrap", json={}).status_code == 401
+    assert client.post(
+        "/api/realtime-voice/confer/bootstrap", json={"provider": "nope"},
+        headers={"X-Minimoi-Auth-Id": "42"},
+    ).status_code == 400
+    with patch(
+        "core.realtime_voice.confer.openai_realtime.mint_ephemeral_credential",
+        side_effect=__import__("core.realtime_voice.providers.openai_realtime", fromlist=["x"]).OpenAIRealtimeError("down"),
+    ):
+        assert client.post(
+            "/api/realtime-voice/confer/bootstrap", json={"provider": "openai"},
+            headers={"X-Minimoi-Auth-Id": "42"},
+        ).status_code == 502
+    outcomes = [line.split("outcome=")[1].split()[0] for line in _outcome_lines(capsys)]
+    assert outcomes == ["identity_required", "invalid_provider", "provider_error"]
+
+
+def test_confer_bootstrap_logs_rate_limited(capsys, monkeypatch):
+    monkeypatch.setattr("core.realtime_voice.confer.check_voice_rate_limit", lambda user_id: False)
+    response = _client().post(
+        "/api/realtime-voice/confer/bootstrap", json={"provider": "openai"},
+        headers={"X-Minimoi-Auth-Id": "42"},
+    )
+    assert response.status_code == 429
+    assert _outcome_lines(capsys) == [
+        "[realtime_voice] domain=cos user_id=42 provider=None model=None outcome=rate_limited"
+    ]
+
+
+def test_confer_bootstrap_logs_unavailable_instructions(capsys):
+    _rate_limit_state.clear()
+    app = Flask(__name__)
+    app.register_blueprint(create_confer_voice_blueprint(build_voice_instructions=None))
+    response = app.test_client().post(
+        "/api/realtime-voice/confer/bootstrap", json={"provider": "openai"},
+        headers={"X-Minimoi-Auth-Id": "42"},
+    )
+    assert response.status_code == 503
+    assert _outcome_lines(capsys)[0].endswith("provider=openai model=None outcome=provider_unavailable")

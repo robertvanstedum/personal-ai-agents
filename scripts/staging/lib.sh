@@ -119,6 +119,9 @@ gateway_keys_on() { [[ -f "$STAGING_KEYS_FILE" && "$(tr -d '[:space:]' < "$STAGI
 STAGING_COS_ENV="$STAGING_ROOT/cos.env"
 STAGING_COS_KEY_FILE="$STAGING_ROOT/state/cos.key"
 STAGING_COS_KEY_OVERLAY="docker-compose.staging-cos-key.yml"
+# The CoS turn log (Spec 160 path (a)): cos-scheduler's data/cos-turns mount
+# and COS_TURNS_DIR. Included whenever the pinned release has it.
+STAGING_COS_TURNS_OVERLAY="docker-compose.staging-cos-turns.yml"
 cos_key_on() { [[ -f "$STAGING_COS_KEY_FILE" && "$(tr -d '[:space:]' < "$STAGING_COS_KEY_FILE")" == on ]]; }
 
 # The portal's Master Craftsman switches (stage B), from state files; both
@@ -264,6 +267,11 @@ staging_compose() {
       || die "state/cos.key is on but $STAGING_COS_ENV is missing or not mode 600 (cos.sh key)"
     extra+=(--env-file "$STAGING_COS_ENV")
     files+=(-f "$RELEASE_DIR/$STAGING_COS_KEY_OVERLAY")
+  fi
+  # The CoS turn log (Spec 160 path (a)): mounted whenever the pinned release
+  # has the overlay; build.sh makes the folder.
+  if [[ -f "$RELEASE_DIR/$STAGING_COS_TURNS_OVERLAY" ]]; then
+    files+=(-f "$RELEASE_DIR/$STAGING_COS_TURNS_OVERLAY")
   fi
   mode=$(mc_mode)
   turns=$(mc_turns)

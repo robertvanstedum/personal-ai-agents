@@ -43,6 +43,7 @@ from core.realtime_voice.capabilities import (
     resolve_agent_conversation_provider,
 )
 from core.realtime_voice.confer import create_confer_voice_blueprint
+from domains.cos.voice_transcripts import create_voice_transcript_blueprint
 from core.realtime_voice.providers import openai_speech
 from domains.cos.confer_service import (
     ConferOperationFailed,
@@ -1129,6 +1130,7 @@ app = Flask(__name__)
 app.register_blueprint(create_confer_voice_blueprint(
     build_voice_instructions=_build_cos_voice_instructions,
 ))
+app.register_blueprint(create_voice_transcript_blueprint())
 
 
 @app.route("/internal/model-gateway/receipt", methods=["POST"])

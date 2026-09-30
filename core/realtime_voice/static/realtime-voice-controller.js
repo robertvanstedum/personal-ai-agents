@@ -5,8 +5,15 @@
  * scenes/voices/save callbacks, never their own copy of this session loop.
  *
  * State machine (Section 11):
- *   idle -> requesting_mic -> connecting -> active
- *        -> reconnecting -> ending -> ended
+ *   idle -> requesting_mic -> connecting -> active -> ending -> ended
+ *
+ * Standard options every page shares (Confer, Gespräche, Conversas):
+ *   replyMode        "speak" (default: speak and write) or "write" (write
+ *                    only: the reply's audio is muted, its text still shows);
+ *                    setReplyMode() changes it during a session.
+ *   openingInstruction  the persona greets first (null: nobody speaks first).
+ *   A provider error ends the session visibly (onFatalError) and releases the
+ *   microphone; only benign provider notices keep it (BENIGN_PROVIDER_ERRORS).
  *
  * Usage from a domain page:
  *   import { RealtimeVoiceController } from "/static/realtime-voice/realtime-voice-controller.js";
@@ -21,10 +28,16 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20260929-mic1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260929-mic1";
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20260929-voice2";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260929-voice2";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
+// Provider "error" events that a healthy session also sees; they never end it.
+const BENIGN_PROVIDER_ERRORS = new Set([
+  "conversation_already_has_active_response",
+  "response_cancel_not_active",
+  "input_audio_buffer_commit_empty",
+]);
 const OPENING_INSTRUCTION =
   "Begin in character with one short, natural greeting and one brief question " +
   "inviting the learner to say what they need. Do not give directions, suggest " +
@@ -35,8 +48,10 @@ export class RealtimeVoiceController {
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall,
     openingInstruction = OPENING_INSTRUCTION,
+    replyMode = "speak",
   }) {
     this._bootstrapUrl = bootstrapUrl;
+    this._replyMode = replyMode === "write" ? "write" : "speak";
     this._onStateChange = onStateChange || (() => {});
     this._onInputState = onInputState || (() => {});
     this._onWarning = onWarning || (() => {});
@@ -62,7 +77,26 @@ export class RealtimeVoiceController {
     this._provider = null;
     this._model = null;
     this._sessionId = null;
-    this._reconnectAttempted = false;
+  }
+
+  /** "speak" (speak and write) or "write" (write only: audio muted, text shown). */
+  setReplyMode(mode) {
+    this._replyMode = mode === "write" ? "write" : "speak";
+    this._adapter?.setOutputMuted?.(this._replyMode === "write");
+  }
+
+  get replyMode() { return this._replyMode; }
+
+  _resetTranscript() {
+    // One controller may run several sessions (Confer keeps one): each
+    // session's transcript starts empty.
+    this._items = new Map();
+    this._seenEventIds = new Set();
+    this._seq = 0;
+    this._pendingAssistantTurns = [];
+    this._startedAt = null;
+    this._warned = false;
+    this._lastUsage = null;
   }
 
   _setState(state) {
@@ -71,6 +105,7 @@ export class RealtimeVoiceController {
   }
 
   async startSession({ provider, persona, scene, learner_name }) {
+    this._resetTranscript();
     this._setState("requesting_mic");
     let resp;
     try {
@@ -101,6 +136,7 @@ export class RealtimeVoiceController {
     this._adapterEnded = false;
     this._finalizing = false;
     this._wireAdapterEvents();
+    this._adapter.setOutputMuted?.(this._replyMode === "write");
 
     this._setState("connecting");
     this._adapter.prepareSession(bootstrap.session_config || {});
@@ -165,9 +201,7 @@ export class RealtimeVoiceController {
     this._adapter.on("usage", (usage) => {
       this._lastUsage = usage;
     });
-    this._adapter.on("recoverable_error", (info) => {
-      this._attemptReconnectOrEndVisibly(info);
-    });
+    this._adapter.on("recoverable_error", (info) => this._onProviderError(info));
     this._adapter.on("fatal_error", (info) => {
       this._onFatalError(info);
       this._setState("ending");
@@ -230,7 +264,7 @@ export class RealtimeVoiceController {
 
   // Releases the provider session and the microphone, once per session. Every
   // way a session ends goes through here: the owner's stop, a fatal error, the
-  // duration limit, a provider-side close and a second recoverable error.
+  // duration limit, a provider-side close and a provider error.
   _endAdapter(reason) {
     if (!this._adapter || this._adapterEnded) return;
     this._adapterEnded = true;
@@ -241,22 +275,19 @@ export class RealtimeVoiceController {
     }
   }
 
-  _attemptReconnectOrEndVisibly(info) {
-    // Section 11: one automatic reconnect attempt is allowed only before
-    // meaningful state would be lost. Kept conservative for this release
-    // -- one attempt, then end visibly and preserve the partial transcript
-    // rather than loop.
-    if (this._reconnectAttempted) {
-      this._finalizeAndEnd("recoverable_error_no_retry");
-      return;
-    }
-    this._reconnectAttempted = true;
-    this._setState("reconnecting");
-    // Actual reconnect (re-running startSession with the same params) is
-    // the domain page's responsibility to trigger via onStateChange
-    // observing "reconnecting" and offering the user "Reconnect" / "Start
-    // a new session" (Section 11) -- the controller does not silently
-    // retry on its own, matching "end visibly... offer Reconnect."
+  // A provider error ends the session visibly and releases the microphone,
+  // never a silent "reconnecting" wait (the controller never reconnects on its
+  // own). Benign notices, which the provider sends in a healthy session, and a
+  // single failed input transcription keep the session.
+  _onProviderError(info) {
+    const code = info?.code || (typeof info?.detail === "object" ? info.detail?.code : null);
+    if (info?.reason === "input_transcription_failed" || BENIGN_PROVIDER_ERRORS.has(code)) return;
+    if (this._state === "ending" || this._state === "ended") return;
+    const detail = typeof info?.detail === "object" ? (info.detail?.message || info.detail?.code) : info?.detail;
+    this._onFatalError({ reason: info?.reason || "provider_error", detail: detail || "the voice provider reported an error" });
+    this._setState("ending");
+    this._endAdapter("provider_error");
+    this._finalizeAndEnd("provider_error");
   }
 
   _finalizeAndEnd(reason) {
@@ -264,7 +295,7 @@ export class RealtimeVoiceController {
     this._finalizing = true;
     clearInterval(this._durationTimer);
     // The session is over however it ended (#273): a provider-side close or a
-    // second recoverable error arrives here without endSession(), so the
+    // provider error arrives here without endSession(), so the
     // microphone is released here too, never left open behind a "Stopped" page.
     this._endAdapter(reason);
     const partial = reason !== "user_ended" && reason !== "normal_end";
