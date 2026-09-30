@@ -8,6 +8,14 @@ Two background threads:
   _health_loop  — every 5 min: service health, disk check, Tier 1 actions
   _audit_loop   — every hour: deeper audit, log age, cron history, escalations
 
+On this Mac it runs beside Docker staging (MINIMOI_ROLE=standby):
+  * the database URL comes from get_secret (env, else the dev Keychain item
+    minimoi-dev-db/database_url; SSM on production), and is never logged;
+  * it watches the staging services on their host ports (the portal always;
+    curator, german and portuguese unless focus.sh keeps them stopped:
+    ~/minimoi-staging/state/focus.stopped, read only);
+  * in standby it restarts nothing and sends no Telegram: it only reports.
+
 Build order: memory helper → /status → loop logic
 """
 
@@ -79,9 +87,23 @@ RULES: dict = {}   # populated on startup
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
-DSN = os.environ.get("DATABASE_URL")
-if not DSN:
-    raise RuntimeError("DATABASE_URL must be set — no insecure default (issue #42)")
+def _database_url() -> str:
+    """DATABASE_URL from the environment, else (standby) the dev Keychain item
+    minimoi-dev-db/database_url, else (production) SSM. Fails clearly when it
+    is missing; the value itself is never printed or logged."""
+    from core.get_secret import get_secret
+    try:
+        value = get_secret("DATABASE_URL", "minimoi-dev-db", "database_url", environment_scoped=True)
+    except Exception as exc:
+        raise RuntimeError(
+            "DATABASE_URL is not available: set it, or (standby, MINIMOI_ROLE=standby) store the Keychain item "
+            "minimoi-dev-db/database_url — no insecure default (issue #42)") from exc
+    if not value:
+        raise RuntimeError("DATABASE_URL is empty — no insecure default (issue #42)")
+    return value
+
+
+DSN = _database_url()
 
 @contextmanager
 def _db():
@@ -272,8 +294,39 @@ def _action_compress_old_logs() -> bool:
         _db_log("compress_logs_error", 1, str(e), False)
         return False
 
+# launchd labels the agent may restart. None today: the watched services are
+# containers (staging on this Mac, production on EC2), and the old native labels
+# (com.user.curator-server, com.vanstedum.german-html-server,
+# com.vanstedum.minimoi-portal) are retired. launchctl is never run on a label
+# outside this list, nor on one launchd reports as disabled.
+RESTARTABLE_LABELS: tuple = ()
+RETIRED_LABELS = ("com.user.curator-server", "com.vanstedum.german-html-server", "com.vanstedum.minimoi-portal")
+
+
+def _launchd_disabled(label: str) -> bool:
+    """True when launchd reports the label disabled (or the answer can't be read)."""
+    try:
+        out = subprocess.run(["launchctl", "print-disabled", f"gui/{os.getuid()}"], capture_output=True, text=True,
+                             timeout=5).stdout
+    except Exception:
+        return True
+    for line in out.splitlines():
+        if f'"{label}"' in line:
+            return "true" in line or "disabled" in line
+    return False
+
+
 def _action_restart_service(label: str) -> bool:
-    """Restart a launchd service once, wait 2 min, verify."""
+    """Restart a launchd service once, wait 2 min, verify. In standby (this
+    Mac) it restarts nothing and only reports; it never runs launchctl on a
+    retired label, one outside RESTARTABLE_LABELS, or one launchd disables."""
+    from utils.role import is_production
+    if not is_production():
+        _db_log("restart_skipped_standby", 1, f"{label}: standby reports only; nothing restarted", False)
+        return False
+    if label in RETIRED_LABELS or label not in RESTARTABLE_LABELS or _launchd_disabled(label):
+        _db_log("restart_skipped", 1, f"{label}: not a live launchd service (retired, unknown or disabled)", False)
+        return False
     try:
         subprocess.run(["launchctl", "stop", label], timeout=10)
         time.sleep(2)
@@ -293,11 +346,38 @@ def _action_restart_service(label: str) -> bool:
 
 # ── Service health checks ─────────────────────────────────────────────────────
 
+# The services, by their Docker staging (and production) compose names, on the
+# host ports both publish. The portal is always watched; the others only when
+# focus.sh is not keeping them stopped on purpose (a deliberately stopped
+# service must not escalate every loop into Guild's Needs you). A watched
+# service that is down still escalates.
 WATCHED_SERVICES = [
-    ("com.user.curator-server",          "http://localhost:8766/"),
-    ("com.vanstedum.german-html-server", "http://localhost:8767/"),
-    ("com.vanstedum.minimoi-portal",     "http://localhost:5001/"),
+    ("portal",     "http://localhost:5001/"),
+    ("curator",    "http://localhost:8766/"),
+    ("german",     "http://localhost:8767/"),
+    ("portuguese", "http://localhost:8770/"),
 ]
+ALWAYS_WATCHED = ("portal",)
+
+
+def _focus_file() -> Path:
+    root = os.environ.get("STAGING_ROOT") or str(Path.home() / "minimoi-staging")
+    return Path(root) / "state" / "focus.stopped"
+
+
+def _focus_stopped() -> set:
+    """The services focus.sh keeps stopped (scripts/staging/lib.sh focus_stopped),
+    read only. No file, or an unreadable one: none (everything is watched)."""
+    try:
+        return set(_focus_file().read_text(encoding="utf-8").split())
+    except OSError:
+        return set()
+
+
+def _watched_services() -> list:
+    stopped = _focus_stopped()
+    return [(name, url) for name, url in WATCHED_SERVICES if name in ALWAYS_WATCHED or name not in stopped]
+
 
 # Track outage start times
 _outage_start: dict = {}
@@ -306,7 +386,10 @@ def _check_services() -> list:
     """HTTP-check each watched service. Returns list of (label, ok, latency_ms)."""
     results = []
     threshold = RULES.get("service_down_threshold_minutes", 15)
-    for label, url in WATCHED_SERVICES:
+    watched = _watched_services()
+    for name in [n for n in list(_outage_start) if n not in {w for w, _ in watched}]:
+        del _outage_start[name]            # stopped on purpose now: its outage clock stops
+    for label, url in watched:
         ok, latency = False, None
         try:
             t0 = time.time()
@@ -491,7 +574,7 @@ def health():
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
+def main(*, serve: bool = True, loops: bool = True):
     global RULES
 
     PORT = int(os.environ.get("PORT", 8768))
@@ -523,15 +606,18 @@ def main():
     _db_update_state("starting")
     print("   DB: agent_state row created")
 
-    # 4. Start health loop thread
-    t1 = threading.Thread(target=_health_loop, daemon=True, name="health-loop")
-    t1.start()
-    print("   Thread started: health-loop (5-min interval)")
+    if loops:
+        # 4. Start health loop thread
+        t1 = threading.Thread(target=_health_loop, daemon=True, name="health-loop")
+        t1.start()
+        print("   Thread started: health-loop (5-min interval)")
 
-    # 5. Start audit loop thread
-    t2 = threading.Thread(target=_audit_loop, daemon=True, name="audit-loop")
-    t2.start()
-    print("   Thread started: audit-loop (1-hour interval)")
+        # 5. Start audit loop thread
+        t2 = threading.Thread(target=_audit_loop, daemon=True, name="audit-loop")
+        t2.start()
+        print("   Thread started: audit-loop (1-hour interval)")
+    print(f"   Watching: {', '.join(n for n, _ in _watched_services())}"
+          + (f" (focus keeps stopped: {', '.join(sorted(_focus_stopped()))})" if _focus_stopped() else ""))
 
     # 6. Update state to running
     _set_state(state="running")
@@ -539,7 +625,8 @@ def main():
     print(f"   State: running — first health check in ~5s\n")
 
     # 7. Serve
-    app.run(host="localhost", port=PORT, debug=False)
+    if serve:
+        app.run(host="localhost", port=PORT, debug=False)
 
 
 if __name__ == "__main__":

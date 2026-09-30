@@ -108,6 +108,11 @@ def test_staging_gateway_is_permanently_on_the_internal_mc_net():
             assert "mc-net" not in (service.get("networks") or []), name
 
 
+# Staging-only portal settings added after main, compared by their own tests:
+# the Systems light's URL for the Mac's native Operations agent.
+STAGING_ONLY_ENV = {"GUILD_OPERATIONS_STATUS_URL"}
+
+
 def _staging_render(files):
     return yaml.safe_load(_compose_config(*files, env_extra={"MINIMOI_ROOT": "/Users/x/minimoi-staging",
                                                              "MINIMOI_IMAGE_TAG": "abc1234"}))
@@ -130,7 +135,8 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
         out = dict(after_svc)
         env_b = before_svc.get("environment") or {}
         if "environment" in out:
-            out["environment"] = {k: v for k, v in out["environment"].items() if k not in usage_env or k in env_b}
+            out["environment"] = {k: v for k, v in out["environment"].items()
+                                  if k not in usage_env | STAGING_ONLY_ENV or k in env_b}
         targets_b = {v["target"] for v in before_svc.get("volumes", [])}
         if "volumes" in out:
             out["volumes"] = [v for v in out["volumes"] if v["target"] not in usage_targets or v["target"] in targets_b]
