@@ -122,8 +122,9 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     (tmp_path / "docker-compose.staging.yml").write_text(main_staging)
     before = _staging_render([tmp_path / "docker-compose.prod.yml", tmp_path / "docker-compose.staging.yml"])
     after = _staging_render([PROD, STAGING])
-    usage_env = {"MINIMOI_USAGE_DIR", "MINIMOI_ENV"}
-    usage_targets = {"/app/usage_record.py", "/app/usage_recorder.py", "/app/usage-data", "/app/data/usage"}
+    usage_env = {"MINIMOI_USAGE_DIR", "MINIMOI_ENV", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID"}
+    usage_targets = {"/app/usage_record.py", "/app/usage_recorder.py", "/app/usage-data", "/app/data/usage",
+                     "/app/data/workshops"}
 
     def without_usage(after_svc, before_svc):
         """after, minus the usage-record additions (U1/U2) that main does not have yet."""

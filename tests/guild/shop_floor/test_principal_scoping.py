@@ -23,7 +23,7 @@ def test_a_master_craftsman_post_it_is_visible_to_robert_and_he_can_bin_it(floor
         ("Queue #31 has been blocked for five days", "Master Craftsman", "agent")]
     rail = client.get(f"{API}/floor").get_json()["postits"]["shown"]
     assert rail[0]["author_label"] == "Master Craftsman"
-    page = client.get("/guild-next/guild/build").get_data(as_text=True)
+    page = client.get("/guild-next/guild/build/bench").get_data(as_text=True)   # the wall
     assert 'data-author-kind="agent">Master Craftsman<' in page
     token = floored.csrf(client)
     binned = client.post(f"{API}/postits/{mc['id']}/bin", json=keyed(), headers=write_headers(token)).get_json()

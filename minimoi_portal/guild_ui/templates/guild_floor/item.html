@@ -6,6 +6,7 @@
   <a class="btn-quiet" href="{{ urls.bench }}" data-back-bench>Workbench</a>
   <a class="btn-quiet" href="{{ urls.queue }}">Build Queue</a>
   <a class="btn-quiet" href="{{ urls.floor }}">Shop floor</a>
+  <a class="btn-quiet" href="{{ urls.workshop }}?item={{ item_id }}" data-open-workshop>Open in Workshop</a>
 </nav>
 {% if not res.ok %}
   <div class="page-head"><h1 class="page-title">Item #{{ item_id }}</h1></div>

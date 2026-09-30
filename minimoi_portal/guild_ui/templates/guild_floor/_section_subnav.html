@@ -1,10 +1,22 @@
-{# Section strip: Build and Operate of the real Shop floor, plus the legacy Build Log. #}
+{# Guild navigation (Guild 1.1 dev, slice 1): the Build pages, Operate, the
+   legacy Build Log, and truthful entry points for Planning Studio and
+   Prototype Lab. #}
+{% set build_links = [
+  ('floor', 'Shop floor', urls.floor, page_id == 'floor'),
+  ('bench', 'Wall', urls.bench, page_id in ('bench', 'postits')),
+  ('queue', 'Queue', urls.queue, page_id in ('queue', 'item')),
+  ('workshop', 'Workshop', urls.workshop, page_id == 'workshop'),
+  ('operate', 'Operate', urls.operate, page_id == 'operate'),
+] %}
 <div class="guild-subnav guild-sections">
-  {% for s in layout.sections %}
+  {% for id, label, href, on in build_links %}
     {% if not loop.first %}<span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>{% endif %}
-    {% set on = (s.id == 'build' and area in ('Build', 'Build Queue')) or (s.id == 'operate' and area == 'Operate') %}
-    <a href="{{ urls[s.id] }}" class="subnav-link{% if on %} subnav-active{% endif %}" data-section="{{ s.id }}"{% if on %} aria-current="page"{% endif %}>{{ s.label }}</a>
+    <a href="{{ href }}" class="subnav-link{% if on %} subnav-active{% endif %}" data-section="{{ id }}"{% if on %} aria-current="page"{% endif %}>{{ label }}</a>
   {% endfor %}
   <span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>
-  <a href="{{ urls.legacy_build }}" class="subnav-link" data-section="legacy">Build Log (current)</a>
+  <a href="{{ urls.legacy_build }}" class="subnav-link" data-section="legacy">Build Log</a>
+  <span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>
+  <a href="{{ urls.labs }}#planning-studio" class="subnav-link subnav-entry{% if page_id == 'labs' %} subnav-active{% endif %}" data-section="planning"{% if page_id == 'labs' %} aria-current="page"{% endif %}>Planning Studio</a>
+  <span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>
+  <a href="{{ urls.labs }}#prototype-lab" class="subnav-link subnav-entry" data-section="prototype">Prototype Lab</a>
 </div>

@@ -859,12 +859,64 @@ and the key database off).
 `cos.sh key` shows a **refused** call on CoS's key (`key_ref` `cos-agent-…`):
 that is a route CoS uses that its key's scope misses.
 
+## The local Workshop (slice 4a: observe and record, read only; staging only)
+
+The Workshop screen (`/guild-next/guild/workshop?item=<id>`, or **Open in
+Workshop** on a queue item) shows what the Mac is doing: the item's approved
+scope, the next actor, the agent clients running, the last event, the host's
+admission verdict for a new run, queued work, this month's gateway spend,
+Needs you, and recovery steps. It is read only and model free: the page and
+its one-minute refresh read files and the queue, never a model, and nothing
+launches (the launcher is 4b). On a phone it leads with Now, Needs you and
+Budget, folds the rest, then the chat.
+
+**Where the data comes from.** `scripts/workshop/workshop.py` runs on the Mac
+from the repository (no container, no key):
+
+```bash
+venv/bin/python3 scripts/workshop/workshop.py observe   # one host reading: memory, swap, disk, agent clients
+venv/bin/python3 scripts/workshop/workshop.py event --actor claude-code --item pr:265 \
+    --kind needs_you --stage review --text "Review slice 2" --next-actor robert
+venv/bin/python3 scripts/workshop/workshop.py state     # the derived state
+venv/bin/python3 scripts/workshop/workshop.py sync      # to ~/minimoi-staging/data/workshops/
+```
+
+The record is `~/minimoi-workshops/<id>/events.jsonl` (append only) plus
+`state.json` (derived, written atomically under a lock). `sync` appends the
+new whole lines and replaces `state.json`; only those two files go. The portal
+mounts `data/workshops` read only (`MINIMOI_WORKSHOPS_DIR`, id
+`MINIMOI_WORKSHOP_ID=mac`).
+
+**The admission verdict.** `ok` (room for one run), `tight` (another agent
+session is running, or a resource is near its limit), `blocked` (memory free
+under 10%, swap over 6 GB, disk free under 10 GB, or three or more agent
+sessions), `unknown` (a probe failed). Each verdict names its limit, and the
+screen shows all four. It counts agent **sessions on this Mac, outside
+Docker**: terminal or desktop Claude Code, and the Codex CLI (native or npm),
+whoever started them. A wrapper and its child, or a parent and a child of the
+same client, count as one session. The ChatGPT app's bundled Codex and an
+OpenClaw gateway are listed as background apps and are not counted. The
+staging containers' agents run inside the Colima VM, where the Mac's `ps`
+cannot see them. `ps` is read with the executable path last; arguments are
+read only for `node` processes, to find the script, and are never kept. A missing, unreadable or stale record (the host
+reading is over 15 minutes old) shows as unknown, never as "nothing running".
+`observe` writes a health event when the verdict, the reasons or the clients
+change, and every 9 minutes otherwise, so a quiet host stays fresh.
+
+**Not installed yet.** Nothing runs `observe` and `sync` on a schedule: until a
+launchd job is added (with Robert's go-ahead), run them by hand before looking
+at the screen, or the page shows unknown after 15 minutes.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes
   `~/minimoi-staging` while staging runs: the queue store's `flock` does not
   cross the Colima VM boundary. `verify.sh` lists native processes with files
-  open there.
+  open there. **One exception:** `scripts/workshop/workshop.py sync` writes
+  `data/workshops/` one way. The portal mounts that folder read only, so the
+  sync is its only writer: `state.json` is replaced atomically, and a torn
+  `events.jsonl` line is skipped. The sync runs for a moment and holds no files
+  open, so `verify.sh` does not list it unless it runs during the check.
 - Never `down -v`, never delete the external volumes or the
   `personal-ai-agents_*` volumes (the rollback copy).
 - The staging bots use the **test** bot tokens; start them only after their

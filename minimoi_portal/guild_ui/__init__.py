@@ -34,7 +34,7 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' 
        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'self'")
 
-ALL_ROUTES = ("floor", "bench", "queue", "item", "postits", "operate", "assets", "api")
+ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "assets", "api")
 B1_ROUTES = ALL_ROUTES   # the landing page, improve, experiment and any reset are not in this package
 
 
@@ -103,8 +103,12 @@ def _make_blueprint(name: str, routes) -> Blueprint:
     bp.after_request(_headers)
     bp.register_error_handler(Exception, _api_error)
     page_rules = {
-        "floor": [("/guild/build", "floor", pages.floor)],
+        "floor": [("/guild/build", "floor", pages.floor),
+                  # The mount's own root lands on the Shop floor (was "not found").
+                  ("/", "home", pages.home), ("/guild", "guild_home", pages.home)],
         "bench": [("/guild/build/bench", "bench", pages.bench)],
+        "labs": [("/guild/labs", "labs", pages.labs)],
+        "workshop": [("/guild/workshop", "workshop", pages.workshop)],
         "queue": [("/guild/build/queue", "queue", pages.queue)],
         "item": [("/guild/build/items/<int:item_id>", "item", pages.item)],
         "postits": [("/guild/build/postits", "postits", pages.postits)],

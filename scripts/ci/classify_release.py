@@ -39,6 +39,9 @@ def _is_release_only(path: str) -> bool:
         path in exact
         or path.startswith("docs/")
         or path.startswith("scripts/docs/")
+        # The local Workshop's tools run on the workshop host (the Mac) from
+        # the repository; no service image contains or runs them.
+        or path.startswith("scripts/workshop/")
         or path.startswith("tests/")
         # Prototype Lab and Planning Studio project homes are documentation:
         # briefs, specifications, decision records, and preserved evidence. A
