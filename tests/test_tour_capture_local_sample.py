@@ -333,3 +333,107 @@ def test_the_sample_voice_adapter_lets_a_scenario_play_the_providers_side():
     for method in ("say(id, text)", "hear(id, text)", "call(id, name, args)", "setOutputMuted(muted)"):
         assert method in ls.SAMPLE_VOICE_ADAPTER
     assert "fetch(" not in ls.SAMPLE_VOICE_ADAPTER and "getUserMedia" not in ls.SAMPLE_VOICE_ADAPTER
+
+
+# ── #282 re-check notes: exception safety, repository content, Private mode ──
+
+def _process_state():
+    import os
+    import core.get_secret as secrets_module
+    import minimoi_portal.auth as portal_auth
+    import minimoi_portal.config as portal_config
+    import minimoi_portal.domain_auth as portal_domain_auth
+    return (secrets_module.get_secret, portal_auth.AUTH_DIR, portal_domain_auth.list_users_with_access,
+            portal_config.CURATOR_BACKEND, portal_config.GUILD_QUEUE_PATH,
+            {k: os.environ.get(k) for k in ("MINIMOI_GUILD_NEXT", "COS_TURNS_DIR", "PORTAL_SECRET_KEY")})
+
+
+def test_a_failed_build_puts_every_patch_back(tmp_path, monkeypatch):
+    before = _process_state()
+
+    def boom(self, args):
+        raise RuntimeError("fails halfway")
+    monkeypatch.setattr(ls.GuildSample, "reset", boom)
+    with pytest.raises(RuntimeError, match="fails halfway"):
+        ls.GuildSample(tmp_path, port=PORT, legacy_guild=True).build()
+    assert _process_state() == before
+
+
+def test_a_failed_serve_puts_every_patch_back():
+    import socket
+    before = _process_state()
+    taken = socket.socket()
+    taken.bind(("127.0.0.1", 0))
+    taken.listen()
+    try:
+        with pytest.raises(ls.SampleServerError, match="could not be bound"):
+            ls.serve(taken.getsockname()[1])            # the port is in use: binding fails after build()
+    finally:
+        taken.close()
+    assert _process_state() == before
+
+
+def test_a_dirty_checkout_is_refused_for_legacy_pages(tmp_path, monkeypatch):
+    before = _process_state()
+    monkeypatch.setattr(ls, "legacy_content_problems", lambda repo: ["?? docs/draft.md", " M ROADMAP.md"])
+    with pytest.raises(ls.SampleServerError, match="clean checkout"):
+        ls.GuildSample(tmp_path, port=PORT, legacy_guild=True).build()
+    assert _process_state() == before
+
+
+def test_uncommitted_untracked_and_ignored_content_is_reported(tmp_path):
+    import subprocess
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    run = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
+    run("init", "-q")
+    run("config", "user.email", "t@example.com")
+    run("config", "user.name", "t")
+    (repo / ".gitignore").write_text("docs/secret.md\n")
+    (repo / "docs" / "a.md").write_text("a")
+    (repo / "README.md").write_text("r")
+    run("add", ".")
+    run("commit", "-qm", "c")
+    assert ls.legacy_content_problems(repo) == []
+    (repo / "docs" / "b.md").write_text("untracked")
+    (repo / "docs" / "secret.md").write_text("ignored")
+    (repo / "README.md").write_text("changed")
+    problems = " ".join(ls.legacy_content_problems(repo))
+    assert "docs/b.md" in problems and "docs/secret.md" in problems and "README.md" in problems
+    assert ls.tracked_content(repo) == frozenset({"docs/a.md", "README.md"})
+
+
+def test_legacy_spec_and_doc_pages_open_only_committed_docs(legacy):
+    import uuid
+    c = Loopback(legacy.app.test_client())
+    assert c.get("/guild/build/spec/spec_125_model_standardization_2026-07-05.md").status_code == 200
+    name = f"tour_sample_probe_{uuid.uuid4().hex[:8]}.md"
+    working = ls.REPO / "_working" / name
+    stray = ls.REPO / "docs" / name
+    working.parent.mkdir(exist_ok=True)
+    try:
+        working.write_text("# PRIVATE WORKING FILE\n")
+        stray.write_text("# UNTRACKED DOC\n")
+        for path in (f"/guild/build/spec/{name}", f"/guild/build/spec/{name}/raw", f"/guild/docs/{name}",
+                     "/guild/docs/../_working/x.md", "/guild/docs/../private/career/x.md",
+                     "/guild/docs/../planning-studio/library/sources/x.md", "/guild/build/items/12/check"):
+            r = c.get(path)
+            assert r.status_code == 404, path
+            assert b"PRIVATE WORKING FILE" not in r.data and b"UNTRACKED DOC" not in r.data
+    finally:
+        working.unlink(missing_ok=True)
+        stray.unlink(missing_ok=True)
+        if not any(working.parent.iterdir()):
+            working.parent.rmdir()
+
+
+def test_private_mode_resolves_the_turn_log_on_every_call(legacy, tmp_path, monkeypatch):
+    """The Private switch lands under the sample's own work folder, read per call, never fixed at import."""
+    private_mode = pytest.importorskip("domains.cos.private_mode")
+    root = private_mode.turns_dir()
+    assert root is not None and root.is_relative_to(legacy.workdir)
+    private_mode.set_private(root, True)
+    assert (legacy.workdir / "cos-turns" / private_mode.MODE_FILE).exists()
+    assert private_mode.state()["private"] is True
+    monkeypatch.setenv("COS_TURNS_DIR", str(tmp_path / "elsewhere"))
+    assert private_mode.turns_dir() == tmp_path / "elsewhere"          # the environment, now, not at import

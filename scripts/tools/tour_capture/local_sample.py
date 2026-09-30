@@ -99,6 +99,64 @@ def path_allowed(path: str, *, legacy_guild: bool = False) -> bool:
     return legacy_guild and path.startswith(LEGACY_PREFIX)
 
 
+# What the legacy pages may read: committed content of these paths only.
+LEGACY_CONTENT_PATHS = ("docs", "README.md", "ARCHITECTURE.md", "OPERATIONS.md", "ROADMAP.md",
+                        "domains/guild/config/cos_context.json", "data/guild/experiment_projection.json")
+DENIED_PATH_PARTS = ("_working", "private", "planning-studio")
+_SPEC_NAME = __import__("re").compile(r"^[\w\-\. ()]+\.md$")
+_ITEM_CHECK = __import__("re").compile(r"^/guild/build/items/\d+/check/?$")
+
+
+def _git(repo: Path, *args: str) -> str:
+    import subprocess
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout
+
+
+def legacy_content_problems(repo: Path) -> list[str]:
+    """Uncommitted, untracked or ignored files under the paths the legacy pages read."""
+    paths = [p for p in LEGACY_CONTENT_PATHS if (repo / p).exists()]
+    if not paths:
+        return []
+    out = _git(repo, "status", "--porcelain", "--ignored", "--untracked-files=all", "--", *paths)
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def tracked_content(repo: Path) -> frozenset[str]:
+    paths = [p for p in LEGACY_CONTENT_PATHS if (repo / p).exists()]
+    return frozenset(_git(repo, "ls-files", "--", *paths).splitlines()) if paths else frozenset()
+
+
+def legacy_file_allowed(path: str, tracked: frozenset[str]) -> bool:
+    """A legacy spec or doc page opens only a committed file under docs/.
+
+    The portal's spec page also looks in _working/ (private, git-ignored) when
+    docs/ has no such file; here that never happens: the file the page would
+    open must be the committed docs/ one. The spec-check JSON route is off."""
+    if any(f"/{part}" in path for part in DENIED_PATH_PARTS):
+        return False
+    if _ITEM_CHECK.match(path):
+        return False
+    for prefix in ("/guild/build/spec/",):
+        if path.startswith(prefix):
+            name = path[len(prefix):]
+            if name.endswith("/raw"):
+                name = name[:-4]
+            if not _SPEC_NAME.match(name):
+                return False
+            for folder in ("docs/specs", "docs/design", "docs"):
+                if (REPO / folder / name).exists():
+                    return f"{folder}/{name}" in tracked       # the first file the page would open
+            return False                                       # it would fall through to _working/
+    if path.startswith("/guild/docs/") and path not in ("/guild/docs/", "/guild/docs/decisions",
+                                                          "/guild/docs/_readme"):
+        name = path[len("/guild/docs/"):]
+        target = (REPO / "docs" / name).resolve()
+        if not target.is_relative_to((REPO / "docs").resolve()):
+            return False
+        return target.relative_to(REPO.resolve()).as_posix() in tracked
+    return True
+
+
 class _NoNetwork:
     """Stands in for the portal module's ``requests``: every call fails as
     unreachable (the legacy Operate page asks localhost:8768 for status)."""
@@ -363,7 +421,16 @@ class GuildSample:
         return {f"{name}:{self.port}" for name in LOOPBACK_HOSTNAMES}
 
     def build(self) -> "GuildSample":
+        """Patch this process for the sample and load the portal copy. On any
+        failure every patch made so far is put back before the error goes on."""
         check_port(self.port)
+        try:
+            return self._build()
+        except BaseException:
+            self.restore()
+            raise
+
+    def _build(self) -> "GuildSample":
         for extra in (REPO / "tests" / "guild" / "shop_floor", REPO):
             if str(extra) not in sys.path:
                 sys.path.insert(0, str(extra))
@@ -375,6 +442,9 @@ class GuildSample:
         def no_secrets(*_a, **_k):
             raise RuntimeError("the sample server reads no secrets")
 
+        import minimoi_portal.auth as portal_auth
+        import minimoi_portal.domain_auth as portal_domain_auth
+
         env_keys = ("DATABASE_URL", "GUILD_RECORDS_DB", "SENTRY_DSN", "MC_RUNTIME_URL", "MC_RUNTIME_TOKEN",
                     "PORTAL_SECRET_KEY", "CAPTURE_AUTH_SECRET", "MINIMOI_GUILD_NEXT", "COS_TURNS_DIR", "MINIMOI_USAGE_DIR", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID")
         self._restore = {"env": {k: os.environ.get(k) for k in env_keys},
@@ -382,13 +452,20 @@ class GuildSample:
                          "in_container": qs._running_in_container,
                          "queue_path": portal_config.GUILD_QUEUE_PATH, "base_url": portal_config.BASE_URL,
                          "backends": {k: getattr(portal_config, k, None) for k in BACKEND_SETTINGS},
-                         "ops_status": getattr(portal_config, "GUILD_OPERATIONS_STATUS_URL", None)}
+                         "ops_status": getattr(portal_config, "GUILD_OPERATIONS_STATUS_URL", None),
+                         "auth_dir": portal_auth.AUTH_DIR,
+                         "list_users": portal_domain_auth.list_users_with_access}
+        if self.legacy_guild:
+            # The legacy pages render repository files: only a clean checkout's
+            # committed content, never uncommitted, untracked or ignored files.
+            problems = legacy_content_problems(REPO)
+            if problems:
+                raise SampleServerError(
+                    "--legacy-guild needs a clean checkout: the Guild pages would show files that are not "
+                    f"committed ({', '.join(problems[:5])}{' …' if len(problems) > 5 else ''}); use a worktree")
+            self._tracked = tracked_content(REPO)
         # The legacy pages' own data: sample guests, users and requests, never
         # the checkout's minimoi_portal/auth files or the auth database.
-        import minimoi_portal.auth as portal_auth
-        import minimoi_portal.domain_auth as portal_domain_auth
-        self._restore.update(auth_dir=portal_auth.AUTH_DIR,
-                             list_users=portal_domain_auth.list_users_with_access)
         auth_dir = self.workdir / "auth"
         auth_dir.mkdir(parents=True, exist_ok=True)
         (auth_dir / "guests.json").write_text(json.dumps(SAMPLE_GUESTS))
@@ -425,6 +502,7 @@ class GuildSample:
         owner = dict(OWNER)
         allowed_hosts = self.allowed_hosts
         legacy = self.legacy_guild
+        tracked = getattr(self, "_tracked", frozenset())
 
         from flask import abort, jsonify, request, session
 
@@ -438,8 +516,11 @@ class GuildSample:
                 abort(403)                                          # a rebound name or a foreign Host
             if not path_allowed(request.path, legacy_guild=legacy):
                 abort(404)
-            if legacy and request.path.startswith(LEGACY_PREFIX) and request.method not in READ_METHODS:
-                abort(403)                                          # the production pages are read only here
+            if legacy and request.path.startswith(LEGACY_PREFIX):
+                if request.method not in READ_METHODS:
+                    abort(403)                                      # the production pages are read only here
+                if not legacy_file_allowed(request.path, tracked):
+                    abort(404)                                      # a spec or doc outside the committed docs
 
         def sign_in_loopback():
             admitted()
@@ -473,7 +554,7 @@ class GuildSample:
         saved = getattr(self, "_restore", None)
         if not saved:
             return
-        for key, value in saved["env"].items():
+        for key, value in saved.get("env", {}).items():
             if value is None:
                 os.environ.pop(key, None)
             else:
@@ -640,12 +721,30 @@ def serve(port: int = 0, host: str = "127.0.0.1", workdir: Path | None = None, l
             port = _free_port()
     own_dir = workdir is None
     workdir = Path(workdir or tempfile.mkdtemp(prefix="tour-sample-"))
-    sample = GuildSample(workdir, port=port, legacy_guild=legacy_guild).build()
-    cos_srv = make_server("127.0.0.1", _free_port(), _stand_in_cos(sample.cos_state), threaded=True)
-    threading.Thread(target=cos_srv.serve_forever, daemon=True).start()
-    portal_config.COS_BACKEND = f"http://127.0.0.1:{cos_srv.server_port}"   # the stand-in, on loopback
-    srv = make_server("127.0.0.1", port, sample.app, threaded=True)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        sample = GuildSample(workdir, port=port, legacy_guild=legacy_guild).build()
+    except BaseException:
+        if own_dir:
+            shutil.rmtree(workdir, ignore_errors=True)
+        raise
+    started = []
+    try:
+        cos_srv = make_server("127.0.0.1", _free_port(), _stand_in_cos(sample.cos_state), threaded=True)
+        started.append(cos_srv)
+        threading.Thread(target=cos_srv.serve_forever, daemon=True).start()
+        portal_config.COS_BACKEND = f"http://127.0.0.1:{cos_srv.server_port}"   # the stand-in, on loopback
+        srv = make_server("127.0.0.1", port, sample.app, threaded=True)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+    except BaseException as exc:
+        # A port already taken (or anything else): nothing stays patched or running.
+        for server in started:
+            server.shutdown()
+        sample.restore()
+        if own_dir:
+            shutil.rmtree(workdir, ignore_errors=True)
+        if isinstance(exc, SystemExit):                # werkzeug exits when the port is taken
+            raise SampleServerError(f"port {port} could not be bound (in use?)") from exc
+        raise
 
     def stop():
         srv.shutdown()

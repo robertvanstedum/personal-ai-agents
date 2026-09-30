@@ -160,11 +160,12 @@ def test_the_review_capture_tool_redeploys_nothing():
 
 def test_no_service_imports_the_review_capture_tool():
     root = Path(__file__).resolve().parents[1]
-    service_trees = ("minimoi_portal", "domains", "core", "services", "utils", "docker")
-    offenders = []
-    for tree in service_trees:
-        for path in (root / tree).rglob("*"):
-            if path.is_file() and path.suffix in {".py", ".sh", ".yml", ".yaml", "", ".txt"} \
-                    and ("tour_capture" in path.read_text(errors="ignore") or "__tour_sample" in path.read_text(errors="ignore")):
-                offenders.append(str(path.relative_to(root)))
+    service_trees = ("minimoi_portal", "domains", "core", "services", "utils", "docker", ".github/workflows")
+    candidates = [path for tree in service_trees for path in (root / tree).rglob("*") if path.is_file()
+                  and (path.suffix in {".py", ".sh", ".yml", ".yaml", "", ".txt", ".json"}
+                       or path.name.startswith("Dockerfile"))]
+    candidates += [p for p in root.glob("docker-compose*.yml")] + [p for p in root.glob("Dockerfile*")]
+    offenders = [str(path.relative_to(root)) for path in candidates
+                 if "tour_capture" in path.read_text(errors="ignore")
+                 or "__tour_sample" in path.read_text(errors="ignore")]
     assert offenders == []
