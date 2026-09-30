@@ -250,7 +250,7 @@ def test_the_helper_records_a_direct_model_call_and_a_search(store):
     assert direct.model_call(name="cos-grok-backend", actor="cos", route="cos-grok-direct:chat", provider="xai",
                              model="grok-4.3", error=err)
     ur2.flush()
-    got = ur2.read(str(store))
+    got = ur2.read_all(str(store))                       # the helper writes to its own folder (U2 fix)
     assert [(r["emitter"], r["kind"], r["status"]) for r in got] == [
         ("helper:cos-grok-backend", "model", "ok"), ("helper:cos-novelty-watch", "search", "ok"),
         ("helper:cos-grok-backend", "model", "refused")]
@@ -279,10 +279,10 @@ def test_tavily_search_passes_results_and_errors_through_and_records_no_query(st
     with pytest.raises(RuntimeError, match="quota"):
         tavily_search(Client(), "cos-curator-watch", "boom")
     ur2.flush()
-    got = ur2.read(str(store))
+    got = ur2.read_all(str(store))
     assert [(r["emitter"], r["status"]) for r in got] == [("helper:cos-curator-watch", "ok"),
                                                            ("helper:cos-curator-watch", "error")]
-    assert "private query text" not in "".join(p.read_text() for p in store.iterdir())
+    assert "private query text" not in "".join(p.read_text() for p in store.rglob("*") if p.is_file())
 
 
 def test_the_grok_backend_records_each_call_and_returns_the_sdks_answer(store):
@@ -299,6 +299,57 @@ def test_the_grok_backend_records_each_call_and_returns_the_sdks_answer(store):
                     return resp
     assert grok_backend._create(Client(), "cos-grok-direct:chat", model="grok-4.3", messages=[]) is resp
     ur2.flush()
-    got = ur2.read(str(store))
+    got = ur2.read_all(str(store))
     assert len(got) == 1 and got[0]["route"] == "cos-grok-direct:chat" and got[0]["output_tokens"] == 30
-    assert "Hello Robert" not in "".join(p.read_text() for p in store.iterdir())
+    assert "Hello Robert" not in "".join(p.read_text() for p in store.rglob("*") if p.is_file())
+
+
+# ── One folder per writer: no first-writer ownership hazard ─────────────────
+
+def test_own_folder_is_the_writers_own_subfolder(monkeypatch, tmp_path):
+    from services.usage import usage_record as ur
+    monkeypatch.delenv("MINIMOI_USAGE_OWN_DIR", raising=False)
+    monkeypatch.delenv("MINIMOI_USAGE_WRITER", raising=False)
+    monkeypatch.delenv("MINIMOI_USAGE_DIR", raising=False)
+    assert ur.own_folder() is None                                        # no store: nothing is written
+    monkeypatch.setenv("MINIMOI_USAGE_DIR", str(tmp_path))
+    assert ur.own_folder() == str(tmp_path / "direct") and (tmp_path / "direct").is_dir()
+    monkeypatch.setenv("MINIMOI_USAGE_WRITER", "cos-bot")
+    assert ur.own_folder() == str(tmp_path / "cos-bot")
+    assert ur.own_folder("portal", create=False) == str(tmp_path / "portal") and not (tmp_path / "portal").exists()
+    monkeypatch.setenv("MINIMOI_USAGE_OWN_DIR", str(tmp_path / "elsewhere"))
+    assert ur.own_folder() == str(tmp_path / "elsewhere")
+    monkeypatch.delenv("MINIMOI_USAGE_OWN_DIR")
+    with pytest.raises(ValueError):
+        ur.own_folder("../gateway")
+
+
+def test_direct_records_never_touch_the_shared_monthly_file(monkeypatch, tmp_path):
+    from services.usage import direct
+    from services.usage import usage_record as ur
+    monkeypatch.setenv("MINIMOI_USAGE_DIR", str(tmp_path))
+    monkeypatch.setenv("MINIMOI_USAGE_WRITER", "cos-scheduler")
+    monkeypatch.delenv("MINIMOI_USAGE_OWN_DIR", raising=False)
+    assert direct.search(name="tavily", actor="cos") is True
+    assert direct.model_call(name="grok", actor="cos", route="grok-direct", provider="xai", model="grok-4",
+                             response={"usage": {"prompt_tokens": 3, "completion_tokens": 2}}) is True
+    ur.flush()
+    assert not list(tmp_path.glob("usage-*.jsonl"))                     # the gateway's file is never created by them
+    own = ur.read(str(tmp_path / "cos-scheduler"))
+    assert sorted(r["emitter"] for r in own) == ["helper:grok", "helper:tavily"]
+
+
+def test_read_all_finds_the_gateway_and_every_writers_records(tmp_path):
+    from services.usage import usage_record as ur
+    base = {"occurred_at": "2026-10-01T00:00:01+00:00", "env": "staging", "actor": "cos", "kind": "model",
+            "route": "r", "status": "ok", "cost_source": "none"}
+    ur.append({**base, "emitter": "gateway"}, str(tmp_path))
+    for writer, emitter in (("cos-bot", "helper:grok"), ("cos-scheduler", "helper:tavily"), ("portal", "runtime-stream")
+                            if "runtime-stream" in ur.EMITTER_RE.pattern else ("portal", "helper:portal")):
+        (tmp_path / writer).mkdir()
+        ur.append({**base, "emitter": emitter}, str(tmp_path / writer))
+    (tmp_path / "Not A Writer").mkdir()
+    (tmp_path / "Not A Writer" / "usage-2026-10.jsonl").write_text('{"v": 1, "emitter": "x"}\n')
+    assert ur.read(str(tmp_path)) and [r["emitter"] for r in ur.read(str(tmp_path))] == ["gateway"]  # unchanged
+    found = sorted(r["emitter"] for r in ur.read_all(str(tmp_path)))
+    assert len(found) == 4 and "gateway" in found and "helper:grok" in found and "helper:tavily" in found

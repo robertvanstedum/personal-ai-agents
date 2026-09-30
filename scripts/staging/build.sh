@@ -185,6 +185,9 @@ for f in usage_record.py litellm_recorder.py; do
   cp "$RELEASE_DIR/services/usage/$f" "$STAGING_ROOT/config/usage/$f"
   chmod 644 "$STAGING_ROOT/config/usage/$f"
 done
+# Each root writer's own usage folder (usage_record.own_folder): the shared
+# monthly file at the top of data/usage/ is the non-root gateway's alone.
+for w in cos-bot cos-scheduler; do mkdir -p "$STAGING_ROOT/data/usage/$w"; done
 {
   echo "sha=$FULL_SHA"
   echo "tag=$SHA"

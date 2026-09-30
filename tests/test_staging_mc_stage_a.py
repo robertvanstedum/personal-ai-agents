@@ -113,6 +113,22 @@ def _staging_render(files):
                                                              "MINIMOI_IMAGE_TAG": "abc1234"}))
 
 
+def _without_own_usage_folder(after_svc, before_svc):
+    """after, minus each root writer's own usage folder (the U2 ownership fix:
+    MINIMOI_USAGE_WRITER, the read-write own folder, the shared store read-only),
+    which main does not have yet."""
+    out = dict(after_svc)
+    if "environment" in out:
+        out["environment"] = {k: v for k, v in out["environment"].items()
+                              if k != "MINIMOI_USAGE_WRITER" or k in (before_svc.get("environment") or {})}
+    if "volumes" in out:
+        before_by_target = {v["target"]: v for v in before_svc.get("volumes", [])}
+        out["volumes"] = [before_by_target.get(v["target"], v) if v["target"] == "/app/data/usage" else v
+                          for v in out["volumes"]
+                          if not (v["target"].startswith("/app/data/usage/") and v["target"] not in before_by_target)]
+    return out
+
+
 def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tmp_path):
     main_staging = _main("docker-compose.staging.yml")
     main_prod = _main("docker-compose.prod.yml")
@@ -147,7 +163,8 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     for name in before["services"]:
         if name == "model-gateway":
             continue
-        assert without_usage(after["services"][name], before["services"][name]) == before["services"][name], name
+        after_svc = _without_own_usage_folder(after["services"][name], before["services"][name])
+        assert without_usage(after_svc, before["services"][name]) == before["services"][name], name
     gw_before, gw_after = before["services"]["model-gateway"], after["services"]["model-gateway"]
     assert set(gw_after["networks"]) == {"default", "mc-net"}
     # Stage C: provider keys under gateway-only names, the default names empty,

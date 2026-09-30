@@ -52,6 +52,10 @@ done
 for v in "${STAGING_VOLUMES[@]}"; do
   docker volume inspect "$v" >/dev/null 2>&1 || die "missing volume $v; run seed.sh --postgres (README step 1b)"
 done
+# Each root writer's own usage folder (build.sh makes them).
+for w in cos-bot cos-scheduler; do
+  [[ -d "$S/data/usage/$w" ]] || die "missing folder $S/data/usage/$w; run build.sh"
+done
 
 # Staging keeps production's container names; an old dev container of the
 # same name must be renamed first (README step 1).
