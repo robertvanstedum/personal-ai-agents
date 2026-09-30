@@ -41,11 +41,26 @@ def _login(client):
         sess["user"] = dict(OWNER)
 
 
+TOKEN = "t" * 43
+
+
+def _write_headers(client) -> dict:
+    """A valid session token for CoS's web write guard when the portal has it
+    (#267: COS_CSRF_SESSION_KEY); nothing extra on a portal without it."""
+    import minimoi_portal.app as portal_app
+    key = getattr(portal_app, "COS_CSRF_SESSION_KEY", None)
+    if key is None:
+        return {}
+    with client.session_transaction() as sess:
+        sess[key] = TOKEN
+    return {"X-CSRF-Token": TOKEN}
+
+
 def test_a_slow_cos_turn_is_an_honest_504_in_json_for_confer(portal_client, backend):
     calls, state = backend
     _login(portal_client)
     state["raise"] = requests.exceptions.ReadTimeout("read timed out")
-    r = portal_client.post("/app/cos/ui/send", json={"text": "hi"})
+    r = portal_client.post("/app/cos/ui/send", json={"text": "hi"}, headers=_write_headers(portal_client))
     body = r.get_json()
     assert r.status_code == 504 and body["error"] == "timeout"
     assert "may still finish" in body["message"] and "nothing was retried" in body["message"]
@@ -66,7 +81,7 @@ def test_other_request_errors_are_a_502_not_a_500(portal_client, backend):
     calls, state = backend
     _login(portal_client)
     state["raise"] = requests.exceptions.ChunkedEncodingError("broken")
-    r = portal_client.post("/app/cos/chat", json={"message": "hi"})
+    r = portal_client.post("/app/cos/chat", json={"message": "hi"}, headers=_write_headers(portal_client))
     assert r.status_code == 502 and r.get_json()["error"] == "backend_error"
     assert calls[0]["timeout"] == (5, 125)
 
