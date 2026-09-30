@@ -183,7 +183,12 @@ routes grant or revoke guests and send mail, so every non-GET request there
 is refused. They show sample guests, users and guest requests, never the
 checkout's `minimoi_portal/auth/` files or the auth database, and the portal
 module makes no outbound call (Operate's localhost:8768 status reads
-unreachable). Every other rule below still applies.
+unreachable). Those pages render repository files, so `--legacy-guild`
+starts only on a clean checkout (no uncommitted, untracked or ignored files
+under `docs/`, the root official docs or the Guild config it reads; use a
+worktree), and a spec or doc page opens only a committed file under `docs/`,
+never `_working/`, `private/` or `planning-studio/`. Every other rule below
+still applies.
 
 It binds 127.0.0.1 only and never on 5001 or a staging or service port. It
 signs its session with its own random key, never `PORTAL_SECRET_KEY`. The
