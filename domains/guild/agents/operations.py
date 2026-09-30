@@ -105,11 +105,58 @@ def _database_url() -> str:
 
 DSN = _database_url()
 
+
+def _dsn_secrets(dsn: str) -> list:
+    """The DSN itself and its password (raw and percent-decoded): text the
+    log must never carry. psycopg2 can echo parts of a malformed DSN in its
+    error messages (#280 review)."""
+    from urllib.parse import unquote, urlsplit
+    out = [dsn]
+    try:
+        pw = urlsplit(dsn).password
+    except Exception:
+        pw = None
+    if not pw and "password=" in dsn:
+        pw = dsn.split("password=", 1)[1].split()[0]
+    for v in (pw, unquote(pw) if pw else None):
+        if v and len(v) >= 3 and v not in out:
+            out.append(v)
+    return out
+
+
+_SECRETS = _dsn_secrets(DSN)
+
+
+def _scrub(text: str) -> str:
+    for secret in _SECRETS:
+        text = text.replace(secret, "***")
+    return text
+
+
+def _check_dsn() -> None:
+    """Fail at start-up on a DSN psycopg2 cannot parse, without echoing it."""
+    failed = None
+    try:
+        psycopg2.extensions.parse_dsn(DSN)
+    except Exception as exc:
+        failed = type(exc).__name__        # raised below, outside the handler: no chained message
+    if failed:
+        raise RuntimeError(f"DATABASE_URL could not be parsed ({failed}); the value is not shown")
+
+
+_check_dsn()
+
 @contextmanager
 def _db():
     conn = None
     try:
-        conn = psycopg2.connect(DSN, cursor_factory=psycopg2.extras.RealDictCursor)
+        failed = None
+        try:
+            conn = psycopg2.connect(DSN, cursor_factory=psycopg2.extras.RealDictCursor)
+        except Exception as exc:        # never let the DSN reach a log via the message
+            failed = f"{type(exc).__name__} {getattr(exc, 'pgcode', None) or ''}".strip()
+        if failed:
+            raise RuntimeError(f"database connect failed: {failed}")
         yield conn
         conn.commit()
     except Exception:
@@ -128,7 +175,7 @@ def _db_log(action: str, tier: int, outcome: str, auto_resolved: bool = False):
                     """INSERT INTO guild.ops_maintenance_log
                        (tier, action, outcome, auto_resolved)
                        VALUES (%s, %s, %s, %s)""",
-                    (tier, action, outcome, auto_resolved)
+                    (tier, action, _scrub(str(outcome)), auto_resolved)
                 )
     except Exception as e:
         _log_file("db_log_error", f"{action}: {e}")
@@ -218,7 +265,7 @@ def _set_state(**kwargs):
 
 def _log_file(event: str, detail: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{ts}] {event}: {detail}\n"
+    line = f"[{ts}] {event}: {_scrub(str(detail))}\n"
     try:
         (LOGS_DIR / "operations.log").open("a").write(line)
     except Exception:

@@ -175,3 +175,27 @@ def test_the_staging_portal_reads_the_macs_operations_agent():
     from pathlib import Path
     compose = (Path(__file__).resolve().parents[2] / "docker-compose.staging.yml").read_text()
     assert "GUILD_OPERATIONS_STATUS_URL=${GUILD_OPERATIONS_STATUS_URL:-http://host.docker.internal:8768/status}" in compose
+
+
+# ── the DSN never reaches a log (#280 review) ─────────────────────────────────
+
+def test_a_malformed_dsn_fails_at_start_without_echoing_its_password(load):
+    bad = "postgresql://kc-user:pa%zz-secret@localhost:5432/db"      # '%zz' is not a percent escape
+    with pytest.raises(RuntimeError) as err:
+        load(keychain=bad)
+    text = str(err.value) + repr(err.value.__cause__) + repr(err.value.__context__)
+    assert "pa%zz-secret" not in text and "zz-secret" not in text and "could not be parsed" in str(err.value)
+
+
+def test_a_connect_error_that_quotes_the_dsn_is_scrubbed_from_the_log(load, monkeypatch, tmp_path):
+    mod, _ = load()
+    monkeypatch.setattr(mod, "LOGS_DIR", tmp_path)
+
+    def connect(dsn, **kw):
+        raise mod.psycopg2.OperationalError(f'connection failed for "{dsn}" password "kc-secret-pass-123"')
+    monkeypatch.setattr(mod.psycopg2, "connect", connect)
+    mod._db_log("probe", 1, "outcome")                     # logs its own failure through _log_file
+    mod._log_file("direct", f"{SECRET_DSN} kc-secret-pass-123")
+    log = (tmp_path / "operations.log").read_text()
+    assert "kc-secret-pass-123" not in log and SECRET_DSN not in log
+    assert "database connect failed: OperationalError" in log and "***" in log
