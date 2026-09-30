@@ -16,6 +16,7 @@ from .imaging import build_contact_sheet, optimize_png
 from .manifest import CapturedScene, write_manifest, write_report, write_review_page
 from .readiness import wait_for_checkpoint
 from .scenario import (
+    LOCAL_ONLY_ACTIONS,
     LOCAL_ONLY_AUTH_PROFILES,
     SUPPORTED_ACTIONS,
     DeviceProfile,
@@ -353,6 +354,12 @@ class CaptureRunner:
                 return pages[int(choice) - 1]
             print(f"  Enter a tab number from 1 to {len(pages)}.")
 
+    def _check_step_allowed(self, action: str) -> None:
+        """Scripted local steps never run in an owner session, whatever the
+        caller validated: this runner refuses them itself."""
+        if self.authenticated and action in LOCAL_ONLY_ACTIONS:
+            raise CaptureRunError(f"{action} steps run only in a local (auth_profile 'none') capture")
+
     def _sample(self, page, name: str, args: dict) -> None:
         """Ask the local sample server (local_sample.py) to set up a state."""
         if self.authenticated:
@@ -499,6 +506,9 @@ class CaptureRunner:
                     # A loopback capture stays on this machine: anything a page
                     # asks for elsewhere (web fonts, analytics) is refused.
                     context.route("**/*", _local_only_route)
+                    if hasattr(context, "route_web_socket"):
+                        # route() does not see WebSockets: close any that leave loopback.
+                        context.route_web_socket(lambda url: not local_only_request(url), lambda ws: ws.close())
                 if self.clean_web:
                     for pattern in _clean_web_route_patterns():
                         context.route(pattern, lambda route: route.abort())
@@ -525,6 +535,7 @@ class CaptureRunner:
                     order = 0
                     for index, step in enumerate(self.scenario["steps"], start=1):
                         action = next(key for key in step if key in SUPPORTED_ACTIONS)
+                        self._check_step_allowed(action)
                         self.last_action = f"step {index}: {action}"
                         value = step[action]
                         if action == "goto":

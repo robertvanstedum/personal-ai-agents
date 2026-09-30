@@ -7,9 +7,28 @@ import pytest
 from scripts.tools.tour_capture import local_sample as ls
 
 
+PORT = 18791
+HOST = f"127.0.0.1:{PORT}"
+
+
+class Loopback:
+    """The test client, naming the sample by its own loopback Host."""
+
+    def __init__(self, client, host=HOST):
+        self.client, self.host = client, host
+
+    def get(self, path, **kw):
+        kw.setdefault("base_url", f"http://{self.host}")
+        return self.client.get(path, **kw)
+
+    def post(self, path, **kw):
+        kw.setdefault("base_url", f"http://{self.host}")
+        return self.client.post(path, **kw)
+
+
 @pytest.fixture(scope="module")
 def sample(tmp_path_factory):
-    built = ls.GuildSample(tmp_path_factory.mktemp("sample")).build()
+    built = ls.GuildSample(tmp_path_factory.mktemp("sample"), port=PORT).build()
     yield built
     built.restore()                       # other tests in this session see the process as it was
 
@@ -17,7 +36,7 @@ def sample(tmp_path_factory):
 @pytest.fixture
 def client(sample):
     sample.reset({})
-    return sample.app.test_client()
+    return Loopback(sample.app.test_client())
 
 
 def test_loopback_requests_are_signed_in_as_the_sample_owner(client):
@@ -98,6 +117,100 @@ def test_a_down_runtime_reads_unavailable(sample, client):
     assert sample.services.mc.health().state == "unavailable"
 
 
+def test_loopback_hosts_with_this_port_are_admitted(sample):
+    for host in (f"localhost:{PORT}", f"[::1]:{PORT}", HOST):
+        assert Loopback(sample.app.test_client(), host).get("/guild-next/guild/build").status_code == 200, host
+
+
+@pytest.mark.parametrize("host", ["evil.example", f"evil.example:{PORT}", "127.0.0.1", "localhost:5001",
+                                  "dev.minimoi.ai", f"127.0.0.1.nip.io:{PORT}"])
+def test_a_foreign_or_rebound_host_is_refused(sample, host):
+    """DNS rebinding: a page rebound to 127.0.0.1 still sends its own Host."""
+    c = Loopback(sample.app.test_client(), host)
+    assert c.get("/guild-next/guild/build").status_code == 403
+    assert c.post("/__tour_sample/reset", json={}).status_code == 403
+
+
+@pytest.mark.parametrize("header", [{"Cf-Connecting-Ip": "203.0.113.9"}, {"CF-Ray": "8c1-ORD"},
+                                    {"Cdn-Loop": "cloudflare"}, {"X-Forwarded-For": "203.0.113.9"},
+                                    {"X-Forwarded-Host": "dev.minimoi.ai"}, {"X-Forwarded-Proto": "https"},
+                                    {"Forwarded": "for=203.0.113.9"}, {"X-Real-Ip": "203.0.113.9"}],
+                         ids=lambda h: next(iter(h)))
+def test_proxied_or_tunnelled_requests_are_refused(client, header):
+    assert client.get("/guild-next/guild/build", headers=header).status_code == 403
+    assert client.post("/__tour_sample/reset", json={}, headers=header).status_code == 403
+
+
+@pytest.mark.parametrize("path", ["/", "/dashboard", "/admin/guests", "/account/password", "/guild/build/queue",
+                                  "/guild/operate", "/app/curator", "/app/curator/api/interests", "/app/german/",
+                                  "/app/portuguese/", "/app/iotconnect/", "/api/anything", "/interests",
+                                  "/research", "/capture-auth", "/login"])
+def test_only_the_review_pages_are_served(client, path):
+    assert client.get(path).status_code == 404
+
+
+@pytest.mark.parametrize("port", [5001, 5432, 8766, 8767, 8768, 8769, 8770, 8095, 14000, 18790, 80, 0, 70000])
+def test_service_tunnel_and_low_ports_are_refused(port, tmp_path):
+    with pytest.raises(ls.SampleServerError):
+        ls.check_port(port)
+    with pytest.raises(ls.SampleServerError):
+        ls.GuildSample(tmp_path, port=port).build()
+
+
+def test_every_staging_host_port_is_refused():
+    import re
+    lib = (ls.REPO / "scripts" / "staging" / "lib.sh").read_text()
+    staging = [int(p) for p in re.search(r'^STAGING_HOST_PORTS="([^"]+)"', lib, re.M).group(1).split()]
+    assert 5001 in staging and set(staging) <= ls.refused_ports()
+
+
+def test_serve_on_port_5001_is_refused_before_anything_is_built():
+    with pytest.raises(ls.SampleServerError, match="5001"):
+        ls.serve(5001)
+
+
+def test_the_real_backends_point_at_a_closed_address(sample):
+    import minimoi_portal.config as portal_config
+    for key in ("CURATOR_BACKEND", "GERMAN_BACKEND", "PORTUGUESE_BACKEND", "IOTCONNECT_BACKEND",
+                "IOTCONNECT_HEALTH_URL"):
+        assert getattr(portal_config, key) == ls.CLOSED_BACKEND, key
+    assert portal_config.GUILD_OPERATIONS_STATUS_URL is None
+
+
+def test_the_session_key_is_the_samples_own(monkeypatch, tmp_path):
+    """Even with the real key exported, a sample cookie is signed with a random per-process key."""
+    import minimoi_portal.config as portal_config
+    real = "r" * 48
+    monkeypatch.setenv("PORTAL_SECRET_KEY", real)
+    monkeypatch.setenv("CAPTURE_AUTH_SECRET", "capture-" + "c" * 32)
+    monkeypatch.setattr(portal_config, "SECRET_KEY", real)
+    first = ls.GuildSample(tmp_path / "a", port=PORT).build()
+    try:
+        assert first.app.secret_key not in (real, "dev-only-change-in-production")
+        assert len(first.app.secret_key) == 64
+        import os
+        assert "PORTAL_SECRET_KEY" not in os.environ and "CAPTURE_AUTH_SECRET" not in os.environ
+        c = Loopback(first.app.test_client())
+        assert c.get("/guild-next/guild/build").status_code == 200
+        cookie = c.client.get_cookie("session", domain="127.0.0.1") or c.client.get_cookie("session")
+        from itsdangerous import BadSignature
+        from flask.sessions import SecureCookieSessionInterface
+        import flask
+        other = flask.Flask("elsewhere")
+        other.secret_key = real
+        with pytest.raises(BadSignature):
+            SecureCookieSessionInterface().get_signing_serializer(other).loads(cookie.value)
+    finally:
+        first.restore()
+    import os
+    assert os.environ["PORTAL_SECRET_KEY"] == real                   # put back for the rest of the process
+    second = ls.GuildSample(tmp_path / "b", port=PORT).build()
+    try:
+        assert second.app.secret_key != first.app.secret_key
+    finally:
+        second.restore()
+
+
 def test_the_cos_stand_in_answers_without_a_model_and_voice_follows_the_sample_state(sample):
     cos = ls._stand_in_cos(sample.cos_state).test_client()
     assert cos.post("/ui/send", json={"text": "Plan the week"}).get_json() == {"reply": "Noted: Plan the week"}
@@ -118,8 +231,9 @@ def test_a_failing_runtime_answers_turns_with_its_error_status(sample, client):
 def test_restore_puts_the_process_back(tmp_path):
     import os
     import core.get_secret as secrets_module
-    before = (secrets_module.get_secret, os.environ.get("MINIMOI_GUILD_NEXT"))
-    built = ls.GuildSample(tmp_path).build()
+    import minimoi_portal.config as portal_config
+    before = (secrets_module.get_secret, os.environ.get("MINIMOI_GUILD_NEXT"), portal_config.CURATOR_BACKEND)
+    built = ls.GuildSample(tmp_path, port=PORT).build()
     assert os.environ["MINIMOI_GUILD_NEXT"] == "1"
     built.restore()
-    assert (secrets_module.get_secret, os.environ.get("MINIMOI_GUILD_NEXT")) == before
+    assert (secrets_module.get_secret, os.environ.get("MINIMOI_GUILD_NEXT"), portal_config.CURATOR_BACKEND) == before

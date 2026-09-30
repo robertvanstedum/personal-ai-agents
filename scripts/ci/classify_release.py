@@ -39,6 +39,10 @@ def _is_release_only(path: str) -> bool:
         path in exact
         or path.startswith("docs/")
         or path.startswith("scripts/docs/")
+        # The review-capture tool (screenshots, review PDFs, the local sample
+        # portal) runs on the Mac from the repository; no service imports or
+        # runs it, so changing it redeploys nothing.
+        or path.startswith("scripts/tools/tour_capture/")
         or path.startswith("tests/")
         # Prototype Lab and Planning Studio project homes are documentation:
         # briefs, specifications, decision records, and preserved evidence. A

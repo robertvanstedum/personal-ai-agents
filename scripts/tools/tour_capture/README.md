@@ -146,13 +146,15 @@ checkout's portal locally with sample data and capture it with
 read, and no model is called.
 
 ```bash
-# 1. The local sample portal (loopback only; Ctrl-C stops it)
-python -m scripts.tools.tour_capture.local_sample --port 8791
+# 1. The local sample portal (loopback only; Ctrl-C stops it). It picks a
+#    random free high port and prints its URL; --port chooses one, but 5001
+#    and every staging or service port are refused.
+python -m scripts.tools.tour_capture.local_sample
 
 # 2. Each scenario (the Guild 1.1 pack: scenarios/guild_1_1_*.json)
 for s in desktop narrow tablet phone; do
   python -m scripts.tools.tour_capture.cli guild-1-1-$s \
-    --base-url http://127.0.0.1:8791 --headless --browser-channel chrome
+    --base-url http://127.0.0.1:PORT --headless --browser-channel chrome
 done
 
 # 3. One PDF: cover, then one captioned page per scene
@@ -165,8 +167,19 @@ whose files must never mention sample data (`test_no_sample_in_real_mode`).
 
 `local_sample` reuses the Shop floor browser harness's set-up
 (`tests/guild/shop_floor`: the sample queue, the floor store on SQLite, the
-owner): every loopback request is signed in as the sample owner, anything
-else gets 403, and the server binds 127.0.0.1 only. Master Craftsman talks to
+owner). It is a whole portal running as owner, so it admits a request only
+when every one of these holds; otherwise the request is refused:
+- the peer is loopback and the `Host` names this server (127.0.0.1,
+  localhost or [::1] with its port), which defeats DNS rebinding;
+- the request carries no proxy or forwarding header (CF-*, X-Forwarded-*,
+  Forwarded, X-Real-IP, CDN-Loop), so the Cloudflare tunnel never reaches it;
+- the path is one the review scenarios need (`/guild`, `/guild-next/...`,
+  `/app/cos/...`, `/static/...`, `/__tour_sample/...`); anything else is 404.
+
+It binds 127.0.0.1 only and never on 5001 or a staging or service port. It
+signs its session with its own random key, never `PORTAL_SECRET_KEY`. The
+real curator, german, portuguese and IoT Connect backends point at a closed
+address, so nothing real is ever proxied. Master Craftsman talks to
 a scripted relay in the same process; CoS runs behind its real `/app/cos`
 proxy against a stand-in cos-scheduler that echoes the message and a stand-in
 voice adapter (no microphone, no provider). Captions must say the data is

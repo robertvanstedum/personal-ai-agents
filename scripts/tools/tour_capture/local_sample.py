@@ -1,6 +1,6 @@
 """A local sample instance of the portal for review captures (loopback only).
 
-    python -m scripts.tools.tour_capture.local_sample --port 8791
+    python -m scripts.tools.tour_capture.local_sample            # a random free high port
 
 Serves this checkout's portal (Guild with the Shop floor on, /guild-next, and
 CoS through its real /app/cos proxy) on 127.0.0.1 with sample data, so a
@@ -9,8 +9,16 @@ Robert's login. It reuses the Shop floor browser harness's setup
 (tests/guild/shop_floor: the sample queue, the floor store on SQLite, the
 signed-in owner) and adds, for captures only:
 
-* every loopback request is signed in as the sample owner; nothing else can
-  reach the server, which binds 127.0.0.1 only;
+* every loopback request is signed in as the sample owner, but only when it
+  names this server by a loopback Host (127.0.0.1, localhost or [::1] with the
+  chosen port: no DNS rebinding) and carries no proxy or forwarding header
+  (CF-*, X-Forwarded-*, Forwarded, X-Real-IP, CDN-Loop: never the tunnel);
+  the server binds 127.0.0.1 only, never on port 5001 or another staging or
+  service port, and its session key is its own random one;
+* it answers only the Guild and CoS pages the review scenarios need, with
+  their assets and APIs; every other path is 404, and every real backend
+  (curator, german, portuguese, IoT Connect, operations status) points at a
+  closed address, so nothing real is proxied;
 * no secret is read (the secret lookup raises), no database URL is used, and
   no model is called: Master Craftsman talks to a scripted relay in this
   process, and CoS to a stand-in cos-scheduler that echoes the message;
@@ -23,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import secrets as _secrets
 import json
 import os
 import shutil
@@ -36,7 +45,56 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 LOOPBACK_ADDRS = {"127.0.0.1", "::1"}
+LOOPBACK_HOSTNAMES = ("127.0.0.1", "localhost", "[::1]")
 SAMPLE_PREFIX = "/__tour_sample/"
+# A closed address (the discard port): a real backend is never reached.
+CLOSED_BACKEND = "http://127.0.0.1:9"
+BACKEND_SETTINGS = ("CURATOR_BACKEND", "GERMAN_BACKEND", "PORTUGUESE_BACKEND", "COS_BACKEND",
+                    "IOTCONNECT_BACKEND", "IOTCONNECT_HEALTH_URL")
+# Ports the sample must never take: the portal and the tunnel's target (5001),
+# the staging stack's host ports, and the services' own ports on this Mac.
+_KNOWN_SERVICE_PORTS = frozenset({5001, 5432, 7474, 7687, 8095, 8766, 8767, 8768, 8769, 8770, 8790, 14000, 18790})
+# Requests that came through a proxy or the Cloudflare tunnel are refused outright.
+PROXY_HEADER_PREFIXES = ("cf-", "x-forwarded-")
+PROXY_HEADERS = {"forwarded", "x-real-ip", "cdn-loop", "true-client-ip", "x-client-ip"}
+# The only paths the sample answers (the review scenarios' pages, assets and APIs).
+ALLOWED_EXACT = {"/guild", "/guild/", "/guild-next", "/app/cos"}
+ALLOWED_PREFIXES = ("/guild-next/", "/app/cos/", "/static/", SAMPLE_PREFIX)
+
+
+def refused_ports() -> frozenset[int]:
+    """The known service ports plus staging's STAGING_HOST_PORTS (scripts/staging/lib.sh)."""
+    ports = set(_KNOWN_SERVICE_PORTS)
+    lib = REPO / "scripts" / "staging" / "lib.sh"
+    try:
+        import re
+        match = re.search(r'^STAGING_HOST_PORTS="([^"]*)"', lib.read_text(), re.M)
+        if match:
+            ports.update(int(p) for p in match.group(1).split() if p.isdigit())
+    except OSError:
+        pass
+    return frozenset(ports)
+
+
+def check_port(port: int) -> int:
+    """A sample port is a free high port that no MiniMoi service or tunnel uses."""
+    if not isinstance(port, int) or isinstance(port, bool) or not 1024 <= port <= 65535:
+        raise SampleServerError("the sample port must be between 1024 and 65535")
+    if port in refused_ports():
+        raise SampleServerError(f"port {port} belongs to a MiniMoi service or the tunnel; the sample never uses it")
+    return port
+
+
+def path_allowed(path: str) -> bool:
+    return path in ALLOWED_EXACT or path.startswith(ALLOWED_PREFIXES)
+
+
+def has_proxy_headers(headers) -> bool:
+    for name in headers.keys():
+        lower = name.lower()
+        if lower in PROXY_HEADERS or lower.startswith(PROXY_HEADER_PREFIXES):
+            return True
+    return False
 
 # A stand-in for the OpenAI WebRTC voice adapter: the same interface, no
 # microphone and no network. A start "connects" at once; the bootstrap answer
@@ -216,13 +274,19 @@ class GuildSample:
     """The sample portal and its state; ``app`` is the Flask app to serve."""
 
     workdir: Path
+    port: int = 0                 # the port it will be served on; the only port its Host may name
     app: object = None
     relay: ScriptedRelay = field(default_factory=ScriptedRelay)
     cos_state: dict = field(default_factory=lambda: {"voice": "fail"})
     features: dict = field(default_factory=dict)
 
     # ── building ──────────────────────────────────────────────────────────
+    @property
+    def allowed_hosts(self) -> set[str]:
+        return {f"{name}:{self.port}" for name in LOOPBACK_HOSTNAMES}
+
     def build(self) -> "GuildSample":
+        check_port(self.port)
         for extra in (REPO / "tests" / "guild" / "shop_floor", REPO):
             if str(extra) not in sys.path:
                 sys.path.insert(0, str(extra))
@@ -235,16 +299,20 @@ class GuildSample:
             raise RuntimeError("the sample server reads no secrets")
 
         env_keys = ("DATABASE_URL", "GUILD_RECORDS_DB", "SENTRY_DSN", "MC_RUNTIME_URL", "MC_RUNTIME_TOKEN",
-                    "MINIMOI_GUILD_NEXT", "MINIMOI_USAGE_DIR", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID")
+                    "PORTAL_SECRET_KEY", "CAPTURE_AUTH_SECRET", "MINIMOI_GUILD_NEXT", "MINIMOI_USAGE_DIR", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID")
         self._restore = {"env": {k: os.environ.get(k) for k in env_keys},
                          "get_secret": secrets_module.get_secret,
                          "in_container": qs._running_in_container,
                          "queue_path": portal_config.GUILD_QUEUE_PATH, "base_url": portal_config.BASE_URL,
-                         "cos_backend": getattr(portal_config, "COS_BACKEND", None)}
+                         "backends": {k: getattr(portal_config, k, None) for k in BACKEND_SETTINGS},
+                         "ops_status": getattr(portal_config, "GUILD_OPERATIONS_STATUS_URL", None)}
         secrets_module.get_secret = no_secrets
         qs._running_in_container = lambda: False
-        for var in env_keys[:5]:
+        for var in env_keys[:7]:
             os.environ.pop(var, None)
+        for key in BACKEND_SETTINGS:                                # nothing real is ever proxied
+            setattr(portal_config, key, CLOSED_BACKEND)
+        portal_config.GUILD_OPERATIONS_STATUS_URL = None
         os.environ.update({"MINIMOI_GUILD_NEXT": "1", "MINIMOI_USAGE_DIR": str(self.workdir / "usage"),
                            "MINIMOI_WORKSHOPS_DIR": str(self.workdir / "workshops"), "MINIMOI_WORKSHOP_ID": "mac"})
         (self.workdir / "usage").mkdir(parents=True, exist_ok=True)
@@ -257,21 +325,34 @@ class GuildSample:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         app = module.app
+        # Its own random session key: never PORTAL_SECRET_KEY, even when the
+        # shell exports it, so a sample cookie is worthless anywhere else.
+        app.secret_key = _secrets.token_hex(32)
         app.config["SESSION_COOKIE_SECURE"] = False                 # plain http on loopback
         owner = dict(OWNER)
+        allowed_hosts = self.allowed_hosts
 
         from flask import abort, jsonify, request, session
 
-        def sign_in_loopback():
+        def admitted() -> None:
+            """Loopback peer, loopback Host naming this port, no proxy headers, an allowed path."""
             if request.remote_addr not in LOOPBACK_ADDRS:
                 abort(403)
+            if has_proxy_headers(request.headers):
+                abort(403)                                          # the tunnel or any proxy: never
+            if request.host not in allowed_hosts:
+                abort(403)                                          # a rebound name or a foreign Host
+            if not path_allowed(request.path):
+                abort(404)
+
+        def sign_in_loopback():
+            admitted()
             if session.get("user") != owner:
                 session["user"] = dict(owner)
         app.before_request_funcs.setdefault(None, []).insert(0, sign_in_loopback)
 
         def control(action):
-            if request.remote_addr not in LOOPBACK_ADDRS:
-                abort(403)
+            admitted()
             try:
                 result = self.control(action, request.get_json(silent=True) or {})
             except SampleServerError as exc:
@@ -304,7 +385,9 @@ class GuildSample:
         secrets_module.get_secret = saved["get_secret"]
         qs._running_in_container = saved["in_container"]
         portal_config.GUILD_QUEUE_PATH, portal_config.BASE_URL = saved["queue_path"], saved["base_url"]
-        portal_config.COS_BACKEND = saved["cos_backend"]
+        for key, value in saved["backends"].items():
+            setattr(portal_config, key, value)
+        portal_config.GUILD_OPERATIONS_STATUS_URL = saved["ops_status"]
         self._restore = None
 
     # ── scene set-up ──────────────────────────────────────────────────────
@@ -440,13 +523,19 @@ def serve(port: int = 0, host: str = "127.0.0.1", workdir: Path | None = None):
     from werkzeug.serving import make_server
     import minimoi_portal.config as portal_config
 
+    if port:
+        check_port(port)
+    else:
+        port = _free_port()
+        while port in refused_ports():                              # a random free high port, never a service's
+            port = _free_port()
     own_dir = workdir is None
     workdir = Path(workdir or tempfile.mkdtemp(prefix="tour-sample-"))
-    sample = GuildSample(workdir).build()
+    sample = GuildSample(workdir, port=port).build()
     cos_srv = make_server("127.0.0.1", _free_port(), _stand_in_cos(sample.cos_state), threaded=True)
     threading.Thread(target=cos_srv.serve_forever, daemon=True).start()
-    portal_config.COS_BACKEND = f"http://127.0.0.1:{cos_srv.server_port}"
-    srv = make_server("127.0.0.1", port or _free_port(), sample.app, threaded=True)
+    portal_config.COS_BACKEND = f"http://127.0.0.1:{cos_srv.server_port}"   # the stand-in, on loopback
+    srv = make_server("127.0.0.1", port, sample.app, threaded=True)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
 
     def stop():
@@ -460,7 +549,8 @@ def serve(port: int = 0, host: str = "127.0.0.1", workdir: Path | None = None):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Serve a local sample portal for review captures (loopback only)")
-    parser.add_argument("--port", type=int, default=8791)
+    parser.add_argument("--port", type=int, default=0,
+                        help="a free high port (default: a random one); MiniMoi service and tunnel ports are refused")
     args = parser.parse_args(argv)
     sample, url, stop = serve(args.port)
     print(f"sample portal: {url} (sample data; loopback only; features: {sample.features})", flush=True)

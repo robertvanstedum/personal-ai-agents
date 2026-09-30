@@ -142,3 +142,29 @@ def test_production_builds_exactly_the_classifier_services():
     assert built == ALL_SERVICES
     listed = re.search(r'ALL_SERVICES="([^"]+)"', text).group(1).split()
     assert tuple(listed) == ALL_SERVICES
+
+
+def test_the_review_capture_tool_redeploys_nothing():
+    """scripts/tools/tour_capture/ runs on the Mac only (screenshots, review PDFs, the local sample portal)."""
+    assert classify([
+        "scripts/tools/tour_capture/local_sample.py",
+        "scripts/tools/tour_capture/runner.py",
+        "scripts/tools/tour_capture/README.md",
+        "scripts/tools/tour_capture/scenarios/guild_1_1_desktop.json",
+        "tests/test_tour_capture_local_sample.py",
+    ]) == ("documents", ())
+    # It does not mask a real service change in the same push.
+    release_class, services = classify(["scripts/tools/tour_capture/runner.py", "minimoi_portal/app.py"])
+    assert release_class != "documents" and "portal" in services
+
+
+def test_no_service_imports_the_review_capture_tool():
+    root = Path(__file__).resolve().parents[1]
+    service_trees = ("minimoi_portal", "domains", "core", "services", "utils", "docker")
+    offenders = []
+    for tree in service_trees:
+        for path in (root / tree).rglob("*"):
+            if path.is_file() and path.suffix in {".py", ".sh", ".yml", ".yaml", "", ".txt"} \
+                    and ("tour_capture" in path.read_text(errors="ignore") or "__tour_sample" in path.read_text(errors="ignore")):
+                offenders.append(str(path.relative_to(root)))
+    assert offenders == []

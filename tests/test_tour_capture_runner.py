@@ -1,3 +1,4 @@
+import pytest
 import builtins
 from pathlib import Path
 
@@ -335,6 +336,8 @@ def test_loopback_captures_refuse_every_other_host():
     assert not local_only_request("https://fonts.googleapis.com/css2?family=Inter")
     assert not local_only_request("https://dev.minimoi.ai/guild")
     assert not local_only_request("http://127.0.0.1.evil.example/x")
+    assert local_only_request("ws://127.0.0.1:8791/socket")
+    assert not local_only_request("wss://relay.example/socket")
 
 
 class _Route:
@@ -400,3 +403,17 @@ def test_a_refused_sample_step_fails_the_run(tmp_path):
     page = _SamplePage(_Response(False, 400, '{"error": "unknown sample action"}'))
     with pytest.raises(CaptureRunError, match="sample server refused"):
         _local_runner(tmp_path)._sample(page, "nope", {})
+
+
+@pytest.mark.parametrize("action", ["evaluate", "fill", "route", "unroute", "sample"])
+def test_local_only_steps_are_refused_at_runtime_in_an_owner_session(tmp_path, action):
+    """Even an unvalidated scenario dict cannot script, type into or fake a dev page."""
+    import pytest as _pytest
+    from scripts.tools.tour_capture.runner import CaptureRunError
+    scenario = {"id": "dev-review", "domain": "guild", "device_profile": "desktop",
+                "auth_profile": "owner_session", "start_path": "/guild", "steps": []}
+    runner = CaptureRunner(scenario, "https://dev.minimoi.ai", tmp_path)
+    with _pytest.raises(CaptureRunError, match="only in a local"):
+        runner._check_step_allowed(action)
+    runner._check_step_allowed("click")                     # ordinary steps are unaffected
+    _local_runner(tmp_path)._check_step_allowed(action)     # and a loopback capture may use them

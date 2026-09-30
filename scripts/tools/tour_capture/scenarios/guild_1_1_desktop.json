@@ -327,7 +327,7 @@
     {
       "screenshot": "blocker-failed",
       "title": "Blocker line: the last answer failed",
-      "description": "A failed answer (a stubbed \"model key refused\"): the note is kept, the thread says why, and \"Last answer failed · ...\" sits above the composer until the next answer. Sample data from a local test instance.",
+      "description": "A failed answer: the note is kept, the thread says why, and \"Last answer failed · ...\" sits above the composer until the next answer. Staged: the turn switch is set in the page and the answer (\"model key refused\") is stubbed. Sample data from a local test instance.",
       "alt": "Blocker line: the last answer failed"
     },
     {
