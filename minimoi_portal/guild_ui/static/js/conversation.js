@@ -7,8 +7,10 @@
 // page's memory only: it is never sent, never kept, never reaches MC.
 import { $, $$, clone, slot, setSlot, el, announce, localTime } from './dom.js';
 import { live, setOff, onChange } from './state.js';
-import { apiGet, apiPost, recordMode } from './api.js';
+import { apiGet, apiPost, apiStream, apiStop, recordMode } from './api.js';
 import { newKey } from './actions.js';
+import { answerFailed, answerArrived } from './floorlayout.js';
+import { applyConversation } from './conversations.js';
 
 let page, panel, thread, pill;
 const inPage = () => document.body.dataset.page === 'floor';
@@ -80,7 +82,13 @@ function noteLine(note) {
   setSlot(li, 'when', localTime(note.created_at));
   const ctx = note.context || {};
   setSlot(li, 'context', `${ctx.area ? ` · ${ctx.area}` : ''}${ctx.item_ref ? ` · #${ctx.item_ref}` : ''}`);
-  setSlot(li, 'text', note.text);
+  li.dataset.authorKind = note.author_kind || '';
+  const body = slot(li, 'text');
+  // The server renders Markdown and sanitises it with an allow-list
+  // (markdown_render.py: no raw HTML, scripts, handlers, javascript: URLs or
+  // images). Without it, the note's own text is shown as plain text.
+  if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;
+  else body.textContent = note.text;
   if (note.turn && note.turn.done_text) {      // a live MC reply: "Done in 1.2s · 96 output tokens"
     const foot = clone('tpl-note-foot');
     foot.querySelector('[data-turn-done]').textContent = note.turn.done_text;
@@ -107,7 +115,8 @@ function askForTokens() {
   tokenTimer = window.setTimeout(async () => {
     tokenTimer = null;
     tokenAsks += 1;
-    const r = await apiGet('/notes?limit=20');
+    const conv = page.conversation ? `&conversation=${encodeURIComponent(page.conversation.id)}` : '';
+    const r = await apiGet(`/notes?limit=20${conv}`);
     let pending = false;
     for (const n of ((r.ok && r.body && r.body.notes) || [])) {
       if (!n.turn) continue;
@@ -142,29 +151,212 @@ function waitingLine() {
   return li;
 }
 
-async function askMasterCraftsman(note) {
-  if (live.off || document.body.dataset.mcTurns !== 'true') return;
-  const waiting = waitingLine();
-  let r;
-  try {
-    r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode() });
-  } finally {
-    waiting.stopTicking();
-  }
-  const body = r.body || {};
+function applyHeader(body) {
   if (body.mc_header) for (const n of $$('[data-mc-header]')) n.textContent = body.mc_header;
   if (body.mc_state) document.body.dataset.mcState = body.mc_state;
+}
+
+// Shows a finished (non-streamed, or repeated) answer in place of `holder`.
+function showAnswer(holder, r) {
+  const body = r.body || {};
+  applyHeader(body);
   if (r.ok && body.status === 'answered' && body.reply_note) {
-    if ($(`[data-note="${body.reply_note.id}"]`)) waiting.remove();
-    else waiting.replaceWith(noteLine(body.reply_note));
+    if ($(`[data-note="${body.reply_note.id}"]`)) holder.remove();
+    else holder.replaceWith(noteLine(body.reply_note));
     announce(body.message || 'Master Craftsman answered');
+    answerArrived();
   } else {
     const text = body.message || 'Master Craftsman did not answer. Your note is kept.';
-    waiting.replaceWith(platformLine('Guild platform', text));
+    holder.replaceWith(platformLine('Guild platform', text));
     announce(text);
+    answerFailed(body.mc_header || 'Master Craftsman did not answer');
   }
   follow();
 }
+
+// One turn per kept note: streamed when the server says so (data-mc-stream,
+// computed from the switch and the backend), else the non-streaming path.
+// One request id per turn, so the server can refuse any second dispatch.
+function askMasterCraftsman(note) {
+  if (live.off || document.body.dataset.mcTurns !== 'true') return undefined;
+  const requestId = newKey();
+  return document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(note, requestId)
+    : turnMasterCraftsman(note, requestId);
+}
+
+async function turnMasterCraftsman(note, requestId, holder) {
+  const waiting = holder || waitingLine();
+  let r;
+  try {
+    r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode(), request_id: requestId,
+      conversation_id: page.conversation ? page.conversation.id : undefined });
+  } finally {
+    if (waiting.stopTicking) waiting.stopTicking();
+  }
+  showAnswer(waiting, r);
+}
+
+// ── Streaming (streaming spec v0.2 §3 and §6, v0.3 §2 and §5) ──
+// Deltas are text and only ever set with textContent. The only HTML inserted
+// is the server's sanitised rendering (render and done events). Closing the
+// tab is not Stop: the server finishes and keeps a real answer. Stop is the
+// explicit control, and says plainly what it cannot save.
+const STREAM_LINE_CAP = 2 * 1024 * 1024;
+
+function streamLine() {
+  const li = clone('tpl-mc-stream');
+  setSlot(li, 'label', document.body.dataset.mcState === 'stub' ? 'Master Craftsman stub · scripted' : 'Master Craftsman');
+  const elapsed = slot(li, 'elapsed');
+  const started = Date.now();
+  const tick = () => { elapsed.textContent = `${Math.floor((Date.now() - started) / 1000)}s`; };
+  li.ticker = window.setInterval(tick, 1000);
+  li.stopTicking = () => window.clearInterval(li.ticker);
+  thread.append(li);
+  follow();
+  return li;
+}
+
+function endLine(li, state) {
+  li.stopTicking();
+  li.dataset.ended = 'true';
+  li.removeAttribute('aria-busy');
+  setSlot(li, 'state', state);
+  slot(li, 'elapsed').textContent = '';
+  const controls = slot(li, 'controls');
+  if (controls) controls.remove();
+}
+
+async function streamMasterCraftsman(note, requestId) {
+  const li = streamLine();
+  const controller = new AbortController();
+  const onHide = () => controller.abort();          // harmless: the server finishes and keeps the answer
+  window.addEventListener('pagehide', onHide);
+  const body = { note_request_id: note.request_id, record_mode: recordMode(), request_id: requestId,
+    conversation_id: page.conversation ? page.conversation.id : undefined };
+  let res;
+  try {
+    res = await apiStream('/mc/turns/stream', body, controller.signal);
+  } catch (e) {
+    window.removeEventListener('pagehide', onHide);
+    endLine(li, 'unknown');
+    const text = 'Unknown · it may have run; nothing was retried. Your note is kept.';
+    thread.append(platformLine('Guild platform', text));
+    announce(text);
+    answerFailed('Master Craftsman: unknown');
+    follow();
+    return;
+  }
+  if (res.refused) {
+    window.removeEventListener('pagehide', onHide);
+    li.remove();
+    return;
+  }
+  const type = res.headers.get('Content-Type') || '';
+  if (!type.includes('application/x-ndjson')) {
+    window.removeEventListener('pagehide', onHide);
+    let data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+    // Only an explicit, server-declared pre-dispatch refusal falls back to the
+    // non-streaming path; nothing was sent, so this is not a second dispatch.
+    if (res.status === 404 || res.status === 405 || ['stream_off', 'stream_unsupported'].includes(data.error)) {
+      li.stopTicking();
+      li.remove();
+      await turnMasterCraftsman(note, requestId);
+      return;
+    }
+    li.stopTicking();
+    showAnswer(li, { ok: res.ok, status: res.status, body: data });
+    return;
+  }
+  const rendered = slot(li, 'rendered');
+  const tail = slot(li, 'tail');
+  const stop = li.querySelector('[data-mc-stop]');
+  const stopNote = slot(li, 'stopnote');
+  const deltas = [];
+  let upto = 0;
+  let acked = false;
+  let ended = false;
+  const showTail = () => { tail.textContent = deltas.slice(upto).join(''); };
+  stop.addEventListener('click', async () => {
+    if (!li.turnId) return;
+    stop.disabled = true;
+    setSlot(li, 'state', 'Stopping…');
+    await apiStop(`/mc/turns/${encodeURIComponent(li.turnId)}/stop`);
+  });
+  const handle = (ev) => {
+    if (ev.t === 'ack' && typeof ev.turn_id === 'string') {
+      acked = true;
+      li.turnId = ev.turn_id;
+      stop.hidden = false;
+      stopNote.hidden = false;
+      announce('Master Craftsman is answering');
+    } else if (ev.t === 'delta' && typeof ev.text === 'string') {
+      if (!deltas.length) setSlot(li, 'state', 'Writing…');
+      deltas.push(ev.text);
+      showTail();
+      follow();
+    } else if (ev.t === 'render' && typeof ev.html === 'string' && Number.isInteger(ev.deltas)) {
+      rendered.innerHTML = ev.html;           // sanitised on the server (markdown_render.py)
+      upto = Math.min(ev.deltas, deltas.length);
+      showTail();
+    } else if (ev.t === 'done') {
+      ended = true;
+      li.stopTicking();
+      applyHeader(ev);
+      if (ev.reply_note && !$(`[data-note="${ev.reply_note.id}"]`)) li.replaceWith(noteLine(ev.reply_note));
+      else li.remove();
+      if (live.off) addPlatform('Guild platform', 'This answer was asked for on the record, so it is kept.');
+      announce(ev.message || 'Master Craftsman answered');
+      answerArrived();
+      follow();
+    } else if (ev.t === 'error') {
+      ended = true;
+      applyHeader(ev);
+      endLine(li, ev.failure_class === 'stopped' ? 'Stopped' : '(interrupted)');
+      if (!deltas.length) li.remove();          // partial text, if any, stays shown once and is never kept
+      const text = ev.message || 'Master Craftsman did not answer. Your note is kept.';
+      thread.append(platformLine('Guild platform', text));
+      announce(text);
+      answerFailed(ev.mc_header || 'Master Craftsman did not answer');
+      follow();
+    }
+  };
+  try {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const raw = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        let ev = null;
+        try { ev = JSON.parse(raw); } catch (e) { ev = null; }
+        if (ev && typeof ev === 'object') handle(ev);
+      }
+      if (buf.length > STREAM_LINE_CAP) { controller.abort(); break; }
+    }
+  } catch (e) {
+    // the connection went (or the page is leaving); said below
+  } finally {
+    window.removeEventListener('pagehide', onHide);
+  }
+  if (!ended) {
+    endLine(li, acked ? '(interrupted)' : 'unknown');
+    if (!deltas.length) li.remove();
+    const text = acked
+      ? 'The connection ended before the answer finished · if Master Craftsman finishes, its answer is kept: reload to see it.'
+      : 'Unknown · it may have run; nothing was retried. Your note is kept.';
+    thread.append(platformLine('Guild platform', text));
+    announce(text);
+    answerFailed('Master Craftsman: connection ended');
+    follow();
+  }
+}
+
 
 function appendOffRecord(text) {
   const li = clone('tpl-off-record');
@@ -187,13 +379,14 @@ async function sendNote(input, send) {
   if (!noteKey) noteKey = newKey();
   send.disabled = true;
   const r = await apiPost('/notes', {
-    request_id: noteKey, text, record_mode: recordMode(),
+    request_id: noteKey, text, record_mode: recordMode(), conversation_id: page.conversation ? page.conversation.id : undefined,
     context: { area: document.body.dataset.area || null, item_ref: page.item_id || null, page: page.page },
   });
   send.disabled = false;
   const body = r.body || {};
   if (r.ok && body.result === 'kept') {
     if (!$(`[data-note="${body.note.id}"]`)) appendNote(body.note);
+    applyConversation(body.conversation);
     input.value = '';
     noteKey = null;
     for (const n of $$('[data-notes-unavailable]')) n.remove();
@@ -260,6 +453,15 @@ export function initConversation(p) {
       addPlatform('Guild platform', 'Back on the record · nothing from the off-the-record stretch was kept');
     }
   });
+  // The three explanatory lines under the composer fold behind ⓘ.
+  const info = $('[data-mc-info]');
+  const lines = $('[data-mc-off-lines]');
+  if (info && lines) {
+    info.addEventListener('click', () => {
+      lines.hidden = !lines.hidden;
+      info.setAttribute('aria-expanded', String(!lines.hidden));
+    });
+  }
   const typeBtn = $('[data-mc-type]');
   typeBtn.addEventListener('click', () => {
     document.body.dataset.typing = 'true';

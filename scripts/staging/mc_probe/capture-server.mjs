@@ -63,6 +63,35 @@ function completion(model, step) {
   };
 }
 
+// A slow or failing stream (streaming spec P1, P2, P4): step.chunks are sent as
+// deltas, step.chunk_delay_ms apart; step.fail_after sends an error event after
+// that many chunks and ends. The log entry says whether the stream finished or
+// its client (OpenClaw) closed it early (entry.outcome: finished | aborted).
+async function slowStream(res, model, step, entry) {
+  const full = completion(model, step);
+  const base = { id: full.id, object: "chat.completion.chunk", created: full.created, model };
+  res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+  let closed = false;
+  res.on("close", () => { if (!res.writableFinished) { closed = true; entry.outcome = "aborted"; entry.aborted_at = new Date().toISOString(); } });
+  const send = (obj) => { if (!closed) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < step.chunks.length; i += 1) {
+    if (closed) return;
+    if (step.fail_after !== undefined && i === step.fail_after) {
+      send({ error: { message: step.message || "upstream failed mid-stream", type: step.type || "internal_error" } });
+      entry.outcome = "failed";
+      return res.end();
+    }
+    send({ ...base, choices: [{ index: 0, delta: i === 0 ? { role: "assistant", content: step.chunks[i] } : { content: step.chunks[i] }, finish_reason: null }] });
+    await wait(step.chunk_delay_ms || 0);
+  }
+  if (closed) return;
+  send({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] });
+  send({ ...base, choices: [], usage: { prompt_tokens: 50, completion_tokens: step.chunks.length, total_tokens: 50 + step.chunks.length } });
+  entry.outcome = "finished";
+  res.end("data: [DONE]\n\n");
+}
+
 function streamCompletion(res, model, step) {
   const full = completion(model, step);
   const msg = full.choices[0].message;
@@ -121,6 +150,7 @@ const api = http.createServer(async (req, res) => {
     res.writeHead(200, { "content-type": "application/json" });
     return res.end(JSON.stringify({ id: "cap-other", output: [], usage: { input_tokens: 1, output_tokens: 1 } }));
   }
+  if (body?.stream && Array.isArray(step.chunks)) return slowStream(res, model, step, entry);
   if (body?.stream) return streamCompletion(res, model, step);
   res.writeHead(200, { "content-type": "application/json" });
   res.end(JSON.stringify(completion(model, step)));

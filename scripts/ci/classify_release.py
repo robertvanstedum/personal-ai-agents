@@ -39,6 +39,9 @@ def _is_release_only(path: str) -> bool:
         path in exact
         or path.startswith("docs/")
         or path.startswith("scripts/docs/")
+        # The local Workshop's tools run on the workshop host (the Mac) from
+        # the repository; no service image contains or runs them.
+        or path.startswith("scripts/workshop/")
         or path.startswith("tests/")
         # Prototype Lab and Planning Studio project homes are documentation:
         # briefs, specifications, decision records, and preserved evidence. A
@@ -106,8 +109,10 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             # The usage record (usage-record U1/U2): the CoS images copy it
             # (Dockerfile.cos*). The production gateway image does not; the
             # staging gateway mounts it. Production writes nothing until its
-            # environment sets MINIMOI_USAGE_DIR.
-            services.update(("cos-bot", "cos-scheduler"))
+            # environment sets MINIMOI_USAGE_DIR. The portal imports it too
+            # (streaming S1: MC's runtime-stream records; the portal image
+            # copies the repository), so a change here redeploys the portal.
+            services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith("services/model_gateway/"):
             services.update(("model-gateway", "cos-bot", "cos-scheduler"))
         elif path.startswith("docker/cos-agent-a/") or path == "docker/Dockerfile.cos-agent-a":

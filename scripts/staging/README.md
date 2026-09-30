@@ -859,12 +859,189 @@ and the key database off).
 `cos.sh key` shows a **refused** call on CoS's key (`key_ref` `cos-agent-…`):
 that is a route CoS uses that its key's scope misses.
 
+## The local Workshop (slice 4a: observe and record, read only; staging only)
+
+The Workshop screen (`/guild-next/guild/workshop?item=<id>`, or **Open in
+Workshop** on a queue item) shows what the Mac is doing: the item's approved
+scope, the next actor, the agent clients running, the last event, the host's
+admission verdict for a new run, queued work, this month's gateway spend,
+Needs you, and recovery steps. It is read only and model free: the page and
+its one-minute refresh read files and the queue, never a model, and nothing
+launches (the launcher is 4b). On a phone it leads with Now, Needs you and
+Budget, folds the rest, then the chat.
+
+**Where the data comes from.** `scripts/workshop/workshop.py` runs on the Mac
+from the repository (no container, no key):
+
+```bash
+venv/bin/python3 scripts/workshop/workshop.py observe   # one host reading: memory, swap, disk, agent clients
+venv/bin/python3 scripts/workshop/workshop.py event --actor claude-code --item pr:265 \
+    --kind needs_you --stage review --text "Review slice 2" --next-actor robert
+venv/bin/python3 scripts/workshop/workshop.py state     # the derived state
+venv/bin/python3 scripts/workshop/workshop.py sync      # to ~/minimoi-staging/data/workshops/
+```
+
+The record is `~/minimoi-workshops/<id>/events.jsonl` (append only) plus
+`state.json` (derived, written atomically under a lock). `sync` appends the
+new whole lines and replaces `state.json`; only those two files go. The portal
+mounts `data/workshops` read only (`MINIMOI_WORKSHOPS_DIR`, id
+`MINIMOI_WORKSHOP_ID=mac`).
+
+**The admission verdict.** `ok` (room for one run), `tight` (another agent
+session is running, or a resource is near its limit), `blocked` (memory free
+under 10%, swap over 6 GB, disk free under 10 GB, or three or more agent
+sessions), `unknown` (a probe failed). Each verdict names its limit, and the
+screen shows all four. It counts agent **sessions on this Mac, outside
+Docker**: terminal or desktop Claude Code, and the Codex CLI (native or npm),
+whoever started them. A wrapper and its child, or a parent and a child of the
+same client, count as one session. The ChatGPT app's bundled Codex and an
+OpenClaw gateway are listed as background apps and are not counted. The
+staging containers' agents run inside the Colima VM, where the Mac's `ps`
+cannot see them. `ps` is read with the executable path last; arguments are
+read only for `node` processes, to find the script, and are never kept. A missing, unreadable or stale record (the host
+reading is over 15 minutes old) shows as unknown, never as "nothing running".
+`observe` writes a health event when the verdict, the reasons or the clients
+change, and every 9 minutes otherwise, so a quiet host stays fresh.
+
+**Not installed yet.** Nothing runs `observe` and `sync` on a schedule: until a
+launchd job is added (with Robert's go-ahead), run them by hand before looking
+at the screen, or the page shows unknown after 15 minutes.
+
+## Master Craftsman streaming (S1; staging only)
+
+**What it is.** MC's replies on the Shop floor stream: "Working… Ns", then the
+text as it is written, then "Done in Ns · N output tokens". The spec is
+`SPEC_STREAMING_CHAT_COS_MC_v0.2` with the v0.3/v0.3.1 amendment (in
+planning-studio). CoS does not stream yet (that is S2).
+
+**Switches.** Streaming happens only when both are true, and the server decides:
+- `MINIMOI_GUILD_MC_STREAM` is on. The code default is off; `docker-compose.staging.yml`
+  sets it on. `/guild-next` never mounts in production.
+- The MC backend supports streaming (openclaw and the stub do; grok does not).
+
+With either one false, the page uses the non-streaming `/mc/turns`, unchanged.
+
+**Path.** browser → portal `POST /guild-next/api/v1/mc/turns/stream` → mc-relay
+(`stream: true`) → MC → gateway.
+- The relay emits its own NDJSON, and nothing of MC's JSON passes.
+- The portal sends `ack` only after its guards, and dispatches only after
+  `ack`.
+- One dispatch per turn: a `request_id` already sent is refused on both
+  endpoints for 10 minutes.
+- A browser that leaves does not stop the run. The relay and the portal read
+  to the end, and a real answer is kept (a reload shows it).
+- Only the limits and the owner's **Stop** (`POST …/mc/turns/<turn_id>/stop`,
+  then the relay's `POST /v1/turns/stop`) end a run early.
+- The UI says what Stop cannot save: what was already generated may still be
+  billed.
+
+**Limits.**
+
+| Hop | Wall clock | Idle | Text | Line |
+|---|---|---|---|---|
+| Relay | 120 s | 30 s | 256 KB | 64 KB |
+| Portal | 125 s | 30 s | 256 KB | 64 KB |
+
+The portal also sends `render` (server-rendered, sanitised Markdown) at most
+every 500 ms, only on change, and none past 32 KB.
+
+**Usage.**
+- MC's own run records are `runtime-stream` lines (`actor: mc`,
+  `route: openclaw/mc-agent`, keyed by the turn id, `cost_usd` null). The
+  portal writes them **only** into `data/usage/portal/` (the same v1 format),
+  mounted read-write. The shared `data/usage/` stays read-only for the portal.
+- Why: the portal runs as root and usage files are created 0600. Had the
+  portal created the month's shared file first, the non-root gateway could no
+  longer append to it. `tests/usage/docker_checks_usage_owners.py` (opt-in,
+  Docker) shows both the hazard and the fix, with two uids on a Docker volume.
+- `minimoi_portal/guild_ui/mc/stream_usage.py` is the portal's only writer; a
+  test holds that.
+- The gateway's own record stays the source for cost. An interrupted, stopped
+  or relay-refused-after-dispatch run leaves a `status: error` line and an
+  `mc_turns.jsonl` line.
+
+**Two limits found on staging** (release `5fdda07`, 2026-09-29):
+- **Zero usage from the runtime.**
+  - OpenClaw 2026.9.6's stream usage chunk carries zeros, as its compat API
+    does (#252/#253): the stream said 0 output tokens while the gateway
+    recorded 190.
+  - The portal reads a runtime's 0 as unknown. Such a `runtime-stream` record
+    has null tokens, never 0, and the footer then joins the gateway's records
+    (U3), as for a non-streamed turn.
+- **Aborted streams are not logged by the gateway.**
+  - What happens: Stop, or the deadline, idle or size limit, makes the relay
+    cancel MC's call, and OpenClaw then cancels its own call to the gateway.
+  - For a client-cancelled stream, LiteLLM 1.93.1 (the pinned gateway) runs
+    neither its success nor its failure callbacks. `proxy_server.async_data_generator`
+    catches `CancelledError`/`GeneratorExit`, releases the parallel-request
+    slot and tags the request 499. Its deferred stream logging fires only for
+    a completed stream.
+  - So the usage recorder writes no record. Very likely the key's spend
+    tracking (also a success callback) does not count it either, which would
+    mean MC's budget does not see aborted streams.
+  - The provider may still bill what was generated.
+  - What the portal does: its `runtime-stream` record for such a run says so,
+    with `status: error`, null tokens and `cost_source: "unrecorded-abort"`.
+    Budget views can then show "at least N stopped turns with unknown cost".
+  - Not fixable in our recorder: LiteLLM's iterator hook sees the abort only
+    when the generator is garbage-collected, by LiteLLM's own note.
+
+**MC's retry cap.** `docker/mc-agent/agent-settings.json`
+(`{"retry":{"provider":{"maxRetries":0}}}`) is applied to MC's agentDir on
+every start (`start-mc.sh`), so one dispatch makes one model call. Without
+it, OpenClaw's own transient-retry loop repeated a failed upstream call five
+times (P1). On the pinned 2026.9.6, with the cap, `stage_b.py` P1 shows
+exactly one model call for a failed turn.
+
+**Rollout.**
+- The portal and the relay both changed. The relay is `docker/mc-agent/relay.mjs`,
+  in the MC image, so a staging rollout rebuilds the portal and MC's image.
+- **No-spend probe first:** `scripts/staging/mc_probe/stage_b.py` (throwaway
+  containers; it mounts this branch's relay). It checks P4 (text, finish,
+  usage, timings), P1 (a mid-stream failure), P2 (Stop, and whether OpenClaw
+  cancels its own upstream call) and a caller that leaves.
+- **First run** (2026-09-29, MC image `fa1e9ec`, OpenClaw 2026.9.6): 22/22.
+  - P4: first text at 1.8 s, finish at 3.4 s, with usage passed through.
+  - P1 without the retry cap: OpenClaw retried its upstream call five times,
+    then went quiet, and the relay's 30 s idle limit ended it. With the cap
+    (the second run, same image): exactly one model call, and the failure
+    reaches the Shop floor at once.
+  - P2: Stop made OpenClaw close its own call to the model endpoint.
+  - A caller that left did not stop the run.
+- The gateway-to-provider hop on abort is not probed yet (stage C).
+
+**Two real turns, without a browser** (paid; they run after rollout, with
+Robert's budget). These go through the same server path as the Shop floor,
+inside the portal container:
+
+```bash
+scripts/staging/mc_cost_probe.sh --stream --yes-spend                          # turn A, then turn B
+scripts/staging/mc_cost_probe.sh --stream --yes-spend --stop-after-first-text  # turn B alone
+```
+
+- **Turn A** (streaming and usage) prints:
+  - the time to the first delta and to the finish;
+  - the event counts;
+  - the `mc_turns.jsonl` line;
+  - the `runtime-stream` record;
+  - the gateway's records in the turn's window, with output tokens compared.
+- **Turn B** stops after the first text, and prints:
+  - the stopped status;
+  - the `runtime-stream` error line;
+  - whether the gateway recorded the aborted call, and with what tokens.
+- Spend is never above $1, and a turn whose cost cannot be read stops the
+  probe.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes
   `~/minimoi-staging` while staging runs: the queue store's `flock` does not
   cross the Colima VM boundary. `verify.sh` lists native processes with files
-  open there.
+  open there. **One exception:** `scripts/workshop/workshop.py sync` writes
+  `data/workshops/` one way. The portal mounts that folder read only, so the
+  sync is its only writer: `state.json` is replaced atomically, and a torn
+  `events.jsonl` line is skipped. The sync runs for a moment and holds no files
+  open, so `verify.sh` does not list it unless it runs during the check.
 - Never `down -v`, never delete the external volumes or the
   `personal-ai-agents_*` volumes (the rollback copy).
 - The staging bots use the **test** bot tokens; start them only after their

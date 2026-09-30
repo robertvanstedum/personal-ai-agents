@@ -179,7 +179,7 @@ cp "$RELEASE_DIR/services/model_gateway/litellm.staging.yaml" "$STAGING_ROOT/con
 chmod 644 "$STAGING_ROOT/config/litellm.staging.yaml"
 # The gateway's usage recorder (usage-record U1): code mounted read-only from
 # config/usage/, records written to data/usage/ (one file per month, 600).
-mkdir -p "$STAGING_ROOT/config/usage" "$STAGING_ROOT/data/usage"
+mkdir -p "$STAGING_ROOT/config/usage" "$STAGING_ROOT/data/usage" "$STAGING_ROOT/data/usage/portal" "$STAGING_ROOT/data/workshops"
 chmod 755 "$STAGING_ROOT/config/usage"
 for f in usage_record.py litellm_recorder.py; do
   cp "$RELEASE_DIR/services/usage/$f" "$STAGING_ROOT/config/usage/$f"

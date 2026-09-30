@@ -31,10 +31,15 @@ VERSION = 1
 MAX_LINE_BYTES = 4000
 QUEUE_MAX = 256
 
-EMITTER_RE = re.compile(r"^(gateway|openclaw-stream|helper:[a-z0-9_.-]{1,40})$")
+# "runtime-stream" is a streamed run's own usage (streaming spec v0.3 §4; it replaces the
+# reserved "openclaw-stream" name: the runtime appears only in `route`).
+EMITTER_RE = re.compile(r"^(gateway|runtime-stream|helper:[a-z0-9_.-]{1,40})$")
 STATUSES = ("ok", "error", "refused")
 KINDS = ("model", "search", "speech")
-COST_SOURCES = ("provider", "price_table", "none")
+# "unrecorded-abort": a streamed run MiniMoi aborted (Stop or a limit). The
+# gateway (LiteLLM 1.93.1) logs nothing for a client-cancelled stream, so the
+# run's cost is unknown, and possibly billed (streaming S1, staging 2026-09-29).
+COST_SOURCES = ("provider", "price_table", "none", "unrecorded-abort")
 
 FIELDS = {
     "v", "record_id", "occurred_at", "env", "emitter", "actor", "kind", "route", "provider", "model",
@@ -86,7 +91,7 @@ def validate(payload: dict) -> dict:
     for name in OPTIONAL_TEXT:
         out[name] = _check_text(name, payload.get(name), secrets, False)
     if not EMITTER_RE.match(out["emitter"]):
-        raise ValueError("usage record emitter must be gateway, openclaw-stream or helper:<name>")
+        raise ValueError("usage record emitter must be gateway, runtime-stream or helper:<name>")
     if out["status"] not in STATUSES:
         raise ValueError(f"usage record status must be one of {STATUSES}")
     if out["kind"] not in KINDS:

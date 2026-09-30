@@ -757,7 +757,7 @@ def _staging_world(tmp_path, *, launchctl=FAKE_LAUNCHCTL_CLEAN, bots_on=False, t
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text("x")
     for rel in ("data/curator", "data/curator_archive", "data/interests", "data/research-intelligence",
-                "data/german", "data/portuguese", "data/guild", "data/usage", "docs/design", "docs/specs", "agent_logs",
+                "data/german", "data/portuguese", "data/guild", "data/usage", "data/usage/portal", "data/workshops", "docs/design", "docs/specs", "agent_logs",
                 "state"):
         (root / rel).mkdir(parents=True, exist_ok=True)
     names = ["XAI_API_KEY='x'"]

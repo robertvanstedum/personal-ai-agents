@@ -228,7 +228,7 @@ def test_production_never_loads_the_gateway_recorder_and_only_cos_images_copy_th
 def test_classifier_maps_the_usage_library_to_the_cos_images():
     sys.path.insert(0, str(REPO / "scripts" / "ci"))
     from classify_release import classify
-    assert classify(["services/usage/usage_record.py"]) == ("domain", ("cos-bot", "cos-scheduler"))
+    assert classify(["services/usage/usage_record.py"]) == ("domain", ("portal", "cos-bot", "cos-scheduler"))
 
 
 class _Usage:

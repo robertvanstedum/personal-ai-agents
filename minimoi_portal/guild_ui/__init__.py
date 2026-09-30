@@ -34,7 +34,7 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' 
        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'self'")
 
-ALL_ROUTES = ("floor", "bench", "queue", "item", "postits", "operate", "assets", "api")
+ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "assets", "api")
 B1_ROUTES = ALL_ROUTES   # the landing page, improve, experiment and any reset are not in this package
 
 
@@ -73,7 +73,11 @@ def _headers(response):
     """Scoped to this blueprint's responses; host-app routes are untouched."""
     response.headers["Content-Security-Policy"] = CSP
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Cache-Control"] = "no-store"
+    # A stream is never stored either, and must not be transformed (compressed
+    # or buffered) on its way (streaming spec v0.2 §3; no-store is stricter
+    # than the spec's no-cache).
+    streaming = (response.mimetype or "") == "application/x-ndjson"
+    response.headers["Cache-Control"] = "no-store, no-transform" if streaming else "no-store"
     return response
 
 
@@ -105,6 +109,8 @@ def _make_blueprint(name: str, routes) -> Blueprint:
     page_rules = {
         "floor": [("/guild/build", "floor", pages.floor)],
         "bench": [("/guild/build/bench", "bench", pages.bench)],
+        "labs": [("/guild/labs", "labs", pages.labs)],
+        "workshop": [("/guild/workshop", "workshop", pages.workshop)],
         "queue": [("/guild/build/queue", "queue", pages.queue)],
         "item": [("/guild/build/items/<int:item_id>", "item", pages.item)],
         "postits": [("/guild/build/postits", "postits", pages.postits)],
