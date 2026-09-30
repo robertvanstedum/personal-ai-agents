@@ -138,10 +138,70 @@ caption with title, description, device profile, viewport, and capture time.
 
 **Browser.** Add `--browser-channel chrome` (or set `MINIMOI_CAPTURE_BROWSER_CHANNEL=chrome`) to use the installed Google Chrome instead of Playwright's downloaded Chromium. This avoids a browser download when a venv's Playwright expects a different build than the one cached.
 
+## Scripted local review packs (sample data)
+
+For a review pack of pages that normally need Robert's login, serve this
+checkout's portal locally with sample data and capture it with
+`auth_profile: "none"`. Nobody signs in to dev or production, no secret is
+read, and no model is called.
+
+```bash
+# 1. The local sample portal (loopback only; Ctrl-C stops it)
+python -m scripts.tools.tour_capture.local_sample --port 8791
+
+# 2. Each scenario (the Guild 1.1 pack: scenarios/guild_1_1_*.json)
+for s in desktop narrow tablet phone; do
+  python -m scripts.tools.tour_capture.cli guild-1-1-$s \
+    --base-url http://127.0.0.1:8791 --headless --browser-channel chrome
+done
+
+# 3. One PDF: cover, then one captioned page per scene
+python -m scripts.tools.tour_capture.review_pdf RUN_DIR [RUN_DIR ...] \
+  -o OUT.pdf --title "..."
+```
+
+The Guild pack sits with this tool rather than in `minimoi_portal/guild_ui/`,
+whose files must never mention sample data (`test_no_sample_in_real_mode`).
+
+`local_sample` reuses the Shop floor browser harness's set-up
+(`tests/guild/shop_floor`: the sample queue, the floor store on SQLite, the
+owner): every loopback request is signed in as the sample owner, anything
+else gets 403, and the server binds 127.0.0.1 only. Master Craftsman talks to
+a scripted relay in the same process; CoS runs behind its real `/app/cos`
+proxy against a stand-in cos-scheduler that echoes the message and a stand-in
+voice adapter (no microphone, no provider). Captions must say the data is
+sample data.
+
+Scenario steps for local captures (refused with `owner_session`, except
+`press`):
+
+| Step | What it does |
+|---|---|
+| `{"sample": "reset"}` | fresh sample: queue, empty floor, no conversations, MC off, seeded Workshop |
+| `{"sample": "queue", "args": {"variant": "quiet"}}` | nothing blocked (`default` restores) |
+| `{"sample": "mc", "args": {"mode": "stream", "script": [0.3, "## Plan\n", "WAIT", "- two"], "tokens": 64}}` | MC on a scripted relay: `off`, `turns`, `stream` or `down`; `"fail": 502` makes every turn fail; text is a delta, a number a pause, `"WAIT"` holds until `mc_release` or Stop |
+| `{"sample": "mc_release"}` | release a held stream |
+| `{"sample": "postit", "args": {"text": "...", "author": "mc"}}`, `{"sample": "continue", "args": {"item": 12, "label": "#12 Floor API"}}` | floor content |
+| `{"sample": "voice", "args": {"boot": "ok"}}` | the CoS voice bootstrap succeeds (`fail` by default) |
+| `{"fill": "#mc-input", "value": "..."}` | type into a field |
+| `{"press": "Escape"}` (optional `"selector"`) | press one key |
+| `{"evaluate": "document.dispatchEvent(new Event('visibilitychange'))"}` | run a script in the page (a poll now, browser storage) |
+| `{"route": {"url": "**/api/v1/floor", "status": 503, "body": {...}}}`, `{"route": {"url": "...", "abort": true}}`, `{"unroute": "**/api/v1/floor"}` | stub or drop one request pattern |
+
+Also: `{"click": "...", "navigates": true}` waits for the page the click
+loads; `wait_for` takes `"text"` (an element matching the selector must show
+it); `"mobile_emulation": true` on a scenario emulates a touch phone. A
+loopback capture refuses every request that is not to localhost or 127.0.0.1
+(web fonts, analytics), so system fonts may show.
+
 ## Safety
 
 - The runner accepts only localhost, `127.0.0.1`, or `dev.minimoi.ai`.
-- `auth_profile: none` is refused for any host other than localhost or `127.0.0.1`.
+- `auth_profile: none` is refused for any host other than localhost or `127.0.0.1`,
+  and such a capture's browser can reach only localhost or `127.0.0.1`.
+- `fill`, `evaluate`, `route`, `unroute` and `sample` steps are refused for
+  `owner_session` scenarios, so a scripted run never types into, scripts or
+  fakes a real dev page.
 - Authentication state and output remain under ignored `_working/`.
 - No production capture or write path exists.
 - A failed run retains a diagnostic screenshot and structured report.

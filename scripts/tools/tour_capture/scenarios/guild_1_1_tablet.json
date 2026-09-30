@@ -1,0 +1,134 @@
+{
+  "id": "guild-1-1-tablet",
+  "domain": "guild",
+  "device_profile": "tablet",
+  "auth_profile": "none",
+  "start_path": "/guild",
+  "steps": [
+    {
+      "sample": "reset"
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "A note on the Shop floor thread"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "A note on the Shop floor thread"
+      }
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "click": "[data-floor-history] [data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Plan the Rooms review"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Plan the Rooms review"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Plan the Rooms review"
+      }
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "click": "[data-floor-history] [data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Hetzner staging checklist"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Hetzner staging checklist"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Hetzner staging checklist"
+      }
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "click": "[data-conv]:has-text(\"Plan the Rooms review\") [data-conv-menu]"
+    },
+    {
+      "click": "[data-conv]:has-text(\"Plan the Rooms review\") [data-conv-act=\"pin\"]",
+      "navigates": true
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "click": "[data-history-toggle]"
+    },
+    {
+      "wait_for": "[data-floor-history] [data-conv-new]"
+    },
+    {
+      "screenshot": "tablet-drawer",
+      "title": "Tablet: the history drawer open",
+      "description": "At 860 px the history becomes a drawer opened by the menu button, with a close button and a scrim; the chat stays underneath. Sample data from a local test instance.",
+      "alt": "Tablet: the history drawer open"
+    }
+  ],
+  "viewport": {
+    "width": 860,
+    "height": 800,
+    "device_scale_factor": 2
+  }
+}

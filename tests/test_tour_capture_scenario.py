@@ -284,3 +284,88 @@ def test_invalid_viewport_is_rejected(viewport):
 def test_unknown_profile_without_viewport_is_still_rejected():
     with pytest.raises(ScenarioValidationError, match="unknown device profile"):
         validate_scenario(_local_scenario(device_profile="laptop"))
+
+
+def _local(steps, **extra):
+    return {"id": "local-review", "domain": "guild", "device_profile": "desktop", "auth_profile": "none",
+            "start_path": "/guild", "steps": steps + [
+                {"screenshot": "one", "title": "One", "description": "One.", "alt": "One"}], **extra}
+
+
+LOCAL_STEPS = [
+    {"sample": "reset"},
+    {"sample": "mc", "args": {"mode": "stream", "script": ["Hi", "WAIT"]}},
+    {"fill": "#mc-input", "value": "Where do things stand?"},
+    {"press": "Enter", "selector": "#mc-input"},
+    {"press": "Escape"},
+    {"evaluate": "document.dispatchEvent(new Event('visibilitychange'))"},
+    {"route": {"url": "**/api/v1/floor", "status": 503, "body": {"error": "unavailable"}}},
+    {"route": {"url": "**/api/v1/workshop*", "abort": True}},
+    {"unroute": "**/api/v1/floor"},
+    {"wait_for": {"selector": "[data-mc-thread]", "text": "Hi"}},
+]
+
+
+def test_local_review_actions_are_valid_with_auth_none():
+    scenario = validate_scenario(_local(copy.deepcopy(LOCAL_STEPS), mobile_emulation=True))
+    assert scenario["_summary"] == {"screenshots": 1, "operator_pauses": 0}
+
+
+@pytest.mark.parametrize("step", [s for s in LOCAL_STEPS if next(iter(s)) in
+                                  ("sample", "fill", "evaluate", "route", "unroute")],
+                         ids=lambda s: next(iter(s)))
+def test_local_only_actions_are_refused_with_the_owner_session(step):
+    scenario = _local([copy.deepcopy(step)])
+    scenario["auth_profile"] = "owner_session"
+    with pytest.raises(ScenarioValidationError, match="only with auth_profile 'none'"):
+        validate_scenario(scenario)
+
+
+def test_press_is_allowed_with_the_owner_session():
+    scenario = _local([{"press": "Escape"}])
+    scenario["auth_profile"] = "owner_session"
+    validate_scenario(scenario)
+
+
+@pytest.mark.parametrize("step", [
+    {"fill": "#mc-input"},
+    {"fill": "", "value": "x"},
+    {"press": "Escape; rm"},
+    {"evaluate": "  "},
+    {"route": {"status": 503}},
+    {"route": {"url": "**/x", "status": 99}},
+    {"route": {"url": "**/x", "abort": True, "status": 200}},
+    {"route": {"url": "**/x", "status": 200, "headers": {}}},
+    {"sample": "Drop Tables"},
+    {"sample": "mc", "args": ["stream"]},
+    {"wait_for": {"selector": "body", "text": ""}},
+], ids=repr)
+def test_malformed_local_steps_are_rejected(step):
+    with pytest.raises(ScenarioValidationError):
+        validate_scenario(_local([step]))
+
+
+def test_mobile_emulation_must_be_a_boolean():
+    with pytest.raises(ScenarioValidationError, match="mobile_emulation"):
+        validate_scenario(_local([], mobile_emulation="yes"))
+
+
+GUILD_REVIEW = ROOT / "scripts" / "tools" / "tour_capture" / "scenarios"
+
+
+@pytest.mark.parametrize("path", sorted(GUILD_REVIEW.glob("guild_1_1_*.json")), ids=lambda p: p.name)
+def test_guild_review_scenarios_are_valid_local_captures(path):
+    scenario = load_scenario(path)
+    assert scenario["auth_profile"] == "none"
+    assert scenario["_summary"]["operator_pauses"] == 0
+    assert scenario["steps"][0] == {"sample": "reset"}
+    for step in scenario["steps"]:
+        if "screenshot" in step:
+            assert "sample" in step["description"].lower() or "stand-in" in step["description"].lower() \
+                or "scripted" in step["description"].lower(), step["screenshot"]
+
+
+def test_a_click_may_declare_that_it_navigates():
+    validate_scenario(_local([{"click": "[data-conv-new]", "navigates": True}]))
+    with pytest.raises(ScenarioValidationError, match="navigates"):
+        validate_scenario(_local([{"click": "[data-conv-new]", "navigates": "yes"}]))

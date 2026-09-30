@@ -1,0 +1,129 @@
+{
+  "id": "guild-1-1-narrow",
+  "domain": "guild",
+  "device_profile": "narrow",
+  "auth_profile": "none",
+  "start_path": "/guild",
+  "steps": [
+    {
+      "sample": "reset"
+    },
+    {
+      "goto": "/guild-next/guild/build"
+    },
+    {
+      "wait_for": "body[data-ready=true]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "A note on the Shop floor thread"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "A note on the Shop floor thread"
+      }
+    },
+    {
+      "click": "[data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Plan the Rooms review"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Plan the Rooms review"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Plan the Rooms review"
+      }
+    },
+    {
+      "click": "[data-conv-new]",
+      "navigates": true
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "New conversation"
+      }
+    },
+    {
+      "fill": "#mc-input",
+      "value": "Hetzner staging checklist"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "Hetzner staging checklist"
+      }
+    },
+    {
+      "wait_for": {
+        "selector": "[data-conv-current-title]",
+        "text": "Hetzner staging checklist"
+      }
+    },
+    {
+      "click": "[data-conv]:has-text(\"Plan the Rooms review\") [data-conv-menu]"
+    },
+    {
+      "click": "[data-conv]:has-text(\"Plan the Rooms review\") [data-conv-act=\"pin\"]",
+      "navigates": true
+    },
+    {
+      "wait_for": "[data-conv]:has-text(\"Plan the Rooms review\")[data-pinned=\"true\"]"
+    },
+    {
+      "fill": "#mc-input",
+      "value": "How does this read at 1100 wide?"
+    },
+    {
+      "click": "[data-mc-send]"
+    },
+    {
+      "wait_for": {
+        "selector": "[data-mc-thread] [data-kind=\"note\"]",
+        "text": "How does this read at 1100 wide?"
+      }
+    },
+    {
+      "click": "[data-rail-toggle]"
+    },
+    {
+      "wait_for": "#main"
+    },
+    {
+      "screenshot": "narrow-rail",
+      "title": "Narrow desktop: the rail toggle",
+      "description": "At 1100 px the rail sits behind the \"Context\" toggle and opens as an overlay (Escape or a click outside closes it); the history keeps its column. Sample data from a local test instance.",
+      "alt": "Narrow desktop: the rail toggle"
+    }
+  ],
+  "viewport": {
+    "width": 1100,
+    "height": 800,
+    "device_scale_factor": 2
+  }
+}

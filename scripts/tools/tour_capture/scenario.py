@@ -20,7 +20,20 @@ SUPPORTED_ACTIONS = {
     "assert_current_article",
     "screenshot",
     "free_capture",
+    # Scripted local review capture (auth_profile "none" only, see LOCAL_ONLY_ACTIONS).
+    "fill",
+    "press",
+    "evaluate",
+    "route",
+    "unroute",
+    "sample",
 }
+# Actions that drive or stub the page. They are refused for owner_session so a
+# scripted run can never type into, script or fake a real dev page; they are
+# for loopback review captures of a local sample instance.
+LOCAL_ONLY_ACTIONS = {"fill", "evaluate", "route", "unroute", "sample"}
+SAMPLE_ACTION_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
+KEY_RE = re.compile(r"^[A-Za-z0-9+]{1,40}$")
 AUTH_PROFILES = {"owner_session", "none"}
 # auth_profile "none" skips login entirely; the runner only permits it against
 # localhost or 127.0.0.1 so an unauthenticated run can never reach dev.
@@ -100,6 +113,27 @@ def resolve_device_profile(scenario: dict[str, Any]) -> DeviceProfile:
     return DEVICE_PROFILES[scenario["device_profile"]]
 
 
+def _validate_route(value: Any, index: int) -> None:
+    """A stubbed answer for one URL pattern: {url, status, body?, content_type?} or {url, abort: true}."""
+    if not isinstance(value, dict) or not isinstance(value.get("url"), str) or not value["url"].strip():
+        raise ScenarioValidationError(f"step {index} route needs an object with a 'url' pattern")
+    if value.get("abort") is True:
+        if set(value) - {"url", "abort"}:
+            raise ScenarioValidationError(f"step {index} route with abort takes no answer fields")
+        return
+    status = value.get("status")
+    if not isinstance(status, int) or isinstance(status, bool) or not 100 <= status <= 599:
+        raise ScenarioValidationError(f"step {index} route status must be an HTTP status code")
+    body = value.get("body", "")
+    if not isinstance(body, (str, dict, list)):
+        raise ScenarioValidationError(f"step {index} route body must be a string or JSON value")
+    if "content_type" in value and not isinstance(value["content_type"], str):
+        raise ScenarioValidationError(f"step {index} route content_type must be a string")
+    unknown = set(value) - {"url", "status", "body", "content_type"}
+    if unknown:
+        raise ScenarioValidationError(f"step {index} route has unknown keys: {sorted(unknown)}")
+
+
 def _action_key(step: dict[str, Any], index: int) -> str:
     actions = [key for key in SUPPORTED_ACTIONS if key in step]
     if len(actions) != 1:
@@ -129,6 +163,8 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
             )
     elif data["device_profile"] not in DEVICE_PROFILES:
         raise ScenarioValidationError(f"unknown device profile: {data['device_profile']!r}")
+    if not isinstance(data.get("mobile_emulation", False), bool):
+        raise ScenarioValidationError("mobile_emulation must be true or false")
     if data["auth_profile"] not in AUTH_PROFILES:
         raise ScenarioValidationError(f"unknown auth profile: {data['auth_profile']!r}")
     unauthenticated = data["auth_profile"] in LOCAL_ONLY_AUTH_PROFILES
@@ -166,6 +202,8 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
                 raise ScenarioValidationError(
                     f"step {index} goto must be an absolute path beginning with '/'"
                 )
+            if action == "click" and not isinstance(step.get("navigates", False), bool):
+                raise ScenarioValidationError(f"step {index} click navigates must be true or false")
         elif action == "wait_for":
             if isinstance(value, str):
                 if not value.strip():
@@ -185,6 +223,8 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
                 raise ScenarioValidationError(
                     f"step {index} wait_for absent must be a list of selectors"
                 )
+            elif "text" in value and (not isinstance(value["text"], str) or not value["text"]):
+                raise ScenarioValidationError(f"step {index} wait_for text must be a non-empty string")
             elif not isinstance(value.get("text_not_in", []), list) or not all(
                 isinstance(text, str) for text in value.get("text_not_in", [])
             ):
@@ -234,6 +274,34 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
                         f"step {index} free_capture {text_key} must be a non-empty string if present"
                     )
             has_free_capture = True
+
+        elif action in LOCAL_ONLY_ACTIONS and not unauthenticated:
+            raise ScenarioValidationError(
+                f"step {index} {action} is allowed only with auth_profile 'none' (local capture)"
+            )
+        if action == "fill":
+            if not isinstance(value, str) or not value.strip() or not isinstance(step.get("value"), str):
+                raise ScenarioValidationError(
+                    f"step {index} fill needs a selector and a string 'value'"
+                )
+        elif action == "press":
+            if not isinstance(value, str) or not KEY_RE.fullmatch(value):
+                raise ScenarioValidationError(f"step {index} press must name one key, e.g. 'Escape'")
+            if "selector" in step and (not isinstance(step["selector"], str) or not step["selector"].strip()):
+                raise ScenarioValidationError(f"step {index} press selector must be a non-empty string")
+        elif action == "evaluate":
+            if not isinstance(value, str) or not value.strip():
+                raise ScenarioValidationError(f"step {index} evaluate must be a non-empty script")
+        elif action == "route":
+            _validate_route(value, index)
+        elif action == "unroute":
+            if not isinstance(value, str) or not value.strip():
+                raise ScenarioValidationError(f"step {index} unroute must be a URL pattern")
+        elif action == "sample":
+            if not isinstance(value, str) or not SAMPLE_ACTION_RE.fullmatch(value):
+                raise ScenarioValidationError(f"step {index} sample must name a sample-server action")
+            if not isinstance(step.get("args", {}), dict):
+                raise ScenarioValidationError(f"step {index} sample args must be an object")
 
         if action in {"operator", "free_capture"}:
             operator_count += 1

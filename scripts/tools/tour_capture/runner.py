@@ -118,6 +118,39 @@ def validate_auth_for_base_url(auth_profile: str, base_url: str) -> None:
             )
 
 
+def local_only_request(url: str) -> bool:
+    """True when a request may leave the page during an unauthenticated
+    (loopback) capture: only loopback hosts and inline data/blob URLs."""
+    if url.startswith(("data:", "blob:", "about:")):
+        return True
+    return (urlparse(url).hostname or "") in LOCAL_CAPTURE_HOSTS
+
+
+def _local_only_route(route) -> None:
+    if local_only_request(route.request.url):
+        route.continue_()
+    else:
+        route.abort()
+
+
+SAMPLE_PREFIX = "/__tour_sample/"
+
+
+def _route_handler(spec: dict):
+    """The Playwright handler for one scenario `route` step (a stubbed answer)."""
+    if spec.get("abort"):
+        return lambda route: route.abort()
+    body = spec.get("body", "")
+    content_type = spec.get("content_type")
+    if not isinstance(body, str):
+        body = json.dumps(body)
+        content_type = content_type or "application/json"
+    kwargs = {"status": spec["status"], "body": body}
+    if content_type:
+        kwargs["content_type"] = content_type
+    return lambda route: route.fulfill(**kwargs)
+
+
 def _valid_storage_state(path: Path) -> bool:
     if not path.exists():
         return False
@@ -320,6 +353,21 @@ class CaptureRunner:
                 return pages[int(choice) - 1]
             print(f"  Enter a tab number from 1 to {len(pages)}.")
 
+    def _sample(self, page, name: str, args: dict) -> None:
+        """Ask the local sample server (local_sample.py) to set up a state."""
+        if self.authenticated:
+            raise CaptureRunError("sample steps run only against a local sample server")
+        response = page.request.post(
+            self._url(SAMPLE_PREFIX + name),
+            data=json.dumps(args),
+            headers={"Content-Type": "application/json"},
+            timeout=self.timeout_ms,
+        )
+        if not response.ok:
+            raise CaptureRunError(
+                f"sample server refused {name!r}: {response.status} {response.text()[:200]}"
+            )
+
     @staticmethod
     def _capture_digest(path: Path) -> str:
         return sha256(path.read_bytes()).hexdigest()
@@ -441,10 +489,16 @@ class CaptureRunner:
                     "color_scheme": "light",
                     "reduced_motion": "reduce",
                 }
+                if self.scenario.get("mobile_emulation"):
+                    context_args.update(is_mobile=True, has_touch=True)
                 if state_path is not None and _valid_storage_state(state_path):
                     state_path.chmod(0o600)
                     context_args["storage_state"] = str(state_path)
                 context = browser.new_context(**context_args)
+                if not self.authenticated:
+                    # A loopback capture stays on this machine: anything a page
+                    # asks for elsewhere (web fonts, analytics) is refused.
+                    context.route("**/*", _local_only_route)
                 if self.clean_web:
                     for pattern in _clean_web_route_patterns():
                         context.route(pattern, lambda route: route.abort())
@@ -480,7 +534,13 @@ class CaptureRunner:
                                 timeout=self.timeout_ms,
                             )
                         elif action == "click":
-                            page.locator(value).first.click(timeout=self.timeout_ms)
+                            if step.get("navigates"):
+                                # The click loads a new page: finish that load
+                                # before the next step looks at the page.
+                                with page.expect_navigation(timeout=self.timeout_ms):
+                                    page.locator(value).first.click(timeout=self.timeout_ms)
+                            else:
+                                page.locator(value).first.click(timeout=self.timeout_ms)
                         elif action == "scroll_to":
                             page.locator(value).first.scroll_into_view_if_needed(
                                 timeout=self.timeout_ms
@@ -505,6 +565,21 @@ class CaptureRunner:
                                 captured_specs,
                                 preferred_page=page,
                             )
+                        elif action == "fill":
+                            page.locator(value).first.fill(step["value"], timeout=self.timeout_ms)
+                        elif action == "press":
+                            if step.get("selector"):
+                                page.locator(step["selector"]).first.press(value, timeout=self.timeout_ms)
+                            else:
+                                page.keyboard.press(value)
+                        elif action == "evaluate":
+                            page.evaluate(value)
+                        elif action == "route":
+                            page.route(value["url"], _route_handler(value))
+                        elif action == "unroute":
+                            page.unroute(value)
+                        elif action == "sample":
+                            self._sample(page, value, step.get("args", {}))
                         elif action == "screenshot":
                             order += 1
                             filename = output_filename(
