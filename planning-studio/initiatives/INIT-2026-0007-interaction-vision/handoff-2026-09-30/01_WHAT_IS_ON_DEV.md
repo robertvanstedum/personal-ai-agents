@@ -27,7 +27,7 @@
 | Container | Image | Notes |
 |---|---|---|
 | minimoi-portal | portal:0d2e7df | `MINIMOI_GUILD_NEXT=1`, `MINIMOI_GUILD_MC=openclaw`, `MINIMOI_GUILD_MC_TURNS=on`, `MINIMOI_GUILD_MC_STREAM=on`, `GUILD_OPERATIONS_STATUS_URL=http://host.docker.internal:8768/status`. `data/usage` is read-only, and only `data/usage/portal` is read-write. `data/workshops` is read-only. |
-| minimoi-cos-scheduler | cos-scheduler:0d2e7df | Has the #267 write guard, the #281 voice fix and the Private switch. The turn log (`state/cos.turns`) is **off**. |
+| minimoi-cos-scheduler | cos-scheduler:0d2e7df | Carries #267's Confer template change (the guard itself is in the portal), the #281 voice fix and the Private switch. The turn log (`state/cos.turns`) is **off**. |
 | minimoi-mc-agent, minimoi-mc-relay | mc-agent:f26b7f0 | Master Craftsman: OpenClaw 2026.9.6 pinned by digest, its own Compose project (`minimoi-staging-mc`). It has a retry cap (`agent-settings.json`, maxRetries 0), streaming relay limits of 120 s, 30 s idle and 256 KB, and compaction on. |
 | minimoi-cos-agent-a | cos-scheduler:agent-a-c7869a3 | CoS Agent A (OpenClaw), on its **own capped key** (`cos-agent-308c59`, $30/30d). |
 | minimoi-model-gateway | cos-scheduler:model-gateway-c7869a3 | LiteLLM 1.93.1 with the key DB `litellm_keys`. MC's key is `mc-agent-e78796` ($15/30d, route `minimoi-mc-agent`). |
