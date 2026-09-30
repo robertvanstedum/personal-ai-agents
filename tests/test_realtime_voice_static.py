@@ -3,6 +3,9 @@ tests/test_realtime_voice_static.py — both domains serve the shared
 realtime-voice JS from one source of truth (core/realtime_voice/static/),
 not a per-domain copy.
 """
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
 
 
 def test_german_serves_shared_controller_js(german_client):
@@ -79,8 +82,8 @@ def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_
     assert "sendContinuationInstruction(this._openingInstruction)" in source
     assert 'this._onInputState("speech_started")' in source
     assert "never surfaced to the UI while active" in source
-    assert "openai-webrtc-adapter.js?v=20260809-ga1" in source
-    assert "xai-websocket-adapter.js?v=20260725-transcript1" in source
+    assert "openai-webrtc-adapter.js?v=20260929-mic1" in source
+    assert "xai-websocket-adapter.js?v=20260929-mic1" in source
 
 
 def test_xai_adapter_handles_current_audio_delta_and_connection_failures(german_client):
@@ -107,3 +110,22 @@ def test_openai_adapter_captures_learner_transcription(german_client):
     assert 'case "conversation.item.input_audio_transcription.failed"' in source
     assert '"https://api.openai.com/v1/realtime/calls"' in source
     assert "realtime/calls?model=" not in source
+
+
+def test_every_session_end_releases_the_microphone_once():
+    """#273: a provider-side close or a second provider error ends the session
+    through _finalizeAndEnd, which must release the adapter (and so the
+    microphone); the adapters' end() is idempotent. The browser proof, on
+    Confer, German and Portuguese, is tests/browser_checks_voice_mic.py."""
+    static = REPO / "core" / "realtime_voice" / "static"
+    source = (static / "realtime-voice-controller.js").read_text()
+    finalize = source[source.index("  _finalizeAndEnd(reason) {"):]
+    finalize = finalize[:finalize.index("\n  }\n")]
+    assert "this._endAdapter(reason);" in finalize
+    end_adapter = source[source.index("  _endAdapter(reason) {"):]
+    assert "if (!this._adapter || this._adapterEnded) return;" in end_adapter[:200]
+    assert "this._adapter?.end(" not in source                  # every end goes through _endAdapter
+    for adapter in ("openai-webrtc-adapter.js", "xai-websocket-adapter.js"):
+        text = (static / "adapters" / adapter).read_text()
+        body = text[text.index("  end(reason) {"):]
+        assert "if (this._ended) return;" in body[:200], adapter

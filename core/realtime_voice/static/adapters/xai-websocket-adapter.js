@@ -155,6 +155,8 @@ export class XAIWebSocketAdapter {
   }
 
   end(reason) {
+    if (this._ended) return;                 // idempotent: the controller and a provider close may both end it
+    this._ended = true;
     clearTimeout(this._connectTimer);
     this._stopMic();
     this._ws?.close();

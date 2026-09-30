@@ -21,8 +21,8 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20260809-ga1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20260929-mic1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260929-mic1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 const OPENING_INSTRUCTION =
@@ -98,6 +98,8 @@ export class RealtimeVoiceController {
     this._maxMinutes = bootstrap.max_minutes;
 
     this._adapter = bootstrap.provider === "openai" ? new OpenAIWebRTCAdapter() : new XAIWebSocketAdapter();
+    this._adapterEnded = false;
+    this._finalizing = false;
     this._wireAdapterEvents();
 
     this._setState("connecting");
@@ -169,7 +171,7 @@ export class RealtimeVoiceController {
     this._adapter.on("fatal_error", (info) => {
       this._onFatalError(info);
       this._setState("ending");
-      this._adapter?.end("fatal_error");
+      this._endAdapter("fatal_error");
       this._finalizeAndEnd("fatal_error");
     });
     this._adapter.on("closed", () => {
@@ -222,8 +224,21 @@ export class RealtimeVoiceController {
   endSession(reason) {
     if (this._state === "ending" || this._state === "ended") return;
     this._setState("ending");
-    this._adapter?.end(reason);
+    this._endAdapter(reason);
     this._finalizeAndEnd(reason);
+  }
+
+  // Releases the provider session and the microphone, once per session. Every
+  // way a session ends goes through here: the owner's stop, a fatal error, the
+  // duration limit, a provider-side close and a second recoverable error.
+  _endAdapter(reason) {
+    if (!this._adapter || this._adapterEnded) return;
+    this._adapterEnded = true;
+    try {
+      this._adapter.end(reason);
+    } catch (_) {
+      // The page still ends the session; the adapter's own end() stops the tracks first.
+    }
   }
 
   _attemptReconnectOrEndVisibly(info) {
@@ -245,8 +260,13 @@ export class RealtimeVoiceController {
   }
 
   _finalizeAndEnd(reason) {
-    if (this._state === "ended") return;
+    if (this._state === "ended" || this._finalizing) return;
+    this._finalizing = true;
     clearInterval(this._durationTimer);
+    // The session is over however it ended (#273): a provider-side close or a
+    // second recoverable error arrives here without endSession(), so the
+    // microphone is released here too, never left open behind a "Stopped" page.
+    this._endAdapter(reason);
     const partial = reason !== "user_ended" && reason !== "normal_end";
     const turns = [...this._items.entries()]
       .sort((a, b) => a[1].firstSeq - b[1].firstSeq)

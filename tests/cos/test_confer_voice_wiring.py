@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_confer_page_uses_shared_controller_and_keeps_typed_path():
     template = (ROOT / "domains/cos/templates/cos_ui.html").read_text()
-    assert "realtime-voice-controller.js?v=20260816-cos1" in template
+    assert "realtime-voice-controller.js?v=20260929-mic1" in template
     assert "bootstrapUrl: '../api/realtime-voice/confer/bootstrap'" in template
     assert 'id="voice-provider-select"' in template
     assert "OpenAI Voice" in template
