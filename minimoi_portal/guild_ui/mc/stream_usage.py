@@ -43,6 +43,14 @@ def portal_folder() -> str | None:
     return os.path.join(shared, "portal") if shared else None
 
 
+# The runs MiniMoi aborted mid-stream (Stop, or the deadline, idle or size limit):
+# the relay cancels MC's call, OpenClaw cancels its call to the gateway, and the
+# gateway (LiteLLM 1.93.1) logs nothing for a client-cancelled stream: no usage
+# record, and nothing counted against MC's key budget. The provider may still
+# bill what was generated. Such a record says so: cost_source "unrecorded-abort".
+UNRECORDED_ABORTS = ("stopped", "deadline", "idle", "too_large")
+
+
 def record_run(*, turn_id: str, status: str, prompt_tokens: int | None = None,
                completion_tokens: int | None = None, latency_ms: int | None = None,
                error_class: str | None = None, folder: str | None = None) -> bool:
@@ -53,7 +61,8 @@ def record_run(*, turn_id: str, status: str, prompt_tokens: int | None = None,
         return False
     ok = status == "ok"
     fields = {"emitter": EMITTER, "actor": ACTOR, "kind": "model", "route": ROUTE,
-              "status": "ok" if ok else "error", "cost_usd": None, "cost_source": "none",
+              "status": "ok" if ok else "error", "cost_usd": None,
+              "cost_source": "unrecorded-abort" if not ok and error_class in UNRECORDED_ABORTS else "none",
               "correlation_id": turn_id, "latency_ms": latency_ms,
               "input_tokens": prompt_tokens if ok else None, "output_tokens": completion_tokens if ok else None,
               "error_class": None if ok else (error_class or "interrupted")}
@@ -81,4 +90,4 @@ def flush(timeout: float = 5.0) -> None:
         pass
 
 
-__all__ = ["record_run", "flush", "portal_folder", "EMITTER", "ACTOR", "ROUTE"]
+__all__ = ["record_run", "flush", "portal_folder", "EMITTER", "ACTOR", "ROUTE", "UNRECORDED_ABORTS"]

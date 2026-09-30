@@ -178,8 +178,8 @@ def one_turn(services, conversations, *, principal: str, label: str, stop_after_
         f"usage {backend_events['usage']} · failure {backend_events['failure']}")
     out("  mc_turns.jsonl: " + (json.dumps({k: line.get(k) for k in ("mode", "status", "failure_class", "duration_ms")})
                                 if line else "no line found"))
-    out("  runtime-stream: " + (json.dumps({k: stream_rec.get(k) for k in ("status", "error_class", "input_tokens",
-                                                                            "output_tokens", "latency_ms")})
+    out("  runtime-stream: " + (json.dumps({k: stream_rec.get(k) for k in ("status", "error_class", "cost_source",
+                                                                            "input_tokens", "output_tokens", "latency_ms")})
                                 if stream_rec else "no record found"))
     if gw:
         out(f"  gateway: {len(gw)} record(s) in the turn's window · output tokens {gw_out} · cost {gw_cost} "
