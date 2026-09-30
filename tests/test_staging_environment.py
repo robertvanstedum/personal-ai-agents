@@ -760,6 +760,8 @@ def _staging_world(tmp_path, *, launchctl=FAKE_LAUNCHCTL_CLEAN, bots_on=False, t
                 "data/german", "data/portuguese", "data/guild", "data/usage", "docs/design", "docs/specs", "agent_logs",
                 "state"):
         (root / rel).mkdir(parents=True, exist_ok=True)
+    for writer in ("cos-bot", "cos-scheduler"):                      # each root writer's own usage folder
+        (root / "data" / "usage" / writer).mkdir(parents=True, exist_ok=True)
     names = ["XAI_API_KEY='x'"]
     sources = ["XAI_API_KEY root-env"]
     if tokens:
