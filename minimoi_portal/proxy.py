@@ -13,6 +13,7 @@ Rewriting strategy:
     dynamically-constructed paths. Good enough for portfolio use.
 """
 
+import json
 import re
 
 import requests
@@ -278,7 +279,7 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
             headers=fwd_headers,
             data=request.get_data(),
             allow_redirects=False,
-            timeout=30,
+            timeout=_route_timeout(portal_prefix, path, request.method),
         )
     except requests.exceptions.ConnectionError:
         return Response(
@@ -286,6 +287,10 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
             status=503,
             content_type="text/html",
         )
+    except requests.exceptions.ReadTimeout:
+        return _timed_out(portal_prefix, path)
+    except requests.exceptions.RequestException:
+        return _backend_error()
 
     # Rewrite Location header on redirects
     if resp.status_code in (301, 302, 303, 307, 308):
@@ -433,3 +438,46 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
         headers=resp_headers,
         content_type=content_type,
     )
+
+
+# ── Timeouts per route (#262) ─────────────────────────────────────────────────
+# The generic bound is 30 s (connect 5 s). A backend route with a longer bound
+# of its own gets a portal bound just past it, so the backend's own answer (or
+# its own timeout) always arrives first: CoS's turns wait up to 120 s for Agent
+# A (domains/cos/backends/openclaw_backend.py, _TURN_TIMEOUT_SECONDS).
+DEFAULT_TIMEOUT = (5, 30)
+ROUTE_TIMEOUTS = {
+    ("/app/cos", "POST", "ui/send"): (5, 125),
+    ("/app/cos", "POST", "chat"): (5, 125),
+}
+
+
+def _route_timeout(portal_prefix: str, path: str, method: str):
+    return ROUTE_TIMEOUTS.get((portal_prefix, method.upper(), (path or "").strip("/")), DEFAULT_TIMEOUT)
+
+
+def _wants_json() -> bool:
+    accept = request.headers.get("Accept", "")
+    return request.is_json or ("application/json" in accept and "text/html" not in accept)
+
+
+def _timed_out(portal_prefix: str, path: str) -> Response:
+    """An honest 504 when the backend did not answer in time: it may still be
+    working, and may still finish (and, for an agent turn, be paid for).
+    Nothing was retried. JSON for a JSON caller (Confer reads ``reply``), HTML
+    otherwise."""
+    seconds = _route_timeout(portal_prefix, path, request.method)[1]
+    message = (f"No answer within {seconds} s. It may still be working, and may still finish; "
+               "nothing was retried. Reload in a minute to check.")
+    if _wants_json():
+        return Response(json.dumps({"error": "timeout", "message": message, "reply": message}),
+                        status=504, content_type="application/json")
+    return Response(f"<h2>Still working</h2><p>{message}</p>", status=504, content_type="text/html")
+
+
+def _backend_error() -> Response:
+    message = "The app's answer could not be read. Nothing was retried."
+    if _wants_json():
+        return Response(json.dumps({"error": "backend_error", "message": message, "reply": message}),
+                        status=502, content_type="application/json")
+    return Response(f"<h2>Backend error</h2><p>{message}</p>", status=502, content_type="text/html")
