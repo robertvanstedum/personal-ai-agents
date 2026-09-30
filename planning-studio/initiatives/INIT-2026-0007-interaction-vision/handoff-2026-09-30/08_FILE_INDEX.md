@@ -24,7 +24,7 @@
 ## Reviews
 - `INIT/reviews/CLAUDE_INDEPENDENT_REVIEW_PR<n>_2026-09-29.md` for #261, #263, #265, #266, #269, #270, #271, #274, #275, #276, #277, #278, #279, #280, #281, #282.
 - `INIT/reviews/CLAUDE_INDEPENDENT_REVIEW_STREAMING_SPEC_v0.1/v0.2_2026-09-29.md`.
-- **Private:** `_working/security/review-pr267-cos-write-guard-2026-09-29.md` and `_working/security/cos-confer-csrf-2026-09-29.md`.
+- **Private:** security reviews and notes are kept in `_working/security/` (local only).
 
 ## Screen pack
 - `INIT/review-package-2026-09-30/Guild_1_1_dev_screens_2026-09-30.pdf`: 36 pages of sample data, integration `5c57bdc`, made before #281.
