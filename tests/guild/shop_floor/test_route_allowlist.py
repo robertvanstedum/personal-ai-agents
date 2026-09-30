@@ -5,6 +5,8 @@ from __future__ import annotations
 from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 EXPECTED = {
+    "/guild-next/",
+    "/guild-next/guild",
     "/guild-next/guild/build",
     "/guild-next/guild/build/bench",
     # Planning Studio and Prototype Lab: truthful entry points (Guild 1.1 dev, slice 1).
@@ -86,4 +88,6 @@ def test_portal_routes_and_headers_are_untouched(staging):
 
 def test_unknown_page_under_the_prefix_is_not_a_floor_page(staging):
     assert staging.owner().get("/guild-next/guild/improve").status_code == 404
-    assert staging.owner().get("/guild-next/guild").status_code == 404
+    assert staging.owner().get("/guild-next/nope").status_code == 404
+    # The mount's root lands on the Shop floor (test_guild_next_landing.py).
+    assert staging.owner().get("/guild-next/guild").headers["Location"].endswith("/guild-next/guild/build")

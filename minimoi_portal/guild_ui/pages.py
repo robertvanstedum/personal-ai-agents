@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from flask import render_template, request, url_for
+from flask import redirect, render_template, request, url_for
 
 from . import cfg, floor_state, owner_page
 from .adapters import ACTIVE, STATUSES, by_recent
@@ -107,6 +107,14 @@ def _current_conversation(c):
             return None, "Conversations are unavailable right now."
     except ConversationStoreUnavailable:
         return None, "Conversations are unavailable right now; showing the Shop floor thread."
+
+
+@owner_page
+def home():
+    """/guild-next, /guild-next/ and /guild-next/guild land on the Shop floor
+    (owner-guarded like every page: a guest or a signed-out visitor gets the
+    portal's guard, never the floor)."""
+    return redirect(url_for(".floor"))
 
 
 @owner_page
