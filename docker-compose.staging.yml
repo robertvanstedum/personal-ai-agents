@@ -115,6 +115,10 @@ services:
       # prototype at /guild-proto. Staging only; unset in production.
       - MINIMOI_GUILD_NEXT=1
       - MINIMOI_GUILD_PROTO=1
+      # Guild's Systems light reads the Mac's native Operations agent (launchd,
+      # bound to 127.0.0.1:8768). Colima forwards host.docker.internal
+      # (192.168.5.2) to the Mac's loopback, so the portal container reaches it.
+      - GUILD_OPERATIONS_STATUS_URL=${GUILD_OPERATIONS_STATUS_URL:-http://host.docker.internal:8768/status}
       # Master Craftsman (MC spec v0.9 §4, stage B), staging only. From
       # $STAGING_ROOT/state/mc.mode and state/mc.turns (lib.sh); off by
       # default. The portal reaches MC only through the relay, with the relay's
