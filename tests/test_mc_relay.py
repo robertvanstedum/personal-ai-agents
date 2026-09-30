@@ -65,6 +65,39 @@ class Upstream:
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
 
 
+def _await_relay(proc, env, base, *, attempts=5, deadline_s=20.0):
+    """Wait until the relay answers /healthz, and return (proc, base).
+
+    The port is picked by binding port 0 and closing it, so by the time node
+    binds 0.0.0.0 on it another socket can hold it (on macOS, typically a
+    client connection in TIME_WAIT): node then exits with EADDRINUSE. That is
+    the flake this replaces (a fixed 5 s loop that never noticed the exit).
+    Now the relay is started again on a fresh port, a few times; any other
+    exit, or no answer within the deadline, fails with the relay's own error."""
+    for _ in range(attempts):
+        started = time.monotonic()
+        while time.monotonic() - started < deadline_s:
+            if proc.poll() is not None:
+                break
+            try:
+                urllib.request.urlopen(base + "/healthz", timeout=1)
+                return proc, base
+            except Exception:
+                time.sleep(0.05)
+        else:
+            proc.terminate()
+            proc.wait(timeout=5)
+            pytest.fail(f"the relay did not answer /healthz within {deadline_s:.0f} s")
+        err = proc.stderr.read()
+        if "EADDRINUSE" not in err:
+            pytest.fail(f"the relay exited ({proc.returncode}): {err[-400:]}")
+        port = _port()
+        env = {**env, "MC_RELAY_PORT": str(port)}
+        proc = subprocess.Popen(["node", str(RELAY)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        base = f"http://127.0.0.1:{port}"
+    pytest.fail(f"the relay could not bind a free port in {attempts} attempts")
+
+
 @pytest.fixture
 def relay():
     up = Upstream()
@@ -73,12 +106,7 @@ def relay():
            "MC_RELAY_TOKEN": CALLER, "MC_OPENCLAW_GATEWAY_TOKEN": MC_TOKEN, "MC_RELAY_DEADLINE_MS": "3000"}
     proc = subprocess.Popen(["node", str(RELAY)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     base = f"http://127.0.0.1:{port}"
-    for _ in range(100):
-        try:
-            urllib.request.urlopen(base + "/healthz", timeout=1)
-            break
-        except Exception:
-            time.sleep(0.05)
+    proc, base = _await_relay(proc, env, base)
     yield base, up, proc
     proc.terminate()
     proc.wait(timeout=5)
