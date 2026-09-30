@@ -493,7 +493,7 @@ class CaptureRunner:
                     "viewport": {"width": profile.width, "height": profile.height},
                     "device_scale_factor": profile.device_scale_factor,
                     "locale": self.scenario.get("locale", "en-US"),
-                    "color_scheme": "light",
+                    "color_scheme": self.scenario.get("color_scheme", "light"),
                     "reduced_motion": "reduce",
                 }
                 if self.scenario.get("mobile_emulation"):

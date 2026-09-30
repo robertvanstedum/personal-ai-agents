@@ -369,3 +369,9 @@ def test_a_click_may_declare_that_it_navigates():
     validate_scenario(_local([{"click": "[data-conv-new]", "navigates": True}]))
     with pytest.raises(ScenarioValidationError, match="navigates"):
         validate_scenario(_local([{"click": "[data-conv-new]", "navigates": "yes"}]))
+
+
+def test_a_scenario_may_ask_for_the_dark_color_scheme():
+    validate_scenario(_local([], color_scheme="dark"))
+    with pytest.raises(ScenarioValidationError, match="color_scheme"):
+        validate_scenario(_local([], color_scheme="sepia"))

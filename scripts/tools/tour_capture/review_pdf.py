@@ -280,12 +280,36 @@ def _scene_page(scene: ReviewScene, position: int, total: int) -> Image.Image:
     return page
 
 
+def _notes_page(notes: list[str]) -> Image.Image:
+    """An "About this pack" page after the cover: one paragraph per note."""
+    page = Image.new("RGB", LANDSCAPE, BACKGROUND)
+    draw = ImageDraw.Draw(page)
+    x, y = MARGIN * 2, MARGIN * 2
+    width = LANDSCAPE[0] - x * 2
+    draw.text((x, y), "About this pack", fill=INK, font=_font(72, bold=True))
+    y += 130
+    body = _font(42)
+    for note in notes:
+        for line in _wrap(draw, note, body, width):
+            if y > LANDSCAPE[1] - MARGIN * 2:
+                raise ReviewPdfError("the notes do not fit on one page; shorten them")
+            draw.text((x, y), line, fill=INK, font=body)
+            y += 60
+        y += 34
+    return page
+
+
 def build_review_pdf(
     run_dirs: list[Path | str],
     output: Path | str,
     title: str = "Review capture",
+    notes: list[str] | None = None,
+    quality: int = 90,
 ) -> Path:
-    """Write a cover page plus one page per scene across all runs, in order."""
+    """Write a cover page (and an optional notes page) plus one page per scene
+    across all runs, in order. ``quality`` is the JPEG quality of the page images."""
+    if not 30 <= quality <= 95:
+        raise ReviewPdfError("quality must be between 30 and 95")
     if not run_dirs:
         raise ReviewPdfError("at least one run directory is required")
     runs = [load_run(run_dir) for run_dir in run_dirs]
@@ -295,12 +319,13 @@ def build_review_pdf(
 
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    total = len(scenes) + 1
+    intro = [_notes_page(notes)] if notes else []
+    total = len(scenes) + 1 + len(intro)
     cover = _cover_page(title, runs)
     # Pillow's PDF writer materialises every page before writing anyway.
-    pages = [
+    pages = intro + [
         _scene_page(scene, position, total)
-        for position, scene in enumerate(scenes, start=2)
+        for position, scene in enumerate(scenes, start=2 + len(intro))
     ]
     cover.save(
         output,
@@ -308,7 +333,7 @@ def build_review_pdf(
         save_all=True,
         append_images=pages,
         resolution=DPI,
-        quality=90,
+        quality=quality,
         title=title,
         author="tour_capture",
     )
@@ -320,9 +345,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("run_dirs", nargs="+", type=Path, help="capture run directories")
     parser.add_argument("-o", "--output", type=Path, required=True, help="PDF to write")
     parser.add_argument("--title", default="Review capture", help="cover page title")
+    parser.add_argument("--note", action="append", default=[],
+                        help="a paragraph for an 'About this pack' page after the cover (repeatable)")
+    parser.add_argument("--quality", type=int, default=90,
+                        help="JPEG quality of the page images, 30-95 (lower makes a smaller file)")
     args = parser.parse_args(argv)
     try:
-        path = build_review_pdf(args.run_dirs, args.output, args.title)
+        path = build_review_pdf(args.run_dirs, args.output, args.title, notes=args.note, quality=args.quality)
     except ReviewPdfError as exc:
         print(f"review pdf error: {exc}")
         return 1

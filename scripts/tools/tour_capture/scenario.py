@@ -165,6 +165,8 @@ def validate_scenario(data: dict[str, Any]) -> dict[str, Any]:
         raise ScenarioValidationError(f"unknown device profile: {data['device_profile']!r}")
     if not isinstance(data.get("mobile_emulation", False), bool):
         raise ScenarioValidationError("mobile_emulation must be true or false")
+    if data.get("color_scheme", "light") not in ("light", "dark"):
+        raise ScenarioValidationError("color_scheme must be 'light' or 'dark'")
     if data["auth_profile"] not in AUTH_PROFILES:
         raise ScenarioValidationError(f"unknown auth profile: {data['auth_profile']!r}")
     unauthenticated = data["auth_profile"] in LOCAL_ONLY_AUTH_PROFILES

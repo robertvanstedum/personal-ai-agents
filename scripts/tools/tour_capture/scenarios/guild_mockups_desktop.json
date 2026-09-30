@@ -1,0 +1,93 @@
+{
+  "id": "guild-mockups-desktop",
+  "domain": "guild",
+  "device_profile": "desktop",
+  "auth_profile": "none",
+  "start_path": "/index.html",
+  "steps": [
+    {
+      "goto": "/index.html"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "index",
+      "title": "Design Studio: the front page",
+      "description": "The studio's front page: one card per room with a thumbnail, and the open questions. Proposed mockup: sample content, nothing is wired.",
+      "alt": "Design Studio: the front page"
+    },
+    {
+      "goto": "/chat.html"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "chat",
+      "title": "Chat (terracotta)",
+      "description": "Chat with the Master Craftsman: the conversation owns the page (one column, history as a quiet rail, no right rail); MC's status once in the header; Markdown replies with Pin to Board, Open #160, Take to a Room. Proposed mockup: sample content, nothing is wired.",
+      "alt": "Chat (terracotta)"
+    },
+    {
+      "goto": "/board.html"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "board",
+      "title": "Board (marigold)",
+      "description": "The post-it board in four lanes (Decide, Blocked, Remember, On the bench), the only home of \"Needs you\"; one light status strip that shows unknown as unknown. Proposed mockup: sample content, nothing is wired.",
+      "alt": "Board (marigold)"
+    },
+    {
+      "goto": "/build-log.html"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "build-log",
+      "title": "Build Log (ink indigo)",
+      "description": "One ranked list replaces Queue, Log, Roadmap items, Improve and Experiment: \"Next up\" 1-2-3, saved views, filters, and a detail panel with spec, reviews and history. Proposed mockup: sample content, nothing is wired.",
+      "alt": "Build Log (ink indigo)"
+    },
+    {
+      "goto": "/rooms.html"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "rooms",
+      "title": "Rooms (plum)",
+      "description": "A group thread (Robert, Claude Code, Codex, MC) where a message becomes a Review request card and the returned review sits inside it; linked work and decisions on the side. Proposed mockup: sample content, nothing is wired.",
+      "alt": "Rooms (plum)"
+    },
+    {
+      "goto": "/docs.html"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "docs",
+      "title": "Docs (moss): idea to discuss",
+      "description": "Docs is marked \"Idea to discuss · not decided\": the roadmap's Direction and loop diagrams on the left, a curated shelf of official documents with honest status on the right. Proposed mockup: sample content, nothing is wired.",
+      "alt": "Docs (moss): idea to discuss"
+    },
+    {
+      "goto": "/workshop.html"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "workshop",
+      "title": "Workshop (verdigris)",
+      "description": "The Workshop: a dark \"lamp-lit\" host gauge as its dominant element, then the bench, queue, budget and recovery; the Needs-you post-it is marked \"same note as the Board\". Proposed mockup: sample content, nothing is wired.",
+      "alt": "Workshop (verdigris)"
+    }
+  ]
+}

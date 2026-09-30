@@ -131,6 +131,11 @@ python -m scripts.tools.tour_capture.review_pdf \
   -o _working/tour-capture/prototype-review.pdf --title "Prototype review"
 ```
 
+`--note "..."` (repeatable) adds an "About this pack" page after the cover,
+for example to explain the sections of a combined pack; `--quality 30-95`
+sets the JPEG quality of the page images (default 90; lower is smaller). A
+scenario may set `"color_scheme": "dark"` to capture a page in dark mode.
+
 The PDF has a cover page (title, date, source URLs, scenarios, and a note
 that local captures may show simulated or sample data), then one page per
 scene in run order: the screenshot scaled to fit without distortion and a

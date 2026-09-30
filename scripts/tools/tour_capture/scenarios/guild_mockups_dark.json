@@ -1,0 +1,22 @@
+{
+  "id": "guild-mockups-dark",
+  "domain": "guild",
+  "device_profile": "desktop",
+  "auth_profile": "none",
+  "start_path": "/index.html",
+  "steps": [
+    {
+      "goto": "/workshop.html"
+    },
+    {
+      "wait_for": "body"
+    },
+    {
+      "screenshot": "workshop-dark",
+      "title": "Workshop in dark mode",
+      "description": "The Workshop with the browser in dark mode (prefers-color-scheme: dark); post-its and index cards stay paper-coloured on purpose. Proposed mockup: sample content, nothing is wired.",
+      "alt": "Workshop in dark mode"
+    }
+  ],
+  "color_scheme": "dark"
+}
