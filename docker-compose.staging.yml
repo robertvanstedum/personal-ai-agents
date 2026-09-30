@@ -149,22 +149,30 @@ services:
     profiles: [bots]
     environment:
       - MINIMOI_ROLE=standby
-      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend).
+      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend),
+      # written only to this writer's own folder (usage_record.own_folder): the
+      # shared monthly file is the non-root gateway's alone.
       - MINIMOI_USAGE_DIR=/app/data/usage
+      - MINIMOI_USAGE_WRITER=cos-bot
       - MINIMOI_ENV=staging
     volumes:
-      - ${MINIMOI_ROOT}/data/usage:/app/data/usage
+      - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
+      - ${MINIMOI_ROOT}/data/usage/cos-bot:/app/data/usage/cos-bot
 
   cos-scheduler:
     image: minimoi-staging/cos-scheduler:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
     pull_policy: never
     environment:
       - MINIMOI_ROLE=standby
-      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend).
+      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend),
+      # written only to this writer's own folder (usage_record.own_folder): the
+      # shared monthly file is the non-root gateway's alone.
       - MINIMOI_USAGE_DIR=/app/data/usage
+      - MINIMOI_USAGE_WRITER=cos-scheduler
       - MINIMOI_ENV=staging
     volumes:
-      - ${MINIMOI_ROOT}/data/usage:/app/data/usage
+      - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
+      - ${MINIMOI_ROOT}/data/usage/cos-scheduler:/app/data/usage/cos-scheduler
 
 volumes:
   postgres-data:

@@ -803,6 +803,26 @@ one standard usage record: `~/minimoi-staging/data/usage/usage-YYYY-MM.jsonl`
 - **Rollback:** build and `up.sh model-gateway` the previous release; the
   records already written stay.
 
+**One folder per writer (the first-writer ownership fix).**
+- **The hazard:** usage files are created 0600 by whoever writes first. The
+  gateway runs as a non-root user; cos-bot, cos-scheduler and the portal run
+  as root. A root writer that created the month's shared `usage-YYYY-MM.jsonl`
+  first (for example on October 1) would lock the gateway out of it for the
+  month.
+- **The fix:** only the gateway writes the shared monthly file at the top of
+  `data/usage/`. Every other writer writes only into its own folder:
+  `data/usage/cos-bot/`, `data/usage/cos-scheduler/`, and (streaming S1)
+  `data/usage/portal/`. The format is the same v1.
+- **Where a writer's folder comes from:** `usage_record.own_folder()`, set by
+  `MINIMOI_USAGE_WRITER`. Staging mounts `data/usage` read-only into those
+  containers, and each one's own folder read-write.
+- **Readers:** `usage_record.read_all()` reads the top level and every
+  writer's folder.
+- **Proof:** `tests/usage/docker_checks_usage_writers.py` (opt-in, Docker)
+  shows the hazard and the fix with two uids on a Docker volume.
+- **Production** writes nothing today: no production compose file sets
+  `MINIMOI_USAGE_DIR`.
+
 ## CoS's own capped gateway key (cos.sh key; staging only)
 
 Robert, September 28 2026: CoS gets its own capped gateway key too, instead of
