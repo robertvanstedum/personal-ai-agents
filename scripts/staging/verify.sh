@@ -486,6 +486,41 @@ print(' '.join('%s x%d' % (k, v) for k, v in sorted(bad.items())))
   else
     fail "CoS's key was refused on: $refused (a route CoS uses is missing from its scope: fix and re-run cos.sh key, or cos.sh off)"
   fi
+  # Advisory (#276 review): CoS's own direct calls (helper:* records: the direct
+  # Grok backend, Tavily) refused since the latest cos.sh key. They do not use
+  # the gateway key, so they never fail verify; a refusal is worth a look. It
+  # reads the whole store with usage_record.read_all() (the top level and every
+  # writer's folder, #276), or the same by hand on a release without it.
+  helpers=$(COS_ENV="$STAGING_COS_ENV" USAGE_DIR="$S/data/usage" RELEASE="$RELEASE_DIR" python3 -c "
+import os, sys
+from datetime import datetime
+sys.path.insert(0, os.environ['RELEASE'])
+from services.usage import usage_record as ur
+store = os.environ['USAGE_DIR']
+if hasattr(ur, 'read_all'):
+    records = ur.read_all(store)
+else:
+    records = ur.read(store) + [r for d in sorted(os.listdir(store)) if os.path.isdir(os.path.join(store, d))
+                                for r in ur.read(os.path.join(store, d))]
+since = os.path.getmtime(os.environ['COS_ENV'])
+seen = {}
+for r in records:
+    if not str(r.get('emitter') or '').startswith('helper:') or r.get('status') != 'refused':
+        continue
+    try:
+        at = datetime.fromisoformat(str(r.get('occurred_at'))).timestamp()
+    except ValueError:
+        continue
+    if at >= since:
+        k = '%s %s %s' % (r.get('emitter'), r.get('route'), r.get('http_status'))
+        seen[k] = seen.get(k, 0) + 1
+print(' '.join('%s x%d' % (k, v) for k, v in sorted(seen.items())))
+" 2>/dev/null || echo "unreadable")
+  if [[ -z "$helpers" ]]; then
+    pass "no refused direct call (helper:*) on CoS's writers since the last cos.sh key (advisory)"
+  else
+    warn "CoS's direct calls were refused since the last cos.sh key: $helpers (advisory: these do not use the gateway key; check that provider's key or rate limit)"
+  fi
 else
   pass "CoS uses the gateway's master key (state/cos.key off)"
 fi
