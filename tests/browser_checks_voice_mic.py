@@ -1,7 +1,13 @@
-"""Browser checks for #273: when a voice session ends from the provider's side
-(a provider-side close, or a second recoverable error), the microphone is
-released, on every page that uses the shared realtime voice controller:
-CoS Confer, Mein Deutsch (Gespräche) and Meu Português (Conversas).
+"""Browser checks for the shared realtime voice controller, on every page that
+uses it: CoS Confer, Mein Deutsch (Gespräche) and Meu Português (Conversas).
+
+- #273: when a session ends from the provider's side (a provider-side close,
+  or a provider error), the microphone is released.
+- Phase A: a provider error is a visible failure with the microphone released,
+  never a silent "reconnecting" wait; benign provider notices keep the session.
+- Phase A: the voice reply toggle ("speak and write" by default, or "write
+  only": the reply's audio muted, its text shown live), remembered per page on
+  this device, and still working when the browser refuses storage.
 
 Opt-in (Playwright + Chrome):
 
@@ -18,6 +24,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import socket
 import sys
 import threading
@@ -29,6 +36,7 @@ from playwright.sync_api import expect, sync_playwright
 from werkzeug.serving import make_server
 
 REPO = Path(__file__).resolve().parent.parent
+SHOTS = os.environ.get("VOICE_SHOTS")
 
 FAKE_ADAPTER = """
 // Test double for the OpenAI WebRTC adapter: the real interface, no network, no microphone.
@@ -45,9 +53,14 @@ export class OpenAIWebRTCAdapter {
   start() {}
   mute() {}
   unmute() {}
+  setOutputMuted(muted) { T().outputMuted = muted; }
   sendContinuationInstruction() {}
   sendFunctionResult() {}
   end(reason) { const t = T(); t.ends += 1; t.micOn = false; this._emit('closed', { reason }); }
+  say(id, text) {
+    this._emit('output_transcript', { item_id: id, text, is_delta: false, completed: true });
+    this._emit('assistant_stopped', {});
+  }
 }
 """
 BOOTSTRAP = {"ok": True, "provider": "openai", "model": "test-model", "client_secret": "not-a-secret",
@@ -85,6 +98,18 @@ def _confer_app():
     def capabilities():
         return jsonify({"ok": True, "default_provider": "openai",
                         "providers": [{"provider": "openai", "label": "OpenAI Voice"}]})
+
+    @app.route("/ui/voice/transcript", methods=["POST"])
+    def transcript():
+        return jsonify({"saved": False, "reason": "no_turn_log"})
+
+    @app.route("/ui/private-mode")
+    def private_mode():
+        return jsonify({"available": False, "private": False})
+
+    @app.route("/api/realtime-voice/confer/outcome", methods=["POST"])
+    def outcome():
+        return jsonify({"ok": True})
     return app
 
 
@@ -126,10 +151,12 @@ def browser():
         b.close()
 
 
-def _open(browser, servers, name):
+def _open(browser, servers, name, *, init_script=None):
     origin = servers[name]
     ctx = browser.new_context(viewport={"width": 1280, "height": 900},
                               extra_http_headers={"X-Minimoi-User-Tier": "owner", "X-Minimoi-Username": "robert"})
+    if init_script:
+        ctx.add_init_script(init_script)
 
     def only_loopback(route):
         return route.continue_() if route.request.url.startswith(origin) else route.abort()
@@ -179,16 +206,128 @@ def test_a_provider_side_close_releases_the_microphone(browser, servers, name):
     ctx.close()
 
 
+ERROR_TEXT = {"confer": "#voice-transcript", "german": "#realtime-voice-error", "portuguese": "#realtime-voice-error"}
+
+
 @pytest.mark.parametrize("name", list(PAGES))
-def test_a_second_provider_error_releases_the_microphone(browser, servers, name):
+def test_a_provider_error_is_visible_and_releases_the_microphone(browser, servers, name):
     ctx, page = _open(browser, servers, name)
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    outcomes = []
+    page.on("request", lambda r: outcomes.append(r) if r.url.endswith("/outcome") else None)
     _start(page, name)
-    page.evaluate("window.__voiceTest.adapter._emit('recoverable_error', { reason: 'network' })")
-    assert page.evaluate("window.__voiceTest.micOn") is True              # one error: reconnecting, still live
-    page.evaluate("window.__voiceTest.adapter._emit('recoverable_error', { reason: 'network' })")
-    _ended_on_screen(page, name)
+    page.evaluate("""window.__voiceTest.adapter._emit('recoverable_error',
+        { reason: 'provider_error', code: 'server_error', type: 'server_error_type',
+          detail: 'The server had an error' })""")
+    _ended_on_screen(page, name)                                          # at once: no "reconnecting" wait
     assert page.evaluate("window.__voiceTest.micOn") is False, "the microphone is still open"
     assert page.evaluate("window.__voiceTest.ends") == 1
+    shown = page.locator(ERROR_TEXT[name])
+    expect(shown).to_be_visible()
+    expect(shown).to_contain_text("The server had an error")
+    # #281 review F6: the code and type are logged on the server, never the message.
+    page.wait_for_timeout(200)
+    assert len(outcomes) == 1
+    sent = json.loads(outcomes[0].post_data)
+    assert sent == {"outcome": "provider_error", "provider": "openai", "reason": "provider_error",
+                    "code": "server_error", "type": "server_error_type"}
+    assert outcomes[0].url.endswith("/api/realtime-voice/confer/outcome" if name == "confer"
+                                    else "/api/realtime-voice/outcome")
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/{name}-provider-error.png", full_page=name == "confer")
+    assert not errors, errors
+    ctx.close()
+
+
+@pytest.mark.parametrize("name", list(PAGES))
+def test_benign_provider_notices_keep_the_session(browser, servers, name):
+    ctx, page = _open(browser, servers, name)
+    _start(page, name)
+    for info in ("{ reason: 'provider_error', code: 'response_cancel_not_active', detail: 'no active response' }",
+                 "{ reason: 'provider_error', code: 'conversation_already_has_active_response', detail: 'busy' }",
+                 "{ reason: 'input_transcription_failed', detail: 'one turn not transcribed' }"):
+        page.evaluate(f"window.__voiceTest.adapter._emit('recoverable_error', {info})")
+    page.wait_for_timeout(100)
+    assert page.evaluate("window.__voiceTest.micOn") is True               # still live
+    assert page.evaluate("window.__voiceTest.ends") == 0
+    ctx.close()
+
+
+REPLY = {"confer": "#voice-reply-mode", "german": "#realtime-voice-reply-mode",
+         "portuguese": "#realtime-voice-reply-mode"}
+WRITE_LABEL = {"confer": "Write only", "german": "Nur schreiben", "portuguese": "Só escrever"}
+SPEAK_LABEL = {"confer": "Speak and write", "german": "Sprechen und schreiben", "portuguese": "Falar e escrever"}
+
+
+NOTE = {"confer": "#voice-reply-note", "german": "#realtime-voice-reply-note",
+        "portuguese": "#realtime-voice-reply-note"}
+NOTE_TEXT = {"confer": "the provider still generates (and bills) the audio",
+             "german": "der Anbieter erzeugt (und berechnet) das Audio weiterhin",
+             "portuguese": "o provedor ainda gera (e cobra) o áudio"}
+
+
+def _live_reply(page, name):
+    if name == "confer":
+        return page.locator("#chat-log .msg-cos .msg-text").last
+    return page.locator("#realtime-live-replies-text")
+
+
+@pytest.mark.parametrize("name", list(PAGES))
+def test_the_reply_toggle_defaults_to_speak_and_write(browser, servers, name):
+    ctx, page = _open(browser, servers, name)
+    select = page.locator(REPLY[name])
+    expect(select).to_be_visible()
+    expect(select).to_have_value("speak")
+    assert select.locator("option").all_text_contents() == [SPEAK_LABEL[name], WRITE_LABEL[name]]
+    _start(page, name)
+    assert page.evaluate("window.__voiceTest.outputMuted") is False       # spoken
+    ctx.close()
+
+
+@pytest.mark.parametrize("name", list(PAGES))
+def test_write_only_mutes_the_reply_shows_its_text_and_is_remembered(browser, servers, name):
+    ctx, page = _open(browser, servers, name)
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    note = page.locator(NOTE[name])
+    expect(note).to_be_hidden()
+    page.select_option(REPLY[name], "write")
+    expect(note).to_be_visible()                                          # #281 review F4: audio still billed
+    expect(note).to_contain_text(NOTE_TEXT[name])
+    _start(page, name)
+    assert page.evaluate("window.__voiceTest.outputMuted") is True        # muted from the start
+    page.evaluate("window.__voiceTest.adapter.say('a1', 'Guten Tag! Was darf es sein?')")
+    reply = _live_reply(page, name)
+    expect(reply).to_be_visible()
+    expect(reply).to_contain_text("Guten Tag! Was darf es sein?")        # the text shows live
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/{name}-write-only.png", full_page=name == "confer")
+    page.select_option(REPLY[name], "speak")                              # during a session too
+    assert page.evaluate("window.__voiceTest.outputMuted") is False
+    page.select_option(REPLY[name], "write")
+    page.reload()
+    expect(page.locator(REPLY[name])).to_have_value("write")              # remembered on this device
+    page.select_option(REPLY[name], "speak")                              # leave the device default
+    assert not errors, errors
+    ctx.close()
+
+
+BLOCKED_STORAGE = """
+Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('blocked', 'SecurityError'); } });
+"""
+
+
+@pytest.mark.parametrize("name", list(PAGES))
+def test_the_toggle_works_when_storage_is_blocked(browser, servers, name):
+    ctx, page = _open(browser, servers, name, init_script=BLOCKED_STORAGE)
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    expect(page.locator(REPLY[name])).to_have_value("speak")
+    page.select_option(REPLY[name], "write")
+    _start(page, name)
+    assert page.evaluate("window.__voiceTest.outputMuted") is True
+    assert not [e for e in errors if "reply" in e.lower() or "blocked" in e], errors
     ctx.close()
 
 

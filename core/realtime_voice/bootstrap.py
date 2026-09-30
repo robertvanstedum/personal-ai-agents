@@ -17,6 +17,7 @@ Per _working/CLAUDE_CODE_BUILD_SPEC_voice_realtime_2026-07-24.md Section 6:
     raw audio, or full prompt content
 """
 import os
+import re
 import time
 
 from flask import Blueprint, jsonify, request
@@ -104,6 +105,10 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         provider override (Section 6/16: never available in production).
     """
     bp = Blueprint(f"realtime_voice_bootstrap_{domain}", __name__)
+
+    @bp.route("/api/realtime-voice/outcome", methods=["POST"])
+    def session_outcome():
+        return log_session_outcome(domain)
 
     @bp.route("/api/realtime-voice/memo/capabilities", methods=["GET"])
     def memo_capabilities():
@@ -263,11 +268,41 @@ def _default_turn_detection(provider: str) -> dict:
     return conversation_turn_detection(provider)
 
 
-def _log_outcome(domain, user_id, provider, model, outcome):
+_ERROR_CODE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
+_SESSION_OUTCOMES = {"provider_error", "fatal_error"}
+
+
+def _safe_code(value) -> str:
+    return value if isinstance(value, str) and _ERROR_CODE.fullmatch(value) else "none"
+
+
+def log_session_outcome(domain):
+    """POST {provider, outcome, reason, code, type} from the shared controller
+    when a provider error ends a session: one outcome line with the provider's
+    error code and type (never its message), so a code the controller does not
+    know as benign (an xAI name for an OpenAI notice, say) is visible."""
+    user_id = resolve_user_id(request)
+    if user_id is None:
+        return jsonify({"ok": False, "error": "identity required"}), 401
+    if request.content_length is None or request.content_length > 2048 or not request.is_json:
+        return jsonify({"ok": False, "error": "small JSON only"}), 400
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or body.get("outcome") not in _SESSION_OUTCOMES:
+        return jsonify({"ok": False, "error": "unknown outcome"}), 400
+    provider = body.get("provider") if body.get("provider") in ("openai", "xai") else "unknown"
+    _log_outcome(domain, user_id, provider, None, f"session_{body['outcome']}",
+                 reason=_safe_code(body.get("reason")), code=_safe_code(body.get("code")),
+                 type=_safe_code(body.get("type")))
+    return jsonify({"ok": True})
+
+
+def _log_outcome(domain, user_id, provider, model, outcome, **extra):
     # Deliberately no credentials, no raw audio, no prompt content --
-    # only the fields Section 6 asks for.
+    # only the fields Section 6 asks for, plus numeric extras (for example
+    # instructions_chars, the size of the server-built instructions).
+    tail = "".join(f" {key}={value}" for key, value in extra.items())
     print(
         f"[realtime_voice] domain={domain} user_id={user_id} provider={provider} "
-        f"model={model} outcome={outcome}",
+        f"model={model} outcome={outcome}{tail}",
         flush=True,
     )

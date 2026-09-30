@@ -7,20 +7,48 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_confer_page_uses_shared_controller_and_keeps_typed_path():
     template = (ROOT / "domains/cos/templates/cos_ui.html").read_text()
-    assert "realtime-voice-controller.js?v=20260929-mic1" in template
+    assert "realtime-voice-controller.js?v=20260929-voice3" in template
     assert "bootstrapUrl: '../api/realtime-voice/confer/bootstrap'" in template
     assert 'id="voice-provider-select"' in template
     assert "OpenAI Voice" in template
     assert "Grok Voice" in template
     assert "onFunctionCall" in template
     assert "speech_output: false" in template
-    assert "onFinalize: (result)" in template
+    assert "onFinalize: async (result)" in template
     assert 'aria-label="Start voice conversation">🎤</button>' in template
     assert "voiceButton.textContent = voiceActive ? '■' : '🎤'" in template
     assert "Voice is AI-generated." in template
     assert "channel: 'html_text'" in template
     assert "captureWithVAD" not in template
     assert "/ui/transcribe" not in template
+
+
+def test_confer_uses_the_standard_voice_flow():
+    """Phase A: CoS greets first, both sides render live, the transcript is
+    posted when voice stops, and the reply toggle is the shared one."""
+    template = (ROOT / "domains/cos/templates/cos_ui.html").read_text()
+    assert "openingInstruction: null" not in template
+    assert "openingInstruction: CONFER_OPENING," in template
+    assert "one short, natural line" in template
+    assert "onUserTurn: (text) => {\n    if (String(text || '').trim()) appendMsg('user'" in template
+    assert "onAssistantTurn: (text) => {\n    if (String(text || '').trim()) appendMsg('cos'" in template
+    assert "fetch('voice/transcript', {" in template
+    assert "Private: not kept in your CoS history." in template
+    assert "voice-reply-mode.js?v=20260929-voice3" in template
+    assert 'id="voice-reply-mode"' in template
+    assert '<option value="speak" selected>Speak and write</option>' in template
+    assert '<option value="write">Write only</option>' in template
+    assert "scope: 'cos'" in template
+    assert "voiceController.setReplyMode(mode)" in template
+    assert "reconnecting:" not in template
+    # #281 review: the Private switch, its marks, and the Write only note.
+    assert '<button id="btn-private" type="button" aria-pressed="false" disabled>' in template
+    assert "fetch('private-mode', {" in template
+    assert "The agent itself may still remember it." in template
+    assert "appendMsg('cos', data.reply || '(empty reply)', { private: data.private === true });" in template
+    assert "mode_epoch: result.session_context?.epoch ?? null," in template
+    assert "window.cosPrivate?.known === false" in template          # unknown mode: Private
+    assert "the provider still generates (and bills) the audio." in template
 
 
 def test_confer_relative_voice_paths_work_directly_and_through_portal():
@@ -36,6 +64,10 @@ def test_confer_relative_voice_paths_work_directly_and_through_portal():
     assert urljoin(direct_page, "send") == "https://cos.example/ui/send"
     assert urljoin(portal_page, "send") == (
         "https://minimoi.example/app/cos/ui/send"
+    )
+    assert urljoin(direct_page, "voice/transcript") == "https://cos.example/ui/voice/transcript"
+    assert urljoin(portal_page, "voice/transcript") == (
+        "https://minimoi.example/app/cos/ui/voice/transcript"
     )
     assert urljoin(direct_page, "speech/turn-1") == (
         "https://cos.example/ui/speech/turn-1"

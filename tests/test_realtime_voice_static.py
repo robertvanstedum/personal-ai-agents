@@ -82,8 +82,8 @@ def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_
     assert "sendContinuationInstruction(this._openingInstruction)" in source
     assert 'this._onInputState("speech_started")' in source
     assert "never surfaced to the UI while active" in source
-    assert "openai-webrtc-adapter.js?v=20260929-mic1" in source
-    assert "xai-websocket-adapter.js?v=20260929-mic1" in source
+    assert "openai-webrtc-adapter.js?v=20260929-voice3" in source
+    assert "xai-websocket-adapter.js?v=20260929-voice3" in source
 
 
 def test_xai_adapter_handles_current_audio_delta_and_connection_failures(german_client):
@@ -113,7 +113,7 @@ def test_openai_adapter_captures_learner_transcription(german_client):
 
 
 def test_every_session_end_releases_the_microphone_once():
-    """#273: a provider-side close or a second provider error ends the session
+    """#273: a provider-side close or a provider error ends the session
     through _finalizeAndEnd, which must release the adapter (and so the
     microphone); the adapters' end() is idempotent. The browser proof, on
     Confer, German and Portuguese, is tests/browser_checks_voice_mic.py."""
@@ -129,3 +129,59 @@ def test_every_session_end_releases_the_microphone_once():
         text = (static / "adapters" / adapter).read_text()
         body = text[text.index("  end(reason) {"):]
         assert "if (this._ended) return;" in body[:200], adapter
+
+
+def test_a_provider_error_ends_the_session_visibly_never_a_silent_wait():
+    """Phase A: no "reconnecting" state; a provider error calls onFatalError
+    and ends the session (releasing the microphone); benign notices do not.
+    The browser proof on all three pages is tests/browser_checks_voice_mic.py."""
+    static = REPO / "core" / "realtime_voice" / "static"
+    source = (static / "realtime-voice-controller.js").read_text()
+    assert "reconnecting" not in source.replace('never a silent "reconnecting" wait', "")
+    assert "_attemptReconnectOrEndVisibly" not in source
+    assert 'this._adapter.on("recoverable_error", (info) => this._onProviderError(info));' in source
+    handler = source[source.index("  _onProviderError(info) {"):]
+    handler = handler[:handler.index("\n  }\n")]
+    assert "this._onFatalError(" in handler
+    assert 'this._endAdapter("provider_error");' in handler
+    for code in ("conversation_already_has_active_response", "response_cancel_not_active",
+                 "input_audio_buffer_commit_empty"):
+        assert f'"{code}"' in source
+    openai = (static / "adapters" / "openai-webrtc-adapter.js").read_text()
+    assert 'this._emit("recoverable_error", { detail: event.error });' not in openai
+    assert "code: event.error?.code || null," in openai and "type: event.error?.type || null," in openai
+    xai = (static / "adapters" / "xai-websocket-adapter.js").read_text()
+    assert "code: event.error?.code || null," in xai and "type: event.error?.type || null," in xai
+    # #281 review F6: the code and type of an error that ends a session are
+    # logged on the server (never the message), benign by code or by type.
+    assert "BENIGN_PROVIDER_ERRORS.has(code) || BENIGN_PROVIDER_ERRORS.has(type)" in handler
+    assert "this._reportProviderError({ ...info, code, type });" in handler
+    report = source[source.index("  _reportProviderError(info) {"):]
+    report = report[:report.index("\n  }\n")]
+    assert "message" not in report and "detail" not in report
+    assert 'String(bootstrapUrl).replace(/bootstrap$/, "outcome")' in source
+
+
+def test_write_only_mutes_playback_in_both_adapters():
+    """Phase A: "write only" mutes the reply's audio on the device (both
+    providers); the provider still sends the transcript, which pages show."""
+    static = REPO / "core" / "realtime_voice" / "static"
+    controller = (static / "realtime-voice-controller.js").read_text()
+    assert 'replyMode = "speak",' in controller
+    assert "setReplyMode(mode) {" in controller
+    assert 'this._adapter.setOutputMuted?.(this._replyMode === "write");' in controller
+    openai = (static / "adapters" / "openai-webrtc-adapter.js").read_text()
+    assert "this._remoteAudioEl.muted = this._outputMuted;" in openai
+    xai = (static / "adapters" / "xai-websocket-adapter.js").read_text()
+    assert "if (this._outputMuted || !this._audioContext || !base64Audio) return;" in xai
+    assert "if (this._outputMuted) this._stopPlayback();" in xai
+    helper = (static / "voice-reply-mode.js").read_text()
+    assert 'const KEY_PREFIX = "minimoi.voice.reply_mode.";' in helper
+    assert helper.count("try {") == 2                    # storage read and write can both throw
+
+
+def test_every_page_serves_the_reply_mode_helper(german_client, portuguese_client):
+    for client in (german_client, portuguese_client):
+        resp = client.get("/static/realtime-voice/voice-reply-mode.js")
+        assert resp.status_code == 200
+        assert "export function mountReplyModeToggle" in resp.get_data(as_text=True)
