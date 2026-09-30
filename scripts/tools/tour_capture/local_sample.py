@@ -144,18 +144,29 @@ def has_proxy_headers(headers) -> bool:
 # (sample action ``voice``) decides whether a start gets that far.
 SAMPLE_VOICE_ADAPTER = """
 // Sample stand-in for the OpenAI WebRTC adapter (tour capture): no network, no microphone.
+// A scenario plays the provider's side through window.__sampleVoice.adapter:
+// say(id, text) (CoS speaks), hear(id, text) (the owner's turn), call(id, name, args)
+// (a function call), and _emit('recoverable_error', {...}) (a provider error).
+const V = () => (window.__sampleVoice ||= {});
 export class OpenAIWebRTCAdapter {
-  constructor() { this._listeners = {}; }
+  constructor() { this._listeners = {}; V().adapter = this; }
   on(name, fn) { (this._listeners[name] ||= []).push(fn); }
   _emit(name, payload) { for (const fn of this._listeners[name] || []) fn(payload); }
   prepareSession(config) { this._config = config; }
-  async connect(credentials) {}
+  setOutputMuted(muted) { V().outputMuted = muted; }
+  async connect(credentials) { setTimeout(() => this._emit('connected', { provider: 'openai' }), 30); }
   start() {}
   mute() {}
   unmute() {}
-  sendContinuationInstruction() {}
-  sendFunctionResult() {}
+  sendContinuationInstruction(text) { V().opening = text; }
+  sendFunctionResult(callId, output) { (V().results ||= []).push({ callId, output }); }
   end(reason) { this._emit('closed', { reason }); }
+  say(id, text) {
+    this._emit('output_transcript', { item_id: id, text, is_delta: false, completed: true });
+    this._emit('assistant_stopped', {});
+  }
+  hear(id, text) { this._emit('input_transcript', { item_id: id, text, is_delta: false, completed: true }); }
+  call(id, name, args) { this._emit('function_call', { call_id: id, name, arguments: JSON.stringify(args) }); }
 }
 """
 
@@ -266,6 +277,17 @@ def _stand_in_cos(state: dict):
 
     app = Flask("cos_sample", template_folder=str(REPO / "domains/cos/templates"),
                 static_folder=str(REPO / "domains/cos/static"))
+    # Where the checkout has them (Confer voice Phase A), the real transcript
+    # and Private routes, on the sample's own turn log (COS_TURNS_DIR).
+    private_mode = None
+    try:
+        from domains.cos import private_mode as _private_mode
+        from domains.cos.voice_transcripts import create_voice_transcript_blueprint
+        app.register_blueprint(create_voice_transcript_blueprint())
+        app.register_blueprint(_private_mode.create_private_mode_blueprint())
+        private_mode = _private_mode
+    except ImportError:
+        pass
 
     @app.route("/ui/<tab>")
     def ui(tab):
@@ -294,12 +316,23 @@ def _stand_in_cos(state: dict):
     def bootstrap():
         if state.get("voice") != "ok":
             return jsonify({"ok": False, "error": "voice is unavailable right now"}), 503
-        return jsonify({"ok": True, "provider": "openai", "model": "sample", "client_secret": "sample-not-a-secret",
-                        "warning_minutes": 20, "max_minutes": 30, "session_config": {}})
+        answer = {"ok": True, "provider": "openai", "model": "sample", "client_secret": "sample-not-a-secret",
+                  "warning_minutes": 20, "max_minutes": 30, "session_config": {}}
+        if private_mode is not None:
+            answer["session_context"] = private_mode.state()
+        return jsonify(answer)
+
+    @app.route("/api/realtime-voice/confer/outcome", methods=["POST"])
+    def outcome():
+        return jsonify({"ok": True})
 
     @app.route("/ui/send", methods=["POST"])
     def send():
-        return jsonify({"reply": f"Noted: {(request.get_json(silent=True) or {}).get('text', '')}"})
+        body = request.get_json(silent=True) or {}
+        answer = {"reply": state.get("reply") or f"Noted: {body.get('text', '')}", "operation": None}
+        if private_mode is not None:
+            answer["private"] = private_mode.state()["private"]
+        return jsonify(answer)
 
     return app
 
@@ -343,7 +376,7 @@ class GuildSample:
             raise RuntimeError("the sample server reads no secrets")
 
         env_keys = ("DATABASE_URL", "GUILD_RECORDS_DB", "SENTRY_DSN", "MC_RUNTIME_URL", "MC_RUNTIME_TOKEN",
-                    "PORTAL_SECRET_KEY", "CAPTURE_AUTH_SECRET", "MINIMOI_GUILD_NEXT", "MINIMOI_USAGE_DIR", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID")
+                    "PORTAL_SECRET_KEY", "CAPTURE_AUTH_SECRET", "MINIMOI_GUILD_NEXT", "COS_TURNS_DIR", "MINIMOI_USAGE_DIR", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID")
         self._restore = {"env": {k: os.environ.get(k) for k in env_keys},
                          "get_secret": secrets_module.get_secret,
                          "in_container": qs._running_in_container,
@@ -370,7 +403,9 @@ class GuildSample:
             setattr(portal_config, key, CLOSED_BACKEND)
         portal_config.GUILD_OPERATIONS_STATUS_URL = None
         os.environ.update({"MINIMOI_GUILD_NEXT": "1", "MINIMOI_USAGE_DIR": str(self.workdir / "usage"),
-                           "MINIMOI_WORKSHOPS_DIR": str(self.workdir / "workshops"), "MINIMOI_WORKSHOP_ID": "mac"})
+                           "MINIMOI_WORKSHOPS_DIR": str(self.workdir / "workshops"), "MINIMOI_WORKSHOP_ID": "mac",
+                           "COS_TURNS_DIR": str(self.workdir / "cos-turns")})
+        (self.workdir / "cos-turns").mkdir(parents=True, exist_ok=True)
         (self.workdir / "usage").mkdir(parents=True, exist_ok=True)
         self.queue = write_queue(self.workdir / "guild" / "build_queue.json")
         self._write_queue = write_queue
@@ -480,6 +515,10 @@ class GuildSample:
         assert not (self.queue.parent / qs.JOURNAL_NAME).exists()
         self.set_mc({"mode": "off"})
         self.cos_state["voice"] = "fail"
+        self.cos_state.pop("reply", None)
+        turns = self.workdir / "cos-turns"                        # CoS's sample turn log and Private switch
+        shutil.rmtree(turns, ignore_errors=True)
+        turns.mkdir(parents=True, exist_ok=True)
         self._seed_workshop()
         return {"features": self.features}
 
@@ -547,9 +586,14 @@ class GuildSample:
                                          idempotency_key=f"sample-cont-{time.time_ns()}")
 
     def set_voice(self, args: dict) -> None:
+        """boot ok|fail: whether a voice start gets a (sample) session; reply: CoS's answer to /ui/send."""
         if args.get("boot") not in ("ok", "fail"):
             raise SampleServerError("voice boot must be 'ok' or 'fail'")
+        if "reply" in args and (not isinstance(args["reply"], str) or not args["reply"].strip()):
+            raise SampleServerError("reply must be text")
         self.cos_state["voice"] = args["boot"]
+        if "reply" in args:
+            self.cos_state["reply"] = args["reply"]
 
     def _clear_inflight(self) -> None:
         try:

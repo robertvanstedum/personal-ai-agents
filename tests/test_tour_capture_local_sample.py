@@ -213,7 +213,7 @@ def test_the_session_key_is_the_samples_own(monkeypatch, tmp_path):
 
 def test_the_cos_stand_in_answers_without_a_model_and_voice_follows_the_sample_state(sample):
     cos = ls._stand_in_cos(sample.cos_state).test_client()
-    assert cos.post("/ui/send", json={"text": "Plan the week"}).get_json() == {"reply": "Noted: Plan the week"}
+    assert cos.post("/ui/send", json={"text": "Plan the week"}).get_json()["reply"] == "Noted: Plan the week"
     sample.cos_state["voice"] = "fail"
     assert cos.post("/api/realtime-voice/confer/bootstrap", json={}).status_code == 503
     sample.cos_state["voice"] = "ok"
@@ -316,3 +316,20 @@ def test_restore_puts_back_the_auth_sources(tmp_path):
     assert portal_auth.AUTH_DIR != before[0]
     built.restore()
     assert (portal_auth.AUTH_DIR, portal_domain_auth.list_users_with_access) == before
+
+
+def test_the_cos_stand_in_carries_the_sample_reply_and_its_turn_log_is_the_samples(legacy):
+    import os
+    sample, client = legacy, Loopback(legacy.app.test_client())
+    assert client.post("/__tour_sample/voice", json={"boot": "ok", "reply": "Two items today."}).status_code == 200
+    cos = ls._stand_in_cos(sample.cos_state).test_client()
+    assert cos.post("/ui/send", json={"text": "What is on my list?"}).get_json()["reply"] == "Two items today."
+    assert cos.post("/api/realtime-voice/confer/outcome", json={"outcome": "provider_error"}).status_code == 200
+    assert os.environ["COS_TURNS_DIR"].startswith(str(sample.workdir))
+    assert client.post("/__tour_sample/voice", json={"boot": "ok", "reply": ""}).status_code == 400
+
+
+def test_the_sample_voice_adapter_lets_a_scenario_play_the_providers_side():
+    for method in ("say(id, text)", "hear(id, text)", "call(id, name, args)", "setOutputMuted(muted)"):
+        assert method in ls.SAMPLE_VOICE_ADAPTER
+    assert "fetch(" not in ls.SAMPLE_VOICE_ADAPTER and "getUserMedia" not in ls.SAMPLE_VOICE_ADAPTER

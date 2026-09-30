@@ -757,26 +757,144 @@
     {
       "sample": "voice",
       "args": {
-        "boot": "ok"
+        "boot": "ok",
+        "reply": "Two items today: the Rooms review and the Hetzner checklist."
+      }
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#btn-voice"
+    },
+    {
+      "click": "#btn-voice"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-status",
+        "text": "Listening"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.say('a1', 'Hi Robert, what shall we work on?')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "what shall we work on"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.hear('u1', 'What is on my list today?')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "What is on my list today?"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.call('c1', 'consult_cos_agent', {request: 'What is on my list today?'})"
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.say('a2', 'Two items today: the Rooms review and the Hetzner checklist.')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "Hetzner checklist"
+      }
+    },
+    {
+      "screenshot": "confer-voice-live",
+      "title": "CoS Confer: voice, CoS greets first",
+      "description": "Voice Phase A: CoS speaks first, then the owner's turn and CoS's reply appear live in the chat as they are spoken (Speak and write, the default). The provider is a sample stand-in: no microphone, no provider, no model. Sample data from a local test instance.",
+      "alt": "CoS Confer: voice, CoS greets first"
+    },
+    {
+      "evaluate": "(() => { const s = document.querySelector('#voice-reply-mode'); s.value = 'write'; s.dispatchEvent(new Event('change', {bubbles: true})); })()"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-reply-note",
+        "text": "Write only"
+      }
+    },
+    {
+      "screenshot": "confer-write-only",
+      "title": "CoS Confer: Write only",
+      "description": "Write only: replies are written, not played; the note says the provider still generates (and bills) the audio. Sample data from a local test instance.",
+      "alt": "CoS Confer: Write only"
+    },
+    {
+      "click": "#btn-voice"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-transcript",
+        "text": "Transcript saved"
+      }
+    },
+    {
+      "screenshot": "confer-voice-ended",
+      "title": "CoS Confer: voice ended, transcript kept",
+      "description": "Stop ends the session; the transcript is saved to the (sample) CoS history, and the chat keeps the exchange. Sample data from a local test instance.",
+      "alt": "CoS Confer: voice ended, transcript kept"
+    },
+    {
+      "evaluate": "(() => { const s = document.querySelector('#voice-reply-mode'); s.value = 'speak'; s.dispatchEvent(new Event('change', {bubbles: true})); })()"
+    },
+    {
+      "click": "#btn-private"
+    },
+    {
+      "wait_for": {
+        "selector": "#btn-private",
+        "text": "Private: on"
+      }
+    },
+    {
+      "wait_for": "#private-banner"
+    },
+    {
+      "screenshot": "confer-private",
+      "title": "CoS Confer: the Private switch",
+      "description": "Private on: a banner says nothing is kept in the CoS history (the agent itself may still remember it); the switch is sticky and covers text and voice. Sample data from a local test instance.",
+      "alt": "CoS Confer: the Private switch"
+    },
+    {
+      "click": "#btn-private"
+    },
+    {
+      "wait_for": {
+        "selector": "#btn-private",
+        "text": "Private: off"
       }
     },
     {
       "click": "#btn-voice"
     },
     {
-      "wait_for": "#btn-voice[aria-label=\"Stop voice conversation\"]"
+      "wait_for": {
+        "selector": "#voice-status",
+        "text": "Listening"
+      }
     },
     {
-      "screenshot": "confer-voice-starting",
-      "title": "CoS Confer: voice controls",
-      "description": "The voice controls on this branch: provider select and the mic button, here a start in progress (\"Connecting...\" with Stop; stand-in adapter: no microphone, no provider). Voice Phase A (greeting, live transcript, Speak and write / Write only) is not on the branch yet. Sample data from a local test instance.",
-      "alt": "CoS Confer: voice controls"
+      "evaluate": "window.__sampleVoice.adapter._emit('recoverable_error', {reason: 'provider_error', code: 'server_error', type: 'server_error_type', detail: 'The server had an error'})"
     },
     {
-      "click": "#btn-voice"
+      "wait_for": {
+        "selector": "#voice-transcript",
+        "text": "The server had an error"
+      }
     },
     {
-      "wait_for": "#btn-voice[aria-label=\"Start voice conversation\"]"
+      "screenshot": "confer-provider-error",
+      "title": "CoS Confer: a provider error",
+      "description": "A provider error is shown, not swallowed: \"Voice error: The server had an error. Voice stopped; the microphone is off.\" (the error is the sample stand-in's). Sample data from a local test instance.",
+      "alt": "CoS Confer: a provider error"
     },
     {
       "sample": "voice",

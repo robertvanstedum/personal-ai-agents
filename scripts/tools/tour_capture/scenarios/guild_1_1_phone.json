@@ -282,6 +282,64 @@
       "title": "CoS Confer on a phone",
       "description": "Confer on a phone through the portal: the stand-in's text reply and the voice row. No model is called. Sample data from a local test instance.",
       "alt": "CoS Confer on a phone"
+    },
+    {
+      "sample": "voice",
+      "args": {
+        "boot": "ok",
+        "reply": "Two items today: the Rooms review and the Hetzner checklist."
+      }
+    },
+    {
+      "goto": "/app/cos/ui/confer"
+    },
+    {
+      "wait_for": "#btn-voice"
+    },
+    {
+      "click": "#btn-voice"
+    },
+    {
+      "wait_for": {
+        "selector": "#voice-status",
+        "text": "Listening"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.say('a1', 'Hi Robert, what shall we work on?')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "what shall we work on"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.hear('u1', 'What is on my list today?')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "What is on my list today?"
+      }
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.call('c1', 'consult_cos_agent', {request: 'What is on my list today?'})"
+    },
+    {
+      "evaluate": "window.__sampleVoice.adapter.say('a2', 'Two items today: the Rooms review and the Hetzner checklist.')"
+    },
+    {
+      "wait_for": {
+        "selector": "#chat-log",
+        "text": "Hetzner checklist"
+      }
+    },
+    {
+      "screenshot": "confer-voice-live",
+      "title": "CoS Confer voice on a phone",
+      "description": "Voice Phase A on a phone: CoS greets first and the exchange shows live (sample provider stand-in). Sample data from a local test instance.",
+      "alt": "CoS Confer voice on a phone"
     }
   ],
   "mobile_emulation": true

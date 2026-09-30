@@ -353,7 +353,7 @@ def test_mobile_emulation_must_be_a_boolean():
 GUILD_REVIEW = ROOT / "scripts" / "tools" / "tour_capture" / "scenarios"
 
 
-@pytest.mark.parametrize("path", sorted(GUILD_REVIEW.glob("guild_1_1_*.json")), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", sorted([*GUILD_REVIEW.glob("guild_1_1_*.json"), *GUILD_REVIEW.glob("guild_current_*.json")]), ids=lambda p: p.name)
 def test_guild_review_scenarios_are_valid_local_captures(path):
     scenario = load_scenario(path)
     assert scenario["auth_profile"] == "none"
