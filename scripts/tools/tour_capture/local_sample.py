@@ -41,6 +41,7 @@ import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -85,8 +86,50 @@ def check_port(port: int) -> int:
     return port
 
 
-def path_allowed(path: str) -> bool:
-    return path in ALLOWED_EXACT or path.startswith(ALLOWED_PREFIXES)
+# With legacy_guild on, the production Guild pages under /guild/ are served
+# too, read only (GET/HEAD): their POST routes grant or revoke guests and send
+# mail, so the sample never runs them.
+LEGACY_PREFIX = "/guild/"
+READ_METHODS = {"GET", "HEAD"}
+
+
+def path_allowed(path: str, *, legacy_guild: bool = False) -> bool:
+    if path in ALLOWED_EXACT or path.startswith(ALLOWED_PREFIXES):
+        return True
+    return legacy_guild and path.startswith(LEGACY_PREFIX)
+
+
+class _NoNetwork:
+    """Stands in for the portal module's ``requests``: every call fails as
+    unreachable (the legacy Operate page asks localhost:8768 for status)."""
+
+    import requests as _real
+    exceptions = _real.exceptions
+    RequestException = _real.RequestException
+    ConnectionError = _real.ConnectionError
+
+    def _refuse(self, *_a, **_k):
+        raise self._real.ConnectionError("the sample server makes no outbound calls")
+
+    get = post = put = patch = delete = head = request = _refuse
+
+
+SAMPLE_GUESTS = {"guests": [
+    {"username": "guest_sample01", "display_name": "Sample Guest", "email": "guest01@example.com",
+     "expires_at": "2026-10-14T00:00:00+00:00", "created_at": "2026-09-14T00:00:00+00:00", "domains": ["german"]},
+    {"username": "guest_sample02", "display_name": "Expired Sample", "email": "guest02@example.com",
+     "expires_at": "2026-09-01T00:00:00+00:00", "created_at": "2026-08-01T00:00:00+00:00", "domains": ["curator"]},
+]}
+SAMPLE_USERS = [
+    {"id": 1, "email": "owner@example.com", "name": "Sample Owner", "role": "owner", "created_at": datetime(2026, 2, 1),
+     "last_login": datetime(2026, 9, 29, 8, 30), "is_active": True, "domains": "curator, german, guild, portuguese"},
+    {"id": 2, "email": "reader@example.com", "name": "Sample Reader", "role": "user", "created_at": datetime(2026, 7, 10),
+     "last_login": datetime(2026, 9, 20, 19, 5), "is_active": True, "domains": "curator"},
+]
+SAMPLE_GUEST_REQUESTS = [
+    {"id": 1, "name": "Sample Requester", "email": "requester@example.com", "reason": "Wants to try Mein Deutsch",
+     "domain": "german", "requested_at": datetime(2026, 9, 28, 10, 0), "status": "requested", "actioned_at": None},
+]
 
 
 def has_proxy_headers(headers) -> bool:
@@ -275,6 +318,7 @@ class GuildSample:
 
     workdir: Path
     port: int = 0                 # the port it will be served on; the only port its Host may name
+    legacy_guild: bool = False    # also serve the production Guild pages under /guild/ (read only)
     app: object = None
     relay: ScriptedRelay = field(default_factory=ScriptedRelay)
     cos_state: dict = field(default_factory=lambda: {"voice": "fail"})
@@ -306,6 +350,18 @@ class GuildSample:
                          "queue_path": portal_config.GUILD_QUEUE_PATH, "base_url": portal_config.BASE_URL,
                          "backends": {k: getattr(portal_config, k, None) for k in BACKEND_SETTINGS},
                          "ops_status": getattr(portal_config, "GUILD_OPERATIONS_STATUS_URL", None)}
+        # The legacy pages' own data: sample guests, users and requests, never
+        # the checkout's minimoi_portal/auth files or the auth database.
+        import minimoi_portal.auth as portal_auth
+        import minimoi_portal.domain_auth as portal_domain_auth
+        self._restore.update(auth_dir=portal_auth.AUTH_DIR,
+                             list_users=portal_domain_auth.list_users_with_access)
+        auth_dir = self.workdir / "auth"
+        auth_dir.mkdir(parents=True, exist_ok=True)
+        (auth_dir / "guests.json").write_text(json.dumps(SAMPLE_GUESTS))
+        (auth_dir / "users.json").write_text(json.dumps({"users": []}))
+        portal_auth.AUTH_DIR = auth_dir
+        portal_domain_auth.list_users_with_access = lambda: [dict(u) for u in SAMPLE_USERS]
         secrets_module.get_secret = no_secrets
         qs._running_in_container = lambda: False
         for var in env_keys[:7]:
@@ -328,9 +384,12 @@ class GuildSample:
         # Its own random session key: never PORTAL_SECRET_KEY, even when the
         # shell exports it, so a sample cookie is worthless anywhere else.
         app.secret_key = _secrets.token_hex(32)
+        module._requests = _NoNetwork()                              # the portal module makes no outbound call
+        module._get_guest_requests = lambda: [dict(r) for r in SAMPLE_GUEST_REQUESTS]
         app.config["SESSION_COOKIE_SECURE"] = False                 # plain http on loopback
         owner = dict(OWNER)
         allowed_hosts = self.allowed_hosts
+        legacy = self.legacy_guild
 
         from flask import abort, jsonify, request, session
 
@@ -342,8 +401,10 @@ class GuildSample:
                 abort(403)                                          # the tunnel or any proxy: never
             if request.host not in allowed_hosts:
                 abort(403)                                          # a rebound name or a foreign Host
-            if not path_allowed(request.path):
+            if not path_allowed(request.path, legacy_guild=legacy):
                 abort(404)
+            if legacy and request.path.startswith(LEGACY_PREFIX) and request.method not in READ_METHODS:
+                abort(403)                                          # the production pages are read only here
 
         def sign_in_loopback():
             admitted()
@@ -388,6 +449,10 @@ class GuildSample:
         for key, value in saved["backends"].items():
             setattr(portal_config, key, value)
         portal_config.GUILD_OPERATIONS_STATUS_URL = saved["ops_status"]
+        import minimoi_portal.auth as portal_auth
+        import minimoi_portal.domain_auth as portal_domain_auth
+        portal_auth.AUTH_DIR = saved["auth_dir"]
+        portal_domain_auth.list_users_with_access = saved["list_users"]
         self._restore = None
 
     # ── scene set-up ──────────────────────────────────────────────────────
@@ -516,7 +581,7 @@ class GuildSample:
                   "text": "Streaming S1 after the reviews"})
 
 
-def serve(port: int = 0, host: str = "127.0.0.1", workdir: Path | None = None):
+def serve(port: int = 0, host: str = "127.0.0.1", workdir: Path | None = None, legacy_guild: bool = False):
     """Build and start the sample portal and its CoS stand-in; returns (sample, url, stop)."""
     if host not in ("127.0.0.1", "localhost"):
         raise SampleServerError("the sample server binds loopback only")
@@ -531,7 +596,7 @@ def serve(port: int = 0, host: str = "127.0.0.1", workdir: Path | None = None):
             port = _free_port()
     own_dir = workdir is None
     workdir = Path(workdir or tempfile.mkdtemp(prefix="tour-sample-"))
-    sample = GuildSample(workdir, port=port).build()
+    sample = GuildSample(workdir, port=port, legacy_guild=legacy_guild).build()
     cos_srv = make_server("127.0.0.1", _free_port(), _stand_in_cos(sample.cos_state), threaded=True)
     threading.Thread(target=cos_srv.serve_forever, daemon=True).start()
     portal_config.COS_BACKEND = f"http://127.0.0.1:{cos_srv.server_port}"   # the stand-in, on loopback
@@ -551,8 +616,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Serve a local sample portal for review captures (loopback only)")
     parser.add_argument("--port", type=int, default=0,
                         help="a free high port (default: a random one); MiniMoi service and tunnel ports are refused")
+    parser.add_argument("--legacy-guild", action="store_true",
+                        help="also serve the production Guild pages under /guild/ (read only, sample data)")
     args = parser.parse_args(argv)
-    sample, url, stop = serve(args.port)
+    sample, url, stop = serve(args.port, legacy_guild=args.legacy_guild)
     print(f"sample portal: {url} (sample data; loopback only; features: {sample.features})", flush=True)
     try:
         threading.Event().wait()

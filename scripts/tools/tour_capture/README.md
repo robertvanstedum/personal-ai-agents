@@ -176,6 +176,15 @@ when every one of these holds; otherwise the request is refused:
 - the path is one the review scenarios need (`/guild`, `/guild-next/...`,
   `/app/cos/...`, `/static/...`, `/__tour_sample/...`); anything else is 404.
 
+With `--legacy-guild` it also serves the production Guild pages under
+`/guild/` (build log, queue, roadmap, docs, spec detail, Operate, Improve,
+Experiment, Career, Users, the Rooms preview), **read only**: their POST
+routes grant or revoke guests and send mail, so every non-GET request there
+is refused. They show sample guests, users and guest requests, never the
+checkout's `minimoi_portal/auth/` files or the auth database, and the portal
+module makes no outbound call (Operate's localhost:8768 status reads
+unreachable). Every other rule below still applies.
+
 It binds 127.0.0.1 only and never on 5001 or a staging or service port. It
 signs its session with its own random key, never `PORTAL_SECRET_KEY`. The
 real curator, german, portuguese and IoT Connect backends point at a closed

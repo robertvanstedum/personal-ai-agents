@@ -237,3 +237,82 @@ def test_restore_puts_the_process_back(tmp_path):
     assert os.environ["MINIMOI_GUILD_NEXT"] == "1"
     built.restore()
     assert (secrets_module.get_secret, os.environ.get("MINIMOI_GUILD_NEXT"), portal_config.CURATOR_BACKEND) == before
+
+
+# ── The production Guild pages (legacy_guild), read only, sample data ────────
+
+@pytest.fixture(scope="module")
+def legacy(tmp_path_factory, sample):
+    sample.restore()                      # one sample per process at a time
+    built = ls.GuildSample(tmp_path_factory.mktemp("legacy"), port=PORT, legacy_guild=True).build()
+    yield built
+    built.restore()
+
+
+LEGACY_PAGES = ["/guild/build", "/guild/build/queue", "/guild/build/roadmap", "/guild/docs", "/guild/docs/decisions",
+                "/guild/operate", "/guild/improve", "/guild/experiment/", "/guild/rooms-preview/", "/guild/career",
+                "/guild/users"]
+
+
+def test_legacy_pages_are_404_unless_switched_on(client):
+    for path in LEGACY_PAGES:
+        assert client.get(path).status_code == 404, path
+
+
+@pytest.mark.parametrize("path", LEGACY_PAGES)
+def test_legacy_pages_render_with_the_sample_owner(legacy, path):
+    assert Loopback(legacy.app.test_client()).get(path).status_code == 200
+
+
+def test_legacy_pages_show_sample_people_never_the_checkouts_auth_files(legacy):
+    import json as _json
+    import minimoi_portal.auth as portal_auth
+    c = Loopback(legacy.app.test_client())
+    operate = c.get("/guild/operate").get_data(as_text=True)
+    users = c.get("/guild/users").get_data(as_text=True)
+    assert "guest01@example.com" in operate and "Sample Requester" in operate
+    assert "owner@example.com" in users
+    assert portal_auth.AUTH_DIR == legacy.workdir / "auth"
+    real_dir = ls.REPO / "minimoi_portal" / "auth"
+    for name in ("pending.json", "email_verifications.json"):
+        path = real_dir / name
+        if path.exists():
+            for email in _json.dumps(_json.loads(path.read_text() or "{}")).split('"'):
+                if "@" in email and "example.com" not in email:
+                    assert email not in operate and email not in users
+
+
+def test_legacy_operate_makes_no_outbound_call(legacy):
+    """The page asks localhost:8768 for status; the sample's portal module answers unreachable."""
+    import requests
+    body = Loopback(legacy.app.test_client()).get("/guild/operate").get_data(as_text=True)
+    assert "unreachable" in body.lower()
+    with pytest.raises(requests.ConnectionError):
+        ls._NoNetwork().get("http://localhost:8768/status")
+
+
+@pytest.mark.parametrize("path", ["/guild/guests/guest_sample01/revoke", "/guild/guests/guest_sample01/extend",
+                                  "/guild/guest-requests/1/status", "/guild/build/items/12/status",
+                                  "/guild/career/positions/add"])
+def test_legacy_writes_are_refused(legacy, path):
+    before = (legacy.workdir / "auth" / "guests.json").read_text()
+    assert Loopback(legacy.app.test_client()).post(path, data={"status": "approved"}).status_code == 403
+    assert (legacy.workdir / "auth" / "guests.json").read_text() == before
+
+
+def test_legacy_pages_keep_every_other_rule(legacy):
+    assert Loopback(legacy.app.test_client(), "evil.example").get("/guild/operate").status_code == 403
+    assert Loopback(legacy.app.test_client()).get("/guild/operate", headers={"CF-Ray": "x"}).status_code == 403
+    assert Loopback(legacy.app.test_client()).get("/admin/guests").status_code == 404
+    import minimoi_portal.config as portal_config
+    assert portal_config.CURATOR_BACKEND == ls.CLOSED_BACKEND
+
+
+def test_restore_puts_back_the_auth_sources(tmp_path):
+    import minimoi_portal.auth as portal_auth
+    import minimoi_portal.domain_auth as portal_domain_auth
+    before = (portal_auth.AUTH_DIR, portal_domain_auth.list_users_with_access)
+    built = ls.GuildSample(tmp_path, port=PORT, legacy_guild=True).build()
+    assert portal_auth.AUTH_DIR != before[0]
+    built.restore()
+    assert (portal_auth.AUTH_DIR, portal_domain_auth.list_users_with_access) == before
