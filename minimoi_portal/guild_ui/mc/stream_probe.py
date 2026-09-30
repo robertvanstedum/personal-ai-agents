@@ -144,7 +144,9 @@ def one_turn(services, conversations, *, principal: str, label: str, stop_after_
     from .stream_usage import flush
     flush()
     line = _turn_line(services, turn_id)
-    stream_rec = next(iter(_records(usage_dir, lambda r: r.get("emitter") == "runtime-stream"
+    from .stream_usage import portal_folder
+    own = portal_folder() or os.path.join(usage_dir or "", "portal")
+    stream_rec = next(iter(_records(own, lambda r: r.get("emitter") == "runtime-stream"
                                     and r.get("correlation_id") == turn_id)), None)
 
     def gateway():

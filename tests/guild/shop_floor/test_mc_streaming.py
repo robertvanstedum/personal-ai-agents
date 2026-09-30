@@ -125,10 +125,12 @@ def _events(resp) -> list[dict]:
 
 
 def _usage_lines(folder) -> list[dict]:
+    """The portal's own usage records: usage/portal/, never the shared monthly file."""
     from services.usage import usage_record
     usage_record.flush()
+    assert not list(Path(folder).glob("usage-*.jsonl")), "the portal wrote the shared monthly file"
     out = []
-    for f in sorted(Path(folder).glob("usage-*.jsonl")):
+    for f in sorted((Path(folder) / "portal").glob("usage-*.jsonl")):
         out += [json.loads(line) for line in f.read_text().splitlines() if line.strip()]
     return out
 
@@ -570,9 +572,54 @@ def test_the_worker_never_reads_the_request_context():
             assert node.id not in ("request", "current_app", "cfg", "session", "g"), node.id
 
 
-def test_staging_turns_streaming_on_and_mounts_the_usage_store_read_write():
+def test_staging_turns_streaming_on_and_mounts_only_the_portals_own_usage_folder_read_write():
     compose = (REPO / "docker-compose.staging.yml").read_text()
     assert "MINIMOI_GUILD_MC_STREAM=${MINIMOI_GUILD_MC_STREAM:-on}" in compose
-    assert "${MINIMOI_ROOT}/data/usage:/app/data/usage\n" in compose
+    assert "${MINIMOI_ROOT}/data/usage:/app/data/usage:ro\n" in compose
+    assert "${MINIMOI_ROOT}/data/usage/portal:/app/data/usage/portal\n" in compose
     from minimoi_portal.guild_ui.mc import stream_enabled
     assert stream_enabled({}) is False and stream_enabled({"MINIMOI_GUILD_MC_STREAM": "on"}) is True
+
+
+def test_the_portal_folder_is_its_own(monkeypatch, tmp_path):
+    from minimoi_portal.guild_ui.mc import stream_usage
+    monkeypatch.delenv("MINIMOI_USAGE_PORTAL_DIR", raising=False)
+    monkeypatch.setenv("MINIMOI_USAGE_DIR", "/app/data/usage")
+    assert stream_usage.portal_folder() == "/app/data/usage/portal"
+    monkeypatch.setenv("MINIMOI_USAGE_PORTAL_DIR", str(tmp_path))
+    assert stream_usage.portal_folder() == str(tmp_path)
+    monkeypatch.delenv("MINIMOI_USAGE_PORTAL_DIR")
+    monkeypatch.delenv("MINIMOI_USAGE_DIR")
+    assert stream_usage.portal_folder() is None
+    assert stream_usage.record_run(turn_id="t" * 32, status="ok") is False            # nowhere to write: nothing
+
+
+@pytest.mark.parametrize("status,text,trace", [
+    (409, '{"error":{"type":"relay_stopped"}}', True),          # stopped before MC's headers: after dispatch
+    (504, '{"error":{"type":"relay_timeout"}}', True),
+    (502, '{"error":{"type":"relay_upstream_down"}}', True),
+    (401, '{"error":{"type":"relay_unauthorized"}}', False),    # refused before MC was called
+    (429, '{"error":{"type":"relay_busy"}}', False),
+])
+def test_relay_answers_after_dispatch_leave_a_usage_trace_with_null_tokens(streaming, status, text, trace):
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "hello")
+    runtime = streaming.extra["runtime"]
+    runtime.status, runtime.error_text = status, text
+    end = _events(_stream(client, token, note["request_id"]))[-1]
+    assert end["t"] == "error" and end["reply_note"] is None
+    _wait_idle()
+    lines = [u for u in _usage_lines(streaming.extra["usage"]) if u["correlation_id"] == end["turn_id"]]
+    if trace:
+        assert len(lines) == 1 and lines[0]["status"] == "error"
+        assert lines[0]["output_tokens"] is None and lines[0]["input_tokens"] is None
+    else:
+        assert lines == []
+
+
+def test_the_portal_idle_limit_outlasts_the_relays():
+    from minimoi_portal.guild_ui.mc.openclaw import STREAM_LIMITS
+    relay = (REPO / "docker/mc-agent/relay.mjs").read_text()
+    assert "MC_RELAY_IDLE_MS || 30000" in relay and "MC_RELAY_DEADLINE_MS || 120000" in relay
+    assert STREAM_LIMITS.idle_s > 30 and STREAM_LIMITS.deadline_s > 120

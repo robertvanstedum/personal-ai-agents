@@ -946,13 +946,26 @@ The portal also sends `render` (server-rendered, sanitised Markdown) at most
 every 500 ms, only on change, and none past 32 KB.
 
 **Usage.**
-- The portal's usage mount is now **read-write**, for one kind of line only:
-  `emitter: runtime-stream`, `actor: mc`, `route: openclaw/mc-agent`, keyed by
-  the turn id (`correlation_id`), with `cost_usd` null.
-- A test holds that `minimoi_portal/guild_ui/mc/stream_usage.py` is the
-  portal's only writer.
-- The gateway's own record stays the source for cost. An interrupted or stopped
-  run leaves a `status: error` line and an `mc_turns.jsonl` line.
+- MC's own run records are `runtime-stream` lines (`actor: mc`,
+  `route: openclaw/mc-agent`, keyed by the turn id, `cost_usd` null). The
+  portal writes them **only** into `data/usage/portal/` (the same v1 format),
+  mounted read-write. The shared `data/usage/` stays read-only for the portal.
+- Why: the portal runs as root and usage files are created 0600. Had the
+  portal created the month's shared file first, the non-root gateway could no
+  longer append to it. `tests/usage/docker_checks_usage_owners.py` (opt-in,
+  Docker) shows both the hazard and the fix, with two uids on a Docker volume.
+- `minimoi_portal/guild_ui/mc/stream_usage.py` is the portal's only writer; a
+  test holds that.
+- The gateway's own record stays the source for cost. An interrupted, stopped
+  or relay-refused-after-dispatch run leaves a `status: error` line and an
+  `mc_turns.jsonl` line.
+
+**MC's retry cap.** `docker/mc-agent/agent-settings.json`
+(`{"retry":{"provider":{"maxRetries":0}}}`) is applied to MC's agentDir on
+every start (`start-mc.sh`), so one dispatch makes one model call. Without
+it, OpenClaw's own transient-retry loop repeated a failed upstream call five
+times (P1). On the pinned 2026.9.6, with the cap, `stage_b.py` P1 shows
+exactly one model call for a failed turn.
 
 **Rollout.**
 - The portal and the relay both changed. The relay is `docker/mc-agent/relay.mjs`,
@@ -963,9 +976,10 @@ every 500 ms, only on change, and none past 32 KB.
   cancels its own upstream call) and a caller that leaves.
 - **First run** (2026-09-29, MC image `fa1e9ec`, OpenClaw 2026.9.6): 22/22.
   - P4: first text at 1.8 s, finish at 3.4 s, with usage passed through.
-  - P1: after a mid-stream failure, OpenClaw retried its upstream call five
-    times, then went quiet. The relay's 30 s idle limit ended it as a failure;
-    it may have been paid, several times.
+  - P1 without the retry cap: OpenClaw retried its upstream call five times,
+    then went quiet, and the relay's 30 s idle limit ended it. With the cap
+    (the second run, same image): exactly one model call, and the failure
+    reaches the Shop floor at once.
   - P2: Stop made OpenClaw close its own call to the model endpoint.
   - A caller that left did not stop the run.
 - The gateway-to-provider hop on abort is not probed yet (stage C).

@@ -33,7 +33,8 @@ Streaming (spec v0.2 §3, v0.3 §2): ``stream_turn()`` sends the same body with
 bounded reader (stream.py) reads it: a 125 s wall clock, 30 s idle (the read
 timeout), 256 KB of text, a 64 KB line. ``stop()`` asks the relay to abort the
 turn (POST /v1/turns/stop). A non-200 from the relay is classified exactly as
-the non-streaming path's.
+the non-streaming path's. The portal's idle limit (35 s) outlasts the relay's
+(30 s), as its deadline (125 s) outlasts the relay's (120 s).
 """
 from __future__ import annotations
 
@@ -50,7 +51,9 @@ MAX_REQUEST_BODY_BYTES = 262_144
 CONNECT_TIMEOUT_S = 5
 TURN_DEADLINE_S = 90
 HEALTH_TIMEOUT_S = 5
-STREAM_LIMITS = Limits(deadline_s=125.0, idle_s=30.0, text_max=256 * 1024, line_max=64 * 1024)
+# The portal's limits outlast the relay's (120 s, 30 s idle), so the relay's own
+# in-band error always arrives first (#275 review, finding 5).
+STREAM_LIMITS = Limits(deadline_s=125.0, idle_s=35.0, text_max=256 * 1024, line_max=64 * 1024)
 STOP_TIMEOUT_S = 5
 # OpenClaw 2026.9.6 (dist/openai-http: the non-streaming chat completion)
 # answers 200 with this text when the agent run produced no reply text, and

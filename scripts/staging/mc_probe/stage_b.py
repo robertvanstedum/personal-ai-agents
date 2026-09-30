@@ -215,7 +215,9 @@ def stream_probes(a):
     record("P1 an upstream failure mid-stream reaches the Shop floor as a failure, never an answer",
            ["Finish", "stop"] not in kinds and (kinds and kinds[-1][0] == "Failure" or "Finish" not in [k[0] for k in kinds]),
            json.dumps(kinds))
-    record("P1 (informational): model calls OpenClaw made for that turn", True, str(len(_chat_log()) - before))
+    calls = len(_chat_log()) - before
+    record("P1 with MC's retry cap (retry.provider.maxRetries 0): one failed dispatch makes exactly one model call",
+           calls == 1, f"{calls} model call(s) for that turn (5 without the cap on 2026-09-29)")
 
     before = len(_chat_log())
     _capture("/script", {"model": "minimoi-mc-agent", "replace": True,
@@ -258,8 +260,13 @@ def main():
            "MC_STATE_VOLUME": VOLS[0], "MC_AUTH_VOLUME": VOLS[1]}
     # This branch's relay (streaming S1), mounted over the image's copy.
     override = tmp / "relay-override.yml"
+    mc_dir = REPO / "docker" / "mc-agent"
     override.write_text("services:\n  mc-relay:\n    volumes:\n"
-                        f"      - {REPO / 'docker' / 'mc-agent' / 'relay.mjs'}:/opt/minimoi/mc-agent/relay.mjs:ro\n")
+                        f"      - {mc_dir / 'relay.mjs'}:/opt/minimoi/mc-agent/relay.mjs:ro\n"
+                        # MC's retry cap (agent-settings.json), applied by this branch's start script.
+                        "  mc-agent:\n    volumes:\n"
+                        f"      - {mc_dir / 'start-mc.sh'}:/opt/minimoi/mc-agent/start-mc.sh:ro\n"
+                        f"      - {mc_dir / 'agent-settings.json'}:/opt/minimoi/mc-agent/agent-settings.json:ro\n")
     compose = lambda *args: sh("docker", "compose", "-p", P, "-f", str(REPO / "docker-compose.mc.yml"),  # noqa: E731
                                "-f", str(override), *args, env=env)
 

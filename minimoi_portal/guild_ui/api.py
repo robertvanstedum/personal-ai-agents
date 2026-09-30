@@ -19,7 +19,7 @@ from .adapters.contract import now_iso
 from .markdown_render import with_html
 from .mc.turn_log import turn_log_of
 from .payment_scrub import scrub
-from .security import OFF_RECORD_TEXT, check_write, csrf_token, json_error
+from .security import OFF_RECORD_TEXT, check_stop, check_write, csrf_token, json_error
 from .stores import (GUILD_PLATFORM, NOTE_MAX, POSTIT_MAX, Author, FloorStoreNotConfigured,
                      FloorStoreUnavailable)
 
@@ -674,6 +674,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     from .markdown_render import render_markdown
     from .mc import TurnRequest
     from .mc.stream import StreamRefused
+    from .mc.stream_usage import portal_folder as portal_usage_folder
     from .mc.streaming import DISPATCHED, StreamContext, StreamRun, browser_events
 
     reply_key = _reply_key(note_id)
@@ -720,7 +721,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         release=lambda: _mc_release(principal), request_id=request_id, turn_log=turns, mc_health=services.mc_health,
         header=lambda: floor_state.mc_view(services, notes_ok=True),
         touch=lambda: _touch_in(conversations, conv, principal), annotate=annotate,
-        usage_folder=os.environ.get("MINIMOI_USAGE_DIR") or None, cancel=cancel))
+        usage_folder=portal_usage_folder(), cancel=cancel))
     return "stream", run, browser_events(run, render=render_markdown.__wrapped__)
 
 
@@ -731,7 +732,7 @@ def mc_turn_stop(turn_id):
     so Stop works while off the record. Ends MiniMoi's side at once and asks
     the relay to abort Master Craftsman's call."""
     from .mc.streaming import MESSAGES, RUNS
-    refusal = check_write(cfg()["base_url"], record_mode=False)
+    refusal = check_stop(cfg()["base_url"])
     if refusal is not None:
         return refusal
     run = RUNS.get(turn_id) if re.fullmatch(r"[0-9a-f]{32}", turn_id or "") else None

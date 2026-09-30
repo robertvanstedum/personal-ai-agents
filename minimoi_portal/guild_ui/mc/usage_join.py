@@ -79,7 +79,9 @@ def add_tokens(turns: dict, *, now: datetime | None = None, folder: str | None =
     # the turn id; then the gateway join below.
     streamed = {}
     if folder and any(t.get("turn_id") for t in turns.values()):
-        for _, rec in _mc_records(folder, emitter="runtime-stream"):
+        from .stream_usage import portal_folder
+        own = portal_folder() or os.path.join(folder, "portal")       # the portal's own records (stream_usage.py)
+        for _, rec in _mc_records(own, emitter="runtime-stream"):
             count = rec.get("output_tokens")
             if rec.get("correlation_id") and isinstance(count, int) and not isinstance(count, bool):
                 streamed[rec["correlation_id"]] = count

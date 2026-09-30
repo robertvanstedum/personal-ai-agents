@@ -71,6 +71,7 @@ MESSAGES = {
     "not_kept": "Master Craftsman answered, but the answer could not be kept, so it is not shown. Treat it as unknown.",
 }
 PARTIAL_CLASSES = ("stopped", "deadline", "idle", "too_large", "truncated", "upstream")
+RELAY_AFTER_DISPATCH = (409, 502, 504)       # relay answers that come after it called MC
 
 
 # ── the dispatched-set and the running turns ──────────────────────────────────
@@ -313,8 +314,12 @@ class StreamRun:
             ctx.turn_log.record(turn_id=ctx.turn_id, status=status, backend_kind=kind, duration_ms=duration_ms,
                                 failure_class=cls, reply_request_id=ctx.reply_key if status == "answered" else None,
                                 mode="stream")
-        dispatched = not (failure is not None and failure.http_status is not None) and \
-            not (failure is not None and failure.cls == "not_ready")
+        # Not dispatched: the relay was never reached (not_ready), or it refused
+        # before calling MC (a caller, body or busy refusal). A 409 (stopped
+        # before MC's headers), 502 or 504 comes after the relay called MC, so
+        # the run may have been paid and gets its trace (#275 review, finding 6).
+        dispatched = failure is None or (failure.cls != "not_ready" and (
+            failure.http_status is None or failure.http_status in RELAY_AFTER_DISPATCH))
         if kind in REAL_KINDS and dispatched:
             ok = status == "answered"
             self._record_usage(turn_id=ctx.turn_id, status="ok" if ok else "error",
