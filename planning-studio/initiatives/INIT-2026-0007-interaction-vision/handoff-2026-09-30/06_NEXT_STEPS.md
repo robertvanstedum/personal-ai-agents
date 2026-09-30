@@ -59,4 +59,5 @@
   - B: the vault, extending the Central Personal Repository design;
   - C: models on subscription plans plus the Grok API and a cheap open model, with no silent subscription-to-API fallback.
 - **Codex is aligning every Guild, CoS, Rooms and Workshop doc for 1.1** (a 128-entry source inventory, a versioned 1.1 roadmap and crosswalk). Claude reviews it here, in the existing chat. Claude Code's CLI login was revoked, so Codex does not run Claude Code itself.
+- **Robert, 2026-09-30 (plus Docs):** destinations are Chat · Board · Build Log · Docs · Rooms. Docs = intro + roadmap top on one side, a library of key official artifacts on the other, for humans and agents; it replaces the Roadmap tab. Codex's alignment (canonical, versioned, superseded) should feed the Docs library.
 - **Robert, 2026-09-30:** 1.1 **replaces** production Guild (no mix of old and new). The new Build Log replaces every current production Guild tab, all backend is reused, and MC gets full access to the Guild backend and tools. The production cutover needs a route-and-tab mapping, redirects from old URLs, a data-path check that every legacy write has a new home, and Robert's approval at merge.

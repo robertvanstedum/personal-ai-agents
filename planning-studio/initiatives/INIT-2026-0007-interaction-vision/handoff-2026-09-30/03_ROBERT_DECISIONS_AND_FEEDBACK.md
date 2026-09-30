@@ -90,3 +90,8 @@
 - **MC gets full access to the Guild backend and tools:** read and write to the Build Log and queue, the Board, operations, and Workshop dispatch.
   - This is assumed to run within its capped key.
   - Merges and production changes stay behind Robert's one-word "approve", with the mechanics before and after in place. Confirm with Robert if "full access" should go further.
+- **Docs, a fifth destination (Robert, 2026-09-30):** a special section for the key official documents, clear to Robert, to others and to agents.
+  - Layout: an introduction plus the top part of the roadmap on one side, and a library of the key artifacts on the other (ARCHITECTURE, AGENTS.md, and so on).
+  - Purpose: "a place of reference for the intent and craft and history".
+  - It replaces the Roadmap tab. The Build Log is the work, including future roadmap items that are still only thoughts.
+  - **The destinations are now Chat · Board · Build Log · Docs · Rooms.**
