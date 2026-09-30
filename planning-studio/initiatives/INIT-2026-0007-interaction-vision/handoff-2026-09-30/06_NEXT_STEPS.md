@@ -45,3 +45,17 @@
 - The MC Grok backend (stage D), mc-evidence (stage E), and the Spec 160 build beyond `record_turn`.
 - #240 is closed by #269/#280; #242 by #271.
 - A broad provider bake-off.
+
+## ⚠ Direction update, 2026-09-30 morning (Robert with Codex). This supersedes section C item 8 and the "room differentiation" idea
+- **Guild's daily UI shrinks to four destinations: Chat · Board · Build Log · Rooms.** Keep all of the backend.
+  - **Chat:** the Shop floor chat, personalised with Robert's artwork or photos.
+  - **Board:** the post-it wall, as light operational status.
+  - **Build Log:** one filtered list (spec, ready, in progress, done, roadmap, …), with Robert's **ranked 1, 2, 3** as its default view. Kanban and graphs come later.
+  - **Rooms:** group discussion and design with Robert, Claude and Codex, with assignments and reviews.
+  - The Workshop, Operate, Labs and Planning Studio move to secondary navigation, or onto the task itself.
+- **CoS and MC are both kept.** CoS is the daily personal partner (Career, RVS Associates, German). MC keeps MiniMoi running and carries requested enhancements through staging, review and a result. MC needs the whole Guild backend and tools, which today are limited to session status.
+- **The next big bucket after this one** is an infrastructure-hardening package, delivered in sequence:
+  - A: Hetzner staging;
+  - B: the vault, extending the Central Personal Repository design;
+  - C: models on subscription plans plus the Grok API and a cheap open model, with no silent subscription-to-API fallback.
+- **Codex is aligning every Guild, CoS, Rooms and Workshop doc for 1.1** (a 128-entry source inventory, a versioned 1.1 roadmap and crosswalk). Claude reviews it here, in the existing chat. Claude Code's CLI login was revoked, so Codex does not run Claude Code itself.
