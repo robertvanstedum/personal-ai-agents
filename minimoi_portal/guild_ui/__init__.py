@@ -103,7 +103,9 @@ def _make_blueprint(name: str, routes) -> Blueprint:
     bp.after_request(_headers)
     bp.register_error_handler(Exception, _api_error)
     page_rules = {
-        "floor": [("/guild/build", "floor", pages.floor)],
+        "floor": [("/guild/build", "floor", pages.floor),
+                  # The mount's own root lands on the Shop floor (was "not found").
+                  ("/", "home", pages.home), ("/guild", "guild_home", pages.home)],
         "bench": [("/guild/build/bench", "bench", pages.bench)],
         "labs": [("/guild/labs", "labs", pages.labs)],
         "workshop": [("/guild/workshop", "workshop", pages.workshop)],
