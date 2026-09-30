@@ -78,3 +78,15 @@
   - the rail is a small copy of the wall;
   - the Workshop's "HOST TIGHT" is only a small pill.
   - Suggestion: one dominant element and one accent colour per room (the floor: chat; the wall: the board; the Workshop: the host gauge), plus a clear room header.
+
+## Decisions, 2026-09-30 (Robert, after reviewing the Codex chat)
+- **Guild 1.1 replaces production Guild completely:** "I don't want old and new mix. We need a new new and reuse all of the backend."
+  - The new UI (Chat · Board · Build Log · Rooms) takes over `/guild` in production, and the legacy tabs and templates are retired.
+  - Old URLs redirect to their new home.
+  - All backend data and write paths are reused.
+- **The new Build Log replaces all of the current production Guild tabs:** queue, log, roadmap, docs, spec detail, improve and experiment. They become its views and filters, and an item's detail when opened.
+  - Legacy career surfaces go to CoS (Spec 156).
+  - The admin surfaces (users, detailed operations, the Workshop) sit in secondary navigation, not the daily tabs.
+- **MC gets full access to the Guild backend and tools:** read and write to the Build Log and queue, the Board, operations, and Workshop dispatch.
+  - This is assumed to run within its capped key.
+  - Merges and production changes stay behind Robert's one-word "approve", with the mechanics before and after in place. Confirm with Robert if "full access" should go further.
