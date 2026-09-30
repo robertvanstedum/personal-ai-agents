@@ -9,7 +9,8 @@
  *
  * The choice is remembered per page on this device (localStorage, which can be
  * missing or throw: the default then applies). The page supplies the <select>
- * with its own localized "speak"/"write" options.
+ * with its own localized "speak"/"write" options, and optionally a short note
+ * shown only while "write" is chosen (the audio is still generated and billed).
  *
  *   import { mountReplyModeToggle } from ".../voice-reply-mode.js?v=...";
  *   let replyMode = mountReplyModeToggle(select, {
@@ -40,13 +41,16 @@ export function saveReplyMode(scope, mode) {
   }
 }
 
-export function mountReplyModeToggle(select, { scope, onChange } = {}) {
+export function mountReplyModeToggle(select, { scope, onChange, note } = {}) {
   const mode = loadReplyMode(scope);
+  const showNote = (m) => { if (note) note.hidden = m !== "write"; };
+  showNote(mode);
   if (!select) return mode;
   select.value = mode;
   select.addEventListener("change", () => {
     const next = normalizeReplyMode(select.value);
     saveReplyMode(scope, next);
+    showNote(next);
     if (onChange) onChange(next);
   });
   return mode;

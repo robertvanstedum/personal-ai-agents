@@ -72,10 +72,12 @@ def _serve(app):
 
 
 def _stand_in_cos(seen: list):
+    from domains.cos import private_mode
     from domains.cos.voice_transcripts import create_voice_transcript_blueprint
     app = Flask("cos_voice_portal_stand_in", template_folder=str(REPO / "domains/cos/templates"),
                 static_folder=str(REPO / "domains/cos/static"))
     app.register_blueprint(create_voice_transcript_blueprint())
+    app.register_blueprint(private_mode.create_private_mode_blueprint())       # the real switch
 
     @app.before_request
     def note():
@@ -107,12 +109,20 @@ def _stand_in_cos(seen: list):
 
     @app.route("/api/realtime-voice/confer/bootstrap", methods=["POST"])
     def bootstrap():
+        # As chief_of_staff wires it: Private mode and its epoch at the start.
         return jsonify({"ok": True, "provider": "openai", "model": "test-model", "client_secret": "not-a-secret",
-                        "warning_minutes": 20, "max_minutes": 30, "session_config": {}})
+                        "warning_minutes": 20, "max_minutes": 30, "session_config": {},
+                        "session_context": private_mode.state()})
+
+    @app.route("/api/realtime-voice/confer/outcome", methods=["POST"])
+    def outcome():
+        return jsonify({"ok": True})
 
     @app.route("/ui/send", methods=["POST"])
     def send():
-        return jsonify({"reply": "Two items today: the voice fix and the review.", "operation": None})
+        # As chief_of_staff's /ui/send: each reply says whether it was Private.
+        return jsonify({"reply": "Two items today: the voice fix and the review.", "operation": None,
+                        "private": private_mode.state()["private"]})
 
     return app
 
@@ -266,7 +276,10 @@ def test_the_standard_flow_speaks_and_writes_and_saves_the_transcript(confer):
 
 def test_write_only_mutes_the_reply_and_still_writes_it(confer):
     page, stack, errors = confer
+    expect(page.locator("#voice-reply-note")).to_be_hidden()
     page.select_option("#voice-reply-mode", "write")
+    expect(page.locator("#voice-reply-note")).to_have_text(
+        "Write only mutes playback; the provider still generates (and bills) the audio.")
     _conversation(page, stack)
     assert _t(page, "mutedAtConnect") is True                             # muted before any audio
     assert _t(page, "outputMuted") is True
@@ -283,16 +296,97 @@ def test_write_only_mutes_the_reply_and_still_writes_it(confer):
     assert not errors, errors
 
 
-def test_private_mode_keeps_nothing_and_says_so(confer):
+def _mode(stack):
+    path = stack["turns"] / "_mode.json"
+    return json.loads(path.read_text())["owner"]["mode"] if path.exists() else None
+
+
+def test_the_private_switch_is_sticky_and_covers_text_and_voice(confer):
     page, stack, errors = confer
-    (stack["turns"] / "_mode.json").write_text('{"owner": "private"}')
-    try:
-        _conversation(page, stack)
-        page.click("#btn-voice")
-        expect(page.locator("#voice-transcript")).to_have_text("Voice ended. Private: not kept in your CoS history.")
-        assert _day_lines(stack["turns"]) == []
-    finally:
-        (stack["turns"] / "_mode.json").unlink()
+    button = page.locator("#btn-private")
+    expect(button).to_have_text("Private: off")
+    expect(page.locator("#private-banner")).to_be_hidden()
+    button.click()                                                        # through the portal (and its guard)
+    expect(button).to_have_text("Private: on")
+    expect(button).to_have_attribute("aria-pressed", "true")
+    banner = page.locator("#private-banner")
+    expect(banner).to_be_visible()
+    expect(banner).to_contain_text("not kept in your CoS history. The agent itself may still remember it.")
+    assert _mode(stack) == "private"
+    _guarded(page, stack, "/app/cos/ui/private-mode",
+             [s for s in stack["seen"] if s["path"] == "/ui/private-mode"][0])
+    page.reload()                                                         # sticky: the server keeps it
+    expect(page.locator("#btn-private")).to_have_text("Private: on")
+    expect(page.locator("#private-banner")).to_be_visible()
+    stack["sent"].clear()
+    stack["seen"].clear()
+    # Voice: each reply marked, the voice status says Private, nothing kept.
+    _conversation(page, stack)
+    expect(page.locator("#voice-private")).to_be_visible()
+    replies = page.locator("#chat-log .msg-cos")
+    for i in range(replies.count()):
+        expect(replies.nth(i).locator(".msg-private")).to_have_text("Private")
+    if SHOTS:
+        page.screenshot(path=f"{SHOTS}/confer-private-voice.png", full_page=True)
+    page.click("#btn-voice")
+    expect(page.locator("#voice-transcript")).to_have_text("Voice ended. Private: not kept in your CoS history.")
+    assert _day_lines(stack["turns"]) == []
+    # Text: the reply is marked too.
+    before = page.locator("#chat-log .msg-cos").count()
+    page.fill("#send-input", "Plan the week")
+    page.click("#btn-send")
+    expect(page.locator("#chat-log .msg-cos")).to_have_count(before + 1)
+    expect(page.locator("#chat-log .msg-cos").last.locator(".msg-private")).to_have_text("Private")
+    # Off only by the switch.
+    page.click("#btn-private")
+    expect(page.locator("#btn-private")).to_have_text("Private: off")
+    expect(page.locator("#private-banner")).to_be_hidden()
+    assert _mode(stack) == "public"
+    before = page.locator("#chat-log .msg-cos").count()
+    page.fill("#send-input", "And tomorrow?")
+    page.click("#btn-send")
+    expect(page.locator("#chat-log .msg-cos")).to_have_count(before + 1)
+    assert page.locator("#chat-log .msg-cos").last.locator(".msg-private").count() == 0
+    assert not errors, errors
+
+
+def test_a_switch_during_the_session_keeps_none_of_it(confer):
+    page, stack, errors = confer
+    _conversation(page, stack)                                            # started kept (Private off)
+    page.click("#btn-private")                                            # Private on, mid-session
+    expect(page.locator("#btn-private")).to_have_text("Private: on")
+    expect(page.locator("#voice-private")).to_be_visible()
+    page.click("#btn-private")                                            # and off again before Stop
+    expect(page.locator("#btn-private")).to_have_text("Private: off")
+    page.click("#btn-voice")
+    expect(page.locator("#voice-transcript")).to_have_text("Voice ended. Private: not kept in your CoS history.")
+    assert _day_lines(stack["turns"]) == []
+    # A change the page never saw (Telegram's /private later, or the file by
+    # hand): the server compares the mode with the one the session started under.
+    page.evaluate("document.getElementById('chat-log').replaceChildren()")
+    stack["seen"].clear()
+    stack["sent"].clear()
+    _conversation(page, stack)
+    from domains.cos import private_mode
+    private_mode.set_private(stack["turns"], True)
+    private_mode.set_private(stack["turns"], False)
+    page.click("#btn-voice")
+    expect(page.locator("#voice-transcript")).to_have_text(
+        "Voice ended. Private changed during this session: not kept in your CoS history.")
+    assert _day_lines(stack["turns"]) == []
+    assert not errors, errors
+
+
+def test_an_unreadable_mode_reads_as_private(confer):
+    page, stack, errors = confer
+    (stack["turns"] / "_mode.json").write_text("{not json")
+    page.reload()
+    expect(page.locator("#btn-private")).to_have_text("Private: on")
+    expect(page.locator("#private-banner")).to_be_visible()
+    _conversation(page, stack)
+    page.click("#btn-voice")
+    expect(page.locator("#voice-transcript")).to_have_text("Voice ended. Private: not kept in your CoS history.")
+    assert _day_lines(stack["turns"]) == []
     assert not errors, errors
 
 
@@ -308,6 +402,9 @@ def test_a_provider_error_is_visible_and_releases_the_microphone(confer):
     expect(page.locator("#voice-transcript")).to_contain_text(
         "Voice error: The server had an error. Voice stopped; the microphone is off.")
     expect(page.locator("#voice-transcript")).to_contain_text("Transcript saved")   # what was said is kept
+    [logged] = [s for s in stack["seen"] if s["path"] == "/api/realtime-voice/confer/outcome"]
+    assert logged["body"] == {"outcome": "provider_error", "provider": "openai", "reason": "provider_error",
+                              "code": "server_error", "type": None}          # code and type, never the message
     if SHOTS:
         page.screenshot(path=f"{SHOTS}/confer-voice-provider-error.png", full_page=True)
     assert not errors, errors

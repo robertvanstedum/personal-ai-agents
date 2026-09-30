@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from flask import Flask
 
+from domains.cos import private_mode
 from domains.cos import voice_transcripts as vt
 
 OWNER = {"X-Minimoi-Auth-Id": "1"}
@@ -25,7 +26,18 @@ def _client():
     return app.test_client()
 
 
-def _post(body, headers=OWNER):
+_CURRENT = object()
+
+
+def _post(body, headers=OWNER, epoch=_CURRENT):
+    """Posts as the page does: with the mode epoch its bootstrap handed it
+    (by default the mode as it is now, so the mode did not change)."""
+    body = dict(body)
+    if epoch is _CURRENT:
+        root = vt.turns_dir()
+        epoch = private_mode.read_mode(root)[1] if root else None
+    if epoch is not None and "mode_epoch" not in body:
+        body["mode_epoch"] = epoch
     return _client().post("/ui/voice/transcript", json=body, headers=headers)
 
 
@@ -176,3 +188,57 @@ def test_a_write_failure_is_reported_without_content(turns_dir, capsys, monkeypa
 def test_chief_of_staff_registers_the_route():
     source = (vt.Path(vt.__file__).parent / "chief_of_staff.py").read_text()
     assert "app.register_blueprint(create_voice_transcript_blueprint())" in source
+
+
+# ── F2: a mode change during the session makes the whole session Private ─────
+
+def test_private_at_the_start_then_switched_off_keeps_nothing(turns_dir):
+    private_mode.set_private(turns_dir, True)
+    started_under = private_mode.read_mode(turns_dir)[1]         # the bootstrap's epoch
+    private_mode.set_private(turns_dir, False)                   # switched off before Stop
+    response = _post({"turns": TURNS}, epoch=started_under)
+    assert response.get_json() == {"saved": False, "reason": "mode_changed"}
+    assert not (turns_dir / "2026").exists()
+
+
+def test_public_then_private_during_the_session_keeps_nothing(turns_dir):
+    started_under = private_mode.read_mode(turns_dir)[1]         # "absent": kept by default
+    private_mode.set_private(turns_dir, True)
+    assert _post({"turns": TURNS}, epoch=started_under).get_json()["reason"] == "private"
+    assert not (turns_dir / "2026").exists()
+
+
+def test_no_record_of_the_start_keeps_nothing(turns_dir):
+    assert _post({"turns": TURNS}, epoch=None).get_json()["reason"] == "mode_changed"
+    assert not (turns_dir / "2026").exists()
+
+
+def test_an_unchanged_mode_is_kept(turns_dir):
+    private_mode.set_private(turns_dir, False)
+    started_under = private_mode.read_mode(turns_dir)[1]
+    assert _post({"turns": TURNS}, epoch=started_under).get_json()["saved"] is True
+
+
+# ── F3: credentials are scrubbed too ─────────────────────────────────────────
+
+def test_credentials_are_removed_before_a_line_is_written(turns_dir):
+    said = ("my api key is sk-ant-abcdefgh12345678 and the password: hunter2, "
+            "db postgres://bob:pw1@db:5432/x, token=ghp_abcdefghijklmnop")
+    _post({"turns": [{"speaker": "user", "text": said, "completed": True}]})
+    record = json.loads(_day_file(turns_dir).read_text())
+    text = record["turns"][0]["text"]
+    for secret in ("sk-ant-abcdefgh12345678", "hunter2", "bob:pw1", "ghp_abcdefghijklmnop"):
+        assert secret not in text
+    assert "[credential removed]" in text and record["sanitized"] is True
+
+
+# ── F5: the body is capped before it is parsed ───────────────────────────────
+
+def test_a_body_over_the_cap_is_refused_before_parsing(turns_dir, monkeypatch):
+    parsed = []
+    monkeypatch.setattr("flask.Request.get_json", lambda *a, **k: parsed.append(1) or {})
+    big = b'{"turns": [], "pad": "' + b"x" * vt.MAX_BODY + b'"}'
+    response = _client().post("/ui/voice/transcript", data=big, headers={**OWNER, "Content-Type": "application/json"})
+    assert response.status_code == 413 and response.get_json()["reason"] == "too_large"
+    assert parsed == []                                          # never parsed
+    assert not (turns_dir / "2026").exists()

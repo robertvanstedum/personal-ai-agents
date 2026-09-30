@@ -82,8 +82,8 @@ def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_
     assert "sendContinuationInstruction(this._openingInstruction)" in source
     assert 'this._onInputState("speech_started")' in source
     assert "never surfaced to the UI while active" in source
-    assert "openai-webrtc-adapter.js?v=20260929-voice2" in source
-    assert "xai-websocket-adapter.js?v=20260929-voice2" in source
+    assert "openai-webrtc-adapter.js?v=20260929-voice3" in source
+    assert "xai-websocket-adapter.js?v=20260929-voice3" in source
 
 
 def test_xai_adapter_handles_current_audio_delta_and_connection_failures(german_client):
@@ -149,7 +149,17 @@ def test_a_provider_error_ends_the_session_visibly_never_a_silent_wait():
         assert f'"{code}"' in source
     openai = (static / "adapters" / "openai-webrtc-adapter.js").read_text()
     assert 'this._emit("recoverable_error", { detail: event.error });' not in openai
-    assert 'code: event.error?.code || event.error?.type || null,' in openai
+    assert "code: event.error?.code || null," in openai and "type: event.error?.type || null," in openai
+    xai = (static / "adapters" / "xai-websocket-adapter.js").read_text()
+    assert "code: event.error?.code || null," in xai and "type: event.error?.type || null," in xai
+    # #281 review F6: the code and type of an error that ends a session are
+    # logged on the server (never the message), benign by code or by type.
+    assert "BENIGN_PROVIDER_ERRORS.has(code) || BENIGN_PROVIDER_ERRORS.has(type)" in handler
+    assert "this._reportProviderError({ ...info, code, type });" in handler
+    report = source[source.index("  _reportProviderError(info) {"):]
+    report = report[:report.index("\n  }\n")]
+    assert "message" not in report and "detail" not in report
+    assert 'String(bootstrapUrl).replace(/bootstrap$/, "outcome")' in source
 
 
 def test_write_only_mutes_playback_in_both_adapters():

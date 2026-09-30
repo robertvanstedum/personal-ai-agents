@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_confer_page_uses_shared_controller_and_keeps_typed_path():
     template = (ROOT / "domains/cos/templates/cos_ui.html").read_text()
-    assert "realtime-voice-controller.js?v=20260929-voice2" in template
+    assert "realtime-voice-controller.js?v=20260929-voice3" in template
     assert "bootstrapUrl: '../api/realtime-voice/confer/bootstrap'" in template
     assert 'id="voice-provider-select"' in template
     assert "OpenAI Voice" in template
@@ -34,13 +34,21 @@ def test_confer_uses_the_standard_voice_flow():
     assert "onAssistantTurn: (text) => {\n    if (String(text || '').trim()) appendMsg('cos'" in template
     assert "fetch('voice/transcript', {" in template
     assert "Private: not kept in your CoS history." in template
-    assert "voice-reply-mode.js?v=20260929-voice2" in template
+    assert "voice-reply-mode.js?v=20260929-voice3" in template
     assert 'id="voice-reply-mode"' in template
     assert '<option value="speak" selected>Speak and write</option>' in template
     assert '<option value="write">Write only</option>' in template
     assert "scope: 'cos'" in template
     assert "voiceController.setReplyMode(mode)" in template
     assert "reconnecting:" not in template
+    # #281 review: the Private switch, its marks, and the Write only note.
+    assert '<button id="btn-private" type="button" aria-pressed="false" disabled>' in template
+    assert "fetch('private-mode', {" in template
+    assert "The agent itself may still remember it." in template
+    assert "appendMsg('cos', data.reply || '(empty reply)', { private: data.private === true });" in template
+    assert "mode_epoch: result.session_context?.epoch ?? null," in template
+    assert "window.cosPrivate?.known === false" in template          # unknown mode: Private
+    assert "the provider still generates (and bills) the audio." in template
 
 
 def test_confer_relative_voice_paths_work_directly_and_through_portal():

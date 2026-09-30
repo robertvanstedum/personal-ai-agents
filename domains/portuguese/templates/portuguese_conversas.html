@@ -105,6 +105,7 @@
                   ⏹ Encerrar
                 </button>
               </div>
+              <p id="realtime-voice-reply-note" class="realtime-session-note" hidden>“Só escrever” só silencia o som; o provedor ainda gera (e cobra) o áudio.</p>
               <div id="realtime-voice-status" class="detail-description realtime-session-status"></div>
               <div id="realtime-voice-error" class="detail-description realtime-session-status realtime-session-error" role="alert" hidden></div>
               <div id="realtime-live-replies" class="prompt-details-block" hidden>
@@ -1646,8 +1647,8 @@ document.getElementById('advance-modal').addEventListener('click', e => {
 // Reads current persona/scene from the DOM rather than this page's own
 // script-level state above -- decoupled on purpose, so this beta wiring
 // can't accidentally break the existing session flow's state.
-import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20260929-voice2";
-import { mountReplyModeToggle } from "./static/realtime-voice/voice-reply-mode.js?v=20260929-voice2";
+import { RealtimeVoiceController } from "./static/realtime-voice/realtime-voice-controller.js?v=20260929-voice3";
+import { mountReplyModeToggle } from "./static/realtime-voice/voice-reply-mode.js?v=20260929-voice3";
 
 const startBtn = document.getElementById('realtime-voice-start-btn');
 const endBtn = document.getElementById('realtime-voice-end-btn');
@@ -1665,6 +1666,7 @@ let controller = null;
 // the reply is muted and its text shows live here). Remembered on this device.
 let replyMode = mountReplyModeToggle(document.getElementById('realtime-voice-reply-mode'), {
   scope: 'portuguese',
+  note: document.getElementById('realtime-voice-reply-note'),
   onChange(mode) {
     replyMode = mode;
     controller?.setReplyMode(mode);

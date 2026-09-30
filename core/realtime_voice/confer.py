@@ -10,7 +10,7 @@ import os
 from flask import Blueprint, jsonify, request
 
 from core.identity import resolve_user_id
-from core.realtime_voice.bootstrap import _log_outcome, check_voice_rate_limit
+from core.realtime_voice.bootstrap import _log_outcome, check_voice_rate_limit, log_session_outcome
 from core.realtime_voice.capabilities import (
     AGENT_CONVERSATION_MODE,
     ProviderUnavailableError,
@@ -82,12 +82,17 @@ def create_confer_voice_blueprint(
     *,
     locale: str = "en-US",
     build_voice_instructions=None,
+    session_context=None,
 ) -> Blueprint:
     """Create the provider-neutral Confer voice bootstrap routes.
 
     The Realtime model owns low-latency speech and barge-in. Platform-owned
     function tools bridge current facts, durable context, and writes to COS
     Agent A without exposing credentials or unrestricted browser authority.
+
+    session_context: optional ``fn(user_id) -> dict`` whose result the
+    bootstrap hands the page as ``session_context`` (CoS: Private mode and its
+    epoch at the start of the session). It holds no secret.
     """
     blueprint = Blueprint("realtime_voice_confer", __name__)
 
@@ -181,11 +186,18 @@ def create_confer_voice_blueprint(
         _log_outcome(_DOMAIN, user_id, provider, credential.get("model"), "started",
                      instructions_chars=len(instructions))
         guard = _duration_guard()
-        return jsonify({
+        payload = {
             "ok": True,
             **credential,
             "warning_minutes": guard.warning_minutes,
             "max_minutes": guard.max_minutes,
-        })
+        }
+        if session_context is not None:
+            payload["session_context"] = session_context(str(user_id))
+        return jsonify(payload)
+
+    @blueprint.route("/api/realtime-voice/confer/outcome", methods=["POST"])
+    def outcome():
+        return log_session_outcome(_DOMAIN)
 
     return blueprint

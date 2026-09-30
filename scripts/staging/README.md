@@ -886,12 +886,19 @@ appends one `html_voice` record to
 `~/minimoi-staging/data/cos-turns/YYYY/YYYY-MM-DD.jsonl` (Robert's local day,
 UTC times inside, files 0600, folders 0700).
 
-- **Mount:** `docker-compose.staging-cos-turns.yml` gives cos-scheduler
-  `COS_TURNS_DIR` and the `data/cos-turns` mount. `lib.sh` includes it
-  whenever the pinned release has it; `build.sh` makes the folder.
-- **Private:** nothing is written while `data/cos-turns/_mode.json` marks the
-  `owner` conversation private, or when that file cannot be read. The page
-  says "Private: not kept in your CoS history".
+- **Off by default; opt-in without a rebuild.** `cos.sh turns on` writes
+  `state/cos.turns` = `on` and recreates only cos-scheduler with the overlay
+  `docker-compose.staging-cos-turns.yml` (`COS_TURNS_DIR` and the
+  `data/cos-turns` mount). `cos.sh turns off` recreates it without; the lines
+  already written stay. `cos.sh status` shows which. `build.sh` makes the
+  folder; `lib.sh` refuses "on" when the pinned release has no overlay.
+- **Private:** Confer's **Private** switch (sticky; off only by the switch)
+  writes `data/cos-turns/_mode.json` for the `owner` conversation. While it is
+  on, or when that file cannot be read, nothing is written, and Confer shows a
+  banner and marks each reply. A voice session whose mode changed while it ran
+  is not kept either. Telegram `/private` is a follow-up.
+- **Scrubbed:** credentials (Spec 160 §3.4, `utils/credential_scrub.py`) and
+  card numbers are replaced before a line is written.
 - **Production** writes nothing: no production compose file sets
   `COS_TURNS_DIR`, and the page says the history "is not set up here".
 - **Rollback:** build and `up.sh cos-scheduler` the previous release; the

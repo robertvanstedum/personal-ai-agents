@@ -44,6 +44,7 @@ from core.realtime_voice.capabilities import (
 )
 from core.realtime_voice.confer import create_confer_voice_blueprint
 from domains.cos.voice_transcripts import create_voice_transcript_blueprint
+from domains.cos import private_mode
 from core.realtime_voice.providers import openai_speech
 from domains.cos.confer_service import (
     ConferOperationFailed,
@@ -1129,8 +1130,12 @@ def _telegram_poll_loop():
 app = Flask(__name__)
 app.register_blueprint(create_confer_voice_blueprint(
     build_voice_instructions=_build_cos_voice_instructions,
+    # Private mode and its epoch at the start of a voice session (Spec 160):
+    # a mode change during the session makes the whole session Private.
+    session_context=lambda user_id: private_mode.state(),
 ))
 app.register_blueprint(create_voice_transcript_blueprint())
+app.register_blueprint(private_mode.create_private_mode_blueprint())
 
 
 @app.route("/internal/model-gateway/receipt", methods=["POST"])
@@ -1333,6 +1338,10 @@ def ui_send():
             request_id=body.get("request_id"),
         )
         payload = result.public_dict()
+        # Private mode (Spec 160): the page marks each reply given under it.
+        # Nothing records a text turn in CoS history yet; when the turn log's
+        # record_turn lands, it reads the same private_mode.state().
+        payload["private"] = private_mode.state()["private"]
         if voice_provider and speech_output:
             _spoken_replies.put(
                 result.turn_id,

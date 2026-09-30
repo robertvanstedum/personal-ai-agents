@@ -215,7 +215,8 @@ export class OpenAIWebRTCAdapter {
       case "error":
         this._emit("recoverable_error", {
           reason: "provider_error",
-          code: event.error?.code || event.error?.type || null,
+          code: event.error?.code || null,
+          type: event.error?.type || null,
           detail: event.error?.message || event.error?.code || "OpenAI reported an error",
         });
         break;

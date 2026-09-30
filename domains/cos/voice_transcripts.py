@@ -8,11 +8,17 @@ day, UTC times inside, files 0600, folders 0700), as one whole line with
 
 Nothing is written when:
 - the turn log is not configured (``COS_TURNS_DIR`` unset): ``no_turn_log``;
-- the conversation is Private (``_mode.json`` says so, or cannot be read, or
-  the request says so): ``private``. Nothing about the session is logged.
+- the conversation is Private (``domains/cos/private_mode.py``: ``_mode.json``
+  says so, or cannot be read, or the request says so): ``private``;
+- the mode changed during the session: the ``mode_epoch`` the voice bootstrap
+  handed the page differs from the mode now, or is missing. The whole session
+  then counts as Private (Spec 160 T6).
+Nothing about a Private session's content is logged.
 
-Until Spec 160's shared scrub lands, card-like numbers (13 to 19 digits that
-pass the Luhn check) are removed from the text. This module never imports
+Text is scrubbed before it is kept: credentials (``utils/credential_scrub``,
+Spec 160 §3.4) and card-like numbers (13 to 19 digits that pass the Luhn
+check; the full payment scrub moves to ``utils`` with Spec 160). The body is
+capped (``MAX_BODY``) before it is parsed. This module never imports
 ``chief_of_staff`` (which starts threads on import), so it is tested alone.
 """
 from __future__ import annotations
@@ -29,11 +35,15 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, jsonify, request
 
 from core.identity import resolve_user_id
+from domains.cos import private_mode
+from utils.credential_scrub import scrub as scrub_credentials
 
 SCHEMA_VERSION = 1
 MAX_TURNS = 200
 MAX_TEXT = 4000
 MAX_TOTAL = 60000
+MAX_BODY = 300_000          # bytes, refused before the JSON is parsed
+_CODE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 CONVERSATION_ID = "owner"
 REMOVED = "[payment detail removed]"
 _CARD_RUN = re.compile(r"(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)")
@@ -66,35 +76,8 @@ def scrub_cards(text: str) -> tuple[str, bool]:
     return _CARD_RUN.sub(repl, text), changed
 
 
-def turns_dir() -> Path | None:
-    value = os.environ.get("COS_TURNS_DIR", "").strip()
-    return Path(value) if value else None
-
-
-def is_private(root: Path, conversation_id: str) -> bool:
-    """Spec 160: the stored mode per conversation id. No file means the
-    default (kept); a file that cannot be read or parsed means Private."""
-    path = root / "_mode.json"
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return False
-    except OSError:
-        return True
-    try:
-        modes = json.loads(raw)
-    except ValueError:
-        return True
-    if not isinstance(modes, dict):
-        return True
-    mode = modes.get(conversation_id)
-    if mode is None:
-        return False
-    if isinstance(mode, dict):
-        mode = mode.get("mode", "private" if mode.get("private") else "public")
-    if mode in ("public", "kept"):
-        return False
-    return True  # "private", or anything this reader does not recognise
+turns_dir = private_mode.turns_dir
+is_private = private_mode.is_private
 
 
 def _local_day(now: datetime) -> datetime:
@@ -157,8 +140,9 @@ def _clean_turns(raw) -> tuple[list[dict], bool]:
         total += len(text)
         if total > MAX_TOTAL:
             raise InvalidTranscript("transcript too long")
-        text, changed = scrub_cards(text)
-        sanitized = sanitized or changed
+        text, changed_cards = scrub_cards(text)
+        text, changed_creds = scrub_credentials(text)
+        sanitized = sanitized or changed_cards or changed_creds
         turns.append({"speaker": speaker, "text": text, "completed": bool(item.get("completed", True))})
     return turns, sanitized
 
@@ -177,20 +161,28 @@ def create_voice_transcript_blueprint(*, clock=None) -> Blueprint:
     def voice_transcript():
         if resolve_user_id(request) is None:
             return jsonify({"saved": False, "reason": "identity_required"}), 401
+        if request.content_length is None or request.content_length > MAX_BODY:
+            return jsonify({"saved": False, "reason": "too_large"}), 413
         if not request.is_json:
             return jsonify({"saved": False, "reason": "not_json"}), 400
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return jsonify({"saved": False, "reason": "invalid"}), 400
+        root = turns_dir()
+        if root is None:
+            return jsonify({"saved": False, "reason": "no_turn_log"})
+        private_now, epoch_now = private_mode.read_mode(root, CONVERSATION_ID)
+        if body.get("private") is True or private_now:
+            return jsonify({"saved": False, "reason": "private"})
+        # The mode the session started under (from the voice bootstrap). A
+        # change during the session, or no record of the start, makes the
+        # whole session Private.
+        if body.get("mode_epoch") != epoch_now:
+            return jsonify({"saved": False, "reason": "mode_changed"})
         try:
             turns, sanitized = _clean_turns(body.get("turns"))
         except InvalidTranscript as exc:
             return jsonify({"saved": False, "reason": "invalid", "error": str(exc)}), 400
-        root = turns_dir()
-        if root is None:
-            return jsonify({"saved": False, "reason": "no_turn_log"})
-        if body.get("private") is True or is_private(root, CONVERSATION_ID):
-            return jsonify({"saved": False, "reason": "private"})
         if not turns:
             return jsonify({"saved": False, "reason": "empty"})
         now = now_fn()

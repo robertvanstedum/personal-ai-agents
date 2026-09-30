@@ -122,7 +122,7 @@ def test_german_dev_ui_makes_realtime_primary(monkeypatch, german_client):
     # the portal's /app/german proxy prefix, leaving the Start button inert.
     assert (
         'from "./static/realtime-voice/realtime-voice-controller.js'
-        '?v=20260929-voice2"' in page
+        '?v=20260929-voice3"' in page
     )
     assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
     assert "source: session.source || 'ki_sitzung'" in page
@@ -139,7 +139,7 @@ def test_german_dev_ui_makes_realtime_primary(monkeypatch, german_client):
 
 def _assert_reply_toggle_and_visible_error(page, scope, speak, write):
     """Phase A: the shared voice reply toggle and a visible provider error."""
-    assert 'from "./static/realtime-voice/voice-reply-mode.js?v=20260929-voice2"' in page
+    assert 'from "./static/realtime-voice/voice-reply-mode.js?v=20260929-voice3"' in page
     assert 'id="realtime-voice-reply-mode"' in page
     assert f'<option value="speak" selected>{speak}</option>' in page
     assert f'<option value="write">{write}</option>' in page
@@ -149,6 +149,8 @@ def _assert_reply_toggle_and_visible_error(page, scope, speak, write):
     assert "onAssistantTurn(text) { appendLive(personaName, text); }" in page
     assert 'id="realtime-voice-error"' in page and 'role="alert"' in page
     assert "showError(`" in page
+    assert '<p id="realtime-voice-reply-note" class="realtime-session-note" hidden>' in page
+    assert "note: document.getElementById('realtime-voice-reply-note')," in page
 
 
 def test_portuguese_dev_ui_makes_realtime_primary(monkeypatch, portuguese_client):
@@ -167,7 +169,7 @@ def test_portuguese_dev_ui_makes_realtime_primary(monkeypatch, portuguese_client
     assert "realtime-transcript" in page
     assert (
         'from "./static/realtime-voice/realtime-voice-controller.js'
-        '?v=20260929-voice2"' in page
+        '?v=20260929-voice3"' in page
     )
     assert "bootstrapUrl: './api/realtime-voice/bootstrap'" in page
     assert "source: session.source || 'ki_sessao'" in page

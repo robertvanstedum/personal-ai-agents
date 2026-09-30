@@ -269,7 +269,8 @@ export class XAIWebSocketAdapter {
         const detail = event.error?.message || event.error?.code || JSON.stringify(event.error || event);
         this._emit(this._connected ? "recoverable_error" : "fatal_error", {
           reason: "provider_error",
-          code: event.error?.code || event.error?.type || null,
+          code: event.error?.code || null,
+          type: event.error?.type || null,
           detail,
         });
         break;

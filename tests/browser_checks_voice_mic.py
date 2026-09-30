@@ -102,6 +102,14 @@ def _confer_app():
     @app.route("/ui/voice/transcript", methods=["POST"])
     def transcript():
         return jsonify({"saved": False, "reason": "no_turn_log"})
+
+    @app.route("/ui/private-mode")
+    def private_mode():
+        return jsonify({"available": False, "private": False})
+
+    @app.route("/api/realtime-voice/confer/outcome", methods=["POST"])
+    def outcome():
+        return jsonify({"ok": True})
     return app
 
 
@@ -206,15 +214,26 @@ def test_a_provider_error_is_visible_and_releases_the_microphone(browser, server
     ctx, page = _open(browser, servers, name)
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
+    outcomes = []
+    page.on("request", lambda r: outcomes.append(r) if r.url.endswith("/outcome") else None)
     _start(page, name)
     page.evaluate("""window.__voiceTest.adapter._emit('recoverable_error',
-        { reason: 'provider_error', code: 'server_error', detail: 'The server had an error' })""")
+        { reason: 'provider_error', code: 'server_error', type: 'server_error_type',
+          detail: 'The server had an error' })""")
     _ended_on_screen(page, name)                                          # at once: no "reconnecting" wait
     assert page.evaluate("window.__voiceTest.micOn") is False, "the microphone is still open"
     assert page.evaluate("window.__voiceTest.ends") == 1
     shown = page.locator(ERROR_TEXT[name])
     expect(shown).to_be_visible()
     expect(shown).to_contain_text("The server had an error")
+    # #281 review F6: the code and type are logged on the server, never the message.
+    page.wait_for_timeout(200)
+    assert len(outcomes) == 1
+    sent = json.loads(outcomes[0].post_data)
+    assert sent == {"outcome": "provider_error", "provider": "openai", "reason": "provider_error",
+                    "code": "server_error", "type": "server_error_type"}
+    assert outcomes[0].url.endswith("/api/realtime-voice/confer/outcome" if name == "confer"
+                                    else "/api/realtime-voice/outcome")
     if SHOTS:
         page.screenshot(path=f"{SHOTS}/{name}-provider-error.png", full_page=name == "confer")
     assert not errors, errors
@@ -241,6 +260,13 @@ WRITE_LABEL = {"confer": "Write only", "german": "Nur schreiben", "portuguese": 
 SPEAK_LABEL = {"confer": "Speak and write", "german": "Sprechen und schreiben", "portuguese": "Falar e escrever"}
 
 
+NOTE = {"confer": "#voice-reply-note", "german": "#realtime-voice-reply-note",
+        "portuguese": "#realtime-voice-reply-note"}
+NOTE_TEXT = {"confer": "the provider still generates (and bills) the audio",
+             "german": "der Anbieter erzeugt (und berechnet) das Audio weiterhin",
+             "portuguese": "o provedor ainda gera (e cobra) o áudio"}
+
+
 def _live_reply(page, name):
     if name == "confer":
         return page.locator("#chat-log .msg-cos .msg-text").last
@@ -264,7 +290,11 @@ def test_write_only_mutes_the_reply_shows_its_text_and_is_remembered(browser, se
     ctx, page = _open(browser, servers, name)
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
+    note = page.locator(NOTE[name])
+    expect(note).to_be_hidden()
     page.select_option(REPLY[name], "write")
+    expect(note).to_be_visible()                                          # #281 review F4: audio still billed
+    expect(note).to_contain_text(NOTE_TEXT[name])
     _start(page, name)
     assert page.evaluate("window.__voiceTest.outputMuted") is True        # muted from the start
     page.evaluate("window.__voiceTest.adapter.say('a1', 'Guten Tag! Was darf es sein?')")
