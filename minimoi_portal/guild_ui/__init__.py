@@ -35,7 +35,7 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' 
        "frame-ancestors 'none'; form-action 'self'")
 
 ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "buildlog", "board",
-              "media", "later", "assets", "api")
+              "media", "rooms", "assets", "api")
 B1_ROUTES = ALL_ROUTES   # improve, experiment and any reset are not in this package
 
 
@@ -126,8 +126,8 @@ def _make_blueprint(name: str, routes) -> Blueprint:
         "board": [("/guild/board", "board", pages.board)],
         "media": [("/guild/media", "media_library", pages.media_library),
                   ("/media/<asset_id>/<variant>", "media_file", board_api.media_file)],
-        # Rooms (slice 4): an honest "coming in a later slice" page until it lands.
-        "later": [("/guild/rooms", "rooms", pages.rooms)],
+        # Rooms (slice 4, spec §6): group chat on Records, through the dev bridge.
+        "rooms": [("/guild/rooms", "rooms", pages.rooms)],
         "assets": [("/guild/ui-assets/<path:filename>", "asset", asset)],
     }
     for route in routes:

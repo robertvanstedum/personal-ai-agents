@@ -10,7 +10,8 @@
 //  * Pin to Board adds a post-it through the existing guarded API (CSRF,
 //    record mode, idempotency key); text over the post-it limit is refused
 //    here, never cut;
-//  * Take to a Room is disabled until Rooms land (slice 4).
+//  * Take to a Room opens Rooms with the note's id (slice 4); the server
+//    answers with the stored note and only that is shared.
 // On a phone the bar docks over the composer while text is selected.
 // No model call.
 import { $, announce } from './dom.js';
@@ -134,5 +135,13 @@ export function initSelection(p) {
   // Keep the selection while a toolbar button is pressed.
   bar.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
   if (pinBtn) pinBtn.addEventListener('click', () => pin(pinBtn));
+  // Take to a Room (Guild 1.1 slice 4): the Rooms page asks the server for the
+  // stored, on-the-record note by its id and shares only that, never the
+  // selected text. Nothing is sent from here.
+  const roomBtn = $('[data-sel-room]', bar);
+  if (roomBtn) roomBtn.addEventListener('click', () => {
+    if (!current || live.off || !live.known) { hide(); return; }
+    window.location.assign(`${page.urls.rooms}?take=${encodeURIComponent(current.noteId)}`);
+  });
   onChange(onModeChange);
 }

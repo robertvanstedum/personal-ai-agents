@@ -662,7 +662,11 @@ class Store:
         name=string(payload.get("name"),"Filename",200)
         if Path(name).name != name or "\\" in name or any(ord(c)<32 for c in name):
             raise Problem("Use a filename, not a path")
-        note=string(payload.get("source_note"),"Source/provenance note",2400)
+        # An optional human description (Guild 1.1 slice 4, spec §6): files may
+        # be shared untagged. Provenance never depends on it: the uploader
+        # actor, time, sha256 and the supporting event are kept automatically.
+        raw_note=payload.get("source_note")
+        note="" if raw_note is None or (isinstance(raw_note,str) and not raw_note.strip()) else string(raw_note,"Description",2400)
         provenance=context_class(payload,actor)
         try:
             encoded=payload.get("base64","")
@@ -683,7 +687,9 @@ class Store:
             record=dict(id=uid(),room=room,actor=actor,name=name,mime=mime,sha256=digest(content),created=now(),source_note=note,context_class=provenance)
             db.execute("INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                        (record["id"],room,actor,name,mime,record["sha256"],content,text_content,record["created"],note,provenance))
-            self._event(db,room,actor,"document",f"Filed source: {name}",reference=record["id"])
+            event=self._event(db,room,actor,"document",f"Filed source: {name}",reference=record["id"])
+            record["event_id"]=event["id"]
+            record["size"]=len(content)
             return record
         return self.mutate(actor,key,{"op":"document","room":room,"payload":payload},action,room)
 

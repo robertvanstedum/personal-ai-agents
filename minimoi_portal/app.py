@@ -2879,6 +2879,16 @@ GUILD_MOUNTS = _guild_mounts.mount_all(
 )
 
 
+# ── Rooms (Records) at /app/records, dev only (Guild 1.1 slice 4, spec §6) ──
+# Records keeps its own login and cookie; the portal adds only its owner guard
+# and never forwards its own cookie or identity. Installed only when BASE_URL
+# is the dev origin and RECORDS_BACKEND names the one allowed internal origin.
+from minimoi_portal import records_bridge as _records_bridge  # noqa: E402
+
+RECORDS_BRIDGE = _records_bridge.install_if_dev(app, base_url=_cfg.BASE_URL, environ=os.environ,
+                                                require_login=_require_login, require_owner=_require_owner)
+
+
 @app.route("/health")
 def health():
     return {"status": "ok", "service": "portal"}

@@ -35,6 +35,8 @@ def server():
     import minimoi_portal.config as portal_config
     saved = (secrets_module.get_secret, portal_config.GUILD_QUEUE_PATH, portal_config.BASE_URL,
              qs._running_in_container, os.environ.get("MINIMOI_GUILD_NEXT"))
+    saved_backend = os.environ.get("RECORDS_BACKEND")
+    os.environ["RECORDS_BACKEND"] = "http://127.0.0.1:18880"           # Rooms (slice 4): loopback, as local hosts need (F7)
     secrets_module.get_secret = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no secrets in tests"))
     qs._running_in_container = lambda: False
     folder = Path(tempfile.mkdtemp()) / "guild"
@@ -53,6 +55,10 @@ def server():
             os.environ.pop("MINIMOI_GUILD_NEXT", None)
         else:
             os.environ["MINIMOI_GUILD_NEXT"] = flag
+        if saved_backend is None:
+            os.environ.pop("RECORDS_BACKEND", None)
+        else:
+            os.environ["RECORDS_BACKEND"] = saved_backend
     qs._running_in_container = lambda: False  # the store checks this on every Save
     app = module.app
     assert module.GUILD_MOUNTS["guild_next"] == "on"
@@ -65,7 +71,16 @@ def server():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
     srv = make_server("127.0.0.1", port, app, threaded=True)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    # Rooms (slice 4): every page that loads Rooms reaches a real Records app
+    # on a temporary folder through the bridge (tests that need their own use
+    # the rooms fixture).
+    from minimoi_portal import records_bridge as RB
+    from rooms_helpers import RecordsTransport, records_app
+    saved_rb = (RB._TRANSPORT, RB.LOCAL_HOSTS)
+    RB._TRANSPORT = RecordsTransport(records_app(Path(tempfile.mkdtemp()) / "records"))
+    RB.LOCAL_HOSTS = {f"127.0.0.1:{port}"}
     yield {"url": f"http://127.0.0.1:{port}", "queue": queue, "app": app}
+    RB._TRANSPORT, RB.LOCAL_HOSTS = saved_rb
     srv.shutdown()
     qs._running_in_container = saved[3]
 
@@ -1019,14 +1034,14 @@ def test_slice1_navigation_reaches_every_guild_page_and_the_truthful_labs_page(b
         assert page.url.split("?")[0].endswith(where), (label, page.url)
         expect(page.locator(".guild-subnav > [aria-current='page']")).to_have_text(label)
         if label == "Rooms":
-            expect(page.locator("[data-later]")).to_contain_text("Coming in a later slice")
+            expect(page.locator("[data-rm-composer]")).to_be_visible()        # the real page since slice 4
     _more_menu(page)
     with page.expect_navigation():
         page.click("[data-more='design-studio']")
     page.wait_for_selector("body[data-ready=true]")
     expect(page.locator("#planning-studio")).to_contain_text("planning-studio/")
     expect(page.locator(".page-meta")).to_contain_text("neither is served on dev yet")
-    assert not errors, errors
+    assert not [e for e in errors if "401" not in e], errors      # Rooms before Records' sign-in: 401 by design
     ctx.close()
 
 
@@ -1842,7 +1857,8 @@ def test_s1_the_guild_bar_and_no_page_overflow_anywhere(browser, server, floor, 
     page.goto(f"{server['url']}/guild-next/guild/build")
     page.wait_for_selector("body[data-ready=true]")
     _more_menu(page)
-    assert not errors, errors
+    # Rooms asks Records first; before Records' own sign-in that is a 401 by design.
+    assert not [e for e in errors if "401" not in e], errors
     ctx.close()
 
 
@@ -1883,7 +1899,7 @@ def test_s1_selection_actions_on_the_record_only_and_rooms_disabled(browser, ser
     expect(bar).to_be_hidden()
     _select_in(page, '[data-mc-thread] [data-kind="note"][data-note]:last-child .msg-text')
     expect(bar).to_be_visible()
-    expect(bar.locator("[data-sel-room]")).to_be_disabled()                        # Rooms come in slice 4
+    expect(bar.locator("[data-sel-room]")).to_be_enabled()                         # Take to a Room (slice 4)
     bar.locator("[data-sel-pin]").click()
     expect(bar.locator("[data-sel-result]")).to_have_text("Pinned to the Board.")
     assert [m for m, _u in posts if m == "POST"] == ["POST"]
@@ -2338,4 +2354,238 @@ def test_s3_phone_board_and_library(browser, server, board_media, path):
         assert max(b["x"] for b in boxes) - min(b["x"] for b in boxes) < 4          # one column on a phone (tilted notes)
         assert page.locator("[data-bd-done]").first.bounding_box()["height"] >= 43   # touch targets
     assert not errors, errors
+    ctx.close()
+
+
+
+# ── Guild 1.1 slice 4 (spec §6, §11): Rooms on Records ────────────────────────
+
+@pytest.fixture
+def rooms(server, floor, tmp_path):
+    """The real Records app on a temporary folder behind the portal's bridge."""
+    from minimoi_portal import records_bridge as RB
+    from rooms_helpers import RecordsTransport, owner_key, records_app
+    app = records_app(tmp_path / "records")
+    transport = RecordsTransport(app)
+    saved = (RB._TRANSPORT, RB.LOCAL_HOSTS)
+    RB._TRANSPORT = transport
+    RB.LOCAL_HOSTS = {server["url"].split("//", 1)[1]}
+    assert server["app"].extensions["records_bridge"]["state"] == "on"
+    yield {"app": app, "transport": transport, "owner_key": owner_key(app)}
+    RB._TRANSPORT, RB.LOCAL_HOSTS = saved
+
+
+def _records_fetch(page, path, body=None, key=None):
+    return page.evaluate("""async ([path, body, key]) => {
+        const opts = { method: body ? 'POST' : 'GET', credentials: 'same-origin',
+          headers: body ? { 'Content-Type': 'application/json', 'Idempotency-Key': key } : {} };
+        if (body) opts.body = JSON.stringify(body);
+        const r = await fetch('/app/records/api' + path, opts);
+        return { status: r.status, body: await r.json().catch(() => null) };
+    }""", [path, body, key])
+
+
+def _agent_post(rooms, room_id, text):
+    """An agent posting with its own Records key (what roomctl sends), straight to Records."""
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+    client = rooms["app"].test_client(use_cookies=False)
+    base = "http://minimoi-records:18880"
+    owner = {"Authorization": f"Bearer {rooms['owner_key']}", "Content-Type": "application/json"}
+    client.post("/api/v1/principals", base_url=base, headers={**owner, "Idempotency-Key": "p-codex-01"},
+                data=_json.dumps({"id": "codex", "label": "Codex"}))
+    client.post(f"/api/v1/rooms/{room_id}/members", base_url=base, headers={**owner, "Idempotency-Key": "m-codex-01"},
+                data=_json.dumps({"actor": "codex", "role": "contributor"}))
+    issued = client.post("/api/v1/platform/credentials", base_url=base, headers={**owner, "Idempotency-Key": "c-codex-01"},
+                         data=_json.dumps({"principal": "codex", "label": "Codex CLI", "grants": {room_id: ["read", "post"]},
+                                           "expires_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}))
+    token = issued.get_json()["access_token"]
+    r = client.post(f"/api/v1/rooms/{room_id}/events", base_url=base,
+                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Idempotency-Key": "agent-msg-01"},
+                    data=_json.dumps({"body": text, "kind": "message"}))
+    assert r.status_code == 201, r.data
+
+
+def _rooms_ready(page, server, rooms, title="Screen review"):
+    r = _records_fetch(page, "/login", {"token": rooms["owner_key"]}, "login-0001")
+    assert r["status"] == 200
+    r = _records_fetch(page, "/v1/rooms", {"title": title, "purpose": "Review the Rooms slice", "mode": "meeting",
+                                           "recording_acknowledged": True}, f"room-{title[:6]}-0001")
+    assert r["status"] == 201
+    return r["body"]["result"]["id"]
+
+
+def test_s4_desktop_signin_draft_chat_files_agent_and_pause(browser, server, rooms, tmp_path):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    expect(page.locator(".guild-subnav > [aria-current='page']")).to_have_text("Rooms")
+    # No Records sign-in yet: say so, and keep the draft.
+    expect(page.locator("[data-rm-signin]")).to_be_visible()
+    expect(page.locator("[data-rm-signin-link]")).to_have_attribute("href", "/app/records/")
+    page.fill("[data-rm-input]", "A draft written before signing in")
+    room_id = _rooms_ready(page, server, rooms)
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
+    expect(page.locator("[data-rm-signin]")).to_be_hidden()
+    expect(page.locator("[data-rm-title]")).to_have_text("Screen review")
+    expect(page.locator("[data-rm-composer]")).to_be_in_viewport()
+    # The draft typed before signing in followed into the room (#288 review F3).
+    expect(page.locator("[data-rm-input]")).to_have_value("A draft written before signing in")
+    # Send a message (the draft typed in this room before is kept until sent).
+    page.fill("[data-rm-input]", "Attaching the review pack once.")
+    page.click("[data-rm-send]")
+    expect(page.locator(".rm-msg .rm-body").last).to_have_text("Attaching the review pack once.")
+    expect(page.locator("[data-rm-input]")).to_have_value("")
+    # Attach a file: it appears in the thread and in the Files drawer, with a preview.
+    notes = tmp_path / "review-notes.md"
+    notes.write_text("# Review notes\np.18 fixed columns\n")
+    page.set_input_files("[data-rm-attach]", str(notes))
+    expect(page.locator("[data-rm-open-file]").first).to_contain_text("review-notes.md")
+    page.click("[data-rm-files-toggle]")
+    expect(page.locator("[data-rm-files]")).to_be_visible()
+    page.locator("[data-rm-files] [data-rm-open-file]").first.click()
+    expect(page.locator("[data-rm-preview] pre")).to_contain_text("p.18 fixed columns")
+    page.click("[data-rm-file-details] summary")
+    page.fill("[data-rm-save-path]", "docs/design/review-notes.md")
+    page.click("[data-rm-save] button[type=submit]")
+    expect(page.locator("[data-rm-status]")).to_contain_text("Project home recorded: docs/design/review-notes.md · v1. Nothing was written")
+    page.click("[data-rm-files-back]")
+    expect(page.locator("[data-rm-files] .rm-flist")).to_be_visible()
+    page.click("[data-rm-files-close]")
+    # An agent's message (its own Records key) is attributed and labelled.
+    _agent_post(rooms, room_id, "Codex: p.12 still says kept.")
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    agent = page.locator('.rm-msg[data-actor="codex"]')
+    expect(agent).to_contain_text("Codex: p.12 still says kept.")
+    expect(agent.locator('[data-tag="agent"]')).to_have_text("agent")
+    expect(page.locator("[data-rm-mic]")).to_be_disabled()
+    expect(page.locator("[data-rm-mic]")).to_contain_text("dictation · later")
+    # Pause: the room says so and writes are refused.
+    page.click("[data-rm-details] > summary")
+    page.fill("[data-rm-state-note]", "Lunch break")
+    page.click("[data-rm-set-state='paused']")
+    expect(page.locator("[data-rm-state]")).to_have_text("Paused")
+    expect(page.locator("[data-rm-send]")).to_be_disabled()
+    expect(page.locator("[data-rm-composer]")).to_be_in_viewport()
+    refused = _records_fetch(page, f"/v1/rooms/{room_id}/events", {"body": "x", "kind": "message"}, "paused-0001")
+    assert refused["status"] == 409
+    assert _no_page_overflow(page)
+    assert not [e for e in errors if "401" not in e and "409" not in e], errors     # 401 before sign-in, 409 by design
+    ctx.close()
+
+
+def test_s4_phone_composer_always_visible_and_the_room_list(browser, server, rooms):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    room_id = _rooms_ready(page, server, rooms, title="Phone room")
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
+    for n in range(12):
+        _records_fetch(page, f"/v1/rooms/{room_id}/events", {"body": f"message {n} " + "words " * 20, "kind": "message"},
+                       f"phone-msg-{n:04d}")
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator(".rm-msg")).to_have_count(12)
+    comp = page.locator("[data-rm-composer]")
+    expect(comp).to_be_in_viewport()
+    box = comp.bounding_box()
+    assert box["y"] + box["height"] <= 844 and box["x"] >= 0 and box["x"] + box["width"] <= 390
+    expect(page.locator("[data-rm-input]")).to_be_visible()
+    page.click("[data-rm-list-open]")
+    expect(page.locator("[data-rm-list] [data-rm-room]")).to_have_count(1)
+    page.click("[data-rm-list-close]")
+    assert _no_page_overflow(page)
+    ctx.close()
+
+
+def test_s4_take_to_a_room_shares_the_stored_note_by_id(browser, server, rooms):
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    room_id = _rooms_ready(page, server, rooms, title="Take room")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.fill("#mc-input", "Decide the Rooms header art")
+    page.click("[data-mc-send]")
+    note = page.locator('[data-mc-thread] [data-kind="note"][data-note]').last
+    expect(note).to_contain_text("Decide the Rooms header art")
+    note_id = note.get_attribute("data-note")
+    _select_in(page, '[data-mc-thread] [data-kind="note"][data-note]:last-child .msg-text')
+    with page.expect_navigation():
+        page.click("[data-sel-room]")
+    page.wait_for_selector("body[data-ready=true]")
+    assert f"take={note_id}" in page.url
+    take = page.locator("[data-rm-take]")
+    expect(take).to_be_visible()
+    expect(page.locator("[data-rm-take-text]")).to_have_text("Decide the Rooms header art")
+    page.click("[data-rm-take-send]")
+    expect(page.locator("[data-rm-take-result]")).to_have_text("Shared into this room.")
+    shared = page.locator('.rm-msg [data-tag="chat"]')
+    expect(shared).to_have_text("from Guild Chat")
+    expect(page.locator(".rm-msg .rm-body").last).to_contain_text(f"From Guild Chat · note #{note_id}")
+    assert "take=" not in page.url
+    ctx.close()
+
+
+def test_s4_a_prepared_take_is_discarded_when_going_off_the_record_and_cancel_sticks(browser, server, rooms):
+    """#288 review F2 and F8: switching mode discards a prepared Take, which is
+    then never sent; Cancel drops it from the address so a reload cannot
+    bring it back."""
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    room_id = _rooms_ready(page, server, rooms, title="Off room")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.fill("#mc-input", "Keep this for the room")
+    page.click("[data-mc-send]")
+    note = page.locator('[data-mc-thread] [data-kind="note"][data-note]').last
+    expect(note).to_contain_text("Keep this for the room")
+    note_id = note.get_attribute("data-note")
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}&take={note_id}")
+    expect(page.locator("[data-rm-take]")).to_be_visible()
+    before = len(_records_fetch(page, f"/v1/rooms/{room_id}", None, None)["body"]["events"])
+    assert page.locator("[data-mc-record]").count() == 1
+    page.evaluate("document.querySelector('[data-mc-record]').click()")         # off the record
+    expect(page.locator("[data-rm-take]")).to_be_hidden()
+    expect(page.locator("[data-rm-status]")).to_contain_text("discarded")
+    assert "take=" not in page.url
+    page.evaluate("document.querySelector('[data-rm-take-send]').click()")      # a stale click does nothing
+    page.wait_for_timeout(300)
+    assert len(_records_fetch(page, f"/v1/rooms/{room_id}", None, None)["body"]["events"]) == before
+    page.evaluate("document.querySelector('[data-mc-record]').click()")         # back on the record
+    # Cancel sticks across a reload.
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}&take={note_id}")
+    expect(page.locator("[data-rm-take]")).to_be_visible()
+    page.click("[data-rm-take-cancel]")
+    assert "take=" not in page.url
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator("[data-rm-take]")).to_be_hidden()
+    ctx.close()
+
+
+def test_s4_an_expired_records_login_says_sign_in_and_keeps_the_draft(browser, server, rooms):
+    ctx, page = _context(browser, server, 1440, 900)
+    writes = []
+    page.on("request", lambda r: writes.append(r.url) if r.method == "POST" and "/app/records/api/v1/rooms/" in r.url else None)
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    room_id = _rooms_ready(page, server, rooms, title="Expiry room")
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
+    expect(page.locator("[data-rm-title]")).to_have_text("Expiry room")
+    page.fill("[data-rm-input]", "Half-written thought about the art")
+    ctx.clear_cookies(name="minimoi_room_poc")                       # Records' own session ends
+    page.click("[data-rm-send]")
+    expect(page.locator("[data-rm-signin]")).to_be_visible()
+    expect(page.locator("[data-rm-input]")).to_have_value("Half-written thought about the art")
+    expect(page.locator("[data-rm-send]")).to_be_disabled()
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator("[data-rm-signin]")).to_be_visible()
+    # Signing in again brings the room back with the draft.
+    _records_fetch(page, "/login", {"token": rooms["owner_key"]}, "login-0002")
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator("[data-rm-input]")).to_have_value("Half-written thought about the art")
+    assert len(writes) == 1                                           # the one refused attempt; nothing else sent
     ctx.close()

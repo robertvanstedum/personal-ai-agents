@@ -336,6 +336,10 @@ def test_staging_volumes_are_external_and_staging_named():
                    "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
         "mc-front": {"name": "minimoi-staging-mc-front", "internal": True,
                      "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
+        # Rooms' Records network (Guild 1.1 slice 4; docker-compose.records.yml): internal,
+        # no host address on the bridge (#288 review F1).
+        "records-net": {"name": "minimoi-staging-records", "internal": True,
+                        "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
     }
 
 
