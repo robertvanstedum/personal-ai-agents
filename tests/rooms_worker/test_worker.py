@@ -330,3 +330,21 @@ def test_a_stale_dispatch_answer_is_asked_again_before_sending(env, monkeypatch)
     env.worker.run_once()
     assert len(heartbeats) == 1 and len(env.relay.calls) == 1
     assert env.turns()[0]["state"] == "committed"
+
+
+
+def test_the_prompt_keeps_earlier_round_replies_apart_from_the_history():
+    """Rooms R3a review A3-02: the label reaches the model, not only the claim."""
+    turn = {"brief": {"title": "t", "purpose": "p", "participants": [], "facilitator_label": "MC", "language": "en",
+                      "kind": "meeting"},
+            "coverage": {"through_seq": 4, "included": 2, "omitted": 0, "earlier_in_round": 1},
+            "transcript": [{"seq": 3, "speaker": "Robert", "kind": "message", "text": "context"},
+                           {"seq": 6, "speaker": "Master Craftsman", "kind": "message", "text": "MC's answer",
+                            "note": "earlier in this round"}],
+            "trigger": {"seq": 5, "id": None, "text": "@everyone go"}}
+    system, data, question = adapter.messages(turn)
+    payload = json.loads(data["content"].split("\n", 1)[1])
+    assert [r["text"] for r in payload["history_before_the_message"]["records"]] == ["context"]
+    assert payload["history_before_the_message"]["through_seq"] == 4
+    assert [r["text"] for r in payload["earlier_in_this_round"]["records"]] == ["MC's answer"]
+    assert question == {"role": "user", "content": "@everyone go"} and "@everyone go" not in data["content"]

@@ -198,3 +198,32 @@ def test_round_replies_export_under_transcript_1_1(env):
     data, _ = capture(env.store, "robert", env.room)
     assert data["schema_version"] == "minimoi.transcript/1.1"
     assert {r["speaker_id"] for r in data["raw_transcript"] if r.get("execution")} == {"mc", "claude-code"}
+
+
+# ── Codex review A3-01 / A3-02 ───────────────────────────────────────────────
+
+def _uncertain_first_turn(env):
+    env.say("@everyone go")
+    mc = env.claim(env.mcw, "mc")
+    env.call("POST", env.mcw, f"/turns/{mc['id']}/start", {"claim_id": mc["claim_id"]})
+    env.sql("UPDATE turns SET lease_until=?,expires=? WHERE id=?", past(5), past(5), mc["id"])
+    env.call("GET", env.owner, f"/rooms/{env.room}/turns")               # → uncertain (lease expired)
+    rec = env.call("POST", env.mcw, f"/turns/{mc['id']}/recover", {"prior_claim_id": mc["claim_id"]}).json
+    assert rec["state"] == "recovering"                                   # before the 120 s release
+    return mc, rec["turn"]
+
+
+def test_delivery_only_recovery_in_a_round_survives_the_inference_deadline(env):
+    mc, recovery = _uncertain_first_turn(env)
+    assert env.run(env.mcw, env.mc, mc, "MC's saved reply", claim_id=recovery["claim_id"]).status_code == 201
+    t = env.turns()
+    assert t["mc"]["state"] == "committed"
+    assert env.claim(env.ccw, "claude-code") is not None                  # the round goes on
+
+
+def test_pause_still_fences_a_recovering_round_turn(env):
+    mc, recovery = _uncertain_first_turn(env)
+    version = env.call("GET", env.owner, f"/rooms/{env.room}").json["version"]
+    env.call("POST", env.owner, f"/rooms/{env.room}/state", {"state": "paused", "version": version, "checkpoint": "p"})
+    assert env.run(env.mcw, env.mc, mc, "late", claim_id=recovery["claim_id"]).status_code == 409
+    assert env.turns()["mc"]["disposition"] == "paused_during_recovery"

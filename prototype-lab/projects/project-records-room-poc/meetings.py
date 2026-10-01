@@ -251,11 +251,16 @@ def round_progress(db, moment):
             # 1. Away: the skipped turn is cancelled; it never takes a slot or starts later.
             set_turn(db, r["waits_for"], state="cancelled", disposition="skipped_away")
             _release(db, r["turn_id"], "skipped_away", moment)
-        elif r["state"] in ("claimed", "running", "recovering") and r["expires"] <= moment:
-            # 2. Past its absolute deadline: fenced in this same transaction.
+        elif r["state"] in ("claimed", "running") and r["expires"] <= moment:
+            # 2. Past its absolute inference deadline: fenced in this same transaction.
             set_turn(db, r["waits_for"], state="cancelled" if r["state"] == "claimed" else "cancel_requested",
                      disposition="round_deadline")
             _release(db, r["turn_id"], "round_deadline", moment)
+        elif r["state"] == "recovering" and r["expires"] <= moment:
+            # Delivery-only recovery of a saved reply keeps its fresh lease past the
+            # inference deadline (v0.3.1): the round goes on, the recovery is not
+            # cancelled; pause, stop and revocation still fence it (review A3-01).
+            _release(db, r["turn_id"], "round_deadline_recovering", moment)
         elif r["state"] == "uncertain" and r["updated"] <= unreconciled_before:
             # 3. Unreconciled: released; the predecessor stays uncertain (saved-reply delivery only).
             _release(db, r["turn_id"], "unreconciled_predecessor", moment)
