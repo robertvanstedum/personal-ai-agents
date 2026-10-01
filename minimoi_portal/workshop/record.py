@@ -27,6 +27,7 @@ FIELDS = {"v", "event_id", "at", "workshop", "actor", "kind", "item", "stage", "
 TEXT_MAX = 280
 LINE_MAX = 4000
 STALE_AFTER = timedelta(minutes=15)
+CLOCK_AHEAD = timedelta(minutes=2)          # a reading dated further ahead than this is untrustworthy
 _SECRET = re.compile(r"(sk-[A-Za-z0-9_\-]{8,}|xai-[A-Za-z0-9]{16,}|tvly-[A-Za-z0-9]{8,}|ghp_[A-Za-z0-9]{10,}|"
                      r"github_pat_|bearer\s+\S+|-----BEGIN|eyJ[A-Za-z0-9_\-]{20,}\.|AKIA[0-9A-Z]{12,}|"
                      r"[a-z]+://[^\s/:@]+:[^\s/@]+@)", re.IGNORECASE)
@@ -229,11 +230,13 @@ def load_state(root: str | None, workshop_id: str) -> tuple[dict | None, str]:
         return None, "unreadable"
     if not isinstance(state, dict):
         return None, "unreadable"
-    host = state.get("host") or {}
+    host = state.get("host") if isinstance(state.get("host"), dict) else {}
     seen = parse(host.get("observed_at") or host.get("at")) if host else None
-    if seen is None or now() - seen > STALE_AFTER:
+    # A reading dated more than CLOCK_AHEAD in the future is not trusted
+    # either (the Mac's and the server's clocks disagree): never "fresh".
+    if seen is None or now() - seen > STALE_AFTER or seen - now() > CLOCK_AHEAD:
         return state, "stale"
     return state, "ok"
 
 
-__all__ = ["Workshop", "validate", "reduce", "load_state", "ACTORS", "KINDS", "STAGES", "STALE_AFTER", "iso", "now", "parse"]
+__all__ = ["Workshop", "validate", "reduce", "load_state", "ACTORS", "KINDS", "STAGES", "STALE_AFTER", "CLOCK_AHEAD", "iso", "now", "parse"]

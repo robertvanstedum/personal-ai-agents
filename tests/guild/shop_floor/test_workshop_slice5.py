@@ -18,8 +18,8 @@ from floor_helpers import load_portal  # noqa: F401  (pytest fixture)
 from floor_db_helpers import floor_db, floored  # noqa: F401  (pytest fixtures)
 from test_workshop_4a import _obs, _record, ws  # noqa: F401  (fixtures and helpers)
 
-from minimoi_portal.guild_ui.workshop_view import jobs, ops_strip
-from minimoi_portal.workshop.record import Workshop
+from minimoi_portal.guild_ui.workshop_view import JOB_CAP, jobs, ops_strip, usage_this_month
+from minimoi_portal.workshop.record import VERSION, Workshop
 
 API = "/guild-next/api/v1"
 PAGE = "/guild-next/guild/workshop"
@@ -121,8 +121,14 @@ def test_job_cards_show_state_reporter_last_contact_and_evidence(ws):
     assert 'href="/guild-next/guild/build/log?item=12">#12</a>' in card and "step 5" in card
     assert card.count("<li>") == 5 and "step 0" not in card                 # the last five events only
     assert "claude-code" in card and "last contact" in card and ", reported" in card
+    assert [c for c, _ in cards] == ["pr:289", "queue:12", "spec:rooms", "spec:workshop"]   # in review, running, queued, completed
     v = ws.owner().get(f"{API}/workshop").get_json()
-    assert v["jobs"] == {"known": True, "stale": False, "count": 4}
+    assert {k: v["jobs"][k] for k in ("known", "stale", "count", "more")} == {"known": True, "stale": False, "count": 4,
+                                                                               "more": 0}
+    assert [c["item"] for c in v["jobs"]["cards"]] == ["pr:289", "queue:12", "spec:rooms", "spec:workshop"]
+    done = page[page.index('data-ws-job="spec:workshop"'):]
+    done = done[:done.index("</article>")]
+    assert "Comment · not available" in done and "Stop · not available" not in done   # nothing to stop
 
 
 def test_an_empty_record_says_so(ws):
@@ -182,3 +188,249 @@ def test_the_workshop_sits_in_the_shell_under_more(ws):
     nav = page[page.index('<div class="guild-subnav guild-sections">'):page.index("</nav>")]
     assert re.search(r'data-more="workshop" aria-current="page"', nav)
     assert "subnav-more-on" in nav
+
+
+# ── PR #289 review fixes ─────────────────────────────────────────────────────
+
+def _ago(**kw):
+    return (datetime.now(timezone.utc) - timedelta(**kw)).isoformat(timespec="seconds")
+
+
+def _ahead(**kw):
+    return (datetime.now(timezone.utc) + timedelta(**kw)).isoformat(timespec="seconds")
+
+
+def _state_path(ws):
+    return ws.extra["root"] / "mac" / "state.json"
+
+
+def _edit_state(ws, change):
+    state = json.loads(_state_path(ws).read_text())
+    change(state)
+    _state_path(ws).write_text(json.dumps(state))
+
+
+def _both(ws):
+    """The page, the item page and the API all answer (never a 500); returns the API body and the page."""
+    client = ws.owner()
+    for url in (f"{PAGE}?item=12", f"{API}/workshop?item=12"):
+        assert client.get(url).status_code == 200, url
+    page = client.get(PAGE)
+    api = client.get(f"{API}/workshop")
+    assert page.status_code == 200 and api.status_code == 200
+    return api.get_json(), page.get_data(as_text=True)
+
+
+def _two_jobs(ws):
+    return _record(ws, {"actor": "codex", "kind": "started", "item": "queue:12", "text": "Building"},
+                   {"actor": "robert", "kind": "next", "item": "spec:rooms", "text": "Rooms walkthrough"})
+
+
+def _raw_line(ws, line: dict):
+    with open(ws.extra["root"] / "mac" / "events.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(line) + "\n")
+
+
+# F1: a malformed but valid JSON record line is "unknown" for that line or item, never a 500.
+
+def test_an_event_line_without_an_item_is_skipped(ws):
+    _two_jobs(ws)
+    _raw_line(ws, {"v": VERSION, "at": _ago(minutes=1), "actor": "codex", "kind": "progress", "text": "no item"})
+    v, page = _both(ws)
+    assert v["jobs"]["known"] is True and {c["item"] for c in v["jobs"]["cards"]} == {"queue:12", "spec:rooms"}
+    assert "no item" not in page
+
+
+def test_an_event_line_with_a_numeric_time_is_skipped(ws):
+    _two_jobs(ws)
+    _raw_line(ws, {"v": VERSION, "at": 1727740800, "actor": "codex", "kind": "progress", "item": "queue:12",
+                   "text": "numeric time"})
+    v, page = _both(ws)
+    card = next(c for c in v["jobs"]["cards"] if c["item"] == "queue:12")
+    assert card["state"] == "running" and "numeric time" not in page
+
+
+def test_record_items_as_a_list_make_job_states_unknown(ws):
+    _two_jobs(ws)
+    _edit_state(ws, lambda s: s.update(items=[{"at": _ago(minutes=1), "kind": "started"}]))
+    v, page = _both(ws)
+    assert v["jobs"]["known"] is False and v["jobs"]["cards"] == []
+    assert "Job states unknown (the workshop record could not be read)." in page
+    assert "No jobs in the workshop record yet." not in page
+
+
+def test_an_item_entry_that_is_a_string_is_unknown_for_that_item_only(ws):
+    _two_jobs(ws)
+    _edit_state(ws, lambda s: s["items"].update({"spec:rooms": "garbled"}))
+    v, page = _both(ws)
+    cards = {c["item"]: c for c in v["jobs"]["cards"]}
+    assert cards["spec:rooms"]["state"] == "unknown" and cards["spec:rooms"]["pill"] == "unknown"
+    assert cards["queue:12"]["state"] == "running"
+    assert "This item&#39;s entry in the workshop record could not be read." in page
+
+
+def test_a_queue_ref_of_non_ascii_digits_is_not_a_queue_link(ws):
+    _two_jobs(ws)
+    _edit_state(ws, lambda s: s["items"].update({"queue:²": {"at": _ago(minutes=1), "kind": "started", "text": "odd ref"}}))
+    v, page = _both(ws)
+    card = next(c for c in v["jobs"]["cards"] if c["item"] == "queue:²")
+    assert card["queue_id"] is None and '<span class="ws-ref">queue:²</span>' in page
+
+
+@pytest.mark.parametrize("change", [
+    lambda s: s.update(host=["not", "a", "reading"]),
+    lambda s: s.update(needs_you={"item": "queue:12"}, next="soon", last_event="text"),
+    lambda s: s["host"].update(runs=["x", {"kind": ["list"]}], clients=[1], sessions="two", reasons="text"),
+], ids=["host-a-list", "lists-of-the-wrong-shape", "host-fields-of-the-wrong-shape"])
+def test_other_sections_of_the_wrong_shape_read_as_unknown_never_a_500(ws, change):
+    _two_jobs(ws)
+    _edit_state(ws, change)
+    _both(ws)
+
+
+def test_job_cards_never_raise_on_a_bad_record():
+    for state in ({"items": ["x"]}, {"items": "x"}, {"items": {"queue:1": 3, "queue:2": {"at": 5, "kind": ["x"]}}}):
+        out = jobs(None, "mac", state, "ok")
+        assert out["known"] in (True, False)
+
+
+# F4: a reading dated ahead of the server's clock is unknown (clock ahead), not "just now".
+
+def test_a_reading_dated_hours_ahead_is_unknown_clock_ahead(ws):
+    _two_jobs(ws).append({"workshop": "mac", "actor": "codex", "kind": "progress", "item": "queue:12",
+                          "text": "From the future", "at": _ahead(hours=3)})
+    _edit_state(ws, lambda s: s["host"].update(observed_at=_ahead(hours=3)))
+    v, page = _both(ws)
+    assert v["record_status"] == "stale" and v["admission"]["verdict"] == "unknown"
+    assert "ahead of this server (clock skew)" in v["admission"]["reasons"][0]
+    assert v["admission"]["age"] == "unknown (clock ahead)"
+    ops = _ops(v)
+    assert ops["memory"]["state"] == "unknown" and ops["memory"]["text"] == "Memory free · unknown (clock ahead)"
+    assert ops["memory"]["fresh"]["age"] == "unknown (clock ahead)" and "just now" not in str(ops)
+    card = next(c for c in v["jobs"]["cards"] if c["item"] == "queue:12")
+    assert card["pill"] == "unknown (clock ahead)" and card["last_contact"]["age"] == "unknown (clock ahead)"
+    assert v["jobs"]["stale_text"].startswith("The host reading is dated ahead of this server")
+    assert "Memory free · unknown (clock ahead)" in page
+
+
+def test_a_reading_a_minute_ahead_is_still_fresh(ws):
+    _record(ws, obs=_obs(observed_at=_ahead(minutes=1)))
+    ops = _ops(ws.owner().get(f"{API}/workshop").get_json())
+    assert ops["memory"]["state"] == "measured" and ops["memory"]["fresh"]["age"] == "just now"
+
+
+# F6: only finite, non-negative numbers are figures; anything else is unknown.
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -5, "lots", {"x": 1}, True])
+def test_a_bad_host_value_is_unknown_never_a_number(ws, bad):
+    _record(ws)
+    _edit_state(ws, lambda s: s["host"].update(memory_free_pct=bad))
+    v, page = _both(ws)
+    memory = _ops(v)["memory"]
+    assert memory["state"] == "unknown" and memory["value"] is None
+    assert memory["text"] == "Memory free · unknown (unreadable value)"
+    assert "nan" not in memory["text"].lower() and "Memory free · unknown (unreadable value)" in page
+    assert "memory free unknown" in (v["headroom"] or "")
+
+
+def test_an_absent_figure_says_so(ws):
+    _record(ws)
+    _edit_state(ws, lambda s: s["host"].pop("load_1m"))
+    assert _ops(ws.owner().get(f"{API}/workshop").get_json())["load"]["text"] == "Load (1 min) · unknown (not in the reading)"
+
+
+@pytest.mark.parametrize("bad", ["NaN", "-0.5", '"cheap"', "Infinity"])
+def test_a_bad_cost_makes_spend_unknown_never_a_total(ws, bad, tmp_path):
+    _record(ws)
+    ws.extra["usage"].mkdir()
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    (ws.extra["usage"] / f"usage-{month}.jsonl").write_text(
+        '{"emitter": "gateway", "actor": "mc", "cost_usd": 0.25}\n'
+        f'{{"emitter": "gateway", "actor": "mc", "cost_usd": {bad}}}\n'
+        '{"emitter": "gateway", "actor": "mc", "cost_usd": null}\n')
+    v, page = _both(ws)
+    spend = _ops(v)["spend"]
+    assert spend["state"] == "unknown" and spend["value"] is None
+    assert spend["text"] == "Model spend · unknown (unreadable value in 1 gateway record)"
+    assert v["budget"]["bad"] == 1 and "$0.25" not in page
+    assert "1 gateway record had an unreadable cost" in page
+
+
+# F7: no usage file yet this month is "not measured yet", and an old file shows its date.
+
+def test_no_usage_file_this_month_is_not_measured_yet_never_zero(ws):
+    _record(ws)
+    ws.extra["usage"].mkdir()
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    v, page = _both(ws)
+    spend = _ops(v)["spend"]
+    assert spend["state"] == "not_measured" and spend["value"] is None
+    assert spend["text"] == "Model spend · not measured yet this month"
+    assert spend["source"] == f"usage store: no gateway records yet in {month}"
+    assert "$0.00" not in page and "none recorded" not in page
+    assert f"no gateway records yet in {month}" in page
+
+
+def test_an_old_usage_file_is_labelled_last_record_with_its_date(ws):
+    _record(ws)
+    ws.extra["usage"].mkdir()
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    path = ws.extra["usage"] / f"usage-{month}.jsonl"
+    path.write_text('{"emitter": "gateway", "actor": "mc", "cost_usd": 0.25}\n')
+    old = datetime.now(timezone.utc) - timedelta(days=3)
+    os.utime(path, (old.timestamp(), old.timestamp()))
+    v, page = _both(ws)
+    fresh = _ops(v)["spend"]["fresh"]
+    assert fresh["label"] == "last record" and fresh["date"] == old.strftime("%d %b").lstrip("0")
+    assert fresh["age"] == "72 h ago"
+    assert f"last record {fresh['date']} <span data-iso" in page
+    today = usage_this_month(str(ws.extra["usage"]))
+    os.utime(path, None)
+    today = usage_this_month(str(ws.extra["usage"]))
+    assert "date" not in ops_strip(None, "missing", today)[4]["fresh"]
+
+
+# F5: a job not heard from in 48 hours is not "running"; needs you first; at most 12 cards.
+
+def test_a_job_silent_for_days_says_last_seen_not_running(ws):
+    _record(ws, {"actor": "codex", "kind": "started", "item": "queue:12", "text": "Building", "at": _ago(days=5)},
+            {"actor": "codex", "kind": "done", "item": "queue:13", "text": "Shipped", "at": _ago(days=5)})
+    v, page = _both(ws)
+    cards = {c["item"]: c for c in v["jobs"]["cards"]}
+    assert cards["queue:12"]["pill"] == "last seen 5d ago (stale)" and cards["queue:12"]["flag"] == "stale"
+    assert cards["queue:13"]["pill"] == "completed" and cards["queue:13"]["flag"] is None   # done stays done
+    assert 'data-ws-job="queue:12" data-state="stale"' in page and "last reported: running" in page
+    assert ">running<" not in page
+
+
+def test_needs_you_comes_first_and_the_cards_are_capped(ws):
+    events = [{"actor": "codex", "kind": "done", "item": f"queue:{n}", "text": f"done {n}"} for n in range(100, 114)]
+    events.insert(0, {"actor": "codex", "kind": "needs_you", "item": "queue:12", "text": "Choose", "at": _ago(hours=1)})
+    _record(ws, *events)
+    v, page = _both(ws)
+    cards = v["jobs"]["cards"]
+    assert len(cards) == JOB_CAP == 12 and v["jobs"]["more"] == 3
+    assert cards[0]["item"] == "queue:12" and cards[0]["state"] == "needs you"
+    assert page.count("<article class=\"ws-job\"") == 12
+    assert "+3 more in the workshop record" in page
+
+
+# F2: the refresh carries the cards, so the page can redraw them.
+
+def test_the_refresh_carries_the_cards_and_their_stale_wording(ws):
+    _record(ws, {"actor": "codex", "kind": "started", "item": "queue:12", "text": "Building"}, obs=_obs(observed_at=_ago(hours=2)))
+    jobs_body = ws.owner().get(f"{API}/workshop").get_json()["jobs"]
+    assert jobs_body["stale"] is True and jobs_body["stale_text"] == "The host reading is stale, so these job states may be out of date."
+    card = jobs_body["cards"][0]
+    assert {"item", "state", "pill", "flag", "title", "actor", "last_contact", "evidence", "queue_id"} <= set(card)
+
+
+# F9: the strip's figures are read out, not hidden behind a label.
+
+def test_the_strip_summary_has_no_aria_label_hiding_its_figures(ws):
+    _record(ws)
+    page = ws.owner().get(PAGE).get_data(as_text=True)
+    start = page.index('<summary class="ws-strip"')
+    summary = page[start:page.index("</summary>", start)]
+    assert "aria-label" not in summary and "Memory free 46.0%" in summary
+    assert '<span class="visually-hidden">Ops strip:</span>' in summary

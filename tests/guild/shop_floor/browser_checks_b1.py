@@ -15,6 +15,7 @@ import re
 import socket
 import tempfile
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -2553,7 +2554,26 @@ def test_s4_an_expired_records_login_says_sign_in_and_keeps_the_draft(browser, s
 
 # ── Guild 1.1 slice 5 (spec §7, §11): the Workshop restyled ───────────────────
 
-def test_s5_desktop_ops_strip_job_cards_and_controls_not_available(browser, server, workshop):
+@pytest.fixture
+def usage_store(tmp_path):
+    """A usage store whose last gateway record is three days and two hours old."""
+    folder = tmp_path / "usage"
+    folder.mkdir()
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    path = folder / f"usage-{month}.jsonl"
+    path.write_text(json.dumps({"emitter": "gateway", "actor": "mc", "cost_usd": 0.4}) + "\n")
+    old = (datetime.now(timezone.utc) - timedelta(days=3, hours=2)).timestamp()
+    os.utime(path, (old, old))
+    saved = os.environ.get("MINIMOI_USAGE_DIR")
+    os.environ["MINIMOI_USAGE_DIR"] = str(folder)
+    yield folder
+    if saved is None:
+        os.environ.pop("MINIMOI_USAGE_DIR", None)
+    else:
+        os.environ["MINIMOI_USAGE_DIR"] = saved
+
+
+def test_s5_desktop_ops_strip_job_cards_and_controls_not_available(browser, server, workshop, usage_store):
     ctx, page = _context(browser, server, 1440, 900)
     errors = _errors(page)
     writes = _writes(page)
@@ -2581,12 +2601,47 @@ def test_s5_desktop_ops_strip_job_cards_and_controls_not_available(browser, serv
         expect(card.locator(f"[data-ws-control='{control}']")).to_be_disabled()
         expect(card.locator(f"[data-ws-control='{control}']")).to_contain_text("not available")
     expect(page.locator("[data-ws-control='start']")).to_be_disabled()
-    # A failed refresh turns measured figures stale and says when the last good read was.
+    # Spend keeps its own time: the usage file's, not the host reading's.
+    expect(page.locator("[data-ws-op='spend']")).to_contain_text("Model spend $0.40")
+    expect(page.locator("[data-ws-op='spend'] .sx-at")).to_contain_text("last record")
+    w, now, iso = workshop["workshop"], workshop["now"], workshop["iso"]
+    # The cards follow the refresh (review F2): a new event changes a pill, a new item adds a card.
+    w.append({"workshop": "mac", "actor": "robert", "kind": "decision", "item": "queue:12", "text": "Every minute"})
+    w.append({"workshop": "mac", "actor": "codex", "kind": "review", "item": "queue:31", "text": "Reviewing #289"})
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(card.locator("[data-ws-pill]")).to_have_text("running")
+    expect(page.locator("[data-ws-job='queue:31'] [data-ws-pill]")).to_have_text("in review")
+    expect(page.locator("[data-ws-job='queue:31'] .ws-ref")).to_have_attribute("href", "/guild-next/guild/build/log?item=31")
+    expect(page.locator("[data-ws-jobs-stale]")).to_have_count(0)
+    # A stale host reading shows on the cards too, in words.
+    old = iso(now() - timedelta(hours=2))
+    stale = workshop["Observation"](observed_at=old, memory_free_pct=46.0, swap_used_gb=1.2, disk_free_gb=80.0,
+                                    load_1m=2.1, clients=[], clients_known=True)
+    w.append({**workshop["health_event"](stale, "mac"), "at": iso(now())})
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(page.locator("[data-ws-jobs-stale]")).to_have_text("The host reading is stale, so these job states may be out of date.")
+    expect(card.locator("[data-ws-stale-pill]")).to_be_visible()
+    expect(card.locator("[data-ws-stale-pill]")).to_have_text("stale record")
+    expect(page.locator("[data-ws-op='memory']")).to_contain_text("Memory free 46.0% · stale")
+    # A failed refresh (review F3): each figure keeps its value, marked stale, with its own last good time and a live age.
     page.route("**/api/v1/workshop*", lambda route: route.fulfill(status=503, body="{}", content_type="application/json"))
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
     expect(page.locator("[data-ws-op='memory']")).to_have_attribute("data-state", "stale")
     expect(page.locator("[data-ws-op='memory'] .sx-at")).to_contain_text("last good read")
-    expect(page.locator("[data-ws-jobs]")).to_have_attribute("data-stale", "true")
+    expect(page.locator("[data-ws-op='spend']")).to_have_attribute("data-state", "stale")
+    expect(page.locator("[data-ws-op='spend']")).to_contain_text("Model spend $0.40 in")
+    host_at = page.locator("[data-ws-op='memory'] .sx-at").text_content()
+    spend_at = page.locator("[data-ws-op='spend'] .sx-at").text_content()
+    assert "last good read" in spend_at and spend_at != host_at, (spend_at, host_at)
+    row = page.locator("[data-ws-op-row='memory']")
+    expect(row).to_have_attribute("data-state", "stale")
+    expect(row.locator("[data-ws-op-value]")).to_have_text("46.0% (stale)")
+    expect(row.locator("[data-ws-op-fresh]")).to_contain_text("last good read")
+    expect(row.locator("[data-ws-op-fresh]")).to_contain_text("2 h ago")
+    assert row.locator("td").first.evaluate("e => getComputedStyle(e).fontStyle") == "italic"
+    expect(page.locator("[data-ws-op-row='spend'] [data-ws-op-value]")).to_have_text("$0.40 (stale)")
+    expect(page.locator("[data-ws-jobs-stale]")).to_contain_text("may be out of date (the refresh failed; last good read")
+    expect(page.locator("[data-ws-job='queue:31'] [data-ws-stale-pill]")).to_be_visible()
     assert _no_page_overflow(page)
     assert not writes, writes                                                       # read only
     assert not [e for e in errors if "status of 503" not in e], errors

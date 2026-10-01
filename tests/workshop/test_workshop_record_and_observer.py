@@ -79,6 +79,19 @@ def test_load_state_is_honest_missing_unreadable_stale(tmp_path):
     assert load_state(str(tmp_path), "mac") == (None, "unreadable")
 
 
+def test_a_reading_dated_ahead_of_this_clock_is_not_current(tmp_path):
+    """PR #289 review F4: the Mac's and the server's clocks can disagree; a
+    reading dated more than two minutes ahead is never "fresh"."""
+    from datetime import datetime, timedelta, timezone
+    ws = Workshop(str(tmp_path), "mac")
+    for ahead, status in ((timedelta(minutes=1), "ok"), (timedelta(hours=3), "stale")):
+        at = (datetime.now(timezone.utc) + ahead).isoformat(timespec="seconds")
+        obs = Observation(observed_at=at, memory_free_pct=50, swap_used_gb=1, disk_free_gb=50, clients=[],
+                          clients_known=True)
+        ws.append({**health_event(obs, "mac"), "at": at})
+        assert load_state(str(tmp_path), "mac")[1] == status, ahead
+
+
 # ── the observer ──────────────────────────────────────────────────────────────
 # Real macOS shapes: `ps -axo pid=,ppid=,etime=,comm=` puts the full executable
 # path LAST (with the old order macOS truncated it to 16 characters). Captured
