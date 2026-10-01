@@ -6,12 +6,9 @@ answers with a redirect, the API answers 401 (no session user) or 403 (a
 user who is not the owner), with no Location header.
 
 CSRF (spec §5.3, review S7). Every write must carry the per-session token in
-X-CSRF-Token and be JSON. The token is the control; it does not depend on
-Origin matching. As a second check, a browser's Sec-Fetch-Site must be
-same-origin, and an Origin header, when present, must name this site's
-host. The host is compared without the scheme, because behind the tunnel
-the portal sees plain HTTP while the browser sends an https Origin, and the
-portal has no ProxyFix; X-Forwarded-* headers are never trusted.
+X-CSRF-Token and be JSON, with a same-origin Sec-Fetch-Site and a matching
+Origin when present: the portal's shared write guard (minimoi_portal/csrf.py),
+which the CoS web chat uses too.
 
 Record mode (review S8). Every write must say X-Record-Mode: on_record.
 off_record answers 409 not_listening before anything is read or written; a
@@ -20,11 +17,10 @@ missing or other value answers 422.
 from __future__ import annotations
 
 import functools
-import hmac
-import secrets
-from urllib.parse import urlsplit
 
-from flask import current_app, jsonify, request, session
+from flask import current_app, jsonify, request
+
+from .. import csrf as _csrf
 
 CSRF_SESSION_KEY = "guild_floor_csrf"
 REDIRECTS = (301, 302, 303, 307, 308)
@@ -38,11 +34,7 @@ def json_error(error: str, message: str, status: int, **extra):
 
 
 def csrf_token() -> str:
-    token = session.get(CSRF_SESSION_KEY)
-    if not token:
-        token = secrets.token_urlsafe(32)
-        session[CSRF_SESSION_KEY] = token
-    return token
+    return _csrf.token(CSRF_SESSION_KEY)
 
 
 def json_guard(owner_guard, current_user):
@@ -61,35 +53,11 @@ def json_guard(owner_guard, current_user):
     return decorate
 
 
-def _host_of(url: str | None) -> str | None:
-    if not url:
-        return None
-    try:
-        return urlsplit(url).netloc.lower() or None
-    except ValueError:
-        return None
-
-
 def check_write(base_url: str | None):
     """None when the write may proceed; otherwise the JSON refusal."""
-    refuse = lambda why: json_error("csrf", f"This request could not be verified ({why}). Nothing was changed.", 403)  # noqa: E731
-    if not request.is_json:
-        return refuse("not JSON")
-    site = request.headers.get("Sec-Fetch-Site")
-    if site is not None and site not in ("same-origin", "none"):
-        return refuse("cross-site")
-    origin = request.headers.get("Origin")
-    if origin is not None:
-        allowed = {request.host.lower()}
-        base = _host_of(base_url)
-        if base:
-            allowed.add(base)
-        if _host_of(origin) not in allowed:
-            return refuse("other origin")
-    expected = session.get(CSRF_SESSION_KEY)
-    sent = request.headers.get("X-CSRF-Token", "")
-    if not expected or not sent or not hmac.compare_digest(sent, expected):
-        return refuse("token")
+    why = _csrf.refusal(CSRF_SESSION_KEY, base_url, content=_csrf.JSON)
+    if why:
+        return json_error("csrf", f"This request could not be verified ({why}). Nothing was changed.", 403)
     mode = request.headers.get("X-Record-Mode")
     if mode == "off_record":
         return json_error("not_listening", OFF_RECORD_TEXT, 409)
@@ -98,4 +66,14 @@ def check_write(base_url: str | None):
     body = request.get_json(silent=True)
     if isinstance(body, dict) and "record_mode" in body and body["record_mode"] != mode:
         return json_error("invalid", "The record mode in the body and the header disagree.", 422)
+    return None
+
+
+def check_stop(base_url: str | None):
+    """The write guard for Master Craftsman's Stop (streaming spec v0.3 N1):
+    the shared guard's JSON, same-origin and token checks, but no record-mode
+    check, so Stop works while off the record."""
+    why = _csrf.refusal(CSRF_SESSION_KEY, base_url, content=_csrf.JSON)
+    if why:
+        return json_error("csrf", f"This request could not be verified ({why}). Nothing was changed.", 403)
     return None

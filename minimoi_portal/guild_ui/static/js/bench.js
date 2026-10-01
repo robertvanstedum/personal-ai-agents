@@ -74,8 +74,23 @@ function move(id, delta) {
   announce(`${titleOf(id)} moved ${delta < 0 ? 'up' : 'down'}`);
 }
 
+// The wall's filters (a view, per tab, not kept): All, or one grouping. On a
+// phone the wall is one card column, so a filter is how Robert narrows it.
+function initFilters() {
+  const bench = $('[data-bench]');
+  const buttons = $$('[data-wall-filter]');
+  for (const b of buttons) {
+    b.addEventListener('click', () => {
+      const f = b.dataset.wallFilter;
+      for (const x of buttons) x.setAttribute('aria-pressed', String(x === b));
+      if (f === 'all') delete bench.dataset.filter; else bench.dataset.filter = f;
+    });
+  }
+}
+
 export function initBench(page) {
   cfg = page.layout;
+  initFilters();
   ids = cfg.bench.panels.map((p) => p.id);
   st = load(KEY, validate, defaults, 'arrangement');
   if (merged) { notice('Layout changed; your arrangement was merged with the default.'); persist(); }

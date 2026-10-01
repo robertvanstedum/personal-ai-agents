@@ -173,18 +173,24 @@ docker image inspect postgres:latest >/dev/null 2>&1 \
 umask 077
 mkdir -p "$STAGING_ROOT/config" "$STAGING_ROOT/state" "$STAGING_ROOT/logs"
 chmod 700 "$STAGING_ROOT"
+# The CoS turn log (Spec 160 path (a)): Confer voice transcripts, folder 0700.
+mkdir -p "$STAGING_ROOT/data/cos-turns"
+chmod 700 "$STAGING_ROOT/data/cos-turns"
 # The gateway image runs as a non-root user with every capability dropped:
 # the mounted config file must be world-readable (it holds no secrets).
 cp "$RELEASE_DIR/services/model_gateway/litellm.staging.yaml" "$STAGING_ROOT/config/litellm.staging.yaml"
 chmod 644 "$STAGING_ROOT/config/litellm.staging.yaml"
 # The gateway's usage recorder (usage-record U1): code mounted read-only from
 # config/usage/, records written to data/usage/ (one file per month, 600).
-mkdir -p "$STAGING_ROOT/config/usage" "$STAGING_ROOT/data/usage"
+mkdir -p "$STAGING_ROOT/config/usage" "$STAGING_ROOT/data/usage" "$STAGING_ROOT/data/usage/portal" "$STAGING_ROOT/data/workshops"
 chmod 755 "$STAGING_ROOT/config/usage"
 for f in usage_record.py litellm_recorder.py; do
   cp "$RELEASE_DIR/services/usage/$f" "$STAGING_ROOT/config/usage/$f"
   chmod 644 "$STAGING_ROOT/config/usage/$f"
 done
+# Each root writer's own usage folder (usage_record.own_folder): the shared
+# monthly file at the top of data/usage/ is the non-root gateway's alone.
+for w in cos-bot cos-scheduler; do mkdir -p "$STAGING_ROOT/data/usage/$w"; done
 {
   echo "sha=$FULL_SHA"
   echo "tag=$SHA"

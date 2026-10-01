@@ -20,12 +20,13 @@
   "bench": {
     "panels": [
       {"id": "needs", "title": "Needs you", "empty_reason": "nothing waiting on you"},
+      {"id": "continue", "title": "Continue", "empty_reason": "no work item opened yet"},
       {"id": "motion", "title": "In motion", "empty_reason": "nothing in Spec Ready or In Build"},
       {"id": "blocked", "title": "Blocked", "empty_reason": "no blocked queue items"},
       {"id": "discussions", "title": "Discussions", "empty_reason": "no open discussions"},
       {"id": "postits", "title": "Post-its", "empty_reason": "no post-its on the board and the bin is empty"}
     ],
-    "default_order": ["needs", "motion", "blocked", "discussions", "postits"],
+    "default_order": ["needs", "continue", "postits", "motion", "blocked", "discussions"],
     "default_folded": [],
     "default_focus": null
   },

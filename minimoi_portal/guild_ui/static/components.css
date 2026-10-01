@@ -33,14 +33,28 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .portal-workspace-link.is-active { color: var(--gu-portal-active); font-weight: 600; }
 .portal-workspace-link.is-off { opacity: 0.7; }
 .portal-nav-account { margin-left: auto; color: var(--gu-portal-dim); }
+.portal-nav-signout { white-space: nowrap; flex: none; }
 
-/* guild section strip */
-.guild-nav { background: var(--gu-nav-bg); }
-.guild-subnav { height: 36px; display: flex; align-items: center; padding: 0 var(--gu-s5); }
-.subnav-link { font: 500 var(--gu-size-xs) var(--gu-font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gu-nav-link); text-decoration: none; padding: 0 10px; height: 36px; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent; }
-.subnav-link:hover { color: var(--gu-nav-active); }
-.subnav-link.subnav-active { color: var(--gu-nav-active); border-bottom-color: var(--gu-nav-underline); font-weight: 700; }
-.subnav-dot { color: var(--gu-nav-sep); font-size: 9px; }
+/* The Guild bar (Guild 1.1 slice 1): Curator's subnav pattern, a light paper
+   strip with mono uppercase tabs and an accent underline. Four daily tabs,
+   then More ▾ (a <details> menu) on the right. */
+.guild-nav { background: var(--gu-paper-bar); border-bottom: 1px solid var(--gu-paper-rule); position: relative; z-index: 60; }
+.guild-subnav { height: var(--gu-subnav-h); display: flex; align-items: center; padding: 0 var(--gu-s5); }
+.subnav-link { font: 500 var(--gu-size-xs) var(--gu-font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gu-paper-link); text-decoration: none; padding: 0 14px; height: var(--gu-subnav-h); display: flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent; white-space: nowrap; }
+.subnav-link:hover { color: var(--gu-paper-ink); }
+.subnav-link.subnav-active { color: var(--gu-paper-active); border-bottom-color: var(--gu-paper-accent); font-weight: 700; }
+.subnav-more { margin-left: auto; position: relative; }
+.subnav-more > summary { list-style: none; cursor: pointer; }
+.subnav-more > summary::-webkit-details-marker { display: none; }
+.subnav-more > summary.subnav-more-on, .subnav-more[open] > summary { color: var(--gu-paper-ink); }
+.subnav-menu { position: absolute; right: 0; top: calc(100% + 2px); width: 300px; padding: 8px; z-index: 70; background: var(--gu-surface); border: 1px solid var(--gu-paper-rule); border-radius: var(--gu-radius); box-shadow: var(--gu-menu-shadow); font: var(--gu-size-md)/1.4 var(--gu-font-body); }
+.subnav-menu a { display: block; padding: 8px 10px; border-radius: var(--gu-radius); text-decoration: none; color: var(--gu-text); }
+.subnav-menu a small { display: block; color: var(--gu-text-muted); font-size: var(--gu-size-sm); }
+.subnav-menu a:hover, .subnav-menu a:focus-visible { background: var(--gu-surface-2); }
+.subnav-menu a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--gu-accent); }
+.subnav-menu hr { border: 0; border-top: 1px solid var(--gu-border); margin: 6px 4px; }
+.subnav-docs { padding: 8px 10px; font-size: var(--gu-size-sm); color: var(--gu-text-muted); }
+.subnav-docs a { display: inline; padding: 0; font-weight: 700; color: var(--gu-accent); }
 .sig-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gu-sig-quiet); flex: none; }
 .sig-dot[data-state="attention"] { background: var(--gu-sig-attention); }
 .sig-dot[data-state="unknown"] { background: transparent; border: 1px dashed var(--gu-sig-unknown); }
@@ -254,8 +268,7 @@ body.gu[data-mc-mode="floating"] .mc-pill, body.gu[data-mc-mode="docked"] .mc-pi
   #portal-nav-bar { padding: 0 10px; }
   #portal-nav-divider, .portal-nav-account { display: none; }
   .guild-subnav { padding: 0 4px; }
-  .subnav-link { padding: 0 6px; letter-spacing: 0.02em; }
-  .subnav-dot { display: none; }
+  .subnav-link { padding: 0 8px; letter-spacing: 0.04em; }
   .gu-notice { margin: 4px 12px 0; }
   .phone-summary { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 4px; }
   .ps-h { font-size: var(--gu-size-sm); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -404,6 +417,34 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
 .mc-elapsed { font-variant-numeric: tabular-nums; }
 .msg-foot { margin-top: 2px; font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
 
+/* Markdown in thread entries (MC's replies, Robert's notes), rendered and
+   sanitised on the server (markdown_render.py). Headings are scaled down to
+   fit the thread; long lines wrap at a readable width. */
+.msg-md { max-width: 72ch; line-height: 1.5; overflow-wrap: anywhere; }
+.msg-md > :first-child { margin-top: 0; }
+.msg-md > :last-child { margin-bottom: 0; }
+.msg-md p { margin: 0 0 var(--gu-s2); }
+.msg-md h1, .msg-md h2, .msg-md h3, .msg-md h4, .msg-md h5, .msg-md h6 { margin: var(--gu-s3) 0 var(--gu-s1); line-height: 1.3; font-weight: 700; }
+.msg-md h1 { font-size: 1.25em; }
+.msg-md h2 { font-size: 1.15em; }
+.msg-md h3 { font-size: 1.05em; }
+.msg-md h4, .msg-md h5, .msg-md h6 { font-size: 1em; }
+.msg-md ul, .msg-md ol { margin: 0 0 var(--gu-s2); padding-left: 1.6em; }
+.msg-md ul { list-style: disc outside; }
+.msg-md ol { list-style: decimal outside; }
+.msg-md li > ul { list-style-type: circle; }
+.msg-md li { margin: 2px 0; }
+.msg-md li > ul, .msg-md li > ol { margin: 2px 0 0; }
+.msg-md code { font: 0.92em var(--gu-font-mono); background: var(--gu-surface-2); border-radius: 4px; padding: 1px 4px; }
+.msg-md pre { margin: 0 0 var(--gu-s2); padding: var(--gu-s2); background: var(--gu-surface-2); border: 1px solid var(--gu-border); border-radius: var(--gu-radius); overflow-x: auto; }
+.msg-md pre code { background: none; padding: 0; font-size: var(--gu-size-xs); white-space: pre; overflow-wrap: normal; }
+.msg-md blockquote { margin: 0 0 var(--gu-s2); padding: 0 0 0 var(--gu-s2); border-left: 3px solid var(--gu-border-strong); color: var(--gu-text-dim); }
+.msg-md table { display: block; overflow-x: auto; border-collapse: collapse; margin: 0 0 var(--gu-s2); font-size: var(--gu-size-sm); overflow-wrap: normal; }
+.msg-md th, .msg-md td { border: 1px solid var(--gu-border); padding: 3px 8px; text-align: left; vertical-align: top; }
+.msg-md th { background: var(--gu-surface-2); font-weight: 700; }
+.msg-md hr { border: 0; border-top: 1px solid var(--gu-border); margin: var(--gu-s2) 0; }
+.msg-md a { color: var(--gu-accent-strong); text-decoration: underline; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
@@ -456,3 +497,206 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
 .postit-result[data-kind="ok"] { background: var(--gu-mark-verified-bg); color: var(--gu-mark-verified-ink); }
 .postit-result[data-kind="warn"] { background: var(--gu-mark-unknown-bg); color: var(--gu-mark-unknown-ink); }
 .postit-result[data-kind="bad"] { background: var(--gu-mark-blocker-bg); color: var(--gu-mark-blocker-ink); }
+
+/* ── Shop floor, Guild 1.1 dev slice 1 (Robert, September 29) ──────────────
+   Desktop: history | clean chat | the Build card and live context (upper
+   right). >= 1200 px the rail sits beside the chat (collapsible, remembered);
+   below 1200 px it opens over the chat from the Context button; below 900 px
+   the history is a drawer. The chat's text column is capped at about 720 px.
+   Status lights are a compact strip low on the page; detail is in Operate. */
+body.gu[data-page="floor"] .gu-layout {
+  grid-template-columns: 210px minmax(0, 1fr) 290px;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "hist conv rail";
+}
+body.gu[data-page="floor"][data-rail="closed"] .gu-layout { grid-template-columns: 210px minmax(0, 1fr); grid-template-areas: "hist conv"; }
+body.gu[data-page="floor"][data-rail="closed"] .gu-main { display: none; }
+body.gu[data-page="floor"] .gu-main { grid-area: rail; overflow-y: auto; display: flex; flex-direction: column; gap: var(--gu-s3); }
+.floor-history { grid-area: hist; min-height: 0; overflow-y: auto; border-right: 1px solid var(--gu-zone-edge); padding-right: var(--gu-s3); }
+.fh-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gu-s2); }
+.fh-close { display: none; }
+.floor-scrim { position: fixed; inset: 0; z-index: 54; background: rgba(20, 14, 8, 0.28); }
+/* The chat header (with ☰ and Context) stays above the scrim, so its buttons are never covered. */
+body.gu[data-page="floor"][data-history="open"] .mc-floorbar,
+body.gu[data-page="floor"][data-rail="open"] .mc-floorbar { position: relative; z-index: 57; }
+.floor-scrim[hidden] { display: none; }
+.fh-h { font: 700 var(--gu-size-xs) var(--gu-font-body); text-transform: uppercase; letter-spacing: 0.12em; color: var(--gu-zone-h-ink); margin: var(--gu-s1) 0 var(--gu-s2); }
+.fh-list { display: flex; flex-direction: column; gap: 2px; }
+.fh-row { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: var(--gu-radius); }
+.fh-row[aria-current="true"] { background: var(--gu-surface-2); box-shadow: inset 3px 0 0 var(--gu-accent); border-radius: var(--gu-radius); }
+.fh-title { font-weight: 700; font-size: var(--gu-size-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Conversations (slice 2): each row is a link plus a small ⋯ menu. */
+.fh-row { position: relative; flex-direction: row; align-items: center; gap: 4px; padding: 0; }
+.fh-link { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; padding: 6px 8px; color: var(--gu-text); text-decoration: none; border-radius: var(--gu-radius); }
+.fh-link:hover, .fh-link:focus-visible { background: var(--gu-surface-2); }
+.fh-more { flex: none; min-width: 28px; min-height: 28px; border: 0; background: transparent; color: var(--gu-text-muted); cursor: pointer; border-radius: var(--gu-radius); font: inherit; }
+.fh-more:hover, .fh-more:focus-visible, .fh-more[aria-expanded="true"] { background: var(--gu-surface-2); color: var(--gu-text); }
+.fh-menu { position: absolute; z-index: 58; right: 0; top: 100%; display: flex; flex-direction: column; min-width: 170px; background: var(--gu-surface); border: 1px solid var(--gu-border-strong); border-radius: var(--gu-radius); box-shadow: var(--gu-shadow-float); padding: 4px; }
+.fh-menu[hidden] { display: none; }
+.fh-menu button { font: inherit; font-size: var(--gu-size-sm); text-align: left; background: transparent; border: 0; padding: 6px 10px; border-radius: 4px; cursor: pointer; color: var(--gu-text); min-height: 32px; }
+.fh-menu button:hover, .fh-menu button:focus-visible { background: var(--gu-surface-2); }
+.fh-new { width: 100%; font: inherit; font-size: var(--gu-size-sm); text-align: left; margin: 0 0 var(--gu-s2); padding: 6px 8px; border: 1px dashed var(--gu-border-strong); border-radius: var(--gu-radius); background: transparent; color: var(--gu-text); cursor: pointer; min-height: 32px; }
+.fh-rename { flex: 1 1 auto; min-width: 0; font: inherit; font-size: var(--gu-size-sm); padding: 5px 8px; border: 1px solid var(--gu-accent); border-radius: var(--gu-radius); }
+.fh-view { margin-top: var(--gu-s2); }
+.fh-empty { color: var(--gu-text-muted); padding: 6px 8px; }
+.fh-unavailable { color: var(--gu-unknown-ink); }
+.fc-about-new { align-self: flex-start; font: inherit; font-size: var(--gu-size-xs); background: transparent; border: 0; padding: 0; color: var(--gu-accent); text-decoration: underline; cursor: pointer; margin-top: 2px; }
+.floor-context { border: 0; }
+.floor-context-sum { display: none; }
+.fc-body { display: flex; flex-direction: column; gap: var(--gu-s2); }
+.fc-item { display: flex; flex-direction: column; gap: 2px; font-size: var(--gu-size-sm); }
+.fc-item[hidden], .fc-quiet[hidden], .fc-wall[hidden] { display: none; }
+.fc-label { font-size: var(--gu-size-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gu-text-muted); font-weight: 700; }
+.fc-urgent .fc-label { color: var(--gu-tag-needs-ink); }
+.fc-quiet { color: var(--gu-text-muted); }
+.fc-wall a { font-weight: 700; }
+/* The chat: messages and composer dominate; little chrome; readable bubbles. */
+body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] { border: 0; background: transparent; padding-bottom: 0; gap: var(--gu-s2); }
+body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] .mc-head { display: none; }
+body.gu[data-page="floor"] .mc-context { display: none; }
+body.gu[data-page="floor"] .mc-thread, body.gu[data-page="floor"] .mc-dock-bottom,
+body.gu[data-page="floor"] .mc-floorbar, body.gu[data-page="floor"] .mc-refusal { width: 100%; max-width: 720px; margin-inline: auto; }
+body.gu[data-page="floor"] .mc-thread .msg { padding: 10px 14px; border-radius: 12px; line-height: 1.5; }
+/* Distinct bubbles: Robert's notes on the right, tinted and narrower; Master Craftsman's replies on the left. */
+body.gu[data-page="floor"] .mc-thread .msg[data-author-kind="owner"] { align-self: flex-end; max-width: 82%; background: var(--gu-msg-own-bg); border-color: transparent; border-radius: 12px 12px 3px 12px; }
+body.gu[data-page="floor"] .mc-thread .msg[data-author-kind="agent"] { align-self: flex-start; max-width: 100%; border-radius: 12px 12px 12px 3px; }
+.mc-info-btn { min-width: 28px; }
+.mc-off-lines[hidden] { display: none; }
+.fc-brief { color: var(--gu-text-muted); border-top: 1px solid var(--gu-zone-edge); padding-top: var(--gu-s2); }
+body.gu[data-page="floor"] .mc-dock-bottom { border-top: 1px solid var(--gu-zone-edge); padding-top: var(--gu-s2); }
+.mc-floorbar { display: flex; align-items: center; gap: var(--gu-s2); padding: 0 var(--gu-s1); }
+.fb-title { flex: 1 1 auto; font: 700 var(--gu-size-sm) var(--gu-font-body); margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-btn { font: inherit; font-size: var(--gu-size-sm); min-height: 32px; min-width: 32px; padding: 2px 10px; border-radius: var(--gu-radius-pill); border: 1px solid var(--gu-border); background: var(--gu-surface); color: var(--gu-text); cursor: pointer; }
+.fb-history { display: none; }
+.fb-needs { font-size: var(--gu-size-sm); text-decoration: none; color: var(--gu-tag-needs-ink); border: 1px solid currentColor; border-radius: var(--gu-radius-pill); padding: 2px 10px; white-space: nowrap; }
+.fb-needs[hidden] { display: none; }
+.fb-needs[data-needs-status]:not([data-needs-status="ok"]),
+.fb-needs[data-stale], .fb-needs[data-fresh]:not([data-fresh="live"]) { color: var(--gu-unknown-ink); border-style: dashed; }
+.fb-count { font-weight: 700; }
+/* The Chat header with the hero in it (Guild 1.1 slice 1, v4 design): the
+   harbour photograph under a dark shade, Master Craftsman's portrait, name,
+   conversation and state, then Needs you, the record chip and Context. It
+   spans the whole chat column. Off the record it turns grey, as in the v4
+   design. The image is decoration only. */
+body.gu[data-page="floor"] .mc-floorbar.mc-hero { max-width: none; }
+.mc-hero { position: relative; min-height: 92px; padding: 12px 18px; gap: 12px; border-radius: var(--gu-radius); overflow: hidden; color: var(--gu-hero-ink); background: var(--gu-nav-bg) url('/static/guild/guild-chat-hero.jpg') 50% 62% / cover no-repeat; }
+.mc-hero::before { content: ""; position: absolute; inset: 0; background: var(--gu-hero-shade); pointer-events: none; }
+.mc-hero > * { position: relative; }
+.hero-portrait { flex: none; width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--gu-paper); box-shadow: 0 0 0 2px var(--gu-paper-accent); background: var(--gu-surface-2) url('/static/guild/guild-mc-portrait.jpg') center / cover no-repeat; }
+.hero-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hero-name { font: 400 21px/1.15 var(--gu-font-serif); color: var(--gu-hero-ink); margin: 0; }
+.hero-name .fb-title { display: block; font: 600 var(--gu-size-sm)/1.3 var(--gu-font-body); color: var(--gu-hero-sub); }
+.hero-sub { display: flex; align-items: center; gap: 6px; font-size: var(--gu-size-sm); color: var(--gu-hero-sub); min-width: 0; }
+.hero-sub [data-mc-header] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hero-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1px dashed var(--gu-hero-sub); }
+body.gu[data-mc-state="live"] .hero-dot { border: 0; background: var(--gu-hero-live); }
+.mc-hero .fb-needs, .hero-chip { background: var(--gu-hero-chip-bg); border-color: transparent; color: var(--gu-tag-needs-ink); }
+.hero-chip { flex: none; font-size: var(--gu-size-sm); padding: 3px 11px; border-radius: var(--gu-radius-pill); color: var(--gu-text); white-space: nowrap; }
+.hero-chip[data-mode="off"] { background: var(--gu-hero-chip-off-bg); color: var(--gu-hero-chip-off-ink); }
+.hero-chip[data-mode="unknown"] { color: var(--gu-unknown-ink); border: 1px dashed var(--gu-unknown-border); }
+body.gu[data-off-record="true"] .mc-hero { filter: grayscale(1); }
+/* Selection actions: a small dark bar above the selected text (desktop),
+   docked over the composer on a phone. Never shown off the record. */
+.sel-bar { position: fixed; z-index: 65; left: var(--sel-x, 50%); top: var(--sel-y, 50%); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; max-width: min(460px, calc(100vw - 16px)); padding: 4px 6px; border-radius: 10px; background: var(--gu-nav-bg); color: var(--gu-on-dark); box-shadow: var(--gu-shadow-float); font-size: var(--gu-size-sm); }
+.sel-label { padding: 0 8px; color: var(--gu-nav-link); font-size: var(--gu-size-xs); }
+.sel-act { font: inherit; min-height: 32px; padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--gu-on-dark); cursor: pointer; }
+.sel-act:hover:not(:disabled), .sel-act:focus-visible { background: var(--gu-on-dark-fill); }
+.sel-act:disabled { opacity: 0.6; }
+.sel-result { flex-basis: 100%; padding: 2px 8px 4px; color: var(--gu-on-dark); }
+body.gu[data-off-record="true"] .sel-bar, body.gu[data-record-known="false"] .sel-bar { display: none; }
+.mc-blocker { margin: 0 0 var(--gu-s2); padding: 4px 10px; font-size: var(--gu-size-sm); color: var(--gu-mark-blocker-ink); background: var(--gu-mark-blocker-bg); border-radius: var(--gu-radius); display: flex; flex-direction: column; gap: 2px; }
+.mc-blocker[hidden] { display: none; }
+.mc-current { margin: 0 var(--gu-s3); color: var(--gu-text-muted); }
+/* The status strip, low and compact. */
+.floor-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--gu-s3); margin: 0 var(--gu-gutter) var(--gu-s2); padding: 4px var(--gu-s3); }
+.floor-strip .status-compact { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; flex: 1 1 auto; background: transparent; border: 0; padding: 2px 0; font: inherit; font-size: var(--gu-size-sm); color: var(--gu-text); cursor: pointer; text-align: left; }
+.floor-strip .lc { display: inline-flex; align-items: center; gap: 3px; }
+.floor-strip .lc .lshape { width: 14px; height: 14px; margin: 0; }
+.floor-strip .lc-word { font-weight: 700; font-size: 10.5px; text-transform: uppercase; }
+.floor-strip .lc-more { color: var(--gu-accent); text-decoration: underline; margin-left: auto; }
+.floor-strip .lights { display: none; flex-basis: 100%; margin-top: 6px; }
+body.gu[data-page="floor"][data-lights-open="true"] .floor-strip .lights { display: grid; }
+.strip-cost { color: var(--gu-mark-blocker-ink); font-weight: 700; }
+@media (max-width: 1199px) {
+  body.gu[data-page="floor"] .gu-layout, body.gu[data-page="floor"][data-rail="closed"] .gu-layout { grid-template-columns: 210px minmax(0, 1fr); grid-template-areas: "hist conv"; }
+  body.gu[data-page="floor"] .gu-main { display: none; }
+  body.gu[data-page="floor"][data-rail="open"] .gu-main { display: flex; position: fixed; z-index: 55; top: 150px; right: 12px; width: 300px; max-height: calc(100vh - 120px); background: var(--gu-bg); border: 1px solid var(--gu-zone-edge); border-radius: var(--gu-radius); box-shadow: var(--gu-shadow-float); padding: var(--gu-s3); }
+}
+@media (max-width: 899px) {
+  body.gu[data-page="floor"] .gu-layout, body.gu[data-page="floor"][data-rail="closed"] .gu-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "conv"; }
+  .floor-history { display: none; }
+  body.gu[data-page="floor"][data-history="open"] .floor-history { display: block; position: fixed; z-index: 56; top: var(--gu-drawer-top, 0px); bottom: 0; left: 0; width: min(300px, 86vw); background: var(--gu-bg); border-right: 1px solid var(--gu-zone-edge); border-top: 1px solid var(--gu-zone-edge); box-shadow: var(--gu-shadow-float); padding: var(--gu-s3); }
+  .fb-history { display: inline-block; }
+  .fh-close { display: inline-block; }
+}
+
+/* The wall (Workbench): room for cards, simple filters, one column on a phone. */
+.wall-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--gu-s3); }
+.wall-filter { font: inherit; font-size: var(--gu-size-sm); min-height: 32px; padding: 2px 12px; border-radius: var(--gu-radius-pill); border: 1px solid var(--gu-border-strong); background: var(--gu-surface); color: var(--gu-text); cursor: pointer; }
+.wall-filter[aria-pressed="true"] { background: var(--gu-accent); border-color: var(--gu-accent); color: var(--gu-on-dark); }
+.bench > [data-panel="postits"] { grid-column: 1 / -1; }
+.bench[data-filter] > [data-panel] { display: none; }
+.bench[data-filter="needs"] > [data-panel="needs"], .bench[data-filter="continue"] > [data-panel="continue"],
+.bench[data-filter="postits"] > [data-panel="postits"], .bench[data-filter="motion"] > [data-panel="motion"],
+.bench[data-filter="blocked"] > [data-panel="blocked"], .bench[data-filter="discussions"] > [data-panel="discussions"] { display: block; grid-column: 1 / -1; }
+.lab-card { background: var(--gu-surface); border: 1px solid var(--gu-zone-edge); border-radius: var(--gu-radius); padding: var(--gu-s3); margin-bottom: var(--gu-s3); max-width: 72ch; }
+
+@media (max-width: 640px) {
+  /* The Guild bar on a phone: the four tabs and More fit at 390 px; on a
+     narrower screen the bar scrolls sideways instead of breaking words. The
+     More menu is fixed below the bars, so the scrolling bar never clips it. */
+  .guild-subnav { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .guild-subnav::-webkit-scrollbar { display: none; }
+  .subnav-menu { position: fixed; top: calc(var(--gu-portal-h) + var(--gu-subnav-h) + 4px); left: 8px; right: 8px; width: auto; }
+  #portal-nav-workspaces { overflow-x: auto; scrollbar-width: none; flex: 1 1 auto; }
+  .portal-nav-signout { white-space: nowrap; flex: none; font-size: 12px; }
+  .guild-subnav .subnav-link { white-space: nowrap; flex: none; }
+  /* Phone: chat first. The hero header, the conversation with its composer
+     (kept above the keyboard), then the context (folded) and the status strip below. */
+  body.gu[data-page="floor"] { padding-bottom: 0; }
+  body.gu[data-page="floor"] .gu-layout { display: flex; flex-direction: column; padding: 0; }
+  body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] { order: 1; min-height: 0; }
+  body.gu[data-page="floor"] .gu-main, body.gu[data-page="floor"][data-rail] .gu-main { order: 2; display: block; position: static; width: auto; max-height: none; box-shadow: none; border: 0; background: transparent; padding: 4px 12px; overflow: visible; }
+  .floor-context-sum { display: list-item; cursor: pointer; font-size: var(--gu-size-sm); color: var(--gu-accent); min-height: var(--gu-target-phone); line-height: var(--gu-target-phone); }
+  .fb-rail { display: none; }
+  .mc-hero { min-height: 64px; padding: 8px 12px; gap: 8px; border-radius: 0; }
+  .hero-portrait { width: 36px; height: 36px; }
+  .hero-name { font-size: 18px; }
+  .hero-chip { display: none; }
+  .sel-bar { left: 8px; right: 8px; max-width: none; }
+  .sel-act { min-height: var(--gu-target-phone); }
+  .floor-strip { margin: 4px 12px; }
+  body.gu[data-page="floor"] .mc-thread .msg { max-width: 100%; }
+  /* The thread scrolls inside the first view, newest at the bottom, above the composer. */
+  body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] .mc-thread { max-height: var(--gu-thread-max, calc(100dvh - 400px)); min-height: 140px; overflow-y: auto; }
+  /* The composer sits just above the fixed Type bar (F10, left as it is), or above the keyboard when it is open. */
+  body.gu[data-page="floor"] .mc-dock-bottom { position: sticky; bottom: var(--gu-typebar, 0px); z-index: 40; background: var(--gu-zone-conv); }
+  body.gu[data-page="floor"][data-keyboard="open"] .mc-dock-bottom { bottom: var(--gu-kb, 0px); }
+  .bench > [data-panel="postits"] { grid-column: auto; }
+}
+
+/* ── The local Workshop (4a: read only) ── */
+.ws-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gu-s3); align-items: start; }
+.ws-more { grid-column: 1 / -1; }
+.ws-more-sum { cursor: pointer; font-size: var(--gu-size-sm); color: var(--gu-accent); margin-bottom: var(--gu-s2); }
+.ws-more-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gu-s3); }
+.ws-admission { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.ws-verdict { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--gu-size-sm); padding: 1px 8px; border-radius: var(--gu-radius-pill); border: 1px solid currentColor; }
+.ws-admission[data-verdict="ok"] .ws-verdict { color: var(--gu-light-green); }
+.ws-admission[data-verdict="tight"] .ws-verdict { color: var(--gu-tag-needs-ink); }
+.ws-admission[data-verdict="blocked"] .ws-verdict { color: var(--gu-mark-blocker-ink); background: var(--gu-mark-blocker-bg); }
+.ws-admission[data-verdict="unknown"] .ws-verdict { color: var(--gu-unknown-ink); border-style: dashed; }
+.ws-runs[data-known="false"] { color: var(--gu-unknown-ink); }
+.ws-reasons { margin: 4px 0 0 1.2em; list-style: disc; }
+.ws-recovery { list-style: disc; margin-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 900px) {
+  .ws-grid, .ws-more-grid { grid-template-columns: 1fr; }
+}
+.ws-headroom[data-stale="true"], .ws-admission[data-stale="true"] .small, #ws-needs-h ~ .rows [data-stale="true"] { color: var(--gu-unknown-ink); }
+.ws-limits, .ws-background { color: var(--gu-text-muted); }
+
+/* ── Streaming Master Craftsman replies (streaming spec v0.2 §6) ── */
+.mc-thread .msg-stream .msg-stream-tail { white-space: pre-wrap; }
+.mc-thread .msg-stream .msg-stream-tail:empty, .mc-thread .msg-stream [data-slot="rendered"]:empty { display: none; }
+.mc-thread .msg-stream[data-ended] .msg-meta [data-slot="state"] { font-style: italic; }
+.mc-thread .msg-stream [data-slot="stopnote"] { margin-left: 6px; }

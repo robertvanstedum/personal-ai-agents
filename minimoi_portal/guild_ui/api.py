@@ -6,18 +6,21 @@ Base: <mount>/api/v1. Every answer is JSON; guard refusals are 401/403 JSON
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 
-from flask import jsonify, request
+from flask import current_app, jsonify, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from . import cfg, floor_state, owner_api
-from .adapters import STATUSES, normalize
+from .adapters import ACTIVE, STATUSES, normalize
+from domains.guild.queue_store import CREATE_STATUSES, RANKS, TITLE_MAX, TROUBLE
 from .adapters.contract import now_iso
+from .markdown_render import with_html
 from .mc.turn_log import turn_log_of
 from .payment_scrub import scrub
-from .security import OFF_RECORD_TEXT, check_write, csrf_token, json_error
+from .security import OFF_RECORD_TEXT, check_stop, check_write, csrf_token, json_error
 from .stores import (GUILD_PLATFORM, NOTE_MAX, POSTIT_MAX, Author, FloorStoreNotConfigured,
                      FloorStoreUnavailable)
 
@@ -100,12 +103,29 @@ def floor_view():
 
 @owner_api
 def queue_view():
+    """The queue. ``?scope=all`` (Guild 1.1 slice 2, the Build Log) answers every
+    status; ``?scope=active`` only Spec Ready and In Build (plus unknown rows,
+    which are never dropped). Without ``scope`` the answer is exactly what it
+    was before slice 2, for compatibility (it already listed every row). Every
+    answer carries ``rank_digest``, the collection's unchanged-check for a rank
+    change (spec §4.3)."""
     services = cfg()["services"]
+    scope = request.args.get("scope", "default")
+    if scope not in ("default", "active", "all"):
+        return json_error("invalid", "scope is active or all.", 422)
     res = services.queue.list_items()
     checks_res = services.queue.checks()
-    return jsonify({**res.meta(), "items": res.data if res.ok else None,
+    items = None
+    if res.ok:
+        items = res.data
+        if scope == "active":
+            items = [i for i in res.data if not i["status_known"] or i["status"] in ACTIVE]
+    return jsonify({**res.meta(), "items": items, "scope": scope,
+                    "total": len(res.data) if res.ok else None,
+                    "rank_digest": getattr(res, "rank_digest", None) if res.ok else None,
                     "checks": checks_res.data if checks_res.ok else None, "checks_source": checks_res.meta(),
-                    "statuses": list(STATUSES)})
+                    "statuses": list(STATUSES), "trouble_statuses": list(TROUBLE),
+                    "create_statuses": list(CREATE_STATUSES)})
 
 
 @owner_api
@@ -114,6 +134,93 @@ def item_view(item_id: int):
     if res.ok and res.data is None:
         return json_error("not_found", f"#{item_id} is not in the queue.", 404)
     return jsonify({**res.meta(), "item": res.data if res.ok else None})
+
+
+@owner_api
+def journal_view(item_id: int):
+    """The item's history from the file journal (spec §4.4): from, to,
+    principal, via, at and receipt, oldest first. Unknown when unreadable."""
+    res = cfg()["services"].queue.journal(item_id)
+    return jsonify({**res.meta(), "journal": res.data if res.ok else None})
+
+
+RANK_WORDS = {
+    "saved": "Rank saved · verified · receipt {receipt}",
+    "conflict": "The ranking changed since you opened it. Here is the current ranking; set the rank again if you still want it",
+}
+
+
+def _store_answer(result, message: str, **extra):
+    """A queue store result as JSON, with the usual HTTP codes and Retry-After."""
+    payload = {"result": result.result, "verified": bool(result.verified), "receipt_id": result.receipt_id,
+               "repeated": bool(result.repeated), "observed_at": now_iso(), "message": message, **extra}
+    status = SAVE_HTTP.get(result.result, 500)
+    if status >= 400:
+        payload["error"] = "unavailable" if result.result == "refused" else result.result
+    if result.result == "busy":
+        payload["retry_after_s"] = 5
+    response = jsonify(payload)
+    response.status_code = status
+    if result.result == "busy":
+        response.headers["Retry-After"] = "5"
+    return response
+
+
+def _current_ranking():
+    res = cfg()["services"].queue.list_items()
+    if not res.ok:
+        return None, None
+    pairs = sorted([i["id"], i["owner_rank"]] for i in res.data if i.get("owner_rank"))
+    return pairs, getattr(res, "rank_digest", None)
+
+
+@owner_api
+def set_rank(item_id: int):
+    """Owner rank 1-3, or none (spec §4.3): one guarded write behind the rank
+    digest; a conflict answers the current ranking. No model call."""
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    rank = body.get("rank")
+    expect = body.get("expect_rank_digest")
+    if rank is not None and (isinstance(rank, bool) or rank not in RANKS):
+        return json_error("invalid", "A rank is 1, 2, 3 or none. Nothing was changed.", 422, result="invalid")
+    if not isinstance(expect, str) or not _HEX64.fullmatch(expect):
+        return json_error("invalid", "This page was out of date; reload and try again", 422, result="invalid")
+    result = cfg()["services"].store.set_rank(item_id, rank, expect_rank_digest=expect, principal=_principal(),
+                                             via="guild-next", idempotency_key=body["_key"])
+    ranking, digest = (result.ranking, result.rank_digest) if result.ranking is not None else _current_ranking()
+    words = RANK_WORDS.get(result.result) or save_message(result.result, item_id, result.receipt_id)
+    return _store_answer(result, words.format(receipt=result.receipt_id or "?"), item_id=item_id, rank=rank,
+                         ranking=ranking, rank_digest=digest, changed=result.changed)
+
+
+@owner_api
+def create_item():
+    """A new item through the queue store (spec §4.5): idea, design or backlog;
+    the next id under the lock; journaled. Never the legacy DB route."""
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    title, bad = _clean_text(body.get("spec_title"), TITLE_MAX, "title")
+    if bad is not None:
+        return bad
+    status = body.get("status", "idea")
+    if status not in CREATE_STATUSES:
+        return json_error("invalid", "A new item starts as idea, design or backlog. Nothing was added.", 422,
+                          result="invalid")
+    result = cfg()["services"].store.create_item(title, status, principal=_principal(), via="guild-next",
+                                                 idempotency_key=body["_key"])
+    item = result.current_item
+    new_id = result.item_id if result.ok else None
+    if result.ok and result.repeated:
+        found = cfg()["services"].queue.get_item(new_id)
+        item_out = found.data if found.ok else None
+    else:
+        item_out = normalize(item) if isinstance(item, dict) and isinstance(item.get("id"), int) else None
+    message = (f"#{new_id} added · verified · receipt {result.receipt_id}" if result.ok
+               else save_message(result.result, "new item", result.receipt_id))
+    return _store_answer(result, message, item=item_out, item_id=new_id)
 
 
 @owner_api
@@ -147,6 +254,8 @@ def save_status(item_id: int):
         return json_error("invalid", "Every Save needs an idempotency key (8 to 64 letters, digits, - or _). "
                           "Nothing was saved.", 422, result="invalid")
     note = (note or "").strip() or None
+    if to in TROUBLE and not note:
+        return json_error("invalid", "Blocked and Rework need a reason. Nothing was saved.", 422, result="invalid")
     services = c["services"]
 
     def audit(_item, old, new):
@@ -251,6 +360,54 @@ def _floor():
     return cfg()["services"].floor
 
 
+# ── conversations (Guild 1.1 slice 2): file first, one owner, no model calls ──
+
+CONV_WORDS = {
+    "unavailable": "Conversations are unavailable right now; nothing was changed.",
+    "not_found": "There is no such conversation. Nothing was changed.",
+}
+
+
+def _conversations():
+    from .conversations import conversations_of
+    return conversations_of(cfg()["services"])
+
+
+def _conversation(cid):
+    """(conversation, refusal). A request that names no conversation is the
+    Shop floor thread, as before conversations existed (older clients, the
+    old thread); the page always names its conversation."""
+    from .conversations import LEGACY_ID, ConversationNotFound, ConversationStoreUnavailable
+    try:
+        return _conversations().get(cid or LEGACY_ID, _principal()), None
+    except ConversationNotFound:
+        return None, json_error("not_found", CONV_WORDS["not_found"], 404)
+    except ConversationStoreUnavailable:
+        if not cid or cid == LEGACY_ID:
+            # The conversation files are unreadable: the Shop floor thread still
+            # works on the floor's own notes (nothing to bump, nothing to title).
+            return {"id": LEGACY_ID, "legacy": True, "notes_floor": _floor().floor, "unfiled": True}, None
+        return None, json_error("unavailable", CONV_WORDS["unavailable"], 503)
+
+
+def _conv_floor(conv):
+    """The floor store for a conversation's notes."""
+    base = _floor()
+    nf = (conv or {}).get("notes_floor")
+    return base if not nf or nf == base.floor else base.for_floor(nf)
+
+
+def _touch(conv, first_text=None):
+    """Bump a conversation after a kept note or reply; never fails the write."""
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable
+    if conv.get("unfiled"):
+        return conv
+    try:
+        return _conversations().touch(conv["id"], _principal(), first_text=first_text)
+    except (ConversationNotFound, ConversationStoreUnavailable):
+        return conv
+
+
 # The largest body a notes, post-its or Continue write may carry (review B1c #1):
 # a 2,000-character note is at most ~12 KB of JSON even with every character
 # escaped, so 32 KB is ample, and nothing larger is ever read or scrubbed.
@@ -324,10 +481,14 @@ def _short(value, limit: int = 60):
 def notes_list():
     before = request.args.get("before", type=int)
     limit = request.args.get("limit", default=50, type=int)
-    res = _floor().list_notes(before=before, limit=max(1, min(limit or 50, 200)))
+    conv, refusal = _conversation(request.args.get("conversation"))
+    if refusal is not None:
+        return refusal
+    res = _conv_floor(conv).list_notes(before=before, limit=max(1, min(limit or 50, 200)))
     data = res.data if res.ok else {}
     if res.ok:
         turn_log_of(cfg()["services"]).annotate(data.get("notes"))
+        with_html(data.get("notes"))
     return jsonify({**_source(res), "notes": data.get("notes") if res.ok else None,
                     "more": data.get("more") if res.ok else None,
                     "message": None if res.ok else floor_state.notes_zone(res)["text"]})
@@ -342,18 +503,24 @@ def notes_add():
     text, bad = _clean_text(body.get("text"), NOTE_MAX, "note")
     if bad is not None:
         return bad
+    conv, refusal = _conversation(body.get("conversation_id"))
+    if refusal is not None:
+        return refusal
     context = body.get("context") if isinstance(body.get("context"), dict) else {}
     item_ref = context.get("item_ref")
     item_ref = item_ref if isinstance(item_ref, int) and not isinstance(item_ref, bool) and 0 < item_ref < 10**9 else None
     try:
-        done = _floor().add_note(request_id, text, _author(), area=_short(context.get("area")),
-                                 item_ref=item_ref, page=_short(context.get("page"), 40))
+        done = _conv_floor(conv).add_note(request_id, text, _author(), area=_short(context.get("area")),
+                                          item_ref=item_ref, page=_short(context.get("page"), 40))
     except FloorStoreUnavailable as exc:
         return _store_down(exc, NOTE_WORDS)
     if done.outcome == "idempotency_mismatch":
         return _mismatch()
+    with_html([done.value] if done.value else None)
+    from .conversations import public
+    conv = _touch(conv, first_text=text) if not done.repeated else conv
     return jsonify({"result": "kept", "repeated": done.repeated, "note": done.value, "message": NOTE_WORDS["kept"],
-                    "observed_at": now_iso()})
+                    "conversation": public(conv), "observed_at": now_iso()})
 
 
 @owner_api
@@ -478,6 +645,55 @@ def _mc_log():
     return logging.getLogger("guild_ui.mc")
 
 
+def _mc_acquire(principal) -> bool:
+    with _MC_LOCK:
+        if principal in _MC_INFLIGHT:
+            return False
+        _MC_INFLIGHT.add(principal)
+        return True
+
+
+def _mc_release(principal) -> None:
+    with _MC_LOCK:
+        _MC_INFLIGHT.discard(principal)
+
+
+def _mc_prelude():
+    """The guards both turn endpoints share. Returns (refusal, None) or
+    (None, (services, principal, conv, floor, note, note_id, request_id))."""
+    if request.content_length is not None and request.content_length > MAX_BODY:
+        return _too_large(), None
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal, None
+    services = cfg()["services"]
+    if not services.mc_turns:
+        state = floor_state.mc_view(services, notes_ok=True)["state"]
+        return json_error("mc_turns_off", MC_WORDS["off"], 409, mc_state=state), None
+    body = request.get_json(silent=True)
+    note_id = body.get("note_request_id") if isinstance(body, dict) else None
+    if not isinstance(note_id, str) or not _IDEMPOTENCY.fullmatch(note_id):
+        return json_error("invalid", "Name the kept note to send (note_request_id). Nothing was sent to Master Craftsman.", 422), None
+    request_id = body.get("request_id")
+    if request_id is not None and (not isinstance(request_id, str) or not _IDEMPOTENCY.fullmatch(request_id)):
+        return json_error("invalid", "request_id is an idempotency key. Nothing was sent to Master Craftsman.", 422), None
+    principal = _principal()
+    conv, refusal = _conversation(body.get("conversation_id"))
+    if refusal is not None:
+        return refusal, None
+    floor = _conv_floor(conv)
+    try:
+        note = floor.get_note(note_id)
+    except FloorStoreUnavailable as exc:
+        return json_error("unavailable", MC_WORDS["notes_down"], 503,
+                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"), None
+    if note is None:
+        return json_error("not_found", MC_WORDS["no_note"], 404), None
+    if note.get("author_kind") != "owner" or note.get("who") != principal:
+        return json_error("not_allowed", MC_WORDS["not_yours"], 403), None
+    return None, (services, principal, conv, floor, note, note_id, request_id)
+
+
 @owner_api
 def mc_turn():
     """Send one kept, on-the-record note to Master Craftsman, server side
@@ -491,66 +707,283 @@ def mc_turn():
     answered turn is kept, with the author its backend decides (a stub reply
     is the stub's, never Master Craftsman's). The answer to the browser is
     allow-listed: never a token, URL, trace or runtime id. Logs carry the
-    turn id and outcome only, never text or tokens."""
+    turn id and outcome only, never text or tokens. A ``request_id`` already
+    dispatched (on this endpoint or the stream) is never sent again."""
+    refusal, found = _mc_prelude()
+    if refusal is not None:
+        return refusal
+    services, principal, conv, floor, note, note_id, request_id = found
+    answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
+                                 principal=principal, note=note, note_id=note_id, request_id=request_id)
+    return jsonify(answer), status
+
+
+def _reply_key(note_id: str) -> str:
+    import hashlib
+    return "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
+
+
+def _repeated_answer(services, existing) -> dict:
+    shown = floor_state.mc_view(services, notes_ok=True)
+    turn_log_of(services).annotate([existing])
+    with_html([existing])
+    return {"turn_id": None, "status": "answered", "repeated": True,
+            "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
+            "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
+            "mc_state": shown["state"], "mc_header": shown["header"], "message": MC_WORDS["already"]}
+
+
+@owner_api
+def mc_turn_stream():
+    """The streamed Master Craftsman turn (streaming spec v0.2 §3, v0.3):
+    the same guards as /mc/turns, then these pre-dispatch refusals, each a
+    normal JSON answer the browser may fall back on or show: the switch
+    (``stream_off``) and the backend (``stream_unsupported``); then
+    ``open_mc_stream``. NDJSON: ``ack`` first, and only then the worker
+    dispatches (mc/streaming.py)."""
+    refusal, found = _mc_prelude()
+    if refusal is not None:
+        return refusal
+    services, principal, conv, floor, note, note_id, request_id = found
+    if not getattr(services, "mc_stream", False):
+        return json_error("stream_off", "Streaming is not switched on on this portal. Nothing was sent.", 409)
+    if not getattr(services.mc, "supports_streaming", False):
+        return json_error("stream_unsupported", "This Master Craftsman backend does not stream. Nothing was sent.", 409)
+    if not request_id:
+        return json_error("invalid", "A streamed turn needs a request_id. Nothing was sent to Master Craftsman.", 422)
+    opened = open_mc_stream(services, conversations=_conversations(), floor=floor, conv=conv, principal=principal,
+                            note=note, note_id=note_id, request_id=request_id)
+    if opened[0] == "refused":
+        _, body, status = opened
+        return jsonify(body), status
+    _, run, body = opened
+    response = current_app.response_class(body, mimetype="application/x-ndjson")
+    response.headers["Content-Type"] = "application/x-ndjson; charset=utf-8"
+    response.headers["X-Accel-Buffering"] = "no"
+    response.call_on_close(run.abandon_if_not_started)
+    return response
+
+
+def open_mc_stream(services, *, conversations, floor, conv, principal, note, note_id, request_id, observe=None):
+    """Everything /mc/turns/stream does after its request guards, with no
+    request context: an existing reply answered from the record; an earlier
+    dispatch of the same ``request_id`` (``already_dispatched``); Master
+    Craftsman's state; the backend's own pre-dispatch checks; one turn in
+    flight. Returns ("refused", body, status) or ("stream", run, events):
+    ``events`` is the NDJSON generator the browser reads (ack first; the
+    worker dispatches only after it). ``observe`` wraps the backend's raw
+    events (the operator-only cost probe counts finish and usage with it).
+    Used by the route and by mc/cost_probe.py."""
+    import threading
+    import uuid
+
+    from .conversations import session_conversation_id
+    from .markdown_render import render_markdown
+    from .mc import TurnRequest
+    from .mc.stream import StreamRefused
+    from .mc.stream_usage import portal_folder as portal_usage_folder
+    from .mc.streaming import DISPATCHED, StreamContext, StreamRun, browser_events
+
+    reply_key = _reply_key(note_id)
+    try:
+        existing = floor.get_note(reply_key)
+    except FloorStoreUnavailable as exc:
+        return "refused", {"error": "unavailable", "message": MC_WORDS["notes_down"],
+                           "reason": "not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"}, 503
+    if existing is not None:
+        return "refused", _repeated_answer(services, existing), 200
+    shown = floor_state.mc_view(services, notes_ok=True)
+    if not shown["turns"]:
+        return "refused", {"error": "mc_unavailable", "mc_state": shown["state"], "reason": shown["reason"],
+                           "message": f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman."}, 503
+    turn_id = uuid.uuid4().hex
+    ctx = note.get("context") or {}
+    turn_req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=scrub(note["text"]),
+                           note_request_id=note_id, correlation_id=turn_id,
+                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
+    cancel = threading.Event()
+    try:
+        events = services.mc.stream_turn(turn_req, cancel)
+    except StreamRefused as exc:
+        return "refused", {"error": "mc_unavailable", "reason": exc.failure_class,
+                           "message": f"{exc.message or 'Master Craftsman cannot take this turn'}. Nothing was sent."}, \
+            413 if exc.failure_class == "request_too_large" else 503
+    if observe is not None:
+        events = observe(events)
+    if not _mc_acquire(principal):
+        return "refused", {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
+    earlier = DISPATCHED.claim(request_id, principal, turn_id)
+    if earlier is not None:
+        _mc_release(principal)
+        return "refused", DISPATCHED.refusal(earlier, principal), 409
+    turns = turn_log_of(services)
+
+    def annotate(reply):
+        turns.annotate([reply])
+        with_html([reply])
+
+    run = StreamRun(StreamContext(
+        turn_id=turn_id, principal=principal, backend=services.mc, events=events, floor=floor, reply_key=reply_key,
+        context={"area": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")},
+        release=lambda: _mc_release(principal), request_id=request_id, turn_log=turns, mc_health=services.mc_health,
+        header=lambda: floor_state.mc_view(services, notes_ok=True),
+        touch=lambda: _touch_in(conversations, conv, principal), annotate=annotate,
+        usage_folder=portal_usage_folder(), cancel=cancel))
+    return "stream", run, browser_events(run, render=render_markdown.__wrapped__)
+
+
+@owner_api
+def mc_turn_stop(turn_id):
+    """The owner's Stop for a streamed turn: the write guard's JSON, origin
+    and token checks, but not its record-mode check (streaming spec v0.3 N1),
+    so Stop works while off the record. Ends MiniMoi's side at once and asks
+    the relay to abort Master Craftsman's call."""
+    from .mc.streaming import MESSAGES, RUNS
+    refusal = check_stop(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    run = RUNS.get(turn_id) if re.fullmatch(r"[0-9a-f]{32}", turn_id or "") else None
+    if run is None or run.ctx.principal != _principal():
+        return json_error("not_running", "No such Master Craftsman turn is running. Nothing was changed.", 404)
+    reached = run.stop()
+    return jsonify({"result": "stopping", "runtime_told": reached, "message": MESSAGES["stopped"],
+                    "observed_at": now_iso()})
+
+
+@owner_api
+def conversations_list():
+    from .conversations import ConversationStoreUnavailable, public
+    view = request.args.get("view", "active")
+    if view not in ("active", "archived"):
+        return json_error("invalid", "view is active or archived.", 422)
+    try:
+        store = _conversations()
+        rows = store.list(_principal(), archived=view == "archived")
+    except ConversationStoreUnavailable:
+        return json_error("unavailable", CONV_WORDS["unavailable"], 503)
+    return jsonify({"view": view, "conversations": [public(c) for c in rows], "unreadable": store.unreadable,
+                    "observed_at": now_iso()})
+
+
+def _conv_write(action):
+    """Every conversation write: owner (route guard), CSRF, record mode, JSON,
+    an idempotency key; then one file change. Never a model call."""
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable, public
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    try:
+        conv, status = action(_conversations(), body)
+    except ConversationNotFound:
+        return json_error("not_found", CONV_WORDS["not_found"], 404)
+    except ConversationStoreUnavailable:
+        return json_error("unavailable", CONV_WORDS["unavailable"], 503)
+    if not isinstance(conv, dict):       # a refusal (a JSON error response) from the action
+        return conv
+    return jsonify({"result": status, "conversation": public(conv), "observed_at": now_iso()})
+
+
+@owner_api
+def conversation_create():
+    def action(store, body):
+        work_item = None
+        ref = body.get("about_item")
+        if ref is not None:
+            if not isinstance(ref, int) or isinstance(ref, bool) or not 0 < ref < 10**9:
+                return json_error("invalid", "about_item is a queue item number.", 422), None
+            res = cfg()["services"].queue.get_item(ref) if hasattr(cfg()["services"].queue, "get_item") else None
+            item = res.data if res is not None and getattr(res, "ok", False) else None
+            label = f"#{ref} {item.get('title')}" if isinstance(item, dict) and item.get("title") else f"#{ref}"
+            work_item = {"kind": "item", "ref": str(ref), "label": label[:120],
+                         "href": url_for(".item", item_id=ref)}
+        conv, repeated = store.create(_principal(), key=body["_key"], work_item=work_item)
+        return conv, ("repeated" if repeated else "created")
+    return _conv_write(action)
+
+
+@owner_api
+def conversation_rename(cid):
+    from .conversations import clean_title
+
+    def action(store, body):
+        title = clean_title(body.get("title"))
+        if title is None:
+            return json_error("invalid", "A conversation needs a title (1 to 80 characters).", 422), None
+        return store.rename(cid, _principal(), title), "renamed"
+    return _conv_write(action)
+
+
+def _flag(cid, change, status):
+    def action(store, body):
+        return change(store), status
+    return _conv_write(action)
+
+
+@owner_api
+def conversation_pin(cid):
+    return _flag(cid, lambda st: st.set_pinned(cid, _principal(), True), "pinned")
+
+
+@owner_api
+def conversation_unpin(cid):
+    return _flag(cid, lambda st: st.set_pinned(cid, _principal(), False), "unpinned")
+
+
+@owner_api
+def conversation_archive(cid):
+    """Remove from list: archive (a view action; nothing is erased)."""
+    return _flag(cid, lambda st: st.set_archived(cid, _principal(), True), "archived")
+
+
+@owner_api
+def conversation_restore(cid):
+    return _flag(cid, lambda st: st.set_archived(cid, _principal(), False), "restored")
+
+
+def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_id,
+                request_id: str | None = None) -> tuple[dict, int]:
+    """One Master Craftsman turn for a kept owner note, after the route's
+    guards (write guard, turn gate, the note is this owner's): one reply per
+    note, MC's state must allow turns, one turn in flight per owner, the note
+    scrubbed again, only an answered turn kept. Returns (answer, HTTP status).
+    Used by the /mc/turns route and by the operator-only cost probe
+    (mc/cost_probe.py), which reaches it only through docker exec."""
     import hashlib
     import uuid
-    from datetime import datetime, timezone
 
     from .mc import NotAnAnswer, TurnRequest, keep_reply
 
-    if request.content_length is not None and request.content_length > MAX_BODY:
-        return _too_large()
-    refusal = check_write(cfg()["base_url"])
-    if refusal is not None:
-        return refusal
-    services = cfg()["services"]
-    if not services.mc_turns:
-        state = floor_state.mc_view(services, notes_ok=True)["state"]
-        return json_error("mc_turns_off", MC_WORDS["off"], 409, mc_state=state)
-    body = request.get_json(silent=True)
-    note_id = body.get("note_request_id") if isinstance(body, dict) else None
-    if not isinstance(note_id, str) or not _IDEMPOTENCY.fullmatch(note_id):
-        return json_error("invalid", "Name the kept note to send (note_request_id). Nothing was sent to Master Craftsman.", 422)
-    principal = _principal()
-    try:
-        note = _floor().get_note(note_id)
-    except FloorStoreUnavailable as exc:
-        return json_error("unavailable", MC_WORDS["notes_down"], 503,
-                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
-    if note is None:
-        return json_error("not_found", MC_WORDS["no_note"], 404)
-    if note.get("author_kind") != "owner" or note.get("who") != principal:
-        return json_error("not_allowed", MC_WORDS["not_yours"], 403)
     # One reply per note (#251 review F1): a note that already has a kept
     # reply is answered from the store, and Master Craftsman is not called
     # again (from stage C every call is paid).
-    reply_key = "mc-" + hashlib.sha256(note_id.encode("utf-8")).hexdigest()[:40]
+    from .mc.streaming import DISPATCHED
+    reply_key = _reply_key(note_id)
     try:
-        existing = _floor().get_note(reply_key)
+        existing = floor.get_note(reply_key)
     except FloorStoreUnavailable as exc:
-        return json_error("unavailable", MC_WORDS["notes_down"], 503,
-                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable")
+        return {"error": "unavailable", "message": MC_WORDS["notes_down"],
+                "reason": "not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"}, 503
     if existing is not None:
-        shown = floor_state.mc_view(services, notes_ok=True)
-        turn_log_of(services).annotate([existing])
-        return jsonify({"turn_id": None, "status": "answered", "repeated": True,
-                        "backend_kind": "stub" if existing.get("who") == "master_craftsman_stub" else None,
-                        "failure_class": None, "reply_note": existing, "observed_at": now_iso(),
-                        "mc_state": shown["state"], "mc_header": shown["header"],
-                        "message": MC_WORDS["already"]})
+        return _repeated_answer(services, existing), 200
     shown = floor_state.mc_view(services, notes_ok=True)
     if not shown["turns"]:
-        return json_error("mc_unavailable", f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
-                          503, mc_state=shown["state"], reason=shown["reason"])
-    with _MC_LOCK:
-        if principal in _MC_INFLIGHT:
-            return json_error("busy", MC_WORDS["busy"], 409, mc_state=shown["state"])
-        _MC_INFLIGHT.add(principal)
+        return {"error": "mc_unavailable", "message": f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
+                "mc_state": shown["state"], "reason": shown["reason"]}, 503
+    if not _mc_acquire(principal):
+        return {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
     turn_id = uuid.uuid4().hex
+    if request_id:
+        earlier = DISPATCHED.claim(request_id, principal, turn_id)
+        if earlier is not None:
+            _mc_release(principal)
+            return DISPATCHED.refusal(earlier, principal), 409
     try:
-        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        from .conversations import session_conversation_id
         ctx = note.get("context") or {}
-        req = TurnRequest(conversation_id=f"{services.floor.floor}:{principal}:{day}", text=scrub(note["text"]),
+        # Each conversation is its own session in the backend (the adapter maps
+        # the id: OpenClaw hashes it into its `user` field). Only this note is
+        # sent: other conversations never reach the model's context.
+        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=scrub(note["text"]),
                           note_request_id=note_id, correlation_id=turn_id,
                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
         _mc_log().info("mc turn %s start backend=%s", turn_id, services.mc.kind)
@@ -561,15 +994,14 @@ def mc_turn():
         _mc_log().info("mc turn %s end status=%s class=%s echo=%s response=%s", turn_id, result.status,
                        result.failure_class, trace.get("correlation_echo") == turn_id, bool(trace.get("response_id")))
     finally:
-        with _MC_LOCK:
-            _MC_INFLIGHT.discard(principal)
+        _mc_release(principal)
         if services.mc_health is not None:
             services.mc_health.invalidate()
     answer = {"turn_id": turn_id, "status": result.status, "backend_kind": result.backend_kind,
               "failure_class": result.failure_class, "reply_note": None, "observed_at": now_iso()}
     if result.status == "answered":
         try:
-            kept = keep_reply(_floor(), result, request_id=reply_key, area=ctx.get("area"),
+            kept = keep_reply(floor, result, request_id=reply_key, area=ctx.get("area"),
                               item_ref=ctx.get("item_ref"), page=ctx.get("page"))
             outcome = getattr(kept, "outcome", None)
         except (FloorStoreUnavailable, NotAnAnswer):
@@ -579,20 +1011,42 @@ def mc_turn():
             # mismatch, a missing row) is "not kept", said as such.
             _mc_log().warning("mc turn %s answered but not kept (%s)", turn_id, outcome)
             shown = floor_state.mc_view(services, notes_ok=True)
-            return jsonify({**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
-                            "mc_state": shown["state"], "mc_header": shown["header"]}), 200
+            refused = {**answer, "status": "error", "failure_class": "not_kept", "message": MC_WORDS["not_kept"],
+                       "mc_state": shown["state"], "mc_header": shown["header"]}
+            DISPATCHED.finish(request_id, refused)
+            return refused, 200
         answer["reply_note"] = kept.value
+        _touch_in(conversations, conv, principal)
     turns = turn_log_of(services)
     turns.record(turn_id=turn_id, status=result.status, backend_kind=result.backend_kind, duration_ms=duration_ms,
                  failure_class=result.failure_class,
                  reply_request_id=reply_key if answer["reply_note"] else None)
     if answer["reply_note"]:
         turns.annotate([answer["reply_note"]])
+        with_html([answer["reply_note"]])
     shown = floor_state.mc_view(services, notes_ok=True)
     answer.update({"mc_state": shown["state"], "mc_header": shown["header"],
                    "message": "Master Craftsman answered · kept on the record" if result.status == "answered"
                    else f"{shown['header']}. Your note is kept; Master Craftsman did not answer."})
-    return jsonify(answer)
+    DISPATCHED.finish(request_id, answer)
+    return answer, 200
+
+
+def _touch_in(conversations, conv, principal):
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable
+    if conv.get("unfiled"):
+        return conv
+    try:
+        return conversations.touch(conv["id"], principal)
+    except (ConversationNotFound, ConversationStoreUnavailable):
+        return conv
+
+
+@owner_api
+def workshop_view_api():
+    """The Workshop's status refresh: files and the queue only, never a model."""
+    from .workshop_view import api_view, view
+    return jsonify({**api_view(view(cfg()["services"], request.args.get("item", type=int))), "observed_at": now_iso()})
 
 
 RULES = [
@@ -602,6 +1056,10 @@ RULES = [
     ("/queue/items/<int:item_id>", "api_item", item_view, ["GET"]),
     ("/queue/items/<int:item_id>/history", "api_history", history_view, ["GET"]),
     ("/queue/items/<int:item_id>/status", "api_save_status", save_status, ["POST"]),
+    # Guild 1.1 slice 2 (spec §4.3-4.5): rank, the file journal, and a new item.
+    ("/queue/items", "api_create_item", create_item, ["POST"]),
+    ("/queue/items/<int:item_id>/rank", "api_set_rank", set_rank, ["POST"]),
+    ("/queue/items/<int:item_id>/journal", "api_item_journal", journal_view, ["GET"]),
     ("/queue/journal/<op_id>/checked", "api_mark_checked", mark_checked, ["POST"]),
     ("/notes", "api_notes", notes_list, ["GET"]),
     ("/notes", "api_notes_add", notes_add, ["POST"]),
@@ -613,6 +1071,16 @@ RULES = [
     ("/continue", "api_continue", continue_get, ["GET"]),
     ("/continue", "api_continue_put", continue_put, ["PUT"]),
     ("/mc/turns", "api_mc_turn", mc_turn, ["POST"]),
+    ("/mc/turns/stream", "api_mc_turn_stream", mc_turn_stream, ["POST"]),
+    ("/mc/turns/<turn_id>/stop", "api_mc_turn_stop", mc_turn_stop, ["POST"]),
+    ("/conversations", "api_conversations", conversations_list, ["GET"]),
+    ("/workshop", "api_workshop", workshop_view_api, ["GET"]),
+    ("/conversations", "api_conversation_create", conversation_create, ["POST"]),
+    ("/conversations/<cid>/rename", "api_conversation_rename", conversation_rename, ["POST"]),
+    ("/conversations/<cid>/pin", "api_conversation_pin", conversation_pin, ["POST"]),
+    ("/conversations/<cid>/unpin", "api_conversation_unpin", conversation_unpin, ["POST"]),
+    ("/conversations/<cid>/archive", "api_conversation_archive", conversation_archive, ["POST"]),
+    ("/conversations/<cid>/restore", "api_conversation_restore", conversation_restore, ["POST"]),
     ("/", "api_root", not_found, ALL_METHODS),
     ("/<path:rest>", "api_not_found", not_found, ALL_METHODS),
 ]

@@ -1,0 +1,78 @@
+{% extends 'guild_floor/_base.html' %}
+{% from 'guild_floor/_macros.html' import src_badge, unknown_row with context %}
+{#
+  The Build Log (Guild 1.1 slice 2, spec §4.1; the v4 build-log.html look):
+  every item in every status, one toolbar (saved views, search, "N of M",
+  View options, + New), a tight table with ranks 1-3 pinned on top, and a
+  drawer with the summary, spec link, trouble reason, status Save, rank and
+  history from the journal. The table is drawn by js/build_log.js from the
+  same answer GET /api/v1/queue?scope=all gives (embedded below); every write
+  goes through the API. Spec author comes only from the spec's author line
+  and is blank otherwise. No model call.
+#}
+{% block title %}Build Log · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/build_log.css') }}">{% endblock %}
+{% block main %}
+<div class="bl-tool" role="toolbar" aria-label="Build Log controls">
+  <h1 class="page-title bl-title">Build Log</h1>
+  <span class="bl-views" role="group" aria-label="Saved views" data-bl-views>
+    {% for key, label, help in [
+      ('next', 'My next three', 'Your ranks 1-3 on top, then work in progress (design, in build)'),
+      ('ready', 'Ready', 'Status spec ready'),
+      ('progress', 'In progress', 'Status design or in build'),
+      ('trouble', 'Trouble', 'Blocked or rework: stays here until saved out of trouble'),
+      ('roadmap', 'Roadmap', 'Idea, backlog or deferred (deferred is paused, never done)'),
+      ('all', 'All', 'Every item, including done, cancelled and superseded')] %}
+    <button type="button" class="bl-view" data-bl-view="{{ key }}" aria-pressed="{{ 'true' if key == 'next' else 'false' }}" title="{{ help }}">{{ label }} <span class="bl-view-n" data-bl-view-n></span></button>
+    {% endfor %}
+  </span>
+  <input class="bl-search" type="search" data-bl-search placeholder="Search…" aria-label="Search the Build Log">
+  <span class="bl-count" data-bl-count aria-live="polite"></span>
+  <button type="button" class="btn-quiet bl-clear" data-bl-clear>Clear filters</button>
+  <span class="bl-sp"></span>
+  <details class="bl-vopts" data-bl-vopts>
+    <summary class="btn-quiet">View options ▾</summary>
+    <div class="bl-vo">
+      <span class="bl-vh">Density</span>
+      <span class="bl-seg" role="group" aria-label="Row density">
+        <button type="button" data-bl-density="compact" aria-pressed="true">Compact</button>
+        <button type="button" data-bl-density="comfortable" aria-pressed="false">Comfortable</button>
+      </span>
+      <span class="bl-vh">Ranks</span>
+      <label><input type="checkbox" data-bl-pin checked> Pin ranks 1–3 on top</label>
+      <span class="bl-vh">Columns</span>
+      <span class="bl-cols" data-bl-cols></span>
+    </div>
+  </details>
+  <button type="button" class="btn bl-new-btn" data-bl-new-open aria-expanded="false" aria-controls="bl-new">+ New</button>
+</div>
+<form class="bl-new" id="bl-new" data-bl-new hidden>
+  <label for="bl-new-title">Title</label>
+  <input id="bl-new-title" data-bl-new-title maxlength="200" required autocomplete="off" placeholder="What is the work?">
+  <label for="bl-new-status">Starts as</label>
+  <select id="bl-new-status" data-bl-new-status>
+    <option value="idea">Idea</option><option value="design">Design</option><option value="backlog">Backlog</option>
+  </select>
+  <button type="submit" class="btn" data-bl-new-add>Add</button>
+  <button type="button" class="btn-quiet" data-bl-new-cancel>Cancel</button>
+  <p class="save-result" data-bl-new-result role="status" hidden></p>
+</form>
+{% include 'guild_floor/_checks.html' %}
+{% if not res.ok %}
+  <p class="bl-unknown" data-bl-unknown>The queue can't be read, so the Build Log is <strong>unknown</strong>, not empty.</p>
+  {{ unknown_row(badge(res)) }}
+{% else %}
+<p class="bl-meta small">{{ src_badge(badge(res)) }}{% if res.note %} · <span data-bl-note>{{ res.note }}</span>{% endif %} · Spec author comes only from the spec's own author line; blank otherwise.</p>
+{% endif %}
+<div class="bl-layout" data-bl-layout>
+  <div class="bl-wrap" data-bl-wrap tabindex="0" role="region" aria-label="Build Log table">
+    <table class="bl-matrix compact" data-bl-matrix>
+      <caption class="visually-hidden">Build items: rank, title, status, priority, notes, spec author, updated</caption>
+      <thead data-bl-head></thead>
+      <tbody data-bl-body></tbody>
+    </table>
+  </div>
+  <aside class="bl-drawer" data-bl-drawer hidden aria-label="Work item detail" tabindex="-1"></aside>
+</div>
+<script type="application/json" id="build-log-data">{{ log_data|tojson }}</script>
+{% endblock %}

@@ -141,6 +141,13 @@ class FloorStores:
         self._qmark = paramstyle == "qmark"
         self.floor = floor
 
+    def for_floor(self, floor: str) -> "FloorStores":
+        """The same database under another floor key: a conversation's own
+        notes (slice 2). Post-its and Continue stay on the floor's own key."""
+        twin = FloorStores(self._database_url, connect=self._connect,
+                           paramstyle="qmark" if self._qmark else "format", floor=floor)
+        return twin
+
     # ── plumbing ────────────────────────────────────────────────────────
     def configured(self) -> bool:
         try:

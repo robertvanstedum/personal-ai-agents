@@ -274,8 +274,8 @@ def test_the_page_tells_the_front_end_whether_turns_are_on(turned):
     assert "apiPost('/mc/turns'" in js
     # Waiting is a transient line where the reply will appear, replaced in place;
     # never an "Asking Master Craftsman" platform entry (Robert, 2026-09-29).
-    assert "Asking Master Craftsman" not in js and "waiting.replaceWith(noteLine(body.reply_note))" in js
-    assert "waiting.replaceWith(platformLine(" in js and "waiting.stopTicking()" in js
+    assert "Asking Master Craftsman" not in js and "holder.replaceWith(noteLine(body.reply_note))" in js
+    assert "holder.replaceWith(platformLine(" in js and "waiting.stopTicking()" in js
     assert 'id="tpl-mc-waiting"' in page and "Waiting for a response…" in page
     assert 'data-slot="elapsed" aria-hidden="true"' in page                 # seconds are never read out
     # The note is shown before the turn is asked, and the turn is not awaited.
@@ -355,7 +355,7 @@ def test_turn_log_reads_only_live_answered_lines_and_skips_torn_ones(tmp_path):
     got = log.turns_for(["mc-a", "mc-b", "mc-c"])
     start, end = got["mc-a"].pop("window")                     # the turn's window (usage-record U3)
     assert abs((end - start).total_seconds() - 1.234) < 0.002
-    assert got == {"mc-a": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None}}
+    assert got == {"mc-a": {"duration_ms": 1234, "done_text": "Done in 1.2s", "usage": None, "turn_id": "t1"}}
     assert done_text(15400) == "Done in 15s" and done_text(900) == "Done in 0.9s"
     assert TurnLog(None).turns_for(["mc-a"]) == {} and TurnLog(str(tmp_path / "missing")).turns_for(["mc-a"]) == {}
 
@@ -483,4 +483,32 @@ def test_the_footer_says_tokens_unknown_with_no_store_or_no_match_once_the_turn_
 def test_the_page_asks_again_for_pending_tokens_a_few_times_only():
     import pathlib
     js = (pathlib.Path(__file__).resolve().parents[3] / "minimoi_portal/guild_ui/static/js/conversation.js").read_text()
-    assert "apiGet('/notes?limit=20')" in js and "tokenAsks >= 4" in js and "turn.tokens_text == null" in js
+    assert "apiGet(`/notes?limit=20${conv}`)" in js and "tokenAsks >= 4" in js and "turn.tokens_text == null" in js
+
+
+# ── Markdown in the thread (Robert, September 29) ────────────────────────────
+
+def test_notes_and_mc_replies_carry_sanitised_html_and_keep_their_markdown(floored):
+    reply = "## Status\n**Two** items:\n1. #12 <script>alert(1)</script>\n2. #14"
+    runtime = FakeRuntime(lambda body, headers: Resp(200, json.dumps({
+        "id": "chatcmpl_md", "object": "chat.completion", "model": "openclaw/mc-agent",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": reply}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}),
+        {"X-MC-Correlation-Id": headers.get("X-MC-Correlation-Id")}))
+    _turn_on(floored, _openclaw(runtime))
+    client = floored.owner()
+    token = floored.csrf(client)
+    r = client.post(f"{API}/notes", json=keyed(text="Is **#12** done?"), headers=write_headers(token))
+    note = r.get_json()["note"]
+    assert note["text"] == "Is **#12** done?" and note["html"] == "<p>Is <strong>#12</strong> done?</p>"
+    body = _ask(client, token, note["request_id"]).get_json()
+    got = body["reply_note"]
+    assert got["text"] == reply                                          # stored as Markdown
+    assert "<h2>Status</h2>" in got["html"] and "<ol>" in got["html"] and "<script" not in got["html"]
+    listed = client.get(f"{API}/notes").get_json()["notes"]
+    assert all("html" in n for n in listed)
+    page = client.get("/guild-next/guild/build").get_data(as_text=True)
+    assert '<div class="msg-text msg-md"><h2>Status</h2>' in page and "&lt;script&gt;alert(1)&lt;/script&gt;" in page
+    assert "<script>alert(1)" not in page
+    rows = floored.extra["floor"].rows("floor_messages")
+    assert any(r_["text"] == reply for r_ in rows)                      # the store holds the original text
