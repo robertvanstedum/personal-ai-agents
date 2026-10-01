@@ -203,5 +203,8 @@ class PlatformAccess:
             if row['principal']=='robert': raise AccessError('Owner recovery key is not a collaborator credential')
             db.execute('UPDATE client_credentials SET revoked=COALESCE(revoked,?) WHERE id=?',(stamp(),cid))
             db.execute('INSERT INTO credential_audit VALUES(?,?,?,?,?)',(str(uuid4()),owner,cid,'revoke',stamp()))
-            if self.on_revoke: self.on_revoke(db,row['principal'])    # Rooms R1: fence that teammate's turns
+            if self.on_revoke:   # Rooms R1: fence that teammate's turns; R3b: end its web sessions
+                import inspect
+                if len(inspect.signature(self.on_revoke).parameters) >= 3: self.on_revoke(db,row['principal'],cid)
+                else: self.on_revoke(db,row['principal'])
         return dict(credential_id=cid,status='revoked')

@@ -31,6 +31,8 @@
 #                         on Records, worker, MC or relay
 #   records.sh provision-connector  Rooms R2: Claude Code hosted by the Mac connector
 #                         (tokens to $STAGING_ROOT/secrets/rooms-connector, not printed)
+#   records.sh rotate-session-key  Rooms R3b rollback step: new cookie signing key
+#                         (Records stopped); every browser sign-in ends
 #   records.sh down       stop and remove the containers (data and journal kept)
 #   records.sh status     state and health of both
 #
@@ -159,6 +161,18 @@ case "$cmd" in
     rmdir "$outbox" 2>/dev/null || true
     chmod 600 "$CONNECTOR_SECRETS"/*.token
     note "provisioned: Claude Code (membership-scoped), claude-code-manual, and the connector's work principal; tokens in $CONNECTOR_SECRETS (not printed). Next: records.sh up, then connector.sh install" ;;
+  rotate-session-key)
+    # Rooms R3b rollback step (ROOMS_R3.md §3): a new cookie signing key ends
+    # every browser session under any Records version, so a cookie revoked by
+    # R3b cannot come back under older code. Records must be stopped first.
+    require_absolute_root
+    [[ "$(docker inspect -f '{{.State.Running}}' "$RECORDS_CONTAINER" 2>/dev/null || true)" != true ]] || die "stop Records first (records.sh down)"
+    key="$STAGING_ROOT/data/records/session-key.txt"
+    [[ -f "$key" && ! -L "$key" ]] || die "no session key at $key"
+    ( umask 077; openssl rand -base64 36 > "$key.new" )
+    chmod 600 "$key.new"
+    mv "$key.new" "$key"
+    note "rotated the Records session key: every browser sign-in ends (sign in again). Bearer clients are unaffected." ;;
   preflight)
     # Rooms R1 build gate (ROOMS_R1.md §6): MC's EFFECTIVE tools from its running
     # gateway, and the boundaries as real connection attempts from inside the
@@ -266,5 +280,5 @@ except Exception as e:
     done
     worker_ready && echo "rooms-worker secrets: provisioned" || echo "rooms-worker secrets: not provisioned (records.sh provision)" ;;
   *)
-    sed -n '2,42p' "$0"; exit 2 ;;
+    sed -n '2,44p' "$0"; exit 2 ;;
 esac

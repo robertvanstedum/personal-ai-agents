@@ -40,6 +40,14 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
                       SESSION_COOKIE_NAME="minimoi_room_poc",PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
                       TESTING=testing)
     app.extensions["records_store"]=store
+    from web_sessions import WebSessions
+    web_sessions=WebSessions(store.connect,app.config["PERMANENT_SESSION_LIFETIME"])
+    app.extensions["web_sessions"]=web_sessions
+    previous_hook=store.platform_access.on_revoke
+    def on_revoke(db,principal,credential_id=None):
+        if previous_hook: previous_hook(db,principal)
+        if credential_id: WebSessions.end_for_credential(db,credential_id)
+    store.platform_access.on_revoke=on_revoke
     from cos_requests import CoSRequests
     if cos_sessions is None:
         import os
@@ -82,7 +90,12 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
         if authorization.startswith("Bearer "):
             actor=store.authenticate(authorization[7:])
         elif session.get("credential_id"):
-            actor=store.platform_access.authenticate(credential_id=session["credential_id"])
+            # Rooms R3b: a browser session must be live on the server too. A cookie
+            # from before R3b (no session id), a logged-out or revoked one, is refused.
+            if web_sessions.valid(session.get("ws"),session["credential_id"]):
+                actor=store.platform_access.authenticate(credential_id=session["credential_id"])
+            else:
+                session.clear()
         if not actor: raise Problem("Sign in with a local access key",401)
         g.actor=actor
         g.auth_context=request_credential.set(actor["credential_id"])
@@ -149,10 +162,12 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
         principal=store.authenticate(body().get("token"))
         if not principal: raise Problem("Invalid local access key",401)
         session.clear(); session["actor"]=principal["id"]; session["credential_id"]=principal["credential_id"]; session.permanent=True
+        session["ws"]=web_sessions.start(principal["id"],principal["credential_id"])
         return jsonify(principal)
 
     @app.post("/api/logout")
     def logout():
+        web_sessions.end(session.get("ws"))          # Rooms R3b: ends it on the server, not only in this browser
         session.clear()
         return jsonify(ok=True)
 
