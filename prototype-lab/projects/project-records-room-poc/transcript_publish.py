@@ -79,7 +79,7 @@ def verify(directory):
 def _complete(store, root, row, fault):
     data=json.loads(row["payload"])
     files=render(data,snapshot_at=row["snapshot_at"])
-    manifest=dict(bundle_id=row["id"], schema_version=VERSION,renderer_version=RENDERER,
+    manifest=dict(bundle_id=row["id"], schema_version=data["schema_version"],renderer_version=RENDERER,
         source_instance_id=data["source_instance_id"],session_id=row["session"],
         source_revision=row["revision"],through_seq=data["through_seq"],
         generated_at=row["generated_at"],snapshot_at=row["snapshot_at"],

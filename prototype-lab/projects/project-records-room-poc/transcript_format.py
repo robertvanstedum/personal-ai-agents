@@ -12,6 +12,9 @@ import re
 
 
 VERSION = "minimoi.transcript/1.0"
+# 1.1 (Rooms R1, ROOMS_R1.md §3.12): a record's execution is one of two strict
+# shapes. 1.0 documents keep validating against the unchanged 1.0 schema.
+VERSION_1_1 = "minimoi.transcript/1.1"
 RENDERER = "minimoi.transcript.markdown/1.0"
 
 
@@ -52,6 +55,14 @@ RECORD = _object(dict(
               "material_class", "origin_assurance", "reply_to_record_id", "corrects_record_id",
               "context_through_seq"])
 
+LEGACY_EXECUTION = _object(dict(coordination_request_id=ID, openclaw_run_id=TEXT), required=[])
+ROOMS_EXECUTION = _object(dict(
+    turn_id=ID, claim_id=ID, attempt={"type": "integer", "minimum": 1}, coordinating_installation=TEXT,
+    caller_correlation={"type": "string", "pattern": "^[0-9a-f]{32}$"}, upstream_execution_id=NULL_TEXT,
+    usage_evidence_status={"enum": ["reported", "none"]}, prompt_tokens=NUMBER, completion_tokens=NUMBER,
+    coordination_request_id=ID, openclaw_run_id=TEXT),
+    required=["turn_id", "claim_id", "attempt", "coordinating_installation", "caller_correlation"])
+
 SCHEMA = {"$schema": "https://json-schema.org/draft/2020-12/schema", **_object(dict(
     schema_version={"const": VERSION}, source_instance_id=ID, source_revision=NUMBER,
     through_seq=NUMBER,
@@ -78,10 +89,24 @@ SCHEMA = {"$schema": "https://json-schema.org/draft/2020-12/schema", **_object(d
 ))}
 
 
+def _schema_1_1():
+    schema = deepcopy(SCHEMA)
+    schema["properties"]["schema_version"] = {"const": VERSION_1_1}
+    record = schema["properties"]["raw_transcript"]["items"]
+    record["properties"]["execution"] = {"oneOf": [LEGACY_EXECUTION, ROOMS_EXECUTION]}
+    return schema
+
+
+SCHEMA_1_1 = _schema_1_1()
+
+
 def validate(snapshot):
-    """Validate shape and local linkage; no remote schema or target fetches."""
+    """Validate shape and local linkage; no remote schema or target fetches.
+    The schema follows the document's own declared version (1.0 unchanged)."""
     from jsonschema import Draft202012Validator, FormatChecker
-    Draft202012Validator(SCHEMA, format_checker=FormatChecker()).validate(snapshot)
+    version = snapshot.get("schema_version") if isinstance(snapshot, dict) else None
+    schema = SCHEMA_1_1 if version == VERSION_1_1 else SCHEMA
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(snapshot)
     records = snapshot["raw_transcript"]
     ids = [r["record_id"] for r in records]
     seqs = [r["seq"] for r in records]
@@ -176,6 +201,8 @@ def render(snapshot, *, snapshot_at):
         stamp = record["source_created_at"] or record["ingested_at"] + " (ingested)"
         lines.extend([f"{stamp} — {_label(record['speaker_label'])} [{record['kind']}; {record['record_id']}; speaker={record['speaker_id']}]:",
                       _literal(record["text"]), ""])
+        if record.get("execution"):
+            lines.extend(["Execution evidence (caller-declared; upstream not observed): " + _literal(json.dumps(record["execution"], ensure_ascii=False, sort_keys=True)), ""])
         if record.get("imported_source"):
             source=record["imported_source"]
             lines.extend(["Imported source (declared, not authenticated speaker): " + _literal(json.dumps(source,ensure_ascii=False,sort_keys=True)), ""])

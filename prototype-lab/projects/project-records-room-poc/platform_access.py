@@ -30,6 +30,7 @@ def hashed(token):
 class PlatformAccess:
     def __init__(self, connect):
         self.connect = connect
+        self.on_revoke = None    # Rooms R1: set by Store to fence a revoked teammate's turns
         with connect() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS client_installations(
@@ -42,6 +43,9 @@ class PlatformAccess:
                 CREATE TABLE IF NOT EXISTS credential_audit(
                     id TEXT PRIMARY KEY,actor TEXT NOT NULL,credential TEXT NOT NULL,
                     action TEXT NOT NULL,created TEXT NOT NULL);
+                -- Rooms R1: scoped credentials (a new table; existing rows untouched).
+                CREATE TABLE IF NOT EXISTS credential_scopes(
+                    credential_id TEXT PRIMARY KEY,scope TEXT NOT NULL,operations TEXT NOT NULL);
             ''')
             # One-time compatible import. Existing keys are not silently expired.
             # Revocation never falls back to principals.token_hash.
@@ -65,9 +69,11 @@ class PlatformAccess:
         else:
             where, value = 'c.id=?', credential_id
         row = db.execute('''SELECT p.id,p.label,p.kind,c.id AS credential_id,
-            c.installation AS installation_id,c.grants,c.legacy,c.expires,c.revoked
+            c.installation AS installation_id,c.grants,c.legacy,c.expires,c.revoked,
+            s.scope,s.operations
             FROM client_credentials c JOIN client_installations i ON i.id=c.installation
-            JOIN principals p ON p.id=i.principal WHERE ''' + where, (value,)).fetchone()
+            JOIN principals p ON p.id=i.principal
+            LEFT JOIN credential_scopes s ON s.credential_id=c.id WHERE ''' + where, (value,)).fetchone()
         if not row or row['revoked'] or (row['expires'] and row['expires'] <= stamp()):
             return None
         return dict(row)
@@ -85,6 +91,23 @@ class PlatformAccess:
         if not auth or auth['id'] != principal:
             raise AccessError('Credential expired or revoked', 401)
         if auth['legacy']:
+            return
+        if auth['scope'] == 'work':
+            raise AccessError('A worker credential does not read or write rooms directly', 403)
+        if auth['scope'] == 'membership':
+            # Spec 157 §8 second strategy: current membership decides, at request time.
+            if destination is None:
+                raise AccessError('This credential works only inside a room', 403)
+            member = db.execute('SELECT role FROM members WHERE room=? AND actor=?', (destination, principal)).fetchone()
+            if not member:
+                raise AccessError('Not a member of this room', 403)
+            if operation == 'rsvp':
+                return
+            if operation not in json.loads(auth['operations']):
+                raise AccessError('Credential does not grant this operation', 403)
+            rsvp = db.execute('SELECT rsvp FROM member_rsvp WHERE room=? AND actor=?', (destination, principal)).fetchone()
+            if rsvp and rsvp['rsvp'] != 'accepted':
+                raise AccessError('This membership is not accepted', 403)
             return
         grants = json.loads(auth['grants'])
         if operation not in grants.get(destination, []):
@@ -120,7 +143,22 @@ class PlatformAccess:
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             self.enforce(db,owner,None,'admin')
-            grants = self.validate_grants(db,principal,payload.get('grants'))
+            scope = payload.get('scope')
+            if scope is None:
+                grants, operations = self.validate_grants(db,principal,payload.get('grants')), None
+            elif scope == 'membership':
+                operations = payload.get('operations')
+                if (not isinstance(operations,list) or not operations or len(set(operations))!=len(operations)
+                        or any(op not in {'read','post','receipt'} for op in operations)):
+                    raise AccessError('A membership credential takes operations from read, post, receipt')
+                if payload.get('grants') is not None: raise AccessError('A membership credential takes no room list')
+                grants = None
+            elif scope == 'work':
+                kind = db.execute('SELECT kind FROM principals WHERE id=?',(principal,)).fetchone()
+                if not kind or kind['kind'] != 'service': raise AccessError('A work credential belongs to a service principal')
+                grants, operations = None, ['work']
+            else:
+                raise AccessError('Unknown credential scope')
             installation = payload.get('installation_id')
             if installation:
                 if not isinstance(installation,str): raise AccessError("Invalid installation ID")
@@ -138,9 +176,11 @@ class PlatformAccess:
                 db.execute('UPDATE client_credentials SET revoked=? WHERE id=?',(stamp(),old))
             db.execute('INSERT INTO client_credentials VALUES(?,?,?,?,?,?,?,0)',
                        (cid,installation,hashed(token),stamp(),expiry,None,grants))
+            if scope is not None:
+                db.execute('INSERT INTO credential_scopes VALUES(?,?,?)',(cid,scope,json.dumps(operations)))
             db.execute('INSERT INTO credential_audit VALUES(?,?,?,?,?)',(str(uuid4()),owner,cid,'rotate' if old else 'issue',stamp()))
         return dict(credential_id=cid,installation_id=installation,principal=principal,
-                    expires_at=expiry,access_token=token)
+                    expires_at=expiry,access_token=token,scope=scope or 'sessions')
 
     def inventory(self, owner):
         if owner!='robert': raise AccessError('Only Robert manages client credentials',403)
@@ -148,8 +188,9 @@ class PlatformAccess:
             self.enforce(db,owner,None,'admin')
             return [dict(row) for row in db.execute('''SELECT c.id AS credential_id,
                 c.installation AS installation_id,i.principal,i.label,c.created,c.expires,
-                c.revoked,c.legacy,c.grants FROM client_credentials c JOIN client_installations i
-                ON c.installation=i.id ORDER BY c.created,c.id''')]
+                c.revoked,c.legacy,c.grants,COALESCE(s.scope,'sessions') AS scope FROM client_credentials c
+                JOIN client_installations i ON c.installation=i.id
+                LEFT JOIN credential_scopes s ON s.credential_id=c.id ORDER BY c.created,c.id''')]
 
     def revoke(self, owner, cid):
         if owner!='robert': raise AccessError('Only Robert manages client credentials',403)
@@ -162,4 +203,5 @@ class PlatformAccess:
             if row['principal']=='robert': raise AccessError('Owner recovery key is not a collaborator credential')
             db.execute('UPDATE client_credentials SET revoked=COALESCE(revoked,?) WHERE id=?',(stamp(),cid))
             db.execute('INSERT INTO credential_audit VALUES(?,?,?,?,?)',(str(uuid4()),owner,cid,'revoke',stamp()))
+            if self.on_revoke: self.on_revoke(db,row['principal'])    # Rooms R1: fence that teammate's turns
         return dict(credential_id=cid,status='revoked')

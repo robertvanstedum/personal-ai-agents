@@ -48,13 +48,20 @@ def test_membership_change_advances_revision(source):
     assert second["source_revision"] > first["source_revision"]
 
 
-def test_closed_legacy_timestamp_is_unknown_not_guessed(source):
+def test_closed_at_comes_from_the_closing_record_and_is_unknown_without_one(source):
+    """Transcript 1.1 contract (ROOMS_R1.md §3.12): read from the session's own
+    closing lifecycle record, never guessed; unknown when that record is absent."""
     store,room=source
-    store.state("robert","close",room,dict(state="closed",version=1,checkpoint="Done"))
+    closing=store.state("robert","close",room,dict(state="closed",version=1,checkpoint="Done"))["result"]["event"]
     data,stamp=capture(store,"robert",room)
+    assert data["session"]["closed_at"] == closing["created"].replace("+00:00","Z")
+    assert "session.closed_at" not in data["coverage"]["unknown_fields"]
+    assert b"Publication: final" in render(data,snapshot_at=stamp)["transcript.md"]
+    with store.connect() as db:
+        db.execute("DELETE FROM events WHERE id=?",(closing["id"],))
+    data,_=capture(store,"robert",room)
     assert data["session"]["closed_at"] is None
     assert "session.closed_at" in data["coverage"]["unknown_fields"]
-    assert b"Publication: final" in render(data,snapshot_at=stamp)["transcript.md"]
 
 
 def test_capture_failure_rolls_back_export_metadata(source):

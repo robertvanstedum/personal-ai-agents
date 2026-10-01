@@ -50,9 +50,66 @@ def seed(store):
     return rooms
 
 
+def _private_dir(path):
+    path=Path(path)
+    if path.is_symlink(): raise SystemExit("Output folder cannot be a symlink")
+    path.mkdir(mode=0o700,parents=True,exist_ok=True)
+    os.chmod(path,0o700)
+    return path
+
+
+def _principal(store,db,name,label,kind):
+    """A principal whose legacy credential is revoked at once: it signs in only
+    with the scoped credential issued next (Rooms R1, ROOMS_R1.md §3.3)."""
+    import secrets
+    from store import digest, now
+    if db.execute("SELECT 1 FROM principals WHERE id=?",(name,)).fetchone(): return False
+    token_hash=digest(secrets.token_urlsafe(36).encode())
+    db.execute("INSERT INTO principals VALUES(?,?,?,?,?)",(name,label,kind,token_hash,now()))
+    store.platform_access.import_legacy(db,dict(id=name,label=label,token_hash=token_hash,created=now()))
+    db.execute("UPDATE client_credentials SET revoked=? WHERE id=?",(now(),"legacy:"+name))
+    return True
+
+
+def provision_rooms(store,teammate,label,out,days=90):
+    """Owner-run, once: MC (membership-scoped) and the worker (work-scoped),
+    the hosting binding and MC's teammate card. Tokens go only to 0600 files
+    in `out`; nothing secret is printed. Refuses if either file exists."""
+    from datetime import datetime, timedelta, timezone
+    out=_private_dir(out)
+    files={teammate:out/f"{teammate}.token","rooms-worker":out/"rooms-worker.token"}
+    if any(f.exists() for f in files.values()): raise SystemExit("Token files already exist; revoke and remove them first")
+    with store.connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        created={teammate:_principal(store,db,teammate,label,"agent"),
+                 "rooms-worker":_principal(store,db,"rooms-worker","Rooms worker","service")}
+        kinds={r["id"]:r["kind"] for r in db.execute("SELECT id,kind FROM principals WHERE id IN (?,?)",(teammate,"rooms-worker"))}
+    if kinds.get(teammate)!="agent" or kinds.get("rooms-worker")!="service":
+        raise SystemExit("Existing principals have the wrong kind for Rooms")
+    store.meetings.put_teammate("robert",teammate,{})
+    expires=(datetime.now(timezone.utc)+timedelta(days=days)).isoformat()
+    issued={}
+    for name,request in ((teammate,dict(scope="membership",operations=["read","post","receipt"])),
+                         ("rooms-worker",dict(scope="work"))):
+        fd=os.open(files[name],os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        result=store.platform_access.issue("robert",dict(principal=name,label=f"Rooms R1 {name}",expires_at=expires,**request))
+        with os.fdopen(fd,"w") as stream:
+            stream.write(result.pop("access_token")+"\n"); stream.flush(); os.fsync(stream.fileno())
+        issued[name]=result
+    from store import now
+    with store.connect() as db:
+        db.execute("INSERT OR IGNORE INTO hosted_teammates VALUES(?,?,?)",(issued["rooms-worker"]["installation_id"],teammate,now()))
+    return {"principals_created":created,"credentials":{k:{x:v[x] for x in ("credential_id","installation_id","expires_at","scope")} for k,v in issued.items()},
+            "token_files":{k:str(v) for k,v in files.items()},"hosted":{"installation_id":issued["rooms-worker"]["installation_id"],"teammate":teammate}}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=["init","seed","backup","verify","publish-transcript","recover-transcripts","publish-cycle","watch-transcripts","cleanup-transcripts"])
+    parser.add_argument("command",choices=["init","seed","backup","verify","publish-transcript","recover-transcripts","publish-cycle","watch-transcripts","cleanup-transcripts","provision-rooms"])
+    parser.add_argument("--teammate",default="mc")
+    parser.add_argument("--label",default="Master Craftsman")
+    parser.add_argument("--out")
+    parser.add_argument("--days",type=int,default=90)
     parser.add_argument("--data-dir",required=True)
     parser.add_argument("--session-id")
     parser.add_argument("--interval",type=float,default=5.0)
@@ -62,6 +119,9 @@ def main():
     if args.command=="init":
         print(json.dumps({"data_directory":str(store.root),"owner_key_file":str(store.root/"owner-key.txt")}))
     elif args.command=="seed": print(json.dumps(seed(store),indent=2))
+    elif args.command=="provision-rooms":
+        if not args.out: parser.error("--out is required")
+        print(json.dumps(provision_rooms(store,args.teammate,args.label,args.out,args.days),indent=2))
     elif args.command=="backup": print(json.dumps(store.backup("robert"),indent=2))
     elif args.command=="publish-transcript":
         if not args.session_id: parser.error("--session-id is required")

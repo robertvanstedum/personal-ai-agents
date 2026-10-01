@@ -93,7 +93,11 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
             operations={"get_room":"read","session_record":"read","events":"post","import_conversation":"post","transfer":"post",
                         "documents":"upload","artifact_link":"link","operation":"receipt",
                         "export":"export","document":"read","rooms":"read","me":"read",
-                        "logout":"read","coordination_inbox":"read","coordination_list":"read","coordination_create":"post","coordination_transition":"post","acknowledge_join":"read"}
+                        "logout":"read","coordination_inbox":"read","coordination_list":"read","coordination_create":"post","coordination_transition":"post","acknowledge_join":"read",
+                        # Rooms R1: a teammate answers its own invitation; the worker's routes need a work scope.
+                        "meeting_rsvp":"rsvp","turns_claim":"work","turns_start":"work","turns_heartbeat":"work",
+                        "turns_fail":"work","turns_cancel_ack":"work","turns_recover":"work",
+                        "hosted_teammates":"work","hosted_reachable":"work"}
             if endpoint not in operations: raise Problem("Route unavailable to installation clients",403)
             request_operation.set(operations[endpoint])
             if endpoint=="operation" and not request.args.get("destination"):
@@ -170,8 +174,14 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
     def rooms():
         result=store.rooms(actor())
         if not g.actor["legacy"]:
-            grants=json.loads(g.actor["grants"])
-            result=[room for room in result if "read" in grants.get(room["id"],[])]
+            if g.actor.get("scope")=="work": raise Problem("A worker credential does not list rooms",403)
+            if g.actor.get("scope")=="membership":
+                from meetings import rsvp_of
+                with store.connect() as db:
+                    result=[room for room in result if rsvp_of(db,room["id"],actor())["rsvp"]=="accepted"]
+            else:
+                grants=json.loads(g.actor["grants"])
+                result=[room for room in result if "read" in grants.get(room["id"],[])]
         return jsonify(rooms=result)
 
     # v1 /rooms remains the stable session alias for existing clients/receipts.
@@ -305,6 +315,69 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
 
     @app.post("/api/v1/backup")
     def backup(): return jsonify(store.backup(actor()))
+
+    # ── Rooms R1 (docs/specs/minimoi-connected-work/ROOMS_R1.md) ─────────────
+    meetings=store.meetings
+
+    @app.post("/api/v1/rooms/<room>/invite")
+    def meeting_invite(room): return jsonify(meetings.invite(actor(),key(),room,body())),201
+
+    @app.post("/api/v1/rooms/<room>/rsvp")
+    def meeting_rsvp(room): return jsonify(meetings.rsvp(actor(),key(),room,body()))
+
+    @app.put("/api/v1/rooms/<room>/presence")
+    def meeting_presence(room): return jsonify(meetings.presence_here(actor(),room,body()))
+
+    @app.get("/api/v1/rooms/<room>/turns")
+    def meeting_turns(room): return jsonify(meetings.status(actor(),room))
+
+    @app.post("/api/v1/rooms/<room>/turns/<turn>/cancel")
+    def meeting_turn_cancel(room,turn): return jsonify(meetings.owner_cancel(actor(),key(),room,turn))
+
+    @app.post("/api/v1/rooms/<room>/turns/<turn>/retry")
+    def meeting_turn_retry(room,turn): return jsonify(meetings.owner_retry(actor(),key(),room,turn,body())),201
+
+    @app.post("/api/v1/rooms/<room>/stop")
+    def meeting_stop(room): return jsonify(meetings.stop(actor(),key(),room))
+
+    @app.post("/api/v1/rooms/<room>/continue")
+    def meeting_continue(room): return jsonify(meetings.continue_conversation(actor(),key(),room)),201
+
+    @app.get("/api/v1/teammates")
+    def teammates(): return jsonify(teammates=meetings.teammates(actor()))
+
+    @app.put("/api/v1/teammates/<principal>")
+    def teammate_card(principal): return jsonify(meetings.put_teammate(actor(),principal,body()))
+
+    @app.post("/api/v1/teammates/<principal>/prove")
+    def teammate_prove(principal): return jsonify(meetings.prove(actor(),key(),principal,body())),202
+
+    @app.get("/api/v1/teammates/<principal>/prove")
+    def teammate_proof(principal): return jsonify(meetings.proof_status(actor(),principal))
+
+    @app.get("/api/v1/hosted-teammates")
+    def hosted_teammates(): return jsonify(meetings.hosted_view(g.actor))
+
+    @app.post("/api/v1/hosted-teammates/<principal>/reachable")
+    def hosted_reachable(principal): return jsonify(meetings.mark_reachable(g.actor,principal,body()))
+
+    @app.post("/api/v1/turns/claim")
+    def turns_claim(): return jsonify(meetings.claim(g.actor,body()))
+
+    @app.post("/api/v1/turns/<turn>/start")
+    def turns_start(turn): return jsonify(meetings.start(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/heartbeat")
+    def turns_heartbeat(turn): return jsonify(meetings.heartbeat(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/fail")
+    def turns_fail(turn): return jsonify(meetings.fail(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/cancel-ack")
+    def turns_cancel_ack(turn): return jsonify(meetings.cancel_ack(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/recover")
+    def turns_recover(turn): return jsonify(meetings.recover(g.actor,turn,body()))
 
     return app
 

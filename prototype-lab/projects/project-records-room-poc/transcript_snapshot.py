@@ -10,7 +10,7 @@ import hashlib
 import json
 from uuid import uuid4, uuid5, UUID
 
-from transcript_format import VERSION, validate
+from transcript_format import VERSION, VERSION_1_1, validate
 
 
 def utc(value):
@@ -41,6 +41,14 @@ def capture(store, actor, session_id):
         kinds = dict(session_opened="lifecycle", state_change="lifecycle", decision="recorded_decision",
                      task="assignment", document="document_filed", artifact_link="artifact_linked")
         ids = {e["id"] for e in events}
+        # Rooms R1 (ROOMS_R1.md §3.12): a committed teammate turn carries typed
+        # execution evidence persisted at commit; nothing is parsed from text.
+        rooms_turns = {}
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='turns'").fetchone():
+            for row in db.execute("SELECT * FROM turns WHERE room=? AND state='committed' AND result IS NOT NULL", (session_id,)):
+                result = json.loads(row["result"])
+                if result.get("execution"):
+                    rooms_turns[result["event_id"]] = (dict(row), result)
         records = []
         for event in events:
             origin = json.loads(event["origin"]) if event["origin"] else {}
@@ -57,6 +65,11 @@ def capture(store, actor, session_id):
                 material_class=event["context_class"], origin_assurance="declared" if origin else "unknown",
                 reply_to_record_id=event["reference"] if event["reference"] in ids else None,
                 corrects_record_id=None, context_through_seq=None))
+            if event["id"] in rooms_turns:
+                turn, result = rooms_turns[event["id"]]
+                execution = {k: v for k, v in result["execution"].items() if v is not None or k == "upstream_execution_id"}
+                records[-1].update(execution=execution, context_through_seq=turn["snapshot_through_seq"],
+                                   model=result.get("model"))
             if origin.get("material_type") in {"transcript","handoff"}:
                 records[-1]["imported_source"]={key:origin[key] for key in
                     ("declared_speaker","coverage","source_ordinal","source_record_ids","material_type") if key in origin}
@@ -85,15 +98,23 @@ def capture(store, actor, session_id):
                 sha256=document["sha256"], label=document["name"]))
         seqs = [e["seq"] for e in events]
         unknown = ["raw_transcript.source_created_at", "raw_transcript.speaker_label"]
-        if session["state"] == "closed": unknown.append("session.closed_at")
-        data = dict(schema_version=VERSION, source_instance_id=source, source_revision=0,
+        if rooms_turns:
+            unknown.extend(["raw_transcript.execution.upstream_execution_id", "raw_transcript.model"])
+        # The one permitted derivation: the session's own closing lifecycle record
+        # (a session field, not record attribution). Unknown if there is none.
+        closed_at = None
+        if session["state"] == "closed":
+            closing = [e for e in events if e["kind"] == "state_change" and "→ closed" in e["body"]]
+            if closing: closed_at = utc(closing[-1]["created"])
+            else: unknown.append("session.closed_at")
+        data = dict(schema_version=VERSION_1_1 if rooms_turns else VERSION, source_instance_id=source, source_revision=0,
             through_seq=max(seqs, default=0),
             coverage=dict(scope="authorized_owner_full", accepted_submissions_only=True,
                 gaps=[dict(after_seq=a, before_seq=b) for a,b in zip(seqs,seqs[1:]) if b>a+1],
                 unknown_fields=unknown, omissions=["Attachment bytes are separate protected sources."]),
             room=dict(room_id=parent["id"], title=parent["title"]),
             session=dict(session_id=session_id, title=session["title"], purpose=session["purpose"],
-                state=session["state"], opened_at=utc(session["created"]), closed_at=None),
+                state=session["state"], opened_at=utc(session["created"]), closed_at=closed_at),
             participants=participants, raw_transcript=records, notes=mapped_notes, references=references)
         validate(data)
         # Include authorization projection even if it doesn't change message text.
