@@ -145,6 +145,11 @@ services:
       # Postgres keeps only their index. Staging only until the production
       # cutover adds the same mount.
       - MINIMOI_MEDIA_DIR=/app/runtime/media
+      # Rooms (Guild 1.1 slice 4): the one internal Records origin the portal's
+      # dev-only bridge may reach (/app/records/). Records runs in its own
+      # project (docker-compose.records.yml); until it is up, Rooms says
+      # "unavailable". BASE_URL above is the dev origin, so the bridge installs.
+      - RECORDS_BACKEND=http://minimoi-records:18880
     volumes:
       - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
       - ${MINIMOI_ROOT}/data/usage/portal:/app/data/usage/portal
@@ -156,6 +161,9 @@ services:
       - default
       - iotconnect-edge
       - mc-front
+      # Permanently on records-net (portal + Records only), so starting
+      # Records never recreates the portal (Guild 1.1 slice 4).
+      - records-net
 
   system-bot:
     image: minimoi-staging/system-bot:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
@@ -224,6 +232,12 @@ networks:
   # The portal's side of the one-way relay (MC spec v0.9 §3-§4): members are
   # the portal (here, permanently) and, from MC's own project, mc-relay only.
   # Internal, and no host address on the bridge.
+  # Rooms' only network (Guild 1.1 slice 4): internal, so Records has no
+  # egress. Members: the portal (here, permanently) and, from Records' own
+  # project (docker-compose.records.yml), minimoi-records.
+  records-net:
+    name: minimoi-staging-records
+    internal: true
   mc-front:
     name: minimoi-staging-mc-front
     internal: true

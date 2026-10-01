@@ -1,0 +1,42 @@
+# Records (Rooms): its OWN Compose project on staging (Guild 1.1 slice 4,
+# spec §6), like Master Craftsman's (docker-compose.mc.yml). Run only through
+# scripts/staging/records.sh; production has no Records service
+# (scripts/ci/classify_release.py: staging-only).
+#
+# Why a separate project: the main project's service set mirrors production
+# (tests/test_staging_environment.py), and its deploys (up --remove-orphans)
+# never touch Records. The main stack provides the fixed-name internal network
+# Records joins; the portal is on it permanently, so starting Records
+# recreates nothing there.
+#
+# Boundaries: only records-net (internal: no egress); no published port; no
+# env_file; its data only in ${MINIMOI_ROOT}/data/records (mode 700, made by
+# build.sh). Records keeps its own sign-in; nothing here holds a credential.
+
+services:
+  records:
+    image: minimoi-staging/records:${MINIMOI_IMAGE_TAG:?run scripts/staging/records.sh build}
+    pull_policy: never
+    container_name: minimoi-records
+    restart: unless-stopped
+    environment:
+      # The exact Host the portal's bridge sends (Records refuses any other).
+      - RECORDS_ALLOWED_HOSTS=minimoi-records:18880
+    volumes:
+      - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/data/records:/data
+    networks:
+      - records-net
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:18880/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  records-net:
+    name: minimoi-staging-records
+    external: true

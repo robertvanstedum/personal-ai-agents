@@ -2,8 +2,7 @@
 Rooms · More ▾ on every /guild-next page, the Guild home included.
 
 Chat is the Shop floor; Board is the wall (the Workbench) and its post-its
-page; Build Log is the real page since slice 2; Rooms says "coming in a later
-slice" until slice 4.
+page; Build Log is the real page since slice 2, Rooms since slice 4.
 More holds the Workshop, the Guild home, the Docs line with its GitHub link,
 Operate, Labs and Design Studio (Planning Studio, under CoS, linked honestly
 to the Labs entry point). The portal's workspace bar is unchanged."""
@@ -60,15 +59,13 @@ def test_more_holds_the_workshop_home_docs_operate_labs_and_design_studio(stagin
     assert "Planning Studio, under CoS · not served on dev yet" in menu    # Design Studio, said honestly
 
 
-@pytest.mark.parametrize("path,slice_no", [("/guild-next/guild/rooms", 4)])
-def test_rooms_says_coming_in_a_later_slice(staging, path, slice_no):
-    r = staging.owner().get(path)
+def test_rooms_is_the_real_page_since_slice_4(staging):
+    r = staging.owner().get("/guild-next/guild/rooms")
     page = r.get_data(as_text=True)
-    assert r.status_code == 200
-    assert f"Coming in a later slice (Guild 1.1 slice {slice_no}). Nothing here is wired yet." in page
+    assert r.status_code == 200 and "data-rm-composer" in page and "Coming in a later slice" not in page
     assert 'aria-current="page"' in _nav(page)
     for client in (staging.guest(), staging.client()):
-        assert client.get(path).status_code in (302, 403)
+        assert client.get("/guild-next/guild/rooms").status_code in (302, 403)
 
 
 def test_build_log_is_the_real_page_since_slice_2(staging):

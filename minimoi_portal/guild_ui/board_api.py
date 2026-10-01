@@ -251,6 +251,32 @@ def trash_empty():
     return _answer(done, value_key=key)
 
 
+# ── Take to a Room (Guild 1.1 slice 4, spec §6, §8, §11) ─────────────────────
+
+@owner_api
+def note_share(note_id: int):
+    """What Take to a Room shares: a stored, on-the-record note, by id only.
+    The answer is the note as the server keeps it; the browser then posts it
+    to the room through Records, under Records' own login. A request that
+    carries any text of its own is refused: nothing from the screen is ever
+    shared, and off the record nothing is answered at all (409)."""
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    if any(k in body for k in ("text", "body", "selection")):
+        return json_error("invalid", "Only a kept note's id can be taken to a Room, never text. Nothing was shared.",
+                          422)
+    try:
+        note = _floor().note_text(note_id)
+    except FloorStoreUnavailable as exc:
+        return _store_down(exc, {"unavailable": "Notes are unavailable right now — nothing was shared",
+                                 "not_configured": "Notes are not configured on this portal — nothing was shared"})
+    if note is None:
+        return json_error("not_found", "No kept, on-the-record note with that id. Nothing was shared.", 404)
+    note.pop("floor", None)
+    return jsonify({"result": "ok", "note": note, "observed_at": now_iso()})
+
+
 # ── the Media library ───────────────────────────────────────────────────────
 
 def _media():
@@ -446,6 +472,7 @@ RULES = [
     ("/postits/photo", "api_postit_photo", postit_photo, ["POST"]),
     ("/postits/reorder", "api_postits_reorder", postits_reorder, ["POST"]),
     ("/postits/trash/empty", "api_trash_empty", trash_empty, ["POST"]),
+    ("/notes/<int:note_id>/share", "api_note_share", note_share, ["POST"]),
     ("/media", "api_media", media_list, ["GET"]),
     ("/media", "api_media_upload", media_upload, ["POST"]),
     ("/media/<asset_id>/trash", "api_media_trash", media_trash, ["POST"]),

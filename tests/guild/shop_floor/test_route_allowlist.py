@@ -50,6 +50,8 @@ EXPECTED = {
     "/guild-next/api/v1/postits/photo",
     "/guild-next/api/v1/postits/reorder",
     "/guild-next/api/v1/postits/trash/empty",
+    # Guild 1.1 slice 4: Take to a Room (a kept note, by id only).
+    "/guild-next/api/v1/notes/<int:note_id>/share",
     "/guild-next/api/v1/media",
     "/guild-next/api/v1/media/<asset_id>/trash",
     "/guild-next/api/v1/media/<asset_id>/restore",

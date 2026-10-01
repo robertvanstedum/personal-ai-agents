@@ -253,7 +253,7 @@ def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict
     }
 
 
-_GUILD_API_PATH = re.compile(r"/guild[\w-]*/api/")
+_GUILD_API_PATH = re.compile(r"/guild[\w-]*/api/|/app/records/")   # Rooms bodies too (slice 4)
 
 
 def sentry_before_send(event, hint=None):

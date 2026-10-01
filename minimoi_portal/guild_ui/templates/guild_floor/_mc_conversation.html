@@ -70,11 +70,11 @@
   </ol>
   {% if page_id == 'floor' %}
   {# Selection actions (Guild 1.1 slice 1): shown only on the record, for text
-     inside one kept message (js/selection.js). Rooms arrive in slice 4. #}
+     inside one kept message (js/selection.js). Take to a Room shares the stored note by id (slice 4). #}
   <div class="sel-bar" data-sel-bar role="toolbar" aria-label="Selected text" hidden>
     <span class="sel-label">Selection</span>
     <button type="button" class="sel-act" data-sel-pin>Pin to Board</button>
-    <button type="button" class="sel-act" data-sel-room disabled title="Rooms arrive in a later slice">Take to a Room<span class="visually-hidden"> (coming in a later slice)</span></button>
+    <button type="button" class="sel-act" data-sel-room title="Share this kept message into a Room (the whole stored note, by its id)">Take to a Room</button>
     <span class="sel-result" data-sel-result role="status" hidden></span>
   </div>
   {% endif %}

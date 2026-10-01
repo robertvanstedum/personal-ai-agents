@@ -155,19 +155,6 @@ def home():
                            user=c["current_user"](), doors=doors)
 
 
-LATER = {
-    "rooms": {"title": "Rooms", "slice": 4,
-              "what": "Group conversations with files, where you can bring Master Craftsman and other "
-                      "agents together."},
-}
-
-
-def _later(page_id: str):
-    info = LATER[page_id]
-    ctx = _context(page_id, info["title"], info["title"])
-    return render_template("guild_floor/later.html", later=info, **ctx)
-
-
 @owner_page
 def build_log():
     """The Build Log (Guild 1.1 slice 2, spec §4.1): every item in every status
@@ -189,8 +176,16 @@ def build_log():
 
 @owner_page
 def rooms():
-    """Rooms: coming in slice 4. Nothing here pretends to work."""
-    return _later("rooms")
+    """Rooms (Guild 1.1 slice 4, spec §6): group chat first, on Records. The
+    page talks to Records only through the dev bridge at /app/records/api/,
+    with Records' own login; it never holds a Records credential. When the
+    bridge is not installed here, it says so."""
+    from flask import current_app
+    bridge = current_app.extensions.get("records_bridge") or {"state": "off_not_dev"}
+    ctx = _context("rooms", "Rooms", "Rooms", page_open=True)
+    rooms_cfg = {"state": bridge.get("state"), "api": "/app/records/api", "login": "/app/records/",
+                 "max_bytes": 2_000_000, "take": request.args.get("take", type=int)}
+    return render_template("guild_floor/rooms.html", rooms_cfg=rooms_cfg, **ctx)
 
 
 @owner_page

@@ -196,6 +196,11 @@ for w in cos-bot cos-scheduler; do mkdir -p "$STAGING_ROOT/data/usage/$w"; done
 # Back it up together with the database's guild and media schemas.
 mkdir -p "$STAGING_ROOT/data/media"
 chmod 700 "$STAGING_ROOT/data/media"
+# Rooms (Guild 1.1 slice 4): Records' SQLite file and its private key files,
+# bind-mounted into minimoi-records at /data (scripts/staging/records.sh).
+# Records refuses a folder that is not owner-private.
+mkdir -p "$STAGING_ROOT/data/records"
+chmod 700 "$STAGING_ROOT/data/records"
 {
   echo "sha=$FULL_SHA"
   echo "tag=$SHA"

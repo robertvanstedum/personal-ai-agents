@@ -110,7 +110,8 @@ def test_staging_gateway_is_permanently_on_the_internal_mc_net():
 
 # Staging-only portal settings added after main, compared by their own tests:
 # the Systems light's URL for the Mac's native Operations agent.
-STAGING_ONLY_ENV = {"GUILD_OPERATIONS_STATUS_URL"}
+STAGING_ONLY_ENV = {"GUILD_OPERATIONS_STATUS_URL",
+                    "RECORDS_BACKEND"}      # Rooms' internal Records origin (Guild 1.1 slice 4)
 
 
 def _staging_render(files):
@@ -165,6 +166,9 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
                               if v["target"] not in usage_targets or v["target"] in targets_b]
             if not out["volumes"] and "volumes" not in before_svc:
                 del out["volumes"]
+        # Rooms' internal network (Guild 1.1 slice 4), which main does not have yet.
+        if "networks" in out and "records-net" not in (before_svc.get("networks") or {}):
+            out["networks"] = {k: v for k, v in out["networks"].items() if k != "records-net"}
         return out
 
     for name in before["services"]:
@@ -459,7 +463,7 @@ def test_the_portal_holds_only_the_relay_caller_token_and_the_switches_default_o
     assert env["MC_RUNTIME_URL"] == "http://mc-relay:8790/v1"
     assert env["MC_RUNTIME_TOKEN"] == "${MC_RELAY_TOKEN:-}"
     assert "MC_OPENCLAW_GATEWAY_TOKEN" not in STAGING.read_text()
-    assert portal["networks"] == ["default", "iotconnect-edge", "mc-front"]
+    assert portal["networks"] == ["default", "iotconnect-edge", "mc-front", "records-net"]   # + Rooms (slice 4)
     assert staging["networks"]["mc-front"]["internal"] is True
     assert "MC_RUNTIME" not in PROD.read_text() and "MINIMOI_GUILD_MC" not in PROD.read_text()
 

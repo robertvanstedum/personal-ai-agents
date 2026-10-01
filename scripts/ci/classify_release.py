@@ -64,7 +64,9 @@ def _is_release_only(path: str) -> bool:
 # until the production MC spec. tests/test_release_classifier.py fails if
 # deploy.yml, the deploy script or docker-compose.prod.yml starts using them,
 # so that change must classify them as a real production service.
-DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent")
+DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent",
+                    # Records (Rooms) runs only in its own staging project (Guild 1.1 slice 4).
+                    "docker/Dockerfile.records", "docker/requirements.records.txt")
 
 
 # The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).
@@ -81,6 +83,8 @@ STAGING_ONLY_FILES = frozenset({
     "docker-compose.staging-cos-key.yml",
     # The CoS turn log mount (Spec 160 path (a)), staging only.
     "docker-compose.staging-cos-turns.yml",
+    # Records (Rooms)' own Compose project (Guild 1.1 slice 4), staging only.
+    "docker-compose.records.yml",
     "services/model_gateway/litellm.staging.yaml",
 })
 STAGING_ONLY_PREFIXES = ("scripts/staging/",)

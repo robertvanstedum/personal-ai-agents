@@ -7,6 +7,7 @@ from io import BytesIO
 import json
 import logging
 from pathlib import Path
+import re
 from urllib.parse import urlsplit
 
 from flask import Flask, g, jsonify, request, send_file, session
@@ -16,7 +17,22 @@ from store import Problem, Store
 from platform_access import AccessError, request_credential, request_operation
 
 
-def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False):
+def configured_hosts(value):
+    """Extra exact Host values (host:port) this app answers, from
+    RECORDS_ALLOWED_HOSTS: for the staging container behind the portal bridge
+    (for example minimoi-records:18880). Each must be a plain lowercase
+    hostname with a port; anything else refuses to start."""
+    hosts=set()
+    for item in (value or "").split(","):
+        item=item.strip()
+        if not item: continue
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,62}:[0-9]{2,5}",item):
+            raise ValueError("RECORDS_ALLOWED_HOSTS takes exact host:port values")
+        hosts.add(item)
+    return hosts
+
+
+def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False, allowed_hosts=None):
     app=Flask(__name__,static_folder="static",static_url_path="/static")
     store=Store(data_dir)
     app.config.update(SECRET_KEY=store.session_key,MAX_CONTENT_LENGTH=3_000_000,
@@ -37,7 +53,9 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
     from coordination import Coordination
     coordination=Coordination(store)
     app.extensions["coordination"]=coordination
-    allowed_hosts={f"127.0.0.1:{port}",f"localhost:{port}"}
+    import os
+    extra_hosts=configured_hosts(os.environ.get("RECORDS_ALLOWED_HOSTS")) if allowed_hosts is None else set(allowed_hosts)
+    allowed_hosts={f"127.0.0.1:{port}",f"localhost:{port}"}|extra_hosts
     if testing: allowed_hosts.add("localhost")
 
     @app.before_request
@@ -295,6 +313,8 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir",required=True)
     parser.add_argument("--port",type=int,default=18880)
+    parser.add_argument("--host",default="127.0.0.1",choices=["127.0.0.1","0.0.0.0"],
+                        help="0.0.0.0 only inside the staging container, on its internal network with no host port")
     parser.add_argument("--ui-preview",action="store_true",
                         help="Also serve the simulated-data UI preview at /preview/ (no login, no store reads)")
     args=parser.parse_args()
@@ -305,4 +325,4 @@ if __name__=="__main__":
     print(f"Access key file: {application.extensions['records_store'].root/'owner-key.txt'}",flush=True)
     # Avoid recording paths/search terms or request bodies in general access logs.
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    application.run(host="127.0.0.1",port=args.port,debug=False,use_reloader=False,threaded=True)
+    application.run(host=args.host,port=args.port,debug=False,use_reloader=False,threaded=True)

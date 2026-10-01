@@ -101,11 +101,14 @@ class BoardMixin:
         """A stored, on-the-record note on this floor or one of its
         conversations (``<floor>/<id>``), by id: {id, text, floor}, or None."""
         def work(q):
-            rows = q("SELECT id, text, floor, record_mode FROM guild.floor_messages WHERE id = %s "
+            rows = q("SELECT id, text, floor, record_mode, author_label, author_kind, created_at "
+                     "FROM guild.floor_messages WHERE id = %s "
                      "AND (floor = %s OR floor LIKE %s)", [int(note_id), self.floor, f"{self.floor}/%"])
             if not rows or rows[0][3] != "on_record":
                 return None
-            return {"id": int(rows[0][0]), "text": rows[0][1], "floor": rows[0][2]}
+            r = rows[0]
+            return {"id": int(r[0]), "text": r[1], "floor": r[2], "author_label": r[4], "author_kind": r[5],
+                    "created_at": S.iso(r[6])}
         return self._run(work, write=False)
 
     # ── one-post-it changes behind its version ───────────────────────────

@@ -45,16 +45,17 @@ def test_the_chat_hero_images_are_same_origin_and_exist():
         assert (REPO / "minimoi_portal/static/guild" / name).stat().st_size > 1000
 
 
-def test_selection_actions_are_on_the_record_only_and_rooms_is_disabled(staging):
+def test_selection_actions_are_on_the_record_only_and_rooms_takes_a_note_id(staging):
     page = _floor(staging)
     bar = page[page.index("data-sel-bar"):]
     bar = bar[:bar.index("</div>")]
     assert "hidden" in bar.split(">", 1)[0]                                      # hidden until text is selected
     assert "data-sel-pin>Pin to Board<" in bar
-    assert re.search(r"data-sel-room disabled[^>]*>Take to a Room", bar)
+    assert re.search(r"data-sel-room [^>]*>Take to a Room", bar) and "data-sel-room disabled" not in bar   # slice 4
     js = (REPO / "minimoi_portal/guild_ui/static/js/selection.js").read_text()
     assert "live.off || !live.known" in js and "removeAllRanges" in js
     assert "li[data-kind=\"note\"][data-note]" in js                            # stored notes only
+    assert "?take=${encodeURIComponent(current.noteId)}" in js                     # Take to a Room: the note id only
     css = (REPO / "minimoi_portal/guild_ui/static/components.css").read_text()
     assert 'body.gu[data-off-record="true"] .sel-bar' in css
     for other in ("/guild-next/guild/build/bench", "/guild-next/guild/operate"):
