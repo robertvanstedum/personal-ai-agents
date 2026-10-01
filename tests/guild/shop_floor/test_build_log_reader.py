@@ -80,3 +80,9 @@ def test_normalize_carries_the_new_fields(docs):
 def test_a_bad_owner_rank_makes_only_that_row_unknown(bad):
     row = normalize({"id": 12, "spec_title": "R", "status": "design", "owner_rank": bad})
     assert row["status_known"] is False and "owner_rank" in row["field_problems"] and row["owner_rank"] is None
+
+
+def test_an_overlong_or_unreadable_spec_file_leaves_the_author_blank(tmp_path):
+    """#286 review: is_file() can raise (name too long, unreadable dir); never a 500."""
+    from minimoi_portal.guild_ui.adapters import spec_author
+    assert spec_author.resolve("x" * 300 + ".md", docs_root=tmp_path) is None

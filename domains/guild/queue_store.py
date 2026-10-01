@@ -164,25 +164,18 @@ def rank_digest(items: list) -> str:
 
 
 def shift_ranks(items: list, item_id: int, rank: int | None) -> dict[int, tuple]:
-    """The whole rank change as one operation: the target takes ``rank``, the
-    previous holder moves down one, and so on; whoever is pushed past 3 is
-    cleared. ``rank=None`` clears the target only. Returns {id: (before, after)}
-    for every item whose rank changes; mutates nothing."""
+    """The whole rank change as one operation on the ordered next-three list:
+    the target is taken out (wherever it was), inserted at position ``rank``,
+    and the list is renumbered 1..3 with no gaps; whoever falls past 3 is
+    cleared. Moving #1 to #3 therefore gives old #2 -> 1, old #3 -> 2.
+    ``rank=None`` removes the target and closes the gap. Returns
+    {id: (before, after)} for every item whose rank changes; mutates nothing."""
     current = {it["id"]: it["owner_rank"] for it in items
                if isinstance(it, dict) and isinstance(it.get("id"), int) and valid_rank(it.get("owner_rank"))}
-    after = dict(current)
-    after.pop(item_id, None)
+    order = [i for i, _ in sorted(current.items(), key=lambda kv: (kv[1], kv[0])) if i != item_id]
     if rank is not None:
-        mover, at = item_id, rank
-        while True:
-            holder = next((i for i, r in after.items() if r == at and i != mover), None)
-            after[mover] = at
-            if holder is None:
-                break
-            mover, at = holder, at + 1
-            if at > max(RANKS):
-                after.pop(mover, None)
-                break
+        order.insert(min(max(rank, 1), len(order) + 1) - 1, item_id)
+    after = {i: n + 1 for n, i in enumerate(order[:max(RANKS)])}
     changed = {}
     for i in set(current) | set(after):
         if current.get(i) != after.get(i):
