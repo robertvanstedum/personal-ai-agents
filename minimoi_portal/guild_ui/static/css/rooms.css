@@ -81,6 +81,7 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
   .rm-thread { padding: var(--gu-s3) 10px; }
   .rm-composer { margin: 0 8px 8px; }
   .rm-mic-label { display: none; }
+  .rm-input { flex-basis: 110px; }
   .rm-btn { min-height: var(--gu-target-phone); }
   .rm-attach, .rm-mic, .rm-send { min-height: var(--gu-target-phone); }
   .rm-attach { width: var(--gu-target-phone); height: var(--gu-target-phone); }
