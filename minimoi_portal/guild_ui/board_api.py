@@ -325,7 +325,7 @@ def media_upload():
     try:
         item = sanitize(raw)
     except MediaRejected as exc:
-        return json_error({413: "too_large", 415: "unsupported", 422: "invalid"}.get(exc.status, "invalid"),
+        return json_error({413: "too_large", 415: "unsupported", 422: "invalid", 503: "busy"}.get(exc.status, "invalid"),
                           f"{exc.message} Nothing was added." if not exc.message.endswith("added.") else exc.message,
                           exc.status)
     try:

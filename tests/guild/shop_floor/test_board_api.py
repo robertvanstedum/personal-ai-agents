@@ -178,13 +178,15 @@ def test_a_pin_must_be_text_from_one_stored_on_the_record_note(board):
     ok = _post(client, token, "/postits", text="Build Log today", source_note_id=note["id"])
     assert ok.status_code == 200                                    # rendered selection vs stored Markdown
     for text, source in (("Ship it tomorrow", note["id"]), ("Somebody else", other["id"]), ("x", 999999),
-                         ("Build Log", True)):
+                         ("Build Log", True), ("B", note["id"]), ("to", note["id"]), (" ** ", note["id"])):
         r = _post(client, token, "/postits", text=text, source_note_id=source)
         assert r.status_code == 422, (text, source)
     conv_note = board.extra["floor"].store("guild/c-0123456789ab").add_note("note-pin-0003", "From a conversation",
                                                                              ROBERT).value
     assert _post(client, token, "/postits", text="a conversation", source_note_id=conv_note["id"]).status_code == 200
-    assert len(_board(client)["active"]) == 2
+    short = board.extra["floor"].store().add_note("note-pin-0004", "OK", ROBERT).value
+    assert _post(client, token, "/postits", text="OK", source_note_id=short["id"]).status_code == 200  # the whole note
+    assert len(_board(client)["active"]) == 3
 
 
 # ── the Media library ───────────────────────────────────────────────────────

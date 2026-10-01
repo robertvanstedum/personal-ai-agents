@@ -225,6 +225,39 @@ def test_placing_a_trashed_purged_or_foreign_asset_is_refused(board):
     assert state(board)["active"] == []
 
 
+
+def test_a_malformed_asset_id_is_not_found_without_touching_the_database(board):
+    """#287 F7: on Postgres the uuid cast used to fail as a 503."""
+    for bad in ("not-a-uuid", "", "1234", "../etc"):
+        assert board.floor.add_photo(bad, board.owner, None, board.author, idempotency_key=key()).outcome == "not_found"
+    assert state(board)["active"] == []
+
+
+def test_placing_a_photo_locks_the_board_before_the_asset_like_restore_does(board, monkeypatch):
+    """#287 F1: placement and restore of the same photo took the two row locks
+    in opposite orders and could deadlock on Postgres."""
+    asset = _asset(board)
+    order, run = [], type(board.floor)._run
+    original_meta = type(board.floor)._meta
+
+    def meta(self, q):
+        order.append("meta")
+        return original_meta(self, q)
+
+    def recording_run(self, work, *, write):
+        def wrap(q):
+            def rq(sql, params=()):
+                if "FROM media.assets" in sql:
+                    order.append("asset")
+                return q(sql, params)
+            return work(rq)
+        return run(self, wrap, write=write)
+
+    monkeypatch.setattr(type(board.floor), "_meta", meta)
+    monkeypatch.setattr(type(board.floor), "_run", recording_run)
+    assert board.floor.add_photo(asset["id"], board.owner, None, board.author, idempotency_key=key()).outcome == "added"
+    assert order.index("meta") < order.index("asset")
+
 def test_concurrent_placement_and_purge_never_leave_a_broken_placement(board):
     """R6: race a placement against a trash-then-purge many times; the end
     state is always either a placement with a live asset, or no placement."""

@@ -17,8 +17,9 @@ outcome; the same key for another change is refused.
   ``conflict`` that deletes nothing. It deletes exactly those rows, releases
   their media references, keeps a purge receipt under the idempotency key,
   and a retry returns that receipt.
-* Photos: placing one locks the media asset row, so a placement can never
-  race a library purge, and refuses an asset in the library Trash.
+* Photos: placing one locks the board meta row, then the media asset row
+  (the order restore uses too), so a placement can never race a library
+  purge or deadlock a restore, and refuses an asset in the library Trash.
 
 On SQLite (the tests) the transaction takes the write lock at its start
 (stores._run), which serialises the same check-then-write.
@@ -26,6 +27,7 @@ On SQLite (the tests) the transaction takes the write lock at its start
 from __future__ import annotations
 
 import hashlib
+import uuid
 import json
 
 from . import stores as S
@@ -178,9 +180,15 @@ class BoardMixin:
         """Place a library photo on the Board. The asset row is locked first:
         not found or not the owner's -> not_found; purged -> gone; in the
         library Trash -> asset_trashed (new placements are refused there).
-        The reference is created in the same transaction."""
+        The reference is created in the same transaction. Lock order is the
+        Board meta row first, then the asset row, the same as restore, so a
+        placement and a restore of the same photo cannot deadlock."""
         now = S.utc_now()
         text = (caption or "").strip() or "Photo"
+        try:
+            uuid.UUID(str(asset_id))
+        except ValueError:
+            return S.WriteResult("not_found", None, False)   # never reaches Postgres's uuid cast
 
         def work(q):
             prior = self._claim(q, idempotency_key, by.id, "postit.photo", f"{asset_id}:{text}", now)
@@ -189,6 +197,7 @@ class BoardMixin:
                     return S.WriteResult("idempotency_mismatch", None, True)
                 return S.WriteResult(prior["outcome"], self._postit_by_id(q, prior["ref"]) if prior["ref"] else None,
                                      True)
+            self._meta(q)
             rows = q(f"SELECT owner, kind, trashed_at, purged_at FROM media.assets WHERE id = %s{self._for_update}",
                      [str(asset_id)])
             if not rows or rows[0][0] != owner or rows[0][1] == "emoji":
@@ -202,7 +211,6 @@ class BoardMixin:
             if outcome:
                 self._settle(q, idempotency_key, outcome, None)
                 return S.WriteResult(outcome, None, False)
-            self._meta(q)
             rows = q(f"INSERT INTO guild.floor_postits (floor, text, author, author_kind, author_label, created_at, "
                      f"kind, asset_id) VALUES (%s, %s, %s, %s, %s, %s, 'photo', %s) RETURNING {S._POSTIT_COLS}",
                      [self.floor, text, by.id, by.kind, by.label, now, str(asset_id)])

@@ -556,6 +556,19 @@ def _skeleton(text: str) -> str:
     return " ".join("".join(ch if ch.isalnum() else " " for ch in text.lower()).split())
 
 
+PIN_MIN_CHARS = 3
+
+
+def _pinned_from(selection: str, note_text: str) -> bool:
+    """The pinned text is part of the note: its skeleton appears in the note's,
+    and it has at least PIN_MIN_CHARS letters or digits (or is the whole note),
+    so a stray letter or two cannot pass as a quote."""
+    part, whole = _skeleton(selection), _skeleton(note_text)
+    if not part or part not in whole:
+        return False
+    return len(part.replace(" ", "")) >= PIN_MIN_CHARS or part == whole
+
+
 PIN_REFUSED = ("Not pinned: the pinned text must come from one kept, on-the-record message. Select text inside "
                "a single message and try again. Nothing was changed.")
 
@@ -587,7 +600,7 @@ def postit_add():
             if isinstance(source, bool) or not isinstance(source, int) or source <= 0:
                 return json_error("invalid", PIN_REFUSED, 422)
             note = _floor().note_text(source)
-            if note is None or not _skeleton(text) or _skeleton(text) not in _skeleton(note["text"]):
+            if note is None or not _pinned_from(text, note["text"]):
                 return json_error("not_from_note", PIN_REFUSED, 422)
         done = _floor().add_postit(text, _author(), idempotency_key=body["_key"], label=label, item_ref=item_ref)
     except FloorStoreUnavailable as exc:
