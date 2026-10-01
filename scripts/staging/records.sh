@@ -20,9 +20,15 @@
 #                         files 600) with the relay caller token from mc.env;
 #                         no value is printed. Refuses if the folder has tokens.
 #   records.sh preflight  read-only build gate: MC's effective tools (from its
-#                         running gateway) are session_status only; real connection
-#                         attempts prove the worker reaches only Records and the
-#                         relay; no published port on Records, worker, MC, relay
+#                         running gateway) are session_status only; from inside the
+#                         containers, Records and the relay answer (positive
+#                         controls) while MC, the gateway and Postgres neither
+#                         resolve by name nor answer at their own IP addresses,
+#                         alongside the declared network attachments (a probe that
+#                         fails to run never passes); the worker holds no portal
+#                         URL, credential or code (it shares records-net and
+#                         mc-front with the portal by design); no published port
+#                         on Records, worker, MC or relay
 #   records.sh down       stop and remove both containers (data and journal kept)
 #   records.sh status     state and health of both
 #
@@ -144,20 +150,65 @@ case "$cmd" in
     check "mc-agent networks" "$(nets minimoi-mc-agent)" "minimoi-staging-mc-net"
     for c in "$WORKER_CONTAINER" "$RECORDS_CONTAINER" minimoi-mc-agent minimoi-mc-relay; do check "$c published ports" "$(ports "$c")" "{}"; done
     check "rooms-worker read-only root" "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$WORKER_CONTAINER" 2>/dev/null)" "true"
-    probe() {   # container, url -> HTTP status, or "unreachable"
+    # One probe run inside a container. Outcomes are exact: an HTTP status,
+    # "nxdomain" (the name did not resolve), "refused", "timeout", "no_route"
+    # (the kernel had no route to that address), or "probe_error:..." /
+    # "exec_failed" (the probe itself did not run). No single negative outcome
+    # is called isolation: each forbidden path is judged on three observations
+    # together, declared attachments (above), name resolution, and a direct
+    # connection attempt to the service's own IP address.
+    probe() {
       docker exec "$1" python -c "
-import sys, urllib.request as u
+import errno, socket, sys, urllib.error, urllib.request as u
+url = sys.argv[1]; host = url.split('/')[2].split(':')[0]
 try:
-    print(u.urlopen(sys.argv[1], timeout=4).status)
+    socket.getaddrinfo(host, None)
+except socket.gaierror:
+    print('nxdomain'); sys.exit(0)
+try:
+    print(u.urlopen(url, timeout=4).status)
+except urllib.error.HTTPError as e:
+    print(e.code)
+except urllib.error.URLError as e:
+    r = e.reason
+    if isinstance(r, ConnectionRefusedError): print('refused')
+    elif isinstance(r, (TimeoutError, socket.timeout)): print('timeout')
+    elif isinstance(r, OSError) and r.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH): print('no_route')
+    else: print('probe_error:' + type(r).__name__)
+except (TimeoutError, socket.timeout):
+    print('timeout')
+except OSError as e:
+    print('no_route' if e.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH) else 'probe_error:' + type(e).__name__)
 except Exception as e:
-    print(getattr(e, 'code', None) or 'unreachable')" "$2" 2>/dev/null || echo unreachable
+    print('probe_error:' + type(e).__name__)" "$2" 2>/dev/null || echo exec_failed
     }
-    check "worker -> Records /health" "$(probe "$WORKER_CONTAINER" http://minimoi-records:18880/health)" "200"
-    check "worker -> MC relay /healthz" "$(probe "$WORKER_CONTAINER" http://mc-relay:8790/healthz)" "200"
-    check "worker -> MC itself (must be unreachable)" "$(probe "$WORKER_CONTAINER" http://mc-agent:18789/healthz)" "unreachable"
-    check "worker -> model gateway (must be unreachable)" "$(probe "$WORKER_CONTAINER" http://model-gateway:4000/health)" "unreachable"
-    check "worker -> portal (must be unreachable)" "$(probe "$WORKER_CONTAINER" http://minimoi-portal:5001/health)" "unreachable"
-    check "Records -> MC relay (must be unreachable)" "$(probe "$RECORDS_CONTAINER" http://mc-relay:8790/healthz)" "unreachable"
+    ip_on() { docker inspect -f "{{with index .NetworkSettings.Networks \"$2\"}}{{.IPAddress}}{{end}}" "$1" 2>/dev/null; }
+    forbidden() {   # label, from-container, by-name URL, target container, target network, port, path
+      local name addr ip
+      name=$(probe "$2" "$3")
+      ip=$(ip_on "$4" "$5")
+      if [[ -z "$ip" ]]; then echo "FAIL $1: could not read $4's address on $5"; bad=1; return; fi
+      addr=$(probe "$2" "http://$ip:$6$7")
+      if [[ "$name" == nxdomain && ( "$addr" == timeout || "$addr" == no_route ) ]]; then
+        echo "PASS $1: name not resolvable, address $ip not reachable ($addr)"
+      else
+        echo "FAIL $1: by name [$name], by address $ip [$addr]; expected nxdomain and timeout/no_route"; bad=1
+      fi
+    }
+    # Positive controls first: they prove the probe runs and the allowed paths work.
+    check "worker -> Records /health (allowed)" "$(probe "$WORKER_CONTAINER" http://minimoi-records:18880/health)" "200"
+    check "worker -> MC relay /healthz (allowed)" "$(probe "$WORKER_CONTAINER" http://mc-relay:8790/healthz)" "200"
+    forbidden "worker -> MC itself" "$WORKER_CONTAINER" http://mc-agent:18789/healthz minimoi-mc-agent minimoi-staging-mc-net 18789 /healthz
+    forbidden "worker -> model gateway" "$WORKER_CONTAINER" http://model-gateway:4000/health minimoi-model-gateway minimoi-staging-mc-net 4000 /health
+    forbidden "worker -> Postgres" "$WORKER_CONTAINER" http://postgres:5432/ postgres-ai-agents minimoi-staging_default 5432 /
+    forbidden "Records -> MC relay" "$RECORDS_CONTAINER" http://mc-relay:8790/healthz minimoi-mc-relay minimoi-staging-mc-front 8790 /healthz
+    # The portal shares records-net and mc-front with the worker by design
+    # (ROOMS_R1.md §3.8): the boundary is that the worker holds no portal URL,
+    # credential or code, not a network wall. Checked here, not probed.
+    wenv=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$WORKER_CONTAINER" 2>/dev/null | grep -ci "portal\|5001\|dev.minimoi" || true)
+    check "worker environment names no portal" "$wenv" "0"
+    wcode=$(docker exec "$WORKER_CONTAINER" sh -c 'grep -rl "minimoi_portal" /app 2>/dev/null | wc -l' 2>/dev/null | tr -d ' ' || echo exec_failed)
+    check "worker image holds no portal code" "$wcode" "0"
     [[ "$bad" == 0 ]] || die "preflight failed" ;;
   down)
     records_compose down ;;
@@ -168,5 +219,5 @@ except Exception as e:
     done
     worker_ready && echo "rooms-worker secrets: provisioned" || echo "rooms-worker secrets: not provisioned (records.sh provision)" ;;
   *)
-    sed -n '2,34p' "$0"; exit 2 ;;
+    sed -n '2,40p' "$0"; exit 2 ;;
 esac

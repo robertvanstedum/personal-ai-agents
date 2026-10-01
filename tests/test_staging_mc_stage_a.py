@@ -534,3 +534,15 @@ def test_records_sh_provisions_privately_and_never_prints_a_token():
     assert "echo \"$relay\"" not in provision and "cat " not in provision
     assert "--volumes" in text and "refusing" in text                     # never removes data
     assert "records_compose up -d --no-build records" in text            # Records alone until provisioned
+
+
+def test_records_preflight_never_counts_a_failed_probe_as_isolation():
+    """Codex final check: no portal-unreachable claim (shared networks by design);
+    each forbidden path needs attachment, name and address observations together."""
+    text = (SCRIPTS / "records.sh").read_text()
+    pre = text[text.index("  preflight)"):text.index("  down)")]
+    assert "unreachable" not in pre.replace("not reachable", "")
+    assert 'echo exec_failed' in pre and "probe_error:" in pre
+    assert pre.count('forbidden "') == 4 and 'nxdomain && ( "$addr" == timeout || "$addr" == no_route )' in pre
+    assert "(allowed)\" \"$(probe" in pre                                  # positive controls run first
+    assert "minimoi-portal:5001" not in pre and "worker environment names no portal" in pre
