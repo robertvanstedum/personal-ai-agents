@@ -1,7 +1,7 @@
-# Rooms R3 — the team, addressed rounds, and the incident door · specification v0.2 (review draft)
+# Rooms R3 — the team, addressed rounds, and the incident door · specification v0.3 (review draft)
 
-**Edition:** v0.2 · 1 October 2026 · **Author:** Claude Code (sole implementation editor) · **Reviewer:** Codex (independent) · **Decision owner:** Robert
-**Status:** draft for Codex's review before any wiring. Robert authorized R3 on dev "if its prerequisites pass" (1 October 2026). Production, main merges, paid live proofs, new cloud services and account changes keep their gates. Builds on [R1](ROOMS_R1.md) v0.5.1 and [R2](ROOMS_R2.md) v0.2 (draft). v0.2 answers Codex's review R3-01…R3-03 and its notes on R3c–R3e (§10).
+**Edition:** v0.3 · 1 October 2026 · **Author:** Claude Code (sole implementation editor) · **Reviewer:** Codex (independent) · **Decision owner:** Robert
+**Status:** draft for Codex's review before any wiring. Robert authorized R3 on dev "if its prerequisites pass" (1 October 2026). Production, main merges, paid live proofs, new cloud services and account changes keep their gates. Builds on [R1](ROOMS_R1.md) v0.5.1 and [R2](ROOMS_R2.md) v0.2 (draft). v0.2 answered Codex's review R3-01…R3-03; v0.3 answers its recheck R3-01b and two stale references (§10).
 
 ## 1. What R3 is
 
@@ -20,7 +20,11 @@ R1 §10 named R3: CoS once Agent A is bounded; everyone and name-list rounds; th
 
 - **Who answers.** `@everyone` (or `@all`) addresses every accepted teammate with a card and a connector, in the participant strip's order. A name list (`@MC @Claude`) addresses those, in the order written. One message, one round, at most one turn per teammate. Agent replies never start a turn (R1 rule kept); there is no agent-to-agent round.
 - **Order.** New table `turn_order(turn_id PK, round_id, position, waits_for, released_at, release_reason)`. A turn is claimable when the turn it waits for is terminal (committed, cancelled, superseded, expired, failed, abandoned), uncertain-and-reconciled, or **released by Records** (below). If an earlier teammate fails or is away, the round continues with the next and the status line says who was skipped and why.
-- **Records-owned release (R3-01).** A lost predecessor cannot strand the round: Records releases the dependency, inside `sweep()`, when the predecessor (a) is still `queued` 90 s after it became claimable (its teammate is away), or (b) is `uncertain` and unreconciled 120 s after its lease expired, or (c) is `running`/`recovering` past its absolute `expires`. Release never changes the predecessor: an uncertain turn stays uncertain with its saved-output and reconciliation rules; nothing is re-inferred; nothing is marked failed that did not fail. The successor's snapshot is fixed at its own claim and never rewritten. If the predecessor's saved reply is delivered later, it appears in the transcript labelled "answered later in this round" (a status-view label; the record itself is unchanged).
+- **Claimable time is recorded.** `turn_order` also stores `claimable_at`, set in the transaction that makes a position claimable (its predecessor ends or is released); a turn waiting behind another speaker accrues no away time.
+- **Records-owned release (R3-01, R3-01b).** A lost predecessor cannot strand the round, and a released predecessor can never run later. Inside `sweep()`, in one transaction each:
+  1. **Queued and away:** a predecessor still `queued` 90 s after its `claimable_at` is **cancelled** (`disposition='skipped_away'`). It never consumes a budget slot and can never be claimed later; the successor becomes claimable.
+  2. **Past its absolute expiry while `claimed`, `running` or `recovering`:** the turn is fenced with the existing protocol in the same transaction (`claimed` → `cancelled`; `running`/`recovering` → `cancel_requested`, disposition `round_deadline`), so no further dispatch or ordinary delivery passes R1's admission and fence; the successor becomes claimable. A worker acknowledgement or the R1 lease-expiry rule then ends it as `cancelled` with `stop_ack` recorded; nothing claims the provider stopped. The fence additionally refuses any agent post for a turn past its absolute `expires` (closing the gap where a renewed lease alone would pass).
+  3. **Uncertain and unreconciled 120 s after its lease expired:** the dependency is released; the turn stays `uncertain` with R1's saved-output and reconciliation rules. Recovery may deliver only an already-generated, journaled reply (no new inference); that reply appears labelled "answered later in this round". The successor's snapshot was fixed at its own claim and is never rewritten.
 - **Bounded context.** Earlier-round replies count inside R1's 40-record snapshot limit; the coverage field reports how many earlier-round replies are included and any omitted.
 - **Context.** A round turn's snapshot is the R1 snapshot (through `trigger_seq − 1`) plus the committed replies of earlier turns in the same round, attributed, labelled "earlier in this round". The trigger still appears once.
 - **Budget and window.** Each turn reserves one slot of the meeting's budget at its own claim (R1 rule). A round larger than the remaining budget is cut where the budget runs out; the cut turns end `cancelled {budget_exhausted}`.
@@ -51,7 +55,7 @@ Recommendation: option 1 as a **candidate**, not yet shown equivalent to MC's se
 
 ## 6. R3e — the direct door (blocked on an owner action)
 
-Records' loopback port from R2 (`127.0.0.1:18881`) is the door; a tunnel route for a hostname such as `rooms.dev.minimoi.ai` would publish it. Prerequisite 1 is R3b. **Prerequisite 2, the front-door control,** needs two things from Robert: approval to publish a new hostname under minimoi.ai, and either creating, or granting access to create, a Cloudflare Zero Trust Access application and policy for that hostname tied to his identity, in his Cloudflare account. Code, configuration and local negative tests can be prepared without publishing anything; no tunnel route or hostname is added, and the door is not exposed, until the access policy exists and a check shows an unauthenticated request stopped at the front door.
+R2's forwarding sidecar (`records-door`, published only on `127.0.0.1:18881`, forwarding only to Records) is the door; a tunnel route for a hostname such as `rooms.dev.minimoi.ai` would publish it. Prerequisite 1 is R3b. **Prerequisite 2, the front-door control,** needs two things from Robert: approval to publish a new hostname under minimoi.ai, and either creating, or granting access to create, a Cloudflare Zero Trust Access application and policy for that hostname tied to his identity, in his Cloudflare account. Code, configuration and local negative tests can be prepared without publishing anything; no tunnel route or hostname is added, and the door is not exposed, until the access policy exists and a check shows an unauthenticated request stopped at the front door.
 
 ## 7. Out of scope
 
@@ -59,11 +63,11 @@ Voice, a second human, cost reporting, tools from meeting turns, laptop-off cont
 
 ## 8. Tests (no model call)
 
-R3a: order, waits-for, skip on failure or away, budget cut, round snapshot contents and attribution, pause and stop mid-round, new message supersedes only unclaimed round turns, agent replies start nothing, UI round line. R3b: listed in §3, plus the baseline-code rollback test still passing. R3c: negative tests in the private fix. Export: round replies validate under transcript 1.1 unchanged.
+R3a: order, waits-for, skip on failure or away, budget cut, round snapshot contents and attribution, pause and stop mid-round, new message supersedes only unclaimed round turns, agent replies start nothing, UI round line; and the three R3-01b cases: a skipped queued teammate whose connector returns while its successor runs starts nothing; an expired predecessor that still heartbeats or posts is fenced; an uncertain predecessor that recovers after its successor's claim delivers one labelled saved reply, with no repeat inference and the successor's snapshot unchanged. R3b: listed in §3, plus the baseline-code rollback test still passing. R3c: negative tests in the private fix. Export: round replies validate under transcript 1.1 unchanged.
 
 ## 9. Gates
 
-G-R3-0 Codex rechecks this draft. G-R3-1 R3a–R3c built, tests green, Codex reviews the frozen diff. G-R3-2 live rounds wait for R2's owner-approved live turns. R3d waits for Robert's choice; R3e for his front-door setup; R3f for both plus R2 live.
+G-R3-0 Codex rechecks this draft. G-R3-1 R3a–R3c built, tests green, Codex reviews the frozen diff. G-R3-2 live rounds wait for R2's owner-approved live turns. R3d waits for its boundary evidence and Robert's choice; R3e for his front-door setup; R3f needs R2's owner-approved live turns, R3a, R3b and R3e (the table's list; CoS is not part of R3f).
 
 ## 10. Finding map (v0.2)
 
@@ -75,3 +79,5 @@ G-R3-0 Codex rechecks this draft. G-R3-1 R3a–R3c built, tests green, Codex rev
 | R3c note | concrete private patch reviewed privately before any merge |
 | R3d note | option 1 is a candidate pending boundary evidence; parked |
 | R3e note | the specific owner approvals and account access named; no exposure before the check |
+| R3-01b released turn could still start | §2: queued-away release cancels the turn (`skipped_away`, no slot, never claimable); expiry release fences dispatch and delivery in the same transaction, and the fence refuses posts past absolute expiry; uncertain release allows only saved-reply delivery, labelled; `claimable_at` recorded; three tests in §8 |
+| Stale references | §6 names R2's forwarding sidecar; §9 uses the table's R3f dependency list |
