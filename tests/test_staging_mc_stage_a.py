@@ -585,3 +585,29 @@ def test_records_sh_starts_the_door_only_once_the_connector_is_provisioned():
     assert "connector_ready && grep -q \"records-door:\"" in text
     pre = text[text.index("  preflight)"):text.index("  down)")]
     assert '"HostIp":"127.0.0.1","HostPort":"18881"' in pre and 'curl exit 7 = connection refused' in pre
+
+
+# ── Rooms R3b review B3-01: key rotation only on a proven stop ───────────────
+
+@pytest.mark.parametrize("case,expect_rotated", [("stopped", True), ("absent", True), ("running", False), ("error", False)])
+def test_rotate_session_key_needs_a_successful_docker_answer(tmp_path, case, expect_rotated):
+    root = tmp_path / "staging"
+    data = root / "data" / "records"
+    data.mkdir(parents=True)
+    key = data / "session-key.txt"
+    key.write_text("old-key\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    replies = {"stopped": "echo false", "running": "echo true",
+               "absent": "echo 'error: no such object: minimoi-records' >&2; exit 1",
+               "error": "echo 'failed to connect to the docker API' >&2; exit 1"}
+    (bin_dir / "docker").write_text(f"#!/bin/sh\n{replies[case]}\n")
+    (bin_dir / "docker").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "STAGING_ROOT": str(root)}
+    out = subprocess.run(["bash", str(SCRIPTS / "records.sh"), "rotate-session-key"], env=env,
+                         capture_output=True, text=True)
+    rotated = key.read_text() != "old-key\n"
+    assert rotated == expect_rotated, (case, out.stdout, out.stderr)
+    assert (out.returncode == 0) == expect_rotated
+    if case == "error":
+        assert "nothing rotated" in out.stderr
