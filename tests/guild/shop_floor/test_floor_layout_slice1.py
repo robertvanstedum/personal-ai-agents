@@ -1,10 +1,12 @@
 """Guild 1.1 dev, slice 1: the Shop floor layout (Robert, September 29).
-Desktop: history | clean chat | the Build card and live context; Needs you in
-one place; a quiet rail; chat blockers above the composer; the status strip
-low; post-its on the wall; coherent navigation. Server side; the browser side
-is in browser_checks_b1.py."""
+Desktop: history | clean chat | live context; Needs you in one place; a quiet
+rail; chat blockers above the composer; the status strip low; post-its on the
+wall. Guild 1.1 slice 1 (spec §3) moved the hero into the chat header; the
+navigation is in test_guild_nav.py. Server side; the browser side is in
+browser_checks_b1.py."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
@@ -19,17 +21,44 @@ def _floor(staging):
     return staging.owner().get("/guild-next/guild/build").get_data(as_text=True)
 
 
-def test_the_floor_is_history_chat_and_the_build_card_rail(staging):
+def test_the_floor_is_history_chat_and_context_with_the_hero_in_the_chat_header(staging):
+    # Guild 1.1 slice 1 (spec §3, v4 design): the hero moved from the rail's
+    # Build card into the chat's header; there is no hero chooser.
     page = _floor(staging)
     assert page.count('class="fh-row"') == 1                                   # one real thread, no fake rows
     assert "Shop floor thread" in page
-    assert 'data-build-card' in page and ">Build<" in page and "spec → build → ship" in page
-    for label, href in (("Queue", "/guild-next/guild/build/queue"), ("Log", "/guild/build"),
-                        ("Roadmap", "/guild/build/roadmap"), ("Docs", "/guild/docs")):
-        assert f'<a href="{href}">{label}</a>' in page, label
-    assert '<link rel="stylesheet" href="/static/guild/guild-card.css">' in page
+    assert page.count("data-chat-hero") == 1 and 'class="mc-floorbar mc-hero"' in page
+    assert '<h1 class="hero-name">Master Craftsman' in page and 'class="hero-portrait"' in page
+    assert page.count("data-mc-header") == 1                                     # the state is in the hero only
+    assert "data-build-card" not in page and "data-build-strip" not in page    # no second hero
+    assert "guild-card.css" not in page and "data-floor-hero" not in page
+    assert not re.search(r"hero[-_ ]?(chooser|picker|option)|data-hero=", page)
     assert 'data-mode="rail"' not in page and "data-postit=" not in page        # no post-it stack on the floor
+    assert page.index('data-chat-hero') < page.index('data-mc-thread')         # the header above the thread
     assert page.index('data-layout') < page.index('data-zone="status"')          # the strip is low on the page
+
+
+def test_the_chat_hero_images_are_same_origin_and_exist():
+    css = (REPO / "minimoi_portal/guild_ui/static/components.css").read_text()
+    for name in ("guild-chat-hero.jpg", "guild-mc-portrait.jpg"):
+        assert f"url('/static/guild/{name}')" in css
+        assert (REPO / "minimoi_portal/static/guild" / name).stat().st_size > 1000
+
+
+def test_selection_actions_are_on_the_record_only_and_rooms_is_disabled(staging):
+    page = _floor(staging)
+    bar = page[page.index("data-sel-bar"):]
+    bar = bar[:bar.index("</div>")]
+    assert "hidden" in bar.split(">", 1)[0]                                      # hidden until text is selected
+    assert "data-sel-pin>Pin to Board<" in bar
+    assert re.search(r"data-sel-room disabled[^>]*>Take to a Room", bar)
+    js = (REPO / "minimoi_portal/guild_ui/static/js/selection.js").read_text()
+    assert "live.off || !live.known" in js and "removeAllRanges" in js
+    assert "li[data-kind=\"note\"][data-note]" in js                            # stored notes only
+    css = (REPO / "minimoi_portal/guild_ui/static/components.css").read_text()
+    assert 'body.gu[data-off-record="true"] .sel-bar' in css
+    for other in ("/guild-next/guild/build/bench", "/guild-next/guild/operate"):
+        assert "data-sel-bar" not in staging.owner().get(other).get_data(as_text=True)
 
 
 def test_needs_you_is_in_one_place_the_chat_header_badge(staging):
@@ -83,17 +112,6 @@ def test_chat_blockers_are_mc_down_and_a_bad_cost_level_only():
     assert chat_blockers({"turns": True, "state": "live"}, "good") == []
     assert chat_blockers({"turns": True, "state": "live"}, "tight") == []
     assert [b["kind"] for b in chat_blockers({"turns": True, "state": "live"}, "stop")] == ["cost"]
-
-
-def test_navigation_and_the_truthful_labs_page(staging):
-    page = _floor(staging)
-    for label in ("Shop floor", "Wall", "Queue", "Workshop", "Operate", "Build Log", "Planning Studio", "Prototype Lab"):
-        assert f">{label}</a>" in page, label
-    labs = staging.owner().get("/guild-next/guild/labs")
-    body = labs.get_data(as_text=True)
-    assert labs.status_code == 200 and "neither is served on dev yet" in body
-    assert "planning-studio/" in body and "prototype-lab/" in body
-    assert staging.guest().get("/guild-next/guild/labs").status_code in (302, 403)
 
 
 def test_the_wall_has_continue_filters_and_room_for_cards(staging):

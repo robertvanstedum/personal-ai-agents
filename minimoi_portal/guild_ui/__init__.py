@@ -34,8 +34,8 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' 
        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'self'")
 
-ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "assets", "api")
-B1_ROUTES = ALL_ROUTES   # the landing page, improve, experiment and any reset are not in this package
+ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "later", "assets", "api")
+B1_ROUTES = ALL_ROUTES   # improve, experiment and any reset are not in this package
 
 
 class GuildBindingError(RuntimeError):
@@ -108,7 +108,8 @@ def _make_blueprint(name: str, routes) -> Blueprint:
     bp.register_error_handler(Exception, _api_error)
     page_rules = {
         "floor": [("/guild/build", "floor", pages.floor),
-                  # The mount's own root lands on the Shop floor (was "not found").
+                  # The mount's own root is the Guild home, paired with Curator
+                  # (Guild 1.1 slice 1); it used to redirect to the Shop floor.
                   ("/", "home", pages.home), ("/guild", "guild_home", pages.home)],
         "bench": [("/guild/build/bench", "bench", pages.bench)],
         "labs": [("/guild/labs", "labs", pages.labs)],
@@ -117,6 +118,9 @@ def _make_blueprint(name: str, routes) -> Blueprint:
         "item": [("/guild/build/items/<int:item_id>", "item", pages.item)],
         "postits": [("/guild/build/postits", "postits", pages.postits)],
         "operate": [("/guild/operate", "operate", pages.operate)],
+        # Build Log (slice 2) and Rooms (slice 4): an honest "coming in a later
+        # slice" page until each slice lands. Read only; no data.
+        "later": [("/guild/build/log", "build_log", pages.build_log), ("/guild/rooms", "rooms", pages.rooms)],
         "assets": [("/guild/ui-assets/<path:filename>", "asset", asset)],
     }
     for route in routes:

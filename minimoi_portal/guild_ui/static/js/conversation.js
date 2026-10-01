@@ -422,6 +422,12 @@ function renderRecord() {
   if (live.off) { r.hidden = false; r.textContent = page.off_record_text; } else { r.hidden = true; r.textContent = ''; }
   document.body.dataset.offRecord = String(live.off);
   document.body.dataset.recordKnown = String(live.known);
+  // The Chat header's record chip (Guild 1.1 slice 1): display only.
+  const chip = $('[data-record-chip]');
+  if (chip) {
+    chip.dataset.mode = !live.known ? 'unknown' : live.off ? 'off' : 'on';
+    chip.textContent = !live.known ? 'Record mode unknown' : live.off ? 'Off the record · not kept' : 'On the record';
+  }
 }
 
 export function initConversation(p) {

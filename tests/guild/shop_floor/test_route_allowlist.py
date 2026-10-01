@@ -17,6 +17,9 @@ EXPECTED = {
     "/guild-next/guild/build/items/<int:item_id>",
     "/guild-next/guild/build/postits",
     "/guild-next/guild/operate",
+    # Guild 1.1 slice 1: Build Log (slice 2) and Rooms (slice 4) say "coming in a later slice".
+    "/guild-next/guild/build/log",
+    "/guild-next/guild/rooms",
     "/guild-next/guild/ui-assets/<path:filename>",
     "/guild-next/api/v1/session",
     "/guild-next/api/v1/floor",
@@ -89,5 +92,6 @@ def test_portal_routes_and_headers_are_untouched(staging):
 def test_unknown_page_under_the_prefix_is_not_a_floor_page(staging):
     assert staging.owner().get("/guild-next/guild/improve").status_code == 404
     assert staging.owner().get("/guild-next/nope").status_code == 404
-    # The mount's root lands on the Shop floor (test_guild_next_landing.py).
-    assert staging.owner().get("/guild-next/guild").headers["Location"].endswith("/guild-next/guild/build")
+    # The mount's root is the Guild home (test_landing_pairing.py), not a redirect.
+    home = staging.owner().get("/guild-next/guild")
+    assert home.status_code == 200 and 'data-page="home"' in home.get_data(as_text=True)

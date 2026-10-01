@@ -40,7 +40,8 @@ function setRail(open, persist, focus = null) {
   if (persist && window.matchMedia(WIDE).matches) save(KEY, open ? 'open' : 'closed');
   syncScrim();
   if (focus === 'into' && open) {
-    const first = $('#main a, #main button, #main summary');
+    // The first control actually shown (the folded summary is hidden off a phone).
+    const first = $$('#main a, #main button, #main summary').find((n) => n.getClientRects().length > 0);
     if (first) first.focus();
   } else if (focus === 'back') {
     const t = $('[data-rail-toggle]');

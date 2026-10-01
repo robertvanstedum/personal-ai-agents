@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from flask import redirect, render_template, request, url_for
+from flask import render_template, request, url_for
 
 from . import cfg, floor_state, owner_page
 from .adapters import ACTIVE, STATUSES, by_recent
@@ -59,18 +59,30 @@ def badge(res) -> dict:
 NOTES_ON_PAGE = 30
 
 
-def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
-    c = cfg()
-    conversation, conv_notice = _current_conversation(c)
-    state = floor_state.compute(c, notes_limit=NOTES_ON_PAGE, conversation=conversation)
-    layout = c["layout"]
-    urls = {
+DOCS_URL = "https://github.com/robertvanstedum/personal-ai-agents/tree/main/docs"
+
+
+def _urls(c) -> dict:
+    """Every page's links, the landing's included. Build Log and Rooms are
+    the later-slice pages until slices 2 and 4 land."""
+    return {
+        "home": url_for(".home"),
         "floor": url_for(".floor"), "build": url_for(".floor"), "bench": url_for(".bench"),
         "queue": url_for(".queue"), "operate": url_for(".operate"), "postits": url_for(".postits"),
         "item": url_for(".item", item_id=987654321).replace("987654321", "__ID__"),
         "api": f"{c['url_prefix']}/api/v1",
         "legacy_build": "/guild/build", "labs": url_for(".labs"), "workshop": url_for(".workshop"),
+        "build_log": url_for(".build_log"), "rooms": url_for(".rooms"),
+        "improve": "/guild/improve", "docs": DOCS_URL,
     }
+
+
+def _context(page_id: str, area: str, context_item: str, **extra) -> dict:
+    c = cfg()
+    conversation, conv_notice = _current_conversation(c)
+    state = floor_state.compute(c, notes_limit=NOTES_ON_PAGE, conversation=conversation)
+    layout = c["layout"]
+    urls = _urls(c)
     lights_by_id = {l["id"]: l for l in state["lights"]}
     phone_numbers = [lights_by_id[n] for n in layout["phone"]["numbers"] if n in lights_by_id]
     page = {
@@ -109,12 +121,65 @@ def _current_conversation(c):
         return None, "Conversations are unavailable right now; showing the Shop floor thread."
 
 
+# The Guild home's four doors (Guild 1.1 slice 1, spec §3): the original
+# Guild art, labels, kickers, flows and CTAs (templates/guild/guild_landing.html),
+# each mapped to where it goes on /guild-next today. The Build door's image is
+# the shared Build card's (templates/guild/_build_card.html).
+DOORS = (
+    {"id": "build", "label": "Build", "href": "queue", "img": None,
+     "kicker": "Queue · Log · Roadmap · Docs", "flow": "spec → build → ship", "cta": "Queue →"},
+    {"id": "operate", "label": "Operate", "href": "operate", "img": "/static/guild/guild-operate.jpg",
+     "alt": "Operate — system health watercolor",
+     "kicker": "Monitor · Maintain", "flow": "monitor → maintain", "cta": "Status →"},
+    {"id": "improve", "label": "Improve", "href": "improve", "img": "/static/guild/guild-improve.jpg",
+     "alt": "Improve — notebook sketches",
+     "kicker": "Review · Analyze", "flow": "review → analyze → improve", "cta": "Explore →"},
+    {"id": "experiment", "label": "Experiment", "href": "labs", "img": "/static/guild/guild-experiment.jpg",
+     "alt": "Experiment — an alchemist at the bench",
+     "kicker": "Ideas · Tinkering · Reference demos", "flow": "try → prove → keep", "cta": "Open →"},
+)
+
+
 @owner_page
 def home():
-    """/guild-next, /guild-next/ and /guild-next/guild land on the Shop floor
-    (owner-guarded like every page: a guest or a signed-out visitor gets the
-    portal's guard, never the floor)."""
-    return redirect(url_for(".floor"))
+    """/guild-next, /guild-next/ and /guild-next/guild: the Guild home, paired
+    with Curator's landing (owner-guarded like every page: a guest or a
+    signed-out visitor gets the portal's guard, never the page). Reads no
+    store and calls no model."""
+    c = cfg()
+    urls = _urls(c)
+    doors = [dict(d, href=urls[d["href"]]) for d in DOORS]
+    return render_template("guild_floor/landing.html", page_id="home", area="Guild", urls=urls,
+                           user=c["current_user"](), doors=doors)
+
+
+LATER = {
+    "build_log": {"title": "Build Log", "slice": 2,
+                  "what": "One table of every build item in every status, with ranks, the spec author and "
+                          "saved views for Queue, Log and Roadmap."},
+    "rooms": {"title": "Rooms", "slice": 4,
+              "what": "Group conversations with files, where you can bring Master Craftsman and other "
+                      "agents together."},
+}
+
+
+def _later(page_id: str):
+    info = LATER[page_id]
+    ctx = _context(page_id, info["title"], info["title"])
+    return render_template("guild_floor/later.html", later=info, **ctx)
+
+
+@owner_page
+def build_log():
+    """Build Log: coming in slice 2. Until then this page says so and points
+    to what works today (the Build Queue and the legacy Build Log)."""
+    return _later("build_log")
+
+
+@owner_page
+def rooms():
+    """Rooms: coming in slice 4. Nothing here pretends to work."""
+    return _later("rooms")
 
 
 @owner_page

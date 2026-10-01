@@ -29,15 +29,23 @@
       <button type="button" class="btn-mini" data-mc-min>Minimize</button>
     </div>
   </header>
-  <p class="mc-state" data-mc-header>{{ state.mc_header }}</p>
+  {% if page_id != 'floor' %}<p class="mc-state" data-mc-header>{{ state.mc_header }}</p>{% endif %}{# on Chat the state is in the hero header #}
   <p class="mc-context" data-mc-context>Context: {{ area }} · {{ context_item }} · on the record</p>
   {% if page_id == 'floor' %}
-  {# The chat's own header (Guild 1.1 slice 1): the conversation, the one place Needs you appears, and the rail toggle. #}
-  <div class="mc-floorbar" data-floorbar>
+  {# The chat's own header, with the hero in it (Guild 1.1 slice 1, the v4
+     design: no hero chooser): Master Craftsman's portrait and state, the
+     conversation, the one place Needs you appears, the record chip, and the
+     rail toggle. The image is decoration (CSS); the words carry the meaning. #}
+  <div class="mc-floorbar mc-hero" data-floorbar data-chat-hero>
     <button type="button" class="fb-btn fb-history" data-history-toggle aria-expanded="false" aria-controls="floor-history">☰<span class="visually-hidden"> Conversations</span></button>
-    <h2 class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</h2>
+    <span class="hero-portrait" aria-hidden="true"></span>
+    <div class="hero-text">
+      <h1 class="hero-name">Master Craftsman<span class="visually-hidden"> · </span> <span class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</span></h1>
+      <p class="hero-sub"><span class="hero-dot" aria-hidden="true"></span><span data-mc-header>{{ state.mc_header }}</span></p>
+    </div>
     {% set nt = state.needs.total %}
     <a class="fb-needs" href="{{ urls.bench }}" data-needs-badge data-needs-status="{{ state.needs.status }}"{% if state.needs.status == 'ok' and not nt %} hidden{% endif %} title="{{ state.needs.text if state.needs.status != 'ok' else 'Needs you — open the wall' }}">Needs you <span class="fb-count" data-reminder-count>{{ nt if nt is not none else '?' }}</span><span class="visually-hidden" data-needs-line>{{ state.needs.text }}</span></a>
+    <span class="hero-chip" data-record-chip>On the record</span>
     <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main">Context</button>
   </div>
   {% else %}
@@ -60,6 +68,16 @@
     {% for n in state.notes.recent %}{{ note_row(n) }}{% endfor %}
     {% endif %}
   </ol>
+  {% if page_id == 'floor' %}
+  {# Selection actions (Guild 1.1 slice 1): shown only on the record, for text
+     inside one kept message (js/selection.js). Rooms arrive in slice 4. #}
+  <div class="sel-bar" data-sel-bar role="toolbar" aria-label="Selected text" hidden>
+    <span class="sel-label">Selection</span>
+    <button type="button" class="sel-act" data-sel-pin>Pin to Board</button>
+    <button type="button" class="sel-act" data-sel-room disabled title="Rooms arrive in a later slice">Take to a Room<span class="visually-hidden"> (coming in a later slice)</span></button>
+    <span class="sel-result" data-sel-result role="status" hidden></span>
+  </div>
+  {% endif %}
   <p class="visually-hidden" aria-live="polite" data-mc-announcer></p>
   <p class="mc-refusal" data-mc-refusal role="status" hidden></p>
   <div class="mc-dock-bottom" data-mc-dock-bottom>

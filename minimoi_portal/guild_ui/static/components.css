@@ -35,13 +35,26 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .portal-nav-account { margin-left: auto; color: var(--gu-portal-dim); }
 .portal-nav-signout { white-space: nowrap; flex: none; }
 
-/* guild section strip */
-.guild-nav { background: var(--gu-nav-bg); }
-.guild-subnav { height: 36px; display: flex; align-items: center; padding: 0 var(--gu-s5); }
-.subnav-link { font: 500 var(--gu-size-xs) var(--gu-font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gu-nav-link); text-decoration: none; padding: 0 10px; height: 36px; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent; }
-.subnav-link:hover { color: var(--gu-nav-active); }
-.subnav-link.subnav-active { color: var(--gu-nav-active); border-bottom-color: var(--gu-nav-underline); font-weight: 700; }
-.subnav-dot { color: var(--gu-nav-sep); font-size: 9px; }
+/* The Guild bar (Guild 1.1 slice 1): Curator's subnav pattern, a light paper
+   strip with mono uppercase tabs and an accent underline. Four daily tabs,
+   then More ▾ (a <details> menu) on the right. */
+.guild-nav { background: var(--gu-paper-bar); border-bottom: 1px solid var(--gu-paper-rule); position: relative; z-index: 60; }
+.guild-subnav { height: var(--gu-subnav-h); display: flex; align-items: center; padding: 0 var(--gu-s5); }
+.subnav-link { font: 500 var(--gu-size-xs) var(--gu-font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gu-paper-link); text-decoration: none; padding: 0 14px; height: var(--gu-subnav-h); display: flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent; white-space: nowrap; }
+.subnav-link:hover { color: var(--gu-paper-ink); }
+.subnav-link.subnav-active { color: var(--gu-paper-active); border-bottom-color: var(--gu-paper-accent); font-weight: 700; }
+.subnav-more { margin-left: auto; position: relative; }
+.subnav-more > summary { list-style: none; cursor: pointer; }
+.subnav-more > summary::-webkit-details-marker { display: none; }
+.subnav-more > summary.subnav-more-on, .subnav-more[open] > summary { color: var(--gu-paper-ink); }
+.subnav-menu { position: absolute; right: 0; top: calc(100% + 2px); width: 300px; padding: 8px; z-index: 70; background: var(--gu-surface); border: 1px solid var(--gu-paper-rule); border-radius: var(--gu-radius); box-shadow: var(--gu-menu-shadow); font: var(--gu-size-md)/1.4 var(--gu-font-body); }
+.subnav-menu a { display: block; padding: 8px 10px; border-radius: var(--gu-radius); text-decoration: none; color: var(--gu-text); }
+.subnav-menu a small { display: block; color: var(--gu-text-muted); font-size: var(--gu-size-sm); }
+.subnav-menu a:hover, .subnav-menu a:focus-visible { background: var(--gu-surface-2); }
+.subnav-menu a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--gu-accent); }
+.subnav-menu hr { border: 0; border-top: 1px solid var(--gu-border); margin: 6px 4px; }
+.subnav-docs { padding: 8px 10px; font-size: var(--gu-size-sm); color: var(--gu-text-muted); }
+.subnav-docs a { display: inline; padding: 0; font-weight: 700; color: var(--gu-accent); }
 .sig-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gu-sig-quiet); flex: none; }
 .sig-dot[data-state="attention"] { background: var(--gu-sig-attention); }
 .sig-dot[data-state="unknown"] { background: transparent; border: 1px dashed var(--gu-sig-unknown); }
@@ -255,8 +268,7 @@ body.gu[data-mc-mode="floating"] .mc-pill, body.gu[data-mc-mode="docked"] .mc-pi
   #portal-nav-bar { padding: 0 10px; }
   #portal-nav-divider, .portal-nav-account { display: none; }
   .guild-subnav { padding: 0 4px; }
-  .subnav-link { padding: 0 6px; letter-spacing: 0.02em; }
-  .subnav-dot { display: none; }
+  .subnav-link { padding: 0 8px; letter-spacing: 0.04em; }
   .gu-notice { margin: 4px 12px 0; }
   .phone-summary { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 4px; }
   .ps-h { font-size: var(--gu-size-sm); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -529,7 +541,6 @@ body.gu[data-page="floor"][data-rail="open"] .mc-floorbar { position: relative; 
 .fh-empty { color: var(--gu-text-muted); padding: 6px 8px; }
 .fh-unavailable { color: var(--gu-unknown-ink); }
 .fc-about-new { align-self: flex-start; font: inherit; font-size: var(--gu-size-xs); background: transparent; border: 0; padding: 0; color: var(--gu-accent); text-decoration: underline; cursor: pointer; margin-top: 2px; }
-.floor-phone-strip { display: none; }
 .floor-context { border: 0; }
 .floor-context-sum { display: none; }
 .fc-body { display: flex; flex-direction: column; gap: var(--gu-s2); }
@@ -562,6 +573,37 @@ body.gu[data-page="floor"] .mc-dock-bottom { border-top: 1px solid var(--gu-zone
 .fb-needs[data-needs-status]:not([data-needs-status="ok"]),
 .fb-needs[data-stale], .fb-needs[data-fresh]:not([data-fresh="live"]) { color: var(--gu-unknown-ink); border-style: dashed; }
 .fb-count { font-weight: 700; }
+/* The Chat header with the hero in it (Guild 1.1 slice 1, v4 design): the
+   harbour photograph under a dark shade, Master Craftsman's portrait, name,
+   conversation and state, then Needs you, the record chip and Context. It
+   spans the whole chat column. Off the record it turns grey, as in the v4
+   design. The image is decoration only. */
+body.gu[data-page="floor"] .mc-floorbar.mc-hero { max-width: none; }
+.mc-hero { position: relative; min-height: 92px; padding: 12px 18px; gap: 12px; border-radius: var(--gu-radius); overflow: hidden; color: var(--gu-hero-ink); background: var(--gu-nav-bg) url('/static/guild/guild-chat-hero.jpg') 50% 62% / cover no-repeat; }
+.mc-hero::before { content: ""; position: absolute; inset: 0; background: var(--gu-hero-shade); pointer-events: none; }
+.mc-hero > * { position: relative; }
+.hero-portrait { flex: none; width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--gu-paper); box-shadow: 0 0 0 2px var(--gu-paper-accent); background: var(--gu-surface-2) url('/static/guild/guild-mc-portrait.jpg') center / cover no-repeat; }
+.hero-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hero-name { font: 400 21px/1.15 var(--gu-font-serif); color: var(--gu-hero-ink); margin: 0; }
+.hero-name .fb-title { display: block; font: 600 var(--gu-size-sm)/1.3 var(--gu-font-body); color: var(--gu-hero-sub); }
+.hero-sub { display: flex; align-items: center; gap: 6px; font-size: var(--gu-size-sm); color: var(--gu-hero-sub); min-width: 0; }
+.hero-sub [data-mc-header] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hero-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1px dashed var(--gu-hero-sub); }
+body.gu[data-mc-state="live"] .hero-dot { border: 0; background: var(--gu-hero-live); }
+.mc-hero .fb-needs, .hero-chip { background: var(--gu-hero-chip-bg); border-color: transparent; color: var(--gu-tag-needs-ink); }
+.hero-chip { flex: none; font-size: var(--gu-size-sm); padding: 3px 11px; border-radius: var(--gu-radius-pill); color: var(--gu-text); white-space: nowrap; }
+.hero-chip[data-mode="off"] { background: var(--gu-hero-chip-off-bg); color: var(--gu-hero-chip-off-ink); }
+.hero-chip[data-mode="unknown"] { color: var(--gu-unknown-ink); border: 1px dashed var(--gu-unknown-border); }
+body.gu[data-off-record="true"] .mc-hero { filter: grayscale(1); }
+/* Selection actions: a small dark bar above the selected text (desktop),
+   docked over the composer on a phone. Never shown off the record. */
+.sel-bar { position: fixed; z-index: 65; left: var(--sel-x, 50%); top: var(--sel-y, 50%); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; max-width: min(460px, calc(100vw - 16px)); padding: 4px 6px; border-radius: 10px; background: var(--gu-nav-bg); color: var(--gu-on-dark); box-shadow: var(--gu-shadow-float); font-size: var(--gu-size-sm); }
+.sel-label { padding: 0 8px; color: var(--gu-nav-link); font-size: var(--gu-size-xs); }
+.sel-act { font: inherit; min-height: 32px; padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--gu-on-dark); cursor: pointer; }
+.sel-act:hover:not(:disabled), .sel-act:focus-visible { background: var(--gu-on-dark-fill); }
+.sel-act:disabled { opacity: 0.6; }
+.sel-result { flex-basis: 100%; padding: 2px 8px 4px; color: var(--gu-on-dark); }
+body.gu[data-off-record="true"] .sel-bar, body.gu[data-record-known="false"] .sel-bar { display: none; }
 .mc-blocker { margin: 0 0 var(--gu-s2); padding: 4px 10px; font-size: var(--gu-size-sm); color: var(--gu-mark-blocker-ink); background: var(--gu-mark-blocker-bg); border-radius: var(--gu-radius); display: flex; flex-direction: column; gap: 2px; }
 .mc-blocker[hidden] { display: none; }
 .mc-current { margin: 0 var(--gu-s3); color: var(--gu-text-muted); }
@@ -598,25 +640,31 @@ body.gu[data-page="floor"][data-lights-open="true"] .floor-strip .lights { displ
 .bench[data-filter="postits"] > [data-panel="postits"], .bench[data-filter="motion"] > [data-panel="motion"],
 .bench[data-filter="blocked"] > [data-panel="blocked"], .bench[data-filter="discussions"] > [data-panel="discussions"] { display: block; grid-column: 1 / -1; }
 .lab-card { background: var(--gu-surface); border: 1px solid var(--gu-zone-edge); border-radius: var(--gu-radius); padding: var(--gu-s3); margin-bottom: var(--gu-s3); max-width: 72ch; }
-.subnav-entry { font-style: italic; }
 
 @media (max-width: 640px) {
-  /* The Guild navigation scrolls sideways on a phone, with a fade at the edge, instead of breaking words. */
-  .guild-subnav { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); mask-image: linear-gradient(to right, #000 85%, transparent); padding-right: 24px; }
+  /* The Guild bar on a phone: the four tabs and More fit at 390 px; on a
+     narrower screen the bar scrolls sideways instead of breaking words. The
+     More menu is fixed below the bars, so the scrolling bar never clips it. */
+  .guild-subnav { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .guild-subnav::-webkit-scrollbar { display: none; }
+  .subnav-menu { position: fixed; top: calc(var(--gu-portal-h) + var(--gu-subnav-h) + 4px); left: 8px; right: 8px; width: auto; }
   #portal-nav-workspaces { overflow-x: auto; scrollbar-width: none; flex: 1 1 auto; }
   .portal-nav-signout { white-space: nowrap; flex: none; font-size: 12px; }
   .guild-subnav .subnav-link { white-space: nowrap; flex: none; }
-  /* Phone: chat first. The Build card's dark title strip with a thumbnail,
-     the conversation with its composer (kept above the keyboard), then the
-     context (folded) and the status strip below. */
+  /* Phone: chat first. The hero header, the conversation with its composer
+     (kept above the keyboard), then the context (folded) and the status strip below. */
   body.gu[data-page="floor"] { padding-bottom: 0; }
   body.gu[data-page="floor"] .gu-layout { display: flex; flex-direction: column; padding: 0; }
-  .floor-phone-strip { display: block; order: 0; }
   body.gu[data-page="floor"] .mc-panel[data-mode="inpage"] { order: 1; min-height: 0; }
   body.gu[data-page="floor"] .gu-main, body.gu[data-page="floor"][data-rail] .gu-main { order: 2; display: block; position: static; width: auto; max-height: none; box-shadow: none; border: 0; background: transparent; padding: 4px 12px; overflow: visible; }
-  body.gu[data-page="floor"] .floor-hero { display: none; }
   .floor-context-sum { display: list-item; cursor: pointer; font-size: var(--gu-size-sm); color: var(--gu-accent); min-height: var(--gu-target-phone); line-height: var(--gu-target-phone); }
   .fb-rail { display: none; }
+  .mc-hero { min-height: 64px; padding: 8px 12px; gap: 8px; border-radius: 0; }
+  .hero-portrait { width: 36px; height: 36px; }
+  .hero-name { font-size: 18px; }
+  .hero-chip { display: none; }
+  .sel-bar { left: 8px; right: 8px; max-width: none; }
+  .sel-act { min-height: var(--gu-target-phone); }
   .floor-strip { margin: 4px 12px; }
   body.gu[data-page="floor"] .mc-thread .msg { max-width: 100%; }
   /* The thread scrolls inside the first view, newest at the bottom, above the composer. */

@@ -1,14 +1,12 @@
 {% extends 'guild_floor/_base.html' %}
 {% from 'guild_floor/_macros.html' import shape, continue_line %}
-{% from 'guild/_build_card.html' import build_card %}
-{% block title %}{{ floor_cfg.title }} · Guild{% endblock %}
-{% block head %}<link rel="stylesheet" href="/static/guild/guild-card.css">{% endblock %}
+{% block title %}Chat · Guild{% endblock %}
 {#
-  The Shop floor, slice 1 of the Guild 1.1 dev layout (Robert, September 29):
-  desktop is  history | clean chat | image and live context;  phone is chat
-  first, with a small image header and the context expandable below it.
+  Chat (the Shop floor), Guild 1.1: desktop is  history | chat | live context;
+  phone is chat first, with the context expandable below it. The hero sits in
+  the chat's header (slice 1, the v4 design; no chooser), on every width.
   Status lights sit in a compact strip low on the page (detail in Operate);
-  post-its live on the wall (the Workbench), not here.
+  post-its live on the Board (the wall), not here.
 #}
 
 {% block before_main %}
@@ -48,8 +46,6 @@
   {% if conv_list.unreadable %}<p class="fh-unavailable small" data-conv-unreadable>{{ conv_list.unreadable }} conversation{{ '' if conv_list.unreadable == 1 else 's' }} couldn't be read.</p>{% endif %}
   <p class="fh-view small">{% if conv_view == 'archived' %}<a href="{{ urls.floor }}" data-conv-view="active">← Conversations</a>{% else %}<a href="{{ urls.floor }}?view=archived" data-conv-view="archived">Archive</a>{% endif %}</p>
 </aside>
-{# Phone only: the card's dark title strip with a small thumbnail, above the chat. #}
-<div class="floor-phone-strip" aria-hidden="true">{{ build_card('strip') }}</div>
 <div class="floor-scrim" data-floor-scrim hidden></div>
 {% endblock %}
 
@@ -58,9 +54,6 @@
    real action; one quiet line otherwise. Needs you itself is only in the chat header. #}
 {% set focus = state.focus %}
 {% set top = state.needs['items'][0] if state.needs['items'] else none %}
-<div class="floor-hero" data-floor-hero>
-  {{ build_card('rail', {'queue': urls.queue, 'log': urls.legacy_build, 'roadmap': '/guild/build/roadmap', 'docs': '/guild/docs'}) }}
-</div>
 <details class="floor-context" data-floor-context open>
   <summary class="floor-context-sum">Context</summary>
   <div class="fc-body">

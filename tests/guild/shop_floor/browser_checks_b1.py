@@ -833,7 +833,7 @@ def _box(page, sel):
     return page.locator(sel).first.bounding_box()
 
 
-def test_slice1_desktop_history_chat_and_the_build_card_rail(browser, server, floor):
+def test_slice1_desktop_history_chat_and_context_with_the_hero_in_the_chat_header(browser, server, floor):
     ctx, page = _context(browser, server, 1440, 900)
     errors = _errors(page)
     go(page, f"{server['url']}/guild-next/guild/build")
@@ -841,11 +841,8 @@ def test_slice1_desktop_history_chat_and_the_build_card_rail(browser, server, fl
     expect(history).to_be_visible()
     expect(history.locator(".fh-row")).to_have_count(1)                          # one real thread, no fake rows
     expect(rail).to_be_visible()
-    card = rail.locator("[data-build-card]")
-    expect(card.locator(".card-tab")).to_have_text("Build")
-    expect(card.locator(".card-kicker a")).to_have_text(["Queue", "Log", "Roadmap", "Docs"])
-    expect(card.locator(".card-desc")).to_have_text("spec → build → ship")
-    expect(card.locator("img")).to_have_attribute("alt", re.compile("craftsman"))
+    expect(rail.locator("[data-build-card]")).to_have_count(0)                   # the hero left the rail (Guild 1.1 slice 1)
+    _hero_in_header(page)
     h, c, r = _box(page, "[data-floor-history]"), _box(page, "[data-mc-thread]"), _box(page, "#main")
     assert h["x"] < c["x"] < r["x"]                                              # history | chat | rail
     assert c["width"] <= 730                                                     # the text column is capped
@@ -961,9 +958,10 @@ def test_slice1_phone_chat_first_with_the_composer_and_newest_note_in_view(brows
         page.fill("#mc-input", f"phone note {n}")
         page.click("[data-mc-send]")
         expect(page.locator('[data-mc-thread] [data-kind="note"]')).to_have_count(n + 1)
-    strip, chat, context = _box(page, "[data-build-strip]"), _box(page, "[data-mc-thread]"), _box(page, "[data-floor-context]")
-    assert strip["y"] < chat["y"] < context["y"]                                  # strip, chat, then context
-    expect(page.locator("[data-build-card]")).to_be_hidden()                      # only the title strip on a phone
+    hero, chat, context = _box(page, "[data-chat-hero]"), _box(page, "[data-mc-thread]"), _box(page, "[data-floor-context]")
+    assert hero["y"] < chat["y"] < context["y"]                                   # hero header, chat, then context
+    assert hero["height"] <= 90 and hero["width"] >= 380                          # compact, edge to edge
+    expect(page.locator("[data-build-card], [data-build-strip]")).to_have_count(0)
     assert page.locator("[data-floor-context]").get_attribute("open") is None     # context folded below
     comp = _box(page, "[data-mc-composer]")
     assert comp["y"] + comp["height"] <= 844                                      # composer in the first view
@@ -1007,18 +1005,28 @@ def test_slice1_the_wall_filters_and_carries_the_same_conversation(browser, serv
 
 
 def test_slice1_navigation_reaches_every_guild_page_and_the_truthful_labs_page(browser, server, fresh_queue):
+    # Guild 1.1 slice 1 (spec §3): Chat · Board · Build Log · Rooms · More ▾.
     ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
     go(page, f"{server['url']}/guild-next/guild/build")
     nav = page.locator(".guild-subnav")
-    expect(nav.locator("a")).to_have_text(["Shop floor", "Wall", "Queue", "Workshop", "Operate", "Build Log", "Planning Studio", "Prototype Lab"])
-    for label, where in (("Wall", "/guild-next/guild/build/bench"), ("Queue", "/guild-next/guild/build/queue"),
-                         ("Operate", "/guild-next/guild/operate"), ("Planning Studio", "/guild-next/guild/labs")):
-        nav.get_by_text(label, exact=True).click()
+    expect(nav.locator("> a")).to_have_text(["Chat", "Board", "Build Log", "Rooms"])
+    for label, where in (("Board", "/guild-next/guild/build/bench"), ("Build Log", "/guild-next/guild/build/log"),
+                         ("Rooms", "/guild-next/guild/rooms"), ("Chat", "/guild-next/guild/build")):
+        with page.expect_navigation():
+            nav.locator("> a", has_text=label).click()
         page.wait_for_selector("body[data-ready=true]")
-        assert where in page.url, (label, page.url)
-        expect(page.locator(".guild-subnav [aria-current='page']")).to_have_count(1)
+        assert page.url.split("?")[0].endswith(where), (label, page.url)
+        expect(page.locator(".guild-subnav > [aria-current='page']")).to_have_text(label)
+        if label in ("Build Log", "Rooms"):
+            expect(page.locator("[data-later]")).to_contain_text("Coming in a later slice")
+    _more_menu(page)
+    with page.expect_navigation():
+        page.click("[data-more='design-studio']")
+    page.wait_for_selector("body[data-ready=true]")
     expect(page.locator("#planning-studio")).to_contain_text("planning-studio/")
     expect(page.locator(".page-meta")).to_contain_text("neither is served on dev yet")
+    assert not errors, errors
     ctx.close()
 
 
@@ -1336,7 +1344,7 @@ def test_slice4a_the_workshop_opens_from_a_queue_item_and_refreshes_honestly(bro
         page.click("[data-open-workshop]")
     page.wait_for_selector("body[data-ready=true]")
     assert "/guild-next/guild/workshop?item=12" in page.url
-    expect(page.locator(".guild-subnav [aria-current='page']")).to_have_text("Workshop")
+    expect(page.locator(".guild-subnav [data-more='workshop']")).to_have_attribute("aria-current", "page")
     expect(page.locator("[data-ws-admission]")).to_have_attribute("data-verdict", "tight")
     expect(page.locator("[data-ws-runs]")).to_contain_text("1 agent session running on this Mac (outside Docker)")
     expect(page.locator("[data-ws-background]")).to_contain_text("Codex desktop (ChatGPT app)")
@@ -1711,4 +1719,212 @@ def test_s1_phone_shows_the_stream_and_stop(browser, server, streaming_mc):
     streaming_mc["runtime"].gate.set()
     expect(page.locator('[data-mc-thread] [data-kind="note"]').last).to_contain_text("on a phone.")
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+    ctx.close()
+
+
+# ── Guild 1.1 slice 1 (spec §3): the Guild home, the Guild bar, the Chat hero ─
+
+DOORS = [("Build", "/guild-next/guild/build/queue"), ("Operate", "/guild-next/guild/operate"),
+         ("Improve", "/guild/improve"), ("Experiment", "/guild-next/guild/labs")]
+
+
+def _no_page_overflow(page):
+    return page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+
+
+def _hero_in_header(page):
+    """The Chat header carries the hero: photo, portrait, name, state, above the thread."""
+    hero = page.locator("[data-chat-hero]")
+    expect(hero).to_be_visible()
+    expect(hero.locator(".hero-name")).to_contain_text("Master Craftsman")
+    expect(hero.locator("[data-conv-current-title]")).to_be_visible()
+    expect(hero.locator("[data-mc-header]")).to_contain_text("Master Craftsman")
+    expect(hero.locator(".hero-portrait")).to_be_visible()
+    assert "guild-chat-hero.jpg" in hero.evaluate("e => getComputedStyle(e).backgroundImage")
+    assert "guild-mc-portrait.jpg" in page.locator(".hero-portrait").evaluate("e => getComputedStyle(e).backgroundImage")
+    # Both images really load (same origin, allowed by the CSP).
+    for name in ("guild-chat-hero.jpg", "guild-mc-portrait.jpg"):
+        assert page.evaluate("""(n) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(i.naturalWidth > 0);
+                                i.onerror = () => ok(false); i.src = '/static/guild/' + n; })""", name), name
+    hb, tb = hero.bounding_box(), page.locator("[data-mc-thread]").bounding_box()
+    assert hb["y"] + hb["height"] <= tb["y"] + 1                                  # the header sits above the thread
+    expect(page.locator("[data-hero-choice], [data-hero-option], .hero-opt")).to_have_count(0)   # no chooser
+
+
+def _more_menu(page):
+    """More ▾ opens a menu with the Workshop, Guild home, Docs, Operate, Labs and Design Studio."""
+    menu = page.locator("[data-subnav-menu]")
+    expect(menu).to_be_hidden()
+    page.click("[data-subnav-more] > summary")
+    expect(menu).to_be_visible()
+    for key in ("workshop", "home", "docs", "operate", "labs", "design-studio"):
+        expect(menu.locator(f"[data-more='{key}']")).to_be_visible()
+    expect(menu.locator("[data-more='docs'] a")).to_have_attribute(
+        "href", "https://github.com/robertvanstedum/personal-ai-agents/tree/main/docs")
+    box, vw = menu.bounding_box(), page.viewport_size["width"]
+    assert box["x"] >= 0 and box["x"] + box["width"] <= vw + 1, box              # the whole menu is on screen
+    page.keyboard.press("Escape")
+    expect(menu).to_be_hidden()
+    page.click("[data-subnav-more] > summary")
+    expect(menu).to_be_visible()
+    page.mouse.click(5, page.viewport_size["height"] - 5)                          # a click outside closes it
+    expect(menu).to_be_hidden()
+    page.click("[data-subnav-more] > summary")
+    expect(menu).to_be_visible()
+
+
+@pytest.mark.parametrize("width,height", [(1440, 900), (390, 844)], ids=["desktop", "phone"])
+def test_s1_the_guild_home_is_paired_with_curator(browser, server, fresh_queue, width, height):
+    ctx, page = _context(browser, server, width, height)
+    errors = _errors(page)
+    page.goto(f"{server['url']}/guild-next/")
+    page.wait_for_load_state("load")
+    assert page.url.rstrip("/").endswith("/guild-next")                          # no redirect to the floor
+    expect(page.locator(".gl-title")).to_have_text("Guild")
+    drawers = page.locator(".gl-drawer")
+    expect(drawers).to_have_count(4)
+    expect(page.locator(".gl-tab")).to_have_text([d[0] for d in DOORS])
+    for i, (_label, href) in enumerate(DOORS):
+        assert drawers.nth(i).get_attribute("href") == href
+    # Every painting loads, in Curator's 210:136 rectangle (no squares).
+    for i in range(4):
+        img = drawers.nth(i).locator("img")
+        page.wait_for_function("(e) => e.complete && e.naturalWidth > 0", arg=img.element_handle())
+        b = img.bounding_box()
+        assert abs(b["width"] / b["height"] - 210 / 136) < 0.03, b
+    boxes = [drawers.nth(i).bounding_box() for i in range(4)]
+    if width >= 1200:
+        assert len({round(b["y"]) for b in boxes}) == 1                          # one row of four
+        row = boxes[-1]["x"] + boxes[-1]["width"] - boxes[0]["x"]
+        assert 1000 <= row <= 1140, row                                          # about 1,100 px at 1440
+    else:
+        assert len({round(b["x"]) for b in boxes}) == 1                          # one column on a phone
+        assert all(boxes[i + 1]["y"] > boxes[i]["y"] for i in range(3))
+        assert boxes[0]["width"] >= width - 40
+    expect(page.locator("text=/tunnel/i")).to_have_count(0)
+    expect(page.locator(".guild-subnav > a")).to_have_text(["Chat", "Board", "Build Log", "Rooms"])
+    assert _no_page_overflow(page)
+    _more_menu(page)
+    expect(page.locator("[data-more='home']")).to_have_attribute("aria-current", "page")
+    page.keyboard.press("Escape")
+    with page.expect_navigation():
+        drawers.nth(0).click()                                                    # Build → the Build Queue for now
+    page.wait_for_selector("body[data-ready=true]")
+    assert page.url.endswith("/guild-next/guild/build/queue")
+    assert not errors, errors
+    ctx.close()
+
+
+def test_s1_the_guild_home_goes_two_up_at_tablet_width(browser, server, fresh_queue):
+    ctx, page = _context(browser, server, 860, 900)
+    page.goto(f"{server['url']}/guild-next/")
+    boxes = [page.locator(".gl-drawer").nth(i).bounding_box() for i in range(4)]
+    assert round(boxes[0]["y"]) == round(boxes[1]["y"]) < round(boxes[2]["y"]) == round(boxes[3]["y"])
+    assert _no_page_overflow(page)
+    ctx.close()
+
+
+@pytest.mark.parametrize("width,height", [(1440, 900), (390, 844)], ids=["desktop", "phone"])
+def test_s1_the_guild_bar_and_no_page_overflow_anywhere(browser, server, floor, width, height):
+    ctx, page = _context(browser, server, width, height)
+    errors = _errors(page)
+    for path in ("/guild-next/", "/guild-next/guild/build", "/guild-next/guild/build/bench",
+                 "/guild-next/guild/build/log", "/guild-next/guild/rooms", "/guild-next/guild/build/queue",
+                 "/guild-next/guild/workshop", "/guild-next/guild/operate", "/guild-next/guild/labs"):
+        page.goto(f"{server['url']}{path}")
+        page.wait_for_load_state("load")
+        tabs = page.locator(".guild-subnav > a")
+        expect(tabs).to_have_text(["Chat", "Board", "Build Log", "Rooms"])
+        for i in range(4):
+            expect(tabs.nth(i)).to_be_in_viewport()                               # all four tabs fit, phone included
+        expect(page.locator("[data-subnav-more] > summary")).to_be_in_viewport()
+        assert _no_page_overflow(page), path
+    page.goto(f"{server['url']}/guild-next/guild/build")
+    page.wait_for_selector("body[data-ready=true]")
+    _more_menu(page)
+    assert not errors, errors
+    ctx.close()
+
+
+def test_s1_phone_chat_has_the_hero_in_its_header(browser, server, floor):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    _hero_in_header(page)
+    hero = _box(page, "[data-chat-hero]")
+    assert hero["y"] < 140 and hero["height"] <= 90                                # right under the bars, compact
+    expect(page.locator("[data-history-toggle]")).to_be_visible()                 # ☰ still in the header
+    comp = _box(page, "[data-mc-composer]")
+    assert comp["y"] + comp["height"] <= 844
+    assert _no_page_overflow(page)
+    assert not errors, errors
+    ctx.close()
+
+
+def _select_in(page, selector):
+    page.evaluate("""(sel) => { const n = document.querySelector(sel); const r = document.createRange();
+                    r.selectNodeContents(n); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+                    document.dispatchEvent(new Event('selectionchange')); }""", selector)
+
+
+def test_s1_selection_actions_on_the_record_only_and_rooms_disabled(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    posts = _requests(page, "/api/v1/postits")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(_hero_chip(page)).to_have_text("On the record")
+    page.fill("#mc-input", "Check the queue lock")
+    page.click("[data-mc-send]")
+    note = page.locator('[data-mc-thread] [data-kind="note"][data-note]').last
+    expect(note).to_contain_text("Check the queue lock")
+    bar = page.locator("[data-sel-bar]")
+    expect(bar).to_be_hidden()
+    _select_in(page, '[data-mc-thread] [data-kind="note"][data-note]:last-child .msg-text')
+    expect(bar).to_be_visible()
+    expect(bar.locator("[data-sel-room]")).to_be_disabled()                        # Rooms come in slice 4
+    bar.locator("[data-sel-pin]").click()
+    expect(bar.locator("[data-sel-result]")).to_have_text("Pinned to the Board.")
+    assert [m for m, _u in posts if m == "POST"] == ["POST"]
+    board = [p["text"] for p in floor.store().list_postits().data["postits"]]
+    assert board == ["Check the queue lock"], board
+    # Clearing the selection hides the bar.
+    page.evaluate("window.getSelection().removeAllRanges()")
+    page.wait_for_timeout(500)
+    expect(bar).to_be_hidden()
+    # Off the record: the selection is cleared and the bar never shows.
+    _select_in(page, '[data-mc-thread] [data-kind="note"][data-note]:last-child .msg-text')
+    expect(bar).to_be_visible()
+    page.click("[data-mc-record]")
+    expect(bar).to_be_hidden()
+    assert page.evaluate("window.getSelection().toString()") == ""
+    expect(_hero_chip(page)).to_have_text("Off the record · not kept")
+    assert "grayscale" in page.locator("[data-chat-hero]").evaluate("e => getComputedStyle(e).filter")
+    _select_in(page, '[data-mc-thread] [data-kind="note"][data-note] .msg-text')
+    page.wait_for_timeout(300)
+    expect(bar).to_be_hidden()
+    assert [m for m, _u in posts if m == "POST"] == ["POST"]                       # nothing more was sent
+    page.click("[data-mc-record]")                                                 # back on the record
+    expect(_hero_chip(page)).to_have_text("On the record")
+    assert not errors, errors
+    ctx.close()
+
+
+def _hero_chip(page):
+    return page.locator("[data-record-chip]")
+
+
+def test_s1_a_selection_longer_than_a_post_it_is_refused_not_cut(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    posts = _requests(page, "/api/v1/postits")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    long_text = "x" * 30 + " " + "y" * 150
+    page.fill("#mc-input", long_text)
+    page.click("[data-mc-send]")
+    expect(page.locator('[data-mc-thread] [data-kind="note"][data-note]').last).to_contain_text("yyyy")
+    _select_in(page, '[data-mc-thread] [data-kind="note"][data-note]:last-child .msg-text')
+    page.locator("[data-sel-pin]").click()
+    expect(page.locator("[data-sel-result]")).to_contain_text("Too long for a post-it")
+    assert not [m for m, _u in posts if m == "POST"]
     ctx.close()

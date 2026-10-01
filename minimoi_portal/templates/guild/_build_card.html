@@ -1,10 +1,12 @@
 {#- The Guild's Build card, shared: the landing (/guild) shows it as one link,
     exactly as before; the Shop floor's context rail (/guild-next) shows the
     same card with its link row as navigation (Robert, September 29: "the
-    existing Build card, literally"). The hero image is named here only. -#}
+    existing Build card, literally"). The hero image is named here only:
+    the /guild-next home (Guild 1.1 slice 1) takes just the image ('img'). -#}
 {%- macro build_card(mode='landing', links=None) -%}
 {%- set img = '<img src="/static/guild/guild-build.jpg" alt="Build — a master craftsman and an apprentice at a workbench">' -%}
-{%- if mode == 'landing' %}
+{%- if mode == 'img' %}{{ img|safe }}
+{%- elif mode == 'landing' %}
   <!-- Build -->
   <a href="/guild/build/queue" class="guild-card">
     <div class="card-tab">Build</div>
