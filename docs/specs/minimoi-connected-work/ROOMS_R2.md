@@ -1,98 +1,116 @@
-# Rooms R2 — Claude Code and Codex join from this Mac · specification v0.1 (review draft)
+# Rooms R2 — Claude Code joins a room from this Mac · specification v0.2 (review draft)
 
-**Edition:** v0.1 · 1 October 2026 · **Author:** Claude Code (sole implementation editor) · **Reviewer:** Codex (independent) · **Decision owner:** Robert
-**Status:** draft for Codex's review before any wiring. Robert authorized R2 on dev on 1 October 2026 ("I give approval to finish R2 and R3 as well"); production, main merges and paid live proofs keep their existing gates.
-**Builds on:** [Rooms R1](ROOMS_R1.md) v0.5.1 (adopted), frozen R1 head `042239a0`. R2 changes no R1 contract; it adds a second hosted connector of the same kind as the MC worker. `records/` means `prototype-lab/projects/project-records-room-poc/`.
+**Edition:** v0.2 · 1 October 2026 · **Author:** Claude Code (sole implementation editor) · **Reviewer:** Codex (independent) · **Decision owner:** Robert
+**Status:** draft for Codex's recheck before wiring. v0.2 answers Codex's review (`CODEX_REVIEW_R1_PREFLIGHT_R2_R3_2026-10-01.md`, R2-01…R2-06). Robert authorized R2 on dev on 1 October 2026; production, main merges and paid/live proofs keep their gates.
+**Builds on:** [R1](ROOMS_R1.md) v0.5.1, deployed on dev at release `d33a400` (branch base `d33a4002`). `records/` means `prototype-lab/projects/project-records-room-poc/`.
+
+## 0. Changes from v0.1 (finding map)
+
+| Finding | Resolution in v0.2 |
+|---|---|
+| R2-01 isolation | Claude Code: no tools at all plus a startup-input allowlist checked before every turn (§3.3). **Codex is parked** (fail-closed, §3.6): its effective tool list is not inspectable without a model call, its default input carries local skill and multi-agent instructions, and its shell could read its own sign-in file. |
+| R2-02 legacy bypass | The fence applies by **teammate identity**: any post by a principal with a teammate card needs a running claim, whatever the credential or origin (§3.4). `claude-code`'s legacy credential is revoked at provisioning; manual posting moves to a distinct principal. |
+| R2-03 adapter and multi-teammate | Runtime identity per teammate in the adapter; one worker per hosted teammate with its own credential; recovery filtered by principal (also fixed for the MC worker); housekeeping on its own thread so reach stays truthful during a long turn (§3.2). |
+| R2-04 loopback door | Docker does not publish ports for a container that sits only on internal networks, so Records itself is **not** given a port. A small forwarding sidecar, `records-door`, publishes `127.0.0.1:18881` and forwards only to `minimoi-records:18880`; Records' attachments and egress are unchanged. Named amendments to R1 §1/§3.8, compose, preflight, tests and docs (§3.1). |
+| R2-05 process outcome | After a CLI process starts, the outcome is `uncertain` unless a trusted pre-inference rejection is proven; races and caps defined (§3.5). |
+| R2-06 proof lifecycle | No-inference checks named; the init-event check happens inside the one owner-approved Prove; evidence bound to binary hash, version and flag profile; a change makes the teammate *away* until proven again (§3.7). |
 
 ## 1. Outcome
 
-In a Rooms meeting, Robert invites **Claude Code** (and, once its isolation proof passes, **Codex**) from the Invite dialog exactly as he invites Master Craftsman. Addressed with `@Claude` (or a recipient chip), Claude Code answers one bounded discussion turn in the room, attributed to `claude-code`, through Robert's existing Claude subscription on this Mac. Nothing new is installed in the cloud, no API key is used, no tool runs. When the Mac sleeps the whole dev site is down (the hub runs here too, R1 §3.9 case a); when only the connector stops, Claude Code shows *away: its worker has not checked in recently* within three minutes.
+In a Rooms meeting Robert invites **Claude Code** from the Invite dialog. Addressed with `@Claude` (or its recipient chip), Claude Code answers one bounded, tool-free discussion turn, attributed to `claude-code`, through Robert's existing Claude subscription on this Mac. No API key, no tool, no file access from the model. When the connector stops or its runner changes, Claude Code shows *away* with the real reason within three minutes; when the Mac sleeps the whole dev site is down (R1 §3.9 case a).
 
-R2 proves: one in-room turn each from Claude Code (and Codex when proven isolated), stop discards late output, connector loss shows *away*. It does not prove: laptop-off participation, tools or repository work from a meeting, CoS, everyone-rounds, voice, a second human, production.
+R2 proves: one in-room turn from Claude Code, stop discards late output, connector loss shows *away*. It does not prove: Codex in Rooms (parked), tools or repository work from a meeting, laptop-off participation, CoS, rounds, voice, production.
 
-## 2. Verified facts this spec rests on (1 October 2026, read-only checks)
+## 2. Verified facts (1 October 2026, read-only, no model call)
 
 | Fact | Evidence |
 |---|---|
-| Claude Code 2.1.76 at `/opt/homebrew/bin/claude`, `claude auth status`: `loggedIn: true`, `authMethod: claude.ai`, `subscriptionType: pro`; no `ANTHROPIC_API_KEY` in the environment | CLI output |
-| Its headless flags: `-p`, `--output-format json|stream-json`, `--tools ""` (disables every built-in tool), `--strict-mcp-config` with `--mcp-config`, `--setting-sources`, `--system-prompt`, `--no-session-persistence`, `--disable-slash-commands`; `--max-budget-usd` applies to API billing only | `claude --help` |
-| Codex: the working CLI is the ChatGPT app's bundled `codex-cli 0.158.0-alpha.2`; `codex login status`: "Logged in using ChatGPT". The `~/.local/bin/codex` 0.145 cannot use the configured model | CLI output; R1 review runs |
-| Codex `exec` flags: `-s read-only`, `--ephemeral`, `--ignore-user-config`, `-C`, `--skip-git-repo-check`, `--json`, `-o` | `codex exec --help` |
-| Codex's `read-only` sandbox still lets its shell read any file: **not** private-data isolation (Codex review R1-06) | Codex documentation of the mode; Codex's own finding |
-| macOS `sandbox-exec` confines reads: with a profile denying `file-read*` under `$HOME`, `cat` of a temp file succeeds and `cat ~/.zshrc` is refused | test with `cat`, not with Codex |
-| The hub (container Records) has no host port today; a Mac process cannot reach it | R1 §1, compose |
+| Claude Code 2.1.76 at `/opt/homebrew/bin/claude`; `claude auth status`: signed in through claude.ai, Pro; no `ANTHROPIC_API_KEY` in the environment | CLI output |
+| With an empty dedicated `HOME`, `claude auth status` reports **signed out**: the subscription sign-in is tied to Robert's real home, so the runner keeps `HOME` and isolates by other means | CLI output |
+| Robert's user-level Claude configuration holds no instruction file (`~/.claude/CLAUDE.md` and `~/.claude/rules` absent) and `settings.json` holds only display preferences | file listing |
+| Headless flags present: `-p`, `--output-format json|stream-json`, `--tools ""`, `--strict-mcp-config`, `--mcp-config`, `--setting-sources`, `--system-prompt`, `--no-session-persistence`, `--disable-slash-commands` | `claude --help` |
+| Codex (ChatGPT-app bundled 0.158.0-alpha.2): `codex debug prompt-input` renders the model-visible input without a model call; it includes local skills instructions and a multi-agent role, and **no tool list**; feature flags (`shell_tool`, `unified_exec`, `plugins`, `apps`, `browser_use`, `computer_use`, …) exist but their effective result is not shown | CLI output |
+| Docker publishes no host port for a container attached only to `internal: true` networks; `minimoi-records` is on `minimoi-staging-records` only | Docker networking rule; R1 compose |
 
-## 3. Architecture
+## 3. Design
 
-### 3.1 One hub door for Mac-hosted connectors
+### 3.1 The door: a forwarding sidecar (amends R1 §1 and §3.8)
 
-Records publishes **one loopback-only port**, `127.0.0.1:18881 → 18880`, in `docker-compose.records.yml`; `RECORDS_ALLOWED_HOSTS` adds `127.0.0.1:18881`. Nothing else changes in Records' boundary: it stays on `records-net` only (internal, no egress); the port is bound to loopback, so only processes on this Mac reach it; every route still needs a credential; the portal bridge is unchanged. This is the same door R3's direct-door slice will later put a front-door control in front of; R2 does **not** add a tunnel route or hostname.
+- New service `records-door` in `docker-compose.records.yml`: the rooms-worker base image (python only, no secrets, no env file), a ~40-line TCP forwarder (`services/records_door/door.py`) that accepts on `0.0.0.0:18881` inside the container and connects **only** to `minimoi-records:18880`. It is attached to `records-net` and to a new non-internal bridge `minimoi-staging-records-door`; its port is published as `127.0.0.1:18881:18881` only. `read_only`, `cap_drop: ALL`, `no-new-privileges`, `mem_limit 64m`.
+- `RECORDS_ALLOWED_HOSTS` adds `127.0.0.1:18881` (the Host header the Mac connector sends). Records itself gains **no** port, no network, no egress.
+- **R1 amendments named:** §1 "networks" list gains `minimoi-staging-records-door` (door only); §3.8 notes the door; `records.sh preflight` checks: Records published ports `{}` (unchanged), door published ports exactly `127.0.0.1:18881`, door attachments exactly `records-net` + `records-door`, door environment holds no credential; from the Mac an authenticated `GET /api/v1/hosted-teammates` with the connector's credential answers 200 and an unauthenticated one 401; a connection to the Mac's LAN address on 18881 is refused. Tests and the staging README are amended. **Rollback:** remove the door service and network; R1 is unchanged.
 
-### 3.2 The connector: the R1 worker with a CLI runner
+### 3.2 The connector process
 
-`services/rooms_connector/` runs **the R1 worker loop unchanged** (`services/rooms_worker/worker.py`: claim, admission, journal, watcher, recovery, reconciliation) with a different runner in place of the relay client. A runner implements the relay client's three calls:
+- `services/rooms_connector/` runs on the Mac (launchd agent `com.vanstedum.minimoi-rooms-connector`, KeepAlive) from a private virtualenv `~/minimoi-staging/connector-venv` (`requests` only), with `RECORDS_URL=http://127.0.0.1:18881`.
+- **One worker per hosted teammate.** The R1 `Worker` class is reused with: its own teammate principal, its own membership credential, its own runner, and an adapter configured with that teammate's runtime identity (`agent_id`, `runtime`). `adapter.reply_payload` takes `agent_id` and `runtime` as parameters (MC keeps `mc-agent`/`OpenClaw`); Claude Code uses `agent_id='claude-code'`, `runtime='Claude Code CLI 2.1.76'`.
+- **Recovery filtered by principal:** `housekeeping` handles only invites and uncertain turns whose `principal` is the worker's own teammate. (This also fixes a latent R1 gap: the MC worker trusted the installation's binding to host only MC.)
+- **Housekeeping on its own thread** every 10 s (invites, reconciliation, readiness), independent of a turn in progress, so a 180-second turn does not stale the reach of the connector's other teammates. Turn handling stays sequential.
+- Separate work-scoped service principal `rooms-connector-mac`, bound only to `claude-code` in R2. The MC worker's binding is unchanged; neither worker can claim the other's teammates.
 
-| Call | Claude Code runner | Codex runner (gated, §3.5) |
-|---|---|---|
-| `ready()` | CLI present at its pinned path and `claude auth status` reports `loggedIn: true` with `authMethod: claude.ai` and no API key in the runner's environment | bundled CLI present, `codex login status` reports ChatGPT sign-in, and the isolation proof (§3.5) passed on this connector start |
-| `stream(messages, user, correlation)` | one subprocess per turn (below); returns the same outcome shapes as the relay (`done`, `refused`, `stopped`, `error`) | same shape |
-| `stop(correlation)` | kills the turn's process group (TERM, then KILL after 5 s) | same |
+### 3.3 The Claude Code runner and its boundary (R2-01)
 
-The worker's other rules carry over as reviewed: journal before inference; no CLI start without a dispatch answer younger than 5 s; a stop request kills the process and the late output is journaled, never posted; transport/process failures after start are `uncertain`; the journal report gates Retry.
-
-**Claude Code turn command (the effective boundary):**
+Command, run in a fresh empty temporary directory (mode 700) under `/private/tmp`, with a stripped environment (`HOME`, `PATH=/usr/bin:/bin:/opt/homebrew/bin`, `LANG`, `USER` only; no `ANTHROPIC_*`):
 
 ```
-env -i HOME=$HOME PATH=/usr/bin:/bin:/opt/homebrew/bin LANG=en_US.UTF-8 \
-  /opt/homebrew/bin/claude -p --output-format json --tools "" \
+/opt/homebrew/bin/claude -p --output-format stream-json --verbose --tools "" \
   --strict-mcp-config --mcp-config '{"mcpServers":{}}' --setting-sources "" \
-  --disable-slash-commands --no-session-persistence \
-  --system-prompt "<etiquette + brief, R1 §3.10>"     # stdin: transcript JSON, then the trigger
+  --disable-slash-commands --no-session-persistence --system-prompt "<etiquette + brief>"
+# stdin: the attributed transcript JSON, then the trigger (R1 §3.10 boundary)
 ```
 
-run in a fresh empty temporary directory (mode 700) as working directory, so no project `CLAUDE.md` loads; no `ANTHROPIC_API_KEY` exists in the stripped environment, so there is no silent API fallback. **Effective-boundary evidence:** before the connector first marks Claude Code reachable, its preflight runs the same command with `--output-format stream-json --verbose` and reads the CLI's own `system/init` event: `tools` must be empty and `mcp_servers` empty; any other value keeps Claude Code *away* with that reason. The init check makes one minimal model request and is part of the owner-approved proof (§6), not a background check.
+- **Tool boundary (enforced by the CLI, observed per turn):** the stream's first event, `system/init`, is read before any answer is accepted: `tools` must be empty, `mcp_servers` empty, and `plugins` (if present) empty. Anything else kills the process and fails the turn `uncertain` (a request may already be in flight) with reason `runner_boundary`; the teammate goes *away* until proven again. With no tools, the model cannot read files, including sign-in files, whatever the process itself can read.
+- **Startup-input allowlist (checked before every turn, no model call):** the runner refuses to start (definitive `failed`, reason `startup_inputs`, no process started) if any of these exist: `~/.claude/CLAUDE.md`, `~/.claude/rules/`, a `CLAUDE.md` or `CLAUDE.local.md` in the working directory or any ancestor, a project memory folder for the working directory under `~/.claude/projects/`, or a user `settings.json` key other than the display preferences found today (`theme`, `agentPushNotifEnabled`, `inputNeededNotifEnabled`). `--setting-sources ""` excludes user, project and local settings, so hooks and plugins configured there do not load; the allowlist guards the files that settings do not cover.
+- **No silent API fallback:** `ready()` requires `claude auth status` to report `loggedIn: true` with `authMethod: claude.ai`; the stripped environment holds no API key.
 
-**Codex turn command (only after §3.5 passes):** the bundled CLI, `exec -s read-only --ephemeral --ignore-user-config --skip-git-repo-check -C <empty temp dir> -o <temp file>`, the prompt on stdin, wrapped in `sandbox-exec` with a profile that denies `file-read*` and `file-write*` under `$HOME` except the Codex sign-in files it needs (`~/.codex/auth.json` read-only) and the turn's temp directory, and denies network except the CLI's own API endpoint if the profile can express it (if not, network stays as the CLI's own; reads are the protected surface).
+### 3.4 The fence by identity (R2-02)
 
-### 3.3 Identities and provisioning
+`fence_append` treats a post as a teammate post when the authenticated principal has a teammate card, regardless of credential scope or origin. Such a post needs a running claim (R1 §3.5) or it is refused 409 with no row. Provisioning revokes `claude-code`'s existing legacy credential (listed in the provisioning output) and creates a separate principal `claude-code-manual` ("Claude Code (manual)") for any future hand-posted note, with its own credential, no card, and no ability to post as `claude-code`. Tests: a legacy `claude-code` token is refused; a card principal's no-origin post to a paused meeting is refused; a stale-generation post by identity is refused; `claude-code-manual` posts as itself. Codex has no card in R2, so its manual path is unchanged.
 
-- Teammates: the existing principals `claude-code` and `codex` (kind `agent`, in the container Records since 1 October). Their existing legacy credentials and the manual `roomctl` path stay as they are (M6 spirit: nothing that works today breaks); their posts without a turn are unaffected by the fence because a legacy credential is not membership-scoped and carries no agent-response origin.
-- New: a teammate card for each (`host: this Mac`, `connector: rooms-connector`, `tools_profile: none`, `billing_route: Robert's Claude subscription` / `Robert's ChatGPT sign-in`, `max_turn_s: 180`, `auto_accept: 1`), a membership-scoped credential each, and a **separate** work-scoped service principal `rooms-connector-mac` bound to `claude-code` (and to `codex` only when §3.5 passes). The MC worker's binding is unchanged; neither worker can claim the other's teammates.
-- `manage.py provision-rooms` gains `--worker-principal` and accepts several teammates; tokens go only to `0600` files in `~/minimoi-staging/secrets/rooms-connector/` (mode 700); nothing is printed.
+### 3.5 Process outcomes (R2-05)
 
-### 3.4 Running on the Mac
+| Situation | Outcome |
+|---|---|
+| Checks fail before any process starts (startup inputs, auth status, runner changed) | `failed`, definitive, no process |
+| Process started, then exits non-zero with no output | `uncertain` (a request may have been consumed) |
+| Process started, `system/init` violates the boundary | killed; `uncertain`, reason `runner_boundary` |
+| Process finishes with a result event, `is_error` false, non-empty text | answer delivered (journaled first) |
+| Result event `is_error` true | `uncertain` unless its subtype is a documented pre-request refusal (none relied on in R2) |
+| Stop requested before the process is registered | the runner checks the stop flag after spawn and kills at once; if the flag is set before spawn, no process starts and the turn is acknowledged stopped |
+| `max_turn_s` (180 s) exceeded | process group killed (TERM, then KILL after 5 s); `uncertain` |
 
-- A launchd agent `com.vanstedum.minimoi-rooms-connector` (KeepAlive) runs the connector from a private virtualenv `~/minimoi-staging/connector-venv` (`requests` only). Journal: `~/minimoi-staging/data/rooms-connector-journal` (700). Log: `~/minimoi-staging/logs/rooms-connector.log` (ids and outcomes only).
-- `scripts/staging/connector.sh install|uninstall|status|preflight` writes and removes the plist; `uninstall` leaves the journal and secrets in place and revokes nothing (revocation is a separate owner command, as in R1).
-- One turn at a time per connector (the loop is sequential); `max_turn_s` 180 kills a turn and reports it `uncertain`.
+Captured output is capped at 1 MB; beyond it the process is killed and the turn is `uncertain`. Child processes run in their own process group and are killed with it. No restart or Retry runs inference automatically; R1's reconciliation gate applies.
 
-### 3.5 Codex isolation proof (gate for the Codex runner)
+### 3.6 Codex: parked, fail-closed
 
-Codex joins only when, on this Mac, a proof run shows: (1) the wrapped bundled CLI starts and answers a fixed one-line prompt (a model request; owner-approved, §6); (2) inside the same wrapper a shell command reading a canary file placed in `$HOME` fails; (3) reading the turn's temp directory works; (4) `~/.codex/sessions` gains no new file (`--ephemeral`). If (1) fails because the CLI cannot run under the wrapper, or (2) succeeds, Codex stays *away: no enforced read isolation yet* and R2 ships with Claude Code alone. No weaker boundary is substituted.
+No Codex runner is wired in R2. Codex's card is not created, so `@Codex` keeps getting R1's "Not sent to Codex: not available in Rooms yet". Unparking needs: an inspectable effective-tool listing showing no file, shell, browser, computer, plugin or app tools; a model-visible input without local skills, memory or agent-role instructions; and a sign-in that the model's tools cannot reach. The evidence above shows none of these today without a model call.
 
-### 3.6 Records and Rooms changes
+### 3.7 Proof lifecycle (R2-06)
 
-- Routing: `route()` already sends a turn only to card teammates with a connector; R2 adds no rule. Unaddressed messages still go to the facilitator (MC). `@Claude`, `@claude-code`, a chip, or `@Codex` address them.
-- Reach: unchanged rules (proof, fresh readiness, no failure since the last commit). The connector reports readiness every 10 s; Mac sleep or connector stop → expiry after 180 s → *away* with the R1 reason.
-- Usage evidence: the Claude CLI's JSON `usage` gives input/output token counts → `usage_evidence_status: reported` with those counts; Codex's `--json` usage events the same if present, else `none`. Nothing is invented; `upstream_execution_id` stays null; `caller_correlation` is the connector's own id.
-- UI: no new screen. The Invite dialog lists the new cards with their real state ("Not yet proven — Prove first", "No connector in Rooms yet" for Codex until §3.5).
+- **No-inference checks** (connector start and every turn): CLI path, its SHA-256 and `--version`; `auth status`; the startup-input allowlist; the flag profile (a hash of the exact argument list minus prompt text).
+- **Evidence:** the one owner-approved **Prove** turn runs the normal command; the runner inspects `system/init` inside that same execution. On success the connector writes `~/minimoi-staging/data/rooms-connector/proof-claude-code.json` (binary SHA-256, version, profile hash, proof turn id, time) and Records sets `proven_at` as in R1.
+- **Invalidation:** if the binary hash, version or profile hash differs from the proof record, the connector reports `unready: runner_changed_since_proof` to Records (stored as the teammate's reach reason, shown as "away: Claude Code changed since its proof — Prove again") and fails any claimed non-proof turn definitively before starting a process. Restarts never spend: they re-run only the no-inference checks.
+- One execution, not two: the init check is part of the Prove turn, not a separate request.
 
-## 4. Out of scope
+## 4. Records changes
 
-Tools, repository or file access from a meeting turn; laptop-off participation; Codex without its isolation proof; CoS; everyone-rounds; a tunnel route or public hostname; voice; a second human; cost reporting; production.
+- `fence_append`: identity-based teammate detection (§3.4).
+- `mark_reachable` accepts an optional `unready` reason code; stored on the card (`teammates.last_failure_at` unchanged; a new table `teammate_status(principal PK, unready, observed_at)`, new table only) and shown by `reach()`.
+- `manage.py provision-rooms`: `--worker-principal`, several teammates, revocation of a teammate's legacy credential with an explicit list in the output, creation of a `<teammate>-manual` principal on request.
 
-## 5. Tests (no model call)
+## 5. Out of scope
+
+Codex in Rooms; tools, repository or file access from a meeting turn; laptop-off participation; CoS; rounds; any tunnel route or public hostname; voice; a second human; cost reporting; production.
+
+## 6. Tests (no model call)
 
 | Layer | Tests |
 |---|---|
-| Records | loopback host accepted only as configured; `provision-rooms` with a second worker principal and two teammates; the MC worker cannot claim `claude-code` and the connector cannot claim `mc`; legacy `claude-code` posts without a turn unchanged |
-| Connector | the R1 worker suite re-run with a fake CLI runner: journal before start, stale admission re-asked, stop kills the process group and discards late output, timeout → `uncertain`, non-zero exit before output → `refused` vs after start → `uncertain`; the built command has `--tools ""`, empty MCP, no setting sources, empty cwd, stripped environment without `ANTHROPIC_API_KEY`; `ready()` false when auth status says API key or logged out; Codex runner refuses to be enabled without a recorded passing proof |
-| Compose/scripts | Records publishes only `127.0.0.1:18881`; production compose byte-identical; classifier staging-only for `services/rooms_connector/`; `connector.sh` writes no secret into the plist; preflight never counts a failed probe |
-| Browser | Invite lists Claude Code with its real state; `@Claude` addressed message → a fake connector reply attributed to Claude Code |
+| Records | identity fence (legacy token, no-origin, paused, stale generation); `-manual` principal posts as itself; `unready` reason stored and shown; worker bindings exclusive; provisioning output lists the revoked legacy credential |
+| Connector | R1 worker suite re-run with a fake CLI (a script emitting stream-json): journal before start; stale admission re-asked; stop before spawn, during run, after output; timeout and output cap kill the group; no-output non-zero exit → `uncertain`; boundary-violating init → killed, `uncertain`; startup-input allowlist each case → `failed`, no process; runner change → `unready`, claimed turn failed before spawn; per-teammate adapter identity in export; recovery ignores another teammate's uncertain turns; housekeeping thread keeps reach fresh during a long fake turn |
+| Door | forwards only to Records; LAN address refused; unauthenticated 401; published only on 127.0.0.1; no credential in its environment |
+| Browser | Invite lists Claude Code with its real state; `@Claude` → a fake-connector reply attributed to Claude Code; `@Codex` → the R1 not-available line |
 
-## 6. Gates
+## 7. Gates
 
-- **G-R2-0:** Codex reviews this draft; findings resolved before wiring.
-- **G-R2-1:** the reviewed build's tests green; Codex reviews the frozen diff.
-- **G-R2-2 (owner-approved, live):** one Prove turn for Claude Code through the connector (the init-event check runs first in the same approval), one stop mid-reply, connector stop → *away*. Codex's isolation proof (§3.5) and its Prove turn likewise. These use Robert's subscriptions; they wait for his explicit OK.
-- **Rollback:** `connector.sh uninstall`, revoke the connector and teammate credentials, remove the loopback port from compose and recreate Records (no data change).
+G-R2-0 Codex rechecks this draft. G-R2-1 build, tests green, Codex reviews the frozen diff, dev rollout of the door and connector (no model call). G-R2-2 owner-approved live turns: one Prove (with the init check inside it), one question, one stop mid-reply, connector stopped → *away*. **Rollback:** `connector.sh uninstall`, revoke the connector and teammate credentials, remove `records-door` and its network; R1 untouched.
