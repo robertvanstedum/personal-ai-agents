@@ -27,6 +27,14 @@ services:
     networks:
       - records-net
     mem_limit: 256m
+    pids_limit: 128
+    # The image is read-only and every capability is dropped (#288 review F6):
+    # Records only writes its SQLite file and key files in /data, and /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
     security_opt:
       - no-new-privileges:true
     healthcheck:
