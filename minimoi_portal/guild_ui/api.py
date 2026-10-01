@@ -550,16 +550,59 @@ def _postit_answer(done):
                     "message": POSTIT_WORDS[done.outcome], "observed_at": now_iso()})
 
 
+def _skeleton(text: str) -> str:
+    """Letters and digits only, lower case, single spaces: what a selection on
+    the rendered page and the stored Markdown have in common."""
+    return " ".join("".join(ch if ch.isalnum() else " " for ch in text.lower()).split())
+
+
+PIN_MIN_CHARS = 3
+
+
+def _pinned_from(selection: str, note_text: str) -> bool:
+    """The pinned text is part of the note: its skeleton appears in the note's,
+    and it has at least PIN_MIN_CHARS letters or digits (or is the whole note),
+    so a stray letter or two cannot pass as a quote."""
+    part, whole = _skeleton(selection), _skeleton(note_text)
+    if not part or part not in whole:
+        return False
+    return len(part.replace(" ", "")) >= PIN_MIN_CHARS or part == whole
+
+
+PIN_REFUSED = ("Not pinned: the pinned text must come from one kept, on-the-record message. Select text inside "
+               "a single message and try again. Nothing was changed.")
+
+
 @owner_api
 def postit_add():
+    """A post-it: text (<= 280), optionally a label and a linked queue item.
+    Pinned from Chat (Guild 1.1 slice 3, the slice 1 review's carry-forward),
+    it names ``source_note_id``: the server checks that the note is a stored,
+    on-the-record note on this floor or one of its conversations, and that
+    the pinned text is part of it; otherwise nothing is kept."""
+    from .board import LABELS
+    from .board_api import _check_item_ref
     refusal, body = _write_body()
     if refusal is not None:
         return refusal
     text, bad = _clean_text(body.get("text"), POSTIT_MAX, "post-it")
     if bad is not None:
         return bad
+    label = body.get("label")
+    if label is not None and label not in LABELS:
+        return json_error("invalid", f"A label is one of {', '.join(LABELS)}, or none.", 422)
+    item_ref, bad = _check_item_ref(body.get("item_ref"))
+    if bad is not None:
+        return bad
+    source = body.get("source_note_id")
     try:
-        done = _floor().add_postit(text, _author(), idempotency_key=body["_key"])
+        if source is not None:
+            if isinstance(source, bool) or not isinstance(source, int) or source <= 0:
+                return json_error("invalid", PIN_REFUSED, 422)
+            note = _floor().note_text(source)
+            if note is None or not _pinned_from(text, note["text"]):
+                return json_error("not_from_note", PIN_REFUSED, 422)
+        done = _floor().add_postit(text, _author(), idempotency_key=body["_key"], label=label, item_ref=item_ref)
     except FloorStoreUnavailable as exc:
         return _store_down(exc, POSTIT_WORDS)
     return _postit_answer(done)
@@ -1049,6 +1092,8 @@ def workshop_view_api():
     return jsonify({**api_view(view(cfg()["services"], request.args.get("item", type=int))), "observed_at": now_iso()})
 
 
+from .board_api import RULES as _BOARD_RULES  # noqa: E402  (it imports helpers from this module)
+
 RULES = [
     ("/session", "api_session", session_view, ["GET"]),
     ("/floor", "api_floor", floor_view, ["GET"]),
@@ -1081,6 +1126,8 @@ RULES = [
     ("/conversations/<cid>/unpin", "api_conversation_unpin", conversation_unpin, ["POST"]),
     ("/conversations/<cid>/archive", "api_conversation_archive", conversation_archive, ["POST"]),
     ("/conversations/<cid>/restore", "api_conversation_restore", conversation_restore, ["POST"]),
+    # Guild 1.1 slice 3: the Board and the Media library (board_api.py).
+    *_BOARD_RULES,
     ("/", "api_root", not_found, ALL_METHODS),
     ("/<path:rest>", "api_not_found", not_found, ALL_METHODS),
 ]

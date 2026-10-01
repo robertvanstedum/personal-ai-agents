@@ -191,6 +191,11 @@ done
 # Each root writer's own usage folder (usage_record.own_folder): the shared
 # monthly file at the top of data/usage/ is the non-root gateway's alone.
 for w in cos-bot cos-scheduler; do mkdir -p "$STAGING_ROOT/data/usage/$w"; done
+# The Guild Media library's files (Guild 1.1 slice 3, spec §5.2): a persistent
+# host folder, bind-mounted read-write into the portal at /app/runtime/media.
+# Back it up together with the database's guild and media schemas.
+mkdir -p "$STAGING_ROOT/data/media"
+chmod 700 "$STAGING_ROOT/data/media"
 {
   echo "sha=$FULL_SHA"
   echo "tag=$SHA"

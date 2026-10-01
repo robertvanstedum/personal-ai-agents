@@ -131,9 +131,10 @@ def test_post_its_trigger_nothing(floored):
 def test_post_it_length_and_emptiness(floored):
     client = floored.owner()
     token = floored.csrf(client)
-    assert _post(floored, client, token, "/postits", text="x" * 140).status_code == 200
-    too_long = _post(floored, client, token, "/postits", text="x" * 141)
-    assert too_long.status_code == 422 and "140" in too_long.get_json()["message"]
+    # Guild 1.1 slice 3 (spec §5.1): the API cap is 280 (the database allows 400).
+    assert _post(floored, client, token, "/postits", text="x" * 280).status_code == 200
+    too_long = _post(floored, client, token, "/postits", text="x" * 281)
+    assert too_long.status_code == 422 and "280" in too_long.get_json()["message"]
     assert _post(floored, client, token, "/postits", text="   ").status_code == 422
     assert _post(floored, client, token, "/postits").status_code == 422
 

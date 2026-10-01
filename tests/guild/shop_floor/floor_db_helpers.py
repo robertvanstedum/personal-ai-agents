@@ -42,6 +42,37 @@ def sqlite_ddl(sql: str | None = None) -> str:
     return sql
 
 
+BOARD = REPO / "minimoi_portal" / "guild_ui" / "sql" / "002_board.sql"
+MEDIA = REPO / "minimoi_portal" / "guild_ui" / "sql" / "003_media.sql"
+
+
+def sqlite_ddl_board(sql: str | None = None) -> str:
+    """002_board.sql for SQLite, by mechanical substitutions. The cross-column
+    kind/asset CHECK is a Postgres DO block, which SQLite cannot add to an
+    existing table; the store enforces the same rule and
+    test_board_media_postgres.py checks the constraint on a real Postgres."""
+    sql = BOARD.read_text() if sql is None else sql
+    sql = "\n".join(line for line in sql.splitlines() if not line.lstrip().startswith("--"))
+    sql = re.sub(r"DO \$\$.*?END \$\$;", "", sql, flags=re.S)
+    sql = sql.replace("ADD COLUMN IF NOT EXISTS", "ADD COLUMN").replace("TIMESTAMPTZ", "TEXT").replace("UUID", "TEXT")
+    sql = re.sub(r"CREATE INDEX IF NOT EXISTS (\w+) ON guild\.(\w+)", r"CREATE INDEX IF NOT EXISTS guild.\1 ON \2", sql)
+    return sql
+
+
+def sqlite_ddl_media(sql: str | None = None) -> str:
+    """003_media.sql for SQLite (the media schema is a second attached database)."""
+    sql = MEDIA.read_text() if sql is None else sql
+    sql = "\n".join(line for line in sql.splitlines() if not line.lstrip().startswith("--"))
+    sql = sql.replace("CREATE SCHEMA IF NOT EXISTS media;", "")
+    sql = sql.replace("sha256 ~ '^[0-9a-f]{64}$'", "length(sha256) = 64")
+    sql = sql.replace("BIGSERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+    sql = sql.replace("TIMESTAMPTZ", "TEXT").replace("UUID", "TEXT")
+    sql = sql.replace("REFERENCES media.assets (id)", "REFERENCES assets (id)")
+    sql = re.sub(r"CREATE (UNIQUE )?INDEX IF NOT EXISTS (\w+) ON media\.(\"?\w+\"?)",
+                 r"CREATE \1INDEX IF NOT EXISTS media.\2 ON \3", sql)
+    return sql
+
+
 class SqliteFloor:
     """A floor database file plus the connect function the store is given."""
 
@@ -49,9 +80,12 @@ class SqliteFloor:
         folder.mkdir(parents=True, exist_ok=True)
         self.path = folder / "guild_floor.sqlite"
         self.connects = 0
+        self.media_path = folder / "media.sqlite"
         if migrate:
             conn = self.connect()
             conn.executescript(sqlite_ddl())
+            conn.executescript(sqlite_ddl_board())       # Guild 1.1 slice 3
+            conn.executescript(sqlite_ddl_media())
             conn.commit()
             conn.close()
 
@@ -60,13 +94,20 @@ class SqliteFloor:
         conn = sqlite3.connect(":memory:", timeout=15)
         conn.execute("ATTACH DATABASE ? AS guild", (str(self.path),))
         conn.execute("PRAGMA guild.journal_mode=WAL")
+        conn.execute("ATTACH DATABASE ? AS media", (str(self.media_path),))
+        conn.execute("PRAGMA media.journal_mode=WAL")
         return conn
 
     def store(self, floor: str = "guild") -> FloorStores:
         return FloorStores(lambda: "sqlite:test-floor", connect=self.connect, paramstyle="qmark", floor=floor)
 
     def rows(self, table: str) -> list[dict]:
-        conn = sqlite3.connect(str(self.path))
+        if table.startswith("media."):
+            return self._rows(self.media_path, table.split(".", 1)[1])
+        return self._rows(self.path, table)
+
+    def _rows(self, path, table: str) -> list[dict]:
+        conn = sqlite3.connect(str(path))
         conn.row_factory = sqlite3.Row
         try:
             return [dict(r) for r in conn.execute(f"SELECT * FROM {table} ORDER BY rowid")]

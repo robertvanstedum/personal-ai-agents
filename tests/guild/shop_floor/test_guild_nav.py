@@ -16,13 +16,15 @@ import pytest
 from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 DOCS = "https://github.com/robertvanstedum/personal-ai-agents/tree/main/docs"
-DAILY = [("chat", "Chat", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/build/bench"),
+DAILY = [("chat", "Chat", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/board"),
          ("build-log", "Build Log", "/guild-next/guild/build/log"), ("rooms", "Rooms", "/guild-next/guild/rooms")]
-MORE = [("workshop", "Workshop", "/guild-next/guild/workshop"), ("home", "Guild home", "/guild-next/"),
+MORE = [("workshop", "Workshop", "/guild-next/guild/workshop"), ("media", "Media library", "/guild-next/guild/media"),
+        ("home", "Guild home", "/guild-next/"),
         ("operate", "Operate", "/guild-next/guild/operate"), ("labs", "Labs", "/guild-next/guild/labs"),
         ("design-studio", "Design Studio", "/guild-next/guild/labs#planning-studio")]
 PAGES = {"/guild-next/": None, "/guild-next/guild/build": "chat", "/guild-next/guild/build/bench": "board",
-         "/guild-next/guild/build/postits": "board", "/guild-next/guild/build/queue": "build-log",
+         "/guild-next/guild/build/postits": "board", "/guild-next/guild/board": "board",
+         "/guild-next/guild/media": None, "/guild-next/guild/build/queue": "build-log",
          "/guild-next/guild/build/log": "build-log", "/guild-next/guild/rooms": "rooms",
          "/guild-next/guild/workshop": None, "/guild-next/guild/operate": None, "/guild-next/guild/labs": None}
 

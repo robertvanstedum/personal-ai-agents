@@ -1011,7 +1011,7 @@ def test_slice1_navigation_reaches_every_guild_page_and_the_truthful_labs_page(b
     go(page, f"{server['url']}/guild-next/guild/build")
     nav = page.locator(".guild-subnav")
     expect(nav.locator("> a")).to_have_text(["Chat", "Board", "Build Log", "Rooms"])
-    for label, where in (("Board", "/guild-next/guild/build/bench"), ("Build Log", "/guild-next/guild/build/log"),
+    for label, where in (("Board", "/guild-next/guild/board"), ("Build Log", "/guild-next/guild/build/log"),
                          ("Rooms", "/guild-next/guild/rooms"), ("Chat", "/guild-next/guild/build")):
         with page.expect_navigation():
             nav.locator("> a", has_text=label).click()
@@ -1919,7 +1919,7 @@ def test_s1_a_selection_longer_than_a_post_it_is_refused_not_cut(browser, server
     ctx, page = _context(browser, server, 1440, 900)
     posts = _requests(page, "/api/v1/postits")
     go(page, f"{server['url']}/guild-next/guild/build")
-    long_text = "x" * 30 + " " + "y" * 150
+    long_text = "x" * 30 + " " + "y" * 300                     # over the post-it cap of 280 (slice 3)
     page.fill("#mc-input", long_text)
     page.click("[data-mc-send]")
     expect(page.locator('[data-mc-thread] [data-kind="note"][data-note]').last).to_contain_text("yyyy")
@@ -2169,5 +2169,173 @@ def test_s2_phone_contained_scroll_default_columns_and_drawer(browser, server, b
     drawer.locator("[data-bl-close]").click()
     expect(drawer).to_be_hidden()
     assert _no_page_overflow(page)
+    assert not errors, errors
+    ctx.close()
+
+
+# ── Guild 1.1 slice 3 (spec §5, §11): the Board and the Media library ────────
+
+@pytest.fixture
+def board_media(server, floor, tmp_path):
+    media = tmp_path / "media"
+    media.mkdir()
+    services = server["app"].extensions["guild_ui_next"]["services"]
+    saved = services.media_dir
+    services.media_dir = str(media)
+    yield floor, media
+    services.media_dir = saved
+
+
+def _bd_ids(page, sel="[data-bd-note]"):
+    return [int(x) for x in page.locator(sel).evaluate_all("ns => ns.map(n => n.dataset.bdNote)")]
+
+
+def _jpeg_file(tmp_path):
+    from board_media_helpers import image_bytes
+    path = tmp_path / "lake.jpg"
+    path.write_bytes(image_bytes(size=(320, 240), color=(60, 120, 180)))
+    return path
+
+
+def test_s3_desktop_notes_done_order_trash_and_empty(browser, server, board_media):
+    from minimoi_portal.guild_ui.stores import Author
+    floor, _media = board_media
+    robert = Author("robert", "owner", "Robert")
+    store = floor.store()
+    ids = [store.add_postit(t, robert, idempotency_key=f"s3-seed-{i:04d}").value["id"]
+           for i, t in enumerate(("first", "second", "third"))]
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/board")
+    expect(page.locator(".guild-subnav > [aria-current='page']")).to_have_text("Board")
+    assert _bd_ids(page) == ids[::-1]                                              # newest on top
+    # + Note ▾ → Note, with a label and a linked work item.
+    page.click("[data-bd-add] > summary")
+    page.click('[data-bd-open="note"]')
+    page.fill("[data-bd-note-text]", "Decide how long Done notes stay")
+    page.select_option("[data-bd-note-label]", "decide")
+    page.fill("[data-bd-note-item]", "12")
+    page.click("[data-bd-note-add]")
+    expect(page.locator("[data-bd-add-result]")).to_have_text("Post-it added")
+    new = page.locator("[data-bd-note]").first
+    expect(new).to_have_attribute("data-label", "decide")
+    expect(new.locator("[data-bd-item]")).to_have_text("#12")
+    expect(new.locator(".bd-linkline")).to_contain_text("Floor API")
+    new_id = _bd_ids(page)[0]
+    # Order: › button, Alt+Arrow, and drag.
+    page.locator(f'[data-bd-move="next"][data-id="{new_id}"]').click()
+    expect(page.locator("[data-bd-note]").nth(1)).to_have_attribute("data-bd-note", str(new_id))
+    page.locator(f'[data-bd-note="{new_id}"]').focus()
+    page.keyboard.press("Alt+ArrowLeft")
+    expect(page.locator("[data-bd-note]").first).to_have_attribute("data-bd-note", str(new_id))
+    page.locator(f'[data-bd-note="{ids[0]}"]').drag_to(page.locator(f'[data-bd-note="{new_id}"]'),
+                                                         target_position={"x": 5, "y": 40})
+    expect(page.locator("[data-bd-note]").first).to_have_attribute("data-bd-note", str(ids[0]))
+    order = _bd_ids(page)
+    assert [p["id"] for p in store.board().data["active"]] == order                 # the server has the order
+    # Done leaves Active and shows under Done; Undone brings it back.
+    page.locator(f'[data-bd-done="{ids[1]}"]').click()
+    expect(page.locator(f'[data-bd-note="{ids[1]}"]')).to_have_count(0)
+    page.select_option("[data-bd-show]", "done")
+    expect(page.locator(f'[data-bd-note="{ids[1]}"]')).to_be_visible()
+    page.locator(f'[data-bd-undone="{ids[1]}"]').click()
+    expect(page.locator(f'[data-bd-note="{ids[1]}"]')).to_have_count(0)
+    # Discard → Trash (with its count) → Restore → Discard again → Empty, confirmed.
+    page.select_option("[data-bd-show]", "active")
+    page.locator(f'[data-bd-bin="{ids[2]}"]').click()
+    expect(page.locator('[data-bd-show] option[value="trash"]')).to_have_text("Trash (1)")
+    page.select_option("[data-bd-show]", "trash")
+    page.locator(f'[data-bd-restore="{ids[2]}"]').click()
+    expect(page.locator('[data-bd-show] option[value="trash"]')).to_have_text("Trash (0)")
+    page.select_option("[data-bd-show]", "active")
+    page.locator(f'[data-bd-bin="{ids[2]}"]').click()
+    page.select_option("[data-bd-show]", "trash")
+    page.click("[data-bd-empty]")
+    expect(page.locator("[data-bd-confirm]")).to_be_visible()
+    page.click("[data-bd-confirm-no]")
+    expect(page.locator(f'[data-bd-note="{ids[2]}"]')).to_be_visible()             # cancel deletes nothing
+    page.click("[data-bd-empty]")
+    page.click("[data-bd-confirm-yes]")
+    expect(page.locator("[data-bd-result]")).to_contain_text("Trash emptied · receipt t-")
+    expect(page.locator("[data-bd-note]")).to_have_count(0)
+    assert _no_page_overflow(page)
+    assert not errors, errors
+    ctx.close()
+
+
+def test_s3_photo_upload_place_and_library_purge_refused_while_used(browser, server, board_media, tmp_path):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    uploads = _requests(page, "/api/v1/media")
+    go(page, f"{server['url']}/guild-next/guild/board")
+    page.click("[data-bd-add] > summary")
+    page.click('[data-bd-open="photo"]')
+    expect(page.locator("[data-bd-pick]")).to_contain_text("no photos yet")
+    page.set_input_files("[data-bd-photo-file]", str(_jpeg_file(tmp_path)))
+    expect(page.locator("[data-bd-photo-result]")).to_contain_text("Added to your library")
+    page.fill("[data-bd-photo-caption]", "Lake ride, Saturday")
+    page.click("[data-bd-photo-add]")
+    photo = page.locator(".bd-photo").first
+    expect(photo).to_contain_text("Lake ride, Saturday")
+    page.wait_for_function("(e) => e.complete && e.naturalWidth > 0", arg=photo.locator("img").element_handle())
+    assert [m for m, _u in uploads if m == "POST"] == ["POST"]
+    # The library: trash the image, then a permanent delete is refused and says where it is used.
+    go(page, f"{server['url']}/guild-next/guild/media")
+    item = page.locator("[data-md-asset]").first
+    expect(item).to_contain_text("Used in 1 place")
+    item.locator("[data-md-trash]").click()
+    expect(page.locator("[data-md-result]")).to_contain_text("Moved to the library Trash")
+    page.select_option("[data-md-show]", "trash")
+    page.locator("[data-md-purge]").first.click()
+    page.click("[data-md-confirm-yes]")
+    expect(page.locator("[data-md-result]")).to_contain_text("Still used")
+    expect(page.locator("[data-md-where]").first).to_contain_text("Board note #")
+    # On the Board the photo is still shown (served while in the library Trash).
+    go(page, f"{server['url']}/guild-next/guild/board")
+    page.wait_for_function("(e) => e.complete && e.naturalWidth > 0", arg=page.locator(".bd-photo img").first.element_handle())
+    assert not [e for e in errors if "409" not in e], errors                       # the refused purge is a 409 by design
+    ctx.close()
+
+
+def test_s3_off_the_record_the_board_writes_nothing(browser, server, board_media, tmp_path):
+    from minimoi_portal.guild_ui.stores import Author
+    floor, _media = board_media
+    pid = floor.store().add_postit("stay", Author("robert", "owner", "Robert"), idempotency_key="s3-off-0001").value["id"]
+    ctx, page = _context(browser, server, 1440, 900)
+    writes = _writes(page)
+    go(page, f"{server['url']}/guild-next/guild/board")
+    page.click("[data-mc-pill]")
+    page.click("[data-mc-record]")
+    page.click("[data-mc-min]")
+    page.locator(f'[data-bd-done="{pid}"]').click()
+    expect(page.locator("[data-bd-result]")).to_contain_text("Off the record")
+    page.click("[data-bd-add] > summary")
+    page.click('[data-bd-open="photo"]')
+    page.set_input_files("[data-bd-photo-file]", str(_jpeg_file(tmp_path)))
+    expect(page.locator("[data-bd-photo-result]")).to_contain_text("Off the record")
+    assert not [w for w in writes if w.startswith(("/postits", "/media"))]
+    page.click("[data-mc-pill]")
+    page.click("[data-mc-record]")
+    ctx.close()
+
+
+@pytest.mark.parametrize("path", ["/guild-next/guild/board", "/guild-next/guild/media"])
+def test_s3_phone_board_and_library(browser, server, board_media, path):
+    from minimoi_portal.guild_ui.stores import Author
+    floor, _media = board_media
+    store = floor.store()
+    for i in range(3):
+        store.add_postit(f"phone note {i} with a little more text to wrap", Author("robert", "owner", "Robert"),
+                         idempotency_key=f"s3-ph-{path[-5:]}-{i:04d}", label="remember")
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    errors = _errors(page)
+    go(page, f"{server['url']}{path}")
+    assert _no_page_overflow(page)
+    if path.endswith("board"):
+        boxes = [page.locator("[data-bd-note]").nth(i).bounding_box() for i in range(3)]
+        assert max(b["x"] for b in boxes) - min(b["x"] for b in boxes) < 4          # one column on a phone (tilted notes)
+        assert page.locator("[data-bd-done]").first.bounding_box()["height"] >= 43   # touch targets
     assert not errors, errors
     ctx.close()

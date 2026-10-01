@@ -140,10 +140,16 @@ services:
       # scripts/workshop/workshop.py sync; the portal never writes it.
       - MINIMOI_WORKSHOPS_DIR=/app/data/workshops
       - MINIMOI_WORKSHOP_ID=mac
+      # The Guild Media library's files (Guild 1.1 slice 3, spec §5.2): images
+      # live only here, on a persistent host folder (created by build.sh);
+      # Postgres keeps only their index. Staging only until the production
+      # cutover adds the same mount.
+      - MINIMOI_MEDIA_DIR=/app/runtime/media
     volumes:
       - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
       - ${MINIMOI_ROOT}/data/usage/portal:/app/data/usage/portal
       - ${MINIMOI_ROOT}/data/workshops:/app/data/workshops:ro
+      - ${MINIMOI_ROOT}/data/media:/app/runtime/media
     # Permanently on mc-front (portal + MC's relay only), so enabling MC never
     # recreates the portal (MC spec v0.9 §3).
     networks:

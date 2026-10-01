@@ -52,7 +52,7 @@ def test_pages_say_unavailable_and_show_no_zero(load_portal):
     # Guild 1.1 slice 1: post-its live on the wall (the Workbench), which says they are unavailable.
     wall = client.get("/guild-next/guild/build/bench").get_data(as_text=True)
     assert "Post-its unavailable — add and remove are paused" in wall
-    assert 'data-postit-input maxlength="140" autocomplete="off" placeholder="Add a post-it" disabled' in wall
+    assert 'data-postit-input maxlength="280" autocomplete="off" placeholder="Add a post-it" disabled' in wall
     for zero in ("0 on the board", "No post-its on the board"):
         assert zero not in wall, zero
     board = client.get("/guild-next/guild/build/postits").get_data(as_text=True)
