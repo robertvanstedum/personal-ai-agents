@@ -147,6 +147,9 @@ class Worker:
             correlation = uuid4().hex
             watcher = Watcher(self, turn, correlation)
             watcher.start()
+            if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
+                watcher.stop()               # the send boundary: still fresh, or ask again (review F4)
+                continue
             try:
                 result = self.relay.stream(messages, adapter.user_key(turn["room"], turn["id"]), correlation)
             finally:

@@ -19,9 +19,10 @@
 #                         straight to $STAGING_ROOT/secrets/rooms-worker (mode 700,
 #                         files 600) with the relay caller token from mc.env;
 #                         no value is printed. Refuses if the folder has tokens.
-#   records.sh preflight  read-only build gate: MC's effective tool profile is
-#                         session_status only; the worker, Records and MC sit on
-#                         exactly their networks with no published port
+#   records.sh preflight  read-only build gate: MC's effective tools (from its
+#                         running gateway) are session_status only; real connection
+#                         attempts prove the worker reaches only Records and the
+#                         relay; no published port on Records, worker, MC, relay
 #   records.sh down       stop and remove both containers (data and journal kept)
 #   records.sh status     state and health of both
 #
@@ -119,25 +120,44 @@ case "$cmd" in
     unset relay
     note "provisioned: MC (membership-scoped) and the Rooms worker (work-scoped) credentials are in $WORKER_SECRETS (not printed). Next: records.sh up" ;;
   preflight)
-    # Rooms R1 build gate (ROOMS_R1.md §6): the effective MC tool profile and the
-    # runtime network boundaries, read from the running containers. Read-only.
+    # Rooms R1 build gate (ROOMS_R1.md §6): MC's EFFECTIVE tools from its running
+    # gateway, and the boundaries as real connection attempts from inside the
+    # containers. Read-only; names and codes only.
     bad=0
     check() { if [[ "$2" == "$3" ]]; then echo "PASS $1"; else echo "FAIL $1: expected [$3], found [$2]"; bad=1; fi; }
     nets() { docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$1" 2>/dev/null | xargs -n1 | sort | xargs; }
     ports() { docker inspect -f '{{json .HostConfig.PortBindings}}' "$1" 2>/dev/null | sed 's/^null$/{}/'; }
+    oc() { docker exec minimoi-mc-agent node /app/openclaw.mjs gateway call "$1" --timeout 90000 --params "$2" --json 2>/dev/null || true; }
+    jget() { docker exec -i minimoi-mc-agent node -e "let t='';process.stdin.on('data',c=>t+=c).on('end',()=>{let d={};try{d=JSON.parse(t.slice(t.indexOf('{')))}catch(e){};let v;try{v=($1)}catch(e){v='error'};console.log(typeof v==='string'?v:JSON.stringify(v))})"; }
+    oc sessions.create '{"agentId":"mc-agent","key":"agent:mc-agent:rooms-preflight"}' >/dev/null
+    tools=$(oc tools.effective '{"sessionKey":"agent:mc-agent:rooms-preflight"}' | jget "(d.groups||[]).flatMap(g=>(g.tools||[]).map(t=>t.id)).sort().join(',')")
+    check "MC effective tools (running gateway)" "${tools:-none}" "session_status"
     allow=$(docker exec minimoi-mc-agent node -e '
       const c = require(process.env.OPENCLAW_CONFIG_PATH || "/home/node/.openclaw/openclaw.json");
       const found = new Set();
       (function walk(v) { if (v && typeof v === "object") { if (v.tools && Array.isArray(v.tools.allow)) found.add(JSON.stringify(v.tools.allow));
         for (const k of Object.keys(v)) walk(v[k]); } })(c);
-      console.log([...found].join(" "));' 2>/dev/null || echo unreadable)
-    check "MC effective tools.allow (every agent block)" "$allow" '["session_status"]'
+      console.log([...found].join(" ") || "none");' 2>/dev/null || echo unreadable)
+    check "MC configured tools.allow (every block; none is a failure)" "$allow" '["session_status"]'
     check "rooms-worker networks" "$(nets "$WORKER_CONTAINER")" "$MC_FRONT_NETWORK $RECORDS_NETWORK"
     check "records networks" "$(nets "$RECORDS_CONTAINER")" "$RECORDS_NETWORK"
-    check "mc-agent networks (never reachable from the worker)" "$(nets minimoi-mc-agent)" "minimoi-staging-mc-net"
-    check "rooms-worker published ports" "$(ports "$WORKER_CONTAINER")" "{}"
-    check "records published ports" "$(ports "$RECORDS_CONTAINER")" "{}"
+    check "mc-agent networks" "$(nets minimoi-mc-agent)" "minimoi-staging-mc-net"
+    for c in "$WORKER_CONTAINER" "$RECORDS_CONTAINER" minimoi-mc-agent minimoi-mc-relay; do check "$c published ports" "$(ports "$c")" "{}"; done
     check "rooms-worker read-only root" "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$WORKER_CONTAINER" 2>/dev/null)" "true"
+    probe() {   # container, url -> HTTP status, or "unreachable"
+      docker exec "$1" python -c "
+import sys, urllib.request as u
+try:
+    print(u.urlopen(sys.argv[1], timeout=4).status)
+except Exception as e:
+    print(getattr(e, 'code', None) or 'unreachable')" "$2" 2>/dev/null || echo unreachable
+    }
+    check "worker -> Records /health" "$(probe "$WORKER_CONTAINER" http://minimoi-records:18880/health)" "200"
+    check "worker -> MC relay /healthz" "$(probe "$WORKER_CONTAINER" http://mc-relay:8790/healthz)" "200"
+    check "worker -> MC itself (must be unreachable)" "$(probe "$WORKER_CONTAINER" http://mc-agent:18789/healthz)" "unreachable"
+    check "worker -> model gateway (must be unreachable)" "$(probe "$WORKER_CONTAINER" http://model-gateway:4000/health)" "unreachable"
+    check "worker -> portal (must be unreachable)" "$(probe "$WORKER_CONTAINER" http://minimoi-portal:5001/health)" "unreachable"
+    check "Records -> MC relay (must be unreachable)" "$(probe "$RECORDS_CONTAINER" http://mc-relay:8790/healthz)" "unreachable"
     [[ "$bad" == 0 ]] || die "preflight failed" ;;
   down)
     records_compose down ;;

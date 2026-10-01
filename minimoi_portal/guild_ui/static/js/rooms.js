@@ -526,9 +526,9 @@ function turnLine(t) {
     case 'claimed': case 'running': case 'recovering': return { text: `${who} is answering…`, wait: true };
     case 'cancel_requested': return { text: `Stopping ${who}'s reply…`, wait: true };
     case 'uncertain':
-      if (!t.disposition || t.disposition === 'lease_expired') return { text: `Checking whether ${who}'s reply was saved…`, actions: ['continue'] };
       if (t.disposition === 'confirmed_absent') return { text: `Not answered: ${who}'s worker stopped before answering.`, actions: ['retry', 'continue'] };
-      return { text: `${who} may have answered; the reply was not received.`, actions: ['attempt', 'continue'] };
+      if (t.disposition === 'unresolved_started') return { text: `${who} may have answered; the reply was not received.`, actions: ['attempt', 'continue'] };
+      return { text: `Checking whether ${who}'s reply was saved…`, actions: ['continue'] };
     case 'expired': return { text: `Not answered: ${who} was busy with an earlier message.`, actions: ['retry', 'continue', 'end'] };
     case 'failed': return { text: t.disposition === 'relay_busy' ? `Not answered: ${who} was busy.` : `Not answered: ${who}'s reply failed.`, actions: ['retry', 'continue', 'end'] };
     case 'cancelled':
@@ -587,7 +587,8 @@ async function turnAction(button) {
   if (action === 'end') { openAct('closed'); return; }
   if (action === 'renew') {
     const r = await records(`/v1/rooms/${encodeURIComponent(current)}/renew`, { method: 'POST', body: {}, key: keyFor(`renew:${id}`) });
-    status(r.status === 200 ? 'Another hour: write again and it answers.' : `Not renewed: ${r.body.error || 'Rooms answered with an error'}.`);
+    if (r.status !== 200) { status(`Not renewed: ${r.body.error || 'Rooms answered with an error'}.`); return; }
+    status('Another hour: write again and it answers.');
     dismissed.add(id);
     await loadMeeting();
     return;

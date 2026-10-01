@@ -764,3 +764,27 @@ def test_reconciled_with_a_receipt_commits_and_stop_wording_is_a_request(env):
     env.call("POST", env.owner, f"/rooms/{env.room}/stop", {})
     events = env.call("GET", env.owner, f"/rooms/{env.room}").json["events"]
     assert events[-1]["body"] == "active → paused. Stop requested for all replies."
+
+
+# ── Codex recheck (CODEX_RECHECK_ROOMS_R1_BUILD_2026-10-01) ─────────────────
+
+def test_reconciled_finds_a_receipt_for_an_uncertain_turn_without_deadlock(env):
+    env.prove(); env.join(); env.say("Q")
+    t = env.claim(); env.start(t); env.reply(t)
+    with env.db() as d:                                                       # the worker never saw the commit
+        d.execute("UPDATE turns SET state='uncertain',disposition='lease_expired' WHERE id=?", (t["id"],))
+    r = env.call("POST", env.worker, f"/turns/{t['id']}/reconciled", {"prior_claim_id": t["claim_id"], "finding": "started"})
+    assert r.status_code == 200 and r.json["state"] == "committed"
+    assert env.turn(t["id"])["state"] == "committed"
+
+
+@pytest.mark.parametrize("disposition", ["lease_expired", "relay_error", "relay_stopped", "journal_started", None])
+def test_retry_accepts_only_reconciled_uncertain_turns(env, disposition):
+    env.prove(); env.join(); env.say("Q")
+    t = env.claim(); env.start(t)
+    with env.db() as d:
+        d.execute("UPDATE turns SET state='uncertain',disposition=? WHERE id=?", (disposition, t["id"]))
+    assert env.call("POST", env.owner, f"/rooms/{env.room}/turns/{t['id']}/retry", {"confirm": True}).status_code == 409
+    with env.db() as d:
+        d.execute("UPDATE turns SET disposition='confirmed_absent' WHERE id=?", (t["id"],))
+    assert env.call("POST", env.owner, f"/rooms/{env.room}/turns/{t['id']}/retry", {"confirm": True}).status_code == 201

@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS routing_notes(
 INSERT OR IGNORE INTO meta VALUES('rooms_r1_schema','1');
 """
 
-ACTIVE = ("claimed", "running", "cancel_requested", "recovering")   # hold the (room, addressee) slot
+ACTIVE = ("claimed", "running", "cancel_requested", "recovering")
+RECONCILED = ("unresolved_started", "confirmed_absent")    # the only uncertain dispositions Retry accepts   # hold the (room, addressee) slot
 TERMINAL = ("committed", "cancelled", "superseded", "expired", "failed", "abandoned")
 LEASE_S = 60
 TURN_TTL_S = 600
@@ -539,7 +540,7 @@ class Meetings:
                 raise Problem("Turn not found", 404)
             if t["state"] not in ("failed", "cancelled", "expired", "uncertain"):
                 raise Problem("Only a failed, cancelled, expired or unresolved turn can be tried again", 409)
-            if t["state"] == "uncertain" and t["disposition"] in (None, "lease_expired"):
+            if t["state"] == "uncertain" and t["disposition"] not in RECONCILED:
                 # Review F3: a saved reply may still be delivered; reconcile first.
                 raise Problem("Still checking whether the reply was saved; try again in a moment", 409)
             if current["state"] != "active":
@@ -974,6 +975,22 @@ class Meetings:
                 clear_presence(db, t["room"], t["addressee"], "answering")
             return {"state": turn_row(db, turn_id)["state"]}
 
+    @staticmethod
+    def commit_from_receipt(db, t):
+        """Receipt first (spec §3.7): a reply Records already accepted wins.
+        Runs in the caller's transaction; never opens another connection."""
+        receipt = db.execute("SELECT response FROM operations WHERE actor=? AND key=?",
+                             (t["addressee"], response_key(t["addressee"], t["id"]))).fetchone()
+        if not receipt:
+            return False
+        event_id = json.loads(receipt["response"])["result"]["id"]
+        seq = db.execute("SELECT seq FROM events WHERE id=?", (event_id,)).fetchone()["seq"]
+        set_turn(db, t["id"], state="committed", disposition="answered",
+                 result=canonical({"event_id": event_id, "event_seq": seq,
+                                   "operation_key": response_key(t["addressee"], t["id"]),
+                                   "execution": None, "model": None}))
+        return True
+
     def reconciled(self, auth, turn_id, payload):
         """The worker reports what its journal shows for an uncertain turn
         (spec §3.7 steps 3-4). Receipt first: a committed reply wins."""
@@ -989,9 +1006,8 @@ class Meetings:
                 raise Problem("That was not this turn's last claim (stale_claim)", 409)
             if t["state"] != "uncertain":
                 return {"state": t["state"]}
-            if db.execute("SELECT 1 FROM operations WHERE actor=? AND key=?",
-                          (t["addressee"], response_key(t["addressee"], t["id"]))).fetchone():
-                return self.recover(auth, turn_id, {"prior_claim_id": t["claim_id"]})
+            if self.commit_from_receipt(db, t):
+                return {"state": "committed"}
             set_turn(db, turn_id, disposition="unresolved_started" if finding == "started" else "confirmed_absent")
             return {"state": "uncertain", "disposition": turn_row(db, turn_id)["disposition"]}
 
@@ -1006,15 +1022,7 @@ class Meetings:
                 return {"state": t["state"]}
             if not prior or prior != t["claim_id"]:
                 raise Problem("That was not this turn's last claim (stale_claim)", 409)
-            receipt = db.execute("SELECT response FROM operations WHERE actor=? AND key=?",
-                                 (t["addressee"], response_key(t["addressee"], t["id"]))).fetchone()
-            if receipt:
-                event_id = json.loads(receipt["response"])["result"]["id"]
-                seq = db.execute("SELECT seq FROM events WHERE id=?", (event_id,)).fetchone()["seq"]
-                set_turn(db, turn_id, state="committed", disposition="answered",
-                         result=canonical({"event_id": event_id, "event_seq": seq,
-                                           "operation_key": response_key(t["addressee"], t["id"]),
-                                           "execution": None, "model": None}))
+            if self.commit_from_receipt(db, t):
                 return {"state": "committed"}
             if t["generation"] != generation(db, t["room"]):
                 set_turn(db, turn_id, state="cancelled", disposition="stale_generation:late_output_retained")
