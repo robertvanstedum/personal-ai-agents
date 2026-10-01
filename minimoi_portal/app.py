@@ -1298,7 +1298,7 @@ from domains.guild import queue_store as _qstore  # noqa: E402
 # with a "Save is off" notice. The store refuses writes in that case (M2).
 _BQ_REPO_COPY = Path(__file__).parent.parent / "data" / "guild" / "build_queue.json"
 _GUILD_QUEUE_PATH = _cfg.GUILD_QUEUE_PATH
-_BUILD_QUEUE_STATUSES = _qstore.STATUSES
+_BUILD_QUEUE_STATUSES = _qstore.STATUSES   # includes rework (Guild 1.1 slice 2, spec §4.2)
 _BUILD_QUEUE_ACTIVE_STATUSES = ("spec_ready", "in_build")
 
 
@@ -2255,6 +2255,7 @@ def guild_build():
     all_items, unreadable = _read_build_queue()
     items = all_items
     if status_filter == 'active':
+        # rework (Guild 1.1 slice 2) is trouble, not terminal: it stays in Active.
         terminal = {'done', 'cancelled', 'superseded', 'deferred'}
         items = [i for i in items if i.get('status') not in terminal]
     elif status_filter != 'all':
@@ -2598,7 +2599,8 @@ def new_build_item():
     summary      = request.form.get('summary',      '').strip() or None
     github_issue = request.form.get('github_issue', '').strip() or None
     status       = request.form.get('status', 'idea')
-    valid_status = set(_BUILD_QUEUE_STATUSES) - {'done', 'superseded'}
+    # rework needs a reason and history (Guild 1.1 slice 2): never a starting status.
+    valid_status = set(_BUILD_QUEUE_STATUSES) - {'done', 'superseded', 'rework'}
     if not spec_title:
         return redirect(url_for('guild_build'))
     if status not in valid_status:

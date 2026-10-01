@@ -11,6 +11,7 @@ from flask import render_template, request, url_for
 
 from . import cfg, floor_state, owner_page
 from .adapters import ACTIVE, STATUSES, by_recent
+from .adapters.queue_reader import TROUBLE
 from .briefing import LABEL as RULES_LABEL
 from .security import OFF_RECORD_TEXT, csrf_token
 from .stores import NOTE_MAX, POSTIT_MAX
@@ -226,8 +227,8 @@ def bench():
     data = {
         "motion": {"res": queue_res,
                    "rows": [i for i in (queue_res.data or []) if i["status_known"] and i["status"] in ACTIVE]},
-        "blocked": {"res": queue_res,
-                    "rows": [i for i in (queue_res.data or []) if i["status_known"] and i["status"] == "blocked"]},
+        "blocked": {"res": queue_res,     # trouble: blocked or rework (Guild 1.1 slice 2)
+                    "rows": [i for i in (queue_res.data or []) if i["status_known"] and i["status"] in TROUBLE]},
         "discussions": {"res": services.sessions.list_sessions()},
         "postits": {"board": services.floor.list_postits(), "bin": services.floor.list_bin(limit=20)},
     }

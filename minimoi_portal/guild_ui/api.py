@@ -14,7 +14,8 @@ from flask import current_app, jsonify, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from . import cfg, floor_state, owner_api
-from .adapters import STATUSES, normalize
+from .adapters import ACTIVE, STATUSES, normalize
+from domains.guild.queue_store import CREATE_STATUSES, RANKS, TITLE_MAX, TROUBLE
 from .adapters.contract import now_iso
 from .markdown_render import with_html
 from .mc.turn_log import turn_log_of
@@ -102,12 +103,29 @@ def floor_view():
 
 @owner_api
 def queue_view():
+    """The queue. ``?scope=all`` (Guild 1.1 slice 2, the Build Log) answers every
+    status; ``?scope=active`` only Spec Ready and In Build (plus unknown rows,
+    which are never dropped). Without ``scope`` the answer is exactly what it
+    was before slice 2, for compatibility (it already listed every row). Every
+    answer carries ``rank_digest``, the collection's unchanged-check for a rank
+    change (spec §4.3)."""
     services = cfg()["services"]
+    scope = request.args.get("scope", "default")
+    if scope not in ("default", "active", "all"):
+        return json_error("invalid", "scope is active or all.", 422)
     res = services.queue.list_items()
     checks_res = services.queue.checks()
-    return jsonify({**res.meta(), "items": res.data if res.ok else None,
+    items = None
+    if res.ok:
+        items = res.data
+        if scope == "active":
+            items = [i for i in res.data if not i["status_known"] or i["status"] in ACTIVE]
+    return jsonify({**res.meta(), "items": items, "scope": scope,
+                    "total": len(res.data) if res.ok else None,
+                    "rank_digest": getattr(res, "rank_digest", None) if res.ok else None,
                     "checks": checks_res.data if checks_res.ok else None, "checks_source": checks_res.meta(),
-                    "statuses": list(STATUSES)})
+                    "statuses": list(STATUSES), "trouble_statuses": list(TROUBLE),
+                    "create_statuses": list(CREATE_STATUSES)})
 
 
 @owner_api
@@ -116,6 +134,93 @@ def item_view(item_id: int):
     if res.ok and res.data is None:
         return json_error("not_found", f"#{item_id} is not in the queue.", 404)
     return jsonify({**res.meta(), "item": res.data if res.ok else None})
+
+
+@owner_api
+def journal_view(item_id: int):
+    """The item's history from the file journal (spec §4.4): from, to,
+    principal, via, at and receipt, oldest first. Unknown when unreadable."""
+    res = cfg()["services"].queue.journal(item_id)
+    return jsonify({**res.meta(), "journal": res.data if res.ok else None})
+
+
+RANK_WORDS = {
+    "saved": "Rank saved · verified · receipt {receipt}",
+    "conflict": "The ranking changed since you opened it. Here is the current ranking; set the rank again if you still want it",
+}
+
+
+def _store_answer(result, message: str, **extra):
+    """A queue store result as JSON, with the usual HTTP codes and Retry-After."""
+    payload = {"result": result.result, "verified": bool(result.verified), "receipt_id": result.receipt_id,
+               "repeated": bool(result.repeated), "observed_at": now_iso(), "message": message, **extra}
+    status = SAVE_HTTP.get(result.result, 500)
+    if status >= 400:
+        payload["error"] = "unavailable" if result.result == "refused" else result.result
+    if result.result == "busy":
+        payload["retry_after_s"] = 5
+    response = jsonify(payload)
+    response.status_code = status
+    if result.result == "busy":
+        response.headers["Retry-After"] = "5"
+    return response
+
+
+def _current_ranking():
+    res = cfg()["services"].queue.list_items()
+    if not res.ok:
+        return None, None
+    pairs = sorted([i["id"], i["owner_rank"]] for i in res.data if i.get("owner_rank"))
+    return pairs, getattr(res, "rank_digest", None)
+
+
+@owner_api
+def set_rank(item_id: int):
+    """Owner rank 1-3, or none (spec §4.3): one guarded write behind the rank
+    digest; a conflict answers the current ranking. No model call."""
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    rank = body.get("rank")
+    expect = body.get("expect_rank_digest")
+    if rank is not None and (isinstance(rank, bool) or rank not in RANKS):
+        return json_error("invalid", "A rank is 1, 2, 3 or none. Nothing was changed.", 422, result="invalid")
+    if not isinstance(expect, str) or not _HEX64.fullmatch(expect):
+        return json_error("invalid", "This page was out of date; reload and try again", 422, result="invalid")
+    result = cfg()["services"].store.set_rank(item_id, rank, expect_rank_digest=expect, principal=_principal(),
+                                             via="guild-next", idempotency_key=body["_key"])
+    ranking, digest = (result.ranking, result.rank_digest) if result.ranking is not None else _current_ranking()
+    words = RANK_WORDS.get(result.result) or save_message(result.result, item_id, result.receipt_id)
+    return _store_answer(result, words.format(receipt=result.receipt_id or "?"), item_id=item_id, rank=rank,
+                         ranking=ranking, rank_digest=digest, changed=result.changed)
+
+
+@owner_api
+def create_item():
+    """A new item through the queue store (spec §4.5): idea, design or backlog;
+    the next id under the lock; journaled. Never the legacy DB route."""
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    title, bad = _clean_text(body.get("spec_title"), TITLE_MAX, "title")
+    if bad is not None:
+        return bad
+    status = body.get("status", "idea")
+    if status not in CREATE_STATUSES:
+        return json_error("invalid", "A new item starts as idea, design or backlog. Nothing was added.", 422,
+                          result="invalid")
+    result = cfg()["services"].store.create_item(title, status, principal=_principal(), via="guild-next",
+                                                 idempotency_key=body["_key"])
+    item = result.current_item
+    new_id = result.item_id if result.ok else None
+    if result.ok and result.repeated:
+        found = cfg()["services"].queue.get_item(new_id)
+        item_out = found.data if found.ok else None
+    else:
+        item_out = normalize(item) if isinstance(item, dict) and isinstance(item.get("id"), int) else None
+    message = (f"#{new_id} added · verified · receipt {result.receipt_id}" if result.ok
+               else save_message(result.result, "new item", result.receipt_id))
+    return _store_answer(result, message, item=item_out, item_id=new_id)
 
 
 @owner_api
@@ -149,6 +254,8 @@ def save_status(item_id: int):
         return json_error("invalid", "Every Save needs an idempotency key (8 to 64 letters, digits, - or _). "
                           "Nothing was saved.", 422, result="invalid")
     note = (note or "").strip() or None
+    if to in TROUBLE and not note:
+        return json_error("invalid", "Blocked and Rework need a reason. Nothing was saved.", 422, result="invalid")
     services = c["services"]
 
     def audit(_item, old, new):
@@ -949,6 +1056,10 @@ RULES = [
     ("/queue/items/<int:item_id>", "api_item", item_view, ["GET"]),
     ("/queue/items/<int:item_id>/history", "api_history", history_view, ["GET"]),
     ("/queue/items/<int:item_id>/status", "api_save_status", save_status, ["POST"]),
+    # Guild 1.1 slice 2 (spec §4.3-4.5): rank, the file journal, and a new item.
+    ("/queue/items", "api_create_item", create_item, ["POST"]),
+    ("/queue/items/<int:item_id>/rank", "api_set_rank", set_rank, ["POST"]),
+    ("/queue/items/<int:item_id>/journal", "api_item_journal", journal_view, ["GET"]),
     ("/queue/journal/<op_id>/checked", "api_mark_checked", mark_checked, ["POST"]),
     ("/notes", "api_notes", notes_list, ["GET"]),
     ("/notes", "api_notes_add", notes_add, ["POST"]),

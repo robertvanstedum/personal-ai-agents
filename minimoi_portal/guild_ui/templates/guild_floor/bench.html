@@ -70,7 +70,7 @@
   {% set b = data.blocked %}
   {% if not b.res.ok %}{{ unknown_row(badge(b.res)) }}{% else %}
   <ul class="rows">
-    {% for it in b.rows %}<li class="row" data-row><span><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title }}</a>{% if it.blocked_reason %} — {{ it.blocked_reason }}{% endif %}</span>{{ src_badge(badge(b.res)) }}</li>{% endfor %}
+    {% for it in b.rows %}<li class="row" data-row><span><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title }}</a>{% if it.status == 'rework' %} — rework: {{ it.trouble_reason }}{% elif it.blocked_reason %} — {{ it.blocked_reason }}{% endif %}</span>{{ src_badge(badge(b.res)) }}</li>{% endfor %}
   </ul>
   {% endif %}
 {% endcall %}
