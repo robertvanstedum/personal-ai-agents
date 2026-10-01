@@ -485,3 +485,52 @@ def test_lib_passes_mc_env_for_interpolation_and_the_turn_switch(tmp_path, shell
     (root / "state" / "mc.turns").write_text("maybe\n")
     bad = _up(shell, env)
     assert bad.returncode != 0 and "use on or off" in bad.stderr
+
+
+# ── Rooms R1: the worker is MC's second relay caller (ROOMS_R1.md §11) ───────
+
+RECORDS_FILE = REPO / "docker-compose.records.yml"
+
+
+def _records_render():
+    return yaml.safe_load(_compose_config(RECORDS_FILE, env_extra={"MINIMOI_IMAGE_TAG": "abc1234",
+                                                                    "MINIMOI_ROOT": "/tmp/staging-root"}))
+
+
+def test_rooms_worker_reaches_only_records_and_the_relay():
+    rendered = _records_render()
+    assert set(rendered["services"]) == {"records", "rooms-worker"}
+    worker = rendered["services"]["rooms-worker"]
+    assert sorted(worker["networks"]) == ["mc-front", "records-net"]       # never mc-net: MC itself is unreachable
+    assert rendered["networks"]["mc-front"] == {"name": "minimoi-staging-mc-front", "external": True}
+    assert "ports" not in worker and "env_file" not in worker
+    assert worker["read_only"] is True and worker["cap_drop"] == ["ALL"]
+    assert worker["security_opt"] == ["no-new-privileges:true"]
+    env = worker["environment"]
+    assert env["MC_RELAY_URL"] == "http://mc-relay:8790" and env["RECORDS_URL"] == "http://minimoi-records:18880"
+    assert not any("TOKEN" in k or "KEY" in k for k in env)                  # secrets only as files
+    mounts = {m["target"]: m for m in worker["volumes"]}
+    assert mounts["/run/secrets/rooms"]["read_only"] is True
+    assert mounts["/run/secrets/rooms"]["source"] == "/tmp/staging-root/secrets/rooms-worker"
+    assert mounts["/journal"]["source"] == "rooms-journal"
+    assert rendered["volumes"]["rooms-journal"] == {"name": "minimoi-staging-rooms-journal", "external": True}
+    records = rendered["services"]["records"]
+    assert list(records["networks"]) == ["records-net"]                    # Records stays isolated
+    assert "portal" not in json.dumps(worker).lower().replace("no portal", "")
+
+
+def test_the_worker_uses_the_relays_own_caller_prefix():
+    adapter = (REPO / "services" / "rooms_worker" / "adapter.py").read_text()
+    relay = (REPO / "docker" / "mc-agent" / "relay.mjs").read_text()
+    assert '"guild-mc:rooms:"' in adapter and 'startsWith("guild-mc:")' in relay
+    assert "rooms-worker" in relay                                          # the second caller is named there
+
+
+def test_records_sh_provisions_privately_and_never_prints_a_token():
+    text = (SCRIPTS / "records.sh").read_text()
+    provision = text[text.index("  provision)"):text.index("  down)")]
+    assert "umask 077" in provision and 'chmod 700 "$WORKER_SECRETS"' in provision
+    assert 'chmod 600 "$WORKER_SECRETS"/*.token' in provision and "unset relay" in provision
+    assert "echo \"$relay\"" not in provision and "cat " not in provision
+    assert "--volumes" in text and "refusing" in text                     # never removes data
+    assert "records_compose up -d --no-build records" in text            # Records alone until provisioned

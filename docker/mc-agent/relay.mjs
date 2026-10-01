@@ -39,6 +39,11 @@ import { timingSafeEqual } from "node:crypto";
 
 const PORT = Number(process.env.MC_RELAY_PORT || 8790);
 const TARGET = process.env.MC_RELAY_TARGET || "http://mc-agent:18789";
+// Callers (MC spec v0.9 §4, amended by Rooms R1, ROOMS_R1.md §11): the portal
+// (Shop floor, user "guild-mc:<...>") and the Rooms worker (minimoi-rooms-worker,
+// user "guild-mc:rooms:<per-turn hash>"), both on mc-front with this one caller
+// token. The relay stays single-flight for both: a busy answer (429) is
+// queued by the worker, never dropped.
 const CALLER_TOKEN = process.env.MC_RELAY_TOKEN || "";
 const MC_TOKEN = process.env.MC_OPENCLAW_GATEWAY_TOKEN || "";
 const MAX_BODY = 256 * 1024;

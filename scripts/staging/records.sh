@@ -4,14 +4,23 @@
 # Craftsman. It never touches the main project's containers; the portal joins
 # Records' internal network permanently from docker-compose.staging.yml.
 #
+# Rooms R1 (docs/specs/minimoi-connected-work/ROOMS_R1.md §3.8) adds its
+# sibling, minimoi-rooms-worker, to the same project: it answers Master
+# Craftsman's meeting turns and has no portal dependency.
+#
 # Usage:
-#   records.sh build    build minimoi-staging/records:<release tag> from the
-#                       pinned release worktree (build.sh's RELEASE)
-#   records.sh up       start minimoi-records (needs the image, the main
-#                       stack's network minimoi-staging-records, and the data
-#                       folder $STAGING_ROOT/data/records at mode 700)
-#   records.sh down     stop and remove the container (the data folder is kept)
-#   records.sh status   state and health
+#   records.sh build      build minimoi-staging/records:<release tag> and
+#                         minimoi-staging/rooms-worker:<release tag> from the
+#                         pinned release worktree (build.sh's RELEASE)
+#   records.sh up         start minimoi-records, and minimoi-rooms-worker when its
+#                         secrets folder is provisioned (else Records alone)
+#   records.sh provision  once, owner-run: MC and the worker principals, their
+#                         scoped credentials and MC's teammate card, written
+#                         straight to $STAGING_ROOT/secrets/rooms-worker (mode 700,
+#                         files 600) with the relay caller token from mc.env;
+#                         no value is printed. Refuses if the folder has tokens.
+#   records.sh down       stop and remove both containers (data and journal kept)
+#   records.sh status     state and health of both
 #
 # Records keeps its own sign-in. On its first start it creates owner-key.txt
 # (mode 600) in the data folder, unless the owner put his own one there first;
@@ -23,6 +32,19 @@ RECORDS_PROJECT="minimoi-staging-records"
 RECORDS_FILE="docker-compose.records.yml"
 RECORDS_CONTAINER="minimoi-records"
 RECORDS_NETWORK="minimoi-staging-records"
+WORKER_CONTAINER="minimoi-rooms-worker"
+WORKER_SECRETS="$STAGING_ROOT/secrets/rooms-worker"
+WORKER_JOURNAL="minimoi-staging-rooms-journal"
+MC_FRONT_NETWORK="minimoi-staging-mc-front"
+env_value() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -n 1 | sed "s/^'\\(.*\\)'\$/\\1/; s/^\"\\(.*\\)\"\$/\\1/"; }
+
+worker_ready() {
+  [[ -d "$WORKER_SECRETS" && "$(file_mode "$WORKER_SECRETS")" == 700 ]] || return 1
+  local f
+  for f in rooms-worker.token mc.token mc-relay.token; do
+    [[ -f "$WORKER_SECRETS/$f" && ! -L "$WORKER_SECRETS/$f" && "$(file_mode "$WORKER_SECRETS/$f")" == 600 ]] || return 1
+  done
+}
 
 records_compose() {
   local arg
@@ -48,7 +70,12 @@ case "$cmd" in
     image="minimoi-staging/records:$tag"
     note "building $image from $RELEASE_DIR at ${sha:0:7}"
     docker build -f "$RELEASE_DIR/docker/Dockerfile.records" -t "$image" \
-      --label "minimoi.staging.release=$sha" "$RELEASE_DIR" ;;
+      --label "minimoi.staging.release=$sha" "$RELEASE_DIR"
+    if [[ -f "$RELEASE_DIR/docker/Dockerfile.rooms-worker" ]]; then
+      note "building minimoi-staging/rooms-worker:$tag"
+      docker build -f "$RELEASE_DIR/docker/Dockerfile.rooms-worker" -t "minimoi-staging/rooms-worker:$tag" \
+        --label "minimoi.staging.release=$sha" "$RELEASE_DIR"
+    fi ;;
   up)
     require_absolute_root
     folder="$STAGING_ROOT/data/records"
@@ -56,13 +83,46 @@ case "$cmd" in
     [[ "$(file_mode "$folder")" == 700 ]] || die "$folder must be mode 700 (Records refuses a shared folder)"
     docker network inspect "$RECORDS_NETWORK" >/dev/null 2>&1 \
       || die "missing network $RECORDS_NETWORK; bring the main stack up first (up.sh portal)"
-    records_compose up -d --no-build
-    note "up. Records answers only through the portal at https://dev.minimoi.ai/app/records/ (owner sign-in, then Records' own sign-in)" ;;
+    if worker_ready && grep -q "rooms-worker:" "$RELEASE_DIR/$RECORDS_FILE"; then
+      docker network inspect "$MC_FRONT_NETWORK" >/dev/null 2>&1 \
+        || die "missing network $MC_FRONT_NETWORK; bring the main stack up first (up.sh portal)"
+      docker volume inspect "$WORKER_JOURNAL" >/dev/null 2>&1 || docker volume create "$WORKER_JOURNAL" >/dev/null
+      records_compose up -d --no-build
+      note "up: Records and the Rooms worker (it answers for Master Craftsman while MC is up)"
+    else
+      records_compose up -d --no-build records
+      note "up: Records only (the Rooms worker needs: records.sh provision)"
+    fi
+    note "Records answers only through the portal at https://dev.minimoi.ai/app/records/ (owner sign-in, then Records' own sign-in)" ;;
+  provision)
+    require_absolute_root
+    docker inspect -f '{{.State.Running}}' "$RECORDS_CONTAINER" 2>/dev/null | grep -q true || die "start Records first (records.sh up)"
+    [[ -f "$STAGING_MC_ENV" ]] || die "missing $STAGING_MC_ENV (mc.sh token writes the relay caller token)"
+    relay=$(env_value "$STAGING_MC_ENV" MC_RELAY_TOKEN)
+    [[ -n "$relay" ]] || die "mc.env has no MC_RELAY_TOKEN (run mc.sh token)"
+    if [[ -e "$WORKER_SECRETS/rooms-worker.token" || -e "$WORKER_SECRETS/mc.token" ]]; then
+      die "$WORKER_SECRETS already holds tokens; revoke them in Records and remove the files first"
+    fi
+    outbox="$STAGING_ROOT/data/records/.rooms-outbox"
+    [[ ! -e "$outbox/mc.token" && ! -e "$outbox/rooms-worker.token" ]] || die "an earlier provision left tokens in $outbox; inspect it first"
+    docker exec "$RECORDS_CONTAINER" python manage.py provision-rooms --data-dir /data --out /data/.rooms-outbox \
+      --teammate mc --label "Master Craftsman"
+    ( umask 077; mkdir -p "$WORKER_SECRETS" )
+    chmod 700 "$WORKER_SECRETS"
+    mv "$outbox/mc.token" "$outbox/rooms-worker.token" "$WORKER_SECRETS/"
+    rmdir "$outbox" 2>/dev/null || true
+    ( umask 077; printf '%s\n' "$relay" > "$WORKER_SECRETS/mc-relay.token" )
+    chmod 600 "$WORKER_SECRETS"/*.token
+    unset relay
+    note "provisioned: MC (membership-scoped) and the Rooms worker (work-scoped) credentials are in $WORKER_SECRETS (not printed). Next: records.sh up" ;;
   down)
     records_compose down ;;
   status)
-    docker inspect -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' "$RECORDS_CONTAINER" 2>/dev/null \
-      || echo "$RECORDS_CONTAINER: absent" ;;
+    for c in "$RECORDS_CONTAINER" "$WORKER_CONTAINER"; do
+      docker inspect -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' "$c" 2>/dev/null \
+        || echo "$c: absent"
+    done
+    worker_ready && echo "rooms-worker secrets: provisioned" || echo "rooms-worker secrets: not provisioned (records.sh provision)" ;;
   *)
-    sed -n '2,19p' "$0"; exit 2 ;;
+    sed -n '2,31p' "$0"; exit 2 ;;
 esac

@@ -1052,6 +1052,44 @@ scripts/staging/mc_cost_probe.sh --stream --yes-spend --stop-after-first-text  #
 - Spend is never above $1, and a turn whose cost cannot be read stops the
   probe.
 
+## Rooms R1: Master Craftsman answers in a room (staging only)
+
+Spec: `docs/specs/minimoi-connected-work/ROOMS_R1.md` (v0.5.1, adopted for dev
+on 2026-10-01). Records' own Compose project (`docker-compose.records.yml`,
+`records.sh`) now holds two services: `minimoi-records` (unchanged boundaries)
+and its sibling `minimoi-rooms-worker`, which claims MC's meeting turns from
+Records and answers them through the MC relay. The worker is on `records-net`
+and `mc-front` only, has no portal code, URL or port, and keeps its turn
+journal in the external volume `minimoi-staging-rooms-journal`. Rooms keeps
+answering while the portal is down; you see the replies when it is back.
+
+Secrets live only as files in `$STAGING_ROOT/secrets/rooms-worker` (mode 700,
+files 600): `rooms-worker.token` (work-scoped), `mc.token` (MC's
+membership-scoped credential) and `mc-relay.token` (the relay caller token,
+copied from `mc.env`). Nothing prints them.
+
+```bash
+scripts/staging/records.sh build        # Records + worker images for the pinned release
+scripts/staging/records.sh down         # stop Records before the migration backup
+# backup with Records stopped: copy data/records (SQLite + WAL) and check it
+scripts/staging/records.sh up           # Records alone the first time: the R1 tables are created (new tables only)
+scripts/staging/records.sh provision    # once: MC + worker credentials, MC's teammate card, the hosting binding
+scripts/staging/records.sh up           # now Records and the worker
+scripts/staging/records.sh status
+docker logs minimoi-rooms-worker        # ids and outcomes only, never message text or a credential
+```
+
+MC must be up (`mc.sh up`) with its relay. A teammate answers only after one
+owner-approved **Prove** (Guild → Rooms → Invite → Prove first): one paid turn
+on MC's capped key.
+
+**Rollback (data-preserving):** `docker rm -f minimoi-rooms-worker`, revoke the
+`mc` and `rooms-worker` credentials (Records → Connections, or
+`accessctl revoke`), then run the previous Records image on the same data
+folder: the R1 tables are new tables only and `schema_version` stays 5, so the
+older code starts and keeps every record. The pre-migration copy is disaster
+recovery only: restoring it discards everything accepted since.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes

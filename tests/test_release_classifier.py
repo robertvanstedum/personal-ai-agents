@@ -142,3 +142,16 @@ def test_production_builds_exactly_the_classifier_services():
     assert built == ALL_SERVICES
     listed = re.search(r'ALL_SERVICES="([^"]+)"', text).group(1).split()
     assert tuple(listed) == ALL_SERVICES
+
+
+def test_rooms_worker_files_redeploy_nothing_until_production_uses_them():
+    """Rooms R1 (ROOMS_R1.md §1): the worker is staging-only, in Records' own project."""
+    assert classify(["services/rooms_worker/worker.py", "docker/Dockerfile.rooms-worker",
+                     "docker/requirements.rooms-worker.txt", "docker-compose.records.yml",
+                     "prototype-lab/projects/project-records-room-poc/meetings.py"]) == ("documents", ())
+    assert classify(["services/rooms_worker/worker.py", "minimoi_portal/app.py"]) == ("domain", ("portal",))
+    root = Path(__file__).resolve().parent.parent
+    users = [path.name for path in (root / ".github/workflows/deploy.yml", root / "scripts/operations/deploy_scoped_release.sh",
+                                    root / "docker-compose.prod.yml", root / "docker-compose.yml", root / "scripts/staging/build.sh")
+             if "rooms-worker" in path.read_text() or "rooms_worker" in path.read_text()]
+    assert users == []

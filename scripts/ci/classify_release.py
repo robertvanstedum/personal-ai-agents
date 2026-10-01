@@ -66,7 +66,10 @@ def _is_release_only(path: str) -> bool:
 # so that change must classify them as a real production service.
 DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent",
                     # Records (Rooms) runs only in its own staging project (Guild 1.1 slice 4).
-                    "docker/Dockerfile.records", "docker/requirements.records.txt")
+                    "docker/Dockerfile.records", "docker/requirements.records.txt",
+                    # The Rooms worker (Rooms R1) runs only beside Records in that project.
+                    "docker/Dockerfile.rooms-worker", "docker/requirements.rooms-worker.txt",
+                    "services/rooms_worker/")
 
 
 # The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).
