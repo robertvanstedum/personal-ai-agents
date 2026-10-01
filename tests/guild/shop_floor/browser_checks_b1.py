@@ -2953,3 +2953,53 @@ def test_r2_claude_code_in_a_room_and_codex_still_not_available(browser, server,
         ctx.close()
     finally:
         mc.stop(); cc.stop()
+
+
+# ── Rooms R3a (docs/specs/minimoi-connected-work/ROOMS_R3.md §2) ─────────────
+
+def test_r3a_everyone_round_answers_in_order_with_a_round_line(browser, server, rooms, tmp_path):
+    import importlib.util
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rooms_worker"))
+    from rooms_helpers import RECORDS_DIR
+    from worker_helpers import FakeRelay, start_worker
+    spec = importlib.util.spec_from_file_location("records_poc_manage_for_r3a_browser", RECORDS_DIR / "manage.py")
+    manage = importlib.util.module_from_spec(spec); spec.loader.exec_module(manage)
+    store = rooms["app"].extensions["records_store"]
+    manage.provision_rooms(store, "mc", "Master Craftsman", tmp_path / "mc-out")
+    manage.provision_rooms(store, "claude-code", "Claude Code", tmp_path / "cc-out", worker="rooms-connector-mac")
+    with store.connect() as d:
+        d.execute("UPDATE teammates SET proven_at='2026-10-01T00:00:00+00:00'")
+
+    class MC(FakeRelay):
+        def stream(self, messages, user, correlation, on_open=None, **_):
+            return {"outcome": "done", "text": "MC first: the meeting.", "usage": None, "detail": "done"}
+
+    class CC(FakeRelay):
+        def stream(self, messages, user, correlation, on_open=None, **_):
+            saw = "MC first" in messages[1]["content"]
+            return {"outcome": "done", "text": "Claude second, having read MC." if saw else "Claude without MC", "usage": None, "detail": "done"}
+    mc = start_worker(rooms["app"], tmp_path / "mc-out", MC(), tmp_path / "j-mc")
+    cc = start_worker(rooms["app"], tmp_path / "cc-out", CC(), tmp_path / "j-cc", teammate="claude-code",
+                      worker="rooms-connector-mac", agent_id="claude-code", runtime="Claude Code CLI (fake)")
+    try:
+        ctx, page = _context(browser, server, 1440, 900)
+        go(page, f"{server['url']}/guild-next/guild/rooms")
+        room_id = _rooms_ready(page, server, rooms, title="Round room")
+        for who in ("mc", "claude-code"):
+            assert _records_fetch(page, f"/v1/rooms/{room_id}/invite", {"actor": who}, f"inv-{who}")["status"] == 201
+        go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
+        expect(page.locator("[data-person='claude-code']")).to_have_attribute("data-rsvp", "accepted", timeout=15000)
+        expect(page.locator("[data-person='mc']")).to_have_attribute("data-rsvp", "accepted", timeout=15000)
+        page.fill("[data-rm-input]", "@ev")
+        expect(page.locator("[data-rm-mention='everyone']")).to_be_visible()
+        page.click("[data-rm-mention='everyone']")
+        page.type("[data-rm-input]", "what should we build first?")
+        page.click("[data-rm-send]")
+        expect(page.locator('.rm-msg[data-actor="claude-code"]')).to_contain_text("Claude second, having read MC.", timeout=25000)
+        actors = page.locator(".rm-msg").evaluate_all("els => els.map(e => e.dataset.actor)")
+        assert actors.index("mc") < actors.index("claude-code")
+        expect(page.locator("[data-rm-turns]")).to_contain_text("Round: Master Craftsman answered · Claude Code answered", timeout=10000)
+        _r1_shot(page, "r3a-1-everyone-round")
+        ctx.close()
+    finally:
+        mc.stop(); cc.stop()

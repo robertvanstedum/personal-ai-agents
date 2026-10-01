@@ -54,6 +54,10 @@ CREATE TABLE IF NOT EXISTS teammates(
 CREATE TABLE IF NOT EXISTS routing_notes(
     room TEXT NOT NULL,trigger_seq INTEGER NOT NULL,addressee TEXT NOT NULL,label TEXT NOT NULL,
     disposition TEXT NOT NULL,created TEXT NOT NULL,PRIMARY KEY(room,trigger_seq,addressee));
+CREATE TABLE IF NOT EXISTS turn_order(
+    turn_id TEXT PRIMARY KEY,round_id TEXT NOT NULL,position INTEGER NOT NULL,waits_for TEXT,
+    claimable_at TEXT,released_at TEXT,release_reason TEXT);
+CREATE INDEX IF NOT EXISTS turn_order_round ON turn_order(round_id,position);
 CREATE TABLE IF NOT EXISTS teammate_status(
     principal TEXT PRIMARY KEY,unready TEXT,observed_at TEXT NOT NULL);
 INSERT OR IGNORE INTO meta VALUES('rooms_r1_schema','1');
@@ -76,6 +80,9 @@ PROOF_QUESTION = ("Proof turn: please introduce yourself in one or two sentences
                   "and cannot do in this meeting.")
 SNAPSHOT_KINDS = ("message", "proposal", "decision", "task", "task_update", "checkpoint", "document")
 DEFAULT_FACILITATOR = "mc"
+ROUND_AWAY_S = 90          # R3a: a queued teammate that does not start within this after its turn comes is skipped
+ROUND_UNRECONCILED_S = 120  # R3a: an unreconciled uncertain predecessor releases its successor after this
+EVERYONE = ("everyone", "all")
 UNREADY_TEXT = {"runner_changed_since_proof": "changed since its proof — Prove again",
                 "not_proven_with_this_runner": "not yet proven on this connector — Prove first",
                 "signed_out": "its CLI is signed out on this Mac",
@@ -212,6 +219,46 @@ def sweep(db):
         db.execute("UPDATE teammates SET last_failure_at=?,updated=? WHERE principal=?", (moment, moment, row["addressee"]))
     db.execute("UPDATE turns SET state='expired',disposition='not_answered_busy',updated=? "
                "WHERE state='queued' AND expires<=?", (moment, moment))
+    round_progress(db, moment)
+
+
+def round_ready(db, turn_id):
+    """R3a: may this turn be claimed as far as its round's order goes?"""
+    row = db.execute("SELECT * FROM turn_order WHERE turn_id=?", (turn_id,)).fetchone()
+    if not row or not row["waits_for"] or row["released_at"]:
+        return True
+    pred = db.execute("SELECT state,disposition FROM turns WHERE id=?", (row["waits_for"],)).fetchone()
+    return bool(pred and (pred["state"] in TERMINAL or (pred["state"] == "uncertain" and pred["disposition"] in RECONCILED)))
+
+
+def _release(db, successor, reason, moment):
+    db.execute("UPDATE turn_order SET released_at=?,release_reason=?,claimable_at=COALESCE(claimable_at,?) "
+               "WHERE turn_id=?", (moment, reason, moment, successor))
+
+
+def round_progress(db, moment):
+    """R3a (ROOMS_R3.md §2): Records-owned release, so a lost predecessor never
+    strands a round and a released predecessor can never start late."""
+    away_before = (datetime.fromisoformat(moment) - timedelta(seconds=ROUND_AWAY_S)).isoformat()
+    unreconciled_before = (datetime.fromisoformat(moment) - timedelta(seconds=ROUND_UNRECONCILED_S)).isoformat()
+    rows = db.execute("""SELECT o.turn_id,o.waits_for,p.state,p.disposition,p.expires,p.updated,po.claimable_at
+        FROM turn_order o JOIN turns p ON p.id=o.waits_for LEFT JOIN turn_order po ON po.turn_id=o.waits_for
+        WHERE o.released_at IS NULL AND o.claimable_at IS NULL""").fetchall()
+    for r in rows:
+        if r["state"] in TERMINAL or (r["state"] == "uncertain" and r["disposition"] in RECONCILED):
+            db.execute("UPDATE turn_order SET claimable_at=? WHERE turn_id=?", (moment, r["turn_id"]))
+        elif r["state"] == "queued" and r["claimable_at"] and r["claimable_at"] <= away_before:
+            # 1. Away: the skipped turn is cancelled; it never takes a slot or starts later.
+            set_turn(db, r["waits_for"], state="cancelled", disposition="skipped_away")
+            _release(db, r["turn_id"], "skipped_away", moment)
+        elif r["state"] in ("claimed", "running", "recovering") and r["expires"] <= moment:
+            # 2. Past its absolute deadline: fenced in this same transaction.
+            set_turn(db, r["waits_for"], state="cancelled" if r["state"] == "claimed" else "cancel_requested",
+                     disposition="round_deadline")
+            _release(db, r["turn_id"], "round_deadline", moment)
+        elif r["state"] == "uncertain" and r["updated"] <= unreconciled_before:
+            # 3. Unreconciled: released; the predecessor stays uncertain (saved-reply delivery only).
+            _release(db, r["turn_id"], "unreconciled_predecessor", moment)
 
 
 class Meetings:
@@ -268,6 +315,9 @@ class Meetings:
         expected = payload.get("expected_context")
         if (not row or row["addressee"] != actor or row["claim_id"] != claim_id
                 or row["state"] not in ("running", "recovering") or not row["lease_until"] or row["lease_until"] <= now()
+                # R3a: ordinary delivery ends at the absolute deadline; delivery-only
+                # recovery of a saved reply keeps its own fresh lease (ROOMS_R3.md §2).
+                or (row["state"] == "running" and row["expires"] <= now())
                 or row["generation"] != generation(db, room)
                 or not db.execute("SELECT 1 FROM hosted_teammates WHERE installation_id=? AND principal=?",
                                   (row["claimed_by"], actor)).fetchone()
@@ -312,8 +362,17 @@ class Meetings:
         for principal, display, disposition in notes:
             db.execute("INSERT OR IGNORE INTO routing_notes VALUES(?,?,?,?,?,?)",
                        (room, event["seq"], principal, display, disposition, now()))
-        for principal in addressees:
-            self.queue_turn(db, room, principal, event["seq"], 1)
+        # R3a: a new human message supersedes the unclaimed turns of an earlier round.
+        db.execute("""UPDATE turns SET state='superseded',disposition='newer_message',updated=? WHERE room=? AND
+            state='queued' AND id IN (SELECT turn_id FROM turn_order)""", (now(), room))
+        previous = None
+        for position, principal in enumerate(addressees):
+            ttl = TURN_TTL_S * (position + 1) if len(addressees) > 1 else TURN_TTL_S
+            turn = self.queue_turn(db, room, principal, event["seq"], 1, ttl=ttl)
+            if len(addressees) > 1:
+                db.execute("INSERT INTO turn_order VALUES(?,?,?,?,?,NULL,NULL)",
+                           (turn, event["id"], position, previous, now() if previous is None else None))
+            previous = turn
         db.execute("UPDATE meetings SET cursor=MAX(cursor,?),updated=? WHERE room=?", (event["seq"], now(), room))
 
     def route(self, db, room, body, target, meeting):
@@ -324,6 +383,16 @@ class Meetings:
             names.append(match.group(1))
         if not names:
             names = [meeting["facilitator"]] if meeting["facilitator"] else []
+        expanded = []
+        for raw in names:
+            if raw.lower() in EVERYONE:
+                # R3a: every accepted teammate with a card and a connector, in strip order.
+                expanded.extend(r["id"] for r in db.execute("""SELECT p.id FROM members m JOIN principals p ON p.id=m.actor
+                    WHERE m.room=? AND p.id<>'robert' ORDER BY p.created""", (room,))
+                    if card(db, r["id"]) and hosted(db, r["id"]) and rsvp_of(db, room, r["id"])["rsvp"] == "accepted")
+            else:
+                expanded.append(raw)
+        names = expanded
         addressees, notes, seen = [], [], set()
         for raw in names:
             principal = self.resolve(db, room, raw)
@@ -357,14 +426,14 @@ class Meetings:
                 return row["id"]
         return None
 
-    def queue_turn(self, db, room, principal, trigger_seq, attempt):
+    def queue_turn(self, db, room, principal, trigger_seq, attempt, ttl=TURN_TTL_S):
         """At most one queued turn per (room, addressee): a newer one supersedes it."""
         db.execute("UPDATE turns SET state='superseded',disposition='newer_message',updated=? "
                    "WHERE room=? AND addressee=? AND state='queued'", (now(), room, principal))
         turn = str(uuid4())
         db.execute("""INSERT INTO turns(id,room,generation,addressee,trigger_seq,attempt,state,created,expires,updated)
             VALUES(?,?,?,?,?,?,'queued',?,?,?)""", (turn, room, generation(db, room), principal, trigger_seq,
-                                                     attempt, now(), stamp(TURN_TTL_S), now()))
+                                                     attempt, now(), stamp(ttl), now()))
         return turn
 
     # ── owner routes ─────────────────────────────────────────────────────────
@@ -499,6 +568,12 @@ class Meetings:
         out = {k: t[k] for k in ("id", "addressee", "trigger_seq", "attempt", "state", "created", "expires",
                                  "disposition", "stop_ack")}
         out["event_id"] = result["event_id"] if result else None
+        order = db.execute("SELECT round_id,position,release_reason FROM turn_order WHERE turn_id=?", (t["id"],)).fetchone()
+        out["round"] = ({"round_id": order["round_id"], "position": order["position"]} if order else None)
+        out["late_in_round"] = False
+        if order and result:
+            successor = db.execute("SELECT released_at FROM turn_order WHERE waits_for=?", (t["id"],)).fetchone()
+            out["late_in_round"] = bool(successor and successor["released_at"] and t["updated"] > successor["released_at"])
         out["answered_earlier"] = False
         if result:
             later = db.execute("""SELECT 1 FROM events WHERE room=? AND actor='robert' AND kind='message'
@@ -850,6 +925,8 @@ class Meetings:
                 if db.execute(f"SELECT 1 FROM turns WHERE room=? AND addressee=? AND state IN "
                               f"({','.join('?' * len(ACTIVE))})", (t["room"], t["addressee"], *ACTIVE)).fetchone():
                     continue    # the slot is busy; this one waits
+                if not round_ready(db, t["id"]):
+                    continue    # R3a: its turn in the round has not come yet
                 if rsvp_of(db, t["room"], t["addressee"])["rsvp"] == "invited" and \
                         proven_or_proof(db, t["room"], t["addressee"]):
                     continue    # acceptance pending on the worker's next pass
@@ -903,7 +980,20 @@ class Meetings:
             JOIN principals p ON p.id=e.actor WHERE e.room=? AND e.seq<? AND e.actor IN ({marks})
             AND e.kind IN ({kinds}) ORDER BY e.seq DESC""",
                           (t["room"], t["trigger_seq"], *accepted, *SNAPSHOT_KINDS)).fetchall()
-        kept = list(reversed(rows[:SNAPSHOT_LIMIT]))
+        # R3a: earlier replies in this turn's round, attributed, inside the same limit.
+        earlier = []
+        order = db.execute("SELECT round_id,position FROM turn_order WHERE turn_id=?", (t["id"],)).fetchone()
+        if order:
+            for prior in db.execute("""SELECT t.result FROM turn_order o JOIN turns t ON t.id=o.turn_id
+                    WHERE o.round_id=? AND o.position<? AND t.state='committed'""", (order["round_id"], order["position"])):
+                event_id = json.loads(prior["result"])["event_id"]
+                e = db.execute("""SELECT e.seq,e.id,e.actor,e.kind,e.body,e.created,p.label FROM events e
+                    JOIN principals p ON p.id=e.actor WHERE e.id=?""", (event_id,)).fetchone()
+                if e:
+                    earlier.append(e)
+        combined = sorted(list(rows) + earlier, key=lambda r: r["seq"], reverse=True)
+        kept = list(reversed(combined[:SNAPSHOT_LIMIT]))
+        earlier_ids = {e["id"] for e in earlier}
         trigger = db.execute("SELECT id,body FROM events WHERE room=? AND seq=?", (t["room"], t["trigger_seq"])).fetchone()
         session = db.execute("SELECT title,purpose FROM rooms WHERE id=?", (t["room"],)).fetchone()
         meeting = db.execute("SELECT * FROM meetings WHERE room=?", (t["room"],)).fetchone()
@@ -918,9 +1008,11 @@ class Meetings:
                 "transcript": [{"seq": r["seq"], "record_id": r["id"], "speaker_id": r["actor"],
                                 "speaker": r["label"], "kind": r["kind"],
                                 "text": r["body"] if r["kind"] != "document" else "(shared a file: " + r["body"] + ")",
-                                "created": r["created"]} for r in kept],
+                                "created": r["created"],
+                                **({"note": "earlier in this round"} if r["id"] in earlier_ids else {})} for r in kept],
                 "coverage": {"through_seq": t["trigger_seq"] - 1, "included": len(kept),
-                             "omitted": max(0, len(rows) - len(kept))},
+                             "omitted": max(0, len(combined) - len(kept)),
+                             "earlier_in_round": sum(1 for r in kept if r["id"] in earlier_ids)},
                 "trigger": {"seq": t["trigger_seq"], "id": trigger["id"] if trigger else None,
                             "text": trigger["body"] if trigger else ""}}
 

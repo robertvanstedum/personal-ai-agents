@@ -119,6 +119,7 @@ function eventLine(e) {
   if (KIND_TAG[e.kind]) meta.append(el('span', { class: 'rm-tag', 'data-tag': e.kind }, KIND_TAG[e.kind]));
   if (e.origin && e.origin.source_application === 'guild-chat' && e.actor_kind !== 'agent') meta.append(el('span', { class: 'rm-tag', 'data-tag': 'chat' }, 'from Guild Chat'));
   if (earlier().has(e.id)) meta.append(el('span', { class: 'rm-tag', 'data-tag': 'earlier', title: 'You wrote again while this reply was being written.' }, 'answered an earlier message'));
+  if (lateInRound().has(e.id)) meta.append(el('span', { class: 'rm-tag', 'data-tag': 'late', title: 'The round went on without this reply; it arrived afterwards.' }, 'answered later in this round'));
   card.append(meta);
   if (e.kind === 'document') {
     const doc = (room.documents || []).find((d) => d.id === e.reference);
@@ -465,8 +466,34 @@ function bind() {
 // people only), turn states, routing notes. Nothing is inferred on the page.
 const labelOf = (id) => ((meeting?.participants || []).find((p) => p.id === id) || {}).label
   || ((room?.members || []).find((m) => m.id === id) || {}).label || id;
-const handle = (id) => (id.length <= 3 ? id.toUpperCase() : labelOf(id).split(' ')[0]);
+const handle = (id) => (id === 'everyone' ? 'everyone' : id.length <= 3 ? id.toUpperCase() : labelOf(id).split(' ')[0]);
 const facilitator = () => meeting?.meeting?.facilitator || null;
+
+function lateInRound() {
+  return new Set((meeting?.turns || []).filter((t) => t.state === 'committed' && t.late_in_round && t.event_id).map((t) => t.event_id));
+}
+
+const ROUND_WORD = (t) => {
+  if (t.state === 'committed') return t.late_in_round ? 'answered (later)' : 'answered';
+  if (['claimed', 'running', 'recovering'].includes(t.state)) return 'is answering…';
+  if (t.state === 'queued') return 'next';
+  if (t.state === 'cancel_requested') return 'stopping…';
+  if (t.state === 'uncertain') return 'may have answered';
+  if (t.state === 'cancelled' && t.disposition === 'skipped_away') return 'skipped (away)';
+  if (t.state === 'cancelled' && t.disposition === 'round_deadline') return 'stopped (out of time)';
+  if (t.state === 'cancelled' && t.disposition === 'budget_exhausted') return 'out of turns this hour';
+  if (t.state === 'superseded') return 'superseded by your newer message';
+  return t.state === 'failed' || t.state === 'expired' ? 'not answered' : t.state;
+};
+
+function roundLine() {
+  // Rooms R3a: the newest round, one line: "Round: MC answered · Claude Code is answering… · Codex next".
+  const inRounds = (meeting?.turns || []).filter((t) => t.round);
+  if (!inRounds.length) return null;
+  const newest = inRounds.reduce((a, b) => (a.created > b.created ? a : b)).round.round_id;
+  const members = inRounds.filter((t) => t.round.round_id === newest).sort((a, b) => a.round.position - b.round.position);
+  return { text: `Round: ${members.map((t) => `${labelOf(t.addressee)} ${ROUND_WORD(t)}`).join(' · ')}`, ids: new Set(members.map((t) => t.id)) };
+}
 
 function earlier() {
   return new Set((meeting?.turns || []).filter((t) => t.state === 'committed' && t.answered_earlier && t.event_id).map((t) => t.event_id));
@@ -556,12 +583,16 @@ function renderTurns() {
   const box = $('[data-rm-turns]');
   const rows = [];
   if (meeting && meeting.room === current) {
+    const round = roundLine();
+    if (round) rows.push({ text: round.text, round: true });
     const latest = new Map();
     for (const t of meeting.turns) if (!latest.has(t.addressee)) latest.set(t.addressee, t);   // newest first
     // An unresolved earlier turn stays visible beside newer ones (review F9).
     const shown = [...meeting.turns.filter((t) => t.state === 'uncertain' && latest.get(t.addressee) !== t), ...latest.values()];
     for (const t of shown) {
       if (dismissed.has(t.id)) continue;
+      // Round turns are summed up in the round line; only those needing an action get their own.
+      if (round && round.ids.has(t.id) && !['uncertain', 'failed', 'expired'].includes(t.state)) continue;
       const line = turnLine(t);
       if (line) rows.push({ ...line, turn: t });
     }
@@ -570,7 +601,7 @@ function renderTurns() {
   }
   box.hidden = !rows.length;
   box.replaceChildren(...rows.map((row) => {
-    const p = el('p', { class: 'rm-turn', 'data-rm-turn': row.turn ? row.turn.id : '', 'data-state': row.turn ? row.turn.state : 'note' });
+    const p = el('p', { class: 'rm-turn', 'data-rm-turn': row.turn ? row.turn.id : '', 'data-state': row.turn ? row.turn.state : (row.round ? 'round' : 'note') });
     p.append(el('span', {}, row.text));
     for (const a of row.actions || []) {
       const label = { retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End',
@@ -789,7 +820,9 @@ function renderMentions() {
   const list = $('[data-rm-mentions]');
   const frag = mentionFragment(input);
   const people = (meeting?.participants || []).filter((p) => p.id !== 'robert');
-  const hits = frag ? people.filter((p) => p.id.startsWith(frag.text) || p.label.toLowerCase().startsWith(frag.text)) : [];
+  const joined = people.filter((p) => p.teammate && p.rsvp === 'accepted');
+  const options = joined.length >= 2 ? [{ id: 'everyone', label: 'everyone (one turn each, in order)' }, ...people] : people;
+  const hits = frag ? options.filter((p) => p.id.startsWith(frag.text) || p.label.toLowerCase().startsWith(frag.text)) : [];
   list.hidden = !hits.length;
   list.replaceChildren(...hits.map((p) => h('li', { role: 'option' }, el('button', { type: 'button', 'data-rm-mention': p.id }, `@${handle(p.id)} · ${p.label}`))));
 }

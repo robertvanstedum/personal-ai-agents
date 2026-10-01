@@ -87,6 +87,8 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
 .rm-turn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding: 6px 10px; border-radius: var(--gu-radius); background: var(--gu-surface); border: 1px solid var(--gu-border); font-size: var(--gu-size-sm); }
 .rm-turn[data-state="failed"], .rm-turn[data-state="uncertain"], .rm-turn[data-state="expired"] { border-color: var(--gu-mark-blocker-ink); }
 .rm-turn[data-state="note"] { background: var(--gu-banner-bg); color: var(--gu-banner-ink); }
+.rm-turn[data-state="round"] { background: var(--gu-surface-2); }
+.rm-tag[data-tag="late"] { background: var(--gu-banner-bg); color: var(--gu-banner-ink); }
 .rm-closed { flex: none; margin: 0 var(--gu-s4) 6px; display: flex; flex-wrap: wrap; gap: 6px var(--gu-s3); align-items: center; font-size: var(--gu-size-sm); }
 .rm-to { flex: none; margin: 0 var(--gu-s4) 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .rm-chip { font: inherit; font-size: 12px; min-height: 28px; padding: 2px 10px; border-radius: var(--gu-radius-pill); border: 1px solid var(--gu-border-strong); background: var(--gu-surface); color: var(--gu-text); cursor: pointer; }
