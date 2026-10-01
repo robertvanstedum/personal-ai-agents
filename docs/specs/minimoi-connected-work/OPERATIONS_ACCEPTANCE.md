@@ -54,3 +54,10 @@ Freeze source, dependencies, configuration and test identifiers. Independent rev
 Full H1 is retained as the later harness contract, not certified by R1. No simulated participant, gateway-only acknowledgment or development route satisfies production participation. Published docs, internal test counts and review concurrence are not deployment authorization.
 
 Before activation: owner operational parameters, effective private-runtime controls, source-transfer approvals and any production change authorization. Before final local release disposition: settle graph gating explicitly. These are operational/scope gates, not a reason to leave the current direction ambiguous.
+
+## 5. Rooms R1 addendum (candidate)
+
+The R1-01…R1-10 cases above are the Records build contract. The first Rooms slice, [Rooms R1](ROOMS_R1.md), carries its own test contract (its §6) and gates (its §7); its cases are named "Rooms R1" to avoid a collision. Two rules it adds to this document:
+
+- **Data-preserving rollback is the routine path.** Schema changes for Rooms add tables only, so the previous application image runs on the migrated database; rollback is stop the worker, revoke its credentials, start the previous image on the same data. A pre-migration backup is disaster recovery, and using it must be recorded as discarding later accepted records.
+- **Master Craftsman caller boundary.** Adding the Rooms worker as a second relay caller is a named amendment to the MC specification with its own boundary tests, reviewed with the R1 diff.

@@ -2,6 +2,10 @@
 
 Edition 1.0 · 19 September 2026 · Current directional baseline; see [status and authority](README.md).
 
+## 0. Mission — owner clarification, 1 October 2026
+
+MiniMoi is its owner's enduring personal companion. It captures the authorized conversation, the alternatives considered, the decisions and the related work, so that they can be retrieved and learned from later. Rooms is the first shared agent-collaboration setting for this. Reflection and outcome notes stay light and optional; later mining or tuning is not a dependency of the first Rooms slice. Source and derived material stay distinguishable, and Private and access boundaries are preserved. See [Rooms R1](ROOMS_R1.md) §3.13 for how the first slice serves this.
+
 ## 1. Purpose and executive roles
 
 Mini-moi must preserve Robert's thinking and practical work across sessions, agents and machines. Local agents remain valuable because they can operate on local files. Production Chief of Staff must be able to follow authorized work while it is underway, not merely read accepted outputs afterward. A laptop is a place of productive work, not automatically a test environment or an always-on host.
