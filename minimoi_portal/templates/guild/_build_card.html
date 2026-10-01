@@ -1,0 +1,42 @@
+{#- The Guild's Build card, shared: the landing (/guild) shows it as one link,
+    exactly as before; the Shop floor's context rail (/guild-next) shows the
+    same card with its link row as navigation (Robert, September 29: "the
+    existing Build card, literally"). The hero image is named here only:
+    the /guild-next home (Guild 1.1 slice 1) takes just the image ('img'). -#}
+{%- macro build_card(mode='landing', links=None) -%}
+{%- set img = '<img src="/static/guild/guild-build.jpg" alt="Build — a master craftsman and an apprentice at a workbench">' -%}
+{%- if mode == 'img' %}{{ img|safe }}
+{%- elif mode == 'landing' %}
+  <!-- Build -->
+  <a href="/guild/build/queue" class="guild-card">
+    <div class="card-tab">Build</div>
+    <div class="card-illustration">
+      {{ img|safe }}
+    </div>
+    <div class="card-body">
+      <div class="card-kicker">Queue · Log · Roadmap · Docs</div>
+      <div class="card-desc">spec → build → ship</div>
+      <div class="card-cta">Queue →</div>
+    </div>
+  </a>
+{%- elif mode == 'strip' %}
+  <div class="guild-card guild-card-strip" data-build-strip>
+    <div class="card-illustration">{{ img|safe }}</div>
+    <div class="card-tab">Build</div>
+  </div>
+{%- else %}
+  <div class="guild-card guild-card-rail" data-build-card>
+    <div class="card-tab">Build</div>
+    <div class="card-illustration">
+      {{ img|safe }}
+    </div>
+    <div class="card-body">
+      <nav class="card-kicker" aria-label="Build">
+        <a href="{{ links.queue }}">Queue</a> · <a href="{{ links.log }}">Log</a> · <a href="{{ links.roadmap }}">Roadmap</a> · <a href="{{ links.docs }}">Docs</a>
+      </nav>
+      <div class="card-desc">spec → build → ship</div>
+      <a class="card-cta" href="{{ links.queue }}">Queue →</a>
+    </div>
+  </div>
+{%- endif %}
+{%- endmacro -%}

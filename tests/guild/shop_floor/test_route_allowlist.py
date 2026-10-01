@@ -5,12 +5,25 @@ from __future__ import annotations
 from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 EXPECTED = {
+    "/guild-next/",
+    "/guild-next/guild",
     "/guild-next/guild/build",
     "/guild-next/guild/build/bench",
+    # Planning Studio and Prototype Lab: truthful entry points (Guild 1.1 dev, slice 1).
+    "/guild-next/guild/labs",
+    # The local Workshop (4a: read only, no model calls).
+    "/guild-next/guild/workshop",
     "/guild-next/guild/build/queue",
     "/guild-next/guild/build/items/<int:item_id>",
     "/guild-next/guild/build/postits",
     "/guild-next/guild/operate",
+    # Guild 1.1: the Build Log (slice 2); Rooms (slice 4) says "coming in a later slice".
+    "/guild-next/guild/build/log",
+    "/guild-next/guild/rooms",
+    # Guild 1.1 slice 3: the Board, the Media library, and owner-only image serving.
+    "/guild-next/guild/board",
+    "/guild-next/guild/media",
+    "/guild-next/media/<asset_id>/<variant>",
     "/guild-next/guild/ui-assets/<path:filename>",
     "/guild-next/api/v1/session",
     "/guild-next/api/v1/floor",
@@ -18,15 +31,45 @@ EXPECTED = {
     "/guild-next/api/v1/queue/items/<int:item_id>",
     "/guild-next/api/v1/queue/items/<int:item_id>/history",
     "/guild-next/api/v1/queue/items/<int:item_id>/status",
+    # Guild 1.1 slice 2 (spec §4.3-4.5): a new item, the rank, the file journal.
+    "/guild-next/api/v1/queue/items",
+    "/guild-next/api/v1/queue/items/<int:item_id>/rank",
+    "/guild-next/api/v1/queue/items/<int:item_id>/journal",
     "/guild-next/api/v1/queue/journal/<op_id>/checked",
     "/guild-next/api/v1/notes",
     "/guild-next/api/v1/postits",
     "/guild-next/api/v1/postits/bin",
     "/guild-next/api/v1/postits/<int:postit_id>/bin",
     "/guild-next/api/v1/postits/<int:postit_id>/restore",
+    # Guild 1.1 slice 3 (spec §5.1-5.2): the Board's writes and the Media library.
+    "/guild-next/api/v1/board",
+    "/guild-next/api/v1/postits/<int:postit_id>/done",
+    "/guild-next/api/v1/postits/<int:postit_id>/undone",
+    "/guild-next/api/v1/postits/<int:postit_id>/label",
+    "/guild-next/api/v1/postits/<int:postit_id>/link",
+    "/guild-next/api/v1/postits/photo",
+    "/guild-next/api/v1/postits/reorder",
+    "/guild-next/api/v1/postits/trash/empty",
+    # Guild 1.1 slice 4: Take to a Room (a kept note, by id only).
+    "/guild-next/api/v1/notes/<int:note_id>/share",
+    "/guild-next/api/v1/media",
+    "/guild-next/api/v1/media/<asset_id>/trash",
+    "/guild-next/api/v1/media/<asset_id>/restore",
+    "/guild-next/api/v1/media/purge",
+    "/guild-next/api/v1/media/<asset_id>/uses",
     "/guild-next/api/v1/continue",
     # Master Craftsman's owner route: a seam, disabled (always refuses; tests/guild/shop_floor/test_mc_backend_switch.py).
     "/guild-next/api/v1/mc/turns",
+    "/guild-next/api/v1/mc/turns/stream",
+    "/guild-next/api/v1/mc/turns/<turn_id>/stop",
+    # Conversations (Guild 1.1 slice 2): owner only, CSRF-checked writes, no model calls.
+    "/guild-next/api/v1/conversations",
+    "/guild-next/api/v1/workshop",
+    "/guild-next/api/v1/conversations/<cid>/rename",
+    "/guild-next/api/v1/conversations/<cid>/pin",
+    "/guild-next/api/v1/conversations/<cid>/unpin",
+    "/guild-next/api/v1/conversations/<cid>/archive",
+    "/guild-next/api/v1/conversations/<cid>/restore",
     "/guild-next/api/v1/",
     "/guild-next/api/v1/<path:rest>",
 }
@@ -72,4 +115,7 @@ def test_portal_routes_and_headers_are_untouched(staging):
 
 def test_unknown_page_under_the_prefix_is_not_a_floor_page(staging):
     assert staging.owner().get("/guild-next/guild/improve").status_code == 404
-    assert staging.owner().get("/guild-next/guild").status_code == 404
+    assert staging.owner().get("/guild-next/nope").status_code == 404
+    # The mount's root is the Guild home (test_landing_pairing.py), not a redirect.
+    home = staging.owner().get("/guild-next/guild")
+    assert home.status_code == 200 and 'data-page="home"' in home.get_data(as_text=True)

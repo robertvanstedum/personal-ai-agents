@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chief of Staff</title>
-  <link rel="stylesheet" href="/static/cos.css?v=3">
+  <link rel="stylesheet" href="/static/cos.css?v=5">
 </head>
 <body>
 
@@ -35,6 +35,9 @@
           <div class="tab-hero-label">[CHICAGO]</div>
           <h1>Confer</h1>
         </div>
+        <div id="private-banner" role="status" hidden>
+          <strong>Private</strong> · not kept in your CoS history. The agent itself may still remember it.
+        </div>
         <div id="chat-log"></div>
         <div class="input-row">
           <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
@@ -42,13 +45,22 @@
           <button id="btn-send">Send</button>
         </div>
         <div class="talk-meta">
+          <button id="btn-private" type="button" aria-pressed="false" disabled>Private: …</button>
+          <span id="private-note"></span>
           <label for="voice-provider-select">Voice</label>
           <select id="voice-provider-select" aria-label="Voice provider"></select>
+          <label for="voice-reply-mode">Reply</label>
+          <select id="voice-reply-mode" aria-label="Voice reply">
+            <option value="speak" selected>Speak and write</option>
+            <option value="write">Write only</option>
+          </select>
+          <span id="voice-private" hidden>Private ·</span>
           <span id="voice-status"></span>
           <span id="voice-provider"></span>
           <span>Voice is AI-generated.</span>
           <a href="/ui/memory" target="_blank">memory ↗</a>
         </div>
+        <div id="voice-reply-note" hidden>Write only mutes playback; the provider still generates (and bills) the audio.</div>
         <div id="voice-transcript" aria-live="polite"></div>
       </div>
 
@@ -93,6 +105,25 @@
 
 <script>
 const INITIAL_TAB = '{{ initial_tab }}';
+// The portal's write guard: its token arrives in the page bootstrap (absent
+// when CoS is opened directly, not through the portal). Every write this page
+// makes to its own origin carries it: text send, the voice bootstrap, the
+// voice send and any later write. It is never sent to another origin (the
+// voice providers), and a guarded request never follows a redirect.
+const CSRF_TOKEN = document.querySelector('meta[name="minimoi-csrf-token"]')?.content || '';
+if (CSRF_TOKEN) {
+  const pageFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const method = String(init.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
+    if (method !== 'GET' && method !== 'HEAD' && url.origin === window.location.origin) {
+      const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+      headers.set('X-CSRF-Token', CSRF_TOKEN);
+      init = { ...init, headers, redirect: 'manual' };
+    }
+    return pageFetch(input, init);
+  };
+}
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
 const tabBtns   = document.querySelectorAll('.tab-btn');
@@ -134,12 +165,18 @@ const chatLog   = document.getElementById('chat-log');
 const sendInput = document.getElementById('send-input');
 const btnSend   = document.getElementById('btn-send');
 
-function appendMsg(role, text) {
+function appendMsg(role, text, opts = {}) {
   const wrap  = document.createElement('div');
   wrap.className = 'msg msg-' + role;
   const label = document.createElement('div');
   label.className = 'msg-label';
   label.textContent = role === 'user' ? 'You' : 'CoS';
+  if (role === 'cos' && opts.private) {          // Spec 160: each reply given under Private says so
+    const badge = document.createElement('span');
+    badge.className = 'msg-private';
+    badge.textContent = 'Private';
+    label.append(' ', badge);
+  }
   const body  = document.createElement('div');
   body.className = 'msg-text';
   body.textContent = text;
@@ -148,6 +185,77 @@ function appendMsg(role, text) {
   chatLog.appendChild(wrap);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
+
+// ── Private mode (Spec 160): sticky, kept by the server ──────────────────────
+// On: nothing from Confer (text or voice) goes into your CoS history. Off only
+// by this switch. If the mode cannot be read, the server treats it as Private.
+const privateBtn    = document.getElementById('btn-private');
+const privateBanner = document.getElementById('private-banner');
+const privateNote   = document.getElementById('private-note');
+window.cosPrivate = { available: false, private: false, known: false };
+
+function renderPrivate() {
+  const p = window.cosPrivate;
+  privateBanner.hidden = !p.private;
+  privateBtn.setAttribute('aria-pressed', p.private ? 'true' : 'false');
+  privateBtn.classList.toggle('on', p.private);
+  if (!p.known) {
+    privateBtn.textContent = 'Private: ?';
+    privateBtn.disabled = true;
+    privateBtn.title = 'Private mode could not be read.';
+  } else if (!p.available) {
+    privateBtn.textContent = 'Private: n/a';
+    privateBtn.disabled = true;
+    privateBtn.title = 'CoS history is not kept here, so there is nothing to make private.';
+  } else {
+    privateBtn.textContent = p.private ? 'Private: on' : 'Private: off';
+    privateBtn.disabled = false;
+    privateBtn.title = p.private
+      ? 'Private is on: nothing from Confer is kept in your CoS history. Tap to turn it off.'
+      : 'Tap to go Private: nothing from Confer is kept in your CoS history until you turn it off.';
+  }
+}
+
+function setPrivateState(data) {
+  const before = window.cosPrivate.private;
+  window.cosPrivate = { available: data.available === true, private: data.private === true, known: true };
+  renderPrivate();
+  if (before !== window.cosPrivate.private) {
+    window.dispatchEvent(new CustomEvent('cos:private-changed', { detail: { ...window.cosPrivate } }));
+  }
+}
+
+async function loadPrivate() {
+  try {
+    const resp = await fetch('private-mode');
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    setPrivateState(data);
+  } catch (_) {
+    window.cosPrivate = { available: false, private: false, known: false };
+    renderPrivate();
+  }
+}
+
+privateBtn.addEventListener('click', async () => {
+  const want = !window.cosPrivate.private;
+  privateBtn.disabled = true;
+  privateNote.textContent = '';
+  try {
+    const resp = await fetch('private-mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ private: want }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    setPrivateState(data);
+  } catch (err) {
+    privateNote.textContent = `Private not changed: ${err.message}`;
+    await loadPrivate();
+  }
+});
+loadPrivate();
 
 function appendThinking() {
   const el = document.createElement('div');
@@ -182,7 +290,7 @@ async function sendMessage() {
     });
     const data = await resp.json();
     thinking.remove();
-    appendMsg('cos', data.reply || '(empty reply)');
+    appendMsg('cos', data.reply || '(empty reply)', { private: data.private === true });
   } catch(err) {
     thinking.remove();
     appendMsg('cos', 'Error: ' + err.message);
@@ -324,7 +432,8 @@ activateTab(INITIAL_TAB, false);
 if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
 </script>
 <script type="module">
-import { RealtimeVoiceController } from "../static/realtime-voice/realtime-voice-controller.js?v=20260816-cos1";
+import { RealtimeVoiceController } from "../static/realtime-voice/realtime-voice-controller.js?v=20260929-voice3";
+import { mountReplyModeToggle } from "../static/realtime-voice/voice-reply-mode.js?v=20260929-voice3";
 
 const voiceButton = document.getElementById('btn-voice');
 const voiceStatus = document.getElementById('voice-status');
@@ -332,6 +441,65 @@ const voiceProvider = document.getElementById('voice-provider');
 const voiceProviderSelect = document.getElementById('voice-provider-select');
 const voiceTranscript = document.getElementById('voice-transcript');
 let voiceRunning = false;
+let voiceError = '';               // this session's provider error, kept visible after it ends
+// Private for this voice session: on at the start, or switched either way
+// during it (the server then keeps nothing of the session either).
+let voiceSessionPrivate = false;
+const voicePrivateMark = document.getElementById('voice-private');
+function renderVoicePrivate() { voicePrivateMark.hidden = !voiceSessionPrivate || !voiceRunning; }
+window.addEventListener('cos:private-changed', () => {
+  if (voiceRunning) { voiceSessionPrivate = true; renderVoicePrivate(); }
+});
+
+// CoS greets first, in one short line, then listens.
+const CONFER_OPENING =
+  "Greet Robert in one short, natural line as his Chief of Staff and ask what " +
+  "he wants to work on. Do not call a tool or give a briefing before he answers.";
+
+// Voice reply: "speak" (speak and write, the default) or "write" (write only:
+// the spoken reply is muted, its text still appears live). Remembered on this device.
+let replyMode = mountReplyModeToggle(document.getElementById('voice-reply-mode'), {
+  scope: 'cos',
+  note: document.getElementById('voice-reply-note'),
+  onChange(mode) {
+    replyMode = mode;
+    voiceController.setReplyMode(mode);
+  },
+});
+
+// When voice stops, the session's transcript goes to CoS as an html_voice
+// record. CoS keeps nothing while Private mode is on, and says so.
+async function saveVoiceTranscript(result) {
+  const turns = (result.turns || []).filter(turn => String(turn.text || '').trim());
+  if (!turns.length) return 'Nothing to save.';
+  try {
+    const response = await fetch('voice/transcript', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        turns,
+        provider: result.provider,
+        partial: result.partial,
+        partial_reason: result.partial_reason,
+        duration_seconds: result.duration_seconds,
+        session_id: result.session_id,
+        reply_mode: replyMode,
+        // The mode this session started under (from the bootstrap): the
+        // server keeps nothing if it changed during the session.
+        mode_epoch: result.session_context?.epoch ?? null,
+        private: voiceSessionPrivate,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok && body.saved) return 'Transcript saved to your CoS history.';
+    if (body.reason === 'private') return 'Private: not kept in your CoS history.';
+    if (body.reason === 'mode_changed') return 'Private changed during this session: not kept in your CoS history.';
+    if (body.reason === 'no_turn_log') return 'Transcript not saved: CoS history is not set up here.';
+    return `Transcript not saved (${body.reason || `HTTP ${response.status}`}).`;
+  } catch (err) {
+    return 'Transcript not saved (network error).';
+  }
+}
 
 const stateLabels = {
   requesting_mic: 'Connecting…',
@@ -339,22 +507,40 @@ const stateLabels = {
   active: 'Listening',
   ending: 'Stopping…',
   ended: 'Stopped',
-  reconnecting: 'Reconnecting…',
+  idle: 'Voice did not start',
 };
+
+// A start in progress: { stop: true } once Stop is tapped during it. The
+// session is then ended as soon as the start returns (it may have opened the
+// microphone by then), and until that happens the button reads "Stopping…".
+let voiceStart = null;
+let voiceState = 'idle';          // the controller's last state
+let voiceAvailable = false;       // a provider is offered (capabilities)
+
+// One place draws the voice button. A failed start (the controller goes back
+// to idle without a session) or an ended session returns it to 🎤.
+function renderVoice(state) {
+  voiceState = state;
+  if (state === 'ended' || state === 'idle') voiceRunning = false;
+  if (state === 'active' && voiceController?.sessionContext?.private) voiceSessionPrivate = true;
+  voicePrivateMark.hidden = !voiceSessionPrivate || !voiceRunning;
+  const voiceActive = voiceRunning && state !== 'ended' && state !== 'idle';
+  const stopping = Boolean(voiceStart && voiceStart.stop);
+  voiceStatus.textContent = stopping ? 'Stopping…' : (stateLabels[state] || state);
+  voiceButton.classList.toggle('recording', voiceActive);
+  voiceButton.textContent = voiceActive ? '■' : '🎤';
+  voiceButton.title = !voiceActive ? 'Start voice conversation'
+    : voiceStart ? 'Cancel voice start' : 'Stop voice conversation';
+  voiceButton.setAttribute('aria-label', voiceButton.title);
+  voiceButton.disabled = !voiceAvailable || stopping;
+  voiceProviderSelect.disabled = voiceActive || !voiceAvailable;
+}
 
 const voiceController = new RealtimeVoiceController({
   bootstrapUrl: '../api/realtime-voice/confer/bootstrap',
-  openingInstruction: null,
-  onStateChange: (state) => {
-    if (state === 'ended') voiceRunning = false;
-    const voiceActive = voiceRunning && state !== 'ended';
-    voiceStatus.textContent = stateLabels[state] || state;
-    voiceButton.classList.toggle('recording', voiceActive);
-    voiceButton.textContent = voiceActive ? '■' : '🎤';
-    voiceButton.title = voiceActive ? 'Stop voice conversation' : 'Start voice conversation';
-    voiceButton.setAttribute('aria-label', voiceButton.title);
-    voiceProviderSelect.disabled = voiceActive;
-  },
+  openingInstruction: CONFER_OPENING,
+  replyMode,
+  onStateChange: renderVoice,
   onInputState: (state) => {
     const labels = {
       speech_started: 'Listening',
@@ -364,12 +550,13 @@ const voiceController = new RealtimeVoiceController({
     };
     if (labels[state]) voiceStatus.textContent = labels[state];
   },
+  // Both sides of the conversation appear live, as each turn completes.
   onUserTurn: (text) => {
-    // Match Gespräche/Conversas: voice stays primary while the session is
-    // active. The transcript is added to Confer only after voice stops.
+    if (String(text || '').trim()) appendMsg('user', String(text).trim());
   },
   onAssistantTurn: (text) => {
-    // Transcript rendering is intentionally deferred to onFinalize below.
+    if (String(text || '').trim()) appendMsg('cos', String(text).trim(), { private: voiceSessionPrivate });
+    if (voiceState === 'active') voiceStatus.textContent = stateLabels.active;   // replied: listening again
   },
   onFunctionCall: async (call) => {
     const args = JSON.parse(call.arguments || '{}');
@@ -407,16 +594,18 @@ const voiceController = new RealtimeVoiceController({
     voiceStatus.textContent = 'Voice duration limit reached.';
   },
   onFatalError: (error) => {
-    voiceTranscript.textContent = `Voice error: ${error?.detail || error?.reason || 'unknown error'}`;
+    voiceError = `Voice error: ${error?.detail || error?.reason || 'unknown error'}. Voice stopped; the microphone is off.`;
+    voiceTranscript.textContent = voiceError;
   },
-  onFinalize: (result) => {
-    for (const turn of result.turns || []) {
-      const text = String(turn.text || '').trim();
-      if (text) appendMsg(turn.speaker === 'user' ? 'user' : 'cos', text);
-    }
-    voiceTranscript.textContent = result.partial
-      ? `Voice ended with a partial transcript (${result.partial_reason}).`
-      : 'Voice transcript added.';
+  onFinalize: async (result) => {
+    // A session with nothing said leaves the page as it is (an error, or a
+    // failed start's message, stays visible).
+    if (!(result.turns || []).some(turn => String(turn.text || '').trim())) return;
+    const ended = voiceError
+      || (result.partial ? `Voice ended (${result.partial_reason}).` : 'Voice ended.');
+    voiceTranscript.textContent = `${ended} Saving transcript…`;
+    const saved = await saveVoiceTranscript(result);
+    voiceTranscript.textContent = `${ended} ${saved}`;
   },
 });
 
@@ -425,7 +614,8 @@ try {
   const capabilities = await response.json();
   if (!response.ok || !capabilities.ok) throw new Error(capabilities.error || 'Voice unavailable');
   const providers = capabilities.providers || [];
-  const savedProvider = localStorage.getItem('minimoi.cos.voice.provider');
+  let savedProvider = null;
+  try { savedProvider = localStorage.getItem('minimoi.cos.voice.provider'); } catch (_) {}   // storage may be blocked
   const selected = providers.find(item => item.provider === savedProvider)
     || providers.find(item => item.provider === capabilities.default_provider)
     || providers[0];
@@ -437,24 +627,40 @@ try {
   }));
   if (selected) voiceProviderSelect.value = selected.provider;
   voiceProvider.textContent = selected ? `Voice: ${selected.label}` : 'Voice unavailable';
+  voiceAvailable = Boolean(selected);
   voiceButton.disabled = !selected;
   voiceProviderSelect.disabled = !selected;
   voiceProviderSelect.addEventListener('change', () => {
-    localStorage.setItem('minimoi.cos.voice.provider', voiceProviderSelect.value);
+    try { localStorage.setItem('minimoi.cos.voice.provider', voiceProviderSelect.value); } catch (_) {}
     const item = providers.find(provider => provider.provider === voiceProviderSelect.value);
     voiceProvider.textContent = item ? `Voice: ${item.label}` : 'Voice unavailable';
   });
 } catch (_) {
+  voiceAvailable = false;
   voiceProvider.textContent = 'Voice unavailable';
   voiceButton.disabled = true;
 }
 
+const sessionOpen = () => !['idle', 'ended', 'ending'].includes(voiceState);
+
 voiceButton.addEventListener('click', async () => {
+  if (voiceStart) {                 // Stop during a start: end it the moment the start returns
+    voiceStart.stop = true;
+    renderVoice(voiceState);
+    return;
+  }
   if (voiceRunning) {
     voiceController.endSession('user_ended');
     return;
   }
+  const start = { stop: false };
+  voiceStart = start;
+  voiceError = '';
+  voiceTranscript.textContent = '';
+  voiceSessionPrivate = window.cosPrivate?.private === true || window.cosPrivate?.known === false;
+  renderVoicePrivate();
   voiceRunning = true;
+  let error = null;
   try {
     await voiceController.startSession({
       provider: voiceProviderSelect.value,
@@ -462,9 +668,21 @@ voiceButton.addEventListener('click', async () => {
       scene: 'confer',
       learner_name: 'Robert',
     });
-  } catch (_) {
-    voiceRunning = false;
+  } catch (err) {
+    error = err;
   }
+  voiceStart = null;
+  if (error || start.stop) {
+    // A thrown start can leave the controller part way (for example
+    // connecting, with the microphone already open), and a Stop tapped
+    // during the start must win: end whatever opened, then show the result.
+    if (sessionOpen()) voiceController.endSession(error ? 'start_failed' : 'user_ended');
+    voiceRunning = false;
+    renderVoice(error ? 'idle' : 'ended');
+    if (error) voiceTranscript.textContent = `Voice error: ${error?.message || 'the voice session could not start'}`;
+    return;
+  }
+  renderVoice(voiceState);
 });
 </script>
 </body>

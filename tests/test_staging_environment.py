@@ -336,6 +336,10 @@ def test_staging_volumes_are_external_and_staging_named():
                    "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
         "mc-front": {"name": "minimoi-staging-mc-front", "internal": True,
                      "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
+        # Rooms' Records network (Guild 1.1 slice 4; docker-compose.records.yml): internal,
+        # no host address on the bridge (#288 review F1).
+        "records-net": {"name": "minimoi-staging-records", "internal": True,
+                        "driver_opts": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}},
     }
 
 
@@ -757,9 +761,11 @@ def _staging_world(tmp_path, *, launchctl=FAKE_LAUNCHCTL_CLEAN, bots_on=False, t
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text("x")
     for rel in ("data/curator", "data/curator_archive", "data/interests", "data/research-intelligence",
-                "data/german", "data/portuguese", "data/guild", "data/usage", "docs/design", "docs/specs", "agent_logs",
+                "data/german", "data/portuguese", "data/guild", "data/usage", "data/usage/portal", "data/workshops", "docs/design", "docs/specs", "agent_logs",
                 "state"):
         (root / rel).mkdir(parents=True, exist_ok=True)
+    for writer in ("cos-bot", "cos-scheduler"):                      # each root writer's own usage folder
+        (root / "data" / "usage" / writer).mkdir(parents=True, exist_ok=True)
     names = ["XAI_API_KEY='x'"]
     sources = ["XAI_API_KEY root-env"]
     if tokens:

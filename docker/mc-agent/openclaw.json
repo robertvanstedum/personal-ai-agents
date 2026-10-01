@@ -92,6 +92,11 @@
         "allow": [
           "minimoi-gateway-mc/minimoi-mc-agent"
         ]
+      },
+      "compaction": {
+        "enabled": true,
+        "keepRecentTokens": 12000,
+        "recentTurnsPreserve": 4
       }
     },
     "entries": {
@@ -183,6 +188,11 @@
           }
         }
       }
+    }
+  },
+  "session": {
+    "reset": {
+      "mode": "none"
     }
   }
 }

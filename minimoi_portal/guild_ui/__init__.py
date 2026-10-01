@@ -34,8 +34,9 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' 
        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'self'")
 
-ALL_ROUTES = ("floor", "bench", "queue", "item", "postits", "operate", "assets", "api")
-B1_ROUTES = ALL_ROUTES   # the landing page, improve, experiment and any reset are not in this package
+ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "buildlog", "board",
+              "media", "rooms", "assets", "api")
+B1_ROUTES = ALL_ROUTES   # improve, experiment and any reset are not in this package
 
 
 class GuildBindingError(RuntimeError):
@@ -73,7 +74,11 @@ def _headers(response):
     """Scoped to this blueprint's responses; host-app routes are untouched."""
     response.headers["Content-Security-Policy"] = CSP
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Cache-Control"] = "no-store"
+    # A stream is never stored either, and must not be transformed (compressed
+    # or buffered) on its way (streaming spec v0.2 §3; no-store is stricter
+    # than the spec's no-cache).
+    streaming = (response.mimetype or "") == "application/x-ndjson"
+    response.headers["Cache-Control"] = "no-store, no-transform" if streaming else "no-store"
     return response
 
 
@@ -97,18 +102,32 @@ def asset(filename):
 
 
 def _make_blueprint(name: str, routes) -> Blueprint:
-    from . import api, pages
+    from . import api, board_api, pages
 
     bp = Blueprint(name, __name__, template_folder=str(PACKAGE / "templates"))
     bp.after_request(_headers)
     bp.register_error_handler(Exception, _api_error)
     page_rules = {
-        "floor": [("/guild/build", "floor", pages.floor)],
+        "floor": [("/guild/build", "floor", pages.floor),
+                  # The mount's own root is the Guild home, paired with Curator
+                  # (Guild 1.1 slice 1); it used to redirect to the Shop floor.
+                  ("/", "home", pages.home), ("/guild", "guild_home", pages.home)],
         "bench": [("/guild/build/bench", "bench", pages.bench)],
+        "labs": [("/guild/labs", "labs", pages.labs)],
+        "workshop": [("/guild/workshop", "workshop", pages.workshop)],
         "queue": [("/guild/build/queue", "queue", pages.queue)],
         "item": [("/guild/build/items/<int:item_id>", "item", pages.item)],
         "postits": [("/guild/build/postits", "postits", pages.postits)],
         "operate": [("/guild/operate", "operate", pages.operate)],
+        # The Build Log (Guild 1.1 slice 2, spec §4): every item in every status.
+        "buildlog": [("/guild/build/log", "build_log", pages.build_log)],
+        # The Board and the Media library (Guild 1.1 slice 3, spec §5); images
+        # are served to their owner only, same origin.
+        "board": [("/guild/board", "board", pages.board)],
+        "media": [("/guild/media", "media_library", pages.media_library),
+                  ("/media/<asset_id>/<variant>", "media_file", board_api.media_file)],
+        # Rooms (slice 4, spec §6): group chat on Records, through the dev bridge.
+        "rooms": [("/guild/rooms", "rooms", pages.rooms)],
         "assets": [("/guild/ui-assets/<path:filename>", "asset", asset)],
     }
     for route in routes:

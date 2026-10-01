@@ -46,11 +46,15 @@ for f in data/curator_history.json data/curator_costs.json auth/users.json auth/
   [[ -f "$S/$f" ]] || die "missing $S/$f; run seed.sh (and build.sh for config/)"
 done
 for d in data/curator data/curator_archive data/interests data/research-intelligence data/german \
-         data/portuguese data/guild data/usage docs/design docs/specs agent_logs; do
+         data/portuguese data/guild data/usage data/usage/portal data/workshops docs/design docs/specs agent_logs; do
   [[ -d "$S/$d" ]] || die "missing folder $S/$d; run seed.sh"
 done
 for v in "${STAGING_VOLUMES[@]}"; do
   docker volume inspect "$v" >/dev/null 2>&1 || die "missing volume $v; run seed.sh --postgres (README step 1b)"
+done
+# Each root writer's own usage folder (build.sh makes them).
+for w in cos-bot cos-scheduler; do
+  [[ -d "$S/data/usage/$w" ]] || die "missing folder $S/data/usage/$w; run build.sh"
 done
 
 # Staging keeps production's container names; an old dev container of the

@@ -1,0 +1,74 @@
+{% extends 'guild_floor/_base.html' %}
+{#
+  Rooms (Guild 1.1 slice 4, spec §6; the v4 rooms look): group chat first,
+  on Records. Every call goes to Records through the dev bridge at
+  /app/records/api/ with Records' own login (its cookie, minimoi_room_poc);
+  this page never holds or sends a Records credential, and Guild's write
+  guard does not apply to Records calls: Records' own actor and grant checks
+  do. Drawn by js/rooms.js. No model call; no live presence is implied.
+#}
+{% block title %}Rooms · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/rooms.css') }}">{% endblock %}
+{% block main %}
+<div class="rm" data-rm data-bridge="{{ rooms_cfg.state }}">
+  <aside class="rm-list" data-rm-list-pane aria-labelledby="rm-list-h">
+    <div class="rm-list-head">
+      <h2 class="rm-list-h" id="rm-list-h">Rooms</h2>
+      <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Close the room list">✕</button>
+    </div>
+    <ol class="rm-rooms" data-rm-list></ol>
+    <p class="small rm-list-foot">Rooms are opened in <a href="{{ rooms_cfg.login }}" data-rm-records-link>Records</a>, which keeps its own sign-in.</p>
+  </aside>
+  <section class="rm-main" aria-labelledby="rm-title">
+    <header class="rm-head">
+      <button type="button" class="rm-btn rm-list-open" data-rm-list-open aria-controls="rm-list-h" aria-label="Show the rooms">☰</button>
+      <h1 class="rm-title" id="rm-title" data-rm-title>Rooms</h1>
+      <span class="rm-state" data-rm-state hidden></span>
+      <span class="rm-people" data-rm-people aria-label="Participants"></span>
+      <button type="button" class="rm-btn" data-rm-files-toggle aria-expanded="false" aria-controls="rm-files" disabled>Files</button>
+      <details class="rm-more" data-rm-details>
+        <summary class="rm-btn" aria-label="Room details">⋯</summary>
+        <div class="rm-more-body" data-rm-details-body></div>
+      </details>
+    </header>
+    <div class="rm-banner" data-rm-off hidden role="status">
+      <strong>Rooms are not connected on this portal.</strong> They run on dev only, through Records; nothing here pretends to work.
+    </div>
+    <div class="rm-banner" data-rm-signin hidden role="status">
+      <strong>Sign in to Rooms.</strong> Rooms use their own Records sign-in, separate from mini-moi.
+      <a class="btn" href="{{ rooms_cfg.login }}" data-rm-signin-link>Sign in to Rooms</a>
+      <span class="small">Your draft is kept in this tab.</span>
+    </div>
+    <div class="rm-banner" data-rm-error hidden role="status"></div>
+    <div class="rm-take" data-rm-take hidden aria-label="Take a Chat note to this room">
+      <p class="rm-take-h">From Guild Chat · a kept, on-the-record note</p>
+      <blockquote class="rm-take-text" data-rm-take-text></blockquote>
+      <p class="small" data-rm-take-meta></p>
+      <button type="button" class="btn" data-rm-take-confirm hidden>Confirm on the record</button>
+      <button type="button" class="btn" data-rm-take-send>Share into this room</button>
+      <button type="button" class="btn-quiet" data-rm-take-cancel>Cancel</button>
+      <p class="small" data-rm-take-result role="status" hidden></p>
+    </div>
+    <ol class="rm-thread" data-rm-thread role="log" aria-live="polite" aria-label="Room conversation"></ol>
+    <form class="rm-composer" data-rm-composer aria-label="Write to the room">
+      <label class="rm-attach" title="Attach a file (up to 2,000,000 bytes)">📎<span class="visually-hidden">Attach a file</span>
+        <input type="file" class="visually-hidden" data-rm-attach></label>
+      <label class="visually-hidden" for="rm-input">Message</label>
+      <textarea id="rm-input" class="rm-input" data-rm-input rows="1" maxlength="16000" placeholder="Message the room…"></textarea>
+      <button type="button" class="rm-mic" data-rm-mic disabled title="Dictation comes in a later slice">🎙<span class="rm-mic-label">dictation · later</span></button>
+      <button type="submit" class="btn rm-send" data-rm-send>Send</button>
+      <p class="rm-status small" data-rm-status role="status" hidden></p>
+    </form>
+  </section>
+  <aside class="rm-files" id="rm-files" data-rm-files hidden aria-label="Files in this room">
+    <div class="rm-files-head">
+      <button type="button" class="rm-btn" data-rm-files-back hidden>← Back to files</button>
+      <h2 class="rm-files-h" data-rm-files-h>Files</h2>
+      <button type="button" class="rm-btn" data-rm-files-close>Close</button>
+    </div>
+    <div data-rm-files-body></div>
+    <p class="small rm-limit">Files up to 2,000,000 bytes (about 2 MB) each; a larger file needs a managed path, which is later work. Files are kept as shared: nothing is cleaned up automatically.</p>
+  </aside>
+</div>
+<script type="application/json" id="rooms-data">{{ rooms_cfg|tojson }}</script>
+{% endblock %}

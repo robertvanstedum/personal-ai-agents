@@ -137,6 +137,7 @@
     .s-spec_ready  { color: #2a6e4e; background: rgba(42,110,78,0.08);  border-color: rgba(42,110,78,0.25); }
     .s-in_build    { color: #1a5c8a; background: rgba(26,92,138,0.08);  border-color: rgba(26,92,138,0.25); }
     .s-blocked     { color: #8b2020; background: rgba(139,32,32,0.08);  border-color: rgba(139,32,32,0.25); }
+    .s-rework      { color: #8a5a00; background: rgba(154,106,0,0.08);  border-color: rgba(154,106,0,0.3); }
     .s-idea, .s-design, .s-backlog { color: var(--text-muted); background: var(--surface2); border-color: var(--border); }
     .s-done        { color: var(--text-dim); background: rgba(0,0,0,0.04); border-color: var(--border); }
     .s-deferred, .s-cancelled, .s-superseded { color: var(--text-dim); background: rgba(0,0,0,0.03); border-color: var(--border); opacity: 0.7; }
@@ -304,6 +305,7 @@
   <a href="/guild/build?status=in_build"   class="filter-btn {% if status_filter == 'in_build' %}active{% endif %}">In Build</a>
   <a href="/guild/build?status=spec_ready" class="filter-btn {% if status_filter == 'spec_ready' %}active{% endif %}">Spec Ready</a>
   <a href="/guild/build?status=blocked"    class="filter-btn {% if status_filter == 'blocked' %}active{% endif %}">Blocked</a>
+  <a href="/guild/build?status=rework"     class="filter-btn {% if status_filter == 'rework' %}active{% endif %}">Rework</a>
   <a href="/guild/build?status=deferred"   class="filter-btn {% if status_filter == 'deferred' %}active{% endif %}">Deferred</a>
   <a href="/guild/build?status=cancelled"  class="filter-btn {% if status_filter == 'cancelled' %}active{% endif %}">Cancelled</a>
   <a href="/guild/build?status=superseded" class="filter-btn {% if status_filter == 'superseded' %}active{% endif %}">Superseded</a>

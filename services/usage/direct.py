@@ -5,6 +5,11 @@ Same record, same store, same guarantees as the gateway recorder: fire and
 forget, never raises, never blocks; nothing is written unless the environment
 has a usage store (MINIMOI_USAGE_DIR; staging today). No query, prompt,
 result or key is ever recorded.
+
+These records go to this writer's own folder, <store>/<MINIMOI_USAGE_WRITER>/
+(usage_record.own_folder), never to the shared monthly file: that file is the
+non-root gateway's, and a root writer creating it first would lock the gateway
+out for the month.
 """
 from __future__ import annotations
 
@@ -50,6 +55,7 @@ def model_call(*, name: str, actor: str, route: str, provider: str, model: str, 
     tokens_in, tokens_out, cached = _usage_numbers(response) if error is None else (None, None, None)
     code = getattr(error, "status_code", None) if error is not None else 200
     return usage_record.record(
+        usage_record.own_folder(),
         emitter=f"helper:{name}", actor=actor, kind="model", route=route, provider=provider, model=model,
         status="ok" if error is None else ("refused" if code in (401, 403, 429) else "error"),
         http_status=code if isinstance(code, int) else None,
@@ -64,6 +70,7 @@ def search(*, name: str, actor: str, provider: str = "tavily", searches: int = 1
            latency_ms: float | None = None, error: Exception | None = None) -> bool:
     """One search call (Tavily's free tier: no cost, counted in units)."""
     return usage_record.record(
+        usage_record.own_folder(),
         emitter=f"helper:{name}", actor=actor, kind="search", route=f"{provider}:search", provider=provider,
         status="ok" if error is None else "error",
         error_class=type(error).__name__[:80] if error is not None else None,
