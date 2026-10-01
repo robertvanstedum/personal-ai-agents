@@ -106,7 +106,7 @@ case "$cmd" in
     note "Records answers only through the portal at https://dev.minimoi.ai/app/records/ (owner sign-in, then Records' own sign-in)" ;;
   provision)
     require_absolute_root
-    docker inspect -f '{{.State.Running}}' "$RECORDS_CONTAINER" 2>/dev/null | grep -q true || die "start Records first (records.sh up)"
+    [[ "$(docker inspect -f '{{.State.Running}}' "$RECORDS_CONTAINER" 2>/dev/null || true)" == true ]] || die "start Records first (records.sh up)"
     [[ -f "$STAGING_MC_ENV" ]] || die "missing $STAGING_MC_ENV (mc.sh token writes the relay caller token)"
     relay=$(env_value "$STAGING_MC_ENV" MC_RELAY_TOKEN)
     [[ -n "$relay" ]] || die "mc.env has no MC_RELAY_TOKEN (run mc.sh token)"
