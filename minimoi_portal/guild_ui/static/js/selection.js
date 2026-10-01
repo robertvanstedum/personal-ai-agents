@@ -90,13 +90,13 @@ function update() {
   place(s.rect);
 }
 
-// Switching mode clears the selection and any pending action (spec §8).
+// Switching mode, in either direction, clears the selection and any pending
+// action (spec §8, §11): nothing selected before the switch is kept or replayed.
 function onModeChange() {
-  if (live.off || !live.known) {
-    const sel = window.getSelection();
-    if (sel && current) sel.removeAllRanges();
-    hide();
-  }
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount && !sel.isCollapsed) sel.removeAllRanges();
+  window.clearTimeout(hideTimer);
+  hide();
 }
 
 async function pin(btn) {

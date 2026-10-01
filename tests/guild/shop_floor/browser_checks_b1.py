@@ -1928,3 +1928,43 @@ def test_s1_a_selection_longer_than_a_post_it_is_refused_not_cut(browser, server
     expect(page.locator("[data-sel-result]")).to_contain_text("Too long for a post-it")
     assert not [m for m, _u in posts if m == "POST"]
     ctx.close()
+
+
+def test_s1_switching_back_on_the_record_clears_a_selection_made_off_it(browser, server, floor):
+    """Review of PR #284, F4: switching mode clears the selection in both directions."""
+    ctx, page = _context(browser, server, 1440, 900)
+    posts = _requests(page, "/api/v1/postits")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.fill("#mc-input", "Kept before going off")
+    page.click("[data-mc-send]")
+    expect(page.locator('[data-mc-thread] [data-kind="note"][data-note]').last).to_contain_text("Kept before")
+    page.click("[data-mc-record]")                                                 # off the record
+    expect(_hero_chip(page)).to_have_text("Off the record · not kept")
+    _select_in(page, '[data-mc-thread] [data-kind="note"][data-note] .msg-text')
+    assert page.evaluate("window.getSelection().toString()") != ""
+    expect(page.locator("[data-sel-bar]")).to_be_hidden()
+    page.click("[data-mc-record]")                                                 # back on the record
+    expect(_hero_chip(page)).to_have_text("On the record")
+    assert page.evaluate("window.getSelection().toString()") == ""                 # the off-record selection is gone
+    page.wait_for_timeout(300)
+    expect(page.locator("[data-sel-bar]")).to_be_hidden()
+    assert not [m for m, _u in posts if m == "POST"]
+    ctx.close()
+
+
+def test_s1_a_selection_across_two_notes_offers_no_actions(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    notes = page.locator('[data-mc-thread] [data-kind="note"][data-note]')
+    for n, text in enumerate(("First kept note", "Second kept note")):
+        page.fill("#mc-input", text)
+        page.click("[data-mc-send]")
+        expect(notes).to_have_count(n + 1)
+    page.evaluate("""() => { const ns = document.querySelectorAll('[data-mc-thread] [data-kind="note"][data-note] .msg-text');
+                    const r = document.createRange(); r.setStart(ns[0], 0);
+                    r.setEnd(ns[1], ns[1].childNodes.length); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+                    document.dispatchEvent(new Event('selectionchange')); }""")
+    assert "First kept note" in page.evaluate("getSelection().toString()")
+    page.wait_for_timeout(500)
+    expect(page.locator("[data-sel-bar]")).to_be_hidden()
+    ctx.close()
