@@ -1,0 +1,69 @@
+{% extends 'guild_floor/_base.html' %}
+{#
+  The Board (Guild 1.1 slice 3, spec §5.1; the v4 board look): relaxed
+  post-its with Done, labels, links and photos, in your order (drag, the ‹ ›
+  buttons, or Alt+Arrow); Trash with Restore and a confirmed Empty. There is
+  no review workflow. Drawn by js/board.js from the same answer GET
+  /api/v1/board gives (embedded below); every write goes through the API.
+#}
+{% block title %}Board · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/board.css') }}">{% endblock %}
+{% block main %}
+<div class="bd-tool" role="toolbar" aria-label="Board controls">
+  <h1 class="page-title">Board</h1>
+  <span class="bd-counts" data-bd-counts aria-live="polite"></span>
+  <label class="visually-hidden" for="bd-show">Show</label>
+  <select id="bd-show" data-bd-show>
+    <option value="active">Active</option>
+    <option value="done">Done</option>
+    <option value="trash">Trash</option>
+  </select>
+  <label class="visually-hidden" for="bd-label">Label</label>
+  <select id="bd-label" data-bd-label-filter><option value="">All labels</option></select>
+  <input type="search" data-bd-search placeholder="Search notes, #ids…" aria-label="Search the Board">
+  <span class="bd-sp"></span>
+  <a class="btn-quiet" href="{{ urls.media }}" data-bd-media-link>Media library</a>
+  <details class="bd-add" data-bd-add>
+    <summary class="btn">+ Note ▾</summary>
+    <div class="bd-add-menu" role="menu">
+      <button type="button" role="menuitem" data-bd-open="note">Note</button>
+      <button type="button" role="menuitem" data-bd-open="photo">Photo</button>
+    </div>
+  </details>
+</div>
+<form class="bd-panel" data-bd-note-form hidden aria-label="New note">
+  <label class="visually-hidden" for="bd-note-text">Note</label>
+  <textarea id="bd-note-text" data-bd-note-text maxlength="{{ postit_max }}" placeholder="Write a note…" required></textarea>
+  <label for="bd-note-label">Label</label>
+  <select id="bd-note-label" data-bd-note-label><option value="">none</option></select>
+  <label for="bd-note-item">Work item #</label>
+  <input id="bd-note-item" data-bd-note-item inputmode="numeric" pattern="[0-9]*" size="6" placeholder="none">
+  <button type="submit" class="btn" data-bd-note-add>Add note</button>
+  <button type="button" class="btn-quiet" data-bd-close>Cancel</button>
+  <span class="bd-count" data-bd-note-count></span>
+  <p class="save-result" data-bd-add-result role="status" hidden></p>
+</form>
+<form class="bd-panel" data-bd-photo-form hidden aria-label="New photo">
+  <p class="small">Pick a photo from your <a href="{{ urls.media }}">Media library</a>, or upload one (JPEG, PNG, WebP or GIF, up to 8 MB; location and camera details are removed).</p>
+  <div class="bd-pick" data-bd-pick role="group" aria-label="Library photos"></div>
+  <label for="bd-photo-file">Upload</label>
+  <input id="bd-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-bd-photo-file>
+  <label for="bd-photo-caption">Caption</label>
+  <input id="bd-photo-caption" data-bd-photo-caption maxlength="140" placeholder="optional">
+  <button type="submit" class="btn" data-bd-photo-add disabled>Place on the Board</button>
+  <button type="button" class="btn-quiet" data-bd-close>Cancel</button>
+  <p class="save-result" data-bd-photo-result role="status" hidden></p>
+</form>
+<p class="save-result bd-note-line" data-bd-result role="status" hidden></p>
+<div class="bd-confirm" data-bd-confirm hidden role="alertdialog" aria-labelledby="bd-confirm-text">
+  <span id="bd-confirm-text" data-bd-confirm-text></span>
+  <button type="button" class="btn" data-bd-confirm-yes>Delete permanently</button>
+  <button type="button" class="btn-quiet" data-bd-confirm-no>Cancel</button>
+</div>
+<p class="bd-state-note" data-bd-state-note></p>
+<div class="bd-cork" data-bd-cork>
+  {% if not res.ok %}<p class="unknown-line" data-bd-unknown>The Board is <strong>unknown</strong>: {% if res.reason == 'not_configured' %}the floor database is not configured on this portal{% else %}it could not be read{% endif %}. Nothing here is empty or zero.</p>{% endif %}
+  <ol class="bd-grid" data-bd-grid aria-label="Notes"></ol>
+</div>
+<script type="application/json" id="board-data">{{ board_data|tojson }}</script>
+{% endblock %}

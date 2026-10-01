@@ -41,6 +41,11 @@ class Services:
     mc: MasterCraftsmanBackend = field(default_factory=OffBackend)
     mc_health: CachedHealth | None = None
     mc_turns: bool = False      # the environment's turn gate (MINIMOI_GUILD_MC_TURNS); off by default
+    mc_stream: bool = False     # the streaming switch (MINIMOI_GUILD_MC_STREAM); code default off, staging on
+    # The Media library's files (Guild 1.1 slice 3): MINIMOI_MEDIA_DIR, a host
+    # bind mount on staging. A missing folder makes uploads "unavailable";
+    # it never fails the mount.
+    media_dir: str | None = None
 
     def __post_init__(self):
         if self.mc_health is None or self.mc_health.backend is not self.mc:
@@ -68,7 +73,8 @@ def build_services(*, queue_path: str | None, operations_status_url: str | None 
                    audit: Callable | None = None, http_get: Callable | None = None,
                    db_connect: Callable | None = None, store: "qs.QueueStore | None" = None,
                    floor: FloorStores | None = None, floor_key: str = DEFAULT_FLOOR,
-                   mc: MasterCraftsmanBackend | None = None, mc_turns: bool = False) -> Services:
+                   mc: MasterCraftsmanBackend | None = None, mc_turns: bool = False,
+                   mc_stream: bool = False, media_dir: str | None = None) -> Services:
     store = store or qs.QueueStore(queue_path)
     return Services(
         store=store,
@@ -81,4 +87,6 @@ def build_services(*, queue_path: str | None, operations_status_url: str | None 
         audit=audit,
         mc=mc or OffBackend(),
         mc_turns=bool(mc_turns),
+        mc_stream=bool(mc_stream),
+        media_dir=media_dir or os.environ.get("MINIMOI_MEDIA_DIR") or "/app/runtime/media",
     )

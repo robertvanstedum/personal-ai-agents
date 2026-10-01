@@ -5,9 +5,13 @@
    shown with its time and context. Off the record, what he types stays in
    this page's memory only and is never sent (S2). #}
 {% macro note_row(n) -%}
-<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-note="{{ n.id }}">
+<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}">
   <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span>{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</p>
+  {%- if n.html %}
+  <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
+  {%- else %}
   <p class="msg-text">{{ n.text }}</p>
+  {%- endif %}
   {%- if n.turn %}
   <p class="msg-foot" data-turn-foot><span data-turn-done>{{ n.turn.done_text }}</span><span data-turn-usage>{% if n.turn.tokens_text %} · {{ n.turn.tokens_text }}{% endif %}</span></p>
   {%- endif %}
@@ -25,13 +29,35 @@
       <button type="button" class="btn-mini" data-mc-min>Minimize</button>
     </div>
   </header>
-  <p class="mc-state" data-mc-header>{{ state.mc_header }}</p>
+  {% if page_id != 'floor' %}<p class="mc-state" data-mc-header>{{ state.mc_header }}</p>{% endif %}{# on Chat the state is in the hero header #}
   <p class="mc-context" data-mc-context>Context: {{ area }} · {{ context_item }} · on the record</p>
+  {% if page_id == 'floor' %}
+  {# The chat's own header, with the hero in it (Guild 1.1 slice 1, the v4
+     design: no hero chooser): Master Craftsman's portrait and state, the
+     conversation, the one place Needs you appears, the record chip, and the
+     rail toggle. The image is decoration (CSS); the words carry the meaning. #}
+  <div class="mc-floorbar mc-hero" data-floorbar data-chat-hero>
+    <button type="button" class="fb-btn fb-history" data-history-toggle aria-expanded="false" aria-controls="floor-history">☰<span class="visually-hidden"> Conversations</span></button>
+    <span class="hero-portrait" aria-hidden="true"></span>
+    <div class="hero-text">
+      <h1 class="hero-name">Master Craftsman<span class="visually-hidden"> · </span> <span class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</span></h1>
+      <p class="hero-sub"><span class="hero-dot" aria-hidden="true"></span><span data-mc-header>{{ state.mc_header }}</span></p>
+    </div>
+    {% set nt = state.needs.total %}
+    <a class="fb-needs" href="{{ urls.bench }}" data-needs-badge data-needs-status="{{ state.needs.status }}"{% if state.needs.status == 'ok' and not nt %} hidden{% endif %} title="{{ state.needs.text if state.needs.status != 'ok' else 'Needs you — open the wall' }}">Needs you <span class="fb-count" data-reminder-count>{{ nt if nt is not none else '?' }}</span><span class="visually-hidden" data-needs-line>{{ state.needs.text }}</span></a>
+    <span class="hero-chip" data-record-chip>On the record</span>
+    <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main">Context</button>
+  </div>
+  {% else %}
+  <p class="mc-current small" data-mc-current>Current conversation · {{ conversation.title if conversation else 'Shop floor thread' }}{% if page_id != 'floor' %} · <a href="{{ urls.floor }}{% if conversation %}?c={{ conversation.id }}{% endif %}">open</a>{% endif %}</p>
+  {% endif %}
   <ol class="mc-thread" data-mc-thread role="log" aria-live="polite" aria-label="Conversation thread">
+    {% if page_id != 'floor' %}{# on the Shop floor the platform's status line sits in the rail: the chat holds only conversation #}
     <li class="msg msg-platform" data-kind="briefing" data-briefing>
       <p class="msg-meta"><span class="msg-label" data-briefing-label>{{ state.briefing.display_label }}</span></p>
       <p class="msg-text" data-briefing-text>{{ state.briefing.text }}</p>
     </li>
+    {% endif %}
     {% if state.notes.state != 'ok' %}
     <li class="msg msg-platform" data-kind="platform" data-notes-unavailable>
       <p class="msg-meta"><span class="msg-label">Guild platform</span></p>
@@ -42,9 +68,21 @@
     {% for n in state.notes.recent %}{{ note_row(n) }}{% endfor %}
     {% endif %}
   </ol>
+  {% if page_id == 'floor' %}
+  {# Selection actions (Guild 1.1 slice 1): shown only on the record, for text
+     inside one kept message (js/selection.js). Rooms arrive in slice 4. #}
+  <div class="sel-bar" data-sel-bar role="toolbar" aria-label="Selected text" hidden>
+    <span class="sel-label">Selection</span>
+    <button type="button" class="sel-act" data-sel-pin>Pin to Board</button>
+    <button type="button" class="sel-act" data-sel-room disabled title="Rooms arrive in a later slice">Take to a Room<span class="visually-hidden"> (coming in a later slice)</span></button>
+    <span class="sel-result" data-sel-result role="status" hidden></span>
+  </div>
+  {% endif %}
   <p class="visually-hidden" aria-live="polite" data-mc-announcer></p>
   <p class="mc-refusal" data-mc-refusal role="status" hidden></p>
   <div class="mc-dock-bottom" data-mc-dock-bottom>
+  {# What blocks chat, one short line right above the composer: MC down, the cost level at act or stop, or a failed answer. #}
+  <p class="mc-blocker" data-mc-blocker role="status"{% if not state.blockers %} hidden{% endif %}>{% for b in state.blockers %}<span data-blocker="{{ b.kind }}">{{ b.text }}</span>{% endfor %}</p>
   <form class="mc-composer" data-mc-composer>
     <label class="visually-hidden" for="mc-input">Type a note</label>
     <input id="mc-input" class="mc-input" data-mc-input autocomplete="off" maxlength="{{ page_json.note_max }}" placeholder="Type a note">
@@ -53,8 +91,9 @@
       <button type="button" class="btn-quiet" data-mc-record-confirm hidden>Confirm on the record</button>
       <button type="button" class="btn-quiet" data-mc-record aria-pressed="false">Off the record</button>
       <button type="button" class="btn-quiet" data-mc-invite disabled>Invite</button>
+      <button type="button" class="btn-quiet mc-info-btn" data-mc-info aria-expanded="false" aria-controls="mc-off-lines" title="How notes, filing and inviting work here">ⓘ<span class="visually-hidden"> About notes, filing and inviting</span></button>
     </div>
-    <div class="mc-off-lines">
+    <div class="mc-off-lines" id="mc-off-lines" data-mc-off-lines hidden>
       <span id="mc-notes-line" data-notes-line data-notes-state="{{ state.notes.state }}">{{ state.notes.text }}</span>
       <span data-filing-off>{{ filing_off }}</span>
       <span data-invite-off>{{ invite_off }}</span>
@@ -75,7 +114,7 @@
 <template id="tpl-note">
   <li class="msg msg-note" data-kind="note">
     <p class="msg-meta"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span><span data-slot="context"></span> · kept as a note</p>
-    <p class="msg-text" data-slot="text"></p>
+    <div class="msg-text msg-md" data-slot="text"></div>
   </li>
 </template>
 <template id="tpl-note-foot">
@@ -86,6 +125,14 @@
     <span class="mc-mark" aria-hidden="true">MC</span>
     <span class="mc-waiting-text">Waiting for a response…</span>
     <span class="mc-elapsed" data-slot="elapsed" aria-hidden="true">0s</span>
+  </li>
+</template>
+<template id="tpl-mc-stream">
+  <li class="msg msg-note msg-stream" data-kind="mc-stream" data-mc-stream-line aria-busy="true">
+    <p class="msg-meta"><span class="mc-mark" aria-hidden="true">MC</span> <span class="msg-label" data-slot="label"></span> · <span data-slot="state">Working…</span> <span class="mc-elapsed" data-slot="elapsed" aria-hidden="true">0s</span></p>
+    <div class="msg-text msg-md" data-slot="rendered"></div>
+    <div class="msg-text msg-stream-tail" data-slot="tail"></div>
+    <p class="msg-foot" data-slot="controls"><button type="button" class="btn-mini" data-mc-stop hidden>Stop</button> <span data-slot="stopnote" hidden>Stop ends it here · what was already generated may still be billed</span></p>
   </li>
 </template>
 <template id="tpl-off-record">

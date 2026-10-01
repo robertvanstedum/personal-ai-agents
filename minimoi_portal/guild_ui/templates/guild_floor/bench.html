@@ -1,7 +1,7 @@
 {% extends 'guild_floor/_base.html' %}
-{% from 'guild_floor/_macros.html' import src_badge, src_note, unknown_row with context %}
+{% from 'guild_floor/_macros.html' import src_badge, src_note, unknown_row, continue_line with context %}
 {% import 'guild_floor/_postits.html' as pz with context %}
-{% block title %}Build · workbench{% endblock %}
+{% block title %}The wall · Workbench{% endblock %}
 
 {% macro panel(id) -%}
 {% set p = panels_cfg[id] %}
@@ -26,12 +26,17 @@
 
 {% block main %}
 <div class="page-head">
-  <h1 class="page-title">Build · workbench</h1>
+  <h1 class="page-title">The wall <span class="small">· Workbench</span></h1>
   <p class="page-meta">⠿ drag · ↑↓ move · Fold · ☆ focus · current as of <span data-iso="{{ state.observed_at }}">{{ hhmm(state.observed_at) }}</span></p>
   <p class="page-actions">
     <a class="btn-quiet" href="{{ urls.queue }}">Build Queue →</a>
     <button type="button" class="btn-quiet" data-bench-reset>Reset arrangement</button>
   </p>
+</div>
+<div class="wall-filters" role="group" aria-label="Show on the wall" data-wall-filters>
+  {% for f, label in [('all', 'All'), ('needs', 'Needs you'), ('continue', 'Continue'), ('postits', 'Post-its'), ('motion', 'In motion'), ('blocked', 'Blocked'), ('discussions', 'Discussions')] %}
+  <button type="button" class="wall-filter" data-wall-filter="{{ f }}" aria-pressed="{{ 'true' if f == 'all' else 'false' }}">{{ label }}</button>
+  {% endfor %}
 </div>
 <p class="bench-note small" data-bench-note>Your arrangement is kept in this browser only (a view setting, per device) · <span data-folded-summary></span></p>
 
@@ -44,6 +49,11 @@
   {% endfor %}
   </ul>
   {% if state.needs.status != 'ok' %}<p class="unknown-line" data-row>{{ state.needs.text }}</p>{% endif %}
+{% endcall %}
+
+{% call panel('continue') %}
+  <p class="row" data-row>{{ continue_line(state['continue']) }}</p>
+  <p class="small"><a href="{{ urls.queue }}">Build Queue →</a></p>
 {% endcall %}
 
 {% call panel('motion') %}
@@ -60,7 +70,7 @@
   {% set b = data.blocked %}
   {% if not b.res.ok %}{{ unknown_row(badge(b.res)) }}{% else %}
   <ul class="rows">
-    {% for it in b.rows %}<li class="row" data-row><span><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title }}</a>{% if it.blocked_reason %} — {{ it.blocked_reason }}{% endif %}</span>{{ src_badge(badge(b.res)) }}</li>{% endfor %}
+    {% for it in b.rows %}<li class="row" data-row><span><a href="{{ url_for('.item', item_id=it.id) }}">#{{ it.id }} {{ it.title }}</a>{% if it.status == 'rework' %} — rework: {{ it.trouble_reason }}{% elif it.blocked_reason %} — {{ it.blocked_reason }}{% endif %}</span>{{ src_badge(badge(b.res)) }}</li>{% endfor %}
   </ul>
   {% endif %}
 {% endcall %}

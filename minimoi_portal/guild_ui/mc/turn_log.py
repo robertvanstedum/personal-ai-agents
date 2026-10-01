@@ -57,7 +57,11 @@ class TurnLog:
         self.path = os.path.join(folder, FILE_NAME) if folder else None
 
     def record(self, *, turn_id: str, status: str, backend_kind: str | None, duration_ms: int,
-               reply_request_id: str | None = None, failure_class: str | None = None) -> None:
+               reply_request_id: str | None = None, failure_class: str | None = None,
+               mode: str | None = None) -> None:
+        """One line per turn. ``mode`` is "stream" for a streamed turn, whose
+        interrupted and stopped turns get a line too (streaming spec v0.3 §6),
+        with no reply id; ``duration_ms`` is then the time to the final text."""
         if not self.path:
             return
         ended = datetime.now(timezone.utc)
@@ -69,6 +73,8 @@ class TurnLog:
                 "status": status, "failure_class": failure_class, "backend_kind": backend_kind,
                 "duration_ms": int(duration_ms), "reply_request_id": reply_request_id,
                 "usage": None}
+        if mode:
+            line["mode"] = mode
         try:
             with _LOCK:
                 fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -101,7 +107,7 @@ class TurnLog:
                 ms = line.get("duration_ms")
                 if isinstance(ms, int):
                     found[rid] = {"duration_ms": ms, "done_text": done_text(ms), "usage": line.get("usage"),
-                                  "window": _window(line, ms)}
+                                  "window": _window(line, ms), "turn_id": line.get("turn_id")}
         return found
 
     def annotate(self, notes):

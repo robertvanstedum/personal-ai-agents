@@ -62,8 +62,25 @@ JOURNAL_NAME = "queue_journal.jsonl"
 STATUSES = (
     "idea", "design", "backlog", "spec_ready", "in_build", "blocked",
     "deferred", "cancelled", "superseded", "done",
+    # Guild 1.1 slice 2 (spec §4.2): review or testing found something to
+    # correct. Additive; nothing is renamed or collapsed.
+    "rework",
 )
 EDITABLE_FIELDS = ("spec_title", "summary", "github_issue")
+
+# "Trouble" is blocked or rework (spec §4.2). While in trouble an item carries
+# trouble_reason (required, <= 500 characters), trouble_from (the last
+# non-trouble status, never overwritten by blocked <-> rework) and
+# trouble_since. They are cleared on the live item when it leaves trouble;
+# the journal keeps the full history.
+TROUBLE = ("blocked", "rework")
+TROUBLE_FIELDS = ("trouble_reason", "trouble_from", "trouble_since")
+REASON_MAX = 500
+# Owner ranks (spec §4.3): an integer 1-3, or absent.
+RANKS = (1, 2, 3)
+# New items (spec §4.5) start early in the lifecycle only.
+CREATE_STATUSES = ("idea", "design", "backlog")
+TITLE_MAX = 200
 
 # Result codes. The portal maps each to one fixed sentence.
 SAVED = "saved"
@@ -126,6 +143,44 @@ def change_hash(op: str, item_id: int, change: dict) -> str:
                            sort_keys=True, separators=(",", ":"), ensure_ascii=False,
                            default=str)
     return sha256_bytes(canonical.encode("utf-8"))
+
+
+def valid_rank(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value in RANKS
+
+
+def ranking(items: list) -> list[list[int]]:
+    """Every ranked item as sorted ``[id, owner_rank]`` pairs (spec §4.3)."""
+    return sorted([it["id"], it["owner_rank"]] for it in items
+                  if isinstance(it, dict) and isinstance(it.get("id"), int)
+                  and valid_rank(it.get("owner_rank")))
+
+
+def rank_digest(items: list) -> str:
+    """SHA-256 over the sorted (id, owner_rank) pairs of every ranked item: the
+    collection's unchanged-check for a rank change (spec §4.3, R3)."""
+    canonical = json.dumps(ranking(items), separators=(",", ":"))
+    return sha256_bytes(canonical.encode("utf-8"))
+
+
+def shift_ranks(items: list, item_id: int, rank: int | None) -> dict[int, tuple]:
+    """The whole rank change as one operation on the ordered next-three list:
+    the target is taken out (wherever it was), inserted at position ``rank``,
+    and the list is renumbered 1..3 with no gaps; whoever falls past 3 is
+    cleared. Moving #1 to #3 therefore gives old #2 -> 1, old #3 -> 2.
+    ``rank=None`` removes the target and closes the gap. Returns
+    {id: (before, after)} for every item whose rank changes; mutates nothing."""
+    current = {it["id"]: it["owner_rank"] for it in items
+               if isinstance(it, dict) and isinstance(it.get("id"), int) and valid_rank(it.get("owner_rank"))}
+    order = [i for i, _ in sorted(current.items(), key=lambda kv: (kv[1], kv[0])) if i != item_id]
+    if rank is not None:
+        order.insert(min(max(rank, 1), len(order) + 1) - 1, item_id)
+    after = {i: n + 1 for n, i in enumerate(order[:max(RANKS)])}
+    changed = {}
+    for i in set(current) | set(after):
+        if current.get(i) != after.get(i):
+            changed[i] = (current.get(i), after.get(i))
+    return changed
 
 
 def reason_class(exc: BaseException) -> str:
@@ -199,6 +254,9 @@ class SaveResult:
     current_item_digest: str | None = None
     reason: str | None = None
     reconciled: list = field(default_factory=list)
+    ranking: list | None = None          # set_rank: the current [id, rank] pairs
+    rank_digest: str | None = None       # set_rank: their digest
+    changed: list | None = None          # set_rank: [{id, from, to}] for every moved item
 
     @property
     def ok(self) -> bool:
@@ -206,6 +264,18 @@ class SaveResult:
 
     def as_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass
+class _Plan:
+    """A planned write: the whole new list, the item it is about, and what the
+    journal intent should record beyond the standard fields."""
+    items: list
+    item_id: int
+    old: Any
+    new: Any
+    item: dict | None
+    intent: dict = field(default_factory=dict)
 
 
 class QueueBusy(Exception):
@@ -373,7 +443,8 @@ class QueueStore:
             intent = intents.get(record.get("op_id"))
             if intent is None:
                 continue
-            if item_id is not None and intent.get("item_id") != item_id:
+            if item_id is not None and intent.get("item_id") != item_id \
+                    and item_id not in {c.get("id") for c in intent.get("items") or [] if isinstance(c, dict)}:
                 continue
             return {"op_id": record.get("op_id"), "item_id": intent.get("item_id"),
                     "op": intent.get("op"), "audit": record.get("audit"),
@@ -558,15 +629,44 @@ class QueueStore:
             os.close(dir_fd)
 
     def _update(self, *, op: str, item_id: int, expect_item_digest: str | None,
-                mutate: Callable[[dict], tuple[Any, Any]], change: dict, principal: str,
+                mutate: Callable[[dict], tuple], change: dict, principal: str,
                 via: str, idempotency_key: str | None,
                 audit: Callable[[dict, Any, Any], str] | None = None) -> SaveResult:
+        """A one-item change behind that item's digest (status, edit)."""
         problem = self.write_problem()
         if problem:
             return SaveResult(REFUSED, item_id=item_id, op=op, reason=problem)
         if not expect_item_digest:
             return SaveResult(CONFLICT, item_id=item_id, op=op,
                               reason="no unchanged-check digest was sent")
+
+        def plan(items: list):
+            index = next((i for i, it in enumerate(items)
+                          if isinstance(it, dict) and it.get("id") == item_id), None)
+            if index is None or item_id == 0:
+                return SaveResult(NOT_FOUND, item_id=item_id, op=op)
+            current = items[index]
+            current_digest = item_digest(current)
+            if current_digest != expect_item_digest:
+                return SaveResult(CONFLICT, item_id=item_id, op=op, current_item=current,
+                                  current_item_digest=current_digest)
+            updated = json.loads(json.dumps(current))
+            outcome = mutate(updated)
+            old, new = outcome[0], outcome[1]
+            detail = outcome[2] if len(outcome) > 2 else {}
+            items[index] = updated
+            return _Plan(items=items, item_id=item_id, old=old, new=new, item=updated,
+                         intent={"item_before_digest": current_digest, **detail})
+
+        return self._commit(op=op, item_id=item_id, plan=plan, change=change, principal=principal,
+                            via=via, idempotency_key=idempotency_key, audit=audit)
+
+    def _commit(self, *, op: str, item_id: int, plan: Callable[[list], Any], change: dict,
+                principal: str, via: str, idempotency_key: str | None,
+                audit: Callable[[dict, Any, Any], str] | None = None) -> SaveResult:
+        problem = self.write_problem()
+        if problem:
+            return SaveResult(REFUSED, item_id=item_id, op=op, reason=problem)
         try:
             held = self._acquire()
         except QueueBusy:
@@ -575,15 +675,18 @@ class QueueStore:
             log.exception("queue_store: could not take the queue lock for item %s", item_id)
             return SaveResult(FAILED, item_id=item_id, op=op, reason=reason_class(exc))
         try:
-            return self._update_locked(
-                op=op, item_id=item_id, expect_item_digest=expect_item_digest,
-                mutate=mutate, change=change, principal=principal, via=via,
-                idempotency_key=idempotency_key, audit=audit)
+            return self._commit_locked(op=op, item_id=item_id, plan=plan, change=change,
+                                       principal=principal, via=via,
+                                       idempotency_key=idempotency_key, audit=audit)
         finally:
             self._release(held)
 
-    def _update_locked(self, *, op, item_id, expect_item_digest, mutate, change,
-                       principal, via, idempotency_key, audit) -> SaveResult:
+    def _commit_locked(self, *, op, item_id, plan, change, principal, via, idempotency_key,
+                       audit) -> SaveResult:
+        """Under the lock: reconcile, repeat check, plan the change on a fresh
+        read (the plan does every unchanged-check), then intent, atomic write,
+        read-back and receipt. One journal intent covers the whole change, even
+        when it moves several items (a rank shift)."""
         # ── Before the intent: an OS error writes nothing and needs no outcome.
         try:
             raw = _read_bytes(self.path)
@@ -612,31 +715,25 @@ class QueueStore:
         except QueueUnavailable as exc:
             return SaveResult(UNAVAILABLE, item_id=item_id, op=op, reason=str(exc),
                               reconciled=reconciled)
-        index = next((i for i, it in enumerate(items)
-                      if isinstance(it, dict) and it.get("id") == item_id), None)
-        if index is None or item_id == 0:
-            return SaveResult(NOT_FOUND, item_id=item_id, op=op, reconciled=reconciled)
-        current = items[index]
-        current_digest = item_digest(current)
-        if current_digest != expect_item_digest:
-            return SaveResult(CONFLICT, item_id=item_id, op=op, current_item=current,
-                              current_item_digest=current_digest, reconciled=reconciled)
-        updated = json.loads(json.dumps(current))
         try:
-            old, new = mutate(updated)
+            planned = plan(items)
         except ValueError as exc:
             return SaveResult(INVALID, item_id=item_id, op=op, reason=str(exc),
                               reconciled=reconciled)
-        items[index] = updated
-        data = serialize(items)
+        if isinstance(planned, SaveResult):
+            planned.reconciled = reconciled
+            return planned
+        item_id, old, new, updated = planned.item_id, planned.old, planned.new, planned.item
+        data = serialize(planned.items)
         after_digest = sha256_bytes(data)
         op_id = uuid.uuid4().hex
         moment = self._clock()
         try:
             self._append({
+                **planned.intent,
                 "kind": "intent", "op_id": op_id, "op": op, "item_id": item_id,
                 "from": old, "to": new, "before_digest": before_digest,
-                "after_digest": after_digest, "item_before_digest": current_digest,
+                "after_digest": after_digest,
                 "change_hash": requested_hash,
                 "principal": principal, "via": via, "idempotency_key": idempotency_key,
                 "at": _iso(moment),
@@ -689,12 +786,17 @@ class QueueStore:
                               at=_iso(moment), before_digest=before_digest,
                               after_digest=after_digest, reconciled=reconciled,
                               reason=f"the receipt could not be journalled ({reason_class(exc)})")
-        return SaveResult(SAVED, item_id=item_id, op=op, old=old, new=new,
-                          at=_iso(moment), receipt_id=rid, verified=True,
-                          audit=audit_state, before_digest=before_digest,
-                          after_digest=after_digest, current_item=updated,
-                          current_item_digest=item_digest(updated),
-                          reconciled=reconciled)
+        result = SaveResult(SAVED, item_id=item_id, op=op, old=old, new=new,
+                            at=_iso(moment), receipt_id=rid, verified=True,
+                            audit=audit_state, before_digest=before_digest,
+                            after_digest=after_digest, current_item=updated,
+                            current_item_digest=item_digest(updated) if updated is not None else None,
+                            reconciled=reconciled)
+        if op == "rank":
+            result.ranking = ranking(planned.items)
+            result.rank_digest = rank_digest(planned.items)
+            result.changed = planned.intent.get("items")
+        return result
 
     def _resolve_write_error(self, exc: OSError, *, op, op_id, item_id, before_digest,
                              after_digest, old, new, moment, reconciled) -> SaveResult:
@@ -727,18 +829,157 @@ class QueueStore:
                     principal: str, note: str | None = None, via: str = "legacy",
                     idempotency_key: str | None = None,
                     audit: Callable[[dict, Any, Any], str] | None = None) -> SaveResult:
+        """A status Save, enforcing the trouble rules of spec §4.2:
+
+        * non-trouble -> blocked or rework: a reason is required;
+          trouble_from = the old status, trouble_since = now;
+        * blocked <-> rework: a reason is required; trouble_from and
+          trouble_since are kept (never overwritten with blocked or rework);
+        * the same trouble status with a new reason: a reason edit; the journal
+          keeps the old reason;
+        * trouble -> non-trouble: only by an explicit Save like this one; the
+          trouble fields are cleared on the live item.
+
+        ``blocked_reason`` keeps its legacy meaning: the reason while blocked,
+        cleared on leaving blocked. A rework reason lives only in trouble_reason."""
+        reason = note.strip() if isinstance(note, str) and note.strip() else None
+
         def mutate(item: dict):
             if to not in STATUSES:
                 raise ValueError("unknown status")
             old = item.get("status")
+            now = _iso(self._clock())
+            reason_before = item.get("trouble_reason") or item.get("blocked_reason") \
+                if old in TROUBLE else None
+            detail = {"reason_from": reason_before}
+            if to in TROUBLE:
+                if not reason:
+                    raise ValueError("a reason is required for blocked or rework")
+                if len(reason) > REASON_MAX:
+                    raise ValueError(f"the reason is longer than {REASON_MAX} characters")
+                if old not in TROUBLE:
+                    item["trouble_from"] = old
+                    item["trouble_since"] = now
+                # blocked <-> rework, or a reason edit: trouble_from and
+                # trouble_since stay as they are.
+                item["trouble_reason"] = reason
+                detail.update({"reason_to": reason, "trouble_from": item.get("trouble_from"),
+                               "reason_edit": old == to})
+            else:
+                if old in TROUBLE:
+                    detail["left_trouble_from"] = item.get("trouble_from")
+                for name in TROUBLE_FIELDS:
+                    item.pop(name, None)
+                detail["reason_to"] = None
             item["status"] = to
-            item["last_transition_at"] = _iso(self._clock())
-            item["blocked_reason"] = note if to == "blocked" else None
-            return old, to
-        change = {"status": to, "blocked_reason": note if to == "blocked" else None}
+            item["last_transition_at"] = now
+            item["blocked_reason"] = reason if to == "blocked" else None
+            return old, to, detail
+        change = {"status": to, "blocked_reason": reason if to == "blocked" else None}
+        if to == "rework":
+            change["trouble_reason"] = reason
         return self._update(op="status", item_id=item_id, expect_item_digest=expect_item_digest,
                             mutate=mutate, change=change, principal=principal, via=via,
                             idempotency_key=idempotency_key, audit=audit)
+
+    def set_rank(self, item_id: int, rank: int | None, *, expect_rank_digest: str | None,
+                 principal: str, via: str = "guild-next",
+                 idempotency_key: str | None = None) -> SaveResult:
+        """Give ``item_id`` owner rank 1-3 (or clear it with None) as one
+        operation behind the collection's rank digest (spec §4.3, R3): the
+        digest is recomputed under the lock and a mismatch is a conflict with
+        the current ranking; the shift moves every affected item in one write,
+        one journal intent (listing every item with before and after rank
+        digests) and one receipt."""
+        if rank is not None and not valid_rank(rank):
+            return SaveResult(INVALID, item_id=item_id, op="rank", reason="a rank is 1, 2, 3 or none")
+        if not expect_rank_digest:
+            return SaveResult(CONFLICT, item_id=item_id, op="rank",
+                              reason="no rank unchanged-check digest was sent")
+
+        def plan(items: list):
+            target = next((it for it in items if isinstance(it, dict) and it.get("id") == item_id), None)
+            if target is None or item_id == 0:
+                return SaveResult(NOT_FOUND, item_id=item_id, op="rank")
+            before = rank_digest(items)
+            if before != expect_rank_digest:
+                return SaveResult(CONFLICT, item_id=item_id, op="rank", ranking=ranking(items),
+                                  rank_digest=before, current_item=target,
+                                  current_item_digest=item_digest(target))
+            moves = shift_ranks(items, item_id, rank)
+            updated = []
+            for it in items:
+                if isinstance(it, dict) and it.get("id") in moves:
+                    it = json.loads(json.dumps(it))
+                    after = moves[it["id"]][1]
+                    if after is None:
+                        it.pop("owner_rank", None)
+                    else:
+                        it["owner_rank"] = after
+                updated.append(it)
+            changed = [{"id": i, "from": b, "to": a} for i, (b, a) in sorted(moves.items())]
+            item = next(it for it in updated if isinstance(it, dict) and it.get("id") == item_id)
+            return _Plan(items=updated, item_id=item_id, old=moves.get(item_id, (rank, rank))[0], new=rank,
+                         item=item, intent={"items": changed, "rank_before_digest": before,
+                                            "rank_after_digest": rank_digest(updated)})
+
+        return self._commit(op="rank", item_id=item_id, plan=plan, change={"rank": rank},
+                            principal=principal, via=via, idempotency_key=idempotency_key)
+
+    def create_item(self, spec_title: str, status: str = "idea", *, principal: str,
+                    via: str = "guild-next", idempotency_key: str | None = None) -> SaveResult:
+        """A new item (spec §4.5): id = max + 1 under the lock, journaled like
+        any Save. Only idea, design or backlog. The queue stays a bare list."""
+        title = spec_title.strip() if isinstance(spec_title, str) else ""
+        if not title or len(title) > TITLE_MAX:
+            return SaveResult(INVALID, op="create", reason=f"a title of 1 to {TITLE_MAX} characters is needed")
+        if status not in CREATE_STATUSES:
+            return SaveResult(INVALID, op="create", reason="a new item starts as idea, design or backlog")
+
+        def plan(items: list):
+            ids = [it["id"] for it in items if isinstance(it, dict) and isinstance(it.get("id"), int)
+                   and not isinstance(it.get("id"), bool)]
+            new_id = max(ids, default=0) + 1
+            item = {"id": new_id, "spec_title": title, "spec_file": None, "status": status,
+                    "blocked_reason": None, "last_transition_at": _iso(self._clock())}
+            return _Plan(items=items + [item], item_id=new_id, old=None, new=status, item=item)
+
+        return self._commit(op="create", item_id=0, plan=plan, change={"spec_title": title, "status": status},
+                            principal=principal, via=via, idempotency_key=idempotency_key)
+
+    def item_journal(self, item_id: int) -> list[dict]:
+        """The journal's completed changes to one item, oldest first (spec §4.4):
+        from, to, principal, via, at and receipt, with the reason change for a
+        status Save and the rank change for a rank shift that moved it. A
+        recovered completion is marked. Raises OSError when unreadable."""
+        lines = self._journal_lines()
+        intents = {r.get("op_id"): r for r in lines if r.get("kind") == "intent"}
+        out = []
+        for record in lines:
+            if record.get("kind") != "completed":
+                continue
+            intent = intents.get(record.get("op_id"))
+            if intent is None:
+                continue
+            entry = None
+            if intent.get("item_id") == item_id:
+                entry = {"from": intent.get("from"), "to": intent.get("to")}
+            elif intent.get("op") == "rank":
+                moved = next((c for c in intent.get("items") or []
+                              if isinstance(c, dict) and c.get("id") == item_id), None)
+                if moved is not None:
+                    entry = {"from": moved.get("from"), "to": moved.get("to"), "shifted_by": intent.get("item_id")}
+            if entry is None:
+                continue
+            entry.update({"op": intent.get("op"), "principal": intent.get("principal"),
+                          "via": intent.get("via"), "at": intent.get("at"),
+                          "receipt_id": record.get("receipt_id"),
+                          "recovered": bool(record.get("recovered"))})
+            if intent.get("op") == "status":
+                entry.update({"reason_from": intent.get("reason_from"), "reason_to": intent.get("reason_to"),
+                              "reason_edit": bool(intent.get("reason_edit"))})
+            out.append(entry)
+        return out
 
     def edit_metadata(self, item_id: int, fields: dict, *, expect_item_digest: str | None,
                       principal: str, via: str = "legacy",

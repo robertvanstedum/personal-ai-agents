@@ -1,0 +1,17 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Planning Studio · Prototype Lab · Guild{% endblock %}
+{% block main %}
+<div class="page-head">
+  <h1 class="page-title">Planning Studio · Prototype Lab</h1>
+  <p class="page-meta">Entry points only: neither is served on dev yet.</p>
+</div>
+<section class="lab-card" id="planning-studio" aria-labelledby="lab-ps">
+  <h2 class="h3" id="lab-ps">Planning Studio</h2>
+  <p>Where initiatives are shaped before the roadmap: briefs, specs, decisions and reviews. Today it lives as files in the repository folder <code>planning-studio/</code> on the workshop; it has no page here yet.</p>
+</section>
+<section class="lab-card" id="prototype-lab" aria-labelledby="lab-pl">
+  <h2 class="h3" id="lab-pl">Prototype Lab</h2>
+  <p>Where UI and flows are tried before they are built. Its projects live in the repository folder <code>prototype-lab/</code>; none is served from this page yet.</p>
+</section>
+<p class="small">Back to the <a href="{{ urls.floor }}">Shop floor</a> · the <a href="{{ urls.bench }}">wall</a></p>
+{% endblock %}

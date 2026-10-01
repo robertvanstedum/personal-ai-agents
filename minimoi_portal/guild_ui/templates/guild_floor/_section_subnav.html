@@ -1,10 +1,32 @@
-{# Section strip: Build and Operate of the real Shop floor, plus the legacy Build Log. #}
+{# Guild navigation (Guild 1.1 slice 1, spec §3): the four daily tabs, Chat ·
+   Board · Build Log · Rooms, then More ▾. Curator's subnav pattern. Chat is
+   the Shop floor; Board is the Board page (slice 3), with the wall and its post-its page in its section;
+   Build Log and Rooms say "coming in a later slice" until slices 2 and 4.
+   More is a plain <details> menu: it works without script. #}
+{# (id, label, href, this very page, pages of its section) #}
+{% set daily = [
+  ('chat', 'Chat', urls.floor, 'floor', ('floor',)),
+  ('board', 'Board', urls.board, 'board', ('board', 'bench', 'postits')),
+  ('build-log', 'Build Log', urls.build_log, 'build_log', ('build_log', 'queue', 'item')),
+  ('rooms', 'Rooms', urls.rooms, 'rooms', ('rooms',)),
+] %}
+{% set more_on = page_id in ('workshop', 'operate', 'labs', 'home', 'media') %}
 <div class="guild-subnav guild-sections">
-  {% for s in layout.sections %}
-    {% if not loop.first %}<span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>{% endif %}
-    {% set on = (s.id == 'build' and area in ('Build', 'Build Queue')) or (s.id == 'operate' and area == 'Operate') %}
-    <a href="{{ urls[s.id] }}" class="subnav-link{% if on %} subnav-active{% endif %}" data-section="{{ s.id }}"{% if on %} aria-current="page"{% endif %}>{{ s.label }}</a>
+  {% for id, label, href, own, section in daily %}{% set on = page_id in section %}
+    <a href="{{ href }}" class="subnav-link{% if on %} subnav-active{% endif %}" data-section="{{ id }}"{% if page_id == own %} aria-current="page"{% elif on %} aria-current="true"{% endif %}>{{ label }}</a>
   {% endfor %}
-  <span class="subnav-dot" aria-hidden="true">&nbsp;·&nbsp;</span>
-  <a href="{{ urls.legacy_build }}" class="subnav-link" data-section="legacy">Build Log (current)</a>
+  <details class="subnav-more" data-subnav-more>
+    <summary class="subnav-link{% if more_on %} subnav-more-on{% endif %}" data-section="more">More ▾</summary>
+    <div class="subnav-menu" data-subnav-menu>
+      <a href="{{ urls.workshop }}" data-more="workshop"{% if page_id == 'workshop' %} aria-current="page"{% endif %}>Workshop<small>Jobs with evidence, read only</small></a>
+      <a href="{{ urls.media }}" data-more="media"{% if page_id == 'media' %} aria-current="page"{% endif %}>Media library<small>Photos for the Board, kept on the server</small></a>
+      <a href="{{ urls.home }}" data-more="home"{% if page_id == 'home' %} aria-current="page"{% endif %}>Guild home<small>Build · Operate · Improve · Experiment</small></a>
+      <hr>
+      <p class="subnav-docs" data-more="docs">Docs: the project's written record lives on GitHub. <a href="{{ urls.docs }}" target="_blank" rel="noopener">Open docs ↗</a></p>
+      <hr>
+      <a href="{{ urls.operate }}" data-more="operate"{% if page_id == 'operate' %} aria-current="page"{% endif %}>Operate<small>System status, unchanged</small></a>
+      <a href="{{ urls.labs }}" data-more="labs"{% if page_id == 'labs' %} aria-current="page"{% endif %}>Labs<small>Planning Studio and Prototype Lab entry points</small></a>
+      <a href="{{ urls.labs }}#planning-studio" data-more="design-studio">Design Studio<small>Planning Studio, under CoS · not served on dev yet</small></a>
+    </div>
+  </details>
 </div>
