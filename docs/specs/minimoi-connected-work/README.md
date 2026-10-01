@@ -11,6 +11,7 @@ This is the single current directional package for Planning Studio, Workshop, Pr
 1. [Overall direction and target](DIRECTION.md).
 2. [Records & Rooms detailed specification, revision 6](RECORDS_ROOMS_v6.md).
    - **Adopted for dev build:** [Rooms R1 — one honest meeting, v0.5.1, adopted 1 October 2026 for a dev build](ROOMS_R1.md): the first implementable slice (one text meeting with Master Craftsman). Its §0 records the owner decisions (MC first confirmed 1 October 2026); §11 names every effect on this package. Adoption authorizes the dev (staging) build only; production is a separate gate.
+   - **Dev build under Robert's 1 October authorization, reviewed by Codex:** [Rooms R2 — Claude Code joins from this Mac, v0.3](ROOMS_R2.md) (Claude-only; Codex in Rooms parked) and [Rooms R3 — addressed rounds, server-side logout, parked CoS and direct door, v0.3.2](ROOMS_R3.md) (R3a/R3b built; R3d/R3e await Robert). Neither is production; live proofs await Robert's OK.
 3. [Transcript data and import contract](TRANSCRIPT_CONTRACT.md).
 4. [Operations, delivery order and acceptance](OPERATIONS_ACCEPTANCE.md).
 5. [Affected documents and supersession boundaries](IMPACT_AND_SUPERSESSION.md).
