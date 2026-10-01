@@ -6,7 +6,10 @@
 // messages carry their Records actor and an "agent" label; no live presence
 // is implied. Take to a Room shares a kept, on-the-record Chat note by id
 // only: the Guild API answers with the stored note, and only that is sent.
-// No model call.
+// No model call here. Rooms R1 (docs/specs/minimoi-connected-work/ROOMS_R1.md):
+// Master Craftsman answers in the room through the Rooms worker; this page
+// shows the meeting from Records (/turns): who is here or reachable, what MC
+// is doing, and what Robert can do next (Retry, Continue without, End).
 import { $, $$, el, announce } from './dom.js';
 import { apiPost, recordMode } from './api.js';
 import { live, onChange, setOff } from './state.js';
@@ -20,6 +23,14 @@ let current = null;           // its id
 let signedOut = false;
 let takeNote = null;          // { id, text, ... } from the Guild API
 let poll = null;
+let meeting = null;           // Records' /turns view: participants, turns, routing notes (Rooms R1)
+let cards = [];               // teammate cards (owner)
+let target = null;            // the recipient chip, if one is chosen
+let fast = null;              // the quick poll while a turn is in flight
+let here = null;              // the presence heartbeat
+let pendingAct = null;        // 'paused' or 'closed', waiting for its note
+const dismissed = new Set();  // turns Robert chose to continue without
+const ACTIVE = ['queued', 'claimed', 'running', 'recovering', 'cancel_requested'];
 const keys = new Map();
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i;
 const TEXT = /\.(txt|md|csv|json)$/i;
@@ -37,7 +48,7 @@ const initial = (label) => (label || '?').trim().slice(0, 2).toUpperCase();
 
 async function records(path, { method = 'GET', body, key } = {}) {
   const headers = { Accept: 'application/json' };
-  if (method !== 'GET') { headers['Content-Type'] = 'application/json'; headers['Idempotency-Key'] = key; }
+  if (method !== 'GET') { headers['Content-Type'] = 'application/json'; headers['Idempotency-Key'] = key || newKey(); }
   let res;
   try {
     res = await fetch(`${cfg.api}${path}`, { method, headers, credentials: 'same-origin', cache: 'no-store', redirect: 'manual',
@@ -107,6 +118,7 @@ function eventLine(e) {
   if (e.actor_kind === 'agent') meta.append(el('span', { class: 'rm-tag', 'data-tag': 'agent', title: 'An agent, posting with its own Records key. No live presence is implied.' }, 'agent'));
   if (KIND_TAG[e.kind]) meta.append(el('span', { class: 'rm-tag', 'data-tag': e.kind }, KIND_TAG[e.kind]));
   if (e.origin && e.origin.source_application === 'guild-chat' && e.actor_kind !== 'agent') meta.append(el('span', { class: 'rm-tag', 'data-tag': 'chat' }, 'from Guild Chat'));
+  if (earlier().has(e.id)) meta.append(el('span', { class: 'rm-tag', 'data-tag': 'earlier', title: 'You wrote again while this reply was being written.' }, 'answered an earlier message'));
   card.append(meta);
   if (e.kind === 'document') {
     const doc = (room.documents || []).find((d) => d.id === e.reference);
@@ -130,9 +142,7 @@ function renderRoom() {
   const st = $('[data-rm-state]');
   st.hidden = room.state === 'active';
   st.textContent = room.state === 'paused' ? 'Paused' : room.state === 'closed' ? 'Closed' : '';
-  const people = $('[data-rm-people]');
-  people.replaceChildren(...(room.members || []).map((m) => el('span', { class: 'rm-av', 'data-kind': m.kind,
-    title: `${m.label} · ${m.kind === 'agent' ? 'agent (no live presence)' : 'person'} · ${m.role}` }, initial(m.label))));
+  renderPeople();
   const files = $('[data-rm-files-toggle]');
   files.disabled = false;
   files.textContent = `Files · ${(room.documents || []).length}`;
@@ -142,7 +152,11 @@ function renderRoom() {
   const writable = room.state === 'active' && !signedOut;
   $('[data-rm-send]').disabled = !writable;
   $('[data-rm-attach]').disabled = !writable;
-  if (room.state !== 'active') status(room.state === 'paused' ? 'Paused: this room is not recording, so nothing can be added. Your draft is kept.' : 'Closed: open a new session in Records to continue.');
+  $('[data-rm-input]').disabled = room.state === 'closed' || signedOut;
+  $('[data-rm-closed]').hidden = room.state !== 'closed';
+  renderControls();
+  if (room.state !== 'active') status(room.state === 'paused' ? 'Paused: this room is not recording, so nothing can be added. Your draft is kept.' : 'Closed: the record is kept. Continue the conversation to go on.');
+  else if (/^(Paused|Closed):/.test($('[data-rm-status]').textContent)) status('');
   renderDetails();
   if (!$('[data-rm-files]').hidden) renderFiles();
 }
@@ -156,7 +170,7 @@ function renderDetails() {
   add('Moderator', (room.members.find((m) => m.id === room.moderator) || {}).label || room.moderator);
   add('Opened', when(room.created));
   add('People', room.members.map((m) => `${m.label}${m.kind === 'agent' ? ' (agent)' : ''}`).join(', '));
-  const parts = [facts, el('p', { class: 'small' }, 'Agents post with their own Records keys through roomctl; nothing here shows them as online.')];
+  const parts = [facts, el('p', { class: 'small' }, 'Teammates show as here, reachable or away from real check-ins only. Other agents post with their own Records keys.')];
   if (room.state !== 'closed') {
     const next = room.state === 'active' ? 'paused' : 'active';
     const note = el('input', { 'data-rm-state-note': true, placeholder: next === 'paused' ? 'Why pause? (required)' : 'Resumption note (required)', 'aria-label': 'Checkpoint note' });
@@ -168,7 +182,7 @@ function renderDetails() {
 
 async function loadRoom(id) {
   const r = await records(`/v1/rooms/${encodeURIComponent(id)}`);
-  if (r.status === 200) { room = r.body; error(''); renderRoom(); return true; }
+  if (r.status === 200) { const changed = room?.id !== r.body.id; room = r.body; error(''); renderRoom(); loadMeeting(); if (changed) heartbeat(); return true; }
   if (r.status === 401) return false;
   room = null;
   renderRoom();
@@ -209,7 +223,9 @@ async function send() {
   if (!text || !current) return;
   const name = `msg:${current}:${text}`;
   $('[data-rm-send]').disabled = true;
-  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/events`, { method: 'POST', body: { body: text, kind: 'message' }, key: keyFor(name) });
+  const body = { body: text, kind: 'message' };
+  if (target && (meeting?.participants || []).some((p) => p.id === target)) body.target = target;
+  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/events`, { method: 'POST', body, key: keyFor(name) });
   $('[data-rm-send]').disabled = signedOut;
   if (r.status === 201 || r.status === 200) {
     keys.delete(name);
@@ -425,11 +441,7 @@ function bind() {
     if (!b) return;
     const note = $('[data-rm-state-note]').value.trim();
     if (!note) { status('Add a short note for the record first.'); return; }
-    const name = `state:${current}:${room.version}:${b.dataset.rmSetState}`;
-    const r = await records(`/v1/rooms/${encodeURIComponent(current)}/state`, { method: 'POST',
-      body: { state: b.dataset.rmSetState, version: room.version, checkpoint: note }, key: keyFor(name) });
-    status(r.status === 200 ? (b.dataset.rmSetState === 'paused' ? 'Paused.' : 'Recording again.') : `Not changed: ${r.body.error || 'Rooms answered with an error'}.`);
-    if (r.status === 200) { status(''); $('[data-rm-details]').open = false; await loadRoom(current); }
+    if (await setState(b.dataset.rmSetState, note)) $('[data-rm-details]').open = false;
   });
   $('[data-rm-list-open]').addEventListener('click', () => { $('[data-rm]').dataset.list = 'open'; });
   $('[data-rm-list-close]').addEventListener('click', () => { $('[data-rm]').dataset.list = 'closed'; });
@@ -448,14 +460,388 @@ function bind() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden && current && !signedOut) loadRoom(current); });
 }
 
+// ── the meeting (Rooms R1, ROOMS_R1.md §3.11) ────────────────────────────────
+// Everything here comes from Records: the participant strip (cards and
+// people only), turn states, routing notes. Nothing is inferred on the page.
+const labelOf = (id) => ((meeting?.participants || []).find((p) => p.id === id) || {}).label
+  || ((room?.members || []).find((m) => m.id === id) || {}).label || id;
+const handle = (id) => (id.length <= 3 ? id.toUpperCase() : labelOf(id).split(' ')[0]);
+const facilitator = () => meeting?.meeting?.facilitator || null;
+
+function earlier() {
+  return new Set((meeting?.turns || []).filter((t) => t.state === 'committed' && t.answered_earlier && t.event_id).map((t) => t.event_id));
+}
+
+async function loadMeeting() {
+  if (!current || signedOut) return;
+  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/turns`);
+  if (r.status !== 200) return;
+  const committed = new Set((meeting?.room === current ? meeting.turns : []).filter((t) => t.state === 'committed').map((t) => t.id));
+  const first = !meeting || meeting.room !== current;
+  meeting = r.body;
+  renderPeople();
+  renderTurns();
+  renderTo();
+  renderControls();
+  const fresh = meeting.turns.some((t) => t.state === 'committed' && !committed.has(t.id));
+  if (fresh && !first) await loadRoom(current);         // the reply arrived: show it
+  else if (earlier().size) renderRoomThreadTags();
+  window.clearTimeout(fast);
+  const joining = meeting.participants.some((p) => p.teammate && p.rsvp === 'invited' && p.proven_at);
+  if (joining || meeting.turns.some((t) => ACTIVE.includes(t.state))) fast = window.setTimeout(loadMeeting, 2500);
+}
+
+function renderRoomThreadTags() {
+  for (const id of earlier()) {
+    const meta = $(`[data-rm-event="${id}"] .rm-meta`);
+    if (meta && !meta.querySelector('[data-tag="earlier"]')) {
+      meta.append(el('span', { class: 'rm-tag', 'data-tag': 'earlier' }, 'answered an earlier message'));
+    }
+  }
+}
+
+const REACH = { here: 'here', reachable: 'reachable', answering: 'answering…', away: 'away' };
+
+function renderPeople() {
+  const people = $('[data-rm-people]');
+  const list = meeting && meeting.room === current ? meeting.participants
+    : (room?.members || []).filter((m) => m.kind === 'human').map((m) => ({ ...m, rsvp: 'accepted', reach: { state: 'away' } }));
+  people.replaceChildren(...list.map((p) => {
+    const reach = p.reach || { state: 'away' };
+    const why = reach.state === 'away' && reach.reason ? `away: ${reach.reason}` : REACH[reach.state] || reach.state;
+    const chip = el('span', { class: 'rm-person', 'data-person': p.id, 'data-reach': reach.state, 'data-rsvp': p.rsvp,
+      title: `${p.label} · ${why}${p.rsvp && p.rsvp !== 'accepted' ? ` · ${p.rsvp.replace('_', ' ')}` : ''}` });
+    chip.append(el('span', { class: 'rm-av', 'data-kind': p.kind, 'aria-hidden': 'true' }, initial(p.label)),
+      el('span', { class: 'rm-dot', 'aria-hidden': 'true' }), el('span', { class: 'rm-pname' }, p.label));
+    if (p.rsvp && p.rsvp !== 'accepted') chip.append(el('span', { class: 'rm-rsvp' }, p.rsvp === 'no_response' ? 'no response' : p.rsvp));
+    chip.append(el('span', { class: 'visually-hidden' }, `: ${why}`));
+    return chip;
+  }));
+}
+
+function turnLine(t) {
+  const who = labelOf(t.addressee);
+  switch (t.state) {
+    case 'queued': return { text: `${who} will answer next…`, wait: true };
+    case 'claimed': case 'running': case 'recovering': return { text: `${who} is answering…`, wait: true };
+    case 'cancel_requested': return { text: `Stopping ${who}'s reply…`, wait: true };
+    case 'uncertain': return { text: `${who} may have answered; the reply was not received.`, actions: ['attempt', 'continue'] };
+    case 'expired': return { text: `Not answered: ${who} was busy with an earlier message.`, actions: ['retry', 'continue', 'end'] };
+    case 'failed': return { text: t.disposition === 'relay_busy' ? `Not answered: ${who} was busy.` : `Not answered: ${who}'s reply failed.`, actions: ['retry', 'continue', 'end'] };
+    case 'cancelled':
+      if (t.disposition === 'budget_exhausted') return { text: `${who} has used its ${meeting?.meeting?.max_turns || 20} turns for this hour.` };
+      if (t.stop_ack === 'worker') return { text: 'Reply stopped.' };
+      if (t.stop_ack === 'none') return { text: "Reply fenced; worker didn't confirm the stop." };
+      if (t.disposition === 'continued_without') return null;
+      if (['paused_by_owner', 'meeting_ended', 'stopped_by_owner', 'resumed'].includes(t.disposition)) return null;
+      return { text: `Not answered: ${(t.disposition || 'cancelled').replace(/_/g, ' ')}.`, actions: ['retry', 'continue'] };
+    default: return null;
+  }
+}
+
+function noteLine(n) {
+  const f = facilitator();
+  const alt = f ? ` ${labelOf(f)} can answer — say @${handle(f)} or leave it unaddressed.` : '';
+  if (n.disposition === 'no_connector') return `Not sent to ${n.label}: not available in Rooms yet.${alt}`;
+  if (n.disposition === 'not_proven') return `Not sent to ${n.label}: not yet proven. Use Invite → Prove first.`;
+  if (n.disposition === 'not_invited') return `Not sent to ${n.label}: not invited to this meeting. Use Invite.`;
+  return `Not sent to ${n.label}: not in this meeting.`;
+}
+
+function renderTurns() {
+  const box = $('[data-rm-turns]');
+  const rows = [];
+  if (meeting && meeting.room === current) {
+    const latest = new Map();
+    for (const t of meeting.turns) if (!latest.has(t.addressee)) latest.set(t.addressee, t);   // newest first
+    for (const t of latest.values()) {
+      if (dismissed.has(t.id)) continue;
+      const line = turnLine(t);
+      if (line) rows.push({ ...line, turn: t });
+    }
+    const lastMine = [...(room?.events || [])].reverse().find((e) => e.actor === 'robert' && e.kind === 'message');
+    for (const n of meeting.routing_notes) if (lastMine && n.trigger_seq === lastMine.seq) rows.push({ text: noteLine(n), note: true });
+  }
+  box.hidden = !rows.length;
+  box.replaceChildren(...rows.map((row) => {
+    const p = el('p', { class: 'rm-turn', 'data-rm-turn': row.turn ? row.turn.id : '', 'data-state': row.turn ? row.turn.state : 'note' });
+    p.append(el('span', {}, row.text));
+    for (const a of row.actions || []) {
+      const label = { retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End' }[a];
+      p.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-turn-action': a, 'data-turn': row.turn.id }, label));
+    }
+    return p;
+  }));
+}
+
+async function turnAction(button) {
+  const id = button.dataset.turn;
+  const action = button.dataset.rmTurnAction;
+  if (action === 'end') { openAct('closed'); return; }
+  if (action === 'continue') {
+    const t = meeting.turns.find((x) => x.id === id);
+    if (t && ['queued', 'claimed', 'running', 'recovering'].includes(t.state)) {
+      await records(`/v1/rooms/${encodeURIComponent(current)}/turns/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: {}, key: keyFor(`cancel:${id}`) });
+    }
+    dismissed.add(id);
+    renderTurns();
+    return;
+  }
+  // Retry / a new attempt may use a second turn: one more click confirms it.
+  if (button.dataset.armed !== 'yes') {
+    button.dataset.armed = 'yes';
+    button.textContent = 'Confirm: may use a second turn';
+    return;
+  }
+  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/turns/${encodeURIComponent(id)}/retry`, { method: 'POST', body: { confirm: true }, key: keyFor(`retry:${id}`) });
+  status(r.status === 201 || r.status === 200 ? '' : `Not retried: ${r.body.error || 'Rooms answered with an error'}.`);
+  await loadMeeting();
+}
+
+function renderTo() {
+  const box = $('[data-rm-to]');
+  const mates = (meeting?.participants || []).filter((p) => p.teammate && p.rsvp === 'accepted');
+  if (target && !mates.some((p) => p.id === target)) target = null;
+  box.hidden = !mates.length || !room || room.state === 'closed';
+  box.replaceChildren(el('span', { class: 'small' }, 'To:'), ...mates.map((p) => el('button', {
+    type: 'button', class: 'rm-chip', 'data-rm-to-chip': p.id, 'aria-pressed': String(target === p.id),
+    title: target === p.id ? `Only ${p.label} answers` : `Send to ${p.label}` }, p.label)),
+  el('span', { class: 'small rm-to-hint' }, target ? '' : `Nobody chosen: ${facilitator() ? labelOf(facilitator()) : 'nobody'} answers.`));
+}
+
+function renderControls() {
+  const box = $('[data-rm-controls]');
+  box.hidden = !room || signedOut || room.state === 'closed' || cfg.state !== 'on';
+  if (!room) return;
+  $('[data-rm-pause]').textContent = room.state === 'paused' ? 'Resume' : 'Pause';
+  $('[data-rm-stop]').disabled = room.state !== 'active';
+}
+
+function openAct(next) {
+  pendingAct = next;
+  const form = $('[data-rm-act]');
+  form.hidden = false;
+  $('[data-rm-act-label]').textContent = next === 'closed' ? 'End the meeting: a closing note for the record'
+    : next === 'paused' ? 'Pause: why? (a note for the record)' : 'Resume: a note for the record';
+  $('[data-rm-act-confirm]').textContent = next === 'closed' ? 'End meeting' : next === 'paused' ? 'Pause' : 'Resume';
+  $('[data-rm-act-note]').focus();
+}
+
+async function setState(next, note) {
+  const name = `state:${current}:${room.version}:${next}`;
+  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/state`, { method: 'POST',
+    body: { state: next, version: room.version, checkpoint: note }, key: keyFor(name) });
+  if (r.status === 200) { status(''); await loadRoom(current); return true; }
+  status(`Not changed: ${r.body.error || 'Rooms answered with an error'}.`);
+  return false;
+}
+
+async function stopAll() {
+  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/stop`, { method: 'POST', body: {}, key: keyFor(`stop:${current}:${room.version}`) });
+  if (r.status === 200) { await loadRoom(current); status('Stopped: replies were stopped and the meeting is paused. Resume when ready.'); }
+  else status(`Not stopped: ${r.body.error || 'Rooms answered with an error'}.`);
+}
+
+// ── Invite and Prove (M1: first use is explicit and server-enforced) ────────
+async function loadCards() {
+  const r = await records('/v1/teammates');
+  cards = r.status === 200 ? r.body.teammates : [];
+  return cards;
+}
+
+function cardState(c) {
+  return c.proven_at ? `Proven ${when(c.proven_at)}` : 'Not yet proven — Prove first (one turn, needs your OK)';
+}
+
+async function openInvite() {
+  await loadCards();
+  renderCards();
+  $('[data-rm-invite-status]').textContent = '';
+  $('[data-rm-invite-dialog]').showModal();
+}
+
+function renderCards() {
+  const list = $('[data-rm-cards]');
+  const inRoom = new Map((meeting?.participants || []).map((p) => [p.id, p]));
+  list.replaceChildren(...cards.map((c) => {
+    const li = el('li', { class: 'rm-card-row', 'data-rm-card': c.principal });
+    const member = inRoom.get(c.principal);
+    li.append(el('strong', {}, c.label), el('span', { class: 'small', 'data-rm-card-state': true }, c.connected ? cardState(c) : 'No connector in Rooms yet'));
+    if (c.connected && !c.proven_at) li.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-prove': c.principal }, 'Prove first'));
+    const invited = member && member.rsvp !== 'declined';
+    li.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-invite-card': c.principal, disabled: invited || !room || room.state === 'closed' ? '' : null },
+      invited ? (member.rsvp === 'accepted' ? 'In this meeting' : 'Invited') : 'Invite'));
+    return li;
+  }));
+  if (!cards.length) list.append(el('li', { class: 'small' }, 'No teammate cards yet. A teammate needs a card and a connector before it can join.'));
+}
+
+async function inviteCard(principal) {
+  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/invite`, { method: 'POST', body: { actor: principal }, key: keyFor(`invite:${current}:${principal}`) });
+  const out = $('[data-rm-invite-status]');
+  if (r.status !== 201 && r.status !== 200) { out.textContent = `Not invited: ${r.body.error || 'Rooms answered with an error'}.`; return; }
+  const rsvp = r.body.result.rsvp;
+  const name = (cards.find((c) => c.principal === principal) || {}).label || principal;
+  out.textContent = rsvp.rsvp === 'accepted' ? `${name} joined.` : rsvp.rsvp_reason === 'not_proven'
+    ? `${name} is invited and answers once proven. Prove first.` : `${name} is invited and joins within a few seconds.`;
+  await loadMeeting();
+  renderCards();
+}
+
+async function prove(button) {
+  const principal = button.dataset.rmProve;
+  if (button.dataset.armed !== 'yes') {
+    button.dataset.armed = 'yes';
+    button.textContent = 'Confirm: use one paid turn';
+    return;
+  }
+  button.disabled = true;
+  const out = $('[data-rm-invite-status]');
+  const name = (cards.find((c) => c.principal === principal) || {}).label || principal;
+  const r = await records(`/v1/teammates/${encodeURIComponent(principal)}/prove`, { method: 'POST', body: { confirm: true }, key: keyFor(`prove:${principal}`) });
+  if (r.status !== 202 && r.status !== 200) { out.textContent = `Proof not started: ${r.body.error || 'Rooms answered with an error'}.`; button.disabled = false; return; }
+  out.textContent = `Proving ${name}: one question, one reply…`;
+  const until = Date.now() + 180000;
+  while (Date.now() < until) {
+    await new Promise((done) => { window.setTimeout(done, 2000); });
+    const s = await records(`/v1/teammates/${encodeURIComponent(principal)}/prove`);
+    if (s.status !== 200) continue;
+    if (s.body.proven_at) {
+      keys.delete(`prove:${principal}`);
+      out.textContent = `${name} is proven (${when(s.body.proven_at)}). It joins this meeting on its next check-in.`;
+      await loadCards(); renderCards(); await loadMeeting();
+      return;
+    }
+    const t = s.body.turn;
+    if (t && ['failed', 'cancelled', 'expired', 'uncertain', 'abandoned'].includes(t.state)) {
+      keys.delete(`prove:${principal}`);
+      out.textContent = `The proof did not finish (${(t.disposition || t.state).replace(/_/g, ' ')}). You can try again.`;
+      await loadCards(); renderCards();
+      return;
+    }
+  }
+  out.textContent = `${name} has not answered the proof yet. Its worker may be away; you can close this and check later.`;
+}
+
+// ── New conversation and Continue conversation ──────────────────────────────
+async function openNew() {
+  await loadCards();
+  const box = $('[data-rm-new-cards]');
+  box.replaceChildren(...cards.filter((c) => c.connected).map((c) => {
+    const label = el('label', { class: 'rm-new-card' });
+    label.append(el('input', { type: 'checkbox', value: c.principal, 'data-rm-new-card': c.principal, checked: '' }),
+      el('span', {}, ` ${c.label} · ${c.proven_at ? 'proven' : 'not yet proven (Prove from Invite)'}`));
+    return label;
+  }));
+  if (!box.children.length) box.append(el('p', { class: 'small' }, 'No teammate is connected yet; you can still record a conversation.'));
+  $('[data-rm-new-status]').textContent = '';
+  $('[data-rm-new-dialog]').showModal();
+  $('[data-rm-new-title]').focus();
+}
+
+async function createNew() {
+  const title = $('[data-rm-new-title]').value.trim();
+  const purpose = $('[data-rm-new-purpose]').value.trim();
+  const out = $('[data-rm-new-status]');
+  if (!title || !purpose) { out.textContent = 'A title and a purpose are needed: both go on the record.'; return; }
+  const name = `new:${title}:${purpose}`;
+  const r = await records('/v1/rooms', { method: 'POST', body: { title, purpose, mode: 'meeting', recording_acknowledged: true }, key: keyFor(name) });
+  if (r.status !== 201 && r.status !== 200) { out.textContent = `Not started: ${r.body.error || 'Rooms answered with an error'}.`; return; }
+  const id = r.body.result.id;
+  for (const box of $$('[data-rm-new-card]')) {
+    if (!box.checked) continue;
+    await records(`/v1/rooms/${encodeURIComponent(id)}/invite`, { method: 'POST', body: { actor: box.value }, key: keyFor(`invite:${id}:${box.value}`) });
+  }
+  keys.delete(name);
+  window.location.search = `?room=${encodeURIComponent(id)}`;
+}
+
+async function continueConversation() {
+  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/continue`, { method: 'POST', body: {}, key: keyFor(`continue:${current}`) });
+  if (r.status === 201 || r.status === 200) window.location.search = `?room=${encodeURIComponent(r.body.result.session_id)}`;
+  else status(`Not continued: ${r.body.error || 'Rooms answered with an error'}.`);
+}
+
+// ── @ suggestions ───────────────────────────────────────────────────────────
+function mentionFragment(input) {
+  const before = input.value.slice(0, input.selectionStart);
+  const m = before.match(/(^|\s)@([A-Za-z0-9_-]*)$/);
+  return m ? { start: before.length - m[2].length - 1, text: m[2].toLowerCase() } : null;
+}
+
+function renderMentions() {
+  const input = $('[data-rm-input]');
+  const list = $('[data-rm-mentions]');
+  const frag = mentionFragment(input);
+  const people = (meeting?.participants || []).filter((p) => p.id !== 'robert');
+  const hits = frag ? people.filter((p) => p.id.startsWith(frag.text) || p.label.toLowerCase().startsWith(frag.text)) : [];
+  list.hidden = !hits.length;
+  list.replaceChildren(...hits.map((p) => h('li', { role: 'option' }, el('button', { type: 'button', 'data-rm-mention': p.id }, `@${handle(p.id)} · ${p.label}`))));
+}
+
+function insertMention(id) {
+  const input = $('[data-rm-input]');
+  const frag = mentionFragment(input);
+  if (!frag) return;
+  const end = input.selectionStart;
+  input.value = `${input.value.slice(0, frag.start)}@${handle(id)} ${input.value.slice(end)}`;
+  store.set(draftKey(), input.value);
+  $('[data-rm-mentions]').hidden = true;
+  input.focus();
+}
+
+function heartbeat() {
+  if (!current || signedOut || document.hidden || !room || room.state === 'closed') return;
+  records(`/v1/rooms/${encodeURIComponent(current)}/presence`, { method: 'PUT', body: { kind: 'here' } });
+}
+
+function bindMeeting() {
+  $('[data-rm-new]').addEventListener('click', openNew);
+  $('[data-rm-new-cancel]').addEventListener('click', () => $('[data-rm-new-dialog]').close());
+  $('[data-rm-new-form]').addEventListener('submit', (e) => { e.preventDefault(); createNew(); });
+  $('[data-rm-invite]').addEventListener('click', openInvite);
+  $('[data-rm-dialog-close]').addEventListener('click', () => $('[data-rm-invite-dialog]').close());
+  $('[data-rm-cards]').addEventListener('click', (e) => {
+    const p = e.target.closest('[data-rm-prove]');
+    if (p) { prove(p); return; }
+    const i = e.target.closest('[data-rm-invite-card]');
+    if (i) inviteCard(i.dataset.rmInviteCard);
+  });
+  $('[data-rm-pause]').addEventListener('click', () => openAct(room.state === 'paused' ? 'active' : 'paused'));
+  $('[data-rm-end]').addEventListener('click', () => openAct('closed'));
+  $('[data-rm-stop]').addEventListener('click', stopAll);
+  $('[data-rm-act-cancel]').addEventListener('click', () => { $('[data-rm-act]').hidden = true; pendingAct = null; });
+  $('[data-rm-act]').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const note = $('[data-rm-act-note]').value.trim();
+    if (!note || !pendingAct) return;
+    if (await setState(pendingAct, note)) { $('[data-rm-act]').hidden = true; $('[data-rm-act-note]').value = ''; pendingAct = null; }
+  });
+  $('[data-rm-turns]').addEventListener('click', (e) => { const b = e.target.closest('[data-rm-turn-action]'); if (b) turnAction(b); });
+  $('[data-rm-continue]').addEventListener('click', continueConversation);
+  $('[data-rm-to]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rm-to-chip]');
+    if (!b) return;
+    target = target === b.dataset.rmToChip ? null : b.dataset.rmToChip;
+    renderTo();
+  });
+  const input = $('[data-rm-input]');
+  input.addEventListener('input', renderMentions);
+  input.addEventListener('keyup', (e) => { if (e.key === 'Escape') $('[data-rm-mentions]').hidden = true; });
+  $('[data-rm-mentions]').addEventListener('click', (e) => { const b = e.target.closest('[data-rm-mention]'); if (b) insertMention(b.dataset.rmMention); });
+  here = window.setInterval(heartbeat, 30000);
+  document.addEventListener('visibilitychange', heartbeat);
+}
+
 export function initRooms(p) {
   page = p;
   const raw = document.getElementById('rooms-data');
   if (!raw || !$('[data-rm]')) return;
   cfg = JSON.parse(raw.textContent);
   bind();
+  bindMeeting();
   loadAll();
   poll = window.setInterval(() => { if (!document.hidden && current && !signedOut) loadRoom(current); }, 15000);
 }
 
-export const _forTests = { stop: () => window.clearInterval(poll) };
+export const _forTests = { stop: () => { window.clearInterval(poll); window.clearInterval(here); window.clearTimeout(fast); } };

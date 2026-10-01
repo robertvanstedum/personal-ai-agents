@@ -31,6 +31,9 @@ from services.rooms_worker.journal import TurnJournal, peek  # noqa: E402
 from services.rooms_worker import worker as worker_module  # noqa: E402
 from services.rooms_worker.worker import Worker, journal_key  # noqa: E402
 
+sys.path.insert(0, str(ROOT / "tests" / "rooms_worker"))
+from worker_helpers import FakeClock, FakeRelay, Session  # noqa: E402
+
 BACKEND = "http://minimoi-records:18880"
 
 
@@ -42,75 +45,6 @@ def _load(name, file):
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
-
-
-class Session:
-    """requests.Session shape over Records' Flask test client."""
-
-    def __init__(self, app):
-        self.client = app.test_client(use_cookies=False)
-        self.trust_env = False
-        self.fail_next = None          # "before" or "after": simulate a lost write
-
-    def request(self, method, url, headers=None, data=None, timeout=None, allow_redirects=None):
-        parts = urlsplit(url)
-        assert parts.netloc == "minimoi-records:18880" and "Origin" not in (headers or {})
-        if self.fail_next == "before":
-            self.fail_next = None
-            import requests
-            raise requests.ConnectionError("lost")
-        r = self.client.open(parts.path + (f"?{parts.query}" if parts.query else ""), method=method,
-                             headers=dict(headers or {}), data=data, base_url=BACKEND)
-        if self.fail_next == "after":
-            self.fail_next = None
-            import requests
-            raise requests.ConnectionError("response lost")
-        return SimpleNamespace(status_code=r.status_code, json=lambda: json.loads(r.data or b"{}"))
-
-
-class FakeClock:
-    def __init__(self):
-        self.now = time.time()
-        self.slept = 0
-
-    def time(self):
-        return self.now
-
-    def sleep(self, seconds):
-        self.slept += seconds
-        self.now += seconds
-
-
-class FakeRelay:
-    """Scripted outcomes; each script item is a dict or a callable(relay, messages) -> dict."""
-
-    def __init__(self, script=(), ready=True):
-        self.script = list(script)
-        self.calls = []
-        self.stops = []
-        self._stopped = threading.Event()
-        self.is_ready = ready
-        self.during = None
-
-    def ready(self):
-        return self.is_ready
-
-    def stop(self, correlation):
-        self.stops.append(correlation)
-        self._stopped.set()
-        return 200
-
-    def stream(self, messages, user, correlation, on_open=None):
-        self.calls.append({"messages": messages, "user": user, "correlation": correlation})
-        if self.during:
-            self.during(self)
-        item = self.script.pop(0) if self.script else {"outcome": "done", "text": "A short useful point.", "usage": None}
-        if callable(item):
-            item = item(self, messages)
-        return {"detail": item.get("outcome"), "usage": None, **item}
-
-    def wait_for_stop(self, timeout=5):
-        return self._stopped.wait(timeout)
 
 
 @pytest.fixture

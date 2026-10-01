@@ -14,10 +14,11 @@
   <aside class="rm-list" data-rm-list-pane aria-labelledby="rm-list-h">
     <div class="rm-list-head">
       <h2 class="rm-list-h" id="rm-list-h">Rooms</h2>
+      <button type="button" class="rm-btn" data-rm-new>＋ New conversation</button>
       <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Close the room list">✕</button>
     </div>
     <ol class="rm-rooms" data-rm-list></ol>
-    <p class="small rm-list-foot">Rooms are opened in <a href="{{ rooms_cfg.login }}" data-rm-records-link>Records</a>, which keeps its own sign-in.</p>
+    <p class="small rm-list-foot">Rooms keep their records in <a href="{{ rooms_cfg.login }}" data-rm-records-link>Records</a>, which keeps its own sign-in.</p>
   </aside>
   <section class="rm-main" aria-labelledby="rm-title">
     <header class="rm-head">
@@ -25,6 +26,12 @@
       <h1 class="rm-title" id="rm-title" data-rm-title>Rooms</h1>
       <span class="rm-state" data-rm-state hidden></span>
       <span class="rm-people" data-rm-people aria-label="Participants"></span>
+      <span class="rm-controls" data-rm-controls hidden>
+        <button type="button" class="rm-btn" data-rm-invite>Invite</button>
+        <button type="button" class="rm-btn" data-rm-pause>Pause</button>
+        <button type="button" class="rm-btn" data-rm-end>End</button>
+        <button type="button" class="rm-btn rm-stop" data-rm-stop title="Stop all replies now and pause the meeting">Stop</button>
+      </span>
       <button type="button" class="rm-btn" data-rm-files-toggle aria-expanded="false" aria-controls="rm-files" disabled>Files</button>
       <details class="rm-more" data-rm-details>
         <summary class="rm-btn" aria-label="Room details">⋯</summary>
@@ -40,6 +47,31 @@
       <span class="small">Your draft is kept in this tab.</span>
     </div>
     <div class="rm-banner" data-rm-error hidden role="status"></div>
+    <form class="rm-act" data-rm-act hidden aria-label="Note for the record">
+      <label for="rm-act-note" data-rm-act-label>Note for the record</label>
+      <input id="rm-act-note" data-rm-act-note maxlength="2400" required>
+      <button type="submit" class="rm-btn" data-rm-act-confirm>Confirm</button>
+      <button type="button" class="btn-quiet" data-rm-act-cancel>Cancel</button>
+    </form>
+    <dialog class="rm-dialog" data-rm-invite-dialog aria-labelledby="rm-invite-h">
+      <h2 id="rm-invite-h">Invite to this meeting</h2>
+      <ul class="rm-cards" data-rm-cards></ul>
+      <p class="small rm-humans">Other people: coming with the invitation slice (A0).</p>
+      <p class="small" data-rm-invite-status role="status"></p>
+      <button type="button" class="rm-btn" data-rm-dialog-close>Close</button>
+    </dialog>
+    <dialog class="rm-dialog" data-rm-new-dialog aria-labelledby="rm-new-h">
+      <form data-rm-new-form method="dialog">
+        <h2 id="rm-new-h">New conversation</h2>
+        <label>Title <input name="title" data-rm-new-title maxlength="160" required></label>
+        <label>Purpose <textarea name="purpose" data-rm-new-purpose maxlength="2400" rows="2" required></textarea></label>
+        <fieldset><legend>Teammates</legend><div data-rm-new-cards></div></fieldset>
+        <p class="small">Master Craftsman facilitates: it answers messages addressed to nobody. The conversation is recorded from the start.</p>
+        <p class="small" data-rm-new-status role="status"></p>
+        <button type="submit" class="btn" data-rm-new-create>Start</button>
+        <button type="button" class="btn-quiet" data-rm-new-cancel>Cancel</button>
+      </form>
+    </dialog>
     <div class="rm-take" data-rm-take hidden aria-label="Take a Chat note to this room">
       <p class="rm-take-h">From Guild Chat · a kept, on-the-record note</p>
       <blockquote class="rm-take-text" data-rm-take-text></blockquote>
@@ -50,6 +82,13 @@
       <p class="small" data-rm-take-result role="status" hidden></p>
     </div>
     <ol class="rm-thread" data-rm-thread role="log" aria-live="polite" aria-label="Room conversation"></ol>
+    <div class="rm-turns" data-rm-turns role="status" aria-live="polite" hidden></div>
+    <div class="rm-closed" data-rm-closed hidden>
+      <span>This conversation is closed; its record is kept.</span>
+      <button type="button" class="btn" data-rm-continue>Continue conversation</button>
+    </div>
+    <div class="rm-to" data-rm-to hidden aria-label="Send to"></div>
+    <ul class="rm-mentions" data-rm-mentions hidden role="listbox" aria-label="Mention a participant"></ul>
     <form class="rm-composer" data-rm-composer aria-label="Write to the room">
       <label class="rm-attach" title="Attach a file (up to 2,000,000 bytes)">📎<span class="visually-hidden">Attach a file</span>
         <input type="file" class="visually-hidden" data-rm-attach></label>

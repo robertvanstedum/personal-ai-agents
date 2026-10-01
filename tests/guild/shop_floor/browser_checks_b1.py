@@ -14,6 +14,7 @@ import os
 import re
 import socket
 import tempfile
+import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -2753,4 +2754,153 @@ def test_s5_phone_workshop_in_the_shell_without_overflow(browser, server, worksh
     expect(page.locator("[data-ws-ops-table]")).to_be_visible()
     assert _no_page_overflow(page)
     assert not errors, errors
+    ctx.close()
+
+
+# ── Rooms R1 (docs/specs/minimoi-connected-work/ROOMS_R1.md §6) ──────────────
+# New conversation → Invite MC → inline Prove (draft kept) → one question →
+# one attributed reply; @CoS gets a visible next action; Stop fences a reply
+# mid-stream; End → Continue conversation. The real worker runs in a thread
+# against the test Records app with a scripted relay: no model, no spend.
+
+@pytest.fixture
+def rooms_r1(rooms, tmp_path):
+    import importlib.util
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rooms_worker"))
+    from rooms_helpers import RECORDS_DIR
+    from worker_helpers import FakeRelay, start_worker
+    from services.rooms_worker import worker as worker_module
+    spec = importlib.util.spec_from_file_location("records_poc_manage_for_browser", RECORDS_DIR / "manage.py")
+    manage = importlib.util.module_from_spec(spec); spec.loader.exec_module(manage)
+    out = tmp_path / "outbox"
+    manage.provision_rooms(rooms["app"].extensions["records_store"], "mc", "Master Craftsman", out)
+
+    class Relay(FakeRelay):
+        def stream(self, messages, user, correlation, on_open=None):
+            self.calls.append({"messages": messages, "correlation": correlation})
+            if "slowly" in messages[-1]["content"]:
+                self.wait_for_stop(20)
+                return {"outcome": "stopped", "text": "half a thought", "usage": None, "detail": "stopped"}
+            return {"outcome": "done", "text": "Start with one honest meeting.", "usage": None, "detail": "done"}
+    relay = Relay()
+    saved = worker_module.HEARTBEAT_S
+    worker_module.HEARTBEAT_S = 0.2
+    running = start_worker(rooms["app"], out, relay, tmp_path / "journal")
+    yield {**rooms, "relay": relay}
+    running.stop()
+    worker_module.HEARTBEAT_S = saved
+
+
+def _r1_shot(page, name):
+    """Opt-in review screenshots (R1_SHOTS=<folder>); sample data only."""
+    folder = os.environ.get("R1_SHOTS")
+    if folder:
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(Path(folder) / f"{name}.png"), full_page=False)
+
+
+def test_r1_desktop_new_conversation_prove_inline_reply_stop_end_continue(browser, server, rooms_r1):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    assert _records_fetch(page, "/login", {"token": rooms_r1["owner_key"]}, "login-r1-0001")["status"] == 200
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    # New conversation, with MC (not yet proven) as a teammate.
+    page.click("[data-rm-new]")
+    expect(page.locator("[data-rm-new-dialog]")).to_be_visible()
+    page.fill("[data-rm-new-title]", "Planning Rooms")
+    page.fill("[data-rm-new-purpose]", "Decide the first slice together")
+    expect(page.locator("[data-rm-new-card='mc']")).to_be_checked()
+    with page.expect_navigation():
+        page.click("[data-rm-new-create]")
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator("[data-rm-title]")).to_have_text("Planning Rooms")
+    mc = page.locator("[data-person='mc']")
+    expect(mc).to_have_attribute("data-rsvp", "invited")
+    expect(mc).to_have_attribute("title", re.compile("not yet proven"))
+    # Writing to an unproven MC gives the next action, not silence.
+    page.fill("[data-rm-input]", "Hello MC")
+    page.click("[data-rm-send]")
+    expect(page.locator("[data-rm-turns]")).to_contain_text("not yet proven. Use Invite → Prove first.")
+    # Prove inline from Invite; the draft is kept and the room stays open.
+    page.fill("[data-rm-input]", "my unsent draft")
+    page.click("[data-rm-invite]")
+    card = page.locator("[data-rm-card='mc']")
+    expect(card).to_contain_text("Not yet proven — Prove first (one turn, needs your OK)")
+    _r1_shot(page, "r1-1-invite-prove-first")
+    page.click("[data-rm-prove='mc']")
+    expect(page.locator("[data-rm-prove='mc']")).to_have_text("Confirm: use one paid turn")
+    page.click("[data-rm-prove='mc']")
+    expect(page.locator("[data-rm-invite-status]")).to_contain_text("is proven", timeout=20000)
+    page.click("[data-rm-dialog-close]")
+    expect(page.locator("[data-rm-input]")).to_have_value("my unsent draft")
+    expect(page.locator("[data-rm-title]")).to_have_text("Planning Rooms")
+    expect(mc).to_have_attribute("data-rsvp", "accepted", timeout=15000)
+    # One question, one attributed reply, no refresh.
+    page.fill("[data-rm-input]", "What should we build first?")
+    page.click("[data-rm-send]")
+    reply = page.locator('.rm-msg[data-actor="mc"]')
+    expect(reply).to_contain_text("Start with one honest meeting.", timeout=20000)
+    expect(reply.locator('[data-tag="agent"]')).to_have_text("agent")
+    _r1_shot(page, "r1-2-mc-reply")
+    # @CoS: the message is kept, nothing is sent to anyone, and the next action is shown.
+    page.fill("[data-rm-input]", "@CoS can you check the calendar?")
+    page.click("[data-rm-send]")
+    expect(page.locator("[data-rm-turns]")).to_contain_text(
+        "Not sent to CoS: not available in Rooms yet. Master Craftsman can answer — say @MC or leave it unaddressed.")
+    _r1_shot(page, "r1-3-not-sent-to-cos")
+    expect(page.locator(".rm-msg .rm-body").last).to_have_text("@CoS can you check the calendar?")
+    # Stop mid-reply: the reply is stopped and nothing late is posted.
+    replies = reply.count()
+    page.fill("[data-rm-input]", "Think about this slowly")
+    page.click("[data-rm-send]")
+    expect(page.locator("[data-rm-turns]")).to_contain_text("Master Craftsman is answering…", timeout=15000)
+    page.click("[data-rm-stop]")
+    expect(page.locator("[data-rm-state]")).to_have_text("Paused")
+    expect(page.locator("[data-rm-turns]")).to_contain_text("Reply stopped.", timeout=15000)
+    _r1_shot(page, "r1-4-reply-stopped")
+    assert reply.count() == replies
+    # Resume, End with a note, then Continue conversation.
+    page.click("[data-rm-pause]")
+    page.fill("[data-rm-act-note]", "Back from the break")
+    page.click("[data-rm-act-confirm]")
+    expect(page.locator("[data-rm-state]")).to_be_hidden()
+    page.click("[data-rm-end]")
+    page.fill("[data-rm-act-note]", "Decided: build R1 first")
+    page.click("[data-rm-act-confirm]")
+    expect(page.locator("[data-rm-closed]")).to_be_visible()
+    expect(page.locator("[data-rm-input]")).to_be_disabled()
+    _r1_shot(page, "r1-5-closed-continue")
+    with page.expect_navigation():
+        page.click("[data-rm-continue]")
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator("[data-rm-title]")).to_have_text("Planning Rooms (continued)")
+    expect(page.locator("[data-person='mc']")).to_have_attribute("data-rsvp", "accepted", timeout=15000)
+    assert _no_page_overflow(page)
+    assert not [e for e in errors if "401" not in e and "409" not in e], errors
+    ctx.close()
+
+
+def test_r1_phone_controls_status_and_composer_fit(browser, server, rooms_r1):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    room_id = _rooms_ready(page, server, rooms_r1, title="Phone meeting")
+    store = rooms_r1["app"].extensions["records_store"]
+    with store.connect() as d:
+        d.execute("UPDATE teammates SET proven_at='2026-10-01T00:00:00+00:00' WHERE principal='mc'")
+    assert _records_fetch(page, f"/v1/rooms/{room_id}/invite", {"actor": "mc"}, "phone-invite-1")["status"] == 201
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
+    expect(page.locator("[data-person='mc']")).to_have_attribute("data-rsvp", "accepted", timeout=15000)
+    expect(page.locator("[data-rm-controls]")).to_be_visible()
+    page.fill("[data-rm-input]", "Quick question from the phone")
+    page.click("[data-rm-send]")
+    expect(page.locator('.rm-msg[data-actor="mc"]')).to_contain_text("Start with one honest meeting.", timeout=20000)
+    comp = page.locator("[data-rm-composer]")
+    expect(comp).to_be_in_viewport()
+    box = comp.bounding_box()
+    assert box["y"] + box["height"] <= 844 and box["x"] >= 0 and box["x"] + box["width"] <= 390
+    _r1_shot(page, "r1-6-phone")
+    assert _no_page_overflow(page)
     ctx.close()
