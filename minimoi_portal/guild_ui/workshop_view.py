@@ -258,6 +258,10 @@ def _card(key: str, last, evs: list[dict]) -> dict:
         card.update(pill="unknown", flag="unreadable", note="This item's last contact time could not be read.")
     elif _ahead(at):
         card.update(pill=AHEAD_TEXT, flag="ahead")
+    elif reported == "needs you" and now() - at > LAST_SEEN_STALE:
+        # Still waiting on Robert: age makes it more urgent, not stale (#289 re-check R1).
+        days = int((now() - at).total_seconds() // 86400)
+        card.update(pill=f"needs you · {days}d")
     elif reported != "completed" and now() - at > LAST_SEEN_STALE:
         days = int((now() - at).total_seconds() // 86400)
         card.update(pill=f"last seen {days}d ago (stale)", flag="stale")

@@ -434,3 +434,19 @@ def test_the_strip_summary_has_no_aria_label_hiding_its_figures(ws):
     summary = page[start:page.index("</summary>", start)]
     assert "aria-label" not in summary and "Memory free 46.0%" in summary
     assert '<span class="visually-hidden">Ops strip:</span>' in summary
+
+
+def test_an_old_needs_you_item_keeps_saying_needs_you(ws):
+    """#289 re-check R1: waiting on Robert for days is urgent, not stale."""
+    _record(ws, {"actor": "codex", "kind": "needs_you", "item": "queue:14", "text": "Pick the art", "at": _ago(days=3)})
+    v, _page = _both(ws)
+    card = {c["item"]: c for c in v["jobs"]["cards"]}["queue:14"]
+    assert card["pill"] == "needs you · 3d" and card["flag"] is None and card["state"] == "needs you"
+    assert v["jobs"]["cards"][0]["item"] == "queue:14"
+
+
+@pytest.mark.parametrize("iso", ["9999-12-31T23:59:59-14:00", "0001-01-01T00:00:00+14:00"])
+def test_a_date_at_the_edge_of_the_calendar_is_shown_as_text_not_a_500(iso):
+    """#289 re-check R2."""
+    from minimoi_portal.guild_ui.pages import hhmm
+    assert hhmm(iso) == iso
