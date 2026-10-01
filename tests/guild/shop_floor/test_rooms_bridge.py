@@ -319,3 +319,46 @@ def test_records_answers_only_exact_configured_hosts(value, ok):
     else:
         with pytest.raises(ValueError):
             hosts(value)
+
+
+# ── #288 review: cookies, loopback ───────────────────────────────────────────
+
+class _Headers(dict):
+    def getlist(self, name):
+        return list(self.get(name, []))
+
+
+class _Upstream:
+    def __init__(self, cookies):
+        self.raw = type("Raw", (), {"headers": _Headers({"Set-Cookie": cookies})})()
+        self.headers = {"Set-Cookie": ", ".join(cookies)}
+
+
+def test_records_cookie_with_max_age_only_or_among_others_never_crashes():
+    """F5: Max-Age without Expires used to raise (a 500); several Set-Cookie
+    headers joined left stray commas in the attributes."""
+    up = _Upstream(["other=1; Path=/; Expires=Wed, 01 Oct 2026 10:00:00 GMT",
+                    f"{RB.COOKIE}=abc; Max-Age=60; Path=/; HttpOnly"])
+    assert RB._records_cookie(up) == ("abc", 60, None)
+    up = _Upstream([f"{RB.COOKIE}=; Max-Age=0; Path=/"])
+    assert RB._records_cookie(up) == ("", 0, None)
+    up = _Upstream([f"{RB.COOKIE}=x; Max-Age=soon"])
+    assert RB._records_cookie(up) == ("x", None, None)
+    assert RB._records_cookie(_Upstream(["unrelated=1"])) is None
+    assert RB._records_cookie(_Upstream(['bad"cookie=\x00'])) is None
+
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1:5001", "http://127.0.0.1", "http://127.0.0.1:80"])
+def test_loopback_backend_must_not_be_the_portal_itself(url):
+    """F7: the backend may not be the portal's own port."""
+    with pytest.raises(RB.BackendRefused):
+        RB.validate_backend(url)
+
+
+def test_local_hosts_are_accepted_only_beside_a_loopback_backend():
+    """F7: in the staging container (backend minimoi-records) only the dev host is served."""
+    assert RB._allowed_host("dev.minimoi.ai", "http://minimoi-records:18880")
+    assert not RB._allowed_host("localhost:5001", "http://minimoi-records:18880")
+    assert not RB._allowed_host("127.0.0.1:5001", "http://minimoi-records:18880")
+    assert RB._allowed_host("127.0.0.1:5001", "http://127.0.0.1:18880")
+    assert not RB._allowed_host("evil.example", "http://127.0.0.1:18880")

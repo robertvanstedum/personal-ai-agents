@@ -229,15 +229,19 @@ networks:
     # the network still reach each other (MC -> model-gateway).
     driver_opts:
       com.docker.network.bridge.gateway_mode_ipv4: isolated
-  # The portal's side of the one-way relay (MC spec v0.9 §3-§4): members are
-  # the portal (here, permanently) and, from MC's own project, mc-relay only.
-  # Internal, and no host address on the bridge.
   # Rooms' only network (Guild 1.1 slice 4): internal, so Records has no
-  # egress. Members: the portal (here, permanently) and, from Records' own
-  # project (docker-compose.records.yml), minimoi-records.
+  # egress, and no host address on the bridge (as mc-net), so Records cannot
+  # reach the Colima VM nor the VM reach Records. Members: the portal (here,
+  # permanently) and, from Records' own project (docker-compose.records.yml),
+  # minimoi-records.
   records-net:
     name: minimoi-staging-records
     internal: true
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+  # The portal's side of the one-way relay (MC spec v0.9 §3-§4): members are
+  # the portal (here, permanently) and, from MC's own project, mc-relay only.
+  # Internal, and no host address on the bridge.
   mc-front:
     name: minimoi-staging-mc-front
     internal: true

@@ -42,8 +42,10 @@ MAX_BODY = 3_000_000
 # The only hostnames RECORDS_BACKEND may name: the staging container, or the
 # loopback address for a local run beside a native portal.
 BACKEND_HOSTS = {"minimoi-records", "127.0.0.1"}
-# A local portal's own host for tests and a native dev run; read per request.
+# A local portal's own host for tests and a native dev run; accepted only when
+# the backend is loopback too (#288 review F7), never beside the container.
 LOCAL_HOSTS = {"127.0.0.1:5001", "localhost:5001"}
+PORTAL_PORT = 5001
 # Tests may set a transport (an object with .request(...) like a requests
 # Session); None means a fresh requests.Session per request.
 _TRANSPORT = None
@@ -76,6 +78,8 @@ def validate_backend(url: str | None) -> str:
         raise BackendRefused(f"RECORDS_BACKEND host must be one of {sorted(BACKEND_HOSTS)}")
     if parts.netloc != (f"{host}:{port}" if port is not None else host):
         raise BackendRefused("RECORDS_BACKEND must be a plain host[:port]")
+    if host == "127.0.0.1" and port in (None, 80, PORTAL_PORT):
+        raise BackendRefused("RECORDS_BACKEND on loopback needs Records' own port, not the portal's")
     return f"http://{parts.netloc}"
 
 
@@ -85,15 +89,15 @@ def rewrite_paths(text: str) -> str:
     return re.sub(r'([\'"`])/(api|static)(?=/)', lambda m: m.group(1) + PREFIX + "/" + m.group(2), text)
 
 
-def _allowed_host(host: str) -> bool:
-    return host == DEV_HOST or host in LOCAL_HOSTS
+def _allowed_host(host: str, backend: str) -> bool:
+    return host == DEV_HOST or (host in LOCAL_HOSTS and backend.startswith("http://127.0.0.1:"))
 
 
 def install(portal, require_login, require_owner, *, backend: str, transport=None) -> str:
     backend = validate_backend(backend)
 
     def forward(path=""):
-        if not _allowed_host(request.host):
+        if not _allowed_host(request.host, backend):
             return Response("Records is available only on dev.minimoi.ai", status=404)
         if request.method not in {"GET", "HEAD"}:
             expected = DEV_ORIGIN if request.host == DEV_HOST else "http://" + request.host
@@ -147,13 +151,12 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
                 response.headers[name] = upstream.headers[name]
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Records-Environment"] = "dev"
-        cookies = SimpleCookie()
-        cookies.load(upstream.headers.get("Set-Cookie", ""))
-        if COOKIE in cookies:
-            cookie = cookies[COOKIE]
-            response.set_cookie(COOKIE, cookie.value, path=PREFIX + "/", httponly=True, samesite="Strict",
-                                secure=request.host == DEV_HOST, max_age=cookie["max-age"] or None,
-                                expires=cookie["expires"] or None)
+        cookie = _records_cookie(upstream)
+        if cookie is not None:
+            value, max_age, expires = cookie
+            response.set_cookie(COOKIE, value, path=PREFIX + "/", httponly=True, samesite="Strict",
+                                secure=request.host == DEV_HOST, max_age=max_age,
+                                expires=None if max_age is not None else expires)
         return response
 
     wrapped = require_login(require_owner(forward))
@@ -164,6 +167,40 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
     portal.add_url_rule(PREFIX + "/<path:path>", endpoint="records_dev_proxy", view_func=wrapped,
                         methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])
     return backend
+
+
+def _set_cookie_headers(upstream) -> list[str]:
+    """Each Set-Cookie header on its own: joined into one string they cannot
+    be split safely (an Expires date has a comma)."""
+    raw = getattr(getattr(upstream, "raw", None), "headers", None)
+    if raw is not None and hasattr(raw, "getlist"):
+        return list(raw.getlist("Set-Cookie"))
+    joined = upstream.headers.get("Set-Cookie")
+    return [joined] if joined else []
+
+
+def _records_cookie(upstream):
+    """(value, max_age as int or None, expires or None) of Records' own cookie,
+    or None. A malformed attribute is dropped, never a 500 (#288 review F5)."""
+    for header in _set_cookie_headers(upstream):
+        jar = SimpleCookie()
+        try:
+            jar.load(header)
+        except Exception:                                  # a cookie we cannot parse is not re-issued
+            continue
+        if COOKIE not in jar:
+            continue
+        morsel = jar[COOKIE]
+        max_age = None
+        raw_age = (morsel["max-age"] or "").strip().rstrip(",")
+        if raw_age:
+            try:
+                max_age = max(0, int(raw_age))
+            except ValueError:
+                max_age = None
+        expires = (morsel["expires"] or "").strip().rstrip(",") or None
+        return morsel.value, max_age, expires
+    return None
 
 
 def install_if_dev(portal, *, base_url: str | None, environ, require_login, require_owner) -> dict:

@@ -36,7 +36,7 @@ def server():
     saved = (secrets_module.get_secret, portal_config.GUILD_QUEUE_PATH, portal_config.BASE_URL,
              qs._running_in_container, os.environ.get("MINIMOI_GUILD_NEXT"))
     saved_backend = os.environ.get("RECORDS_BACKEND")
-    os.environ["RECORDS_BACKEND"] = "http://minimoi-records:18880"     # Rooms (slice 4): the bridge installs
+    os.environ["RECORDS_BACKEND"] = "http://127.0.0.1:18880"           # Rooms (slice 4): loopback, as local hosts need (F7)
     secrets_module.get_secret = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no secrets in tests"))
     qs._running_in_container = lambda: False
     folder = Path(tempfile.mkdtemp()) / "guild"
@@ -2429,6 +2429,8 @@ def test_s4_desktop_signin_draft_chat_files_agent_and_pause(browser, server, roo
     expect(page.locator("[data-rm-signin]")).to_be_hidden()
     expect(page.locator("[data-rm-title]")).to_have_text("Screen review")
     expect(page.locator("[data-rm-composer]")).to_be_in_viewport()
+    # The draft typed before signing in followed into the room (#288 review F3).
+    expect(page.locator("[data-rm-input]")).to_have_value("A draft written before signing in")
     # Send a message (the draft typed in this room before is kept until sent).
     page.fill("[data-rm-input]", "Attaching the review pack once.")
     page.click("[data-rm-send]")
@@ -2446,7 +2448,7 @@ def test_s4_desktop_signin_draft_chat_files_agent_and_pause(browser, server, roo
     page.click("[data-rm-file-details] summary")
     page.fill("[data-rm-save-path]", "docs/design/review-notes.md")
     page.click("[data-rm-save] button[type=submit]")
-    expect(page.locator("[data-rm-status]")).to_contain_text("Saved to project: docs/design/review-notes.md · v1")
+    expect(page.locator("[data-rm-status]")).to_contain_text("Project home recorded: docs/design/review-notes.md · v1. Nothing was written")
     page.click("[data-rm-files-back]")
     expect(page.locator("[data-rm-files] .rm-flist")).to_be_visible()
     page.click("[data-rm-files-close]")
@@ -2522,6 +2524,44 @@ def test_s4_take_to_a_room_shares_the_stored_note_by_id(browser, server, rooms):
     expect(shared).to_have_text("from Guild Chat")
     expect(page.locator(".rm-msg .rm-body").last).to_contain_text(f"From Guild Chat · note #{note_id}")
     assert "take=" not in page.url
+    ctx.close()
+
+
+def test_s4_a_prepared_take_is_discarded_when_going_off_the_record_and_cancel_sticks(browser, server, rooms):
+    """#288 review F2 and F8: switching mode discards a prepared Take, which is
+    then never sent; Cancel drops it from the address so a reload cannot
+    bring it back."""
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    go(page, f"{server['url']}/guild-next/guild/rooms")
+    room_id = _rooms_ready(page, server, rooms, title="Off room")
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.fill("#mc-input", "Keep this for the room")
+    page.click("[data-mc-send]")
+    note = page.locator('[data-mc-thread] [data-kind="note"][data-note]').last
+    expect(note).to_contain_text("Keep this for the room")
+    note_id = note.get_attribute("data-note")
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}&take={note_id}")
+    expect(page.locator("[data-rm-take]")).to_be_visible()
+    before = len(_records_fetch(page, f"/v1/rooms/{room_id}", None, None)["body"]["events"])
+    assert page.locator("[data-mc-record]").count() == 1
+    page.evaluate("document.querySelector('[data-mc-record]').click()")         # off the record
+    expect(page.locator("[data-rm-take]")).to_be_hidden()
+    expect(page.locator("[data-rm-status]")).to_contain_text("discarded")
+    assert "take=" not in page.url
+    page.evaluate("document.querySelector('[data-rm-take-send]').click()")      # a stale click does nothing
+    page.wait_for_timeout(300)
+    assert len(_records_fetch(page, f"/v1/rooms/{room_id}", None, None)["body"]["events"]) == before
+    page.evaluate("document.querySelector('[data-mc-record]').click()")         # back on the record
+    # Cancel sticks across a reload.
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}&take={note_id}")
+    expect(page.locator("[data-rm-take]")).to_be_visible()
+    page.click("[data-rm-take-cancel]")
+    assert "take=" not in page.url
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator("[data-rm-take]")).to_be_hidden()
     ctx.close()
 
 
