@@ -82,6 +82,34 @@ def test_a_type_we_do_not_take_is_refused():
     assert err.value.status == 415
 
 
+
+def test_a_phone_mpo_jpeg_is_taken_as_a_plain_jpeg_of_its_first_picture():
+    """#287 F5: many phones write MPO (a JPEG plus a depth or gain map)."""
+    first, second, out = Image.new("RGB", (16, 12), (10, 20, 30)), Image.new("RGB", (16, 12), (200, 0, 0)), io.BytesIO()
+    first.save(out, "MPO", save_all=True, append_images=[second])
+    assert Image.open(io.BytesIO(out.getvalue())).format == "MPO"
+    item = M.sanitize(out.getvalue())
+    stored = Image.open(io.BytesIO(item.data))
+    assert (stored.format, item.mime, item.ext, item.width, item.height) == ("JPEG", "image/jpeg", "jpg", 16, 12)
+    assert getattr(stored, "n_frames", 1) == 1 and b"MPF" not in item.data
+
+
+def test_only_one_image_is_decoded_at_a_time_and_a_waiting_upload_gives_up_cleanly(monkeypatch):
+    """#287 F2: a large decode takes hundreds of MB, so uploads are serialised."""
+    monkeypatch.setattr(M, "SANITIZE_WAIT_S", 0.05)
+    assert M._SANITIZING.acquire(timeout=1)
+    try:
+        with pytest.raises(M.MediaRejected) as busy:
+            M.sanitize(image_bytes("PNG"))
+        assert busy.value.status == 503
+    finally:
+        M._SANITIZING.release()
+    assert M.sanitize(image_bytes("PNG")).mime == "image/png"               # released after a refusal too
+    with pytest.raises(M.MediaRejected):
+        M.sanitize(b"not an image at all")
+    assert M._SANITIZING.acquire(timeout=0.01)                              # and after a failure
+    M._SANITIZING.release()
+
 # ── files and the index ───────────────────────────────────────────────────────
 
 def _create(board, raw=None, k=None):

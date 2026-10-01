@@ -40,6 +40,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 import time
 import uuid
 import warnings
@@ -53,15 +54,24 @@ MAX_BYTES = 8 * 1024 * 1024
 MAX_PIXELS = 40_000_000
 THUMB_EDGE = 480
 ORPHAN_GRACE_S = 24 * 3600
-FORMATS = {"JPEG": ("image/jpeg", "jpg"), "PNG": ("image/png", "png"), "WEBP": ("image/webp", "webp"),
+FORMATS = {"JPEG": ("image/jpeg", "jpg"), "MPO": ("image/jpeg", "jpg"), "PNG": ("image/png", "png"),
+           "WEBP": ("image/webp", "webp"),
            "GIF": ("image/png", "png")}           # a GIF is stored as its first frame, a PNG still
+# MPO is the multi-picture JPEG many phones write (the main photo plus a depth
+# or gain map): it is stored as a plain JPEG of its first picture.
+JPEG_LIKE = ("JPEG", "MPO")
+SANITIZE_WAIT_S = 30
+# One decode at a time per portal process: a 40 MP image needs several hundred
+# MB while it is decoded and re-encoded, so two at once could exhaust memory.
+_SANITIZING = threading.BoundedSemaphore(1)
 OWNER_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 KINDS = ("photo", "icon", "emoji")
 
 
 class MediaRejected(Exception):
     """An upload that is refused: ``status`` 413 (too large), 415 (not an
-    image type we take) or 422 (corrupt)."""
+    image type we take), 422 (corrupt) or 503 (another image is still being
+    processed; try again)."""
 
     def __init__(self, status: int, message: str):
         super().__init__(message)
@@ -88,11 +98,20 @@ def media_root(env=None) -> Path:
 # ── sanitising ───────────────────────────────────────────────────────────────
 
 def sanitize(raw: bytes) -> Sanitized:
-    """Decode, check and re-encode one image. Raises MediaRejected."""
-    from PIL import Image, ImageOps, UnidentifiedImageError
-    Image.MAX_IMAGE_PIXELS = MAX_PIXELS          # a backstop only: the explicit check below decides
+    """Decode, check and re-encode one image, one at a time. Raises MediaRejected."""
     if len(raw) > MAX_BYTES:
         raise MediaRejected(413, f"The image is larger than {MAX_BYTES // (1024 * 1024)} MB.")
+    if not _SANITIZING.acquire(timeout=SANITIZE_WAIT_S):
+        raise MediaRejected(503, "Another image is still being processed. Try again in a moment.")
+    try:
+        return _sanitize(raw)
+    finally:
+        _SANITIZING.release()
+
+
+def _sanitize(raw: bytes) -> Sanitized:
+    from PIL import Image, ImageOps, UnidentifiedImageError
+    Image.MAX_IMAGE_PIXELS = MAX_PIXELS          # a backstop only: the explicit check below decides
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", Image.DecompressionBombWarning)
@@ -120,24 +139,30 @@ def sanitize(raw: bytes) -> Sanitized:
         raise MediaRejected(422, "That image could not be decoded. Nothing was added.") from None
     mime, ext = FORMATS[fmt]
     has_alpha = img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info)
-    if fmt == "JPEG":
-        pixels, save_as, opts = img.convert("RGB"), "JPEG", {"quality": 88, "optimize": True}
+    if fmt in JPEG_LIKE:
+        mode, save_as, opts = "RGB", "JPEG", {"quality": 88, "optimize": True}
     elif fmt == "WEBP":
-        pixels, save_as, opts = img.convert("RGBA" if has_alpha else "RGB"), "WEBP", {"quality": 88}
+        mode, save_as, opts = ("RGBA" if has_alpha else "RGB"), "WEBP", {"quality": 88}
     else:                                                 # PNG, and a GIF's first frame
-        pixels, save_as, opts = img.convert("RGBA" if has_alpha else "RGB"), "PNG", {"optimize": True}
+        mode, save_as, opts = ("RGBA" if has_alpha else "RGB"), "PNG", {"optimize": True}
+    pixels = img if img.mode == mode else img.convert(mode)
+    del img
     # A fresh image from the pixels only: no info dict, so no EXIF, GPS, XMP,
-    # ICC profile, comment or animation can be carried over.
-    clean = Image.frombytes(pixels.mode, pixels.size, pixels.tobytes())
+    # ICC profile, comment or animation can be carried over. paste() copies
+    # the pixels without the extra full-size bytes buffer tobytes() made.
+    clean = Image.new(mode, pixels.size)
+    clean.paste(pixels)
+    del pixels
+    width, height = clean.size
     out = io.BytesIO()
     clean.save(out, save_as, **opts)
     data = out.getvalue()
-    thumb_img = clean.copy()
-    thumb_img.thumbnail((THUMB_EDGE, THUMB_EDGE))
+    del out
+    clean.thumbnail((THUMB_EDGE, THUMB_EDGE))            # in place: the full-size copy is no longer needed
     tout = io.BytesIO()
-    thumb_img.save(tout, "WEBP", quality=80)
-    return Sanitized(data=data, thumb=tout.getvalue(), mime=mime, ext=ext, width=clean.size[0],
-                     height=clean.size[1], sha256=hashlib.sha256(data).hexdigest())
+    clean.save(tout, "WEBP", quality=80)
+    return Sanitized(data=data, thumb=tout.getvalue(), mime=mime, ext=ext, width=width,
+                     height=height, sha256=hashlib.sha256(data).hexdigest())
 
 
 # ── files ────────────────────────────────────────────────────────────────────
