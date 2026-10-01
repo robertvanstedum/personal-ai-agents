@@ -2565,6 +2565,47 @@ def test_s4_a_prepared_take_is_discarded_when_going_off_the_record_and_cancel_st
     ctx.close()
 
 
+def test_s4_a_take_in_a_tab_with_unknown_mode_waits_for_confirm_and_off_drops_it(browser, server, rooms):
+    """#288 re-check R1 and R2: in a tab whose record mode is unknown, the Take
+    box says so and offers Confirm on the record; nothing is fetched before.
+    Choosing Off instead drops the Take for good."""
+    ctx, first = _context(browser, server, 1440, 900)
+    go(first, f"{server['url']}/guild-next/guild/rooms")
+    room_id = _rooms_ready(first, server, rooms, title="Unknown room")
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first.fill("#mc-input", "Share me once confirmed")
+    first.click("[data-mc-send]")
+    note = first.locator('[data-mc-thread] [data-kind="note"][data-note]').last
+    expect(note).to_contain_text("Share me once confirmed")
+    note_id = note.get_attribute("data-note")
+    first.evaluate(f"localStorage.setItem('{OFF_TABS}', '{{garbled')")
+    fresh = ctx.new_page()
+    shares = []
+    fresh.on("request", lambda r: shares.append(r.url) if "/share" in r.url else None)
+    go(fresh, f"{server['url']}/guild-next/guild/rooms?room={room_id}&take={note_id}")
+    expect(fresh.locator("body")).to_have_attribute("data-record-known", "false")
+    expect(fresh.locator("[data-rm-take]")).to_be_visible()
+    expect(fresh.locator("[data-rm-take-meta]")).to_contain_text("Confirm on the record")
+    expect(fresh.locator("[data-rm-take-send]")).to_be_disabled()
+    fresh.wait_for_timeout(300)
+    assert shares == []
+    fresh.click("[data-rm-take-confirm]")
+    expect(fresh.locator("[data-rm-take-text]")).to_have_text("Share me once confirmed")
+    expect(fresh.locator("[data-rm-take-confirm]")).to_be_hidden()
+    assert len(shares) == 1
+    fresh.click("[data-rm-take-send]")
+    expect(fresh.locator("[data-rm-take-result]")).to_have_text("Shared into this room.")
+    # Another unknown tab chooses Off: the Take is dropped and never prepared.
+    first.evaluate(f"localStorage.setItem('{OFF_TABS}', '{{garbled')")
+    other = ctx.new_page()
+    go(other, f"{server['url']}/guild-next/guild/rooms?room={room_id}&take={note_id}")
+    expect(other.locator("[data-rm-take]")).to_be_visible()
+    other.evaluate("document.querySelector('[data-mc-record]').click()")
+    expect(other.locator("[data-rm-take]")).to_be_hidden()
+    assert "take=" not in other.url
+    ctx.close()
+
+
 def test_s4_an_expired_records_login_says_sign_in_and_keeps_the_draft(browser, server, rooms):
     ctx, page = _context(browser, server, 1440, 900)
     writes = []
