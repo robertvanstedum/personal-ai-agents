@@ -123,4 +123,5 @@ def test_real_floor_says_master_craftsman_is_off_and_filing_is_off(staging):
     assert "Filing is off until the Record is specified (#235). Nothing is filed." in body
     assert "Inviting agents needs Rooms; not connected" in body
     assert "Hold to talk" not in body
-    assert "Prototype" not in body and "Reset fixtures" not in body
+    # "Prototype Lab" is a navigation entry point (Guild 1.1 slice 1), not the prototype's sample data.
+    assert "Prototype" not in body.replace("Prototype Lab", "") and "Reset fixtures" not in body

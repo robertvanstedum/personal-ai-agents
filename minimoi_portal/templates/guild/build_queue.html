@@ -284,6 +284,7 @@
         <option value="spec_ready"  {% if status == 'spec_ready'  %}selected{% endif %}>Spec Ready</option>
         <option value="in_build"    {% if status == 'in_build'    %}selected{% endif %}>In Build</option>
         <option value="blocked"     {% if status == 'blocked'     %}selected{% endif %}>Blocked</option>
+        <option value="rework"      {% if status == 'rework'      %}selected{% endif %}>Rework</option>
         <option value="deferred"    {% if status == 'deferred'    %}selected{% endif %}>Deferred</option>
         <option value="cancelled"   {% if status == 'cancelled'   %}selected{% endif %}>Cancelled</option>
         <option value="superseded"  {% if status == 'superseded'  %}selected{% endif %}>Superseded</option>
@@ -394,7 +395,7 @@ function queueStatus(select, id) {
   const saveBtn = document.getElementById('bsave-' + id);
   const noteWrap = document.getElementById('bd-' + id);
   // Show note input only when blocking
-  if (val === 'blocked') {
+  if (val === 'blocked' || val === 'rework') {   // both need a reason (Guild 1.1 slice 2)
     noteWrap.style.display = 'block';
   } else {
     noteWrap.style.display = 'none';

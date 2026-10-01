@@ -1,0 +1,22 @@
+# Records (Rooms) for STAGING ONLY (Guild 1.1 slice 4, spec §6). Never part of
+# a production deploy (scripts/ci/classify_release.py: dormant); it runs in
+# its own Compose project (docker-compose.records.yml, scripts/staging/records.sh)
+# on an internal network with no host port. The portal reaches it at
+# http://minimoi-records:18880 through its dev-only bridge (/app/records/).
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY docker/requirements.records.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY prototype-lab/projects/project-records-room-poc/ /app/
+RUN rm -rf /app/tests /app/static/v2/fixtures 2>/dev/null || true
+
+ENV PYTHONDONTWRITEBYTECODE=1
+EXPOSE 18880
+
+# The SQLite file and its private key files live in /data, a host folder
+# (${MINIMOI_ROOT}/data/records, mode 700). On first start Records creates
+# owner-key.txt there unless the owner put his own one in place first.
+CMD ["python", "app.py", "--data-dir", "/data", "--host", "0.0.0.0", "--port", "18880"]

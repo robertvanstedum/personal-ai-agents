@@ -16,7 +16,14 @@
 #                   existing provider keys (nothing new from a provider).
 #   cos.sh off      back to the master key: state/cos.key off, recreate only
 #                   cos-agent-a. The key stays in cos.env and the gateway.
-#   cos.sh status   which key CoS uses (never the value), and Agent A's health
+#   cos.sh status   which key CoS uses (never the value), whether the CoS turn
+#                   log is on, and Agent A's health
+#   cos.sh turns on|off
+#                   the CoS turn log (Spec 160 path (a); Confer voice
+#                   transcripts): state/cos.turns on or off, then recreates
+#                   ONLY cos-scheduler with or without its data/cos-turns mount.
+#                   Off by default. Needs no rebuild. Off keeps the lines
+#                   already written.
 #
 # With its own key, CoS depends on the gateway's key database: with Postgres
 # down, CoS's key is refused after the gateway's 60 s key cache (MC stage C
@@ -100,7 +107,30 @@ case "${1:-}" in
     recreate_cos
     note "CoS uses the master key again (its own key is kept in cos.env and the gateway)"
     ;;
+  turns)
+    require_absolute_root
+    require_release
+    require_env
+    case "${2:-}" in
+      on)
+        [[ -f "$RELEASE_DIR/$STAGING_COS_TURNS_OVERLAY" ]] || die "the pinned release has no $STAGING_COS_TURNS_OVERLAY"
+        [[ -d "$STAGING_ROOT/data/cos-turns" ]] || die "missing $STAGING_ROOT/data/cos-turns; run build.sh"
+        value=on ;;
+      off) value=off ;;
+      *) die "usage: cos.sh turns on|off" ;;
+    esac
+    mkdir -p "$STAGING_ROOT/state"
+    printf '%s\n' "$value" > "$STAGING_COS_TURNS_FILE"
+    note "recreating ONLY cos-scheduler (Confer is unavailable for a few seconds)"
+    staging_compose up -d --no-build --no-deps cos-scheduler
+    if [[ "$value" == on ]]; then
+      note "the CoS turn log is on: Confer voice transcripts are kept unless Private is on (Confer's Private switch)"
+    else
+      note "the CoS turn log is off: nothing new is kept; the lines already written stay"
+    fi
+    ;;
   status)
+    if cos_turns_on; then echo "CoS turn log: on (state/cos.turns)"; else echo "CoS turn log: off"; fi
     if cos_key_on; then
       [[ -n "$(env_value "$STAGING_COS_ENV" COS_MODEL_GATEWAY_KEY)" ]] && echo "CoS key: its own capped key (cos.env)" \
         || echo "CoS key: state/cos.key is on but cos.env has no key (up.sh will refuse)"
@@ -109,5 +139,5 @@ case "${1:-}" in
     fi
     echo "cos-agent-a: $(health_of "$COS_CONTAINER")"
     ;;
-  *) die "usage: cos.sh key | off | status" ;;
+  *) die "usage: cos.sh key | off | status | turns on|off" ;;
 esac

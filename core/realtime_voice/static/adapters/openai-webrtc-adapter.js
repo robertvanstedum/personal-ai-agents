@@ -25,6 +25,15 @@ export class OpenAIWebRTCAdapter {
     this._micStream = null;
     this._remoteAudioEl = null;
     this._muted = false;
+    this._outputMuted = false;
+  }
+
+  // Write only: the reply's audio is muted on this device; the provider still
+  // produces it (and its transcript, which the page shows). Can change during
+  // a session.
+  setOutputMuted(muted) {
+    this._outputMuted = !!muted;
+    if (this._remoteAudioEl) this._remoteAudioEl.muted = this._outputMuted;
   }
 
   on(eventName, handler) {
@@ -49,6 +58,7 @@ export class OpenAIWebRTCAdapter {
     // credentials: {client_secret, model} from the bootstrap response.
     this._remoteAudioEl = document.createElement("audio");
     this._remoteAudioEl.autoplay = true;
+    this._remoteAudioEl.muted = this._outputMuted;
 
     this._pc = new RTCPeerConnection();
     this._pc.ontrack = (event) => {
@@ -117,6 +127,8 @@ export class OpenAIWebRTCAdapter {
   }
 
   end(reason) {
+    if (this._ended) return;                 // idempotent: the controller and a provider close may both end it
+    this._ended = true;
     for (const track of this._micStream?.getAudioTracks() || []) track.stop();
     this._dc?.close();
     this._pc?.close();
@@ -201,7 +213,12 @@ export class OpenAIWebRTCAdapter {
         if (event.response?.usage) this._emit("usage", event.response.usage);
         break;
       case "error":
-        this._emit("recoverable_error", { detail: event.error });
+        this._emit("recoverable_error", {
+          reason: "provider_error",
+          code: event.error?.code || null,
+          type: event.error?.type || null,
+          detail: event.error?.message || event.error?.code || "OpenAI reported an error",
+        });
         break;
       default:
         break;

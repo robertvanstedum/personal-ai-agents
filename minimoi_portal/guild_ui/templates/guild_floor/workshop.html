@@ -1,0 +1,156 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Workshop{% if ws_item %} · #{{ ws_item }}{% endif %} · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/workshop.css') }}">{% endblock %}
+{#
+  The local Workshop, focused (4a: read only). Everything here is read from
+  files and the queue; nothing calls a model and nothing launches (the
+  launcher is 4b). Phone: Now, Needs you and Budget first, the rest folded,
+  then the chat.
+#}
+{% set adm = ws.admission %}
+{% block main %}
+{# Guild 1.1 slice 5 (spec §7, the v4 workshop look): a dark header with the
+   ops strip (each figure with its source and freshness, or "not measured"),
+   light job-state cards from the workshop record, then Now, Needs you and
+   Budget. Read only: remote start, stop and comment are shown "not
+   available" (a later slice). #}
+<section class="ws-top" aria-labelledby="ws-title" data-ws-top>
+  <div class="ws-art" aria-hidden="true"></div>
+  <div class="ws-title-row">
+    <h1 class="ws-title" id="ws-title">Workshop</h1>
+    <span class="ws-target">Target: {{ ws.workshop }} · read from its synced record</span>
+    {% if ws.item %}<span class="ws-target" data-ws-item-chip>#{{ ws.item.id }} {{ ws.item.title }}</span>{% endif %}
+  </div>
+  <p class="ws-sub">Observed, not configured · read only (launching comes later) · <span data-ws-refreshed>as of <span data-iso="{{ state.observed_at }}">{{ hhmm(state.observed_at) }}</span></span></p>
+  <details class="ws-status" data-ws-ops>
+    <summary class="ws-strip">
+      <span class="visually-hidden">Ops strip:</span>
+      {% for o in ws.ops %}<span class="sx" data-ws-op="{{ o.id }}" data-state="{{ o.state }}" data-at="{{ o.fresh.at or '' }}" data-date="{{ o.fresh.date or '' }}"><span data-ws-op-text>{{ o.text }}</span>{% if o.fresh.at %}<span class="sx-at"> · {% if o.fresh.label %}{{ o.fresh.label }} {% endif %}{% if o.fresh.date %}{{ o.fresh.date }} {% endif %}<span data-iso="{{ o.fresh.at }}">{{ hhmm(o.fresh.at) }}</span></span>{% endif %}</span>{% endfor %}
+      <span class="sdet">Details ▾</span>
+    </summary>
+    <div class="ws-table-wrap">
+      <table class="ws-table" data-ws-ops-table>
+        <caption class="visually-hidden">Each figure, where it came from and when</caption>
+        <thead><tr><th scope="col">Measure</th><th scope="col">Value</th><th scope="col">Source</th><th scope="col">Fresh</th></tr></thead>
+        <tbody>
+          {% for o in ws.ops %}<tr data-ws-op-row="{{ o.id }}" data-state="{{ o.state }}" data-at="{{ o.fresh.at or '' }}" data-date="{{ o.fresh.date or '' }}">
+            <th scope="row">{{ o.label }}</th>
+            <td data-ws-op-value>{{ o.value if o.value else ('not measured' if o.state == 'not_measured' else 'unknown') }}{% if o.state == 'stale' %} (stale){% endif %}</td>
+            <td>{{ o.source }}</td>
+            <td data-ws-op-fresh>{% if o.fresh.at %}{% if o.fresh.label %}{{ o.fresh.label }} {% endif %}{% if o.fresh.date %}{{ o.fresh.date }} {% endif %}<span data-iso="{{ o.fresh.at }}">{{ hhmm(o.fresh.at) }}</span>{% if o.fresh.age %} · {{ o.fresh.age }}{% endif %}{% else %}—{% endif %}</td>
+          </tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="ws-snote">Stale means the last host reading is older than 15 minutes; unknown means a probe failed; not measured means there is no source here. Nothing is estimated.</p>
+  </details>
+</section>
+{% if ws_item and not ws.item %}<p class="unknown-line">Queue item #{{ ws_item }} is not in the Build Queue{% if not ws.item_res.ok %} (the queue could not be read){% endif %}.</p>{% endif %}
+
+<section class="ws-jobs" aria-labelledby="ws-jobs-h" data-ws-jobs data-known="{{ 'true' if ws.jobs.known else 'false' }}" data-stale="{{ 'true' if ws.jobs.stale else 'false' }}">
+  <div class="ws-jobs-head">
+    <h2 class="ws-jobs-h" id="ws-jobs-h">Job states</h2>
+    <span class="small">From the workshop record: what each worker reported, with its time.</span>
+    <button type="button" class="ws-na" data-ws-control="start" disabled>Start a job · not available</button>
+  </div>
+  <div data-ws-jobs-body>
+  {% if not ws.jobs.known %}<p class="unknown-line" data-ws-jobs-unknown>{{ ws.jobs.text }}</p>
+  {% elif ws.jobs.stale %}<p class="unknown-line" data-ws-jobs-stale>{{ ws.jobs.stale_text }}</p>{% endif %}
+  {% if ws.jobs.cards %}
+  <div class="ws-cards">
+    {% for c in ws.jobs.cards %}
+    <article class="ws-job" data-ws-job="{{ c.item }}" data-state="{{ c.state if not c.flag else ('stale' if c.flag == 'stale' else 'unknown') }}">
+      <div class="ws-jh">
+        <span class="ws-pill" data-ws-pill>{{ c.pill }}</span>
+        {% if ws.jobs.stale %}<span class="ws-pill" data-state="stale" data-ws-stale-pill>stale record</span>{% endif %}
+        <span class="ws-sp"></span>
+        {% if c.queue_id %}<a class="ws-ref" href="{{ urls.build_log }}?item={{ c.queue_id }}">#{{ c.queue_id }}</a>{% else %}<span class="ws-ref">{{ c.item }}</span>{% endif %}
+      </div>
+      <h3 class="ws-job-title">{{ c.title }}</h3>
+      <p class="ws-who">{% if c.flag %}last reported: {{ c.state }} · {% endif %}{{ c.actor or 'unknown' }}{% if c.stage %} · {{ c.stage }}{% endif %} · last contact {% if c.last_contact.at %}<span data-iso="{{ c.last_contact.at }}">{{ hhmm(c.last_contact.at) }}</span>{% if c.last_contact.age %} ({{ c.last_contact.age }}){% endif %}{% else %}unknown{% endif %}, reported{% if c.next_actor %} · next: {{ c.next_actor }}{% endif %}</p>
+      {% if c.note %}<p class="unknown-line" data-ws-job-note>{{ c.note }}</p>{% endif %}
+      <ol class="ws-ev" data-ws-evidence aria-label="Evidence for {{ c.item }}">
+        {% for e in c.evidence %}<li><span data-iso="{{ e.at }}">{{ hhmm(e.at) }}</span> {{ e.actor }} · {{ e.kind }} · {{ e.text }}</li>{% endfor %}
+      </ol>
+      <p class="ws-jf">Evidence is what the worker reported, with its time; nothing here is inferred.</p>
+      <div class="ws-ja">
+        <button type="button" class="ws-na" data-ws-control="comment" disabled>Comment · not available</button>
+        {% if c.state != 'completed' %}<button type="button" class="ws-na" data-ws-control="stop" disabled>Stop · not available</button>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% if ws.jobs.more %}<p class="small" data-ws-jobs-more>+{{ ws.jobs.more }} more in the workshop record (needs you first; older and completed jobs are not shown).</p>{% endif %}
+  {% elif ws.jobs.known %}<p class="small" data-ws-jobs-empty>{{ ws.jobs.text }}</p>{% endif %}
+  </div>
+  <p class="small ws-controls-note" data-ws-controls-note>Remote start, stop and comment are not available yet: they come with a later slice. This page only reads.</p>
+</section>
+
+<div class="ws-grid" data-workshop data-ws-item="{{ ws_item or '' }}">
+  <section class="card ws-now" aria-labelledby="ws-now-h" data-ws-now>
+    <h2 class="h2" id="ws-now-h">Now</h2>
+    <p class="ws-admission" data-ws-admission data-verdict="{{ adm.verdict }}">
+      <span class="ws-verdict" data-ws-verdict>Host {{ adm.verdict }}</span>
+      <span class="small" data-ws-reason>{{ adm.reasons[0] if adm.reasons else '' }}</span>
+      <span class="small ws-age" data-ws-age data-observed="{{ adm.observed_at or '' }}">{% if adm.age %}· read {{ adm.age }}{% endif %}</span>
+    </p>
+    {% if adm.reasons|length > 1 %}<ul class="ws-reasons small" data-ws-reasons>{% for r in adm.reasons[1:] %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+    <p class="ws-runs" data-ws-runs data-known="{{ 'true' if ws.runs.known else 'false' }}">{{ ws.runs.text }}{% if ws.runs.runs %}: {% for r in ws.runs.runs %}<span class="ws-run">{{ r.label }} <span class="small">(up {{ r.elapsed }})</span></span>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+    {% if ws.runs.background %}<p class="ws-background small" data-ws-background>Also running, not counted as build sessions: {% for r in ws.runs.background %}{{ r.label }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+    <p class="ws-last small" data-ws-last>{% if ws.last_event %}Last event ({{ ws.last_event_scope }}): {{ ws.last_event.actor }} · {{ ws.last_event.kind }} · {{ ws.last_event.text }} · <span data-iso="{{ ws.last_event.at }}">{{ hhmm(ws.last_event.at) }}</span>{% else %}No workshop events yet.{% endif %}</p>
+    <p class="ws-next small" data-ws-next>Next actor: <strong>{{ ws.next_actor or 'unknown' }}</strong></p>
+  </section>
+
+  <section class="card ws-needs" aria-labelledby="ws-needs-h" data-ws-needs>
+    <h2 class="h2" id="ws-needs-h">Needs you</h2>
+    {% if ws.needs.status != 'ok' %}<p class="unknown-line">{{ ws.needs.text }}</p>{% endif %}
+    {% if ws.needs.workshop_status != 'ok' %}<p class="unknown-line" data-ws-needs-unknown>{{ ws.needs.workshop_text }}</p>{% endif %}
+    <ul class="rows">
+      {% for n in ws.needs['items'] %}<li class="row"><span><span class="tag" data-tag="needs">{{ n.tag }}</span> <a href="{{ urls.item | replace('__ID__', n.item_id|string) }}">{{ n.text }}</a></span></li>{% endfor %}
+      {% for n in ws.needs.workshop %}<li class="row"{% if ws.needs.workshop_status != 'ok' %} data-stale="true"{% endif %}><span><span class="tag" data-tag="needs">{{ n.actor }}</span> {{ n.text }} <span class="small">({{ n.item }}{% if ws.needs.workshop_status != 'ok' %}, from a stale record{% endif %})</span></span></li>{% endfor %}
+    </ul>
+    {% if ws.needs.status == 'ok' and ws.needs.workshop_status == 'ok' and not ws.needs['items'] and not ws.needs.workshop %}<p class="small">Nothing needs you here right now.</p>{% endif %}
+  </section>
+
+  <section class="card ws-budget" aria-labelledby="ws-budget-h" data-ws-budget>
+    <h2 class="h2" id="ws-budget-h">Budget and headroom</h2>
+    {% if ws.budget.known and ws.budget.bad %}<p class="unknown-line" data-ws-spend-unknown>Model spend this month ({{ ws.budget.month }}) unknown: {{ ws.budget.bad }} gateway record{{ 's' if ws.budget.bad != 1 else '' }} had an unreadable cost.</p>
+    {% elif ws.budget.known and ws.budget.none_yet %}<p class="small" data-ws-spend-none>Model spend not measured yet this month: no gateway records yet in {{ ws.budget.month }}.</p>
+    {% elif ws.budget.known %}
+    <p class="small">Model spend this month ({{ ws.budget.month }}, gateway records):
+      {% if ws.budget.by_actor %}{% for actor, usd in ws.budget.by_actor.items() %}<strong>{{ actor }}</strong> ${{ '%.2f' % usd }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}none recorded{% endif %}</p>
+    {% else %}<p class="unknown-line">Model spend unknown (no usage store here).</p>{% endif %}
+    <p class="small">Builder runs: no task budget yet (the launcher arrives in 4b).</p>
+    <p class="small ws-headroom" data-ws-headroom data-stale="{{ 'false' if ws.headroom else 'true' }}">{{ ws.headroom or 'Headroom unknown (no fresh host reading).' }}</p>
+    <p class="small ws-limits" data-ws-limits>{{ ws.limits }}.</p>
+  </section>
+
+  <details class="ws-more" data-ws-more open>
+    <summary class="ws-more-sum">Scope, queued work and recovery</summary>
+    <div class="ws-more-grid">
+      <section class="card" aria-labelledby="ws-scope-h" data-ws-scope>
+        <h2 class="h2" id="ws-scope-h">Approved scope</h2>
+        {% if ws.item %}
+        <p><a href="{{ urls.item | replace('__ID__', ws.item.id|string) }}">#{{ ws.item.id }} {{ ws.item.title }}</a> · {{ ws.item.status_label }}</p>
+        <p class="small">{% if ws.approved %}Approved for build (the queue says {{ ws.item.status_label }}).{% else %}Not approved for build: the queue says {{ ws.item.status_label }}.{% endif %}</p>
+        {% if ws.item.summary %}<p class="small">{{ ws.item.summary }}</p>{% endif %}
+        {% if ws.item.spec_file %}<p class="small">Spec: <code>{{ ws.item.spec_file }}</code></p>{% endif %}
+        {% else %}<p class="small">Open the Workshop from a queue item to see its scope.</p>{% endif %}
+      </section>
+      <section class="card" aria-labelledby="ws-queue-h" data-ws-queued>
+        <h2 class="h2" id="ws-queue-h">Queued work</h2>
+        <ul class="rows">
+          {% for i in ws.queued %}<li class="row"><span><a href="{{ urls.workshop }}?item={{ i.id }}">#{{ i.id }} {{ i.title }}</a></span><span class="small">{{ i.status_label }}</span></li>{% endfor %}
+          {% for n in ws.queued_next %}<li class="row"><span>{{ n.text }} <span class="small">({{ n.item }})</span></span></li>{% endfor %}
+        </ul>
+        {% if not ws.queued and not ws.queued_next %}<p class="small">Nothing queued in Spec Ready.</p>{% endif %}
+      </section>
+      <section class="card" aria-labelledby="ws-recover-h" data-ws-recovery>
+        <h2 class="h2" id="ws-recover-h">Recovery</h2>
+        <ul class="small ws-recovery" data-ws-recovery-list>{% for r in ws.recovery %}<li>{{ r }}</li>{% endfor %}</ul>
+        <p class="small">No launched runs to recover: the launcher is 4b.</p>
+      </section>
+    </div>
+  </details>
+</div>
+{% endblock %}

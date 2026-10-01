@@ -9,6 +9,8 @@ portal starts:
                             stub, openclaw or grok (minimoi_portal/guild_ui/mc)
     MINIMOI_GUILD_MC_TURNS=1  lets /guild-next send kept notes to that backend
                             (off by default; staging only)
+    MINIMOI_GUILD_MC_STREAM=1 streams those turns when the backend can
+                            (off by default; staging turns it on)
 
 Unset (production) means nothing is registered, so both prefixes fall through
 to the portal's own routes and answer 404. Only "1", "true", "on" or "yes"
@@ -110,16 +112,18 @@ def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, ope
         return "off"
     try:
         from minimoi_portal.guild_ui import register_guild_ui
-        from minimoi_portal.guild_ui.mc import backend_from_env, turns_enabled
+        from minimoi_portal.guild_ui.mc import backend_from_env, stream_enabled, turns_enabled
         from minimoi_portal.guild_ui.services import build_services
         # MINIMOI_GUILD_MC (off | stub | openclaw | grok); never raises, and an
         # MC problem never fails this mount (it shows "unavailable").
         mc = backend_from_env(environ)
         mc_turns = turns_enabled(environ)
-        log.info("guild mount: Master Craftsman backend %s, turns %s", mc.kind, "on" if mc_turns else "off")
+        mc_stream = stream_enabled(environ)
+        log.info("guild mount: Master Craftsman backend %s, turns %s, streaming %s", mc.kind,
+                 "on" if mc_turns else "off", "on" if mc_stream and mc.supports_streaming else "off")
         services = build_services(queue_path=queue_path, operations_status_url=operations_status_url,
                                   records_db=records_db, database_url=database_url, audit=audit, mc=mc,
-                                  mc_turns=mc_turns)
+                                  mc_turns=mc_turns, mc_stream=mc_stream)
         register_guild_ui(app, owner_guard=owner_guard, current_user=current_user, url_prefix=NEXT_PREFIX,
                           blueprint_name=NEXT_NAME, services=services, base_url=base_url)
         log.info("guild mount: /guild-next registered")
@@ -249,7 +253,7 @@ def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict
     }
 
 
-_GUILD_API_PATH = re.compile(r"/guild[\w-]*/api/")
+_GUILD_API_PATH = re.compile(r"/guild[\w-]*/api/|/app/records/")   # Rooms bodies too (slice 4)
 
 
 def sentry_before_send(event, hint=None):

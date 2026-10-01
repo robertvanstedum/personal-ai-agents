@@ -157,7 +157,7 @@ def test_same_key_different_change_is_refused_never_the_old_receipt(queue):
     s = store(queue)
     d = digest_of(queue, 1)
     first = s.save_status(1, "blocked", expect_item_digest=d, principal="r",
-                          idempotency_key="k")
+                          note="waiting on a decision", idempotency_key="k")   # a reason is required (Guild 1.1 §4.2)
     assert first.ok
     after_first = queue.read_bytes()
     second = s.save_status(1, "done", expect_item_digest=d, principal="r",

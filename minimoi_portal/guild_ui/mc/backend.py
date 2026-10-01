@@ -50,10 +50,19 @@ HEALTH_TTL_S = 60
 # The per-environment turn gate, read once when /guild-next mounts. Off unless
 # exactly one of FLAG_VALUES_ON; production never sets it.
 TURNS_VAR = "MINIMOI_GUILD_MC_TURNS"
+# The streaming switch (streaming spec v0.2 §5): code default off, staging on.
+# Effective streaming = this switch AND the backend's supports_streaming, and
+# the server computes it; the page never decides for itself.
+STREAM_VAR = "MINIMOI_GUILD_MC_STREAM"
+FLAG_ON = ("1", "true", "on", "yes")
 
 
 def turns_enabled(environ) -> bool:
-    return str(environ.get(TURNS_VAR, "") or "").strip().lower() in ("1", "true", "on", "yes")
+    return str(environ.get(TURNS_VAR, "") or "").strip().lower() in FLAG_ON
+
+
+def stream_enabled(environ) -> bool:
+    return str(environ.get(STREAM_VAR, "") or "").strip().lower() in FLAG_ON
 
 
 @dataclass(frozen=True)
@@ -91,15 +100,34 @@ class Health:
 
 
 class MasterCraftsmanBackend(abc.ABC):
-    """One Master Craftsman runtime behind the Shop floor."""
+    """One Master Craftsman runtime behind the Shop floor.
+
+    Streaming (spec v0.2 §5): ``supports_streaming`` is False unless a backend
+    implements ``stream_turn(req, cancel)``. That call makes its pre-dispatch
+    checks at once (raising ``stream.StreamRefused``: nothing was sent) and
+    returns an iterator that dispatches on its first ``next()`` and yields the
+    runtime-neutral events of ``stream.py``. One dispatch per turn: nothing
+    here ever retries. ``stop(correlation_id)`` asks the runtime to abort that
+    turn; ``settle(result)`` records a finished turn for the header, as
+    ``turn()`` does."""
 
     kind: str = "off"
+    supports_streaming: bool = False
 
     @abc.abstractmethod
     def health(self) -> Health: ...
 
     @abc.abstractmethod
     def turn(self, req: TurnRequest, cancel: threading.Event | None = None) -> TurnResult: ...
+
+    def stream_turn(self, req: TurnRequest, cancel: threading.Event | None = None):
+        raise NotImplementedError(f"the {self.kind} backend does not stream")
+
+    def stop(self, correlation_id: str) -> bool:
+        return False
+
+    def settle(self, result: TurnResult) -> None:
+        return None
 
 
 class OffBackend(MasterCraftsmanBackend):
@@ -213,7 +241,7 @@ UNAVAILABLE_WHY = {
 NOTES_TEXT = "On the record, your messages are kept as notes."
 
 
-def view(health: Health, *, notes_ok: bool, turns_on: bool = False) -> dict:
+def view(health: Health, *, notes_ok: bool, turns_on: bool = False, stream_on: bool = False) -> dict:
     """The Shop floor's Master Craftsman state, header and notes line.
 
     ``state`` is one of off, stub, live, unavailable. ``turns`` says whether a
@@ -244,7 +272,8 @@ def view(health: Health, *, notes_ok: bool, turns_on: bool = False) -> dict:
     else:
         notes = f"{NOTES_TEXT} Master Craftsman does not reply."
     return {"state": state, "reason": health.reason if state == "unavailable" else None, "header": header,
-            "notes_text": notes, "turns": replies, "observed_at": health.observed_at}
+            "notes_text": notes, "turns": replies, "stream": bool(replies and stream_on),
+            "observed_at": health.observed_at}
 
 
 # ── keeping a reply ───────────────────────────────────────────────────────────

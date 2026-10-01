@@ -139,6 +139,7 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 # Lazy imports
 from minimoi_portal import auth as _auth          # noqa: E402
 from minimoi_portal import proxy as _proxy        # noqa: E402
+from minimoi_portal import csrf as _csrf          # noqa: E402
 from minimoi_portal import guest_data as _gdata   # noqa: E402
 from minimoi_portal import domain_auth as _dauth  # noqa: E402
 from minimoi_portal.workspaces import (           # noqa: E402
@@ -656,20 +657,50 @@ def curator_static_passthrough(filename):
 
 
 # ── Chief of Staff proxy (owner only — no auth at CoS service layer yet) ─────
+# Browser writes use the portal's write guard, the same one as the Shop floor
+# API (minimoi_portal/csrf.py): the per-session token in X-CSRF-Token, a
+# same-origin Sec-Fetch-Site, a matching Origin, and the expected content
+# type (JSON; multipart for the audio upload). The token reaches Confer in
+# its page bootstrap as <meta name="minimoi-csrf-token">. A write that fails
+# the guard never reaches cos-scheduler. Reads are unchanged.
+
+COS_CSRF_SESSION_KEY = "cos_web_csrf"
+COS_CSRF_META = "minimoi-csrf-token"
+_COS_MULTIPART_PATHS = {"ui/transcribe"}
+
+
+def _cos_page_meta():
+    return {COS_CSRF_META: _csrf.token(COS_CSRF_SESSION_KEY)}
+
+
+def _cos_write_refused(path: str):
+    """None when this /app/cos write may be forwarded; otherwise the 403."""
+    kind = _csrf.MULTIPART if path.strip("/") in _COS_MULTIPART_PATHS else _csrf.JSON
+    why = _csrf.refusal(COS_CSRF_SESSION_KEY, _cfg.BASE_URL, content=kind)
+    if not why:
+        return None
+    message = f"This request could not be verified ({why}). Reload the page and try again."
+    return jsonify({"error": "csrf", "message": message, "reply": message}), 403
+
 
 @app.route("/app/cos")
 @app.route("/app/cos/")
 @_require_owner
 def cos_root():
     user = _current_user()
-    return _proxy.proxy_to(_cfg.COS_BACKEND, "ui", "/app/cos", user=user)
+    return _proxy.proxy_to(_cfg.COS_BACKEND, "ui", "/app/cos", user=user, head_meta=_cos_page_meta())
 
 
 @app.route("/app/cos/<path:path>", methods=["GET", "POST"])
 @_require_owner
 def cos_proxy(path):
     user = _current_user()
-    return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
+    if request.method != "GET":
+        refused = _cos_write_refused(path)
+        if refused is not None:
+            return refused
+        return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
+    return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user, head_meta=_cos_page_meta())
 
 
 # ── IoT Connect reference demo (owner only in v0.9 — Spec #154 §4.1) ────────
@@ -1267,7 +1298,7 @@ from domains.guild import queue_store as _qstore  # noqa: E402
 # with a "Save is off" notice. The store refuses writes in that case (M2).
 _BQ_REPO_COPY = Path(__file__).parent.parent / "data" / "guild" / "build_queue.json"
 _GUILD_QUEUE_PATH = _cfg.GUILD_QUEUE_PATH
-_BUILD_QUEUE_STATUSES = _qstore.STATUSES
+_BUILD_QUEUE_STATUSES = _qstore.STATUSES   # includes rework (Guild 1.1 slice 2, spec §4.2)
 _BUILD_QUEUE_ACTIVE_STATUSES = ("spec_ready", "in_build")
 
 
@@ -2224,6 +2255,7 @@ def guild_build():
     all_items, unreadable = _read_build_queue()
     items = all_items
     if status_filter == 'active':
+        # rework (Guild 1.1 slice 2) is trouble, not terminal: it stays in Active.
         terminal = {'done', 'cancelled', 'superseded', 'deferred'}
         items = [i for i in items if i.get('status') not in terminal]
     elif status_filter != 'all':
@@ -2567,7 +2599,8 @@ def new_build_item():
     summary      = request.form.get('summary',      '').strip() or None
     github_issue = request.form.get('github_issue', '').strip() or None
     status       = request.form.get('status', 'idea')
-    valid_status = set(_BUILD_QUEUE_STATUSES) - {'done', 'superseded'}
+    # rework needs a reason and history (Guild 1.1 slice 2): never a starting status.
+    valid_status = set(_BUILD_QUEUE_STATUSES) - {'done', 'superseded', 'rework'}
     if not spec_title:
         return redirect(url_for('guild_build'))
     if status not in valid_status:
@@ -2844,6 +2877,16 @@ GUILD_MOUNTS = _guild_mounts.mount_all(
     audit=lambda item_id, old, new, note: _queue_audit_insert(item_id, old, new, note),
     database_url=lambda: os.environ.get("DATABASE_URL"),
 )
+
+
+# ── Rooms (Records) at /app/records, dev only (Guild 1.1 slice 4, spec §6) ──
+# Records keeps its own login and cookie; the portal adds only its owner guard
+# and never forwards its own cookie or identity. Installed only when BASE_URL
+# is the dev origin and RECORDS_BACKEND names the one allowed internal origin.
+from minimoi_portal import records_bridge as _records_bridge  # noqa: E402
+
+RECORDS_BRIDGE = _records_bridge.install_if_dev(app, base_url=_cfg.BASE_URL, environ=os.environ,
+                                                require_login=_require_login, require_owner=_require_owner)
 
 
 @app.route("/health")

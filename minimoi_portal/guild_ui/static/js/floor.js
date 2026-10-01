@@ -11,6 +11,7 @@ import { apiGet } from './api.js';
 import { explain, setBriefing } from './conversation.js';
 import { freshnessOf, lightView, needsView, bannerText, briefingText, sinceText } from './freshness.js';
 import { applyFloorZones } from './zones.js';
+import { renderFloorNeeds, renderBlockers, updateQuiet } from './floorlayout.js';
 
 let page;
 let current = null;
@@ -100,7 +101,7 @@ function renderNeeds(needs) {
 
 function renderFreshness() {
   document.body.dataset.freshness = fresh.mode;
-  for (const zone of $$('[data-zone], [data-floor-urgent], .phone-summary, [data-panel="needs"]')) {
+  for (const zone of $$('[data-zone], [data-floor-urgent], [data-needs-badge], .phone-summary, [data-panel="needs"]')) {
     if (fresh.mode === 'live') delete zone.dataset.stale; else zone.dataset.stale = fresh.mode;
   }
   let banner = $('[data-stale-banner]');
@@ -122,6 +123,7 @@ function render() {
   if (!current) return;
   renderLights(current.lights || []);
   renderNeeds(current.needs);
+  renderFloorNeeds(current.needs, fresh.mode, since());
   if (current.briefing) {
     setBriefing(current.briefing);
     const text = $('[data-briefing-text]');
@@ -129,6 +131,8 @@ function render() {
   }
   renderFreshness();
   applyFloorZones(current, fresh.mode, since());
+  renderBlockers(current.blockers);
+  updateQuiet();
   document.body.dataset.observedAt = current.observed_at;
   localizeTimes();
 }
@@ -210,8 +214,9 @@ export function initFloorState(p) {
   if (page.page !== 'floor') return;
   const lightsBtn = $('[data-lights-toggle]');
   lightsBtn.addEventListener('click', () => toggle('lightsOpen', lightsBtn, 'Hide ▴', 'Details ▾'));
-  const sheetBtn = $('[data-sheet-toggle]');
-  sheetBtn.addEventListener('click', () => toggle('sheetOpen', sheetBtn));
+  const sheetBtn = $('[data-sheet-toggle]');     // the pre-1.1 floor's post-it sheet; gone from the 1.1 layout
+  if (sheetBtn) sheetBtn.addEventListener('click', () => toggle('sheetOpen', sheetBtn));
+  // (The context rail's folding follows the width: floorlayout.js.)
   for (const b of $$('[data-ask]')) {
     b.addEventListener('click', () => {
       const light = (current.lights || []).find((l) => l.id === b.dataset.ask);
