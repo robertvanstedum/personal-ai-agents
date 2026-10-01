@@ -74,6 +74,7 @@ def _urls(c) -> dict:
         "api": f"{c['url_prefix']}/api/v1",
         "legacy_build": "/guild/build", "labs": url_for(".labs"), "workshop": url_for(".workshop"),
         "build_log": url_for(".build_log"), "rooms": url_for(".rooms"),
+        "board": url_for(".board"), "media": url_for(".media_library"),
         "improve": "/guild/improve", "docs": DOCS_URL,
     }
 
@@ -291,3 +292,33 @@ def operate():
     selected = wanted if wanted in tile_ids else ctx["layout"]["operate"]["default_selected"]
     lights = {l["id"]: l for l in ctx["state"]["lights"]}
     return render_template("guild_floor/operate.html", selected_tile=selected, tile_lights=lights, **ctx)
+
+
+@owner_page
+def board():
+    """The Board (Guild 1.1 slice 3, spec §5.1, the v4 board look): relaxed
+    post-its with Done, labels, links and photos; order by drag, the ‹ ›
+    buttons or Alt+Arrow; Trash with Restore and a confirmed Empty. The page
+    embeds the same answer GET /api/v1/board gives; its script writes only
+    through the API. No review workflow, no model call."""
+    from .board import LABELS
+    from .board_api import _decorate, _queue_index
+    res = cfg()["services"].floor.board()
+    data = res.data if res.ok else {}
+    index = _queue_index() if res.ok else None
+    for name in ("active", "done", "trash"):
+        _decorate(data.get(name), index)
+    ctx = _context("board", "Board", "Board", page_open=True)
+    board_data = {"status": res.status, "reason": res.reason, "labels": list(LABELS),
+                  **({k: data.get(k) for k in ("active", "done", "trash", "order_rev", "trash_rev", "counts")}
+                     if res.ok else {"active": None, "done": None, "trash": None})}
+    return render_template("guild_floor/board.html", res=res, board_data=board_data, **ctx)
+
+
+@owner_page
+def media_library():
+    """The shared Media library (spec §5.2): thumbnails, a type filter, Add,
+    Trash and Restore, and a permanent delete that says where an image is
+    still used. Drawn by js/media.js from GET /api/v1/media."""
+    ctx = _context("media", "Media library", "Media library", page_open=True)
+    return render_template("guild_floor/media.html", **ctx)

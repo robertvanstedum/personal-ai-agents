@@ -17,6 +17,7 @@ missing or other value answers 422.
 from __future__ import annotations
 
 import functools
+import re
 
 from flask import current_app, jsonify, request
 
@@ -77,3 +78,27 @@ def check_stop(base_url: str | None):
     if why:
         return json_error("csrf", f"This request could not be verified ({why}). Nothing was changed.", 403)
     return None
+
+
+UPLOAD_KEY_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
+
+
+def check_upload(base_url: str | None):
+    """(refusal, idempotency_key) for a media upload (Guild 1.1 slice 3, spec
+    §2 and §5.2): the same owner, same-origin and CSRF checks as every write,
+    but for multipart/form-data; X-Record-Mode: on_record (off the record is
+    409, nothing is read); and the idempotency key in the Idempotency-Key
+    header, since the body is the file. The size caps are the caller's."""
+    why = _csrf.refusal(CSRF_SESSION_KEY, base_url, content=_csrf.MULTIPART)
+    if why:
+        return json_error("csrf", f"This request could not be verified ({why}). Nothing was changed.", 403), None
+    mode = request.headers.get("X-Record-Mode")
+    if mode == "off_record":
+        return json_error("not_listening", OFF_RECORD_TEXT, 409), None
+    if mode != "on_record":
+        return json_error("invalid", "Every write must say whether it is on the record (X-Record-Mode).", 422), None
+    key = request.headers.get("Idempotency-Key", "")
+    if not UPLOAD_KEY_RE.fullmatch(key):
+        return json_error("invalid", "An upload needs an Idempotency-Key header (8 to 64 letters, digits, - or _).",
+                          422), None
+    return None, key

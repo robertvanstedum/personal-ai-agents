@@ -34,8 +34,8 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' 
        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'self'")
 
-ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "buildlog", "later",
-              "assets", "api")
+ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "buildlog", "board",
+              "media", "later", "assets", "api")
 B1_ROUTES = ALL_ROUTES   # improve, experiment and any reset are not in this package
 
 
@@ -102,7 +102,7 @@ def asset(filename):
 
 
 def _make_blueprint(name: str, routes) -> Blueprint:
-    from . import api, pages
+    from . import api, board_api, pages
 
     bp = Blueprint(name, __name__, template_folder=str(PACKAGE / "templates"))
     bp.after_request(_headers)
@@ -121,6 +121,11 @@ def _make_blueprint(name: str, routes) -> Blueprint:
         "operate": [("/guild/operate", "operate", pages.operate)],
         # The Build Log (Guild 1.1 slice 2, spec §4): every item in every status.
         "buildlog": [("/guild/build/log", "build_log", pages.build_log)],
+        # The Board and the Media library (Guild 1.1 slice 3, spec §5); images
+        # are served to their owner only, same origin.
+        "board": [("/guild/board", "board", pages.board)],
+        "media": [("/guild/media", "media_library", pages.media_library),
+                  ("/media/<asset_id>/<variant>", "media_file", board_api.media_file)],
         # Rooms (slice 4): an honest "coming in a later slice" page until it lands.
         "later": [("/guild/rooms", "rooms", pages.rooms)],
         "assets": [("/guild/ui-assets/<path:filename>", "asset", asset)],

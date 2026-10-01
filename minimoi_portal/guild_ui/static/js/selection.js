@@ -108,7 +108,10 @@ async function pin(btn) {
   }
   const taken = current;
   btn.disabled = true;
-  const r = await apiPost('/postits', { text: taken.text, idempotency_key: taken.key, record_mode: recordMode() });
+  // source_note_id: the server checks the text is part of that stored,
+  // on-the-record note (Guild 1.1 slice 3), and refuses it otherwise.
+  const r = await apiPost('/postits', { text: taken.text, source_note_id: Number(taken.noteId),
+    idempotency_key: taken.key, record_mode: recordMode() });
   btn.disabled = false;
   if (current !== taken) return;            // the mode or the selection changed meanwhile
   const body = r.body || {};

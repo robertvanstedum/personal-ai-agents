@@ -20,6 +20,10 @@ EXPECTED = {
     # Guild 1.1: the Build Log (slice 2); Rooms (slice 4) says "coming in a later slice".
     "/guild-next/guild/build/log",
     "/guild-next/guild/rooms",
+    # Guild 1.1 slice 3: the Board, the Media library, and owner-only image serving.
+    "/guild-next/guild/board",
+    "/guild-next/guild/media",
+    "/guild-next/media/<asset_id>/<variant>",
     "/guild-next/guild/ui-assets/<path:filename>",
     "/guild-next/api/v1/session",
     "/guild-next/api/v1/floor",
@@ -37,6 +41,20 @@ EXPECTED = {
     "/guild-next/api/v1/postits/bin",
     "/guild-next/api/v1/postits/<int:postit_id>/bin",
     "/guild-next/api/v1/postits/<int:postit_id>/restore",
+    # Guild 1.1 slice 3 (spec §5.1-5.2): the Board's writes and the Media library.
+    "/guild-next/api/v1/board",
+    "/guild-next/api/v1/postits/<int:postit_id>/done",
+    "/guild-next/api/v1/postits/<int:postit_id>/undone",
+    "/guild-next/api/v1/postits/<int:postit_id>/label",
+    "/guild-next/api/v1/postits/<int:postit_id>/link",
+    "/guild-next/api/v1/postits/photo",
+    "/guild-next/api/v1/postits/reorder",
+    "/guild-next/api/v1/postits/trash/empty",
+    "/guild-next/api/v1/media",
+    "/guild-next/api/v1/media/<asset_id>/trash",
+    "/guild-next/api/v1/media/<asset_id>/restore",
+    "/guild-next/api/v1/media/purge",
+    "/guild-next/api/v1/media/<asset_id>/uses",
     "/guild-next/api/v1/continue",
     # Master Craftsman's owner route: a seam, disabled (always refuses; tests/guild/shop_floor/test_mc_backend_switch.py).
     "/guild-next/api/v1/mc/turns",

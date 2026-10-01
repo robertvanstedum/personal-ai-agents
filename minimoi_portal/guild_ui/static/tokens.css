@@ -72,6 +72,23 @@
   --gu-st-build-ink: #1f5a52;    --gu-st-build-bg: #d8ece8;
   --gu-st-rework-ink: #3d2a00;   --gu-st-rework-bg: #f0c24b;
   --gu-st-blocked-ink: #ffffff;
+  /* The Board (Guild 1.1 slice 3): corkboard, relaxed post-its by label, photos */
+  --gu-board-bg: #e9dfcd;
+  --gu-board-edge: #cdbd9f;
+  --gu-note-shadow: 2px 4px 10px rgba(42, 31, 20, 0.16);
+  --gu-note-default: #fbeea6;
+  --gu-note-decide: #f9ea9c;
+  --gu-note-blocked: #f6d3cf;
+  --gu-note-remember: #d6e4f3;
+  --gu-note-followup: #dcebc9;
+  --gu-note-idea: #e6dcf1;
+  --gu-note-fyi: #efe9dc;
+  --gu-note-ink: #2a2418;
+  --gu-note-kicker: #6b5a3a;
+  --gu-note-tape: rgba(255, 255, 255, 0.55);
+  --gu-note-pin: #c0443a;
+  --gu-photo-bg: #fffdf8;
+  --gu-font-hand: 'Noteworthy', 'Bradley Hand', 'Segoe Print', 'Chalkboard SE', cursive;
   --gu-font-serif: Georgia, 'Times New Roman', serif;
   --gu-subnav-h: 44px;
   /* stoplights: shape + word always accompany colour; unknown is grey, never green */

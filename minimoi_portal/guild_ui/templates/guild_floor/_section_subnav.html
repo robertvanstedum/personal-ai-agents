@@ -1,16 +1,16 @@
 {# Guild navigation (Guild 1.1 slice 1, spec §3): the four daily tabs, Chat ·
    Board · Build Log · Rooms, then More ▾. Curator's subnav pattern. Chat is
-   the Shop floor; Board is the wall (the Workbench) and its post-its page;
+   the Shop floor; Board is the Board page (slice 3), with the wall and its post-its page in its section;
    Build Log and Rooms say "coming in a later slice" until slices 2 and 4.
    More is a plain <details> menu: it works without script. #}
 {# (id, label, href, this very page, pages of its section) #}
 {% set daily = [
   ('chat', 'Chat', urls.floor, 'floor', ('floor',)),
-  ('board', 'Board', urls.bench, 'bench', ('bench', 'postits')),
+  ('board', 'Board', urls.board, 'board', ('board', 'bench', 'postits')),
   ('build-log', 'Build Log', urls.build_log, 'build_log', ('build_log', 'queue', 'item')),
   ('rooms', 'Rooms', urls.rooms, 'rooms', ('rooms',)),
 ] %}
-{% set more_on = page_id in ('workshop', 'operate', 'labs', 'home') %}
+{% set more_on = page_id in ('workshop', 'operate', 'labs', 'home', 'media') %}
 <div class="guild-subnav guild-sections">
   {% for id, label, href, own, section in daily %}{% set on = page_id in section %}
     <a href="{{ href }}" class="subnav-link{% if on %} subnav-active{% endif %}" data-section="{{ id }}"{% if page_id == own %} aria-current="page"{% elif on %} aria-current="true"{% endif %}>{{ label }}</a>
@@ -19,6 +19,7 @@
     <summary class="subnav-link{% if more_on %} subnav-more-on{% endif %}" data-section="more">More ▾</summary>
     <div class="subnav-menu" data-subnav-menu>
       <a href="{{ urls.workshop }}" data-more="workshop"{% if page_id == 'workshop' %} aria-current="page"{% endif %}>Workshop<small>Jobs with evidence, read only</small></a>
+      <a href="{{ urls.media }}" data-more="media"{% if page_id == 'media' %} aria-current="page"{% endif %}>Media library<small>Photos for the Board, kept on the server</small></a>
       <a href="{{ urls.home }}" data-more="home"{% if page_id == 'home' %} aria-current="page"{% endif %}>Guild home<small>Build · Operate · Improve · Experiment</small></a>
       <hr>
       <p class="subnav-docs" data-more="docs">Docs: the project's written record lives on GitHub. <a href="{{ urls.docs }}" target="_blank" rel="noopener">Open docs ↗</a></p>

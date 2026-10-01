@@ -1,0 +1,33 @@
+{% extends 'guild_floor/_base.html' %}
+{#
+  The shared Media library (Guild 1.1 slice 3, spec §5.2): your photos as
+  thumbnails, a type filter, Add, Trash and Restore, and a permanent delete
+  that is refused while an image is still used, saying where. The files live
+  on the server's disk; the database keeps only their index. Drawn by
+  js/media.js from GET /api/v1/media.
+#}
+{% block title %}Media library · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/board.css') }}">{% endblock %}
+{% block main %}
+<div class="bd-tool" role="toolbar" aria-label="Media library controls">
+  <h1 class="page-title">Media library</h1>
+  <span class="bd-counts" data-md-counts aria-live="polite"></span>
+  <label class="visually-hidden" for="md-show">Show</label>
+  <select id="md-show" data-md-show><option value="active">Library</option><option value="trash">Trash</option></select>
+  <label class="visually-hidden" for="md-kind">Type</label>
+  <select id="md-kind" data-md-kind><option value="">All types</option><option value="photo">Photos</option><option value="icon">Icons</option><option value="emoji">Emoji</option></select>
+  <span class="bd-sp"></span>
+  <a class="btn-quiet" href="{{ urls.board }}">← Board</a>
+  <label class="btn" for="md-file">Add</label>
+  <input id="md-file" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-md-file>
+</div>
+<p class="small">JPEG, PNG, WebP or GIF, up to 8 MB. Location, camera and other details are removed; a GIF keeps its first frame. Images in the Trash still show where they are already used, and cannot be placed again until restored.</p>
+<p class="save-result bd-note-line" data-md-result role="status" hidden></p>
+<div class="bd-confirm" data-md-confirm hidden role="alertdialog" aria-labelledby="md-confirm-text">
+  <span id="md-confirm-text" data-md-confirm-text></span>
+  <button type="button" class="btn" data-md-confirm-yes>Delete permanently</button>
+  <button type="button" class="btn-quiet" data-md-confirm-no>Cancel</button>
+</div>
+<p class="bd-state-note" data-md-state></p>
+<ul class="md-grid" data-md-grid aria-label="Images"></ul>
+{% endblock %}

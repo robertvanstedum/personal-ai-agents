@@ -87,3 +87,27 @@ export async function apiStop(path) {
 export const apiGet = (path, etag) => call('GET', path, null, etag);
 export const apiPost = (path, body) => call('POST', path, body || {});
 export const apiPut = (path, body) => call('PUT', path, body || {});
+
+// A media upload (Guild 1.1 slice 3): multipart, so the idempotency key goes
+// in the Idempotency-Key header; the same guard headers as every write, and
+// nothing is sent off the record or while the record mode is unknown.
+export async function apiUpload(path, file, key) {
+  if (live.off) return { ok: false, status: 409, body: { error: 'not_listening', message: page.off_record_text } };
+  if (!live.known) return { ok: false, status: 409, body: { error: 'record_unknown', message: RECORD_UNKNOWN_TEXT } };
+  const form = new FormData();
+  form.append('file', file);
+  let res;
+  try {
+    res = await fetch(`${page.urls.api}${path}`, {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store', body: form,
+      headers: { Accept: 'application/json', 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode(),
+        'Idempotency-Key': key },
+    });
+  } catch (e) {
+    return { ok: false, status: 0, body: { error: 'network', message: 'The server could not be reached. Nothing was added.' } };
+  }
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = { error: 'unreadable', message: 'The server answer could not be read.' }; }
+  if (res.status === 401) signedOut();
+  return { ok: res.ok, status: res.status, body: data || {} };
+}
