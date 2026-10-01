@@ -21,7 +21,7 @@ ROOTS = ["/guild-next", "/guild-next/", "/guild-next/guild", "/guild-next/guild/
 
 # Door, mapped href (spec §3 table), original image, kicker, flow, CTA.
 DOORS = [
-    ("Build", "/guild-next/guild/build/queue", "/static/guild/guild-build.jpg",
+    ("Build", "/guild-next/guild/build/log", "/static/guild/guild-build.jpg",      # the Build Log since slice 2
      "Queue · Log · Roadmap · Docs", "spec → build → ship", "Queue →"),
     ("Operate", "/guild-next/guild/operate", "/static/guild/guild-operate.jpg",
      "Monitor · Maintain", "monitor → maintain", "Status →"),

@@ -1018,7 +1018,7 @@ def test_slice1_navigation_reaches_every_guild_page_and_the_truthful_labs_page(b
         page.wait_for_selector("body[data-ready=true]")
         assert page.url.split("?")[0].endswith(where), (label, page.url)
         expect(page.locator(".guild-subnav > [aria-current='page']")).to_have_text(label)
-        if label in ("Build Log", "Rooms"):
+        if label == "Rooms":
             expect(page.locator("[data-later]")).to_contain_text("Coming in a later slice")
     _more_menu(page)
     with page.expect_navigation():
@@ -1724,7 +1724,7 @@ def test_s1_phone_shows_the_stream_and_stop(browser, server, streaming_mc):
 
 # ── Guild 1.1 slice 1 (spec §3): the Guild home, the Guild bar, the Chat hero ─
 
-DOORS = [("Build", "/guild-next/guild/build/queue"), ("Operate", "/guild-next/guild/operate"),
+DOORS = [("Build", "/guild-next/guild/build/log"), ("Operate", "/guild-next/guild/operate"),
          ("Improve", "/guild/improve"), ("Experiment", "/guild-next/guild/labs")]
 
 
@@ -1808,9 +1808,9 @@ def test_s1_the_guild_home_is_paired_with_curator(browser, server, fresh_queue, 
     expect(page.locator("[data-more='home']")).to_have_attribute("aria-current", "page")
     page.keyboard.press("Escape")
     with page.expect_navigation():
-        drawers.nth(0).click()                                                    # Build → the Build Queue for now
+        drawers.nth(0).click()                                                    # Build → the Build Log (slice 2)
     page.wait_for_selector("body[data-ready=true]")
-    assert page.url.endswith("/guild-next/guild/build/queue")
+    assert page.url.endswith("/guild-next/guild/build/log")
     assert not errors, errors
     ctx.close()
 
@@ -1967,4 +1967,207 @@ def test_s1_a_selection_across_two_notes_offers_no_actions(browser, server, floo
     assert "First kept note" in page.evaluate("getSelection().toString()")
     page.wait_for_timeout(500)
     expect(page.locator("[data-sel-bar]")).to_be_hidden()
+    ctx.close()
+
+
+# ── Guild 1.1 slice 2 (spec §4, §11): the Build Log ──────────────────────────
+
+BL_ITEMS = [
+    {"id": 7, "spec_title": "Queue lock hardening", "status": "spec_ready", "priority": "high",
+     "notes": "Robert's go to start", "owner_rank": 2, "last_transition_at": "2026-09-20T10:00:00+00:00"},
+    {"id": 12, "spec_title": "Floor API", "status": "in_build", "summary": "json api", "owner_rank": 1,
+     "priority": "high", "notes": "Wire the stream", "last_transition_at": "2026-09-21T10:00:00+00:00"},
+    {"id": 31, "spec_title": "Blocked thing", "status": "blocked", "blocked_reason": "waiting on Robert",
+     "last_transition_at": "2026-09-22T10:00:00+00:00"},
+    {"id": 40, "spec_title": "Done thing", "status": "done", "last_transition_at": "2026-09-01T10:00:00+00:00"},
+    {"id": 41, "spec_title": "Design the Workshop jobs view", "status": "design", "priority": "normal",
+     "last_transition_at": "2026-09-28T10:00:00+00:00"},
+    {"id": 42, "spec_title": "Board photo notes", "status": "idea", "last_transition_at": "2026-09-27T10:00:00+00:00"},
+    {"id": 43, "spec_title": "Tips popover redesign", "status": "deferred", "priority": "low",
+     "last_transition_at": "2026-09-02T10:00:00+00:00"},
+]
+
+
+@pytest.fixture
+def build_log(server, floor):
+    write_queue(server["queue"], BL_ITEMS)
+    journal = server["queue"].parent / qs.JOURNAL_NAME
+    if journal.exists():
+        journal.unlink()
+    yield server["queue"]
+    write_queue(server["queue"])
+    if journal.exists():
+        journal.unlink()
+
+
+def _bl_ids(page):
+    return [int(x) for x in page.locator("[data-bl-row]").evaluate_all("rs => rs.map(r => r.dataset.blRow)")]
+
+
+def test_s2_desktop_views_filters_sort_search_and_count(browser, server, build_log):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build/log")
+    expect(page.locator(".guild-subnav > [aria-current='page']")).to_have_text("Build Log")
+    # My next three: the ranks pinned on top in rank order, then work in progress.
+    assert _bl_ids(page) == [12, 7, 41]
+    expect(page.locator("[data-bl-row].bl-pinned")).to_have_count(2)
+    expect(page.locator("[data-bl-count]")).to_contain_text("3 of 3 · 7 total")
+    for view, ids in (("ready", [7]), ("trouble", [31]), ("roadmap", None), ("all", None)):
+        page.click(f'[data-bl-view="{view}"]')
+        if ids is not None:
+            assert _bl_ids(page) == ids, view
+    assert sorted(_bl_ids(page)) == [7, 12, 31, 40, 41, 42, 43]                 # All includes done
+    expect(page.locator('[data-bl-view="roadmap"] [data-bl-view-n]')).to_have_text("2")
+    # Search and a column filter narrow it; the count says so; Clear restores.
+    page.fill("[data-bl-search]", "board")
+    assert _bl_ids(page) == [42]
+    expect(page.locator("[data-bl-count]")).to_contain_text("1 of 7")
+    page.click("[data-bl-clear]")
+    page.select_option('[data-bl-filter="priority"]', "high")
+    assert sorted(_bl_ids(page)) == [7, 12]
+    page.click("[data-bl-clear]")
+    # Sort by updated, newest first, with pinning off.
+    page.click("[data-bl-vopts] > summary")
+    page.uncheck("[data-bl-pin]")
+    page.keyboard.press("Escape")                                                  # View options closes
+    expect(page.locator(".bl-vo")).to_be_hidden()
+    page.click('[data-bl-sort="updated"]')
+    assert _bl_ids(page)[:2] == [41, 42]
+    expect(page.locator('th[data-col="updated"]')).to_have_attribute("aria-sort", "descending")
+    # View options: hide a column, comfortable density; remembered on reload.
+    page.click("[data-bl-vopts] > summary")
+    page.uncheck('[data-bl-col="author"]')
+    expect(page.locator('th[data-col="author"]')).to_have_count(0)
+    page.click('[data-bl-density="comfortable"]')
+    expect(page.locator("[data-bl-matrix]")).to_have_class(re.compile("comfortable"))
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    expect(page.locator('th[data-col="author"]')).to_have_count(0)
+    expect(page.locator('[data-bl-view="all"]')).to_have_attribute("aria-pressed", "true")
+    assert _no_page_overflow(page)
+    assert not errors, errors
+    ctx.close()
+
+
+def test_s2_drawer_rank_shift_and_rework_with_history(browser, server, build_log):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    model_calls = _requests(page, "/mc/turns")
+    go(page, f"{server['url']}/guild-next/guild/build/log")
+    page.click('[data-bl-view="all"]')
+    page.click('[data-bl-open="41"]')
+    drawer = page.locator("[data-bl-drawer]")
+    expect(drawer).to_be_visible()
+    expect(drawer.locator(".bl-d-title")).to_have_text("Design the Workshop jobs view")
+    expect(drawer.locator("[data-bl-author]")).to_have_text("blank: no author line in the spec")
+    # Rank 1: #12 moves to 2, #7 to 3; one write, a receipt.
+    drawer.locator('[data-bl-rank="1"]').click()
+    expect(drawer.locator("[data-bl-rank-result]")).to_contain_text("Rank saved · verified · receipt")
+    page.click('[data-bl-view="next"]')
+    assert _bl_ids(page)[:3] == [41, 12, 7]
+    ranks = {i["id"]: i.get("owner_rank") for i in json.loads(build_log.read_text())}
+    assert (ranks[41], ranks[12], ranks[7]) == (1, 2, 3)
+    # Rework needs a reason; with one it saves and the history shows it.
+    status = drawer.locator("[data-bl-status-select]")
+    status.select_option("rework")
+    drawer.locator("[data-bl-reason]").fill("")
+    drawer.locator("[data-bl-save]").click()
+    expect(drawer.locator("[data-bl-status-result]")).to_contain_text("need a reason")
+    drawer.locator("[data-bl-reason]").fill("Review found the job card hides its last contact")
+    drawer.locator("[data-bl-save]").click()
+    expect(drawer.locator("[data-bl-status-result]")).to_contain_text("Saved · verified")
+    expect(drawer.locator("[data-bl-trouble]")).to_contain_text("Review found the job card")
+    expect(drawer.locator("[data-bl-trouble]")).to_contain_text("In trouble from design")
+    expect(drawer.locator("[data-bl-history] li")).to_have_count(2)
+    expect(drawer.locator("[data-bl-history] li").first).to_contain_text("design → rework")
+    expect(drawer.locator("[data-bl-history] li").last).to_contain_text("Rank none → 1")
+    expect(drawer.locator("[data-bl-back]")).to_have_text("Suggest: back to design")
+    page.click('[data-bl-view="trouble"]')
+    assert sorted(_bl_ids(page)) == [31, 41]
+    # Leaving trouble is an explicit Save.
+    drawer.locator("[data-bl-back]").click()
+    drawer.locator("[data-bl-save]").click()
+    expect(drawer.locator("[data-bl-status-result]")).to_contain_text("Saved · verified")
+    expect(drawer.locator("[data-bl-trouble]")).to_have_count(0)
+    page.keyboard.press("Escape")
+    expect(drawer).to_be_hidden()
+    assert not model_calls
+    assert not errors, errors
+    ctx.close()
+
+
+def test_s2_a_stale_ranking_in_one_tab_gets_a_conflict_and_the_current_order(browser, server, build_log):
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/build/log")
+    other = ctx.new_page()
+    go(other, f"{server['url']}/guild-next/guild/build/log")
+    other.click('[data-bl-view="all"]')
+    other.click('[data-bl-open="42"]')
+    other.locator('[data-bl-rank="1"]').click()
+    expect(other.locator("[data-bl-rank-result]")).to_contain_text("Rank saved")
+    page.click('[data-bl-view="all"]')
+    page.click('[data-bl-open="43"]')
+    page.locator('[data-bl-rank="1"]').click()                                     # this tab's digest is stale
+    expect(page.locator("[data-bl-rank-result]")).to_contain_text("The ranking changed since you opened it")
+    ranks = {i["id"]: i.get("owner_rank") for i in json.loads(build_log.read_text())}
+    assert ranks[42] == 1 and ranks.get(43) is None                                # never overwritten
+    page.click('[data-bl-view="next"]')
+    assert _bl_ids(page)[0] == 42                                                  # the current order is shown
+    ctx.close()
+
+
+def test_s2_new_item_opens_in_the_drawer(browser, server, build_log):
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/build/log")
+    page.click("[data-bl-new-open]")
+    page.fill("[data-bl-new-title]", "Rooms file preview")
+    page.select_option("[data-bl-new-status]", "design")
+    page.click("[data-bl-new-add]")
+    expect(page.locator("[data-bl-new-result]")).to_contain_text("#44 added · verified · receipt")
+    expect(page.locator("[data-bl-drawer] .bl-d-title")).to_have_text("Rooms file preview")
+    expect(page.locator("[data-bl-drawer] [data-bl-history] li")).to_contain_text(["Created as design"])
+    assert json.loads(build_log.read_text())[-1]["id"] == 44
+    ctx.close()
+
+
+def test_s2_off_the_record_the_build_log_writes_nothing(browser, server, build_log):
+    ctx, page = _context(browser, server, 1440, 900)
+    posts = _requests(page, "/api/v1/queue/items")
+    go(page, f"{server['url']}/guild-next/guild/build/log")
+    page.click("[data-mc-pill]")
+    page.click("[data-mc-record]")
+    page.click("[data-mc-min]")                                                   # back to the pill
+    page.click('[data-bl-open="12"]')
+    page.locator('[data-bl-rank="3"]').click()
+    expect(page.locator("[data-bl-rank-result]")).to_contain_text("Off the record")
+    assert not [m for m, _u in posts if m == "POST"]
+    page.click("[data-mc-pill]")
+    page.click("[data-mc-record]")
+    ctx.close()
+
+
+def test_s2_phone_contained_scroll_default_columns_and_drawer(browser, server, build_log):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build/log")
+    heads = page.locator("[data-bl-head] th").evaluate_all("ths => ths.map(t => t.dataset.col)")
+    assert heads == ["rank", "title", "status", "notes"]                          # the phone's default columns
+    assert _no_page_overflow(page)
+    wrap = page.locator("[data-bl-wrap]")
+    assert wrap.evaluate("w => w.scrollWidth > w.clientWidth")                    # the table scrolls in its box
+    assert wrap.bounding_box()["width"] <= 390
+    page.click('[data-bl-view="all"]')
+    page.click('[data-bl-open="31"]')
+    drawer = page.locator("[data-bl-drawer]")
+    expect(drawer).to_be_visible()
+    box = drawer.bounding_box()
+    assert box["x"] <= 1 and box["width"] >= 388                                   # full screen on a phone
+    expect(drawer.locator("[data-bl-trouble]")).to_contain_text("waiting on Robert")
+    drawer.locator("[data-bl-close]").click()
+    expect(drawer).to_be_hidden()
+    assert _no_page_overflow(page)
+    assert not errors, errors
     ctx.close()

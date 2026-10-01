@@ -1,6 +1,6 @@
 {% extends 'guild_floor/_base.html' %}
-{# Build Log (slice 2) and Rooms (slice 4) until their slices land: an honest
-   page that pretends nothing and reads no data of its own. #}
+{# Rooms (slice 4) until its slice lands: an honest page that pretends
+   nothing and reads no data of its own. #}
 {% block title %}{{ later.title }} · Guild{% endblock %}
 {% block main %}
 <div class="page-head">
@@ -10,9 +10,5 @@
 <section class="lab-card" aria-label="What is coming">
   <p>{{ later.what }}</p>
 </section>
-{% if page_id == 'build_log' %}
-<p class="small">Today: the <a href="{{ urls.queue }}">Build Queue</a> (active items) and the <a href="{{ urls.legacy_build }}">legacy Build Log</a>.</p>
-{% else %}
 <p class="small">Today: talk with Master Craftsman in <a href="{{ urls.floor }}">Chat</a>, and keep notes on the <a href="{{ urls.bench }}">Board</a>.</p>
-{% endif %}
 {% endblock %}

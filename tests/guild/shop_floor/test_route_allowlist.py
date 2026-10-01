@@ -17,7 +17,7 @@ EXPECTED = {
     "/guild-next/guild/build/items/<int:item_id>",
     "/guild-next/guild/build/postits",
     "/guild-next/guild/operate",
-    # Guild 1.1 slice 1: Build Log (slice 2) and Rooms (slice 4) say "coming in a later slice".
+    # Guild 1.1: the Build Log (slice 2); Rooms (slice 4) says "coming in a later slice".
     "/guild-next/guild/build/log",
     "/guild-next/guild/rooms",
     "/guild-next/guild/ui-assets/<path:filename>",
@@ -27,6 +27,10 @@ EXPECTED = {
     "/guild-next/api/v1/queue/items/<int:item_id>",
     "/guild-next/api/v1/queue/items/<int:item_id>/history",
     "/guild-next/api/v1/queue/items/<int:item_id>/status",
+    # Guild 1.1 slice 2 (spec §4.3-4.5): a new item, the rank, the file journal.
+    "/guild-next/api/v1/queue/items",
+    "/guild-next/api/v1/queue/items/<int:item_id>/rank",
+    "/guild-next/api/v1/queue/items/<int:item_id>/journal",
     "/guild-next/api/v1/queue/journal/<op_id>/checked",
     "/guild-next/api/v1/notes",
     "/guild-next/api/v1/postits",

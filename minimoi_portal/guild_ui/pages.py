@@ -127,7 +127,7 @@ def _current_conversation(c):
 # each mapped to where it goes on /guild-next today. The Build door's image is
 # the shared Build card's (templates/guild/_build_card.html).
 DOORS = (
-    {"id": "build", "label": "Build", "href": "queue", "img": None,
+    {"id": "build", "label": "Build", "href": "build_log", "img": None,     # the Build Log since slice 2
      "kicker": "Queue · Log · Roadmap · Docs", "flow": "spec → build → ship", "cta": "Queue →"},
     {"id": "operate", "label": "Operate", "href": "operate", "img": "/static/guild/guild-operate.jpg",
      "alt": "Operate — system health watercolor",
@@ -155,9 +155,6 @@ def home():
 
 
 LATER = {
-    "build_log": {"title": "Build Log", "slice": 2,
-                  "what": "One table of every build item in every status, with ranks, the spec author and "
-                          "saved views for Queue, Log and Roadmap."},
     "rooms": {"title": "Rooms", "slice": 4,
               "what": "Group conversations with files, where you can bring Master Craftsman and other "
                       "agents together."},
@@ -172,9 +169,21 @@ def _later(page_id: str):
 
 @owner_page
 def build_log():
-    """Build Log: coming in slice 2. Until then this page says so and points
-    to what works today (the Build Queue and the legacy Build Log)."""
-    return _later("build_log")
+    """The Build Log (Guild 1.1 slice 2, spec §4.1): every item in every status
+    as one table with saved views, filters, sort, search, ranks and a drawer.
+    The page embeds the same answer GET /api/v1/queue?scope=all gives; its
+    script writes only through the API (status Save, rank, new item). No
+    model call."""
+    services = cfg()["services"]
+    res = services.queue.list_items()
+    checks_res = services.queue.checks()
+    ctx = _context("build_log", "Build Log", "Build Log", page_open=True)
+    data = {"status": res.status, "items": res.data if res.ok else None, "error": res.error,
+            "observed_at": res.observed_at, "rank_digest": getattr(res, "rank_digest", None) if res.ok else None,
+            "statuses": list(STATUSES), "trouble_statuses": list(TROUBLE), "create_statuses": ["idea", "design", "backlog"],
+            "note": res.note}
+    return render_template("guild_floor/build_log.html", res=res, log_data=data, checks=checks_res.data or [],
+                           checks_res=checks_res, **ctx)
 
 
 @owner_page

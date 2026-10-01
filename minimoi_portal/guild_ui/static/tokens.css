@@ -66,6 +66,12 @@
   --gu-hero-chip-bg: rgba(255, 250, 241, 0.92);
   --gu-hero-chip-off-bg: #3e3b37;
   --gu-hero-chip-off-ink: #f2eee8;
+  /* Build Log status pills (Guild 1.1 slice 2) */
+  --gu-st-design-ink: #6b4e00;   --gu-st-design-bg: #f6e7b8;
+  --gu-st-ready-ink: #24456e;    --gu-st-ready-bg: #dde6f2;
+  --gu-st-build-ink: #1f5a52;    --gu-st-build-bg: #d8ece8;
+  --gu-st-rework-ink: #3d2a00;   --gu-st-rework-bg: #f0c24b;
+  --gu-st-blocked-ink: #ffffff;
   --gu-font-serif: Georgia, 'Times New Roman', serif;
   --gu-subnav-h: 44px;
   /* stoplights: shape + word always accompany colour; unknown is grey, never green */
