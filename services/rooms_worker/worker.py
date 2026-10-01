@@ -127,6 +127,8 @@ class Worker:
                 code, _ = self.mc.call("POST", f"/rooms/{invite['room']}/rsvp", {"state": "accepted"},
                                        key=f"rsvp-accept:{invite['room']}:{self.teammate}")
                 log(event="rsvp_accept", room=invite["room"], status=code)
+        if hasattr(self.relay, "reconcile_proofs"):
+            self.relay.reconcile_proofs(self.mc)       # proofs Records accepted before a crash (B2-02)
         for item in hosted.get("uncertain_turns", []):
             # Only this worker's own teammate (R2-03), and never a turn it is delivering now.
             if item.get("principal", self.teammate) != self.teammate:
@@ -205,11 +207,22 @@ class Worker:
                 watcher.stop()               # the send boundary: still fresh, or ask again (review F4)
                 continue
             try:
-                result = self.relay.stream(messages, adapter.user_key(turn["room"], turn["id"]), correlation, turn=turn)
+                result = self.relay.stream(messages, adapter.user_key(turn["room"], turn["id"]), correlation, turn=turn,
+                                           admit=lambda: self.spawn_admission(turn))
             finally:
                 watcher.stop()
             log(event="relay_turn", turn=turn["id"], correlation=correlation, outcome=result["outcome"],
                 detail=result["detail"], chars=len(result["text"]))
+            if result["outcome"] == "not_admitted":
+                # A runner asked for a fresh admission at its spawn boundary and did
+                # not get one; no process started (ROOMS_R2 B2-01).
+                if result.get("state") == "cancel_requested":
+                    self.ack(turn, turn["claim_id"], late_output=False)
+                    return None
+                if result.get("state") == "stale":
+                    continue
+                log(event="dispatch_refused", turn=turn["id"], state=result.get("state"))
+                return None
             if watcher.cancelled:
                 if result["text"]:
                     self.journal.generated(journal_key(turn["id"]),
@@ -237,6 +250,18 @@ class Worker:
                 # worked on it. Never claim it failed (review F7).
                 self.fail(turn, turn["claim_id"], "uncertain", "relay_error" if result["outcome"] == "error" else "relay_stopped")
             return None
+
+    def spawn_admission(self, turn):
+        """(granted, state): a fresh dispatch admission at a runner's spawn
+        boundary, inside the turn's absolute deadline."""
+        if time.time() >= self._deadline(turn):
+            return False, "turn_expired"
+        ok, state, asked_at = self.admitted(turn, first=False)
+        if not ok:
+            return False, state
+        if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
+            return False, "stale"
+        return True, None
 
     @staticmethod
     def _deadline(turn):

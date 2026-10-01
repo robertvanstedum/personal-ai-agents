@@ -83,10 +83,12 @@ Command, run in a fresh empty temporary directory (mode 700) under `/private/tmp
 | Process started, `system/init` violates the boundary | killed; `uncertain`, reason `runner_boundary` |
 | Process finishes with a result event, `is_error` false, non-empty text | answer delivered (journaled first) |
 | Result event `is_error` true | `uncertain` unless its subtype is a documented pre-request refusal (none relied on in R2) |
+| All preparation done (fingerprint, sign-in, startup inputs, working directory) | the runner asks Records for a **fresh dispatch admission at the spawn boundary**, inside the turn's absolute deadline; refused or stale → no process (`not_admitted`); nothing that can block runs between that answer and the spawn |
+| Process exits non-zero after a clean result, a later `init` or tool declaration appears, an event is not a JSON object, or a second result arrives | `uncertain` (the lifecycle must be clean end to end) |
 | Stop requested before the process is registered | the runner checks the stop flag after spawn and kills at once; if the flag is set before spawn, no process starts and the turn is acknowledged stopped |
 | `max_turn_s` (180 s) exceeded | process group killed (TERM, then KILL after 5 s); `uncertain` |
 
-Captured output is capped at 1 MB; beyond it the process is killed and the turn is `uncertain`. Child processes run in their own process group and are killed with it. No restart or Retry runs inference automatically; R1's reconciliation gate applies.
+Captured output is capped at 1 MB, enforced on bounded chunk reads before anything is buffered or parsed; beyond it the process is killed and the turn is `uncertain`. The child is always terminated and reaped, and its registration cleared, on every exit path. Child processes run in their own process group and are killed with it. No restart or Retry runs inference automatically; R1's reconciliation gate applies.
 
 ### 3.6 Codex: parked, fail-closed
 
@@ -95,7 +97,7 @@ No Codex runner is wired in R2. Codex's card is not created, so `@Codex` keeps g
 ### 3.7 Proof lifecycle (R2-06)
 
 - **No-inference checks** (connector start and every turn): CLI path, its SHA-256 and `--version`; `auth status`; the startup-input allowlist; the flag profile (a hash of the exact argument list minus prompt text).
-- **Evidence:** the one owner-approved **Prove** turn runs the normal command; the runner inspects `system/init` inside that same execution. On success the connector writes `~/minimoi-staging/data/rooms-connector/proof-claude-code.json` (binary SHA-256, version, profile hash, proof turn id, time) and Records sets `proven_at` as in R1.
+- **Evidence:** the one owner-approved **Prove** turn runs the normal command; the runner inspects `system/init` inside that same execution. The fingerprint of the binary about to run is written per turn (`proof-pending/<turn>.json`) **before** the process starts; it is promoted to the proof record only after Records accepted that proof reply (directly, through recovery, or found by receipt in housekeeping after a restart), and is never synthesized from whatever binary is installed later. On success the connector writes `~/minimoi-staging/data/rooms-connector/proof-claude-code.json` (binary SHA-256, version, profile hash, proof turn id, time) and Records sets `proven_at` as in R1.
 - **Invalidation:** if the binary hash, version or profile hash differs from the proof record, the connector reports `unready: runner_changed_since_proof` to Records (stored as the teammate's reach reason, shown as "away: Claude Code changed since its proof — Prove again") and fails any claimed non-proof turn definitively before starting a process. Restarts never spend: they re-run only the no-inference checks.
 - One execution, not two: the init check is part of the Prove turn, not a separate request.
 

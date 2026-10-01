@@ -9,6 +9,9 @@ Behaviour is chosen by FAKE_CLAUDE_MODE:
   slow          init, then sleeps until killed
   huge          init, then more than 1 MB of assistant text
   signed_out    `auth status` reports loggedIn false
+  exit_after_result  init and a clean result, then exit code 1
+  double_init   init (no tools), a second init declaring a tool, then a result
+  flood         init, then 2 MB with no newline at all
 The event shapes follow the CLI's stream-json output as documented; the real
 shapes are checked inside the owner-approved Prove (ROOMS_R2.md §3.7).
 FAKE_CLAUDE_LOG, if set, receives the argument list and environment keys.
@@ -45,6 +48,12 @@ def emit(event):
 
 emit({"type": "system", "subtype": "init", "session_id": "fake", "tools": ["Read"] if mode == "bad_init" else [],
       "mcp_servers": [], "model": "fake-model", "permissionMode": "default", "plugins": []})
+if mode == "flood":
+    sys.stdout.write("y" * 2_000_000)
+    sys.stdout.flush()
+    sys.exit(0)
+if mode == "double_init":
+    emit({"type": "system", "subtype": "init", "tools": ["Read"], "mcp_servers": []})
 if mode == "slow":
     while True:
         time.sleep(0.2)
@@ -58,3 +67,5 @@ text = "A short useful point from Claude Code." if "boundary" not in prompt else
 emit({"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}})
 emit({"type": "result", "subtype": "success", "is_error": False, "result": text,
       "usage": {"input_tokens": 120, "output_tokens": 14}})
+if mode == "exit_after_result":
+    sys.exit(1)

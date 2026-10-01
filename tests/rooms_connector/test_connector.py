@@ -82,7 +82,9 @@ PROOF = {"id": "t-proof", "brief": {"kind": "proof"}}
 
 
 def prove(r):
-    r.record_proof(PROOF)
+    """A real (fake-CLI) proof execution, then promotion: the only way to a proof record."""
+    assert r.stream(MESSAGES, "u", uuid4().hex, turn=PROOF)["outcome"] == "done"
+    assert r.record_proof(PROOF) is True
 
 
 # ── the runner ──────────────────────────────────────────────────────────────
@@ -104,8 +106,9 @@ def test_the_command_has_no_tools_no_mcp_no_settings_a_stripped_env_and_an_empty
     assert call["cwd"].startswith(str((tmp_path / "turns").resolve())) or call["cwd"].startswith(str(tmp_path / "turns"))
 
 
-@pytest.mark.parametrize("mode,detail", [("no_output", "no_result"), ("bad_init", "runner_boundary"),
-                                         ("error_result", "result_error")])
+@pytest.mark.parametrize("mode,detail", [("no_output", "exit_1"), ("bad_init", "runner_boundary"),
+                                         ("error_result", "result_error"), ("exit_after_result", "exit_1"),
+                                         ("double_init", "runner_boundary")])
 def test_after_a_process_starts_anything_but_a_clean_result_is_an_error(tmp_path, home, mode, detail):
     r = runner(tmp_path, home, mode)
     out = r.stream(MESSAGES, "u", "d" * 32, turn=PROOF)
@@ -315,3 +318,119 @@ def test_the_door_forwards_only_to_its_fixed_target(monkeypatch):
     assert asyncio.run(scenario()) == b"records:GET /"
     text = (ROOT / "services" / "records_door" / "door.py").read_text()
     assert 'TARGET_HOST = "minimoi-records"' in text and "TARGET_PORT = 18880" in text and "environ.get(\"DOOR_TARGET" not in text
+
+
+
+# ── Codex build review B2-01..B2-05 ─────────────────────────────────────────
+
+def test_admission_is_asked_after_preparation_and_no_process_starts_without_it(tmp_path, home):
+    log = tmp_path / "argv.log"
+    r = runner(tmp_path, home, log=log)
+    order = []
+    original_check = r._check
+    r._check = lambda allow_unproven=False: (order.append("prepare"), original_check(allow_unproven))[1]
+    out = r.stream(MESSAGES, "u", "k" * 32, turn=PROOF, admit=lambda: (order.append("admit"), (False, "cancel_requested"))[1])
+    assert order == ["prepare", "admit"]
+    assert out == {"outcome": "not_admitted", "state": "cancel_requested", "text": "", "usage": None, "detail": "cancel_requested"}
+    assert not log.exists() or not any("-p" in json.loads(l)["argv"] for l in log.read_text().splitlines())
+    out = r.stream(MESSAGES, "u", "l" * 32, turn=PROOF, admit=lambda: (True, None))
+    assert out["outcome"] == "done"
+
+
+def test_a_slow_preparation_makes_the_worker_ask_again_before_spawning(env, monkeypatch):
+    """B2-01 end to end: the first admission goes stale during a slow sign-in
+    check; the runner's spawn-boundary admission asks again; one process."""
+    with env.store.connect() as d:
+        d.execute("UPDATE teammates SET proven_at='2026-10-01T00:00:00+00:00' WHERE principal='claude-code'")
+    prove(env.runner)
+    env.call("POST", f"/rooms/{env.room}/invite", {"actor": "claude-code"})
+    env.worker.housekeeping()
+    env.call("POST", f"/rooms/{env.room}/events", {"body": "@Claude q"})
+    asked = []
+    original = env.worker.spawn_admission
+    def spy(turn):
+        result = original(turn)
+        asked.append(result)
+        return result
+    monkeypatch.setattr(env.worker, "spawn_admission", spy)
+    env.worker.run_once()
+    assert asked and asked[-1] == (True, None)
+    assert env.call("GET", f"/rooms/{env.room}/turns")[1]["turns"][0]["state"] == "committed"
+
+
+def test_pause_during_preparation_starts_no_process(env, tmp_path, monkeypatch):
+    with env.store.connect() as d:
+        d.execute("UPDATE teammates SET proven_at='2026-10-01T00:00:00+00:00' WHERE principal='claude-code'")
+    prove(env.runner)
+    env.call("POST", f"/rooms/{env.room}/invite", {"actor": "claude-code"})
+    env.worker.housekeeping()
+    env.call("POST", f"/rooms/{env.room}/events", {"body": "@Claude q"})
+    env.worker._last_hosted = float("inf")            # no inline housekeeping in this pass
+    original = env.runner._check
+    def pause_then_check(allow_unproven=False):
+        version = env.call("GET", f"/rooms/{env.room}")[1]["version"]
+        env.call("POST", f"/rooms/{env.room}/state", {"state": "paused", "version": version, "checkpoint": "p"})
+        return original(allow_unproven)
+    env.runner._check = pause_then_check
+    spawned = []
+    real = env.runner.popen
+    env.runner.popen = lambda *a, **k: (spawned.append(1), real(*a, **k))[1]
+    env.worker.run_once()
+    assert spawned == []
+    t = env.call("GET", f"/rooms/{env.room}/turns")[1]["turns"][0]
+    assert t["state"] == "cancelled" and t["stop_ack"] == "worker"
+
+
+def test_output_beyond_the_cap_without_a_newline_is_cut_off(tmp_path, home):
+    out = runner(tmp_path, home, "flood", output_cap=100_000).stream(MESSAGES, "u", "m" * 32, turn=PROOF)
+    assert (out["outcome"], out["detail"]) == ("error", "output_cap")
+
+
+def test_proof_evidence_is_the_binary_that_ran_even_if_it_changes_during_the_proof(tmp_path, home):
+    r = runner(tmp_path, home)
+    real = r.popen
+    def popen_then_update(*a, **k):
+        proc = real(*a, **k)
+        with open(r.cli, "a") as f:
+            f.write("# updated while the proof ran\n")
+        return proc
+    r.popen = popen_then_update
+    assert r.stream(MESSAGES, "u", "n" * 32, turn=PROOF)["outcome"] == "done"
+    assert r.record_proof(PROOF) is True
+    assert r.ready() is False and r.unready_reason == "runner_changed_since_proof"
+
+
+def test_no_proof_without_its_pending_evidence_and_never_from_the_current_binary(tmp_path, home):
+    r = runner(tmp_path, home)
+    assert r.record_proof(PROOF) is False and not r.proof_path().exists()
+
+
+def test_proof_survives_a_crash_after_records_accepted_it(env):
+    status, body = env.call("POST", "/teammates/claude-code/prove", {"confirm": True})
+    env.worker._last_hosted = 0
+    env.worker.on_committed = None                    # the connector died before writing its proof record
+    env.worker.run_once()
+    assert env.call("GET", "/teammates/claude-code/prove")[1]["proven_at"]
+    assert not env.runner.proof_path().exists()
+    assert list((env.runner.state_dir / "proof-pending").glob("*.json"))
+    env.worker.on_committed = env.runner.record_proof  # restart
+    env.worker.housekeeping()                          # receipt found: promoted
+    assert env.runner.proof_path().exists() and env.runner.ready() is True
+
+
+def test_proof_delivered_through_recovery_is_recorded(env):
+    status, body = env.call("POST", "/teammates/claude-code/prove", {"confirm": True})
+    env.worker.housekeeping()                          # accept the proof invitation first
+    env.worker._last_hosted = float("inf")
+    env.worker.mc.session.fail_next = "before"         # the reply never reached Records
+    env.worker.run_once()
+    with env.store.connect() as d:
+        d.execute("UPDATE turns SET lease_until='2000-01-01T00:00:00+00:00'")
+    env.call("GET", f"/rooms/{body['result']['proof_room']}/turns")
+    env.worker.housekeeping()                          # saved reply delivered under a recovery lease
+    assert env.call("GET", "/teammates/claude-code/prove")[1]["proven_at"]
+    assert env.runner.proof_path().exists()
+
+
+def test_connector_script_is_executable():
+    assert os.access(ROOT / "scripts" / "staging" / "connector.sh", os.X_OK)
