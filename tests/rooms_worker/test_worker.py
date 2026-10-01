@@ -221,6 +221,7 @@ def test_crash_before_inference_leaves_the_turn_for_robert(env):
     env.worker._last_hosted = 0
     env.worker.run_once()
     assert env.relay.calls == [] and env.turns()[0]["state"] == "uncertain"
+    assert env.turns()[0]["disposition"] == "unresolved_started"           # reported once, Retry now honest
 
 
 def test_unreadable_journal_is_uncertainty_not_nothing(env, monkeypatch):
@@ -293,3 +294,39 @@ def test_adapter_shortens_long_replies_and_keys_per_turn():
     assert len(payload["body"]) <= adapter.MAX_BODY and payload["body"].endswith("fit the room)")
     assert payload["usage_evidence"] == {"status": "reported", "prompt_tokens": 5, "completion_tokens": 7}
     assert adapter.user_key("r", "t1") != adapter.user_key("r", "t2")
+
+
+
+# ── Codex build review fixes ────────────────────────────────────────────────
+
+def test_the_watcher_does_not_shadow_thread_internals():
+    """Review F1: Python 3.12's Thread.join() calls Thread._stop()."""
+    w = worker_module.Watcher(SimpleNamespace(work=None, relay=None), {"id": "t", "claim_id": "c"}, "a" * 32)
+    assert not isinstance(getattr(w, "_stop", None), threading.Event)
+    w.start(); w.stop()
+    assert not w.is_alive()
+
+
+def test_ambiguous_relay_failure_is_uncertain_not_failed(env):
+    env.prove(); env.join(); env.say("Q")
+    env.relay.script = [{"outcome": "error", "text": "", "detail": "ReadTimeout"}]
+    env.worker.run_once()
+    t = env.turns()[0]
+    assert (t["state"], t["disposition"]) == ("uncertain", "relay_error")
+
+
+def test_a_stale_dispatch_answer_is_asked_again_before_sending(env, monkeypatch):
+    env.prove(); env.join(); env.say("Q")
+    clock = iter([0.0, 10.0] + [100.0 + i for i in range(50)])                # first answer arrives 10 s late
+    monkeypatch.setattr(worker_module.time, "monotonic", lambda: next(clock))
+    heartbeats = []
+    original = env.worker.work.call
+
+    def spy(method, path, body=None, key=None, missing_ok=False):
+        if path.endswith("/heartbeat") and (body or {}).get("intent") == "dispatch":
+            heartbeats.append(path)
+        return original(method, path, body, key=key, missing_ok=missing_ok)
+    monkeypatch.setattr(env.worker.work, "call", spy)
+    env.worker.run_once()
+    assert len(heartbeats) == 1 and len(env.relay.calls) == 1
+    assert env.turns()[0]["state"] == "committed"

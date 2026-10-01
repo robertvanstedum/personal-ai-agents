@@ -195,8 +195,12 @@ def sweep(db):
         if row["state"] == "cancel_requested":
             set_turn(db, row["id"], state="cancelled", stop_ack="none", disposition="fenced_without_ack")
         else:
+            # Unreconciled until the worker checks its journal (review F3).
             set_turn(db, row["id"], state="uncertain", disposition="lease_expired")
         clear_presence(db, row["room"], row["addressee"], "answering")
+        # A dead worker must not keep a fresh "reachable" badge (review F10).
+        clear_presence(db, "*", row["addressee"], "reachable")
+        db.execute("UPDATE teammates SET last_failure_at=?,updated=? WHERE principal=?", (moment, moment, row["addressee"]))
     db.execute("UPDATE turns SET state='expired',disposition='not_answered_busy',updated=? "
                "WHERE state='queued' AND expires<=?", (moment, moment))
 
@@ -460,7 +464,9 @@ class Meetings:
                                      "proven_at": record["proven_at"] if record else None,
                                      "teammate": bool(record)})
             turns = [self.public_turn(db, dict(r)) for r in db.execute(
-                "SELECT * FROM turns WHERE room=? ORDER BY created DESC LIMIT 20", (room,)).fetchall()]
+                """SELECT * FROM turns WHERE room=? AND (state='uncertain' OR id IN
+                   (SELECT id FROM turns WHERE room=? ORDER BY created DESC LIMIT 20))
+                   ORDER BY created DESC""", (room, room)).fetchall()]
             notes = [dict(r) for r in db.execute(
                 "SELECT * FROM routing_notes WHERE room=? ORDER BY trigger_seq DESC LIMIT 20", (room,)).fetchall()]
             return {"room": room, "state": current["state"], "generation": generation(db, room),
@@ -533,6 +539,9 @@ class Meetings:
                 raise Problem("Turn not found", 404)
             if t["state"] not in ("failed", "cancelled", "expired", "uncertain"):
                 raise Problem("Only a failed, cancelled, expired or unresolved turn can be tried again", 409)
+            if t["state"] == "uncertain" and t["disposition"] in (None, "lease_expired"):
+                # Review F3: a saved reply may still be delivered; reconcile first.
+                raise Problem("Still checking whether the reply was saved; try again in a moment", 409)
             if current["state"] != "active":
                 raise Problem("The meeting is not active", 409)
             if t["state"] == "uncertain":
@@ -542,6 +551,22 @@ class Meetings:
             new = self.queue_turn(db, room, t["addressee"], t["trigger_seq"], top + 1)
             return self.public_turn(db, turn_row(db, new))
         return self.store.mutate(actor, key, {"op": "turn_retry", "room": room, "turn": turn_id}, action, room)
+
+    def renew(self, actor, key, room):
+        """Owner-only: a new window and a full budget for this meeting."""
+        self.store.owner(actor)
+
+        def action(db):
+            current = self.store.access(db, actor, room, True)
+            meeting = db.execute("SELECT * FROM meetings WHERE room=?", (room,)).fetchone()
+            if not meeting or meeting["kind"] != "meeting":
+                raise Problem("This room has no teammate meeting to renew", 409)
+            if current["state"] == "closed":
+                raise Problem("A closed meeting is continued, not renewed", 409)
+            db.execute("UPDATE meetings SET remaining=max_turns,window_expires=?,updated=? WHERE room=?",
+                       (stamp(meeting["window_s"]), now(), room))
+            return self.public_meeting(dict(db.execute("SELECT * FROM meetings WHERE room=?", (room,)).fetchone()))
+        return self.store.mutate(actor, key, {"op": "renew", "room": room}, action, room)
 
     def stop(self, actor, key, room):
         """Stop all replies: pause the session and fence every unfinished turn."""
@@ -553,7 +578,7 @@ class Meetings:
                 raise Problem("Only an active meeting can be stopped", 409)
             db.execute("UPDATE rooms SET state='paused',version=version+1 WHERE id=?", (room,))
             self.on_state(db, room, "paused", "stopped_by_owner")
-            event = self.store._event(db, room, actor, "state_change", "active → paused. Stop: all replies stopped.")
+            event = self.store._event(db, room, actor, "state_change", "active → paused. Stop requested for all replies.")
             return {"state": "paused", "version": current["version"] + 1, "event": event}
         return self.store.mutate(actor, key, {"op": "stop", "room": room}, action, room)
 
@@ -696,11 +721,13 @@ class Meetings:
         return [r["principal"] for r in db.execute(
             "SELECT principal FROM hosted_teammates WHERE installation_id=?", (auth["installation_id"],)).fetchall()]
 
-    def bound_turn(self, db, auth, turn_id, bound, claim_id=None, require_lease=True):
+    def bound_turn(self, db, auth, turn_id, bound, claim_id=None, require_lease=True, require_claim=True):
         t = turn_row(db, turn_id)
         if t["addressee"] not in bound or t["claimed_by"] not in (None, auth["installation_id"]):
             raise Problem("Turn not found", 404)
-        if claim_id is not None and t["claim_id"] != claim_id:
+        if require_claim and (not isinstance(claim_id, str) or not claim_id):
+            raise Problem("Name the current claim (claim_id)", 409)      # review F2: never optional
+        if require_claim and t["claim_id"] != claim_id:
             raise Problem("That claim was replaced or never existed (stale_claim)", 409)
         if require_lease and t["state"] not in TERMINAL and t["state"] != "uncertain" and (
                 not t["lease_until"] or t["lease_until"] <= now()):
@@ -739,10 +766,10 @@ class Meetings:
                 for r in db.execute("""SELECT room FROM member_rsvp WHERE actor=? AND rsvp='invited'""", (principal,)):
                     invites.append({"room": r["room"], "principal": principal,
                                     "proven": proven_or_proof(db, r["room"], principal)})
-                for r in db.execute("""SELECT id,room,claim_id FROM turns WHERE addressee=? AND state='uncertain'
-                        AND claimed_by=?""", (principal, auth["installation_id"])):
+                for r in db.execute("""SELECT id,room,claim_id,disposition FROM turns WHERE addressee=?
+                        AND state='uncertain' AND claimed_by=?""", (principal, auth["installation_id"])):
                     uncertain.append({"turn_id": r["id"], "room": r["room"], "prior_claim_id": r["claim_id"],
-                                      "principal": principal})
+                                      "principal": principal, "disposition": r["disposition"]})
             return {"teammates": bound, "pending_invites": invites, "uncertain_turns": uncertain}
 
     def mark_reachable(self, auth, principal, payload):
@@ -818,12 +845,7 @@ class Meetings:
             return "turn_expired"
         meeting = dict(db.execute("SELECT * FROM meetings WHERE room=?", (t["room"],)).fetchone())
         if meeting["window_expires"] <= now():
-            if meeting["kind"] == "proof":
-                return "window_expired"
-            # A rolling hour: the next claim after the window starts a new one (spec §3.6 budget).
-            db.execute("UPDATE meetings SET remaining=max_turns,window_expires=?,updated=? WHERE room=?",
-                       (stamp(meeting["window_s"]), now(), t["room"]))
-            meeting = dict(db.execute("SELECT * FROM meetings WHERE room=?", (t["room"],)).fetchone())
+            return "window_expired"       # absolute; only Robert renews it (review F5)
         if meeting["remaining"] <= 0:
             return "budget_exhausted"
         if not accepted_member(db, t["room"], t["addressee"]):
@@ -952,13 +974,34 @@ class Meetings:
                 clear_presence(db, t["room"], t["addressee"], "answering")
             return {"state": turn_row(db, turn_id)["state"]}
 
+    def reconciled(self, auth, turn_id, payload):
+        """The worker reports what its journal shows for an uncertain turn
+        (spec §3.7 steps 3-4). Receipt first: a committed reply wins."""
+        finding = payload.get("finding")
+        if finding not in {"started", "nothing"}:
+            raise Problem("Report started or nothing")
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            sweep(db)
+            bound = self.require_work(db, auth)
+            t = self.bound_turn(db, auth, turn_id, bound, require_lease=False, require_claim=False)
+            if payload.get("prior_claim_id") != t["claim_id"]:
+                raise Problem("That was not this turn's last claim (stale_claim)", 409)
+            if t["state"] != "uncertain":
+                return {"state": t["state"]}
+            if db.execute("SELECT 1 FROM operations WHERE actor=? AND key=?",
+                          (t["addressee"], response_key(t["addressee"], t["id"]))).fetchone():
+                return self.recover(auth, turn_id, {"prior_claim_id": t["claim_id"]})
+            set_turn(db, turn_id, disposition="unresolved_started" if finding == "started" else "confirmed_absent")
+            return {"state": "uncertain", "disposition": turn_row(db, turn_id)["disposition"]}
+
     def recover(self, auth, turn_id, payload):
         prior = payload.get("prior_claim_id")
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             sweep(db)
             bound = self.require_work(db, auth)
-            t = self.bound_turn(db, auth, turn_id, bound, require_lease=False)
+            t = self.bound_turn(db, auth, turn_id, bound, require_lease=False, require_claim=False)
             if t["state"] != "uncertain":
                 return {"state": t["state"]}
             if not prior or prior != t["claim_id"]:

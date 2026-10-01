@@ -561,6 +561,10 @@ def test_late_fail_after_commit_is_refused_and_retry_rules(env):
     with env.db() as d: d.execute("UPDATE turns SET lease_until=? WHERE id=?", (past(), t2["id"]))
     env.status()
     assert env.call("POST", env.owner, f"/rooms/{env.room}/turns/{t2['id']}/retry", {}).status_code == 400
+    # Not reconciled yet: a saved reply may still be delivered (review F3).
+    assert env.call("POST", env.owner, f"/rooms/{env.room}/turns/{t2['id']}/retry", {"confirm": True}).status_code == 409
+    rec = env.call("POST", env.worker, f"/turns/{t2['id']}/reconciled", {"prior_claim_id": t2["claim_id"], "finding": "started"})
+    assert rec.json == {"state": "uncertain", "disposition": "unresolved_started"}
     r = env.call("POST", env.owner, f"/rooms/{env.room}/turns/{t2['id']}/retry", {"confirm": True})
     assert r.status_code == 201 and r.json["result"]["attempt"] == 2
     assert env.turn(t2["id"])["state"] == "abandoned"
@@ -693,3 +697,70 @@ def test_teammate_reply_needs_a_32_hex_correlation(env):
             "origin": {"source_application": "rooms_worker", "mode": "agent_response", "agent_id": "mc-agent",
                        "runtime": "OpenClaw", "execution_id": "not-hex"}}
     assert env.call("POST", env.mc, f"/rooms/{env.room}/events", body).status_code == 409
+
+
+
+# ── Codex build review fixes (CODEX_REVIEW_ROOMS_R1_BUILD_2026-10-01) ────────
+
+def test_every_turn_mutation_requires_the_current_claim(env):
+    env.prove(); env.join(); env.say("Q")
+    t = env.claim()
+    for route, body in (("start", {}), ("heartbeat", {"intent": "dispatch"}),
+                        ("fail", {"outcome": "failed", "reason": "x"}), ("cancel-ack", {})):
+        assert env.call("POST", env.worker, f"/turns/{t['id']}/{route}", body).status_code == 409, route
+    assert env.turn(t["id"])["state"] == "claimed"
+
+
+def test_expired_window_is_refused_until_robert_renews_it(env):
+    env.prove(); env.join()
+    with env.db() as d:
+        d.execute("UPDATE meetings SET window_expires=? WHERE room=?", (past(), env.room))
+    env.say("Q")
+    assert env.claim() is None
+    assert env.status()["turns"][0]["disposition"] == "window_expired"
+    assert env.call("POST", env.mc, f"/rooms/{env.room}/renew", {}).status_code == 403
+    r = env.call("POST", env.owner, f"/rooms/{env.room}/renew", {})
+    assert r.status_code == 200 and r.json["result"]["remaining"] == 20
+    env.say("Q again")
+    assert env.claim()["trigger"]["text"] == "Q again"
+
+
+def test_teammates_join_only_through_invite(env):
+    env.prove()
+    r = env.call("POST", env.owner, f"/rooms/{env.room}/members", {"actor": "mc", "role": "contributor"})
+    assert r.status_code == 409
+    env.join()
+    assert env.call("POST", env.owner, f"/rooms/{env.room}/members", {"actor": "mc", "role": "observer"}).status_code == 200
+
+
+def test_lease_expiry_clears_reachable(env):
+    env.prove()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    env.call("POST", env.worker, "/hosted-teammates/mc/reachable", {"readyz_at": now_iso})
+    env.join(); env.say("Q"); t = env.claim(); env.start(t)
+    with env.db() as d: d.execute("UPDATE turns SET lease_until=? WHERE id=?", (past(), t["id"]))
+    mc = [p for p in env.status()["participants"] if p["id"] == "mc"][0]
+    assert mc["reach"]["state"] == "away"
+
+
+def test_old_unresolved_turns_stay_in_the_status(env):
+    env.prove(); env.join(); env.say("first")
+    t = env.claim(); env.start(t)
+    with env.db() as d: d.execute("UPDATE turns SET lease_until=? WHERE id=?", (past(), t["id"]))
+    env.status()
+    for n in range(25):
+        env.say(f"later {n}")
+        with env.db() as d:
+            d.execute("UPDATE turns SET state='superseded' WHERE state='queued'")
+    ids = [x["id"] for x in env.status()["turns"]]
+    assert t["id"] in ids and len(ids) == 21
+
+
+def test_reconciled_with_a_receipt_commits_and_stop_wording_is_a_request(env):
+    env.prove(); env.join(); env.say("Q")
+    t = env.claim(); env.start(t); env.reply(t)
+    assert env.call("POST", env.worker, f"/turns/{t['id']}/reconciled",
+                    {"prior_claim_id": t["claim_id"], "finding": "nothing"}).json["state"] == "committed"
+    env.call("POST", env.owner, f"/rooms/{env.room}/stop", {})
+    events = env.call("GET", env.owner, f"/rooms/{env.room}").json["events"]
+    assert events[-1]["body"] == "active → paused. Stop requested for all replies."

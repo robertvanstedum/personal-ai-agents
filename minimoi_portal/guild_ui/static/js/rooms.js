@@ -525,11 +525,15 @@ function turnLine(t) {
     case 'queued': return { text: `${who} will answer next…`, wait: true };
     case 'claimed': case 'running': case 'recovering': return { text: `${who} is answering…`, wait: true };
     case 'cancel_requested': return { text: `Stopping ${who}'s reply…`, wait: true };
-    case 'uncertain': return { text: `${who} may have answered; the reply was not received.`, actions: ['attempt', 'continue'] };
+    case 'uncertain':
+      if (!t.disposition || t.disposition === 'lease_expired') return { text: `Checking whether ${who}'s reply was saved…`, actions: ['continue'] };
+      if (t.disposition === 'confirmed_absent') return { text: `Not answered: ${who}'s worker stopped before answering.`, actions: ['retry', 'continue'] };
+      return { text: `${who} may have answered; the reply was not received.`, actions: ['attempt', 'continue'] };
     case 'expired': return { text: `Not answered: ${who} was busy with an earlier message.`, actions: ['retry', 'continue', 'end'] };
     case 'failed': return { text: t.disposition === 'relay_busy' ? `Not answered: ${who} was busy.` : `Not answered: ${who}'s reply failed.`, actions: ['retry', 'continue', 'end'] };
     case 'cancelled':
-      if (t.disposition === 'budget_exhausted') return { text: `${who} has used its ${meeting?.meeting?.max_turns || 20} turns for this hour.` };
+      if (t.disposition === 'budget_exhausted') return { text: `${who} has used its ${meeting?.meeting?.max_turns || 20} turns for this hour.`, actions: ['renew'] };
+      if (t.disposition === 'window_expired') return { text: `${who}'s hour in this meeting is over.`, actions: ['renew'] };
       if (t.stop_ack === 'worker') return { text: 'Reply stopped.' };
       if (t.stop_ack === 'none') return { text: "Reply fenced; worker didn't confirm the stop." };
       if (t.disposition === 'continued_without') return null;
@@ -554,7 +558,9 @@ function renderTurns() {
   if (meeting && meeting.room === current) {
     const latest = new Map();
     for (const t of meeting.turns) if (!latest.has(t.addressee)) latest.set(t.addressee, t);   // newest first
-    for (const t of latest.values()) {
+    // An unresolved earlier turn stays visible beside newer ones (review F9).
+    const shown = [...meeting.turns.filter((t) => t.state === 'uncertain' && latest.get(t.addressee) !== t), ...latest.values()];
+    for (const t of shown) {
       if (dismissed.has(t.id)) continue;
       const line = turnLine(t);
       if (line) rows.push({ ...line, turn: t });
@@ -567,7 +573,8 @@ function renderTurns() {
     const p = el('p', { class: 'rm-turn', 'data-rm-turn': row.turn ? row.turn.id : '', 'data-state': row.turn ? row.turn.state : 'note' });
     p.append(el('span', {}, row.text));
     for (const a of row.actions || []) {
-      const label = { retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End' }[a];
+      const label = { retry: 'Retry', attempt: 'Start a new attempt', continue: `Continue without ${labelOf(row.turn.addressee)}`, end: 'End',
+        renew: `Give ${labelOf(row.turn.addressee)} another hour` }[a];
       p.append(el('button', { type: 'button', class: 'rm-btn', 'data-rm-turn-action': a, 'data-turn': row.turn.id }, label));
     }
     return p;
@@ -578,6 +585,13 @@ async function turnAction(button) {
   const id = button.dataset.turn;
   const action = button.dataset.rmTurnAction;
   if (action === 'end') { openAct('closed'); return; }
+  if (action === 'renew') {
+    const r = await records(`/v1/rooms/${encodeURIComponent(current)}/renew`, { method: 'POST', body: {}, key: keyFor(`renew:${id}`) });
+    status(r.status === 200 ? 'Another hour: write again and it answers.' : `Not renewed: ${r.body.error || 'Rooms answered with an error'}.`);
+    dismissed.add(id);
+    await loadMeeting();
+    return;
+  }
   if (action === 'continue') {
     const t = meeting.turns.find((x) => x.id === id);
     if (t && ['queued', 'claimed', 'running', 'recovering'].includes(t.state)) {
@@ -638,7 +652,7 @@ async function setState(next, note) {
 
 async function stopAll() {
   const r = await records(`/v1/rooms/${encodeURIComponent(current)}/stop`, { method: 'POST', body: {}, key: keyFor(`stop:${current}:${room.version}`) });
-  if (r.status === 200) { await loadRoom(current); status('Stopped: replies were stopped and the meeting is paused. Resume when ready.'); }
+  if (r.status === 200) { await loadRoom(current); status('Stop requested; the meeting is paused. Each reply shows when it has actually stopped.'); }
   else status(`Not stopped: ${r.body.error || 'Rooms answered with an error'}.`);
 }
 

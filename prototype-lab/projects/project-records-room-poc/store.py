@@ -413,6 +413,11 @@ class Store:
         def action(db):
             if not db.execute("SELECT 1 FROM principals WHERE id=?",(target,)).fetchone():
                 raise Problem("Unknown participant",404)
+            from meetings import card
+            if role != "remove" and card(db,target) and not db.execute(
+                    "SELECT 1 FROM members WHERE room=? AND actor=?",(room,target)).fetchone():
+                # Rooms R1 review F6: a teammate joins only through Invite (and its proof gate).
+                raise Problem("Invite teammates from Rooms; this route changes roles only",409)
             if role == "remove":
                 db.execute("DELETE FROM members WHERE room=? AND actor=?",(room,target))
                 db.execute("UPDATE rooms SET moderator='robert' WHERE id=? AND moderator=?",(room,target))

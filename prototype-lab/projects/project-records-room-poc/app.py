@@ -96,7 +96,7 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
                         "logout":"read","coordination_inbox":"read","coordination_list":"read","coordination_create":"post","coordination_transition":"post","acknowledge_join":"read",
                         # Rooms R1: a teammate answers its own invitation; the worker's routes need a work scope.
                         "meeting_rsvp":"rsvp","turns_claim":"work","turns_start":"work","turns_heartbeat":"work",
-                        "turns_fail":"work","turns_cancel_ack":"work","turns_recover":"work",
+                        "turns_fail":"work","turns_cancel_ack":"work","turns_recover":"work","turns_reconciled":"work",
                         "hosted_teammates":"work","hosted_reachable":"work"}
             if endpoint not in operations: raise Problem("Route unavailable to installation clients",403)
             request_operation.set(operations[endpoint])
@@ -375,6 +375,12 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
 
     @app.post("/api/v1/turns/<turn>/cancel-ack")
     def turns_cancel_ack(turn): return jsonify(meetings.cancel_ack(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/reconciled")
+    def turns_reconciled(turn): return jsonify(meetings.reconciled(g.actor,turn,body()))
+
+    @app.post("/api/v1/rooms/<room>/renew")
+    def meeting_renew(room): return jsonify(meetings.renew(actor(),key(),room))
 
     @app.post("/api/v1/turns/<turn>/recover")
     def turns_recover(turn): return jsonify(meetings.recover(g.actor,turn,body()))

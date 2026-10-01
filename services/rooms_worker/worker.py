@@ -115,32 +115,40 @@ class Worker:
         self.deliver(turn, turn["claim_id"], saved)
 
     def admitted(self, turn, first):
+        """(ok, state, asked_at). asked_at is a monotonic time taken BEFORE the
+        request, so the freshness window is measured conservatively (review F4)."""
         path = f"/turns/{turn['id']}/start" if first else f"/turns/{turn['id']}/heartbeat"
         body = {"claim_id": turn["claim_id"]} if first else {"claim_id": turn["claim_id"], "intent": "dispatch"}
+        asked_at = time.monotonic()
         try:
             status, data = self.work.call("POST", path, body, key=str(uuid4()))
         except Unavailable:
-            return False, "records_unavailable"
+            return False, "records_unavailable", asked_at
         if status == 200 and data.get("dispatch") is True:
-            return True, None
-        return False, data.get("state") or f"http_{status}"
+            return True, None, asked_at
+        return False, data.get("state") or f"http_{status}", asked_at
 
     def infer(self, turn):
         """Run the relay turn; on success journal the generated content and return it."""
         first = True
         while True:
-            ok, state = self.admitted(turn, first)
+            ok, state, asked_at = self.admitted(turn, first)
             if not ok:
                 if state == "cancel_requested":
                     self.ack(turn, turn["claim_id"], late_output=False)
                 log(event="dispatch_refused", turn=turn["id"], state=state)
                 return None
             first = False
+            if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
+                continue                     # the answer is too old to send on: ask again
+            messages = adapter.messages(turn)
+            if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
+                continue
             correlation = uuid4().hex
             watcher = Watcher(self, turn, correlation)
             watcher.start()
             try:
-                result = self.relay.stream(adapter.messages(turn), adapter.user_key(turn["room"], turn["id"]), correlation)
+                result = self.relay.stream(messages, adapter.user_key(turn["room"], turn["id"]), correlation)
             finally:
                 watcher.stop()
             log(event="relay_turn", turn=turn["id"], correlation=correlation, outcome=result["outcome"],
@@ -161,10 +169,14 @@ class Worker:
                 payload = adapter.reply_payload(turn, result["text"], correlation, result["usage"])
                 self.journal.generated(journal_key(turn["id"]), payload)
                 return payload
-            reason = {"refused": "relay_refused", "stopped": "relay_stopped"}.get(result["outcome"], "relay_error")
             if result["outcome"] == "done":
-                reason = "empty_reply"
-            self.fail(turn, turn["claim_id"], "failed", reason)
+                self.fail(turn, turn["claim_id"], "failed", "empty_reply")      # MC answered nothing
+            elif result["outcome"] == "refused":
+                self.fail(turn, turn["claim_id"], "failed", "relay_refused")    # refused before any inference
+            else:
+                # A transport or stream failure after sending: MC may have
+                # worked on it. Never claim it failed (review F7).
+                self.fail(turn, turn["claim_id"], "uncertain", "relay_error" if result["outcome"] == "error" else "relay_stopped")
             return None
 
     @staticmethod
@@ -202,7 +214,15 @@ class Worker:
             log(event="journal_unreadable", turn=item["turn_id"])   # uncertainty, never "nothing"
             return
         if state != "generated" or not saved:
-            return   # started (owner decides) or nothing (owner may start a new attempt)
+            if item.get("disposition") in ("unresolved_started", "confirmed_absent"):
+                return                       # already reported
+            # Tell Records what the journal shows, so Robert's choices are honest:
+            # started = MC may have answered; nothing = no inference happened.
+            self.work.call("POST", f"/turns/{item['turn_id']}/reconciled",
+                           {"prior_claim_id": item["prior_claim_id"], "finding": "started" if state == "started" else "nothing"},
+                           key=str(uuid4()))
+            log(event="reconciled", turn=item["turn_id"], finding=state or "nothing")
+            return
         status, data = self.work.call("POST", f"/turns/{item['turn_id']}/recover",
                                       {"prior_claim_id": item["prior_claim_id"]}, key=str(uuid4()))
         if status != 200 or data.get("state") != "recovering":
@@ -229,11 +249,11 @@ class Watcher(threading.Thread):
     def __init__(self, worker, turn, correlation):
         super().__init__(daemon=True)
         self.worker, self.turn, self.correlation = worker, turn, correlation
-        self._stop = threading.Event()
+        self._halt = threading.Event()      # not "_stop": Thread.join() calls Thread._stop() (review F1)
         self.cancelled = False
 
     def run(self):
-        while not self._stop.wait(HEARTBEAT_S):
+        while not self._halt.wait(HEARTBEAT_S):
             try:
                 status, data = self.worker.work.call("POST", f"/turns/{self.turn['id']}/heartbeat",
                                                      {"claim_id": self.turn["claim_id"]}, key=str(uuid4()))
@@ -246,7 +266,7 @@ class Watcher(threading.Thread):
                 return
 
     def stop(self):
-        self._stop.set()
+        self._halt.set()
         self.join(timeout=5)
 
 

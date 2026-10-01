@@ -19,6 +19,9 @@
 #                         straight to $STAGING_ROOT/secrets/rooms-worker (mode 700,
 #                         files 600) with the relay caller token from mc.env;
 #                         no value is printed. Refuses if the folder has tokens.
+#   records.sh preflight  read-only build gate: MC's effective tool profile is
+#                         session_status only; the worker, Records and MC sit on
+#                         exactly their networks with no published port
 #   records.sh down       stop and remove both containers (data and journal kept)
 #   records.sh status     state and health of both
 #
@@ -115,6 +118,27 @@ case "$cmd" in
     chmod 600 "$WORKER_SECRETS"/*.token
     unset relay
     note "provisioned: MC (membership-scoped) and the Rooms worker (work-scoped) credentials are in $WORKER_SECRETS (not printed). Next: records.sh up" ;;
+  preflight)
+    # Rooms R1 build gate (ROOMS_R1.md §6): the effective MC tool profile and the
+    # runtime network boundaries, read from the running containers. Read-only.
+    bad=0
+    check() { if [[ "$2" == "$3" ]]; then echo "PASS $1"; else echo "FAIL $1: expected [$3], found [$2]"; bad=1; fi; }
+    nets() { docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$1" 2>/dev/null | xargs -n1 | sort | xargs; }
+    ports() { docker inspect -f '{{json .HostConfig.PortBindings}}' "$1" 2>/dev/null | sed 's/^null$/{}/'; }
+    allow=$(docker exec minimoi-mc-agent node -e '
+      const c = require(process.env.OPENCLAW_CONFIG_PATH || "/home/node/.openclaw/openclaw.json");
+      const found = new Set();
+      (function walk(v) { if (v && typeof v === "object") { if (v.tools && Array.isArray(v.tools.allow)) found.add(JSON.stringify(v.tools.allow));
+        for (const k of Object.keys(v)) walk(v[k]); } })(c);
+      console.log([...found].join(" "));' 2>/dev/null || echo unreadable)
+    check "MC effective tools.allow (every agent block)" "$allow" '["session_status"]'
+    check "rooms-worker networks" "$(nets "$WORKER_CONTAINER")" "$MC_FRONT_NETWORK $RECORDS_NETWORK"
+    check "records networks" "$(nets "$RECORDS_CONTAINER")" "$RECORDS_NETWORK"
+    check "mc-agent networks (never reachable from the worker)" "$(nets minimoi-mc-agent)" "minimoi-staging-mc-net"
+    check "rooms-worker published ports" "$(ports "$WORKER_CONTAINER")" "{}"
+    check "records published ports" "$(ports "$RECORDS_CONTAINER")" "{}"
+    check "rooms-worker read-only root" "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$WORKER_CONTAINER" 2>/dev/null)" "true"
+    [[ "$bad" == 0 ]] || die "preflight failed" ;;
   down)
     records_compose down ;;
   status)
@@ -124,5 +148,5 @@ case "$cmd" in
     done
     worker_ready && echo "rooms-worker secrets: provisioned" || echo "rooms-worker secrets: not provisioned (records.sh provision)" ;;
   *)
-    sed -n '2,31p' "$0"; exit 2 ;;
+    sed -n '2,34p' "$0"; exit 2 ;;
 esac
