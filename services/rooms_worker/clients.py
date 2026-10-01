@@ -104,7 +104,7 @@ class Relay:
         except requests.RequestException:
             return 0
 
-    def stream(self, messages, user, correlation, on_open=None):
+    def stream(self, messages, user, correlation, on_open=None, **_):
         """One streamed turn. Returns a dict:
         {"outcome": "done"|"busy"|"refused"|"stopped"|"error", "text": str,
          "usage": {"prompt_tokens", "completion_tokens"} or None, "detail": str}"""

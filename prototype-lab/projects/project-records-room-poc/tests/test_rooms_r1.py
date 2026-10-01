@@ -788,3 +788,16 @@ def test_retry_accepts_only_reconciled_uncertain_turns(env, disposition):
     with env.db() as d:
         d.execute("UPDATE turns SET disposition='confirmed_absent' WHERE id=?", (t["id"],))
     assert env.call("POST", env.owner, f"/rooms/{env.room}/turns/{t['id']}/retry", {"confirm": True}).status_code == 201
+
+
+
+def test_mc_is_the_facilitator_whatever_the_invitation_order(env):
+    """Rooms R2: inviting another teammate first must not make it the facilitator."""
+    from store import now
+    env.prove()
+    with env.db() as d:
+        d.execute("INSERT INTO principals VALUES('claude-code','Claude Code','agent','h-cc',?)", (now(),))
+    env.store.meetings.put_teammate("robert", "claude-code", {})
+    env.call("POST", env.owner, f"/rooms/{env.room}/invite", {"actor": "claude-code"})
+    env.call("POST", env.owner, f"/rooms/{env.room}/invite", {"actor": "mc"})
+    assert env.status()["meeting"]["facilitator"] == "mc"

@@ -29,7 +29,9 @@
 #                         URL, credential or code (it shares records-net and
 #                         mc-front with the portal by design); no published port
 #                         on Records, worker, MC or relay
-#   records.sh down       stop and remove both containers (data and journal kept)
+#   records.sh provision-connector  Rooms R2: Claude Code hosted by the Mac connector
+#                         (tokens to $STAGING_ROOT/secrets/rooms-connector, not printed)
+#   records.sh down       stop and remove the containers (data and journal kept)
 #   records.sh status     state and health of both
 #
 # Records keeps its own sign-in. On its first start it creates owner-key.txt
@@ -45,6 +47,16 @@ RECORDS_NETWORK="minimoi-staging-records"
 WORKER_CONTAINER="minimoi-rooms-worker"
 WORKER_SECRETS="$STAGING_ROOT/secrets/rooms-worker"
 WORKER_JOURNAL="minimoi-staging-rooms-journal"
+# Rooms R2: the Mac connector's secrets and its door sidecar.
+CONNECTOR_SECRETS="$STAGING_ROOT/secrets/rooms-connector"
+DOOR_CONTAINER="minimoi-records-door"
+connector_ready() {
+  [[ -d "$CONNECTOR_SECRETS" && "$(file_mode "$CONNECTOR_SECRETS")" == 700 ]] || return 1
+  local f
+  for f in rooms-connector-mac.token claude-code.token; do
+    [[ -f "$CONNECTOR_SECRETS/$f" && ! -L "$CONNECTOR_SECRETS/$f" && "$(file_mode "$CONNECTOR_SECRETS/$f")" == 600 ]] || return 1
+  done
+}
 MC_FRONT_NETWORK="minimoi-staging-mc-front"
 env_value() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -n 1 | sed "s/^'\\(.*\\)'\$/\\1/; s/^\"\\(.*\\)\"\$/\\1/"; }
 
@@ -97,8 +109,11 @@ case "$cmd" in
       docker network inspect "$MC_FRONT_NETWORK" >/dev/null 2>&1 \
         || die "missing network $MC_FRONT_NETWORK; bring the main stack up first (up.sh portal)"
       docker volume inspect "$WORKER_JOURNAL" >/dev/null 2>&1 || docker volume create "$WORKER_JOURNAL" >/dev/null
-      records_compose up -d --no-build
-      note "up: Records and the Rooms worker (it answers for Master Craftsman while MC is up)"
+      services="records rooms-worker"
+      if connector_ready && grep -q "records-door:" "$RELEASE_DIR/$RECORDS_FILE"; then services="$services records-door"; fi
+      # shellcheck disable=SC2086
+      records_compose up -d --no-build $services
+      note "up: $services"
     else
       records_compose up -d --no-build records
       note "up: Records only (the Rooms worker needs: records.sh provision)"
@@ -125,6 +140,25 @@ case "$cmd" in
     chmod 600 "$WORKER_SECRETS"/*.token
     unset relay
     note "provisioned: MC (membership-scoped) and the Rooms worker (work-scoped) credentials are in $WORKER_SECRETS (not printed). Next: records.sh up" ;;
+  provision-connector)
+    # Rooms R2 (ROOMS_R2.md §3.3-3.4), once, owner-run: Claude Code as a
+    # teammate hosted by the Mac connector's own work principal. Revokes
+    # Claude Code's existing credentials (listed) and creates claude-code-manual
+    # for hand-posted notes. Tokens go only to $CONNECTOR_SECRETS (700/600).
+    require_absolute_root
+    [[ "$(docker inspect -f '{{.State.Running}}' "$RECORDS_CONTAINER" 2>/dev/null || true)" == true ]] || die "start Records first (records.sh up)"
+    [[ ! -e "$CONNECTOR_SECRETS/claude-code.token" ]] || die "$CONNECTOR_SECRETS already holds tokens; revoke them in Records and remove the files first"
+    outbox="$STAGING_ROOT/data/records/.rooms-outbox-connector"
+    [[ ! -e "$outbox" ]] || die "an earlier provision left $outbox; inspect it first"
+    docker exec "$RECORDS_CONTAINER" python manage.py provision-rooms --data-dir /data --out /data/.rooms-outbox-connector \
+      --teammate claude-code --label "Claude Code" --worker-principal rooms-connector-mac --revoke-legacy --manual \
+      --card '{"host":"this Mac","connector":"rooms-connector","tools_profile":"none (no tools, no MCP, no settings)","billing_route":"Robert'"'"'s Claude subscription (claude.ai sign-in)","max_turn_s":180,"auto_accept":true}'
+    ( umask 077; mkdir -p "$CONNECTOR_SECRETS" )
+    chmod 700 "$CONNECTOR_SECRETS"
+    mv "$outbox"/*.token "$CONNECTOR_SECRETS/"
+    rmdir "$outbox" 2>/dev/null || true
+    chmod 600 "$CONNECTOR_SECRETS"/*.token
+    note "provisioned: Claude Code (membership-scoped), claude-code-manual, and the connector's work principal; tokens in $CONNECTOR_SECRETS (not printed). Next: records.sh up, then connector.sh install" ;;
   preflight)
     # Rooms R1 build gate (ROOMS_R1.md §6): MC's EFFECTIVE tools from its running
     # gateway, and the boundaries as real connection attempts from inside the
@@ -150,6 +184,19 @@ case "$cmd" in
     check "mc-agent networks" "$(nets minimoi-mc-agent)" "minimoi-staging-mc-net"
     for c in "$WORKER_CONTAINER" "$RECORDS_CONTAINER" minimoi-mc-agent minimoi-mc-relay; do check "$c published ports" "$(ports "$c")" "{}"; done
     check "rooms-worker read-only root" "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$WORKER_CONTAINER" 2>/dev/null)" "true"
+    if docker inspect "$DOOR_CONTAINER" >/dev/null 2>&1; then
+      # Rooms R2: the door is the only published port, on loopback only.
+      check "records-door networks" "$(nets "$DOOR_CONTAINER")" "$RECORDS_NETWORK minimoi-staging-records-door"
+      check "records-door published ports" "$(ports "$DOOR_CONTAINER")" '{"18881/tcp":[{"HostIp":"127.0.0.1","HostPort":"18881"}]}'
+      check "records-door holds no credential" "$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$DOOR_CONTAINER" | grep -ciE 'token|key|secret' || true)" "0"
+      check "records-door read-only root" "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$DOOR_CONTAINER")" "true"
+      check "door from the Mac, no credential (expect 401)" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:18881/api/v1/me || echo curl_failed)" "401"
+      lan=$(ipconfig getifaddr en0 2>/dev/null || true)
+      if [[ -n "$lan" ]]; then
+        rc=0; curl -s -o /dev/null --max-time 5 "http://$lan:18881/api/v1/me" || rc=$?
+        check "door on the LAN address $lan (curl exit 7 = connection refused)" "$rc" "7"
+      fi
+    fi
     # One probe run inside a container. Outcomes are exact: an HTTP status,
     # "nxdomain" (the name did not resolve), "refused", "timeout", "no_route"
     # (the kernel had no route to that address), or "probe_error:..." /
@@ -219,5 +266,5 @@ except Exception as e:
     done
     worker_ready && echo "rooms-worker secrets: provisioned" || echo "rooms-worker secrets: not provisioned (records.sh provision)" ;;
   *)
-    sed -n '2,40p' "$0"; exit 2 ;;
+    sed -n '2,42p' "$0"; exit 2 ;;
 esac

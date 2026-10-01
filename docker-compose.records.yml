@@ -21,7 +21,7 @@ services:
     restart: unless-stopped
     environment:
       # The exact Host the portal's bridge sends (Records refuses any other).
-      - RECORDS_ALLOWED_HOSTS=minimoi-records:18880
+      - RECORDS_ALLOWED_HOSTS=minimoi-records:18880,127.0.0.1:18881
     volumes:
       - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/data/records:/data
     networks:
@@ -84,6 +84,32 @@ services:
       retries: 3
       start_period: 20s
 
+  # Rooms R2 (docs/specs/minimoi-connected-work/ROOMS_R2.md §3.1): the Mac
+  # connector's door. Docker publishes no port for a container that is only on
+  # internal networks, so Records keeps none; this sidecar forwards TCP from
+  # 127.0.0.1:18881 on the Mac to minimoi-records:18880 and nowhere else. It
+  # holds no credential; Records authenticates every request.
+  records-door:
+    image: minimoi-staging/rooms-worker:${MINIMOI_IMAGE_TAG:?run scripts/staging/records.sh build}
+    pull_policy: never
+    container_name: minimoi-records-door
+    restart: unless-stopped
+    entrypoint: ["python", "-m", "services.records_door.door"]
+    ports:
+      - "127.0.0.1:18881:18881"
+    networks:
+      - records-net
+      - records-door
+    depends_on:
+      - records
+    mem_limit: 64m
+    pids_limit: 32
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   # The worker's turn journal (journal before inference): kept across restarts
   # so recovery is receipt-first and never re-runs inference. External, so a
@@ -99,3 +125,7 @@ networks:
   mc-front:
     name: minimoi-staging-mc-front
     external: true
+  # The door's own ordinary bridge (Rooms R2): only records-door is on it, so
+  # its loopback port can be published. Records itself never joins it.
+  records-door:
+    name: minimoi-staging-records-door

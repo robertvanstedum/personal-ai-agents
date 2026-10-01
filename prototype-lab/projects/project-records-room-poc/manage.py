@@ -71,36 +71,52 @@ def _principal(store,db,name,label,kind):
     return True
 
 
-def provision_rooms(store,teammate,label,out,days=90):
-    """Owner-run, once: MC (membership-scoped) and the worker (work-scoped),
-    the hosting binding and MC's teammate card. Tokens go only to 0600 files
-    in `out`; nothing secret is printed. Refuses if either file exists."""
+def provision_rooms(store,teammate,label,out,days=90,worker="rooms-worker",card=None,revoke_legacy=False,manual=False):
+    """Owner-run, once per teammate: the teammate (membership-scoped), its
+    worker (work-scoped service principal), the hosting binding and the
+    teammate card. Tokens go only to 0600 files in `out`; nothing secret is
+    printed. Refuses if a token file exists. Rooms R2 (ROOMS_R2.md §3.4):
+    revoke_legacy revokes the teammate's existing credentials (listed in the
+    result); manual creates `<teammate>-manual`, a cardless principal for
+    hand-posted notes that can never post as the teammate."""
     from datetime import datetime, timedelta, timezone
     out=_private_dir(out)
-    files={teammate:out/f"{teammate}.token","rooms-worker":out/"rooms-worker.token"}
+    files={teammate:out/f"{teammate}.token",worker:out/f"{worker}.token"}
+    if manual: files[teammate+"-manual"]=out/f"{teammate}-manual.token"
     if any(f.exists() for f in files.values()): raise SystemExit("Token files already exist; revoke and remove them first")
+    from store import now
     with store.connect() as db:
         db.execute("BEGIN IMMEDIATE")
         created={teammate:_principal(store,db,teammate,label,"agent"),
-                 "rooms-worker":_principal(store,db,"rooms-worker","Rooms worker","service")}
-        kinds={r["id"]:r["kind"] for r in db.execute("SELECT id,kind FROM principals WHERE id IN (?,?)",(teammate,"rooms-worker"))}
-    if kinds.get(teammate)!="agent" or kinds.get("rooms-worker")!="service":
+                 worker:_principal(store,db,worker,"Rooms worker" if worker=="rooms-worker" else f"Rooms worker ({worker})","service")}
+        if manual: created[teammate+"-manual"]=_principal(store,db,teammate+"-manual",label+" (manual)","agent")
+        kinds={r["id"]:r["kind"] for r in db.execute("SELECT id,kind FROM principals WHERE id IN (?,?)",(teammate,worker))}
+        revoked=[]
+        if revoke_legacy:
+            for row in db.execute("""SELECT c.id FROM client_credentials c JOIN client_installations i ON i.id=c.installation
+                    WHERE i.principal=? AND c.revoked IS NULL""",(teammate,)).fetchall():
+                db.execute("UPDATE client_credentials SET revoked=? WHERE id=?",(now(),row["id"]))
+                db.execute("INSERT INTO credential_audit VALUES(?,?,?,?,?)",(str(__import__("uuid").uuid4()),"robert",row["id"],"revoke",now()))
+                revoked.append(row["id"])
+    if kinds.get(teammate)!="agent" or kinds.get(worker)!="service":
         raise SystemExit("Existing principals have the wrong kind for Rooms")
-    store.meetings.put_teammate("robert",teammate,{})
+    store.meetings.put_teammate("robert",teammate,card or {})
     expires=(datetime.now(timezone.utc)+timedelta(days=days)).isoformat()
     issued={}
-    for name,request in ((teammate,dict(scope="membership",operations=["read","post","receipt"])),
-                         ("rooms-worker",dict(scope="work"))):
+    requests=[(teammate,dict(scope="membership",operations=["read","post","receipt"])),(worker,dict(scope="work"))]
+    if manual:
+        requests.append((teammate+"-manual",dict(scope="membership",operations=["read","post","receipt"])))
+    for name,request in requests:
         fd=os.open(files[name],os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-        result=store.platform_access.issue("robert",dict(principal=name,label=f"Rooms R1 {name}",expires_at=expires,**request))
+        result=store.platform_access.issue("robert",dict(principal=name,label=f"Rooms {name}",expires_at=expires,**request))
         with os.fdopen(fd,"w") as stream:
             stream.write(result.pop("access_token")+"\n"); stream.flush(); os.fsync(stream.fileno())
         issued[name]=result
-    from store import now
     with store.connect() as db:
-        db.execute("INSERT OR IGNORE INTO hosted_teammates VALUES(?,?,?)",(issued["rooms-worker"]["installation_id"],teammate,now()))
+        db.execute("INSERT OR IGNORE INTO hosted_teammates VALUES(?,?,?)",(issued[worker]["installation_id"],teammate,now()))
     return {"principals_created":created,"credentials":{k:{x:v[x] for x in ("credential_id","installation_id","expires_at","scope")} for k,v in issued.items()},
-            "token_files":{k:str(v) for k,v in files.items()},"hosted":{"installation_id":issued["rooms-worker"]["installation_id"],"teammate":teammate}}
+            "token_files":{k:str(v) for k,v in files.items()},"hosted":{"installation_id":issued[worker]["installation_id"],"teammate":teammate},
+            "revoked_legacy_credentials":revoked}
 
 
 def main():
@@ -110,6 +126,10 @@ def main():
     parser.add_argument("--label",default="Master Craftsman")
     parser.add_argument("--out")
     parser.add_argument("--days",type=int,default=90)
+    parser.add_argument("--worker-principal",default="rooms-worker")
+    parser.add_argument("--card",help="JSON object of teammate card fields")
+    parser.add_argument("--revoke-legacy",action="store_true")
+    parser.add_argument("--manual",action="store_true")
     parser.add_argument("--data-dir",required=True)
     parser.add_argument("--session-id")
     parser.add_argument("--interval",type=float,default=5.0)
@@ -121,7 +141,8 @@ def main():
     elif args.command=="seed": print(json.dumps(seed(store),indent=2))
     elif args.command=="provision-rooms":
         if not args.out: parser.error("--out is required")
-        print(json.dumps(provision_rooms(store,args.teammate,args.label,args.out,args.days),indent=2))
+        print(json.dumps(provision_rooms(store,args.teammate,args.label,args.out,args.days,worker=args.worker_principal,
+            card=json.loads(args.card) if args.card else None,revoke_legacy=args.revoke_legacy,manual=args.manual),indent=2))
     elif args.command=="backup": print(json.dumps(store.backup("robert"),indent=2))
     elif args.command=="publish-transcript":
         if not args.session_id: parser.error("--session-id is required")

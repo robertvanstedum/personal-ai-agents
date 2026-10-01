@@ -155,3 +155,9 @@ def test_rooms_worker_files_redeploy_nothing_until_production_uses_them():
                                     root / "docker-compose.prod.yml", root / "docker-compose.yml", root / "scripts/staging/build.sh")
              if "rooms-worker" in path.read_text() or "rooms_worker" in path.read_text()]
     assert users == []
+
+
+
+def test_rooms_connector_and_door_files_are_staging_only():
+    assert classify(["services/rooms_connector/connector.py", "services/records_door/door.py",
+                     "scripts/staging/connector.sh"]) == ("documents", ())

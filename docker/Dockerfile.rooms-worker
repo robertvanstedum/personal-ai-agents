@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/__init__.py /app/services/__init__.py
 COPY services/rooms_worker/ /app/services/rooms_worker/
+# Rooms R2: the records-door sidecar runs from this image with its own entrypoint.
+COPY services/records_door/ /app/services/records_door/
 RUN rm -rf /app/services/rooms_worker/tests
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1

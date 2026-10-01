@@ -46,7 +46,7 @@ def messages(turn):
             {"role": "user", "content": turn["trigger"]["text"]}]
 
 
-def reply_payload(turn, text, correlation, usage):
+def reply_payload(turn, text, correlation, usage, agent_id="mc-agent", runtime="OpenClaw"):
     """The immutable generated content, journaled once (ROOMS_R1.md §3.7).
     The delivery envelope (turn_id, claim_id, expected_context) is added at
     each delivery and never journaled."""
@@ -60,8 +60,8 @@ def reply_payload(turn, text, correlation, usage):
         evidence.update({k: usage[k] for k in ("prompt_tokens", "completion_tokens") if isinstance(usage.get(k), int)})
     return {"kind": "message", "context_class": "agent_draft", "body": text,
             "reference": turn["trigger"].get("id"),
-            "origin": {"source_application": "rooms_worker", "mode": "agent_response", "agent_id": "mc-agent",
-                       "runtime": "OpenClaw", "execution_id": correlation},
+            "origin": {"source_application": "rooms_worker", "mode": "agent_response", "agent_id": agent_id,
+                       "runtime": runtime, "execution_id": correlation},
             "usage_evidence": evidence}
 
 

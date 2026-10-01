@@ -68,7 +68,7 @@ class FakeRelay:
         self._stopped.set()
         return 200
 
-    def stream(self, messages, user, correlation, on_open=None):
+    def stream(self, messages, user, correlation, on_open=None, **_):
         self.calls.append({"messages": messages, "user": user, "correlation": correlation})
         if self.during:
             self.during(self)
@@ -81,14 +81,16 @@ class FakeRelay:
         return self._stopped.wait(timeout)
 
 
-def start_worker(app, out_dir, relay, journal_dir, period=0.2):
+def start_worker(app, out_dir, relay, journal_dir, period=0.2, teammate="mc", worker="rooms-worker",
+                 agent_id="mc-agent", runtime="OpenClaw"):
     """Run the real worker loop in a thread against a test Records app."""
     from services.rooms_worker.clients import Records
     from services.rooms_worker.journal import TurnJournal
     from services.rooms_worker.worker import Worker
-    tokens = {n: (out_dir / f"{n}.token").read_text().strip() for n in ("mc", "rooms-worker")}
-    w = Worker(Records(BACKEND, tokens["rooms-worker"], session=Session(app)),
-               Records(BACKEND, tokens["mc"], session=Session(app)), relay, TurnJournal(journal_dir))
+    tokens = {n: (out_dir / f"{n}.token").read_text().strip() for n in (teammate, worker)}
+    w = Worker(Records(BACKEND, tokens[worker], session=Session(app)),
+               Records(BACKEND, tokens[teammate], session=Session(app)), relay, TurnJournal(journal_dir),
+               teammate=teammate, agent_id=agent_id, runtime=runtime)
     stop = threading.Event()
 
     def loop():

@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS teammates(
 CREATE TABLE IF NOT EXISTS routing_notes(
     room TEXT NOT NULL,trigger_seq INTEGER NOT NULL,addressee TEXT NOT NULL,label TEXT NOT NULL,
     disposition TEXT NOT NULL,created TEXT NOT NULL,PRIMARY KEY(room,trigger_seq,addressee));
+CREATE TABLE IF NOT EXISTS teammate_status(
+    principal TEXT PRIMARY KEY,unready TEXT,observed_at TEXT NOT NULL);
 INSERT OR IGNORE INTO meta VALUES('rooms_r1_schema','1');
 """
 
@@ -73,6 +75,12 @@ PROOF_WINDOW_S = 900
 PROOF_QUESTION = ("Proof turn: please introduce yourself in one or two sentences and say what you can "
                   "and cannot do in this meeting.")
 SNAPSHOT_KINDS = ("message", "proposal", "decision", "task", "task_update", "checkpoint", "document")
+DEFAULT_FACILITATOR = "mc"
+UNREADY_TEXT = {"runner_changed_since_proof": "changed since its proof — Prove again",
+                "not_proven_with_this_runner": "not yet proven on this connector — Prove first",
+                "signed_out": "its CLI is signed out on this Mac",
+                "startup_inputs": "extra startup instructions found on this Mac; it stays away until they are gone",
+                "runner_unavailable": "its CLI is not available on this Mac"}
 MENTION = re.compile(r"(?<![\w@.])@([A-Za-z][A-Za-z0-9_-]{0,59})")
 HEX32 = re.compile(r"[0-9a-f]{32}")
 
@@ -244,10 +252,14 @@ class Meetings:
         """The write fence (spec §3.5). Returns the turn being committed, or None
         for an ordinary (human) post. Raises 409 with no row otherwise."""
         origin = payload.get("origin") or {}
-        agent = ((credential_scope or {}).get("scope") == "membership" or "turn_id" in payload
-                 or (origin.get("mode") == "agent_response" and card(db, actor) is not None))
+        # Rooms R2 (ROOMS_R2.md §3.4): a teammate is fenced by identity, whatever
+        # its credential or declared origin; people and cardless agents (the
+        # existing CoS connector path) are unchanged (M6).
+        # Every teammate holds a card, so identity covers each teammate's
+        # membership credential; a cardless "-manual" principal posts as itself.
+        agent = "turn_id" in payload or card(db, actor) is not None
         if not agent:
-            return None    # people, and the existing CoS connector path (no card), are unchanged (M6)
+            return None
         turn_id, claim_id = payload.get("turn_id"), payload.get("claim_id")
         if not isinstance(turn_id, str) or not isinstance(claim_id, str):
             raise Problem("An agent reply must name its claimed turn", 409)
@@ -360,8 +372,12 @@ class Meetings:
                        window_s=DEFAULT_WINDOW_S):
         if db.execute("SELECT 1 FROM meetings WHERE room=?", (room,)).fetchone():
             if facilitator:
-                db.execute("UPDATE meetings SET facilitator=COALESCE(facilitator,?),updated=? WHERE room=?",
-                           (facilitator, now(), room))
+                # MC is the default facilitator (owner decision, ROOMS_R1.md §0): inviting
+                # MC takes the role whatever the invitation order; otherwise the first
+                # teammate invited keeps it.
+                db.execute("""UPDATE meetings SET facilitator=CASE WHEN ?=? THEN ? ELSE COALESCE(facilitator,?) END,
+                    updated=? WHERE room=? AND kind='meeting'""",
+                           (facilitator, DEFAULT_FACILITATOR, facilitator, facilitator, now(), room))
             return
         session = db.execute("SELECT title,purpose FROM rooms WHERE id=?", (room,)).fetchone()
         cursor = db.execute("SELECT COALESCE(MAX(seq),0) FROM events WHERE room=?", (room,)).fetchone()[0]
@@ -497,6 +513,9 @@ class Meetings:
             return {"state": "answering", "reason": None}
         if fresh(db, "*", principal, "reachable"):
             return {"state": "reachable", "reason": None}
+        status = db.execute("SELECT unready FROM teammate_status WHERE principal=?", (principal,)).fetchone()
+        if status and status["unready"]:
+            return {"state": "away", "reason": UNREADY_TEXT.get(status["unready"], status["unready"].replace("_", " "))}
         if not record or not hosted(db, principal):
             return {"state": "away", "reason": "no connector in Rooms yet"}
         if not record["proven_at"]:
@@ -787,6 +806,15 @@ class Meetings:
             except (TypeError, ValueError):
                 raise Problem("readyz_at must be a timezone-aware time")
             record = card(db, principal)
+            unready = payload.get("unready")
+            if unready is not None:
+                if not isinstance(unready, str) or not re.fullmatch(r"[a-z_]{1,48}", unready):
+                    raise Problem("unready must be a short reason code")
+                clear_presence(db, "*", principal, "reachable")
+                db.execute("INSERT INTO teammate_status VALUES(?,?,?) ON CONFLICT(principal) DO UPDATE SET "
+                           "unready=excluded.unready,observed_at=excluded.observed_at", (principal, unready, now()))
+                return {"reachable": False, "reasons": [unready]}
+            db.execute("DELETE FROM teammate_status WHERE principal=?", (principal,))
             age = (datetime.now(timezone.utc) - checked).total_seconds()
             failed_after_commit = db.execute("""SELECT 1 FROM turns WHERE addressee=? AND state IN ('failed','uncertain')
                 AND updated > COALESCE((SELECT MAX(updated) FROM turns WHERE addressee=? AND state='committed'),'')""",

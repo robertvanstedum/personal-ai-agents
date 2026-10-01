@@ -2776,7 +2776,7 @@ def rooms_r1(rooms, tmp_path):
     manage.provision_rooms(rooms["app"].extensions["records_store"], "mc", "Master Craftsman", out)
 
     class Relay(FakeRelay):
-        def stream(self, messages, user, correlation, on_open=None):
+        def stream(self, messages, user, correlation, on_open=None, **_):
             self.calls.append({"messages": messages, "correlation": correlation})
             if "slowly" in messages[-1]["content"]:
                 self.wait_for_stop(20)
@@ -2904,3 +2904,52 @@ def test_r1_phone_controls_status_and_composer_fit(browser, server, rooms_r1):
     _r1_shot(page, "r1-6-phone")
     assert _no_page_overflow(page)
     ctx.close()
+
+
+
+# ── Rooms R2 (docs/specs/minimoi-connected-work/ROOMS_R2.md §6) ──────────────
+
+def test_r2_claude_code_in_a_room_and_codex_still_not_available(browser, server, rooms, tmp_path):
+    import importlib.util
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rooms_worker"))
+    from rooms_helpers import RECORDS_DIR
+    from worker_helpers import FakeRelay, start_worker
+    spec = importlib.util.spec_from_file_location("records_poc_manage_for_r2_browser", RECORDS_DIR / "manage.py")
+    manage = importlib.util.module_from_spec(spec); spec.loader.exec_module(manage)
+    store = rooms["app"].extensions["records_store"]
+    manage.provision_rooms(store, "mc", "Master Craftsman", tmp_path / "mc-out")
+    manage.provision_rooms(store, "claude-code", "Claude Code", tmp_path / "cc-out", worker="rooms-connector-mac",
+                           card={"host": "this Mac", "connector": "rooms-connector"})
+    with store.connect() as d:
+        d.execute("UPDATE teammates SET proven_at='2026-10-01T00:00:00+00:00'")
+
+    class Relay(FakeRelay):
+        def stream(self, messages, user, correlation, on_open=None, **_):
+            return {"outcome": "done", "text": "Claude Code here: start with the meeting itself.", "usage": None, "detail": "done"}
+    mc = start_worker(rooms["app"], tmp_path / "mc-out", FakeRelay(), tmp_path / "j-mc")
+    cc = start_worker(rooms["app"], tmp_path / "cc-out", Relay(), tmp_path / "j-cc", teammate="claude-code",
+                      worker="rooms-connector-mac", agent_id="claude-code", runtime="Claude Code CLI (fake)")
+    try:
+        ctx, page = _context(browser, server, 1440, 900)
+        go(page, f"{server['url']}/guild-next/guild/rooms")
+        room_id = _rooms_ready(page, server, rooms, title="Team room")
+        go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
+        page.click("[data-rm-invite]")
+        expect(page.locator("[data-rm-card='claude-code']")).to_contain_text("Proven")
+        page.click("[data-rm-invite-card='claude-code']")
+        page.click("[data-rm-invite-card='mc']")
+        page.click("[data-rm-dialog-close]")
+        expect(page.locator("[data-person='claude-code']")).to_have_attribute("data-rsvp", "accepted", timeout=15000)
+        page.fill("[data-rm-input]", "@Claude what should we build first?")
+        page.click("[data-rm-send]")
+        reply = page.locator('.rm-msg[data-actor="claude-code"]')
+        expect(reply).to_contain_text("Claude Code here", timeout=20000)
+        expect(reply.locator('[data-tag="agent"]')).to_have_text("agent")
+        assert page.locator('.rm-msg[data-actor="mc"]').count() == 0          # addressed: MC stays quiet
+        page.fill("[data-rm-input]", "@Codex can you review it?")
+        page.click("[data-rm-send]")
+        expect(page.locator("[data-rm-turns]")).to_contain_text("Not sent to Codex: not available in Rooms yet.")
+        _r1_shot(page, "r2-1-claude-code-in-a-room")
+        ctx.close()
+    finally:
+        mc.stop(); cc.stop()

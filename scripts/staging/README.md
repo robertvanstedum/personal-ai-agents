@@ -1090,6 +1090,35 @@ folder: the R1 tables are new tables only and `schema_version` stays 5, so the
 older code starts and keeps every record. The pre-migration copy is disaster
 recovery only: restoring it discards everything accepted since.
 
+## Rooms R2: Claude Code joins from this Mac (staging only)
+
+Spec: `docs/specs/minimoi-connected-work/ROOMS_R2.md` (v0.3). Claude Code
+answers in Rooms through a launchd connector on this Mac, with **no tools, no
+MCP servers and no setting sources**, through Robert's existing claude.ai
+sign-in (no API key). Codex in Rooms is **parked** (incomplete): its tool
+surface cannot be verified off without a model call.
+
+The connector reaches Records only through `minimoi-records-door`, a TCP
+forwarder published on `127.0.0.1:18881` (Records itself still has no port).
+Secrets: `$STAGING_ROOT/secrets/rooms-connector` (700/600). State, journal and
+proof record: `$STAGING_ROOT/data/rooms-connector`. Log:
+`$STAGING_ROOT/logs/rooms-connector.log` (ids and outcomes only).
+
+```bash
+scripts/staging/records.sh provision-connector   # once: Claude Code card + credentials; revokes its old keys; creates claude-code-manual
+scripts/staging/records.sh up                    # now also starts the door
+scripts/staging/records.sh preflight             # adds the door checks (loopback only, LAN refused)
+scripts/staging/connector.sh install             # venv + launchd agent from the pinned release
+scripts/staging/connector.sh preflight           # no model request: sign-in, startup inputs, door
+```
+
+Claude Code shows *away: not yet proven on this connector* until one
+owner-approved **Prove** (one turn on Robert's Claude subscription). A CLI
+update changes the binary fingerprint: it goes *away* until proven again.
+**Rollback:** `connector.sh uninstall`, revoke the connector and Claude Code
+credentials, remove `records-door` (`records.sh up` without the connector
+secrets leaves it stopped). R1 is untouched.
+
 ## Rules
 
 - **One writer per state folder.** No Mac-native process writes

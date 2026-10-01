@@ -499,7 +499,7 @@ def _records_render():
 
 def test_rooms_worker_reaches_only_records_and_the_relay():
     rendered = _records_render()
-    assert set(rendered["services"]) == {"records", "rooms-worker"}
+    assert set(rendered["services"]) == {"records", "rooms-worker", "records-door"}     # + the R2 door
     worker = rendered["services"]["rooms-worker"]
     assert sorted(worker["networks"]) == ["mc-front", "records-net"]       # never mc-net: MC itself is unreachable
     assert rendered["networks"]["mc-front"] == {"name": "minimoi-staging-mc-front", "external": True}
@@ -546,3 +546,42 @@ def test_records_preflight_never_counts_a_failed_probe_as_isolation():
     assert pre.count('forbidden "') == 4 and 'nxdomain && ( "$addr" == timeout || "$addr" == no_route )' in pre
     assert "(allowed)\" \"$(probe" in pre                                  # positive controls run first
     assert "minimoi-portal:5001" not in pre and "worker environment names no portal" in pre
+
+
+
+# ── Rooms R2: the records-door sidecar and the Mac connector (ROOMS_R2.md §3.1-3.4) ──
+
+def test_the_door_is_the_only_published_port_and_records_stays_sealed():
+    rendered = _records_render()
+    door = rendered["services"]["records-door"]
+    assert door["ports"] == [{"mode": "ingress", "host_ip": "127.0.0.1", "target": 18881, "published": "18881",
+                              "protocol": "tcp"}]
+    assert sorted(door["networks"]) == ["records-door", "records-net"]
+    assert door["entrypoint"] == ["python", "-m", "services.records_door.door"]
+    assert "environment" not in door and "env_file" not in door and "volumes" not in door
+    assert door["read_only"] is True and door["cap_drop"] == ["ALL"]
+    assert rendered["networks"]["records-door"] == {"name": "minimoi-staging-records-door"}
+    records = rendered["services"]["records"]
+    assert "ports" not in records and list(records["networks"]) == ["records-net"]
+    env = records["environment"]
+    hosts = env["RECORDS_ALLOWED_HOSTS"] if isinstance(env, dict) else dict(e.split("=", 1) for e in env)["RECORDS_ALLOWED_HOSTS"]
+    assert hosts == "minimoi-records:18880,127.0.0.1:18881"
+    assert "ports" not in rendered["services"]["rooms-worker"]
+
+
+def test_connector_script_writes_no_secret_into_its_plist_and_keeps_state_on_uninstall():
+    text = (SCRIPTS / "connector.sh").read_text()
+    plist = text[text.index("<plist"):text.index("</plist>")]
+    assert "token" not in plist.lower() and "TOKEN" not in plist
+    assert "RECORDS_URL</key><string>http://127.0.0.1:18881" in plist
+    uninstall = text[text.index("  uninstall)"):text.index("  status)")]
+    assert "rm -f \"$PLIST\"" in uninstall and "rm -rf" not in uninstall
+    preflight = text[text.index("  preflight)"):]
+    assert "allow_unproven=True" in preflight            # no-inference checks only
+
+
+def test_records_sh_starts_the_door_only_once_the_connector_is_provisioned():
+    text = (SCRIPTS / "records.sh").read_text()
+    assert "connector_ready && grep -q \"records-door:\"" in text
+    pre = text[text.index("  preflight)"):text.index("  down)")]
+    assert '"HostIp":"127.0.0.1","HostPort":"18881"' in pre and 'curl exit 7 = connection refused' in pre

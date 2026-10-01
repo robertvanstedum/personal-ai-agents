@@ -56,7 +56,8 @@ def fingerprint(turn):
 
 
 class Worker:
-    def __init__(self, records_work, records_mc, relay, journal, teammate="mc", alive_path=None, clock=time):
+    def __init__(self, records_work, records_mc, relay, journal, teammate="mc", alive_path=None, clock=time,
+                 agent_id="mc-agent", runtime="OpenClaw"):
         self.work = records_work
         self.mc = records_mc
         self.relay = relay
@@ -65,17 +66,55 @@ class Worker:
         self.alive_path = Path(alive_path) if alive_path else None
         self.clock = clock
         self._last_hosted = 0.0
+        # Rooms R2 (ROOMS_R2.md §3.2): runtime identity per teammate; the
+        # turns this worker is delivering right now, so threaded housekeeping
+        # never reconciles or delivers the same turn concurrently.
+        self.agent_id, self.runtime = agent_id, runtime
+        self._inflight = set()
+        self._lock = threading.Lock()
+        self._housekeeper = None
+        self.on_committed = None          # optional callback(turn) after Records accepted a reply
+
+    def start_housekeeping(self, every=None):
+        """Housekeeping on its own thread (invites, reconciliation, reach), so a
+        long turn does not stale the teammate's reach. Idempotent."""
+        if self._housekeeper:
+            return
+        stop = threading.Event()
+
+        def loop():
+            while not stop.wait(every or HOSTED_EVERY_S):
+                try:
+                    self.housekeeping()
+                except Exception as error:           # never print payloads or secrets
+                    log(event="housekeeping_error", kind=type(error).__name__)
+        thread = threading.Thread(target=loop, daemon=True)
+        thread.start()
+        self._housekeeper = (thread, stop)
+
+    def stop_housekeeping(self):
+        if self._housekeeper:
+            self._housekeeper[1].set()
+            self._housekeeper[0].join(timeout=5)
+            self._housekeeper = None
 
     # ── one pass of the loop ────────────────────────────────────────────────
     def run_once(self):
         self.touch()
-        if self.clock.time() - self._last_hosted >= HOSTED_EVERY_S:
+        if not self._housekeeper and self.clock.time() - self._last_hosted >= HOSTED_EVERY_S:
             self._last_hosted = self.clock.time()
             self.housekeeping()
         status, data = self.work.call("POST", "/turns/claim", {"addressees": [self.teammate]}, key=str(uuid4()))
         if status != 200 or not data.get("turn"):
             return False
-        self.answer(data["turn"])
+        turn = data["turn"]
+        with self._lock:
+            self._inflight.add(turn["id"])
+        try:
+            self.answer(turn)
+        finally:
+            with self._lock:
+                self._inflight.discard(turn["id"])
         return True
 
     def housekeeping(self):
@@ -89,10 +128,25 @@ class Worker:
                                        key=f"rsvp-accept:{invite['room']}:{self.teammate}")
                 log(event="rsvp_accept", room=invite["room"], status=code)
         for item in hosted.get("uncertain_turns", []):
-            self.recover(item)
+            # Only this worker's own teammate (R2-03), and never a turn it is delivering now.
+            if item.get("principal", self.teammate) != self.teammate:
+                continue
+            with self._lock:
+                if item["turn_id"] in self._inflight:
+                    continue
+                self._inflight.add(item["turn_id"])
+            try:
+                self.recover(item)
+            finally:
+                with self._lock:
+                    self._inflight.discard(item["turn_id"])
         if self.relay.ready():
             self.work.call("POST", f"/hosted-teammates/{self.teammate}/reachable",
                            {"readyz_at": datetime.now(timezone.utc).isoformat()}, key=str(uuid4()))
+        elif getattr(self.relay, "unready_reason", None):
+            self.work.call("POST", f"/hosted-teammates/{self.teammate}/reachable",
+                           {"readyz_at": datetime.now(timezone.utc).isoformat(), "unready": self.relay.unready_reason},
+                           key=str(uuid4()))
 
     def touch(self):
         if self.alive_path:
@@ -151,7 +205,7 @@ class Worker:
                 watcher.stop()               # the send boundary: still fresh, or ask again (review F4)
                 continue
             try:
-                result = self.relay.stream(messages, adapter.user_key(turn["room"], turn["id"]), correlation)
+                result = self.relay.stream(messages, adapter.user_key(turn["room"], turn["id"]), correlation, turn=turn)
             finally:
                 watcher.stop()
             log(event="relay_turn", turn=turn["id"], correlation=correlation, outcome=result["outcome"],
@@ -169,13 +223,15 @@ class Worker:
                 self.clock.sleep(BUSY_RETRY_S)
                 continue
             if result["outcome"] == "done" and result["text"].strip():
-                payload = adapter.reply_payload(turn, result["text"], correlation, result["usage"])
+                payload = adapter.reply_payload(turn, result["text"], correlation, result["usage"],
+                                                agent_id=self.agent_id, runtime=self.runtime)
                 self.journal.generated(journal_key(turn["id"]), payload)
                 return payload
             if result["outcome"] == "done":
                 self.fail(turn, turn["claim_id"], "failed", "empty_reply")      # MC answered nothing
             elif result["outcome"] == "refused":
-                self.fail(turn, turn["claim_id"], "failed", "relay_refused")    # refused before any inference
+                # Refused before any inference (relay 4xx; a runner's pre-spawn check).
+                self.fail(turn, turn["claim_id"], "failed", result.get("reason") or "relay_refused")
             else:
                 # A transport or stream failure after sending: MC may have
                 # worked on it. Never claim it failed (review F7).
@@ -201,6 +257,11 @@ class Worker:
             return
         if status in (200, 201):
             log(event="committed", turn=turn["id"], record=data.get("result", {}).get("id"))
+            if self.on_committed:
+                try:
+                    self.on_committed(turn)
+                except Exception as error:
+                    log(event="on_committed_error", kind=type(error).__name__)
             return
         log(event="post_refused", turn=turn["id"], status=status)
         if status == 409:
@@ -288,6 +349,7 @@ def main():
                     TurnJournal(journal_dir / "turns"), teammate=env.get("ROOMS_TEAMMATE", "mc"),
                     alive_path="/tmp/rooms-worker/alive")
     log(event="started", records=records_url, relay=relay_url, teammate=worker.teammate)
+    worker.start_housekeeping()
     while True:
         try:
             busy = worker.run_once()

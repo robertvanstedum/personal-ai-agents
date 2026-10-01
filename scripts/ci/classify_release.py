@@ -69,7 +69,9 @@ DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent",
                     "docker/Dockerfile.records", "docker/requirements.records.txt",
                     # The Rooms worker (Rooms R1) runs only beside Records in that project.
                     "docker/Dockerfile.rooms-worker", "docker/requirements.rooms-worker.txt",
-                    "services/rooms_worker/")
+                    "services/rooms_worker/",
+                    # Rooms R2: the Mac connector and the door sidecar, staging/Mac only.
+                    "services/rooms_connector/", "services/records_door/")
 
 
 # The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).
