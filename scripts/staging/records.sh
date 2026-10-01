@@ -166,7 +166,14 @@ case "$cmd" in
     # every browser session under any Records version, so a cookie revoked by
     # R3b cannot come back under older code. Records must be stopped first.
     require_absolute_root
-    [[ "$(docker inspect -f '{{.State.Running}}' "$RECORDS_CONTAINER" 2>/dev/null || true)" != true ]] || die "stop Records first (records.sh down)"
+    # Only a successful Docker answer proves Records is stopped or absent; a
+    # query error (daemon, socket, permission) stops here (review B3-01).
+    rc=0; state=$(docker inspect -f '{{.State.Running}}' "$RECORDS_CONTAINER" 2>&1) || rc=$?
+    if [[ "$rc" == 0 ]]; then
+      [[ "$state" == false ]] || die "stop Records first (records.sh down)"
+    elif ! grep -qi "no such object" <<< "$state"; then
+      die "cannot tell whether Records is running (docker query failed); nothing rotated"
+    fi
     key="$STAGING_ROOT/data/records/session-key.txt"
     [[ -f "$key" && ! -L "$key" ]] || die "no session key at $key"
     ( umask 077; openssl rand -base64 36 > "$key.new" )
