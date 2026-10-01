@@ -180,10 +180,21 @@ def test_moving_up_and_gaps_shift_only_as_far_as_needed(queue):
         assert rank(s, queue, item_id, value).ok
     assert rank(s, queue, 3, 1).ok
     assert ranks(queue) == {3: 1, 1: 2, 2: 3}
-    assert rank(s, queue, 1, None).ok                                     # clear: only the target
-    assert ranks(queue) == {3: 1, 2: 3}
-    assert rank(s, queue, 5, 2).ok                                        # the gap at 2: nobody moves
+    assert rank(s, queue, 1, None).ok                                     # clear: the gap closes
+    assert ranks(queue) == {3: 1, 2: 2}
+    assert rank(s, queue, 5, 2).ok                                        # insert at 2: #2 moves to 3
     assert ranks(queue) == {3: 1, 5: 2, 2: 3}
+
+
+def test_moving_number_one_down_to_three_reorders_the_list(queue):
+    """#286 review: moving #1 to #3 is a reorder within the next three, not a drop."""
+    s = store(queue)
+    for item_id, value in ((1, 1), (2, 2), (3, 3)):
+        assert rank(s, queue, item_id, value).ok
+    assert rank(s, queue, 1, 3).ok
+    assert ranks(queue) == {2: 1, 3: 2, 1: 3}
+    assert rank(s, queue, 4, 1).ok                                        # a newcomer at 1: old #3 drops out
+    assert ranks(queue) == {4: 1, 2: 2, 3: 3}
 
 
 def test_two_devices_ranking_different_items_the_second_gets_a_conflict(queue):

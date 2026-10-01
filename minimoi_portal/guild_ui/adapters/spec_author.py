@@ -35,8 +35,13 @@ def resolve(spec_file, docs_root: Path | None = None) -> Path | None:
     root = Path(docs_root or DOCS_ROOT)
     for sub in SEARCH:
         candidate = root / sub / name if sub else root / name
-        if candidate.is_file():
-            return candidate
+        try:
+            if candidate.is_file():
+                return candidate
+        except (OSError, ValueError):
+            # e.g. a name longer than the filesystem allows, or an unreadable
+            # directory: the author is simply unknown (blank), never a 500.
+            return None
     return None
 
 
