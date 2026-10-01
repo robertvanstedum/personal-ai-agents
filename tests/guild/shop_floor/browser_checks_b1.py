@@ -2549,3 +2549,72 @@ def test_s4_an_expired_records_login_says_sign_in_and_keeps_the_draft(browser, s
     expect(page.locator("[data-rm-input]")).to_have_value("Half-written thought about the art")
     assert len(writes) == 1                                           # the one refused attempt; nothing else sent
     ctx.close()
+
+
+# ── Guild 1.1 slice 5 (spec §7, §11): the Workshop restyled ───────────────────
+
+def test_s5_desktop_ops_strip_job_cards_and_controls_not_available(browser, server, workshop):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    writes = _writes(page)
+    go(page, f"{server['url']}/guild-next/guild/workshop")
+    expect(page.locator(".guild-subnav [data-more='workshop']")).to_have_attribute("aria-current", "page")
+    expect(page.locator("[data-ws-top] .ws-title")).to_have_text("Workshop")
+    for key, text in (("memory", "Memory free 46.0%"), ("swap", "Swap used 1.2 GB"), ("disk", "Disk free 80.0 GB"),
+                      ("load", "Load (1 min) 2.1")):
+        chip = page.locator(f"[data-ws-op='{key}']")
+        expect(chip).to_have_attribute("data-state", "measured")
+        expect(chip).to_contain_text(text)
+        expect(chip.locator(".sx-at")).to_be_visible()                            # with its time
+    expect(page.locator("[data-ws-op='production']")).to_have_text("Production host · not measured")
+    expect(page.locator("[data-ws-op='production']")).to_have_attribute("data-state", "not_measured")
+    expect(page.locator("[data-ws-ops-table]")).to_be_hidden()
+    page.click("[data-ws-ops] > summary")
+    expect(page.locator("[data-ws-ops-table]")).to_be_visible()
+    expect(page.locator("[data-ws-op-row='memory'] td").nth(1)).to_contain_text("workshop.py observe")
+    expect(page.locator("[data-ws-op-row='production'] [data-ws-op-fresh]")).to_have_text("—")
+    card = page.locator("[data-ws-job='queue:12']")
+    expect(card).to_have_attribute("data-state", "needs you")
+    expect(card.locator("[data-ws-evidence] li")).to_have_count(2)
+    expect(card.locator(".ws-ref")).to_have_attribute("href", "/guild-next/guild/build/log?item=12")
+    for control in ("comment", "stop"):
+        expect(card.locator(f"[data-ws-control='{control}']")).to_be_disabled()
+        expect(card.locator(f"[data-ws-control='{control}']")).to_contain_text("not available")
+    expect(page.locator("[data-ws-control='start']")).to_be_disabled()
+    # A failed refresh turns measured figures stale and says when the last good read was.
+    page.route("**/api/v1/workshop*", lambda route: route.fulfill(status=503, body="{}", content_type="application/json"))
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(page.locator("[data-ws-op='memory']")).to_have_attribute("data-state", "stale")
+    expect(page.locator("[data-ws-op='memory'] .sx-at")).to_contain_text("last good read")
+    expect(page.locator("[data-ws-jobs]")).to_have_attribute("data-stale", "true")
+    assert _no_page_overflow(page)
+    assert not writes, writes                                                       # read only
+    assert not [e for e in errors if "status of 503" not in e], errors
+    ctx.close()
+
+
+def test_s5_phone_workshop_in_the_shell_without_overflow(browser, server, workshop):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    errors = _errors(page)
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    page.goto(f"{server['url']}/guild-next/")                                    # the Guild home (no floor script)
+    page.wait_for_load_state("load")
+    page.click("[data-subnav-more] > summary")
+    with page.expect_navigation():
+        page.click("[data-more='workshop']")
+    page.wait_for_selector("body[data-ready=true]")
+    assert page.url.endswith("/guild-next/guild/workshop")
+    expect(page.locator("[data-ws-top]")).to_be_visible()
+    expect(page.locator("[data-ws-op='memory']")).to_be_in_viewport()
+    cards = page.locator(".ws-job")
+    expect(cards).to_have_count(2)
+    boxes = [cards.nth(i).bounding_box() for i in range(2)]
+    assert abs(boxes[0]["x"] - boxes[1]["x"]) < 2 and boxes[1]["y"] > boxes[0]["y"]   # one column
+    assert boxes[0]["x"] >= 0 and boxes[0]["x"] + boxes[0]["width"] <= 390
+    assert page.locator("[data-ws-control='stop']").first.bounding_box()["height"] >= 43
+    page.click("[data-ws-ops] > summary")
+    expect(page.locator("[data-ws-ops-table]")).to_be_visible()
+    assert _no_page_overflow(page)
+    assert not errors, errors
+    ctx.close()

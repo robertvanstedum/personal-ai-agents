@@ -26,6 +26,46 @@ function setRecovery(lines) {
   }));
 }
 
+// The ops strip (Guild 1.1 slice 5): each figure with its source and
+// freshness, or "not measured"; text only, set with textContent.
+function showOps(ops) {
+  if (!Array.isArray(ops)) return;
+  for (const o of ops) {
+    const chip = $(`[data-ws-op="${o.id}"]`);
+    if (chip) {
+      chip.dataset.state = o.state;
+      const text = $('[data-ws-op-text]', chip);
+      if (text) text.textContent = o.text;
+      let at = $('.sx-at', chip);
+      if (o.fresh && o.fresh.at) {
+        if (!at) { at = document.createElement('span'); at.className = 'sx-at'; chip.append(at); }
+        at.textContent = ` · ${localTime(o.fresh.at)}`;
+      } else if (at) at.remove();
+    }
+    const row = $(`[data-ws-op-row="${o.id}"]`);
+    if (row) {
+      row.dataset.state = o.state;
+      const value = $('[data-ws-op-value]', row);
+      if (value) value.textContent = (o.value || (o.state === 'not_measured' ? 'not measured' : 'unknown')) + (o.state === 'stale' ? ' (stale)' : '');
+      const fresh = $('[data-ws-op-fresh]', row);
+      if (fresh) fresh.textContent = o.fresh && o.fresh.at ? `${localTime(o.fresh.at)}${o.fresh.age ? ` · ${o.fresh.age}` : ''}` : '—';
+    }
+  }
+}
+
+function opsFailed(when) {
+  for (const chip of document.querySelectorAll('[data-ws-op]')) {
+    if (chip.dataset.state === 'measured') chip.dataset.state = 'stale';
+    const at = $('.sx-at', chip);
+    if (at && !at.textContent.includes('last good read')) at.textContent = ` · last good read ${when}`;
+  }
+  for (const row of document.querySelectorAll('[data-ws-op-row]')) {
+    if (row.dataset.state === 'measured') row.dataset.state = 'stale';
+  }
+  const jobs = $('[data-ws-jobs]');
+  if (jobs) jobs.dataset.stale = 'true';
+}
+
 function show(v) {
   const adm = v.admission || {};
   const box = $('[data-ws-admission]');
@@ -51,6 +91,7 @@ function show(v) {
   if (head) head.dataset.stale = v.headroom ? 'false' : 'true';
   if (Array.isArray(v.recovery)) setRecovery(v.recovery);
   setText('[data-ws-refreshed]', `as of ${localTime(v.observed_at)}`);
+  showOps(v.ops);
 }
 
 function failed() {
@@ -69,6 +110,7 @@ function failed() {
   }
   setRecovery([FAILED_RECOVERY]);
   setText('[data-ws-refreshed]', `as of ${when} (last good read; the refresh failed)`);
+  opsFailed(when);
 }
 
 async function refresh() {

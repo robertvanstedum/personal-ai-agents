@@ -89,6 +89,22 @@
   --gu-note-pin: #c0443a;
   --gu-photo-bg: #fffdf8;
   --gu-font-hand: 'Noteworthy', 'Bradley Hand', 'Segoe Print', 'Chalkboard SE', cursive;
+  /* The Workshop (Guild 1.1 slice 5, after the v4 look): a dark green header */
+  --gu-ws-top-a: #1d3533;
+  --gu-ws-top-b: #152523;
+  --gu-ws-top-c: #1b1a17;
+  --gu-ws-top-glow: rgba(255, 196, 120, 0.18);
+  --gu-ws-top-ink: #f2eadf;
+  --gu-ws-top-muted: #d2c6b5;
+  --gu-ws-chip-line: rgba(255, 255, 255, 0.26);
+  --gu-ws-chip-bg: rgba(255, 255, 255, 0.07);
+  --gu-ws-ok: #8fd19e;
+  --gu-ws-warn: #f2c66d;
+  --gu-ws-unk: #c9c2b8;
+  --gu-ws-pill-run-bg: #d8ece8;   --gu-ws-pill-run-ink: #1f5a52;
+  --gu-ws-pill-need-bg: #f6e7b8;  --gu-ws-pill-need-ink: #6b4e00;
+  --gu-ws-pill-done-bg: #e6e9dc;  --gu-ws-pill-done-ink: #3b4630;
+  --gu-ws-ev-bg: #2a241c;         --gu-ws-ev-ink: #f2eadf;
   --gu-font-serif: Georgia, 'Times New Roman', serif;
   --gu-subnav-h: 44px;
   /* stoplights: shape + word always accompany colour; unknown is grey, never green */
