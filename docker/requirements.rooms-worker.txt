@@ -1,0 +1,3 @@
+# Rooms worker (Rooms R1, docs/specs/minimoi-connected-work/ROOMS_R1.md §3.8),
+# STAGING ONLY: the runtime needs of services/rooms_worker (no test tools).
+requests>=2.32,<3

@@ -44,7 +44,58 @@ services:
       retries: 3
       start_period: 20s
 
+  # Rooms R1 (docs/specs/minimoi-connected-work/ROOMS_R1.md §3.8): the worker
+  # that answers Master Craftsman's meeting turns. A sibling of Records, never
+  # a process in the portal: Rooms keeps answering while the portal is down.
+  # It reaches Records on records-net and the MC relay on mc-front, nothing
+  # else; no published port; no env_file; its secrets only as read-only files.
+  rooms-worker:
+    image: minimoi-staging/rooms-worker:${MINIMOI_IMAGE_TAG:?run scripts/staging/records.sh build}
+    pull_policy: never
+    container_name: minimoi-rooms-worker
+    restart: unless-stopped
+    environment:
+      - RECORDS_URL=http://minimoi-records:18880
+      - MC_RELAY_URL=http://mc-relay:8790
+      - ROOMS_SECRETS_DIR=/run/secrets/rooms
+      - ROOMS_JOURNAL_DIR=/journal
+      - ROOMS_TEAMMATE=mc
+    volumes:
+      - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/secrets/rooms-worker:/run/secrets/rooms:ro
+      - rooms-journal:/journal
+    networks:
+      - records-net
+      - mc-front
+    depends_on:
+      - records
+    mem_limit: 128m
+    pids_limit: 64
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; p='/tmp/rooms-worker/alive'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 60 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  # The worker's turn journal (journal before inference): kept across restarts
+  # so recovery is receipt-first and never re-runs inference. External, so a
+  # compose down cannot remove it.
+  rooms-journal:
+    name: minimoi-staging-rooms-journal
+    external: true
+
 networks:
   records-net:
     name: minimoi-staging-records
+    external: true
+  mc-front:
+    name: minimoi-staging-mc-front
     external: true

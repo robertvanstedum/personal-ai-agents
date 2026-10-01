@@ -853,7 +853,7 @@ class Meetings:
             AND e.kind IN ({kinds}) ORDER BY e.seq DESC""",
                           (t["room"], t["trigger_seq"], *accepted, *SNAPSHOT_KINDS)).fetchall()
         kept = list(reversed(rows[:SNAPSHOT_LIMIT]))
-        trigger = db.execute("SELECT body FROM events WHERE room=? AND seq=?", (t["room"], t["trigger_seq"])).fetchone()
+        trigger = db.execute("SELECT id,body FROM events WHERE room=? AND seq=?", (t["room"], t["trigger_seq"])).fetchone()
         session = db.execute("SELECT title,purpose FROM rooms WHERE id=?", (t["room"],)).fetchone()
         meeting = db.execute("SELECT * FROM meetings WHERE room=?", (t["room"],)).fetchone()
         participants = [{"id": r["id"], "label": r["label"], "kind": r["kind"]} for r in db.execute(
@@ -870,7 +870,8 @@ class Meetings:
                                 "created": r["created"]} for r in kept],
                 "coverage": {"through_seq": t["trigger_seq"] - 1, "included": len(kept),
                              "omitted": max(0, len(rows) - len(kept))},
-                "trigger": {"seq": t["trigger_seq"], "text": trigger["body"] if trigger else ""}}
+                "trigger": {"seq": t["trigger_seq"], "id": trigger["id"] if trigger else None,
+                            "text": trigger["body"] if trigger else ""}}
 
     def start(self, auth, turn_id, payload):
         with self.store.connect() as db:
