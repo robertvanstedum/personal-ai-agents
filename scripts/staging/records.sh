@@ -209,7 +209,8 @@ case "$cmd" in
       # Rooms R2: the door is the only published port, on loopback only.
       check "records-door networks" "$(nets "$DOOR_CONTAINER")" "$RECORDS_NETWORK minimoi-staging-records-door"
       check "records-door published ports" "$(ports "$DOOR_CONTAINER")" '{"18881/tcp":[{"HostIp":"127.0.0.1","HostPort":"18881"}]}'
-      check "records-door holds no credential" "$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$DOOR_CONTAINER" | grep -ciE 'token|key|secret' || true)" "0"
+      # Variable NAMES only; GPG_KEY is the Python base image's public signing-key id.
+      check "records-door holds no credential" "$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$DOOR_CONTAINER" | sed 's/=.*//' | grep -iE 'token|secret|password|key' | grep -cvx 'GPG_KEY' || true)" "0"
       check "records-door read-only root" "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$DOOR_CONTAINER")" "true"
       check "door from the Mac, no credential (expect 401)" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:18881/api/v1/me || echo curl_failed)" "401"
       lan=$(ipconfig getifaddr en0 2>/dev/null || true)
