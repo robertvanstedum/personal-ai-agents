@@ -108,9 +108,30 @@ def test_staging_gateway_is_permanently_on_the_internal_mc_net():
             assert "mc-net" not in (service.get("networks") or []), name
 
 
+# Staging-only portal settings added after main, compared by their own tests:
+# the Systems light's URL for the Mac's native Operations agent.
+STAGING_ONLY_ENV = {"GUILD_OPERATIONS_STATUS_URL"}
+
+
 def _staging_render(files):
     return yaml.safe_load(_compose_config(*files, env_extra={"MINIMOI_ROOT": "/Users/x/minimoi-staging",
                                                              "MINIMOI_IMAGE_TAG": "abc1234"}))
+
+
+def _without_own_usage_folder(after_svc, before_svc):
+    """after, minus each root writer's own usage folder (the U2 ownership fix:
+    MINIMOI_USAGE_WRITER, the read-write own folder, the shared store read-only),
+    which main does not have yet."""
+    out = dict(after_svc)
+    if "environment" in out:
+        out["environment"] = {k: v for k, v in out["environment"].items()
+                              if k != "MINIMOI_USAGE_WRITER" or k in (before_svc.get("environment") or {})}
+    if "volumes" in out:
+        before_by_target = {v["target"]: v for v in before_svc.get("volumes", [])}
+        out["volumes"] = [before_by_target.get(v["target"], v) if v["target"] == "/app/data/usage" else v
+                          for v in out["volumes"]
+                          if not (v["target"].startswith("/app/data/usage/") and v["target"] not in before_by_target)]
+    return out
 
 
 def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tmp_path):
@@ -122,18 +143,25 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     (tmp_path / "docker-compose.staging.yml").write_text(main_staging)
     before = _staging_render([tmp_path / "docker-compose.prod.yml", tmp_path / "docker-compose.staging.yml"])
     after = _staging_render([PROD, STAGING])
-    usage_env = {"MINIMOI_USAGE_DIR", "MINIMOI_ENV"}
-    usage_targets = {"/app/usage_record.py", "/app/usage_recorder.py", "/app/usage-data", "/app/data/usage"}
+    usage_env = {"MINIMOI_USAGE_DIR", "MINIMOI_ENV", "MINIMOI_WORKSHOPS_DIR", "MINIMOI_WORKSHOP_ID",
+                 "MINIMOI_GUILD_MC_STREAM"}
+    usage_targets = {"/app/usage_record.py", "/app/usage_recorder.py", "/app/usage-data", "/app/data/usage",
+                     "/app/data/usage/portal", "/app/data/workshops"}
 
     def without_usage(after_svc, before_svc):
         """after, minus the usage-record additions (U1/U2) that main does not have yet."""
         out = dict(after_svc)
         env_b = before_svc.get("environment") or {}
         if "environment" in out:
-            out["environment"] = {k: v for k, v in out["environment"].items() if k not in usage_env or k in env_b}
+            out["environment"] = {k: v for k, v in out["environment"].items()
+                                  if k not in usage_env | STAGING_ONLY_ENV or k in env_b}
         targets_b = {v["target"] for v in before_svc.get("volumes", [])}
         if "volumes" in out:
-            out["volumes"] = [v for v in out["volumes"] if v["target"] not in usage_targets or v["target"] in targets_b]
+            # The usage store's mounts are compared by their own tests (the
+            # portal's became read-write for its runtime-stream records, S1).
+            before_usage = {v["target"]: v for v in before_svc.get("volumes", []) if v["target"] in usage_targets}
+            out["volumes"] = [before_usage.get(v["target"], v) for v in out["volumes"]
+                              if v["target"] not in usage_targets or v["target"] in targets_b]
             if not out["volumes"] and "volumes" not in before_svc:
                 del out["volumes"]
         return out
@@ -141,7 +169,8 @@ def test_c6_cos_render_is_identical_to_main_and_only_the_gateway_gains_mc_net(tm
     for name in before["services"]:
         if name == "model-gateway":
             continue
-        assert without_usage(after["services"][name], before["services"][name]) == before["services"][name], name
+        after_svc = _without_own_usage_folder(after["services"][name], before["services"][name])
+        assert without_usage(after_svc, before["services"][name]) == before["services"][name], name
     gw_before, gw_after = before["services"]["model-gateway"], after["services"]["model-gateway"]
     assert set(gw_after["networks"]) == {"default", "mc-net"}
     # Stage C: provider keys under gateway-only names, the default names empty,

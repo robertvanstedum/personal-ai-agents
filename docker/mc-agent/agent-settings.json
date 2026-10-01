@@ -1,0 +1,7 @@
+{
+  "retry": {
+    "provider": {
+      "maxRetries": 0
+    }
+  }
+}

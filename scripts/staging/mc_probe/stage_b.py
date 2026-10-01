@@ -20,6 +20,17 @@ header "live" only after that; a refused model key (the staging case) shows
 "unavailable · its model key was refused"; the relay refuses every other
 path, model alias and caller; MC cannot resolve or reach the portal side, and
 reaches the relay only without a caller token; no token in the relay's logs.
+
+Streaming (streaming spec v0.2 §2 and §10, S1): the relay runs THIS branch's
+relay.mjs (mounted over the image's), and the portal side calls the adapter's
+stream_turn():
+  P4  a streamed turn: text, finish, usage, and the timings to the first
+      delta, the finish and the end;
+  P1  an upstream failure mid-stream reaches the Shop floor as a failure;
+  P2  Stop mid-stream: the portal side gets "stopped", and whether OpenClaw
+      then closes its own call to the model endpoint (the capture server
+      logs "aborted" or "finished") and whether any further call starts;
+  --  a caller that leaves mid-stream does not stop the run (finished).
 """
 from __future__ import annotations
 
@@ -107,7 +118,39 @@ print(json.dumps({"readyz": code("/readyz"), "no_token": code("/readyz", token=F
   "tools_invoke": code("/tools/invoke", "POST", b"{}"), "embeddings": code("/v1/embeddings", "POST", b"{}"),
   "models": code("/v1/models"), "alias_default": code("/v1/chat/completions", "POST", chat("openclaw/default")),
   "alias_cos": code("/v1/chat/completions", "POST", chat("openclaw/cos-agent-a")),
-  "stream": code("/v1/chat/completions", "POST", json.dumps({"model": "openclaw/mc-agent", "user": "guild-mc:x", "stream": True, "messages": [{"role": "user", "content": "x"}]}).encode())}))
+  "stream_string": code("/v1/chat/completions", "POST", json.dumps({"model": "openclaw/mc-agent", "user": "guild-mc:x", "stream": "true", "messages": [{"role": "user", "content": "x"}]}).encode()),
+  "stream_options": code("/v1/chat/completions", "POST", json.dumps({"model": "openclaw/mc-agent", "user": "guild-mc:x", "stream": True, "stream_options": {"include_usage": False}, "messages": [{"role": "user", "content": "x"}]}).encode()),
+  "stop_unknown": code("/v1/turns/stop", "POST", json.dumps({"correlation_id": "0" * 32}).encode())}))
+"""
+
+STREAM_SIDE = r"""
+import json, os, sys, time
+sys.path.insert(0, "/src")
+from minimoi_portal.guild_ui.mc.openclaw import OpenClawMasterCraftsman
+from minimoi_portal.guild_ui.mc.backend import TurnRequest
+mode, corr = sys.argv[1], sys.argv[2]
+b = OpenClawMasterCraftsman("http://mc-relay:8790/v1", os.environ["MC_RUNTIME_TOKEN"])
+t0 = time.monotonic()
+out = {"events": [], "t": {}}
+it = b.stream_turn(TurnRequest("guild:robert:stream-probe", "Stream, please", "n-" + mode, correlation_id=corr))
+for ev in it:
+    ms = int((time.monotonic() - t0) * 1000)
+    name = type(ev).__name__
+    value = getattr(ev, "text", None) or getattr(ev, "reason", None) or getattr(ev, "cls", None)
+    if name == "Usage":
+        value = [ev.prompt_tokens, ev.completion_tokens]
+    out["events"].append([name, value, ms])
+    if name == "Delta" and "first_delta" not in out["t"]:
+        out["t"]["first_delta"] = ms
+        if mode == "stop":
+            out["stopped"] = b.stop(corr)
+        if mode == "leave":
+            break
+    if name == "Finish":
+        out["t"]["finish"] = ms
+it.close()
+out["t"]["end"] = int((time.monotonic() - t0) * 1000)
+print(json.dumps(out))
 """
 
 FROM_MC = r"""
@@ -126,6 +169,83 @@ const probe = (h, p) => new Promise(r => { const s = net.connect({ host: h, port
 """
 
 
+def _capture(path, body=None):
+    js = (f"fetch('http://127.0.0.1:4001{path}'" + (f",{{method:'POST',body:JSON.stringify({json.dumps(body)})}}" if body else "")
+          + ").then(r=>r.text()).then(t=>console.log(t))")
+    return docker("exec", CAP, "node", "-e", js).stdout
+
+
+def _stream_side(mode):
+    corr = secrets.token_hex(16)
+    out = docker("exec", PORTAL, "python", "-c", STREAM_SIDE, mode, corr, timeout=300)
+    try:
+        return corr, json.loads(out.stdout.strip().splitlines()[-1])
+    except (json.JSONDecodeError, IndexError):
+        return corr, {"error": (out.stderr or out.stdout)[-400:], "events": []}
+
+
+def _chat_log():
+    try:
+        return [e for e in json.loads(_capture("/log") or "[]") if e["path"].endswith("/chat/completions")]
+    except json.JSONDecodeError:
+        return []
+
+
+def stream_probes(a):
+    """P4, P1, P2 and a leaving caller (see the module doc). No spend: the model
+    endpoint is the capture server."""
+    words = ["Item ", "12 ", "is ", "in ", "build."]
+    _capture("/script", {"model": "minimoi-mc-agent", "replace": True,
+                         "steps": [{"chunks": words, "chunk_delay_ms": 300}]})
+    _, res = _stream_side("happy")
+    kinds = [e[0] for e in res.get("events", [])]
+    text = "".join(e[1] for e in res.get("events", []) if e[0] == "Delta")
+    record("P4 a streamed turn through the relay: its text, then finish 'stop'",
+           text == "Item 12 is in build." and ["Finish", "stop"] in [e[:2] for e in res["events"]], json.dumps(res)[:300])
+    usage = [e[1] for e in res.get("events", []) if e[0] == "Usage"]
+    record("P4 the stream carries its usage (include_usage), provider-reported through OpenClaw",
+           bool(usage) and all(isinstance(n, int) for n in usage[-1]), json.dumps(usage))
+    record("P4 (timings, informational): to the first delta, the finish, and the end", True, json.dumps(res.get("t")))
+
+    before = len(_chat_log())
+    _capture("/script", {"model": "minimoi-mc-agent", "replace": True,
+                         "steps": [{"chunks": words, "chunk_delay_ms": 200, "fail_after": 2}] * 6})
+    _, res = _stream_side("p1")
+    kinds = [e[:2] for e in res.get("events", [])]
+    record("P1 an upstream failure mid-stream reaches the Shop floor as a failure, never an answer",
+           ["Finish", "stop"] not in kinds and (kinds and kinds[-1][0] == "Failure" or "Finish" not in [k[0] for k in kinds]),
+           json.dumps(kinds))
+    calls = len(_chat_log()) - before
+    record("P1 with MC's retry cap (retry.provider.maxRetries 0): one failed dispatch makes exactly one model call",
+           calls == 1, f"{calls} model call(s) for that turn (5 without the cap on 2026-09-29)")
+
+    before = len(_chat_log())
+    _capture("/script", {"model": "minimoi-mc-agent", "replace": True,
+                         "steps": [{"chunks": [f"w{i} " for i in range(20)], "chunk_delay_ms": 700}]})
+    _, res = _stream_side("stop")
+    kinds = [e[:2] for e in res.get("events", [])]
+    record("P2 Stop mid-stream: the relay aborts and the portal side gets 'stopped'",
+           res.get("stopped") is True and kinds and kinds[-1] == ["Failure", "stopped"], json.dumps(kinds)[:300])
+    time.sleep(3)
+    calls = _chat_log()[before:]
+    outcome = calls[-1].get("outcome") if calls else None
+    record("P2 (finding): after Stop, OpenClaw's own call to the model endpoint was "
+           + ("closed early (cancelled)" if outcome == "aborted" else f"left to run ({outcome})"), True,
+           f"{len(calls)} call(s); the UI line assumes it may have finished until this says 'cancelled'")
+
+    before = len(_chat_log())
+    _capture("/script", {"model": "minimoi-mc-agent", "replace": True,
+                         "steps": [{"chunks": [f"v{i} " for i in range(6)], "chunk_delay_ms": 500}]})
+    corr, res = _stream_side("leave")
+    time.sleep(6)
+    calls = _chat_log()[before:]
+    logs = docker("logs", RELAY).stdout
+    left = [json.loads(line) for line in logs.splitlines() if corr in line and '"event":"stream"' in line]
+    record("a caller that leaves mid-stream does not stop the run: MC's call finished and the relay read it to the end",
+           bool(calls) and calls[-1].get("outcome") == "finished" and bool(left) and left[-1].get("caller_gone") is True,
+           json.dumps({"outcome": calls[-1].get("outcome") if calls else None, "relay": left[-1] if left else None}))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mc-image", required=True)
@@ -138,7 +258,17 @@ def main():
            "MC_IMAGE_REPO": a.mc_image.split(":")[0], "MINIMOI_IMAGE_TAG": a.mc_image.split(":")[1],
            "MC_CONTAINER_NAME": MC, "MC_RELAY_CONTAINER_NAME": RELAY, "MC_NET_NAME": NET_MC, "MC_FRONT_NAME": NET_FRONT,
            "MC_STATE_VOLUME": VOLS[0], "MC_AUTH_VOLUME": VOLS[1]}
-    compose = lambda *args: sh("docker", "compose", "-p", P, "-f", str(REPO / "docker-compose.mc.yml"), *args, env=env)  # noqa: E731
+    # This branch's relay (streaming S1), mounted over the image's copy.
+    override = tmp / "relay-override.yml"
+    mc_dir = REPO / "docker" / "mc-agent"
+    override.write_text("services:\n  mc-relay:\n    volumes:\n"
+                        f"      - {mc_dir / 'relay.mjs'}:/opt/minimoi/mc-agent/relay.mjs:ro\n"
+                        # MC's retry cap (agent-settings.json), applied by this branch's start script.
+                        "  mc-agent:\n    volumes:\n"
+                        f"      - {mc_dir / 'start-mc.sh'}:/opt/minimoi/mc-agent/start-mc.sh:ro\n"
+                        f"      - {mc_dir / 'agent-settings.json'}:/opt/minimoi/mc-agent/agent-settings.json:ro\n")
+    compose = lambda *args: sh("docker", "compose", "-p", P, "-f", str(REPO / "docker-compose.mc.yml"),  # noqa: E731
+                               "-f", str(override), *args, env=env)
 
     def cleanup():
         compose("down")
@@ -170,6 +300,10 @@ def main():
             time.sleep(2)
         record("MC and the relay start in MC's own project; MC serving after its self-check",
                docker("exec", MC, "cat", "/tmp/minimoi-mc/state").stdout.strip() == "serving", f"{round(time.time() - t0)}s")
+
+        # The streaming probes first: the refused-key checks below make OpenClaw
+        # disable MC's key for about a minute, which every later turn would hit.
+        stream_probes(a)
 
         def portal_side(*ids):
             out = docker("exec", PORTAL, "python", "-c", PORTAL_SIDE, *ids, timeout=300)
@@ -222,7 +356,7 @@ def main():
                        f"class {got.get('failure_class')}")
         rules = json.loads(docker("exec", PORTAL, "python", "-c", RELAY_RULES).stdout.strip() or "{}")
         want = {"readyz": 200, "no_token": 401, "tools_invoke": 403, "embeddings": 403, "models": 403,
-                "alias_default": 403, "alias_cos": 403, "stream": 403}
+                "alias_default": 403, "alias_cos": 403, "stream_string": 403, "stream_options": 403, "stop_unknown": 404}
         record("from the portal side the relay passes only readiness and allowed turns", rules == want, json.dumps(rules))
         portal_ip = json.loads(docker("inspect", "-f", "{{json .NetworkSettings.Networks}}", PORTAL).stdout)[NET_FRONT]["IPAddress"]
         from_mc = json.loads(docker("exec", MC, "node", "-e", FROM_MC % {"portal": PORTAL, "portal_ip": portal_ip}).stdout.strip() or "{}")
@@ -238,7 +372,10 @@ def main():
         out = a.out or Path(tempfile.mkdtemp(prefix="mc-stage-b-"))
         out.mkdir(parents=True, exist_ok=True)
         (out / "results.json").write_text(json.dumps(RESULTS, indent=2))
-        cleanup()
+        if os.environ.get("MCPB_KEEP") == "1":          # debugging only: leave the throwaway stack up
+            print(f"MCPB_KEEP=1: containers left running (project {P}); remove with docker compose -p {P} down")
+        else:
+            cleanup()
         shutil.rmtree(tmp, ignore_errors=True)
     failed = [r for r in RESULTS if not r["pass"]]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")

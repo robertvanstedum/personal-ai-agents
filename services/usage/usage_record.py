@@ -31,10 +31,15 @@ VERSION = 1
 MAX_LINE_BYTES = 4000
 QUEUE_MAX = 256
 
-EMITTER_RE = re.compile(r"^(gateway|openclaw-stream|helper:[a-z0-9_.-]{1,40})$")
+# "runtime-stream" is a streamed run's own usage (streaming spec v0.3 §4; it replaces the
+# reserved "openclaw-stream" name: the runtime appears only in `route`).
+EMITTER_RE = re.compile(r"^(gateway|runtime-stream|helper:[a-z0-9_.-]{1,40})$")
 STATUSES = ("ok", "error", "refused")
 KINDS = ("model", "search", "speech")
-COST_SOURCES = ("provider", "price_table", "none")
+# "unrecorded-abort": a streamed run MiniMoi aborted (Stop or a limit). The
+# gateway (LiteLLM 1.93.1) logs nothing for a client-cancelled stream, so the
+# run's cost is unknown, and possibly billed (streaming S1, staging 2026-09-29).
+COST_SOURCES = ("provider", "price_table", "none", "unrecorded-abort")
 
 FIELDS = {
     "v", "record_id", "occurred_at", "env", "emitter", "actor", "kind", "route", "provider", "model",
@@ -86,7 +91,7 @@ def validate(payload: dict) -> dict:
     for name in OPTIONAL_TEXT:
         out[name] = _check_text(name, payload.get(name), secrets, False)
     if not EMITTER_RE.match(out["emitter"]):
-        raise ValueError("usage record emitter must be gateway, openclaw-stream or helper:<name>")
+        raise ValueError("usage record emitter must be gateway, runtime-stream or helper:<name>")
     if out["status"] not in STATUSES:
         raise ValueError(f"usage record status must be one of {STATUSES}")
     if out["kind"] not in KINDS:
@@ -228,4 +233,51 @@ def read(folder: str, months: int = 2) -> list[dict]:
     return out
 
 
-__all__ = ["validate", "append", "record", "flush", "read", "now_iso", "usage_dir", "env_name", "FIELDS", "VERSION"]
+# ── One folder per writer (the first-writer ownership fix) ─────────────────────
+# Files are created 0600 by whoever writes first. The gateway runs as a non-root
+# user and appends to the shared monthly file (usage-YYYY-MM.jsonl at the top of
+# the store); every other writer (cos-bot, cos-scheduler, the portal) runs as
+# root. Had one of them created the month's shared file first, the gateway could
+# not append to it that month. So every writer but the gateway writes only into
+# its own subfolder, <store>/<writer>/ (the same v1 files and format), and the
+# shared file is only ever the gateway's. Readers use read_all(), which reads the
+# top level and every writer's folder.
+
+WRITER_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+DEFAULT_WRITER = "direct"
+
+
+def own_folder(writer: str | None = None, *, create: bool = True) -> str | None:
+    """This writer's own folder: MINIMOI_USAGE_OWN_DIR if set, else
+    $MINIMOI_USAGE_DIR/<writer>, where the writer is the argument, else
+    MINIMOI_USAGE_WRITER, else "direct". None when there is no store (nothing
+    is written). With ``create``, the folder is made (0700) when missing."""
+    folder = os.environ.get("MINIMOI_USAGE_OWN_DIR") or None
+    if folder is None:
+        store = usage_dir()
+        if not store:
+            return None
+        name = writer or os.environ.get("MINIMOI_USAGE_WRITER") or DEFAULT_WRITER
+        if not WRITER_RE.match(name):
+            raise ValueError("a usage writer's name is short lower-case text")
+        folder = os.path.join(store, name)
+    if create:
+        os.makedirs(folder, mode=0o700, exist_ok=True)
+    return folder
+
+
+def read_all(folder: str, months: int = 2) -> list[dict]:
+    """The most recent months' records of the whole store: the top level (the
+    gateway's) and every writer's own folder. Torn or foreign lines are skipped."""
+    out = read(folder, months)
+    try:
+        names = sorted(n for n in os.listdir(folder) if WRITER_RE.match(n) and os.path.isdir(os.path.join(folder, n)))
+    except OSError:
+        return out
+    for name in names:
+        out.extend(read(os.path.join(folder, name), months))
+    return out
+
+
+__all__ = ["validate", "append", "record", "flush", "read", "read_all", "own_folder", "now_iso", "usage_dir",
+           "env_name", "FIELDS", "VERSION", "WRITER_RE"]

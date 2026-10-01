@@ -173,20 +173,9 @@
   <p class="guild-tagline">Craft the work. Sharpen the craft.</p>
 </div>
 
+{% from 'guild/_build_card.html' import build_card %}
 <div class="guild-card-row">
-
-  <!-- Build -->
-  <a href="/guild/build/queue" class="guild-card">
-    <div class="card-tab">Build</div>
-    <div class="card-illustration">
-      <img src="/static/guild/guild-build.jpg" alt="Build — craftsmen at a workbench">
-    </div>
-    <div class="card-body">
-      <div class="card-kicker">Queue · Log · Roadmap · Docs</div>
-      <div class="card-desc">spec → build → ship</div>
-      <div class="card-cta">Queue →</div>
-    </div>
-  </a>
+{{ build_card() }}
 
   <!-- Operate -->
   <a href="/guild/operate" class="guild-card">

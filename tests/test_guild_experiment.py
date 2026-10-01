@@ -872,8 +872,10 @@ def test_the_three_original_landing_cards_are_still_present():
     """§9.2 guard, relaxed after G1 shipped: the landing keeps its three original
     cards and their links; wording may change deliberately (PR #197 renamed the
     Improve kicker), so the byte-identical comparison against origin/main is gone."""
-    current = (Path(__file__).resolve().parent.parent
-               / "minimoi_portal" / "templates" / "guild" / "guild_landing.html").read_text()
+    templates = Path(__file__).resolve().parent.parent / "minimoi_portal" / "templates" / "guild"
+    # The Build card is the shared partial (also on the Shop floor's rail); the landing includes it.
+    current = (templates / "guild_landing.html").read_text() + (templates / "_build_card.html").read_text()
+    assert "{{ build_card() }}" in current
     blocks = _card_blocks(current)
     assert set(blocks) == {"Build", "Operate", "Improve"}
     assert 'href="/guild/build/queue"' in blocks["Build"]

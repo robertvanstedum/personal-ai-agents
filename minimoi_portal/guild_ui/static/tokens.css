@@ -43,6 +43,31 @@
   --gu-nav-underline: #d49a6a;
   --gu-banner-bg: #f3dcc2;
   --gu-banner-ink: #5c330c;
+  /* Guild 1.1 (slice 1): Curator's paper palette, shared by the Guild bar, the
+     Guild home (css/landing.css) and the Chat header. Values from
+     domains/curator/templates/curator_landing.html; link ink darkened for AA. */
+  --gu-paper: #f5f0e8;
+  --gu-paper-bar: rgba(245, 240, 232, 0.97);
+  --gu-paper-ink: #2a1f14;
+  --gu-paper-drawer: #ede7dc;
+  --gu-paper-rule: #c4b49a;
+  --gu-paper-accent: #c68a5e;
+  --gu-paper-muted: #8a7060;
+  --gu-paper-dim: #a89880;
+  --gu-paper-link: #6e5c4a;
+  --gu-paper-active: #6f4718;
+  --gu-paper-shadow: 2px 3px 8px rgba(42, 31, 20, 0.10);
+  --gu-paper-shadow-hover: 2px 6px 16px rgba(42, 31, 20, 0.14);
+  --gu-menu-shadow: 0 10px 30px rgba(42, 31, 20, 0.18);
+  --gu-hero-shade: linear-gradient(90deg, rgba(20, 14, 10, 0.74), rgba(20, 14, 10, 0.28) 70%);
+  --gu-hero-ink: #ffffff;
+  --gu-hero-sub: #efe6d8;
+  --gu-hero-live: #6fcf74;
+  --gu-hero-chip-bg: rgba(255, 250, 241, 0.92);
+  --gu-hero-chip-off-bg: #3e3b37;
+  --gu-hero-chip-off-ink: #f2eee8;
+  --gu-font-serif: Georgia, 'Times New Roman', serif;
+  --gu-subnav-h: 44px;
   /* stoplights: shape + word always accompany colour; unknown is grey, never green */
   --gu-light-green: #2f6b34;
   --gu-light-yellow: #9a6a00;

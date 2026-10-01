@@ -45,13 +45,16 @@ def test_pages_say_unavailable_and_show_no_zero(load_portal):
     portal, _ = _down(load_portal)
     client = portal.owner()
     floor = client.get("/guild-next/guild/build").get_data(as_text=True)
-    assert "Post-its unavailable — add and remove are paused" in floor
-    assert "Continue unavailable — treat as unknown" in floor
+    assert "Continue unavailable — treat as unknown" in floor          # the context rail shows it, never hides it
     assert "Conversation unavailable — treat as unknown. Nothing you send is kept." in floor
-    assert "· unavailable" in floor
     for zero in ("0 on the board", "Bin (0)", "No post-its on the board", "Nothing to continue"):
         assert zero not in floor, zero
-    assert 'data-postit-input maxlength="140" autocomplete="off" placeholder="Add a post-it" disabled' in floor
+    # Guild 1.1 slice 1: post-its live on the wall (the Workbench), which says they are unavailable.
+    wall = client.get("/guild-next/guild/build/bench").get_data(as_text=True)
+    assert "Post-its unavailable — add and remove are paused" in wall
+    assert 'data-postit-input maxlength="140" autocomplete="off" placeholder="Add a post-it" disabled' in wall
+    for zero in ("0 on the board", "No post-its on the board"):
+        assert zero not in wall, zero
     board = client.get("/guild-next/guild/build/postits").get_data(as_text=True)
     assert "Post-its unavailable — add and remove are paused" in board and "Bin unavailable — treat as unknown" in board
     assert "The bin is empty" not in board

@@ -1,0 +1,78 @@
+/* The Guild card (Build), shared by the landing (/guild, which also styles it
+   inline) and the Shop floor's context rail (/guild-next, whose CSP allows
+   only 'self' styles). Values are the landing's own (guild_landing.html). */
+.guild-card {
+  --gc-surface: var(--surface, #faf7f2);
+  --gc-surface2: var(--surface2, #f0ebe0);
+  --gc-border: var(--border, #ddd6c8);
+  --gc-text: var(--text, #2a2418);
+  --gc-text-muted: var(--text-muted, #6b5f4e);
+  --gc-text-dim: var(--text-dim, #9e9080);
+  --gc-accent: var(--accent, #8b5e2a);
+  display: flex;
+  flex-direction: column;
+  background: var(--gc-surface);
+  border: 1px solid var(--gc-border);
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(42,26,14,0.07);
+  text-decoration: none;
+  color: var(--gc-text);
+  overflow: hidden;
+}
+.guild-card .card-tab {
+  background: #2a1f14;
+  color: #F5EDE0;
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+}
+.guild-card .card-illustration {
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gc-surface2);
+  border-bottom: 1px solid var(--gc-border);
+  overflow: hidden;
+}
+.guild-card .card-illustration img { width: 100%; height: 100%; object-fit: cover; object-position: center center; }
+.guild-card .card-body { padding: 14px 16px 16px; flex: 1; display: flex; flex-direction: column; }
+.guild-card .card-kicker {
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gc-text-dim);
+  margin-bottom: 5px;
+}
+.guild-card .card-desc {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--gc-text-muted);
+  flex: 1;
+  margin-bottom: 8px;
+}
+.guild-card .card-cta {
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--gc-accent);
+  letter-spacing: 0.06em;
+}
+/* The rail variant: the same card, compact; its link row is navigation. */
+.guild-card-rail { width: 100%; }
+.guild-card-rail .card-illustration { height: 132px; }
+.guild-card-rail .card-illustration img { object-position: 50% 58%; }
+.guild-card-rail .card-body { padding: 10px 14px 12px; }
+.guild-card-rail .card-kicker { font-size: 9.5px; }
+.guild-card-rail .card-kicker a, .guild-card-rail .card-cta { color: var(--gc-accent); text-decoration: none; }
+.guild-card-rail .card-kicker a:hover, .guild-card-rail .card-cta:hover,
+.guild-card-rail .card-kicker a:focus-visible, .guild-card-rail .card-cta:focus-visible { text-decoration: underline; }
+.guild-card-rail .card-desc { margin-bottom: 4px; }
+/* The strip variant (the Shop floor on a phone): only the dark title bar, with a small thumbnail. */
+.guild-card-strip { flex-direction: row; align-items: stretch; border-radius: 0; border-width: 0 0 1px; box-shadow: none; background: #2a1f14; }
+.guild-card-strip .card-illustration { flex: none; width: 34px; height: 34px; border: 0; }
+.guild-card-strip .card-tab { flex: 1 1 auto; display: flex; align-items: center; padding: 0 12px; }

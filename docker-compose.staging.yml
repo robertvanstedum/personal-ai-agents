@@ -115,6 +115,10 @@ services:
       # prototype at /guild-proto. Staging only; unset in production.
       - MINIMOI_GUILD_NEXT=1
       - MINIMOI_GUILD_PROTO=1
+      # Guild's Systems light reads the Mac's native Operations agent (launchd,
+      # bound to 127.0.0.1:8768). Colima forwards host.docker.internal
+      # (192.168.5.2) to the Mac's loopback, so the portal container reaches it.
+      - GUILD_OPERATIONS_STATUS_URL=${GUILD_OPERATIONS_STATUS_URL:-http://host.docker.internal:8768/status}
       # Master Craftsman (MC spec v0.9 §4, stage B), staging only. From
       # $STAGING_ROOT/state/mc.mode and state/mc.turns (lib.sh); off by
       # default. The portal reaches MC only through the relay, with the relay's
@@ -122,13 +126,24 @@ services:
       # OpenClaw token.
       - MINIMOI_GUILD_MC=${MINIMOI_GUILD_MC:-off}
       - MINIMOI_GUILD_MC_TURNS=${MINIMOI_GUILD_MC_TURNS:-off}
+      # Streaming (streaming spec v0.2 §5): on for staging; the code default
+      # is off, and /guild-next never mounts in production.
+      - MINIMOI_GUILD_MC_STREAM=${MINIMOI_GUILD_MC_STREAM:-on}
       - MC_RUNTIME_URL=http://mc-relay:8790/v1
       - MC_RUNTIME_TOKEN=${MC_RELAY_TOKEN:-}
       # The usage store, read-only (usage-record U3): the Shop floor footer's
-      # output tokens, joined from MC's gateway records by turn window.
+      # output tokens. MC's own runtime-stream records (streaming S1) go only to
+      # usage/portal, mounted read-write below: the portal never creates or
+      # touches the gateway's shared monthly file (#275 review, finding 4).
       - MINIMOI_USAGE_DIR=/app/data/usage
+      # The local Workshop's record, read-only (4a): synced from the Mac by
+      # scripts/workshop/workshop.py sync; the portal never writes it.
+      - MINIMOI_WORKSHOPS_DIR=/app/data/workshops
+      - MINIMOI_WORKSHOP_ID=mac
     volumes:
       - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
+      - ${MINIMOI_ROOT}/data/usage/portal:/app/data/usage/portal
+      - ${MINIMOI_ROOT}/data/workshops:/app/data/workshops:ro
     # Permanently on mc-front (portal + MC's relay only), so enabling MC never
     # recreates the portal (MC spec v0.9 §3).
     networks:
@@ -149,22 +164,30 @@ services:
     profiles: [bots]
     environment:
       - MINIMOI_ROLE=standby
-      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend).
+      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend),
+      # written only to this writer's own folder (usage_record.own_folder): the
+      # shared monthly file is the non-root gateway's alone.
       - MINIMOI_USAGE_DIR=/app/data/usage
+      - MINIMOI_USAGE_WRITER=cos-bot
       - MINIMOI_ENV=staging
     volumes:
-      - ${MINIMOI_ROOT}/data/usage:/app/data/usage
+      - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
+      - ${MINIMOI_ROOT}/data/usage/cos-bot:/app/data/usage/cos-bot
 
   cos-scheduler:
     image: minimoi-staging/cos-scheduler:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
     pull_policy: never
     environment:
       - MINIMOI_ROLE=standby
-      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend).
+      # The usage store (usage-record U2): direct calls (Tavily, the Grok backend),
+      # written only to this writer's own folder (usage_record.own_folder): the
+      # shared monthly file is the non-root gateway's alone.
       - MINIMOI_USAGE_DIR=/app/data/usage
+      - MINIMOI_USAGE_WRITER=cos-scheduler
       - MINIMOI_ENV=staging
     volumes:
-      - ${MINIMOI_ROOT}/data/usage:/app/data/usage
+      - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
+      - ${MINIMOI_ROOT}/data/usage/cos-scheduler:/app/data/usage/cos-scheduler
 
 volumes:
   postgres-data:

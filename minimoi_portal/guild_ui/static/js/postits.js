@@ -174,7 +174,7 @@ async function onAdd(form) {
     input.value = '';
     result(container, 'ok', body.message);
   } else {
-    result(container, body.error === 'not_listening' ? 'warn' : 'bad', body.message || 'Post-it not added');
+    result(container, ['not_listening', 'record_unknown'].includes(body.error) ? 'warn' : 'bad', body.message || 'Post-it not added');
   }
   await reloadPostits();
 }

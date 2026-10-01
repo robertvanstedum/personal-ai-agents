@@ -1,0 +1,67 @@
+{# The Guild home on /guild-next (Guild 1.1 slice 1, spec §3): a matched pair
+   with Curator's landing (domains/curator/templates/curator_landing.html):
+   the centred masthead and a catalog of drawer cards (dark label tab, a
+   210:136 image, then kicker, line and link), 2-up at <= 900 px and 1-up at
+   <= 480 px, and a mono footer. The four doors keep the original Guild art,
+   labels, kickers, flows and CTAs (templates/guild/guild_landing.html). No
+   tunnel photo, no square tiles. Reads no store; calls no model. #}
+{% from 'guild/_build_card.html' import build_card %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guild — mini-moi</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('.asset', filename='tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('.asset', filename='components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('.asset', filename='css/landing.css') }}">
+  <script type="module" src="{{ url_for('.asset', filename='js/nav.js') }}"></script>
+</head>
+<body class="gu gl" data-page="home" data-area="Guild">
+<a class="gu-skip" href="#main">Skip to content</a>
+{{ portal_nav_html(user, '/guild') | safe }}
+<nav class="guild-nav" aria-label="Guild sections">
+  {% include 'guild_floor/_section_subnav.html' %}
+</nav>
+<main id="main" class="gl-site" tabindex="-1">
+  <div class="gl-masthead">
+    <hr class="gl-rule">
+    <h1 class="gl-title">Guild</h1>
+    <hr class="gl-rule">
+    <p class="gl-tagline">Craft the work. Sharpen the craft.<br>spec → build → operate → improve</p>
+    <p class="gl-date" data-today></p>
+  </div>
+
+  <div class="gl-catalog" data-doors>
+    {% for d in doors %}
+    <a href="{{ d.href }}" class="gl-drawer" data-door="{{ d.id }}">
+      <div class="gl-tab">{{ d.label }}</div>
+      <div class="gl-img">{% if d.img %}<img src="{{ d.img }}" alt="{{ d.alt }}">{% else %}{{ build_card('img') }}{% endif %}</div>
+      <div class="gl-body">
+        <div class="gl-kicker">{{ d.kicker }}</div>
+        <div class="gl-line">{{ d.flow }}</div>
+        <div class="gl-link">{{ d.cta }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  <details class="gl-mapping">
+    <summary>Where the four doors go in Guild 1.1</summary>
+    <table>
+      <thead><tr><th scope="col">Door</th><th scope="col">Goes to</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Build</th><td>The Build Queue for now; the Build Log when slice 2 lands. Docs is a GitHub link under More.</td></tr>
+        <tr><th scope="row">Operate</th><td>Operate, unchanged. Whether it opens the Workshop instead is still open.</td></tr>
+        <tr><th scope="row">Improve</th><td>Improve, unchanged.</td></tr>
+        <tr><th scope="row">Experiment</th><td>Labs: the Planning Studio and Prototype Lab entry points.</td></tr>
+        <tr><th scope="row">Daily</th><td>Chat, Board, Build Log and Rooms, in the Guild bar above.</td></tr>
+      </tbody>
+    </table>
+  </details>
+
+  <footer class="gl-footer"><a href="https://github.com/robertvanstedum/personal-ai-agents" target="_blank" rel="noopener">mini-moi &middot; github.com/robertvanstedum/personal-ai-agents</a></footer>
+</main>
+</body>
+</html>
