@@ -15,6 +15,7 @@ import re
 import socket
 import tempfile
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -2565,6 +2566,47 @@ def test_s4_a_prepared_take_is_discarded_when_going_off_the_record_and_cancel_st
     ctx.close()
 
 
+def test_s4_a_take_in_a_tab_with_unknown_mode_waits_for_confirm_and_off_drops_it(browser, server, rooms):
+    """#288 re-check R1 and R2: in a tab whose record mode is unknown, the Take
+    box says so and offers Confirm on the record; nothing is fetched before.
+    Choosing Off instead drops the Take for good."""
+    ctx, first = _context(browser, server, 1440, 900)
+    go(first, f"{server['url']}/guild-next/guild/rooms")
+    room_id = _rooms_ready(first, server, rooms, title="Unknown room")
+    go(first, f"{server['url']}/guild-next/guild/build")
+    first.fill("#mc-input", "Share me once confirmed")
+    first.click("[data-mc-send]")
+    note = first.locator('[data-mc-thread] [data-kind="note"][data-note]').last
+    expect(note).to_contain_text("Share me once confirmed")
+    note_id = note.get_attribute("data-note")
+    first.evaluate(f"localStorage.setItem('{OFF_TABS}', '{{garbled')")
+    fresh = ctx.new_page()
+    shares = []
+    fresh.on("request", lambda r: shares.append(r.url) if "/share" in r.url else None)
+    go(fresh, f"{server['url']}/guild-next/guild/rooms?room={room_id}&take={note_id}")
+    expect(fresh.locator("body")).to_have_attribute("data-record-known", "false")
+    expect(fresh.locator("[data-rm-take]")).to_be_visible()
+    expect(fresh.locator("[data-rm-take-meta]")).to_contain_text("Confirm on the record")
+    expect(fresh.locator("[data-rm-take-send]")).to_be_disabled()
+    fresh.wait_for_timeout(300)
+    assert shares == []
+    fresh.click("[data-rm-take-confirm]")
+    expect(fresh.locator("[data-rm-take-text]")).to_have_text("Share me once confirmed")
+    expect(fresh.locator("[data-rm-take-confirm]")).to_be_hidden()
+    assert len(shares) == 1
+    fresh.click("[data-rm-take-send]")
+    expect(fresh.locator("[data-rm-take-result]")).to_have_text("Shared into this room.")
+    # Another unknown tab chooses Off: the Take is dropped and never prepared.
+    first.evaluate(f"localStorage.setItem('{OFF_TABS}', '{{garbled')")
+    other = ctx.new_page()
+    go(other, f"{server['url']}/guild-next/guild/rooms?room={room_id}&take={note_id}")
+    expect(other.locator("[data-rm-take]")).to_be_visible()
+    other.evaluate("document.querySelector('[data-mc-record]').click()")
+    expect(other.locator("[data-rm-take]")).to_be_hidden()
+    assert "take=" not in other.url
+    ctx.close()
+
+
 def test_s4_an_expired_records_login_says_sign_in_and_keeps_the_draft(browser, server, rooms):
     ctx, page = _context(browser, server, 1440, 900)
     writes = []
@@ -2588,4 +2630,127 @@ def test_s4_an_expired_records_login_says_sign_in_and_keeps_the_draft(browser, s
     page.wait_for_selector("body[data-ready=true]")
     expect(page.locator("[data-rm-input]")).to_have_value("Half-written thought about the art")
     assert len(writes) == 1                                           # the one refused attempt; nothing else sent
+    ctx.close()
+
+
+# ── Guild 1.1 slice 5 (spec §7, §11): the Workshop restyled ───────────────────
+
+@pytest.fixture
+def usage_store(tmp_path):
+    """A usage store whose last gateway record is three days and two hours old."""
+    folder = tmp_path / "usage"
+    folder.mkdir()
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    path = folder / f"usage-{month}.jsonl"
+    path.write_text(json.dumps({"emitter": "gateway", "actor": "mc", "cost_usd": 0.4}) + "\n")
+    old = (datetime.now(timezone.utc) - timedelta(days=3, hours=2)).timestamp()
+    os.utime(path, (old, old))
+    saved = os.environ.get("MINIMOI_USAGE_DIR")
+    os.environ["MINIMOI_USAGE_DIR"] = str(folder)
+    yield folder
+    if saved is None:
+        os.environ.pop("MINIMOI_USAGE_DIR", None)
+    else:
+        os.environ["MINIMOI_USAGE_DIR"] = saved
+
+
+def test_s5_desktop_ops_strip_job_cards_and_controls_not_available(browser, server, workshop, usage_store):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    writes = _writes(page)
+    go(page, f"{server['url']}/guild-next/guild/workshop")
+    expect(page.locator(".guild-subnav [data-more='workshop']")).to_have_attribute("aria-current", "page")
+    expect(page.locator("[data-ws-top] .ws-title")).to_have_text("Workshop")
+    for key, text in (("memory", "Memory free 46.0%"), ("swap", "Swap used 1.2 GB"), ("disk", "Disk free 80.0 GB"),
+                      ("load", "Load (1 min) 2.1")):
+        chip = page.locator(f"[data-ws-op='{key}']")
+        expect(chip).to_have_attribute("data-state", "measured")
+        expect(chip).to_contain_text(text)
+        expect(chip.locator(".sx-at")).to_be_visible()                            # with its time
+    expect(page.locator("[data-ws-op='production']")).to_have_text("Production host · not measured")
+    expect(page.locator("[data-ws-op='production']")).to_have_attribute("data-state", "not_measured")
+    expect(page.locator("[data-ws-ops-table]")).to_be_hidden()
+    page.click("[data-ws-ops] > summary")
+    expect(page.locator("[data-ws-ops-table]")).to_be_visible()
+    expect(page.locator("[data-ws-op-row='memory'] td").nth(1)).to_contain_text("workshop.py observe")
+    expect(page.locator("[data-ws-op-row='production'] [data-ws-op-fresh]")).to_have_text("—")
+    card = page.locator("[data-ws-job='queue:12']")
+    expect(card).to_have_attribute("data-state", "needs you")
+    expect(card.locator("[data-ws-evidence] li")).to_have_count(2)
+    expect(card.locator(".ws-ref")).to_have_attribute("href", "/guild-next/guild/build/log?item=12")
+    for control in ("comment", "stop"):
+        expect(card.locator(f"[data-ws-control='{control}']")).to_be_disabled()
+        expect(card.locator(f"[data-ws-control='{control}']")).to_contain_text("not available")
+    expect(page.locator("[data-ws-control='start']")).to_be_disabled()
+    # Spend keeps its own time: the usage file's, not the host reading's.
+    expect(page.locator("[data-ws-op='spend']")).to_contain_text("Model spend $0.40")
+    expect(page.locator("[data-ws-op='spend'] .sx-at")).to_contain_text("last record")
+    w, now, iso = workshop["workshop"], workshop["now"], workshop["iso"]
+    # The cards follow the refresh (review F2): a new event changes a pill, a new item adds a card.
+    w.append({"workshop": "mac", "actor": "robert", "kind": "decision", "item": "queue:12", "text": "Every minute"})
+    w.append({"workshop": "mac", "actor": "codex", "kind": "review", "item": "queue:31", "text": "Reviewing #289"})
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(card.locator("[data-ws-pill]")).to_have_text("running")
+    expect(page.locator("[data-ws-job='queue:31'] [data-ws-pill]")).to_have_text("in review")
+    expect(page.locator("[data-ws-job='queue:31'] .ws-ref")).to_have_attribute("href", "/guild-next/guild/build/log?item=31")
+    expect(page.locator("[data-ws-jobs-stale]")).to_have_count(0)
+    # A stale host reading shows on the cards too, in words.
+    old = iso(now() - timedelta(hours=2))
+    stale = workshop["Observation"](observed_at=old, memory_free_pct=46.0, swap_used_gb=1.2, disk_free_gb=80.0,
+                                    load_1m=2.1, clients=[], clients_known=True)
+    w.append({**workshop["health_event"](stale, "mac"), "at": iso(now())})
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(page.locator("[data-ws-jobs-stale]")).to_have_text("The host reading is stale, so these job states may be out of date.")
+    expect(card.locator("[data-ws-stale-pill]")).to_be_visible()
+    expect(card.locator("[data-ws-stale-pill]")).to_have_text("stale record")
+    expect(page.locator("[data-ws-op='memory']")).to_contain_text("Memory free 46.0% · stale")
+    # A failed refresh (review F3): each figure keeps its value, marked stale, with its own last good time and a live age.
+    page.route("**/api/v1/workshop*", lambda route: route.fulfill(status=503, body="{}", content_type="application/json"))
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    expect(page.locator("[data-ws-op='memory']")).to_have_attribute("data-state", "stale")
+    expect(page.locator("[data-ws-op='memory'] .sx-at")).to_contain_text("last good read")
+    expect(page.locator("[data-ws-op='spend']")).to_have_attribute("data-state", "stale")
+    expect(page.locator("[data-ws-op='spend']")).to_contain_text("Model spend $0.40 in")
+    host_at = page.locator("[data-ws-op='memory'] .sx-at").text_content()
+    spend_at = page.locator("[data-ws-op='spend'] .sx-at").text_content()
+    assert "last good read" in spend_at and spend_at != host_at, (spend_at, host_at)
+    row = page.locator("[data-ws-op-row='memory']")
+    expect(row).to_have_attribute("data-state", "stale")
+    expect(row.locator("[data-ws-op-value]")).to_have_text("46.0% (stale)")
+    expect(row.locator("[data-ws-op-fresh]")).to_contain_text("last good read")
+    expect(row.locator("[data-ws-op-fresh]")).to_contain_text("2 h ago")
+    assert row.locator("td").first.evaluate("e => getComputedStyle(e).fontStyle") == "italic"
+    expect(page.locator("[data-ws-op-row='spend'] [data-ws-op-value]")).to_have_text("$0.40 (stale)")
+    expect(page.locator("[data-ws-jobs-stale]")).to_contain_text("may be out of date (the refresh failed; last good read")
+    expect(page.locator("[data-ws-job='queue:31'] [data-ws-stale-pill]")).to_be_visible()
+    assert _no_page_overflow(page)
+    assert not writes, writes                                                       # read only
+    assert not [e for e in errors if "status of 503" not in e], errors
+    ctx.close()
+
+
+def test_s5_phone_workshop_in_the_shell_without_overflow(browser, server, workshop):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    errors = _errors(page)
+    page.goto(f"{server['url']}/__b1_test_sign_in")
+    page.goto(f"{server['url']}/guild-next/")                                    # the Guild home (no floor script)
+    page.wait_for_load_state("load")
+    page.click("[data-subnav-more] > summary")
+    with page.expect_navigation():
+        page.click("[data-more='workshop']")
+    page.wait_for_selector("body[data-ready=true]")
+    assert page.url.endswith("/guild-next/guild/workshop")
+    expect(page.locator("[data-ws-top]")).to_be_visible()
+    expect(page.locator("[data-ws-op='memory']")).to_be_in_viewport()
+    cards = page.locator(".ws-job")
+    expect(cards).to_have_count(2)
+    boxes = [cards.nth(i).bounding_box() for i in range(2)]
+    assert abs(boxes[0]["x"] - boxes[1]["x"]) < 2 and boxes[1]["y"] > boxes[0]["y"]   # one column
+    assert boxes[0]["x"] >= 0 and boxes[0]["x"] + boxes[0]["width"] <= 390
+    assert page.locator("[data-ws-control='stop']").first.bounding_box()["height"] >= 43
+    page.click("[data-ws-ops] > summary")
+    expect(page.locator("[data-ws-ops-table]")).to_be_visible()
+    assert _no_page_overflow(page)
+    assert not errors, errors
     ctx.close()

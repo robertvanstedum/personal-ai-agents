@@ -126,7 +126,9 @@ def test_budget_is_this_months_gateway_spend_and_unknown_without_a_store(ws):
             {"emitter": "gateway", "actor": "cos", "cost_usd": 0.5}, {"emitter": "direct", "actor": "mc", "cost_usd": 9}]
     (ws.extra["usage"] / f"usage-{month}.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n{torn\n")
     body = client.get(f"{API}/workshop").get_json()
-    assert body["budget"] == {"known": True, "month": month, "by_actor": {"cos": 0.5, "mc": 0.0223}}
+    budget = dict(body["budget"])
+    assert budget.pop("as_of")                                             # the usage file's time (slice 5)
+    assert budget == {"known": True, "month": month, "by_actor": {"cos": 0.5, "mc": 0.0223}}
     assert "<strong>mc</strong> $0.02" in client.get(PAGE).get_data(as_text=True)
 
 
@@ -146,7 +148,7 @@ def test_the_refresh_carries_no_raw_state_and_the_workshop_is_owner_only(ws):
     _record(ws, {"actor": "claude-code", "kind": "progress", "item": "queue:12", "text": "x"})
     body = ws.owner().get(f"{API}/workshop?item=12").get_json()
     assert set(body) == {"workshop", "record_status", "admission", "runs", "last_event", "next_actor", "needs",
-                         "headroom", "recovery", "budget", "observed_at"}
+                         "headroom", "recovery", "budget", "observed_at", "ops", "jobs"}   # + slice 5
     assert ws.guest().get(PAGE).status_code in (302, 403)
     assert ws.guest().get(f"{API}/workshop").status_code == 403
 

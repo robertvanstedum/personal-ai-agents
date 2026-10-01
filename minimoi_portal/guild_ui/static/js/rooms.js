@@ -9,7 +9,7 @@
 // No model call.
 import { $, $$, el, announce } from './dom.js';
 import { apiPost, recordMode } from './api.js';
-import { live, onChange } from './state.js';
+import { live, onChange, setOff } from './state.js';
 import { newKey } from './actions.js';
 
 let cfg;
@@ -328,18 +328,28 @@ function dropTakeParam() {
 // Switching mode, either way, discards a prepared Take (spec §8, §11): it is
 // never sent after the switch; open it again from Chat (#288 review F2).
 function discardTake(reason) {
-  if (!takeNote && $('[data-rm-take]').hidden) return;
+  const shown = takeNote || !$('[data-rm-take]').hidden;
   takeNote = null;
   $('[data-rm-take-send]').disabled = true;
   $('[data-rm-take]').hidden = true;
   dropTakeParam();
-  if (reason) status(reason);
+  if (shown && reason) status(reason);
 }
 
 async function prepareTake() {
   const box = $('[data-rm-take]');
   if (live.off) { dropTakeParam(); return; }
-  if (!live.known) return;                 // waits for Confirm on the record, below
+  if (!live.known) {
+    // This tab does not know its record mode yet: nothing is fetched until
+    // Robert confirms on the record here (#288 re-check R1).
+    box.hidden = false;
+    $('[data-rm-take-text]').textContent = '';
+    $('[data-rm-take-meta]').textContent = 'This tab does not know whether you are on the record. Confirm on the record to prepare this share.';
+    $('[data-rm-take-confirm]').hidden = false;
+    $('[data-rm-take-send]').disabled = true;
+    return;
+  }
+  $('[data-rm-take-confirm]').hidden = true;
   const r = await apiPost(`/notes/${cfg.take}/share`, { idempotency_key: newKey(), record_mode: recordMode() });
   box.hidden = false;
   if (!r.ok || !r.body.note) {
@@ -425,11 +435,13 @@ function bind() {
   $('[data-rm-list-close]').addEventListener('click', () => { $('[data-rm]').dataset.list = 'closed'; });
   $('[data-rm-take-send]').addEventListener('click', sendTake);
   $('[data-rm-take-cancel]').addEventListener('click', () => { $('[data-rm-take]').hidden = true; takeNote = null; dropTakeParam(); });
+  $('[data-rm-take-confirm]').addEventListener('click', () => setOff(false));
   onChange(() => {
-    if (takeNote || !$('[data-rm-take]').hidden) {
+    const wanted = cfg.take && new URLSearchParams(window.location.search).has('take');
+    // Off the record, a pending or prepared Take is always dropped (#288 re-check R2).
+    if (takeNote || live.off) {
       discardTake('Take to a Room was discarded because the record mode changed. Nothing was shared.');
-    } else if (cfg.take && live.known && !live.off && !signedOut
-               && new URLSearchParams(window.location.search).has('take')) {
+    } else if (wanted && live.known && !signedOut) {
       prepareTake();                         // confirmed on the record after loading: prepare it now
     }
   });

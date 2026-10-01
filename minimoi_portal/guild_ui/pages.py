@@ -26,7 +26,7 @@ def hhmm(iso) -> str:
         return ""
     try:
         return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%H:%M UTC")
-    except ValueError:
+    except (ValueError, OverflowError):                  # OverflowError: a date at the edge of the calendar
         return str(iso)
 
 
