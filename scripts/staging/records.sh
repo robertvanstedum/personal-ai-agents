@@ -52,6 +52,15 @@ WORKER_JOURNAL="minimoi-staging-rooms-journal"
 # Rooms R2: the Mac connector's secrets and its door sidecar.
 CONNECTOR_SECRETS="$STAGING_ROOT/secrets/rooms-connector"
 DOOR_CONTAINER="minimoi-records-door"
+# Rooms R2 v0.4 (ROOMS_R2.md §3.6): Codex's container and its three volumes.
+CODEX_CONTAINER="minimoi-rooms-codex"
+CODEX_VOLUMES="minimoi-staging-rooms-codex-home minimoi-staging-rooms-codex-state minimoi-staging-rooms-codex-secrets"
+CODEX_PROVISIONED="$STAGING_ROOT/state/rooms-codex.provisioned"
+codex_ready() {
+  [[ -f "$CODEX_PROVISIONED" ]] || return 1
+  local v
+  for v in $CODEX_VOLUMES; do docker volume inspect "$v" >/dev/null 2>&1 || return 1; done
+}
 connector_ready() {
   [[ -d "$CONNECTOR_SECRETS" && "$(file_mode "$CONNECTOR_SECRETS")" == 700 ]] || return 1
   local f
@@ -99,6 +108,11 @@ case "$cmd" in
       note "building minimoi-staging/rooms-worker:$tag"
       docker build -f "$RELEASE_DIR/docker/Dockerfile.rooms-worker" -t "minimoi-staging/rooms-worker:$tag" \
         --label "minimoi.staging.release=$sha" "$RELEASE_DIR"
+    fi
+    if [[ -f "$RELEASE_DIR/docker/Dockerfile.rooms-codex" ]]; then
+      note "building minimoi-staging/rooms-codex:$tag"
+      docker build -f "$RELEASE_DIR/docker/Dockerfile.rooms-codex" -t "minimoi-staging/rooms-codex:$tag" \
+        --label "minimoi.staging.release=$sha" "$RELEASE_DIR"
     fi ;;
   up)
     require_absolute_root
@@ -113,6 +127,11 @@ case "$cmd" in
       docker volume inspect "$WORKER_JOURNAL" >/dev/null 2>&1 || docker volume create "$WORKER_JOURNAL" >/dev/null
       services="records rooms-worker"
       if connector_ready && grep -q "records-door:" "$RELEASE_DIR/$RECORDS_FILE"; then services="$services records-door"; fi
+      if codex_ready && grep -q "rooms-codex:" "$RELEASE_DIR/$RECORDS_FILE"; then
+        docker network inspect minimoi-staging-rooms-codex-egress >/dev/null 2>&1 \
+          || docker network create minimoi-staging-rooms-codex-egress >/dev/null
+        services="$services rooms-codex"
+      fi
       # shellcheck disable=SC2086
       records_compose up -d --no-build $services
       note "up: $services"
@@ -161,6 +180,33 @@ case "$cmd" in
     rmdir "$outbox" 2>/dev/null || true
     chmod 600 "$CONNECTOR_SECRETS"/*.token
     note "provisioned: Claude Code (membership-scoped), claude-code-manual, and the connector's work principal; tokens in $CONNECTOR_SECRETS (not printed). Next: records.sh up, then connector.sh install" ;;
+  provision-codex)
+    # Rooms R2 v0.4 (ROOMS_R2.md §3.6), once, owner-run: Codex as a teammate
+    # hosted by its container's own work principal. Revokes Codex's existing
+    # credentials (listed) and creates codex-manual. Tokens go only into the
+    # rooms-codex-secrets volume (uid 10001, 600); nothing is printed.
+    require_absolute_root
+    require_release
+    [[ "$(docker inspect -f '{{.State.Running}}' "$RECORDS_CONTAINER" 2>/dev/null || true)" == true ]] || die "start Records first (records.sh up)"
+    [[ ! -f "$CODEX_PROVISIONED" ]] || die "Codex is already provisioned ($CODEX_PROVISIONED); revoke in Records and remove it first"
+    image="minimoi-staging/rooms-codex:$(release_tag)"
+    docker image inspect "$image" >/dev/null 2>&1 || die "missing $image (records.sh build)"
+    for v in $CODEX_VOLUMES; do
+      docker volume inspect "$v" >/dev/null 2>&1 || docker volume create "$v" >/dev/null
+      docker run --rm --user 0 --network none -v "$v:/v" --entrypoint sh "$image" -c 'chown 10001:10001 /v && chmod 700 /v'
+    done
+    outbox="$STAGING_ROOT/data/records/.rooms-outbox-codex"
+    [[ ! -e "$outbox" ]] || die "an earlier provision left $outbox; inspect it first"
+    docker exec "$RECORDS_CONTAINER" python manage.py provision-rooms --data-dir /data --out /data/.rooms-outbox-codex \
+      --teammate codex --label "Codex" --worker-principal rooms-connector-codex --revoke-legacy --manual \
+      --card '{"host":"its own container on this Mac","connector":"rooms-codex","tools_profile":"none (shell, files, web, apps, plugins, skills off; images refused)","billing_route":"Robert'"'"'s ChatGPT subscription (its own sign-in)","max_turn_s":180,"auto_accept":true}'
+    docker run --rm --user 0 --network none -v "$outbox:/outbox:ro" -v minimoi-staging-rooms-codex-secrets:/s \
+      --entrypoint sh "$image" -c 'cp /outbox/rooms-connector-codex.token /outbox/codex.token /s/ && chown 10001:10001 /s/*.token && chmod 600 /s/*.token'
+    mkdir -p "$(dirname "$CODEX_PROVISIONED")"
+    [[ -f "$outbox/codex-manual.token" ]] && { ( umask 077; mkdir -p "$STAGING_ROOT/secrets/rooms-codex-manual" ); mv "$outbox/codex-manual.token" "$STAGING_ROOT/secrets/rooms-codex-manual/"; chmod 600 "$STAGING_ROOT/secrets/rooms-codex-manual/codex-manual.token"; }
+    rm -f "$outbox"/*.token; rmdir "$outbox" 2>/dev/null || true
+    date -u +%Y-%m-%dT%H:%M:%SZ > "$CODEX_PROVISIONED"
+    note "provisioned: Codex (membership-scoped), codex-manual, and rooms-connector-codex; tokens only in the rooms-codex-secrets volume (not printed). Next: records.sh up, then codex-room.sh login" ;;
   rotate-session-key)
     # Rooms R3b rollback step (ROOMS_R3.md §3): a new cookie signing key ends
     # every browser session under any Records version, so a cookie revoked by

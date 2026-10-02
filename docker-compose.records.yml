@@ -110,12 +110,63 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Rooms R2 v0.4 (docs/specs/minimoi-connected-work/ROOMS_R2.md §3.6): Codex
+  # answers meeting turns from this container through `codex app-server`, one
+  # child per turn, tools off. Nothing of Robert's is mounted: its own sign-in
+  # volume (codex-room.sh login), its state, its two tokens (own volume, read-only), and
+  # tmpfs for the turn folders. records-net reaches Records; codex-egress is
+  # outbound HTTPS for ChatGPT. No published port, no env_file, no API key.
+  rooms-codex:
+    image: minimoi-staging/rooms-codex:${MINIMOI_IMAGE_TAG:?run scripts/staging/records.sh build}
+    pull_policy: never
+    container_name: minimoi-rooms-codex
+    restart: unless-stopped
+    user: "10001:10001"
+    environment:
+      - RECORDS_URL=http://minimoi-records:18880
+      - ROOMS_TEAMMATE=codex
+      - ROOMS_CONNECTOR_SECRETS=/run/secrets/rooms
+      - ROOMS_CONNECTOR_STATE=/state
+      - ROOMS_TURNS=/turns
+      - CODEX_HOME=/codex-home
+    volumes:
+      - rooms-codex-secrets:/run/secrets/rooms:ro
+      - rooms-codex-home:/codex-home
+      - rooms-codex-state:/state
+    tmpfs:
+      - /turns:size=8m,mode=700,uid=10001,gid=10001
+      - /tmp:size=16m,mode=1777
+    networks:
+      - records-net
+      - codex-egress
+    depends_on:
+      - records
+    mem_limit: 512m
+    pids_limit: 128
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   # The worker's turn journal (journal before inference): kept across restarts
   # so recovery is receipt-first and never re-runs inference. External, so a
   # compose down cannot remove it.
   rooms-journal:
     name: minimoi-staging-rooms-journal
+    external: true
+  # Rooms R2 v0.4: Codex's own sign-in home and its journal/proof state.
+  rooms-codex-home:
+    name: minimoi-staging-rooms-codex-home
+    external: true
+  rooms-codex-state:
+    name: minimoi-staging-rooms-codex-state
+    external: true
+  # Its two Records tokens, copied in by records.sh provision-codex (owned by
+  # uid 10001, mode 600): a host bind would keep the Mac user's ownership.
+  rooms-codex-secrets:
+    name: minimoi-staging-rooms-codex-secrets
     external: true
 
 networks:
@@ -129,3 +180,7 @@ networks:
   # its loopback port can be published. Records itself never joins it.
   records-door:
     name: minimoi-staging-records-door
+  # Rooms R2 v0.4: outbound only, for Codex's ChatGPT requests. Only
+  # rooms-codex is on it; Records never joins it.
+  codex-egress:
+    name: minimoi-staging-rooms-codex-egress
