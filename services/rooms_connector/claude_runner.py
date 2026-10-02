@@ -251,7 +251,10 @@ class ClaudeRunner:
         timer = threading.Timer(self.max_turn_s, lambda: self._kill(proc, reason="timeout"))
         timer.daemon = True
         timer.start()
-        state = {"init": False, "result": False, "text": None, "usage": None, "failure": None}
+        # "generated": any evidence the model may have worked (a real assistant
+        # event, or usage in the result). The CLI's own error notice is an
+        # assistant event with model "<synthetic>" and is not evidence.
+        state = {"init": False, "result": False, "text": None, "usage": None, "failure": None, "generated": False}
 
         def handle(raw):
             raw = raw.strip()
@@ -274,7 +277,13 @@ class ClaudeRunner:
             if (kind == "system" and sub == "init") or (event.get("tools") not in (None, [])):
                 state["failure"] = "runner_boundary"              # a later, contradictory declaration
                 return
+            if kind == "assistant" and ((event.get("message") or {}).get("model") != "<synthetic>"):
+                state["generated"] = True
             if kind == "result":
+                u = event.get("usage") if isinstance(event.get("usage"), dict) else {}
+                if (u.get("input_tokens") or 0) > 0 or (u.get("output_tokens") or 0) > 0:
+                    state["generated"] = True
+                    state["usage"] = {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}
                 if state["result"]:
                     state["failure"] = "malformed"; return
                 state["result"] = True
@@ -283,7 +292,8 @@ class ClaudeRunner:
                     u = event.get("usage") if isinstance(event.get("usage"), dict) else {}
                     state["usage"] = {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}
                 elif AUTH_FAILURE.search(str(event.get("result") or "")):
-                    state["failure"] = "signed_out"               # rejected before any inference
+                    # Definitive only with no sign the model worked; otherwise uncertain.
+                    state["failure"] = "signed_out_after_start" if state["generated"] else "signed_out"
                 else:
                     state["failure"] = "result_error"
         try:
@@ -329,6 +339,9 @@ class ClaudeRunner:
             return {"outcome": "error", "text": "", "usage": None, "detail": "timeout"}
         if state["failure"] == "signed_out":
             return {"outcome": "refused", "text": "", "usage": None, "detail": "signed_out", "reason": "signed_out"}
+        if state["failure"] == "signed_out_after_start":
+            return {"outcome": "error", "text": "", "usage": state["usage"], "detail": "signed_out_after_start",
+                    "reason": "signed_out_after_start"}
         if state["failure"] or not state["result"] or not (state["text"] or "").strip():
             return {"outcome": "error", "text": "", "usage": None,
                     "detail": state["failure"] or ("no_result" if not state["result"] else "empty")}

@@ -1133,7 +1133,10 @@ class Meetings:
                 return {"state": t["state"]}
             if self.commit_from_receipt(db, t):
                 return {"state": "committed"}
-            set_turn(db, turn_id, disposition="unresolved_started" if finding == "started" else "confirmed_absent")
+            # A started turn keeps a known cause (a rejected sign-in) so the room can say why.
+            keep = finding == "started" and t["disposition"] == "signed_out_after_start"
+            set_turn(db, turn_id, disposition=t["disposition"] if keep else
+                     ("unresolved_started" if finding == "started" else "confirmed_absent"))
             return {"state": "uncertain", "disposition": turn_row(db, turn_id)["disposition"]}
 
     def recover(self, auth, turn_id, payload):

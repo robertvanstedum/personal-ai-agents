@@ -6,7 +6,8 @@ Behaviour is chosen by FAKE_CLAUDE_MODE:
   no_output     starts, prints nothing, exits 1
   bad_init      init lists a tool (the boundary must refuse)
   error_result  init, then a result event with is_error true
-  auth_rejected init, then the CLI's 401 result (sign-in on file but rejected)
+  auth_rejected init, the CLI's synthetic notice, then its 401 result with no usage (as observed)
+  auth_late     init, real assistant text, then a 401 result with usage (rejected after it worked)
   slow          init, then sleeps until killed
   huge          init, then more than 1 MB of assistant text
   signed_out    `auth status` reports loggedIn false
@@ -61,9 +62,16 @@ if mode == "slow":
 if mode == "huge":
     emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "x" * 1_200_000}]}})
     sys.exit(0)
+AUTH_401 = 'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error"}}'
 if mode == "auth_rejected":
-    emit({"type": "result", "subtype": "success", "is_error": True,
-          "result": 'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error"}}'})
+    emit({"type": "assistant", "message": {"model": "<synthetic>", "content": [{"type": "text", "text": AUTH_401}]}})
+    emit({"type": "result", "subtype": "success", "is_error": True, "duration_api_ms": 0, "result": AUTH_401,
+          "usage": {"input_tokens": 0, "output_tokens": 0}})
+    sys.exit(1)
+if mode == "auth_late":
+    emit({"type": "assistant", "message": {"model": "claude-sonnet-4-6", "content": [{"type": "text", "text": "Partly"}]}})
+    emit({"type": "result", "subtype": "success", "is_error": True, "result": AUTH_401,
+          "usage": {"input_tokens": 100, "output_tokens": 12}})
     sys.exit(1)
 if mode == "error_result":
     emit({"type": "result", "subtype": "error_during_execution", "is_error": True, "result": ""})

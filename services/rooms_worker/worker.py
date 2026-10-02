@@ -248,7 +248,8 @@ class Worker:
             else:
                 # A transport or stream failure after sending: MC may have
                 # worked on it. Never claim it failed (review F7).
-                self.fail(turn, turn["claim_id"], "uncertain", "relay_error" if result["outcome"] == "error" else "relay_stopped")
+                reason = (result.get("reason") or "relay_error") if result["outcome"] == "error" else "relay_stopped"
+                self.fail(turn, turn["claim_id"], "uncertain", reason)
             return None
 
     def spawn_admission(self, turn):

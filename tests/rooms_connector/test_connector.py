@@ -121,6 +121,13 @@ def test_a_rejected_sign_in_is_refused_as_signed_out_not_a_timeout(tmp_path, hom
     assert out["outcome"] == "refused" and out["reason"] == "signed_out" and out["text"] == ""
 
 
+def test_a_sign_in_rejected_after_the_model_worked_stays_uncertain(tmp_path, home):
+    r = runner(tmp_path, home, "auth_late")
+    out = r.stream(MESSAGES, "u", "f" * 32, turn=PROOF)
+    assert out["outcome"] == "error" and out["reason"] == "signed_out_after_start" and out["text"] == ""
+    assert out["usage"] == {"prompt_tokens": 100, "completion_tokens": 12}      # evidence kept, not erased
+
+
 def test_output_cap_and_timeout_kill_the_process_group(tmp_path, home):
     out = runner(tmp_path, home, "huge", output_cap=100_000).stream(MESSAGES, "u", "e" * 32, turn=PROOF)
     assert (out["outcome"], out["detail"]) == ("error", "output_cap")

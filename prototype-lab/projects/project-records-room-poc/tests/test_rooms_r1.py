@@ -572,6 +572,17 @@ def test_late_fail_after_commit_is_refused_and_retry_rules(env):
     assert env.claim() is None                                                    # a retry obeys the budget
 
 
+
+def test_reconciling_a_started_turn_keeps_a_rejected_sign_in_as_its_cause(env):
+    env.prove(); env.join(); env.say("Q")
+    t = env.claim(); env.start(t)
+    f = env.call("POST", env.worker, f"/turns/{t['id']}/fail",
+                 {"claim_id": t["claim_id"], "outcome": "uncertain", "reason": "signed_out_after_start"})
+    assert f.status_code == 200 and env.turn(t["id"])["state"] == "uncertain"
+    rec = env.call("POST", env.worker, f"/turns/{t['id']}/reconciled", {"prior_claim_id": t["claim_id"], "finding": "started"})
+    assert rec.json == {"state": "uncertain", "disposition": "signed_out_after_start"}
+
+
 # ── presence, RSVP, continue ────────────────────────────────────────────────
 
 def test_presence_here_is_the_callers_own_and_agents_cannot_report_it(env):

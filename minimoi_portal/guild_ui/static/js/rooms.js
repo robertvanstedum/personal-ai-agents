@@ -556,6 +556,7 @@ function failureText(who, reason) {
     case 'runner_changed_since_proof': return `${who} was updated since it was proven. Use Invite → Prove again.`;
     case 'relay_busy': return `${who} was busy.`;
     case 'empty_reply': return `${who} answered with nothing.`;
+    case 'signed_out_after_start': return `${who}'s sign-in was rejected partway through. It may have started answering; nothing was received. Sign in again in Terminal, then Retry.`;
     case 'unresolved_started': return `${who} started but no reply arrived in time. It may still have answered; nothing was received.`;
     default: return `${who}'s reply failed (${(reason || 'unknown').replace(/_/g, ' ')}).`;
   }
@@ -569,7 +570,7 @@ function turnLine(t) {
     case 'cancel_requested': return { text: `Stopping ${who}'s reply…`, wait: true };
     case 'uncertain':
       if (t.disposition === 'confirmed_absent') return { text: `Not answered: ${who}'s worker stopped before answering.`, actions: ['retry', 'continue'] };
-      if (t.disposition === 'unresolved_started') return { text: failureText(who, 'unresolved_started'), actions: ['attempt', 'continue'] };
+      if (['unresolved_started', 'signed_out_after_start'].includes(t.disposition)) return { text: failureText(who, t.disposition), actions: ['attempt', 'continue'] };
       return { text: `Checking whether ${who}'s reply was saved…`, actions: ['continue'] };
     case 'expired': return { text: `Not answered: ${who} was busy with an earlier message.`, actions: ['retry', 'continue', 'end'] };
     case 'failed': return { text: `Not answered: ${failureText(who, t.disposition)}`, actions: ['retry', 'continue', 'end'] };
