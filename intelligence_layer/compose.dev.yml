@@ -1,0 +1,46 @@
+# Separate project, images, networks and data. Never include main-stack compose.
+services:
+  intelligence:
+    image: minimoi-staging/intelligence:${INTELLIGENCE_TAG:?exact committed revision required}
+    pull_policy: never
+    container_name: minimoi-intelligence-dev
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 192m
+    pids_limit: 64
+    volumes:
+      - intelligence-data:/tmp/intelligence-data
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    networks: [intelligence-internal]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18882/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  door:
+    image: minimoi-staging/intelligence:${INTELLIGENCE_TAG:?exact committed revision required}
+    pull_policy: never
+    container_name: minimoi-intelligence-door
+    entrypoint: [python, -m, intelligence_layer.door]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 48m
+    pids_limit: 32
+    ports: ["127.0.0.1:18882:18882"]
+    networks: [intelligence-internal, intelligence-door]
+    depends_on:
+      intelligence:
+        condition: service_healthy
+networks:
+  intelligence-internal:
+    internal: true
+  intelligence-door: {}
+volumes:
+  intelligence-data:
+    name: minimoi-intelligence-dev-data

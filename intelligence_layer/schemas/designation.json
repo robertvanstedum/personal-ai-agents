@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attachments": {
+      "items": {
+        "pattern": "[0-9a-f]{64}",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "designated_by": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "disclosure_class": {
+      "enum": [
+        "team",
+        "owner-local",
+        "owner-only"
+      ]
+    },
+    "hash": {
+      "pattern": "[0-9a-f]{64}",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "[0-7][0-9A-HJKMNP-TV-Z]{25}",
+      "type": "string"
+    },
+    "owner_event_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "provider": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "minimoi.intelligence/1.0"
+    },
+    "start": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stop": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "thread_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "topic": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "provider",
+    "thread_id",
+    "topic",
+    "disclosure_class",
+    "start",
+    "stop",
+    "owner_event_id",
+    "designated_by",
+    "created_at",
+    "attachments",
+    "hash"
+  ],
+  "title": "designation",
+  "type": "object"
+}

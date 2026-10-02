@@ -1,0 +1,52 @@
+# Intelligence dev build and posthoc review packet
+
+Scope: INIT-2026-0007 intelligence-layer v0.3, section 17; companion to Guild 1.1, no independently assigned release number. P0–P2 offline foundation plus an independently deployable, authenticated synthetic dev service. Robert subsequently authorized dev setup, scoped commits/pushes and deployment, deferring independent Claude Code review until the posthoc review/test session. No pre-deployment independent review is claimed.
+
+Authority and continuity: the supplied v0.3 spec and reconciliation in the main workspace were read only. Its predecessor v0.1 supplies record detail; section 17 supersedes older blanket capture/scheduling wording and earlier time semantics. The assigned base is `7d6e2852b87f31c372bd571e7e04fff2be4d757b`. The checkout's ignored project-state file was absent; the main workspace copy was read only. No protected documentation, planning spec, GitHub issue or current application data is modified.
+
+## Implemented and verified locally
+
+- Versioned portable JSON Schemas; strict canonical UTF-8 JSON, exact raw-byte SHA-256, separate assertion/source clocks, deterministic source IDs, unknown-version rejection. IDs use deterministic 128-bit payloads in ULID syntax; chronology comes from explicit timestamps, not identifier order.
+- A bounded schema validator rejects unsupported schema keywords; it validates the shipped subset without optional dependencies. General `jsonschema` is absent in the available runtimes. The upstream Rooms validator remains unavailable rather than silently bypassed.
+- Explicit synthetic JSONL adapter with owner-origin designation, half-open range, direct/relay provenance, private exclusion and attachment authorization metadata. Original selected JSONL lines are byte-preserved; the entire input file is hashed but excluded/undesigned ranges are never copied into the store. Missing attachments are gaps, never fetched. Completeness is explicitly partial.
+- File-first generations, atomic manifest/pointer publication, hash verification, failure injection, duplicate-ingest detection, dependency inventories, immutable originals, exact-revision owner receipts, proposal/decision separation and pending ordinary relations.
+- Source restrictions propagate to dependent assertions and relation endpoints; promotions lose authority after revision changes. Re-ingest cannot lower an existing source's class. Shared-source derivatives are withdrawn on deletion; duplicate snapshots and duplicate capture paths are purged. Tombstones block recapture. Interrupted erasure blocks retrieval and can resume physical cleanup. Backup erasure stays pending.
+- SQLite FTS5, exact character-range citations resolving to source hashes/provider/thread/event, knowledge-time and event-time filters, topic/clearance/route checks, scoped withheld counts, metadata-only owner-only fixture stubs. No owner-only plaintext capture; no owner-only text/vector/model indexes. No model or vector fallback.
+- Synthetic metadata-only detector fixture. No actual session scanning, policy activation or schedule.
+- Standalone HTTP dev service with random local credential, authenticated principal binding, strict request fields, same-origin browser posts, HttpOnly/SameSite cookie, host checks, body/concurrency limits and content-free logs. Search, citation resolution, temporal relations, manual proposals, exact-revision owner promotions, deletion-plan confirmation and rebuild APIs. Minimal local UI for sign-in, fixture loading, search, source verification and capability details.
+- Synthetic learning-cycle example: proposal, owner correction, fixture decision, lesson, practice and outcome, with receipted fixture relations. These are not Robert's real adopted decisions or practices.
+
+Validation: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s intelligence_layer/tests -v`; 36 tests pass. Full output: `tests.txt`. Tests use temporary synthetic stores and in-process loopback services only. Shell syntax and whitespace checks also pass. Container build runs the same tests under the pinned Python 3.12 image. Deployment evidence is recorded separately after promotion.
+
+## Isolation and dev topology
+
+Only `intelligence_layer/` is changed in the assigned checkout. No application imports at startup. No portal, CoS, Records or source directories mounted. Separate Compose project `minimoi-intelligence-dev`, containers `minimoi-intelligence-dev` / `minimoi-intelligence-door`, image `minimoi-staging/intelligence:<full-revision>`, named data volume `minimoi-intelligence-dev-data`. The main service has an internal-only network and no published port. A separate credential-free door follows the existing Records TCP-door pattern and exposes only `127.0.0.1:18882`. Nothing edits shared staging RELEASE/release.env or resets the shared release checkout. No external API calls, model calls, timers, production changes or main merges.
+
+A dedicated pinned Python base was downloaded under dev software authorization. No host packages or model/encryption/backup integrations were installed. Container build uses `--network none` after that pull. Runtime dependencies are Python standard library only.
+
+## Source-contract evidence and release gaps
+
+Actual files read at the pinned base:
+
+- `prototype-lab/projects/project-records-room-poc/transcript_format.py`: 1.0 and 1.1 schemas, strict upstream validator, raw transcript event IDs/seq, source times, imported-source provenance, coverage. `transcript_publish.py`: exact bundle files, byte-size/hash manifest, atomic publication. The read-only bundle inspection adapter calls the pure validator lazily; no publisher/store/portal import. Capture is unavailable until a synthetic/owner-designated sample verifies range slicing, private exclusion and attachments. Container does not contain the external upstream module.
+- `docs/specs/spec_160_agent_memory_owned_by_minimoi_2026-09-28.md`: actual current contract explicitly drops `turn_index`, uses `turn_id` and UTC time, and calls completeness best effort. The intelligence table's `turn_index` / full logged-day claims are stale. No `cos_turn` writer or agent-memory copier implementation exists at this pinned base. Missing implementation/exporter samples are named dependencies, not permission to read databases.
+- `minimoi_portal/guild_ui/mc/turn_log.py`: timing/usage trace only, not the CoS transcript exporter. It is not ingested as one.
+- Native Claude/Codex sessions, relay/OCR, memory manifests, attachments: interfaces/availability statuses only. No private sessions read, no guessed native format implemented, no six-source completeness claim.
+
+## Owner-assisted P3–P4 steps
+
+1. Adopt applicable D1–D10 choices and exact privacy/model-route policy; retain L0's same-user plaintext limitation. Before sensitive owner-local capture or a second person, provision L1 OS separation. Do not treat this fixture credential boundary as same-user isolation.
+2. Provision the approved encrypted volume and recovery material outside this fixture service. Demonstrate that ordinary agent processes cannot retrieve/unlock the owner-only key. Until demonstrated, owner-only capture remains disabled. No real keys requested or created here.
+3. Select/pin encryption and backup tools and verify licenses; run actual disposable encryption/decryption, recovery-only restore, snapshot rewrite/prune/check, versioned/object-locked bucket inspection and deleted-canary restore drills. Mocks and these file-store tests do not satisfy I1/I4 backup/erasure gates. Verify source hashes, privacy, citations and supported conclusions after a real restore.
+4. Supply one explicitly designated export range per family with the actual exporter version, owner-origin event, private exclusions, compaction/omission evidence and explicit attachment grants. Verify Spec 160 implementation and reconcile the stale `turn_index` wording before enabling that adapter. Supply upstream `jsonschema` through an approved environment when validating Rooms bundles. Do not copy all home-directory sessions.
+5. If local embeddings/answers are chosen, provision a pinned local model, measure recall/cost and test route refusal. Team cloud calls require an explicit capped route/key decision; owner-local and owner-only never fall back to cloud. Model interfaces currently return unavailable.
+6. Bind a future real-data ask service to verified platform identity and durable owner receipts, then perform I1–I4 and designated-sample acceptance. This dev endpoint has only synthetic `demo` scope. It is not attached to public dev.minimoi.ai and does not claim portal integration.
+7. Conduct the deferred Claude Code review against the actual committed diff and the deployed revision. Review source exclusion, class/deletion closure, hash-bound promotion, authentication, container mounts and egress, and run all tests plus the loopback UI walkthrough. Owner reviews conclusions and any new real-data scope.
+
+## Review and rollback
+
+Build/up: `intelligence_layer/deploy-dev.sh build` then `... up` from a clean committed checkout. Inspection is the script default. To stop this companion only: `intelligence_layer/deploy-dev.sh down`; the named data volume is preserved. Roll back an updated dev image by setting `INTELLIGENCE_TAG` to the previous deployed full revision and running Compose for project `minimoi-intelligence-dev` with this file only. Never invoke shared staging up/down or delete the data volume for rollback.
+
+Owner sign-in: open `http://127.0.0.1:18882/`. Copy the local-only dev token directly to the clipboard with `docker exec minimoi-intelligence-dev cat /tmp/intelligence-data/auth/owner.token | pbcopy`, then paste into the sign-in field. Do not put the token into chat, commits or review packets. The service creates this credential only for its isolated synthetic dev scope; it is not an external API key.
+
+Learning closeout: inspecting the actual implementation exposed two continuity risks before activation: the stale CoS identity/completeness wording, and the temptation to treat a usage timing trace as a transcript. Keep exporter availability explicit and preserve a synthetic contract test before connecting real data. No new practice is adopted by this note. Full release/operations retrospectives remain planning-role deliverables, with the production follow-up undated because no production launch occurred.

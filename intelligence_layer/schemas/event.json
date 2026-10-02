@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attachments": {
+      "items": {
+        "pattern": "[0-9a-f]{64}",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "author": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "event_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "event_time": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "index": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "origin": {
+      "enum": [
+        "owner",
+        "agent",
+        "tool",
+        "relay",
+        "quote"
+      ]
+    },
+    "private": {
+      "type": "boolean"
+    },
+    "provider": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "minimoi.fixture-session/1.0"
+    },
+    "synthetic": {
+      "const": true
+    },
+    "text": {
+      "type": "string"
+    },
+    "thread_id": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "provider",
+    "thread_id",
+    "event_id",
+    "index",
+    "author",
+    "origin",
+    "private",
+    "event_time",
+    "text",
+    "attachments"
+  ],
+  "title": "event",
+  "type": "object"
+}

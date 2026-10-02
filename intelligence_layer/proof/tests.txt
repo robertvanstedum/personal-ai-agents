@@ -1,0 +1,41 @@
+test_atomic_failure_leaves_previous_snapshot (test_foundation.Foundation.test_atomic_failure_leaves_previous_snapshot) ... ok
+test_attachment_is_gap_and_not_followed (test_foundation.Foundation.test_attachment_is_gap_and_not_followed) ... ok
+test_body_identity_and_forged_receipts_do_not_grant_access (test_foundation.Foundation.test_body_identity_and_forged_receipts_do_not_grant_access) ... ok
+test_capability_and_source_availability_honest (test_foundation.Foundation.test_capability_and_source_availability_honest) ... ok
+test_class_raise_blocks_existing_derivatives_and_old_citations (test_foundation.Foundation.test_class_raise_blocks_existing_derivatives_and_old_citations) ... ok
+test_default_capture_dry_run_has_no_writes (test_foundation.Foundation.test_default_capture_dry_run_has_no_writes) ... ok
+test_derivative_requires_strictest_class_and_exact_source (test_foundation.Foundation.test_derivative_requires_strictest_class_and_exact_source) ... ok
+test_designation_widening_requires_new_receipt_and_identity (test_foundation.Foundation.test_designation_widening_requires_new_receipt_and_identity) ... ok
+test_detector_only_tool_inputs_metadata_and_explicit_exception (test_foundation.Foundation.test_detector_only_tool_inputs_metadata_and_explicit_exception) ... ok
+test_duplicate_capture_paths_deleted_together (test_foundation.Foundation.test_duplicate_capture_paths_deleted_together) ... ok
+test_event_and_assertion_clocks_both_filter (test_foundation.Foundation.test_event_and_assertion_clocks_both_filter) ... ok
+test_exact_citation_and_tamper_rejection (test_foundation.Foundation.test_exact_citation_and_tamper_rejection) ... ok
+test_exact_range_source_immutability_and_idempotency (test_foundation.Foundation.test_exact_range_source_immutability_and_idempotency) ... ok
+test_golden_serialization_and_timestamp_contract (test_foundation.Foundation.test_golden_serialization_and_timestamp_contract) ... ok
+test_interrupted_erasure_blocks_retrieval_then_recovers (test_foundation.Foundation.test_interrupted_erasure_blocks_retrieval_then_recovers) ... ok
+test_invalid_version_and_float_fail_without_replacing_snapshot (test_foundation.Foundation.test_invalid_version_and_float_fail_without_replacing_snapshot) ... ok
+test_local_only_route_and_scoped_withheld_counts (test_foundation.Foundation.test_local_only_route_and_scoped_withheld_counts) ... ok
+test_metadata_only_restricted_stub_and_scoped_count (test_foundation.Foundation.test_metadata_only_restricted_stub_and_scoped_count) ... ok
+test_no_network_or_optional_fallback (test_foundation.Foundation.test_no_network_or_optional_fallback) ... ok
+test_owner_only_ingestion_disabled_no_canary_in_index (test_foundation.Foundation.test_owner_only_ingestion_disabled_no_canary_in_index) ... ok
+test_private_and_foreign_thread_excluded (test_foundation.Foundation.test_private_and_foreign_thread_excluded) ... ok
+test_proposals_promotions_and_receipt_revision_binding (test_foundation.Foundation.test_proposals_promotions_and_receipt_revision_binding) ... ok
+test_quote_tool_relay_cannot_designate (test_foundation.Foundation.test_quote_tool_relay_cannot_designate) ... ok
+test_reingest_cannot_downgrade_source_class (test_foundation.Foundation.test_reingest_cannot_downgrade_source_class) ... ok
+test_root_and_symlink_boundaries (test_foundation.Foundation.test_root_and_symlink_boundaries) ... ok
+test_shared_source_deletion_removes_derivative_preserves_other_source (test_foundation.Foundation.test_shared_source_deletion_removes_derivative_preserves_other_source) ... ok
+test_source_corruption_fails_closed (test_foundation.Foundation.test_source_corruption_fails_closed) ... ok
+test_temporal_relations_pending_vs_owner_and_citations (test_foundation.Foundation.test_temporal_relations_pending_vs_owner_and_citations) ... ok
+test_unknown_event_time_stays_unknown (test_foundation.Foundation.test_unknown_event_time_stays_unknown) ... ok
+test_auth_host_origin_and_body_identity (test_service.Service.test_auth_host_origin_and_body_identity) ... ok
+test_cookie_signin_and_static_ui (test_service.Service.test_cookie_signin_and_static_ui) ... ok
+test_demo_search_citation_rebuild_idempotency (test_service.Service.test_demo_search_citation_rebuild_idempotency) ... ok
+test_learning_cycle_relations_have_exact_citations (test_service.Service.test_learning_cycle_relations_have_exact_citations) ... ok
+test_owner_promotion_and_exact_delete_plan (test_service.Service.test_owner_promotion_and_exact_delete_plan) ... ok
+test_restart_preserves_sources_and_receipts (test_service.Service.test_restart_preserves_sources_and_receipts) ... ok
+test_topic_denial_and_no_secret_in_error (test_service.Service.test_topic_denial_and_no_secret_in_error) ... ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 9.021s
+
+OK

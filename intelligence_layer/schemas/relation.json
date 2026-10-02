@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "author": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "authority": {
+      "enum": [
+        "pending",
+        "owner"
+      ]
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "disclosure_class": {
+      "enum": [
+        "team",
+        "owner-local",
+        "owner-only"
+      ]
+    },
+    "event_time": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "from_id": {
+      "pattern": "[0-7][0-9A-HJKMNP-TV-Z]{25}",
+      "type": "string"
+    },
+    "hash": {
+      "pattern": "[0-9a-f]{64}",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "[0-7][0-9A-HJKMNP-TV-Z]{25}",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "motivates",
+        "alternative_to",
+        "evidence_for",
+        "evidence_against",
+        "corrects",
+        "supersedes",
+        "applies",
+        "outcome_of",
+        "relayed_from"
+      ]
+    },
+    "schema_version": {
+      "const": "minimoi.intelligence/1.0"
+    },
+    "to_id": {
+      "pattern": "[0-7][0-9A-HJKMNP-TV-Z]{25}",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "kind",
+    "from_id",
+    "to_id",
+    "author",
+    "authority",
+    "created_at",
+    "event_time",
+    "disclosure_class",
+    "hash"
+  ],
+  "title": "relation",
+  "type": "object"
+}

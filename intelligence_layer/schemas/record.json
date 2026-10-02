@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "author": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "authority": {
+      "enum": [
+        "evidence",
+        "agent_proposal",
+        "pending",
+        "owner",
+        "assertion"
+      ]
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "data": {
+      "type": "object"
+    },
+    "disclosure_class": {
+      "enum": [
+        "team",
+        "owner-local",
+        "owner-only"
+      ]
+    },
+    "event_time": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hash": {
+      "pattern": "[0-9a-f]{64}",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "[0-7][0-9A-HJKMNP-TV-Z]{25}",
+      "type": "string"
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "capture_method": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "event_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "fidelity": {
+          "enum": [
+            "direct",
+            "relayed",
+            "observed",
+            "inferred",
+            "reviewed"
+          ]
+        },
+        "gaps": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "thread_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "thread_id",
+        "event_id",
+        "capture_method",
+        "extractor_version",
+        "model",
+        "fidelity",
+        "gaps"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "minimoi.intelligence/1.0"
+    },
+    "sources": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "record_hash": {
+            "pattern": "[0-9a-f]{64}",
+            "type": "string"
+          },
+          "record_id": {
+            "pattern": "[0-7][0-9A-HJKMNP-TV-Z]{25}",
+            "type": "string"
+          },
+          "start": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_id",
+          "record_hash",
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "text": {
+      "type": "string"
+    },
+    "topics": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "type": {
+      "enum": [
+        "designation",
+        "source",
+        "relay",
+        "observation",
+        "candidate",
+        "lesson",
+        "decision",
+        "practice",
+        "outcome"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "type",
+    "created_at",
+    "event_time",
+    "author",
+    "disclosure_class",
+    "topics",
+    "sources",
+    "provenance",
+    "text",
+    "authority",
+    "data",
+    "hash"
+  ],
+  "title": "record",
+  "type": "object"
+}
