@@ -6,6 +6,7 @@ Behaviour is chosen by FAKE_CLAUDE_MODE:
   no_output     starts, prints nothing, exits 1
   bad_init      init lists a tool (the boundary must refuse)
   error_result  init, then a result event with is_error true
+  auth_rejected init, then the CLI's 401 result (sign-in on file but rejected)
   slow          init, then sleeps until killed
   huge          init, then more than 1 MB of assistant text
   signed_out    `auth status` reports loggedIn false
@@ -60,6 +61,10 @@ if mode == "slow":
 if mode == "huge":
     emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "x" * 1_200_000}]}})
     sys.exit(0)
+if mode == "auth_rejected":
+    emit({"type": "result", "subtype": "success", "is_error": True,
+          "result": 'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error"}}'})
+    sys.exit(1)
 if mode == "error_result":
     emit({"type": "result", "subtype": "error_during_execution", "is_error": True, "result": ""})
     sys.exit(1)

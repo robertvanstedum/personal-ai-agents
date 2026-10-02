@@ -546,6 +546,21 @@ function renderPeople() {
   }));
 }
 
+// Why a teammate did not answer, said plainly with what to do next.
+function failureText(who, reason) {
+  switch (reason) {
+    case 'signed_out': return `${who} is signed out on your Mac (its sign-in was rejected). Sign in again in Terminal, then Retry.`;
+    case 'runner_unavailable': return `${who} could not start on your Mac (the app is missing or would not launch).`;
+    case 'startup_inputs': return `${who} did not start: your Mac has settings or files for it that Rooms does not allow.`;
+    case 'not_proven_with_this_runner': return `${who} is not proven yet. Use Invite → Prove first.`;
+    case 'runner_changed_since_proof': return `${who} was updated since it was proven. Use Invite → Prove again.`;
+    case 'relay_busy': return `${who} was busy.`;
+    case 'empty_reply': return `${who} answered with nothing.`;
+    case 'unresolved_started': return `${who} started but no reply arrived in time. It may still have answered; nothing was received.`;
+    default: return `${who}'s reply failed (${(reason || 'unknown').replace(/_/g, ' ')}).`;
+  }
+}
+
 function turnLine(t) {
   const who = labelOf(t.addressee);
   switch (t.state) {
@@ -554,10 +569,10 @@ function turnLine(t) {
     case 'cancel_requested': return { text: `Stopping ${who}'s reply…`, wait: true };
     case 'uncertain':
       if (t.disposition === 'confirmed_absent') return { text: `Not answered: ${who}'s worker stopped before answering.`, actions: ['retry', 'continue'] };
-      if (t.disposition === 'unresolved_started') return { text: `${who} may have answered; the reply was not received.`, actions: ['attempt', 'continue'] };
+      if (t.disposition === 'unresolved_started') return { text: failureText(who, 'unresolved_started'), actions: ['attempt', 'continue'] };
       return { text: `Checking whether ${who}'s reply was saved…`, actions: ['continue'] };
     case 'expired': return { text: `Not answered: ${who} was busy with an earlier message.`, actions: ['retry', 'continue', 'end'] };
-    case 'failed': return { text: t.disposition === 'relay_busy' ? `Not answered: ${who} was busy.` : `Not answered: ${who}'s reply failed.`, actions: ['retry', 'continue', 'end'] };
+    case 'failed': return { text: `Not answered: ${failureText(who, t.disposition)}`, actions: ['retry', 'continue', 'end'] };
     case 'cancelled':
       if (t.disposition === 'budget_exhausted') return { text: `${who} has used its ${meeting?.meeting?.max_turns || 20} turns for this hour.`, actions: ['renew'] };
       if (t.disposition === 'window_expired') return { text: `${who}'s hour in this meeting is over.`, actions: ['renew'] };
@@ -747,7 +762,7 @@ async function prove(button) {
   const r = await records(`/v1/teammates/${encodeURIComponent(principal)}/prove`, { method: 'POST', body: { confirm: true }, key: keyFor(`prove:${principal}`) });
   if (r.status !== 202 && r.status !== 200) { out.textContent = `Proof not started: ${r.body.error || 'Rooms answered with an error'}.`; button.disabled = false; return; }
   out.textContent = `Proving ${name}: one question, one reply…`;
-  const until = Date.now() + 180000;
+  const until = Date.now() + 240000;              // the turn limit (180 s) plus recovery
   while (Date.now() < until) {
     await new Promise((done) => { window.setTimeout(done, 2000); });
     const s = await records(`/v1/teammates/${encodeURIComponent(principal)}/prove`);
@@ -761,7 +776,7 @@ async function prove(button) {
     const t = s.body.turn;
     if (t && ['failed', 'cancelled', 'expired', 'uncertain', 'abandoned'].includes(t.state)) {
       keys.delete(`prove:${principal}`);
-      out.textContent = `The proof did not finish (${(t.disposition || t.state).replace(/_/g, ' ')}). You can try again.`;
+      out.textContent = `The proof did not finish. ${failureText(name, t.disposition || t.state)} You can try again.`;
       await loadCards(); renderCards();
       return;
     }

@@ -101,7 +101,7 @@ def test_the_command_has_no_tools_no_mcp_no_settings_a_stripped_env_and_an_empty
                          "--mcp-config", '{"mcpServers":{}}', "--setting-sources", "", "--disable-slash-commands"]
     assert "--no-session-persistence" in argv and argv[argv.index("--system-prompt") + 1] == "etiquette"
     assert not any(k.startswith("ANTHROPIC") for k in call["env"])
-    assert set(call["env"]) <= {"HOME", "PATH", "LANG", "USER", "LOGNAME", "TMPDIR", "FAKE_CLAUDE_MODE",
+    assert set(call["env"]) <= {"HOME", "PATH", "LANG", "USER", "LOGNAME", "TMPDIR", "CLAUDE_CODE_MAX_RETRIES", "FAKE_CLAUDE_MODE",
                                 "FAKE_CLAUDE_LOG", "PWD", "SHLVL", "_", "__CF_USER_TEXT_ENCODING", "OLDPWD"}
     assert call["cwd"].startswith(str((tmp_path / "turns").resolve())) or call["cwd"].startswith(str(tmp_path / "turns"))
 
@@ -113,6 +113,12 @@ def test_after_a_process_starts_anything_but_a_clean_result_is_an_error(tmp_path
     r = runner(tmp_path, home, mode)
     out = r.stream(MESSAGES, "u", "d" * 32, turn=PROOF)
     assert out["outcome"] == "error" and out["detail"] == detail and out["text"] == ""
+
+
+def test_a_rejected_sign_in_is_refused_as_signed_out_not_a_timeout(tmp_path, home):
+    r = runner(tmp_path, home, "auth_rejected")
+    out = r.stream(MESSAGES, "u", "e" * 32, turn=PROOF)
+    assert out["outcome"] == "refused" and out["reason"] == "signed_out" and out["text"] == ""
 
 
 def test_output_cap_and_timeout_kill_the_process_group(tmp_path, home):

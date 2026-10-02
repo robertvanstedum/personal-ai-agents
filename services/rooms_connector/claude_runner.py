@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import tempfile
@@ -33,6 +34,11 @@ MANAGED_DIR = Path("/Library/Application Support/ClaudeCode")
 FLAGS = ["-p", "--output-format", "stream-json", "--verbose", "--tools", "",
          "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--setting-sources", "",
          "--disable-slash-commands", "--no-session-persistence"]
+# The CLI retries a rejected sign-in for about three minutes by default, past
+# the turn limit, so the room only ever saw a timeout. Two retries still ride
+# out a blip and turn a 401 into a clear "signed out" within seconds.
+MAX_RETRIES = "2"
+AUTH_FAILURE = re.compile(r"failed to authenticate|authentication_error|\b401\b|invalid api key|please run /login", re.I)
 
 
 def sha256_file(path):
@@ -120,7 +126,8 @@ class ClaudeRunner:
     # ── no-inference checks ─────────────────────────────────────────────────
     def env(self):
         keep = {k: self.base_env[k] for k in ("USER", "LOGNAME", "TMPDIR") if k in self.base_env}
-        return {**keep, "HOME": self.home, "PATH": "/usr/bin:/bin:/opt/homebrew/bin", "LANG": "en_US.UTF-8"}
+        return {**keep, "HOME": self.home, "PATH": "/usr/bin:/bin:/opt/homebrew/bin", "LANG": "en_US.UTF-8",
+                "CLAUDE_CODE_MAX_RETRIES": MAX_RETRIES}
 
     def fingerprint(self):
         """Binary hash, version and flag profile: what a proof is bound to."""
@@ -275,6 +282,8 @@ class ClaudeRunner:
                     state["text"] = event["result"]
                     u = event.get("usage") if isinstance(event.get("usage"), dict) else {}
                     state["usage"] = {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}
+                elif AUTH_FAILURE.search(str(event.get("result") or "")):
+                    state["failure"] = "signed_out"               # rejected before any inference
                 else:
                     state["failure"] = "result_error"
         try:
@@ -318,6 +327,8 @@ class ClaudeRunner:
             return {"outcome": "stopped", "text": state["text"] or "", "usage": state["usage"], "detail": "stopped"}
         if killed_for == "timeout":
             return {"outcome": "error", "text": "", "usage": None, "detail": "timeout"}
+        if state["failure"] == "signed_out":
+            return {"outcome": "refused", "text": "", "usage": None, "detail": "signed_out", "reason": "signed_out"}
         if state["failure"] or not state["result"] or not (state["text"] or "").strip():
             return {"outcome": "error", "text": "", "usage": None,
                     "detail": state["failure"] or ("no_result" if not state["result"] else "empty")}
