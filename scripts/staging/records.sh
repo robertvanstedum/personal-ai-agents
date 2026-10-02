@@ -127,11 +127,8 @@ case "$cmd" in
       docker volume inspect "$WORKER_JOURNAL" >/dev/null 2>&1 || docker volume create "$WORKER_JOURNAL" >/dev/null
       services="records rooms-worker"
       if connector_ready && grep -q "records-door:" "$RELEASE_DIR/$RECORDS_FILE"; then services="$services records-door"; fi
-      if codex_ready && grep -q "rooms-codex:" "$RELEASE_DIR/$RECORDS_FILE"; then
-        docker network inspect minimoi-staging-rooms-codex-egress >/dev/null 2>&1 \
-          || docker network create minimoi-staging-rooms-codex-egress >/dev/null
-        services="$services rooms-codex"
-      fi
+      # Compose creates and labels its own codex-egress network.
+      if codex_ready && grep -q "rooms-codex:" "$RELEASE_DIR/$RECORDS_FILE"; then services="$services rooms-codex"; fi
       # shellcheck disable=SC2086
       records_compose up -d --no-build $services
       note "up: $services"
