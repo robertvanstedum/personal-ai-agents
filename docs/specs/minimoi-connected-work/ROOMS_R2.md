@@ -1,7 +1,7 @@
-# Rooms R2 — Claude Code joins a room from this Mac · specification v0.3 (build candidate)
+# Rooms R2 — Claude Code and Codex join a room · specification v0.4 (Codex amendment, review candidate)
 
-**Edition:** v0.3 · 1 October 2026 · **Author:** Claude Code (sole implementation editor) · **Reviewer:** Codex (independent) · **Decision owner:** Robert
-**Status:** Codex cleared v0.2 for the Claude-only implementation (`CODEX_RECHECK_R2_R3_v0.2_2026-10-01.md`); v0.3 folds in its four acceptance clarifications and two adjustments found while building (§0). v0.2 answered Codex's review (`CODEX_REVIEW_R1_PREFLIGHT_R2_R3_2026-10-01.md`, R2-01…R2-06). Robert authorized R2 on dev on 1 October 2026; production, main merges and paid/live proofs keep their gates.
+**Edition:** v0.4 · 2 October 2026 (v0.3: 1 October) · **Author:** Claude Code (sole implementation editor) · **Reviewer:** Codex (independent) · **Decision owner:** Robert
+**Status:** v0.4 unparks Codex (§3.6) on Robert's direction of 2 October 2026 ("Codex and Claude are the same … codex setup now, grok to follow later"; "finish the room test with 3 of us"); everything else is v0.3 unchanged. Codex cleared v0.2 for the Claude-only implementation (`CODEX_RECHECK_R2_R3_v0.2_2026-10-01.md`); v0.3 folds in its four acceptance clarifications and two adjustments found while building (§0). v0.2 answered Codex's review (`CODEX_REVIEW_R1_PREFLIGHT_R2_R3_2026-10-01.md`, R2-01…R2-06). Robert authorized R2 on dev on 1 October 2026; production, main merges and paid/live proofs keep their gates.
 **Builds on:** [R1](ROOMS_R1.md) v0.5.1, deployed on dev at release `d33a400` (branch base `d33a4002`). `records/` means `prototype-lab/projects/project-records-room-poc/`.
 
 ## 0. Changes from v0.1 (finding map)
@@ -21,11 +21,21 @@
 | Built: facilitator | §3.2: inviting MC makes it the facilitator whatever the invitation order (owner decision R1 §0); otherwise the first teammate invited keeps the role |
 | R2-06 proof lifecycle | No-inference checks named; the init-event check happens inside the one owner-approved Prove; evidence bound to binary hash, version and flag profile; a change makes the teammate *away* until proven again (§3.7). |
 
+### v0.4 — Codex amendment
+
+| Item | Resolution |
+|---|---|
+| R2-01 Codex parked | Unparked with evidence (`_working/rooms-redesign/codex-boundary-evidence-2026-10-02/EVIDENCE.md`, E1–E11, no model call): a Rooms flag set and a text-only model catalog reduce what Codex 0.145.0 offers the model to `update_plan`, `request_user_input`, `view_image`, and `view_image` is refused before any file read; local skills, rules and instructions are absent from the model-visible input. Codex runs in its own container through `codex app-server`, with its own subscription sign-in (§3.6). |
+| Remaining gap (E11) | The tool list under a real ChatGPT sign-in cannot be captured offline (requests go over a fixed `wss://chatgpt.com` endpoint). Covered at runtime: any non-message item or any server request fails the turn closed and sends Codex *away* (§3.6.4); and the container holds nothing of Robert's for a tool to reach (§3.6.2). |
+| One teammate experience | Same Invite, Prove, answer, Stop, *away* and visible failures as Claude Code; same worker, journal, fence, proof lifecycle; the runner is the only provider-specific part. Grok is the next runner (not this build). |
+
 ## 1. Outcome
 
 In a Rooms meeting Robert invites **Claude Code** from the Invite dialog. Addressed with `@Claude` (or its recipient chip), Claude Code answers one bounded, tool-free discussion turn, attributed to `claude-code`, through Robert's existing Claude subscription on this Mac. No API key, no tool, no file access from the model. When the connector stops or its runner changes, Claude Code shows *away* with the real reason within three minutes; when the Mac sleeps the whole dev site is down (R1 §3.9 case a).
 
-R2 proves: one in-room turn from Claude Code, stop discards late output, connector loss shows *away*. It does not prove: Codex in Rooms (parked), tools or repository work from a meeting, laptop-off participation, CoS, rounds, voice, production.
+**v0.4:** Codex joins the same way: invited from Invite, addressed with `@Codex`, one bounded tool-free turn attributed to `codex`, through Robert's ChatGPT subscription signed in once inside its own container. With Claude Code and MC this makes the three-teammate meeting.
+
+R2 proves: one in-room turn from Claude Code and one from Codex, stop discards late output, connector loss shows *away*. It does not prove: Grok, tools or repository work from a meeting, laptop-off participation, CoS, rounds, voice, production.
 
 ## 2. Verified facts (1 October 2026, read-only, no model call)
 
@@ -36,6 +46,8 @@ R2 proves: one in-room turn from Claude Code, stop discards late output, connect
 | Robert's user-level Claude configuration holds no instruction file (`~/.claude/CLAUDE.md` and `~/.claude/rules` absent) and `settings.json` holds only display preferences | file listing |
 | Headless flags present: `-p`, `--output-format json|stream-json`, `--tools ""`, `--strict-mcp-config`, `--mcp-config`, `--setting-sources`, `--system-prompt`, `--no-session-persistence`, `--disable-slash-commands` | `claude --help` |
 | Codex (ChatGPT-app bundled 0.158.0-alpha.2): `codex debug prompt-input` renders the model-visible input without a model call; it includes local skills instructions and a multi-agent role, and **no tool list**; feature flags (`shell_tool`, `unified_exec`, `plugins`, `apps`, `browser_use`, `computer_use`, …) exist but their effective result is not shown | CLI output |
+| **v0.4** Codex CLI 0.145.0 (standalone, SHA-256 `1da3f4e0…705f590`); npm publishes the same version for `linux-arm64` (`@openai/codex@0.145.0-linux-arm64`) | `npm view`; binary hash |
+| **v0.4** Effective tool listing and model-visible input, captured from the request Codex sends to a loopback fake endpoint, defaults vs Rooms flag set; `view_image` behaviour; `exec --json` hides tool calls while app-server has `imageView`/`commandExecution`/… items; `chatgptAuthTokens` login is "internal use only"; `codex login --device-auth` exists | EVIDENCE.md E1–E11; `codex app-server generate-json-schema` |
 | Docker publishes no host port for a container attached only to `internal: true` networks; `minimoi-records` is on `minimoi-staging-records` only | Docker networking rule; R1 compose |
 
 ## 3. Design
@@ -90,9 +102,73 @@ Command, run in a fresh empty temporary directory (mode 700) under `/private/tmp
 
 Captured output is capped at 1 MB, enforced on bounded chunk reads before anything is buffered or parsed; beyond it the process is killed and the turn is `uncertain`. The child is always terminated and reaped, and its registration cleared, on every exit path. Child processes run in their own process group and are killed with it. No restart or Retry runs inference automatically; R1's reconciliation gate applies.
 
-### 3.6 Codex: parked, fail-closed
+### 3.6 Codex: a container connector (v0.4; replaces "parked")
 
-No Codex runner is wired in R2. Codex's card is not created, so `@Codex` keeps getting R1's "Not sent to Codex: not available in Rooms yet". Unparking needs: an inspectable effective-tool listing showing no file, shell, browser, computer, plugin or app tools; a model-visible input without local skills, memory or agent-role instructions; and a sign-in that the model's tools cannot reach. The evidence above shows none of these today without a model call.
+#### 3.6.1 Process model
+
+- New service **`rooms-codex`** in `docker-compose.records.yml`, image `minimoi-staging/rooms-codex:<tag>` built by `records.sh build` from `docker/Dockerfile.rooms-codex`: `python:3.12-slim`, `requests`, the repository's `services/rooms_worker` + `services/rooms_connector`, the Codex **0.145.0 linux-arm64** binary from the npm tarball (version and SHA-256 pinned in the Dockerfile; the build fails on a mismatch), and the Rooms model catalog `services/rooms_connector/codex_catalog.json` (read-only in the image).
+- One long-running Python connector process (`python -m services.rooms_connector.connector`, `ROOMS_TEAMMATE=codex`) runs the R1 worker with a `CodexRunner`. It reaches Records directly at `http://minimoi-records:18880` (no door). **One `codex app-server` child per turn** over stdio, in its own process group, reaped on every exit path; no daemon, no socket, no WebSocket listener.
+- Separate work principal `rooms-connector-codex`, bound only to `codex`; `codex` gets a teammate card and its legacy credential is revoked, with `codex-manual` for hand-posted notes (§3.4 unchanged, now applied to Codex too).
+
+#### 3.6.2 Container boundary
+
+| Item | Value |
+|---|---|
+| User | uid/gid 10001 (`rooms`), no shell login, no sudo |
+| Root filesystem | `read_only: true`; `cap_drop: ALL`; `no-new-privileges`; `mem_limit 512m`; `pids_limit 128` |
+| `/codex-home` | named volume `minimoi-staging-rooms-codex-home` (external), mode 700: `CODEX_HOME`, holding only the sign-in (`auth.json`) and Codex's own runtime files. No `config.toml`, `AGENTS.md`, `rules/`, `skills/`, `plugins/`, `hooks` — checked before every turn (§3.6.5) |
+| `/state` | named volume `minimoi-staging-rooms-codex-state` (external): the turn journal and proof records |
+| `/run/secrets/rooms` | bind of `${MINIMOI_ROOT}/secrets/rooms-codex` **read-only**: `rooms-connector-codex.token`, `codex.token` |
+| `/turns`, `/tmp` | tmpfs (`/turns` 8 MB, mode 700): each turn's empty working directory |
+| Not mounted | the repository, Robert's home, `~/.codex`, Docker socket, any other secret |
+| Networks | `records-net` (internal) and a new ordinary bridge `minimoi-staging-rooms-codex-egress` (outbound HTTPS for ChatGPT). No published port. Records gains nothing. |
+| Environment | `RECORDS_URL`, `ROOMS_TEAMMATE=codex`, `CODEX_HOME=/codex-home`, paths only. No `OPENAI_*`, no API key, no env_file. |
+
+The model's only file-reaching tool, `view_image`, is refused before any read (E8/E9); even if a future catalog change let it run, it would see only this container (no Robert data) and cannot carry text such as `auth.json` (E6).
+
+#### 3.6.3 Command and configuration (the flag profile)
+
+```
+codex app-server --listen stdio:// \
+  --disable shell_tool --disable unified_exec --disable apps --disable plugins --disable browser_use \
+  --disable browser_use_external --disable computer_use --disable in_app_browser --disable image_generation \
+  --disable multi_agent --disable hooks --disable skill_search --disable skill_mcp_dependency_install \
+  --disable tool_suggest --disable goals --disable code_mode_host --disable workspace_dependencies \
+  --disable shell_snapshot --disable remote_plugin \
+  -c web_search="disabled" -c skills.bundled.enabled=false -c skills.include_instructions=false \
+  -c model_catalog_json="/app/services/rooms_connector/codex_catalog.json" -c model="gpt-5.5" \
+  -c approval_policy="never" -c sandbox_mode="read-only" -c forced_login_method="chatgpt" \
+  -c cli_auth_credentials_store="file"
+```
+
+JSON-RPC: `initialize` (`clientInfo.name = "minimoi-rooms"`) → `thread/start {cwd: <empty turn dir>, ephemeral: true, approvalPolicy: "never", sandbox: "read-only", baseInstructions: null, developerInstructions: <etiquette + brief>}` → `turn/start {threadId, input: [{type: "text", text: <attributed transcript JSON + trigger>}]}`. Stripped child environment: `HOME=/codex-home`, `CODEX_HOME=/codex-home`, `PATH=/usr/local/bin:/usr/bin:/bin`, `LANG`. The **profile hash** is SHA-256 over this exact argument list plus the catalog file's SHA-256.
+
+#### 3.6.4 Turn contract (request, output, stop, recovery)
+
+| Event | Handling |
+|---|---|
+| Notifications allowed | `thread/started`, `turn/started`, `item/started`/`item/completed` for item types **`userMessage`, `agentMessage`, `reasoning`, `plan`** only; `item/agentMessage/delta`, reasoning deltas, `thread/tokenUsage/updated`, `turn/completed`, `warning`, `configWarning`, status/rate-limit/account notifications |
+| Any other item type (`commandExecution`, `fileChange`, `mcpToolCall`, `dynamicToolCall`, `collabAgentToolCall`, `subAgentActivity`, `webSearch`, `imageView`, `imageGeneration`, `hookPrompt`, …) | `turn/interrupt`, then kill the group; `uncertain`, reason `runner_boundary`; teammate *away* until proven again |
+| Any server→client **request** (approvals, `item/tool/requestUserInput`, `item/tool/call`, elicitation, permissions, `account/chatgptAuthTokens/refresh`, `attestation/generate`) | answered with a JSON-RPC error ("declined by Rooms"), then the same as above |
+| Answer | on `turn/completed` with `status: completed`: the text of the **last completed `agentMessage`**; non-empty → delivered (journaled first); empty → `failed`, `empty_reply` |
+| Usage | the last `thread/tokenUsage/updated` for the turn, reported as `prompt_tokens`/`completion_tokens`; it is evidence the model worked |
+| `turn/completed` `status: failed`, `codexErrorInfo: unauthorized` (or `httpConnectionFailed` 401) | with **no** agent output and **no** usage: `refused`, `signed_out` (definitive, the R2 P2 rule); otherwise `uncertain`, `signed_out_after_start` |
+| `usageLimitExceeded` before any output/usage | `refused`, `usage_limit` ("Codex's ChatGPT plan limit is reached") |
+| Other failure, malformed JSON-RPC, a non-object line, exit before `turn/completed` | `uncertain` |
+| Stop | `turn/interrupt`, then TERM the group, KILL after 5 s; late output discarded (R1 rule) |
+| Limits | 180 s per turn (kill → `uncertain`, `timeout`); 1 MB captured output; one turn at a time |
+| Recovery | unchanged R1 §3.7: journal before start, receipt-first, never re-runs inference |
+
+#### 3.6.5 Readiness, sign-in and proof
+
+- **Sign-in (owner-run, once):** `scripts/staging/codex-room.sh login` runs `codex login --device-auth` inside the container with the same `CODEX_HOME`; Robert opens the shown URL and enters the code with his ChatGPT account. The login never leaves the volume; nothing is copied from the Mac's `~/.codex`. `codex-room.sh logout` removes it.
+- **No-inference checks** (connector start, housekeeping and every turn): binary path, SHA-256 and version; `codex login status` reports ChatGPT sign-in (an API-key sign-in or none → `signed_out`, no process); `CODEX_HOME` contains only allowlisted entries (no `config.toml`, `AGENTS.md`, `rules`, `skills`, `plugins`, `hooks`; anything unreadable fails closed → `startup_inputs`); the profile hash.
+- **Boundary probe (no model call):** at connector start and before a Prove, the runner starts the same command against a loopback fake endpoint inside the container (a `model_provider` override aimed at `127.0.0.1`, dummy key, scratch `CODEX_HOME`) and requires the captured request to offer exactly `{update_plan, request_user_input, view_image}`, a developer input without `skills_instructions`, and a scripted `view_image` call refused. A mismatch → `unready: runner_boundary`.
+- **Proof:** as §3.7 (pending fingerprint before the process, promoted only after Records accepts the reply), fingerprint = binary SHA-256 + version + profile hash. `proof-codex.json` in `/state`. Any change → *away: Codex changed since its proof — Prove again*.
+
+#### 3.6.6 Room experience (same as Claude Code)
+
+Codex appears in Invite with its real state; `@Codex` routes to it (R1 routing, by card and host); failures use the R2 plain texts with a per-teammate sign-in hint (Claude Code: `claude auth login` on the Mac; Codex: `codex-room.sh login`).
 
 ### 3.7 Proof lifecycle (R2-06)
 
@@ -106,10 +182,11 @@ No Codex runner is wired in R2. Codex's card is not created, so `@Codex` keeps g
 - `fence_append`: identity-based teammate detection (§3.4).
 - `mark_reachable` accepts an optional `unready` reason code; stored on the card (`teammates.last_failure_at` unchanged; a new table `teammate_status(principal PK, unready, observed_at)`, new table only) and shown by `reach()`.
 - `manage.py provision-rooms`: `--worker-principal`, several teammates, revocation of a teammate's legacy credential with an explicit list in the output, creation of a `<teammate>-manual` principal on request.
+- **v0.4:** no Records code change. `records.sh provision-codex` reuses `provision-rooms` (`--teammate codex --worker-principal rooms-connector-codex --revoke-legacy --manual --card …`).
 
 ## 5. Out of scope
 
-Codex in Rooms; tools, repository or file access from a meeting turn; laptop-off participation; CoS; rounds; any tunnel route or public hostname; voice; a second human; cost reporting; production.
+Grok (next runner); tools, repository or file access from a meeting turn; laptop-off participation; CoS; rounds; any tunnel route or public hostname; voice; a second human; cost reporting; production.
 
 ## 6. Tests (no model call)
 
@@ -118,8 +195,10 @@ Codex in Rooms; tools, repository or file access from a meeting turn; laptop-off
 | Records | identity fence (legacy token, no-origin, paused, stale generation); `-manual` principal posts as itself; `unready` reason stored and shown; worker bindings exclusive; provisioning output lists the revoked legacy credential |
 | Connector | R1 worker suite re-run with a fake CLI (a script emitting stream-json): journal before start; stale admission re-asked; stop before spawn, during run, after output; timeout and output cap kill the group; no-output non-zero exit → `uncertain`; boundary-violating init → killed, `uncertain`; startup-input allowlist each case → `failed`, no process; runner change → `unready`, claimed turn failed before spawn; per-teammate adapter identity in export; recovery ignores another teammate's uncertain turns; housekeeping thread keeps reach fresh during a long fake turn |
 | Door | forwards only to Records; LAN address refused; unauthenticated 401; published only on 127.0.0.1; no credential in its environment |
-| Browser | Invite lists Claude Code with its real state; `@Claude` → a fake-connector reply attributed to Claude Code; `@Codex` → the R1 not-available line |
+| Codex runner (v0.4) | a fake `codex app-server` (stdio JSON-RPC script): answer from the last agentMessage; each non-message item type and each server request → interrupt, `runner_boundary`; unauthorized with/without prior output or usage → `signed_out` / `signed_out_after_start`; stop → interrupt then kill; timeout; output cap; disallowed `CODEX_HOME` entries → `startup_inputs`; API-key login → `signed_out`; profile hash covers flags and catalog; proof pending → promoted |
+| Container (v0.4) | preflight: user 10001, read-only root, no published port, networks exactly records-net + codex-egress, mounts exactly as §3.6.2, no credential variable |
+| Browser | Invite lists Claude Code with its real state; `@Claude` → a fake-connector reply attributed to Claude Code; `@Codex` → a fake-runner reply attributed to Codex |
 
 ## 7. Gates
 
-G-R2-0 Codex rechecks this draft. G-R2-1 build, tests green, Codex reviews the frozen diff, dev rollout of the door and connector (no model call). G-R2-2 owner-approved live turns: one Prove (with the init check inside it), one question, one stop mid-reply, connector stopped → *away*. **Rollback:** `connector.sh uninstall`, revoke the connector and teammate credentials, remove `records-door` and its network; R1 untouched.
+**v0.4:** G-R2C-0 Codex reviews this amendment; G-R2C-1 build, tests green, Codex reviews the frozen diff, dev rollout of `rooms-codex` (no model call); G-R2C-2 owner-run `codex-room.sh login`, then owner-approved Prove and the three-teammate meeting. Rollback: stop and remove `rooms-codex`, revoke `rooms-connector-codex` and `codex` credentials. G-R2-0 Codex rechecks this draft. G-R2-1 build, tests green, Codex reviews the frozen diff, dev rollout of the door and connector (no model call). G-R2-2 owner-approved live turns: one Prove (with the init check inside it), one question, one stop mid-reply, connector stopped → *away*. **Rollback:** `connector.sh uninstall`, revoke the connector and teammate credentials, remove `records-door` and its network; R1 untouched.
