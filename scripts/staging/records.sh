@@ -265,6 +265,30 @@ case "$cmd" in
         check "door on the LAN address $lan (curl exit 7 = connection refused)" "$rc" "7"
       fi
     fi
+    if docker inspect "$CODEX_CONTAINER" >/dev/null 2>&1; then
+      # Rooms R2 v0.4 §3.6.2 / §6: the Codex container as it actually runs.
+      c="$CODEX_CONTAINER"
+      check "rooms-codex user" "$(docker inspect -f '{{.Config.User}}' "$c")" "10001:10001"
+      check "rooms-codex uid inside" "$(docker exec "$c" id -u 2>/dev/null)" "10001"
+      check "rooms-codex read-only root" "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$c")" "true"
+      check "rooms-codex capabilities dropped" "$(docker inspect -f '{{json .HostConfig.CapDrop}}' "$c")" '["ALL"]'
+      check "rooms-codex no-new-privileges" "$(docker inspect -f '{{json .HostConfig.SecurityOpt}}' "$c")" '["no-new-privileges:true"]'
+      check "rooms-codex networks" "$(nets "$c")" "$RECORDS_NETWORK minimoi-staging-rooms-codex-egress"
+      check "rooms-codex published ports" "$(ports "$c")" "{}"
+      check "rooms-codex mounts (destination=source:rw)" \
+        "$(docker inspect -f '{{range .Mounts}}{{.Destination}}={{.Name}}:{{.RW}} {{end}}' "$c" | xargs -n1 | sort | xargs)" \
+        "/codex-home=minimoi-staging-rooms-codex-home:true /run/secrets/rooms=minimoi-staging-rooms-codex-secrets:false /state=minimoi-staging-rooms-codex-state:true"
+      check "rooms-codex tmpfs" "$(docker inspect -f '{{range $k,$v := .HostConfig.Tmpfs}}{{$k}} {{end}}' "$c" | xargs -n1 | sort | xargs)" "/tmp /turns"
+      check "rooms-codex holds no credential variable" "$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" | sed 's/=.*//' | grep -iE 'token|secret|password|key|openai' | grep -cvx 'GPG_KEY' || true)" "0"
+      check "rooms-codex image release" "$(docker inspect -f '{{index .Config.Labels "minimoi.staging.release"}}' "$(docker inspect -f '{{.Image}}' "$c")" | cut -c1-7)" "$(release_tag)"
+      check "rooms-codex binary version" "$(docker exec "$c" codex --version 2>/dev/null | awk '{print $NF}')" "0.145.0"
+      check "rooms-codex binary sha256" "$(docker exec "$c" python -c 'import hashlib;print(hashlib.sha256(open("/usr/local/bin/codex","rb").read()).hexdigest())' 2>/dev/null)" "57d79900fe95df2ab854adf581a28ec46d7442f07445032d86453a44b577dced"
+      check "rooms-codex has no bwrap/rg/zsh" "$(docker exec "$c" sh -c 'command -v bwrap rg zsh' 2>/dev/null | wc -l | tr -d ' ')" "0"
+      check "rooms-codex CODEX_HOME allowlist" "$(docker exec "$c" python -c 'from services.rooms_connector.codex_runner import CodexRunner;print(",".join(CodexRunner().home_problems()) or "clean")' 2>/dev/null)" "clean"
+      check "rooms-codex offline boundary probe (no model call)" "$(docker exec "$c" python -c 'from services.rooms_connector.codex_runner import CodexRunner;print(CodexRunner().boundary_probe())' 2>/dev/null)" "True"
+      echo "INFO rooms-codex profile hash: $(docker exec "$c" python -c 'from services.rooms_connector.codex_runner import CodexRunner;print(CodexRunner().fingerprint()["profile_sha256"])' 2>/dev/null)"
+      echo "INFO rooms-codex sign-in: $(docker exec "$c" codex login status 2>&1 | sed -n 1p)"
+    fi
     # One probe run inside a container. Outcomes are exact: an HTTP status,
     # "nxdomain" (the name did not resolve), "refused", "timeout", "no_route"
     # (the kernel had no route to that address), or "probe_error:..." /

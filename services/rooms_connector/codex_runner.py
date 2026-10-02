@@ -14,10 +14,12 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import shutil
 import subprocess
 import tempfile
 import threading
+import time
 
 from services.rooms_connector.claude_runner import OUTPUT_CAP, ClaudeRunner, sha256_file
 
@@ -29,6 +31,10 @@ DISABLED = ["shell_tool", "unified_exec", "apps", "plugins", "browser_use", "bro
             "shell_snapshot", "remote_plugin"]
 EXPECTED_TOOLS = {"update_plan", "request_user_input", "view_image"}
 ALLOWED_ITEMS = {"userMessage", "agentMessage", "reasoning", "plan"}
+# Streamed model output: any of these with text is evidence the model worked (C2).
+OUTPUT_DELTAS = {"item/agentMessage/delta", "item/reasoning/textDelta", "item/reasoning/summaryTextDelta",
+                 "item/plan/delta"}
+INTERRUPT_GRACE_S = 3                    # after turn/interrupt, before TERM (then KILL after 5 s)
 # Codex's own runtime files (observed in a fresh CODEX_HOME, EVIDENCE.md) plus the sign-in.
 HOME_ALLOWED = {"auth.json", "installation_id", "tmp", ".sandbox_migration", ".personality_migration", "version.json",
                 "models_cache.json", "log", "logs", "sessions", "cache", "shell_snapshots"}
@@ -61,6 +67,7 @@ class CodexRunner(ClaudeRunner):
                          output_cap=output_cap, popen=popen, run=run, environ=environ)
         self.catalog = Path(catalog)
         self.probe_ok = None                 # None: not yet probed; False: failed (unready)
+        self._sessions = {}                  # correlation -> active _Session, so Stop can interrupt (C3)
 
     # ── no-inference checks ─────────────────────────────────────────────────
     def env(self, home=None):
@@ -114,7 +121,7 @@ class CodexRunner(ClaudeRunner):
         return True, None, fp
 
     # ── the offline boundary probe (§3.6.5) ─────────────────────────────────
-    def boundary_probe(self, timeout=60):
+    def boundary_probe(self, timeout=60, correlation=None):
         """Run the profile against a loopback fake endpoint: the captured request
         must offer exactly EXPECTED_TOOLS, carry no skills instructions, and a
         scripted view_image call must be refused. No model call."""
@@ -158,13 +165,23 @@ class CodexRunner(ClaudeRunner):
             argv = [self.cli, *flags(self.catalog, provider=f"http://127.0.0.1:{server.server_port}/v1")]
             proc = self.popen(argv, cwd=str(cwd), env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                               stderr=subprocess.DEVNULL, start_new_session=True)
+            session = _Session(proc, timeout)                    # every read bounded by this deadline (C1)
+            if correlation:                                      # a Prove's Stop releases its probe (C1)
+                with self._lock:
+                    self._procs[correlation], self._sessions[correlation] = proc, session
+                    stopped = correlation in self._stopped
+                if stopped:
+                    self._kill(proc)
             try:
-                session = _Session(proc, timeout)
                 session.handshake(str(cwd), "Rooms boundary probe.")
                 session.request("turn/start", {"threadId": session.thread,
                                                "input": [{"type": "text", "text": "probe"}]})
                 items, _ = session.until_completed()
             finally:
+                if correlation:
+                    with self._lock:
+                        self._procs.pop(correlation, None)
+                        self._sessions.pop(correlation, None)
                 self._kill(proc)
                 try:
                     proc.wait(timeout=10)
@@ -187,7 +204,11 @@ class CodexRunner(ClaudeRunner):
     def stream(self, messages, user, correlation, on_open=None, turn=None, admit=None, **_):
         proof = bool(turn and (turn.get("brief") or {}).get("kind") == "proof")
         if proof:
-            self.probe_ok = self.boundary_probe()           # fresh before a Prove (§3.6.5)
+            self.probe_ok = self.boundary_probe(correlation=correlation)    # fresh before a Prove (§3.6.5)
+            with self._lock:
+                if correlation in self._stopped:
+                    self._stopped.discard(correlation)
+                    return {"outcome": "stopped", "text": "", "usage": None, "detail": "stopped_before_start"}
         ok, reason, fp = self._check(allow_unproven=proof)
         if not ok:
             return {"outcome": "refused", "text": "", "usage": None, "detail": reason, "reason": reason}
@@ -234,6 +255,8 @@ class CodexRunner(ClaudeRunner):
         timer.daemon = True
         timer.start()
         session = _Session(proc, self.max_turn_s + 5, output_cap=self.output_cap)
+        with self._lock:
+            self._sessions[correlation] = session
         failure, items, final = None, [], None
         try:
             session.handshake(cwd, system)
@@ -249,13 +272,15 @@ class CodexRunner(ClaudeRunner):
             self._kill(proc)
         finally:
             timer.cancel()
+            with self._lock:
+                self._sessions.pop(correlation, None)
         killed_for = getattr(proc, "_rooms_kill_reason", None)
         with self._lock:
             stopped = correlation in self._stopped
         texts = [i.get("text") or "" for i in items if i.get("type") == "agentMessage"]
         text = texts[-1] if texts else ""
         usage = session.usage
-        generated = bool(any(t.strip() for t in texts) or session.usage_seen)
+        generated = bool(any(t.strip() for t in texts) or session.generated)     # kept on every exit path (C2)
         if stopped:
             return {"outcome": "stopped", "text": text, "usage": usage, "detail": "stopped"}
         if killed_for == "timeout":
@@ -281,7 +306,27 @@ class CodexRunner(ClaudeRunner):
         return {"outcome": "error", "text": "", "usage": usage, "detail": f"turn_{status or 'incomplete'}"}
 
     def stop(self, correlation):
-        return super().stop(correlation)
+        """C3: the app-server's own interruption first when the turn's ids are
+        known, then bounded TERM/KILL. Whether the provider stopped stays
+        unknown; Records' late-post fence still discards anything after."""
+        with self._lock:
+            self._stopped.add(correlation)
+            proc, session = self._procs.get(correlation), self._sessions.get(correlation)
+        if not proc:
+            return 200
+        if session and session.thread and session.turn:
+            session.interrupt()
+
+            def bounded():
+                deadline = time.monotonic() + INTERRUPT_GRACE_S
+                while time.monotonic() < deadline and proc.poll() is None:
+                    time.sleep(0.05)
+                if proc.poll() is None:
+                    self._kill(proc)
+            threading.Thread(target=bounded, daemon=True).start()
+        else:
+            self._kill(proc)                                  # handshake not done: nothing to interrupt
+        return 200
 
 
 class _Boundary(Exception):
@@ -297,14 +342,17 @@ class _Session:
 
     def __init__(self, proc, timeout, output_cap=OUTPUT_CAP):
         self.proc, self.timeout, self.cap = proc, timeout, output_cap
+        self.deadline = time.monotonic() + timeout
         self.next_id, self.total, self.buf = 0, 0, b""
         self.thread = self.turn = None
-        self.usage, self.usage_seen = None, False
+        self.usage, self.generated = None, False
+        self._send_lock = threading.Lock()                # Stop may interrupt from another thread
 
     def send(self, message):
         try:
-            self.proc.stdin.write((json.dumps(message) + "\n").encode())
-            self.proc.stdin.flush()
+            with self._send_lock:
+                self.proc.stdin.write((json.dumps(message) + "\n").encode())
+                self.proc.stdin.flush()
         except (OSError, ValueError) as error:
             raise _Broken("exit_before_completion") from error
 
@@ -323,6 +371,12 @@ class _Session:
     def read(self):
         fd = self.proc.stdout.fileno()
         while b"\n" not in self.buf:
+            remaining = self.deadline - time.monotonic()
+            if remaining <= 0:
+                raise _Broken("timeout")
+            ready, _, _ = select.select([fd], [], [], min(remaining, 1.0))
+            if not ready:
+                continue
             chunk = os.read(fd, 65536)
             if not chunk:
                 raise _Broken("exit_before_completion")
@@ -354,6 +408,10 @@ class _Session:
             self.send({"id": message["id"], "error": {"code": -32000, "message": "declined by Rooms"}})
             raise _Boundary(method)
         params = message.get("params") or {}
+        if method in OUTPUT_DELTAS and str(params.get("delta") or "").strip():
+            self.generated = True
+        if method == "item/completed" and str((params.get("item") or {}).get("text") or "").strip():
+            self.generated = True
         if method in ("item/started", "item/completed"):
             if (params.get("item") or {}).get("type") not in ALLOWED_ITEMS:
                 raise _Boundary((params.get("item") or {}).get("type"))
@@ -361,7 +419,7 @@ class _Session:
             last = ((params.get("tokenUsage") or {}).get("last") or (params.get("tokenUsage") or {}).get("total") or {})
             prompt, completion = last.get("inputTokens"), last.get("outputTokens")
             if (prompt or 0) > 0 or (completion or 0) > 0:
-                self.usage_seen = True
+                self.generated = True
             self.usage = {"prompt_tokens": prompt, "completion_tokens": completion}
 
     def handshake(self, cwd, instructions):

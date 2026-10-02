@@ -23,24 +23,25 @@ MESSAGES = [{"role": "system", "content": "etiquette"}, {"role": "user", "conten
 PROOF = {"id": "proof-turn", "room": "r", "response_key": "k", "brief": {"kind": "proof"}}
 
 
-def cli(tmp_path, mode="ok", log=None):
+def cli(tmp_path, mode="ok", log=None, methods=None):
     path = tmp_path / f"codex-{mode}"
-    lines = ["#!/bin/sh", f"FAKE_CODEX_MODE={mode}"]
+    lines = ["#!/bin/sh", f"FAKE_CODEX_MODE={mode}", "export FAKE_CODEX_MODE"]
     if log:
-        lines.append(f"FAKE_CODEX_LOG={log}")
-    lines.append(f"export FAKE_CODEX_MODE{' FAKE_CODEX_LOG' if log else ''}")
+        lines += [f"FAKE_CODEX_LOG={log}", "export FAKE_CODEX_LOG"]
+    if methods:
+        lines += [f"FAKE_CODEX_METHODS={methods}", "export FAKE_CODEX_METHODS"]
     lines.append(f'exec {sys.executable} {FAKE} "$@"')
     path.write_text("\n".join(lines) + "\n")
     path.chmod(0o755)
     return str(path)
 
 
-def runner(tmp_path, mode="ok", log=None, probe=True, max_turn_s=20):
+def runner(tmp_path, mode="ok", log=None, probe=True, max_turn_s=20, methods=None):
     home = tmp_path / "codex-home"
     home.mkdir(mode=0o700, exist_ok=True)
-    r = CodexRunner(cli=cli(tmp_path, mode, log), home=str(home), state_dir=str(tmp_path / "state"),
+    r = CodexRunner(cli=cli(tmp_path, mode, log, methods), home=str(home), state_dir=str(tmp_path / "state"),
                     turns_root=str(tmp_path / "turns"), max_turn_s=max_turn_s)
-    r.boundary_probe = lambda timeout=60: probe
+    r.boundary_probe = lambda timeout=60, correlation=None: probe
     return r
 
 
@@ -58,7 +59,7 @@ def test_answer_is_the_last_agent_message_with_usage(tmp_path):
                     'approval_policy="never"', 'sandbox_mode="read-only"', 'forced_login_method="chatgpt"'):
         assert setting in argv
     assert not any("model_provider" in a for a in argv)                     # never the probe's provider
-    assert set(call["env"]) <= {"HOME", "CODEX_HOME", "PATH", "LANG", "FAKE_CODEX_MODE", "FAKE_CODEX_LOG",
+    assert set(call["env"]) <= {"HOME", "CODEX_HOME", "PATH", "LANG", "FAKE_CODEX_MODE", "FAKE_CODEX_LOG", "FAKE_CODEX_METHODS",
                                 "PWD", "SHLVL", "_", "__CF_USER_TEXT_ENCODING", "OLDPWD", "LC_CTYPE"}
     assert not any(k.startswith("OPENAI") for k in call["env"])
 
@@ -104,16 +105,41 @@ def test_timeout_kills_and_is_uncertain(tmp_path):
     assert out["outcome"] == "error" and out["detail"] == "timeout"
 
 
-def test_stop_during_a_turn(tmp_path):
-    r = runner(tmp_path, "slow")
+def _run_in_thread(r, correlation, turn=PROOF):
     import threading
     result = {}
-    t = threading.Thread(target=lambda: result.update(r.stream(MESSAGES, "u", "j" * 32, turn=PROOF)))
+    t = threading.Thread(target=lambda: result.update(r.stream(MESSAGES, "u", correlation, turn=turn)))
     t.start()
+    return t, result
+
+
+def test_stop_during_a_turn_sends_turn_interrupt_first(tmp_path):
+    methods = tmp_path / "methods.log"
+    r = runner(tmp_path, "slow", methods=methods)
+    t, result = _run_in_thread(r, "j" * 32)
     time.sleep(1.5)
+    started = time.time()
     r.stop("j" * 32)
     t.join(15)
-    assert result["outcome"] == "stopped"
+    assert result["outcome"] == "stopped" and time.time() - started < 10
+    assert "turn/interrupt" in methods.read_text().split()                      # protocol interrupt (C3)
+
+
+def test_stop_during_a_stalled_handshake_kills_without_ids(tmp_path):
+    methods = tmp_path / "methods.log"
+    r = runner(tmp_path, "silent", methods=methods)
+    t, result = _run_in_thread(r, "s" * 32)
+    time.sleep(1.5)
+    started = time.time()
+    r.stop("s" * 32)
+    t.join(15)
+    assert result["outcome"] == "stopped" and time.time() - started < 10
+    assert "turn/interrupt" not in methods.read_text().split()                  # no ids yet: nothing to interrupt
+
+
+def test_a_streamed_delta_then_unauthorized_stays_uncertain(tmp_path):
+    out = runner(tmp_path, "delta_unauth").stream(MESSAGES, "u", "m" * 32, turn=PROOF)
+    assert out["outcome"] == "error" and out["reason"] == "signed_out_after_start"     # C2
 
 
 @pytest.mark.parametrize("mode,reason", [("api_key", "signed_out"), ("signed_out", "signed_out")])
@@ -148,6 +174,27 @@ def test_the_real_probe_fails_closed_when_nothing_is_captured(tmp_path):
     r = runner(tmp_path)
     del r.boundary_probe                                                     # the fake never calls the endpoint
     assert r.boundary_probe(timeout=5) is False
+
+
+@pytest.mark.parametrize("mode", ["silent", "slow"])
+def test_the_probe_deadline_is_enforced(tmp_path, mode):
+    r = runner(tmp_path, mode)
+    del r.boundary_probe
+    started = time.time()
+    assert r.boundary_probe(timeout=0.5) is False                            # C1: stalled handshake / turn
+    assert time.time() - started < 8
+
+
+def test_stop_during_a_prove_releases_its_probe(tmp_path):
+    r = runner(tmp_path, "silent")
+    del r.boundary_probe                                                     # the real probe, stalled child
+    t, result = _run_in_thread(r, "p" * 32)
+    time.sleep(1.5)
+    started = time.time()
+    r.stop("p" * 32)
+    t.join(15)
+    assert not t.is_alive() and time.time() - started < 10                  # C1: Stop releases the Prove
+    assert result["outcome"] in ("stopped", "refused")
 
 
 def test_proof_binding_and_change(tmp_path):

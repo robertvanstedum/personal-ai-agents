@@ -11,11 +11,14 @@ stdio. Behaviour is chosen by FAKE_CODEX_MODE:
   unauthorized   turn failed, codexErrorInfo unauthorized, no output, no usage
   late_unauth    an agentMessage and usage, then turn failed unauthorized
   usage_limit    turn failed, usageLimitExceeded, no output
-  slow           turn started, then nothing until killed
+  slow           turn started, then nothing (still reads: answers turn/interrupt)
+  silent         never answers initialize (a stalled handshake)
+  delta_unauth   an agentMessage delta, then turn failed unauthorized (no item, no usage)
   malformed      a non-JSON line after turn/started
   api_key        `login status` reports an API key sign-in
   signed_out     `login status` reports not logged in
-FAKE_CODEX_LOG, if set, receives argv and the environment keys.
+FAKE_CODEX_LOG, if set, receives argv and the environment keys; FAKE_CODEX_METHODS, if set,
+receives every JSON-RPC method the fake reads (to see turn/interrupt).
 """
 import json
 import os
@@ -64,9 +67,15 @@ def completed(status, error=None):
     note("turn/completed", {"threadId": "th", "turn": {"id": "tu", "items": [], "status": status, "error": error}})
 
 
+methods_log = os.environ.get("FAKE_CODEX_METHODS")
 for line in sys.stdin:
     msg = json.loads(line)
     method, rid = msg.get("method"), msg.get("id")
+    if methods_log:
+        with open(methods_log, "a") as f:
+            f.write(f"{method}\n")
+    if mode == "silent":
+        continue
     if method == "initialize":
         send({"id": rid, "result": {"userAgent": "fake"}})
     elif method == "thread/start":
@@ -88,10 +97,11 @@ for line in sys.stdin:
             completed("completed")
         elif mode.startswith("item_"):
             item(mode[5:], done=False)
-            time.sleep(30)
         elif mode == "server_request":
             send({"id": 99, "method": "item/tool/requestUserInput", "params": {"threadId": "th", "turnId": "tu"}})
-            time.sleep(30)
+        elif mode == "delta_unauth":
+            note("item/agentMessage/delta", {"threadId": "th", "turnId": "tu", "itemId": "m", "delta": "Already thinking aloud"})
+            completed("failed", {"message": "401", "codexErrorInfo": "unauthorized"})
         elif mode == "unauthorized":
             completed("failed", {"message": "401", "codexErrorInfo": "unauthorized"})
         elif mode == "late_unauth":
@@ -101,8 +111,7 @@ for line in sys.stdin:
         elif mode == "usage_limit":
             completed("failed", {"message": "limit", "codexErrorInfo": "usageLimitExceeded"})
         elif mode == "slow":
-            time.sleep(60)
+            pass                                           # keep reading; only turn/interrupt ends it
         elif mode == "malformed":
             sys.stdout.write("not json\n")
             sys.stdout.flush()
-            time.sleep(30)
