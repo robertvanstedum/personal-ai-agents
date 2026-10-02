@@ -279,7 +279,10 @@ case "$cmd" in
         "$(docker inspect -f '{{range .Mounts}}{{.Destination}}={{.Name}}:{{.RW}} {{end}}' "$c" | xargs -n1 | sort | xargs)" \
         "/codex-home=minimoi-staging-rooms-codex-home:true /run/secrets/rooms=minimoi-staging-rooms-codex-secrets:false /state=minimoi-staging-rooms-codex-state:true"
       check "rooms-codex tmpfs" "$(docker inspect -f '{{range $k,$v := .HostConfig.Tmpfs}}{{$k}} {{end}}' "$c" | xargs -n1 | sort | xargs)" "/tmp /turns"
-      check "rooms-codex holds no credential variable" "$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" | sed 's/=.*//' | grep -iE 'token|secret|password|key|openai' | grep -cvx 'GPG_KEY' || true)" "0"
+      # Names only. ROOMS_CONNECTOR_SECRETS is a path, exempt only at its exact value.
+      env_c=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c")
+      check "rooms-codex secrets path variable" "$(sed -n 's/^ROOMS_CONNECTOR_SECRETS=//p' <<< "$env_c")" "/run/secrets/rooms"
+      check "rooms-codex holds no credential variable" "$(sed 's/=.*//' <<< "$env_c" | grep -iE 'token|secret|password|key|openai' | grep -vx 'GPG_KEY' | grep -cvx 'ROOMS_CONNECTOR_SECRETS' || true)" "0"
       check "rooms-codex image release" "$(docker inspect -f '{{index .Config.Labels "minimoi.staging.release"}}' "$(docker inspect -f '{{.Image}}' "$c")" | cut -c1-7)" "$(release_tag)"
       check "rooms-codex binary version" "$(docker exec "$c" codex --version 2>/dev/null | awk '{print $NF}')" "0.145.0"
       check "rooms-codex binary sha256" "$(docker exec "$c" python -c 'import hashlib;print(hashlib.sha256(open("/usr/local/bin/codex","rb").read()).hexdigest())' 2>/dev/null)" "57d79900fe95df2ab854adf581a28ec46d7442f07445032d86453a44b577dced"
