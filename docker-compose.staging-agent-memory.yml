@@ -1,0 +1,25 @@
+# Staging-only: the agent-memory copier on cos-scheduler (Spec 160 path (b), M1).
+# NOT included by scripts/staging/lib.sh yet: wiring it into the shared staging
+# lifecycle (an opt-in state file like state/cos.turns) is a separate reviewed
+# change. Until then this file is inert.
+#
+# What it gives cos-scheduler, and nothing else:
+#   AGENT_MEMORY_COPIER=1   registers the daily job loop_m (domains/cos/agent_memory_job.py)
+#   data/agent-memory       where current/ and history/ are written (0700)
+#   the Mac inbox           read-only: only ever read, never written, by the scheduler
+#   the sources config      read-only, kept in the staging root so a never_copy list
+#                           (names of personal files) never enters the repository
+# The Docker socket cos-scheduler already mounts is used read-only (archive GET, no exec).
+# cos-bot is untouched: it never sets AGENT_MEMORY_COPIER, so importing the CoS module
+# there starts no copier. Production is unchanged (docker-compose.prod.yml).
+
+services:
+  cos-scheduler:
+    environment:
+      - AGENT_MEMORY_COPIER=1
+      - AGENT_MEMORY_CONFIG=/app/config/agent_memory_sources.json
+      - AGENT_MEMORY_CLAUDE_CODE_INBOX=/app/data/agent-memory-inbox/claude-code
+    volumes:
+      - ${MINIMOI_ROOT:?}/data/agent-memory:/app/data/agent-memory
+      - ${MINIMOI_ROOT:?}/data/agent-memory-inbox/claude-code:/app/data/agent-memory-inbox/claude-code:ro
+      - ${MINIMOI_ROOT:?}/config/agent_memory_sources.json:/app/config/agent_memory_sources.json:ro

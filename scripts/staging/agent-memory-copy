@@ -1,0 +1,51 @@
+#!/bin/bash
+# agent-memory-copy: the Mac side of the Claude Code memory copy (Spec 160 §4, M1).
+#
+# Copies ONLY *.md files (<= 512 KB, no symlinks, no subfolders) from the
+# Claude Code memory folder into a FRESH folder and publishes it only when
+# complete, by renaming it over the inbox. A failed or partial run leaves the
+# previous inbox untouched, so a dead job looks like stale data, never like
+# deleted files. The inbox carries _copy_manifest.json (complete, copied_at,
+# file_count), written last; staging's copier trusts the inbox only when that
+# manifest is complete and its count matches.
+#
+# Environment (no path is baked in; nothing here reads file contents):
+#   AGENT_MEMORY_MAC_SOURCE   the memory folder to copy (required)
+#   AGENT_MEMORY_MAC_INBOX    where the finished copy is published (required)
+#   AGENT_MEMORY_MIN_FREE_KB  refuse to run below this free space (default 5 GB)
+# Exit codes: 0 ok · 2 not configured · 3 disk_low (nothing written) · 4 source unreadable · 5 copy failed.
+set -euo pipefail
+
+SRC="${AGENT_MEMORY_MAC_SOURCE:-}"
+DEST="${AGENT_MEMORY_MAC_INBOX:-}"
+MIN_FREE_KB="${AGENT_MEMORY_MIN_FREE_KB:-5242880}"
+[[ -n "$SRC" && -n "$DEST" ]] || { echo "agent-memory-copy: not configured"; exit 2; }
+[[ -d "$SRC" && ! -L "$SRC" ]] || { echo "agent-memory-copy: source unreadable"; exit 4; }
+
+PARENT="$(dirname "$DEST")"
+mkdir -p "$PARENT"
+free_kb=$(df -k "$PARENT" | awk 'NR==2 {print $4}')
+if [[ "${free_kb:-0}" -lt "$MIN_FREE_KB" ]]; then
+  echo "agent-memory-copy: disk_low"; exit 3        # nothing written, nothing deleted
+fi
+
+TMP="$PARENT/.inbox.tmp.$$"
+cleanup() { rm -rf "$TMP"; }
+trap cleanup EXIT
+rm -rf "$TMP"
+mkdir -m 700 "$TMP"
+
+rsync -a --no-links --include='*.md' --exclude='*' --max-size=512k "$SRC"/ "$TMP"/ \
+  || { echo "agent-memory-copy: copy failed"; exit 5; }
+
+count=$(find "$TMP" -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
+printf '{"complete": true, "file_count": %s, "copied_at": "%s"}\n' \
+  "$count" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$TMP/_copy_manifest.json"   # written last
+chmod 600 "$TMP"/*.md "$TMP/_copy_manifest.json" 2>/dev/null || true
+
+# Publish: the new folder replaces the inbox in two renames; the old one is only removed after.
+[[ -d "$DEST" ]] && mv "$DEST" "$DEST.prev"
+mv "$TMP" "$DEST"
+rm -rf "$DEST.prev"
+trap - EXIT
+echo "agent-memory-copy: ok files=$count"
