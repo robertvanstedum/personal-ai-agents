@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "data_root": "data/agent-memory",
+  "headroom": {"min_free_bytes": 5368709120, "min_free_fraction": null},
+  "sources": {
+    "cos-agent-a": {
+      "source_kind": "docker_workspace",
+      "agent": "cos-agent-a",
+      "runtime": "openclaw",
+      "runtime_version": "unknown",
+      "enabled": false,
+      "container": "minimoi-cos-agent-a",
+      "workspace_path": "/home/node/.openclaw/workspace-cos-agent-a",
+      "include": [],
+      "never_copy": []
+    },
+    "master-craftsman": {
+      "source_kind": "docker_workspace",
+      "agent": "master-craftsman",
+      "runtime": "openclaw",
+      "runtime_version": "unknown",
+      "enabled": false,
+      "container": "minimoi-cos-agent-a",
+      "workspace_path": "/home/node/.openclaw/workspace-mc",
+      "include": [],
+      "never_copy": []
+    },
+    "claude-code": {
+      "source_kind": "mac_folder",
+      "agent": "claude-code",
+      "runtime": "claude-code",
+      "runtime_version": "unknown",
+      "enabled": false,
+      "inbox_env": "AGENT_MEMORY_CLAUDE_CODE_INBOX",
+      "patterns": ["*.md"],
+      "include": [],
+      "never_copy": []
+    }
+  }
+}
