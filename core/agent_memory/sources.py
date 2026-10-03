@@ -6,27 +6,30 @@ copier compute deletions: a partial scan publishes nothing (§3.6 rule 5).
 * ``DirectorySource``: a folder (tests, and the Mac inbox of §4). For the Mac
   it requires a complete ``_copy_manifest.json`` whose count matches.
 * ``TarSource``: a tar archive from a callable, read to its end.
-* ``DockerArchiveSource``: STUB. The real Docker API reader
-  (``GET /containers/<name>/archive?path=...``, read-only, 10 s timeout) is NOT
-  built here; the coordinator wires it in M1 integration.
+* ``DockerArchiveSource``: the Docker API reader (``GET /containers/<name>/archive``,
+  read-only, one deadline), whose tar bytes go through ``TarSource``.
 
 Names rejected before reading are kept in ``SourceScan.rejected`` in memory
 only, so the terminal-only dry run can show them; the copier uses just counts.
 """
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import os
+import socket
 import stat
 import tarfile
+import time
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Protocol
+from urllib.parse import quote
 
-from .errors import COPY_INCOMPLETE, MODE_UNREADABLE
+from .errors import COPY_INCOMPLETE, DOCKER_TIMEOUT, DOCKER_UNREACHABLE, MODE_UNREADABLE, CopierError
 from .selection import HIDDEN, MAX_BYTES, SPECIAL, SYMLINK, TOO_LARGE, UNSAFE_PATH, normalize_path
 
 # relative name -> refusal code, or None to read the file
@@ -204,21 +207,79 @@ class TarSource:
         return scan
 
 
-class DockerArchiveSource:
-    """STUB: the Docker API archive reader is wired in M1 integration, not here.
+MAX_ARCHIVE_BYTES = 64 * 1024 * 1024        # a bigger archive is refused as incomplete, never half-read
 
-    Intended behaviour (v0.4 §3.3, §6): ``GET /containers/<container>/archive
-    ?path=<workspace>`` over the Docker socket, read-only, never exec, 10 s
-    timeout, returning the tar bytes to ``TarSource``. It must raise
-    ``CopierError("docker_unreachable")`` or ``("docker_timeout")`` and carry
-    no error text.
+
+class _UnixHTTPConnection(http.client.HTTPConnection):
+    """HTTP over a unix socket (the Docker API), with its own timeout."""
+
+    def __init__(self, path: str, timeout: float) -> None:
+        super().__init__("localhost", timeout=timeout)
+        self._socket_path = path
+
+    def connect(self) -> None:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(self.timeout)
+        sock.connect(self._socket_path)
+        self.sock = sock
+
+
+class DockerArchiveSource:
+    """Read a container folder through the Docker API (agent-memory v0.4 §3.3, §6).
+
+    ``GET /containers/<name>/archive?path=<folder>`` over the Docker socket:
+    **read-only, the only request this class ever makes; never exec.** One
+    overall deadline (``timeout_s``, default 10 s) covers connect, request and
+    the whole body. Failures are fixed codes with no text: ``docker_unreachable``
+    (no socket, refused, a non-200 answer, a missing container), ``docker_timeout``,
+    and ``copy_incomplete`` (a cut-off or oversized body, or an unfinished tar).
     """
 
-    def __init__(self, container: str, workspace_path: str, timeout_s: float = 10.0) -> None:
+    def __init__(self, container: str, workspace_path: str, timeout_s: float = 10.0,
+                 socket_path: str = "/var/run/docker.sock") -> None:
         self.container, self.workspace_path, self.timeout_s = container, workspace_path, timeout_s
+        self.socket_path = socket_path
+
+    def _fetch(self) -> bytes:
+        deadline = time.monotonic() + self.timeout_s
+        url = f"/containers/{quote(self.container, safe='')}/archive?path={quote(self.workspace_path, safe='')}"
+        conn = _UnixHTTPConnection(self.socket_path, self.timeout_s)
+        try:
+            conn.request("GET", url)
+            resp = conn.getresponse()
+            if resp.status != 200:
+                raise CopierError(DOCKER_UNREACHABLE)
+            declared = resp.getheader("Content-Length")
+            expected = int(declared) if declared and declared.isdigit() else None
+            if expected is not None and expected > MAX_ARCHIVE_BYTES:
+                raise CopierError(COPY_INCOMPLETE)        # refuse an oversized body before reading it
+            chunks, total = [], 0
+            while True:
+                if time.monotonic() > deadline:
+                    raise CopierError(DOCKER_TIMEOUT)
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_ARCHIVE_BYTES:
+                    raise CopierError(COPY_INCOMPLETE)
+                chunks.append(chunk)
+            if expected is not None and total != expected:
+                raise CopierError(COPY_INCOMPLETE)        # the connection dropped before the whole body arrived
+            return b"".join(chunks)
+        except CopierError:
+            raise
+        except (socket.timeout, TimeoutError):
+            raise CopierError(DOCKER_TIMEOUT) from None
+        except http.client.IncompleteRead:
+            raise CopierError(COPY_INCOMPLETE) from None
+        except (OSError, http.client.HTTPException):
+            raise CopierError(DOCKER_UNREACHABLE) from None
+        finally:
+            conn.close()
 
     def read(self, accept: Accept | None = None) -> SourceScan:
-        raise NotImplementedError("DockerArchiveSource is wired by the coordinator in M1 integration")
+        return TarSource(self._fetch, strip_components=1).read(accept)
 
 
 __all__ = ["Accept", "DirectorySource", "DockerArchiveSource", "Source", "SourceScan", "TarSource", "incomplete"]

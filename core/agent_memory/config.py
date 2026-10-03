@@ -104,7 +104,7 @@ def load_config(path: str | os.PathLike[str] | None = None) -> AppConfig:
 
 
 def build_source(cfg: SourceConfig, env: Mapping[str, str] | None = None) -> Source:
-    """The reader for a configured source. The Docker reader is a stub until M1 integration."""
+    """The reader for a configured source."""
     env = os.environ if env is None else env
     if cfg.source_kind == "mac_folder":
         inbox = env.get(cfg.inbox_env, "") if cfg.inbox_env else ""

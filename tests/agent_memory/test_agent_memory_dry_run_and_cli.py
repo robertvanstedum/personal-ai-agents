@@ -110,12 +110,3 @@ def test_example_config_loads_with_no_absolute_paths():
     assert cfg.sources["cos-agent-a"].workspace_path.endswith("workspace-cos-agent-a")
     assert cfg.sources["master-craftsman"].workspace_path.endswith("workspace-mc")
     assert all(not s.enabled for s in cfg.sources.values())    # nothing runs until Robert approves a dry run
-
-
-def test_docker_source_is_a_marked_stub(tmp_path):
-    from core.agent_memory.sources import DockerArchiveSource
-    from core.agent_memory.run import run_source
-    r = run_source(DockerArchiveSource("c", "/w"), make_cfg(), tmp_path / "data", NOW)
-    assert not r.ok and r.code == "internal"      # NotImplementedError is recorded as a fixed code, not raised
-    with pytest.raises(NotImplementedError):
-        DockerArchiveSource("c", "/w").read()
