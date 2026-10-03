@@ -44,7 +44,7 @@ from core.realtime_voice.capabilities import (
 )
 from core.realtime_voice.confer import create_confer_voice_blueprint
 from domains.cos.voice_transcripts import create_voice_transcript_blueprint
-from domains.cos import private_mode, turn_log
+from domains.cos import agent_memory_job, private_mode, turn_log
 from core.realtime_voice.providers import openai_speech
 from domains.cos.confer_service import (
     ConferOperationFailed,
@@ -853,6 +853,8 @@ _loop_state: dict[str, dict] = {
     "loop_g": {"name": "guest_nudge_check",      "last_run": None, "last_result": None, "error": None},
     "loop_h": {"name": "ec2_health_check",       "last_run": None, "last_result": None, "error": None},
     "loop_i": {"name": "model_gateway_cost_check", "last_run": None, "last_result": None, "error": None},
+    # loop_m runs only in cos-scheduler with AGENT_MEMORY_COPIER=1 (Spec 160 §6).
+    "loop_m": {"name": "agent_memory_copy",     "last_run": None, "last_result": None, "error": None},
 }
 _loop_lock = threading.Lock()
 
@@ -1202,6 +1204,12 @@ def status():
 @app.route("/health")
 def health():
     return jsonify({"ok": True})
+
+
+@app.route("/agent-memory/status")
+def agent_memory_status():
+    """Memory-copy status for the Guild's Agents light: codes, times and counts only."""
+    return jsonify(agent_memory_job.status_payload())
 
 
 @app.route("/loops")
@@ -1607,6 +1615,16 @@ def _start_cos():
         lambda: _run_loop("loop_i", _run_model_gateway_cost_checkpoint),
         "cron", hour=7, minute=45, id="loop_i", misfire_grace_time=600
     )
+
+    # Loop M — daily agent-memory copy (Spec 160). Registered ONLY where
+    # AGENT_MEMORY_COPIER=1 is set in the container's own environment block, so
+    # importing this module in cos-bot starts no copier. It copies only the
+    # sources Robert has approved after a dry run, and never raises.
+    if agent_memory_job.enabled():
+        scheduler.add_job(
+            lambda: _run_loop("loop_m", agent_memory_job.run_all),
+            "cron", hour=4, minute=15, id="loop_m", misfire_grace_time=3600
+        )
 
     if loops_ok:
         # Loop A — career focus scout: DISABLED 2026-09-01.

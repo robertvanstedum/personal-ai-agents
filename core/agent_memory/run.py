@@ -13,6 +13,7 @@ which encodes "Robert approves each source's dry run before its first copy".
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import secrets
 import sys
@@ -25,7 +26,7 @@ from . import publish as publish_mod
 from .config import ConfigError, Headroom, SourceConfig, build_source, load_config
 from .dry_run import build_rows, listing_hash, scan_for_listing
 from .errors import COPY_INCOMPLETE, DISK_LOW, INTERNAL, CopierError, classify
-from .fsio import ensure_dir
+from .fsio import ensure_dir, write_atomic
 from .headroom import check_headroom
 from .scrub import scrub_file
 from .selection import path_reason, select
@@ -104,6 +105,34 @@ def run_source(source: Source, config: SourceConfig, root: str | Path, now: date
         return RunResult(config.name, False, code)
 
 
+APPROVAL_FILE = "_approval.json"
+
+
+def record_approval(root: str | Path, name: str, listing_hash: str, now: datetime) -> bool:
+    """Remember that Robert approved this source's dry run (a time and the listing hash only).
+
+    The scheduled job runs only sources that have this file, so a source never
+    starts copying on a schedule before its dry run was approved.
+    """
+    try:
+        folder = Path(root) / name
+        ensure_dir(folder)
+        doc = {"schema_version": 1, "source": name, "approved_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+               "listing_hash": listing_hash}
+        write_atomic(folder / APPROVAL_FILE, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
+        return True
+    except Exception:  # noqa: BLE001 - a failed record only means the scheduler waits
+        return False
+
+
+def is_approved(root: str | Path, name: str) -> bool:
+    try:
+        doc = json.loads((Path(root) / name / APPROVAL_FILE).read_text("utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(doc, dict) and doc.get("source") == name and bool(doc.get("approved_at"))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.agent_memory.run")
     parser.add_argument("--source", required=True)
@@ -126,8 +155,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not approved:
         print("refused: a real copy needs --approved-by-dry-run matching a fresh dry run of this source")
         return 3
-    result = run_source(source, cfg, args.root or config.data_root, datetime.now(timezone.utc),
-                        headroom=config.headroom)
+    root = args.root or config.data_root
+    record_approval(root, cfg.name, args.approved_by_dry_run, datetime.now(timezone.utc))
+    result = run_source(source, cfg, root, datetime.now(timezone.utc), headroom=config.headroom)
     print("ok" + (f" snapshot={result.snapshot}" if result.snapshot else " no-changes") if result.ok
           else f"failed code={result.code}")
     return 0 if result.ok else 1

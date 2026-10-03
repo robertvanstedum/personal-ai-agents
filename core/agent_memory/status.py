@@ -32,7 +32,7 @@ STATUS_FILE = "_status.json"
 STATUS_MIN_FREE = 1024 * 1024   # a status file is tiny; see update_status
 _SEVERITY = {GREEN: 0, UNKNOWN: 1, YELLOW: 2, RED: 3}
 
-__all__ = ["check_headroom", "load_sources_status", "memory_copy_state", "memory_copy_states",
+__all__ = ["check_headroom", "write_first_seen", "load_sources_status", "memory_copy_state", "memory_copy_states",
            "read_status", "update_status"]
 
 
@@ -112,6 +112,19 @@ def read_status(source_dir: Path) -> dict | None:
 def load_sources_status(root: Path, names: list[str]) -> dict[str, dict | None]:
     """What the scheduler's status endpoint serves: each source's status, ``None`` if unreadable."""
     return {name: read_status(root / name) for name in names}
+
+
+def write_first_seen(source_dir: Path, name: str, now: datetime) -> bool:
+    """Stamp an enabled source that has never run, so the light can tell "never ran" from "no answer"."""
+    try:
+        if read_status(source_dir) is not None:
+            return True
+        doc = {"schema_version": 1, "source": name, "first_seen_at": iso_utc(now), "last_ok": None,
+               "last_complete": False, "counts": {}}
+        write_atomic(source_dir / STATUS_FILE, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def update_status(source_dir: Path, name: str, now: datetime, *, ok: bool, code: str | None,
