@@ -37,6 +37,7 @@ from flask import Blueprint, jsonify, request
 from core.identity import resolve_user_id
 from domains.cos import private_mode
 from utils.credential_scrub import scrub as scrub_credentials
+from utils.payment_scrub import scrub as scrub_payment
 
 SCHEMA_VERSION = 1
 MAX_TURNS = 200
@@ -141,8 +142,10 @@ def _clean_turns(raw) -> tuple[list[dict], bool]:
         if total > MAX_TOTAL:
             raise InvalidTranscript("transcript too long")
         text, changed_cards = scrub_cards(text)
+        before = text
+        text = scrub_payment(text)                      # cards, IBANs, routing numbers, emails (Spec 160 §2)
         text, changed_creds = scrub_credentials(text)
-        sanitized = sanitized or changed_cards or changed_creds
+        sanitized = sanitized or changed_cards or changed_creds or text != before
         turns.append({"speaker": speaker, "text": text, "completed": bool(item.get("completed", True))})
     return turns, sanitized
 
