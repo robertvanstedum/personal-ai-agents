@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from agent_memory_helpers import NOW, make_cfg, make_tar
+from agent_memory.agent_memory_helpers import NOW, make_cfg, make_tar
 from core.agent_memory.errors import COPY_INCOMPLETE, DOCKER_TIMEOUT, DOCKER_UNREACHABLE, CopierError
 from core.agent_memory.run import run_source
 from core.agent_memory.sources import MAX_ARCHIVE_BYTES, DockerArchiveSource

@@ -9,7 +9,7 @@ from core.agent_memory import dry_run, run as run_mod
 from core.agent_memory.config import ConfigError, load_config, parse_config
 from core.agent_memory.status import STATUS_FILE
 
-from agent_memory_helpers import NOW, make_cfg, tree, write_mac_manifest, write_tree
+from agent_memory.agent_memory_helpers import NOW, make_cfg, tree, write_mac_manifest, write_tree
 
 FILES = {"MEMORY.md": b"api key: sk-ant-FAKEFAKEFAKE0000canary\nhello\n", "feedback_a.md": b"clean\n",
          ".env": b"K=v", "auth.json": b"{}", "notes.txt": b"t", "private.md": b"mine"}

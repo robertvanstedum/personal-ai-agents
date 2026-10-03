@@ -7,7 +7,7 @@ from core.agent_memory import selection as sel
 from core.agent_memory.selection import Rules, classify_path, select
 from core.agent_memory.sources import DirectorySource, TarSource
 
-from agent_memory_helpers import make_tar, write_tree
+from agent_memory.agent_memory_helpers import make_tar, write_tree
 
 
 def test_defaults_copy_only_memory_files():

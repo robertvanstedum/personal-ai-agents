@@ -1,15 +1,13 @@
 """Fixtures for the agent-memory copier tests."""
 from __future__ import annotations
 
-import sys
 from collections import namedtuple
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent))
-from agent_memory_helpers import NOW, Box  # noqa: E402
+from agent_memory.agent_memory_helpers import NOW, Box
 
 
 @pytest.fixture(autouse=True)
