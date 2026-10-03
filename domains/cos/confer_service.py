@@ -7,7 +7,7 @@ worthiness judgment through the existing ``call_backend`` contract. Explicit
 note commands are deterministic platform operations and never reach a model.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import re
 from typing import Callable
@@ -57,6 +57,7 @@ class ConferTurnRequest:
     channel: str
     conversation_id: str = "owner"
     request_id: str | None = None
+    private: bool = False        # the request itself says Private (Spec 160 §2)
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,10 @@ class ConferTurnResult:
     served_provider: str | None = None
     fallback_position: int | None = None
     fallback_reason: str | None = None
+    # Spec 160: True = a turn-log line was written; False = it was meant to be
+    # and was not (the page shows "not saved"); None = nothing was meant to be
+    # kept (Private, no turn log, switched off).
+    history_saved: bool | None = None
 
     def public_dict(self) -> dict:
         """Return response metadata without echoing the user's full input."""
@@ -88,6 +93,8 @@ class ConferTurnResult:
         }
         if self.operation is not None:
             payload["operation"] = self.operation
+        if self.history_saved is not None:
+            payload["history_saved"] = self.history_saved
         if self.served_provider is not None:
             payload["runtime_route"] = {
                 "configured_primary": self.configured_primary,
@@ -144,6 +151,7 @@ class ConferTurnService:
         save_note: Callable[[str, str], dict] | None = None,
         reset_conversation: Callable[[str], bool] | None = None,
         get_routing_receipt: Callable[[str], dict | None] | None = None,
+        record_turn: Callable[["ConferTurnRequest", "ConferTurnResult"], bool | None] | None = None,
     ) -> None:
         self._call_backend = call_backend
         self._build_context = build_context
@@ -152,8 +160,23 @@ class ConferTurnService:
         self._save_note = save_note
         self._reset_conversation = reset_conversation
         self._get_routing_receipt = get_routing_receipt
+        self._record_turn = record_turn
 
     def handle(self, request: ConferTurnRequest) -> ConferTurnResult:
+        """Run one turn, then offer it to the optional turn-log hook.
+
+        The hook is best effort: whatever it does or raises, the turn answers.
+        """
+        result = self._handle(request)
+        if self._record_turn is None:
+            return result
+        try:
+            saved = self._record_turn(request, result)
+        except Exception:
+            saved = False
+        return result if saved is None else replace(result, history_saved=bool(saved))
+
+    def _handle(self, request: ConferTurnRequest) -> ConferTurnResult:
         text = request.text.strip()
         if not text:
             raise InvalidConferTurn("Nothing to respond to.")

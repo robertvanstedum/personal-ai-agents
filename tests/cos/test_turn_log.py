@@ -1,0 +1,254 @@
+"""CoS text-turn log (Spec 160 §2; tests T5, T6, T9 and the log half of T7).
+
+No model, no network, no Docker: ConferTurnService with a fake backend and
+``record_turn=turn_log.recorder()`` against a temporary COS_TURNS_DIR.
+"""
+import errno
+import json
+import stat
+import threading
+from datetime import datetime, timezone
+
+import pytest
+
+from domains.cos import private_mode, turn_log
+from domains.cos.confer_service import (
+    ALLOWED_CHANNELS, ConferTurnRequest, ConferTurnService,
+)
+
+FIXED = datetime(2026, 10, 3, 17, 30, 0, tzinfo=timezone.utc)      # 12:30 in Chicago, same local day
+FAKE_KEY = "sk-ant-FAKEFAKEFAKE12345"
+MARKER = "CANARY-MARKER-7QX"
+
+
+@pytest.fixture
+def root(tmp_path, monkeypatch):
+    folder = tmp_path / "cos-turns"
+    folder.mkdir(mode=0o700)
+    monkeypatch.setenv("COS_TURNS_DIR", str(folder))
+    monkeypatch.setenv("COS_TURN_LOG_ENABLED", "1")
+    monkeypatch.setenv("COS_TURNS_MIN_FREE_BYTES", "1")
+    monkeypatch.setenv("COS_AGENT_TIMEZONE", "America/Chicago")
+    monkeypatch.setenv("COS_CONTAINER_NAME", "cos-test")
+    return folder
+
+
+def service(reply="a reply", hook=None, **kw):
+    calls = []
+    return ConferTurnService(
+        call_backend=lambda prompt, ctx, policy: reply,
+        build_context=lambda: {"system_prompt": "s"},
+        increment_chat=lambda: calls.append(1),
+        backend_metadata=lambda: ("Test backend", "test-model"),
+        save_note=lambda text, op: {"saved": True, "deduplicated": False},
+        reset_conversation=lambda cid: True,
+        record_turn=hook if hook is not None else turn_log.recorder(clock=lambda: FIXED),
+        **kw,
+    )
+
+
+def ask(svc, text="hello", channel="html_text", **kw):
+    return svc.handle(ConferTurnRequest(text=text, channel=channel, **kw))
+
+
+def lines(root):
+    out = []
+    for path in sorted(root.rglob("*.jsonl")):
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            try:
+                out.append(json.loads(raw))
+            except ValueError:
+                pass          # a crash fragment: readers skip it
+    return out
+
+
+def turns(root):
+    return [r for r in lines(root) if r.get("record_type") == "cos_turn"]
+
+
+# ── T5: one valid line per turn, on every channel ─────────────────────────────
+
+@pytest.mark.parametrize("channel", sorted(ALLOWED_CHANNELS))
+@pytest.mark.parametrize("backend", ["grok", "openclaw"])
+def test_one_valid_line_per_turn_on_every_channel(root, monkeypatch, channel, backend):
+    monkeypatch.setenv("COS_BACKEND_TYPE", backend)
+    result = ask(service(), "What is next?", channel=channel)
+    [rec] = turns(root)
+    assert result.history_saved is True
+    assert rec["schema_version"] == 1 and rec["record_type"] == "cos_turn"
+    assert rec["channel"] == channel and rec["backend_type"] == backend
+    assert rec["turn_id"] == result.turn_id and rec["receipt_id"] == result.turn_id
+    assert rec["conversation_id"] == "owner"
+    assert rec["user_text"] == "What is next?" and rec["reply"] == "a reply"
+    assert rec["time"] == "2026-10-03T17:30:00Z"            # UTC inside, file named by local day
+    assert (root / "2026" / "2026-10-03.jsonl").exists()
+    assert rec["sanitized"] is False
+
+
+def test_operations_are_logged_with_their_operation(root):
+    svc = service()
+    ask(svc, "/new")
+    ask(svc, "Save a note: buy milk")
+    ops = [r["operation"]["type"] for r in turns(root)]
+    assert ops == ["session_reset", "note_save"]
+
+
+def test_modes_and_folders_are_private_to_the_owner(root):
+    ask(service())
+    day = root / "2026" / "2026-10-03.jsonl"
+    assert stat.S_IMODE(day.stat().st_mode) == 0o600
+    assert stat.S_IMODE((root / "2026").stat().st_mode) == 0o700
+    status = root / "_status" / "cos-test.json"
+    assert stat.S_IMODE(status.stat().st_mode) == 0o600
+
+
+def test_two_writers_at_once_leave_only_whole_lines(root):
+    svc = service()
+    errors = []
+
+    def worker(tag):
+        try:
+            for i in range(25):
+                ask(svc, f"{tag}-{i}")
+        except Exception as exc:                              # pragma: no cover
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(t,)) for t in ("a", "b")]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    raw = (root / "2026" / "2026-10-03.jsonl").read_text(encoding="utf-8").splitlines()
+    assert not errors and len(raw) == 50
+    assert all(json.loads(line)["record_type"] == "cos_turn" for line in raw)
+
+
+def test_a_crash_truncated_tail_is_closed_with_a_log_gap(root):
+    target = root / "2026" / "2026-10-03.jsonl"
+    target.parent.mkdir(mode=0o700)
+    target.write_text('{"record_type":"cos_turn","schema_version":1,"user_te', encoding="utf-8")   # no newline
+    ask(service(), "after the crash")
+    all_lines = target.read_text(encoding="utf-8").splitlines()
+    kinds = [json.loads(l).get("record_type") if l.startswith("{") and l.endswith("}") else "fragment" for l in all_lines]
+    assert "log_gap" in kinds and kinds[-1] == "cos_turn"
+    assert [r["user_text"] for r in turns(root)] == ["after the crash"]      # the fragment is skipped
+
+
+# ── T5: failure is visible and the turn still answers ─────────────────────────
+
+def test_a_full_disk_answers_the_turn_and_says_not_saved(root, monkeypatch):
+    def boom(*a, **k):
+        raise OSError(errno.ENOSPC, "No space left on device")
+    monkeypatch.setattr(turn_log, "append_record", boom)
+    result = ask(service(reply="still answered"))
+    assert result.reply == "still answered" and result.history_saved is False
+    assert result.public_dict()["history_saved"] is False
+    status = json.loads((root / "_status" / "cos-test.json").read_text())
+    assert status["last_failure_code"] == "disk_write_failed" and "last_failure_at" in status
+
+
+def test_below_the_free_space_floor_nothing_is_written_and_nothing_deleted(root, monkeypatch):
+    keep = root / "keep.txt"
+    keep.write_text("do not delete")
+    monkeypatch.setenv("COS_TURNS_MIN_FREE_BYTES", str(10 ** 18))
+    result = ask(service())
+    assert result.history_saved is False and turns(root) == []
+    assert keep.read_text() == "do not delete"
+    assert json.loads((root / "_status" / "cos-test.json").read_text())["last_failure_code"] == "disk_low"
+
+
+def test_a_hook_that_raises_never_stops_the_answer(root):
+    def broken(request, result):
+        raise RuntimeError("hook exploded")
+    result = ask(service(reply="fine", hook=broken))
+    assert result.reply == "fine" and result.history_saved is False
+
+
+def test_no_turn_log_configured_keeps_nothing_and_is_not_a_failure(tmp_path, monkeypatch):
+    monkeypatch.delenv("COS_TURNS_DIR", raising=False)
+    result = ask(service())
+    assert result.history_saved is None and "history_saved" not in result.public_dict()
+
+
+def test_switched_off_keeps_nothing_and_is_not_a_failure(root, monkeypatch):
+    monkeypatch.setenv("COS_TURN_LOG_ENABLED", "0")
+    result = ask(service())
+    assert result.history_saved is None and turns(root) == []
+
+
+# ── T6: Private ───────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("channel", sorted(ALLOWED_CHANNELS))
+def test_private_writes_nothing_on_any_channel(root, channel):
+    private_mode.set_private(root, True)
+    result = ask(service(), channel=channel)
+    assert turns(root) == [] and result.history_saved is None
+
+
+def test_new_does_not_end_private(root):
+    private_mode.set_private(root, True)
+    svc = service()
+    ask(svc, "/new")
+    ask(svc, "still private")
+    assert turns(root) == [] and private_mode.is_private(root)
+
+
+def test_only_an_explicit_public_ends_private(root):
+    private_mode.set_private(root, True)
+    ask(service(), "private one")
+    private_mode.set_private(root, False)
+    ask(service(), "public one")
+    assert [r["user_text"] for r in turns(root)] == ["public one"]
+
+
+def test_the_request_saying_private_is_enough(root):
+    result = ask(service(), "this one only", private=True)
+    assert turns(root) == [] and result.history_saved is None
+
+
+def test_an_unreadable_mode_is_treated_as_private(root):
+    (root / "_mode.json").write_text("{not json", encoding="utf-8")
+    result = ask(service())
+    assert turns(root) == [] and result.history_saved is None
+
+
+def test_telegram_and_web_share_the_mode(root):
+    private_mode.set_private(root, True)          # what /private on Telegram does
+    ask(service(), channel="html_text")
+    ask(service(), channel="telegram_text")
+    ask(service(), channel="html_voice")
+    assert turns(root) == []
+
+
+# ── scrub and the error canary (T4-style, T9) ─────────────────────────────────
+
+def test_payment_details_and_credentials_are_scrubbed_before_they_are_kept(root):
+    text = f"my card 4242 4242 4242 4242 and mail robert@example.com and key {FAKE_KEY}"
+    ask(service(reply=f"echo {FAKE_KEY} and 4242 4242 4242 4242"), text)
+    [rec] = turns(root)
+    blob = json.dumps(rec)
+    assert "4242 4242 4242 4242" not in blob and "robert@example.com" not in blob and FAKE_KEY not in blob
+    assert rec["sanitized"] is True
+    assert FAKE_KEY not in (root / "_status" / "cos-test.json").read_text()
+
+
+def test_text_fields_are_capped_before_they_are_kept(root):
+    ask(service(reply="r" * 20_000), "u" * 12_000)
+    [rec] = turns(root)
+    assert len(rec["user_text"]) == turn_log.MAX_USER_TEXT and len(rec["reply"]) == turn_log.MAX_REPLY
+
+
+def test_error_text_never_reaches_logs_status_or_results(root, monkeypatch, capsys):
+    def boom(*a, **k):
+        raise OSError(errno.EIO, f"disk error mentioning {MARKER} in /secret/{MARKER}.md")
+    monkeypatch.setattr(turn_log, "append_record", boom)
+    result = ask(service(), f"user text {MARKER}")
+    out = capsys.readouterr()
+    status_text = (root / "_status" / "cos-test.json").read_text()
+    for blob in (out.out, out.err, status_text, json.dumps(result.public_dict())):
+        assert MARKER not in blob and "/secret/" not in blob
+
+
+def test_status_file_holds_codes_and_times_only(root):
+    ask(service())
+    status = json.loads((root / "_status" / "cos-test.json").read_text())
+    assert set(status) <= {"schema_version", "container", "last_success_at", "last_failure_at", "last_failure_code"}
+    assert status["last_success_at"] == "2026-10-03T17:30:00Z"

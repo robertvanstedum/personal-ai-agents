@@ -45,7 +45,7 @@ def test_confer_uses_the_standard_voice_flow():
     assert '<button id="btn-private" type="button" aria-pressed="false" disabled>' in template
     assert "fetch('private-mode', {" in template
     assert "The agent itself may still remember it." in template
-    assert "appendMsg('cos', data.reply || '(empty reply)', { private: data.private === true });" in template
+    assert "appendMsg('cos', data.reply || '(empty reply)', { private: data.private === true, notSaved: data.history_saved === false });" in template
     assert "mode_epoch: result.session_context?.epoch ?? null," in template
     assert "window.cosPrivate?.known === false" in template          # unknown mode: Private
     assert "the provider still generates (and bills) the audio." in template

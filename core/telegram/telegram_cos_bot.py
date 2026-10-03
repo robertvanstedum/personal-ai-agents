@@ -47,6 +47,32 @@ def _chat(text: str, *, channel: str = "telegram_text") -> str:
     return cos_chat(text, channel=channel)
 
 
+def _is_private() -> bool:
+    """Spec 160: the sticky Private mode shared with the web page and voice."""
+    from domains.cos import private_mode
+    return private_mode.state()["private"]
+
+
+def _with_private_prefix(reply: str) -> str:
+    return f"Private · {reply}" if _is_private() else reply
+
+
+def _set_private(private: bool) -> str:
+    from domains.cos import private_mode
+    root = private_mode.turns_dir()
+    if root is None:
+        return "CoS history is not kept here, so there is nothing to make private."
+    try:
+        private_mode.set_private(root, private)
+    except OSError:
+        return "The mode could not be saved. It stays as it was."
+    if private:
+        return ("Private is ON: this chat, the web page and voice are not kept in your CoS history. "
+                "The agent itself may still remember it, and the model provider still processes each message. "
+                "Send /public to turn it off.")
+    return "Private is OFF: turns are kept in your CoS history again."
+
+
 def _transcribe_voice(audio_path: str) -> str:
     """Transcribe a voice file via OpenAI Whisper API. Returns transcript text."""
     from openai import OpenAI
@@ -70,6 +96,14 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"Chief of Staff — {_identity()}\n\nSend any message to chat with CoS.\n/status — agent status"
     )
+
+
+async def cmd_private(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(_set_private(True))
+
+
+async def cmd_public(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(_set_private(False))
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -97,7 +131,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.exception("_chat error")
         reply = f"CoS error: {e}"
 
-    await update.message.reply_text(reply)
+    await update.message.reply_text(_with_private_prefix(reply))
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -130,7 +164,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
-    await update.message.reply_text(reply)
+    await update.message.reply_text(_with_private_prefix(reply))
 
 
 def main():
@@ -144,6 +178,8 @@ def main():
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("private", cmd_private))
+    app.add_handler(CommandHandler("public", cmd_public))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 

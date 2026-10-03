@@ -158,6 +158,13 @@ function appendMsg(role, text, opts = {}) {
     badge.textContent = 'Private';
     label.append(' ', badge);
   }
+  if (role === 'cos' && opts.notSaved) {         // Spec 160: a turn that could not be kept says so
+    const mark = document.createElement('span');
+    mark.className = 'msg-private';
+    mark.textContent = 'not saved';
+    mark.title = 'This turn could not be written to your CoS history.';
+    label.append(' ', mark);
+  }
   const body  = document.createElement('div');
   body.className = 'msg-text';
   body.textContent = text;
@@ -271,7 +278,7 @@ async function sendMessage() {
     });
     const data = await resp.json();
     thinking.remove();
-    appendMsg('cos', data.reply || '(empty reply)', { private: data.private === true });
+    appendMsg('cos', data.reply || '(empty reply)', { private: data.private === true, notSaved: data.history_saved === false });
   } catch(err) {
     thinking.remove();
     appendMsg('cos', 'Error: ' + err.message);

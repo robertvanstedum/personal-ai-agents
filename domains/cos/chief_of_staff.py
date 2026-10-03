@@ -44,7 +44,7 @@ from core.realtime_voice.capabilities import (
 )
 from core.realtime_voice.confer import create_confer_voice_blueprint
 from domains.cos.voice_transcripts import create_voice_transcript_blueprint
-from domains.cos import private_mode
+from domains.cos import private_mode, turn_log
 from core.realtime_voice.providers import openai_speech
 from domains.cos.confer_service import (
     ConferOperationFailed,
@@ -772,6 +772,7 @@ def _process_confer_turn(
     channel: str = "api_text",
     conversation_id: str = "owner",
     request_id: str | None = None,
+    private: bool = False,
 ):
     receipt_resolver = (
         _get_routing_receipt
@@ -786,12 +787,14 @@ def _process_confer_turn(
         save_note=_save_explicit_note,
         reset_conversation=_reset_backend_conversation,
         get_routing_receipt=receipt_resolver,
+        record_turn=turn_log.recorder(),
     )
     return service.handle(ConferTurnRequest(
         text=text,
         channel=channel,
         conversation_id=conversation_id,
         request_id=request_id,
+        private=private,
     ))
 
 
@@ -1336,12 +1339,12 @@ def ui_send():
             channel=channel,
             conversation_id=body.get("conversation_id") or "owner",
             request_id=body.get("request_id"),
+            private=body.get("private") is True,
         )
         payload = result.public_dict()
-        # Private mode (Spec 160): the page marks each reply given under it.
-        # Nothing records a text turn in CoS history yet; when the turn log's
-        # record_turn lands, it reads the same private_mode.state().
-        payload["private"] = private_mode.state()["private"]
+        # Private mode (Spec 160): the page marks each reply given under it;
+        # the turn log (domains/cos/turn_log.py) reads the same private_mode.
+        payload["private"] = private_mode.state()["private"] or body.get("private") is True
         if voice_provider and speech_output:
             _spoken_replies.put(
                 result.turn_id,
