@@ -1,5 +1,6 @@
 """The agent-memory overlay (Spec 160, M1): inert until wired, and when added it gives
 cos-scheduler only the copier switch and its folders. Production never enables it."""
+import re
 from pathlib import Path
 
 import yaml
@@ -13,7 +14,7 @@ def test_the_overlay_touches_only_cos_scheduler_and_only_the_copier():
     assert list(doc["services"]) == ["cos-scheduler"]
     cos = doc["services"]["cos-scheduler"]
     assert "AGENT_MEMORY_COPIER=1" in cos["environment"]
-    mounts = {m.split(":", 1)[1] for m in cos["volumes"]}
+    mounts = {re.search(r":(/app/[^:]+(?::ro)?)$", m).group(1) for m in cos["volumes"]}
     assert mounts == {"/app/data/agent-memory",
                       "/app/data/agent-memory-inbox/claude-code:ro",
                       "/app/config/agent_memory_sources.json:ro"}                  # the inbox and config are read-only
