@@ -232,6 +232,8 @@ class Shelf:
         fsio.ensure_dir(folder)
         edition = editions.add_edition(folder, bundle.edition, "jsonl")
         meta["edition"], meta["edition_hash"] = edition.number, editions.digest(bundle.edition)
+        if bundle.retained:
+            meta["retained"] = bundle.retained          # where the original lives (for the fidelity re-parse)
         self._designate(meta, bundle)
         record.write(folder / f"{stem}.md", meta, bundle.body)
         self._flag_possible_same(bundle, meta, index)
@@ -256,6 +258,8 @@ class Shelf:
             return Result(codes.UNCHANGED, bundle.key, meta["id"])
         meta["edition"], meta["edition_hash"] = edition.number, editions.digest(bundle.edition)
         meta["source_hash"], meta["normalized"] = bundle.source_hash, bundle.meta["normalized"]
+        if bundle.retained:
+            meta["retained"] = bundle.retained
         meta["events"] = [*meta["events"], ev.make_event(
             "edition-added", bundle.origin, now=self.now(), edition=edition.number, source_hash=bundle.source_hash)]
         self._designate(meta, bundle)
