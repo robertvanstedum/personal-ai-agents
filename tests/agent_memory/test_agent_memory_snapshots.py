@@ -11,7 +11,7 @@ from core.agent_memory.run import run_source
 from core.agent_memory.snapshot import read_manifest, rebuild_state, snapshot_names
 from core.agent_memory.sources import DirectorySource, TarSource
 
-from conftest import NOW, Box, make_cfg, make_tar, tree, write_mac_manifest, write_tree
+from agent_memory_helpers import NOW, Box, make_cfg, make_tar, tree, write_mac_manifest, write_tree
 
 
 def src(root, name="cos-agent-a"):

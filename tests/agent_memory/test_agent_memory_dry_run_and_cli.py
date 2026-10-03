@@ -9,7 +9,7 @@ from core.agent_memory import dry_run, run as run_mod
 from core.agent_memory.config import ConfigError, load_config, parse_config
 from core.agent_memory.status import STATUS_FILE
 
-from conftest import NOW, tree, write_mac_manifest, write_tree
+from agent_memory_helpers import NOW, make_cfg, tree, write_mac_manifest, write_tree
 
 FILES = {"MEMORY.md": b"api key: sk-ant-FAKEFAKEFAKE0000canary\nhello\n", "feedback_a.md": b"clean\n",
          ".env": b"K=v", "auth.json": b"{}", "notes.txt": b"t", "private.md": b"mine"}
@@ -115,7 +115,7 @@ def test_example_config_loads_with_no_absolute_paths():
 def test_docker_source_is_a_marked_stub(tmp_path):
     from core.agent_memory.sources import DockerArchiveSource
     from core.agent_memory.run import run_source
-    r = run_source(DockerArchiveSource("c", "/w"), __import__("conftest").make_cfg(), tmp_path / "data", NOW)
+    r = run_source(DockerArchiveSource("c", "/w"), make_cfg(), tmp_path / "data", NOW)
     assert not r.ok and r.code == "internal"      # NotImplementedError is recorded as a fixed code, not raised
     with pytest.raises(NotImplementedError):
         DockerArchiveSource("c", "/w").read()

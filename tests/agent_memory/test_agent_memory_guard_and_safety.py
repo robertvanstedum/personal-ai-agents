@@ -10,7 +10,7 @@ from core.agent_memory.run import run_source
 from core.agent_memory.scrub import scrub_file, scrub_text
 from core.agent_memory.snapshot import read_manifest
 
-from conftest import NOW, Box, make_cfg, tree
+from agent_memory_helpers import NOW, Box, make_cfg, tree
 
 FAKE_KEY = "sk-ant-FAKEFAKEFAKE0000canary"
 FAKE_PW = "hunter2-canary-value"
