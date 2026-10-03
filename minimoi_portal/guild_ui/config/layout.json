@@ -12,7 +12,7 @@
     "lights": [
       {"id": "build_queue", "label": "Build queue", "short": "Queue", "rule": "queue", "link": "queue"},
       {"id": "systems", "label": "Systems", "short": "Systems", "rule": "systems", "link": "operate:systems"},
-      {"id": "agents", "label": "Agents", "short": "Agents", "rule": "not_instrumented", "link": "operate:agents"},
+      {"id": "agents", "label": "Agents", "short": "Agents", "rule": "memory_copy", "link": "operate:agents"},
       {"id": "usage", "label": "Usage & limits", "short": "Usage", "rule": "not_instrumented", "link": "operate:usage"},
       {"id": "rollouts", "label": "Rollouts", "short": "Rollouts", "rule": "not_instrumented", "link": "operate:rollouts"}
     ]

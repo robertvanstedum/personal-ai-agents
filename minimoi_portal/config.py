@@ -65,6 +65,8 @@ GUILD_QUEUE_PATH = os.environ.get("GUILD_QUEUE_PATH") or None
 # configured" (grey), never green. The legacy /guild/operate page keeps its
 # own hard-coded address.
 GUILD_OPERATIONS_STATUS_URL = os.environ.get("GUILD_OPERATIONS_STATUS_URL") or None
+# The CoS scheduler's memory-copy status, read by the Agents light (Spec 160 §7). Unset: "not configured" (grey).
+GUILD_MEMORY_STATUS_URL = os.environ.get("GUILD_MEMORY_STATUS_URL") or None
 # Records SQLite for the Discussions panel, opened read-only. Unset means
 # "not instrumented".
 GUILD_RECORDS_DB = os.environ.get("GUILD_RECORDS_DB") or None

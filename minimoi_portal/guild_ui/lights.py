@@ -109,6 +109,39 @@ def systems_light(res: SourceResult, now: datetime | None = None) -> dict:
     return make("green", f"running · checked in {age_min} min ago", res, detail)
 
 
+SKEW_S = 60
+
+
+def memory_copy_light(res: SourceResult, now: datetime | None = None) -> dict:
+    """The Agents light, today carrying the memory copy (Spec 160 §7).
+
+    The reason always says "memory copy" because this light will later carry agent
+    run state too. Never green unless the scheduler answered, the copier is on,
+    its worst source is green, and the answer is not from the future. A stale or
+    failed copy is yellow or red as the scheduler says; no answer is unknown.
+    """
+    if res.source == NOT_INSTRUMENTED:
+        return make("unknown", "memory copy not configured", res, ["no GUILD_MEMORY_STATUS_URL on this portal"])
+    if res.status != "ok" or not isinstance(res.data, dict):
+        return make("unknown", "memory copy no answer", res, [f"treat as unknown — {res.error or 'no answer'}"])
+    data = res.data
+    detail = [f"{name}: {row['state']} · {row['reason']}" for name, row in sorted(data.get("sources", {}).items())]
+    for name, row in sorted(data.get("turn_log", {}).items()):
+        bits = [f"last saved {row['last_success_at']}" if row.get("last_success_at") else "never saved",
+                f"last failure {row['last_failure_code']}" if row.get("last_failure_code") else None]
+        detail.append(f"turn log ({name}): " + " · ".join(b for b in bits if b))
+    if not data.get("enabled"):
+        return make("unknown", "memory copy off", res, detail + ["the copier is switched off on the scheduler"])
+    as_of = _parse_time(data.get("as_of"))
+    if as_of is not None and (as_of - (now or datetime.now(timezone.utc))).total_seconds() > SKEW_S:
+        return make("unknown", "memory copy clock skew", res, detail + ["the answer is dated in the future"])
+    state = data.get("state") if data.get("state") in STATES else "unknown"
+    reason = data.get("reason") or "memory copy"
+    if state == "unknown":
+        return make("unknown", reason, res, detail)
+    return make(state, reason, res, detail)
+
+
 def not_instrumented_light(res: SourceResult) -> dict:
     return make("unknown", res.error or "not instrumented", res, ["not instrumented — no source yet"])
 
@@ -126,6 +159,8 @@ def derive_lights(cfg_lights, services, queue_res: SourceResult, now: datetime |
             light = queue_light(queue_res)
         elif rule == "systems":
             light = systems_light(services.systems.status(), now)
+        elif rule == "memory_copy":
+            light = memory_copy_light(services.memory_copy.status(), now)
         else:
             light = not_instrumented_light(services.not_instrumented[c["id"]].read())
         out.append({**{k: v for k, v in c.items() if not k.startswith("_")}, **light})

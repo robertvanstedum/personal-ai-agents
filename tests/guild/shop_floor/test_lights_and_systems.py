@@ -115,7 +115,8 @@ def test_grey_lights_are_not_instrumented_and_never_green(staging):
     assert by_id["usage"]["reason"] == "Usage watch arrives in B2"
     assert by_id["systems"]["state"] == "unknown"  # no Operations address configured here
     assert by_id["build_queue"]["source"] == "live"
-    assert "3 not instrumented" in floor["briefing"]["text"]
+    # Agents now has a source (the memory copy), unconfigured here: it reads "unknown", so two lights are not instrumented.
+    assert "2 not instrumented" in floor["briefing"]["text"]
 
 
 def test_systems_green_only_when_the_agent_is_up(load_portal, monkeypatch):

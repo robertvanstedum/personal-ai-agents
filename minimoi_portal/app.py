@@ -2839,6 +2839,7 @@ GUILD_MOUNTS = _guild_mounts.mount_all(
     current_user=_current_user,
     queue_path=_GUILD_QUEUE_PATH,
     operations_status_url=_cfg.GUILD_OPERATIONS_STATUS_URL,
+    memory_status_url=_cfg.GUILD_MEMORY_STATUS_URL,
     records_db=_cfg.GUILD_RECORDS_DB,
     base_url=_cfg.BASE_URL,
     audit=lambda item_id, old, new, note: _queue_audit_insert(item_id, old, new, note),

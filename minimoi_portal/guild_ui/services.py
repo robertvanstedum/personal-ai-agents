@@ -19,11 +19,11 @@ from typing import Callable
 
 from domains.guild import queue_store as qs
 
-from .adapters import DbHistory, LiveBuildQueue, LiveSessions, NotInstrumented, OperationsProbe
+from .adapters import DbHistory, LiveBuildQueue, LiveSessions, MemoryCopyProbe, NotInstrumented, OperationsProbe
 from .mc import CachedHealth, MasterCraftsmanBackend, OffBackend
 from .stores import DEFAULT_FLOOR, FloorStores
 
-GREY_SOURCES = ("agents", "usage", "rollouts")
+GREY_SOURCES = ("usage", "rollouts")     # the Agents light now reads the memory copy (Spec 160)
 
 
 @dataclass
@@ -33,6 +33,7 @@ class Services:
     history: DbHistory
     systems: OperationsProbe
     sessions: LiveSessions
+    memory_copy: MemoryCopyProbe | None = None
     floor: FloorStores | None = None
     not_instrumented: dict = field(default_factory=dict)
     audit: Callable | None = None   # (item_id, old, new, note) -> "ok" | "skipped"; may raise
@@ -68,7 +69,8 @@ def build_services(*, queue_path: str | None, operations_status_url: str | None 
                    audit: Callable | None = None, http_get: Callable | None = None,
                    db_connect: Callable | None = None, store: "qs.QueueStore | None" = None,
                    floor: FloorStores | None = None, floor_key: str = DEFAULT_FLOOR,
-                   mc: MasterCraftsmanBackend | None = None, mc_turns: bool = False) -> Services:
+                   mc: MasterCraftsmanBackend | None = None, mc_turns: bool = False,
+                   memory_status_url: str | None = None) -> Services:
     store = store or qs.QueueStore(queue_path)
     return Services(
         store=store,
@@ -76,6 +78,7 @@ def build_services(*, queue_path: str | None, operations_status_url: str | None 
         history=DbHistory(database_url, connect=db_connect),
         systems=OperationsProbe(operations_status_url, http_get=http_get),
         sessions=LiveSessions(records_db),
+        memory_copy=MemoryCopyProbe(memory_status_url, http_get=http_get),
         floor=floor or FloorStores(database_url, connect=db_connect, floor=floor_key),
         not_instrumented={name: NotInstrumented(name) for name in GREY_SOURCES},
         audit=audit,

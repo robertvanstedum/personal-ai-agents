@@ -104,7 +104,8 @@ def register_unavailable(app, *, url_prefix: str, name: str, owner_guard: Callab
 
 
 def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, operations_status_url=None,
-                     records_db=None, base_url=None, audit=None, database_url=lambda: None) -> str:
+                     records_db=None, base_url=None, audit=None, database_url=lambda: None,
+                     memory_status_url=None) -> str:
     """Return "off", "on" or "unavailable"."""
     if not flag_on(environ, NEXT_FLAG):
         return "off"
@@ -119,7 +120,7 @@ def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, ope
         log.info("guild mount: Master Craftsman backend %s, turns %s", mc.kind, "on" if mc_turns else "off")
         services = build_services(queue_path=queue_path, operations_status_url=operations_status_url,
                                   records_db=records_db, database_url=database_url, audit=audit, mc=mc,
-                                  mc_turns=mc_turns)
+                                  mc_turns=mc_turns, memory_status_url=memory_status_url)
         register_guild_ui(app, owner_guard=owner_guard, current_user=current_user, url_prefix=NEXT_PREFIX,
                           blueprint_name=NEXT_NAME, services=services, base_url=base_url)
         log.info("guild mount: /guild-next registered")
