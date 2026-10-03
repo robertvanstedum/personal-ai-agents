@@ -1,0 +1,6 @@
+#!/bin/sh
+# moi: the memory shelf's owner CLI (see core/memory_shelf/cli.py). Uses the project venv (system python3 lacks yaml).
+here="$(cd "$(dirname "$0")/.." && pwd)"
+py="${MOI_PYTHON:-$here/venv/bin/python}"
+[ -x "$py" ] || py=python3
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -m core.memory_shelf.cli "$@"
