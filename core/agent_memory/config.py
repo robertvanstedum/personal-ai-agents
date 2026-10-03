@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 
-from .headroom import DEFAULT_MIN_FREE_BYTES, DEFAULT_MIN_FREE_FRACTION
+from .headroom import DEFAULT_MIN_FREE_BYTES
 from .selection import DEFAULT_PATTERNS, Rules
 from .sources import DirectorySource, DockerArchiveSource, Source
 
@@ -27,8 +27,9 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class Headroom:
+    """Mac default: 5 GB. On EC2 set ``min_free_fraction`` to 0.10 (amendment §4)."""
     min_free_bytes: int | None = DEFAULT_MIN_FREE_BYTES
-    min_free_fraction: float | None = DEFAULT_MIN_FREE_FRACTION
+    min_free_fraction: float | None = None
 
 
 @dataclass(frozen=True)

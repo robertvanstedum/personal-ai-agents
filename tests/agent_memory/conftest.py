@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+from collections import namedtuple
 import json
 import tarfile
 from datetime import datetime, timedelta, timezone
@@ -57,6 +58,13 @@ class Box:
     def __init__(self, files: dict[str, bytes]) -> None:
         self.files = dict(files)
         self.source = TarSource(lambda: make_tar(self.files))
+
+
+@pytest.fixture(autouse=True)
+def roomy_disk(monkeypatch):
+    """Hermetic: pretend the disk has plenty of room unless a test says otherwise."""
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr("core.agent_memory.headroom.shutil.disk_usage", lambda p: usage(10**12, 10**11, 9 * 10**11))
 
 
 @pytest.fixture
