@@ -2,7 +2,8 @@
 
 * **Body:** each turn is framed ``<!-- turn N | speaker | line L | bytes B | sha256 H -->`` and then exactly
   ``B`` bytes of text, so a turn that contains anything (even a fake frame) reads back unchanged.
-  Omitted parts appear as one-line ``[omitted: kind, source line L]`` pointers between turns.
+  Omitted parts appear as one-line ``[omitted: kind, source line L]`` pointers between turns (a file
+  name may follow, sanitized); a conversation's alternate branches are introduced by a ``=== Branch ... ===`` line.
 * **Scrub first (D8):** the payment scrub and the credential guard run on each turn's text before it
   is hashed or stored; the record says how many redactions, and carries the **unscrubbed source file's**
   sha256. The edition is a canonical JSONL of the scrubbed turns, a sanitized derivative with provenance.
@@ -18,7 +19,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from core.memory_shelf import record
-from core.memory_shelf.sessions import Parsed, Turn
+from core.memory_shelf.sessions import MARK, Parsed, Turn
 from utils.credential_scrub import scrub as scrub_credentials
 from utils.payment_scrub import scrub as scrub_payment
 
@@ -55,17 +56,32 @@ def scrub_parsed(parsed: Parsed) -> tuple[Parsed, int]:
     return replace(parsed, turns=turns), changed
 
 
+_UNSAFE = re.compile(r"[\x00-\x1f\x7f\u2028\u2029]")
+
+
+def one_line(text: str, limit: int = 200) -> str:
+    """Untrusted text made safe for a one-line pointer: no line breaks, no frame or comment markers."""
+    return _UNSAFE.sub(" ", text).replace("<!--", "< !--").replace("-->", "-- >")[:limit]
+
+
+def _pointer_line(pointer: tuple) -> str:
+    _, kind, line, detail = pointer
+    if kind == MARK:
+        return f"{one_line(detail or '')}\n"
+    tail = f": {one_line(detail)}" if detail else ""
+    return f"[omitted: {one_line(kind, 80)}, source line {line}{tail}]\n"
+
+
 def render_body(parsed: Parsed) -> str:
     chunks, pointers = [], list(parsed.pointers)
     for turn in parsed.turns:
         while pointers and pointers[0][0] < turn.ordinal:
-            _, kind, line = pointers.pop(0)
-            chunks.append(f"[omitted: {kind}, source line {line}]\n")
+            chunks.append(_pointer_line(pointers.pop(0)))
         raw = turn.text.encode("utf-8")
         chunks.append(f"<!-- turn {turn.ordinal} | {turn.speaker} | line {turn.line} | bytes {len(raw)} | "
                       f"sha256 {hashlib.sha256(raw).hexdigest()} -->\n{turn.text}\n\n")
-    for _, kind, line in pointers:
-        chunks.append(f"[omitted: {kind}, source line {line}]\n")
+    for pointer in pointers:
+        chunks.append(_pointer_line(pointer))
     return "".join(chunks)
 
 
@@ -94,6 +110,8 @@ def edition_bytes(parsed: Parsed, source_sha256: str, source_size: int, redacted
             "source_sha256": source_sha256, "source_bytes": source_size, "redacted_turns": redacted_turns,
             "identity": parsed.identity, "malformed_lines": parsed.malformed,
             "omitted": dict(sorted(parsed.omitted.items()))}
+    if parsed.manifest:                     # only when a format has structure beyond turns, so older editions keep their hash
+        head["manifest"] = dict(sorted(parsed.manifest.items()))
     lines = [json.dumps(head, ensure_ascii=False, sort_keys=True)]
     for t in parsed.turns:
         lines.append(json.dumps({"ordinal": t.ordinal, "speaker": t.speaker, "line": t.line, "basis": t.basis,
@@ -112,7 +130,7 @@ def to_shelf(parsed: Parsed, source_sha256: str, source_size: int, *, created: s
     meta["edition"] = 1
     meta["edition_hash"] = hashlib.sha256(edition_bytes(clean, source_sha256, source_size, redacted)).hexdigest()
     meta["normalized"] = {"turns": len(clean.turns), "redacted_turns": redacted, "malformed_lines": clean.malformed,
-                          "identity": clean.identity, "omitted": dict(sorted(clean.omitted.items()))}
+                          "identity": clean.identity, "omitted": dict(sorted(clean.omitted.items())), **clean.manifest}
     return meta, render_body(clean), edition_bytes(clean, source_sha256, source_size, redacted)
 
 

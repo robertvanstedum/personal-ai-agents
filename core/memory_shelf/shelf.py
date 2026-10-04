@@ -39,7 +39,7 @@ from core.memory_shelf.bundle import OWNER_ACTOR, Bundle
 
 RECORD_KINDS = ("sessions-raw", "sessions", "notes", "turns", "snapshots", "briefs")
 SESSION_DIR = "sessions-raw"
-MANUAL_PROVIDERS = frozenset({"paste", "claude-ai"})        # B7: where title/date overlap is worth a flag
+MANUAL_PROVIDERS = frozenset({"paste", "claude-ai", "grok"})        # B7: where title/date overlap is worth a flag
 MAX_FLAGS = 5
 
 
@@ -177,6 +177,15 @@ class Shelf:
             if entry["id"] == record_id:
                 return self.main_path(entry)
         return None
+
+    def resolve_id(self, token: str) -> tuple[str | None, str | None]:
+        """A full ULID or the 8-character short id, matched **exactly** (never by prefix or similarity):
+        ``(record id, None)``, or ``(None, "unknown_id" | "ambiguous_id")``."""
+        found = sorted({e["id"] for e in self.index().values()
+                        if e["id"] == token or (len(token) == 8 and ulid.is_ulid(e["id"]) and ulid.short(e["id"]) == token.lower())})
+        if len(found) == 1:
+            return found[0], None
+        return None, ("ambiguous_id" if found else "unknown_id")
 
     def has_record(self, record_id: str) -> bool:
         path = self.find_record(record_id)

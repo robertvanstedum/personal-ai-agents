@@ -1,5 +1,6 @@
 """Inbox (B7): claude.ai export zips, pasted transcripts, refusals, designation candidates, canary."""
 import json
+import os
 import shutil
 import zipfile
 from collections import namedtuple
@@ -9,7 +10,7 @@ import pytest
 
 from core.memory_shelf import canary, codes, events as ev, inbox, ledger, record, review, weight
 
-from .helpers import FAKE_KEY, make_shelf
+from .helpers import FAKE_KEY, make_shelf, process
 
 NOW = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)
 
@@ -45,7 +46,7 @@ def test_export_zip_one_record_per_conversation_speakers_from_sender(tmp_path):
     shelf, box = setup(tmp_path)
     make_zip(box, "export.zip", [conv("u-1", "Plan the week", [("human", "first"), ("assistant", "reply")]),
                                  conv("u-2", "Second chat", [("human", "other"), ("assistant", f"key {FAKE_KEY}")])])
-    out = inbox.process(shelf, box, now=NOW)
+    out = process(shelf, box, now=NOW)
     assert out == {"status": "ok", "counts": {codes.CAPTURED: 2}}
     recs = records(shelf)
     meta, body, path = recs["claude-ai:u-1"]
@@ -60,11 +61,11 @@ def test_a_later_export_adds_editions_never_duplicates(tmp_path):
     shelf, box = setup(tmp_path)
     make_zip(box, "w1.zip", [conv("u-1", "Chat", [("human", "q"), ("assistant", "a")]),
                              conv("u-2", "Other", [("human", "x"), ("assistant", "y")])])
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     make_zip(box, "w2.zip", [conv("u-1", "Chat", [("human", "q"), ("assistant", "a"), ("human", "q2"), ("assistant", "a2")],
                                   updated="2026-09-08T00:00:00Z"),
                              conv("u-2", "Other", [("human", "x"), ("assistant", "y")], updated="2026-09-09T00:00:00Z")])
-    out = inbox.process(shelf, box, now=NOW)
+    out = process(shelf, box, now=NOW)
     assert out["counts"] == {codes.EDITION_ADDED: 1, codes.UNCHANGED: 1}       # updated_at alone is not a change
     assert len(shelf.list_records()) == 2
     meta, body, path = records(shelf)["claude-ai:u-1"]
@@ -82,7 +83,7 @@ def test_a_later_export_adds_editions_never_duplicates(tmp_path):
 def test_unknown_schema_is_refused_whole_and_visibly(tmp_path, bad):
     shelf, box = setup(tmp_path)
     make_zip(box, "export.zip", bad)
-    out = inbox.process(shelf, box, now=NOW)
+    out = process(shelf, box, now=NOW)
     assert out["counts"] == {codes.REFUSED: 1} and shelf.list_records() == [] and shelf.pending() == []
     rows = inbox.refused_listing(box)
     assert len(rows) == 1 and rows[0]["reason"] == codes.UNKNOWN_SCHEMA and set(rows[0]) == {"at", "name", "reason", "bytes", "sha256"}
@@ -105,7 +106,7 @@ def test_other_unreadable_inputs_are_refused_with_codes(tmp_path, monkeypatch):
     with zipfile.ZipFile(box / "badjson.zip", "w") as zf:
         zf.writestr("conversations.json", "{{{")
     make_zip(box, "emptylist.zip", [])
-    out = inbox.process(shelf, box, now=NOW)
+    out = process(shelf, box, now=NOW)
     assert out["counts"] == {codes.REFUSED: 9}
     reasons = {r["name"]: r["reason"] for r in inbox.refused_listing(box)}
     assert reasons == {"notzip.zip": "unparseable", "nojson.zip": "empty", "weird.png": "unsupported_type",
@@ -118,7 +119,7 @@ def test_oversized_export_is_refused(tmp_path, monkeypatch):
     shelf, box = setup(tmp_path)
     monkeypatch.setattr(inbox, "MAX_EXPORT_BYTES", 50)
     make_zip(box, "big.zip", [conv("u", "x", [("human", "a" * 100), ("assistant", "b")])])
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     assert inbox.refused_listing(box)[0]["reason"] == codes.TOO_LARGE
 
 
@@ -141,7 +142,7 @@ def test_paste_turns_preamble_kept_and_heuristic_identity(tmp_path):
     shelf, box = setup(tmp_path)
     box.mkdir()
     (box / "weekly plan.txt").write_text(PASTE)
-    out = inbox.process(shelf, box, now=NOW)
+    out = process(shelf, box, now=NOW)
     assert out["counts"] == {codes.CAPTURED: 1}
     meta, body, _ = next(iter(records(shelf).values()))
     assert meta["chair"] == "Claude" and meta["normalized"]["identity"] == "heuristic"
@@ -157,7 +158,7 @@ def test_paste_without_clear_speakers_is_refused_never_guessed(tmp_path, text):
     shelf, box = setup(tmp_path)
     box.mkdir()
     (box / "p.txt").write_text(text)
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     assert shelf.list_records() == [] and inbox.refused_listing(box)[0]["reason"] in {"unparseable", "empty", "no_turns"}
 
 
@@ -165,7 +166,7 @@ def test_pasted_marker_is_a_candidate_not_a_designation(tmp_path):
     shelf, box = setup(tmp_path)
     box.mkdir()
     (box / "p.txt").write_text("Human: file this\nClaude: ok\nHuman: and approved-direct please\nClaude: noted")
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     meta, _, _ = next(iter(records(shelf).values()))
     assert meta["events"] == [] and meta["tier"] == "raw"
     items = review.items(shelf)
@@ -178,7 +179,7 @@ def test_export_human_marker_designates_but_assistant_marker_does_not(tmp_path):
     make_zip(box, "e.zip", [conv("u-1", "Marked", [("human", "Please file this conversation"), ("assistant", "ok")]),
                             conv("u-2", "Assistant says it", [("human", "hello"), ("assistant", "file this")]),
                             conv("u-3", "Quoted", [("human", "> file this\nwhat does that mean"), ("assistant", "x")])])
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     recs = records(shelf)
     assert [e["kind"] for e in recs["claude-ai:u-1"][0]["events"]] == ["designated-curated"]
     assert recs["claude-ai:u-2"][0]["events"] == [] and recs["claude-ai:u-3"][0]["events"] == []
@@ -189,12 +190,12 @@ def test_identical_paste_twice_is_one_record_and_a_different_paste_is_only_flagg
     shelf, box = setup(tmp_path)
     box.mkdir()
     (box / "a.txt").write_text("Human: shared opening question\nClaude: answer one")
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     (box / "a-again.txt").write_text("Human: shared opening question\nClaude: answer one")
-    assert inbox.process(shelf, box, now=NOW)["counts"] == {codes.UNCHANGED: 1}
+    assert process(shelf, box, now=NOW)["counts"] == {codes.UNCHANGED: 1}
     assert len(shelf.list_records()) == 1
     (box / "a-edited.txt").write_text("Human: shared opening question\nClaude: answer one\nHuman: more\nClaude: more")
-    assert inbox.process(shelf, box, now=NOW)["counts"] == {codes.CAPTURED: 1}
+    assert process(shelf, box, now=NOW)["counts"] == {codes.CAPTURED: 1}
     assert len(shelf.list_records()) == 2                                       # never auto-merged
     flags = review.items(shelf)
     assert [f["type"] for f in flags] == ["possible-same-conversation"] and flags[0]["detail"]["reasons"] == ["first_turn"]
@@ -204,10 +205,11 @@ def test_export_matching_an_earlier_paste_is_only_a_possible_match(tmp_path):
     shelf, box = setup(tmp_path)
     box.mkdir()
     (box / "weekly.txt").write_text("Human: opening words\nClaude: answer")
-    inbox.process(shelf, box, now=NOW)
+    os.utime(box / "weekly.txt", (NOW.timestamp(), NOW.timestamp()))        # its date is the clock the test runs under
+    process(shelf, box, now=NOW)
     make_zip(box, "e.zip", [conv("u-1", "weekly", [("human", "opening words"), ("assistant", "answer"), ("human", "q"), ("assistant", "a")],
                                  created=NOW.strftime("%Y-%m-%dT%H:%M:%SZ"))])
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     assert len(shelf.list_records()) == 2
     detail = review.items(shelf)[0]["detail"]
     assert sorted(detail["reasons"]) == ["first_turn", "title_and_date"]
@@ -220,7 +222,7 @@ def test_private_and_never_copy_files_are_excluded_whole(tmp_path):
     (box / "marked.txt").write_text("[private]\nHuman: a\nClaude: b")
     (box / "skipme.txt").write_text("Human: a\nClaude: b")
     (box / "fine.txt").write_text("Human: a\nClaude: b")
-    out = inbox.process(shelf, box, now=NOW, never_copy=("skipme.txt",))
+    out = process(shelf, box, now=NOW, never_copy=("skipme.txt",))
     assert out["counts"] == {codes.EXCLUDED: 3, codes.CAPTURED: 1}
     assert {r["reason"] for r in inbox.refused_listing(box)} == {"private", "never_copy"}
     assert len(shelf.list_records()) == 1
@@ -232,7 +234,7 @@ def test_processed_files_are_moved_never_deleted_even_with_the_same_name(tmp_pat
     box.mkdir()
     for i in range(2):
         (box / "same.txt").write_text(f"Human: q{i}\nClaude: a{i}")
-        inbox.process(shelf, box, now=NOW)
+        process(shelf, box, now=NOW)
     done = sorted(p.name for p in (box / "_processed" / "2026-10-03").iterdir())
     assert done == ["same.txt", "same.txt.1"] and list(box.glob("*.txt")) == []
 
@@ -244,7 +246,7 @@ def test_disk_low_leaves_inbox_files_where_they_are(tmp_path, monkeypatch):
     Usage = namedtuple("Usage", "total used free")
     monkeypatch.setattr(shutil, "disk_usage", lambda p: Usage(100 * 1024 ** 3, 99 * 1024 ** 3, 1024 ** 3))
     shelf.min_free_bytes = 5 * 1024 ** 3
-    assert inbox.process(shelf, box, now=NOW)["status"] == codes.DISK_LOW
+    assert process(shelf, box, now=NOW)["status"] == codes.DISK_LOW
     assert (box / "p.txt").is_file() and not (box / "_processed").exists()
 
 
@@ -254,7 +256,7 @@ def test_a_file_still_being_copied_in_waits(tmp_path):
     path = box / "p.txt"
     path.write_text("Human: a\nClaude: b")
     fresh = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-    assert inbox.process(shelf, box, now=fresh, settle_seconds=30)["counts"] == {codes.UNSTABLE: 1}
+    assert process(shelf, box, now=fresh, settle_seconds=30)["counts"] == {codes.UNSTABLE: 1}
     assert path.is_file()
 
 
@@ -264,14 +266,14 @@ def test_canary_travels_inbox_to_shelf_and_stays_out_of_ordinary_views(tmp_path)
     shelf, box = setup(tmp_path)
     path = canary.emit(box, NOW)
     assert path.name == "canary-2026-10-03.canary.json" and canary.emit(box, NOW) == path
-    out = inbox.process(shelf, box, now=NOW)
+    out = process(shelf, box, now=NOW)
     assert out["counts"] == {codes.CAPTURED: 1}
     meta, body, _ = records(shelf)["canary:canary-2026-10-03"]
     assert meta["kind"] == "canary" and meta["scope"] == "robert" and meta["tier"] == "raw" and meta["events"] == []
     assert shelf.list_records() == [] and len(shelf.list_records(canary=True)) == 1
     assert ledger.report(shelf)["sources"] == {} and ledger.report(shelf, canary=True)["sources"]["inbox"]["captured"] == 1
     canary.emit(box, NOW)                                                  # same day again: same bytes, no new edition
-    assert inbox.process(shelf, box, now=NOW)["counts"] == {codes.UNCHANGED: 1}
+    assert process(shelf, box, now=NOW)["counts"] == {codes.UNCHANGED: 1}
     assert review.items(shelf) == []
 
 
@@ -281,7 +283,7 @@ def test_a_tampered_canary_file_is_refused(tmp_path):
     doc = canary.document("2026-10-03")
     doc["turns"].append({"speaker": "human", "text": "smuggled content"})
     (box / "canary-2026-10-03.canary.json").write_text(json.dumps(doc))
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     assert shelf.list_records(canary=True) == [] and inbox.refused_listing(box)[0]["reason"] == codes.UNKNOWN_SCHEMA
 
 
