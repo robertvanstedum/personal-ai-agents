@@ -11,7 +11,8 @@ What it does
   SOURCES (claude-code, codex) whose approval is **approved right now**. A source that is not approved
   (or whose approval went stale) is recorded as ``not_approved`` / ``stale`` and is never captured, and
   that is a warning, not an error. The inbox is never run by this job.
-* Finishes ``ok``; ``warn`` (a source not approved or stale, disk_low, unstable or failed files);
+* Finishes ``ok``; ``warn`` (a source not approved or stale, disk_low, unstable or failed files, or a coverage
+  flag: ``possible_gap`` / ``unknown_kind``);
   or ``failed`` (an exception, a nonzero exit from a watch, an output it cannot read, or an approval check that
   cannot run: it then captures nothing, fail closed).
 * On ``failed`` it sends ONE Telegram message (job id, state, fixed codes; no content) and records
@@ -46,7 +47,7 @@ DEFAULT_JOBS_ROOT = "~/minimoi-staging/data/jobs"
 WATCH_TIMEOUT_S = 3600
 OK, WARN, FAILED = "ok", "warn", "failed"
 WARN_CODES = frozenset({"not_approved", "stale", "not_configured", "disk_low", "ok_unstable", "ok_failed_files",
-                        "unreadable"})
+                        "ok_possible_gap", "ok_unknown_kind", "unreadable"})
 EXIT = {OK: 0, WARN: 0, FAILED: 1}
 EXIT_BROKEN = 2
 
@@ -102,6 +103,13 @@ def code_for_watch(returncode: int, stdout: str) -> str:
             return "ok_failed_files"
         if isinstance(unstable, int) and unstable > 0:
             return "ok_unstable"
+        # The coverage check (amendment §10): files whose capture took fewer messages than the file shows, or a
+        # format the reader has not seen. Counts are files flagged now, so the warning stays until it is cleared.
+        gap, unknown = counts.get("possible_gap", 0), counts.get("unknown_kind", 0)
+        if isinstance(gap, int) and gap > 0:
+            return "ok_possible_gap"
+        if isinstance(unknown, int) and unknown > 0:
+            return "ok_unknown_kind"
         return "ok"
     if word == "disk_low":
         return "disk_low"

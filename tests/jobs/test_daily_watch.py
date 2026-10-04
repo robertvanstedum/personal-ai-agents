@@ -116,6 +116,9 @@ def test_the_inbox_is_never_run_and_only_the_two_sources_are_asked(tmp_path):
     (watch_line("codex", "disk_low", {}), "disk_low"),
     (watch_line("codex", "ok", {"captured": 1, "unstable": 2}), "ok_unstable"),
     (watch_line("codex", "ok", {"failed": 1}), "ok_failed_files"),
+    (watch_line("codex", "ok", {"captured": 1, "possible_gap": 3}), "ok_possible_gap"),
+    (watch_line("codex", "ok", {"unknown_kind": 1}), "ok_unknown_kind"),
+    (watch_line("codex", "ok", {"possible_gap": 1, "unknown_kind": 2}), "ok_possible_gap"),
     (watch_line("codex", "dry_run_only", {}), "not_approved"),
     (watch_line("codex", "not_approved", {}), "not_approved"),
 ])
