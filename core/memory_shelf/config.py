@@ -15,7 +15,7 @@ from pathlib import Path
 
 from core.memory_shelf.fsio import DEFAULT_MIN_FREE_BYTES
 
-SOURCE_KINDS = ("claude-code", "codex")
+SOURCE_KINDS = ("claude-code", "codex", "rooms")
 DEFAULT_CONFIG = Path("config/memory_shelf.json")
 
 
@@ -29,10 +29,18 @@ class SourceCfg:
     kind: str
     root: Path
     never_copy: tuple[str, ...] = ()
+    # Rooms only: who the owner is (trusted participant ids, D2) and which Records store the bundles may come from.
+    owner_ids: tuple[str, ...] = ()
+    source_instance_id: str = ""
 
     def fingerprint(self) -> str:
-        """What an approval binds to: the source's kind, root and never_copy list."""
+        """What an approval binds to: the source's kind, root and never_copy list; for Rooms also the trusted owner ids,
+        the source instance and the selection-policy version, so changing who counts as the owner, or pointing the same
+        name at another store, needs a new approval. (Other kinds hash exactly as before: their approvals stay valid.)"""
         doc = {"kind": self.kind, "root": str(self.root), "never_copy": sorted(self.never_copy)}
+        if self.kind == "rooms":
+            doc.update({"owner_ids": sorted(self.owner_ids), "source_instance_id": self.source_instance_id,
+                        "policy": "rooms-d2-v1"})
         return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
 
 
@@ -71,13 +79,18 @@ def parse(doc: object) -> Config:
     sources = {}
     for name, raw in (doc.get("sources") or default_sources()).items():
         if isinstance(raw, SourceCfg):
-            sources[name] = SourceCfg(raw.name, raw.kind, raw.root, tuple(dict.fromkeys(glob + raw.never_copy)))
+            sources[name] = SourceCfg(raw.name, raw.kind, raw.root, tuple(dict.fromkeys(glob + raw.never_copy)),
+                                      raw.owner_ids, raw.source_instance_id)
             continue
         if not isinstance(raw, dict) or raw.get("kind") not in SOURCE_KINDS or not isinstance(raw.get("root"), str):
             raise ConfigError("a source needs kind and root")
         own = _strings(raw.get("never_copy"), "never_copy")
+        owners = _strings(raw.get("owner_ids"), "owner_ids")
+        instance = raw.get("source_instance_id", "")
+        if not isinstance(instance, str):
+            raise ConfigError("source_instance_id must be a string")
         sources[str(name)] = SourceCfg(str(name), raw["kind"], Path(raw["root"]).expanduser(),
-                                       tuple(dict.fromkeys(glob + own)))
+                                       tuple(dict.fromkeys(glob + own)), owners, instance)
     return Config(
         shelf_root=Path(doc.get("shelf_root", base.shelf_root)).expanduser(),
         inbox_root=Path(doc.get("inbox_root", base.inbox_root)).expanduser(),

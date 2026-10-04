@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core.memory_shelf import approvals, codes, coverage, fsio, ledger, render, review, sessions
+from core.memory_shelf import approvals, codes, coverage, fsio, ledger, render, review, rooms, sessions
 from core.memory_shelf import bundle as bundles
 from core.memory_shelf.config import SourceCfg, never_copied
 
@@ -89,7 +89,10 @@ def _date(mtime_ns: int) -> str:
 
 
 def build_listing(cfg: SourceCfg, now: datetime | None = None) -> dict:
-    """Dry-run listing: ids, sizes, dates and counts. Reads no file content and names no file."""
+    """Dry-run listing: ids, sizes, dates and counts. Reads no file content and names no file.
+    (A Rooms source is checked bundle by bundle, D2 included, and lists the same way: ids and counts only.)"""
+    if cfg.kind == "rooms":
+        return rooms.build_listing(cfg, now)
     rows, excluded, total = [], {}, 0
     for cand in discover(cfg):
         if never_copied(cand.rel, cfg.never_copy):
@@ -147,6 +150,12 @@ def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_sec
     def tally(outcome: str) -> None:
         counts[outcome] = counts.get(outcome, 0) + 1
 
+    if cfg.kind == "rooms":
+        try:
+            _rooms_pass(shelf, cfg, state, counts, now, settle_seconds)
+        finally:
+            fsio.write_json(_state_path(shelf, name), {"files": state})
+        return _finish(shelf, name, state, counts, now)
     try:
         for cand in discover(cfg):
             lkey = bundles.ledger_key_for(name, cand.rel)
@@ -179,12 +188,57 @@ def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_sec
             tally(outcome)
     finally:
         fsio.write_json(_state_path(shelf, name), {"files": state})
+    return _finish(shelf, name, state, counts, now)
+
+
+def _finish(shelf, name: str, state: dict, counts: dict, now: datetime) -> dict:
     for flag in (coverage.POSSIBLE_GAP, coverage.UNKNOWN_KIND):
         flagged = sum(1 for entry in state.values() if flag in (entry.get("flags") or []))
         if flagged:
             counts[flag] = flagged                          # files flagged now, not only this pass: a gap stays a warning
     _write_status(shelf, name, "ok", counts, now)
     return {"status": "ok", "counts": counts}
+
+
+def _rooms_pass(shelf, cfg: SourceCfg, state: dict, counts: dict, now: datetime, settle_seconds: float) -> None:
+    """One pass over a Rooms source's bundles, oldest revision of each session first. Bundles are immutable, so a
+    bundle already judged (kept, excluded or refused) is not read again; its outcome is still counted every pass, so an
+    exclusion or a refusal stays visible until someone deals with it."""
+    name = cfg.name
+    current = sessions.NORMALIZER_VERSION["rooms"]
+    cands, passed = rooms.discover(cfg)
+    for kind, n in passed.items():
+        counts[f"passed_over_{kind}"] = n
+
+    def tally(outcome: str, reason: str | None = None) -> None:
+        counts[outcome] = counts.get(outcome, 0) + 1
+        if reason and outcome in (codes.EXCLUDED, codes.REFUSED):
+            counts[reason] = counts.get(reason, 0) + 1
+
+    for cand in cands:
+        skey = bundles.ledger_key_for(name, cand.rel)
+        lkey = rooms.session_key(name, cand.session)
+        prev = state.get(skey) or {}
+        judged = prev.get("outcome") in (*codes.OK_OUTCOMES, codes.EXCLUDED, codes.REFUSED)
+        if (judged and prev.get("size") == cand.size and prev.get("mtime_ns") == cand.mtime_ns
+                and prev.get("normalizer", sessions.DEFAULT_NORMALIZER) == current):
+            if prev["outcome"] in (codes.EXCLUDED, codes.REFUSED):
+                tally(prev["outcome"], prev.get("reason"))
+            else:
+                tally("skipped_unchanged")
+            continue
+        ledger.record(shelf, name, lkey, codes.DISCOVERED, now=now)
+        outcome, rid, sha, cov, reason = rooms.capture(shelf, cfg, cand, skey, prev, now, settle_seconds, lkey)
+        if outcome in codes.OK_OUTCOMES:
+            review.sync_rooms_exclusion(shelf, lkey, None)
+            if cov is not None:
+                _sync_coverage(shelf, name, lkey, cand, cov)
+        flags = (cov or {}).get("flags") or prev.get("flags") or []
+        state[skey] = {"outcome": outcome, "size": cand.size, "mtime_ns": cand.mtime_ns, "sha256": sha, "record": rid,
+                       "rel": cand.rel, "normalizer": current if outcome in (*codes.OK_OUTCOMES, codes.EXCLUDED, codes.REFUSED)
+                       else prev.get("normalizer", sessions.DEFAULT_NORMALIZER),
+                       **({"reason": reason} if reason else {}), **({"flags": flags} if flags else {})}
+        tally(outcome, reason)
 
 
 def _sync_coverage(shelf, source: str, lkey: str, cand: Candidate, cov: dict) -> None:
@@ -235,6 +289,8 @@ def _capture(shelf, cfg: SourceCfg, cand: Candidate, lkey: str, prev: dict, now:
         ledger.record(shelf, name, lkey, codes.DISK_LOW, now=now)
         return codes.DISK_LOW, None, sha, None
     result = next((r for r in shelf.drain() if r.key == bundle.key), None)
+    if result is None and not path.exists():
+        result = shelf.ingest(bundle)                  # another process's drain applied our staged bundle: ask again (idempotent)
     if result is None:
         return codes.FAILED, None, sha, None
     return result.outcome, result.record_id, sha, parsed.coverage

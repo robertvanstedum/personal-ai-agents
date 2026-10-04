@@ -24,7 +24,7 @@ import random
 from collections import Counter
 from pathlib import Path
 
-from core.memory_shelf import editions, inbox, record, render, sessions, watchers
+from core.memory_shelf import editions, inbox, record, render, rooms, sessions, watchers
 from core.memory_shelf.config import Config
 
 SOURCE_CHANGED, SOURCE_MISSING, NOT_RETAINED, UNREADABLE = "source_changed", "source_missing", "not_retained", "unreadable"
@@ -82,9 +82,14 @@ def edition_turns(folder: Path, number: int) -> list[tuple[int, str, str]] | Non
                 handle.readline()                                  # header
                 for line in handle:
                     row = json.loads(line)
+                    if row.get("type") in ("note", "ref"):               # kept apart from the turns; hashed like them
+                        if render.sha256_text(str(row.get("text", ""))) != row["sha256"]:
+                            return rows + [(-1, "?", "0" * 64)]
+                        continue
                     if render.sha256_text(row["text"]) != row["sha256"]:
                         return rows + [(-1, "?", "0" * 64)]        # the edition's own hash line disagrees with its text
-                    rows.append((row["ordinal"], row["speaker"], row["sha256"]))
+                    who = (row.get("attrs") or {}).get("who")
+                    rows.append((row["ordinal"], f"{row['speaker']}:{who}" if who else row["speaker"], row["sha256"]))
             return rows
     return None
 
@@ -103,6 +108,13 @@ def _source_turns(cfg: Config, meta: dict):
                 return None, NORMALIZER_CHANGED
             with open(path, "rb") as handle:
                 parsed = watchers.PARSERS[source.kind](handle)
+        elif ret.get("kind") == "rooms-bundle":
+            source = cfg.sources.get(ret.get("source"))
+            path = source and Path(source.root) / ret["rel"]
+            if not path or not path.is_dir():
+                return None, SOURCE_MISSING
+            read = rooms.read_bundle(path, source)             # D2 and every integrity check apply to a re-read too
+            parsed, sha = read.parsed, read.sha256
         elif ret.get("kind") == "inbox-file":
             path = Path(cfg.inbox_root) / ret["rel"]
             if not path.is_file():
@@ -117,7 +129,7 @@ def _source_turns(cfg: Config, meta: dict):
             parsed, sha = item.parsed, item.source_sha256
         else:
             return None, NOT_RETAINED
-    except (OSError, inbox.Refusal, ValueError, KeyError):
+    except (OSError, inbox.Refusal, rooms.Refusal, ValueError, KeyError):
         return None, UNREADABLE
     clean, _ = render.scrub_parsed(parsed)
     return (render.ordered_turns(clean.turns), sha), None

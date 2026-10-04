@@ -43,11 +43,12 @@ from core.jobs import alert, registry, schedule, status  # noqa: E402
 
 JOB_ID = "memory-watch"
 SOURCES = ("claude-code", "codex")              # the approved-memory sources; the inbox is deliberately absent
+OPTIONAL_SOURCES = ("rooms",)                   # Rooms export bundles: run only when configured (then it follows the same approval gate)
 DEFAULT_JOBS_ROOT = "~/minimoi-staging/data/jobs"
 WATCH_TIMEOUT_S = 3600
 OK, WARN, FAILED = "ok", "warn", "failed"
 WARN_CODES = frozenset({"not_approved", "stale", "not_configured", "disk_low", "ok_unstable", "ok_failed_files",
-                        "ok_possible_gap", "ok_unknown_kind", "unreadable"})
+                        "ok_possible_gap", "ok_unknown_kind", "ok_refused_files", "ok_unknown_participant", "unreadable"})
 EXIT = {OK: 0, WARN: 0, FAILED: 1}
 EXIT_BROKEN = 2
 
@@ -105,6 +106,13 @@ def code_for_watch(returncode: int, stdout: str) -> str:
             return "ok_unstable"
         # The coverage check (amendment §10): files whose capture took fewer messages than the file shows, or a
         # format the reader has not seen. Counts are files flagged now, so the warning stays until it is cleared.
+        # Rooms: a meeting whose participants could not be identified, or a bundle refused as corrupt, is a warning
+        # (an ordinary D2 exclusion of a meeting with a guest is expected and is not).
+        who, refused = counts.get("unknown_participant", 0), counts.get("refused", 0)
+        if isinstance(who, int) and who > 0:
+            return "ok_unknown_participant"
+        if isinstance(refused, int) and refused > 0:
+            return "ok_refused_files"
         gap, unknown = counts.get("possible_gap", 0), counts.get("unknown_kind", 0)
         if isinstance(gap, int) and gap > 0:
             return "ok_possible_gap"
@@ -137,6 +145,10 @@ def capture(approval: Callable[[str], str], watch: Callable[[str], tuple[int, st
     results: dict[str, str] = {}
     try:
         gates = {source: approval(source) for source in SOURCES}
+        for source in OPTIONAL_SOURCES:
+            gate = approval(source)
+            if gate != "not_configured":                # an optional source nobody configured is not a problem
+                gates[source] = gate
     except ApprovalUnavailable:
         return {"approvals": "approval_unavailable"}
     for source, gate in gates.items():

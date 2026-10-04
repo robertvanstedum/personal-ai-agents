@@ -13,7 +13,7 @@ from pathlib import Path
 
 from core.memory_shelf import fsio
 
-TYPES = frozenset({"designation-candidate", "possible-same-conversation", "coverage-flag"})
+TYPES = frozenset({"designation-candidate", "possible-same-conversation", "coverage-flag", "rooms-exclusion"})
 
 
 def _dir(shelf) -> Path:
@@ -65,4 +65,18 @@ def sync_coverage(shelf, name: str, detail: dict | None) -> None:
         return
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     fsio.write_json(path, {"type": "coverage-flag", "name": name, "state": "open", "detail": detail,
+                           "created": existing.get("created", now) if isinstance(existing, dict) else now})
+
+
+def sync_rooms_exclusion(shelf, name: str, detail: dict | None) -> None:
+    """The D2 exclusion of one Rooms session: open while the meeting is excluded (the detail says whether earlier
+    editions are kept), resolved if a later bundle of the same session is accepted again."""
+    path = _dir(shelf) / f"rooms-exclusion--{name}.json"
+    existing = fsio.read_json(path)
+    if detail is None:
+        if isinstance(existing, dict) and existing.get("state") == "open":
+            resolve(shelf, "rooms-exclusion", name, "accepted-again")
+        return
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fsio.write_json(path, {"type": "rooms-exclusion", "name": name, "state": "open", "detail": detail,
                            "created": existing.get("created", now) if isinstance(existing, dict) else now})

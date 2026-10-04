@@ -190,20 +190,31 @@ class Shelf:
 
     def drain(self) -> list[Result]:
         """Apply every staged bundle. Applied bundles move to ``outbox/_done/``; a bundle that cannot be
-        applied (``disk_low``, unreadable) stays where it is for the next run."""
+        applied (``disk_low``, unreadable) stays where it is for the next run. Each bundle is applied under the shelf
+        lock and only if it is still there: another process draining the same outbox may have applied it first."""
         results = []
         for path in self.pending():
             try:
-                bundle = Bundle.from_json(path.read_bytes())
-            except (OSError, ValueError, KeyError):
-                results.append(Result(codes.FAILED, reason="bundle_unreadable"))
-                continue
-            result = self.ingest(bundle)
-            results.append(result)
-            if result.outcome in codes.OK_OUTCOMES:
-                done = self.outbox / "_done"
-                fsio.ensure_dir(done)
-                os.replace(path, done / path.name)
+                with self.lock():
+                    if not path.exists():
+                        continue
+                    try:
+                        bundle = Bundle.from_json(path.read_bytes())
+                    except (OSError, ValueError, KeyError):
+                        results.append(Result(codes.FAILED, reason="bundle_unreadable"))
+                        continue
+                    result = self.ingest(bundle)
+                    results.append(result)
+                    if result.outcome in codes.OK_OUTCOMES:
+                        done = self.outbox / "_done"
+                        fsio.ensure_dir(done)
+                        os.replace(path, done / path.name)
+                    elif result.outcome == codes.REFUSED:      # e.g. revision_conflict: settled for now, not retried every run
+                        refused = self.outbox / "_refused"
+                        fsio.ensure_dir(refused)
+                        os.replace(path, refused / path.name)
+            except ShelfBusy:
+                results.append(Result(codes.FAILED, reason="shelf_busy"))
         return results
 
     # ── source index ──────────────────────────────────────────────────────────
@@ -289,7 +300,7 @@ class Shelf:
         self._dirty.unlink(missing_ok=True)
         norm = bundle.meta.get("normalized") or {}
         ledger.record(self, bundle.origin.split(":", 1)[-1], bundle.ledger_key or bundle.key[:16], result.outcome,
-                      record_id=result.record_id, canary=bundle.kind == "canary", turns=norm.get("turns", 0),
+                      reason=result.reason, record_id=result.record_id, canary=bundle.kind == "canary", turns=norm.get("turns", 0),
                       redacted_turns=norm.get("redacted_turns", 0), omitted=norm.get("omitted"),
                       flags=(norm.get("coverage") or {}).get("flags"), gap=(norm.get("coverage") or {}).get("gap"),
                       now=self.now())
@@ -352,6 +363,15 @@ class Shelf:
             # An earlier run saved this edition and stopped before the main file moved on: finish the publication.
             # (The edition file is never taken as proof that the record was updated.)
             return self._publish(bundle, meta, main, saved.number, "recovered:interrupted-publication")
+        # Revision order (a format that numbers its snapshots, e.g. Rooms): a lower revision never becomes current, and
+        # the same revision with different bytes is a conflict nobody may settle by guessing.
+        rev_new = bundle.meta["normalized"].get("source_revision")
+        rev_have = (meta.get("normalized") or {}).get("source_revision")
+        if isinstance(rev_new, int) and isinstance(rev_have, int):
+            if rev_new < rev_have:
+                return Result(codes.UNCHANGED, bundle.key, meta["id"], reason=codes.OLDER_REVISION)
+            if rev_new == rev_have and bundle.source_hash != meta.get("source_hash"):
+                return Result(codes.REFUSED, bundle.key, meta["id"], reason=codes.REVISION_CONFLICT)
         note = None
         if bundle.source_hash in self._seen_hashes(folder, meta):
             if new <= have:

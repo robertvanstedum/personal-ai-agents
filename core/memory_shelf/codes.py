@@ -39,3 +39,16 @@ TOO_LARGE = "too_large"
 UNSUPPORTED_TYPE = "unsupported_type"
 ZIP_UNSAFE = "zip_unsafe"
 NO_TURNS = "no_turns"
+
+# Rooms (amendment §10b, D2): who may be in a meeting, and what a bundle must be to be read
+OTHER_PARTICIPANT = "other_participant"      # a human other than the owner took part: the whole meeting is excluded (D2)
+UNKNOWN_PARTICIPANT = "unknown_participant"  # a participant whose identity cannot be established: fail closed, distinct from the above
+WRONG_SOURCE = "wrong_source"                # a bundle from a store other than the approved source instance
+OLDER_REVISION = "older_revision"            # a snapshot older than the current record: never becomes current
+REVISION_CONFLICT = "revision_conflict"      # the same revision with different bytes
+BAD_MANIFEST = "bad_manifest"
+BAD_BUNDLE_FILES = "bad_bundle_files"        # missing, extra, linked or special files
+HASH_MISMATCH = "hash_mismatch"              # a file does not match its manifest length or sha256
+BAD_IDENTITY = "bad_identity"                # name, manifest and transcript disagree about which session and revision
+BAD_TRANSCRIPT = "bad_transcript"            # transcript.json is not the typed shape
+UNSUPPORTED_SCHEMA = "unsupported_schema"

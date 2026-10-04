@@ -40,7 +40,7 @@ class Fakes:
     """One place to script approvals, watches and the sender, and to see what was called."""
 
     def __init__(self, approvals=None, outputs=None, send_result="sent"):
-        self.approvals = {"claude-code": "approved", "codex": "approved", **(approvals or {})}
+        self.approvals = {"claude-code": "approved", "codex": "approved", "rooms": "not_configured", **(approvals or {})}
         self.outputs = outputs or {}
         self.watched, self.sent, self.send_result = [], [], send_result
 
@@ -107,7 +107,7 @@ def test_the_inbox_is_never_run_and_only_the_two_sources_are_asked(tmp_path):
     assert dw.SOURCES == ("claude-code", "codex")
     f = Fakes()
     go(tmp_path, f)
-    assert "inbox" not in f.watched and set(f.approvals) == set(dw.SOURCES)
+    assert "inbox" not in f.watched and set(f.approvals) == set(dw.SOURCES) | set(dw.OPTIONAL_SOURCES)
 
 
 # ── warn conditions ─────────────────────────────────────────────────────────
@@ -119,6 +119,8 @@ def test_the_inbox_is_never_run_and_only_the_two_sources_are_asked(tmp_path):
     (watch_line("codex", "ok", {"captured": 1, "possible_gap": 3}), "ok_possible_gap"),
     (watch_line("codex", "ok", {"unknown_kind": 1}), "ok_unknown_kind"),
     (watch_line("codex", "ok", {"possible_gap": 1, "unknown_kind": 2}), "ok_possible_gap"),
+    (watch_line("codex", "ok", {"refused": 1, "revision_conflict": 1}), "ok_refused_files"),
+    (watch_line("codex", "ok", {"excluded": 2, "unknown_participant": 1}), "ok_unknown_participant"),
     (watch_line("codex", "dry_run_only", {}), "not_approved"),
     (watch_line("codex", "not_approved", {}), "not_approved"),
 ])
@@ -296,3 +298,28 @@ def test_moi_watch_runs_the_moi_script_for_one_source_without_a_shell(monkeypatc
     monkeypatch.setenv("MOI_BIN", "/opt/moi")
     dw.moi_watch("codex")
     assert seen["argv"][0] == "/opt/moi"
+
+
+# ── Rooms (optional source) ─────────────────────────────────────────────────
+
+def test_an_unconfigured_rooms_source_is_silently_left_out(tmp_path):
+    f = Fakes()
+    code, doc, *_ = go(tmp_path, f)
+    assert doc["state"] == "ok" and "rooms" not in doc["results"] and "rooms" not in f.watched
+
+
+def test_a_configured_and_approved_rooms_source_runs_with_the_others(tmp_path):
+    f = Fakes(approvals={"rooms": "approved"}, outputs={"rooms": (0, watch_line("rooms", "ok", {"captured": 2, "excluded": 1, "other_participant": 1}))})
+    code, doc, *_ = go(tmp_path, f)
+    assert doc["state"] == "ok" and doc["results"]["rooms"] == "ok" and f.watched == ["claude-code", "codex", "rooms"]
+
+
+def test_a_configured_rooms_source_that_is_not_approved_warns_and_is_never_run(tmp_path):
+    f = Fakes(approvals={"rooms": "not_approved"})
+    code, doc, *_ = go(tmp_path, f)
+    assert doc["state"] == "warn" and doc["results"]["rooms"] == "not_approved" and "rooms" not in f.watched
+
+
+def test_an_ordinary_guest_exclusion_alone_is_not_a_warning(tmp_path):
+    f = Fakes(approvals={"rooms": "approved"}, outputs={"rooms": (0, watch_line("rooms", "ok", {"excluded": 3, "other_participant": 3}))})
+    assert go(tmp_path, f)[1]["state"] == "ok"

@@ -18,7 +18,7 @@ from core.memory_shelf import ulid as ulids
 
 KEYS = ("id", "kind", "created", "chair", "source", "source_hash", "scope", "tier", "tags",
         "edition", "edition_hash", "events", "embedding", "type")
-CHAIRS = frozenset({"CoS", "Claude", "Claude Code", "Codex", "Grok", "Robert"})
+CHAIRS = frozenset({"CoS", "Claude", "Claude Code", "Codex", "Grok", "Robert", "Rooms"})
 TIERS = frozenset({"raw", "curated"})
 _SCOPE = re.compile(r"^(robert|mandate:[0-9A-HJKMNP-TV-Z]{26})$")
 _SHA = re.compile(r"^[0-9a-f]{64}$")

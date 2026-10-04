@@ -306,3 +306,27 @@ def test_repair_writes_nothing_when_the_rebuilt_body_would_not_match_the_edition
     monkeypatch.setattr(render, "render_body", lambda parsed: "")
     assert repair.recover(shelf, shelf.list_records()[0]["id"]) == "rebuild_mismatch"
     assert path.read_bytes() == before and not (path.parent / "repairs").exists()
+
+
+# ── draining the same outbox from two processes ─────────────────────────────
+
+DRAINER = textwrap.dedent("""
+    import sys
+    sys.path.insert(0, {repo!r})
+    from core.memory_shelf.shelf import Shelf
+    out = Shelf({root!r}, min_free_bytes=0).drain()
+    print(len(out))
+""")
+
+
+def test_two_processes_draining_one_outbox_apply_each_bundle_once_and_neither_fails(tmp_path):
+    shelf = make_shelf(tmp_path)
+    for i in range(24):
+        sid = f"d-{i}"
+        shelf.stage(cc_bundle(cc_lines(sid, ("human", "q " + sid), ("assistant", "a"))))
+    code = DRAINER.format(repo=str(REPO), root=str(shelf.root))
+    procs = [subprocess.Popen([sys.executable, "-c", code], cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.PIPE) for _ in range(3)]
+    results = [(p.wait(timeout=120), p.stderr.read().decode()[-300:]) for p in procs]
+    assert [r[0] for r in results] == [0, 0, 0], results
+    assert len(shelf.scan_index()) == 24 and shelf.pending() == [] and len(list((shelf.outbox / "_done").glob("*.json"))) == 24
+    assert shelf.index() == shelf.scan_index()

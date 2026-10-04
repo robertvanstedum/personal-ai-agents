@@ -37,17 +37,25 @@ MARK = "@mark"
 # Bump a parser's version when a change to it can change the turn sequence of an unchanged source file.
 # The watcher re-reads such files and, when the turns differ, adds an edition (note ``normalizer:<old>-><new>``).
 # 2 = Codex reads response_item messages too, with reconcile (injected context pointers, heartbeat as system).
-NORMALIZER_VERSION = {"claude-code": 1, "codex": 2}
+NORMALIZER_VERSION = {"claude-code": 1, "codex": 2, "rooms": 1}
 DEFAULT_NORMALIZER = 1                      # a record or state entry written before versions existed
 
 
 @dataclass(frozen=True)
 class Turn:
     ordinal: int
-    speaker: str
+    speaker: str              # the coarse role: human | assistant | system
     text: str
     line: int                 # 1-based line in the source file
     basis: str                # which structural fact decided the speaker
+    # Additive, for formats with more than one human or agent (a room): stable speaker id, sequence, record id, reply
+    # and correction links, timestamps, kind (and, edition-only, the label as supplied). None for every older format,
+    # whose records keep their exact bytes. ``who`` (when set) is part of what fidelity compares.
+    attrs: dict | None = None
+
+    @property
+    def who(self) -> str | None:
+        return (self.attrs or {}).get("who")
 
 
 @dataclass
@@ -64,12 +72,16 @@ class Parsed:
     malformed: int = 0
     lines: int = 0
     manifest: dict = field(default_factory=dict)      # format-level counts (branches, attachments, ...) for the record
+    participants: list = field(default_factory=list)   # [{id, kind, role, label}] from the format's own roster
+    notes: list = field(default_factory=list)         # typed notes kept apart from the turns: {note_id, author, kind, version, ...}
+    references: list = field(default_factory=list)    # inert references (kind, target, label, ...); never followed
+    designatable: bool = True                         # False: an in-transcript "file this" never designates (a room)
     normalizer: int = DEFAULT_NORMALIZER              # which parser version produced the turns
     coverage: dict = field(default_factory=dict)      # the coverage check's counts (coverage.py); counts only
 
-    def add(self, speaker: str, text: str, line: int, basis: str) -> None:
+    def add(self, speaker: str, text: str, line: int, basis: str, attrs: dict | None = None) -> None:
         if text.strip():
-            self.turns.append(Turn(len(self.turns) + 1, speaker, text, line, basis))
+            self.turns.append(Turn(len(self.turns) + 1, speaker, text, line, basis, attrs))
 
     def skip(self, kind: str, line: int, detail: str | None = None) -> None:
         self.omitted[kind] += 1
@@ -314,6 +326,8 @@ def designation(parsed: Parsed) -> dict | None:
     it never designates by itself (fail closed). Designation is a **selection**, not an
     approval: it can add ``designated-curated`` and nothing else.
     """
+    if not parsed.designatable:
+        return None
     for turn in parsed.turns:
         if turn.speaker != HUMAN:
             continue

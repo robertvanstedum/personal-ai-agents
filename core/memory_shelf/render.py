@@ -8,7 +8,12 @@
   is hashed or stored; the record says how many redactions, and carries the **unscrubbed source file's**
   sha256. The edition is a canonical JSONL of the scrubbed turns, a sanitized derivative with provenance.
   The session file itself stays where it is (``~/.claude``, ``~/.codex``).
-* ``ordered_turns`` is what the fidelity check compares: ``(ordinal, speaker, sha256(text))``.
+* ``ordered_turns`` is what the fidelity check compares: ``(ordinal, speaker, sha256(text))``; for a turn that has a stable
+  speaker id (a room) the speaker element is ``role:id``, so two agents are never the same speaker.
+* **Additive attributes** (formats with several humans or agents): a turn frame may end with ``| key=value`` pairs
+  (``who``, ``seq``, ``kind``, ``rid``, ``reply``, ``corrects``, ``ts``, ``ing``), each value a short machine-safe token
+  validated at render time, never free text. Typed notes and references follow the turns as ``note`` and ``ref`` blocks
+  framed the same way (declared bytes and sha256). Frames without attributes are byte-for-byte what they always were.
 """
 from __future__ import annotations
 
@@ -46,14 +51,36 @@ def scrub_text(text: str) -> tuple[str, bool]:
     return second, changed or first != text
 
 
+def _scrub_value(value, counter: list):
+    """Scrub every string inside a JSON-like value; count the strings that changed."""
+    if isinstance(value, str):
+        text, was = scrub_text(value)
+        counter[0] += was
+        return text
+    if isinstance(value, list):
+        return [_scrub_value(v, counter) for v in value]
+    if isinstance(value, dict):
+        return {k: _scrub_value(v, counter) for k, v in value.items()}
+    return value
+
+
 def scrub_parsed(parsed: Parsed) -> tuple[Parsed, int]:
-    """A copy whose turn texts are scrubbed, and how many turns were changed."""
-    turns, changed = [], 0
+    """A copy whose turn texts (and, for formats that have them, labels, notes, references and participant labels)
+    are scrubbed (D8), and how many turns were changed. Redactions outside the turn texts are counted separately in
+    the manifest as ``redacted_fields``, so the provenance says what was touched."""
+    turns, changed, extra = [], 0, [0]
     for turn in parsed.turns:
         text, was = scrub_text(turn.text)
         changed += was
-        turns.append(replace(turn, text=text))
-    return replace(parsed, turns=turns), changed
+        # frame attributes are validated machine tokens (ids, a sequence, a time); everything else a turn carries is text
+        attrs = ({k: (v if k in FRAME_KEYS else _scrub_value(v, extra)) for k, v in turn.attrs.items()}
+                 if turn.attrs else turn.attrs)
+        turns.append(replace(turn, text=text, attrs=attrs))
+    notes = [_scrub_value(n, extra) for n in parsed.notes]
+    refs = [_scrub_value(r, extra) for r in parsed.references]
+    people = [_scrub_value(p, extra) for p in parsed.participants]
+    manifest = {**parsed.manifest, **({"redacted_fields": extra[0]} if extra[0] else {})}
+    return replace(parsed, turns=turns, notes=notes, references=refs, participants=people, manifest=manifest), changed
 
 
 _UNSAFE = re.compile(r"[\x00-\x1f\x7f\u2028\u2029]")
@@ -72,6 +99,26 @@ def _pointer_line(pointer: tuple) -> str:
     return f"[omitted: {one_line(kind, 80)}, source line {line}{tail}]\n"
 
 
+FRAME_KEYS = ("who", "seq", "kind", "rid", "reply", "corrects", "ts", "ing")
+BLOCK_KEYS = ("id", "author", "kind", "version", "seq", "ref")
+_ATTR = re.compile(r"^[A-Za-z0-9_:.+-]{1,64}$")
+
+
+def _attr_suffix(attrs: dict | None, keys: tuple, *, strict: bool) -> str:
+    out = []
+    for key in keys:
+        value = (attrs or {}).get(key)
+        if value is None:
+            continue
+        value = str(value)
+        if not _ATTR.match(value):
+            if strict:
+                raise ValueError("a frame attribute is not a machine-safe token")
+            continue                                   # block attributes are optional hints: omit what is not safe
+        out.append(f" | {key}={value}")
+    return "".join(out)
+
+
 def render_body(parsed: Parsed) -> str:
     chunks, pointers = [], list(parsed.pointers)
     for turn in parsed.turns:
@@ -79,30 +126,73 @@ def render_body(parsed: Parsed) -> str:
             chunks.append(_pointer_line(pointers.pop(0)))
         raw = turn.text.encode("utf-8")
         chunks.append(f"<!-- turn {turn.ordinal} | {turn.speaker} | line {turn.line} | bytes {len(raw)} | "
-                      f"sha256 {hashlib.sha256(raw).hexdigest()} -->\n{turn.text}\n\n")
+                      f"sha256 {hashlib.sha256(raw).hexdigest()}{_attr_suffix(turn.attrs, FRAME_KEYS, strict=True)} -->\n"
+                      f"{turn.text}\n\n")
     for pointer in pointers:
         chunks.append(_pointer_line(pointer))
+    for index, note in enumerate(parsed.notes, 1):
+        raw = str(note.get("text", "")).encode("utf-8")
+        attrs = {"id": note.get("note_id"), "author": note.get("author"), "kind": note.get("kind"),
+                 "version": note.get("version"), "seq": note.get("source_through_seq")}
+        chunks.append(f"<!-- note {index} | bytes {len(raw)} | sha256 {hashlib.sha256(raw).hexdigest()}"
+                      f"{_attr_suffix(attrs, BLOCK_KEYS, strict=False)} -->\n{raw.decode('utf-8')}\n\n")
+    for index, ref in enumerate(parsed.references, 1):
+        raw = _ref_text(ref).encode("utf-8")
+        attrs = {"id": ref.get("reference_id"), "kind": ref.get("kind"), "ref": ref.get("source_record_id")}
+        chunks.append(f"<!-- ref {index} | bytes {len(raw)} | sha256 {hashlib.sha256(raw).hexdigest()}"
+                      f"{_attr_suffix(attrs, BLOCK_KEYS, strict=False)} -->\n{raw.decode('utf-8')}\n\n")
     return "".join(chunks)
+
+
+def _ref_text(ref: dict) -> str:
+    """A reference as canonical JSON text: inert data, never followed."""
+    return json.dumps(ref, ensure_ascii=False, sort_keys=True)
+
+
+_FRAME = re.compile(rb"<!-- turn (\d+) \| (human|assistant|system) \| line (\d+) \| bytes (\d+) \| sha256 ([0-9a-f]{64})"
+                    rb"((?: \| [a-z]+=[A-Za-z0-9_:.+-]{1,64})*) -->\n")
+_BLOCK = re.compile(rb"<!-- (note|ref) (\d+) \| bytes (\d+) \| sha256 ([0-9a-f]{64})((?: \| [a-z]+=[A-Za-z0-9_:.+-]{1,64})*) -->\n")
+
+
+def _attrs_of(raw: bytes) -> dict | None:
+    pairs = [part.split("=", 1) for part in raw.decode().split(" | ") if part]
+    return {k: v for k, v in pairs} or None
 
 
 def parse_body(body: str) -> list[Turn]:
     """Read turns back by their declared byte lengths; a frame that lies about its length raises."""
-    data, turns, pos = body.encode("utf-8"), [], 0
-    frame = re.compile(rb"<!-- turn (\d+) \| (human|assistant|system) \| line (\d+) \| bytes (\d+) \| sha256 ([0-9a-f]{64}) -->\n")
+    return parse_blocks(body)[0]
+
+
+def parse_blocks(body: str) -> tuple[list[Turn], list[tuple[str, int, str, dict | None]]]:
+    """(turns, [(kind, index, text, attrs)] for the note and ref blocks). Every frame is checked against its own
+    declared length and sha256; the first that lies raises ``InvalidRecord``."""
+    data, pos = body.encode("utf-8"), 0
+    turns: list[Turn] = []
+    blocks: list[tuple[str, int, str, dict | None]] = []
     while True:
-        match = frame.search(data, pos)
-        if not match:
-            return turns
-        start, size = match.end(), int(match.group(4))
-        chunk = data[start:start + size]
-        if len(chunk) != size or hashlib.sha256(chunk).hexdigest() != match.group(5).decode():
-            raise record.InvalidRecord("a turn does not match its frame")
-        turns.append(Turn(int(match.group(1)), match.group(2).decode(), chunk.decode("utf-8"), int(match.group(3)), "shelf"))
-        pos = start + size
+        match, block = _FRAME.search(data, pos), _BLOCK.search(data, pos)
+        if match and (not block or match.start() < block.start()):
+            start, size = match.end(), int(match.group(4))
+            chunk = data[start:start + size]
+            if len(chunk) != size or hashlib.sha256(chunk).hexdigest() != match.group(5).decode():
+                raise record.InvalidRecord("a turn does not match its frame")
+            turns.append(Turn(int(match.group(1)), match.group(2).decode(), chunk.decode("utf-8"), int(match.group(3)),
+                              "shelf", _attrs_of(match.group(6))))
+            pos = start + size
+        elif block:
+            start, size = block.end(), int(block.group(3))
+            chunk = data[start:start + size]
+            if len(chunk) != size or hashlib.sha256(chunk).hexdigest() != block.group(4).decode():
+                raise record.InvalidRecord("a block does not match its frame")
+            blocks.append((block.group(1).decode(), int(block.group(2)), chunk.decode("utf-8"), _attrs_of(block.group(5))))
+            pos = start + size
+        else:
+            return turns, blocks
 
 
 def ordered_turns(turns) -> list[tuple[int, str, str]]:
-    return [(t.ordinal, t.speaker, sha256_text(t.text)) for t in turns]
+    return [(t.ordinal, f"{t.speaker}:{t.who}" if t.who else t.speaker, sha256_text(t.text)) for t in turns]
 
 
 def edition_bytes(parsed: Parsed, source_sha256: str, source_size: int, redacted_turns: int) -> bytes:
@@ -114,8 +204,17 @@ def edition_bytes(parsed: Parsed, source_sha256: str, source_size: int, redacted
         head["manifest"] = dict(sorted(parsed.manifest.items()))
     lines = [json.dumps(head, ensure_ascii=False, sort_keys=True)]
     for t in parsed.turns:
-        lines.append(json.dumps({"ordinal": t.ordinal, "speaker": t.speaker, "line": t.line, "basis": t.basis,
-                                 "sha256": sha256_text(t.text), "text": t.text}, ensure_ascii=False, sort_keys=True))
+        row = {"ordinal": t.ordinal, "speaker": t.speaker, "line": t.line, "basis": t.basis,
+               "sha256": sha256_text(t.text), "text": t.text}
+        if t.attrs:
+            row["attrs"] = t.attrs
+        lines.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
+    for index, note in enumerate(parsed.notes, 1):
+        lines.append(json.dumps({"type": "note", "index": index, **note, "sha256": sha256_text(str(note.get("text", "")))},
+                                ensure_ascii=False, sort_keys=True))
+    for index, ref in enumerate(parsed.references, 1):
+        lines.append(json.dumps({"type": "ref", "index": index, "sha256": sha256_text(_ref_text(ref)), "text": _ref_text(ref)},
+                                ensure_ascii=False, sort_keys=True))
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
@@ -136,4 +235,4 @@ def to_shelf(parsed: Parsed, source_sha256: str, source_size: int, *, created: s
     return meta, render_body(clean), edition_bytes(clean, source_sha256, source_size, redacted)
 
 
-__all__ = ["render_body", "parse_body", "ordered_turns", "edition_bytes", "to_shelf", "hash_file", "scrub_parsed"]
+__all__ = ["render_body", "parse_body", "parse_blocks", "ordered_turns", "edition_bytes", "to_shelf", "hash_file", "scrub_parsed"]
