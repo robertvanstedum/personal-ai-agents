@@ -45,7 +45,10 @@ DISCLOSURE = "Private: not kept in your CoS history. The agent itself may still 
 
 
 MODE_LOCK = "_mode.lock"
-HOLD_WAIT_S = 5.0                 # how long a turn waits for a mode switch in progress before it gives up (and saves nothing)
+HOLD_WAIT_S = 0.03                # how long a turn waits for a mode switch in progress before it gives up (and saves nothing).
+                                  # The capture contract is best effort within 50 ms; a switch holds the lock for a few
+                                  # milliseconds, so this is generous, and a switch that is slower costs one turn its record.
+_POLL_S = 0.002
 
 
 class ModeBusy(RuntimeError):
@@ -73,7 +76,7 @@ def hold_mode(root: Path, wait: float | None = None):
             except OSError:
                 if time.monotonic() >= deadline:
                     raise ModeBusy("a mode switch is in progress") from None
-                time.sleep(0.01)
+                time.sleep(_POLL_S)
         yield
     finally:
         os.close(fd)                                 # closing releases the lock

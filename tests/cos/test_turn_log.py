@@ -443,3 +443,42 @@ def test_another_process_holding_the_switch_makes_the_turn_wait_then_see_the_new
     result = ask(service(backend=lambda p, c, k: (time.sleep(0.8) or "slow reply")))      # starts public, ends after the flip
     proc.wait(10)
     assert lines(root) == [] and result.history_saved is None
+
+
+# ── the lock wait fits the capture latency budget (Codex checkpoint 2026-10-04: best effort within 50 ms) ──
+
+def test_the_wait_for_a_mode_switch_is_short_enough_for_the_capture_budget():
+    assert private_mode.HOLD_WAIT_S <= 0.05
+
+
+def test_a_turn_blocked_by_a_slow_switch_gives_up_within_the_budget_and_saves_nothing(root):
+    private_mode.set_private(root, False, "owner")
+    fd = os.open(root / "_mode.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)                                          # a switch that never finishes
+    try:
+        svc = service()
+        started = time.monotonic()
+        result = ask(svc)
+        elapsed = time.monotonic() - started
+    finally:
+        os.close(fd)
+    assert result.history_saved is False and lines(root) == []
+    assert elapsed < 0.25, elapsed                                          # was 5 s; the turn's own work is a fake backend here
+
+
+def test_an_uncontended_turn_pays_no_measurable_lock_cost(root):
+    private_mode.set_private(root, False, "owner")
+    ask(service())                                                          # warm up
+    started = time.monotonic()
+    for _ in range(20):
+        ask(service())
+    assert (time.monotonic() - started) / 20 < 0.05                          # well inside 50 ms per turn, lock included
+
+
+def test_a_normal_switch_that_takes_a_few_milliseconds_does_not_cost_the_turn_its_record(root, monkeypatch):
+    """A switch holds the lock for milliseconds, not the whole budget: a turn arriving then still waits and is saved."""
+    private_mode.set_private(root, False, "owner")
+    fd = os.open(root / "_mode.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    threading.Timer(0.008, lambda: os.close(fd)).start()                     # released after 8 ms, mode unchanged
+    assert ask(service()).history_saved is True and len(lines(root)) == 1
