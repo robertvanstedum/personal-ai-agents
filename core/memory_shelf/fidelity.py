@@ -70,7 +70,7 @@ def diff(expected: list[tuple], actual: list[tuple], label: str = "") -> list[di
 
 
 def shelf_turns(main: Path) -> list[tuple[int, str, str]]:
-    _, body = record.load(main.read_text("utf-8"))
+    _, body = record.load(record.read(main))
     return render.ordered_turns(render.parse_body(body))
 
 
@@ -125,7 +125,7 @@ def _source_turns(cfg: Config, meta: dict):
 
 def check_record(cfg: Config, main: Path) -> dict:
     """One record's F2 result: ``{"record", "status": ok|failed|skipped, "findings"|"reason"}``."""
-    meta, _ = record.load(main.read_text("utf-8"))
+    meta, _ = record.load(record.read(main))
     base = {"record": meta["id"]}
     got, reason = _source_turns(cfg, meta)
     if got is None:
