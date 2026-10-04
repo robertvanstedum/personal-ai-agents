@@ -459,6 +459,8 @@ is the fully verified picture (live `launchctl`/`docker`/`crontab`/`lsof` inspec
 | System bot (Mac-local standby) | — | launchd `com.vanstedum.system-bot` | **Distinct from the EC2 system-bot container** — code implements a deliberate standby/production token switch so the two never collide on the same Telegram token |
 | cloudflared, Colima | — | launchd | Tunnel + Docker runtime |
 | Usage report | cron 08:00 + 10:00 | `scripts/track_usage_wrapper.sh` | No matching crontab entry was present on the Mac when checked 2026-07-26; restore deliberately if this report is still wanted |
+| Memory watch | 04:00 daily | launchd `com.vanstedum.minimoi-memory-watch` | Runs `moi watch` for each approved memory source (claude-code, codex); job `memory-watch`; see "Scheduled jobs and launchd on the Mac" below |
+| Jobs watchdog | 09:00 daily | launchd `com.vanstedum.minimoi-jobs-watchdog` | Telegram message when a Mac job failed, never ran or is stuck; job `jobs-watchdog` |
 
 Dev-only by current design: Ollama (local models, `gemma3:1b`) and the nightly
 private-repo sync (`scripts/sync_private_repo.sh`, 02:00 local). The original
@@ -477,6 +479,26 @@ port in `lsof` is Colima's port-forwarder acting on the container's behalf, not 
 native listener. Both native curator launchd jobs (`com.user.curator-server`,
 `com.vanstedum.minimoi-curator`) were pre-Docker leftovers that could never bind, and
 are disabled as `*.plist.disabled-2026-09-08`.
+
+### Scheduled jobs and launchd on the Mac
+
+**Registry: `config/scheduled_jobs.json`.** It lists every scheduled job on any host (id, host, schedule, how long
+before a run counts as missed or stuck, status file, owner, runbook). Each job writes one status file under the
+jobs root (`MINIMOI_JOBS_ROOT`, default `~/minimoi-staging/data/jobs`): state, times, fixed result codes, never
+conversation text. The Guild Operate tile, the watchdog and a future Grafana/Prometheus exporter read only the registry
+and those files. Contract: `docs/jobs_status_contract.md`.
+
+| Job | What | Schedule | Log | Status file | Stop it |
+|---|---|---|---|---|---|
+| `memory-watch` (`com.vanstedum.minimoi-memory-watch`) | `scripts/memory/daily_watch.py`: `moi watch` for each **approved** source; an unapproved source is listed `not_approved`, never captured; the inbox is never run. Finishes `ok`, `warn` or `failed`; on `failed` sends one Telegram message. Exit 0 ok/warn, 1 failed, 2 wrapper broke | 04:00 daily (Mac local time, America/Chicago) | `~/minimoi-staging/logs/memory-watch.log` | `~/minimoi-staging/data/jobs/memory-watch.json` | `scripts/jobs/launchd.sh uninstall` |
+| `jobs-watchdog` (`com.vanstedum.minimoi-jobs-watchdog`) | `scripts/jobs/watchdog.py`: judges the other jobs on this host; one message per problem (failed, never ran, stuck, no completed run in 50 h) and one "recovered"; never judges itself | 09:00 daily | `~/minimoi-staging/logs/jobs-watchdog.log` | `~/minimoi-staging/data/jobs/jobs-watchdog.json` | `scripts/jobs/launchd.sh uninstall` |
+
+Install, remove or inspect both with `scripts/jobs/launchd.sh install|uninstall|status` (Robert runs it; the plists
+live in `infrastructure/launchd/`). To stop one job only: `launchctl bootout gui/$(id -u)/<label>`. To run the
+capture by hand: `venv/bin/python scripts/memory/daily_watch.py`. If a job's status file is missing or
+`running` for hours, read its log first; the watchdog's Telegram message names the job and the condition only.
+The Guild tile for these jobs is read-only and shows "not connected" until the staging overlay
+`docker-compose.staging-jobs.yml` is included.
 
 ## Mac restart protocol
 
