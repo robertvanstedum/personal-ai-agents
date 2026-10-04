@@ -126,14 +126,12 @@ def ensure_root(jobs_root: str | Path) -> Path:
     return root
 
 
-def write_status(jobs_root: str | Path, status_file: str, doc: dict) -> Path:
-    """Atomic write: temp file in the same folder, fsync, rename. Refuses a document that breaks the contract."""
-    if not validate(doc):
-        raise StatusError("document")
+def write_json_atomic(jobs_root: str | Path, name: str, obj: object) -> Path:
+    """Temp file in the same folder, fsync, rename; the file 0600, the folder 0700 (created if missing)."""
     root = ensure_root(jobs_root)
-    path = root / status_file
-    tmp = root / f".{status_file}.tmp-{os.getpid()}"
-    data = (json.dumps(doc, sort_keys=True, indent=1) + "\n").encode("utf-8")
+    path = root / name
+    tmp = root / f".{name}.tmp-{os.getpid()}"
+    data = (json.dumps(obj, sort_keys=True, indent=1) + "\n").encode("utf-8")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, FILE_MODE)
     try:
         os.write(fd, data)
@@ -143,6 +141,13 @@ def write_status(jobs_root: str | Path, status_file: str, doc: dict) -> Path:
     os.chmod(tmp, FILE_MODE)
     os.replace(tmp, path)
     return path
+
+
+def write_status(jobs_root: str | Path, status_file: str, doc: dict) -> Path:
+    """Atomic write of a status document. Refuses a document that breaks the contract."""
+    if not validate(doc):
+        raise StatusError("document")
+    return write_json_atomic(jobs_root, status_file, doc)
 
 
 def read_status(jobs_root: str | Path, status_file: str, job_id: str | None = None) -> dict | None:

@@ -93,7 +93,7 @@ matches the host that dir belongs to (the Mac staging dir: `mac`). Registry fiel
 `id name host schedule expected_every_s grace_s missed_after_s stuck_after_s active_from status_file`.
 Status fields used: `state started_at finished_at last_success_at next_due_by results summary`.
 
-**Per-job light** (first rule that matches wins; `now` is the portal clock):
+**Per-job light** (first rule that matches wins; `now` is the portal clock). `core.jobs.judge.judge(job, doc, now)` is the reference implementation of exactly these rules (it returns `state`, a fixed `code` and a `key`) and `judge.worst` is the summary precedence; call them, or copy the rules, but do not invent different ones:
 
 1. Status file missing, unreadable or corrupt (`read_status` is `None`): **red**, "never ran",
    only if the registry says a run was due, i.e. `active_from` is set and
@@ -120,5 +120,5 @@ file carries only codes and counts, so everything in it is safe to render.
 
 **Wiring notes.** The tile is an Operate tile, not a Shop floor light: `operate()` in
 `pages.py` looks tiles up in `state.lights` (floor lights), so either add a floor light with its own rule
-or compute extra lights for Operate tiles that have none. Add a classifier rule so a change under
-`core/jobs/` or `config/scheduled_jobs.json` redeploys only the portal (already in `classify_release.py`).
+or compute extra lights for Operate tiles that have none. A change under `core/jobs/` or
+`config/scheduled_jobs.json` already classifies as a portal-only release in `scripts/ci/classify_release.py`.
