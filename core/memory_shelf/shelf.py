@@ -25,8 +25,12 @@ no approval event: it never imports ``OwnerAuthority``.
 """
 from __future__ import annotations
 
+import fcntl
 import os
 import shutil
+import threading
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,6 +50,14 @@ MANUAL_PROVIDERS = frozenset({"paste", "claude-ai", "grok"})        # B7: manual
 # the same conversation (people reuse opening prompts). Flags need a paste side.
 FLAG_PROVIDERS = frozenset({"paste"})
 MAX_FLAGS = 5
+
+
+LOCK_WAIT_S = 300.0                         # how long a writer waits for another process before giving up (shelf_busy)
+_HELD = threading.local()                   # lock path -> [fd, depth]: re-entrant per thread, so nested writers do not deadlock
+
+
+class ShelfBusy(RuntimeError):
+    """Another process held the shelf's write lock for the whole wait."""
 
 
 @dataclass(frozen=True)
@@ -116,6 +128,46 @@ class Shelf:
     def index_path(self) -> Path: return self.ledger_dir / "source_index.json"
     @property
     def _dirty(self) -> Path: return self.ledger_dir / "index.dirty"
+
+    @property
+    def lock_path(self) -> Path: return self.ledger_dir / "shelf.lock"
+
+    @contextmanager
+    def lock(self, wait: float | None = None):
+        """The shelf's write lock, across processes (flock). Every read-modify-write of the source index, a record's
+        main file or its events happens inside it, so two writers (a scheduled watch and a manual ``moi`` run) cannot
+        each overwrite the other's update. Re-entrant within a thread. The kernel drops it if the holder dies."""
+        held = getattr(_HELD, "held", None)
+        if held is None:
+            held = _HELD.held = {}
+        key = str(self.lock_path)
+        if key in held:
+            held[key][1] += 1
+            try:
+                yield
+            finally:
+                held[key][1] -= 1
+            return
+        fsio.ensure_dir(self.lock_path.parent)
+        fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, fsio.FILE_MODE)
+        deadline = time.monotonic() + (LOCK_WAIT_S if wait is None else wait)
+        try:
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise ShelfBusy("the shelf is being written by another process") from None
+                    time.sleep(0.05)
+            held[key] = [fd, 1]
+            try:
+                yield
+            finally:
+                del held[key]
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
     def init_layout(self) -> None:
         for name in (*RECORD_KINDS, "outbox", "_ledger", "_status"):
@@ -211,9 +263,18 @@ class Shelf:
 
     # ── ingest ────────────────────────────────────────────────────────────────
     def ingest(self, bundle: Bundle) -> Result:
+        """Apply one bundle. The whole transaction (index read, edition and main writes, index write, ledger row) runs
+        under the shelf lock; a crash anywhere inside it is finished by running the same bundle again."""
         code = self.headroom()
         if code:
             return Result(codes.DISK_LOW, bundle.key, reason=code)
+        try:
+            with self.lock():
+                return self._ingest_locked(bundle)
+        except ShelfBusy:
+            return Result(codes.FAILED, bundle.key, reason="shelf_busy")
+
+    def _ingest_locked(self, bundle: Bundle) -> Result:
         self.init_layout()
         index = self.index()                       # rebuilt first if an earlier run died mid-write
         fsio.write_atomic(self._dirty, b"1")
@@ -253,7 +314,14 @@ class Shelf:
         stem = ulid.filename(bundle.title, meta["id"], "md")[:-3]
         folder = self.root / SESSION_DIR / stem
         if folder.exists():
-            raise FileExistsError                  # same short id, different record: refuse, never overwrite
+            existing = folder / f"{stem}.md"
+            if existing.is_file():
+                have, _ = record.load(record.read(existing))
+                if have["id"] != meta["id"]:
+                    raise FileExistsError          # same short id, different record: refuse, never overwrite
+                index[bundle.key] = self._entry_for(have, stem)     # an earlier run of this very bundle finished the record
+                return Result(codes.CAPTURED, bundle.key, have["id"])
+            # an earlier run saved the edition and stopped before the main file: finish it below (editions are idempotent)
         fsio.ensure_dir(folder)
         edition = editions.add_edition(folder, bundle.edition, "jsonl")
         meta["edition"], meta["edition_hash"] = edition.number, editions.digest(bundle.edition)
@@ -278,6 +346,12 @@ class Shelf:
         folder = main.parent
         have, new = (meta.get("normalized") or {}).get("normalizer", DEFAULT_NORMALIZER), \
             bundle.meta["normalized"].get("normalizer", DEFAULT_NORMALIZER)
+        new_hash = editions.digest(bundle.edition)
+        saved = editions.find(folder, bundle.edition)
+        if saved and meta.get("edition_hash") != new_hash and saved.number > int(meta.get("edition") or 0):
+            # An earlier run saved this edition and stopped before the main file moved on: finish the publication.
+            # (The edition file is never taken as proof that the record was updated.)
+            return self._publish(bundle, meta, main, saved.number, "recovered:interrupted-publication")
         note = None
         if bundle.source_hash in self._seen_hashes(folder, meta):
             if new <= have:
@@ -294,13 +368,18 @@ class Shelf:
         edition = editions.add_edition(folder, bundle.edition, "jsonl")
         if not edition.added:
             return Result(codes.UNCHANGED, bundle.key, meta["id"])
-        meta["edition"], meta["edition_hash"] = edition.number, editions.digest(bundle.edition)
+        return self._publish(bundle, meta, main, edition.number, note)
+
+    def _publish(self, bundle: Bundle, meta: dict, main: Path, number: int, note: str | None) -> Result:
+        """Point the main record at edition ``number`` (already saved) and record the event once."""
+        meta["edition"], meta["edition_hash"] = number, editions.digest(bundle.edition)
         meta["source_hash"], meta["normalized"] = bundle.source_hash, bundle.meta["normalized"]
         if bundle.retained:
             meta["retained"] = bundle.retained
-        meta["events"] = [*meta["events"], ev.make_event(
-            "edition-added", bundle.origin, now=self.now(), edition=edition.number, source_hash=bundle.source_hash,
-            note=note)]
+        if not any(e.get("kind") == "edition-added" and e.get("edition") == number for e in meta["events"]):
+            meta["events"] = [*meta["events"], ev.make_event(
+                "edition-added", bundle.origin, now=self.now(), edition=number, source_hash=bundle.source_hash,
+                note=note)]
         self._designate(meta, bundle)
         record.write(main, meta, bundle.body)
         return Result(codes.EDITION_ADDED, bundle.key, meta["id"])

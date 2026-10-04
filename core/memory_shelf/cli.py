@@ -13,6 +13,8 @@
     moi canary emit | check          write the canary into the inbox | audit it (read-only)
     moi ledger [--canary]            F1: captured vs expected exclusions vs missing
     moi fidelity [--sample N] [--canary]   F2 sample (read-only)
+    moi doctor                       read-only: does each record's main file agree with its own editions? counts and short ids
+    moi repair                       rebuild the body of records `doctor` finds unreadable, from their current edition (one typed "yes")
 
 **Titles stay in the owner's terminal.** ``moi list`` prints each record's stored title (a slug) and so needs a real
 TTY on stdin and stdout; under a pipe, a script or an agent's shell it refuses with ``not_interactive`` and prints nothing.
@@ -33,7 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
-from core.memory_shelf import approvals, backfill, canary, config, editions, fidelity, fsio, inbox, ledger, review, ulid, watchers, weight
+from core.memory_shelf import approvals, backfill, canary, config, editions, fidelity, fsio, inbox, ledger, repair, review, ulid, watchers, weight
 from core.memory_shelf.events import OwnerAuthority
 from core.memory_shelf.shelf import Shelf
 
@@ -214,6 +216,8 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
     sub.add_parser("drain")
     p = sub.add_parser("canary"); p.add_argument("action", choices=["emit", "check"])
     p = sub.add_parser("ledger"); p.add_argument("--canary", action="store_true")
+    sub.add_parser("doctor")
+    sub.add_parser("repair")
     p = sub.add_parser("fidelity"); p.add_argument("--sample", type=int, default=5); p.add_argument("--canary", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -228,6 +232,29 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
         return cmd_review(cfg, shelf, out)
     if args.cmd == "ledger":
         return cmd_ledger(shelf, out, args.canary)
+    if args.cmd == "doctor":
+        res = repair.inspect(shelf)
+        print(f"doctor\trecords={res['records']}\tstates={json.dumps(res['states'], sort_keys=True)}", file=out)
+        for state, short in res["ids"].items():
+            print(f"{state}\t{','.join(short)}", file=out)
+        return OK if set(res["states"]) <= {repair.OK, repair.MAIN_BEHIND} else REFUSED
+    if args.cmd == "repair":
+        res = repair.inspect(shelf)
+        todo = [i for state in repair.RECOVERABLE for i in res["ids"].get(state, [])]
+        if not todo:
+            print("repair\tnothing to repair", file=out)
+            return OK
+        auth = _authority(confirm, f"rebuild the body of {len(todo)} record{'s' if len(todo) != 1 else ''} from "
+                                   f"their editions (the old main file is kept under repairs/)", out)
+        if not auth:
+            return REFUSED
+        outcome: dict[str, int] = {}
+        for short in todo:
+            rid, why = shelf.resolve_id(short)
+            result = repair.recover(shelf, rid, now=now) if rid else why
+            outcome[result] = outcome.get(result, 0) + 1
+        print(f"repair\t{json.dumps(outcome, sort_keys=True)}", file=out)
+        return OK if set(outcome) <= {"repaired"} else REFUSED
     if args.cmd == "approve":
         auth = _authority(confirm, f"approve record {args.id}" + (f" under mandate {args.under}" if args.under else ""), out)
         if not auth:

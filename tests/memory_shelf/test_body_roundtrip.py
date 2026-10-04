@@ -13,7 +13,8 @@ from core.memory_shelf.config import SourceCfg
 from .helpers import make_shelf, write_tree
 from .test_codex_mediation import NOW, UUID_A, OWNER, approvals, copy, item, jl, meta, started
 
-TEXTS = ["line one\r\nline two", "old mac\rbreak", "ends with blanks  ", "ends with newlines\n\n", "ends crlf\r\n"]
+TEXTS = ["line one\r\nline two", "old mac\rbreak", "ends with blanks  ", "ends with newlines\n\n", "ends crlf\r\n",
+         "blank\n\n\nlines in the middle", "unicode h\u00e9llo \u2014 \u65e5\u672c\u8a9e \U0001F600 \u2028 line sep", "\ttab and trailing tab\t", "  leading spaces"]
 
 
 def record_text(last: str):
