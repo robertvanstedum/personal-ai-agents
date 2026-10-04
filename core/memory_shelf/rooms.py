@@ -9,7 +9,10 @@ never held up by it, because nothing in this module is on the path that accepts 
 
 **What a bundle must be (each failure is one fixed code, nothing else):**
 the directory name matches the format; the three files are regular, not links, and nothing else is there; the manifest
-is the typed shape with the supported schema; every file's length and sha256 match the manifest; the directory name
+is the typed shape with a supported schema (1.0, or 1.1 which adds typed execution evidence to agent turns; a **newer
+minor of major 1 is refused with its own code, ``unsupported_minor``**, and any other family or major with
+``unsupported_schema``: a newer minor may add fields that matter to identity, timestamps or attribution, so it is taught
+deliberately, with fixtures, and never half-read); every file's length and sha256 match the manifest; the directory name
 equals the identity recomputed from the files; the manifest, the transcript and the name agree on session and
 revision; the transcript has the typed shape; the bundle comes from the approved source instance.
 
@@ -41,7 +44,8 @@ from core.memory_shelf import bundle as bundles
 from core.memory_shelf.config import SourceCfg, never_copied
 from core.memory_shelf.sessions import ASSISTANT, HUMAN, Parsed
 
-SCHEMA_VERSION = "minimoi.transcript/1.0"
+SCHEMA_FAMILY = "minimoi.transcript"
+SUPPORTED_SCHEMAS = ("minimoi.transcript/1.0", "minimoi.transcript/1.1")   # 1.1: Rooms R1 execution evidence on agent turns
 FILES = ("manifest.json", "transcript.json", "transcript.md")
 PAYLOAD = ("transcript.json", "transcript.md")
 MAX_FILE = 64 * 1024 * 1024
@@ -51,6 +55,8 @@ NORMALIZER = 1
 _UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _NAME = re.compile(rf"^({_UUID})-r(\d+)-([0-9a-f]{{64}})$")
 _ID = re.compile(rf"^{_UUID}$")
+_SCHEMA = re.compile(rf"^{re.escape(SCHEMA_FAMILY)}/(\d+)\.(\d+)$")
+_HEX32 = re.compile(r"^[0-9a-f]{32}$")
 _ACTOR = re.compile(r"^[a-z][a-z0-9_-]{0,59}$(?![\s\S])")
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 _TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
@@ -168,6 +174,17 @@ def _is(value, kind) -> bool:
     return isinstance(value, kind) and not isinstance(value, bool)
 
 
+def schema_gate(version) -> str:
+    """The supported schema string, or ``Refusal``: another family or major is ``unsupported_schema``; a 1.x minor this
+    reader has not been taught is ``unsupported_minor`` (fail closed, distinct, so it is visible and can be taught)."""
+    match = _SCHEMA.match(version) if isinstance(version, str) else None
+    if not match or int(match.group(1)) != 1:
+        raise Refusal(codes.UNSUPPORTED_SCHEMA)
+    if version not in SUPPORTED_SCHEMAS:
+        raise Refusal(codes.UNSUPPORTED_MINOR)
+    return version
+
+
 def _manifest(doc: dict) -> dict:
     need = {"bundle_id": str, "schema_version": str, "renderer_version": str, "source_instance_id": str,
             "session_id": str, "source_revision": int, "through_seq": int, "generated_at": str, "snapshot_at": str,
@@ -175,8 +192,7 @@ def _manifest(doc: dict) -> dict:
     for key, kind in need.items():
         if not _is(doc.get(key), kind):
             raise Refusal(codes.BAD_MANIFEST)
-    if doc["schema_version"] != SCHEMA_VERSION:
-        raise Refusal(codes.UNSUPPORTED_SCHEMA)
+    schema_gate(doc["schema_version"])
     if not (_ID.match(doc["source_instance_id"]) and _ID.match(doc["session_id"]) and doc["session_state"] in STATES
             and doc["source_revision"] >= 0 and doc["through_seq"] >= 0 and set(doc["files"]) == set(PAYLOAD)):
         raise Refusal(codes.BAD_MANIFEST)
@@ -222,9 +238,35 @@ def _nullable_time(value) -> bool:
     return value is None or (isinstance(value, str) and bool(_TIME.match(value)))
 
 
-def _shape(doc: dict) -> None:
+LEGACY_EXECUTION = {"coordination_request_id": lambda v: isinstance(v, str) and bool(_ID.match(v)),
+                    "openclaw_run_id": lambda v: isinstance(v, str)}
+ROOMS_REQUIRED = {"turn_id": lambda v: isinstance(v, str) and bool(_ID.match(v)),
+                  "claim_id": lambda v: isinstance(v, str) and bool(_ID.match(v)),
+                  "attempt": lambda v: _is(v, int) and v >= 1,
+                  "coordinating_installation": lambda v: isinstance(v, str),
+                  "caller_correlation": lambda v: isinstance(v, str) and bool(_HEX32.match(v))}
+ROOMS_OPTIONAL = {"upstream_execution_id": lambda v: v is None or isinstance(v, str),
+                  "usage_evidence_status": lambda v: v in ("reported", "none"),
+                  "prompt_tokens": lambda v: _is(v, int) and v >= 0, "completion_tokens": lambda v: _is(v, int) and v >= 0}
+
+
+def execution_ok(execution, schema: str) -> bool:
+    """A record's ``execution`` under the declared schema, exactly the exporter's two strict shapes: the legacy one
+    (1.0 and 1.1) or, in 1.1 only, the typed Rooms evidence (every required field, no unknown field)."""
+    if not isinstance(execution, dict):
+        return False
+    keys = set(execution)
+    if keys <= set(LEGACY_EXECUTION) and all(LEGACY_EXECUTION[k](execution[k]) for k in keys):
+        return True
+    if schema != "minimoi.transcript/1.1":
+        return False
+    allowed = {**ROOMS_REQUIRED, **ROOMS_OPTIONAL, **LEGACY_EXECUTION}
+    return set(ROOMS_REQUIRED) <= keys <= set(allowed) and all(allowed[k](execution[k]) for k in keys)
+
+
+def _shape(doc: dict, schema: str) -> None:
     """The typed shape of ``transcript.json`` (a local check; no schema library, no remote resolution)."""
-    ok = (doc.get("schema_version") == SCHEMA_VERSION and isinstance(doc.get("session"), dict)
+    ok = (doc.get("schema_version") == schema and isinstance(doc.get("session"), dict)
           and isinstance(doc.get("coverage"), dict) and isinstance(doc.get("raw_transcript"), list)
           and isinstance(doc.get("participants"), list) and isinstance(doc.get("notes"), list)
           and isinstance(doc.get("references"), list) and _is(doc.get("source_revision"), int)
@@ -250,6 +292,17 @@ def _shape(doc: dict) -> None:
         for link in ("reply_to_record_id", "corrects_record_id"):
             if r.get(link) is not None and not _ID.match(str(r[link])):
                 raise Refusal(codes.BAD_TRANSCRIPT)
+        for key in ("agent_id", "model", "source_application", "material_class"):
+            if r.get(key) is not None and not isinstance(r[key], str):
+                raise Refusal(codes.BAD_TRANSCRIPT)
+        through = r.get("context_through_seq")
+        if through is not None and not (_is(through, int) and 0 <= through < r["seq"]):
+            raise Refusal(codes.BAD_TRANSCRIPT)
+        if "execution" in r and not execution_ok(r["execution"], schema):
+            raise Refusal(codes.BAD_TRANSCRIPT)
+        if r["origin_assurance"] == "verified" and not all(isinstance(r.get(k), str) and r[k].strip()
+                                                           for k in ("evidence_reference", "verification_method")):
+            raise Refusal(codes.BAD_TRANSCRIPT)
         if r["record_id"] in seen:
             raise Refusal(codes.BAD_TRANSCRIPT)
         seen.add(r["record_id"])
@@ -299,7 +352,9 @@ def read_bundle(path: Path, cfg: SourceCfg) -> Read:
     """Verify, check identity, apply D2, and turn one bundle into a ``Parsed``. Raises ``Refusal`` / ``Excluded``."""
     manifest, payload = verify_bundle(path)
     doc = _load(payload["transcript.json"], codes.BAD_TRANSCRIPT)
-    _shape(doc)
+    if doc.get("schema_version") != manifest["schema_version"]:
+        raise Refusal(codes.BAD_IDENTITY)                     # the manifest and the transcript must declare the same schema
+    _shape(doc, manifest["schema_version"])
     if not (doc["source_instance_id"] == manifest["source_instance_id"] and doc["session"]["session_id"] == manifest["session_id"]
             and doc["source_revision"] == manifest["source_revision"] and doc["through_seq"] == manifest["through_seq"]
             and doc["session"]["state"] == manifest["session_state"]):
@@ -328,6 +383,8 @@ def _parse(doc: dict, manifest: dict, roles: dict[str, str]) -> Parsed:
             continue
         attrs = {"who": r["speaker_id"], "seq": r["seq"], "kind": r["kind"], "rid": r["record_id"],
                  "ing": r["ingested_at"], "label": r["speaker_label"]}
+        if isinstance(r.get("execution"), dict) and r["execution"].get("turn_id"):
+            attrs["turn"] = r["execution"]["turn_id"]           # links the agent's reply to its Rooms turn, in the readable view
         if r.get("source_created_at"):
             attrs["ts"] = r["source_created_at"]
         for key, src in (("reply", "reply_to_record_id"), ("corrects", "corrects_record_id")):
@@ -354,7 +411,9 @@ def _parse(doc: dict, manifest: dict, roles: dict[str, str]) -> Parsed:
                        "session_state": session["state"], "publication_status": manifest["publication_status"],
                        "participants": len(doc["participants"]), "notes": len(doc["notes"]),
                        "references": len(doc["references"]), "declared_coverage": doc["coverage"],
-                       "transcript_schema": SCHEMA_VERSION}
+                       "transcript_schema": doc["schema_version"],
+                       "execution_records": sum(1 for r in records if isinstance(r.get("execution"), dict)
+                                                and set(ROOMS_REQUIRED) <= set(r["execution"]))}
     omissions = [o for o in (doc["coverage"].get("omissions") or []) if isinstance(o, str)]
     empties = sum(1 for r in records if not r["text"].strip())
     gap = max(0, len(records) - len(parsed.turns) - empties)

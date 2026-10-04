@@ -51,13 +51,32 @@ def default_records() -> list[dict]:
             record(4, OWNER, "Decision: read path first.", kind="recorded_decision")]
 
 
+V10, V11 = "minimoi.transcript/1.0", "minimoi.transcript/1.1"
+
+
+def execution(n: int = 1, **over) -> dict:
+    """Rooms R1 typed execution evidence, as the exporter writes it for a committed agent turn."""
+    ev = {"turn_id": uid(n, "e"), "claim_id": uid(n, "f"), "attempt": 1, "coordinating_installation": "install-test-1",
+          "caller_correlation": "a" * 32, "upstream_execution_id": None, "usage_evidence_status": "none"}
+    ev.update(over)
+    return ev
+
+
+def agent_turn(n: int, speaker: str, text: str, *, reply=None, ev: dict | None = None, **extra) -> dict:
+    """A committed agent record the way the 1.1 exporter maps it: declared origin, context coverage, execution evidence."""
+    base = dict(execution=ev if ev is not None else execution(n), context_through_seq=n - 1, model=None,
+                agent_id="mc-agent", source_application="rooms_worker")
+    base.update(extra)
+    return record(n, speaker, text, reply=reply, **base)
+
+
 def document(*, instance=INSTANCE, session=SESSION, revision=1, state="closed", records=None, participants=None,
-             notes=None, references=None, coverage=None, title="Migration planning") -> dict:
+             notes=None, references=None, coverage=None, title="Migration planning", schema=V10) -> dict:
     records = default_records() if records is None else records
     participants = participants if participants is not None else [person(OWNER, "human"), person("agent-a", "agent"),
                                                                   person("agent-b", "agent")]
     through = max((r["seq"] for r in records), default=0)
-    return {"schema_version": "minimoi.transcript/1.0", "source_instance_id": instance, "source_revision": revision,
+    return {"schema_version": schema, "source_instance_id": instance, "source_revision": revision,
             "through_seq": through,
             "coverage": coverage or {"scope": "authorized_owner_full", "accepted_submissions_only": True, "gaps": [],
                                      "unknown_fields": ["raw_transcript.source_created_at"], "omissions": []},
@@ -75,7 +94,7 @@ def write_bundle(root: Path, doc: dict | None = None, *, md: bytes = b"# rendere
              "transcript.md": md}
     material = b"".join(n.encode() + b"\0" + files[n] for n in sorted(files))
     identity = f"{doc['session']['session_id']}-r{doc['source_revision']}-{hashlib.sha256(material).hexdigest()}"
-    manifest = {"bundle_id": identity, "schema_version": "minimoi.transcript/1.0", "renderer_version": "minimoi.transcript.markdown/1.0",
+    manifest = {"bundle_id": identity, "schema_version": doc["schema_version"], "renderer_version": "minimoi.transcript.markdown/1.0",
                 "source_instance_id": doc["source_instance_id"], "session_id": doc["session"]["session_id"],
                 "source_revision": doc["source_revision"], "through_seq": doc["through_seq"],
                 "generated_at": "2026-10-04T09:30:00Z", "snapshot_at": "2026-10-04T09:29:00Z",

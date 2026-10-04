@@ -48,13 +48,39 @@ excluded or refused), `moi approve-source rooms` (typed yes), then it runs with 
 * **Inert:** references are kept as data, never followed; attachments are not copied; instructions inside a transcript are only text.
   A recorded Rooms decision is attributed source evidence, never an owner-approval event, and no "file this" in a room designates it.
 * **Refusals** (fixed codes, nothing else): `bad_bundle_files`, `bad_manifest`, `unsupported_schema`, `hash_mismatch`, `bad_identity`,
-  `bad_transcript`, `too_large`, `wrong_source`. Links, scratch (`.pending-*`), quarantine and unknown names are counted and never opened.
+  `bad_transcript`, `unsupported_minor`, `too_large`, `wrong_source`. Links, scratch (`.pending-*`), quarantine and unknown names are counted and never opened.
 
 ## What the record keeps beyond a Claude Code or Codex record (additive, shared contract)
 Per turn: stable speaker id (`who`), sequence, record id, kind, reply and correction links, timestamps (source time stays unknown when the
 source did not have it; ingest time is kept separately) in the frame; the label as supplied and the other source fields in the edition.
 Typed notes and references follow the turns as framed blocks. The record manifest has revision, state, through-sequence, participants
 (id, kind, owner/agent role, label), counts and the exporter's declared coverage. Fidelity compares speaker identity as well as text.
+
+## Schema versions (1.0, 1.1) and newer minors
+The exporter writes `minimoi.transcript/1.0`, or **1.1 when a committed agent turn carries Rooms R1 execution evidence**. The
+adapter reads both, validated against each version's own rules (not relabelled): in 1.0 a record's `execution` may only be the legacy
+shape (`coordination_request_id`, `openclaw_run_id`); in 1.1 it is the legacy shape or the typed evidence with every required field
+(`turn_id`, `claim_id`, `attempt >= 1`, `coordinating_installation`, 32-hex `caller_correlation`) plus optional `upstream_execution_id`,
+`usage_evidence_status` (`reported`|`none`), token counts, and nothing else. Agent provenance fields are checked the exporter's way
+(`context_through_seq` precedes the record, `model`/`agent_id`/`source_application` are text or absent, `verified` origin needs its
+evidence). The manifest and the transcript must declare the same schema. The record keeps the schema (`transcript_schema`), the number
+of records with typed execution evidence, and, per turn, the evidence itself in the edition and `turn=<id>` in the readable view.
+
+**An unknown minor is refused, not half-read:** `1.2` (any other `1.x`) fails closed with `unsupported_minor`; another family or major
+(`2.0`, a different name, garbage) with `unsupported_schema`. A newer minor may add fields that matter to identity, time or attribution;
+it is taught on purpose, with fixtures, and until then it shows in the counts as a refusal and warns in the daily job.
+
+D2 and D8 do not depend on the version. D8 scrubs free text in the new fields (installation names, upstream ids) but leaves a value that is
+**wholly** a machine id (uuid, 32/64 hex, ISO time) alone, because the payment scrub reads a digit-heavy uuid as a card number and would
+rewrite the id; prose that contains an id is still scrubbed.
+
+## Real-exporter check (opt-in)
+`tests/memory_shelf/rooms_exporter_harness.py` builds real bundles with Records' own exporter in a throwaway store (a 1.1 meeting with a
+committed MC turn carrying execution evidence, and a plain 1.0 meeting) and the test feeds them through the adapter, D2 and the shelf.
+It needs Flask and jsonschema (not installed in the project venv) and a Records checkout:
+`RECORDS_EXPORTER_DIR=<checkout>/prototype-lab/projects/project-records-room-poc pytest tests/memory_shelf/test_rooms.py -k real_exporter`.
+**It has not been run yet** (no network install here; the harness mirrors Records' own `test_rooms_r1.py` fixture and may need a small
+fix on first run). The synthetic 1.1 fixtures follow the exporter's emitted shape field for field.
 
 ## Counts and status
 `moi watch rooms` prints `watch\trooms\tok\t{counts}`: `captured`, `edition-added`, `unchanged`, `excluded`, `refused`, the reason codes,

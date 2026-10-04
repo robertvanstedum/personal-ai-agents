@@ -51,8 +51,17 @@ def scrub_text(text: str) -> tuple[str, bool]:
     return second, changed or first != text
 
 
+# A value that is *entirely* a machine identifier (uuid, 32 or 64 hex, an ISO time) is provenance, not prose: the payment
+# scrub reads a run of digits in a uuid as a card number and would rewrite the id, breaking every link to it.
+_MACHINE_ID = re.compile(r"^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32}|[0-9a-f]{64}"
+                         r"|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))$")
+
+
 def _scrub_value(value, counter: list):
-    """Scrub every string inside a JSON-like value; count the strings that changed."""
+    """Scrub every free-text string inside a JSON-like value; count the strings that changed. A string that is wholly a
+    machine identifier is left alone (see ``_MACHINE_ID``); anything else, including text that contains an id, is scrubbed."""
+    if isinstance(value, str) and _MACHINE_ID.match(value):
+        return value
     if isinstance(value, str):
         text, was = scrub_text(value)
         counter[0] += was
@@ -99,7 +108,7 @@ def _pointer_line(pointer: tuple) -> str:
     return f"[omitted: {one_line(kind, 80)}, source line {line}{tail}]\n"
 
 
-FRAME_KEYS = ("who", "seq", "kind", "rid", "reply", "corrects", "ts", "ing")
+FRAME_KEYS = ("who", "seq", "kind", "rid", "reply", "corrects", "ts", "ing", "turn")
 BLOCK_KEYS = ("id", "author", "kind", "version", "seq", "ref")
 _ATTR = re.compile(r"^[A-Za-z0-9_:.+-]{1,64}$")
 

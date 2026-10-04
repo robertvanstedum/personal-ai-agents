@@ -646,3 +646,229 @@ def test_the_job_wrapper_reads_exclusions_and_refusals_as_counts(world):
     approved(shelf, source)
     out = run(shelf, source)
     assert set(out["counts"]) <= {codes.CAPTURED, codes.EDITION_ADDED, codes.EXCLUDED, codes.REFUSED, "skipped_unchanged"}
+
+
+# ── schema 1.0 and 1.1 (Rooms R1 execution evidence), and what a newer minor does ───────────────────────
+
+def doc11(**kw):
+    recs = [fx.record(1, "robert", "Please review the plan"),
+            fx.agent_turn(2, "agent-a", "Reviewed: read path first", reply=fx.uid(1, "a")),
+            fx.record(3, "robert", "Thanks")]
+    return fx.document(schema=fx.V11, records=kw.pop("records", recs), **kw)
+
+
+def captured(world, doc):
+    shelf, root, _ = world
+    fx.write_bundle(root, doc)
+    source = fx.cfg(root)
+    approved(shelf, source)
+    return shelf, source, run(shelf, source)
+
+
+def edition_rows(shelf):
+    (path,) = main_files(shelf)
+    lines = editions.list_editions(path.parent)[-1].path.read_text().splitlines()
+    return path, json.loads(lines[0]), [json.loads(l) for l in lines[1:]]
+
+
+def test_a_1_1_bundle_with_agent_execution_evidence_is_ingested_and_the_evidence_is_kept_typed(world):
+    shelf, source, out = captured(world, doc11())
+    assert out["counts"] == {codes.CAPTURED: 1}
+    path, head, rows = edition_rows(shelf)
+    meta, body = load(path)
+    assert meta["normalized"]["transcript_schema"] == fx.V11 and meta["normalized"]["execution_records"] == 1
+    agent = [r for r in rows if r.get("attrs", {}).get("who") == "agent-a"][0]
+    assert agent["attrs"]["execution"] == fx.execution(2) and agent["attrs"]["context_through_seq"] == 1
+    assert agent["attrs"]["agent_id"] == "mc-agent" and agent["attrs"]["source_application"] == "rooms_worker"
+    assert agent["attrs"]["origin"] == "declared" and "model" not in agent["attrs"]            # unknown stays absent
+    turns = render.parse_body(body)
+    assert turns[1].attrs["turn"] == fx.uid(2, "e") and turns[1].who == "agent-a" and turns[0].attrs.get("turn") is None
+
+
+def test_a_1_0_bundle_still_reads_exactly_as_before_and_records_its_schema(world):
+    shelf, source, out = captured(world, fx.document())
+    assert out["counts"] == {codes.CAPTURED: 1}
+    meta, _ = load(main_files(shelf)[0])
+    assert meta["normalized"]["transcript_schema"] == fx.V10 and meta["normalized"]["execution_records"] == 0
+
+
+def test_a_session_exported_as_1_0_then_1_1_keeps_both_editions_and_the_newer_schema_is_current(world):
+    shelf, root, _ = world
+    fx.write_bundle(root, fx.document(revision=1, state="active", records=fx.default_records()[:2]))
+    source = fx.cfg(root)
+    approved(shelf, source)
+    run(shelf, source)
+    fx.write_bundle(root, doc11(revision=2))
+    assert run(shelf, source)["counts"].get(codes.EDITION_ADDED) == 1
+    (path,) = main_files(shelf)
+    assert load(path)[0]["normalized"]["transcript_schema"] == fx.V11 and len(editions.list_editions(path.parent)) == 2
+
+
+def test_legacy_execution_shapes_are_accepted_under_both_versions(world, tmp_path):
+    for schema, name in ((fx.V10, "a"), (fx.V11, "b")):
+        sub = tmp_path / name
+        sub.mkdir()
+        recs = [fx.record(1, "robert", "hi"), fx.record(2, "agent-a", "ok", execution={"openclaw_run_id": "run-7"}),
+                fx.record(3, "agent-b", "ok", execution={"coordination_request_id": fx.uid(9, "e"), "openclaw_run_id": "r"}),
+                fx.record(4, "agent-a", "fine", execution={})]
+        fx.write_bundle(sub, fx.document(schema=schema, records=recs))
+        shelf = make_shelf(tmp_path, f"shelf-{name}")
+        source = fx.cfg(sub)
+        approved(shelf, source)
+        assert run(shelf, source)["counts"] == {codes.CAPTURED: 1}, schema
+
+
+@pytest.mark.parametrize("bad", [
+    lambda ev: ev.pop("claim_id"),
+    lambda ev: ev.pop("turn_id"),
+    lambda ev: ev.__setitem__("caller_correlation", "not-hex"),
+    lambda ev: ev.__setitem__("caller_correlation", "A" * 32),
+    lambda ev: ev.__setitem__("attempt", 0),
+    lambda ev: ev.__setitem__("attempt", "1"),
+    lambda ev: ev.__setitem__("usage_evidence_status", "estimated"),
+    lambda ev: ev.__setitem__("prompt_tokens", -1),
+    lambda ev: ev.__setitem__("surprise", 1),
+    lambda ev: ev.__setitem__("turn_id", "not-a-uuid"),
+], ids=["no-claim", "no-turn", "corr-not-hex", "corr-upper", "attempt-0", "attempt-str", "usage-status", "tokens-neg", "extra-key", "turn-not-uuid"])
+def test_a_1_1_execution_that_breaks_the_exporters_strict_shape_is_refused(world, bad):
+    ev = fx.execution(2)
+    bad(ev)
+    recs = [fx.record(1, "robert", "q"), fx.agent_turn(2, "agent-a", "a", ev=ev)]
+    shelf, source, out = captured(world, fx.document(schema=fx.V11, records=recs))
+    assert out["counts"].get(codes.BAD_TRANSCRIPT) == 1 and main_files(shelf) == []
+
+
+def test_rooms_execution_evidence_is_not_valid_inside_a_1_0_document(world):
+    recs = [fx.record(1, "robert", "q"), fx.agent_turn(2, "agent-a", "a")]
+    shelf, source, out = captured(world, fx.document(schema=fx.V10, records=recs))
+    assert out["counts"].get(codes.BAD_TRANSCRIPT) == 1 and main_files(shelf) == []
+
+
+def test_a_newer_minor_is_refused_with_its_own_code_and_other_families_with_another(world, tmp_path):
+    cases = {"minimoi.transcript/1.2": codes.UNSUPPORTED_MINOR, "minimoi.transcript/1.10": codes.UNSUPPORTED_MINOR,
+             "minimoi.transcript/2.0": codes.UNSUPPORTED_SCHEMA, "minimoi.transcript/1": codes.UNSUPPORTED_SCHEMA,
+             "other.transcript/1.0": codes.UNSUPPORTED_SCHEMA, "": codes.UNSUPPORTED_SCHEMA}
+    for n, (version, code) in enumerate(cases.items()):
+        sub = tmp_path / f"v{n}"
+        sub.mkdir()
+        fx.write_bundle(sub, fx.document(schema=version))
+        shelf = make_shelf(tmp_path, f"s{n}")
+        source = fx.cfg(sub)
+        approved(shelf, source)
+        out = run(shelf, source)
+        assert out["counts"].get(code) == 1 and out["counts"].get(codes.REFUSED) == 1, (version, out)
+        assert main_files(shelf) == []
+
+
+def test_the_manifest_and_the_transcript_must_declare_the_same_schema(world):
+    doc = doc11()
+    shelf, root, _ = world
+    fx.write_bundle(root, doc, manifest_extra={"schema_version": fx.V10})
+    source = fx.cfg(root)
+    approved(shelf, source)
+    assert run(shelf, source)["counts"].get(codes.BAD_IDENTITY) == 1
+
+
+def test_d2_applies_unchanged_to_1_1_bundles(world):
+    people = [fx.person("robert", "human"), fx.person("agent-a", "agent"), fx.person("guest-1", "human")]
+    recs = [fx.record(1, "robert", "q"), fx.agent_turn(2, "agent-a", "a"), fx.record(3, "guest-1", GUEST_TEXT)]
+    shelf, source, out = captured(world, fx.document(schema=fx.V11, participants=people, records=recs))
+    assert out["counts"].get(codes.OTHER_PARTICIPANT) == 1 and main_files(shelf) == []
+    assert GUEST_TEXT not in "".join(p.read_text(errors="ignore") for p in Path(shelf.root).rglob("*") if p.is_file())
+
+
+def test_unknown_identity_in_a_1_1_agent_turn_fails_closed(world):
+    people = [fx.person("robert", "human"), fx.person("agent-a", "unknown")]
+    shelf, source, out = captured(world, fx.document(schema=fx.V11, participants=people, records=[
+        fx.record(1, "robert", "q"), fx.agent_turn(2, "agent-a", "a")]))
+    assert out["counts"].get(codes.UNKNOWN_PARTICIPANT) == 1 and main_files(shelf) == []
+
+
+def test_d8_scrubs_free_text_in_the_new_fields_and_leaves_the_provenance_ids_alone(world):
+    clean = doc11()
+    shelf, source, out = captured(world, clean)
+    meta, _ = load(main_files(shelf)[0])
+    assert "redacted_fields" not in meta["normalized"]                                   # uuids and hex ids were not touched
+    path, head, rows = edition_rows(shelf)
+    assert [r for r in rows if r.get("attrs", {}).get("who") == "agent-a"][0]["attrs"]["execution"] == fx.execution(2)
+
+
+def test_a_secret_in_execution_evidence_text_is_scrubbed_and_counted(tmp_path):
+    root = tmp_path / "t"
+    root.mkdir()
+    shelf = make_shelf(tmp_path)
+    ev = fx.execution(2, coordinating_installation=f"host key {FAKE_KEY}", upstream_execution_id=f"run {FAKE_KEY}")
+    fx.write_bundle(root, fx.document(schema=fx.V11, records=[fx.record(1, "robert", "q"), fx.agent_turn(2, "agent-a", "a", ev=ev)]))
+    source = fx.cfg(root)
+    approved(shelf, source)
+    assert run(shelf, source)["counts"] == {codes.CAPTURED: 1}
+    (path,) = main_files(shelf)
+    everything = path.read_text() + "".join(e.path.read_text() for e in editions.list_editions(path.parent))
+    assert FAKE_KEY not in everything and load(path)[0]["normalized"]["redacted_fields"] >= 1
+
+
+def test_fidelity_passes_on_a_1_1_record_and_notices_a_changed_agent(world):
+    shelf, source, out = captured(world, doc11())
+    config = Config(shelf_root=shelf.root, sources={"rooms": source})
+    (path,) = main_files(shelf)
+    assert fidelity.check_record(config, path)["status"] == "ok"
+    meta, body = load(path)
+    path.write_bytes(record.dump(meta, body.replace("who=agent-a", "who=agent-b")).encode())
+    assert fidelity.check_record(config, path)["status"] == "failed"
+
+
+# ── the real exporter (opt-in: needs Records' dependencies and its checkout) ────────────────────────────
+
+EXPORTER_DIR = os.environ.get("RECORDS_EXPORTER_DIR", "")
+
+
+def _exporter_ready():
+    try:
+        import jsonschema, flask  # noqa: F401
+    except ImportError:
+        return False
+    return bool(EXPORTER_DIR) and (Path(EXPORTER_DIR) / "transcript_publish.py").is_file()
+
+
+@pytest.mark.skipif(not _exporter_ready(), reason="set RECORDS_EXPORTER_DIR to a Records checkout with Flask and jsonschema installed")
+def test_bundles_made_by_the_real_exporter_flow_through_the_adapter_d2_and_the_shelf(tmp_path):
+    from .rooms_exporter_harness import make_real_bundles
+    root = tmp_path / "transcripts"
+    owner_ids, instance = make_real_bundles(Path(EXPORTER_DIR), tmp_path / "records", root)
+    shelf = make_shelf(tmp_path)
+    source = fx.cfg(root, owners=owner_ids, instance=instance)
+    approved(shelf, source)
+    out = run(shelf, source)
+    assert out["counts"].get(codes.REFUSED) is None and out["counts"].get(codes.CAPTURED, 0) + out["counts"].get(codes.EDITION_ADDED, 0) >= 2, out
+    schemas = {load(p)[0]["normalized"]["transcript_schema"] for p in main_files(shelf)}
+    assert schemas == {fx.V10, fx.V11}
+
+
+def test_an_id_that_looks_like_a_card_number_survives_but_prose_around_a_real_one_does_not():
+    digits = "1234-5678-9012-3456-789012345678"
+    uid_like = "12345678-1234-5678-9012-345678901234"
+    changed = [0]
+    assert render._scrub_value(uid_like, changed) == uid_like and changed[0] == 0
+    assert render._scrub_value({"id": uid_like, "note": f"paid with 4111 1111 1111 1111 for {uid_like}"}, changed)["id"] == uid_like
+    assert "4111" not in render._scrub_value("card 4111 1111 1111 1111", changed)
+
+
+@pytest.mark.parametrize("change", [{"context_through_seq": 2}, {"context_through_seq": 5}, {"context_through_seq": -1},
+                                    {"context_through_seq": "1"}, {"model": 7}, {"agent_id": 3},
+                                    {"origin_assurance": "verified"},
+                                    {"origin_assurance": "verified", "evidence_reference": "e", "verification_method": " "}])
+def test_agent_provenance_fields_that_break_the_exporters_rules_are_refused(world, change):
+    rec = fx.agent_turn(2, "agent-a", "a")
+    rec.update(change)
+    shelf, source, out = captured(world, fx.document(schema=fx.V11, records=[fx.record(1, "robert", "q"), rec]))
+    assert out["counts"].get(codes.BAD_TRANSCRIPT) == 1 and main_files(shelf) == []
+
+
+def test_verified_origin_with_its_evidence_and_a_context_marker_before_the_turn_is_accepted(world):
+    rec = fx.agent_turn(2, "agent-a", "a", origin_assurance="verified", evidence_reference="receipt-9",
+                        verification_method="signed receipt", model="model-x")
+    shelf, source, out = captured(world, fx.document(schema=fx.V11, records=[fx.record(1, "robert", "q"), rec]))
+    assert out["counts"] == {codes.CAPTURED: 1}
+    _, _, rows = edition_rows(shelf)
+    attrs = [r for r in rows if r.get("attrs", {}).get("who") == "agent-a"][0]["attrs"]
+    assert attrs["origin"] == "verified" and attrs["model"] == "model-x" and attrs["evidence_reference"] == "receipt-9"

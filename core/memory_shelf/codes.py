@@ -51,4 +51,5 @@ BAD_BUNDLE_FILES = "bad_bundle_files"        # missing, extra, linked or special
 HASH_MISMATCH = "hash_mismatch"              # a file does not match its manifest length or sha256
 BAD_IDENTITY = "bad_identity"                # name, manifest and transcript disagree about which session and revision
 BAD_TRANSCRIPT = "bad_transcript"            # transcript.json is not the typed shape
-UNSUPPORTED_SCHEMA = "unsupported_schema"
+UNSUPPORTED_SCHEMA = "unsupported_schema"   # not a transcript schema this reader knows (another family or major version)
+UNSUPPORTED_MINOR = "unsupported_minor"    # a 1.x minor version this reader has not been taught: refused, never half-read
