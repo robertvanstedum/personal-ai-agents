@@ -39,7 +39,11 @@ from core.memory_shelf.bundle import OWNER_ACTOR, Bundle
 
 RECORD_KINDS = ("sessions-raw", "sessions", "notes", "turns", "snapshots", "briefs")
 SESSION_DIR = "sessions-raw"
-MANUAL_PROVIDERS = frozenset({"paste", "claude-ai", "grok"})        # B7: where title/date overlap is worth a flag
+MANUAL_PROVIDERS = frozenset({"paste", "claude-ai", "grok"})        # B7: manual submissions (inbox)
+# Only a paste can be an early edition of another record (B7): two exported or
+# watched records carry their own source ids, so overlap between them is never
+# the same conversation (people reuse opening prompts). Flags need a paste side.
+FLAG_PROVIDERS = frozenset({"paste"})
 MAX_FLAGS = 5
 
 
@@ -283,7 +287,7 @@ class Shelf:
         for key, other in index.items():
             if key == bundle.key or other.get("kind") == "canary":
                 continue
-            if bundle.provider not in MANUAL_PROVIDERS and other.get("provider") not in MANUAL_PROVIDERS:
+            if bundle.provider not in FLAG_PROVIDERS and other.get("provider") not in FLAG_PROVIDERS:
                 continue
             reasons = []
             if norm.get("first_human_sha256") and norm["first_human_sha256"] == other.get("first_human"):
@@ -297,4 +301,21 @@ class Shelf:
                 flagged += 1
 
 
-__all__ = ["Shelf", "Result", "read_front_matter", "RECORD_KINDS"]
+def prune_flags(shelf: "Shelf") -> int:
+    """Close open possible-same flags that the paste-only rule no longer raises.
+    Resolved as ``superseded_rule``, never deleted; returns how many were closed."""
+    providers = {v.get("id"): v.get("provider") for v in shelf.index().values()}
+    closed = 0
+    for item in review.items(shelf):
+        if item.get("type") != "possible-same-conversation":
+            continue
+        ids = (item.get("detail") or {}).get("records") or []
+        if any(providers.get(i) in FLAG_PROVIDERS for i in ids):
+            continue
+        name = "-".join(ulid.short(i) for i in sorted(ids))
+        if review.resolve(shelf, "possible-same-conversation", name, "superseded_rule:paste_only"):
+            closed += 1
+    return closed
+
+
+__all__ = ["Shelf", "Result", "read_front_matter", "RECORD_KINDS", "FLAG_PROVIDERS", "prune_flags"]

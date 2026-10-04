@@ -291,3 +291,40 @@ def test_canary_producer_only_touches_the_inbox(tmp_path):
     box = tmp_path / "inbox"
     canary.emit(box, NOW)
     assert [p.name for p in tmp_path.iterdir()] == ["inbox"] and len(list(box.iterdir())) == 1
+
+
+def test_two_exported_conversations_with_the_same_opening_are_not_flagged(tmp_path):
+    """Reused opening prompts are common; exported records carry their own ids (paste-only rule)."""
+    shelf, box = setup(tmp_path)
+    box.mkdir()
+    created = NOW.strftime("%Y-%m-%dT%H:%M:%SZ")
+    make_zip(box, "e.zip", [conv("u-1", "same", [("human", "my usual opener"), ("assistant", "one")], created=created),
+                            conv("u-2", "same", [("human", "my usual opener"), ("assistant", "two")], created=created)])
+    process(shelf, box, now=NOW)
+    assert len(shelf.list_records()) == 2
+    assert [f for f in review.items(shelf) if f["type"] == "possible-same-conversation"] == []
+
+
+def test_review_closes_old_flags_between_exported_records_but_keeps_paste_flags(tmp_path):
+    from core.memory_shelf.shelf import prune_flags
+    shelf, box = setup(tmp_path)
+    box.mkdir()
+    paste = box / "weekly.txt"
+    paste.write_text("Human: opening words\nClaude: answer")
+    os.utime(paste, (NOW.timestamp(), NOW.timestamp()))
+    process(shelf, box, now=NOW)
+    make_zip(box, "e.zip", [conv("u-1", "weekly", [("human", "opening words"), ("assistant", "answer"), ("human", "q"), ("assistant", "a")],
+                                 created=NOW.strftime("%Y-%m-%dT%H:%M:%SZ"))])
+    process(shelf, box, now=NOW)
+    paste_flags = [f for f in review.items(shelf) if f["type"] == "possible-same-conversation"]
+    assert len(paste_flags) == 1
+    # an old-rule flag between two exported records, as written before the paste-only rule
+    exported = [v["id"] for v in shelf.index().values() if v.get("provider") == "claude-ai"]
+    fake_other = exported[0][:-1] + ("A" if exported[0][-1] != "A" else "B")
+    shelf.index()  # ensure index exists
+    from core.memory_shelf import ulid
+    a, b = sorted((exported[0], fake_other))
+    review.add(shelf, "possible-same-conversation", f"{ulid.short(a)}-{ulid.short(b)}", {"records": [a, b], "reasons": ["first_turn"]})
+    assert prune_flags(shelf) == 1
+    left = [f for f in review.items(shelf) if f["type"] == "possible-same-conversation"]
+    assert left == paste_flags
