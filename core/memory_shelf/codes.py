@@ -29,6 +29,7 @@ EXPORT_MANIFEST = "export_manifest"        # expiring download links: never copi
 UNSUPPORTED_KIND = "unsupported_kind"      # memories, projects, frames: held for a later version
 ORPHAN_PARENT = "orphan_parent"            # a message whose parent is not in the export: kept as its own branch
 EXTRA_ROOT = "extra_root"
+UNKNOWN_SENDER = "unknown_sender"          # a Grok response whose sender is outside the closed set: the conversation is refused
 
 # Inbox refusal reasons
 UNPARSEABLE = "unparseable"

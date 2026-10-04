@@ -39,7 +39,7 @@ from core.memory_shelf.bundle import OWNER_ACTOR, Bundle
 
 RECORD_KINDS = ("sessions-raw", "sessions", "notes", "turns", "snapshots", "briefs")
 SESSION_DIR = "sessions-raw"
-MANUAL_PROVIDERS = frozenset({"paste", "claude-ai"})        # B7: where title/date overlap is worth a flag
+MANUAL_PROVIDERS = frozenset({"paste", "claude-ai", "grok"})        # B7: where title/date overlap is worth a flag
 MAX_FLAGS = 5
 
 

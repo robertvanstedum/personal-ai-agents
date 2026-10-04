@@ -12,6 +12,11 @@ Accepts, at the top level of the folder:
   each message's ``sender``: a source-identified format. Any other shape is refused
   whole (``unknown_schema``); nothing is guessed. Conversations are trees: see
   ``branches.py`` (main line first, every other message kept as a branch);
+* a **Grok (xAI) account export**: a ``<uuid>.zip`` recognised by its ``prod-grok-backend.json``
+  member. Its conversations import (speakers from ``sender`` over a closed set; a conversation with
+  any other sender is refused, ``unknown_sender``; one with nothing to say is skipped, ``empty``); its two
+  account files are excluded (``account_metadata``, never opened); asset files, projects, tasks and
+  media_posts are held (``unsupported_kind``, counted; the zip is kept whole under ``_processed/``);
 * a **pasted transcript** (``.txt``/``.md``): turn boundaries are found by speaker
   labels (heuristic identity). Text before the first label is kept as an
   unattributed ``system`` turn, never dropped. A marker in a paste never designates:
@@ -86,6 +91,8 @@ class Item:
     created: str
     member: str | None = None
     kind: str = "session"
+    skip: str | None = None                     # a conversation that is not taken: its reason code
+    skip_outcome: str = codes.EXCLUDED          # ... and how the ledger counts it (excluded, or refused)
 
 
 def _canonical(obj) -> bytes:
@@ -171,13 +178,13 @@ def check_conversation(conv: object) -> dict:
     return conv
 
 
-def parse_conversation(conv: dict) -> Item:
-    """One validated conversation to turns: the main line in order, then every other branch (``branches.py``)."""
-    msgs = conv["chat_messages"]
-    main, segments = branches.plan(msgs)
-    parsed = Parsed("claude-ai", "Claude", source_id=conv["uuid"], started=conv.get("created_at"), identity="source")
-    parsed.manifest.update({"branches": len(segments), "branch_messages": sum(len(s.indexes) for s in segments),
-                            "attachments": 0, "attachment_chars": 0})
+def render_tree(parsed: Parsed, main, segments, add) -> None:
+    """Emit the main line, then every branch segment under its heading (``branches.py``).
+
+    ``add(index, branch_number)`` appends the turns of one message. A heading says which turn the
+    branch leaves from (the nearest turn at or above the fork) and how many messages it holds.
+    """
+    parsed.manifest.update({"branches": len(segments), "branch_messages": sum(len(s.indexes) for s in segments)})
     for reason in (codes.ORPHAN_PARENT, codes.EXTRA_ROOT):
         count = sum(1 for s in segments if s.reason == reason)
         if count:
@@ -186,11 +193,9 @@ def parse_conversation(conv: dict) -> Item:
 
     def emit(path, last: int, branch_no: int) -> None:
         for idx in path:
-            msg = msgs[idx]
-            parsed.lines = idx + 1
-            basis = f"sender:{msg['sender']}" + (f",branch:{branch_no}" if branch_no else "")
             before = len(parsed.turns)
-            parsed.add(EXPORT_SENDERS[msg["sender"]], _message_text(msg, parsed, idx + 1), idx + 1, basis)
+            parsed.lines = idx + 1
+            add(idx, branch_no)
             if len(parsed.turns) > before:
                 last = len(parsed.turns)
             turn_at[idx] = last
@@ -204,6 +209,20 @@ def parse_conversation(conv: dict) -> Item:
         else:
             parsed.mark(f"=== Branch from turn {turn_at.get(seg.fork, 0)} ({count} messages) ===")
         emit(seg.indexes, turn_at.get(seg.fork, 0) if seg.fork is not None else 0, number)
+
+
+def parse_conversation(conv: dict) -> Item:
+    """One validated conversation to turns: the main line in order, then every other branch (``branches.py``)."""
+    msgs = conv["chat_messages"]
+    main, segments = branches.plan(msgs)
+    parsed = Parsed("claude-ai", "Claude", source_id=conv["uuid"], started=conv.get("created_at"), identity="source")
+    parsed.manifest.update({"attachments": 0, "attachment_chars": 0})
+
+    def add(idx: int, branch_no: int) -> None:
+        msg = msgs[idx]
+        basis = f"sender:{msg['sender']}" + (f",branch:{branch_no}" if branch_no else "")
+        parsed.add(EXPORT_SENDERS[msg["sender"]], _message_text(msg, parsed, idx + 1), idx + 1, basis)
+    render_tree(parsed, main, segments, add)
     # the hash covers the conversation's content, not export-run metadata such as updated_at
     core = {k: conv.get(k) for k in ("uuid", "name", "created_at", "chat_messages")}
     raw = _canonical(core)
@@ -213,7 +232,85 @@ def parse_conversation(conv: dict) -> Item:
 
 
 class NotAList(ValueError):
-    """The JSON is valid but is not an array."""
+    """The JSON is valid but is not the array (or object) the format needs."""
+
+
+class _Json:
+    """Incremental JSON reading over ``read(n) -> str``: one value at a time, a chunk of lookahead."""
+
+    def __init__(self, read, chunk: int = 1 << 20):
+        self.read, self.chunk = read, chunk
+        self.buf, self.pos, self.eof = "", 0, False
+        self.decoder = json.JSONDecoder()
+
+    def more(self, size: int) -> bool:
+        data = self.read(size)
+        if not data:
+            self.eof = True
+            return False
+        self.buf, self.pos = self.buf[self.pos:] + data, 0
+        return True
+
+    def peek(self) -> str:
+        """The next non-space character ("" at the end of the input)."""
+        while True:
+            while self.pos < len(self.buf) and self.buf[self.pos] in " \t\r\n":
+                self.pos += 1
+            if self.pos < len(self.buf):
+                return self.buf[self.pos]
+            if not self.more(self.chunk):
+                return ""
+
+    def not_structured(self) -> None:
+        """The input does not start with the expected bracket: malformed -> ValueError, valid -> NotAList."""
+        pieces, total = [self.buf[self.pos:]], len(self.buf) - self.pos
+        while True:
+            data = self.read(self.chunk)
+            if not data:
+                break
+            pieces.append(data)
+            total += len(data)
+            if total > MAX_EXPORT_BYTES:
+                raise ValueError("too large")
+        json.loads("".join(pieces))
+        raise NotAList
+
+    def value(self):
+        """Decode one complete value at the cursor (growing the read-ahead until it is whole)."""
+        if self.peek() == "":
+            raise ValueError("truncated")
+        size = self.chunk
+        while True:
+            try:
+                item, end = self.decoder.raw_decode(self.buf, self.pos)
+                if end < len(self.buf) or self.eof:
+                    break                         # a number at the very end of the buffer may be cut short
+            except json.JSONDecodeError:
+                if self.eof:
+                    raise ValueError("malformed") from None
+            self.more(size)
+            size *= 2
+        self.pos = end
+        return item
+
+    def array(self):
+        """Yield the items of the array at the cursor."""
+        self.pos += 1                             # the "["
+        if self.peek() == "]":
+            self.pos += 1
+            return
+        while True:
+            yield self.value()
+            sep = self.peek()
+            self.pos += 1
+            if sep == "]":
+                return
+            if sep != ",":
+                raise ValueError("malformed")
+
+    def finish(self) -> None:
+        if self.peek() != "":
+            raise ValueError("trailing data")
 
 
 def iter_json_array(read, *, chunk: int = 1 << 20):
@@ -222,70 +319,50 @@ def iter_json_array(read, *, chunk: int = 1 << 20):
     Only one item (plus a chunk) is ever held, so a 74 MB ``conversations.json`` costs about one
     conversation of memory. Raises ``ValueError`` for malformed JSON and ``NotAList`` otherwise.
     """
-    decoder = json.JSONDecoder()
-    buf, pos, eof = "", 0, False
-
-    def more(size: int) -> bool:
-        nonlocal buf, pos, eof
-        data = read(size)
-        if not data:
-            eof = True
-            return False
-        buf, pos = buf[pos:] + data, 0
-        return True
-
-    def peek() -> str:
-        nonlocal pos
-        while True:
-            while pos < len(buf) and buf[pos] in " \t\r\n":
-                pos += 1
-            if pos < len(buf):
-                return buf[pos]
-            if not more(chunk):
-                return ""
-    first = peek()
+    reader = _Json(read, chunk)
+    first = reader.peek()
     if first == "":
         raise ValueError("empty")
     if first != "[":
-        pieces, total = [buf[pos:]], len(buf) - pos
-        while True:
-            data = read(chunk)
-            if not data:
-                break
-            pieces.append(data)
-            total += len(data)
-            if total > MAX_EXPORT_BYTES:
-                raise ValueError("too large")
-        json.loads("".join(pieces))                   # malformed -> ValueError; valid -> not a list
-        raise NotAList
-    pos += 1
-    if peek() == "]":
-        pos += 1
+        reader.not_structured()
+    yield from reader.array()
+    reader.finish()
+
+
+def iter_json_object(read, stream_key: str, *, chunk: int = 1 << 20):
+    """Walk a top-level JSON object. The array under ``stream_key`` is yielded item by item as
+    ``("item", obj)`` (after one ``("start", key)``); every other key is decoded whole and yielded as ``("value", key, obj)``
+    (the other keys are small in the formats that use this). ``NotAList`` if it is not an object."""
+    reader = _Json(read, chunk)
+    first = reader.peek()
+    if first == "":
+        raise ValueError("empty")
+    if first != "{":
+        reader.not_structured()
+    reader.pos += 1
+    if reader.peek() == "}":
+        reader.pos += 1
     else:
         while True:
-            if peek() == "":
-                raise ValueError("truncated")
-            size = chunk
-            while True:
-                try:
-                    item, end = decoder.raw_decode(buf, pos)
-                    if end < len(buf) or eof:
-                        break                         # a number at the very end of the buffer may be cut short
-                except json.JSONDecodeError:
-                    if eof:
-                        raise ValueError("malformed") from None
-                more(size)
-                size *= 2
-            pos = end
-            yield item
-            sep = peek()
-            pos += 1
-            if sep == "]":
+            if reader.peek() != '"':
+                raise ValueError("malformed")
+            key = reader.value()
+            if reader.peek() != ":":
+                raise ValueError("malformed")
+            reader.pos += 1
+            if key == stream_key and reader.peek() == "[":
+                yield "start", key
+                for item in reader.array():
+                    yield "item", item
+            else:
+                yield "value", key, reader.value()
+            sep = reader.peek()
+            reader.pos += 1
+            if sep == "}":
                 break
             if sep != ",":
                 raise ValueError("malformed")
-    if peek() != "":
-        raise ValueError("trailing data")
+    reader.finish()
 
 
 class _Capped:
@@ -426,8 +503,269 @@ def parse_canary(raw: bytes) -> Item:
 
 
 
-def classify(name: str) -> tuple[str, str | None]:
-    """``(kind, category)`` from the file name alone: no content is opened to decide."""
+# ── Grok (xAI) account export ─────────────────────────────────────────────────
+#
+# A zip named <uuid>.zip whose members sit under ttl/<n>d/export_data/<uuid>/. Recognised by the
+# ``prod-grok-backend.json`` member (a dict: conversations, projects, tasks, media_posts); anything else
+# in the zip is not a conversation: the two account files are excluded (``account_metadata``) and never
+# opened, the asset-server files, projects, tasks and media_posts are held (``unsupported_kind``).
+
+GROK_BACKEND = "prod-grok-backend.json"
+GROK_ACCOUNT_FILES = frozenset({"prod-mc-auth-mgmt-api.json", "prod-mc-billing.json"})
+GROK_ASSET_DIR = "prod-mc-asset-server"
+GROK_HELD_KEYS = ("projects", "tasks", "media_posts")
+
+
+def grok_speaker(sender: object) -> str | None:
+    """From the format only: ``human``; ``assistant``, ``model`` and ``grok-*`` (any case) are Grok. Else None."""
+    if not isinstance(sender, str):
+        return None
+    low = sender.strip().lower()
+    if low == "human":
+        return HUMAN
+    if low in ("assistant", "model") or (low.startswith("grok-") and len(low) > 5):
+        return ASSISTANT
+    return None
+
+
+def _basename(name: str) -> str:
+    return name.replace("\\", "/").rstrip("/").split("/")[-1]
+
+
+def _safe_member(info: zipfile.ZipInfo) -> bool:
+    return not info.is_dir() and ".." not in info.filename.split("/") and not info.filename.startswith("/")
+
+
+def is_grok_zip(path: Path) -> bool:
+    try:
+        with zipfile.ZipFile(path) as zf:
+            return any(_safe_member(i) and _basename(i.filename) == GROK_BACKEND for i in zf.infolist())
+    except (zipfile.BadZipFile, OSError):
+        return False
+
+
+def grok_layout(path: Path) -> dict:
+    """Counts of the zip's non-conversation members, from its directory only (no member is opened)."""
+    assets = account = other = 0
+    with zipfile.ZipFile(path) as zf:
+        for info in zf.infolist():
+            if not _safe_member(info):
+                continue
+            base, parts = _basename(info.filename), info.filename.split("/")
+            if base == GROK_BACKEND:
+                continue
+            if base in GROK_ACCOUNT_FILES:
+                account += 1
+            elif GROK_ASSET_DIR in parts:
+                assets += 1
+            else:
+                other += 1
+    return {"assets": assets, "account_files": account, "other_members": other}
+
+
+def _grok_stream(read):
+    try:
+        yield from iter_json_object(read, "conversations")
+    except NotAList:
+        raise Refusal(codes.UNKNOWN_SCHEMA) from None
+    except (ValueError, UnicodeDecodeError):
+        raise Refusal(codes.UNPARSEABLE) from None
+
+
+def stream_grok(path: Path):
+    """Yield ``("conversation", conv)`` for each conversation and ``("held", key, count)`` for projects, tasks,
+    media_posts and any other top-level key. A backend without a ``conversations`` array is ``unknown_schema``."""
+    seen = False
+    try:
+        with zipfile.ZipFile(path) as zf:
+            infos = [i for i in zf.infolist() if _safe_member(i) and _basename(i.filename) == GROK_BACKEND]
+            if not infos:
+                raise Refusal(codes.UNKNOWN_SCHEMA)
+            if infos[0].file_size > MAX_EXPORT_BYTES:
+                raise Refusal(codes.TOO_LARGE)
+            with zf.open(infos[0]) as handle:
+                for event in _grok_stream(_Capped(handle, MAX_EXPORT_BYTES)):
+                    if event[0] == "start":
+                        seen = True
+                    elif event[0] == "item":
+                        yield "conversation", event[1]
+                    elif event[1] == "conversations":
+                        raise Refusal(codes.UNKNOWN_SCHEMA)                # present but not an array
+                    else:
+                        yield "held", str(event[1])[:40], len(event[2]) if isinstance(event[2], (list, dict)) else 1
+    except zipfile.BadZipFile:
+        raise Refusal(codes.UNPARSEABLE) from None
+    if not seen:
+        raise Refusal(codes.UNKNOWN_SCHEMA)                                # no conversations array at all
+
+
+def check_grok_conversation(conv: object) -> dict:
+    """The shape each conversation must have (ids and the response list); a bad shape refuses the whole file."""
+    if not (isinstance(conv, dict) and isinstance(conv.get("conversation"), dict)
+            and isinstance(conv["conversation"].get("id"), str) and conv["conversation"]["id"]
+            and isinstance(conv.get("responses"), list)):
+        raise Refusal(codes.UNKNOWN_SCHEMA)
+    for entry in conv["responses"]:
+        if not (isinstance(entry, dict) and isinstance(entry.get("response"), dict)
+                and isinstance(entry["response"].get("_id"), str) and entry["response"]["_id"]):
+            raise Refusal(codes.UNKNOWN_SCHEMA)
+    return conv
+
+
+def _grok_nodes(conv: dict) -> tuple[list[dict], list[dict], int | None]:
+    """(responses, tree nodes for ``branches.plan``, index of the named leaf if it resolves)."""
+    responses = [e["response"] for e in conv["responses"]]
+    linked = any("parent_response_id" in r for r in responses)
+    nodes = []
+    for r in responses:
+        node = {"uuid": r["_id"], "created_at": r.get("create_time")}
+        if linked:
+            node["parent_message_uuid"] = r.get("parent_response_id")
+        nodes.append(node)
+    leaf_id = conv["conversation"].get("leaf_response_id")
+    leaf = next((i for i, r in enumerate(responses) if r["_id"] == leaf_id), None) if isinstance(leaf_id, str) else None
+    return responses, nodes, leaf
+
+
+def _count(value: object) -> int:
+    return len(value) if isinstance(value, (list, dict)) else (1 if value else 0)
+
+
+def _grok_pointers(r: dict, parsed: Parsed, line: int) -> None:
+    """One-line pointers for what is not the owner's or Grok's words: counts and lengths only, never content."""
+    if r.get("thinking_trace"):
+        parsed.skip("thinking_trace", line)
+    if r.get("agent_thinking_traces"):
+        parsed.skip("agent_thinking_traces", line, f"{_count(r['agent_thinking_traces'])} items")
+    for key, unit in (("steps", "items"), ("web_search_results", "results"), ("cited_web_search_results", "results")):
+        if r.get(key):
+            parsed.skip(key, line, f"{_count(r[key])} {unit}")
+    if r.get("card_attachments_json"):
+        card = r["card_attachments_json"]
+        parsed.skip("card_attachments_json", line, f"{len(card)} chars" if isinstance(card, str) else f"{_count(card)} items")
+    if isinstance(r.get("query"), str) and r["query"].strip():
+        parsed.skip("query", line, f"{len(r['query'])} chars")                # the model-side query, not copied
+    attachments = r.get("file_attachments")
+    for asset in (attachments if isinstance(attachments, list) else [attachments] if attachments else []):
+        parsed.manifest["file_attachments"] += 1
+        parsed.skip("file_attachment", line, str(asset)[:80])
+    if r.get("generated_image_urls"):
+        n = _count(r["generated_image_urls"])
+        parsed.manifest["generated_image_urls"] += n
+        parsed.skip("generated_image_urls", line, f"{n} urls")
+    if r.get("error"):
+        parsed.manifest["error_responses"] += 1
+    if r.get("partial"):
+        parsed.manifest["partial_responses"] += 1
+
+
+def parse_grok_conversation(conv: dict) -> Item:
+    """One Grok conversation to turns (``message`` verbatim). A conversation with a sender outside the closed
+    set is refused (``unknown_sender``) and one with nothing to say is skipped (``empty``): both as items that
+    say so, never silently."""
+    head = conv["conversation"]
+    responses, nodes, leaf = _grok_nodes(conv)
+    cid = head["id"]
+    title = head.get("title") if isinstance(head.get("title"), str) and head["title"].strip() else "grok conversation"
+    core = {"id": cid, "title": head.get("title"), "create_time": head.get("create_time"),
+            "responses": [{"id": r["_id"], "parent": r.get("parent_response_id"), "sender": r.get("sender"),
+                           "message": r.get("message")} for r in responses]}
+    raw = _canonical(core)
+    created = bundles.utc(head.get("create_time"))
+    parsed = Parsed("grok", "Grok", source_id=cid, started=head.get("create_time") if isinstance(head.get("create_time"), str) else None,
+                    identity="source")
+    sha, size, key = hashlib.sha256(raw).hexdigest(), len(raw), f"grok:{cid}"
+    if any(grok_speaker(r.get("sender")) is None for r in responses):
+        return Item(parsed, sha, size, key, title, created, member=cid, skip=codes.UNKNOWN_SENDER, skip_outcome=codes.REFUSED)
+    main, segments = branches.plan(nodes, prefer_leaf=leaf)
+    parsed.manifest.update({"file_attachments": 0, "generated_image_urls": 0, "error_responses": 0, "partial_responses": 0})
+
+    def add(idx: int, branch_no: int) -> None:
+        r = responses[idx]
+        message = r.get("message")
+        _grok_pointers(r, parsed, idx + 1)
+        if message is not None and not isinstance(message, str):
+            parsed.skip("message_not_text", idx + 1)
+            message = ""
+        basis = f"sender:{str(r.get('sender')).strip().lower()}" + (f",branch:{branch_no}" if branch_no else "")
+        parsed.add(grok_speaker(r.get("sender")), message or "", idx + 1, basis)
+    render_tree(parsed, main, segments, add)
+    return Item(parsed, sha, size, key, title, created, member=cid, skip=None if parsed.turns else codes.EMPTY)
+
+
+class ItemStream:
+    """Items produced lazily, plus ``parts``: what the file held that is not a conversation (counted, not read)."""
+
+    def __init__(self, items, parts: dict | None = None):
+        self._items, self.parts = items, parts or {}
+
+    def __iter__(self):
+        return iter(self._items)
+
+
+def validate_grok(path: Path) -> tuple[int, dict]:
+    """Judge a Grok export whole before taking anything: ``(conversation count, parts)`` or ``Refusal``."""
+    count, held = 0, {}
+    for event in stream_grok(path):
+        if event[0] == "conversation":
+            check_grok_conversation(event[1])
+            count += 1
+        else:
+            held[event[1]] = held.get(event[1], 0) + event[2]
+    if not count:
+        raise Refusal(codes.NO_TURNS)
+    layout = grok_layout(path)
+    held = {k: v for k, v in {"assets": layout["assets"], **held, "other_members": layout["other_members"]}.items() if v}
+    return count, {"excluded": {codes.ACCOUNT_METADATA: layout["account_files"]} if layout["account_files"] else {},
+                   "held": held}
+
+
+def _grok_items(path: Path, only: str | None):
+    for event in stream_grok(path):
+        if event[0] != "conversation":
+            continue
+        conv = event[1]
+        if only is not None and not (isinstance(conv, dict) and isinstance(conv.get("conversation"), dict)
+                                     and conv["conversation"].get("id") == only):
+            continue
+        yield parse_grok_conversation(check_grok_conversation(conv))
+
+
+def grok_stats(path: Path) -> dict:
+    """Counts and a date range for a Grok export. Never a title, summary or any text."""
+    convs = resp = branched = empty = unknown = files = 0
+    first = last = None
+    held: dict[str, int] = {}
+    for event in stream_grok(path):
+        if event[0] == "held":
+            held[event[1]] = held.get(event[1], 0) + event[2]
+            continue
+        conv = check_grok_conversation(event[1])
+        convs += 1
+        responses, nodes, leaf = _grok_nodes(conv)
+        resp += len(responses)
+        if branches.plan(nodes, prefer_leaf=leaf)[1]:
+            branched += 1
+        if any(grok_speaker(r.get("sender")) is None for r in responses):
+            unknown += 1
+        elif not any(isinstance(r.get("message"), str) and r["message"].strip() for r in responses):
+            empty += 1
+        for r in responses:
+            files += _count(r.get("file_attachments"))
+        day = _day(conv["conversation"].get("create_time"))
+        if day:
+            first, last = min(first or day, day), max(last or day, day)
+    layout = grok_layout(path)
+    return {"conversations": convs, "messages": resp, "created_first": first, "created_last": last,
+            "conversations_with_branches": branched, "empty_conversations": empty, "unknown_sender_conversations": unknown,
+            "file_attachments": files,
+            "held": {k: v for k, v in {"assets": layout["assets"], **held, "other_members": layout["other_members"]}.items() if v},
+            "excluded": {codes.ACCOUNT_METADATA: layout["account_files"]} if layout["account_files"] else {}}
+
+
+def classify(name: str, path: Path | None = None) -> tuple[str, str | None]:
+    """``(kind, category)`` from the file name; for a zip with an unlisted name, ``path`` lets the zip's own
+    directory (never a member's content) tell a Grok export from the older claude.ai single zip."""
     lower = name.lower()
     if name.endswith(".canary.json"):
         return "canary", None
@@ -435,6 +773,8 @@ def classify(name: str) -> tuple[str, str | None]:
     if m:
         return "claude-ai-export", m.group(1)
     if lower.endswith(".zip"):
+        if path is not None and is_grok_zip(path):
+            return "grok-export", None
         return "claude-ai-export", "conversations"              # the older single zip
     if name == "conversations.json":
         return "claude-ai-export", "conversations"
@@ -451,9 +791,14 @@ def load_items(path: Path, fallback: datetime, only: str | None = None):
     name, size = path.name, path.stat().st_size
     if size == 0:
         raise Refusal(codes.EMPTY)
-    kind, _ = classify(name)
+    kind, _ = classify(name, path)
     if kind == "canary":
         return [parse_canary(path.read_bytes())]
+    if kind == "grok-export":
+        if only is None:
+            count, parts = validate_grok(path)
+            return ItemStream(_grok_items(path, None), parts)
+        return ItemStream(_grok_items(path, only))
     if kind == "claude-ai-export":
         if only is None:
             validate_export(path)
@@ -534,7 +879,7 @@ def candidates(inbox_root: Path) -> list[Path]:
 def scan(inbox_root: str | Path, never_copy: tuple[str, ...] = ()) -> list[Entry]:
     entries = []
     for path in candidates(Path(inbox_root)):
-        kind, category = classify(path.name)
+        kind, category = classify(path.name, path)
         sha = None if never_copied(path.name, never_copy) else _sha_file(path)
         entries.append(Entry(path, path.name, path.stat().st_size, kind, category, sha))
     return entries
@@ -572,7 +917,7 @@ def decide(entry: Entry, never_copy: tuple[str, ...]) -> tuple[str, str | None]:
         return "excluded", codes.ACCOUNT_METADATA
     if entry.kind == "claude-ai-export" and entry.category in HELD_CATEGORIES:
         return "held", codes.UNSUPPORTED_KIND
-    if entry.kind in ("claude-ai-export", "paste"):
+    if entry.kind in ("claude-ai-export", "grok-export", "paste"):
         return "would_import", None
     return "would_refuse", codes.UNSUPPORTED_TYPE
 
@@ -622,9 +967,9 @@ def build_listing(inbox_root: str | Path, never_copy: tuple[str, ...] = (), now:
                "decision": decision}
         if reason:
             row["reason"] = reason
-        if decision == "would_import" and e.kind == "claude-ai-export":
+        if decision == "would_import" and e.kind in ("claude-ai-export", "grok-export"):
             try:
-                row["export"] = export_stats(e.path)
+                row["export"] = (grok_stats if e.kind == "grok-export" else export_stats)(e.path)
                 counts["conversations"] += row["export"]["conversations"]
                 counts["messages"] += row["export"]["messages"]
             except Refusal as exc:
@@ -711,7 +1056,7 @@ def process(shelf, inbox_root: str | Path, *, now: datetime | None = None, settl
         if settle_seconds and now.timestamp() - path.stat().st_mtime < settle_seconds:
             tally(codes.UNSTABLE)
             continue
-        kind, category = classify(path.name)
+        kind, category = classify(path.name, path)
         canary_file = kind == "canary"
         if never_copied(path.name, never_copy):
             if approved is None and not canary_file:
@@ -755,10 +1100,11 @@ def process(shelf, inbox_root: str | Path, *, now: datetime | None = None, settl
         ok = True
         try:
             for item in items:
-                if not item.parsed.turns:
-                    ledger.record(shelf, "inbox", bundles.ledger_key_for("inbox", item.key), codes.EXCLUDED,
-                                  reason=codes.NO_TURNS, canary=item.kind == "canary", now=now)
-                    tally(codes.EXCLUDED)
+                if item.skip or not item.parsed.turns:
+                    outcome = item.skip_outcome if item.skip else codes.EXCLUDED
+                    ledger.record(shelf, "inbox", bundles.ledger_key_for("inbox", item.key), outcome,
+                                  reason=item.skip or codes.NO_TURNS, canary=item.kind == "canary", now=now)
+                    tally(outcome)
                     continue
                 lkey = bundles.ledger_key_for("inbox", item.key)
                 ledger.record(shelf, "inbox", lkey, codes.DISCOVERED, canary=item.kind == "canary", now=now)
@@ -781,6 +1127,13 @@ def process(shelf, inbox_root: str | Path, *, now: datetime | None = None, settl
             ok = False
             tally(codes.FAILED)
         if ok:
+            parts = getattr(items, "parts", None) or {}
+            for part, n in parts.get("excluded", {}).items():        # what the file held that is not a conversation
+                _note(shelf, latest, f"{path.name}#{part}", sha, codes.EXCLUDED, part, now)
+                tally(codes.EXCLUDED)
+            for part, n in parts.get("held", {}).items():
+                _note(shelf, latest, f"{path.name}#{part}", sha, codes.HELD, codes.UNSUPPORTED_KIND, now)
+                tally(codes.HELD)
             fsio.ensure_dir(dest.parent)
             os.replace(path, dest)                           # moved, never deleted
     return {"status": "ok", "counts": counts}

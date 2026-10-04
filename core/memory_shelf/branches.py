@@ -38,6 +38,10 @@ class Segment:
 
 def _ts(msg: dict) -> float:
     text = msg.get("created_at")
+    if isinstance(text, dict):                                   # {"$date": ...}
+        text = text.get("$date")
+    if isinstance(text, (int, float)) and not isinstance(text, bool):
+        return float(text) / 1000 if text > 1e11 else float(text)          # epoch seconds or milliseconds
     if isinstance(text, str):
         try:
             parsed = datetime.fromisoformat(text.strip().replace("Z", "+00:00"))
@@ -49,8 +53,14 @@ def _ts(msg: dict) -> float:
     return float("-inf")
 
 
-def plan(messages: list[dict]) -> tuple[list[int], list[Segment]]:
-    """``(main line indexes, branch segments)`` covering every message exactly once."""
+def plan(messages: list[dict], prefer_leaf: int | None = None) -> tuple[list[int], list[Segment]]:
+    """``(main line indexes, branch segments)`` covering every message exactly once.
+
+    Messages are dicts with ``uuid``, ``parent_message_uuid`` and ``created_at`` (a format that names them
+    differently maps its fields first). ``prefer_leaf`` is the index of a message the source itself names as
+    the end of the conversation (Grok's ``leaf_response_id``): when its parent chain reaches a root, the main
+    line is that path; otherwise the newest-leaf rule applies.
+    """
     n = len(messages)
     if not any(isinstance(m, dict) and "parent_message_uuid" in m for m in messages):
         return list(range(n)), []
@@ -62,7 +72,7 @@ def plan(messages: list[dict]) -> tuple[list[int], list[Segment]]:
     parent: list[int | None] = []                  # index, None for a root, -1 for an orphan
     for i, msg in enumerate(messages):
         pid = msg.get("parent_message_uuid")
-        if pid in NO_PARENT or not isinstance(pid, str):
+        if not isinstance(pid, str) or pid in NO_PARENT:
             parent.append(None)
         elif pid in by_uuid and by_uuid[pid] != i:
             parent.append(by_uuid[pid])
@@ -96,6 +106,14 @@ def plan(messages: list[dict]) -> tuple[list[int], list[Segment]]:
     roots = [i for i, p in enumerate(parent) if p is None]
     main: list[int] = []
     best_key = None
+    if prefer_leaf is not None:
+        chain, node = [prefer_leaf], prefer_leaf
+        while parent[node] is not None and parent[node] >= 0 and parent[node] not in chain:
+            node = parent[node]
+            chain.append(node)
+        if parent[node] is None:
+            main = chain[::-1]
+            roots = []                                       # decided; the loop below only picks when undecided
     for root in roots:                              # the root whose subtree holds the newest leaf owns the main line
         candidate = path_from(root)
         if best_key is None or key[candidate[-1]] > best_key:
