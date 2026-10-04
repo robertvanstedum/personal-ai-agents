@@ -99,6 +99,13 @@ def cmd_review(cfg, shelf, out) -> int:
         if item["type"] == "possible-same-conversation":
             print(f"possible-same\t{item['detail']['records'][0]}\t{item['detail']['records'][1]}\t"
                   f"{','.join(item['detail']['reasons'])}", file=out)
+    print("# coverage flags (a file shows more than was taken, or a format the reader has not seen)", file=out)
+    for item in review.items(shelf):
+        if item["type"] == "coverage-flag":
+            d = item["detail"]
+            print(f"coverage-flag\t{d.get('source')}\t{d.get('date')}\t{d.get('bytes')} bytes\t"
+                  f"{','.join(d.get('flags') or [])}\tgap={json.dumps(d.get('gap') or {}, sort_keys=True)}\t"
+                  f"unknown={','.join(d.get('unknown') or []) or '-'}", file=out)
     print("# refused inbox files", file=out)
     for row in inbox.refused_listing(cfg.inbox_root):
         print(f"refused\t{row['name']}\t{row['reason']}\t{row['bytes']}\tsha256:{row['sha256'][:12]}", file=out)
@@ -184,6 +191,8 @@ def cmd_ledger(shelf, out, canary_flag: bool) -> int:
               f"excluded={json.dumps(row['excluded'], sort_keys=True)}\trefused={json.dumps(row['refused'], sort_keys=True)}\t"
               f"held={json.dumps(row['held'], sort_keys=True)}\tmissing={json.dumps(row['missing'], sort_keys=True)}", file=out)
     print(f"expected-exclusions\t{json.dumps(rep['expected_exclusions'], sort_keys=True)}", file=out)
+    cov = rep["coverage"]
+    print("coverage\t" + (json.dumps(cov, sort_keys=True) if cov else "clear (every capture took all the messages its file shows)"), file=out)
     print("OK" if rep["ok"] else f"MISSING {rep['missing']}", file=out)
     return OK if rep["ok"] else REFUSED
 

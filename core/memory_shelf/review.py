@@ -13,7 +13,7 @@ from pathlib import Path
 
 from core.memory_shelf import fsio
 
-TYPES = frozenset({"designation-candidate", "possible-same-conversation"})
+TYPES = frozenset({"designation-candidate", "possible-same-conversation", "coverage-flag"})
 
 
 def _dir(shelf) -> Path:
@@ -52,3 +52,17 @@ def resolve(shelf, type_: str, name: str, how: str) -> bool:
                resolved_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
     fsio.write_json(path, doc)
     return True
+
+
+def sync_coverage(shelf, name: str, detail: dict | None) -> None:
+    """The coverage flag for one source item: open (re-opened if it had been resolved) while the check flags
+    it, resolved once a later pass finds it complete. ``detail`` is None when the item is clear."""
+    path = _dir(shelf) / f"coverage-flag--{name}.json"
+    existing = fsio.read_json(path)
+    if detail is None:
+        if isinstance(existing, dict) and existing.get("state") == "open":
+            resolve(shelf, "coverage-flag", name, "clear")
+        return
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fsio.write_json(path, {"type": "coverage-flag", "name": name, "state": "open", "detail": detail,
+                           "created": existing.get("created", now) if isinstance(existing, dict) else now})

@@ -32,10 +32,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from core.memory_shelf import codes, editions, fsio, ledger, review, ulid
+from core.memory_shelf import codes, editions, fsio, ledger, render, review, ulid
 from core.memory_shelf import events as ev
 from core.memory_shelf import record
 from core.memory_shelf.bundle import OWNER_ACTOR, Bundle
+from core.memory_shelf.sessions import DEFAULT_NORMALIZER
 
 RECORD_KINDS = ("sessions-raw", "sessions", "notes", "turns", "snapshots", "briefs")
 SESSION_DIR = "sessions-raw"
@@ -219,7 +220,9 @@ class Shelf:
         norm = bundle.meta.get("normalized") or {}
         ledger.record(self, bundle.origin.split(":", 1)[-1], bundle.ledger_key or bundle.key[:16], result.outcome,
                       record_id=result.record_id, canary=bundle.kind == "canary", turns=norm.get("turns", 0),
-                      redacted_turns=norm.get("redacted_turns", 0), omitted=norm.get("omitted"), now=self.now())
+                      redacted_turns=norm.get("redacted_turns", 0), omitted=norm.get("omitted"),
+                      flags=(norm.get("coverage") or {}).get("flags"), gap=(norm.get("coverage") or {}).get("gap"),
+                      now=self.now())
         return result
 
     def _designate(self, meta: dict, bundle: Bundle) -> None:
@@ -262,10 +265,23 @@ class Shelf:
 
     def _add_edition(self, bundle: Bundle, entry: dict) -> Result:
         main = self.main_path(entry)
-        meta, _ = record.load(main.read_text("utf-8"))
+        meta, old_body = record.load(main.read_text("utf-8"))
         folder = main.parent
+        have, new = (meta.get("normalized") or {}).get("normalizer", DEFAULT_NORMALIZER), \
+            bundle.meta["normalized"].get("normalizer", DEFAULT_NORMALIZER)
+        note = None
         if bundle.source_hash in self._seen_hashes(folder, meta):
-            return Result(codes.UNCHANGED, bundle.key, meta["id"])
+            if new <= have:
+                return Result(codes.UNCHANGED, bundle.key, meta["id"])
+            # The same source bytes, read by a newer parser (amendment §10, R3). If it reads the same turns, only the
+            # manifest moves on; if it reads different turns, that is a new edition and the old one stays.
+            if render.ordered_turns(render.parse_body(old_body)) == render.ordered_turns(render.parse_body(bundle.body)):
+                meta["normalized"] = {**meta.get("normalized", {}), "normalizer": new,
+                                      **({"coverage": bundle.meta["normalized"]["coverage"]}
+                                         if bundle.meta["normalized"].get("coverage") else {})}
+                record.write(main, meta, old_body)
+                return Result(codes.UNCHANGED, bundle.key, meta["id"])
+            note = f"normalizer:{have}->{new}"
         edition = editions.add_edition(folder, bundle.edition, "jsonl")
         if not edition.added:
             return Result(codes.UNCHANGED, bundle.key, meta["id"])
@@ -274,7 +290,8 @@ class Shelf:
         if bundle.retained:
             meta["retained"] = bundle.retained
         meta["events"] = [*meta["events"], ev.make_event(
-            "edition-added", bundle.origin, now=self.now(), edition=edition.number, source_hash=bundle.source_hash)]
+            "edition-added", bundle.origin, now=self.now(), edition=edition.number, source_hash=bundle.source_hash,
+            note=note)]
         self._designate(meta, bundle)
         record.write(main, meta, bundle.body)
         return Result(codes.EDITION_ADDED, bundle.key, meta["id"])
