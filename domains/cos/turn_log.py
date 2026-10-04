@@ -111,7 +111,10 @@ def _build_record(request, result, now: datetime) -> dict:
 
 def record_turn(request, result, *, clock: Callable[[], datetime] | None = None,
                 container: str | None = None, latch: Latch | None = None) -> tuple[bool | None, str]:
-    """Append one turn. Returns (history_saved, code); never raises. ``latch`` is what ``begin`` read at the start."""
+    """Append one turn. Returns (history_saved, code); never raises. ``latch`` is what ``begin`` read at the start.
+
+    The final mode check and the append happen **inside one shared hold of the mode lock** (``private_mode.hold_mode``),
+    the same lock ``set_private`` takes exclusively, so the mode cannot change between "was it Private?" and the write."""
     now = (clock or (lambda: datetime.now(timezone.utc)))()
     try:
         if not enabled():
@@ -119,20 +122,21 @@ def record_turn(request, result, *, clock: Callable[[], datetime] | None = None,
         root = private_mode.turns_dir()
         if root is None:
             return None, NO_TURN_LOG
-        private_now, epoch_now = private_mode.read_mode(root, result.conversation_id)
-        if private_now or getattr(request, "private", False):
-            return None, PRIVATE
-        if latch is not None:
-            if latch.private or not latch.readable:
-                return None, PRIVATE             # the turn began Private (or its mode was unreadable): it stays unlogged
-            if latch.epoch != epoch_now:
-                return None, MODE_CHANGED        # the mode moved while the turn ran, in either direction: log nothing
+        with private_mode.hold_mode(root):
+            private_now, epoch_now = private_mode.read_mode(root, result.conversation_id)
+            if private_now or getattr(request, "private", False):
+                return None, PRIVATE
+            if latch is not None:
+                if latch.private or not latch.readable:
+                    return None, PRIVATE         # the turn began Private (or its mode was unreadable): it stays unlogged
+                if latch.epoch != epoch_now:
+                    return None, MODE_CHANGED    # the mode moved while the turn ran, in either direction: log nothing
+            return core_writer.save_record(
+                root, lambda: _build_record(request, result, now), now=now, container=container or container_name(),
+                log_tag="cos_turn_log", floor_env="COS_TURNS_MIN_FREE_BYTES", fraction_env="COS_TURNS_MIN_FREE_FRACTION",
+                append=append_record)
     except Exception:
-        return False, INTERNAL           # the mode could not be decided: log nothing, say so
-    return core_writer.save_record(
-        root, lambda: _build_record(request, result, now), now=now, container=container or container_name(),
-        log_tag="cos_turn_log", floor_env="COS_TURNS_MIN_FREE_BYTES", fraction_env="COS_TURNS_MIN_FREE_FRACTION",
-        append=append_record)
+        return False, INTERNAL           # the mode could not be decided or locked: log nothing, say so
 
 
 def recorder(*, clock: Callable[[], datetime] | None = None, container: str | None = None):
