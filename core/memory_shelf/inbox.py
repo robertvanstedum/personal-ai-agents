@@ -59,7 +59,7 @@ from pathlib import Path
 
 from core.memory_shelf import approvals, branches
 from core.memory_shelf import canary as canary_mod
-from core.memory_shelf import codes, fsio, ledger, render, selection
+from core.memory_shelf import codes, fsio, ledger, render, selection, sessions
 from core.memory_shelf import bundle as bundles
 from core.memory_shelf.config import never_copied
 from core.memory_shelf.sessions import ASSISTANT, HUMAN, SYSTEM, Parsed
@@ -216,7 +216,7 @@ def parse_conversation(conv: dict) -> Item:
     msgs = conv["chat_messages"]
     main, segments = branches.plan(msgs)
     parsed = Parsed("claude-ai", "Claude", source_id=conv["uuid"], started=conv.get("created_at"), identity="source",
-                    normalizer=2)                  # 2: attachment text is a reference, not dialogue
+                    normalizer=sessions.NORMALIZER_VERSION["claude-ai"])    # 2: attachment text is a reference, not dialogue
     parsed.manifest.update({"attachments": 0})
 
     def add(idx: int, branch_no: int) -> None:

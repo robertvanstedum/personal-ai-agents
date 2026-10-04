@@ -43,7 +43,7 @@ MARK = "@mark"
 # owner's dialogue; response_item agent_message handoffs are kept as typed coordination content (no decryption); duplicates of
 # handoffs are counted, not kept twice. Claude.ai 2 (inbox): an attachment's extracted text is no longer copied into the
 # dialogue (a reference stays). Older editions are never rewritten: the next pass adds a new edition when the turns differ.
-NORMALIZER_VERSION = {"claude-code": 2, "codex": 3, "rooms": 1}
+NORMALIZER_VERSION = {"claude-code": 2, "codex": 3, "rooms": 1, "claude-ai": 2, "grok": 1, "paste": 1}
 DEFAULT_NORMALIZER = 1                      # a record or state entry written before versions existed
 
 

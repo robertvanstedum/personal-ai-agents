@@ -13,6 +13,9 @@
     moi canary emit | check          write the canary into the inbox | audit it (read-only)
     moi ledger [--canary]            F1: captured vs expected exclusions vs missing
     moi fidelity [--sample N] [--canary]   F2 sample (read-only)
+    moi migrate-preview [source]     read-only, counts only: what the current parser rules would change in each provider's records
+    moi reprocess inbox              re-read claude.ai / Grok records from their kept export files with the current rules (one typed "yes");
+                                     a new edition where the turns differ, old editions untouched
     moi doctor                       read-only: does each record's main file agree with its own editions? counts and short ids
     moi repair                       rebuild the body of records `doctor` finds unreadable, from their current edition (one typed "yes")
 
@@ -35,7 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
-from core.memory_shelf import approvals, backfill, canary, config, editions, fidelity, fsio, inbox, ledger, repair, review, ulid, watchers, weight
+from core.memory_shelf import approvals, backfill, canary, config, editions, fidelity, fsio, inbox, ledger, migration, repair, review, ulid, watchers, weight
 from core.memory_shelf.events import OwnerAuthority
 from core.memory_shelf.shelf import Shelf
 
@@ -216,6 +219,8 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
     sub.add_parser("drain")
     p = sub.add_parser("canary"); p.add_argument("action", choices=["emit", "check"])
     p = sub.add_parser("ledger"); p.add_argument("--canary", action="store_true")
+    p = sub.add_parser("migrate-preview"); p.add_argument("source", nargs="?")
+    p = sub.add_parser("reprocess"); p.add_argument("source", choices=["inbox"])
     sub.add_parser("doctor")
     sub.add_parser("repair")
     p = sub.add_parser("fidelity"); p.add_argument("--sample", type=int, default=5); p.add_argument("--canary", action="store_true")
@@ -232,6 +237,20 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
         return cmd_review(cfg, shelf, out)
     if args.cmd == "ledger":
         return cmd_ledger(shelf, out, args.canary)
+    if args.cmd == "migrate-preview":
+        res = migration.preview(shelf, cfg, only=args.source)
+        for provider, row in res["providers"].items():
+            flat = {k: v for k, v in row.items()}
+            print(f"migrate-preview\t{provider}\t{json.dumps(flat, sort_keys=True)}", file=out)
+        print("migrate-preview\tread_only", file=out)
+        return OK
+    if args.cmd == "reprocess":
+        auth = _authority(confirm, "re-read the inbox records from their kept export files with the current rules "
+                                   "(new editions only; nothing is deleted or rewritten)", out)
+        if not auth:
+            return REFUSED
+        print(f"reprocess\tinbox\t{json.dumps(migration.reprocess_inbox(shelf, cfg, now=clock), sort_keys=True)}", file=out)
+        return OK
     if args.cmd == "doctor":
         res = repair.inspect(shelf)
         print(f"doctor\trecords={res['records']}\tstates={json.dumps(res['states'], sort_keys=True)}", file=out)

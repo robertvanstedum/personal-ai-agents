@@ -94,8 +94,9 @@ def edition_turns(folder: Path, number: int) -> list[tuple[int, str, str]] | Non
     return None
 
 
-def _source_turns(cfg: Config, meta: dict):
-    """(expected ordered turns, source sha256) from the retained source, or (None, reason)."""
+def load_source(cfg: Config, meta: dict):
+    """``(parsed, sha256)`` from a record's retained source, parsed fresh with the **current** parser, or ``(None, reason)``.
+    Shared by the fidelity check and the migration preview: both need the source as the current rules read it."""
     ret = meta.get("retained") or {}
     try:
         if ret.get("kind") == "source-file":
@@ -104,8 +105,6 @@ def _source_turns(cfg: Config, meta: dict):
             if not path or not path.is_file():
                 return None, SOURCE_MISSING
             sha, size = render.hash_file(path)
-            if (meta.get("normalized") or {}).get("normalizer", sessions.DEFAULT_NORMALIZER) != sessions.NORMALIZER_VERSION[source.kind]:
-                return None, NORMALIZER_CHANGED
             with open(path, "rb") as handle:
                 parsed = watchers.PARSERS[source.kind](handle)
         elif ret.get("kind") == "rooms-bundle":
@@ -131,6 +130,18 @@ def _source_turns(cfg: Config, meta: dict):
             return None, NOT_RETAINED
     except (OSError, inbox.Refusal, rooms.Refusal, ValueError, KeyError):
         return None, UNREADABLE
+    return (parsed, sha), None
+
+
+def _source_turns(cfg: Config, meta: dict):
+    """(expected ordered turns, source sha256) from the retained source, or (None, reason). A record read by an older
+    parser version is skipped (``normalizer_changed``), not called damaged: the next pass brings it up to date."""
+    got, reason = load_source(cfg, meta)
+    if got is None:
+        return None, reason
+    parsed, sha = got
+    if (meta.get("normalized") or {}).get("normalizer", sessions.DEFAULT_NORMALIZER) != parsed.normalizer:
+        return None, NORMALIZER_CHANGED
     clean, _ = render.scrub_parsed(parsed)
     return (render.ordered_turns(clean.turns), sha), None
 
