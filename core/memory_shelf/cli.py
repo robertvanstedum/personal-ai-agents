@@ -13,6 +13,9 @@
     moi canary emit | check          write the canary into the inbox | audit it (read-only)
     moi ledger [--canary]            F1: captured vs expected exclusions vs missing
     moi fidelity [--sample N] [--canary]   F2 sample (read-only)
+    moi report [--json] [--fidelity N] [--publish] [--jobs-root DIR]
+                                     the counts-only capture report: read-only unless asked (--fidelity records a sample result,
+                                     --publish writes the report and matrix files atomically); never captures anything
     moi migrate-preview [source]     read-only, counts only: what the current parser rules would change in each provider's records
     moi reprocess inbox              re-read claude.ai / Grok records from their kept export files with the current rules (one typed "yes");
                                      a new edition where the turns differ, old editions untouched
@@ -38,7 +41,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
-from core.memory_shelf import approvals, backfill, canary, config, editions, fidelity, fsio, inbox, ledger, migration, repair, review, ulid, watchers, weight
+from core.memory_shelf import approvals, backfill, canary, config, editions, fidelity, fsio, inbox, ledger, migration, repair, report, review, ulid, watchers, weight
 from core.memory_shelf.events import OwnerAuthority
 from core.memory_shelf.shelf import Shelf
 
@@ -188,6 +191,29 @@ def record_front(shelf, record_id: str) -> dict:
         return {}
 
 
+def cmd_report(cfg, shelf, args, out, clock) -> int:
+    """Build (and optionally publish) the capture report. Plain ``moi report`` writes nothing."""
+    try:
+        if args.fidelity > 0:
+            sample = fidelity.sample(shelf, cfg, n=args.fidelity, seed=int(clock.strftime("%Y%m%d")))
+            report.record_quality(shelf, "fidelity", {
+                "at": clock.strftime("%Y-%m-%dT%H:%M:%SZ"), "method": "random_sample", "seed": int(clock.strftime("%Y%m%d")),
+                "sample_size": args.fidelity, "checked": sample["checked"], "ok": sample["ok"], "failed": sample["failed"],
+                "skipped": sample["skipped"], "scope": "storage_and_edition_same_parser"})
+        jobs_root = args.jobs_root or os.environ.get("MINIMOI_JOBS_ROOT") or "~/minimoi-staging/data/jobs"
+        doc = report.build(shelf, cfg, clock, jobs_root=Path(jobs_root).expanduser())
+        published = report.publish(shelf, doc, Path(jobs_root).expanduser()) if args.publish else None
+    except report.ReportError:
+        print("report\trefused: the payload was not counts-only", file=out)
+        return REFUSED
+    print(report.summary_line(doc), file=out)
+    if published:
+        print(f"report\tpublished={json.dumps(published, sort_keys=True)}", file=out)
+    if args.json:
+        print(json.dumps(doc, sort_keys=True, indent=1), file=out)
+    return OK
+
+
 def cmd_ledger(shelf, out, canary_flag: bool) -> int:
     rep = ledger.report(shelf, canary=canary_flag)
     print(f"# ledger{' (canary)' if canary_flag else ''}", file=out)
@@ -219,6 +245,8 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
     sub.add_parser("drain")
     p = sub.add_parser("canary"); p.add_argument("action", choices=["emit", "check"])
     p = sub.add_parser("ledger"); p.add_argument("--canary", action="store_true")
+    p = sub.add_parser("report"); p.add_argument("--json", action="store_true"); p.add_argument("--fidelity", type=int, default=0)
+    p.add_argument("--publish", action="store_true"); p.add_argument("--jobs-root")
     p = sub.add_parser("migrate-preview"); p.add_argument("source", nargs="?")
     p = sub.add_parser("reprocess"); p.add_argument("source", choices=["inbox"])
     sub.add_parser("doctor")
@@ -237,6 +265,8 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
         return cmd_review(cfg, shelf, out)
     if args.cmd == "ledger":
         return cmd_ledger(shelf, out, args.canary)
+    if args.cmd == "report":
+        return cmd_report(cfg, shelf, args, out, clock)
     if args.cmd == "migrate-preview":
         res = migration.preview(shelf, cfg, only=args.source)
         for provider, row in res["providers"].items():

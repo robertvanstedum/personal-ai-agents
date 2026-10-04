@@ -122,9 +122,24 @@ def _state_path(shelf, name: str) -> Path:
     return Path(shelf.status_dir) / "watch-state" / f"{name}.json"
 
 
+_PROBLEM_COUNTS = (codes.FAILED, codes.UNSTABLE, codes.DISK_LOW)
+
+
 def _write_status(shelf, name: str, status: str, counts: dict, now: datetime) -> None:
-    fsio.write_json(Path(shelf.status_dir) / f"watch-{name}.json",
-                    {"last_run_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "status": status, "counts": counts})
+    """The source's own status file. ``last_run_at`` is when the pass ran; ``last_success_at`` moves **only** when the pass
+    finished ``ok`` with no failed, unstable or disk-low item, and ``last_new_capture_at`` only when it also captured or
+    added an edition. They are carried forward otherwise, so a failing source keeps showing when it last worked and a run
+    that found nothing new never looks like a capture."""
+    path = Path(shelf.status_dir) / f"watch-{name}.json"
+    prev = fsio.read_json(path)
+    prev = prev if isinstance(prev, dict) else {}
+    stamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    success = status == "ok" and not any(counts.get(k) for k in _PROBLEM_COUNTS)
+    new = bool(counts.get(codes.CAPTURED) or counts.get(codes.EDITION_ADDED))
+    doc = {"last_run_at": stamp, "status": status, "counts": counts,
+           "last_success_at": stamp if success else prev.get("last_success_at"),
+           "last_new_capture_at": stamp if (success and new) else prev.get("last_new_capture_at")}
+    fsio.write_json(path, {k: v for k, v in doc.items() if v is not None})
 
 
 def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_seconds: float = 0) -> dict:

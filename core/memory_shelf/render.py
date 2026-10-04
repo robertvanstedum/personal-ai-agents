@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
@@ -248,7 +249,8 @@ def to_shelf(parsed: Parsed, source_sha256: str, source_size: int, *, created: s
         title=title)
     meta["edition"] = 1
     meta["edition_hash"] = hashlib.sha256(edition_bytes(clean, source_sha256, source_size, redacted)).hexdigest()
-    meta["normalized"] = {"turns": len(clean.turns), "redacted_turns": redacted, "malformed_lines": clean.malformed,
+    meta["normalized"] = {"turns": len(clean.turns), "turns_by_role": dict(sorted(Counter(t.speaker for t in clean.turns).items())),
+                          "redacted_turns": redacted, "malformed_lines": clean.malformed,
                           "identity": clean.identity, "omitted": dict(sorted(clean.omitted.items())),
                           "normalizer": clean.normalizer, **({"coverage": clean.coverage} if clean.coverage else {}),
                           **clean.manifest}
