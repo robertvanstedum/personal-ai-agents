@@ -346,7 +346,7 @@ def test_the_report_is_published_after_the_captures_with_the_jobs_root(tmp_path)
 
 
 @pytest.mark.parametrize("out,expected", [((1, ""), "report_failed"), ((0, "nothing useful"), "report_unparseable"),
-                                          (subprocess.TimeoutExpired("moi", 1), "report_timeout"), (RuntimeError("boom"), "report_error_runtimeerror")])
+                                          (subprocess.TimeoutExpired("moi", 1), "report_timeout"), (RuntimeError("boom"), "report_failed")])
 def test_a_report_failure_is_a_warning_and_never_a_failed_capture(tmp_path, out, expected):
     f = Fakes()
     f.report_out = out

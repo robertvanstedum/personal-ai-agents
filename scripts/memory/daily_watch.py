@@ -210,8 +210,8 @@ def publish_report(jobs_root, report: Callable[[object], tuple[int, str]]) -> di
         code = code_for_report(*report(jobs_root))
     except subprocess.TimeoutExpired:
         return {"report": "report_timeout"}
-    except Exception as exc:                    # noqa: BLE001 - a fixed code, never the message
-        return {"report": f"report_error_{type(exc).__name__.lower()}"[:40]}
+    except Exception:                           # noqa: BLE001 - a fixed code, never the message
+        return {"report": "report_failed"}
     return {"report": "ok" if code == "ok" else ("report_unparseable" if code == "unparseable" else "report_failed")}
 
 
