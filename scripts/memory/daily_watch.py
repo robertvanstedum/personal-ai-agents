@@ -15,6 +15,9 @@ What it does
   flag: ``possible_gap`` / ``unknown_kind``);
   or ``failed`` (an exception, a nonzero exit from a watch, an output it cannot read, or an approval check that
   cannot run: it then captures nothing, fail closed).
+* After the captures it publishes the counts-only **memory capture report** and the Operate matrix (``moi report --publish
+  --fidelity N``: ``memory-capture-report.json`` and ``memory-capture-matrix.json`` under the jobs root; contract
+  ``docs/memory_capture_report_contract.md``). A report failure is a **warning** (``report_failed``), never a failed capture.
 * On ``failed`` it sends ONE Telegram message (job id, state, fixed codes; no content) and records
   ``alert`` as ``sent`` or ``not_sent``; it exits nonzero either way.
 
@@ -48,7 +51,8 @@ DEFAULT_JOBS_ROOT = "~/minimoi-staging/data/jobs"
 WATCH_TIMEOUT_S = 3600
 OK, WARN, FAILED = "ok", "warn", "failed"
 WARN_CODES = frozenset({"not_approved", "stale", "not_configured", "disk_low", "ok_unstable", "ok_failed_files",
-                        "ok_possible_gap", "ok_unknown_kind", "ok_refused_files", "ok_unknown_participant", "unreadable"})
+                        "ok_possible_gap", "ok_unknown_kind", "ok_refused_files", "ok_unknown_participant", "unreadable",
+                        "report_failed", "report_unparseable", "report_timeout"})
 EXIT = {OK: 0, WARN: 0, FAILED: 1}
 EXIT_BROKEN = 2
 
@@ -71,6 +75,26 @@ def shelf_approval(source: str) -> str:
         return approvals.source_status(shelf, source, cfg.sources[source].fingerprint())
     except Exception as exc:                    # noqa: BLE001 - missing shelf code, bad config, unreadable record
         raise ApprovalUnavailable(type(exc).__name__) from exc
+
+
+REPORT_TIMEOUT_S = 1800
+FIDELITY_SAMPLE = 10                            # records re-read from their sources each day for the report's quality section
+
+
+def moi_report(jobs_root) -> tuple[int, str]:
+    """Run ``moi report --publish --fidelity N``: the counts-only capture report and the Operate matrix, written atomically to the
+    jobs root. Read-only on the shelf apart from the report files and the sample result. Raises subprocess.TimeoutExpired."""
+    moi = os.environ.get("MOI_BIN") or str(REPO / "scripts" / "moi")
+    done = subprocess.run([moi, "report", "--publish", "--fidelity", str(FIDELITY_SAMPLE), "--jobs-root", str(jobs_root)],
+                          capture_output=True, text=True, timeout=REPORT_TIMEOUT_S, stdin=subprocess.DEVNULL, cwd=str(REPO), check=False)
+    return done.returncode, done.stdout
+
+
+def code_for_report(returncode: int, stdout: str) -> str:
+    """``ok`` or a fixed code; only the summary line's first word is read."""
+    if returncode != 0:
+        return f"exit_{returncode}"
+    return "ok" if any(line.startswith("report\tpublished=") for line in stdout.splitlines()) else "unparseable"
 
 
 def moi_watch(source: str) -> tuple[int, str]:
@@ -137,8 +161,9 @@ def summarize(state: str, results: dict[str, str]) -> str:
     if state == FAILED:
         bad = [f"{p}={c}" for p, c in results.items() if c not in WARN_CODES and c != "ok"]
         return ("failed: " + ", ".join(bad))[: status.SUMMARY_MAX]
-    good = sum(1 for c in results.values() if c == "ok")
-    return f"{good} of {len(results)} sources ok" + ("" if state == OK else ", see results")
+    sources = {k: v for k, v in results.items() if k != "report"}
+    good = sum(1 for c in sources.values() if c == "ok")
+    return f"{good} of {len(sources)} sources ok" + ("" if state == OK else ", see results")
 
 
 def capture(approval: Callable[[str], str], watch: Callable[[str], tuple[int, str]]) -> dict[str, str]:
@@ -179,7 +204,18 @@ def _job(registry_path) -> tuple[registry.Job, dict[str, str]]:
     return fallback, {"registry": "unreadable"}
 
 
-def run(*, jobs_root, registry_path=None, approval=shelf_approval, watch=moi_watch, sender=alert.send,
+def publish_report(jobs_root, report: Callable[[object], tuple[int, str]]) -> dict[str, str]:
+    """The report step: a failure here is a warning (the capture itself may be fine) and never an exception."""
+    try:
+        code = code_for_report(*report(jobs_root))
+    except subprocess.TimeoutExpired:
+        return {"report": "report_timeout"}
+    except Exception as exc:                    # noqa: BLE001 - a fixed code, never the message
+        return {"report": f"report_error_{type(exc).__name__.lower()}"[:40]}
+    return {"report": "ok" if code == "ok" else ("report_unparseable" if code == "unparseable" else "report_failed")}
+
+
+def run(*, jobs_root, registry_path=None, approval=shelf_approval, watch=moi_watch, report=moi_report, sender=alert.send,
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc), out=sys.stdout, err=sys.stderr) -> int:
     job, extra = _job(registry_path)
     started = now()
@@ -192,6 +228,7 @@ def run(*, jobs_root, registry_path=None, approval=shelf_approval, watch=moi_wat
         return EXIT_BROKEN
     try:
         results = capture(approval, watch)
+        results.update(publish_report(jobs_root, report))
     except Exception as exc:                    # noqa: BLE001
         results = {"wrapper": f"exception_{type(exc).__name__.lower()}"[:40]}
     results.update(extra)

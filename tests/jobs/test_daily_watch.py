@@ -43,6 +43,7 @@ class Fakes:
         self.approvals = {"claude-code": "approved", "codex": "approved", "rooms": "not_configured", **(approvals or {})}
         self.outputs = outputs or {}
         self.watched, self.sent, self.send_result = [], [], send_result
+        self.reports, self.report_out = [], (0, "report\tr1\toverall=current\nreport\tpublished={}\n")
 
     def approval(self, source):
         value = self.approvals[source]
@@ -57,6 +58,12 @@ class Fakes:
             raise out
         return out
 
+    def report(self, jobs_root):
+        self.reports.append(str(jobs_root))
+        if isinstance(self.report_out, Exception):
+            raise self.report_out
+        return self.report_out
+
     def sender(self, text):
         self.sent.append(text)
         if isinstance(self.send_result, Exception):
@@ -64,9 +71,13 @@ class Fakes:
         return self.send_result
 
 
+def without_report(results):
+    return {k: v for k, v in results.items() if k != "report"}
+
+
 def go(tmp_path, fakes, **kw):
     out, err = io.StringIO(), io.StringIO()
-    code = dw.run(jobs_root=tmp_path / "jobs", approval=fakes.approval, watch=fakes.watch, sender=fakes.sender,
+    code = dw.run(jobs_root=tmp_path / "jobs", approval=fakes.approval, watch=fakes.watch, report=fakes.report, sender=fakes.sender,
                   now=kw.pop("now", Clock()), out=out, err=err, **kw)
     doc = status.read_status(tmp_path / "jobs", "memory-watch.json", "memory-watch")
     return code, doc, out.getvalue(), err.getvalue()
@@ -79,7 +90,7 @@ def test_both_sources_approved_and_ok(tmp_path):
     code, doc, out, _ = go(tmp_path, f)
     assert code == 0 and doc["state"] == "ok" and doc["exit_code"] == 0
     assert f.watched == ["claude-code", "codex"] and f.sent == []
-    assert doc["results"] == {"claude-code": "ok", "codex": "ok"} and doc["alert"] == "not_needed"
+    assert without_report(doc["results"]) == {"claude-code": "ok", "codex": "ok"} and doc["alert"] == "not_needed"
     assert doc["summary"] == "2 of 2 sources ok"
     assert doc["last_success_at"] == doc["finished_at"] and doc["next_due_by"] == "2026-10-05T09:00:00Z"
     assert "memory-watch ok" in out
@@ -89,7 +100,7 @@ def test_an_unapproved_source_is_never_captured_and_is_not_an_error(tmp_path):
     f = Fakes(approvals={"codex": "not_approved"})
     code, doc, _, _ = go(tmp_path, f)
     assert f.watched == ["claude-code"]                    # codex was never run
-    assert code == 0 and doc["state"] == "warn" and doc["results"] == {"claude-code": "ok", "codex": "not_approved"}
+    assert code == 0 and doc["state"] == "warn" and without_report(doc["results"]) == {"claude-code": "ok", "codex": "not_approved"}
     assert f.sent == [] and doc["alert"] == "not_needed"
 
 
@@ -100,7 +111,7 @@ def test_any_gate_other_than_approved_blocks_capture(tmp_path, gate, code_word):
     f = Fakes(approvals={"claude-code": gate, "codex": gate})
     code, doc, _, _ = go(tmp_path, f)
     assert f.watched == [] and code == 0 and doc["state"] == "warn"
-    assert set(doc["results"].values()) == {code_word}
+    assert set(without_report(doc["results"]).values()) == {code_word}
 
 
 def test_the_inbox_is_never_run_and_only_the_two_sources_are_asked(tmp_path):
@@ -136,7 +147,7 @@ def test_a_nonzero_watch_fails_the_job_sends_one_message_and_exits_1(tmp_path):
     f = Fakes(outputs={"codex": (1, "")})
     code, doc, _, _ = go(tmp_path, f)
     assert code == 1 and doc["state"] == "failed" and doc["exit_code"] == 1
-    assert doc["results"] == {"claude-code": "ok", "codex": "exit_1"} and doc["alert"] == "sent"
+    assert without_report(doc["results"]) == {"claude-code": "ok", "codex": "exit_1"} and doc["alert"] == "sent"
     assert len(f.sent) == 1
     assert "memory-watch" in f.sent[0] and "FAILED" in f.sent[0] and "codex=exit_1" in f.sent[0]
     assert doc["last_success_at"] is None                  # a failed run is not a success
@@ -170,7 +181,7 @@ def test_an_approval_check_that_cannot_run_fails_closed_and_captures_nothing(tmp
     f = Fakes(approvals={"claude-code": dw.ApprovalUnavailable("ImportError")})
     code, doc, _, _ = go(tmp_path, f)
     assert f.watched == [] and code == 1 and doc["state"] == "failed"
-    assert doc["results"] == {"approvals": "approval_unavailable"} and len(f.sent) == 1
+    assert without_report(doc["results"]) == {"approvals": "approval_unavailable"} and len(f.sent) == 1
 
 
 def test_an_unexpected_exception_is_a_failed_run_not_a_crash(tmp_path, monkeypatch):
@@ -179,7 +190,7 @@ def test_an_unexpected_exception_is_a_failed_run_not_a_crash(tmp_path, monkeypat
     monkeypatch.setattr(dw, "capture", boom)
     f = Fakes()
     code, doc, _, _ = go(tmp_path, f)
-    assert code == 1 and doc["results"] == {"wrapper": "exception_valueerror"} and "TOPSECRET" not in str(f.sent)
+    assert code == 1 and without_report(doc["results"]) == {"wrapper": "exception_valueerror"} and "TOPSECRET" not in str(f.sent)
 
 
 # ── the status file never holds text ────────────────────────────────────────
@@ -323,3 +334,33 @@ def test_a_configured_rooms_source_that_is_not_approved_warns_and_is_never_run(t
 def test_an_ordinary_guest_exclusion_alone_is_not_a_warning(tmp_path):
     f = Fakes(approvals={"rooms": "approved"}, outputs={"rooms": (0, watch_line("rooms", "ok", {"excluded": 3, "other_participant": 3}))})
     assert go(tmp_path, f)[1]["state"] == "ok"
+
+
+# ── the capture report step ─────────────────────────────────────────────────
+
+def test_the_report_is_published_after_the_captures_with_the_jobs_root(tmp_path):
+    f = Fakes()
+    code, doc, *_ = go(tmp_path, f)
+    assert f.reports == [str(tmp_path / "jobs")] and doc["results"]["report"] == "ok" and doc["state"] == "ok"
+    assert doc["summary"] == "2 of 2 sources ok"
+
+
+@pytest.mark.parametrize("out,expected", [((1, ""), "report_failed"), ((0, "nothing useful"), "report_unparseable"),
+                                          (subprocess.TimeoutExpired("moi", 1), "report_timeout"), (RuntimeError("boom"), "report_error_runtimeerror")])
+def test_a_report_failure_is_a_warning_and_never_a_failed_capture(tmp_path, out, expected):
+    f = Fakes()
+    f.report_out = out
+    code, doc, *_ = go(tmp_path, f)
+    assert code == 0 and doc["state"] == "warn" and doc["results"]["report"] == expected and doc["results"]["codex"] == "ok"
+    assert f.sent == [] and "boom" not in json.dumps(doc)
+
+
+def test_a_failed_capture_still_tries_to_publish_the_report(tmp_path):
+    f = Fakes(outputs={"codex": (1, "")})
+    code, doc, *_ = go(tmp_path, f)
+    assert code == 1 and doc["state"] == "failed" and f.reports
+
+
+def test_code_for_report_reads_only_the_publish_line():
+    assert dw.code_for_report(0, "report\trun\toverall=x\nreport\tpublished={\"a\": 1}\n") == "ok"
+    assert dw.code_for_report(0, "report\trun\toverall=x\n") == "unparseable" and dw.code_for_report(3, "") == "exit_3"
