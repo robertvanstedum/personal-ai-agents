@@ -13,6 +13,9 @@ latest row for each (source, key) is that item's state. The report separates:
 * **missing**: seen but no outcome (a crash), failed, unstable, ``disk_low``,
   or captured on paper with no record on the shelf.
 
+Coverage flags (``possible_gap``, ``unknown_kind``) ride on the captured row, as counts, and are summed per
+source: a capture that looks complete in the ledger can still be short of what its file shows.
+
 Canaries are counted apart and never in the ordinary totals.
 """
 from __future__ import annotations
@@ -30,7 +33,7 @@ def _file(shelf) -> Path:
 
 def record(shelf, source: str, key: str, outcome: str, *, reason: str | None = None, record_id: str | None = None,
            canary: bool = False, redacted_turns: int = 0, omitted: dict | None = None, turns: int = 0,
-           now: datetime | None = None) -> dict:
+           flags: list | None = None, gap: dict | None = None, now: datetime | None = None) -> dict:
     row = {"at": (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source, "key": key,
            "outcome": outcome}
     if reason:
@@ -45,6 +48,10 @@ def record(shelf, source: str, key: str, outcome: str, *, reason: str | None = N
         row["redacted_turns"] = redacted_turns
     if omitted:
         row["omitted"] = dict(omitted)
+    if flags:                                    # coverage flags (possible_gap, unknown_kind): codes and counts only
+        row["flags"] = sorted(flags)
+    if gap and any(gap.values()):
+        row["gap"] = {k: v for k, v in gap.items() if v}
     fsio.append_jsonl(_file(shelf), row)
     return row
 
@@ -61,7 +68,7 @@ def report(shelf, *, canary: bool = False) -> dict:
     """Counts only. ``ok`` is True when nothing is missing."""
     per: dict[str, dict] = defaultdict(lambda: {"expected": 0, "captured": 0, "excluded": Counter(),
                                                 "refused": Counter(), "held": Counter(), "missing": Counter()})
-    scrub, omitted = 0, Counter()
+    scrub, omitted, flagged = 0, Counter(), defaultdict(Counter)
     for (source, _key), row in latest(shelf).items():
         if bool(row.get("canary")) != canary:
             continue
@@ -75,6 +82,10 @@ def report(shelf, *, canary: bool = False) -> dict:
             bucket["captured"] += 1
             scrub += row.get("redacted_turns", 0)
             omitted.update(row.get("omitted") or {})
+            for flag in row.get("flags") or []:
+                flagged[source][flag] += 1
+                if flag == "possible_gap":
+                    flagged[source]["gap_messages"] += sum((row.get("gap") or {}).values())
         elif out == codes.EXCLUDED:
             bucket["excluded"][reason] += 1
         elif out == codes.REFUSED:
@@ -86,5 +97,6 @@ def report(shelf, *, canary: bool = False) -> dict:
     sources = {s: {"expected": b["expected"], "captured": b["captured"], "excluded": dict(b["excluded"]),
                    "refused": dict(b["refused"]), "held": dict(b["held"]), "missing": dict(b["missing"])} for s, b in sorted(per.items())}
     missing = sum(sum(b["missing"].values()) for b in sources.values())
-    return {"canary": canary, "sources": sources, "missing": missing, "ok": missing == 0,
+    coverage = {s: dict(c) for s, c in sorted(flagged.items())}
+    return {"canary": canary, "sources": sources, "missing": missing, "ok": missing == 0, "coverage": coverage,
             "expected_exclusions": {"scrubbed_turns": scrub, "omitted_by_kind": dict(sorted(omitted.items()))}}

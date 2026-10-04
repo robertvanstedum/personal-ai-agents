@@ -130,7 +130,9 @@ def to_shelf(parsed: Parsed, source_sha256: str, source_size: int, *, created: s
     meta["edition"] = 1
     meta["edition_hash"] = hashlib.sha256(edition_bytes(clean, source_sha256, source_size, redacted)).hexdigest()
     meta["normalized"] = {"turns": len(clean.turns), "redacted_turns": redacted, "malformed_lines": clean.malformed,
-                          "identity": clean.identity, "omitted": dict(sorted(clean.omitted.items())), **clean.manifest}
+                          "identity": clean.identity, "omitted": dict(sorted(clean.omitted.items())),
+                          "normalizer": clean.normalizer, **({"coverage": clean.coverage} if clean.coverage else {}),
+                          **clean.manifest}
     return meta, render_body(clean), edition_bytes(clean, source_sha256, source_size, redacted)
 
 

@@ -24,10 +24,11 @@ import random
 from collections import Counter
 from pathlib import Path
 
-from core.memory_shelf import editions, inbox, record, render, watchers
+from core.memory_shelf import editions, inbox, record, render, sessions, watchers
 from core.memory_shelf.config import Config
 
 SOURCE_CHANGED, SOURCE_MISSING, NOT_RETAINED, UNREADABLE = "source_changed", "source_missing", "not_retained", "unreadable"
+NORMALIZER_CHANGED = "normalizer_changed"          # the record was read by an older parser; re-mediation will bring it up to date
 
 
 def diff(expected: list[tuple], actual: list[tuple], label: str = "") -> list[dict]:
@@ -98,6 +99,8 @@ def _source_turns(cfg: Config, meta: dict):
             if not path or not path.is_file():
                 return None, SOURCE_MISSING
             sha, size = render.hash_file(path)
+            if (meta.get("normalized") or {}).get("normalizer", sessions.DEFAULT_NORMALIZER) != sessions.NORMALIZER_VERSION[source.kind]:
+                return None, NORMALIZER_CHANGED
             with open(path, "rb") as handle:
                 parsed = watchers.PARSERS[source.kind](handle)
         elif ret.get("kind") == "inbox-file":

@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core.memory_shelf import approvals, codes, fsio, ledger, render, sessions
+from core.memory_shelf import approvals, codes, coverage, fsio, ledger, render, review, sessions
 from core.memory_shelf import bundle as bundles
 from core.memory_shelf.config import SourceCfg, never_copied
 
@@ -158,47 +158,71 @@ def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_sec
                 state[lkey] = {"outcome": codes.EXCLUDED, "reason": reason}
                 tally(codes.EXCLUDED)
                 continue
+            current = sessions.NORMALIZER_VERSION[cfg.kind]
             if (prev.get("outcome") in codes.OK_OUTCOMES and prev.get("size") == cand.size
-                    and prev.get("mtime_ns") == cand.mtime_ns):
+                    and prev.get("mtime_ns") == cand.mtime_ns
+                    and prev.get("normalizer", sessions.DEFAULT_NORMALIZER) == current):
                 tally("skipped_unchanged")
                 continue
             ledger.record(shelf, name, lkey, codes.DISCOVERED, now=now)
-            outcome, rid, sha = _capture(shelf, cfg, cand, lkey, prev, now, settle_seconds)
+            outcome, rid, sha, cov = _capture(shelf, cfg, cand, lkey, prev, now, settle_seconds)
+            if outcome in codes.OK_OUTCOMES and cov is not None:
+                _sync_coverage(shelf, name, lkey, cand, cov)
+                flags = cov.get("flags") or []
+            else:
+                flags = prev.get("flags") or []             # not re-read this pass: what we knew stays true
             state[lkey] = {"outcome": outcome, "size": cand.size, "mtime_ns": cand.mtime_ns, "sha256": sha,
-                           "record": rid, "rel": cand.rel}
+                           "record": rid, "rel": cand.rel, "normalizer": current,
+                           **({"flags": flags} if flags else {})}
+            if outcome not in codes.OK_OUTCOMES:
+                state[lkey]["normalizer"] = prev.get("normalizer", sessions.DEFAULT_NORMALIZER)
             tally(outcome)
     finally:
         fsio.write_json(_state_path(shelf, name), {"files": state})
+    for flag in (coverage.POSSIBLE_GAP, coverage.UNKNOWN_KIND):
+        flagged = sum(1 for entry in state.values() if flag in (entry.get("flags") or []))
+        if flagged:
+            counts[flag] = flagged                          # files flagged now, not only this pass: a gap stays a warning
     _write_status(shelf, name, "ok", counts, now)
     return {"status": "ok", "counts": counts}
 
 
+def _sync_coverage(shelf, source: str, lkey: str, cand: Candidate, cov: dict) -> None:
+    """Keep the owner's review item in step with the coverage check: open while flagged, resolved once clear."""
+    flags = cov.get("flags") or []
+    review.sync_coverage(shelf, lkey, {"source": source, "date": _date(cand.mtime_ns), "bytes": cand.size,
+                                       "flags": flags, "gap": cov.get("gap") or {},
+                                       "unknown": sorted((cov.get("unknown") or {}))[:10]} if flags else None)
+
+
 def _capture(shelf, cfg: SourceCfg, cand: Candidate, lkey: str, prev: dict, now: datetime,
-             settle_seconds: float) -> tuple[str, str | None, str | None]:
+             settle_seconds: float) -> tuple[str, str | None, str | None, dict | None]:
+    """(outcome, record id, sha256, coverage). Coverage is None when the file was not re-read into a record."""
     name = cfg.name
     if settle_seconds and (now.timestamp() - cand.mtime_ns / 1e9) < settle_seconds:
         ledger.record(shelf, name, lkey, codes.UNSTABLE, now=now)
-        return codes.UNSTABLE, None, None
+        return codes.UNSTABLE, None, None, None
     try:
         sha, size = render.hash_file(cand.path)
         with open(cand.path, "rb") as handle:
-            parsed = PARSERS[cfg.kind](handle)
+            parsed = coverage.parse_with_coverage(cfg.kind, handle, PARSERS)
         after = cand.path.stat()
     except OSError:
         ledger.record(shelf, name, lkey, codes.FAILED, reason="read_failed", now=now)
-        return codes.FAILED, None, None
+        return codes.FAILED, None, None, None
     except Exception:                                    # noqa: BLE001 - fixed code only, never the message
         ledger.record(shelf, name, lkey, codes.FAILED, reason="parse_failed", now=now)
-        return codes.FAILED, None, None
+        return codes.FAILED, None, None, None
     if after.st_size != cand.size or after.st_mtime_ns != cand.mtime_ns or size != cand.size:
         ledger.record(shelf, name, lkey, codes.UNSTABLE, now=now)
-        return codes.UNSTABLE, None, None
-    if prev.get("sha256") == sha and prev.get("record") and prev.get("outcome") in codes.OK_OUTCOMES:
-        ledger.record(shelf, name, lkey, codes.UNCHANGED, record_id=prev["record"], now=now)   # touched, not changed
-        return codes.UNCHANGED, prev["record"], sha
+        return codes.UNSTABLE, None, None, None
+    if (prev.get("sha256") == sha and prev.get("record") and prev.get("outcome") in codes.OK_OUTCOMES
+            and prev.get("normalizer", sessions.DEFAULT_NORMALIZER) == parsed.normalizer):
+        ledger.record(shelf, name, lkey, codes.UNCHANGED, record_id=prev["record"], flags=prev.get("flags"), now=now)
+        return codes.UNCHANGED, prev["record"], sha, None          # touched, not changed
     if not parsed.turns:
         ledger.record(shelf, name, lkey, codes.EXCLUDED, reason=codes.NO_TURNS, now=now)
-        return codes.EXCLUDED, None, sha
+        return codes.EXCLUDED, None, sha, None
     sid = parsed.source_id or session_id_from_name(cfg.kind, cand.rel)
     started_fallback = datetime.fromtimestamp(cand.mtime_ns / 1e9, tz=timezone.utc)
     created = bundles.utc(parsed.started, started_fallback)
@@ -209,11 +233,11 @@ def _capture(shelf, cfg: SourceCfg, cand: Candidate, lkey: str, prev: dict, now:
     path, code = shelf.stage(bundle)
     if code:
         ledger.record(shelf, name, lkey, codes.DISK_LOW, now=now)
-        return codes.DISK_LOW, None, sha
+        return codes.DISK_LOW, None, sha, None
     result = next((r for r in shelf.drain() if r.key == bundle.key), None)
     if result is None:
-        return codes.FAILED, None, sha
-    return result.outcome, result.record_id, sha
+        return codes.FAILED, None, sha, None
+    return result.outcome, result.record_id, sha, parsed.coverage
 
 
 __all__ = ["run_source", "dry_run", "build_listing", "discover", "session_id_from_name"]
