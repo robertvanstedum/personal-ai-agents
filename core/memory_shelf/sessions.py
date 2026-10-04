@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Iterable
 
 HUMAN, ASSISTANT, SYSTEM = "human", "assistant", "system"
+MARK = "@mark"
 
 
 @dataclass(frozen=True)
@@ -48,17 +49,23 @@ class Parsed:
     identity: str = "source"  # "source": speakers come from the file's own structure; "heuristic": a paste
     turns: list[Turn] = field(default_factory=list)
     omitted: Counter = field(default_factory=Counter)
-    pointers: list[tuple[int, str, int]] = field(default_factory=list)   # (after turn ordinal, kind, source line)
+    # (after turn ordinal, kind, source line, detail); kind "@mark" is a rendered header, not an omission
+    pointers: list[tuple[int, str, int, str | None]] = field(default_factory=list)
     malformed: int = 0
     lines: int = 0
+    manifest: dict = field(default_factory=dict)      # format-level counts (branches, attachments, ...) for the record
 
     def add(self, speaker: str, text: str, line: int, basis: str) -> None:
         if text.strip():
             self.turns.append(Turn(len(self.turns) + 1, speaker, text, line, basis))
 
-    def skip(self, kind: str, line: int) -> None:
+    def skip(self, kind: str, line: int, detail: str | None = None) -> None:
         self.omitted[kind] += 1
-        self.pointers.append((len(self.turns), kind, line))
+        self.pointers.append((len(self.turns), kind, line, detail))
+
+    def mark(self, text: str) -> None:
+        """A one-line header between turns (a branch heading). Not an omission, so not counted as one."""
+        self.pointers.append((len(self.turns), MARK, 0, text))
 
 
 def _json(raw: bytes | str):

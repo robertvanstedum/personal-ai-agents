@@ -9,6 +9,7 @@ latest row for each (source, key) is that item's state. The report separates:
 * **expected exclusion**: ``never_copy``, ``private``, ``empty``, and scrub or
   omission counts read from the record manifest, grouped by reason code;
 * **refused**: an inbox file that was refused visibly, with its reason code;
+* **held**: a file kept untouched for a later version (``unsupported_kind``): listed, not missing;
 * **missing**: seen but no outcome (a crash), failed, unstable, ``disk_low``,
   or captured on paper with no record on the shelf.
 
@@ -59,7 +60,7 @@ def latest(shelf) -> dict[tuple[str, str], dict]:
 def report(shelf, *, canary: bool = False) -> dict:
     """Counts only. ``ok`` is True when nothing is missing."""
     per: dict[str, dict] = defaultdict(lambda: {"expected": 0, "captured": 0, "excluded": Counter(),
-                                                "refused": Counter(), "missing": Counter()})
+                                                "refused": Counter(), "held": Counter(), "missing": Counter()})
     scrub, omitted = 0, Counter()
     for (source, _key), row in latest(shelf).items():
         if bool(row.get("canary")) != canary:
@@ -78,10 +79,12 @@ def report(shelf, *, canary: bool = False) -> dict:
             bucket["excluded"][reason] += 1
         elif out == codes.REFUSED:
             bucket["refused"][reason] += 1
+        elif out == codes.HELD:
+            bucket["held"][reason] += 1
         else:                                   # discovered, failed, unstable, disk_low
             bucket["missing"][out] += 1
     sources = {s: {"expected": b["expected"], "captured": b["captured"], "excluded": dict(b["excluded"]),
-                   "refused": dict(b["refused"]), "missing": dict(b["missing"])} for s, b in sorted(per.items())}
+                   "refused": dict(b["refused"]), "held": dict(b["held"]), "missing": dict(b["missing"])} for s, b in sorted(per.items())}
     missing = sum(sum(b["missing"].values()) for b in sources.values())
     return {"canary": canary, "sources": sources, "missing": missing, "ok": missing == 0,
             "expected_exclusions": {"scrubbed_turns": scrub, "omitted_by_kind": dict(sorted(omitted.items()))}}

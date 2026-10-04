@@ -4,9 +4,10 @@
     moi approve <id> [--under <m>]   the ONLY path to approval events
     moi approve-source <source>      switch a source on after its dry run
     moi designate <id>               confirm a pasted "file this" candidate
-    moi dry-run <source>             write the dry-run listing (claude-code | codex | backfill-guild | backfill-curator)
+    moi dry-run <source>             write the dry-run listing (claude-code | codex | inbox | backfill-guild | backfill-curator)
     moi watch <source>               one watcher pass (dry run only until approved)
-    moi inbox                        one inbox pass       moi drain   apply the outbox to the shelf
+    moi inbox                        one inbox pass (nothing but the canary moves until `approve-source inbox`)
+    moi drain                        apply the outbox to the shelf
     moi canary emit | check          write the canary into the inbox | audit it (read-only)
     moi ledger [--canary]            F1: captured vs expected exclusions vs missing
     moi fidelity [--sample N] [--canary]   F2 sample (read-only)
@@ -48,6 +49,8 @@ def _shelf(cfg: config.Config, now=None) -> Shelf:
 
 
 def _fingerprint(cfg: config.Config, name: str) -> str | None:
+    if name == inbox.SOURCE:
+        return inbox.fingerprint(cfg.inbox_root, cfg.never_copy)
     if name in cfg.sources:
         return cfg.sources[name].fingerprint()
     if name in backfill.SOURCES:
@@ -64,7 +67,7 @@ def _authority(confirm: Callable[[str], bool], what: str, out) -> OwnerAuthority
 
 def cmd_review(cfg, shelf, out) -> int:
     print("# dry runs", file=out)
-    names = [*cfg.sources, *BACKFILL]
+    names = [*cfg.sources, *BACKFILL, inbox.SOURCE]
     for name in names:
         listing = fsio.read_json(approvals.dry_run_path(shelf, name))
         if not isinstance(listing, dict):
@@ -94,7 +97,7 @@ def cmd_ledger(shelf, out, canary_flag: bool) -> int:
     for name, row in rep["sources"].items():
         print(f"{name}\texpected={row['expected']}\tcaptured={row['captured']}\t"
               f"excluded={json.dumps(row['excluded'], sort_keys=True)}\trefused={json.dumps(row['refused'], sort_keys=True)}\t"
-              f"missing={json.dumps(row['missing'], sort_keys=True)}", file=out)
+              f"held={json.dumps(row['held'], sort_keys=True)}\tmissing={json.dumps(row['missing'], sort_keys=True)}", file=out)
     print(f"expected-exclusions\t{json.dumps(rep['expected_exclusions'], sort_keys=True)}", file=out)
     print("OK" if rep["ok"] else f"MISSING {rep['missing']}", file=out)
     return OK if rep["ok"] else REFUSED
@@ -168,7 +171,9 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
         print(f"source-approved\t{args.source}\t{doc['approved_at']}", file=out)
         return OK
     if args.cmd == "dry-run":
-        if args.source in cfg.sources:
+        if args.source == inbox.SOURCE:
+            listing = inbox.dry_run(shelf, cfg.inbox_root, cfg.never_copy, clock)
+        elif args.source in cfg.sources:
             listing = watchers.dry_run(shelf, cfg.sources[args.source], clock)
         elif args.source in BACKFILL:
             listing = backfill.dry_run(shelf, args.source, cfg.repo_root, cfg.never_copy, clock)
@@ -185,7 +190,7 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
         print(f"watch\t{args.source}\t{res['status']}\t{json.dumps(res['counts'], sort_keys=True)}", file=out)
         return OK
     if args.cmd == "inbox":
-        res = inbox.process(shelf, cfg.inbox_root, now=clock, never_copy=cfg.never_copy)
+        res = inbox.run(shelf, cfg.inbox_root, now=clock, never_copy=cfg.never_copy)
         print(f"inbox\t{res['status']}\t{json.dumps(res['counts'], sort_keys=True)}", file=out)
         return OK
     if args.cmd == "drain":

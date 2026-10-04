@@ -2,14 +2,32 @@
 
 Accepts, at the top level of the folder:
 
-* a **claude.ai export zip** (``conversations.json``): speakers come from each
-  message's ``sender`` (``human`` / ``assistant``) -- a source-identified format.
-  Any other shape is refused whole (``unknown_schema``); nothing is guessed;
+* a **claude.ai export**: either the older single zip (``conversations.json`` at its
+  root) or the newer manifest plus category zips ``<category>-<NNN>.zip``. Categories:
+  ``conversations`` is imported; ``light_metadata`` (login history, account data) is
+  **excluded whole** (``account_metadata``) and left in place; ``memories``,
+  ``projects`` and ``frames`` are **held** (``unsupported_kind``: listed, left
+  untouched, not refused, so a later version can import them); the manifest JSON is
+  ignored (``export_manifest``: it carries expiring download links). Speakers come from
+  each message's ``sender``: a source-identified format. Any other shape is refused
+  whole (``unknown_schema``); nothing is guessed. Conversations are trees: see
+  ``branches.py`` (main line first, every other message kept as a branch);
 * a **pasted transcript** (``.txt``/``.md``): turn boundaries are found by speaker
   labels (heuristic identity). Text before the first label is kept as an
   unattributed ``system`` turn, never dropped. A marker in a paste never designates:
   it becomes a *candidate* for ``moi review``;
 * a **canary** file (see ``canary.py``).
+
+**Approval gate (fail closed).** ``moi dry-run inbox`` lists every file (name, size,
+sha256, kind, category, decision, and for conversation exports counts and a date
+range only: never a title, name, summary or any text). ``moi approve-source inbox``
+binds an approval to the **exact set of (name, sha256) pairs** in that listing;
+``moi inbox`` processes nothing unless the files present now are exactly that set. A
+new, changed or renamed file makes the approval ``stale`` until a new dry run is
+approved; each file's sha256 is checked again at the moment it is processed. The
+canary is the one exemption: its file must equal the fixed synthetic conversation
+byte for byte in content (``canary.valid``), so it can carry nothing real; it keeps
+travelling without an approval.
 
 Anything else, or anything unparseable, is **refused visibly**: moved to
 ``_refused/`` with a row in ``_refused/listing.jsonl`` (name, reason code, size,
@@ -19,10 +37,12 @@ sha256: no content) and counted in the ledger. Processed files move to
 Conversations are normalized (scrubbed, D8), staged in the outbox and applied to
 the shelf; one export carries many conversations and each is matched to its record
 **only by its exact conversation uuid** (a later export adds an edition, a changed
-conversation never becomes a duplicate record).
+conversation never becomes a duplicate record). ``conversations.json`` is read as a
+stream, one conversation at a time (it is tens of MB and grows).
 """
 from __future__ import annotations
 
+import codecs
 import hashlib
 import json
 import os
@@ -32,8 +52,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.memory_shelf import approvals, branches
 from core.memory_shelf import canary as canary_mod
-from core.memory_shelf import codes, fsio, ledger, selection
+from core.memory_shelf import codes, fsio, ledger, render, selection
 from core.memory_shelf import bundle as bundles
 from core.memory_shelf.config import never_copied
 from core.memory_shelf.sessions import ASSISTANT, HUMAN, SYSTEM, Parsed
@@ -71,49 +92,277 @@ def _canonical(obj) -> bytes:
     return json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")
 
 
-def _message_text(msg: dict, parsed: Parsed, ordinal_line: int) -> str:
-    text = msg.get("text")
-    content = msg.get("content")
-    blocks = [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
-    for block in blocks:
-        if block.get("type") != "text":
-            parsed.skip(f"content:{str(block.get('type', 'unknown'))[:40]}", ordinal_line)
-    for field_name in ("attachments", "files"):
-        for _ in msg.get(field_name) or []:
-            parsed.skip(field_name, ordinal_line)
-    if isinstance(text, str) and text.strip():
-        return text
-    return "\n\n".join(b.get("text", "") for b in blocks if b.get("type") == "text" and isinstance(b.get("text"), str))
+
+# ── claude.ai conversations ───────────────────────────────────────────────────
+
+SOURCE = "inbox"
+CATEGORY_ZIP = re.compile(r"^(conversations|memories|projects|frames|light_metadata)-\d+\.zip$")
+HELD_CATEGORIES = ("memories", "projects", "frames")
+
+
+def _cap(text: object, limit: int = 40) -> str:
+    return render.one_line(str(text) if text is not None else "?", limit) or "?"
+
+
+def _message_text(msg: dict, parsed: Parsed, line: int) -> str:
+    """One message's text. Content blocks are authoritative; ``text`` is used only when there are none.
+
+    ``text`` blocks are kept verbatim; thinking, tool calls and results, injected prompt blocks and
+    files become one-line pointers (names only); an attachment's extracted text is part of what the
+    owner sent and is kept, framed, after the message text.
+    """
+    content, text = msg.get("content"), msg.get("text")
+    if isinstance(content, list) and content:
+        parts = []
+        for block in content:
+            kind = block.get("type") if isinstance(block, dict) else None
+            if kind == "text" and isinstance(block.get("text"), str):
+                parts.append(block["text"])
+            elif kind == "thinking":
+                parsed.skip("thinking", line)
+            elif kind == "tool_use":
+                parsed.skip(f"tool_use:{_cap(block.get('name'))}", line)
+            elif kind == "tool_result":
+                parsed.skip(f"tool_result:{_cap(block.get('name'))}", line)
+            elif kind == "injected_prompt_block":
+                parsed.skip("injected_prompt_block", line)
+            else:
+                parsed.skip(f"content:{_cap(kind or 'unknown')}", line)
+        body = "\n\n".join(parts)
+    else:
+        body = text if isinstance(text, str) else ""
+    framed = []
+    attachments = msg.get("attachments")
+    if attachments is not None and not isinstance(attachments, list):
+        parsed.skip("attachments", line)
+        attachments = []
+    for att in attachments or []:
+        parsed.manifest["attachments"] += 1
+        extracted = att.get("extracted_content") if isinstance(att, dict) else None
+        if isinstance(extracted, str) and extracted.strip():
+            name = att.get("file_name") if isinstance(att.get("file_name"), str) else "unnamed"
+            ftype = att.get("file_type") if isinstance(att.get("file_type"), str) else "unknown type"
+            size = att.get("file_size")
+            size_text = f"{int(size)} bytes" if isinstance(size, (int, float)) and not isinstance(size, bool) else "size unknown"
+            parsed.manifest["attachment_chars"] += len(extracted)
+            framed.append(f"Attachment: {name} ({ftype}, {size_text})\n{extracted}")
+        else:
+            name = att.get("file_name") if isinstance(att, dict) and isinstance(att.get("file_name"), str) else None
+            parsed.skip("attachment_no_text", line, name)
+    files = msg.get("files")
+    if files is not None and not isinstance(files, list):
+        parsed.skip("files", line)
+        files = []
+    for entry in files or []:
+        name = entry.get("file_name") if isinstance(entry, dict) and isinstance(entry.get("file_name"), str) else None
+        parsed.skip("file", line, name)
+    return "\n\n".join(p for p in [body if body.strip() else "", *framed] if p)
+
+
+def check_conversation(conv: object) -> dict:
+    """The shape every conversation must have; one unknown shape refuses the whole file (never guessed)."""
+    if not (isinstance(conv, dict) and isinstance(conv.get("uuid"), str) and conv["uuid"]
+            and isinstance(conv.get("chat_messages"), list)):
+        raise Refusal(codes.UNKNOWN_SCHEMA)
+    for msg in conv["chat_messages"]:
+        if not (isinstance(msg, dict) and msg.get("sender") in EXPORT_SENDERS
+                and (isinstance(msg.get("text"), str) or isinstance(msg.get("content"), list))):
+            raise Refusal(codes.UNKNOWN_SCHEMA)
+    return conv
+
+
+def parse_conversation(conv: dict) -> Item:
+    """One validated conversation to turns: the main line in order, then every other branch (``branches.py``)."""
+    msgs = conv["chat_messages"]
+    main, segments = branches.plan(msgs)
+    parsed = Parsed("claude-ai", "Claude", source_id=conv["uuid"], started=conv.get("created_at"), identity="source")
+    parsed.manifest.update({"branches": len(segments), "branch_messages": sum(len(s.indexes) for s in segments),
+                            "attachments": 0, "attachment_chars": 0})
+    for reason in (codes.ORPHAN_PARENT, codes.EXTRA_ROOT):
+        count = sum(1 for s in segments if s.reason == reason)
+        if count:
+            parsed.manifest[reason] = count
+    turn_at: dict[int, int] = {}                    # message index -> ordinal of the nearest turn at or above it
+
+    def emit(path, last: int, branch_no: int) -> None:
+        for idx in path:
+            msg = msgs[idx]
+            parsed.lines = idx + 1
+            basis = f"sender:{msg['sender']}" + (f",branch:{branch_no}" if branch_no else "")
+            before = len(parsed.turns)
+            parsed.add(EXPORT_SENDERS[msg["sender"]], _message_text(msg, parsed, idx + 1), idx + 1, basis)
+            if len(parsed.turns) > before:
+                last = len(parsed.turns)
+            turn_at[idx] = last
+    emit(main, 0, 0)
+    for number, seg in enumerate(segments, 1):
+        count = len(seg.indexes)
+        if seg.reason == codes.ORPHAN_PARENT:
+            parsed.mark(f"=== Orphan branch, parent message not in the export ({count} messages) ===")
+        elif seg.reason == codes.EXTRA_ROOT:
+            parsed.mark(f"=== Additional conversation root ({count} messages) ===")
+        else:
+            parsed.mark(f"=== Branch from turn {turn_at.get(seg.fork, 0)} ({count} messages) ===")
+        emit(seg.indexes, turn_at.get(seg.fork, 0) if seg.fork is not None else 0, number)
+    # the hash covers the conversation's content, not export-run metadata such as updated_at
+    core = {k: conv.get(k) for k in ("uuid", "name", "created_at", "chat_messages")}
+    raw = _canonical(core)
+    name = conv.get("name") if isinstance(conv.get("name"), str) and conv["name"].strip() else "claude-ai conversation"
+    return Item(parsed, hashlib.sha256(raw).hexdigest(), len(raw), f"claude-ai:{conv['uuid']}", name,
+                bundles.utc(conv.get("created_at")), member=conv["uuid"])
+
+
+class NotAList(ValueError):
+    """The JSON is valid but is not an array."""
+
+
+def iter_json_array(read, *, chunk: int = 1 << 20):
+    """Yield the items of a top-level JSON array from ``read(n) -> str``, one at a time (bounded memory).
+
+    Only one item (plus a chunk) is ever held, so a 74 MB ``conversations.json`` costs about one
+    conversation of memory. Raises ``ValueError`` for malformed JSON and ``NotAList`` otherwise.
+    """
+    decoder = json.JSONDecoder()
+    buf, pos, eof = "", 0, False
+
+    def more(size: int) -> bool:
+        nonlocal buf, pos, eof
+        data = read(size)
+        if not data:
+            eof = True
+            return False
+        buf, pos = buf[pos:] + data, 0
+        return True
+
+    def peek() -> str:
+        nonlocal pos
+        while True:
+            while pos < len(buf) and buf[pos] in " \t\r\n":
+                pos += 1
+            if pos < len(buf):
+                return buf[pos]
+            if not more(chunk):
+                return ""
+    first = peek()
+    if first == "":
+        raise ValueError("empty")
+    if first != "[":
+        pieces, total = [buf[pos:]], len(buf) - pos
+        while True:
+            data = read(chunk)
+            if not data:
+                break
+            pieces.append(data)
+            total += len(data)
+            if total > MAX_EXPORT_BYTES:
+                raise ValueError("too large")
+        json.loads("".join(pieces))                   # malformed -> ValueError; valid -> not a list
+        raise NotAList
+    pos += 1
+    if peek() == "]":
+        pos += 1
+    else:
+        while True:
+            if peek() == "":
+                raise ValueError("truncated")
+            size = chunk
+            while True:
+                try:
+                    item, end = decoder.raw_decode(buf, pos)
+                    if end < len(buf) or eof:
+                        break                         # a number at the very end of the buffer may be cut short
+                except json.JSONDecodeError:
+                    if eof:
+                        raise ValueError("malformed") from None
+                more(size)
+                size *= 2
+            pos = end
+            yield item
+            sep = peek()
+            pos += 1
+            if sep == "]":
+                break
+            if sep != ",":
+                raise ValueError("malformed")
+    if peek() != "":
+        raise ValueError("trailing data")
+
+
+class _Capped:
+    """Text reader over a binary handle that refuses to read more than ``limit`` bytes (a zip header can lie)."""
+
+    def __init__(self, handle, limit: int):
+        self.handle, self.limit, self.total = handle, limit, 0
+        self.decoder = codecs.getincrementaldecoder("utf-8-sig")()
+
+    def __call__(self, size: int) -> str:
+        raw = self.handle.read(size)
+        self.total += len(raw)
+        if self.total > self.limit:
+            raise Refusal(codes.ZIP_UNSAFE)
+        return self.decoder.decode(raw, final=not raw)
+
+
+def _export_member(zf: zipfile.ZipFile) -> zipfile.ZipInfo:
+    members = [i for i in zf.infolist() if not i.is_dir()
+               and i.filename.replace("\\", "/").split("/")[-1] == "conversations.json"
+               and i.filename.count("/") <= 1 and ".." not in i.filename.split("/") and not i.filename.startswith("/")]
+    if not members:
+        raise Refusal(codes.UNKNOWN_SCHEMA)
+    if members[0].file_size > MAX_EXPORT_BYTES:
+        raise Refusal(codes.TOO_LARGE)
+    return members[0]
+
+
+def stream_conversations(path: Path):
+    """Yield the raw conversations of an export (a zip with ``conversations.json``, or the file itself).
+
+    Opened afresh each call, so a second pass costs a second read, not memory. Refusals (``Refusal``)
+    are raised as the stream reaches them; callers that need the whole file judged first run a
+    validation pass (``load_items``).
+    """
+    try:
+        if path.name.endswith(".zip"):
+            with zipfile.ZipFile(path) as zf:
+                info = _export_member(zf)
+                with zf.open(info) as handle:
+                    yield from _stream(_Capped(handle, MAX_EXPORT_BYTES))
+        else:
+            if path.stat().st_size > MAX_EXPORT_BYTES:
+                raise Refusal(codes.TOO_LARGE)
+            with open(path, "rb") as handle:
+                yield from _stream(_Capped(handle, MAX_EXPORT_BYTES))
+    except zipfile.BadZipFile:
+        raise Refusal(codes.UNPARSEABLE) from None
+
+
+def _stream(read):
+    try:
+        yield from iter_json_array(read)
+    except NotAList:
+        raise Refusal(codes.UNKNOWN_SCHEMA) from None
+    except (ValueError, UnicodeDecodeError):
+        raise Refusal(codes.UNPARSEABLE) from None
+
+
+def validate_export(path: Path) -> int:
+    """Judge the whole export before anything is taken: returns the conversation count or raises ``Refusal``."""
+    count = 0
+    for conv in stream_conversations(path):
+        check_conversation(conv)
+        count += 1
+    if not count:
+        raise Refusal(codes.NO_TURNS)
+    return count
 
 
 def parse_claude_ai_export(data: object) -> list[Item]:
-    """Validate the whole export first; one unknown shape refuses the file (never guessed)."""
+    """In-memory form (tests and small exports): the same validation and parsing as the streamed path."""
     if not isinstance(data, list):
         raise Refusal(codes.UNKNOWN_SCHEMA)
     if not data:
         raise Refusal(codes.NO_TURNS)
-    for conv in data:
-        if not (isinstance(conv, dict) and isinstance(conv.get("uuid"), str) and conv["uuid"]
-                and isinstance(conv.get("chat_messages"), list)):
-            raise Refusal(codes.UNKNOWN_SCHEMA)
-        for msg in conv["chat_messages"]:
-            if not (isinstance(msg, dict) and msg.get("sender") in EXPORT_SENDERS
-                    and (isinstance(msg.get("text"), str) or isinstance(msg.get("content"), list))):
-                raise Refusal(codes.UNKNOWN_SCHEMA)
-    items = []
-    for conv in data:
-        parsed = Parsed("claude-ai", "Claude", source_id=conv["uuid"], started=conv.get("created_at"), identity="source")
-        for number, msg in enumerate(conv["chat_messages"], 1):
-            parsed.lines = number
-            parsed.add(EXPORT_SENDERS[msg["sender"]], _message_text(msg, parsed, number), number,
-                       f"sender:{msg['sender']}")
-        # the hash covers the conversation's content, not export-run metadata such as updated_at
-        core = {k: conv.get(k) for k in ("uuid", "name", "created_at", "chat_messages")}
-        raw = _canonical(core)
-        name = conv.get("name") if isinstance(conv.get("name"), str) and conv["name"].strip() else "claude-ai conversation"
-        items.append(Item(parsed, hashlib.sha256(raw).hexdigest(), len(raw), f"claude-ai:{conv['uuid']}", name,
-                          bundles.utc(conv.get("created_at")), member=conv["uuid"]))
-    return items
+    return [parse_conversation(check_conversation(conv)) for conv in data]
 
 
 def parse_paste(raw: bytes, *, name: str, fallback: datetime) -> Item:
@@ -175,47 +424,52 @@ def parse_canary(raw: bytes) -> Item:
                 bundles.utc(parsed.started), kind="canary")
 
 
-def read_export_zip(path: Path) -> object:
-    try:
-        with zipfile.ZipFile(path) as zf:
-            members = [i for i in zf.infolist() if not i.is_dir()
-                       and i.filename.replace("\\", "/").split("/")[-1] == "conversations.json"
-                       and i.filename.count("/") <= 1 and ".." not in i.filename.split("/") and not i.filename.startswith("/")]
-            if not members:
-                raise Refusal(codes.UNKNOWN_SCHEMA)
-            info = members[0]
-            if info.file_size > MAX_EXPORT_BYTES:
-                raise Refusal(codes.TOO_LARGE)
-            with zf.open(info) as handle:
-                raw = handle.read(MAX_EXPORT_BYTES + 1)
-            if len(raw) > MAX_EXPORT_BYTES:
-                raise Refusal(codes.ZIP_UNSAFE)             # the header lied about the size
-    except zipfile.BadZipFile:
-        raise Refusal(codes.UNPARSEABLE) from None
-    try:
-        return json.loads(raw)
-    except (ValueError, UnicodeDecodeError):
-        raise Refusal(codes.UNPARSEABLE) from None
 
 
-def load_items(path: Path, fallback: datetime) -> list[Item]:
+def classify(name: str) -> tuple[str, str | None]:
+    """``(kind, category)`` from the file name alone: no content is opened to decide."""
+    lower = name.lower()
+    if name.endswith(".canary.json"):
+        return "canary", None
+    m = CATEGORY_ZIP.match(name)
+    if m:
+        return "claude-ai-export", m.group(1)
+    if lower.endswith(".zip"):
+        return "claude-ai-export", "conversations"              # the older single zip
+    if name == "conversations.json":
+        return "claude-ai-export", "conversations"
+    if lower.endswith(".json") and "manifest" in lower:
+        return "export-manifest", None
+    if lower.endswith((".txt", ".md", ".text")):
+        return "paste", None
+    return "other", None
+
+
+def load_items(path: Path, fallback: datetime, only: str | None = None):
+    """Items for one inbox file. Exports are validated whole first (eagerly, so a refusal is raised here),
+    then parsed lazily one conversation at a time. ``only`` limits a re-read to one conversation uuid."""
     name, size = path.name, path.stat().st_size
     if size == 0:
         raise Refusal(codes.EMPTY)
-    if name.endswith(".zip"):
-        return parse_claude_ai_export(read_export_zip(path))
-    if name.endswith(".canary.json"):
+    kind, _ = classify(name)
+    if kind == "canary":
         return [parse_canary(path.read_bytes())]
-    if name == "conversations.json":
-        try:
-            return parse_claude_ai_export(json.loads(path.read_bytes()))
-        except (ValueError, UnicodeDecodeError):
-            raise Refusal(codes.UNPARSEABLE) from None
-    if name.endswith((".txt", ".md", ".text")):
+    if kind == "claude-ai-export":
+        if only is None:
+            validate_export(path)
+        return _export_items(path, only)
+    if kind == "paste":
         if size > MAX_PASTE_BYTES:
             raise Refusal(codes.TOO_LARGE)
         return [parse_paste(path.read_bytes(), name=name, fallback=fallback)]
     raise Refusal(codes.UNSUPPORTED_TYPE)
+
+
+def _export_items(path: Path, only: str | None):
+    for conv in stream_conversations(path):
+        if only is not None and not (isinstance(conv, dict) and conv.get("uuid") == only):
+            continue
+        yield parse_conversation(check_conversation(conv))
 
 
 def _sha_file(path: Path) -> str:
@@ -256,9 +510,191 @@ def refused_listing(inbox_root: Path) -> list[dict]:
     return fsio.read_jsonl(Path(inbox_root) / "_refused" / "listing.jsonl")
 
 
+
+
+# ── the approval gate and the dry run ─────────────────────────────────────────
+
+@dataclass
+class Entry:
+    path: Path
+    name: str
+    size: int
+    kind: str
+    category: str | None
+    sha: str | None                      # None when never_copy says the file is not even hashed
+
+
+def candidates(inbox_root: Path) -> list[Path]:
+    if not inbox_root.is_dir():
+        return []
+    return [p for p in sorted(inbox_root.iterdir())
+            if not p.name.startswith(("_", ".")) and not p.is_symlink() and p.is_file()]
+
+
+def scan(inbox_root: str | Path, never_copy: tuple[str, ...] = ()) -> list[Entry]:
+    entries = []
+    for path in candidates(Path(inbox_root)):
+        kind, category = classify(path.name)
+        sha = None if never_copied(path.name, never_copy) else _sha_file(path)
+        entries.append(Entry(path, path.name, path.stat().st_size, kind, category, sha))
+    return entries
+
+
+def approved_pairs(entries: list[Entry]) -> frozenset[tuple[str, str]]:
+    """The (name, sha256) pairs an approval covers: every hashed file except the canary exemption."""
+    return frozenset((e.name, e.sha) for e in entries if e.sha and e.kind != "canary")
+
+
+def fingerprint_of(entries: list[Entry], never_copy: tuple[str, ...] = ()) -> str:
+    doc = {"files": sorted(approved_pairs(entries)), "never_copy": sorted(never_copy)}
+    return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
+
+
+def fingerprint(inbox_root: str | Path, never_copy: tuple[str, ...] = ()) -> str:
+    """What ``moi approve-source inbox`` binds to: the exact (name, sha256) set now in the inbox."""
+    return fingerprint_of(scan(inbox_root, never_copy), never_copy)
+
+
+def decide(entry: Entry, never_copy: tuple[str, ...]) -> tuple[str, str | None]:
+    """The decision for one file, from its name (and the owner's private mark), never from its content."""
+    if never_copied(entry.name, never_copy):
+        return "excluded", codes.NEVER_COPY
+    first = selection.first_line_of(entry.path) if entry.kind == "paste" else ""
+    if entry.kind != "canary" and selection.private_marked(entry.name, first):
+        return "excluded", codes.PRIVATE
+    if entry.size == 0:
+        return "would_refuse", codes.EMPTY
+    if entry.kind == "canary":
+        return "canary", None
+    if entry.kind == "export-manifest":
+        return "ignored", codes.EXPORT_MANIFEST
+    if entry.kind == "claude-ai-export" and entry.category == "light_metadata":
+        return "excluded", codes.ACCOUNT_METADATA
+    if entry.kind == "claude-ai-export" and entry.category in HELD_CATEGORIES:
+        return "held", codes.UNSUPPORTED_KIND
+    if entry.kind in ("claude-ai-export", "paste"):
+        return "would_import", None
+    return "would_refuse", codes.UNSUPPORTED_TYPE
+
+
+def _day(text: object) -> str | None:
+    if isinstance(text, str):
+        try:
+            return datetime.fromisoformat(text.strip().replace("Z", "+00:00")).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+    return None
+
+
+def export_stats(path: Path) -> dict:
+    """Counts and a date range for a conversation export. Never a title, name, summary or any text."""
+    convs = msgs = branched = atts = att_bytes = 0
+    first = last = None
+    for conv in stream_conversations(path):
+        check_conversation(conv)
+        convs += 1
+        messages = conv["chat_messages"]
+        msgs += len(messages)
+        if branches.plan(messages)[1]:
+            branched += 1
+        for msg in messages:
+            for att in msg.get("attachments") or []:
+                atts += 1
+                size = att.get("file_size") if isinstance(att, dict) else None
+                att_bytes += int(size) if isinstance(size, (int, float)) and not isinstance(size, bool) else 0
+        day = _day(conv.get("created_at"))
+        if day:
+            first, last = min(first or day, day), max(last or day, day)
+    if not convs:
+        raise Refusal(codes.NO_TURNS)
+    return {"conversations": convs, "messages": msgs, "created_first": first, "created_last": last,
+            "conversations_with_branches": branched, "attachments": atts, "attachment_bytes": att_bytes}
+
+
+def build_listing(inbox_root: str | Path, never_copy: tuple[str, ...] = (), now: datetime | None = None) -> dict:
+    """Per-file metadata only: name, size, sha256, kind, category, decision, and export counts."""
+    entries = scan(inbox_root, never_copy)
+    rows, counts = [], {"would_import": 0, "held": {}, "excluded": {}, "ignored": 0, "would_refuse": {}, "canary": 0,
+                        "files": len(entries), "bytes": 0, "conversations": 0, "messages": 0}
+    for e in entries:
+        decision, reason = decide(e, never_copy)
+        row = {"name": e.name, "bytes": e.size, "sha256": e.sha, "kind": e.kind, "category": e.category,
+               "decision": decision}
+        if reason:
+            row["reason"] = reason
+        if decision == "would_import" and e.kind == "claude-ai-export":
+            try:
+                row["export"] = export_stats(e.path)
+                counts["conversations"] += row["export"]["conversations"]
+                counts["messages"] += row["export"]["messages"]
+            except Refusal as exc:
+                row["decision"], row["reason"] = "would_refuse", exc.code
+            except Exception:                                    # noqa: BLE001 - fixed code only
+                row["decision"], row["reason"] = "would_refuse", codes.UNPARSEABLE
+        decision = row["decision"]
+        if decision in ("held", "excluded", "would_refuse"):
+            bucket = counts[decision]
+            bucket[row["reason"]] = bucket.get(row["reason"], 0) + 1
+        else:
+            counts[decision] += 1
+        counts["bytes"] += e.size
+        rows.append(row)
+    digest = hashlib.sha256("\n".join(f"{r['name']}\t{r['sha256']}" for r in rows).encode()).hexdigest()
+    return {"source": SOURCE, "kind": "inbox", "fingerprint": fingerprint_of(entries, never_copy),
+            "generated_at": (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "counts": counts, "files": rows, "listing_sha256": digest}
+
+
+def dry_run(shelf, inbox_root: str | Path, never_copy: tuple[str, ...] = (), now: datetime | None = None) -> dict:
+    shelf.init_layout()
+    listing = build_listing(inbox_root, never_copy, now)
+    fsio.write_json(approvals.dry_run_path(shelf, SOURCE), listing)
+    return listing
+
+
+def run(shelf, inbox_root: str | Path, *, now: datetime | None = None, settle_seconds: float = 0,
+        never_copy: tuple[str, ...] = ()) -> dict:
+    """The ``moi inbox`` pass: processes nothing unless an approval binds to exactly the files now present.
+
+    Without one, only the canary (fixed synthetic content) travels; the first such run writes the
+    dry-run listing for the owner. Returns ``{"status", "counts"}``.
+    """
+    now = now or datetime.now(timezone.utc)
+    inbox_root = Path(inbox_root)
+    if not inbox_root.is_dir():
+        return {"status": "no_inbox", "counts": {}}
+    shelf.init_layout()
+    entries = scan(inbox_root, never_copy)
+    fp = fingerprint_of(entries, never_copy)
+    status = approvals.source_status(shelf, SOURCE, fp)
+    if status == approvals.APPROVED:
+        return process(shelf, inbox_root, now=now, settle_seconds=settle_seconds, never_copy=never_copy,
+                       approved=approved_pairs(entries))
+    listing = fsio.read_json(approvals.dry_run_path(shelf, SOURCE)) if status != approvals.NO_DRY_RUN else None
+    if not isinstance(listing, dict) or listing.get("fingerprint") != fp:
+        dry_run(shelf, inbox_root, never_copy, now)
+        status = "dry_run_only"
+    res = process(shelf, inbox_root, now=now, settle_seconds=settle_seconds, never_copy=never_copy, approved=None)
+    return {"status": status, "counts": res["counts"]}
+
+
+def _note(shelf, latest: dict, name: str, sha: str, outcome: str, reason: str, now: datetime) -> None:
+    """A ledger row for a file that stays where it is; written once per state, not once per run."""
+    key = bundles.ledger_key_for(SOURCE, f"file:{sha}:{name}")
+    prev = latest.get((SOURCE, key))
+    if prev and prev.get("outcome") == outcome and prev.get("reason") == reason:
+        return
+    ledger.record(shelf, SOURCE, key, outcome, reason=reason, now=now)
+
+
 def process(shelf, inbox_root: str | Path, *, now: datetime | None = None, settle_seconds: float = 0,
-            never_copy: tuple[str, ...] = ()) -> dict:
-    """One inbox pass. Returns counts; never raises on a bad file."""
+            never_copy: tuple[str, ...] = (), approved: frozenset | None = None) -> dict:
+    """One inbox pass over the files. Returns counts; never raises on a bad file.
+
+    ``approved`` is the set of ``(name, sha256)`` pairs the owner approved (``run`` supplies it); ``None``
+    means no approval, and then only canary files are taken. Each file's sha256 is checked here again, at
+    the moment it is processed, so a file swapped after the check is not taken.
+    """
     now = now or datetime.now(timezone.utc)
     inbox_root = Path(inbox_root)
     counts: dict[str, int] = {}
@@ -270,21 +706,41 @@ def process(shelf, inbox_root: str | Path, *, now: datetime | None = None, settl
     shelf.init_layout()
     if shelf.headroom():
         return {"status": codes.DISK_LOW, "counts": counts}
-    for path in sorted(inbox_root.iterdir()):
-        if path.name.startswith(("_", ".")) or path.is_symlink() or not path.is_file():
-            continue
+    latest = ledger.latest(shelf)
+    for path in candidates(inbox_root):
         if settle_seconds and now.timestamp() - path.stat().st_mtime < settle_seconds:
             tally(codes.UNSTABLE)
             continue
+        kind, category = classify(path.name)
+        canary_file = kind == "canary"
         if never_copied(path.name, never_copy):
+            if approved is None and not canary_file:
+                tally(codes.NOT_APPROVED)
+                continue
             refuse(shelf, inbox_root, path, codes.NEVER_COPY, now, outcome=codes.EXCLUDED)
             tally(codes.EXCLUDED)
             continue
+        sha = None
+        if not canary_file:
+            sha = _sha_file(path) if approved is not None else None
+            if approved is None or (path.name, sha) not in approved:
+                tally(codes.NOT_APPROVED)
+                continue
         try:
-            if selection.private_marked(path.name, selection.first_line_of(path) if path.suffix in (".txt", ".md", ".text") else ""):
+            first = selection.first_line_of(path) if kind == "paste" else ""
+            if not canary_file and selection.private_marked(path.name, first):
                 refuse(shelf, inbox_root, path, codes.PRIVATE, now, outcome=codes.EXCLUDED)
                 tally(codes.EXCLUDED)
                 continue
+            if path.stat().st_size:
+                stays = (
+                    (codes.EXCLUDED, codes.EXPORT_MANIFEST) if kind == "export-manifest" else
+                    (codes.EXCLUDED, codes.ACCOUNT_METADATA) if kind == "claude-ai-export" and category == "light_metadata" else
+                    (codes.HELD, codes.UNSUPPORTED_KIND) if kind == "claude-ai-export" and category in HELD_CATEGORIES else None)
+                if stays:                                   # listed and counted, left in place untouched
+                    _note(shelf, latest, path.name, sha, stays[0], stays[1], now)
+                    tally(stays[0])
+                    continue
             fallback = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
             items = load_items(path, fallback)
         except Refusal as exc:
@@ -297,29 +753,33 @@ def process(shelf, inbox_root: str | Path, *, now: datetime | None = None, settl
             continue
         dest = _unique(inbox_root / "_processed" / now.strftime("%Y-%m-%d"), path.name)
         ok = True
-        for item in items:
-            if not item.parsed.turns:
-                ledger.record(shelf, "inbox", bundles.ledger_key_for("inbox", item.key), codes.EXCLUDED,
-                              reason=codes.NO_TURNS, canary=item.kind == "canary", now=now)
-                tally(codes.EXCLUDED)
-                continue
-            lkey = bundles.ledger_key_for("inbox", item.key)
-            ledger.record(shelf, "inbox", lkey, codes.DISCOVERED, canary=item.kind == "canary", now=now)
-            retained = {"kind": "inbox-file", "rel": dest.relative_to(inbox_root).as_posix(), "member": item.member,
-                        "format": item.parsed.provider}
-            bundle = bundles.from_parsed(item.parsed, item.source_sha256, item.size, key=item.key, title=item.title,
-                                         origin="inbox", created=item.created, retained=retained, ledger_key=lkey,
-                                         kind=item.kind)
-            _path, code = shelf.stage(bundle)
-            if code:
-                ok = False
-                ledger.record(shelf, "inbox", lkey, codes.DISK_LOW, canary=item.kind == "canary", now=now)
-                tally(codes.DISK_LOW)
-                continue
-            result = next((r for r in shelf.drain() if r.key == bundle.key), None)
-            outcome = result.outcome if result else codes.FAILED
-            ok = ok and outcome in codes.OK_OUTCOMES
-            tally(outcome)
+        try:
+            for item in items:
+                if not item.parsed.turns:
+                    ledger.record(shelf, "inbox", bundles.ledger_key_for("inbox", item.key), codes.EXCLUDED,
+                                  reason=codes.NO_TURNS, canary=item.kind == "canary", now=now)
+                    tally(codes.EXCLUDED)
+                    continue
+                lkey = bundles.ledger_key_for("inbox", item.key)
+                ledger.record(shelf, "inbox", lkey, codes.DISCOVERED, canary=item.kind == "canary", now=now)
+                retained = {"kind": "inbox-file", "rel": dest.relative_to(inbox_root).as_posix(), "member": item.member,
+                            "format": item.parsed.provider}
+                bundle = bundles.from_parsed(item.parsed, item.source_sha256, item.size, key=item.key, title=item.title,
+                                             origin="inbox", created=item.created, retained=retained, ledger_key=lkey,
+                                             kind=item.kind)
+                _path, code = shelf.stage(bundle)
+                if code:
+                    ok = False
+                    ledger.record(shelf, "inbox", lkey, codes.DISK_LOW, canary=item.kind == "canary", now=now)
+                    tally(codes.DISK_LOW)
+                    continue
+                result = next((r for r in shelf.drain() if r.key == bundle.key), None)
+                outcome = result.outcome if result else codes.FAILED
+                ok = ok and outcome in codes.OK_OUTCOMES
+                tally(outcome)
+        except Exception:                                    # noqa: BLE001 - the file stays where it is; fixed code only
+            ok = False
+            tally(codes.FAILED)
         if ok:
             fsio.ensure_dir(dest.parent)
             os.replace(path, dest)                           # moved, never deleted

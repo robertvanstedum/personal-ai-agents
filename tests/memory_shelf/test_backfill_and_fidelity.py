@@ -8,7 +8,7 @@ import pytest
 from core.memory_shelf import approvals, backfill, canary, codes, events as ev, fidelity, inbox, ledger, record, render, watchers
 from core.memory_shelf.config import Config, SourceCfg
 
-from .helpers import FAKE_KEY, cc_lines, codex_lines, make_shelf, write_tree
+from .helpers import FAKE_KEY, cc_lines, codex_lines, make_shelf, write_tree, process
 from .test_inbox import conv, make_zip
 
 OWNER = ev.OwnerAuthority("moi-approve")
@@ -85,7 +85,7 @@ def world(tmp_path):
     make_zip(box, "e.zip", [conv("u-1", "Chat", [("human", "q"), ("assistant", "a"), ("human", "q2"), ("assistant", "a2")])])
     (box / "p.txt").write_text("Human: pasted q\nClaude: pasted a\nHuman: more\nClaude: more a")
     canary.emit(box, NOW)
-    inbox.process(shelf, box, now=NOW)
+    process(shelf, box, now=NOW)
     return shelf, cfg
 
 

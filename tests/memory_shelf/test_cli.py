@@ -108,6 +108,7 @@ def test_review_lists_candidates_flags_and_refusals_metadata_only(w):
     (w.inbox / "p1.txt").write_text("Human: file this, SECRET-PASTE-TEXT\nClaude: ok")
     (w.inbox / "junk.bin").write_bytes(b"\x00\x01")
     make_zip(w.inbox, "e.zip", [conv("u-1", "Chat", [("human", "file this, SECRET-PASTE-TEXT"), ("assistant", "x")])])
+    assert w.run("dry-run", "inbox")[0] == 0 and w.run("approve-source", "inbox")[0] == 0
     assert w.run("inbox")[0] == 0
     code, text = w.run("review")
     assert "designation-candidate\t" in text and "possible-same\t" in text and "refused\tjunk.bin\tunsupported_type" in text

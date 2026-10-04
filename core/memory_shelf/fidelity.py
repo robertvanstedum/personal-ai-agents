@@ -106,9 +106,9 @@ def _source_turns(cfg: Config, meta: dict):
                 return None, SOURCE_MISSING
             from datetime import datetime, timezone
             fallback = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-            items = inbox.load_items(path, fallback)
             member = ret.get("member")
-            item = next((i for i in items if i.member == member), None) if member else (items[0] if items else None)
+            items = inbox.load_items(path, fallback, only=member)
+            item = next((i for i in items if i.member == member), None) if member else next(iter(items), None)
             if item is None:
                 return None, SOURCE_MISSING
             parsed, sha = item.parsed, item.source_sha256

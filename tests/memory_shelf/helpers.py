@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from core.memory_shelf import bundle as bundles
-from core.memory_shelf import sessions
+from core.memory_shelf import inbox, sessions
 from core.memory_shelf.shelf import Shelf
 
 FAKE_KEY = "sk-ant-FAKEFAKEFAKE12345"
@@ -60,3 +60,9 @@ def write_tree(root: Path, files: dict[str, str]) -> None:
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+
+
+def process(shelf, box, **kw):
+    """One inbox pass with every file present approved (the gate itself is tested in test_inbox_gate)."""
+    entries = inbox.scan(box, kw.get("never_copy", ()))
+    return inbox.process(shelf, box, approved=inbox.approved_pairs(entries), **kw)

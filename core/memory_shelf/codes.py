@@ -16,6 +16,7 @@ DISCOVERED = "discovered"          # seen, no outcome yet: a crash here reads as
 FAILED = "failed"
 UNSTABLE = "unstable"              # the file changed while it was read; retried next run
 DISK_LOW = "disk_low"
+HELD = "held"                      # a file kept for a later version: listed, untouched, not refused
 OK_OUTCOMES = frozenset({CAPTURED, EDITION_ADDED, UNCHANGED})
 
 # Expected-exclusion reasons (not "missing")
@@ -23,6 +24,11 @@ NEVER_COPY = "never_copy"
 PRIVATE = "private"
 EMPTY = "empty"
 NOT_APPROVED = "not_approved"
+ACCOUNT_METADATA = "account_metadata"      # login history, account data: never imported, left in place
+EXPORT_MANIFEST = "export_manifest"        # expiring download links: never copied, ignored
+UNSUPPORTED_KIND = "unsupported_kind"      # memories, projects, frames: held for a later version
+ORPHAN_PARENT = "orphan_parent"            # a message whose parent is not in the export: kept as its own branch
+EXTRA_ROOT = "extra_root"
 
 # Inbox refusal reasons
 UNPARSEABLE = "unparseable"
