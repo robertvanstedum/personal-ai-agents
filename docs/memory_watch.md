@@ -49,6 +49,16 @@ States: **ok**; **warn** (a source not approved or stale, disk low, an unstable 
 reader took fewer messages than a file shows, or met a format it has not seen); **failed** (one Telegram message, exit 1).
 A damaged record body is repaired with `scripts/moi repair` (you type yes; the old file is kept, editions are never touched).
 
+## The capture report (what the Operate matrix shows)
+After the captures the job publishes `memory-capture-report.json` and `memory-capture-matrix.json` under the jobs root, and records a small fidelity sample.
+On demand, read-only, without recapture:
+```bash
+scripts/moi report                    # one summary line, writes nothing
+scripts/moi report --json             # the full counts-only payload
+scripts/moi migrate-preview           # what the current parser rules would change in each provider's records (counts only)
+```
+Contract, states and rules: `docs/memory_capture_report_contract.md`.
+
 ## Counts only
 Every status file, log line, ledger row, review item and Telegram message carries ids, counts and fixed codes: never a
 title, a file name or a word of a conversation. Keep it that way when you check on it: `moi list` (titles) shows them only

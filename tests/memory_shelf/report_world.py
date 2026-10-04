@@ -50,7 +50,7 @@ def cc_user(text, origin=None):
 def build_world(tmp_path: Path, *, approve=True, run=True, now=NOW):
     """claude-code (human, peer, task-notification, assistant) and codex (a dialogue session with a duplicate copy and a
     handoff, a guardian session): approved and captured at ``now``. Returns (shelf, cfg, sources)."""
-    shelf = make_shelf(tmp_path)
+    shelf = make_shelf(tmp_path, clock=lambda: now)                   # a fixed clock: the ledger's times are part of the payload
     cx, cc = tmp_path / "codex", tmp_path / "cc"
     write_tree(cx, {
         "2026/10/04/rollout-a-0199aaaa-0000-0000-0000-000000000001.jsonl": "\n".join(jl(

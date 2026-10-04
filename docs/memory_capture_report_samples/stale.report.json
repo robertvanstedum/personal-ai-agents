@@ -1,0 +1,284 @@
+{
+ "cadence": {
+  "expected_every_s": 86400,
+  "missed_after_s": 180000,
+  "stale_report_after_s": 172800
+ },
+ "generated_at": "2026-10-06T15:00:00Z",
+ "history": {
+  "basis": "per_source_same_units_snapshot_on_change_or_daily",
+  "bound": 90,
+  "delta_since_previous": {},
+  "previous_at": null,
+  "previous_run_id": null,
+  "retained_snapshots": 0,
+  "unchanged_since_previous": false
+ },
+ "job": {
+  "age_s": 183660,
+  "finished_at": "2026-10-04T11:59:00Z",
+  "reason": "stale",
+  "state": "unknown"
+ },
+ "operate": {
+  "generated_at": "2026-10-06T15:00:00Z",
+  "job": {
+   "reason": "stale",
+   "state": "unknown"
+  },
+  "overall": "watch",
+  "rows": [
+   {
+    "captured_records": 1,
+    "label": "Claude Code",
+    "last_check_kind": "capture",
+    "last_new_capture_at": "2026-10-04T12:00:00Z",
+    "last_success_at": "2026-10-04T12:00:00Z",
+    "mode": "scheduled",
+    "reason": "overdue",
+    "source": "claude-code",
+    "status": "watch"
+   },
+   {
+    "captured_records": 2,
+    "label": "Codex",
+    "last_check_kind": "capture",
+    "last_new_capture_at": "2026-10-04T12:00:00Z",
+    "last_success_at": "2026-10-04T12:00:00Z",
+    "mode": "scheduled",
+    "reason": "overdue",
+    "source": "codex",
+    "status": "watch"
+   }
+  ],
+  "run_id": "20261004T120000Z-abc123",
+  "schema": "minimoi.memory-capture-matrix.v1",
+  "stale_after_s": 172800
+ },
+ "run_id": "20261004T120000Z-abc123",
+ "schema": "minimoi.memory-capture-report.v1",
+ "source_snapshot": {
+  "as_of": "2026-10-04T12:00:00Z",
+  "basis": "read_only_at_generated_at",
+  "ledger_rows": 6,
+  "shelf_records": 3
+ },
+ "sources": {
+  "claude-code": {
+   "capture": {
+    "by_class": {},
+    "changed_or_unverifiable_sources": {
+     "basis": "size_and_mtime_since_capture",
+     "changed": 0,
+     "checked": 1,
+     "missing": 0
+    },
+    "excluded": {},
+    "failures": {},
+    "held": {},
+    "pending_outbox": 0,
+    "records": 1,
+    "redacted_turns": 0,
+    "refused": {},
+    "turns": {
+     "assistant": 1,
+     "coordination": 1,
+     "human": 1,
+     "system": 1,
+     "total": 4
+    },
+    "unreadable_records": 0
+   },
+   "evidence": {
+    "attachment_chars_excluded": 0,
+    "attachment_content_excluded_items": 0,
+    "attachment_references": 0,
+    "attachments_seen": 0,
+    "handoffs_duplicate": 0,
+    "handoffs_retained": 0,
+    "handoffs_unavailable": 0
+   },
+   "label": "Claude Code",
+   "mode": "scheduled",
+   "quality": {
+    "classification": {
+     "current_parser_version": 2,
+     "findings": [],
+     "records_on_older_parser": 0
+    },
+    "duplicates": {
+     "state": "not_applicable"
+    },
+    "fidelity": {
+     "at": "2026-10-04T11:30:00Z",
+     "checked": 3,
+     "failed": 0,
+     "method": "random_sample",
+     "ok": 3,
+     "sample_size": 10,
+     "scope": "storage_and_edition_same_parser",
+     "seed": 20261004,
+     "skipped": {},
+     "state": "ok"
+    },
+    "semantic_audit": {
+     "state": "not_run"
+    }
+   },
+   "selection": {
+    "normalized_turns_kept": 4,
+    "raw_items_omitted": {
+     "by_disposition": {
+      "attachment_content_excluded": 0,
+      "attachment_reference": 0,
+      "duplicate": 0,
+      "empty": 0,
+      "handoff_unavailable": 0,
+      "injected_context": 0,
+      "machinery": 1,
+      "reasoning_trace": 0,
+      "tool_activity": 1,
+      "unknown": 0
+     },
+     "by_kind": {
+      "line:last-prompt": 1,
+      "tool_use:Bash": 1
+     },
+     "kinds_total": 2,
+     "total": 2,
+     "unknown_kinds": []
+    },
+    "units_note": "raw_items_and_turns_are_different_units"
+   },
+   "status": {
+    "last_check_kind": "capture",
+    "last_new_capture_at": "2026-10-04T12:00:00Z",
+    "last_success_at": "2026-10-04T12:00:00Z",
+    "reason": "overdue",
+    "state": "watch"
+   }
+  },
+  "codex": {
+   "capture": {
+    "by_class": {
+     "approval_review": 2
+    },
+    "changed_or_unverifiable_sources": {
+     "basis": "size_and_mtime_since_capture",
+     "changed": 0,
+     "checked": 2,
+     "missing": 0
+    },
+    "excluded": {},
+    "failures": {},
+    "held": {},
+    "pending_outbox": 0,
+    "records": 2,
+    "redacted_turns": 0,
+    "refused": {},
+    "turns": {
+     "assistant": 1,
+     "coordination": 3,
+     "human": 1,
+     "system": 0,
+     "total": 5
+    },
+    "unreadable_records": 0
+   },
+   "evidence": {
+    "attachment_chars_excluded": 0,
+    "attachment_content_excluded_items": 0,
+    "attachment_references": 0,
+    "attachments_seen": 0,
+    "handoffs_duplicate": 0,
+    "handoffs_retained": 1,
+    "handoffs_unavailable": 1
+   },
+   "label": "Codex",
+   "mode": "scheduled",
+   "quality": {
+    "classification": {
+     "current_parser_version": 3,
+     "findings": [],
+     "records_on_older_parser": 0
+    },
+    "duplicates": {
+     "basis": "parser_matching_recorded_per_record",
+     "copies_kept_as_turns": 0,
+     "copies_matched": 1,
+     "omitted_copy_items_all_records": 1,
+     "records_counted": 2,
+     "records_unverifiable": 0,
+     "state": "counted",
+     "whitespace_rule": "collapse_whitespace_runs_item_bytes_kept"
+    },
+    "fidelity": {
+     "at": "2026-10-04T11:30:00Z",
+     "checked": 3,
+     "failed": 0,
+     "method": "random_sample",
+     "ok": 3,
+     "sample_size": 10,
+     "scope": "storage_and_edition_same_parser",
+     "seed": 20261004,
+     "skipped": {},
+     "state": "ok"
+    },
+    "semantic_audit": {
+     "state": "not_run"
+    }
+   },
+   "selection": {
+    "normalized_turns_kept": 5,
+    "raw_items_omitted": {
+     "by_disposition": {
+      "attachment_content_excluded": 0,
+      "attachment_reference": 0,
+      "duplicate": 1,
+      "empty": 0,
+      "handoff_unavailable": 0,
+      "injected_context": 0,
+      "machinery": 2,
+      "reasoning_trace": 0,
+      "tool_activity": 0,
+      "unknown": 0
+     },
+     "by_kind": {
+      "event_msg:task_started": 2,
+      "response_item:message": 1
+     },
+     "kinds_total": 2,
+     "total": 3,
+     "unknown_kinds": []
+    },
+    "units_note": "raw_items_and_turns_are_different_units"
+   },
+   "status": {
+    "last_check_kind": "capture",
+    "last_new_capture_at": "2026-10-04T12:00:00Z",
+    "last_success_at": "2026-10-04T12:00:00Z",
+    "reason": "overdue",
+    "state": "watch"
+   }
+  }
+ },
+ "totals": {
+  "note": "records_not_deduplicated_across_sources",
+  "records": 3,
+  "turns": {
+   "assistant": 2,
+   "coordination": 4,
+   "human": 2,
+   "system": 1,
+   "total": 9
+  }
+ },
+ "versions": {
+  "parsers": {
+   "claude-code": 2,
+   "codex": 3
+  },
+  "policy": "capture-policy.2026-10-04.1",
+  "report_schema": 1
+ }
+}
