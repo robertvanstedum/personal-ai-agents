@@ -2,7 +2,8 @@
 
 * **Body:** each turn is framed ``<!-- turn N | speaker | line L | bytes B | sha256 H -->`` and then exactly
   ``B`` bytes of text, so a turn that contains anything (even a fake frame) reads back unchanged.
-  Omitted parts appear as one-line ``[omitted: kind, source line L]`` pointers between turns.
+  Omitted parts appear as one-line ``[omitted: kind, source line L]`` pointers between turns (a file
+  name may follow, sanitized); a conversation's alternate branches are introduced by a ``=== Branch ... ===`` line.
 * **Scrub first (D8):** the payment scrub and the credential guard run on each turn's text before it
   is hashed or stored; the record says how many redactions, and carries the **unscrubbed source file's**
   sha256. The edition is a canonical JSONL of the scrubbed turns, a sanitized derivative with provenance.
