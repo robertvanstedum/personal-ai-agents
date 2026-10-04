@@ -33,16 +33,19 @@ def root(tmp_path, monkeypatch):
     return folder
 
 
-def service(reply="a reply", hook=None, **kw):
+def service(reply="a reply", hook=None, backend=None, **kw):
     calls = []
+    recorder = turn_log.recorder(clock=lambda: FIXED)
+    if hook is None:
+        kw.setdefault("begin_turn", recorder.begin)
     return ConferTurnService(
-        call_backend=lambda prompt, ctx, policy: reply,
+        call_backend=backend or (lambda prompt, ctx, policy: reply),
         build_context=lambda: {"system_prompt": "s"},
         increment_chat=lambda: calls.append(1),
         backend_metadata=lambda: ("Test backend", "test-model"),
         save_note=lambda text, op: {"saved": True, "deduplicated": False},
         reset_conversation=lambda cid: True,
-        record_turn=hook if hook is not None else turn_log.recorder(clock=lambda: FIXED),
+        record_turn=hook if hook is not None else recorder,
         **kw,
     )
 
@@ -252,3 +255,65 @@ def test_status_file_holds_codes_and_times_only(root):
     status = json.loads((root / "_status" / "cos-test.json").read_text())
     assert set(status) <= {"schema_version", "container", "last_success_at", "last_failure_at", "last_failure_code"}
     assert status["last_success_at"] == "2026-10-03T17:30:00Z"
+
+
+# ── the mode is latched when the turn starts (Codex review of M1, 2026-10-04) ──────────────────────────────
+
+def flip_during_turn(root, *modes, conversation_id="owner"):
+    """A backend that changes the stored mode while the turn is running."""
+    def backend(prompt, ctx, policy):
+        for private in modes:
+            private_mode.set_private(root, private, conversation_id)
+        return "a reply that must not be kept"
+    return backend
+
+
+def test_a_turn_that_starts_private_and_becomes_public_while_it_runs_is_never_saved(root):
+    private_mode.set_private(root, True, "owner")
+    result = ask(service(backend=flip_during_turn(root, False)))
+    assert lines(root) == [] and result.history_saved is None
+
+
+def test_a_turn_that_starts_public_and_becomes_private_while_it_runs_is_never_saved(root):
+    private_mode.set_private(root, False, "owner")
+    result = ask(service(backend=flip_during_turn(root, True)))
+    assert lines(root) == [] and result.history_saved is None
+
+
+def test_public_to_private_to_public_inside_one_turn_is_still_not_saved(root):
+    private_mode.set_private(root, False, "owner")
+    result = ask(service(backend=flip_during_turn(root, True, False)))
+    assert lines(root) == [] and result.history_saved is None
+
+
+@pytest.mark.parametrize("channel", sorted(ALLOWED_CHANNELS))
+def test_every_channel_follows_the_latch(root, channel):
+    private_mode.set_private(root, True, "owner")
+    ask(service(backend=flip_during_turn(root, False)), channel=channel)
+    assert lines(root) == []
+
+
+def test_a_turn_whose_mode_never_moves_is_saved_as_before(root):
+    private_mode.set_private(root, False, "owner")
+    result = ask(service())
+    assert len(lines(root)) == 1 and result.history_saved is True
+
+
+def test_a_turn_whose_mode_could_not_be_read_at_the_start_is_not_saved(root, monkeypatch):
+    real = private_mode.read_mode
+    calls = {"n": 0}
+
+    def flaky(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("unreadable")
+        return real(*a, **k)
+    monkeypatch.setattr(private_mode, "read_mode", flaky)
+    ask(service())
+    assert lines(root) == []
+
+
+def test_without_the_latch_hook_the_service_still_works_with_a_two_argument_recorder(root):
+    seen = []
+    ask(service(hook=lambda request, result: seen.append(result.reply) or True))
+    assert seen == ["a reply"]

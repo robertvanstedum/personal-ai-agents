@@ -7,6 +7,7 @@ of Robert's home appears in any file or output.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import dataclass, field
@@ -49,6 +50,17 @@ class SourceConfig:
 
     def rules(self) -> Rules:
         return Rules(self.patterns, self.include, self.never_copy)
+
+    def fingerprint(self, env: Mapping[str, str] | None = None) -> str:
+        """What an approval binds to: which source this is and what it may copy. Container, workspace, the inbox
+        location actually in force, the include / never-copy / pattern policy. Not ``enabled`` and not the runtime
+        version: ordinary content updates inside an unchanged, approved source need no new approval (Codex, M1)."""
+        env = os.environ if env is None else env
+        doc = {"name": self.name, "agent": self.agent, "kind": self.source_kind, "container": self.container,
+               "workspace_path": self.workspace_path, "inbox_env": self.inbox_env,
+               "inbox": env.get(self.inbox_env, "") if self.inbox_env else "",
+               "patterns": sorted(self.patterns), "include": sorted(self.include), "never_copy": sorted(self.never_copy)}
+        return hashlib.sha256(json.dumps(doc, sort_keys=True).encode("utf-8")).hexdigest()
 
     def meta(self) -> dict[str, str]:
         """The manifest's ``source`` block: labels only (§3.2)."""

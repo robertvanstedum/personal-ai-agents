@@ -59,7 +59,7 @@ def run_all(now: datetime | None = None) -> dict:
     _stamp_first_seen(root, enabled_names, now)
     for name in enabled_names:
         cfg = config.sources[name]
-        if not is_approved(root, name):
+        if not is_approved(root, name, cfg):
             out[name] = "awaiting_approval"
             continue
         try:
@@ -102,7 +102,7 @@ def status_payload(now: datetime | None = None) -> dict:
         names = [n for n, c in config.sources.items() if c.enabled]
         statuses = copier_status.load_sources_status(Path(config.data_root), names)
         for name in names:                       # approval is part of the picture
-            if not is_approved(Path(config.data_root), name) and statuses.get(name) is not None:
+            if not is_approved(Path(config.data_root), name, config.sources[name]) and statuses.get(name) is not None:
                 statuses[name] = {**statuses[name], "awaiting_approval": True}
         light = copier_status.memory_copy_state(now, statuses)
         rows = copier_status.memory_copy_states(now, statuses)

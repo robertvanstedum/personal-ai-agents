@@ -189,3 +189,44 @@ def test_t7_unreadable_folder_is_mode_unreadable_and_publishes_nothing(root, tmp
     finally:
         (folder / "memory").chmod(0o700)
     assert not r.ok and r.code == "mode_unreadable" and not (root / "cos-agent-a" / "current").exists()
+
+
+# ── one run at a time per source (Codex review of M1, 2026-10-04) ─────────────────────────────────────────
+
+def test_a_second_run_of_the_same_source_is_skipped_as_busy_and_the_first_run_is_untouched(root, box):
+    """The second run's recovery would delete the first run's staged folder; the lock turns it away instead."""
+    from core.agent_memory import publish as pub
+    seen = {}
+    real = pub.publish
+
+    def overlapping(*a, **k):
+        seen["second"] = run_source(box.source, make_cfg(), root, NOW)           # a second run while this one publishes
+        return real(*a, **k)
+    import pytest
+    mp = pytest.MonkeyPatch()
+    mp.setattr(pub, "publish", overlapping)
+    try:
+        first = run_source(box.source, make_cfg(), root, NOW)
+    finally:
+        mp.undo()
+    assert first.ok and (root / make_cfg().name / "current").is_dir()
+    assert not seen["second"].ok and seen["second"].code == "busy"
+
+
+def test_a_busy_source_does_not_overwrite_the_first_runs_status(root, box):
+    import fcntl, os
+    cfg = make_cfg()
+    folder = root / cfg.name
+    folder.mkdir(parents=True)
+    fd = os.open(folder / "_run.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    try:
+        r = run_source(box.source, cfg, root, NOW)
+        assert (r.ok, r.code) == (False, "busy") and not (folder / "_status.json").exists()
+    finally:
+        os.close(fd)
+
+
+def test_the_lock_is_released_when_the_run_ends_so_the_next_run_goes_ahead(root, box):
+    assert run_source(box.source, make_cfg(), root, NOW).ok
+    assert run_source(box.source, make_cfg(), root, NOW.replace(day=4)).ok

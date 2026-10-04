@@ -779,6 +779,7 @@ def _process_confer_turn(
         if getattr(_backend, "supports_routing_receipts", False)
         else None
     )
+    turn_recorder = turn_log.recorder()
     service = ConferTurnService(
         call_backend=call_backend,
         build_context=_build_confer_context,
@@ -787,7 +788,8 @@ def _process_confer_turn(
         save_note=_save_explicit_note,
         reset_conversation=_reset_backend_conversation,
         get_routing_receipt=receipt_resolver,
-        record_turn=turn_log.recorder(),
+        record_turn=turn_recorder,
+        begin_turn=turn_recorder.begin,
     )
     return service.handle(ConferTurnRequest(
         text=text,

@@ -1,8 +1,10 @@
 """Small durable file helpers: files 0600, folders 0700 (agent-memory v0.4 §2, §3.6)."""
 from __future__ import annotations
 
+import fcntl
 import os
 import shutil
+from contextlib import contextmanager
 from pathlib import Path
 
 FILE_MODE = 0o600
@@ -63,3 +65,23 @@ def remove_tree(path: Path) -> None:
         path.unlink(missing_ok=True)
     elif path.exists():
         shutil.rmtree(path)
+
+
+class LockBusy(Exception):
+    """Another process (or run) holds this lock."""
+
+
+@contextmanager
+def exclusive(path: Path):
+    """An exclusive, non-blocking flock on ``path`` (created 0600), held for the ``with`` block. Raises ``LockBusy``
+    if someone else holds it. The kernel drops it if the holder dies, so a crashed run never leaves a stuck lock."""
+    ensure_dir(path.parent)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, FILE_MODE)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise LockBusy from None
+        yield
+    finally:
+        os.close(fd)             # closing releases the lock

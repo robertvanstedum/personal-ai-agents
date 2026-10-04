@@ -13,9 +13,10 @@ DISK_WRITE_FAILED = "disk_write_failed"
 MODE_UNREADABLE = "mode_unreadable"
 DISK_LOW = "disk_low"
 INTERNAL = "internal"
+BUSY = "busy"                      # another run of this source holds its lock: skipped, nothing touched
 
 CODES = frozenset({DOCKER_UNREACHABLE, DOCKER_TIMEOUT, COPY_INCOMPLETE,
-                   DISK_WRITE_FAILED, MODE_UNREADABLE, DISK_LOW, INTERNAL})
+                   DISK_WRITE_FAILED, MODE_UNREADABLE, DISK_LOW, INTERNAL, BUSY})
 
 
 class CopierError(Exception):

@@ -151,7 +151,8 @@ class ConferTurnService:
         save_note: Callable[[str, str], dict] | None = None,
         reset_conversation: Callable[[str], bool] | None = None,
         get_routing_receipt: Callable[[str], dict | None] | None = None,
-        record_turn: Callable[["ConferTurnRequest", "ConferTurnResult"], bool | None] | None = None,
+        record_turn: Callable[..., bool | None] | None = None,
+        begin_turn: Callable[["ConferTurnRequest"], object] | None = None,
     ) -> None:
         self._call_backend = call_backend
         self._build_context = build_context
@@ -161,20 +162,31 @@ class ConferTurnService:
         self._reset_conversation = reset_conversation
         self._get_routing_receipt = get_routing_receipt
         self._record_turn = record_turn
+        self._begin_turn = begin_turn
 
     def handle(self, request: ConferTurnRequest) -> ConferTurnResult:
         """Run one turn, then offer it to the optional turn-log hook.
 
         The hook is best effort: whatever it does or raises, the turn answers.
         """
+        latch = None
+        if self._record_turn is not None and self._begin_turn is not None:
+            try:
+                latch = self._begin_turn(request)          # the mode as it is before the backend runs
+            except Exception:
+                return self._unlogged(request)
         result = self._handle(request)
         if self._record_turn is None:
             return result
         try:
-            saved = self._record_turn(request, result)
+            saved = self._record_turn(request, result) if self._begin_turn is None else self._record_turn(request, result, latch)
         except Exception:
             saved = False
         return result if saved is None else replace(result, history_saved=bool(saved))
+
+    def _unlogged(self, request: ConferTurnRequest) -> ConferTurnResult:
+        """The mode could not be latched: answer the turn, log nothing."""
+        return replace(self._handle(request), history_saved=False)
 
     def _handle(self, request: ConferTurnRequest) -> ConferTurnResult:
         text = request.text.strip()

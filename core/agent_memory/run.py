@@ -25,8 +25,8 @@ from typing import Callable, Sequence
 from . import publish as publish_mod
 from .config import ConfigError, Headroom, SourceConfig, build_source, load_config
 from .dry_run import build_rows, listing_hash, scan_for_listing
-from .errors import COPY_INCOMPLETE, DISK_LOW, INTERNAL, CopierError, classify
-from .fsio import ensure_dir, write_atomic
+from .errors import BUSY, COPY_INCOMPLETE, DISK_LOW, DISK_WRITE_FAILED, INTERNAL, CopierError, classify
+from .fsio import LockBusy, ensure_dir, exclusive, write_atomic
 from .headroom import check_headroom
 from .scrub import scrub_file
 from .selection import path_reason, select
@@ -81,11 +81,31 @@ def _run(source: Source, cfg: SourceConfig, source_dir: Path, now: datetime,
     return RunResult(cfg.name, True, None, snapshot, counts), scan.data_time
 
 
+LOCK_FILE = "_run.lock"
+
+
 def run_source(source: Source, config: SourceConfig, root: str | Path, now: datetime,
                *, headroom: Headroom | None = None) -> RunResult:
-    """Copy one source once. Never raises; failures are one fixed code (§6)."""
+    """Copy one source once. Never raises; failures are one fixed code (§6).
+
+    Recovery, scan, publish and the status write run under one per-source lock, so a second run (the daily job and a
+    manual CLI run can overlap) never deletes the first one's staging folders. A run that finds the lock held is
+    skipped with code ``busy`` and touches nothing, not even the status file."""
     headroom = headroom or Headroom()
     source_dir = Path(root) / config.name
+    try:
+        with exclusive(source_dir / LOCK_FILE):
+            return _run_locked(source, config, source_dir, now, headroom)
+    except LockBusy:
+        return RunResult(config.name, False, BUSY)
+    except OSError:                             # the lock file could not be made: nothing was run
+        return RunResult(config.name, False, DISK_WRITE_FAILED)
+    except Exception:  # noqa: BLE001 - fixed code only
+        return RunResult(config.name, False, INTERNAL)
+
+
+def _run_locked(source: Source, config: SourceConfig, source_dir: Path, now: datetime,
+                headroom: Headroom) -> RunResult:
     try:
         result, data_time = _run(source, config, source_dir, now, headroom)
         update_status(source_dir, config.name, now, ok=True, code=None, complete=True,
@@ -108,8 +128,8 @@ def run_source(source: Source, config: SourceConfig, root: str | Path, now: date
 APPROVAL_FILE = "_approval.json"
 
 
-def record_approval(root: str | Path, name: str, listing_hash: str, now: datetime) -> bool:
-    """Remember that Robert approved this source's dry run (a time and the listing hash only).
+def record_approval(root: str | Path, name: str, listing_hash: str, now: datetime, fingerprint: str | None = None) -> bool:
+    """Remember that Robert approved this source's dry run (a time, the listing hash and the source's fingerprint).
 
     The scheduled job runs only sources that have this file, so a source never
     starts copying on a schedule before its dry run was approved.
@@ -118,19 +138,25 @@ def record_approval(root: str | Path, name: str, listing_hash: str, now: datetim
         folder = Path(root) / name
         ensure_dir(folder)
         doc = {"schema_version": 1, "source": name, "approved_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-               "listing_hash": listing_hash}
+               "listing_hash": listing_hash, "fingerprint": fingerprint}
         write_atomic(folder / APPROVAL_FILE, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
         return True
     except Exception:  # noqa: BLE001 - a failed record only means the scheduler waits
         return False
 
 
-def is_approved(root: str | Path, name: str) -> bool:
+def is_approved(root: str | Path, name: str, cfg: SourceConfig | None = None) -> bool:
+    """Approved for **this** source as configured now. With ``cfg``, the approval must carry the fingerprint of the
+    source's identity and selection policy; repointing the name at another container, workspace or inbox, or widening
+    include / never-copy, invalidates it until the dry run is approved again. An approval written before fingerprints
+    existed does not match (fail closed)."""
     try:
         doc = json.loads((Path(root) / name / APPROVAL_FILE).read_text("utf-8"))
     except (OSError, ValueError):
         return False
-    return isinstance(doc, dict) and doc.get("source") == name and bool(doc.get("approved_at"))
+    if not (isinstance(doc, dict) and doc.get("source") == name and bool(doc.get("approved_at"))):
+        return False
+    return cfg is None or (bool(doc.get("fingerprint")) and doc.get("fingerprint") == cfg.fingerprint())
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -156,7 +182,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("refused: a real copy needs --approved-by-dry-run matching a fresh dry run of this source")
         return 3
     root = args.root or config.data_root
-    record_approval(root, cfg.name, args.approved_by_dry_run, datetime.now(timezone.utc))
+    record_approval(root, cfg.name, args.approved_by_dry_run, datetime.now(timezone.utc), cfg.fingerprint())
     result = run_source(source, cfg, root, datetime.now(timezone.utc), headroom=config.headroom)
     print("ok" + (f" snapshot={result.snapshot}" if result.snapshot else " no-changes") if result.ok
           else f"failed code={result.code}")

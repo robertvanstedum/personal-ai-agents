@@ -17,6 +17,10 @@ Rules, each tested in ``tests/cos/test_turn_log.py``:
 - **Private writes nothing.** Private is on if the stored mode says so, the mode
   cannot be read, or the request says so (``private_mode.read_mode`` fails to
   Private). Nothing about a Private turn is logged, not even its length.
+- **The mode is latched when the turn starts** (Codex review of M1, 2026-10-04). ``begin`` reads the stored mode and
+  its epoch before the backend runs; ``record_turn`` writes nothing if the turn started Private, if the mode could not
+  be read then, or if the epoch differs now (any change in between, even Private on and off again). The request's own
+  flag stays an extra way to say Private. This is the same epoch rule a voice session follows at Stop.
 - **Scrubbed before it is kept.** The payment scrub (cards, IBANs, routing
   numbers, emails) and the credential guard run on both text fields, which are
   capped first (8,000 and 16,000 characters).
@@ -30,7 +34,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Callable, NamedTuple
 
 from core.agent_turns import writer as core_writer
 from core.agent_turns.writer import (DEFAULT_MIN_FREE_BYTES, DISK_LOW, FAILURES, INTERNAL, MAX_REPLY,  # noqa: F401
@@ -41,6 +45,28 @@ from domains.cos.voice_transcripts import append_record
 NO_TURN_LOG = "no_turn_log"
 DISABLED = "disabled"
 PRIVATE = "private"
+MODE_CHANGED = "mode_changed"
+
+
+class Latch(NamedTuple):
+    """The mode as it was when the turn began."""
+    private: bool
+    epoch: str | None
+    readable: bool
+
+
+def begin(request) -> Latch | None:
+    """Read the stored mode before the turn runs. None when there is nothing to latch (log off, no turn log)."""
+    try:
+        if not enabled():
+            return None
+        root = private_mode.turns_dir()
+        if root is None:
+            return None
+        private_now, epoch = private_mode.read_mode(root, (getattr(request, "conversation_id", "") or "").strip() or "owner")
+        return Latch(bool(private_now), epoch, True)
+    except Exception:
+        return Latch(True, None, False)          # fail closed: a turn whose mode could not be read starts as Private
 
 
 def enabled() -> bool:
@@ -84,8 +110,8 @@ def _build_record(request, result, now: datetime) -> dict:
 
 
 def record_turn(request, result, *, clock: Callable[[], datetime] | None = None,
-                container: str | None = None) -> tuple[bool | None, str]:
-    """Append one turn. Returns (history_saved, code); never raises."""
+                container: str | None = None, latch: Latch | None = None) -> tuple[bool | None, str]:
+    """Append one turn. Returns (history_saved, code); never raises. ``latch`` is what ``begin`` read at the start."""
     now = (clock or (lambda: datetime.now(timezone.utc)))()
     try:
         if not enabled():
@@ -93,9 +119,14 @@ def record_turn(request, result, *, clock: Callable[[], datetime] | None = None,
         root = private_mode.turns_dir()
         if root is None:
             return None, NO_TURN_LOG
-        private_now, _ = private_mode.read_mode(root, result.conversation_id)
+        private_now, epoch_now = private_mode.read_mode(root, result.conversation_id)
         if private_now or getattr(request, "private", False):
             return None, PRIVATE
+        if latch is not None:
+            if latch.private or not latch.readable:
+                return None, PRIVATE             # the turn began Private (or its mode was unreadable): it stays unlogged
+            if latch.epoch != epoch_now:
+                return None, MODE_CHANGED        # the mode moved while the turn ran, in either direction: log nothing
     except Exception:
         return False, INTERNAL           # the mode could not be decided: log nothing, say so
     return core_writer.save_record(
@@ -105,12 +136,14 @@ def record_turn(request, result, *, clock: Callable[[], datetime] | None = None,
 
 
 def recorder(*, clock: Callable[[], datetime] | None = None, container: str | None = None):
-    """The ``record_turn`` callable ``ConferTurnService`` takes: (request, result) -> history_saved."""
-    def hook(request, result):
-        saved, _ = record_turn(request, result, clock=clock, container=container)
+    """The ``record_turn`` callable ``ConferTurnService`` takes: (request, result[, latch]) -> history_saved.
+    ``hook.begin`` is the matching ``begin_turn`` hook."""
+    def hook(request, result, latch=None):
+        saved, _ = record_turn(request, result, clock=clock, container=container, latch=latch)
         return saved
+    hook.begin = begin
     return hook
 
 
-__all__ = ["record_turn", "recorder", "enabled", "container_name", "SAVED", "NO_TURN_LOG",
+__all__ = ["record_turn", "recorder", "begin", "Latch", "MODE_CHANGED", "enabled", "container_name", "SAVED", "NO_TURN_LOG",
            "DISABLED", "PRIVATE", "DISK_LOW", "WRITE_FAILED", "INTERNAL"]
