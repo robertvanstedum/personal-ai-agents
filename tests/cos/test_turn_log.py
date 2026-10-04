@@ -317,3 +317,129 @@ def test_without_the_latch_hook_the_service_still_works_with_a_two_argument_reco
     seen = []
     ask(service(hook=lambda request, result: seen.append(result.reply) or True))
     assert seen == ["a reply"]
+
+
+# ── the final check and the append are atomic with the mode switch (Codex review of M1, fix verdict 2026-10-04) ──
+
+import fcntl
+import os
+import time
+
+
+def lock_is_held_shared_or_more(root) -> bool:
+    """True if an exclusive lock on the mode lock cannot be taken right now (someone holds it)."""
+    fd = os.open(root / "_mode.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return True
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    finally:
+        os.close(fd)
+
+
+def test_the_mode_lock_is_held_while_the_record_is_built_and_while_it_is_appended(root, monkeypatch):
+    private_mode.set_private(root, False, "owner")
+    seen = {}
+    real_build, real_append = turn_log._build_record, turn_log.append_record
+
+    def build(*a, **k):
+        seen["build"] = lock_is_held_shared_or_more(root)
+        return real_build(*a, **k)
+
+    def append(r, record, now):
+        seen["append"] = lock_is_held_shared_or_more(root)
+        return real_append(r, record, now)
+    monkeypatch.setattr(turn_log, "_build_record", build)
+    monkeypatch.setattr(turn_log, "append_record", append)
+    assert ask(service()).history_saved is True
+    assert seen == {"build": True, "append": True}
+    assert lock_is_held_shared_or_more(root) is False                     # and released afterwards
+
+
+def test_a_switch_to_private_started_after_the_final_check_waits_for_the_turn_instead_of_racing_the_append(root, monkeypatch):
+    """Codex's boundary: the switch lands between the last mode read and the append. It must now queue behind the turn."""
+    private_mode.set_private(root, False, "owner")
+    real_build = turn_log._build_record
+    order, switcher = [], {}
+
+    def build(*a, **k):
+        def flip():
+            private_mode.set_private(root, True, "owner")
+            order.append("switched")
+        switcher["t"] = threading.Thread(target=flip)
+        switcher["t"].start()
+        time.sleep(0.3)                                                    # the switch is now trying; it must be waiting
+        order.append("record built")
+        return real_build(*a, **k)
+    monkeypatch.setattr(turn_log, "_build_record", build)
+    result = ask(service())
+    switcher["t"].join(10)
+    assert result.history_saved is True and order == ["record built", "switched"]        # the turn finished first
+    assert len(lines(root)) == 1
+    assert private_mode.read_mode(root, "owner")[0] is True
+    assert ask(service()).history_saved is None and len(lines(root)) == 1                 # and nothing after the switch
+
+
+def test_no_turn_is_ever_appended_while_the_mode_is_private_under_concurrent_switching(root, monkeypatch):
+    private_mode.set_private(root, False, "owner")
+    violations, real_append = [], turn_log.append_record
+
+    def append(r, record, now):
+        if private_mode.read_mode(r, "owner")[0]:
+            violations.append(1)                                           # a line is being written while Private
+        time.sleep(0.002)
+        return real_append(r, record, now)
+    monkeypatch.setattr(turn_log, "append_record", append)
+    stop = threading.Event()
+
+    def toggler():
+        flag = True
+        while not stop.is_set():
+            private_mode.set_private(root, flag, "owner")
+            flag = not flag
+            time.sleep(0.001)
+    threads = [threading.Thread(target=toggler)]
+    threads += [threading.Thread(target=lambda: [ask(service(), text=f"turn {n}") for n in range(25)]) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads[1:]:
+        t.join(120)
+    stop.set()
+    threads[0].join(10)
+    assert violations == []
+
+
+def test_a_turn_that_cannot_get_the_mode_lock_in_time_saves_nothing(root, monkeypatch):
+    private_mode.set_private(root, False, "owner")
+    monkeypatch.setattr(private_mode, "HOLD_WAIT_S", 0.2)
+    fd = os.open(root / "_mode.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)                                          # a switch that is taking its time
+    try:
+        result = ask(service())
+    finally:
+        os.close(fd)
+    assert result.history_saved is False and lines(root) == []
+
+
+def test_another_process_holding_the_switch_makes_the_turn_wait_then_see_the_new_mode(root):
+    import subprocess, sys, textwrap
+    private_mode.set_private(root, False, "owner")
+    child = textwrap.dedent("""
+        import sys, time
+        sys.path.insert(0, %r)
+        from domains.cos import private_mode
+        from pathlib import Path
+        root = Path(sys.argv[1])
+        private_mode.set_private(root, False, "owner")      # refresh, then flip while the parent is mid-turn
+        print("go", flush=True)
+        time.sleep(0.4)
+        private_mode.set_private(root, True, "owner")
+    """) % str(__import__("pathlib").Path(__file__).resolve().parents[2])
+    proc = subprocess.Popen([sys.executable, "-c", child, str(root)], stdout=subprocess.PIPE)
+    assert proc.stdout.readline().strip() == b"go"
+    result = ask(service(backend=lambda p, c, k: (time.sleep(0.8) or "slow reply")))      # starts public, ends after the flip
+    proc.wait(10)
+    assert lines(root) == [] and result.history_saved is None

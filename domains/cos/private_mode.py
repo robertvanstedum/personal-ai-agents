@@ -29,6 +29,8 @@ import fcntl
 import hashlib
 import json
 import os
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,6 +42,41 @@ CONVERSATION_ID = "owner"
 MODE_FILE = "_mode.json"
 MAX_BODY = 1024
 DISCLOSURE = "Private: not kept in your CoS history. The agent itself may still remember it."
+
+
+MODE_LOCK = "_mode.lock"
+HOLD_WAIT_S = 5.0                 # how long a turn waits for a mode switch in progress before it gives up (and saves nothing)
+
+
+class ModeBusy(RuntimeError):
+    """A mode switch held the lock for the whole wait: the turn must not be logged."""
+
+
+@contextmanager
+def hold_mode(root: Path, wait: float | None = None):
+    """Hold ``_mode.lock`` **shared** for the final mode check and the append of one turn (Codex review of M1).
+
+    ``set_private`` takes the same lock exclusively, so while a turn holds it the mode cannot change between the last
+    read and the write: Private on, Private on-and-off, and a switch from another process or the Telegram bot all wait
+    for the turn to finish (or the turn waits for them). Many turns may hold it together. Lock order is always
+    ``_mode.lock`` first, then the daily file's own append lock (``set_private`` takes only this one), so the two
+    cannot deadlock. Anything that stops the lock being taken raises, and the caller saves nothing (fail closed)."""
+    root = Path(root)
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd = os.open(root / MODE_LOCK, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        deadline = time.monotonic() + (HOLD_WAIT_S if wait is None else wait)
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise ModeBusy("a mode switch is in progress") from None
+                time.sleep(0.01)
+        yield
+    finally:
+        os.close(fd)                                 # closing releases the lock
 
 
 def turns_dir() -> Path | None:
@@ -94,7 +131,7 @@ def set_private(root: Path, private: bool, conversation_id: str = CONVERSATION_I
     """Write the mode for conversation_id, keeping other conversations'."""
     now = now or datetime.now(timezone.utc)
     root.mkdir(mode=0o700, exist_ok=True)
-    lock_fd = os.open(root / "_mode.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    lock_fd = os.open(root / MODE_LOCK, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX)
         try:
