@@ -48,10 +48,17 @@ def _is_release_only(path: str) -> bool:
         # for a change under these trees.
         or path.startswith("prototype-lab/")
         or path.startswith("planning-studio/")
+        # The Mac's scheduled jobs (memory-watch, jobs-watchdog), their launchd files and the install
+        # helper run on the Mac from the repository; no service image contains or runs them.
+        or path.startswith(MAC_JOB_PREFIXES)
         or path in {"requirements.test.txt", "pytest.ini", ".gitignore"}
         or _is_staging_only(path)
         or path.startswith(DORMANT_PREFIXES)
     )
+
+
+# Mac-only scheduled jobs (scheduled-jobs registry): scripts that launchd runs from the repository on the Mac.
+MAC_JOB_PREFIXES = ("scripts/jobs/", "scripts/memory/", "infrastructure/launchd/")
 
 
 # Files that no production service is built from or mounts yet. Master
@@ -78,6 +85,8 @@ STAGING_ONLY_FILES = frozenset({
     "docker-compose.staging-cos-key.yml",
     # The CoS turn log mount (Spec 160 path (a)), staging only.
     "docker-compose.staging-cos-turns.yml",
+    # The scheduled-jobs status folder, read-only into the portal (jobs registry), staging only.
+    "docker-compose.staging-jobs.yml",
     "services/model_gateway/litellm.staging.yaml",
 })
 STAGING_ONLY_PREFIXES = ("scripts/staging/",)
@@ -114,6 +123,10 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             services.update(("model-gateway", "cos-bot", "cos-scheduler"))
         elif path.startswith("docker/cos-agent-a/") or path == "docker/Dockerfile.cos-agent-a":
             services.add("cos-agent-a")
+        elif path.startswith("core/jobs/") or path == "config/scheduled_jobs.json":
+            # The jobs registry and status contract: the Guild Operate tile (portal) reads them from the image;
+            # no other service imports them.
+            services.add("portal")
         elif path.startswith("core/realtime_voice/"):
             services.update(("german", "portuguese", "cos-scheduler"))
         elif path.startswith("core/telegram/"):

@@ -1,0 +1,15 @@
+# Staging-only: the Guild Operate tile's read of the scheduled jobs' status files (scheduled-jobs registry,
+# docs/jobs_status_contract.md). Opt-in, the same way as docker-compose.staging-mc-turns.yml: a staging script
+# includes it only when it should (nothing in scripts/staging includes it yet; Codex owns those scripts); the
+# folder $STAGING_ROOT/data/jobs must exist (0700; scripts/jobs/launchd.sh install creates it).
+#
+# The Mac jobs (memory-watch, jobs-watchdog) write <MINIMOI_JOBS_ROOT>/<job>.json; the portal only READS them,
+# so the mount is read-only. Without MINIMOI_JOBS_DIR the Scheduled jobs tile says "jobs status not connected"
+# (unknown, never green). Production is unchanged (docker-compose.prod.yml never sets MINIMOI_JOBS_DIR).
+
+services:
+  portal:
+    environment:
+      - MINIMOI_JOBS_DIR=/app/data/jobs
+    volumes:
+      - ${MINIMOI_ROOT:?}/data/jobs:/app/data/jobs:ro
