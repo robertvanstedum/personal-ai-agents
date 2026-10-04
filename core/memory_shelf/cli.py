@@ -86,6 +86,10 @@ def cmd_review(cfg, shelf, out) -> int:
         counts = listing.get("counts", {})
         print(f"dry-run\t{name}\t{status}\t{json.dumps(counts, sort_keys=True)}\t{listing.get('generated_at')}\t"
               f"sha256:{str(listing.get('listing_sha256'))[:12]}", file=out)
+    from core.memory_shelf.shelf import prune_flags
+    closed = prune_flags(shelf)
+    if closed:
+        print(f"# closed {closed} possible-same flags between exported records (paste-only rule)", file=out)
     print("# designation candidates", file=out)
     for item in review.items(shelf):
         if item["type"] == "designation-candidate":
