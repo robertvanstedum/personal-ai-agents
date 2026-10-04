@@ -67,7 +67,8 @@ def dump(meta: dict, body: str) -> str:
     extra = sorted(set(meta) - set(ordered))
     ordered.update({k: meta[k] for k in extra})
     head = yaml.safe_dump(ordered, sort_keys=False, allow_unicode=True, default_flow_style=False)
-    return f"---\n{head}---\n\n{body.rstrip()}\n"
+    # Not rstripped: the last turn's own trailing spaces and newlines are part of its frame (bytes + sha256).
+    return f"---\n{head}---\n\n{body if body.endswith(chr(10)) else body + chr(10)}"
 
 
 def load(text: str) -> tuple[dict, str]:
@@ -83,6 +84,13 @@ def load(text: str) -> tuple[dict, str]:
     if not isinstance(meta, dict):
         raise InvalidRecord("front matter must be a mapping")
     return check(meta), text[end + 5:].lstrip("\n")
+
+
+def read(path: Path) -> str:
+    """A record file's text exactly as written. ``Path.read_text`` translates a lone CR or CRLF to LF, which
+    breaks a turn frame (its declared bytes and sha256) when a turn contains one, and would rewrite the turn
+    differently the next time the record is saved."""
+    return Path(path).read_bytes().decode("utf-8")
 
 
 def write(path: Path, meta: dict, body: str) -> None:
@@ -102,10 +110,10 @@ def write(path: Path, meta: dict, body: str) -> None:
 
 def append_event(path: Path, event: dict) -> dict:
     """Append one already-built event; every earlier event is left byte-for-byte as it was."""
-    meta, body = load(Path(path).read_text(encoding="utf-8"))
+    meta, body = load(read(path))
     meta["events"] = [*meta.get("events", []), event]
     write(path, meta, body)
     return meta
 
 
-__all__ = ["new_front_matter", "check", "dump", "load", "write", "append_event", "InvalidRecord", "CHAIRS"]
+__all__ = ["new_front_matter", "check", "dump", "load", "read", "write", "append_event", "InvalidRecord", "CHAIRS"]

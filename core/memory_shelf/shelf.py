@@ -89,6 +89,15 @@ def edition_source_hash(path: Path) -> str | None:
         return None
 
 
+def _same_turns(old_body: str, new_body: str) -> bool:
+    """True only when both bodies read back and hold the same turns. A body that does not read back is never
+    "the same": the safe answer is a new edition (the old one stays), never a failed ingest."""
+    try:
+        return render.ordered_turns(render.parse_body(old_body)) == render.ordered_turns(render.parse_body(new_body))
+    except record.InvalidRecord:
+        return False
+
+
 class Shelf:
     def __init__(self, root: str | Path, *, min_free_bytes: int | None = fsio.DEFAULT_MIN_FREE_BYTES,
                  min_free_fraction: float | None = None, clock: Callable[[], datetime] | None = None):
@@ -265,7 +274,7 @@ class Shelf:
 
     def _add_edition(self, bundle: Bundle, entry: dict) -> Result:
         main = self.main_path(entry)
-        meta, old_body = record.load(main.read_text("utf-8"))
+        meta, old_body = record.load(record.read(main))
         folder = main.parent
         have, new = (meta.get("normalized") or {}).get("normalizer", DEFAULT_NORMALIZER), \
             bundle.meta["normalized"].get("normalizer", DEFAULT_NORMALIZER)
@@ -275,7 +284,7 @@ class Shelf:
                 return Result(codes.UNCHANGED, bundle.key, meta["id"])
             # The same source bytes, read by a newer parser (amendment §10, R3). If it reads the same turns, only the
             # manifest moves on; if it reads different turns, that is a new edition and the old one stays.
-            if render.ordered_turns(render.parse_body(old_body)) == render.ordered_turns(render.parse_body(bundle.body)):
+            if _same_turns(old_body, bundle.body):
                 meta["normalized"] = {**meta.get("normalized", {}), "normalizer": new,
                                       **({"coverage": bundle.meta["normalized"]["coverage"]}
                                          if bundle.meta["normalized"].get("coverage") else {})}
