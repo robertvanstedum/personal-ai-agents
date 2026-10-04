@@ -6,7 +6,7 @@ exporter (Prometheus, Grafana, something else) share only two things: the **regi
 to a scheduler, an alert channel or a dashboard.
 
 Code: `core/jobs/registry.py`, `core/jobs/status.py`, `core/jobs/schedule.py`.
-Jobs today: `scripts/memory/daily_watch.py` (writes status), `scripts/jobs/watchdog.py` (reads it).
+Jobs today: `scripts/memory/daily_watch.py` (writes status; operator page: `docs/memory_watch.md`), `scripts/jobs/watchdog.py` (reads it).
 
 ## Registry: `config/scheduled_jobs.json`
 

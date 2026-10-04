@@ -59,8 +59,8 @@ def helper(tmp_path):
            "MINIMOI_LAUNCH_AGENTS_DIR": str(agents), "MINIMOI_STAGING_ROOT": str(staging),
            "MINIMOI_REPO": "/tmp/trial-checkout"}
 
-    def run(cmd):
-        return subprocess.run(["/bin/sh", str(REPO / "scripts" / "jobs" / "launchd.sh"), cmd], env=env,
+    def run(cmd, **extra):
+        return subprocess.run(["/bin/sh", str(REPO / "scripts" / "jobs" / "launchd.sh"), cmd], env={**env, **extra},
                               capture_output=True, text=True)
     return run, agents, staging, tmp_path / "calls.log"
 
@@ -77,6 +77,25 @@ def test_install_copies_both_plists_points_them_at_the_chosen_checkout_and_boots
     assert (staging / "logs").is_dir() and oct((staging / "data" / "jobs").stat().st_mode & 0o777) == "0o700"
     log = calls.read_text()
     assert log.count("bootstrap") == 2 and "com.vanstedum.minimoi-memory-watch.plist" in log
+
+
+def test_a_worktree_install_keeps_the_interpreter_in_the_main_checkouts_venv(helper):
+    """A worktree has no venv: the plist must not point python (or moi's python) at one."""
+    run, agents, *_ = helper
+    run("install")
+    for label, script, *_ in CASES:
+        plist = plistlib.loads((agents / f"{label}.plist").read_bytes())
+        assert plist["ProgramArguments"][0] == f"{MAIN}/venv/bin/python3"
+    assert plistlib.loads((agents / "com.vanstedum.minimoi-memory-watch.plist").read_bytes())[
+        "EnvironmentVariables"]["MOI_PYTHON"] == f"{MAIN}/venv/bin/python3"
+
+
+def test_the_venv_can_be_chosen_explicitly(helper):
+    run, agents, *_ = helper
+    assert run("install", MINIMOI_VENV="/tmp/some-venv").returncode == 0
+    plist = plistlib.loads((agents / "com.vanstedum.minimoi-memory-watch.plist").read_bytes())
+    assert plist["ProgramArguments"][0] == "/tmp/some-venv/bin/python3"
+    assert plist["EnvironmentVariables"]["MOI_PYTHON"] == "/tmp/some-venv/bin/python3"
 
 
 def test_uninstall_unloads_and_removes_the_copies_but_keeps_status_and_logs(helper):

@@ -497,7 +497,8 @@ Install, remove or inspect both with `scripts/jobs/launchd.sh install|uninstall|
 live in `infrastructure/launchd/`). To stop one job only: `launchctl bootout gui/$(id -u)/<label>`. To run the
 capture by hand: `venv/bin/python scripts/memory/daily_watch.py`. If a job's status file is missing or
 `running` for hours, read its log first; the watchdog's Telegram message names the job and the condition only.
-The Guild tile for these jobs is read-only and shows "not connected" until the staging overlay
+The one-page operator guide for the memory watch (approve, install, run now, pause, read the result) is
+`docs/memory_watch.md`. The Guild tile for these jobs is read-only and shows "not connected" until the staging overlay
 `docker-compose.staging-jobs.yml` is included.
 
 ## Mac restart protocol

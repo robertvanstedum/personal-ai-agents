@@ -7,13 +7,15 @@
 #
 # Robert runs this. Nothing in the repo runs it. The plists name the main checkout
 # (/Users/vanstedum/Projects/personal-ai-agents); to point them at another checkout (for a trial from a worktree),
-# set MINIMOI_REPO=/path before `install`. Test hooks: LAUNCHCTL, MINIMOI_LAUNCH_AGENTS_DIR.
+# set MINIMOI_REPO=/path before `install`. A worktree has no venv, so the Python interpreter stays the main checkout's
+# venv unless MINIMOI_VENV=/path/to/venv is set. Test hooks: LAUNCHCTL, MINIMOI_LAUNCH_AGENTS_DIR.
 set -eu
 
 here="$(cd "$(dirname "$0")/../.." && pwd)"
 src="$here/infrastructure/launchd"
 default_repo="/Users/vanstedum/Projects/personal-ai-agents"
 repo="${MINIMOI_REPO:-$default_repo}"
+venv="${MINIMOI_VENV:-$default_repo/venv}"
 agents="${MINIMOI_LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"
 launchctl_bin="${LAUNCHCTL:-launchctl}"
 uid="$(id -u)"
@@ -27,7 +29,8 @@ install_one() {
   plist="$src/$label.plist"
   target="$agents/$label.plist"
   [ -f "$plist" ] || { echo "missing $plist" >&2; exit 1; }
-  sed "s|$default_repo|$repo|g" "$plist" > "$target.tmp"
+  # the interpreter (venv) is replaced separately, so pointing at a worktree does not point at a venv it lacks
+  sed -e "s|$default_repo/venv|@@VENV@@|g" -e "s|$default_repo|$repo|g" -e "s|@@VENV@@|$venv|g" "$plist" > "$target.tmp"
   if command -v plutil >/dev/null 2>&1; then plutil -lint "$target.tmp" >/dev/null || { rm -f "$target.tmp"; echo "invalid plist for $label" >&2; exit 1; }; fi
   mv "$target.tmp" "$target"
   chmod 644 "$target"
