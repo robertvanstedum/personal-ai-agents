@@ -23,17 +23,14 @@ capped (``MAX_BODY``) before it is parsed. This module never imports
 """
 from __future__ import annotations
 
-import fcntl
-import json
-import os
 import re
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
-from zoneinfo import ZoneInfo
+from pathlib import Path  # noqa: F401  (tests reach it as vt.Path)
 
 from flask import Blueprint, jsonify, request
 
+from core.agent_turns.writer import append_record  # noqa: F401  (re-exported: the shared whole-line writer)
 from core.identity import resolve_user_id
 from domains.cos import private_mode
 from utils.credential_scrub import scrub as scrub_credentials
@@ -79,39 +76,6 @@ def scrub_cards(text: str) -> tuple[str, bool]:
 
 turns_dir = private_mode.turns_dir
 is_private = private_mode.is_private
-
-
-def _local_day(now: datetime) -> datetime:
-    try:
-        tz = ZoneInfo(os.environ.get("COS_AGENT_TIMEZONE") or "America/Chicago")
-    except Exception:
-        tz = ZoneInfo("America/Chicago")
-    return now.astimezone(tz)
-
-
-def append_record(root: Path, record: dict, now: datetime) -> Path:
-    """One whole line under an exclusive lock; a crash-truncated tail is
-    closed with a newline and a log_gap line first (Spec 160)."""
-    day = _local_day(now)
-    folder = root / f"{day:%Y}"
-    for path in (root, folder):
-        path.mkdir(mode=0o700, exist_ok=True)   # new folders only; an existing mount keeps its mode
-    target = folder / f"{day:%Y-%m-%d}.jsonl"
-    line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
-    fd = os.open(target, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
-    try:
-        os.fchmod(fd, 0o600)
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        size = os.fstat(fd).st_size
-        prefix = ""
-        if size:
-            os.lseek(fd, size - 1, os.SEEK_SET)
-            if os.read(fd, 1) != b"\n":
-                prefix = "\n" + json.dumps({"record_type": "log_gap", "reason": "truncated_tail"}) + "\n"
-        os.write(fd, (prefix + line).encode("utf-8"))
-    finally:
-        os.close(fd)
-    return target
 
 
 class InvalidTranscript(ValueError):

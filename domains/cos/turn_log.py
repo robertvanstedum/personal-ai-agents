@@ -4,7 +4,10 @@
 ``save_note``). It appends a ``cos_turn`` record to the same daily file that
 voice sessions use (``COS_TURNS_DIR/YYYY/YYYY-MM-DD.jsonl``, named by Robert's
 local day, UTC times inside, 0600/0700), through ``voice_transcripts.append_record``
-so whole-line appends, the file lock and the ``log_gap`` repair are shared.
+so whole-line appends, the file lock and the ``log_gap`` repair are shared. The
+generic parts (append, status file, headroom, scrub) live in ``core/agent_turns``,
+which Master Craftsman uses too (v0.5.1 §8); this module keeps the CoS-specific
+part: Private, the switch, the record shape.
 
 Rules, each tested in ``tests/cos/test_turn_log.py``:
 - **Best effort, never fatal.** Every failure is caught and reported as a fixed
@@ -25,35 +28,19 @@ Rules, each tested in ``tests/cos/test_turn_log.py``:
 """
 from __future__ import annotations
 
-import json
 import os
-import re
-import shutil
-import socket
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Callable
 
+from core.agent_turns import writer as core_writer
+from core.agent_turns.writer import (DEFAULT_MIN_FREE_BYTES, DISK_LOW, FAILURES, INTERNAL, MAX_REPLY,  # noqa: F401
+                                     MAX_USER_TEXT, SAVED, SCHEMA_VERSION, STATUS_DIR, WRITE_FAILED)
 from domains.cos import private_mode
 from domains.cos.voice_transcripts import append_record
-from utils.credential_scrub import scrub as scrub_credentials
-from utils.payment_scrub import scrub as scrub_payment
 
-SCHEMA_VERSION = 1
-MAX_USER_TEXT = 8_000
-MAX_REPLY = 16_000
-STATUS_DIR = "_status"
-DEFAULT_MIN_FREE_BYTES = 5 * 1024 ** 3
-
-# Fixed outcome codes (no error text ever leaves this module).
-SAVED = "saved"
 NO_TURN_LOG = "no_turn_log"
 DISABLED = "disabled"
 PRIVATE = "private"
-DISK_LOW = "disk_low"
-WRITE_FAILED = "disk_write_failed"
-INTERNAL = "internal"
-FAILURES = frozenset({DISK_LOW, WRITE_FAILED, INTERNAL})
 
 
 def enabled() -> bool:
@@ -62,59 +49,11 @@ def enabled() -> bool:
 
 
 def container_name() -> str:
-    raw = os.environ.get("COS_CONTAINER_NAME") or socket.gethostname() or "cos"
-    return re.sub(r"[^A-Za-z0-9_.\-]", "_", raw)[:64] or "cos"
-
-
-def _disk_low(root: Path) -> bool:
-    """True when free space is below the floor. An unreadable disk counts as low."""
-    try:
-        usage = shutil.disk_usage(root if root.exists() else root.parent)
-    except OSError:
-        return True
-    floor = int(os.environ.get("COS_TURNS_MIN_FREE_BYTES", DEFAULT_MIN_FREE_BYTES))
-    if usage.free < floor:
-        return True
-    fraction = os.environ.get("COS_TURNS_MIN_FREE_FRACTION")
-    return bool(fraction) and usage.total > 0 and usage.free / usage.total < float(fraction)
+    return core_writer.container_name("COS_CONTAINER_NAME", "cos")
 
 
 def _cap_and_scrub(text: str, limit: int) -> tuple[str, bool]:
-    text = (text or "")[:limit]
-    scrubbed = scrub_payment(text)
-    scrubbed, creds = scrub_credentials(scrubbed)
-    return scrubbed, scrubbed != text or creds
-
-
-def _write_status(root: Path, container: str, *, ok: bool, code: str | None, now: datetime) -> None:
-    """The per-container status file; any failure here is swallowed."""
-    try:
-        folder = root / STATUS_DIR
-        folder.mkdir(mode=0o700, exist_ok=True)
-        path = folder / f"{container}.json"
-        try:
-            state = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(state, dict):
-                state = {}
-        except (OSError, ValueError):
-            state = {}
-        stamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-        state["schema_version"] = SCHEMA_VERSION
-        state["container"] = container
-        if ok:
-            state["last_success_at"] = stamp
-        else:
-            state["last_failure_at"] = stamp
-            state["last_failure_code"] = code if code in FAILURES else INTERNAL
-        tmp = folder / f".{container}.tmp-{os.getpid()}"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        try:
-            os.write(fd, (json.dumps(state, indent=2, sort_keys=True) + "\n").encode("utf-8"))
-        finally:
-            os.close(fd)
-        os.replace(tmp, path)
-    except Exception:
-        pass
+    return core_writer.cap_and_scrub(text, limit)
 
 
 def _build_record(request, result, now: datetime) -> dict:
@@ -159,22 +98,10 @@ def record_turn(request, result, *, clock: Callable[[], datetime] | None = None,
             return None, PRIVATE
     except Exception:
         return False, INTERNAL           # the mode could not be decided: log nothing, say so
-    name = container or container_name()
-    try:
-        if _disk_low(root):
-            _write_status(root, name, ok=False, code=DISK_LOW, now=now)
-            return False, DISK_LOW
-        append_record(root, _build_record(request, result, now), now)
-    except OSError:
-        _write_status(root, name, ok=False, code=WRITE_FAILED, now=now)
-        print(f"[cos_turn_log] saved=false code={WRITE_FAILED}", flush=True)
-        return False, WRITE_FAILED
-    except Exception:
-        _write_status(root, name, ok=False, code=INTERNAL, now=now)
-        print(f"[cos_turn_log] saved=false code={INTERNAL}", flush=True)
-        return False, INTERNAL
-    _write_status(root, name, ok=True, code=None, now=now)
-    return True, SAVED
+    return core_writer.save_record(
+        root, lambda: _build_record(request, result, now), now=now, container=container or container_name(),
+        log_tag="cos_turn_log", floor_env="COS_TURNS_MIN_FREE_BYTES", fraction_env="COS_TURNS_MIN_FREE_FRACTION",
+        append=append_record)
 
 
 def recorder(*, clock: Callable[[], datetime] | None = None, container: str | None = None):
