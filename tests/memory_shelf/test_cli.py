@@ -33,9 +33,9 @@ class World:
             "sources": {"claude-code": {"kind": "claude-code", "root": str(self.cc)}}}))
         write_tree(tmp_path / "repo", {"docs/DECISIONS.md": "# d\n"})
 
-    def run(self, *argv, confirm=YES):
+    def run(self, *argv, confirm=YES, tty=True):
         buf = io.StringIO()
-        code = cli.main(["--config", str(self.cfg_path), *argv], confirm=confirm, out=buf, now=NOW)
+        code = cli.main(["--config", str(self.cfg_path), *argv], confirm=confirm, out=buf, now=NOW, is_tty=lambda: tty)
         return code, buf.getvalue()
 
     @property

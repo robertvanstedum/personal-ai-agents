@@ -178,6 +178,15 @@ class Shelf:
                 return self.main_path(entry)
         return None
 
+    def resolve_id(self, token: str) -> tuple[str | None, str | None]:
+        """A full ULID or the 8-character short id, matched **exactly** (never by prefix or similarity):
+        ``(record id, None)``, or ``(None, "unknown_id" | "ambiguous_id")``."""
+        found = sorted({e["id"] for e in self.index().values()
+                        if e["id"] == token or (len(token) == 8 and ulid.is_ulid(e["id"]) and ulid.short(e["id"]) == token.lower())})
+        if len(found) == 1:
+            return found[0], None
+        return None, ("ambiguous_id" if found else "unknown_id")
+
     def has_record(self, record_id: str) -> bool:
         path = self.find_record(record_id)
         return bool(path and path.is_file())
