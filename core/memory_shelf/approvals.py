@@ -85,7 +85,8 @@ def approve_record(shelf, record_id: str, authority: OwnerAuthority, *, under: s
             event = ev.make_event("approved-direct", authority.owner, now=now, authority=authority)
     except ev.EventRefused as exc:
         raise ApprovalRefused(str(exc)) from exc
-    record.append_event(path, event)
+    with shelf.lock():
+        record.append_event(path, event)
     return event
 
 
@@ -96,6 +97,7 @@ def designate_record(shelf, record_id: str, authority: OwnerAuthority, *, now: d
     if path is None or not path.is_file():
         raise ApprovalRefused("no such record")
     event = ev.make_event("designated-curated", authority.owner, now=now, via="moi-designate")
-    record.append_event(path, event)
+    with shelf.lock():
+        record.append_event(path, event)
     review.resolve(shelf, "designation-candidate", ulid.short(record_id), "confirmed")
     return event

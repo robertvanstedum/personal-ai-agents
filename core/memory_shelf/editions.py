@@ -45,6 +45,15 @@ def list_editions(record_dir: Path) -> list[Edition]:
     return sorted(found, key=lambda e: e.number)
 
 
+def find(record_dir: Path, raw: bytes) -> Edition | None:
+    """The edition holding exactly these bytes, or None."""
+    full = digest(raw)
+    for edition in list_editions(record_dir):
+        if _NAME.match(edition.path.name).group(2) == full[:12] and digest(edition.path.read_bytes()) == full:
+            return Edition(edition.number, full, edition.path, False)
+    return None
+
+
 def add_edition(record_dir: Path, raw: bytes, ext: str = "txt") -> Edition:
     """Store ``raw`` as the next edition unless these exact bytes are already one."""
     ext = re.sub(r"[^a-z0-9]", "", ext.lower()) or "txt"
@@ -72,4 +81,4 @@ def same_source(a: dict, b: dict) -> bool:
     return bool(ka) and ka == kb and a.get("provider") == b.get("provider")
 
 
-__all__ = ["Edition", "add_edition", "list_editions", "digest", "same_source"]
+__all__ = ["Edition", "find", "add_edition", "list_editions", "digest", "same_source"]
