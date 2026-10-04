@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  minimoi jobs watchdog — tells Robert when a scheduled job failed, never ran, or is stuck (job id: jobs-watchdog)
+
+  Runs scripts/jobs/watchdog.py every day at 09:00 (the Mac's local time, America/Chicago). It reads
+  config/scheduled_jobs.json and each job's status file under MINIMOI_JOBS_ROOT, and sends one Telegram
+  message per problem (and one when it clears). It judges only jobs registered for host "mac" (MINIMOI_JOBS_HOST).
+  Contract: docs/jobs_status_contract.md.
+
+  Install:   scripts/jobs/launchd.sh install      (Robert runs it; nothing installs itself)
+  Stop:      scripts/jobs/launchd.sh uninstall    (or: launchctl bootout gui/$(id -u)/com.vanstedum.minimoi-jobs-watchdog)
+  Log:       ~/minimoi-staging/logs/jobs-watchdog.log
+
+  PYTHONPATH is required: the script imports core.* from the repository.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vanstedum.minimoi-jobs-watchdog</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/venv/bin/python3</string>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/scripts/jobs/watchdog.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vanstedum/minimoi-staging/logs/jobs-watchdog.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vanstedum/minimoi-staging/logs/jobs-watchdog.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONPATH</key>
+        <string>/Users/vanstedum/Projects/personal-ai-agents</string>
+        <key>MINIMOI_JOBS_ROOT</key>
+        <string>/Users/vanstedum/minimoi-staging/data/jobs</string>
+    </dict>
+</dict>
+</plist>

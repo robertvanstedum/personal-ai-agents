@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  minimoi memory watch — the daily capture of approved memory sources (job id: memory-watch)
+
+  Runs scripts/memory/daily_watch.py every day at 04:00 (the Mac's local time; the Mac is on
+  America/Chicago, which is what config/scheduled_jobs.json assumes). It runs `moi watch` for each
+  source Robert has approved, writes its status file under MINIMOI_JOBS_ROOT, and sends one Telegram
+  message if it fails. Registry: config/scheduled_jobs.json. Contract: docs/jobs_status_contract.md.
+
+  Install:   scripts/jobs/launchd.sh install      (Robert runs it; nothing installs itself)
+  Stop:      scripts/jobs/launchd.sh uninstall    (or: launchctl bootout gui/$(id -u)/com.vanstedum.minimoi-memory-watch)
+  Log:       ~/minimoi-staging/logs/memory-watch.log
+
+  PYTHONPATH is required: the script imports core.* from the repository. (A missing PYTHONPATH broke
+  a CoS plist before.)
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vanstedum.minimoi-memory-watch</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/venv/bin/python3</string>
+        <string>/Users/vanstedum/Projects/personal-ai-agents/scripts/memory/daily_watch.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vanstedum/Projects/personal-ai-agents</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>4</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vanstedum/minimoi-staging/logs/memory-watch.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vanstedum/minimoi-staging/logs/memory-watch.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONPATH</key>
+        <string>/Users/vanstedum/Projects/personal-ai-agents</string>
+        <key>MINIMOI_JOBS_ROOT</key>
+        <string>/Users/vanstedum/minimoi-staging/data/jobs</string>
+    </dict>
+</dict>
+</plist>
