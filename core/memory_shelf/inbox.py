@@ -114,9 +114,11 @@ def _cap(text: object, limit: int = 40) -> str:
 def _message_text(msg: dict, parsed: Parsed, line: int) -> str:
     """One message's text. Content blocks are authoritative; ``text`` is used only when there are none.
 
-    ``text`` blocks are kept verbatim; thinking, tool calls and results, injected prompt blocks and
-    files become one-line pointers (names only); an attachment's extracted text is part of what the
-    owner sent and is kept, framed, after the message text.
+    ``text`` blocks are kept verbatim; thinking, tool calls and results, injected prompt blocks, files and
+    **attachments** become one-line pointers (the reference the source gave: name, type, size). An attachment's
+    extracted text is **not** copied into the dialogue (owner boundary, 4 Oct 2026: documents would swamp useful memory;
+    the original stays where it is); the characters left out are counted. Text the owner typed or pasted into the
+    message itself is dialogue and is kept verbatim like any other.
     """
     content, text = msg.get("content"), msg.get("text")
     if isinstance(content, list) and content:
@@ -138,7 +140,6 @@ def _message_text(msg: dict, parsed: Parsed, line: int) -> str:
         body = "\n\n".join(parts)
     else:
         body = text if isinstance(text, str) else ""
-    framed = []
     attachments = msg.get("attachments")
     if attachments is not None and not isinstance(attachments, list):
         parsed.skip("attachments", line)
@@ -146,15 +147,14 @@ def _message_text(msg: dict, parsed: Parsed, line: int) -> str:
     for att in attachments or []:
         parsed.manifest["attachments"] += 1
         extracted = att.get("extracted_content") if isinstance(att, dict) else None
+        name = att.get("file_name") if isinstance(att, dict) and isinstance(att.get("file_name"), str) else None
         if isinstance(extracted, str) and extracted.strip():
-            name = att.get("file_name") if isinstance(att.get("file_name"), str) else "unnamed"
-            ftype = att.get("file_type") if isinstance(att.get("file_type"), str) else "unknown type"
+            ftype = att.get("file_type") if isinstance(att.get("file_type"), str) and att["file_type"] else "unknown type"
             size = att.get("file_size")
             size_text = f"{int(size)} bytes" if isinstance(size, (int, float)) and not isinstance(size, bool) else "size unknown"
-            parsed.manifest["attachment_chars"] += len(extracted)
-            framed.append(f"Attachment: {name} ({ftype}, {size_text})\n{extracted}")
+            parsed.manifest["attachment_chars_excluded"] = parsed.manifest.get("attachment_chars_excluded", 0) + len(extracted)
+            parsed.skip("attachment_content_excluded", line, f"{name or 'unnamed'} ({ftype}, {size_text})")
         else:
-            name = att.get("file_name") if isinstance(att, dict) and isinstance(att.get("file_name"), str) else None
             parsed.skip("attachment_no_text", line, name)
     files = msg.get("files")
     if files is not None and not isinstance(files, list):
@@ -163,7 +163,7 @@ def _message_text(msg: dict, parsed: Parsed, line: int) -> str:
     for entry in files or []:
         name = entry.get("file_name") if isinstance(entry, dict) and isinstance(entry.get("file_name"), str) else None
         parsed.skip("file", line, name)
-    return "\n\n".join(p for p in [body if body.strip() else "", *framed] if p)
+    return body if body.strip() else ""
 
 
 def check_conversation(conv: object) -> dict:
@@ -215,8 +215,9 @@ def parse_conversation(conv: dict) -> Item:
     """One validated conversation to turns: the main line in order, then every other branch (``branches.py``)."""
     msgs = conv["chat_messages"]
     main, segments = branches.plan(msgs)
-    parsed = Parsed("claude-ai", "Claude", source_id=conv["uuid"], started=conv.get("created_at"), identity="source")
-    parsed.manifest.update({"attachments": 0, "attachment_chars": 0})
+    parsed = Parsed("claude-ai", "Claude", source_id=conv["uuid"], started=conv.get("created_at"), identity="source",
+                    normalizer=2)                  # 2: attachment text is a reference, not dialogue
+    parsed.manifest.update({"attachments": 0})
 
     def add(idx: int, branch_no: int) -> None:
         msg = msgs[idx]

@@ -190,27 +190,42 @@ def test_pointer_names_cannot_forge_a_frame_or_break_a_line(tmp_path):
 
 # ── attachments and files ─────────────────────────────────────────────────────
 
-def test_attachment_text_is_kept_in_the_human_turn_framed_and_scrubbed(tmp_path):
+def test_attachment_text_is_a_reference_not_dialogue_and_the_owners_own_words_stay(tmp_path):
+    """Owner boundary, 4 Oct 2026: a document attachment's extracted text is not copied into the dialogue; the reference stays."""
     atts = [{"file_name": "notes.txt", "file_size": 42, "file_type": "text/plain",
-             "extracted_content": f"line one\nkey {FAKE_KEY}\nline three"},
+             "extracted_content": f"DOC-LINE-ONE\nkey {FAKE_KEY}\nline three"},
             {"file_name": "scan.png", "file_size": 7, "file_type": "image/png", "extracted_content": ""}]
     files = [{"file_uuid": "f-1", "file_name": "photo.jpg"}, {"file_uuid": "f-2"}]
-    msgs = [m("r", ROOT, "human", "please read this", 1, attachments=atts, files=files), m("a", "r", "assistant", "ok", 2)]
+    pasted = "my own pasted question:\n\n```\nindented  code\n```"            # typed or pasted by the owner into the message
+    msgs = [m("r", ROOT, "human", pasted, 1, attachments=atts, files=files), m("a", "r", "assistant", "ok", 2)]
     shelf, *_ = ingest(tmp_path, [conversation("c1", msgs)])
     meta, body = body_of(shelf, "claude-ai:c1")
+    entry = shelf.index()["claude-ai:c1"]
+    everything = "".join(p.read_text() for p in shelf.main_path(entry).parent.rglob("*") if p.is_file())
     first = turns_of(body)[0]
-    assert first[1] == "human" and first[2].startswith("please read this\n\nAttachment: notes.txt (text/plain, 42 bytes)\nline one")
-    assert "line three" in first[2] and FAKE_KEY not in body and meta["normalized"]["redacted_turns"] == 1
+    assert first[1] == "human" and first[2] == pasted                              # the message text, verbatim, nothing framed after it
+    assert "DOC-LINE-ONE" not in everything and FAKE_KEY not in everything and meta["normalized"]["redacted_turns"] == 0
+    assert "[omitted: attachment_content_excluded, source line 1: notes.txt (text/plain, 42 bytes)]" in body
     assert "[omitted: attachment_no_text, source line 1: scan.png]" in body
     assert "[omitted: file, source line 1: photo.jpg]" in body and "[omitted: file, source line 1]" in body
-    assert meta["normalized"]["attachments"] == 2 and meta["normalized"]["attachment_chars"] == len(atts[0]["extracted_content"])
+    assert meta["normalized"]["attachments"] == 2 and meta["normalized"]["attachment_chars_excluded"] == len(atts[0]["extracted_content"])
+    assert meta["normalized"]["normalizer"] == 2
 
 
-def test_a_message_with_only_an_attachment_still_makes_its_turn(tmp_path):
+def test_a_message_with_only_an_attachment_makes_no_dialogue_turn_but_keeps_the_reference(tmp_path):
     atts = [{"file_name": "a.md", "file_size": 3, "file_type": "text/markdown", "extracted_content": "doc body"}]
     msgs = [m("r", ROOT, "human", "", 1, content=[], attachments=atts), m("a", "r", "assistant", "read it", 2)]
     shelf, *_ = ingest(tmp_path, [conversation("c1", msgs)])
-    assert turns_of(body_of(shelf, "claude-ai:c1")[1])[0][2] == "Attachment: a.md (text/markdown, 3 bytes)\ndoc body"
+    meta, body = body_of(shelf, "claude-ai:c1")
+    assert [t[1] for t in turns_of(body)] == ["assistant"] and "doc body" not in body
+    assert "[omitted: attachment_content_excluded, source line 1: a.md (text/markdown, 3 bytes)]" in body
+
+
+def test_an_attachment_without_a_name_is_a_missing_reference_not_an_invented_one(tmp_path):
+    atts = [{"file_size": 3, "file_type": "", "extracted_content": "x"}]
+    msgs = [m("r", ROOT, "human", "see attached", 1, attachments=atts), m("a", "r", "assistant", "ok", 2)]
+    shelf, *_ = ingest(tmp_path, [conversation("c1", msgs)])
+    assert "attachment_content_excluded, source line 1: unnamed (unknown type, 3 bytes)" in body_of(shelf, "claude-ai:c1")[1]
 
 
 def test_titles_and_summaries_never_enter_the_record_body_or_edition(tmp_path):

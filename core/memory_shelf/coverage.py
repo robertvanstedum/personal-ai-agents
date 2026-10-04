@@ -48,6 +48,7 @@ CC_LINES = frozenset({"user", "assistant", "attachment", "queue-operation", "las
                       "custom-title", "system", "pr-link", "atis-latch", "agent-name", "bridge-session",
                       "file-history-snapshot", "file-history-delta", "frame-link", "artifact-autoreact-ledger",
                       "artifact-comment-monitor", "cost-state", "summary", "progress"})
+CC_ORIGINS = frozenset({"human", "peer", "task-notification"})
 CC_PARTS = frozenset({"text", "tool_use", "tool_result", "thinking", "redacted_thinking", "image", "document"})
 
 
@@ -156,6 +157,9 @@ class ClaudeCodeCounter(_Counter):
         self.unseen("line", kind, CC_LINES)
         if kind not in ("user", "assistant") or row.get("isSidechain"):
             return
+        origin = row.get("origin")
+        if kind == "user" and origin is not None:
+            self.unseen("origin", origin.get("kind") if isinstance(origin, dict) else "unreadable", CC_ORIGINS)
         content = (row.get("message") or {}).get("content")
         parts = [{"type": "text", "text": content}] if isinstance(content, str) else (content if isinstance(content, list) else [])
         for part in parts:
@@ -173,6 +177,8 @@ def taken_by_role(parsed: Parsed) -> dict[str, int]:
     """Turns by the role of the line they came from (a system turn counts under the role that wrote it)."""
     taken: Counter = Counter()
     for turn in parsed.turns:
+        if turn.basis == "response_item:agent_message":
+            continue                                      # a handoff is its own representation, not a role message
         user = turn.basis.startswith(("item:UserMessage", "response_item:user")) if parsed.provider == "codex" \
             else turn.basis != "role:assistant"
         taken["user" if user else "assistant"] += 1

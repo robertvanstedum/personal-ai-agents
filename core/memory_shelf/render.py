@@ -108,7 +108,7 @@ def _pointer_line(pointer: tuple) -> str:
     return f"[omitted: {one_line(kind, 80)}, source line {line}{tail}]\n"
 
 
-FRAME_KEYS = ("who", "seq", "kind", "rid", "reply", "corrects", "ts", "ing", "turn")
+FRAME_KEYS = ("who", "seq", "kind", "rid", "reply", "corrects", "ts", "ing", "turn", "class", "to")
 BLOCK_KEYS = ("id", "author", "kind", "version", "seq", "ref")
 _ATTR = re.compile(r"^[A-Za-z0-9_:.+-]{1,64}$")
 
@@ -158,7 +158,7 @@ def _ref_text(ref: dict) -> str:
     return json.dumps(ref, ensure_ascii=False, sort_keys=True)
 
 
-_FRAME = re.compile(rb"<!-- turn (\d+) \| (human|assistant|system) \| line (\d+) \| bytes (\d+) \| sha256 ([0-9a-f]{64})"
+_FRAME = re.compile(rb"<!-- turn (\d+) \| (human|assistant|system|coordination) \| line (\d+) \| bytes (\d+) \| sha256 ([0-9a-f]{64})"
                     rb"((?: \| [a-z]+=[A-Za-z0-9_:.+-]{1,64})*) -->\n")
 _BLOCK = re.compile(rb"<!-- (note|ref) (\d+) \| bytes (\d+) \| sha256 ([0-9a-f]{64})((?: \| [a-z]+=[A-Za-z0-9_:.+-]{1,64})*) -->\n")
 
@@ -200,6 +200,16 @@ def parse_blocks(body: str) -> tuple[list[Turn], list[tuple[str, int, str, dict 
             return turns, blocks
 
 
+NON_DIALOGUE_CLASSES = frozenset({"approval_review", "subagent_task", "subagent", "handoff"})
+
+
+def dialogue_turns(turns) -> list[Turn]:
+    """The turns that are the owner's dialogue with an assistant: ``human`` and ``assistant`` turns that are not part of
+    automatic approval review, a subagent thread or an agent-to-agent handoff. This is what ordinary conversational
+    retrieval should read; coordination and system turns stay in the record as attributed operational evidence."""
+    return [t for t in turns if t.speaker in ("human", "assistant") and (t.attrs or {}).get("class") not in NON_DIALOGUE_CLASSES]
+
+
 def ordered_turns(turns) -> list[tuple[int, str, str]]:
     return [(t.ordinal, f"{t.speaker}:{t.who}" if t.who else t.speaker, sha256_text(t.text)) for t in turns]
 
@@ -234,7 +244,8 @@ def to_shelf(parsed: Parsed, source_sha256: str, source_size: int, *, created: s
     meta = record.new_front_matter(
         kind="session", chair=parsed.chair, source=f"{parsed.provider}:{parsed.source_id or 'unknown'}",
         source_hash=source_sha256, created=created, tier="raw", scope="robert",
-        tags=[parsed.provider, *(tags or [])], title=title)
+        tags=[parsed.provider, *(tags or []), *([f"class:{parsed.session_class}"] if parsed.session_class != "dialogue" else [])],
+        title=title)
     meta["edition"] = 1
     meta["edition_hash"] = hashlib.sha256(edition_bytes(clean, source_sha256, source_size, redacted)).hexdigest()
     meta["normalized"] = {"turns": len(clean.turns), "redacted_turns": redacted, "malformed_lines": clean.malformed,
@@ -244,4 +255,4 @@ def to_shelf(parsed: Parsed, source_sha256: str, source_size: int, *, created: s
     return meta, render_body(clean), edition_bytes(clean, source_sha256, source_size, redacted)
 
 
-__all__ = ["render_body", "parse_body", "parse_blocks", "ordered_turns", "edition_bytes", "to_shelf", "hash_file", "scrub_parsed"]
+__all__ = ["render_body", "parse_body", "parse_blocks", "dialogue_turns", "ordered_turns", "edition_bytes", "to_shelf", "hash_file", "scrub_parsed"]

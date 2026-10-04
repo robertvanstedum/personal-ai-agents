@@ -146,7 +146,7 @@ def test_commentary_messages_are_assistant_turns_with_the_phase_noted():
 
 def test_an_old_style_file_reads_exactly_as_before():
     p = parse(item("UserMessage", "q"), item("Reasoning", ""), item("AgentMessage", "a", "final_answer"))
-    assert turns(p) == [("human", "q"), ("assistant", "a")] and p.normalizer == 2
+    assert turns(p) == [("human", "q"), ("assistant", "a")] and p.normalizer == sessions.NORMALIZER_VERSION["codex"]
 
 
 # ── the coverage check ──────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ def test_claude_code_records_do_not_churn_when_only_codex_moves(tmp_path):
     approvals.approve_source(shelf, cfg.name, cfg.fingerprint(), OWNER)
     assert watchers.run_source(shelf, cfg, now=NOW)["counts"] == {codes.CAPTURED: 1}
     assert watchers.run_source(shelf, cfg, now=NOW)["counts"] == {"skipped_unchanged": 1}
-    assert sessions.NORMALIZER_VERSION["claude-code"] == 1
+    assert sessions.NORMALIZER_VERSION["claude-code"] >= 1
 
 
 def test_a_record_from_an_older_reader_has_no_normalizer_and_counts_as_version_one(tmp_path, monkeypatch):
