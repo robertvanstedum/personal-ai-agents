@@ -180,6 +180,124 @@ def cmd_artifact(journal: Journal, a) -> int:
     return 0
 
 
+def _find_request(journal: Journal, request_id: str):
+    read = journal.read(deep=False)
+    for ev in read.events:
+        if ev.get("event_id") == request_id and ev.get("kind") == "request":
+            return ev, read
+    return None, read
+
+
+def _send(journal: Journal, a, envelope: dict) -> int:
+    """Append one shorthand event, or only check it with --dry-run. Same one-object output and exit codes as ``append``."""
+    if getattr(a, "event_id", None):
+        envelope["event_id"] = a.event_id
+    result = journal.preflight(envelope) if a.dry_run else journal.append(envelope, adapter="cli")
+    return _emit(result)
+
+
+def _shorthand_base(journal: Journal, a, request_id: str, actor: str):
+    request, _ = _find_request(journal, request_id)
+    if request is None:
+        print(json.dumps({"ok": False, "status": "policy_refused", "reason": "unknown_request", "committed": False}))
+        return None
+    return {"actor": actor, "item": request["item"], "topic": request.get("topic"), "recipients": []}
+
+
+def cmd_pending(journal: Journal, a) -> int:
+    from core.workshop_journal import workflow
+    read = journal.read(deep=False)
+    if read.status in ("missing", "unsafe_root", "unsupported_writer", "corrupt"):
+        print(json.dumps({"ok": False, "status": "refused" if read.status == "corrupt" else read.status, "for": a.for_actor, "requests": []}))
+        return EXIT_BY_STATUS.get(read.status, 5)
+    flow = workflow.derive(read.events)
+    rows = []
+    for rid, req in flow.requests.items():
+        if a.for_actor in req["recipients"] and workflow.recipient_status(req, a.for_actor) != "returned":
+            ev = req["event"]
+            rows.append({"request_id": rid, "seq": ev["seq"], "from": ev["actor"], "action": ev["payload"]["action"], "text": ev["text"],
+                         "status": workflow.recipient_status(req, a.for_actor), "due_at": ev["payload"].get("due_at"), "topic": ev.get("topic")})
+    print(json.dumps({"ok": True, "status": read.status, "for": a.for_actor, "requests": rows, "as_of_seq": read.scan.last_seq}, sort_keys=True))
+    return 0
+
+
+def cmd_receipt(journal: Journal, a) -> int:
+    base = _shorthand_base(journal, a, a.request, a.actor)
+    if base is None:
+        return 2
+    payload = {"request_id": a.request, "recipient": a.actor}
+    if a.native_correlation:
+        payload["native_correlation"] = a.native_correlation
+    return _send(journal, a, {**base, "kind": "receipt", "text": f"{a.actor} picked up the request.", "payload": payload})
+
+
+def cmd_claim(journal: Journal, a) -> int:
+    base = _shorthand_base(journal, a, a.request, a.actor)
+    if base is None:
+        return 2
+    return _send(journal, a, {**base, "kind": "claim", "text": f"{a.actor} claims {a.resource}.",
+                              "payload": {"request_id": a.request, "resource": a.resource, "generation": a.expected_generation,
+                                          "claimant": a.actor}})
+
+
+def cmd_release(journal: Journal, a) -> int:
+    read = journal.read(deep=False)
+    claim = next((e for e in read.events if e.get("event_id") == a.claim and e.get("kind") == "claim"), None)
+    if claim is None:
+        print(json.dumps({"ok": False, "status": "policy_refused", "reason": "unknown_claim", "committed": False}))
+        return 2
+    return _send(journal, a, {"actor": a.actor, "kind": "release", "item": claim["item"], "topic": claim.get("topic"), "recipients": [],
+                              "text": f"{a.actor} releases the claim.",
+                              "payload": {"claim_id": a.claim, "generation": a.generation, "stopped": a.stopped, "reason": a.reason}})
+
+
+def cmd_result(journal: Journal, a) -> int:
+    doc = _read_envelope(a.file)
+    if isinstance(doc, Result):
+        return _emit(doc)
+    actor = doc.pop("actor", None) or a.actor
+    base = _shorthand_base(journal, a, a.request, actor)
+    if base is None:
+        return 2
+    payload = {"request_id": a.request, "recipient": actor, "outcome": doc.pop("outcome", None), "limitations": doc.pop("limitations", [])}
+    for key in ("claim_id", "evidence_refs", "test_summary"):
+        if key in doc:
+            payload[key] = doc.pop(key)
+    envelope = {**base, "kind": "result", "text": doc.pop("text", "Result."), "payload": payload}
+    if "refs" in doc:
+        envelope["refs"] = doc.pop("refs")
+    if doc:
+        return _emit(Result(False, "invalid_input", None, None, False, False, "unknown_result_fields", {}, 2))
+    return _send(journal, a, envelope)
+
+
+def _parse_now(text: str | None):
+    from datetime import datetime, timezone
+    if not text:
+        return datetime.now(timezone.utc)
+    return datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+
+def cmd_brief(journal: Journal, a) -> int:
+    from core.workshop_journal import brief as brief_view
+    doc = journal.brief(topic=a.topic, now=_parse_now(a.now), teammates=tuple(a.teammate or ()))
+    if "status" in doc:                                                  # refused, missing or unsafe: never an empty brief
+        print(json.dumps({"ok": False, **doc}, sort_keys=True))
+        return {"missing": 8, "refused": 5, "unsafe_root": 2}.get(doc["status"], 5)
+    print(brief_view.render_markdown(doc), end="") if a.format == "md" else print(json.dumps({"ok": True, **doc}, sort_keys=True))
+    return 0
+
+
+def cmd_history(journal: Journal, a) -> int:
+    from core.workshop_journal import brief as brief_view
+    doc = journal.history(topic=a.topic, through_seq=a.through_seq)
+    if doc["status"] in ("missing", "unsafe_root", "unsupported_writer", "refused"):
+        print(json.dumps({"ok": False, **doc}, sort_keys=True))
+        return {"missing": 8, "refused": 5}.get(doc["status"], 2)
+    print(brief_view.render_history_markdown(doc["events"]), end="") if a.format == "md" else print(json.dumps({"ok": True, **doc}, sort_keys=True))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--home", default=HOME)
@@ -216,17 +334,51 @@ def main(argv=None) -> int:
     af = sub.add_parser("artifact", help="retained documents: report orphans, or open the exact bytes for a hash")
     af.add_argument("action", choices=["report", "open"])
     af.add_argument("--sha256")
+    pe = sub.add_parser("pending", help="open requests addressed to one actor (read only)")
+    pe.add_argument("--for", dest="for_actor", required=True)
+    pe.add_argument("--json", action="store_true")
+    for name, helptext in (("receipt", "pick up a request"), ("claim", "claim a resource for a request"),
+                           ("release", "release a claim"), ("result", "return a result for a request")):
+        sp = sub.add_parser(name, help=helptext)
+        sp.add_argument("--dry-run", action="store_true", help="check only; write nothing")
+        sp.add_argument("--event-id", help="a stable event ID, so a retry is a duplicate and never a second event")
+        if name != "release":
+            sp.add_argument("--request", required=True)
+        sp.add_argument("--actor", required=name != "result")
+        if name == "receipt":
+            sp.add_argument("--native-correlation")
+        if name == "claim":
+            sp.add_argument("--resource", required=True)
+            sp.add_argument("--expected-generation", type=int, required=True)
+        if name == "release":
+            sp.add_argument("--claim", required=True)
+            sp.add_argument("--generation", type=int, required=True)
+            sp.add_argument("--stopped", action=argparse.BooleanOptionalAction, required=True)
+            sp.add_argument("--reason", required=True)
+        if name == "result":
+            sp.add_argument("--file", required=True)
+    br = sub.add_parser("brief", help="the deterministic return brief (read only, no model)")
+    br.add_argument("--topic")
+    br.add_argument("--format", choices=["json", "md"], default="json")
+    br.add_argument("--now", help="ISO time for overdue checks (default: the clock)")
+    br.add_argument("--teammate", action="append", help="name a teammate to list even if silent (repeatable)")
+    hi = sub.add_parser("history", help="every entry in a topic up to a sequence number (read only)")
+    hi.add_argument("--topic")
+    hi.add_argument("--through-seq", type=int)
+    hi.add_argument("--format", choices=["json", "md"], default="json")
     s = sub.add_parser("sync")
     s.add_argument("--to", default=SYNC_TO)
     a = ap.parse_args(argv)
-    if a.cmd in ("append", "prepare", "get", "verify", "repair", "inbox", "artifact"):
+    if a.cmd in ("append", "prepare", "get", "verify", "repair", "inbox", "artifact", "pending", "receipt", "claim", "release", "result",
+                 "brief", "history"):
         try:
             journal = Journal(a.home, a.workshop)
         except Exception as exc:                                   # a refused workshop ID or root; fixed text only
             print(json.dumps({"ok": False, "status": getattr(exc, "status", "invalid_input"), "reason": getattr(exc, "reason", "bad_arguments")}))
             return 2
         return {"append": cmd_append, "prepare": cmd_prepare, "get": cmd_get, "verify": cmd_verify, "repair": cmd_repair,
-                "inbox": cmd_inbox, "artifact": cmd_artifact}[a.cmd](journal, a)
+                "inbox": cmd_inbox, "artifact": cmd_artifact, "pending": cmd_pending, "receipt": cmd_receipt, "claim": cmd_claim,
+                "release": cmd_release, "result": cmd_result, "brief": cmd_brief, "history": cmd_history}[a.cmd](journal, a)
     ws = Workshop(a.home, a.workshop)
     try:
         return {"event": cmd_event, "observe": cmd_observe, "state": cmd_state, "sync": cmd_sync}[a.cmd](ws, a)

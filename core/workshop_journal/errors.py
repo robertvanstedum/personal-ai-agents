@@ -71,3 +71,13 @@ class ArtifactMissing(Missing):
 
 class ArtifactCorrupt(Corrupt):
     status = "artifact_corrupt"
+
+
+class PolicyRefused(InvalidInput):
+    """The event is well formed but the record forbids it now (an unknown request, someone else's claim, a wrong recipient)."""
+    status = "policy_refused"
+
+
+class ClaimConflict(JournalError):
+    """A claim that is not the next generation, or a resource that already has an effective claimant."""
+    status, exit_code = "claim_conflict", 3

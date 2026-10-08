@@ -85,7 +85,6 @@ def cut_points(line_len: int, emoji_at: int) -> list[int]:
 
 
 def test_J03_a_cut_at_any_byte_keeps_prior_records_preserves_the_evidence_and_never_glues_the_next_append(root, tmp_path):
-    probe_root = clone(root, tmp_path, "probe-root") if False else None                    # (kept simple: one line length per run)
     j = seeded(root)
     prepared = j.prepare(envelope(text="an interrupted handoff 😀 é"))
     full = line_for(root, tmp_path, prepared.evidence["envelope"])

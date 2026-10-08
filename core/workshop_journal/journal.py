@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Iterator
 
-from core.workshop_journal import artifacts as artifact_store, fsutil, reducer, schema, strictjson
+from core.workshop_journal import artifacts as artifact_store, brief as brief_view, fsutil, reducer, schema, strictjson, workflow
 from core.workshop_journal.errors import (CommitUnknown, Corrupt, IdConflict, InvalidInput, JournalError, LegacyAfterV2,
                                           LockBusy, Missing, RecoveryBlocked, SourceRefused, UnsafeRoot, WriteFailed)
 from core.workshop_journal.errors import ArtifactMissing
@@ -209,7 +209,7 @@ class Journal:
     def __init__(self, root: str, workshop_id: str, *, stream: str | None = None,
                  actors: tuple[str, ...] | None = schema.DEFAULT_ACTORS, durability: str = "strict", lock_timeout: float = 5.0,
                  clock: Callable[[], datetime] | None = None, resolver: reducer.Resolver | None = None,
-                 sleep: Callable[[float], None] = time.sleep):
+                 sleep: Callable[[float], None] = time.sleep, rules: Callable[[dict, list], None] | None = workflow.check):
         if not schema.WORKSHOP_RE.fullmatch(workshop_id or ""):
             raise InvalidInput("workshop_id_format")
         if durability not in ("strict", "degraded"):
@@ -223,6 +223,7 @@ class Journal:
         self.events_path = os.path.join(self.dir, JOURNAL)
         self.state_path = os.path.join(self.dir, STATE)
         self.actors, self.durability, self.lock_timeout = actors, durability, lock_timeout
+        self.rules = rules                       # what the record forbids next (request/claim/result); None disables it
         self.clock, self.resolver, self._sleep = clock or (lambda: datetime.now(timezone.utc)), resolver, sleep
 
     # time
@@ -505,6 +506,8 @@ class Journal:
                     if known["intent_hash"] != ih:
                         raise IdConflict("same_id_different_intent", event_id=intent["event_id"])
                     return Result(True, "duplicate", intent["event_id"], known["seq"], True, False, "already_committed", {}, 0)
+                if self.rules is not None:
+                    self.rules(intent, s.scan.events)
                 for item in artifacts or []:
                     try:
                         artifact_store.publish(s.base_fd, item)
@@ -519,6 +522,33 @@ class Journal:
                 except (OSError, JournalError):
                     result.status, result.reason = "committed_state_stale", "state_not_refreshed"
                 return result
+        except schema.SchemaError as exc:
+            return Result(False, "invalid_input", None, None, False, False, f"{exc.field}:{exc.reason}", {}, 2)
+        except JournalError as exc:
+            return _fail(exc)
+
+    def preflight(self, envelope: dict, *, software: bool = False) -> Result:
+        """What ``append`` would do, writing nothing (no lock, no folder, no receipt, no recovery). ``would_commit`` or the refusal."""
+        try:
+            read = self.read(deep=False)
+            if read.status == "corrupt":
+                raise Corrupt("interior_damage_writes_held", evidence={"problems": read.scan.problems[:5]})
+            if read.status in ("unsafe_root", "unsupported_writer"):
+                raise UnsafeRoot(read.reason or read.status)
+            events = read.events if read.status != "missing" else []
+            supplied = envelope.get("event_id") if isinstance(envelope, dict) else None
+            eid = schema.uuid_text(supplied, "event_id") if supplied is not None else str(uuid.uuid4())
+            intent = schema.normalize_intent(envelope, workshop=self.id, stream=self.stream, actors=self.actors, resolved_at=self._now(),
+                                             event_id=eid, allow_software=software)
+            known = read.scan.ids.get(eid) if read.scan is not None else None
+            if known is not None:
+                same = known["intent_hash"] == schema.intent_hash(intent) or known.get("legacy")
+                return Result(True, "duplicate", eid, known["seq"], True, False, "already_committed" if same else "same_id_different_intent",
+                              {"dry_run": True}, 0 if same else 3)
+            if self.rules is not None:
+                self.rules(intent, events)
+            seq = (read.scan.last_seq if read.scan is not None else 0) + 1
+            return Result(True, "would_commit", eid, seq, False, False, "", {"dry_run": True, "tail_recovery_pending": bool(read.scan and read.scan.tail)}, 0)
         except schema.SchemaError as exc:
             return Result(False, "invalid_input", None, None, False, False, f"{exc.field}:{exc.reason}", {}, 2)
         except JournalError as exc:
@@ -643,6 +673,25 @@ class Journal:
             if same:
                 return rebuilt, "file"
         return rebuilt, "rebuilt"
+
+    # ── the brief and the history (read only) ─────────────────────────────────────────────────────────────────
+    def brief(self, *, topic: str | None = None, now: datetime | None = None, teammates: tuple[str, ...] = ()) -> dict:
+        """The deterministic return brief, or a refusal when the journal cannot be trusted (it never reports a stale as-of)."""
+        read = self.read(deep=False)
+        if read.status in ("missing", "unsafe_root", "unsupported_writer"):
+            return {"v": brief_view.BRIEF_VERSION, "workshop": self.id, "status": read.status, "reason": read.reason}
+        if read.status == "corrupt":
+            return {"v": brief_view.BRIEF_VERSION, "workshop": self.id, "status": "refused", "reason": "journal_damaged",
+                    "valid_events": len(read.events)}
+        return brief_view.build(self.id, read.events, topic=topic, resolver=self.resolver, now=now, teammates=teammates,
+                                journal_status=read.status)
+
+    def history(self, *, topic: str | None = None, through_seq: int | None = None) -> dict:
+        read = self.read(deep=False)
+        if read.status in ("missing", "unsafe_root", "unsupported_writer", "corrupt"):
+            return {"status": "refused" if read.status == "corrupt" else read.status, "reason": read.reason, "events": []}
+        return {"status": read.status, "topic": topic, "through_seq": through_seq,
+                "events": brief_view.history(read.events, topic=topic, through_seq=through_seq)}
 
     # ── retained documents ────────────────────────────────────────────────────────────────────────────────────────
     def open_artifact(self, retained_sha256: str) -> bytes:

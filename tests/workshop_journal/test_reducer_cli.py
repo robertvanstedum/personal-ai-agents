@@ -19,7 +19,9 @@ def need(text="Which backup destination should we use?", *, item="spec:backup", 
     return envelope(kind="needs_you", recipients=["robert"], stage="review", item=item, text=text, payload=payload, **over)
 
 
-def decision(resolves, *, actor="robert", kind="approved-direct", item="spec:backup", **over):
+def decision(resolves, *, actor="robert", kind="approved-direct", item="spec:backup", authority=True, **over):
+    if authority and kind != "proposed":
+        over.setdefault("authority_ref", {"type": "owner-control", "ref": "synthetic:test"})
     return envelope(actor=actor, kind="decision", recipients=[], stage="review", item=item, text="Decided.",
                     payload={"record_event_kind": kind, "resolves": resolves, "reason": "chosen"}, **over)
 
@@ -243,3 +245,53 @@ def test_cli_inbox_is_a_dry_run_until_applied_and_artifact_open_returns_the_exac
     assert missing.returncode == 8 and json.loads(missing.stdout)["status"] == "artifact_missing"
     open(f"{folder}/notes.md", "w").write("not a drop-off\n")
     assert cli(root, "inbox", "--apply", "--settle", "0").returncode == 8                           # a held file is visible in the exit code
+
+
+# ── workflow shorthands, brief and history on the command line ────────────────────────────────────────────────────
+def test_cli_workflow_round_trip_with_dry_runs_and_stable_ids(root, tmp_path):
+    def run(*args, stdin=None):
+        out = cli(root, *args, stdin=stdin)
+        return out.returncode, json.loads(out.stdout) if out.stdout.strip().startswith("{") else out.stdout
+    req = {"actor": "claude-code", "kind": "request", "item": "spec:backup", "topic": "backup", "recipients": ["codex"], "text": "Review the plan.",
+           "payload": {"action": "review", "expected_result": "Numbered findings."}}
+    code, doc = run("append", "--file", write_env(tmp_path, req))
+    assert code == 0
+    rid = doc["event_id"]
+    code, pending = run("pending", "--for", "codex", "--json")
+    assert code == 0 and [r["request_id"] for r in pending["requests"]] == [rid] and pending["requests"][0]["status"] == "pending"
+    assert run("pending", "--for", "grok-cli", "--json")[1]["requests"] == []
+    code, dry = run("receipt", "--request", rid, "--actor", "codex", "--dry-run")
+    assert code == 0 and dry["status"] == "would_commit" and len(Journal(root, WORKSHOP).read().events) == 1
+    eid = new_id()
+    assert run("receipt", "--request", rid, "--actor", "codex", "--event-id", eid)[1]["status"] == "committed"
+    assert run("receipt", "--request", rid, "--actor", "codex", "--event-id", eid)[1]["status"] == "duplicate"
+    assert run("pending", "--for", "codex", "--json")[1]["requests"][0]["status"] == "received"
+    code, refused = run("receipt", "--request", rid, "--actor", "grok-cli")
+    assert code == 2 and refused["reason"] == "recipient_not_on_the_request"
+    code, claim = run("claim", "--request", rid, "--actor", "codex", "--resource", "checkout-a", "--expected-generation", "1")
+    assert code == 0
+    code, clash = run("claim", "--request", rid, "--actor", "codex", "--resource", "checkout-a", "--expected-generation", "2")
+    assert code == 3 and clash["status"] == "claim_conflict"
+    code, rel = run("release", "--claim", claim["event_id"], "--actor", "codex", "--generation", "1", "--stopped", "--reason", "finished")
+    assert code == 0
+    result_file = write_env(tmp_path, {"outcome": "completed", "limitations": ["did not run the build"], "text": "Two findings.",
+                                       "test_summary": {"reported": 3, "run": 3, "passed": 3, "failed": 0, "not_run": 0}}, "r.json")
+    code, res = run("result", "--request", rid, "--actor", "codex", "--file", result_file)
+    assert code == 0 and res["status"] == "committed"
+    assert run("pending", "--for", "codex", "--json")[1]["requests"] == []
+    code, brief = run("brief", "--topic", "backup", "--now", "2026-10-09T00:00:00Z")
+    assert code == 0 and brief["requests"][0]["state"] == "closed" and brief["test_reports"][0]["summary"]["passed"] == 3
+    md = cli(root, "brief", "--topic", "backup", "--format", "md")
+    assert md.returncode == 0 and md.stdout.startswith("# Brief: workshop-neubau / backup") and "Two findings" not in md.stdout
+    hist = json.loads(cli(root, "history", "--topic", "backup", "--through-seq", "2").stdout)
+    assert [e["kind"] for e in hist["events"]] == ["request", "receipt"]
+    assert cli(root, "history", "--topic", "backup", "--format", "md").stdout.count("\n") == 5
+
+
+def test_cli_brief_and_history_refuse_a_damaged_or_missing_journal(root, tmp_path):
+    assert cli(root, "brief").returncode == 8 and cli(root, "history").returncode == 8
+    assert cli(root, "append", "--file", write_env(tmp_path, progress("x"))).returncode == 0
+    open(f"{root}/{WORKSHOP}/events.jsonl", "ab").write(b"garbage\n")
+    out = cli(root, "brief")
+    assert out.returncode == 5 and json.loads(out.stdout)["status"] == "refused"
+    assert cli(root, "history").returncode == 5 and cli(root, "pending", "--for", "codex", "--json").returncode == 5
