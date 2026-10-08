@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from conftest import WORKSHOP, envelope, new_id
+from conftest import WORKSHOP, envelope, new_id, write_config
 from core.workshop_journal import notify, routes
 from core.workshop_journal.journal import Journal
 
@@ -92,13 +92,13 @@ def test_a_bad_routes_table_is_refused_not_ignored(bad):
 
 
 def test_config_overrides_the_defaults_and_an_unknown_field_is_refused(tmp_path):
-    (tmp_path / "config.json").write_text(json.dumps({"v": 1, "routes": {"codex": {"status": "headless_exec", "verified": True,
+    write_config(tmp_path, json.dumps({"v": 1, "routes": {"codex": {"status": "headless_exec", "verified": True,
                                                                                    "unattended_safe": True, "evidence": "tested"}}}))
     row = routes.describe(routes.load(str(tmp_path)), "codex")
     assert row["status"] == "headless_exec" and row["sends_automatically"] is True
-    (tmp_path / "config.json").write_text(json.dumps({"v": 1, "tokens": {"x": "y"}}))
+    write_config(tmp_path, json.dumps({"v": 1, "tokens": {"x": "y"}}))
     with pytest.raises(routes.BadRoutes):
         routes.load(str(tmp_path))
-    (tmp_path / "config.json").write_text("{ not json")
+    write_config(tmp_path, "{ not json")
     with pytest.raises(routes.BadRoutes):
         routes.load(str(tmp_path))

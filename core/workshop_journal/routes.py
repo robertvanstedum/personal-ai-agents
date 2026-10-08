@@ -6,10 +6,7 @@ pending list), and that is reported as such. ``verified`` says whether a person 
 """
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-from core.workshop_journal import schema, strictjson
+from core.workshop_journal import config, schema
 
 STATUSES = ("native_ui_bridge", "native_gateway", "headless_exec", "pending_pickup", "unverified", "unsupported")
 
@@ -66,16 +63,12 @@ def validate(table: dict) -> dict:
 
 def load(workshop_dir: str) -> dict:
     """The defaults, overridden by ``config.json`` -> ``routes`` when that file exists and is valid (invalid is refused)."""
+    try:
+        doc = config.read(workshop_dir)
+    except config.BadConfig as exc:
+        raise BadRoutes(str(exc)) from None
     table = dict(DEFAULT_ROUTES)
-    path = Path(workshop_dir) / "config.json"
-    if path.is_file():
-        try:
-            doc = strictjson.loads(path.read_bytes())
-        except strictjson.StrictJSONError:
-            raise BadRoutes("config_unreadable") from None
-        if not isinstance(doc, dict) or set(doc) - {"v", "routes", "model_profiles"}:
-            raise BadRoutes("unknown_config_field")
-        table.update(validate(doc.get("routes") or {}))
+    table.update(validate(doc.get("routes") or {}))
     return table
 
 

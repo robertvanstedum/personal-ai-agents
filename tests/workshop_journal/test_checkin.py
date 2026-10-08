@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO, WORKSHOP, new_id
+from conftest import REPO, WORKSHOP, new_id, write_config
 from core.workshop_journal import checkin, profiles
 from core.workshop_journal.journal import Journal
 from fakes import SyntheticOwnerResolver, Teammate, make_synthetic_root
@@ -79,7 +79,7 @@ def test_O02_a_missing_profile_is_a_hard_error_and_the_environment_is_never_cons
 
 
 def test_O02_profiles_come_only_from_config_and_the_requested_model_is_recorded_as_provider_and_requested(tmp_path):
-    (tmp_path / "config.json").write_text(json.dumps({"v": 1, "model_profiles": {"routine": {"provider": "local", "model": "small-1"},
+    write_config(tmp_path, json.dumps({"v": 1, "model_profiles": {"routine": {"provider": "local", "model": "small-1"},
                                                                                    "judgment": {"provider": "cloud", "model": "large-1"}}}))
     table = profiles.load(str(tmp_path))
     assert profiles.require(table, "routine") == {"provider": "local", "requested": "small-1"}

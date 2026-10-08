@@ -8,9 +8,8 @@ variable, a previous run or "whatever is available". The profile a run requested
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-from core.workshop_journal import strictjson
+from core.workshop_journal import config
 
 PURPOSES = ("routine", "judgment")
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$")
@@ -41,15 +40,10 @@ def validate(table) -> dict:
 
 def load(workshop_dir: str) -> dict:
     """The configured profiles (possibly none). Only ``config.json`` is read: no environment, no defaults."""
-    path = Path(workshop_dir) / "config.json"
-    if not path.is_file():
-        return {}
     try:
-        doc = strictjson.loads(path.read_bytes())
-    except strictjson.StrictJSONError:
-        raise BadProfiles("config_unreadable") from None
-    if not isinstance(doc, dict) or set(doc) - {"v", "routes", "model_profiles"}:
-        raise BadProfiles("unknown_config_field")
+        doc = config.read(workshop_dir)
+    except config.BadConfig as exc:
+        raise BadProfiles(str(exc)) from None
     return validate(doc.get("model_profiles") or {})
 
 

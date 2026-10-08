@@ -51,3 +51,11 @@ def run_child(code: str, *args: str, env_extra: dict | None = None) -> subproces
 
 def new_id() -> str:
     return str(uuid.uuid4())
+
+
+def write_config(folder, text: str) -> Path:
+    """A private config.json, as the helper itself would leave it."""
+    path = Path(folder) / "config.json"
+    path.write_text(text)
+    os.chmod(path, 0o600)
+    return path
