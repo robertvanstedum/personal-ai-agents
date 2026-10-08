@@ -210,7 +210,7 @@ class Journal:
     def __init__(self, root: str, workshop_id: str, *, stream: str | None = None,
                  actors: tuple[str, ...] | None = schema.DEFAULT_ACTORS, durability: str = "strict", lock_timeout: float = 5.0,
                  clock: Callable[[], datetime] | None = None, resolver: reducer.Resolver | None = None,
-                 sleep: Callable[[float], None] = time.sleep, rules: Callable[[dict, list], None] | None = workflow.check):
+                 sleep: Callable[[float], None] = time.sleep, rules: Callable[[dict, list, object], None] | None = workflow.check):
         if not schema.WORKSHOP_RE.fullmatch(workshop_id or ""):
             raise InvalidInput("workshop_id_format")
         if durability not in ("strict", "degraded"):
@@ -537,7 +537,7 @@ class Journal:
                         raise IdConflict("same_id_different_intent", event_id=intent["event_id"])
                     return Result(True, "duplicate", intent["event_id"], known["seq"], True, False, "already_committed", {}, 0)
                 if self.rules is not None:
-                    self.rules(intent, s.scan.events)
+                    self.rules(intent, s.scan.events, self.resolver)
                 self._check_retained(s.base_fd, intent, artifacts)
                 for item in artifacts or []:
                     try:
@@ -577,7 +577,7 @@ class Journal:
                 return Result(True, "duplicate", eid, known["seq"], True, False, "already_committed" if same else "same_id_different_intent",
                               {"dry_run": True}, 0 if same else 3)
             if self.rules is not None:
-                self.rules(intent, events)
+                self.rules(intent, events, self.resolver)
             try:
                 base_fd = self._open_base(create=False)
             except Missing:

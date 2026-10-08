@@ -295,3 +295,38 @@ def test_cli_brief_and_history_refuse_a_damaged_or_missing_journal(root, tmp_pat
     out = cli(root, "brief")
     assert out.returncode == 5 and json.loads(out.stdout)["status"] == "refused"
     assert cli(root, "history").returncode == 5 and cli(root, "pending", "--for", "codex", "--json").returncode == 5
+
+
+# ── Codex R8: a history or brief export never looks complete when the journal is not ──────────────────────────────
+def test_R8_history_and_brief_say_so_and_exit_incomplete_when_the_journal_has_a_partial_tail(root, tmp_path):
+    assert cli(root, "append", "--file", write_env(tmp_path, progress("one"))).returncode == 0
+    open(f"{root}/{WORKSHOP}/events.jsonl", "ab").write(b'{"v":2')
+    md = cli(root, "history", "--format", "md")
+    assert md.returncode == 8 and md.stdout.startswith("NOTICE: incomplete.") and "torn_tail" in md.stdout and "one" in md.stdout
+    js = json.loads(cli(root, "history").stdout)
+    assert js["complete"] is False and js["status"] == "torn_tail" and cli(root, "history").returncode == 8
+    bmd = cli(root, "brief", "--format", "md")
+    assert bmd.returncode == 8 and bmd.stdout.startswith("NOTICE: incomplete.")
+    bjs = cli(root, "brief")
+    assert json.loads(bjs.stdout)["complete"] is False and bjs.returncode == 8
+    pend = cli(root, "pending", "--for", "codex", "--json")
+    assert pend.returncode == 8 and json.loads(pend.stdout)["complete"] is False
+
+
+def test_R8_a_live_writers_tail_is_reported_the_same_way(root, tmp_path):
+    from test_safety import hold_lock
+    assert cli(root, "append", "--file", write_env(tmp_path, progress("one"))).returncode == 0
+    open(f"{root}/{WORKSHOP}/events.jsonl", "ab").write(b'{"v":2,"part')
+    holder = hold_lock(root, 4)
+    try:
+        md = cli(root, "history", "--format", "md")
+        assert md.returncode == 8 and "tail_in_progress" in md.stdout.splitlines()[0]
+    finally:
+        holder.kill()
+        holder.wait()
+
+
+def test_a_complete_journal_still_exits_zero_with_no_notice(root, tmp_path):
+    assert cli(root, "append", "--file", write_env(tmp_path, progress("one"))).returncode == 0
+    md = cli(root, "history", "--format", "md")
+    assert md.returncode == 0 and "NOTICE" not in md.stdout and json.loads(cli(root, "history").stdout)["complete"] is True

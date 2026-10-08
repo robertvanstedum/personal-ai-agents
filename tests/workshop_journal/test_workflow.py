@@ -115,16 +115,44 @@ def test_R03_a_lease_that_has_run_out_does_not_authorize_a_second_writer(team):
     refused(grok.claim(req.event_id, "checkout-a", 2, ok=False), "claim_conflict", "resource_has_an_effective_claimant")
 
 
-def test_G9_a_release_needs_the_right_generation_and_the_claimant_or_the_owner(team):
+def test_G9_a_release_needs_the_right_generation_and_the_claimant(team):
     j, code, codex, grok = team
     req = code.request(["codex", "grok-cli"], "build", "build it")
     claim = codex.claim(req.event_id, "checkout-a", 1)
     refused(codex.release(claim.event_id, 2, True, ok=False), "claim_conflict", "not_this_claims_generation")
-    refused(grok.release(claim.event_id, 1, True, ok=False), reason="only_the_claimant_or_the_owner_releases")
+    refused(grok.release(claim.event_id, 1, True, ok=False), reason="owner_release_needs_owner_control")
     refused(codex.release(new_id(), 1, True, ok=False), reason="unknown_claim")
-    owner = j.append({"actor": "robert", "kind": "release", "item": "topic:scenario", "topic": "scenario", "text": "owner stops it",
-                      "payload": {"claim_id": claim.event_id, "generation": 1, "stopped": True, "reason": "owner stopped the work"}})
-    assert owner.committed and not workflow.derive(j.read().events).claims[claim.event_id].active
+
+
+def owner_release(j, claim_id, **over):
+    return j.append({"actor": "robert", "kind": "release", "item": "topic:scenario", "topic": "scenario", "text": "owner stops it",
+                     "payload": {"claim_id": claim_id, "generation": 1, "stopped": True, "reason": "owner stopped the work"}, **over})
+
+
+def test_R6_a_claimed_owner_label_cannot_release_another_writers_resource(team):
+    j, code, codex, grok = team
+    req = code.request(["codex", "grok-cli"], "build", "build it")
+    claim = codex.claim(req.event_id, "checkout-a", 1)
+    refused(owner_release(j, claim.event_id), reason="owner_release_needs_owner_control")                 # a name is not authority
+    forged = owner_release(j, claim.event_id, authority_ref={"type": "owner-control", "ref": "synthetic:forged"})
+    refused(forged, reason="owner_release_needs_owner_control")                                           # no resolver is configured at all
+    assert workflow.derive(j.read().events).claims[claim.event_id].active
+    refused(grok.claim(req.event_id, "checkout-a", 2, ok=False), "claim_conflict", "resource_has_an_effective_claimant")
+
+
+def test_R6_a_validated_owner_release_works_and_a_resolver_that_says_no_does_not(root):
+    from fakes import SyntheticOwnerResolver, make_synthetic_root
+    make_synthetic_root(root)
+    j = Journal(root, WORKSHOP, lock_timeout=0.3, resolver=SyntheticOwnerResolver(root))
+    code, codex, grok = Teammate("claude-code", j), Teammate("codex", j), Teammate("grok-cli", j)
+    req = code.request(["codex", "grok-cli"], "build", "build it")
+    claim = codex.claim(req.event_id, "checkout-a", 1)
+    refused(owner_release(j, claim.event_id), reason="owner_release_needs_owner_control")                 # right actor, no authority reference
+    refused(owner_release(j, claim.event_id, authority_ref={"type": "owner-control", "ref": "record-7"}),
+            reason="owner_release_needs_owner_control")                                                   # reference the resolver does not recognise
+    assert owner_release(j, claim.event_id, authority_ref={"type": "owner-control", "ref": "synthetic:release-1"}).committed
+    assert not workflow.derive(j.read().events).claims[claim.event_id].active
+    assert grok.claim(req.event_id, "checkout-a", 2).committed
 
 
 def test_started_and_progress_citing_a_claim_need_it_to_be_the_actors_and_still_effective(team):

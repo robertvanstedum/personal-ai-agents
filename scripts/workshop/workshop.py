@@ -217,8 +217,10 @@ def cmd_pending(journal: Journal, a) -> int:
             ev = req["event"]
             rows.append({"request_id": rid, "seq": ev["seq"], "from": ev["actor"], "action": ev["payload"]["action"], "text": ev["text"],
                          "status": workflow.recipient_status(req, a.for_actor), "due_at": ev["payload"].get("due_at"), "topic": ev.get("topic")})
-    print(json.dumps({"ok": True, "status": read.status, "for": a.for_actor, "requests": rows, "as_of_seq": read.scan.last_seq}, sort_keys=True))
-    return 0
+    incomplete = read.status in INCOMPLETE
+    print(json.dumps({"ok": True, "complete": not incomplete, "status": read.status, "for": a.for_actor, "requests": rows,
+                      "as_of_seq": read.scan.last_seq}, sort_keys=True))
+    return INCOMPLETE_EXIT if incomplete else 0
 
 
 def cmd_receipt(journal: Journal, a) -> int:
@@ -278,14 +280,26 @@ def _parse_now(text: str | None):
     return datetime.fromisoformat(text.replace("Z", "+00:00"))
 
 
+INCOMPLETE = ("torn_tail", "tail_in_progress")
+INCOMPLETE_EXIT = 8
+
+
+def _notice(status: str) -> str:
+    return (f"NOTICE: incomplete. The journal read is {status}: the newest bytes are not shown, so this is not the whole record.\n")
+
+
 def cmd_brief(journal: Journal, a) -> int:
     from core.workshop_journal import brief as brief_view
     doc = journal.brief(topic=a.topic, now=_parse_now(a.now), teammates=tuple(a.teammate or ()))
     if "status" in doc:                                                  # refused, missing or unsafe: never an empty brief
         print(json.dumps({"ok": False, **doc}, sort_keys=True))
         return {"missing": 8, "refused": 5, "unsafe_root": 2}.get(doc["status"], 5)
-    print(brief_view.render_markdown(doc), end="") if a.format == "md" else print(json.dumps({"ok": True, **doc}, sort_keys=True))
-    return 0
+    incomplete = doc["journal_status"] in INCOMPLETE
+    if a.format == "md":
+        print((_notice(doc["journal_status"]) if incomplete else "") + brief_view.render_markdown(doc), end="")
+    else:
+        print(json.dumps({"ok": True, "complete": not incomplete, **doc}, sort_keys=True))
+    return INCOMPLETE_EXIT if incomplete else 0
 
 
 def cmd_history(journal: Journal, a) -> int:
@@ -294,8 +308,12 @@ def cmd_history(journal: Journal, a) -> int:
     if doc["status"] in ("missing", "unsafe_root", "unsupported_writer", "refused"):
         print(json.dumps({"ok": False, **doc}, sort_keys=True))
         return {"missing": 8, "refused": 5}.get(doc["status"], 2)
-    print(brief_view.render_history_markdown(doc["events"]), end="") if a.format == "md" else print(json.dumps({"ok": True, **doc}, sort_keys=True))
-    return 0
+    incomplete = doc["status"] in INCOMPLETE
+    if a.format == "md":
+        print((_notice(doc["status"]) if incomplete else "") + brief_view.render_history_markdown(doc["events"]), end="")
+    else:
+        print(json.dumps({"ok": True, "complete": not incomplete, **doc}, sort_keys=True))
+    return INCOMPLETE_EXIT if incomplete else 0
 
 
 def main(argv=None) -> int:

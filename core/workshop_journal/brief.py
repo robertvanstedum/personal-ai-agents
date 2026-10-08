@@ -45,18 +45,33 @@ def _counts_text(summary: dict) -> str:
 
 
 def _in_topic(events: list[dict], flow: workflow.Flow, topic: str | None) -> list[dict]:
+    """The events of a topic and everything linked to them: a request's receipts, results and claims, a decision that resolves
+    one of its questions, and replies and supersessions. Linked events are kept even if they omit the topic, so a question the
+    owner already answered never reappears in a topic view. Unrelated events are not admitted."""
+    v2 = [e for e in events if e.get("v") == 2]
     if topic is None:
-        return [e for e in events if e.get("v") == 2]
+        return v2
     requests = {rid for rid, r in flow.requests.items() if r["event"].get("topic") == topic}
     claims = {cid for cid, c in flow.claims.items() if c.request_id in requests}
-    keep = []
-    for ev in events:
-        if ev.get("v") != 2:
-            continue
-        p = ev.get("payload") or {}
-        if ev.get("topic") == topic or p.get("request_id") in requests or p.get("claim_id") in claims or ev["event_id"] in requests:
-            keep.append(ev)
-    return keep
+    ids = {e["event_id"] for e in v2 if e.get("topic") == topic} | requests | claims
+    keep: dict[str, dict] = {}
+    changed = True
+    while changed:
+        changed = False
+        for ev in v2:
+            if ev["event_id"] in keep:
+                continue
+            p = ev.get("payload") or {}
+            linked = (ev.get("topic") == topic or ev["event_id"] in ids or p.get("request_id") in requests or p.get("claim_id") in claims
+                      or bool(set(p.get("resolves") or ()) & ids) or ev.get("supersedes") in ids or ev.get("in_reply_to") in ids
+                      or p.get("incident_id") in ids and ev["kind"] != "needs_you")
+            if linked:
+                keep[ev["event_id"]] = ev
+                ids.add(ev["event_id"])
+                if ev["kind"] == "needs_you" and p.get("incident_id"):
+                    ids.add(p["incident_id"])
+                changed = True
+    return [e for e in v2 if e["event_id"] in keep]
 
 
 def build(workshop_id: str, events: list[dict], *, topic: str | None = None, resolver=None, now: datetime | None = None,

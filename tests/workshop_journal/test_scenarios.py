@@ -245,3 +245,37 @@ def test_the_brief_refuses_a_damaged_journal_and_flags_a_torn_tail(world):
 def test_a_missing_workshop_has_no_brief_not_an_empty_one(root):
     j = Journal(root, WORKSHOP)
     assert j.brief()["status"] == "missing" and j.history()["status"] == "missing"
+
+
+# ── Codex R7: a topic view must not resurrect an answered question ───────────────────────────────────────────────────
+def test_R7_a_question_the_owner_already_answered_stays_answered_in_the_topic_brief_and_history(world):
+    j, code, codex, robert, _ = world
+    q = code.needs_you("Which destination?")                                  # topic: scenario
+    answer = j.append({"actor": "robert", "kind": "decision", "item": "topic:scenario", "text": "Use the external disk.",   # note: no topic
+                       "authority_ref": {"type": "owner-control", "ref": "synthetic:answer"},
+                       "payload": {"record_event_kind": "approved-direct", "resolves": [q.event_id], "reason": "owner chose"}})
+    assert answer.committed
+    assert j.brief()["needs_you"] == [] and j.brief(topic="scenario")["needs_you"] == []
+    kinds = [r["kind"] for r in j.history(topic="scenario")["events"]]
+    assert kinds == ["needs_you", "decision"]                                  # the resolving decision is kept in the topic's history
+    unrelated = Teammate("codex", j, topic="elsewhere").needs_you("An unrelated question")
+    assert [r["event_id"] for r in j.history(topic="scenario")["events"]] == [q.event_id, answer.event_id]
+    assert [n["event_id"] for n in j.brief(topic="scenario")["needs_you"]] == []
+    assert [n["event_id"] for n in j.brief()["needs_you"]] == [unrelated.event_id]
+
+
+def test_R7_replies_and_supersessions_stay_with_their_topic_and_incident_ids_resolve_too(world):
+    j, code, codex, robert, _ = world
+    first = code.propose("Plan A")
+    newer = j.append({"actor": "claude-code", "kind": "decision", "item": "topic:scenario", "text": "Plan B replaces A", "supersedes": first.event_id,
+                      "payload": {"record_event_kind": "proposed", "resolves": [], "reason": "B"}})
+    reply = j.append({"actor": "codex", "kind": "progress", "item": "topic:scenario", "in_reply_to": newer.event_id,
+                      "text": "agreed", "payload": {"action": "reply"}})
+    q = code.needs_you("Which?")
+    incident = j.get(q.event_id).evidence["event"]["payload"]["incident_id"]
+    resolve = j.append({"actor": "robert", "kind": "decision", "item": "topic:scenario", "text": "this one",
+                        "authority_ref": {"type": "owner-control", "ref": "synthetic:by-incident"},
+                        "payload": {"record_event_kind": "approved-direct", "resolves": [incident], "reason": "chosen"}})
+    ids = [r["event_id"] for r in j.history(topic="scenario")["events"]]
+    assert ids == [first.event_id, newer.event_id, reply.event_id, q.event_id, resolve.event_id]
+    assert j.brief(topic="scenario")["needs_you"] == []

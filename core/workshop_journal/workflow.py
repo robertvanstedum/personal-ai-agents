@@ -97,7 +97,7 @@ def _refuse(reason: str):
     raise PolicyRefused(reason)
 
 
-def check(intent: dict, events: list[dict]) -> None:
+def check(intent: dict, events: list[dict], resolver=None) -> None:
     """Raise PolicyRefused or ClaimConflict if the record forbids this event now. Cheap kinds never rebuild the picture."""
     kind, p, actor = intent["kind"], intent["payload"], intent["actor"]
     if kind == "request":
@@ -179,7 +179,15 @@ def check(intent: dict, events: list[dict]) -> None:
             _refuse("unknown_claim")
         if p["generation"] != claim.generation:
             raise ClaimConflict("not_this_claims_generation")
-        if actor != claim.claimant and actor != "robert":
-            _refuse("only_the_claimant_or_the_owner_releases")
+        if actor != claim.claimant:
+            # Only the claimant releases on its own word. Anyone else, the owner included, needs validated owner control: a
+            # name in the actor field is a label, not authority, and with no resolver configured there is no override at all.
+            candidate = {**intent, "v": 2, "origin": {"adapter": "local-helper", "basis": "claimed"}}
+            try:
+                allowed = intent.get("authority_ref") is not None and resolver is not None and resolver(candidate) is True
+            except Exception:
+                allowed = False
+            if not allowed:
+                _refuse("owner_release_needs_owner_control")
         if claim.stopped_by is not None:
             _refuse("claim_already_stopped")
