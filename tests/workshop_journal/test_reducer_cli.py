@@ -219,3 +219,27 @@ def test_cli_repair_is_a_dry_run_unless_applied(root, tmp_path):
     assert dry.returncode == 0 and json.loads(dry.stdout)["status"] == "would_repair" and len(open(path, "rb").read()) == size
     done = cli(root, "repair", "--apply")
     assert json.loads(done.stdout)["status"] == "repaired" and cli(root, "verify", "--json").returncode == 0
+
+
+# ── inbox and artifact commands ───────────────────────────────────────────────────────────────────────────────────
+def test_cli_inbox_is_a_dry_run_until_applied_and_artifact_open_returns_the_exact_text(root, tmp_path):
+    from test_inbox import HEADER, NAME
+    assert cli(root, "append", "--file", write_env(tmp_path, progress("seed"))).returncode == 0
+    folder = f"{root}/{WORKSHOP}/inbox"
+    import os
+    os.mkdir(folder, 0o700)
+    open(f"{folder}/{NAME}", "w").write(HEADER)
+    dry = json.loads(cli(root, "inbox", "--settle", "0").stdout)
+    assert dry["apply"] is False and dry["counts"] == {"would_ingest": 1}
+    assert Journal(root, WORKSHOP).read().events[-1]["kind"] == "progress" and len(Journal(root, WORKSHOP).read().events) == 1
+    done = cli(root, "inbox", "--apply", "--settle", "0")
+    out = json.loads(done.stdout)
+    assert done.returncode == 0 and out["counts"] == {"ingested": 1}
+    sha = out["files"][0]["retained_sha256"]
+    opened = json.loads(cli(root, "artifact", "open", "--sha256", sha).stdout)
+    assert opened["text"] == HEADER and opened["size"] == len(HEADER.encode())
+    assert json.loads(cli(root, "artifact", "report").stdout)["status"] == "ok"
+    missing = cli(root, "artifact", "open", "--sha256", "0" * 64)
+    assert missing.returncode == 8 and json.loads(missing.stdout)["status"] == "artifact_missing"
+    open(f"{folder}/notes.md", "w").write("not a drop-off\n")
+    assert cli(root, "inbox", "--apply", "--settle", "0").returncode == 8                           # a held file is visible in the exit code

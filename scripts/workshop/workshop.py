@@ -155,6 +155,31 @@ def cmd_repair(journal: Journal, a) -> int:
     return 0 if report["status"] in ("nothing_to_repair", "would_repair", "repaired") else 5
 
 
+def cmd_inbox(journal: Journal, a) -> int:
+    from core.workshop_journal.inbox import Inbox
+    outcomes = Inbox(journal, settle=a.settle).scan(apply=a.apply)
+    counts: dict[str, int] = {}
+    for o in outcomes:
+        counts[o.status] = counts.get(o.status, 0) + 1
+    print(json.dumps({"ok": True, "apply": a.apply, "counts": counts, "files": [o.to_json() for o in outcomes]}, sort_keys=True))
+    return 0 if not any(o.status in ("held", "unstable") for o in outcomes) else 8
+
+
+def cmd_artifact(journal: Journal, a) -> int:
+    from core.workshop_journal.errors import JournalError
+    if a.action == "report":
+        report = journal.artifact_report()
+        print(json.dumps(report, sort_keys=True))
+        return 0 if report["status"] == "ok" else 5
+    try:
+        data = journal.open_artifact(a.sha256)
+    except JournalError as exc:
+        print(json.dumps({"ok": False, "status": exc.status, "reason": exc.reason}))
+        return exc.exit_code
+    print(json.dumps({"ok": True, "sha256": a.sha256, "size": len(data), "text": data.decode("utf-8")}, sort_keys=True))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--home", default=HOME)
@@ -185,16 +210,23 @@ def main(argv=None) -> int:
     v.add_argument("--json", action="store_true")
     rp = sub.add_parser("repair", help="dry run unless --apply: preserve, then complete or cut an unterminated final record")
     rp.add_argument("--apply", action="store_true")
+    ib = sub.add_parser("inbox", help="scan the landing folder; a dry run unless --apply")
+    ib.add_argument("--apply", action="store_true")
+    ib.add_argument("--settle", type=float, default=2.0, help="seconds a file must stay unchanged before it is read")
+    af = sub.add_parser("artifact", help="retained documents: report orphans, or open the exact bytes for a hash")
+    af.add_argument("action", choices=["report", "open"])
+    af.add_argument("--sha256")
     s = sub.add_parser("sync")
     s.add_argument("--to", default=SYNC_TO)
     a = ap.parse_args(argv)
-    if a.cmd in ("append", "prepare", "get", "verify", "repair"):
+    if a.cmd in ("append", "prepare", "get", "verify", "repair", "inbox", "artifact"):
         try:
             journal = Journal(a.home, a.workshop)
         except Exception as exc:                                   # a refused workshop ID or root; fixed text only
             print(json.dumps({"ok": False, "status": getattr(exc, "status", "invalid_input"), "reason": getattr(exc, "reason", "bad_arguments")}))
             return 2
-        return {"append": cmd_append, "prepare": cmd_prepare, "get": cmd_get, "verify": cmd_verify, "repair": cmd_repair}[a.cmd](journal, a)
+        return {"append": cmd_append, "prepare": cmd_prepare, "get": cmd_get, "verify": cmd_verify, "repair": cmd_repair,
+                "inbox": cmd_inbox, "artifact": cmd_artifact}[a.cmd](journal, a)
     ws = Workshop(a.home, a.workshop)
     try:
         return {"event": cmd_event, "observe": cmd_observe, "state": cmd_state, "sync": cmd_sync}[a.cmd](ws, a)
