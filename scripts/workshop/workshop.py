@@ -25,6 +25,8 @@ from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from core.workshop_journal import strictjson  # noqa: E402
+from core.workshop_journal.journal import Journal, Result  # noqa: E402
 from minimoi_portal.workshop.observer import changed, health_event, observe  # noqa: E402
 from minimoi_portal.workshop.record import Workshop, now, parse  # noqa: E402
 
@@ -97,10 +99,67 @@ def cmd_sync(ws: Workshop, a) -> int:
     return 0
 
 
+ENVELOPE_MAX = 64 * 1024
+
+
+def _emit(result: Result) -> int:
+    """One JSON object on stdout, nothing else; the exit code carries the class of outcome (v0.6 section 13)."""
+    print(json.dumps(result.to_json(), sort_keys=True))
+    return result.exit_code
+
+
+def _read_envelope(path: str) -> dict | Result:
+    try:
+        raw = sys.stdin.buffer.read(ENVELOPE_MAX + 1) if path == "-" else Path(path).read_bytes()
+    except OSError:
+        return Result(False, "invalid_input", None, None, False, False, "file_unreadable", {}, 2)
+    if len(raw) > ENVELOPE_MAX:
+        return Result(False, "invalid_input", None, None, False, False, "envelope_too_large", {}, 2)
+    try:
+        doc = strictjson.loads(raw)
+    except strictjson.StrictJSONError as exc:
+        return Result(False, "invalid_input", None, None, False, False, exc.reason, {}, 2)
+    if not isinstance(doc, dict):
+        return Result(False, "invalid_input", None, None, False, False, "not_an_object", {}, 2)
+    return doc
+
+
+def cmd_append(journal: Journal, a) -> int:
+    envelope = _read_envelope(a.file)
+    return _emit(envelope) if isinstance(envelope, Result) else _emit(
+        journal.append(envelope, adapter="cli", session_ref=a.session_ref))
+
+
+def cmd_prepare(journal: Journal, a) -> int:
+    envelope = _read_envelope(a.file)
+    return _emit(envelope) if isinstance(envelope, Result) else _emit(journal.prepare(envelope))
+
+
+def cmd_get(journal: Journal, a) -> int:
+    return _emit(journal.get(a.event_id))
+
+
+EXIT_BY_STATUS = {"ok": 0, "tail_in_progress": 0, "torn_tail": 5, "corrupt": 5, "missing": 8, "unsupported_writer": 8,
+                  "unsafe_root": 2}
+
+
+def cmd_verify(journal: Journal, a) -> int:
+    report = journal.verify()
+    print(json.dumps(report, sort_keys=True))
+    return EXIT_BY_STATUS.get(report["status"], 5) if report["status"] != "ok" or report["ok"] else 5
+
+
+def cmd_repair(journal: Journal, a) -> int:
+    report = journal.repair(apply=a.apply)
+    print(json.dumps(report, sort_keys=True))
+    return 0 if report["status"] in ("nothing_to_repair", "would_repair", "repaired") else 5
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--home", default=HOME)
-    ap.add_argument("--workshop", default=WORKSHOP_ID)
+    ap.add_argument("--workshop", "--id", dest="workshop", default=WORKSHOP_ID,
+                    help="the workshop ID (v0.6 writes it --id; --workshop is the older spelling)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("event")
     e.add_argument("--actor", required=True)
@@ -114,9 +173,28 @@ def main(argv=None) -> int:
     o = sub.add_parser("observe")
     o.add_argument("--force", action="store_true")
     sub.add_parser("state")
+    ap_ = sub.add_parser("append", help="append a v2 envelope (JSON file or - for stdin); one JSON object out")
+    ap_.add_argument("--file", required=True)
+    ap_.add_argument("--session-ref")
+    pr = sub.add_parser("prepare", help="fix the event ID and time now, without touching the journal; prints the envelope to resubmit")
+    pr.add_argument("--file", required=True)
+    g = sub.add_parser("get", help="one event by ID")
+    g.add_argument("--event-id", required=True)
+    g.add_argument("--json", action="store_true")
+    v = sub.add_parser("verify", help="read-only consistency report")
+    v.add_argument("--json", action="store_true")
+    rp = sub.add_parser("repair", help="dry run unless --apply: preserve, then complete or cut an unterminated final record")
+    rp.add_argument("--apply", action="store_true")
     s = sub.add_parser("sync")
     s.add_argument("--to", default=SYNC_TO)
     a = ap.parse_args(argv)
+    if a.cmd in ("append", "prepare", "get", "verify", "repair"):
+        try:
+            journal = Journal(a.home, a.workshop)
+        except Exception as exc:                                   # a refused workshop ID or root; fixed text only
+            print(json.dumps({"ok": False, "status": getattr(exc, "status", "invalid_input"), "reason": getattr(exc, "reason", "bad_arguments")}))
+            return 2
+        return {"append": cmd_append, "prepare": cmd_prepare, "get": cmd_get, "verify": cmd_verify, "repair": cmd_repair}[a.cmd](journal, a)
     ws = Workshop(a.home, a.workshop)
     try:
         return {"event": cmd_event, "observe": cmd_observe, "state": cmd_state, "sync": cmd_sync}[a.cmd](ws, a)

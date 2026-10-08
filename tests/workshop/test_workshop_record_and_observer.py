@@ -50,7 +50,10 @@ def test_append_is_one_line_owner_only_and_state_is_derived(tmp_path):
     assert [n["item"] for n in state["next"]] == ["spec:streaming"]
     assert state["items"]["queue:146"]["next_actor"] == "codex"
     ws.append(_ev(actor="robert", kind="decision", item="pr:265", text="Approved"))
-    assert json.loads(Path(ws.state_path).read_text())["needs_you"] == []        # decided
+    # Unit 1 fix (v0.6 D01): a decision labelled robert is a claim, not owner control, so it closes nothing. The first
+    # Workshop reducer cleared the question for any actor's decision (reproduced 8 Oct); see tests/workshop_journal for the
+    # exact-resolution path that does close one.
+    assert [n["item"] for n in json.loads(Path(ws.state_path).read_text())["needs_you"]] == ["pr:265"]
     ws.append(_ev(kind="done", item="queue:146", text="merged"))
     assert "queue:146" not in [i["item"] for i in json.loads(Path(ws.state_path).read_text())["in_progress"]]
 
@@ -248,14 +251,15 @@ def test_the_cli_records_observes_and_syncs_one_way(tmp_path):
     subprocess.run(cli + ["sync", "--to", str(dest)], capture_output=True, text=True)
     second = (dest / "mac/events.jsonl").read_text()
     assert second.startswith(first) and second.count("\n") == 2                    # appended, not rewritten
-    assert json.loads((dest / "mac/state.json").read_text())["needs_you"] == []
+    assert [n["item"] for n in json.loads((dest / "mac/state.json").read_text())["needs_you"]] == ["pr:265"]   # a label closes nothing
     assert sorted(p.name for p in (dest / "mac").iterdir()) == ["events.jsonl", "state.json"]   # only these two go
 
 
 def test_the_workshop_code_never_reaches_a_model():
     banned = ("anthropic", "openai", "litellm", "requests", "httpx", "urllib", "http", "socket", "aiohttp")
-    for path in list((REPO / "minimoi_portal/workshop").glob("*.py")) + [REPO / "scripts/workshop/workshop.py",
-                                                                       REPO / "minimoi_portal/guild_ui/workshop_view.py"]:
+    screen = REPO / "minimoi_portal/guild_ui/workshop_view.py"        # the Workshop screen is not on every branch
+    for path in (list((REPO / "minimoi_portal/workshop").glob("*.py")) + list((REPO / "core/workshop_journal").glob("*.py"))
+                 + [REPO / "scripts/workshop/workshop.py"] + ([screen] if screen.exists() else [])):
         text = path.read_text()
         for node in ast.walk(ast.parse(text)):
             names = ([a.name for a in node.names] if isinstance(node, ast.Import)
