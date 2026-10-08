@@ -296,7 +296,34 @@ def test_J04_a_partial_write_then_a_full_disk_is_cut_back(root, monkeypatch):
     assert jpath(root).read_bytes() == before                                               # the ten bytes were cut back off
 
 
-def test_J04_if_the_cut_back_also_fails_the_next_append_quarantines_the_partial_line(root, monkeypatch):
+def test_J04_if_the_cut_back_also_fails_the_outcome_is_unknown_not_definitely_uncommitted(root, monkeypatch):
+    """Codex R3: a line that was written whole except its newline can be completed later from its prepare receipt."""
+    j = seeded(root)
+    before = jpath(root).read_bytes()
+    real_w, real_t, count = fsutil._write, fsutil.truncate, []
+
+    def whole_line_minus_lf_then_full(fd, view):
+        count.append(1)
+        if len(count) == 1:
+            real_w(fd, view[:-1])                                   # everything but the closing newline reaches the file
+        raise OSError(errno.ENOSPC, "no space")
+    monkeypatch.setattr(fsutil, "_write", only_journal(root, whole_line_minus_lf_then_full, real_w))
+    monkeypatch.setattr(fsutil, "truncate", lambda fd, size: (_ for _ in ()).throw(OSError(errno.EIO, "no cut")))
+    eid = new_id()
+    unknown = j.append(envelope(event_id=eid))
+    assert (unknown.status, unknown.committed, unknown.retryable, unknown.event_id) == ("commit_unknown", None, True, eid)
+    assert len(jpath(root).read_bytes()) > len(before) and not jpath(root).read_bytes().endswith(b"\n")
+    monkeypatch.setattr(fsutil, "_write", real_w)
+    monkeypatch.setattr(fsutil, "truncate", real_t)
+    assert j.append(progress("an unrelated append")).committed             # recovery completes the original event from its receipt
+    events = j.read().events
+    assert [e["event_id"] for e in events].count(eid) == 1
+    assert j.get(eid).status == "found"
+    assert j.append(envelope(event_id=eid)).status == "duplicate"           # the retry finds it; no second event
+    assert [e["event_id"] for e in j.read().events].count(eid) == 1
+
+
+def test_J04_a_partial_line_whose_cut_back_failed_is_quarantined_by_the_next_append(root, monkeypatch):
     j = seeded(root)
     before = jpath(root).read_bytes()
     real_w, real_t, count = fsutil._write, fsutil.truncate, []
@@ -308,7 +335,7 @@ def test_J04_if_the_cut_back_also_fails_the_next_append_quarantines_the_partial_
         raise OSError(errno.ENOSPC, "no space")
     monkeypatch.setattr(fsutil, "_write", only_journal(root, partial_then_full, real_w))
     monkeypatch.setattr(fsutil, "truncate", lambda fd, size: (_ for _ in ()).throw(OSError(errno.EIO, "no cut")))
-    assert j.append(envelope()).status == "write_failed"
+    assert j.append(envelope()).status == "commit_unknown"
     assert len(jpath(root).read_bytes()) == len(before) + 25
     monkeypatch.setattr(fsutil, "_write", real_w)
     monkeypatch.setattr(fsutil, "truncate", real_t)
@@ -318,7 +345,13 @@ def test_J04_if_the_cut_back_also_fails_the_next_append_quarantines_the_partial_
 
 def test_J04_a_sync_failure_is_commit_unknown_resolved_by_id_without_a_second_event(root, monkeypatch):
     j = seeded(root)
-    monkeypatch.setattr(fsutil, "full_sync", lambda fd, degraded_ok=False: (_ for _ in ()).throw(OSError(errno.EIO, "sync")))
+    real_sync, ino = fsutil.full_sync, jpath(root).stat().st_ino
+
+    def journal_sync_fails(fd, degraded_ok=False):
+        if os.fstat(fd).st_ino == ino:
+            raise OSError(errno.EIO, "sync")
+        return real_sync(fd, degraded_ok=degraded_ok)
+    monkeypatch.setattr(fsutil, "full_sync", journal_sync_fails)
     eid = new_id()
     unknown = j.append(envelope(event_id=eid))
     assert (unknown.status, unknown.committed, unknown.retryable, unknown.exit_code, unknown.event_id) == ("commit_unknown", None, True, 6, eid)
@@ -330,10 +363,13 @@ def test_J04_a_sync_failure_is_commit_unknown_resolved_by_id_without_a_second_ev
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="F_FULLFSYNC exists on macOS")
 def test_J04_strict_refuses_a_volume_without_full_sync_and_degraded_says_so(root, monkeypatch):
+    seeded(root, 1)
+    real_fcntl, ino = fsutil.fcntl.fcntl, jpath(root).stat().st_ino
+
     def no_full(fd, cmd, *a):
-        if cmd == fsutil.fcntl.F_FULLFSYNC:
+        if cmd == fsutil.fcntl.F_FULLFSYNC and os.fstat(fd).st_ino == ino:
             raise OSError(errno.ENOTSUP, "not supported")
-        return 0
+        return real_fcntl(fd, cmd, *a)
     monkeypatch.setattr(fsutil.fcntl, "fcntl", no_full)
     strict = Journal(root, WORKSHOP, lock_timeout=0.3).append(envelope())
     assert strict.status == "commit_unknown" and strict.committed is None                   # never an ordinary durable success
@@ -416,26 +452,64 @@ def test_J05_a_forged_sequence_is_never_reordered_or_skipped(root):
     assert read.status == "corrupt" and [e["seq"] for e in read.events] == [1]
 
 
-def test_J05_tampering_beyond_the_newest_rows_is_caught_by_verify_not_by_an_append(root):
-    """Decision recorded in WORKSHOP_BUILD_DECISIONS: an append deep-checks the newest 25 rows (a full deep scan costs about
-    14 times a shallow one); verify and deep reads check them all."""
+def test_J05_tampering_with_an_old_row_is_caught_by_append_and_state_not_only_by_verify(root):
+    """Codex R1: a cache of "already checked" rows must be bound to the exact bytes it covered."""
     j = seeded(root, 40)
+    assert (base(root) / "validated.json").exists()                                           # the cache exists and is trusted while bytes match
     lines = jpath(root).read_bytes().splitlines(keepends=True)
     row = strictjson.loads(lines[4])
     row["text"] = "edited long after"
     lines[4] = strictjson.canonical_bytes(row) + b"\n"
     jpath(root).write_bytes(b"".join(lines))
-    assert j.verify()["ok"] is False and j.read(deep=True).status == "corrupt"
-    assert j.append(progress("an append only checks the newest rows")).committed
+    held = j.append(progress("must not be accepted"))
+    assert (held.status, held.committed) == ("corrupt", False)
+    assert j.state() == (None, "refused") and j.verify()["ok"] is False and j.read(deep=True).status == "corrupt"
+    assert j.brief()["status"] == "refused"
 
 
-def test_J04_evidence_whose_folder_sync_fails_blocks_the_cut(root, tmp_path, monkeypatch):
-    j, prefix, tail, resubmit = torn(root, tmp_path, cut=90)
+def test_J05_the_validated_prefix_cache_is_only_believed_while_the_bytes_match(root):
+    j = seeded(root, 30)
+    marker = base(root) / "validated.json"
+    good = marker.read_bytes()
+    assert j.append(progress("fast path")).committed
+    for forged in (b"not json", b'{"v":1,"upto":99999999,"sha256":"' + b"0" * 64 + b'"}', b'{"v":1,"upto":10,"sha256":"' + b"0" * 64 + b'"}'):
+        marker.write_bytes(forged)
+        os.chmod(marker, 0o600)
+        assert j.append(progress("full check")).committed                                     # a bad cache means check everything
+    assert marker.read_bytes() != good
+    lines = jpath(root).read_bytes().splitlines(keepends=True)
+    row = strictjson.loads(lines[2])
+    row["text"] = "edited"
+    lines[2] = strictjson.canonical_bytes(row) + b"\n"
+    stale = marker.read_bytes()
+    jpath(root).write_bytes(b"".join(lines))
+    marker.write_bytes(stale)
+    assert j.append(progress("x")).status == "corrupt"                                          # the old cache no longer matches the bytes
 
-    def fail_sync(dir_fd, *, durable=True):
-        if durable:
-            raise OSError(errno.EIO, "directory sync failed")
-    monkeypatch.setattr(fsutil, "fsync_dir", fail_sync)
-    blocked = j.append(progress("next"))
-    assert (blocked.status, blocked.committed) == ("recovery_blocked", False)
-    assert jpath(root).read_bytes() == prefix + tail                                         # evidence not durable: nothing cut
+
+def test_R2_a_partial_journal_is_never_presented_as_a_complete_state(root):
+    j = seeded(root, 2)
+    with open(jpath(root), "ab") as handle:
+        handle.write(b'{"v":2')
+    state, source = j.state()
+    assert source == "incomplete" and state["incomplete"]["reason"] == "torn_tail" and state["events"] == 2
+    before = (base(root) / "state.json").read_bytes()
+    assert j.state()[1] == "incomplete"                                                         # a read publishes nothing
+    assert (base(root) / "state.json").read_bytes() == before
+    done = j.write_state()                                                                      # the writer repairs first, then publishes
+    assert j.read().status == "ok" and done["events"] == 3 and "incomplete" not in done        # two events plus the recovery record
+    assert j.state()[1] == "file"
+
+
+def test_R2_a_live_writers_tail_is_reported_incomplete_too(root):
+    from test_safety import hold_lock
+    j = seeded(root, 1)
+    with open(jpath(root), "ab") as handle:
+        handle.write(b'{"v":2,"part')
+    holder = hold_lock(root, 3)
+    try:
+        state, source = j.state()
+        assert source == "incomplete" and state["incomplete"]["reason"] == "tail_in_progress"
+    finally:
+        holder.kill()
+        holder.wait()

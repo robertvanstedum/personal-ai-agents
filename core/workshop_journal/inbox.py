@@ -4,7 +4,7 @@
 source and is held (``source_approval_required``) until its own source approval exists. Nothing is moved, deleted or executed:
 the files stay where Robert put them and the ingester writes small manifests next to them:
 
-    inbox/_processed/<read hash>.json   which entry and retained document this file produced (never replaced)
+    inbox/_processed/<read hash>.json   which entry and retained document this file produced, and every name it was seen under
     inbox/_held/<read hash>.json        why it was not ingested (replaced when the reason changes, removed on success)
 
 The header author is a *claim*, never an identity: the entry's origin is the inbox adapter with basis ``claimed``. A header
@@ -242,7 +242,7 @@ class Outcome:
 
 
 def _envelope(h: Header, item: art.Prepared, event_id: str, name: str, journal: Journal, previous: str | None) -> dict:
-    refs = [item.ref(f"inbox:{name}"[:128], name)] + [{"type": "artifact", "id": n, "availability": "pointer_only"} for n in h.artifacts]
+    refs = [item.ref(f"dropoff:{item.original_sha256[:16]}")] + [{"type": "artifact", "id": n, "availability": "pointer_only"} for n in h.artifacts]
     base = {"event_id": event_id, "actor": h.sender, "item": f"topic:{h.topic}", "topic": h.topic, "stage": None,
             "recipients": h.recipients, "in_reply_to": h.reply_to, "supersedes": h.supersedes or previous, "refs": refs}
     if h.kind in ("handoff", "update"):
@@ -326,7 +326,9 @@ class Inbox:
             return Outcome(name, "unstable" if exc.reason == "source_changed" else "held", exc.reason)
         original = art.sha256(raw)
         known = self._known(original)
-        if known is not None and known.get("parser_version") == PARSER_VERSION:
+        if known is not None and known.get("parser_version") == PARSER_VERSION and self.journal.get(known.get("event_id") or "").status == "found":
+            if apply:                                                   # the journal is the authority; the manifest only remembers names
+                self._write_processed_names(original, name)
             return Outcome(name, "duplicate", "already_ingested", known.get("event_id"), original, known.get("retained_sha256"),
                            known.get("redactions", 0))
         return self._process(name, raw, original, apply, previous=known.get("event_id") if known else None)
@@ -393,13 +395,38 @@ class Inbox:
     def _write_processed(self, out: Outcome, h: Header, item: art.Prepared, eid: str) -> None:
         doc = strictjson.canonical_bytes({
             "v": 1, "original_sha256": out.original_sha256, "retained_sha256": item.retained_sha256, "redactions": item.redactions,
-            "event_id": eid, "sender": h.sender, "kind": h.kind, "topic": h.topic, "filename": out.name,
+            "event_id": eid, "sender": h.sender, "kind": h.kind, "topic": h.topic, "filenames": [out.name],
             "parser_version": PARSER_VERSION, "adapter": "inbox"})
         inbox_fd = self._folder(create=True)
         try:
             pfd = self._manifest_dir(inbox_fd, PROCESSED, True)
             try:
-                fsutil.publish_new(pfd, f"{out.original_sha256}.json", doc)
+                fsutil.publish_replace(pfd, f"{out.original_sha256}.json", doc, durable=True)
+            finally:
+                os.close(pfd)
+        finally:
+            os.close(inbox_fd)
+        self._write_processed_names(out.original_sha256, out.name)
+
+    def _write_processed_names(self, original: str, name: str) -> None:
+        """Filenames are observations, not identity: a manifest lists every name this content was seen under."""
+        inbox_fd = self._folder(create=True)
+        try:
+            pfd = self._manifest_dir(inbox_fd, PROCESSED, True)
+            try:
+                try:
+                    fd = fsutil.open_file(pfd, f"{original}.json", os.O_RDONLY)
+                except Missing:
+                    return
+                try:
+                    doc = strictjson.loads(fsutil.read_all(fd))
+                finally:
+                    os.close(fd)
+                names = sorted(set(doc.get("filenames") or []) | {name})
+                if names != doc.get("filenames"):
+                    doc["filenames"] = names
+                    doc.pop("filename", None)
+                    fsutil.publish_replace(pfd, f"{original}.json", strictjson.canonical_bytes(doc), durable=True)
             finally:
                 os.close(pfd)
         finally:

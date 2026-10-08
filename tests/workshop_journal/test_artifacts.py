@@ -290,3 +290,36 @@ def test_capture_reports_a_file_replaced_during_the_read(src, monkeypatch):
     with pytest.raises(SourceRefused) as caught:
         art.capture_file(str(src), "a.md")
     assert caught.value.reason == "source_changed"
+
+
+# ── Codex R4: "retained" must mean kept ─────────────────────────────────────────────────────────────────────────────
+def retained_ref(sha: str) -> dict:
+    return {"type": "artifact", "id": "claimed-document", "sha256": sha, "availability": "retained"}
+
+
+def test_R4_an_event_cannot_claim_a_retained_document_that_was_never_kept(root):
+    j = Journal(root, WORKSHOP, lock_timeout=0.3)
+    refused = j.append(progress("cites nothing real", refs=[retained_ref("a" * 64)]))
+    assert (refused.status, refused.reason, refused.committed) == ("policy_refused", "retained_artifact_not_kept", False)
+    assert len(j.read().events) == 0
+    pre = j.preflight(progress("cites nothing real", refs=[retained_ref("a" * 64)]))
+    assert (pre.status, pre.reason) == ("policy_refused", "retained_artifact_not_kept")
+
+
+def test_R4_a_kept_intact_document_may_be_cited_by_a_later_event_and_pointers_stay_usable(root):
+    j = Journal(root, WORKSHOP, lock_timeout=0.3)
+    item, env = with_doc(DOC)
+    assert j.append(env, artifacts=[item]).committed
+    assert j.append(progress("cites the kept one", refs=[retained_ref(item.retained_sha256)])).committed
+    pointer = {"type": "artifact", "id": "elsewhere", "availability": "pointer_only"}
+    missing = {"type": "artifact", "id": "gone", "sha256": "b" * 64, "availability": "missing"}
+    assert j.append(progress("absent evidence is still allowed", refs=[pointer, missing])).committed
+
+
+def test_R4_a_damaged_kept_document_cannot_be_cited_as_retained(root):
+    j = Journal(root, WORKSHOP, lock_timeout=0.3)
+    item, env = with_doc(DOC)
+    assert j.append(env, artifacts=[item]).committed
+    (objects(root) / item.retained_sha256).write_bytes(DOC + b"damaged")
+    bad = j.append(progress("cites damaged bytes", refs=[retained_ref(item.retained_sha256)]))
+    assert (bad.status, bad.committed) == ("artifact_corrupt", False)

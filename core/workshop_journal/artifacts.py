@@ -19,7 +19,7 @@ import re
 import stat
 from dataclasses import dataclass
 
-from core.workshop_journal import fsutil, strictjson
+from core.workshop_journal import fsutil, payment, strictjson
 from core.workshop_journal.errors import ArtifactCorrupt, ArtifactMissing, Missing, SourceRefused
 from utils import credential_scrub
 
@@ -81,6 +81,8 @@ def prepare(data: bytes, *, source_class: str = "handoff") -> Prepared:
         raise SourceRefused("not_text")
     kept, changed = credential_scrub.scrub(text)
     redactions = kept.count(credential_scrub.REMOVED) - text.count(credential_scrub.REMOVED) if changed else 0
+    kept, payments = payment.scrub(kept)
+    redactions += payments
     retained = kept.encode("utf-8")
     return Prepared(sha256(data), sha256(retained), retained, max(redactions, 0), source_class, len(data))
 

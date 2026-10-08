@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from core.workshop_journal import strictjson
+from core.workshop_journal import payment
 from utils.credential_scrub import SECRET
 
 VERSION = 2
@@ -89,6 +90,8 @@ def _free_text(value: Any, field: str, lo: int, hi: int) -> str:
         raise SchemaError(field, "length")
     if SECRET.search(value):
         raise SchemaError(field, "credential_shaped")
+    if payment.found(value):
+        raise SchemaError(field, "payment_detail_shaped")
     return value
 
 

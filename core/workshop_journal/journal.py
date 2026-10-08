@@ -11,6 +11,7 @@ No model, network or HTTP import anywhere in this package (a test scans for them
 """
 from __future__ import annotations
 
+import bisect
 import fcntl
 import hashlib
 import json
@@ -25,12 +26,12 @@ from typing import Callable, Iterator
 from core.workshop_journal import artifacts as artifact_store, brief as brief_view, fsutil, reducer, schema, strictjson, workflow
 from core.workshop_journal.errors import (CommitUnknown, Corrupt, IdConflict, InvalidInput, JournalError, LegacyAfterV2,
                                           LockBusy, Missing, RecoveryBlocked, SourceRefused, UnsafeRoot, WriteFailed)
-from core.workshop_journal.errors import ArtifactMissing
+from core.workshop_journal.errors import ArtifactMissing, PolicyRefused
 
 JOURNAL, LOCK, STATE = "events.jsonl", ".lock", "state.json"
 PREPARED, QUARANTINE = "prepared", "quarantine"
 MAX_PROBLEMS = 50
-DEEP_TAIL = 25                      # an append deep-checks the newest rows; verify deep-checks all of them
+VALIDATED = "validated.json"        # derived: "the first N bytes were deep-checked and hashed to H"; a cache bound to exact bytes
 
 
 # ── scanning ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -70,9 +71,10 @@ def _shallow_ok(row: dict) -> bool:
             and isinstance(row["item"], str))
 
 
-def scan_bytes(data: bytes, *, deep: bool = True, deep_tail: int = 0, actors: tuple[str, ...] | None = None) -> Scan:
+def scan_bytes(data: bytes, *, deep: bool = True, deep_from: int | None = None, actors: tuple[str, ...] | None = None) -> Scan:
     """Scan the journal bytes. ``deep`` validates every v2 row against its own intent hash (about 14 times the cost of a
-    shallow scan); ``deep_tail`` validates only the newest N v2 rows, which is what an append does."""
+    shallow scan); ``deep_from`` validates every v2 row that starts at or after that byte offset, which is how an append checks
+    what no earlier deep check covered (the covered prefix is proven by hash, never assumed)."""
     scan = Scan()
     cut = data.rfind(b"\n") + 1
     scan.complete_bytes, scan.tail = cut, data[cut:]
@@ -144,9 +146,8 @@ def scan_bytes(data: bytes, *, deep: bool = True, deep_tail: int = 0, actors: tu
             scan.events.append(row)
         else:
             problem("unknown_version")
-    if deep_tail and not deep and not scan.problems:
-        start = max(0, len(scan.events) - deep_tail)
-        for index in range(start, len(scan.events)):
+    if deep_from is not None and not deep and not scan.problems:
+        for index in range(bisect.bisect_left(scan.offsets, deep_from), len(scan.events)):
             row = scan.events[index]
             if row.get("v") != 2:
                 continue
@@ -273,7 +274,7 @@ class Journal:
             jfd = fsutil.open_file(base_fd, JOURNAL, os.O_RDWR | os.O_CREAT | os.O_APPEND)
             prepared_fd = fsutil.open_subdir(base_fd, PREPARED, create=True) if prepared else None
             data = fsutil.read_all(jfd)
-            yield _Session(base_fd, jfd, data, scan_bytes(data, deep=False, deep_tail=DEEP_TAIL), prepared_fd)
+            yield _Session(base_fd, jfd, data, scan_bytes(data, deep=False, deep_from=self._validated_upto(base_fd, data)), prepared_fd)
         finally:
             for fd in (prepared_fd, jfd, lock_fd, base_fd):
                 if fd is not None:
@@ -281,6 +282,27 @@ class Journal:
                         os.close(fd)                           # closing the lock descriptor releases the flock
                     except OSError:
                         pass
+
+    # ── the validated-prefix cache ────────────────────────────────────────────────────────────────────────────────
+    @staticmethod
+    def _validated_upto(base_fd: int, data: bytes) -> int:
+        """How many leading bytes were deep-checked before and are byte-for-byte unchanged (their hash is recomputed here).
+        Anything else, including an absent, damaged or stale cache, means check everything."""
+        try:
+            fd = fsutil.open_file(base_fd, VALIDATED, os.O_RDONLY)
+        except (Missing, UnsafeRoot):
+            return 0
+        try:
+            doc = strictjson.loads(fsutil.read_all(fd))
+        except strictjson.StrictJSONError:
+            return 0
+        finally:
+            os.close(fd)
+        upto, digest = (doc.get("upto"), doc.get("sha256")) if isinstance(doc, dict) else (None, None)
+        if not isinstance(upto, int) or isinstance(upto, bool) or not isinstance(digest, str) or not 0 < upto <= len(data) \
+                or data[upto - 1:upto] != b"\n":
+            return 0
+        return upto if hashlib.sha256(data[:upto]).hexdigest() == digest else 0
 
     # ── prepare receipts ──────────────────────────────────────────────────────────────────────────────────────────
     @staticmethod
@@ -312,7 +334,7 @@ class Journal:
             return existing
         body = self._receipt_bytes(intent, ih, self._now())
         try:
-            fsutil.publish_new(prepared_fd, f"{intent['event_id']}.json", body, durable=False)
+            fsutil.publish_new(prepared_fd, f"{intent['event_id']}.json", body)
         except OSError as exc:
             raise WriteFailed("receipt_not_written", event_id=intent["event_id"], evidence={"errno": exc.errno}) from None
         return self._load_receipt(prepared_fd, intent["event_id"]) or {}
@@ -465,7 +487,9 @@ class Journal:
             try:
                 fsutil.truncate(s.jfd, len(s.data))
             except OSError:
-                pass
+                # a partial (or complete but unterminated) line may remain, and recovery can later complete it from the receipt:
+                # the outcome is unknown until the stable ID is looked up, never "definitely not committed"
+                raise CommitUnknown("cut_back_failed", event_id=intent["event_id"], evidence={"errno": exc.errno}) from None
             raise WriteFailed("write_failed", event_id=intent["event_id"], evidence={"errno": exc.errno}) from None
         try:
             durability = fsutil.full_sync(s.jfd, degraded_ok=self.durability == "degraded")
@@ -477,8 +501,14 @@ class Journal:
 
     def _publish_state(self, s: _Session) -> None:
         state = reducer.reduce(self.id, s.scan.events, resolver=self.resolver)
-        state["watermark"] = {"journal_bytes": len(s.data), "journal_sha256": hashlib.sha256(s.data).hexdigest(),
+        digest = hashlib.sha256(s.data).hexdigest()
+        state["watermark"] = {"journal_bytes": len(s.data), "journal_sha256": digest,
                               "last_seq": s.scan.last_seq, "events": len(s.scan.events), "problems": len(s.scan.problems)}
+        if not s.scan.problems and not s.scan.tail:
+            try:                                                   # every row up to here has now been deep-checked by this writer
+                fsutil.publish_replace(s.base_fd, VALIDATED, strictjson.canonical_bytes({"v": 1, "upto": len(s.data), "sha256": digest}))
+            except OSError:
+                pass
         fsutil.publish_replace(s.base_fd, STATE, strictjson.canonical_bytes(state) + b"\n")
 
     def _require_healthy(self, s: _Session) -> None:
@@ -508,6 +538,7 @@ class Journal:
                     return Result(True, "duplicate", intent["event_id"], known["seq"], True, False, "already_committed", {}, 0)
                 if self.rules is not None:
                     self.rules(intent, s.scan.events)
+                self._check_retained(s.base_fd, intent, artifacts)
                 for item in artifacts or []:
                     try:
                         artifact_store.publish(s.base_fd, item)
@@ -527,7 +558,7 @@ class Journal:
         except JournalError as exc:
             return _fail(exc)
 
-    def preflight(self, envelope: dict, *, software: bool = False) -> Result:
+    def preflight(self, envelope: dict, *, software: bool = False, artifacts: list | None = None) -> Result:
         """What ``append`` would do, writing nothing (no lock, no folder, no receipt, no recovery). ``would_commit`` or the refusal."""
         try:
             read = self.read(deep=False)
@@ -547,12 +578,35 @@ class Journal:
                               {"dry_run": True}, 0 if same else 3)
             if self.rules is not None:
                 self.rules(intent, events)
+            try:
+                base_fd = self._open_base(create=False)
+            except Missing:
+                base_fd = None
+            try:
+                self._check_retained(base_fd, intent, artifacts)
+            finally:
+                if base_fd is not None:
+                    os.close(base_fd)
             seq = (read.scan.last_seq if read.scan is not None else 0) + 1
             return Result(True, "would_commit", eid, seq, False, False, "", {"dry_run": True, "tail_recovery_pending": bool(read.scan and read.scan.tail)}, 0)
         except schema.SchemaError as exc:
             return Result(False, "invalid_input", None, None, False, False, f"{exc.field}:{exc.reason}", {}, 2)
         except JournalError as exc:
             return _fail(exc)
+
+    @staticmethod
+    def _check_retained(base_fd: int | None, intent: dict, artifacts: list | None) -> None:
+        """A reference that says "retained" must point at a document published in this very append or already kept and intact."""
+        supplied = {item.retained_sha256 for item in artifacts or []}
+        for ref in intent["refs"]:
+            if ref.get("type") != "artifact" or ref.get("availability") != "retained" or ref["sha256"] in supplied:
+                continue
+            try:
+                if base_fd is None:
+                    raise ArtifactMissing("no_workshop")
+                artifact_store.open_exact(base_fd, ref["sha256"])
+            except ArtifactMissing:
+                raise PolicyRefused("retained_artifact_not_kept") from None
 
     def append_legacy(self, event: dict) -> Result:
         """A v1 line through the same lock, recovery and durability as v2 (compatibility for the existing Workshop callers).
@@ -596,6 +650,10 @@ class Journal:
         """Rebuild ``state.json`` from the journal under the lock (the one writer of that file besides ``append``)."""
         with self._locked() as s:
             self._require_healthy(s)
+            self._recover_tail(s, emit=bool(s.scan.v2))          # under the exclusive lock a partial tail is truly torn: never publish around it
+            if s.scan.v2:
+                self._emit_missing_recoveries(s)                 # a stream that is still all v1 gets no v2 recovery events
+            self._require_healthy(s)
             self._publish_state(s)
             state = reducer.reduce(self.id, s.scan.events, resolver=self.resolver)
             return state
@@ -620,7 +678,7 @@ class Journal:
                 return ReadResult("unsupported_writer", reason="no_lock_file")
             in_progress = lock_fd is None
             data = fsutil.read_all(jfd)
-            scan = scan_bytes(data, deep=deep, deep_tail=0 if deep else DEEP_TAIL)
+            scan = scan_bytes(data, deep=True) if deep else scan_bytes(data, deep=False, deep_from=self._validated_upto(base_fd, data))
             if scan.problems:
                 return ReadResult("corrupt", scan.events, scan, scan.problems[0]["reason"], data)
             if scan.tail:
@@ -665,6 +723,9 @@ class Journal:
         except (strictjson.StrictJSONError, UnsafeRoot):
             return None, "unreadable"
         rebuilt = reducer.reduce(self.id, read.events, resolver=self.resolver)
+        if read.status in ("torn_tail", "tail_in_progress"):
+            rebuilt["incomplete"] = {"reason": read.status, "tail_bytes": len(read.scan.tail)}
+            return rebuilt, "incomplete"
         mark = {"journal_bytes": len(read.data), "journal_sha256": hashlib.sha256(read.data).hexdigest(),
                 "last_seq": read.scan.last_seq, "events": len(read.events), "problems": 0}
         if isinstance(doc, dict) and doc.get("watermark") == mark:

@@ -79,7 +79,8 @@ def test_a_valid_handoff_becomes_one_progress_entry_citing_the_retained_original
     assert j.open_artifact(out.retained_sha256) == HEADER.encode()                                 # exact original bytes
     assert (folder / NAME).read_text() == HEADER                                                   # the file itself is untouched
     manifest = json.loads((folder / "_processed" / f"{out.original_sha256}.json").read_text())
-    assert manifest["event_id"] == out.event_id and manifest["adapter"] == "inbox"
+    assert manifest["event_id"] == out.event_id and manifest["adapter"] == "inbox" and manifest["filenames"] == [NAME]
+    assert ev["refs"][0]["id"] == f"dropoff:{out.original_sha256[:16]}" and ev["refs"][0]["locator"] is None   # no filename in the identity
 
 
 def test_I01_the_same_bytes_under_another_name_are_the_same_entry(box):
@@ -292,3 +293,46 @@ def test_A01_a_file_that_changes_during_the_read_is_unstable(box, monkeypatch):
         return data
     monkeypatch.setattr(fsutil, "read_all", changing)
     assert inbox.scan(apply=True)[0].status == "unstable"
+
+
+def test_R5_a_crash_after_the_commit_then_a_renamed_file_is_the_same_entry(box, monkeypatch):
+    """Codex R5: the entry committed, the manifest was lost to a crash, then the same bytes arrived under another name."""
+    inbox, folder, j = box
+    drop(folder)
+
+    def crash(self, *a, **k):
+        raise OSError(5, "crash after the journal commit")
+    monkeypatch.setattr(ib.Inbox, "_write_processed", crash)
+    with pytest.raises(OSError):
+        inbox.scan(apply=True)
+    monkeypatch.undo()
+    assert not (folder / "_processed").exists() and len(j.read().events) == 2                       # committed, nothing remembered
+    (folder / NAME).rename(folder / "HANDOFF_claude-chat_local-workshop-design_2026-10-08_1431.md")
+    [out] = inbox.scan(apply=True)
+    assert out.status == "duplicate" and out.reason != "journal_id_conflict" and len(j.read().events) == 2
+    manifest = json.loads((folder / "_processed" / f"{out.original_sha256}.json").read_text())
+    assert manifest["filenames"] == ["HANDOFF_claude-chat_local-workshop-design_2026-10-08_1431.md"]    # the journal stayed authoritative
+
+
+def test_R5_every_name_the_content_was_seen_under_is_remembered(box):
+    inbox, folder, j = box
+    drop(folder)
+    drop(folder, "HANDOFF_claude-chat_local-workshop-design_2026-10-08_1431.md")
+    out = inbox.scan(apply=True)
+    manifest = json.loads((folder / "_processed" / f"{out[0].original_sha256}.json").read_text())
+    assert manifest["filenames"] == sorted([NAME, "HANDOFF_claude-chat_local-workshop-design_2026-10-08_1431.md"])
+
+
+def test_a_manifest_without_its_event_does_not_make_a_duplicate(box, root):
+    inbox, folder, j = box
+    drop(folder)
+    first = inbox.scan(apply=True)[0]
+    fresh = Journal(root + "-other", WORKSHOP, lock_timeout=0.3)                                      # a restored journal that lacks the event
+    os.makedirs(root + "-other", mode=0o700, exist_ok=True)
+    fresh.append(progress("seed"))
+    (Path(root + "-other") / WORKSHOP / "inbox").mkdir(mode=0o700)
+    import shutil
+    shutil.copytree(folder / "_processed", Path(root + "-other") / WORKSHOP / "inbox" / "_processed")
+    shutil.copy(folder / NAME, Path(root + "-other") / WORKSHOP / "inbox" / NAME)
+    again = ib.Inbox(fresh, settle=0).scan(apply=True)[0]
+    assert again.status == "ingested" and again.event_id == first.event_id
