@@ -273,6 +273,49 @@ def cmd_result(journal: Journal, a) -> int:
     return _send(journal, a, envelope)
 
 
+def cmd_notify(journal: Journal, a) -> int:
+    """Print the exact, frozen notification for one recipient of one request. Sends nothing, ever."""
+    from core.workshop_journal import notify
+    request, _ = _find_request(journal, a.request)
+    if request is None:
+        print(json.dumps({"ok": False, "status": "policy_refused", "reason": "unknown_request"}))
+        return 2
+    try:
+        sys.stdout.write(notify.build(request, a.to, journal.id).decode("utf-8"))
+    except notify.NotNotifiable as exc:
+        print(json.dumps({"ok": False, "status": "policy_refused", "reason": str(exc)}))
+        return 2
+    return 0
+
+
+def cmd_routes(journal: Journal, a) -> int:
+    from core.workshop_journal import routes
+    try:
+        table = routes.load(journal.dir)
+    except routes.BadRoutes as exc:
+        print(json.dumps({"ok": False, "status": "invalid_input", "reason": str(exc)}))
+        return 2
+    rows = [routes.describe(table, who) for who in ([a.actor] if a.actor else sorted(table))]
+    print(json.dumps({"ok": True, "routes": rows}, sort_keys=True))
+    return 0
+
+
+def cmd_checkin(journal: Journal, a) -> int:
+    """Where are they: the brief in plain words, no model. --ask-refresh also posts an ordinary refresh request per teammate."""
+    from core.workshop_journal import checkin
+    doc = journal.brief(topic=a.topic, now=_parse_now(a.now), teammates=tuple(a.teammate or ()))
+    sys.stdout.write(checkin.report(doc))
+    code = 0
+    for who in a.ask_refresh or ():
+        env = checkin.refresh_request([who])
+        result = journal.preflight(env) if a.dry_run else journal.append(env, adapter="cli")
+        print(json.dumps(result.to_json(), sort_keys=True))
+        code = code or result.exit_code
+    if "status" in doc:
+        return {"missing": 8, "refused": 5}.get(doc["status"], 2)
+    return code or (INCOMPLETE_EXIT if doc["journal_status"] in INCOMPLETE else 0)
+
+
 def _parse_now(text: str | None):
     from datetime import datetime, timezone
     if not text:
@@ -375,6 +418,17 @@ def main(argv=None) -> int:
             sp.add_argument("--reason", required=True)
         if name == "result":
             sp.add_argument("--file", required=True)
+    nt = sub.add_parser("notify", help="print the frozen notification for one recipient of a request (sends nothing)")
+    nt.add_argument("--request", required=True)
+    nt.add_argument("--to", required=True)
+    ro = sub.add_parser("routes", help="how each teammate is reached, stated honestly")
+    ro.add_argument("--actor")
+    ck = sub.add_parser("checkin", help="where are they: the brief in plain words; no model; optionally ask teammates to refresh")
+    ck.add_argument("--topic")
+    ck.add_argument("--now")
+    ck.add_argument("--teammate", action="append")
+    ck.add_argument("--ask-refresh", action="append", help="post a refresh request to this teammate (repeatable)")
+    ck.add_argument("--dry-run", action="store_true")
     br = sub.add_parser("brief", help="the deterministic return brief (read only, no model)")
     br.add_argument("--topic")
     br.add_argument("--format", choices=["json", "md"], default="json")
@@ -388,7 +442,7 @@ def main(argv=None) -> int:
     s.add_argument("--to", default=SYNC_TO)
     a = ap.parse_args(argv)
     if a.cmd in ("append", "prepare", "get", "verify", "repair", "inbox", "artifact", "pending", "receipt", "claim", "release", "result",
-                 "brief", "history"):
+                 "brief", "history", "notify", "routes", "checkin"):
         try:
             journal = Journal(a.home, a.workshop)
         except Exception as exc:                                   # a refused workshop ID or root; fixed text only
@@ -396,7 +450,8 @@ def main(argv=None) -> int:
             return 2
         return {"append": cmd_append, "prepare": cmd_prepare, "get": cmd_get, "verify": cmd_verify, "repair": cmd_repair,
                 "inbox": cmd_inbox, "artifact": cmd_artifact, "pending": cmd_pending, "receipt": cmd_receipt, "claim": cmd_claim,
-                "release": cmd_release, "result": cmd_result, "brief": cmd_brief, "history": cmd_history}[a.cmd](journal, a)
+                "release": cmd_release, "result": cmd_result, "brief": cmd_brief, "history": cmd_history, "notify": cmd_notify,
+                "routes": cmd_routes, "checkin": cmd_checkin}[a.cmd](journal, a)
     ws = Workshop(a.home, a.workshop)
     try:
         return {"event": cmd_event, "observe": cmd_observe, "state": cmd_state, "sync": cmd_sync}[a.cmd](ws, a)

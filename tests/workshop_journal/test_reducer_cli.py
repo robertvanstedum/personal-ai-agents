@@ -330,3 +330,18 @@ def test_a_complete_journal_still_exits_zero_with_no_notice(root, tmp_path):
     assert cli(root, "append", "--file", write_env(tmp_path, progress("one"))).returncode == 0
     md = cli(root, "history", "--format", "md")
     assert md.returncode == 0 and "NOTICE" not in md.stdout and json.loads(cli(root, "history").stdout)["complete"] is True
+
+
+def test_cli_notify_prints_the_frozen_notice_and_sends_nothing_and_routes_are_honest(root, tmp_path):
+    req = {"actor": "claude-code", "kind": "request", "item": "spec:backup", "topic": "backup", "recipients": ["codex"], "text": "Review.",
+           "payload": {"action": "review", "expected_result": "Findings."}}
+    rid = json.loads(cli(root, "append", "--file", write_env(tmp_path, req)).stdout)["event_id"]
+    out = cli(root, "notify", "--request", rid, "--to", "codex")
+    assert out.returncode == 0 and out.stdout.startswith("WORKSHOP NOTICE v1\nSource: agent-authored message from claude-code.")
+    assert f"Request: {rid}\n" in out.stdout and "Review." not in out.stdout
+    bad = cli(root, "notify", "--request", rid, "--to", "grok-cli")
+    assert bad.returncode == 2 and json.loads(bad.stdout)["reason"] == "recipient is not on the request"
+    assert cli(root, "notify", "--request", new_id(), "--to", "codex").returncode == 2
+    table = json.loads(cli(root, "routes").stdout)["routes"]
+    assert all(r["sends_automatically"] is False for r in table) and {r["actor"]: r["status"] for r in table}["grok-cli"] == "unverified"
+    assert json.loads(cli(root, "routes", "--actor", "host").stdout)["routes"][0]["status"] == "unsupported"
