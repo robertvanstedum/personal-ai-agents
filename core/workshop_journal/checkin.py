@@ -3,8 +3,8 @@
 The report is the brief, worded plainly: the last entry from each teammate, what is waiting for the owner, which requests have no
 receipt or no result, and what is overdue. No entry is "nothing reported since <time>", never "idle" or "done". A refresh is an
 ordinary addressed request, so the answer comes back as a correlated result. An optional model-written summary may be appended
-for reading ease; it must cite only IDs that are in the brief, it is placed *after* the base report, and it can neither remove a
-gap nor add an approval. Judgment calls need a configured profile (``profiles``); routine checks need none because they use none.
+for reading ease, but it may only *select* facts the brief already holds; the sentences are generated here from fixed templates, so a
+summary cannot add an approval, a completion or a gap. Judgment calls need a configured profile (``profiles``); routine checks need none because they use none.
 """
 from __future__ import annotations
 
@@ -41,52 +41,85 @@ def report(brief: dict) -> str:
     return "\n".join(out) + "\n"
 
 
-def cited_ids(brief: dict) -> set[str]:
-    """Every ID a summary may cite: events and requests the brief mentions."""
-    ids: set[str] = set()
-    for key in ("requests",):
-        ids |= {r["id"] for r in brief.get(key, [])}
-    for key in ("needs_you", "blocked", "unaddressed"):
-        ids |= {r["event_id"] for r in brief.get(key, [])}
-    for t in brief.get("teammates", []):
-        if t["last"]:
-            ids.add(t["last"]["event_id"])
-    d = brief.get("decisions", {})
-    ids |= {r["event_id"] for r in d.get("proposals", [])} | {r["event_id"] for r in d.get("owner", [])}
-    ids |= {r["request_id"] for r in brief.get("results", [])}
-    return ids
-
-
 class BadSummary(ValueError):
     pass
 
 
-def check_summary(summary: dict, brief: dict) -> dict:
-    """A model summary is acceptable only as ``{"text": str, "cites": [ids from the brief]}`` with at least one citation, no
-    unknown ID, and no claim of approval or completion that the brief does not carry."""
-    if not isinstance(summary, dict) or set(summary) != {"text", "cites"}:
+# A model may only *select* facts the brief already holds, by kind and ID. It writes no prose: every sentence of the summary is
+# produced here from a fixed template and the brief's own data, so it cannot invent authority, completion or a gap that is not
+# there (Codex R10). A fact the brief does not contain is refused, whatever it is called.
+FACT_KINDS = ("request_open", "request_closed", "no_receipt", "no_result", "owner_question_open", "last_entry", "proposal_open",
+              "claim_active", "gap")
+
+
+def _facts(brief: dict) -> dict[tuple, str]:
+    """Every sentence the brief can support, keyed by (kind, identifier...)."""
+    out: dict[tuple, str] = {}
+    for r in brief.get("requests", []):
+        who = ", ".join(r["to"])
+        if r["state"] == "open":
+            out[("request_open", r["id"])] = f"Request {r['id']} from {r['from']} to {who} ({r['action']}) is still open."
+        else:
+            out[("request_closed", r["id"])] = f"Request {r['id']} from {r['from']} to {who} ({r['action']}) has a result from every recipient."
+        for name, info in r["recipients"].items():
+            if info["status"] == "pending":
+                out[("no_receipt", r["id"], name)] = f"{name} has not picked up request {r['id']}."
+            elif info["status"] == "received":
+                out[("no_result", r["id"], name)] = f"{name} picked up request {r['id']} but has returned no result."
+    for n in brief.get("needs_you", []):
+        out[("owner_question_open", n["event_id"])] = f"A question for Robert is open: entry {n['seq']}."
+    for t in brief.get("teammates", []):
+        if t["last"]:
+            out[("last_entry", t["actor"], t["last"]["event_id"])] = (
+                f"{t['actor']}'s last entry was a {t['last']['kind']} at {t['last']['at']} (entry {t['last']['seq']}).")
+    for p in brief.get("decisions", {}).get("proposals", []):
+        if p["status"] == "open":
+            out[("proposal_open", p["event_id"])] = f"{p['actor']}'s proposal at entry {p['seq']} has not been settled."
+    for c in brief.get("claims", []):
+        if c["state"] == "active":
+            out[("claim_active", c["claim_id"])] = f"{c['claimant']} holds {c['resource']} (generation {c['generation']})."
+    for g in brief.get("gaps", []):
+        out[("gap", g["code"], g.get("request_id") or g.get("event_id") or g.get("claim_id"))] = g["text"]
+    return out
+
+
+def check_summary(summary: dict, brief: dict) -> list[str]:
+    """The summary lines for ``{"facts": [{"kind": ..., "id": ..., "actor": ...}, ...]}``, each checked against the brief and worded
+    here. Anything else is refused: free text, an unknown kind, or a fact the brief does not hold."""
+    if not isinstance(summary, dict) or set(summary) != {"facts"} or not isinstance(summary["facts"], list):
         raise BadSummary("shape")
-    if not isinstance(summary["text"], str) or not 1 <= len(summary["text"]) <= 2000:
-        raise BadSummary("text")
-    cites = summary["cites"]
-    if not isinstance(cites, list) or not cites or not all(isinstance(c, str) for c in cites):
-        raise BadSummary("cites_required")
-    if set(cites) - cited_ids(brief):
-        raise BadSummary("cites_unknown_id")
-    lowered = summary["text"].lower()
-    if any(word in lowered for word in ("approved", "all clear", "nothing is missing", "everything is done", "no gaps")):
-        raise BadSummary("claims_what_the_brief_does_not")
-    return {"text": summary["text"], "cites": list(cites)}
+    if not 1 <= len(summary["facts"]) <= 12:
+        raise BadSummary("fact_count")
+    known = _facts(brief)
+    lines, seen = [], set()
+    for fact in summary["facts"]:
+        if not isinstance(fact, dict) or fact.get("kind") not in FACT_KINDS or set(fact) - {"kind", "id", "actor", "recipient", "code"}:
+            raise BadSummary("bad_fact")
+        kind = fact["kind"]
+        if kind in ("no_receipt", "no_result"):
+            key = (kind, fact.get("id"), fact.get("recipient"))
+        elif kind == "last_entry":
+            key = (kind, fact.get("actor"), fact.get("id"))
+        elif kind == "gap":
+            key = (kind, fact.get("code"), fact.get("id"))
+        else:
+            key = (kind, fact.get("id"))
+        if key not in known:
+            raise BadSummary("fact_not_in_the_brief")
+        if key not in seen:
+            seen.add(key)
+            lines.append(known[key])
+    return lines
 
 
 def summarise(brief: dict, profiles: dict, caller: Callable[[dict, dict], dict], purpose: str = "routine") -> tuple[str, dict]:
-    """(base report + the checked summary below it, the ``model`` object to record). Raises ProfileMissing with no profile,
-    BadSummary if the model's answer breaks the rules. ``caller(profile, brief)`` is the only thing that touches a model and is
-    injected, so nothing in this module imports or configures one."""
+    """(base report + the verified highlights below it, the ``model`` object to record). Raises ProfileMissing with no profile and
+    BadSummary if the model's answer is anything but facts the brief holds. ``caller(profile, brief)`` is the only thing that
+    touches a model and is injected, so nothing in this module imports or configures one."""
     profile = profile_mod.require(profiles, purpose)
-    checked = check_summary(caller(profile, brief), brief)
-    text = report(brief) + "\nSummary (written by a model, cites " + ", ".join(checked["cites"]) + "):\n" + checked["text"] + "\n"
-    return text, profile
+    lines = check_summary(caller(profile, brief), brief)
+    text = report(brief) + "\nHighlights (chosen by a model; every line is generated from the brief, not written by it):\n"
+    return text + "".join(f"- {line}\n" for line in lines), profile
 
 
 def refresh_request(to: list[str], text: str = "Where are you on this? One line: done, in progress, or blocked.") -> dict:

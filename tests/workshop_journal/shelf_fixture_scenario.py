@@ -71,6 +71,12 @@ out["record"] = {"chair": meta["chair"], "source": meta["source"], "kind": meta[
 found = editions.find(rec_path.parent, bundle.edition)
 out["edition_lookup"] = {"found": bool(found), "number": found.number if found else None,
                          "hash_matches_record": editions.digest(bundle.edition) == meta["edition_hash"]}
+edition_file = editions.list_editions(rec_path.parent)[0].path
+restored = vx.restore_prefix(edition_file.read_bytes())            # the journal is not consulted
+out["restore"] = {"sha_matches_source_hash": restored.sha256 == meta["source_hash"], "same_as_exported_prefix": restored.prefix == exp.prefix,
+                  "payload_only_value": restored.rows[0]["payload"]["expected_result"], "rows": len(restored.rows),
+                  "authority_and_item_kept": restored.rows[0]["item"] == "topic:scenario" and "authority_ref" in restored.rows[0],
+                  "retained_kind": meta.get("retained", {}).get("kind")}
 turns = render.parse_body(body)
 out["turns"] = {"speakers": sorted({t.speaker for t in turns}), "who": [t.who for t in turns], "count": len(turns),
                 "seqs": [(t.attrs or {}).get("seq") for t in turns]}

@@ -1,6 +1,7 @@
 """The export seam (v0.6 section 11; v0.7 Unit 4). Fixture only: nothing is registered in, or written to, a live shelf."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -238,8 +239,76 @@ def test_the_real_shelf_consumer_accepts_the_bundle_and_keeps_coordination_out_o
     # coordination is excluded from ordinary retrieval while permitted dialogue still indexes
     assert out["retrievable_workshop_turns"] == 0 and out["retrievable_dialogue_turns"] == 2
     assert out["listing"]["excluded"] == {"kind:health": 1}
+    # Codex R9: the edition alone rebuilds the exact canonical prefix, including payload-only values
+    assert out["restore"] == {"sha_matches_source_hash": True, "same_as_exported_prefix": True, "payload_only_value": "Findings.", "rows": 2,
+                              "authority_and_item_kept": True, "retained_kind": "workshop-journal"}
     # a later prefix adds an immutable edition; a repeat is a no-op; an older prefix changes nothing
     assert out["second_drain"][0][0] == "edition-added" and out["repeat_drain"][0][0] == "unchanged"
     assert out["older_drain"][0][0] == "unchanged"
     assert out["after"]["edition"] == 2 and out["after"]["revision"] == 6 and out["after"]["editions_on_disk"] == 2
     assert out["first_edition_still_exact"] is True
+
+
+# ── Codex R9: the structured journal survives the trip, and documents travel by an explicit package ──────────────
+def test_R9_the_prefix_is_recoverable_from_the_edition_alone_and_a_damaged_edition_is_refused(root):
+    j, clock = journal_with_clock(root, datetime(2026, 10, 8, 15, 0, tzinfo=UTC))
+    say(j, clock, "ask", kind="request")
+    say(j, clock, "reply", actor="codex")
+    export = vx.day_export(j.read().events, "2026-10-08")
+    try:
+        bundle = vx.build_bundle(WORKSHOP, j.stream, export)
+    except vx.ShelfUnavailable:
+        pytest.skip("the shelf code is not importable in this tree; the merged-tree test covers it")
+    restored = vx.restore_prefix(bundle.edition)
+    assert restored.prefix == export.prefix and restored.sha256 == bundle.source_hash == export.prefix_sha256
+    assert restored.rows[0]["payload"]["expected_result"] == "Findings." and restored.rows[0]["recipients"] == ["codex"]
+    for damage in (lambda b: b.replace(b"Findings.", b"Different."), lambda b: b"", lambda b: b.split(b"\n")[0] + b"\n"):
+        with pytest.raises(vx.NotRestorable):
+            vx.restore_prefix(damage(bundle.edition))
+
+
+def test_R9_documents_travel_by_a_verified_package_and_problems_are_listed_not_dropped(root):
+    from core.workshop_journal import artifacts as art
+    j, clock = journal_with_clock(root, datetime(2026, 10, 8, 15, 0, tzinfo=UTC))
+    kept = art.prepare(b"# kept document\n")
+    gone = art.prepare(b"# soon missing\n")
+    bad = art.prepare(b"# soon damaged\n")
+    for n, item in enumerate((kept, gone, bad)):
+        clock["now"] += timedelta(seconds=30)
+        assert j.append({"actor": "claude-code", "kind": "progress", "item": "topic:scenario", "topic": "scenario", "text": f"doc {n}",
+                         "refs": [item.ref(f"doc-{n}")], "payload": {"action": "w"}}, artifacts=[item]).committed
+    base = Path(root) / WORKSHOP / "artifacts" / "sha256"
+    (base / gone.retained_sha256).unlink()
+    (base / bad.retained_sha256).write_bytes(b"tampered")
+    export = vx.day_export(j.read().events, "2026-10-08")
+    package = vx.transfer_package(j, export)
+    assert package["objects"] == {kept.retained_sha256: kept.data} and package["missing"] == [gone.retained_sha256]
+    assert package["damaged"] == [bad.retained_sha256] and package["bytes"] == len(kept.data)
+    with pytest.raises(vx.PackageTooLarge):
+        vx.transfer_package(j, export, limit=5)
+
+
+def hand_edition(rows: list[dict]) -> bytes:
+    """An edition shaped like the shelf renderer's (header line, then one line per turn carrying the whole event), built without
+    the shelf so the restore rules are tested in every tree."""
+    prefix = b"".join(vx.strictjson.canonical_bytes(r) + b"\n" for r in rows)
+    digest = hashlib.sha256(prefix).hexdigest()
+    head = {"format": "minimoi-session-turns/1", "provider": "workshop", "source_sha256": digest, "manifest": {"prefix_sha256": digest}}
+    lines = [json.dumps(head, sort_keys=True)] + [json.dumps({"ordinal": n, "speaker": "coordination", "attrs": {"event": r}}, sort_keys=True)
+                                                  for n, r in enumerate(rows, 1)]
+    return ("\n".join(lines) + "\n").encode()
+
+
+def test_R9_restore_rebuilds_the_prefix_and_refuses_every_kind_of_damage_in_any_tree(root):
+    j, clock = journal_with_clock(root, datetime(2026, 10, 8, 15, 0, tzinfo=UTC))
+    say(j, clock, "ask", kind="request")
+    say(j, clock, "reply", actor="codex")
+    export = vx.day_export(j.read().events, "2026-10-08")
+    edition = hand_edition(export.rows)
+    restored = vx.restore_prefix(edition)
+    assert restored.prefix == export.prefix and restored.rows[0]["payload"]["expected_result"] == "Findings."
+    lines = edition.split(b"\n")
+    for damage in (edition.replace(b"Findings.", b"Different."), b"", lines[0] + b"\n", b"\n".join(lines[:1] + lines[2:]),
+                   edition + b"not json\n"):
+        with pytest.raises(vx.NotRestorable):
+            vx.restore_prefix(damage)

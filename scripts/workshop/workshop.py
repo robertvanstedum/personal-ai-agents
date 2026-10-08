@@ -281,7 +281,7 @@ def cmd_notify(journal: Journal, a) -> int:
         print(json.dumps({"ok": False, "status": "policy_refused", "reason": "unknown_request"}))
         return 2
     try:
-        sys.stdout.write(notify.build(request, a.to, journal.id).decode("utf-8"))
+        sys.stdout.write(notify.build(request, a.to, journal.id, os.path.abspath(journal.root)).decode("utf-8"))
     except notify.NotNotifiable as exc:
         print(json.dumps({"ok": False, "status": "policy_refused", "reason": str(exc)}))
         return 2

@@ -337,7 +337,7 @@ def test_cli_notify_prints_the_frozen_notice_and_sends_nothing_and_routes_are_ho
            "payload": {"action": "review", "expected_result": "Findings."}}
     rid = json.loads(cli(root, "append", "--file", write_env(tmp_path, req)).stdout)["event_id"]
     out = cli(root, "notify", "--request", rid, "--to", "codex")
-    assert out.returncode == 0 and out.stdout.startswith("WORKSHOP NOTICE v1\nSource: agent-authored message from claude-code.")
+    assert out.returncode == 0 and out.stdout.startswith("WORKSHOP NOTICE v2\nSource: agent-authored message from claude-code.") and f"--home {root}" in out.stdout
     assert f"Request: {rid}\n" in out.stdout and "Review." not in out.stdout
     bad = cli(root, "notify", "--request", rid, "--to", "grok-cli")
     assert bad.returncode == 2 and json.loads(bad.stdout)["reason"] == "recipient is not on the request"

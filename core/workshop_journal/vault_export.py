@@ -193,7 +193,8 @@ def build_bundle(workshop_id: str, stream: str, export: DayExport):
     actors: dict[str, int] = {}
     for ev in export.rows:
         attrs = {"who": _token(ev["actor"]), "seq": ev["seq"], "kind": ev["kind"], "rid": ev["event_id"], "ing": ev["recorded_at"],
-                 "ts": ev["at"], "class": SESSION_CLASS}
+                 "ts": ev["at"], "class": SESSION_CLASS,
+                 "event": ev}                    # the whole persisted event, so the edition alone can rebuild the canonical prefix
         if ev.get("in_reply_to"):
             attrs["reply"] = ev["in_reply_to"]
         if ev.get("supersedes"):
@@ -208,9 +209,79 @@ def build_bundle(workshop_id: str, stream: str, export: DayExport):
                          for sha, n in sorted(export.artifacts.items())]
     parsed.manifest = {"workshop": workshop_id, "stream": stream, "day": export.day, "timezone": TIMEZONE, "through_seq": export.through_seq,
                        "source_revision": export.through_seq, "selection_policy_id": POLICY_ID, "events": export.event_count,
-                       "excluded": dict(sorted(export.excluded.items())), "artifacts": len(export.artifacts)}
+                       "excluded": dict(sorted(export.excluded.items())), "artifacts": len(export.artifacts),
+                       "prefix_sha256": export.prefix_sha256}
     parsed.coverage = {"seen": {"events": export.event_count + sum(export.excluded.values())}, "taken": {"events": export.event_count},
                        "gap": {"events": 0}, "flags": []}
+    retained = {"kind": "workshop-journal", "workshop": workshop_id, "stream": stream, "day": export.day,
+                "through_seq": export.through_seq, "prefix_sha256": export.prefix_sha256,
+                "artifacts": {sha: {"citations": n, "transfer": "reference_only"} for sha, n in sorted(export.artifacts.items())}}
     return bundle_mod.from_parsed(parsed, export.prefix_sha256, len(export.prefix), key=key, title=f"Workshop {export.day}",
-                                  origin=ORIGIN, created=bundle_mod.utc(first_at),
+                                  origin=ORIGIN, created=bundle_mod.utc(first_at), retained=retained,
                                   ledger_key=bundle_mod.ledger_key_for(PROVIDER, key), kind="session")
+
+
+# ── getting the journal back out of an edition, with the journal gone ──────────────────────────────────────────────
+class NotRestorable(ValueError):
+    """The edition does not rebuild the prefix it claims; the reason is a fixed code."""
+
+
+@dataclass
+class Restored:
+    rows: list
+    prefix: bytes
+    sha256: str
+
+
+def restore_prefix(edition: bytes) -> Restored:
+    """Rebuild the exported canonical prefix from a shelf edition alone and check it against the hash the edition declares.
+
+    Every line after the header carries the whole persisted event; the rebuilt bytes must hash to ``manifest.prefix_sha256`` and
+    to the declared ``source_sha256``. Nothing here needs the journal, the shelf or the network."""
+    lines = edition.decode("utf-8").splitlines()
+    if not lines:
+        raise NotRestorable("empty_edition")
+    try:
+        header = strictjson.loads(lines[0])
+        parsed = [strictjson.loads(line) for line in lines[1:]]
+        rows = [row["attrs"]["event"] for row in parsed if "ordinal" in row]
+    except (strictjson.StrictJSONError, KeyError, TypeError):
+        raise NotRestorable("edition_unreadable") from None
+    prefix = b"".join(strictjson.canonical_bytes(r) + b"\n" for r in rows)
+    digest = hashlib.sha256(prefix).hexdigest()
+    declared = (header.get("manifest") or {}).get("prefix_sha256")
+    if digest != declared or digest != header.get("source_sha256"):
+        raise NotRestorable("prefix_hash_mismatch")
+    return Restored(rows, prefix, digest)
+
+
+# ── retained documents travel by an explicit package, never by a bare hash ───────────────────────────────────────────
+TRANSFER_LIMIT_BYTES = 64 * 1024 * 1024
+
+
+class PackageTooLarge(ValueError):
+    pass
+
+
+def transfer_package(journal, export: DayExport, limit: int = TRANSFER_LIMIT_BYTES) -> dict:
+    """The kept documents a day cites, each opened and hash-checked: ``{"objects": {hash: bytes}, "missing": [...], "damaged": [...]}``.
+
+    The shelf record carries only references (``transfer: reference_only``); a receiver gets the bytes from a package like this
+    one, verifies every hash, and a missing or damaged document is listed, never dropped quietly. A package over the limit is
+    refused whole; larger sets are split by the caller."""
+    from core.workshop_journal.errors import ArtifactCorrupt, ArtifactMissing
+    objects, missing, damaged, total = {}, [], [], 0
+    for sha in sorted(export.artifacts):
+        try:
+            data = journal.open_artifact(sha)
+        except ArtifactMissing:
+            missing.append(sha)
+            continue
+        except ArtifactCorrupt:
+            damaged.append(sha)
+            continue
+        total += len(data)
+        if total > limit:
+            raise PackageTooLarge("over_the_transfer_limit")
+        objects[sha] = data
+    return {"day": export.day, "objects": objects, "missing": missing, "damaged": damaged, "bytes": total}

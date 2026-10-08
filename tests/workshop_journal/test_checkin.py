@@ -102,40 +102,78 @@ def test_O02_no_model_name_is_hardcoded_anywhere_in_the_workshop_code():
             assert not hit or "grok-cli" in hit.group(0) or "grok-chat" in hit.group(0), (path.name, lineno, hit.group(0))
 
 
-# ── a model summary may help reading, never change the facts ─────────────────────────────────────────────────────────
+# ── a model may only choose facts the brief holds; it writes no sentence (Codex R10) ────────────────────────────────
 def configured():
     return {"routine": {"provider": "local", "model": "small-1"}}
 
 
-def test_a_checked_summary_is_appended_below_the_base_report_and_cannot_replace_it(world):
+def test_a_model_selection_is_rendered_from_templates_below_the_base_report(world):
     j, code, codex, _ = world
     req = codex.request(["claude-code"], "review", "Look.")
+    code.needs_you("Which destination?")
     brief = j.brief(now=NOW)
+    qid = brief["needs_you"][0]["event_id"]
     seen = {}
 
     def fake_model(profile, brief_):
         seen["profile"] = profile
-        return {"text": "Codex is waiting on a receipt from claude-code.", "cites": [req.event_id]}
+        return {"facts": [{"kind": "request_open", "id": req.event_id}, {"kind": "no_receipt", "id": req.event_id, "recipient": "claude-code"},
+                          {"kind": "owner_question_open", "id": qid}, {"kind": "request_open", "id": req.event_id}]}
     text, recorded = checkin.summarise(brief, configured(), fake_model)
-    assert text.startswith(checkin.report(brief)) and "Summary (written by a model, cites " + req.event_id in text
-    assert "No receipt from claude-code" in text                                                        # the gap is still there
+    assert text.startswith(checkin.report(brief)) and "Highlights (chosen by a model;" in text
+    tail = text.split("Highlights")[1]
+    assert f"Request {req.event_id} from codex to claude-code (review) is still open." in tail
+    assert f"claude-code has not picked up request {req.event_id}." in tail and "A question for Robert is open" in tail
+    assert tail.count("is still open") == 1                                                                 # a repeated choice is shown once
+    assert "No receipt from claude-code" in text                                                           # the gap is still in the base report
     assert recorded == {"provider": "local", "requested": "small-1"} == {"provider": seen["profile"]["provider"], "requested": seen["profile"]["requested"]}
 
 
-@pytest.mark.parametrize("summary,reason", [
-    ({"text": "fine", "cites": [new_id()]}, "cites_unknown_id"), ({"text": "fine", "cites": []}, "cites_required"),
-    ({"text": "Everything is fine, no gaps remain.", "cites": ["__REQ__"]}, "claims_what_the_brief_does_not"),
-    ({"text": "Robert approved the plan.", "cites": ["__REQ__"]}, "claims_what_the_brief_does_not"),
-    ({"text": "fine", "cites": ["__REQ__"], "extra": 1}, "shape"), ({"text": "", "cites": ["__REQ__"]}, "text"), ("text", "shape"),
-])
-def test_a_summary_that_cites_nothing_real_or_claims_more_than_the_brief_is_refused(world, summary, reason):
+def test_R10_invented_authority_or_completion_cannot_be_expressed_at_all(world):
+    """Codex's case: an unanswered request, and a model that says Robert authorized a release and the review finished."""
     j, code, codex, _ = world
     req = codex.request(["claude-code"], "review", "Look.")
-    if isinstance(summary, dict):
-        summary = {k: ([req.event_id if c == "__REQ__" else c for c in v] if k == "cites" else v) for k, v in summary.items()}
+    brief = j.brief(now=NOW)
+    liar = {"facts": [{"kind": "request_closed", "id": req.event_id}]}                                      # it is open
+    with pytest.raises(checkin.BadSummary) as caught:
+        checkin.summarise(brief, configured(), lambda p, b: liar)
+    assert str(caught.value) == "fact_not_in_the_brief"
+    for prose in ({"text": "Robert authorized production release. The review finished successfully; every finding is resolved.",
+                   "cites": [req.event_id]}, {"facts": [{"kind": "authorized", "id": req.event_id}]},
+                  {"facts": [{"kind": "request_open", "id": req.event_id, "text": "Robert authorized production release."}]}):
+        with pytest.raises(checkin.BadSummary):
+            checkin.summarise(brief, configured(), lambda p, b, prose=prose: prose)
+
+
+@pytest.mark.parametrize("summary,reason", [
+    ({"facts": []}, "fact_count"), ({"facts": "text"}, "shape"), ({"facts": [{"kind": "request_open", "id": "x"}]}, "fact_not_in_the_brief"),
+    ({"facts": [{"kind": "last_entry", "actor": "codex", "id": "x"}]}, "fact_not_in_the_brief"), ("text", "shape"), ({"facts": [{}]}, "bad_fact"),
+    ({"facts": [{"kind": "gap", "code": "overdue", "id": "x"}]}, "fact_not_in_the_brief"), ({"facts": [1]}, "bad_fact"),
+    ({"facts": [{"kind": "request_open", "id": "x"}] * 13}, "fact_count"),
+])
+def test_a_selection_naming_anything_the_brief_does_not_hold_is_refused(world, summary, reason):
+    j, code, codex, _ = world
+    codex.request(["claude-code"], "review", "Look.")
     with pytest.raises(checkin.BadSummary) as caught:
         checkin.summarise(j.brief(now=NOW), configured(), lambda p, b: summary)
     assert str(caught.value) == reason
+
+
+def test_every_fact_the_brief_holds_can_be_selected_and_reads_correctly(world):
+    j, code, codex, _ = world
+    req = codex.request(["claude-code"], "build", "Build.", due_at="2026-10-08T12:00:00Z")
+    claim = Teammate("claude-code", j).claim(req.event_id, "checkout-a", 1)
+    prop = code.propose("A plan")
+    code.needs_you("Q?")
+    brief = j.brief(now=NOW)
+    picks = [{"kind": "claim_active", "id": claim.event_id}, {"kind": "proposal_open", "id": prop.event_id},
+             {"kind": "last_entry", "actor": "claude-code", "id": brief["teammates"][0]["last"]["event_id"]},
+             {"kind": "gap", "code": "overdue", "id": req.event_id}, {"kind": "no_result", "id": req.event_id, "recipient": "claude-code"}]
+    lines = checkin.check_summary({"facts": picks[:4]}, brief)
+    assert lines[0] == "claude-code holds checkout-a (generation 1)." and "has not been settled" in lines[1] and "was due 2026-10-08T12:00:00Z" in lines[3]
+    codex_receipt = Teammate("claude-code", j).receive(req.event_id)
+    assert codex_receipt.committed
+    assert checkin.check_summary({"facts": picks[4:]}, j.brief(now=NOW))[0].endswith("but has returned no result.")
 
 
 def test_the_check_in_command_prints_the_report_and_can_post_refresh_requests(root, tmp_path):
