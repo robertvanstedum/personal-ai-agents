@@ -168,23 +168,26 @@ def full_sync(fd: int, *, degraded_ok: bool = False) -> str:
     return "full"
 
 
-def fsync_dir(dir_fd: int) -> None:
+def fsync_dir(dir_fd: int, *, durable: bool = True) -> None:
+    """Make a folder's entries durable. A failure raises when the caller needs the entry to survive a crash (evidence, artifacts);
+    for derived or recoverable files (``durable=False``) it is best effort."""
     try:
-        os.fsync(dir_fd)
+        full_sync(dir_fd) if durable else os.fsync(dir_fd)
     except OSError:
-        pass
+        if durable:
+            raise
 
 
 def _temp_name() -> str:
     return f".tmp-{os.getpid()}-{secrets.token_hex(4)}"
 
 
-def _write_temp(dir_fd: int, data: bytes) -> str:
+def _write_temp(dir_fd: int, data: bytes, durable: bool = True) -> str:
     name = _temp_name()
     fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | _BASE, FILE_MODE, dir_fd=dir_fd)
     try:
         write_all(fd, data)
-        os.fsync(fd)
+        full_sync(fd) if durable else os.fsync(fd)
     except BaseException:
         os.close(fd)
         try:
@@ -196,12 +199,15 @@ def _write_temp(dir_fd: int, data: bytes) -> str:
     return name
 
 
-def publish_new(dir_fd: int, name: str, data: bytes) -> bool:
-    """Publish a file that must not replace a different one: temp, fsync, hard-link into place, fsync the folder.
+def publish_new(dir_fd: int, name: str, data: bytes, *, durable: bool = True) -> bool:
+    """Publish a file that must not replace a different one: temp, full sync, hard-link into place, sync the folder.
+
+    ``durable=False`` is for files a crash can safely lose (a prepare receipt: losing it only turns a completion into a
+    quarantine); everything else keeps full sync on the file and the folder, and a failure raises.
 
     Returns True if created, False if the identical bytes were already there; different bytes under the same name raise
     ``IdConflict`` (content-addressed names make that a real conflict, never a retry)."""
-    temp = _write_temp(dir_fd, data)
+    temp = _write_temp(dir_fd, data, durable)
     try:
         try:
             os.link(temp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd, follow_symlinks=False)
@@ -220,13 +226,13 @@ def publish_new(dir_fd: int, name: str, data: bytes) -> bool:
             os.unlink(temp, dir_fd=dir_fd)
         except OSError:
             pass
-    fsync_dir(dir_fd)
+    fsync_dir(dir_fd, durable=durable)
     return created
 
 
-def publish_replace(dir_fd: int, name: str, data: bytes) -> None:
+def publish_replace(dir_fd: int, name: str, data: bytes, *, durable: bool = False) -> None:
     """Replace a derived file whole: temp, full write, fsync, rename, fsync the folder."""
-    temp = _write_temp(dir_fd, data)
+    temp = _write_temp(dir_fd, data, durable)
     try:
         os.rename(temp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
     except BaseException:
@@ -235,4 +241,4 @@ def publish_replace(dir_fd: int, name: str, data: bytes) -> None:
         except OSError:
             pass
         raise
-    fsync_dir(dir_fd)
+    fsync_dir(dir_fd, durable=durable)

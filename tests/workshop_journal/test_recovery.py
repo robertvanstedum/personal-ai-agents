@@ -348,10 +348,10 @@ def test_J04_quarantine_that_cannot_be_written_blocks_recovery_and_changes_nothi
     j, prefix, tail, resubmit = torn(root, tmp_path, cut=80)
     real = fsutil.publish_new
 
-    def refuse(dir_fd, name, data):
+    def refuse(dir_fd, name, data, **kw):
         if name.startswith("tail-"):
             raise OSError(errno.ENOSPC, "no space for evidence")
-        return real(dir_fd, name, data)
+        return real(dir_fd, name, data, **kw)
     monkeypatch.setattr(fsutil, "publish_new", refuse)
     blocked = j.append(progress("next"))
     assert (blocked.status, blocked.exit_code, blocked.committed) == ("recovery_blocked", 5, False)
@@ -428,3 +428,15 @@ def test_J05_tampering_beyond_the_newest_rows_is_caught_by_verify_not_by_an_appe
     jpath(root).write_bytes(b"".join(lines))
     assert j.verify()["ok"] is False and j.read(deep=True).status == "corrupt"
     assert j.append(progress("an append only checks the newest rows")).committed
+
+
+def test_J04_evidence_whose_folder_sync_fails_blocks_the_cut(root, tmp_path, monkeypatch):
+    j, prefix, tail, resubmit = torn(root, tmp_path, cut=90)
+
+    def fail_sync(dir_fd, *, durable=True):
+        if durable:
+            raise OSError(errno.EIO, "directory sync failed")
+    monkeypatch.setattr(fsutil, "fsync_dir", fail_sync)
+    blocked = j.append(progress("next"))
+    assert (blocked.status, blocked.committed) == ("recovery_blocked", False)
+    assert jpath(root).read_bytes() == prefix + tail                                         # evidence not durable: nothing cut

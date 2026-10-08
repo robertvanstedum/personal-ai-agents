@@ -56,3 +56,18 @@ class CommitUnknown(JournalError):
 
 class Missing(JournalError):
     status, exit_code = "missing", 8
+
+
+class SourceRefused(JournalError):
+    """A document that cannot be kept as it is: changed while read, too large, not text, a link, or an excluded class.
+
+    The reason is a fixed code; nothing from the document is ever quoted."""
+    status, exit_code = "source_refused", 2
+
+
+class ArtifactMissing(Missing):
+    status = "artifact_missing"
+
+
+class ArtifactCorrupt(Corrupt):
+    status = "artifact_corrupt"

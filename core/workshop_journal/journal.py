@@ -22,9 +22,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Iterator
 
-from core.workshop_journal import fsutil, reducer, schema, strictjson
+from core.workshop_journal import artifacts as artifact_store, fsutil, reducer, schema, strictjson
 from core.workshop_journal.errors import (CommitUnknown, Corrupt, IdConflict, InvalidInput, JournalError, LegacyAfterV2,
-                                          LockBusy, Missing, RecoveryBlocked, UnsafeRoot, WriteFailed)
+                                          LockBusy, Missing, RecoveryBlocked, SourceRefused, UnsafeRoot, WriteFailed)
+from core.workshop_journal.errors import ArtifactMissing
 
 JOURNAL, LOCK, STATE = "events.jsonl", ".lock", "state.json"
 PREPARED, QUARANTINE = "prepared", "quarantine"
@@ -310,7 +311,7 @@ class Journal:
             return existing
         body = self._receipt_bytes(intent, ih, self._now())
         try:
-            fsutil.publish_new(prepared_fd, f"{intent['event_id']}.json", body)
+            fsutil.publish_new(prepared_fd, f"{intent['event_id']}.json", body, durable=False)
         except OSError as exc:
             raise WriteFailed("receipt_not_written", event_id=intent["event_id"], evidence={"errno": exc.errno}) from None
         return self._load_receipt(prepared_fd, intent["event_id"]) or {}
@@ -485,11 +486,16 @@ class Journal:
 
     # ── append ────────────────────────────────────────────────────────────────────────────────────────────────────
     def append(self, envelope: dict, *, adapter: str = "local-helper", session_ref: str | None = None, basis: str = "claimed",
-               software: bool = False) -> Result:
+               software: bool = False, artifacts: list | None = None) -> Result:
+        """Append one event. ``artifacts`` are documents (``artifacts.prepare``) the event refers to: each is published and made
+        durable first, under the same lock, and if that fails no event is written."""
         try:
             origin = schema.make_origin(adapter, session_ref, basis)
             with self._locked() as s:
                 intent, ih = self._resolve(envelope, s.prepared_fd, software=software)
+                cited = {r.get("sha256") for r in intent["refs"]}
+                if any(item.retained_sha256 not in cited for item in artifacts or []):
+                    raise InvalidInput("artifact_not_referenced")
                 self._require_healthy(s)
                 self._recover_tail(s, emit=True)
                 self._emit_missing_recoveries(s)
@@ -499,6 +505,12 @@ class Journal:
                     if known["intent_hash"] != ih:
                         raise IdConflict("same_id_different_intent", event_id=intent["event_id"])
                     return Result(True, "duplicate", intent["event_id"], known["seq"], True, False, "already_committed", {}, 0)
+                for item in artifacts or []:
+                    try:
+                        artifact_store.publish(s.base_fd, item)
+                    except OSError as exc:
+                        raise WriteFailed("artifact_not_published", event_id=intent["event_id"],
+                                          evidence={"errno": exc.errno}) from None
                 event, durability = self._commit(s, intent, ih, origin)
                 result = Result(True, "committed", event["event_id"], event["seq"], True, False, "",
                                 {"durability": durability, "recorded_at": event["recorded_at"]}, 0)
@@ -631,6 +643,34 @@ class Journal:
             if same:
                 return rebuilt, "file"
         return rebuilt, "rebuilt"
+
+    # ── retained documents ────────────────────────────────────────────────────────────────────────────────────────
+    def open_artifact(self, retained_sha256: str) -> bytes:
+        """The exact kept bytes for a hash (checked on every open). Raises ArtifactMissing, ArtifactCorrupt or SourceRefused."""
+        if not isinstance(retained_sha256, str) or not artifact_store.HASH.fullmatch(retained_sha256):
+            raise SourceRefused("bad_hash")
+        try:
+            base_fd = self._open_base(create=False)
+        except Missing:
+            raise ArtifactMissing("no_workshop") from None
+        try:
+            return artifact_store.open_exact(base_fd, retained_sha256)
+        finally:
+            os.close(base_fd)
+
+    def artifact_report(self) -> dict:
+        """Read-only: orphans (kept but nothing refers to them), missing, damaged and stale temporary files. Deletes nothing."""
+        read = self.read(deep=False)
+        if read.status in ("missing", "unsafe_root", "unsupported_writer"):
+            return {"status": read.status}
+        base_fd = self._open_base(create=False)
+        try:
+            report = artifact_store.inventory(base_fd, artifact_store.referenced_hashes(read.events))
+        finally:
+            os.close(base_fd)
+        report["status"] = "ok" if not (report["missing_referenced"] or report["corrupt"]) else "attention"
+        report["journal_status"] = read.status
+        return report
 
     def get(self, event_id: str) -> Result:
         try:
