@@ -91,7 +91,8 @@ LOCAL_TOOL_PREFIXES = ("scripts/workshop/", "scripts/vault/")
 # workshop/). No other service imports it:
 # tests/test_release_classifier.py fails if one starts to, so that change must
 # classify the new consumer here.
-WORKSHOP_BACKEND_PATHS = ("core/workshop_journal/", "core/vault_t1/", "utils/credential_scrub.py")
+WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/")
+WORKSHOP_BACKEND_FILES = frozenset({"utils/credential_scrub.py"})   # exact: no other utils/ file moves
 
 
 def _is_staging_only(path: str) -> bool:
@@ -129,7 +130,7 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             services.update(("german", "portuguese", "cos-scheduler"))
         elif path.startswith("core/telegram/"):
             services.update(("curator", "system-bot", "cos-bot"))
-        elif path.startswith(WORKSHOP_BACKEND_PATHS):
+        elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path in WORKSHOP_BACKEND_FILES:
             services.add("portal")
         elif path.startswith(("core/", "utils/")):
             services.update(PYTHON_SERVICES)
