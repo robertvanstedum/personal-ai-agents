@@ -259,6 +259,25 @@ class Vault:
         self._all()
         return sum(self.skipped.values())
 
+    def record_problems(self, rec: Record) -> Counter:
+        """Reasons this record cannot be carried out whole, as counts: the editions its own metadata promises must all be there,
+        numbered without gaps, and each must hash to its name. A record whose metadata declares no edition needs none."""
+        found: Counter = Counter()
+        numbers = [e.number for e in rec.editions]
+        declared = rec.meta.get("edition")
+        if declared is not None and not rec.editions:
+            found["editions_missing"] += 1
+        elif numbers != list(range(1, len(numbers) + 1)):
+            found["edition_numbers_not_contiguous"] += 1
+        if declared is not None and rec.editions and declared not in numbers:
+            found["current_edition_missing"] += 1
+        for edition in rec.editions:
+            try:
+                self.edition_bytes(rec, edition)
+            except VaultError:
+                found["edition_damaged"] += 1
+        return found
+
     def permitted(self, rec: Record) -> bool:
         scope = str(rec.meta.get("scope", ""))
         return scope == "robert" or (scope.startswith("mandate:") and scope in {f"mandate:{m}" for m in self.mandates})
@@ -307,8 +326,11 @@ class Vault:
                 "editions": [e.number for e in rec.editions], "turns": norm.get("turns"), "turns_by_role": norm.get("turns_by_role") or {}}
 
     def list(self) -> dict:
+        problems: Counter = Counter()
+        for rec in self.records():
+            problems.update(self.record_problems(rec))
         return {"records": [self.summary(r) for r in self.records()], "withheld_by_scope": self.withheld(), "unreadable": self.unreadable,
-                "skipped": dict(sorted(self.skipped.items()))}
+                "skipped": dict(sorted(self.skipped.items())), "record_problems": dict(sorted(problems.items()))}
 
     def _workshop_events(self, rec: Record) -> list[dict]:
         cur = rec.current()
@@ -328,12 +350,23 @@ class Vault:
                     work[ev["topic"]] = work.get(ev["topic"], 0) + 1
         return {"tags": dict(sorted(tags.items())), "workshop_topics": dict(sorted(work.items())), "withheld_by_scope": self.withheld()}
 
-    def topic_members(self, topic: str) -> list[Record]:
-        out = []
+    def topic_split(self, topic: str) -> tuple[list[Record], list[Record]]:
+        """(members, unclassified): a record is a member by a tag or, for a Workshop day, by an event's topic. A Workshop day whose
+        current edition cannot be read cannot be classified, and a caller wanting completeness must treat it as possibly a member."""
+        members, unclassified = [], []
         for rec in self.records():
-            if topic in (rec.meta.get("tags") or []) or any(ev.get("topic") == topic for ev in self._workshop_events(rec)):
-                out.append(rec)
-        return out
+            if topic in (rec.meta.get("tags") or []):
+                members.append(rec)
+                continue
+            try:
+                if any(ev.get("topic") == topic for ev in self._workshop_events(rec)):
+                    members.append(rec)
+            except VaultError:
+                unclassified.append(rec)
+        return members, unclassified
+
+    def topic_members(self, topic: str) -> list[Record]:
+        return self.topic_split(topic)[0]
 
     def coverage(self) -> dict:
         rows, totals, omitted, flagged, roles = [], {"records": 0, "turns": 0, "redacted_turns": 0, "malformed_lines": 0}, {}, 0, {}

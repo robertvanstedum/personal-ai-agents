@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections import Counter
 from pathlib import Path
 
 from core.vault_t1 import reader
@@ -59,6 +60,16 @@ separate claims that this export makes no statement about.
 """
 
 
+def _write_all(fd: int, data: bytes) -> None:
+    """Write every byte or fail: a short write continues, zero progress is an error."""
+    view, done = memoryview(data), 0
+    while done < len(data):
+        n = os.write(fd, view[done:])
+        if n <= 0:
+            raise OSError(5, "write made no progress")
+        done += n
+
+
 _OPEN_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 
 
@@ -72,7 +83,7 @@ class Publisher:
 
     def __init__(self, target: str):
         path = Path(target)
-        self.created_files: list[tuple[int, str]] = []
+        self.created_files: list[tuple[int, str, tuple[int, int]]] = []
         self.created_dirs: list[tuple[int, str]] = []
         self.root_created = False
         if path.is_symlink():
@@ -118,23 +129,39 @@ class Publisher:
         tmp = f".{parts[-1]}.{os.getpid()}.tmp"
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dir_fd)
         try:
-            os.write(fd, data)
+            _write_all(fd, data)
             os.fsync(fd)
-        finally:
+        except BaseException:
             os.close(fd)
+            try:
+                os.unlink(tmp, dir_fd=dir_fd)
+            except OSError:
+                pass
+            raise
+        os.close(fd)
         try:
             os.link(tmp, parts[-1], src_dir_fd=dir_fd, dst_dir_fd=dir_fd, follow_symlinks=False)
+            mine = os.stat(parts[-1], dir_fd=dir_fd, follow_symlinks=False)
         except FileExistsError:
             raise VaultError("destination_taken", {"path": rel}) from None
         finally:
-            os.unlink(tmp, dir_fd=dir_fd)
-        self.created_files.append((dir_fd, parts[-1]))
+            try:
+                os.unlink(tmp, dir_fd=dir_fd)
+            except OSError:
+                pass
+        self.created_files.append((dir_fd, parts[-1], (mine.st_dev, mine.st_ino)))
 
     def abort(self) -> None:
-        """Remove only what this publisher made: its files, then its folders if they are empty, then the target if it made it and it is empty."""
-        for dir_fd, name in reversed(self.created_files):
+        """Remove only what this publisher made. A file is removed only if the name still holds the very file this publisher
+        created (same device and inode): if another writer replaced it, their file stays and this output is left visibly incomplete.
+        (Between that check and the unlink there is a window no POSIX call can close; the cost of losing it is a deleted file that
+        was already a rival's replacement of ours, which is why a mismatch leaves everything else alone too.) Folders are removed
+        only if empty, and the target only if this publisher created it and it is empty."""
+        for dir_fd, name, ident in reversed(self.created_files):
             try:
-                os.unlink(name, dir_fd=dir_fd)
+                now = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+                if (now.st_dev, now.st_ino) == ident:
+                    os.unlink(name, dir_fd=dir_fd)
             except OSError:
                 pass
         for dir_fd, name in reversed(self.created_dirs):
@@ -168,10 +195,26 @@ def export(vault: Vault, target: str, *, topic: str | None = None, allow_incompl
     A complete export means every record in the shelf was either exported, out of this caller's scope (counted), or out of the
     topic (counted). If any entry of the shelf could not be read, the export refuses (``source_incomplete``, with counts) unless
     ``allow_incomplete`` is set, in which case the manifest says ``complete: false`` and how many entries were skipped."""
-    members = vault.topic_members(topic) if topic else vault.records()
-    if topic and not members:
+    unclassified: list = []
+    if topic:
+        members, unclassified = vault.topic_split(topic)
+    else:
+        members = vault.records()
+    if topic and not members and not unclassified:
         raise NotFound("topic_not_found")
-    skipped = dict(sorted(vault.skipped.items()))
+    skipped = Counter(vault.skipped)
+    if unclassified:
+        skipped["topic_membership_unknown"] += len(unclassified)
+    usable = []
+    for rec in members:
+        found = vault.record_problems(rec)
+        if found:
+            skipped.update(found)
+        else:
+            usable.append(rec)
+    skipped = dict(sorted(skipped.items()))
+    unusable = len(members) - len(usable)
+    members = usable
     if skipped and not allow_incomplete:
         raise VaultError("source_incomplete", {"skipped": skipped})
     pub = Publisher(target)
@@ -211,7 +254,7 @@ def export(vault: Vault, target: str, *, topic: str | None = None, allow_incompl
                     "selection": {"topic": topic, "scope": "robert" + "".join(f"+mandate:{m}" for m in vault.mandates)},
                     "records": records, "files": sorted(files, key=lambda f: f["path"]),
                     "counts": {"records": len(records), "editions": sum(len(r["editions"]) for r in records), "turns_indexed": len(index_lines)},
-                    "left_out": {"outside_scope": vault.withheld(), "outside_topic": (len(vault.records()) - len(members)) if topic else 0,
+                    "left_out": {"outside_scope": vault.withheld(), "outside_topic": (len(vault.records()) - len(members) - unusable - len(unclassified)) if topic else 0,
                                  "skipped_unreadable": skipped},
                     "limitations": [] if complete else ["some shelf entries could not be read and are not in this export; see left_out.skipped_unreadable"],
                     "schema": SCHEMA, "index": INDEX, "terms": TERMS}
@@ -258,7 +301,7 @@ def verify_shelf(root: str) -> dict:
         if names != list(range(1, len(names) + 1)):
             problems.append({"where": rec.id, "code": "edition_numbers_not_contiguous"})
         current = rec.current()
-        if current is None:
+        if current is None and rec.meta.get("edition") is not None:
             problems.append({"where": rec.id, "code": "current_edition_missing"})
         for edition in rec.editions:
             try:
@@ -366,7 +409,7 @@ def _load_export(folder: str) -> tuple[dict | None, dict[str, bytes], list]:
             _check_edition(blobs[path], m.group(0), problems, path)
         if numbers != list(range(1, len(numbers) + 1)):
             problems.append({"where": name, "code": "edition_numbers_not_contiguous"})
-        if meta.get("edition") not in numbers:
+        if meta.get("edition") is not None and meta.get("edition") not in numbers:
             problems.append({"where": name, "code": "current_edition_not_in_the_export"})
     # nothing in the folder that the manifest does not list
     try:

@@ -6,6 +6,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -625,3 +626,142 @@ def test_R15_export_verification_reads_never_follow_a_link_swapped_in_during_the
     monkeypatch.setattr(reader.os, "open", swapping_open)
     report = portable.verify(str(export))
     assert report["ok"] is False and any(p["code"] == "not_a_regular_file" for p in report["problems"])
+
+
+# ── Codex round 2: R13 (missing editions), R14 (cleanup ownership), R16 (short writes) ───────────────────────────
+def break_editions(shelf: Path, how: str) -> None:
+    garden = by_title(Vault(str(shelf)), "garden")
+    folder = garden.path.parent / "editions"
+    if how == "folder_removed":
+        shutil.rmtree(folder)
+    elif how == "current_edition_removed":
+        next(folder.glob("2--*")).unlink()
+    elif how == "gap_in_sequence":
+        next(folder.glob("1--*")).unlink()
+    elif how == "edition_damaged":
+        f = next(folder.glob("1--*"))
+        f.write_bytes(f.read_bytes() + b" ")
+
+
+EXPECT = {"folder_removed": {"editions_missing": 1}, "current_edition_removed": {"current_edition_missing": 1},
+          "gap_in_sequence": {"edition_numbers_not_contiguous": 1}, "edition_damaged": {"edition_damaged": 1}}
+
+
+@pytest.mark.parametrize("how", list(EXPECT))
+def test_R13b_a_record_missing_the_editions_its_metadata_promises_blocks_a_complete_export(shelf, tmp_path, how):
+    break_editions(shelf, how)
+    with pytest.raises(VaultError) as caught:
+        portable.export(Vault(str(shelf)), str(tmp_path / "out"))
+    got = caught.value.detail["skipped"]
+    assert caught.value.code == "source_incomplete" and got == EXPECT[how] or (how == "gap_in_sequence" and "edition_numbers_not_contiguous" in got), got
+    assert not (tmp_path / "out").exists()
+    # a topic the damaged record cannot belong to is not held up by it (its own tags say it is a claude-code session)...
+    assert portable.export(Vault(str(shelf)), str(tmp_path / "topic"), topic="garden-build")["complete"] is True
+    # ...but a topic it does belong to is
+    with pytest.raises(VaultError) as held:
+        portable.export(Vault(str(shelf)), str(tmp_path / "tag-topic"), topic="claude-code")
+    assert held.value.code == "source_incomplete"
+
+
+def test_R13b_a_damaged_workshop_day_blocks_topic_exports_because_its_topics_cannot_be_known(shelf, tmp_path):
+    day = by_title(Vault(str(shelf)), "workshop")
+    next((day.path.parent / "editions").glob("1--*")).write_bytes(b"damaged")
+    with pytest.raises(VaultError) as caught:
+        portable.export(Vault(str(shelf)), str(tmp_path / "topic"), topic="garden-build")
+    assert caught.value.code == "source_incomplete" and "topic_membership_unknown" in caught.value.detail["skipped"]
+    out = tmp_path / "partial"
+    manifest = portable.export(Vault(str(shelf)), str(out), topic="claude-code", allow_incomplete=True)
+    assert manifest["complete"] is False and manifest["left_out"]["skipped_unreadable"]["topic_membership_unknown"] == 1
+
+
+@pytest.mark.parametrize("how", list(EXPECT))
+def test_R13b_in_incomplete_mode_the_unusable_record_is_left_out_with_counts_and_the_rest_verifies_and_restores(shelf, tmp_path, how):
+    break_editions(shelf, how)
+    out = tmp_path / "partial"
+    manifest = portable.export(Vault(str(shelf)), str(out), allow_incomplete=True)
+    assert manifest["complete"] is False and manifest["counts"]["records"] == 3 and manifest["left_out"]["skipped_unreadable"]
+    assert not any("garden" in r["name"] for r in manifest["records"])
+    assert portable.verify(str(out))["ok"] is True
+    assert portable.restore(str(out), str(tmp_path / "back"))["restored_records"] == 3
+
+
+def test_R13b_an_ordinary_complete_export_verifies_and_restores(shelf, tmp_path):
+    out = tmp_path / "whole"
+    m = portable.export(Vault(str(shelf)), str(out))
+    assert m["complete"] is True and portable.verify(str(out))["ok"] is True and portable.restore(str(out), str(tmp_path / "back"))["restored_records"] == 4
+
+
+def test_R13b_a_record_whose_metadata_declares_no_edition_needs_none(shelf, tmp_path):
+    garden = by_title(Vault(str(shelf)), "garden")
+    text = garden.path.read_text()
+    text = re.sub(r"^edition: \d+\n", "", text, flags=re.M)
+    text = re.sub(r"^edition_hash: \w+\n", "", text, flags=re.M)
+    garden.path.write_text(text)
+    shutil.rmtree(garden.path.parent / "editions")
+    out = tmp_path / "out"
+    m = portable.export(Vault(str(shelf)), str(out))
+    assert m["complete"] is True and m["counts"]["records"] == 4
+    assert portable.verify(str(out))["ok"] is True and portable.restore(str(out), str(tmp_path / "back"))["target_verified"] is True
+
+
+def test_R14b_cleanup_never_deletes_a_file_another_writer_put_in_place_of_ours(shelf, tmp_path, monkeypatch):
+    for operation in ("export", "restore"):
+        source = made_export(shelf, tmp_path / operation, topic=None) if operation == "restore" else None
+        target = tmp_path / f"{operation}-target"
+        original_put, calls = portable.Publisher.put, {"n": 0}
+
+        def failing_put(self, rel, data, target=target, original_put=original_put, calls=calls):
+            calls["n"] += 1
+            if calls["n"] == 3:
+                first = next(p for p in sorted(target.rglob("*")) if p.is_file())
+                replacement = first.with_name("rival.tmp")
+                replacement.write_text("A RIVAL'S REPLACEMENT")
+                os.replace(replacement, first)                                                            # fresh inode under our name
+                raise OSError(28, "disk full")
+            return original_put(self, rel, data)
+        monkeypatch.setattr(portable.Publisher, "put", failing_put)
+        with pytest.raises(OSError):
+            portable.export(Vault(str(shelf)), str(target)) if operation == "export" else portable.restore(str(source), str(target))
+        survivors = [p for p in target.rglob("*") if p.is_file()]
+        assert [p.read_text() for p in survivors] == ["A RIVAL'S REPLACEMENT"], operation               # theirs stays; ours are gone
+        monkeypatch.undo()
+
+
+def test_R16_a_short_write_is_continued_and_the_export_is_exact(shelf, tmp_path, monkeypatch):
+    real = portable.os.write
+
+    def three_bytes(fd, data):
+        return real(fd, bytes(data[:3]))
+    monkeypatch.setattr(portable.os, "write", three_bytes)
+    out = tmp_path / "out"
+    manifest = portable.export(Vault(str(shelf)), str(out))
+    monkeypatch.undo()
+    assert manifest["complete"] is True and portable.verify(str(out))["ok"] is True
+    monkeypatch.setattr(portable.os, "write", three_bytes)
+    assert portable.restore(str(out), str(tmp_path / "back"))["target_verified"] is True
+
+
+def test_R16_zero_progress_or_a_failure_after_a_short_write_never_reports_success_or_leaves_a_temp_file(shelf, tmp_path, monkeypatch):
+    real = portable.os.write
+    state = {"calls": 0}
+
+    def short_then_fail(fd, data):
+        state["calls"] += 1
+        if state["calls"] == 1:
+            return real(fd, bytes(data[:2]))
+        raise OSError(28, "no space left")
+    monkeypatch.setattr(portable.os, "write", short_then_fail)
+    target = tmp_path / "out"
+    with pytest.raises(OSError):
+        portable.export(Vault(str(shelf)), str(target))
+    assert not target.exists()                                                                          # nothing left, no temp file either
+    adopted = tmp_path / "adopted"
+    adopted.mkdir()
+    state["calls"] = 0
+    with pytest.raises(OSError):
+        portable.export(Vault(str(shelf)), str(adopted))
+    assert list(adopted.iterdir()) == []
+    monkeypatch.setattr(portable.os, "write", lambda fd, data: 0)
+    with pytest.raises(OSError) as caught:
+        portable.export(Vault(str(shelf)), str(tmp_path / "zero"))
+    assert "no progress" in str(caught.value) and not (tmp_path / "zero").exists()
