@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Callable
 
-from core.workshop_journal import profiles as profile_mod
+from core.workshop_journal import brief as brief_view, profiles as profile_mod
 
 
 def report(brief: dict) -> str:
@@ -22,8 +22,9 @@ def report(brief: dict) -> str:
            + f" (as of journal entry {brief['as_of']['seq']}; journal {brief['journal_status']})."]
     for t in brief["teammates"]:
         if t["last"]:
-            out.append(f"- {t['actor']}: last entry was a {t['last']['kind']} at {t['last']['at']} (entry {t['last']['seq']}); "
-                       f"nothing newer has been reported since {t['last']['at']}.")
+            when = brief_view.human_time(t["last"]["at"])
+            out.append(f"- {t['actor']}: last entry was a {t['last']['kind']} at {when} (entry {t['last']['seq']}), "
+                       f"\"{brief_view._snippet(t['last']['text'])}\"; nothing newer has been reported since {when}.")
         else:
             out.append(f"- {t['actor']}: no entry in this scope; nothing has been reported.")
     if brief["needs_you"]:
@@ -71,7 +72,7 @@ def _facts(brief: dict) -> dict[tuple, str]:
     for t in brief.get("teammates", []):
         if t["last"]:
             out[("last_entry", t["actor"], t["last"]["event_id"])] = (
-                f"{t['actor']}'s last entry was a {t['last']['kind']} at {t['last']['at']} (entry {t['last']['seq']}).")
+                f"{t['actor']}'s last entry was a {t['last']['kind']} at {brief_view.human_time(t['last']['at'])} (entry {t['last']['seq']}).")
     for p in brief.get("decisions", {}).get("proposals", []):
         if p["status"] == "open":
             out[("proposal_open", p["event_id"])] = f"{p['actor']}'s proposal at entry {p['seq']} has not been settled."

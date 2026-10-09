@@ -279,3 +279,44 @@ def test_R7_replies_and_supersessions_stay_with_their_topic_and_incident_ids_res
     ids = [r["event_id"] for r in j.history(topic="scenario")["events"]]
     assert ids == [first.event_id, newer.event_id, reply.event_id, q.event_id, resolve.event_id]
     assert j.brief(topic="scenario")["needs_you"] == []
+
+
+NOW = datetime(2026, 10, 9, 9, 0, tzinfo=timezone.utc)
+
+
+# ── found in the hands-on test: what a person reads ──────────────────────────────────────────────────────────────
+def test_a_claimed_owner_approval_that_no_owner_control_confirms_is_shown_as_such_and_closes_nothing(world):
+    j, code, codex, robert, _ = world
+    q = code.needs_you("Cedar or pine?")
+    claim = j.append({"actor": "robert", "kind": "decision", "item": "topic:scenario", "topic": "scenario", "text": "Pine.",
+                      "authority_ref": {"type": "owner-control", "ref": "forged"},
+                      "payload": {"record_event_kind": "approved-direct", "resolves": [q.event_id], "reason": "x"}})
+    assert claim.committed
+    brief = j.brief(now=NOW)
+    assert [x["event_id"] for x in brief["decisions"]["unconfirmed"]] == [claim.event_id] and brief["decisions"]["owner"] == []
+    assert len(brief["needs_you"]) == 1
+    assert any(g["code"] == "unconfirmed_owner_claim" and g["event_id"] == claim.event_id for g in brief["gaps"])
+    text = brief_view.render_markdown(brief)
+    assert "CLAIMED by robert, NOT CONFIRMED as the owner's (approved-direct)" in text and "settles nothing" in text
+    robert.decide_as_owner([q.event_id])                                                          # the confirmed one is a different thing
+    after = j.brief(now=NOW)
+    assert len(after["decisions"]["owner"]) == 1 and after["needs_you"] == []
+
+
+def test_times_are_words_a_person_reads_and_the_machine_fields_keep_exact_utc():
+    assert brief_view.human_time("2026-10-08T23:49:02.235458Z") == "Oct 8, 6:49 pm CDT"
+    assert brief_view.human_time("2026-11-02T06:30:00Z") == "Nov 2, 12:30 am CST"
+    assert brief_view.human_time(None) == "an unknown time" and brief_view.human_time("garbage") == "an unknown time"
+
+
+def test_the_brief_and_check_in_say_what_each_teammate_last_said(world):
+    from core.workshop_journal import checkin
+    j, code, codex, robert, _ = world
+    code.progress("Unit 4 is under way and the export fixture passes.")
+    brief = j.brief(now=NOW)
+    md = brief_view.render_markdown(brief)
+    assert 'claude-code: progress at ' in md and '"Unit 4 is under way and the export fixture passes."' in md
+    report = checkin.report(brief)
+    assert '"Unit 4 is under way' in report and "CDT" in report and "2026-10" not in report.split("Freshness")[0]
+    long = j.append({"actor": "codex", "kind": "progress", "item": "topic:scenario", "topic": "scenario", "text": "x" * 400, "payload": {"action": "w"}})
+    assert long.committed and "…" in brief_view.render_markdown(j.brief(now=NOW))

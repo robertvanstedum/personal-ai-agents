@@ -282,7 +282,7 @@ def test_cli_workflow_round_trip_with_dry_runs_and_stable_ids(root, tmp_path):
     code, brief = run("brief", "--topic", "backup", "--now", "2026-10-09T00:00:00Z")
     assert code == 0 and brief["requests"][0]["state"] == "closed" and brief["test_reports"][0]["summary"]["passed"] == 3
     md = cli(root, "brief", "--topic", "backup", "--format", "md")
-    assert md.returncode == 0 and md.stdout.startswith("# Brief: workshop-neubau / backup") and "Two findings" not in md.stdout
+    assert md.returncode == 0 and md.stdout.startswith("# Brief: workshop-neubau / backup") and 'codex: result at ' in md.stdout and '"Two findings."' in md.stdout
     hist = json.loads(cli(root, "history", "--topic", "backup", "--through-seq", "2").stdout)
     assert [e["kind"] for e in hist["events"]] == ["request", "receipt"]
     assert cli(root, "history", "--topic", "backup", "--format", "md").stdout.count("\n") == 5

@@ -8,11 +8,21 @@ model summary of the product spec is not here: the base brief must work without 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from core.workshop_journal import reducer, workflow
 
 BRIEF_VERSION = 1
 NOT_OBSERVED = "not_observed"
+
+
+def human_time(iso: str | None, zone: str = "America/Chicago") -> str:
+    """A time a person can read ("Oct 8, 6:49 pm CDT"). The machine fields keep the exact UTC text; only the words change."""
+    moment = _parse(iso)
+    if moment is None:
+        return "an unknown time"
+    local = moment.astimezone(ZoneInfo(zone))
+    return f"{local.strftime('%b')} {local.day}, {local.strftime('%I:%M %p').lstrip('0').lower()} {local.strftime('%Z')}"
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -32,6 +42,11 @@ def _line(ev: dict) -> dict:
 def _refs(ev: dict) -> list[dict]:
     return [{k: r.get(k) for k in ("type", "id", "sha256", "availability", "locator") if r.get(k) is not None}
             for r in ev.get("refs") or []]
+
+
+def _snippet(text: str | None, limit: int = 90) -> str:
+    flat = " ".join(str(text or "").split())
+    return flat if len(flat) <= limit else flat[:limit - 1].rstrip() + "…"
 
 
 def _evidence(payload: dict) -> list[dict]:
@@ -156,7 +171,7 @@ def build(workshop_id: str, events: list[dict], *, topic: str | None = None, res
 
     # decisions: a proposal is only a proposal; the owner resolver alone makes a decision the owner's
     proposals: dict[str, dict] = {}
-    owner, links = [], []
+    owner, links, unconfirmed = [], [], []
     for ev in scope:
         if ev.get("supersedes"):
             links.append({"newer": ev["event_id"], "older": ev["supersedes"], "seq": ev["seq"]})
@@ -175,6 +190,8 @@ def build(workshop_id: str, events: list[dict], *, topic: str | None = None, res
             for target in p["resolves"]:
                 if target in proposals and proposals[target]["actor"] == ev["actor"]:
                     proposals[target].update(status="withdrawn", settled_by=ev["event_id"])
+        elif not by_owner and p["record_event_kind"] in ("approved-direct", "approved-under-mandate", "rejected", "verified", "superseded"):
+            unconfirmed.append(row)                       # someone's claim of owner authority that no owner control confirms
         elif by_owner:
             owner.append(row)
             outcome = {"approved-direct": "approved", "approved-under-mandate": "approved", "rejected": "rejected",
@@ -188,7 +205,10 @@ def build(workshop_id: str, events: list[dict], *, topic: str | None = None, res
             newer = next((e for e in scope if e["event_id"] == link["newer"]), None)
             owned = newer is not None and (newer["kind"] != "decision" or any(o["event_id"] == newer["event_id"] for o in owner))
             old.update(status="superseded" if owned else "revised", settled_by=link["newer"])
-    out["decisions"] = {"proposals": list(proposals.values()), "owner": owner, "superseded": links}
+    out["decisions"] = {"proposals": list(proposals.values()), "owner": owner, "unconfirmed": unconfirmed, "superseded": links}
+    for row in unconfirmed:
+        gaps.append({"code": "unconfirmed_owner_claim", "event_id": row["event_id"],
+                     "text": f"Entry {row['seq']} ({row['actor']}) claims an owner {row['record_event_kind']} that no owner control confirms; it settles nothing."})
 
     # blocked and uncertain work, claims, next actor
     out["blocked"] = [{**_line(ev), "reason_code": (ev["payload"] or {}).get("reason_code")} for ev in scope if ev["kind"] == "blocked"] + \
@@ -234,12 +254,13 @@ def history(events: list[dict], *, topic: str | None = None, through_seq: int | 
 # ── a plain-text rendering of the same view ──────────────────────────────────────────────────────────────────────────
 def render_markdown(brief: dict) -> str:
     out = [f"# Brief: {brief['workshop']}" + (f" / {brief['topic']}" if brief["topic"] else ""),
-           f"As of seq {brief['as_of']['seq']} (journal {brief['journal_status']}). Latest entry: {brief['freshness']['journal_latest'] or 'none'}. "
+           f"As of seq {brief['as_of']['seq']} (journal {brief['journal_status']}). Latest entry: {human_time(brief['freshness']['journal_latest']) if brief['freshness']['journal_latest'] else 'none'}. "
            "Native source, capture and production acknowledgement: not observed."]
     if brief["needs_you"]:
         out += ["", "## Waiting for Robert"] + [f"- seq {n['seq']}: {n['text']}" for n in brief["needs_you"]]
-    out += ["", "## Teammates"] + [f"- {t['actor']}: {t['last']['kind']} at seq {t['last']['seq']}, {t['note']}" if t["last"]
-                                    else f"- {t['actor']}: {t['note']}" for t in brief["teammates"]]
+    out += ["", "## Teammates"] + [
+        f"- {t['actor']}: {t['last']['kind']} at {human_time(t['last']['at'])} (entry {t['last']['seq']}), \"{_snippet(t['last']['text'])}\"; nothing newer"
+        if t["last"] else f"- {t['actor']}: {t['note']}" for t in brief["teammates"]]
     if brief["requests"]:
         out += ["", "## Requests"]
         for r in brief["requests"]:
@@ -255,9 +276,10 @@ def render_markdown(brief: dict) -> str:
         out += [f"- seq {x['seq']} {x['reported_by']}: {_counts_text(x['summary'])}"
                 + (f" at pin {x['pin'][0]['sha256'][:12]}" if x["pin"] else " (no pin given)") for x in brief["test_reports"]]
     d = brief["decisions"]
-    if d["proposals"] or d["owner"]:
+    if d["proposals"] or d["owner"] or d["unconfirmed"]:
         out += ["", "## Decisions"] + [f"- owner {x['record_event_kind']}: seq {x['seq']} {x['text']}" for x in d["owner"]] + \
-              [f"- proposal by {x['actor']} ({x['status']}): seq {x['seq']} {x['text']}" for x in d["proposals"]]
+              [f"- proposal by {x['actor']} ({x['status']}): seq {x['seq']} {x['text']}" for x in d["proposals"]] + \
+              [f"- CLAIMED by {x['actor']}, NOT CONFIRMED as the owner's ({x['record_event_kind']}): seq {x['seq']} {x['text']}" for x in d["unconfirmed"]]
     if d["superseded"]:
         out += ["- replaced: " + "; ".join(f"seq {x['seq']} replaces {x['older']}" for x in d["superseded"])]
     if brief["blocked"]:
