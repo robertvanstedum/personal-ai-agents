@@ -1,4 +1,4 @@
-"""Staging-only Guild mounts on the portal: /guild-next and /guild-proto.
+"""Guild mounts on the portal: /guild-next and /guild-proto.
 
 Each mount is switched on by its own environment variable, read once when the
 portal starts:
@@ -24,6 +24,15 @@ must be ``dev.minimoi.ai``, ``localhost`` or ``127.0.0.1``, or be named in
 ``MINIMOI_GUILD_ALLOWED_HOSTS`` (comma-separated; for tests or a future
 always-on staging host). An empty, unknown or production ``BASE_URL`` refuses
 both mounts, whatever the switches say.
+
+Production is a separate, deliberate act (Guild UI integration). The real
+Shop floor can mount on minimoi.ai only when ALL of these hold: BASE_URL's
+host is exactly ``minimoi.ai`` (never ``www``), ``MINIMOI_GUILD_NEXT`` is on,
+and ``MINIMOI_GUILD_PRODUCTION`` is on. Neither switch alone does it, and
+``MINIMOI_GUILD_ALLOWED_HOSTS`` can never name a production host. There the
+prototype is always refused, and Master Craftsman is held off whatever
+``MINIMOI_GUILD_MC*`` says (no relay exists in production; the chat shows an
+honest "not connected" and never a stub). Everything below still applies.
 
 Both mounts use the portal's real owner guard. A mount that is switched on but
 fails to register never falls back to anything: its prefix answers 503 (JSON
@@ -198,6 +207,14 @@ STAGING_HOSTS = frozenset({"dev.minimoi.ai", "localhost", "127.0.0.1"})
 NEVER_ALLOWED_HOSTS = frozenset({"minimoi.ai", "www.minimoi.ai"})
 ALLOWED_HOSTS_VAR = "MINIMOI_GUILD_ALLOWED_HOSTS"
 
+# The one production host the real Shop floor may be activated on, by the second
+# switch below. Not part of allowed_hosts(): the staging allowlist still refuses it.
+PRODUCTION_HOSTS = frozenset({"minimoi.ai"})
+PRODUCTION_FLAG = "MINIMOI_GUILD_PRODUCTION"
+# Master Craftsman has no relay in production: these are removed before the mount
+# reads them, so the backend is "off" and no turn is sent, whatever the file says.
+PRODUCTION_HELD_OFF = ("MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MINIMOI_GUILD_MC_STREAM")
+
 
 def origin_host(base_url) -> str:
     from urllib.parse import urlsplit
@@ -223,6 +240,16 @@ def is_staging_origin(base_url, environ) -> bool:
     return bool(host) and host in allowed_hosts(environ)
 
 
+def is_production_activation(base_url, environ) -> bool:
+    """True only when the production host is exact and BOTH switches are on."""
+    return (origin_host(base_url) in PRODUCTION_HOSTS
+            and flag_on(environ, NEXT_FLAG) and flag_on(environ, PRODUCTION_FLAG))
+
+
+def production_environ(environ) -> dict:
+    return {k: v for k, v in dict(environ).items() if k not in PRODUCTION_HELD_OFF}
+
+
 MC_LOGGER = "guild_ui.mc"
 
 
@@ -243,6 +270,13 @@ def staging_mc_logging() -> logging.Logger:
 
 def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict:
     base_url = next_kwargs.get("base_url") or environ.get("BASE_URL")
+    if is_production_activation(base_url, environ):
+        if flag_on(environ, PROTO_FLAG):
+            log.warning("guild mounts: MINIMOI_GUILD_PROTO ignored on production; the prototype is never mounted there")
+        log.warning("guild mounts: production activation (BASE_URL %r): /guild-next only, Master Craftsman held off", base_url)
+        return {"guild_proto": "refused_production",
+                "guild_next": mount_guild_next(app, environ=production_environ(environ), owner_guard=owner_guard,
+                                               current_user=current_user, **next_kwargs)}
     if not is_staging_origin(base_url, environ):
         if flag_on(environ, NEXT_FLAG) or flag_on(environ, PROTO_FLAG):
             log.warning("guild mounts: MINIMOI_GUILD_NEXT/PROTO ignored; %r is not a staging origin "

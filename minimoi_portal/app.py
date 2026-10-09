@@ -1547,15 +1547,27 @@ def _update_guest_request_status(req_id: int, status: str) -> None:
     )
 
 
+def _guild_primary_on() -> bool:
+    """Does /guild send the owner to the new Shop floor? On a staging origin that is the default (MINIMOI_GUILD_PRIMARY=0
+    turns it off). On production it is a second, explicit act: off until MINIMOI_GUILD_PRIMARY is set on, so activating the
+    mount alone leaves today's /guild landing and every old page where they are."""
+    if GUILD_MOUNTS.get("guild_next") != "on":
+        return False
+    flag = os.environ.get("MINIMOI_GUILD_PRIMARY")
+    if _guild_mounts.is_staging_origin(_cfg.BASE_URL, os.environ):
+        return (flag if flag is not None else "1").lower() in _guild_mounts.FLAG_VALUES_ON
+    if _guild_mounts.is_production_activation(_cfg.BASE_URL, os.environ):
+        return (flag or "").strip().lower() in _guild_mounts.FLAG_VALUES_ON
+    return False
+
+
 @app.route("/guild")
 @app.route("/guild/")
 @_require_owner
 def guild_landing():
     # Entry-only dev cutover: deep legacy routes and every POST keep their
     # original contracts. Turning the flag off restores the old landing.
-    if (GUILD_MOUNTS.get("guild_next") == "on"
-            and _guild_mounts.is_staging_origin(_cfg.BASE_URL, os.environ)
-            and os.environ.get("MINIMOI_GUILD_PRIMARY", "1").lower() in _guild_mounts.FLAG_VALUES_ON):
+    if _guild_primary_on():
         return redirect("/guild-next/", code=302)
     return render_template("guild/guild_landing.html", user=_current_user())
 
@@ -1564,8 +1576,9 @@ def guild_landing():
 @_require_owner
 def guild_previous():
     from flask import abort
-    if not (_guild_mounts.is_staging_origin(_cfg.BASE_URL, os.environ)
-            and GUILD_MOUNTS.get("guild_next") == "on"):
+    if not (GUILD_MOUNTS.get("guild_next") == "on"
+            and (_guild_mounts.is_staging_origin(_cfg.BASE_URL, os.environ)
+                 or _guild_mounts.is_production_activation(_cfg.BASE_URL, os.environ))):
         abort(404)
     return render_template("guild/guild_landing.html", user=_current_user())
 
