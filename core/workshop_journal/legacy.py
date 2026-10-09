@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 from core.workshop_journal import reducer
 from core.workshop_journal.errors import JournalError
-from core.workshop_journal.journal import Journal, Result
+from core.workshop_journal.journal import LOCK, Journal, Result
 
 VERSION = 1
 ACTORS = ("claude-code", "codex", "robert", "host", "mc")
@@ -117,6 +117,7 @@ class Workshop:
         if not ID_RE.fullmatch(workshop_id or ""):
             raise ValueError("workshop id is lower-case letters, digits and -")
         self.id = workshop_id
+        self._root = root
         self.journal = Journal(root, workshop_id, actors=None)
         self.dir = self.journal.dir
         self.events_path = self.journal.events_path
@@ -129,9 +130,17 @@ class Workshop:
             raise OSError(f"workshop append failed: {result.status} ({result.reason})")
         return ev
 
+    def reader(self) -> Journal:
+        """The journal to read from. A synced copy (what the portal's read-only mount holds) has events and state but no lock
+        file and can never be written, so it is read as a replica; a live journal, which has its lock file, is read through
+        the locking journal as before. Reading never writes either way."""
+        if os.path.exists(os.path.join(self.dir, LOCK)):
+            return self.journal
+        return Journal(self._root, self.id, actors=None, replica=True)
+
     def events(self) -> list[dict]:
         """The valid prefix of the journal (legacy and v2 rows). An unterminated tail is never part of it."""
-        return self.journal.read(deep=False, tolerate_legacy=True).events
+        return self.reader().read(deep=False, tolerate_legacy=True).events
 
     def write_state(self) -> dict:
         return self.journal.write_state()
@@ -149,7 +158,7 @@ def load_state(root: str | None, workshop_id: str) -> tuple[dict | None, str]:
         ws = Workshop(root, workshop_id)
     except ValueError:
         return None, "missing"
-    state, source = ws.journal.state(tolerate_legacy=True)
+    state, source = ws.reader().state(tolerate_legacy=True)
     if state is None:
         return None, "missing" if source in ("missing", "unsupported_writer") else "unreadable"
     host = state.get("host") if isinstance(state.get("host"), dict) else {}
