@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from conftest import WORKSHOP, envelope, new_id, progress
+from workshop_journal.conftest import WORKSHOP, envelope, new_id, progress
 from core.workshop_journal import artifacts as art
 from core.workshop_journal import brief as brief_view
 from core.workshop_journal.journal import Journal
-from fakes import NotASyntheticRoot, SyntheticOwnerResolver, Teammate, make_synthetic_root
+from workshop_journal.fakes import NotASyntheticRoot, SyntheticOwnerResolver, Teammate, make_synthetic_root
 
 MODEL_LIBS = ("anthropic", "openai", "litellm", "httpx", "requests", "aiohttp", "xai_sdk")
 

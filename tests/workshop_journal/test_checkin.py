@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO, WORKSHOP, new_id, write_config
+from workshop_journal.conftest import REPO, WORKSHOP, new_id, write_config
 from core.workshop_journal import checkin, profiles
 from core.workshop_journal.journal import Journal
-from fakes import SyntheticOwnerResolver, Teammate, make_synthetic_root
-from test_reducer_cli import cli, write_env
+from workshop_journal.fakes import SyntheticOwnerResolver, Teammate, make_synthetic_root
+from workshop_journal.test_reducer_cli import cli, write_env
 
 
 @pytest.fixture

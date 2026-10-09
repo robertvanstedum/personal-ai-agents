@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO, WORKSHOP, envelope, new_id, progress, run_child
+from workshop_journal.conftest import REPO, WORKSHOP, envelope, new_id, progress, run_child
 from core.workshop_journal import fsutil
 from core.workshop_journal.journal import Journal
 

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from conftest import REPO, WORKSHOP, envelope, new_id, write_config
+from workshop_journal.conftest import REPO, WORKSHOP, envelope, new_id, write_config
 from core.workshop_journal import notify, routes
 from core.workshop_journal.journal import Journal
 

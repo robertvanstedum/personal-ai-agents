@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import WORKSHOP, new_id, progress
+from workshop_journal.conftest import WORKSHOP, new_id, progress
 from core.workshop_journal import artifacts as art
 from core.workshop_journal import payment
 from core.workshop_journal.journal import Journal
@@ -48,7 +48,7 @@ def test_a_kept_document_has_payment_numbers_removed_and_counted():
 def test_payment_numbers_in_a_dropped_handoff_never_reach_the_workshop_folder(root, tmp_path):
     from pathlib import Path
     from core.workshop_journal import inbox as ib
-    from test_inbox import HEADER, NAME
+    from workshop_journal.test_inbox import HEADER, NAME
     j = Journal(root, WORKSHOP, lock_timeout=0.3)
     j.append(progress("seed"))
     folder = Path(root) / WORKSHOP / "inbox"

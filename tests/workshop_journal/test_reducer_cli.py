@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from conftest import REPO, WORKSHOP, envelope, new_id, progress
+from workshop_journal.conftest import REPO, WORKSHOP, envelope, new_id, progress
 from core.workshop_journal import reducer
 from core.workshop_journal.journal import Journal
 
@@ -226,7 +226,7 @@ def test_cli_repair_is_a_dry_run_unless_applied(root, tmp_path):
 
 # ── inbox and artifact commands ───────────────────────────────────────────────────────────────────────────────────
 def test_cli_inbox_is_a_dry_run_until_applied_and_artifact_open_returns_the_exact_text(root, tmp_path):
-    from test_inbox import HEADER, NAME
+    from workshop_journal.test_inbox import HEADER, NAME
     assert cli(root, "append", "--file", write_env(tmp_path, progress("seed"))).returncode == 0
     folder = f"{root}/{WORKSHOP}/inbox"
     import os
@@ -315,7 +315,7 @@ def test_R8_history_and_brief_say_so_and_exit_incomplete_when_the_journal_has_a_
 
 
 def test_R8_a_live_writers_tail_is_reported_the_same_way(root, tmp_path):
-    from test_safety import hold_lock
+    from workshop_journal.test_safety import hold_lock
     assert cli(root, "append", "--file", write_env(tmp_path, progress("one"))).returncode == 0
     open(f"{root}/{WORKSHOP}/events.jsonl", "ab").write(b'{"v":2,"part')
     holder = hold_lock(root, 4)

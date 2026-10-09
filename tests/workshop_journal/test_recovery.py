@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO, WORKSHOP, envelope, new_id, progress, run_child
+from workshop_journal.conftest import REPO, WORKSHOP, envelope, new_id, progress, run_child
 from core.workshop_journal import fsutil, schema, strictjson
 from core.workshop_journal.errors import RecoveryBlocked, WriteFailed
 from core.workshop_journal.journal import Journal
@@ -502,7 +502,7 @@ def test_R2_a_partial_journal_is_never_presented_as_a_complete_state(root):
 
 
 def test_R2_a_live_writers_tail_is_reported_incomplete_too(root):
-    from test_safety import hold_lock
+    from workshop_journal.test_safety import hold_lock
     j = seeded(root, 1)
     with open(jpath(root), "ab") as handle:
         handle.write(b'{"v":2,"part')

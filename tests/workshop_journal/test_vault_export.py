@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO, WORKSHOP, progress
+from workshop_journal.conftest import REPO, WORKSHOP, progress
 from core.workshop_journal import vault_export as vx
 from core.workshop_journal.journal import Journal
 

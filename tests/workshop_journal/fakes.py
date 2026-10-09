@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from conftest import new_id
+from workshop_journal.conftest import new_id
 
 SYNTHETIC_MARKER = ".synthetic-owner-root"
 

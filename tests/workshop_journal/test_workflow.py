@@ -6,10 +6,10 @@ from datetime import timedelta
 
 import pytest
 
-from conftest import WORKSHOP, envelope, new_id, progress
+from workshop_journal.conftest import WORKSHOP, envelope, new_id, progress
 from core.workshop_journal import workflow
 from core.workshop_journal.journal import Journal
-from fakes import Teammate
+from workshop_journal.fakes import Teammate
 
 
 @pytest.fixture
@@ -141,7 +141,7 @@ def test_R6_a_claimed_owner_label_cannot_release_another_writers_resource(team):
 
 
 def test_R6_a_validated_owner_release_works_and_a_resolver_that_says_no_does_not(root):
-    from fakes import SyntheticOwnerResolver, make_synthetic_root
+    from workshop_journal.fakes import SyntheticOwnerResolver, make_synthetic_root
     make_synthetic_root(root)
     j = Journal(root, WORKSHOP, lock_timeout=0.3, resolver=SyntheticOwnerResolver(root))
     code, codex, grok = Teammate("claude-code", j), Teammate("codex", j), Teammate("grok-cli", j)

@@ -5,7 +5,7 @@ import copy
 
 import pytest
 
-from conftest import envelope, progress
+from workshop_journal.conftest import envelope, progress
 from core.workshop_journal import schema, strictjson
 
 W, STREAM = "workshop-neubau", "workshop-neubau.local"

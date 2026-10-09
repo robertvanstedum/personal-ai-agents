@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import WORKSHOP, envelope, new_id, progress
+from workshop_journal.conftest import WORKSHOP, envelope, new_id, progress
 from core.workshop_journal import inbox as ib
 from core.workshop_journal.journal import Journal
 

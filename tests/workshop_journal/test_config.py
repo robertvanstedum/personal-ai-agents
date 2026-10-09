@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from conftest import write_config
+from workshop_journal.conftest import write_config
 from core.workshop_journal import config, profiles, routes
 
 
