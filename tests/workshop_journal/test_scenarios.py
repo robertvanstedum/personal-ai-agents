@@ -320,3 +320,16 @@ def test_the_brief_and_check_in_say_what_each_teammate_last_said(world):
     assert '"Unit 4 is under way' in report and "CDT" in report and "2026-10" not in report.split("Freshness")[0]
     long = j.append({"actor": "codex", "kind": "progress", "item": "topic:scenario", "topic": "scenario", "text": "x" * 400, "payload": {"action": "w"}})
     assert long.committed and "…" in brief_view.render_markdown(j.brief(now=NOW))
+
+
+def test_a_result_says_how_many_entries_came_after_it_so_stale_limits_are_not_taken_as_current(world):
+    j, code, codex, robert, _ = world
+    req = code.request(["codex"], "review", "Look.")
+    codex.receive(req.event_id)
+    codex.result(req.event_id, "completed", ["build not cleared"])
+    assert j.brief(now=NOW)["results"][0]["newer_entries_in_scope"] == 0 and "newer entr" not in brief_view.render_markdown(j.brief(now=NOW))
+    code.progress("Fixed what the review found.")
+    md = brief_view.render_markdown(j.brief(now=NOW))
+    assert "[1 newer entry since: read them before relying on this]" in md
+    code.progress("And again.")
+    assert "[2 newer entries since:" in brief_view.render_markdown(j.brief(now=NOW))

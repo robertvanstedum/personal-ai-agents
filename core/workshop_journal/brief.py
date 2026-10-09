@@ -155,6 +155,7 @@ def build(workshop_id: str, events: list[dict], *, topic: str | None = None, res
             p = ev["payload"]
             done.append({"request_id": p["request_id"], "reported_by": ev["actor"], "outcome": p["outcome"], "seq": ev["seq"],
                          "limitations": p["limitations"], "evidence": _refs(ev) + _evidence(p),
+                         "newer_entries_in_scope": sum(1 for e in scope if e["seq"] > ev["seq"]),
                          "note": "a worker report, not an independent check"})
             if p.get("test_summary"):
                 tests.append({"reported_by": ev["actor"], "seq": ev["seq"], "summary": p["test_summary"], "request_id": p["request_id"],
@@ -270,7 +271,8 @@ def render_markdown(brief: dict) -> str:
     if brief["results"]:
         out += ["", "## Reported results (worker reports, not independent checks)"]
         out += [f"- seq {x['seq']} {x['reported_by']}: {x['outcome']}" + (f"; limits: {'; '.join(x['limitations'])}" if x["limitations"] else "")
-                for x in brief["results"]]
+                + (f" [{x['newer_entries_in_scope']} newer entr{'y' if x['newer_entries_in_scope'] == 1 else 'ies'} since: read them before relying on this]"
+                   if x.get("newer_entries_in_scope") else "") for x in brief["results"]]
     if brief["test_reports"]:
         out += ["", "## Test reports (per reporter; never summed)"]
         out += [f"- seq {x['seq']} {x['reported_by']}: {_counts_text(x['summary'])}"
