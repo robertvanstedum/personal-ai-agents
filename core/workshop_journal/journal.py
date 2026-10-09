@@ -219,7 +219,8 @@ class Journal:
     def __init__(self, root: str, workshop_id: str, *, stream: str | None = None,
                  actors: tuple[str, ...] | None = schema.DEFAULT_ACTORS, durability: str = "strict", lock_timeout: float = 5.0,
                  clock: Callable[[], datetime] | None = None, resolver: reducer.Resolver | None = None,
-                 sleep: Callable[[float], None] = time.sleep, rules: Callable[[dict, list, object], None] | None = workflow.check):
+                 sleep: Callable[[float], None] = time.sleep, rules: Callable[[dict, list, object], None] | None = workflow.check,
+                 replica: bool = False):
         if not schema.WORKSHOP_RE.fullmatch(workshop_id or ""):
             raise InvalidInput("workshop_id_format")
         if durability not in ("strict", "degraded"):
@@ -234,6 +235,7 @@ class Journal:
         self.state_path = os.path.join(self.dir, STATE)
         self.actors, self.durability, self.lock_timeout = actors, durability, lock_timeout
         self.rules = rules                       # what the record forbids next (request/claim/result); None disables it
+        self.replica = replica                   # a copy made by sync (events and state only): readable without a lock file, never written
         self.clock, self.resolver, self._sleep = clock or (lambda: datetime.now(timezone.utc)), resolver, sleep
 
     # time
@@ -276,6 +278,8 @@ class Journal:
 
     @contextmanager
     def _locked(self, *, prepared: bool = True) -> Iterator[_Session]:
+        if self.replica:
+            raise InvalidInput("replica_is_read_only")
         base_fd = self._open_base(create=True)
         lock_fd = jfd = prepared_fd = None
         try:
@@ -684,8 +688,9 @@ class Journal:
             try:
                 lock_fd = self._flock(base_fd, exclusive=False, create=False, wait=0.2)
             except Missing:
-                return ReadResult("unsupported_writer", reason="no_lock_file")
-            in_progress = lock_fd is None
+                if not self.replica:
+                    return ReadResult("unsupported_writer", reason="no_lock_file")
+            in_progress = lock_fd is None and not self.replica
             data = fsutil.read_all(jfd)
             scan = (scan_bytes(data, deep=True, tolerate_legacy=tolerate_legacy) if deep else
                     scan_bytes(data, deep=False, deep_from=self._validated_upto(base_fd, data), tolerate_legacy=tolerate_legacy))

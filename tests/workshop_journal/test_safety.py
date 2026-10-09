@@ -254,3 +254,29 @@ def test_A01_a_missing_file_without_create_is_still_missing_at_once(root, monkey
     monkeypatch.setattr(os, "open", lambda p, f, *a, **k: (calls.append(p) if p == "events.jsonl" else None) or real(p, f, *a, **k))
     (base(root) / "events.jsonl").unlink()
     assert Journal(root, WORKSHOP).read().status == "missing" and calls.count("events.jsonl") == 1
+
+
+# ── a synced copy (events and state only, no lock file) can be read but never written ────────────────────────────
+def test_a_replica_without_a_lock_file_is_readable_and_never_writable(root, tmp_path):
+    j = seeded(root)
+    assert j.append(progress("second")).committed
+    copy = tmp_path / "replica"
+    (copy / WORKSHOP).mkdir(parents=True, mode=0o700)
+    os.chmod(copy, 0o700)
+    for name in ("events.jsonl",):
+        data = (base(root) / name).read_bytes()
+        (copy / WORKSHOP / name).write_bytes(data)
+        os.chmod(copy / WORKSHOP / name, 0o600)
+    plain = Journal(str(copy), WORKSHOP)
+    assert plain.read().status == "unsupported_writer"                                        # a normal reader still refuses a lockless folder
+    replica = Journal(str(copy), WORKSHOP, replica=True)
+    read = replica.read()
+    assert read.status == "ok" and len(read.events) == 2 and replica.brief()["as_of"]["seq"] == 2
+    refused = replica.append(progress("must not be written"))
+    assert (refused.status, refused.reason, refused.committed) == ("invalid_input", "replica_is_read_only", False)
+    assert replica.write_state is not None
+    with pytest.raises(Exception):
+        replica.write_state()
+    assert sorted(p.name for p in (copy / WORKSHOP).iterdir()) == ["events.jsonl"]            # nothing was created beside the copy
+    (copy / WORKSHOP / "events.jsonl").write_bytes(b"garbage\n")
+    assert replica.read().status == "corrupt"                                                 # and damage is still damage
