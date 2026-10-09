@@ -142,3 +142,35 @@ def test_production_builds_exactly_the_classifier_services():
     assert built == ALL_SERVICES
     listed = re.search(r'ALL_SERVICES="([^"]+)"', text).group(1).split()
     assert tuple(listed) == ALL_SERVICES
+
+
+def test_the_workshop_backend_deploys_the_portal_only():
+    """The Workshop backend's one consumer is the portal; its laptop tools run in no service."""
+    backend = [
+        "core/workshop_journal/journal.py", "core/vault_t1/reader.py", "utils/credential_scrub.py",
+        "minimoi_portal/workshop/record.py", "scripts/workshop/workshop.py", "scripts/vault/vault.py",
+        "tests/workshop_journal/test_journal.py", "tests/test_credential_scrub.py",
+    ]
+    assert classify(backend) == ("domain", ("portal",))
+    assert classify(["scripts/workshop/workshop.py", "scripts/vault/vault.py"]) == ("documents", ())
+    # Neighbours keep their old ownership: only these exact places moved.
+    assert classify(["core/other_module.py"]) == ("domain", ("portal", "curator", "german", "portuguese", "system-bot", "cos-bot", "cos-scheduler"))
+    assert classify(["scripts/other_tool.py"]) == ("full", ALL_SERVICES)
+
+
+def test_no_other_service_imports_the_workshop_backend():
+    """Guard for the rule above: the day a CoS, language or bot file imports the Workshop
+    backend, this fails and that change must classify the new consumer."""
+    import re
+    root = Path(__file__).resolve().parent.parent
+    pattern = re.compile(r"^\s*(?:from|import)\s+(?:core\.workshop_journal|core\.vault_t1|utils\.credential_scrub)\b", re.M)
+    own = ("core/workshop_journal/", "core/vault_t1/", "utils/credential_scrub.py", "minimoi_portal/", "scripts/workshop/",
+           "scripts/vault/", "tests/", "prototype-lab/", "planning-studio/", "venv/", "ai-env/", "_working/", ".claude/")
+    importers = []
+    for path in root.rglob("*.py"):
+        rel = path.relative_to(root).as_posix()
+        if rel.startswith(own) or "/node_modules/" in rel or "/.git/" in rel:
+            continue
+        if pattern.search(path.read_text(errors="ignore")):
+            importers.append(rel)
+    assert importers == []

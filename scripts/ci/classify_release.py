@@ -51,6 +51,7 @@ def _is_release_only(path: str) -> bool:
         or path in {"requirements.test.txt", "pytest.ini", ".gitignore"}
         or _is_staging_only(path)
         or path.startswith(DORMANT_PREFIXES)
+        or path.startswith(LOCAL_TOOL_PREFIXES)
     )
 
 
@@ -79,6 +80,18 @@ STAGING_ONLY_FILES = frozenset({
     "services/model_gateway/litellm.staging.yaml",
 })
 STAGING_ONLY_PREFIXES = ("scripts/staging/",)
+
+
+# Operator tools that run on the owner's laptop: no production service image
+# runs them (the Dockerfiles copy the repository, but nothing starts these).
+LOCAL_TOOL_PREFIXES = ("scripts/workshop/", "scripts/vault/")
+
+# The Workshop backend (journal, Vault readers, the credential scrub they use).
+# Its one intended consumer is the portal (the Workshop screen, minimoi_portal/
+# workshop/). No other service imports it:
+# tests/test_release_classifier.py fails if one starts to, so that change must
+# classify the new consumer here.
+WORKSHOP_BACKEND_PATHS = ("core/workshop_journal/", "core/vault_t1/", "utils/credential_scrub.py")
 
 
 def _is_staging_only(path: str) -> bool:
@@ -116,6 +129,8 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             services.update(("german", "portuguese", "cos-scheduler"))
         elif path.startswith("core/telegram/"):
             services.update(("curator", "system-bot", "cos-bot"))
+        elif path.startswith(WORKSHOP_BACKEND_PATHS):
+            services.add("portal")
         elif path.startswith(("core/", "utils/")):
             services.update(PYTHON_SERVICES)
         elif path == "docker/Dockerfile.portal" or path == "docker/requirements.portal.txt":
