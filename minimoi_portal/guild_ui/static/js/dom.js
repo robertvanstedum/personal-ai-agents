@@ -27,6 +27,25 @@ export function el(tag, attrs = {}, text) {
   return node;
 }
 
+// A short message the person can SEE (announce() alone is read out to screen readers and shows nothing). It stays about six seconds,
+// longer for long text, and is also announced. Used for the result of an action: removed, refused, stopped, could not be done.
+export function toast(text) {
+  if (!text) return;
+  announce(text);
+  let box = document.querySelector('[data-toast]');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'gu-toast';
+    box.setAttribute('data-toast', '');
+    box.setAttribute('aria-hidden', 'true');                  // the live region already says it to screen readers
+    document.body.append(box);
+  }
+  box.textContent = text;
+  box.hidden = false;
+  window.clearTimeout(box.timer);
+  box.timer = window.setTimeout(() => { box.hidden = true; }, Math.min(12000, 4000 + text.length * 60));
+}
+
 export function announce(text) {
   const live = document.querySelector('[data-mc-announcer]');
   if (live) { live.textContent = ''; window.setTimeout(() => { live.textContent = text; }, 30); }

@@ -1,0 +1,15 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block main %}<article class="gu-reference">
+{% if page_id in ('improve','experiment') %}<img class="gu-section-art" src="/static/guild/guild-{{ page_id }}.jpg" alt="" width="120" height="90">{% endif %}
+<h1>{{ title }}</h1><p>{{ note }}</p>
+<p class="small">Source: <code>{{ source }}</code> · read from this deployment on page load. File timestamps below are checkout timestamps, not review dates.</p>
+{% if source_error %}<p class="gu-notice" role="status">{{ source_error }}</p>{% endif %}
+{% if groups is not none %}
+{% for category, entries in groups %}<details class="gu-doc-group"><summary>{{ category }} <span class="small">{{ entries|length }} docs</span></summary><ul class="gu-reference-list">{% for row in entries %}<li><a href="{{ url_for('.document',ref=row.reference) }}">{{ row.title }}</a></li>{% endfor %}</ul></details>{% else %}<p>No documents available.</p>{% endfor %}
+{% else %}<ul class="gu-reference-list">{% for row in rows %}<li>
+<a href="{{ url_for('.document', ref=row.reference) }}">{{ row.title }}</a>
+<small>{{ row.reference }}<br>{{ row.status }} · file timestamp {{ row.updated }}</small>
+</li>{% else %}<li>No reference documents available from this source.</li>{% endfor %}</ul>
+{% endif %}
+</article>{% endblock %}

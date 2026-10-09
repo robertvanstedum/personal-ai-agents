@@ -11,6 +11,11 @@ Each line has an empty ``usage`` slot, to be filled from the gateway's own
 per-call usage record (the usage-record PR), joined by ``turn_id`` or by MC's
 spend delta (MC takes one turn at a time, so the delta is exact).
 
+A line also says whether the turn's text capture was saved (``history_saved``,
+mc/turn_capture.py, the separate ``MC_TURNS_DIR`` log): written only when a
+capture was meant (true or false), never when none was. A reply whose capture
+failed shows "Done in 1.2s · not saved", live and after a reload.
+
 Never blocking, never failing a turn: a write or read problem is logged and
 ignored; the footer is simply not shown.
 """
@@ -47,9 +52,13 @@ def _window(line: dict, duration_ms: int):
     return start, end
 
 
-def done_text(duration_ms: int) -> str:
+NOT_SAVED = "not saved"
+
+
+def done_text(duration_ms: int, history_saved: bool | None = None) -> str:
     seconds = max(0, duration_ms) / 1000
-    return f"Done in {seconds:.1f}s" if seconds < 10 else f"Done in {round(seconds)}s"
+    text = f"Done in {seconds:.1f}s" if seconds < 10 else f"Done in {round(seconds)}s"
+    return f"{text} · {NOT_SAVED}" if history_saved is False else text
 
 
 class TurnLog:
@@ -57,7 +66,12 @@ class TurnLog:
         self.path = os.path.join(folder, FILE_NAME) if folder else None
 
     def record(self, *, turn_id: str, status: str, backend_kind: str | None, duration_ms: int,
-               reply_request_id: str | None = None, failure_class: str | None = None) -> None:
+               reply_request_id: str | None = None, failure_class: str | None = None,
+               mode: str | None = None, history_saved: bool | None = None) -> None:
+        """One line per turn. ``mode`` is "stream" for a streamed turn, whose
+        interrupted and stopped turns get a line too (streaming spec v0.3 §6),
+        with no reply id; ``duration_ms`` is then the time to the final text.
+        ``history_saved`` is the turn capture's outcome (None: none was meant)."""
         if not self.path:
             return
         ended = datetime.now(timezone.utc)
@@ -69,6 +83,10 @@ class TurnLog:
                 "status": status, "failure_class": failure_class, "backend_kind": backend_kind,
                 "duration_ms": int(duration_ms), "reply_request_id": reply_request_id,
                 "usage": None}
+        if mode:
+            line["mode"] = mode
+        if isinstance(history_saved, bool):
+            line["history_saved"] = history_saved
         try:
             with _LOCK:
                 fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -100,8 +118,12 @@ class TurnLog:
             if rid in wanted and line.get("status") == "answered" and line.get("backend_kind") in SHOWN_KINDS:
                 ms = line.get("duration_ms")
                 if isinstance(ms, int):
-                    found[rid] = {"duration_ms": ms, "done_text": done_text(ms), "usage": line.get("usage"),
-                                  "window": _window(line, ms)}
+                    saved = line.get("history_saved")
+                    saved = saved if isinstance(saved, bool) else None
+                    found[rid] = {"duration_ms": ms, "done_text": done_text(ms, saved), "usage": line.get("usage"),
+                                  "window": _window(line, ms), "turn_id": line.get("turn_id")}
+                    if saved is not None:
+                        found[rid]["history_saved"] = saved
         return found
 
     def annotate(self, notes):

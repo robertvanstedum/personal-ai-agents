@@ -8,8 +8,8 @@
   </select>
   <button type="submit" class="btn" data-save hidden>Save</button>
   <span class="note-wrap" data-note-wrap hidden>
-    <label class="visually-hidden" for="nt-{{ it.id }}-{{ form_scope }}">Reason for blocking</label>
-    <input id="nt-{{ it.id }}-{{ form_scope }}" data-note maxlength="500" placeholder="Reason for blocking…">
+    <label class="visually-hidden" for="nt-{{ it.id }}-{{ form_scope }}">Reason (required for Blocked or Rework)</label>
+    <input id="nt-{{ it.id }}-{{ form_scope }}" data-note maxlength="500" placeholder="Reason (required)…"{% if it.trouble_reason %} value="{{ it.trouble_reason }}"{% endif %}>
   </span>
   <p class="save-result" data-save-result role="status" hidden></p>
 </form>

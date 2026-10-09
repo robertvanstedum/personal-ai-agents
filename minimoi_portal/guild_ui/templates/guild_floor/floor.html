@@ -1,17 +1,124 @@
 {% extends 'guild_floor/_base.html' %}
-{% from 'guild_floor/_macros.html' import shape, continue_line %}
-{% import 'guild_floor/_postits.html' as pz with context %}
-{% block title %}{{ floor_cfg.title }} · Guild{% endblock %}
+{% from 'guild_floor/_macros.html' import shape %}
+{% block title %}Chat · Guild{% endblock %}
+{#
+  Chat (the Shop floor), Guild 1.1: desktop is  history | chat | live context;
+  phone is chat first, with the context expandable below it. The hero sits in
+  the chat's header (slice 1, the v4 design; no chooser), on every width.
+  Status lights sit in a compact strip low on the page (detail in Operate);
+  post-its live on the Board (the wall), not here.
+#}
 
-{% block above %}
-<section class="zone zone-status" data-zone="status" aria-labelledby="z-status">
-  <h2 class="zone-h" id="z-status"><span class="crumb">Build → </span>{{ floor_cfg.title }} · Status <span class="small">· {{ rules_label }}</span></h2>
+{% block before_main %}
+<aside class="floor-history" id="floor-history" aria-labelledby="fh-h" data-floor-history>
+  <div class="fh-head">
+    <h2 class="fh-h" id="fh-h">{{ 'Archive' if conv_view == 'archived' else 'Conversations' }}</h2>
+    <button type="button" class="fb-btn fh-close" data-history-close aria-label="Close conversations">✕</button>
+  </div>
+  {% if conv_view == 'active' %}<button type="button" class="fh-new" data-conv-new>＋ New conversation</button>{% endif %}
+  {# Server-owned, file-first (conversations.py): newest first, pinned on top. Housekeeping never calls a model. #}
+  {% if conv_list.state != 'ok' %}
+  <p class="fh-unavailable small" data-conv-unavailable>Conversations unavailable — treat as unknown.</p>
+  {% endif %}
+  <ol class="fh-list" data-conv-list data-view="{{ conv_view }}">
+    {% for cv in conv_list.rows %}
+    {% set on = conversation and cv.id == conversation.id %}
+    <li class="fh-row" data-conv="{{ cv.id }}" data-pinned="{{ 'true' if cv.pinned else 'false' }}"{% if on %} aria-current="true" data-fh-current{% endif %}>
+      <a class="fh-link" href="{{ urls.floor }}?c={{ cv.id }}" data-conv-link>
+        <span class="fh-title" data-conv-title>{% if cv.pinned %}<span class="fh-pin" aria-label="Pinned">📌 </span>{% endif %}{{ cv.title }}</span>
+        {% if on %}<span class="fh-meta small" data-fh-count data-more="{{ 'true' if state.notes.more else 'false' }}">{% if state.notes.state == 'ok' %}{{ state.notes.recent|length }}{% if state.notes.more %}+{% endif %} kept{% else %}notes unavailable{% endif %}</span>
+        {% else %}<span class="fh-meta small"><span data-iso="{{ cv.updated_at }}">{{ hhmm(cv.updated_at) }}</span></span>{% endif %}
+      </a>
+      <button type="button" class="fh-more" data-conv-menu aria-haspopup="true" aria-expanded="false" aria-label="Actions for {{ cv.title }}">⋯</button>
+      <div class="fh-menu" data-conv-actions role="menu" hidden>
+        {% if conv_view == 'archived' %}
+        <button type="button" role="menuitem" data-conv-act="restore">Restore</button>
+        {% else %}
+        <button type="button" role="menuitem" data-conv-act="rename">Rename</button>
+        <button type="button" role="menuitem" data-conv-act="{{ 'unpin' if cv.pinned else 'pin' }}">{{ 'Unpin' if cv.pinned else 'Pin' }}</button>
+        <button type="button" role="menuitem" data-conv-act="archive">Remove from list</button>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+    {% if conv_view == 'archived' and not conv_list.rows %}<li class="fh-empty small">Nothing archived.</li>{% endif %}
+  </ol>
+  {% if conv_list.unreadable %}<p class="fh-unavailable small" data-conv-unreadable>{{ conv_list.unreadable }} conversation{{ '' if conv_list.unreadable == 1 else 's' }} couldn't be read.</p>{% endif %}
+  <p class="fh-view small">{% if conv_view == 'archived' %}<a href="{{ urls.floor }}" data-conv-view="active">← Conversations</a>{% else %}<a href="{{ urls.floor }}?view=archived" data-conv-view="archived">Archive</a>{% endif %}</p>
+</aside>
+<div class="floor-scrim" data-floor-scrim hidden></div>
+{% endblock %}
+
+{% block main %}
+{# The context rail (Guild 1.1 Build refinement, 5 Oct): the work this conversation
+   is explicitly tied to (empty until Robert attaches one: no browsing-history
+   fallback, no "Last opened"), and the files kept with it. Nothing else: no
+   urgent-item line, no generated status paragraph, no link to the old Wall.
+   js/linked_work.js and js/attachments.js write only through the API. #}
+{% set work = conversation.work_item if conversation else none %}
+{% set files = (conversation.attachments or []) if conversation else [] %}
+{% set docs = (conversation.documents or []) if conversation else [] %}
+<details class="floor-context" data-floor-context>
+  <summary class="floor-context-sum">Files and linked work</summary>
+  <div class="fc-body">
+    {# The artwork leads the rail, as Robert likes it (6 Oct); Linked work and Files sit under it. #}
+    <img class="fc-art" src="/static/guild/guild-build.webp" alt="Craftspeople working together at a workshop bench" width="784" height="1168">
+    {# Only when a read failed: the honest "unknown", never a generic status paragraph. #}
+    <p class="fc-empty" data-needs-summary{% if state.needs.status == "ok" %} hidden{% endif %}>{{ state.needs.text }}</p>
+    <section class="fc-sec" data-linked-work aria-labelledby="fc-linked-h">
+      <h2 class="fc-h" id="fc-linked-h">Linked work</h2>
+      <div data-linked-empty{% if work %} hidden{% endif %}>
+        <p class="fc-empty">None. A conversation is only tied to a spec or issue when you attach one.</p>
+        <form class="fc-link-form" data-linked-form autocomplete="off">
+          <label class="visually-hidden" for="fc-link-input">Spec or issue</label>
+          <input id="fc-link-input" class="fc-link-input" data-linked-input inputmode="text" maxlength="400" placeholder="Build Log number, or a GitHub link">
+          <button type="submit" class="btn-quiet" data-linked-attach>Attach</button>
+        </form>
+      </div>
+      <div class="fc-linked" data-linked-card{% if not work %} hidden{% endif %}>
+        <p class="fc-linked-title"><a data-linked-link href="{{ (work.href ~ '?c=' ~ conversation.id) if work and work.kind == 'item' and conversation else (work.href if work else '#') }}"{% if work and work.kind != 'item' %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ work.label if work else '' }}</a></p>
+        <p class="fc-linked-meta small" data-linked-meta>{% if work %}{{ 'Build Log item' if work.kind == 'item' else 'GitHub file' if work.kind == 'github_file' else 'GitHub pull request · title not loaded' if work.github_kind == 'pull' else 'GitHub issue · title not loaded' if work.github_kind == 'issue' else 'GitHub issue or pull request · title not loaded' }}{% endif %}</p>
+        <div class="fc-linked-acts">
+          <button type="button" class="btn-quiet" data-linked-replace>Replace</button>
+          <button type="button" class="btn-quiet" data-linked-remove>Remove</button>
+        </div>
+      </div>
+      <p class="fc-linked-error small" data-linked-error role="alert" hidden></p>
+    </section>
+    <section class="fc-sec" data-conv-files-sec aria-labelledby="fc-files-h">
+      <h2 class="fc-h" id="fc-files-h">Files in this conversation</h2>
+      <p class="fc-empty" data-conv-files-empty{% if files or docs %} hidden{% endif %}>No files yet. Files you attach stay here. They do not link this conversation to any work.</p>
+      <ul class="fc-files" data-conv-files>
+        {% for f in files %}
+        <li class="fc-file" data-file="{{ f.asset_id }}"><a href="{{ urls.media_file.replace('__ID__', f.asset_id).replace('__V__', 'full') }}" target="_blank" rel="noopener"><img src="{{ urls.media_file.replace('__ID__', f.asset_id).replace('__V__', 'thumb') }}" alt="" width="36" height="36" loading="lazy"><span class="fc-file-name">{{ f.name }}</span></a><button type="button" class="fc-file-remove" data-file-remove="{{ f.asset_id }}" aria-label="Remove {{ f.name }} from this conversation">Remove</button></li>
+        {% endfor %}
+        {% for d in docs %}
+        <li class="fc-file fc-doc" data-doc="{{ d.id }}"><span class="fc-doc-icon" aria-hidden="true">📄</span><span class="fc-file-name">{{ d.name }}{% if d.truncated %}<span class="fc-doc-meta small"> · only {{ '{:,}'.format(d.chars) }} of {{ '{:,}'.format(d.chars_total) }} characters kept</span>{% endif %}</span><span class="fc-file-acts">{% if d.has_original %}<a class="fc-file-download" data-doc-download href="{{ urls.api }}/conversations/{{ conversation.id }}/documents/{{ d.id }}/original" download aria-label="Download the original of {{ d.name }}">Download</a>{% endif %}<button type="button" class="fc-file-remove" data-doc-remove="{{ d.id }}" aria-label="Remove {{ d.name }} from this conversation">Remove</button></span></li>
+        {% endfor %}
+      </ul>
+      {# Removed here, but the library hold was not released: shown so it can be retried, never hidden. #}
+      <ul class="fc-files fc-pending" data-conv-pending{% if not (conversation and conversation.release_pending) %} hidden{% endif %}>
+        {% for p in (conversation.release_pending or []) if conversation %}
+        <li class="fc-file is-pending" data-pending="{{ p.asset_id }}"><span class="fc-file-name">{{ p.name }}</span><span class="fc-pending-note small">Removed here. Its hold in the library is not released yet.</span><button type="button" class="fc-file-remove" data-file-retry="{{ p.asset_id }}" aria-label="Retry releasing {{ p.name }}">Retry</button></li>
+        {% endfor %}
+      </ul>
+      <p class="fc-note small">Documents go to Master Craftsman as text when you attach them to a message; only that text is kept here. Images are kept as pictures: Master Craftsman can’t see them yet.</p>
+    </section>
+  </div>
+</details>
+{% endblock %}
+
+{% block below %}
+<section class="zone zone-status floor-strip" data-zone="status" aria-labelledby="z-status">
+  <h2 class="visually-hidden" id="z-status">{{ floor_cfg.title }} · Status · {{ rules_label }}</h2>
   <button type="button" class="status-compact" data-lights-toggle aria-expanded="false" aria-controls="lights-full">
     {% for l in state.lights %}
     <span class="lc" data-lc="{{ l.id }}" data-light-state="{{ l.state }}">{{ shape(l) }}<span class="lc-name">{{ l.short }}</span> <span class="lc-word" data-lc-word>{{ l.word }}</span></span>
     {% endfor %}
     <span class="lc-more" data-lights-more>Details ▾</span>
   </button>
+  {% if state.cost_level and state.cost_level != 'good' %}<span class="strip-cost small" data-strip-cost>Cost: {{ state.cost_level }}</span>{% endif %}
+  <a class="strip-operate small" href="{{ urls.operate }}">Operate →</a>
   <ul class="lights" id="lights-full" data-lights-full>
     {% for l in state.lights %}
     <li class="light" data-light="{{ l.id }}" data-light-state="{{ l.state }}">
@@ -26,37 +133,4 @@
     {% endfor %}
   </ul>
 </section>
-{% endblock %}
-
-{% block main %}
-<div class="floor-rail" data-floor-rail>
-  <p class="floor-urgent" data-floor-urgent{% if not state.needs['items'] %} hidden{% endif %}><span class="floor-urgent-label">Needs you:</span> <a href="{{ state.needs['items'][0].href if state.needs['items'] else '#' }}" data-urgent-link>{% if state.needs['items'] %}{{ state.needs['items'][0].tag }} · {{ state.needs['items'][0].text }}{% endif %}</a></p>
-  <button type="button" class="floor-chip" data-sheet-toggle aria-expanded="false" aria-controls="floor-sheet">
-    Needs you <span data-reminder-count>{{ state.needs.total if state.needs.total is not none else '?' }}</span> · Continue · Post-its ▾
-  </button>
-  <div class="floor-sheet" id="floor-sheet" data-floor-sheet>
-    <section class="zone zone-needs" data-zone="needs" aria-labelledby="z-needs">
-      <h2 class="zone-h" id="z-needs">Needs you</h2>
-      <ol class="reminders" data-reminders>
-        {% for r in state.needs['items'] %}
-        <li class="reminder" data-reminder>
-          <span class="reminder-tag">{{ r.tag }}</span>
-          <a href="{{ r.href }}" data-reminder-link>{{ r.text }}</a>
-        </li>
-        {% endfor %}
-      </ol>
-      <p class="needs-line" data-needs-line>{% if state.needs.status != 'ok' %}{{ state.needs.text }}{% elif state.needs.total %}{{ state.needs.total }} in all{% if state.needs.total > state.needs['items']|length %} · {{ state.needs['items']|length }} shown{% endif %} · checked <span data-iso="{{ state.needs.observed_at }}">{{ hhmm(state.needs.observed_at) }}</span>{% else %}Nothing needs you · checked <span data-iso="{{ state.needs.observed_at }}">{{ hhmm(state.needs.observed_at) }}</span>{% endif %}</p>
-    </section>
-    <section class="zone zone-continue" data-zone="continue" aria-labelledby="z-cont">
-      <h2 class="zone-h" id="z-cont">Continue</h2>
-      <p class="zone-next">{{ continue_line(state['continue']) }}</p>
-      <p><a href="{{ urls.bench }}" class="open-bench" data-open-bench>Open the bench →</a></p>
-      <p><a href="{{ urls.queue }}">Build Queue →</a></p>
-    </section>
-    <section class="zone zone-postits" data-zone="postits" aria-labelledby="z-notes">
-      <h2 class="zone-h" id="z-notes">Post-its <span class="small" data-postits-count>{% if state.postits.state == 'ok' %}· {{ state.postits.active_total }} on the board{% else %}· unavailable{% endif %}</span></h2>
-      {{ pz.rail(state.postits) }}
-    </section>
-  </div>
-</div>
 {% endblock %}

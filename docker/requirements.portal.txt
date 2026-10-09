@@ -5,5 +5,11 @@ flask-cors==6.0.2
 requests==2.32.5
 beautifulsoup4>=4.14.0
 markdown
+nh3>=0.3,<0.4
+markdown-it-py>=4,<5
 python-dotenv
 psycopg2-binary>=2.9.0
+# The Guild Media library (Guild 1.1 slice 3): decode, check and re-encode uploads.
+pillow>=12,<13
+# Upload reading (Guild 1.1): the text layer of a PDF, read in a bounded child process (guild_ui/doc_reader.py).
+pypdf==6.8.0

@@ -14,6 +14,7 @@ from domains.guild import queue_store as qs
 from floor_helpers import write_headers
 from floor_helpers import load_portal  # noqa: F401  (pytest fixture)
 from floor_db_helpers import floor_db, floored, keyed  # noqa: F401  (pytest fixtures)
+from minimoi_portal.guild_ui.security import OFF_RECORD_TEXT
 
 API = "/guild-next/api/v1"
 HEADER = "Master Craftsman is off · your messages are kept as notes"
@@ -75,7 +76,7 @@ def test_off_the_record_is_refused_before_the_store_and_keeps_nothing(floored, m
         assert response.status_code == 409
         body = response.get_json()
         assert body["error"] == "not_listening"
-        assert body["message"] == "Off the record · nothing is kept. Save, notes and post-its are paused."
+        assert body["message"] == OFF_RECORD_TEXT
     monkeypatch.undo()
     assert db.count("floor_messages") == 0 and db.count("floor_postits") == 0
     assert db.count("floor_continue") == 0 and db.count("floor_requests") == 0

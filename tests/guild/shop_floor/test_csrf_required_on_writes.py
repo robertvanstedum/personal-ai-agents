@@ -9,6 +9,7 @@ from domains.guild import queue_store as qs
 
 from floor_helpers import write_headers
 from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
+from minimoi_portal.guild_ui.security import OFF_RECORD_TEXT
 
 URL = "/guild-next/api/v1/queue/items/12/status"
 
@@ -111,8 +112,8 @@ def test_off_the_record_is_refused_with_platform_text_before_the_queue_is_touche
         assert response.status_code == 409, url
         body = response.get_json()
         assert body["error"] == "not_listening"
-        assert body["message"] == "Off the record · nothing is kept. Save, notes and post-its are paused."
-        assert "Master Craftsman" not in body["message"]
+        assert body["message"] == OFF_RECORD_TEXT
+        assert "MiniMoi keeps no notes" in body["message"]
 
 
 def _body_static():

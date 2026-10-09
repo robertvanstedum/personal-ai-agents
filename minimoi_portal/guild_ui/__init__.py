@@ -18,6 +18,7 @@ bundle are required, and only the allowlisted routes are registered.
 from __future__ import annotations
 
 import functools
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -34,8 +35,9 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' 
        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'self'")
 
-ALL_ROUTES = ("floor", "bench", "queue", "item", "postits", "operate", "assets", "api")
-B1_ROUTES = ALL_ROUTES   # the landing page, improve, experiment and any reset are not in this package
+ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "buildlog", "board",
+              "media", "rooms", "references", "assets", "api")
+B1_ROUTES = ALL_ROUTES   # improve, experiment and any reset are not in this package
 
 
 class GuildBindingError(RuntimeError):
@@ -71,9 +73,15 @@ def owner_api(view):
 
 def _headers(response):
     """Scoped to this blueprint's responses; host-app routes are untouched."""
-    response.headers["Content-Security-Policy"] = CSP
+    response.headers.setdefault("Content-Security-Policy", CSP)        # a download sets its own stricter one
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Cache-Control"] = "no-store"
+    # A stream is never stored either, and must not be transformed (compressed
+    # or buffered) on its way (streaming spec v0.2 §3; no-store is stricter
+    # than the spec's no-cache).
+    streaming = (response.mimetype or "") == "application/x-ndjson"
+    response.headers["Cache-Control"] = "no-store, no-transform" if streaming else "no-store"
+    if getattr(response, "_guild_immutable_asset", False):      # a versioned page asset: the one thing the browser may keep
+        response.headers["Cache-Control"] = IMMUTABLE_CACHE
     return response
 
 
@@ -91,25 +99,76 @@ def _api_error(exc):
                       "state before trying again.", 500)
 
 
+IMMUTABLE_CACHE = "private, max-age=31536000, immutable"
+_asset_version: str | None = None
+
+
+def asset_version() -> str:
+    """A short fingerprint of everything under static/, taken once per process. Page assets are addressed by it
+    (``/ui-assets/_v/<fingerprint>/js/x.js``), so a browser keeps each file until the next deploy changes the
+    fingerprint and every address with it. Relative imports inside the scripts stay under the same fingerprint."""
+    global _asset_version
+    if _asset_version is None:
+        h = hashlib.sha256()
+        for path in sorted(p for p in STATIC.rglob("*") if p.is_file()):
+            h.update(str(path.relative_to(STATIC)).encode())
+            h.update(hashlib.sha256(path.read_bytes()).digest())
+        _asset_version = h.hexdigest()[:12]
+    return _asset_version
+
+
 @owner_page
-def asset(filename):
-    return send_from_directory(STATIC, filename, max_age=0)
+def asset(filename, ver=None):
+    """The unversioned address always revalidates; the versioned one is kept by the browser, but only when the
+    fingerprint in it is this deploy's (an address from an older page is served fresh and never stored)."""
+    response = send_from_directory(STATIC, filename, max_age=0)
+    response._guild_immutable_asset = ver is not None and ver == asset_version()
+    return response
+
+
+def _asset_url_defaults(endpoint, values):
+    """Every url_for of the page assets carries this deploy's fingerprint, without touching a template."""
+    if endpoint.endswith(".asset") and "ver" not in values:
+        values["ver"] = asset_version()
 
 
 def _make_blueprint(name: str, routes) -> Blueprint:
-    from . import api, pages
+    from . import api, board_api, pages
 
     bp = Blueprint(name, __name__, template_folder=str(PACKAGE / "templates"))
     bp.after_request(_headers)
+    bp.url_defaults(_asset_url_defaults)
     bp.register_error_handler(Exception, _api_error)
     page_rules = {
-        "floor": [("/guild/build", "floor", pages.floor)],
+        "floor": [("/guild/build", "floor", pages.floor),
+                  # The mount's own root is the Guild home, paired with Curator
+                  # (Guild 1.1 slice 1); it used to redirect to the Shop floor.
+                  ("/", "home", pages.home), ("/guild", "guild_home", pages.home)],
         "bench": [("/guild/build/bench", "bench", pages.bench)],
+        "labs": [("/guild/labs", "labs", pages.labs)],
+        "workshop": [("/guild/workshop", "workshop", pages.workshop)],
         "queue": [("/guild/build/queue", "queue", pages.queue)],
         "item": [("/guild/build/items/<int:item_id>", "item", pages.item)],
         "postits": [("/guild/build/postits", "postits", pages.postits)],
         "operate": [("/guild/operate", "operate", pages.operate)],
-        "assets": [("/guild/ui-assets/<path:filename>", "asset", asset)],
+        # The Build Log (Guild 1.1 slice 2, spec §4): every item in every status.
+        "buildlog": [("/guild/build/log", "build_log", pages.build_log)],
+        # The Board and the Media library (Guild 1.1 slice 3, spec §5); images
+        # are served to their owner only, same origin.
+        "board": [("/guild/board", "board", pages.board)],
+        "media": [("/guild/media", "media_library", pages.media_library),
+                  ("/media/<asset_id>/<variant>", "media_file", board_api.media_file)],
+        # Rooms (slice 4, spec §6): group chat on Records, through the dev bridge.
+        "rooms": [("/guild/rooms", "rooms", pages.rooms), ("/rooms", "rooms_short", pages.rooms)],
+        "references": [("/guild/docs", "docs", pages.docs),
+                       ("/guild/docs/read", "document", pages.document),
+                       ("/guild/build/items/<int:item_id>/spec", "item_spec", pages.item_spec),
+                       ("/guild/improve", "improve", pages.improve),
+                       ("/guild/experiment", "experiment", pages.experiment),
+                       ("/guild/experiment/<slug>", "prototype_detail", pages.prototype_detail),
+                       ("/guild/operate/<view>", "operate_view", pages.operate_view)],
+        "assets": [("/guild/ui-assets/<path:filename>", "asset", asset),
+                   ("/guild/ui-assets/_v/<ver>/<path:filename>", "asset", asset)],
     }
     for route in routes:
         for rule, endpoint, view in page_rules.get(route, []):
@@ -159,6 +218,8 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
         "storage_ns": "guild" + url_prefix.replace("/", "."),
     }
     app.register_blueprint(bp, url_prefix=url_prefix)
+    from .jobs_wiring import attach_jobs
+    attach_jobs(app, blueprint_name, services)         # Master Craftsman jobs: nothing happens unless MINIMOI_GUILD_JOBS is on
     return bp
 
 

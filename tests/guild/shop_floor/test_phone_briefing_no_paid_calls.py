@@ -15,12 +15,14 @@ from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 PACKAGE = Path(__file__).resolve().parents[3] / "minimoi_portal" / "guild_ui"
 
 
-def test_type_is_rendered_on_every_page_and_hold_to_talk_never(staging):
+def test_the_ask_button_is_on_every_page_but_chat_and_hold_to_talk_never(staging):
     client = staging.owner()
-    for url in ("/guild-next/guild/build", "/guild-next/guild/build/bench", "/guild-next/guild/build/queue",
+    chat = client.get("/guild-next/guild/build").get_data(as_text=True)
+    assert "data-mc-type" not in chat and 'id="mc-input"' in chat           # on Chat the Ask box is already there: no second button
+    for url in ("/guild-next/guild/build/bench", "/guild-next/guild/build/queue",
                 "/guild-next/guild/build/items/12", "/guild-next/guild/operate"):
         body = client.get(url).get_data(as_text=True)
-        assert re.search(r'<button[^>]*data-mc-type[^>]*>Type</button>', body), url
+        assert re.search(r'<button[^>]*data-mc-type[^>]*>Ask Master Craftsman</button>', body), url
         assert 'id="mc-input"' in body
         assert "Hold to talk" not in body and "data-mc-voice" not in body
 
@@ -52,10 +54,10 @@ def test_the_briefing_is_one_rules_only_line(staging):
     assert "\n" not in briefing["text"] and briefing["text"].startswith("As of ")
     assert "1 needs you (Decide #31)" in briefing["text"]
     lights = {l["id"]: l for l in floor["lights"]}
-    assert f"Queue {lights['build_queue']['word']}" in briefing["text"]
+    assert f"Build Log {lights['build_queue']['word']}" in briefing["text"]
+    # The chat no longer prints this paragraph (Build refinement, 5 Oct); the rules-only line stays on the API.
     page = client.get("/guild-next/guild/build").get_data(as_text=True)
-    assert f'data-briefing-label>{LABEL}<' in page.replace("&middot;", "·")
-    assert "data-briefing-text" in page
+    assert "data-briefing-text" not in page
 
 
 def test_the_briefing_is_a_pure_function_of_lights_and_needs():

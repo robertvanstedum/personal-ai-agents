@@ -1,0 +1,21 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}{{ page_id|title }}{% endblock %}
+{% block main %}
+<article class="gu-reference">
+<img class="gu-section-art" src="/static/guild/guild-{{ page_id }}.jpg" alt="" width="120" height="90">
+<h1>{{ page_id|title }}</h1>
+<p>A working notebook of {{ 'lessons and questions' if page_id == 'improve' else 'ideas and experiments' }}.</p>
+<p><a href="{{ urls.board }}">Keep a note on the Board</a> · <a href="{{ urls.docs }}">Browse references</a>{% if page_id == 'improve' %} · <a href="/app/curator">Explore with Curator</a>{% endif %}</p>
+{% for section in sections %}
+<section class="card" id="{{ section.id }}">
+<h2>{{ section.title }}</h2><p>{{ section.note }}</p>
+{% if section.rows %}
+<ul class="gu-reference-list">{% for row in section.rows[:5] %}<li><a href="{{ url_for('.document',ref=row.reference) }}">{{ row.title }}</a></li>{% endfor %}</ul>
+{% if section.rows|length > 5 %}<details><summary>More references ({{ section.rows|length - 5 }})</summary><ul class="gu-reference-list">{% for row in section.rows[5:] %}<li><a href="{{ url_for('.document',ref=row.reference) }}">{{ row.title }}</a></li>{% endfor %}</ul></details>{% endif %}
+{% else %}<p>No records available here yet. Use the Board to keep a question or observation.</p>{% endif %}
+{% if section.error %}<p class="small" role="status">{{ section.error }}</p>{% endif %}
+<p class="small">Source: {{ section.source }} · review status is not indexed.</p>
+</section>
+{% endfor %}
+</article>
+{% endblock %}

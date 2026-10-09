@@ -406,3 +406,20 @@ def test_owner_route_is_guarded_like_every_floor_write(load_portal):
     assert _write(owner, "wrong-token").status_code == 403
     assert _write(owner, token, **{"X-Record-Mode": "off_record"}).status_code == 409
     assert owner.get(f"{API}/mc/turns").status_code in (404, 405)
+
+
+def test_reachable_unverified_connection_does_not_claim_failure_or_live_answer():
+    shown = view(Health("unavailable", "not_verified", reachable=True), notes_ok=True, turns_on=True)
+    assert shown["state"] == "unavailable" and shown["reason"] == "not_verified"
+    assert shown["header"] == "Master Craftsman is connected · response not yet verified"
+    assert shown["turns"] is True
+    assert view(Health("unavailable", "not_verified", reachable=False), notes_ok=True)["header"].startswith("Master Craftsman is unavailable")
+    assert view(Health("unavailable", "not_verified", reachable=True), notes_ok=False, turns_on=True)["turns"] is False
+
+
+def test_idle_stream_failure_is_explicit_and_does_not_claim_work_stopped():
+    shown = view(Health("unavailable", "idle", reachable=True), notes_ok=True, turns_on=True)
+    assert "the relay cancelled the run after a long silence; commands it started may still be running" in shown["header"]
+    local = view(Health("unavailable", "local_timeout", reachable=True), notes_ok=True, turns_on=True)
+    assert "no answer received; outcome unknown, work may still be running" in local["header"]    # the page gave up: nothing confirmed
+    assert "your messages are kept as notes" not in shown["header"]

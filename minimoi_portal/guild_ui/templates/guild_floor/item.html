@@ -1,11 +1,11 @@
 {% extends 'guild_floor/_base.html' %}
 {% from 'guild_floor/_macros.html' import src_badge, status_mark, unknown_row with context %}
-{% block title %}#{{ item_id }} · Build Queue{% endblock %}
+{% block title %}#{{ item_id }} · Build Log{% endblock %}
 {% block main %}
 <nav class="crumbs" aria-label="Back">
-  <a class="btn-quiet" href="{{ urls.bench }}" data-back-bench>Workbench</a>
-  <a class="btn-quiet" href="{{ urls.queue }}">Build Queue</a>
-  <a class="btn-quiet" href="{{ urls.floor }}">Shop floor</a>
+  {% if conversation and request.args.get('c') == conversation.id %}<a class="btn-quiet" href="{{ urls.floor }}?c={{ conversation.id }}" data-back-conversation>← Back to the conversation</a>{% endif %}
+  <a class="btn-quiet" href="{{ urls.build_log }}?only={{ item_id }}" data-back-build-log>Build Log</a>
+  <a class="btn-quiet" href="{{ urls.floor }}">Chat</a>
 </nav>
 {% if not res.ok %}
   <div class="page-head"><h1 class="page-title">Item #{{ item_id }}</h1></div>
@@ -25,6 +25,8 @@
       {% if it.spec_file %}<dt>Spec file</dt><dd><code>{{ it.spec_file }}</code></dd>{% endif %}
       {% if it.github_issue %}<dt>GitHub issue</dt><dd>{{ it.github_issue }}</dd>{% endif %}
       {% if it.blocked_reason %}<dt>Blocked because</dt><dd>{{ it.blocked_reason }}</dd>{% endif %}
+      {% if it.status == 'rework' and it.trouble_reason %}<dt>Rework because</dt><dd data-trouble-reason>{{ it.trouble_reason }}</dd>{% endif %}
+      {% if it.trouble and it.trouble_from %}<dt>In trouble from</dt><dd data-trouble-from>{{ it.trouble_from.replace('_', ' ') }}{% if it.trouble_since %} · since <span data-iso="{{ it.trouble_since }}">{{ hhmm(it.trouble_since) }}</span>{% endif %}</dd>{% endif %}
       <dt>Last transition</dt><dd>{{ age(it.last_transition_at) or '—' }}</dd>
     </dl>
   </section>

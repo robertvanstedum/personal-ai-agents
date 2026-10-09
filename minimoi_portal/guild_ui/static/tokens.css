@@ -43,6 +43,70 @@
   --gu-nav-underline: #d49a6a;
   --gu-banner-bg: #f3dcc2;
   --gu-banner-ink: #5c330c;
+  /* Guild 1.1 (slice 1): Curator's paper palette, shared by the Guild bar, the
+     Guild home (css/landing.css) and the Chat header. Values from
+     domains/curator/templates/curator_landing.html; link ink darkened for AA. */
+  --gu-paper: #f5f0e8;
+  --gu-paper-bar: rgba(245, 240, 232, 0.97);
+  --gu-paper-ink: #2a1f14;
+  --gu-paper-drawer: #ede7dc;
+  --gu-paper-rule: #c4b49a;
+  --gu-paper-accent: #c68a5e;
+  --gu-paper-muted: #8a7060;
+  --gu-paper-dim: #a89880;
+  --gu-paper-link: #6e5c4a;
+  --gu-paper-active: #6f4718;
+  --gu-paper-shadow: 2px 3px 8px rgba(42, 31, 20, 0.10);
+  --gu-paper-shadow-hover: 2px 6px 16px rgba(42, 31, 20, 0.14);
+  --gu-menu-shadow: 0 10px 30px rgba(42, 31, 20, 0.18);
+  --gu-hero-shade: linear-gradient(90deg, rgba(20, 14, 10, 0.74), rgba(20, 14, 10, 0.28) 70%);
+  --gu-hero-ink: #ffffff;
+  --gu-hero-sub: #efe6d8;
+  --gu-hero-live: #6fcf74;
+  --gu-hero-chip-bg: rgba(255, 250, 241, 0.92);
+  --gu-hero-chip-off-bg: #3e3b37;
+  --gu-hero-chip-off-ink: #f2eee8;
+  /* Build Log status pills (Guild 1.1 slice 2) */
+  --gu-st-design-ink: #6b4e00;   --gu-st-design-bg: #f6e7b8;
+  --gu-st-ready-ink: #24456e;    --gu-st-ready-bg: #dde6f2;
+  --gu-st-build-ink: #1f5a52;    --gu-st-build-bg: #d8ece8;
+  --gu-st-rework-ink: #3d2a00;   --gu-st-rework-bg: #f0c24b;
+  --gu-st-blocked-ink: #ffffff;
+  /* The Board (Guild 1.1 slice 3): corkboard, relaxed post-its by label, photos */
+  --gu-board-bg: #e9dfcd;
+  --gu-board-edge: #cdbd9f;
+  --gu-note-shadow: 2px 4px 10px rgba(42, 31, 20, 0.16);
+  --gu-note-default: #fbeea6;
+  --gu-note-decide: #f9ea9c;
+  --gu-note-blocked: #f6d3cf;
+  --gu-note-remember: #d6e4f3;
+  --gu-note-followup: #dcebc9;
+  --gu-note-idea: #e6dcf1;
+  --gu-note-fyi: #efe9dc;
+  --gu-note-ink: #2a2418;
+  --gu-note-kicker: #6b5a3a;
+  --gu-note-tape: rgba(255, 255, 255, 0.55);
+  --gu-note-pin: #c0443a;
+  --gu-photo-bg: #fffdf8;
+  --gu-font-hand: 'Noteworthy', 'Bradley Hand', 'Segoe Print', 'Chalkboard SE', cursive;
+  /* The Workshop (Guild 1.1 slice 5, after the v4 look): a dark green header */
+  --gu-ws-top-a: #1d3533;
+  --gu-ws-top-b: #152523;
+  --gu-ws-top-c: #1b1a17;
+  --gu-ws-top-glow: rgba(255, 196, 120, 0.18);
+  --gu-ws-top-ink: #f2eadf;
+  --gu-ws-top-muted: #d2c6b5;
+  --gu-ws-chip-line: rgba(255, 255, 255, 0.26);
+  --gu-ws-chip-bg: rgba(255, 255, 255, 0.07);
+  --gu-ws-ok: #8fd19e;
+  --gu-ws-warn: #f2c66d;
+  --gu-ws-unk: #c9c2b8;
+  --gu-ws-pill-run-bg: #d8ece8;   --gu-ws-pill-run-ink: #1f5a52;
+  --gu-ws-pill-need-bg: #f6e7b8;  --gu-ws-pill-need-ink: #6b4e00;
+  --gu-ws-pill-done-bg: #e6e9dc;  --gu-ws-pill-done-ink: #3b4630;
+  --gu-ws-ev-bg: #2a241c;         --gu-ws-ev-ink: #f2eadf;
+  --gu-font-serif: Georgia, 'Times New Roman', serif;
+  --gu-subnav-h: 44px;
   /* stoplights: shape + word always accompany colour; unknown is grey, never green */
   --gu-light-green: #2f6b34;
   --gu-light-yellow: #9a6a00;
@@ -86,4 +150,11 @@
   --gu-target: 24px;
   --gu-target-phone: 44px;
   color-scheme: light;
+}
+
+/* Accepted Chat V2 theme; the other Guild surfaces retain their palette. */
+body.gu[data-page="floor"] {
+  --gu-bg: #f5f0e7;
+  --gu-zone-conv: #f5f0e7;
+  --gu-chat-art-shade: linear-gradient(90deg, rgba(25,20,14,.52), rgba(25,20,14,.06) 38%, transparent 55%);
 }

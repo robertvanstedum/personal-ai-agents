@@ -1,0 +1,37 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Improve · Technology library{% endblock %}
+{% block main %}
+<article class="gu-reference">
+<h1>Improve</h1><p>Technology references worth coming back to.</p>
+{% set construction_text = "Improve is being redesigned. The reference library below works today. Search-and-save from the web, tagging and a weekly digest are planned, not built." %}
+{% include 'guild_floor/_in_construction.html' %}
+<form method="get" class="library-search">
+<label for="library-query">Search saved references</label><input id="library-query" type="search" name="q" value="{{ query }}" maxlength="200">
+<label for="library-tag">Topic</label><select id="library-tag" name="tag"><option value="">All topics</option>{% for t in tags %}<option{% if t == tag %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+<button class="btn">Search library</button><button type="button" class="btn-quiet" data-library-web>Search the web ↗</button>
+</form>
+<p class="small">Web search opens a new tab. Add a result’s link below to save it here.</p>
+{% if library_error %}<p role="alert">{{ library_error }}</p>{% endif %}
+<details class="card" data-library-new><summary>Add a reference</summary>
+<form data-library-form data-revision="0">
+<label>Link <input name="url" type="url" required maxlength="3000"></label>
+<label>Title <input name="title" required maxlength="200"></label>
+<label>Topics · comma separated <input name="tags" maxlength="1000"></label>
+<label>Why it matters <textarea name="note" rows="2" maxlength="4000"></textarea></label>
+<button type="submit" class="btn">Save reference</button><p role="status" data-library-result></p>
+</form></details>
+{% for link in links %}
+<section class="card"><h2><a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.title }} ↗</a></h2>
+<p class="small">{% for t in link.tags %}<a href="{{ url_for('.improve',tag=t) }}">{{ t }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% if link.note %}<p>{{ link.note }}</p>{% endif %}
+<details><summary>Edit reference</summary><form data-library-form data-revision="{{ link.revision }}">
+<input name="url" type="hidden" value="{{ link.url }}">
+<label>Title <input name="title" value="{{ link.title }}" required maxlength="200"></label>
+<label>Topics · comma separated <input name="tags" value="{{ link.tags|join(', ') }}" maxlength="1000"></label>
+<label>Why it matters <textarea name="note" rows="2" maxlength="4000">{{ link.note }}</textarea></label>
+<button type="submit" class="btn">Save changes</button><p role="status" data-library-result></p>
+</form></details></section>
+{% else %}{% if not library_error %}<p>{{ 'No matching references.' if query or tag else 'No references saved yet.' }}</p>{% endif %}{% endfor %}
+<p class="small"><a href="https://github.com/robertvanstedum/personal-ai-agents/issues">Reviews and follow-ups on GitHub ↗</a></p>
+</article>
+{% endblock %}

@@ -1,0 +1,221 @@
+/* The topic Workshop (W1). Colours, type and radii come from tokens.css; this file is layout and the few study colours the design
+   package r6 records as deliberate departures (delivery steps, pins). Port of the reviewed mock: topic-workshop-design r6, alternative F. */
+.wt { padding: var(--gu-s2) var(--gu-gutter) 96px; max-width: 1660px; margin: 0 auto; }
+.wt-top { display: flex; gap: 6px 12px; align-items: center; flex-wrap: wrap; margin-bottom: var(--gu-s2); }
+.wt-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; }
+.wt-eyebrow { font: 700 11px/1.5 var(--gu-font-mono); text-transform: uppercase; letter-spacing: .12em; color: var(--gu-text-muted); }
+.wt-title { font: 700 19px/1.25 var(--gu-font-serif); margin: 0; overflow-wrap: anywhere; flex: 0 1 auto; max-width: 100%; }
+.wt-note { color: var(--gu-text-muted); }
+.wt button, .wt input, .wt select, .wt textarea { font: inherit; }
+.wt-btn { min-height: 44px; min-width: 44px; border: 1px solid var(--gu-border-strong); border-radius: 8px; background: var(--gu-surface); padding: 6px 12px; cursor: pointer; color: inherit; }
+.wt-btn:hover { background: var(--gu-surface-2); }
+.wt-btn:disabled { opacity: .45; cursor: default; }
+.wt-btn.primary, .wt-btn[aria-pressed="true"] { background: var(--gu-accent-strong, #344b40); color: #fff; border-color: var(--gu-accent-strong, #344b40); }
+.wt-quiet { background: transparent; border-color: transparent; }
+.wt-views { display: inline-flex; margin-left: auto; border: 1px solid var(--gu-border-strong); border-radius: 8px; overflow: hidden; background: var(--gu-surface); }
+.wt-views .wt-btn { border: 0; border-radius: 0; background: transparent; }
+.wt-views .wt-btn + .wt-btn { border-left: 1px solid var(--gu-border); }
+.wt-views .wt-btn[aria-pressed="true"] { background: var(--gu-surface-2); color: inherit; font-weight: 700; box-shadow: inset 0 -3px 0 var(--gu-accent-strong, #344b40); }
+.wt-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 var(--gu-s3); }
+.wt-chip { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--gu-border); background: var(--gu-surface); font-size: 13px; }
+.wt-badge { display: inline-block; border-radius: 20px; background: var(--gu-surface-2); padding: 2px 9px; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.wt-badge.warn { background: #f8e3b0; } .wt-badge.ok { background: #d9e8d4; } .wt-badge.off { background: #e9e5e0; }
+.wt-banner { border: 1px solid; border-radius: 10px; padding: 10px 14px; margin: 0 0 var(--gu-s3); display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; font-size: 14px; }
+.wt-banner.info { background: #e7eef2; border-color: #8da7b7; } .wt-banner.warn { background: #faf0cf; border-color: #d9b84a; } .wt-banner.bad { background: #f8dfd9; border-color: #c9715f; }
+
+/* board */
+.wt-board { background: var(--gu-board-bg, #e9dfcd); border: 1px solid var(--gu-board-edge, #c9b898); border-radius: 14px; padding: 14px; min-height: 260px; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; align-items: start; }
+.wt-card { position: relative; min-width: 0; background: var(--wt-card, var(--gu-zone-conv)); box-shadow: 2px 4px 9px #35281118; border: 1px solid var(--gu-border); border-radius: 4px 4px 14px 4px; padding: 12px 12px 10px; overflow-wrap: anywhere; }
+.wt-card.wide { grid-column: span 2; }
+.wt-card[data-kind="note"] { --wt-card: #faefb0; } .wt-card[data-kind="request"] { --wt-card: #e6eddf; } .wt-card[data-kind="document"] { --wt-card: #f7f2e8; } .wt-card[data-kind="design"] { --wt-card: #f1ebf6; }
+.wt-card .top { display: flex; gap: 6px; justify-content: space-between; align-items: center; }
+.wt-card .grip { border: 0; background: transparent; opacity: 0; cursor: grab; min-height: 44px; font-size: 18px; padding: 0 6px; }
+.wt-card:hover .grip, .wt-card:focus-within .grip { opacity: .7; }
+.wt-card .open { border: 0; background: none; text-align: left; padding: 2px 0; min-height: 44px; font-weight: 700; font-size: 16px; text-decoration: underline; text-underline-offset: 4px; width: 100%; cursor: pointer; color: inherit; }
+.wt-card .txt { font-size: 14px; margin: 2px 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wt-card .foot { display: flex; gap: 6px; align-items: center; justify-content: space-between; margin-top: 8px; flex-wrap: wrap; }
+.wt-card .more { border-color: transparent; background: transparent; font-size: 20px; line-height: 1; }
+.wt-card.dragging { opacity: .4; }
+.wt-card img.thumb { display: block; width: 100%; max-height: 160px; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--gu-border); margin: 6px 0; background: #fff; }
+.wt-empty { padding: 28px 16px; text-align: center; display: grid; gap: 10px; justify-items: center; grid-column: 1 / -1; }
+.wt-menuwrap { position: relative; }
+.wt-menu { position: absolute; right: 0; top: 100%; z-index: 30; min-width: 230px; background: var(--gu-zone-conv); border: 1px solid var(--gu-border-strong); border-radius: 10px; padding: 6px; box-shadow: var(--gu-menu-shadow, 0 8px 28px #0003); display: grid; gap: 2px; }
+.wt-menu button { border: 0; background: transparent; text-align: left; border-radius: 6px; min-height: 44px; padding: 6px 10px; cursor: pointer; color: inherit; }
+.wt-menu button:hover { background: var(--gu-surface-2); } .wt-menu button:disabled { opacity: .45; }
+
+/* delivery steps */
+.wt-steps { display: flex; gap: 4px; flex-wrap: wrap; margin: 6px 0; font-size: 12px; list-style: none; padding: 0; }
+.wt-steps li { padding: 2px 8px; border-radius: 12px; background: #ece5d6; border: 1px solid #cdbf9f; color: #6a5d49; }
+.wt-steps li.here { background: #f8e3b0; border-color: #d9b84a; color: #2b2113; font-weight: 700; }
+.wt-steps li.done { background: #d9e8d4; border-color: #9fbf98; color: #2b2113; }
+
+/* the opened item */
+.wt-reader { background: var(--gu-zone-conv); border: 1px solid var(--gu-border); border-radius: 14px; padding: 16px; min-width: 0; }
+.wt-head { display: flex; gap: 10px 16px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 12px; }
+.wt-head h2 { font: 700 21px/1.25 var(--gu-font-serif); margin: 0; overflow-wrap: anywhere; outline: none; }
+.wt-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+.wt-view { background: #fff; border: 1px solid var(--gu-border-strong); border-radius: 12px; padding: 18px; min-width: 0; overflow: auto; min-height: 220px; overflow-wrap: anywhere; }
+.wt-doc { font-size: 16px; line-height: 1.6; max-width: 72ch; }
+.wt-doc h1, .wt-doc h2, .wt-doc h3, .wt-doc h4 { font-family: var(--gu-font-serif); line-height: 1.25; margin: 1.1em 0 .4em; }
+.wt-doc h1 { font-size: 26px; margin-top: 0; } .wt-doc h2 { font-size: 21px; } .wt-doc h3 { font-size: 18px; }
+.wt-doc p, .wt-doc ul, .wt-doc ol, .wt-doc blockquote, .wt-doc table, .wt-doc pre { margin: 0 0 .9em; }
+.wt-doc ul { list-style: disc; padding-left: 1.5em; } .wt-doc ol { list-style: decimal; padding-left: 1.6em; }
+.wt-doc blockquote { border-left: 3px solid var(--gu-border-strong); padding-left: 12px; color: var(--gu-text-muted); }
+.wt-doc [data-block] { position: relative; border-radius: 4px; padding: 2px 4px; margin-left: -4px; margin-right: -4px; }
+.wt-doc.commenting [data-block] { cursor: crosshair; }
+.wt-doc.commenting [data-block]:hover { outline: 2px dashed #b4501f; outline-offset: 3px; }
+.wt-doc [data-block].marked { background: #fff6dc; }
+.wt-doc table { border-collapse: collapse; } .wt-doc th, .wt-doc td { border: 1px solid var(--gu-border); padding: 4px 8px; }
+.wt-doc pre { background: var(--gu-surface-2); padding: 10px; overflow: auto; border-radius: 6px; }
+.wt-img { position: relative; display: inline-block; max-width: 100%; }
+.wt-img img { display: block; max-width: 100%; height: auto; border-radius: 6px; }
+.wt-img.commenting { cursor: crosshair; outline: 2px dashed #b4501f; outline-offset: 3px; }
+.wt-pin { position: absolute; transform: translate(-50%, -50%); width: 24px; height: 24px; border-radius: 50%; background: #b4501f; color: #fff; border: 2px solid #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0; min-width: 24px; min-height: 24px; }
+.wt-pin-inline { display: inline-flex; margin-left: 6px; width: 22px; height: 22px; border-radius: 50%; background: #b4501f; color: #fff; border: 2px solid #fff; font-size: 12px; font-weight: 700; align-items: center; justify-content: center; vertical-align: middle; }
+.wt-rail { display: grid; gap: 14px; min-width: 0; }
+.wt-rail section { border: 1px solid var(--gu-border); border-radius: 12px; padding: 12px; background: #fbf7ee; }
+.wt-rail .ask { background: #e6eddf; border-color: #b9c7ae; }
+.wt-rail h3 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 16px; margin: 0 0 6px; }
+.wt-sim { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: #fff7d6; border: 1px solid #d9b84a; border-radius: 6px; padding: 0 6px; }
+.wt-cmt { border-top: 1px solid var(--gu-border); padding: 10px 0; } .wt-cmt:first-child { border-top: 0; }
+.wt-cmt .reply { margin-left: 16px; border-left: 2px solid var(--gu-border); padding-left: 10px; }
+.wt-cmt .acts, .wt-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.wt textarea, .wt input[type="text"], .wt input[type="search"], .wt select { width: 100%; border: 1px solid var(--gu-border-strong); border-radius: 8px; padding: 8px 10px; background: var(--gu-input-bg, #fff); min-height: 44px; }
+.wt textarea { min-height: 80px; resize: vertical; }
+.wt label { display: block; margin: 10px 0 4px; font-size: 14px; }
+.wt-journal { margin-top: var(--gu-s4); }
+.wt-journal ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wt-journal li { border-left: 3px solid var(--gu-border-strong); padding: 4px 0 4px 12px; font-size: 14px; }
+.wt-journal li[data-via="inbox"] { border-left-color: #d9b84a; }
+.wt-journal small { color: var(--gu-text-muted); display: block; }
+.wt dialog, dialog.wt-dialog { width: min(720px, calc(100% - 20px)); max-height: 88dvh; border: 1px solid var(--gu-border-strong); background: var(--gu-zone-conv); color: var(--gu-text); border-radius: 14px; padding: 18px; box-shadow: 0 12px 70px #0005; overflow: auto; }
+dialog.wt-dialog::backdrop { background: #151a1b77; }
+dialog.wt-dialog > header { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+dialog.wt-dialog h2 { margin: 0; font: 700 20px var(--gu-font-serif); }
+dialog.wt-dialog label { display: block; margin: 10px 0 4px; } dialog.wt-dialog input, dialog.wt-dialog textarea, dialog.wt-dialog select { width: 100%; border: 1px solid var(--gu-border-strong); border-radius: 8px; padding: 8px 10px; min-height: 44px; font: inherit; background: #fff; }
+dialog.wt-dialog textarea { min-height: 120px; }
+
+/* the question context chip above the composer */
+.wt-ctx { display: flex; gap: 8px 12px; justify-content: space-between; align-items: center; flex-wrap: wrap; padding: 8px 12px; margin: 0 0 6px; background: #e6eddf; border: 1px solid #b9c7ae; border-radius: 10px; font-size: 14px; }
+
+/* the chat panel inside this page: Split docks it left of the work; Chat fills the page; Cards folds it away */
+body.gu[data-page="workshop"] .mc-pill { display: none; }
+body.gu[data-page="workshop"] .mc-head-actions, body.gu[data-page="workshop"] .mc-context { display: none; }
+body.gu[data-page="workshop"][data-mc-mode="docked"] .gu-layout { display: grid; grid-template-columns: clamp(300px, var(--wt-chat-w, 42%), calc(100% - 460px)) 14px minmax(0, 1fr); gap: 0; align-items: start; padding: var(--gu-s2) var(--gu-gutter) 0; }
+body.gu[data-page="workshop"][data-mc-mode="docked"][data-wt-side="right"] .gu-layout { grid-template-columns: minmax(0, 1fr) 14px clamp(300px, var(--wt-chat-w, 42%), calc(100% - 460px)); }
+body.gu[data-page="workshop"][data-mc-mode="docked"] .wt { padding-left: 0; padding-right: 0; }
+body.gu[data-page="workshop"][data-mc-mode="docked"] .mc-panel { order: -1; border: 1px solid var(--gu-border); border-radius: 14px; overflow: hidden; position: sticky; top: 8px; height: calc(100dvh - 140px); }
+body.gu[data-page="workshop"][data-mc-mode="docked"] .gu-main { order: 1; min-width: 0; max-height: calc(100dvh - 140px); overflow: auto; }
+body.gu[data-page="workshop"][data-mc-mode="docked"][data-wt-side="right"] .mc-panel { order: 1; }
+body.gu[data-page="workshop"][data-mc-mode="docked"][data-wt-side="right"] .gu-main { order: -1; }
+.wt-divider { display: none; }
+body.gu[data-page="workshop"][data-mc-mode="docked"] .wt-divider { display: block; order: 0; align-self: stretch; position: relative; cursor: col-resize; touch-action: none; min-height: 120px; }
+.wt-divider::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: var(--gu-border-strong); border-radius: 2px; opacity: .55; }
+.wt-divider::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 44px; transform: translate(-50%, -50%); border-radius: 4px; background: var(--gu-border-strong); }
+.wt-divider:hover::before, .wt-divider:focus-visible::before, .wt-sizing .wt-divider::before { opacity: 1; background: var(--gu-accent-strong, #344b40); }
+.wt-divider:focus-visible { outline: 2px solid var(--gu-accent-strong, #344b40); outline-offset: -2px; border-radius: 6px; }
+.wt-sizing { user-select: none; cursor: col-resize; }
+.wt-sizing .mc-panel, .wt-sizing .gu-main { pointer-events: none; }
+.wt-panelctl { display: none; margin-left: auto; gap: 2px; }
+body.gu[data-page="workshop"] .mc-head { display: flex; align-items: center; }
+body.gu[data-page="workshop"][data-mc-mode="docked"] .wt-panelctl, body.gu[data-page="workshop"][data-mc-mode="full"] .wt-panelctl { display: inline-flex; }
+.wt-pc { border: 0; background: transparent; color: #fff6e6; width: 30px; height: 30px; border-radius: 6px; font-size: 16px; line-height: 1; cursor: pointer; }
+.wt-pc:hover, .wt-pc:focus-visible { background: #ffffff26; }
+body.gu[data-page="workshop"][data-mc-mode="full"] .wt-pc[data-wt-swap] { display: none; }
+body.gu[data-page="workshop"][data-mc-mode="full"] .gu-layout { display: block; }
+/* Chat view: the panel starts right under the heading, and its composer is on screen (desktop and phone). */
+body.gu[data-page="workshop"][data-mc-mode="full"] .wt { padding-bottom: 0; }
+body.gu[data-page="workshop"][data-mc-mode="full"] .gu-main { padding-bottom: var(--gu-s2); }
+body.gu[data-page="workshop"][data-mc-mode="full"] [data-wt-body] { display: none; }            /* the view control stays; the cards step aside for the chat */
+body.gu[data-page="workshop"][data-mc-mode="full"] .mc-panel[data-mode="full"] { display: flex; position: static; width: auto; max-width: 960px; margin: 0 auto; height: calc(100dvh - 190px); min-height: 420px; border: 1px solid var(--gu-border); border-radius: 14px; overflow: hidden; }
+@media (min-width: 701px) { body.gu[data-page="workshop"][data-mc-mode="full"] .mc-panel[data-mode="full"] { height: calc(100dvh - 250px); } }
+body.gu[data-page="workshop"][data-mc-mode="pill"] .mc-panel[data-mode="pill"] { display: none; }
+body.gu[data-page="workshop"] .mc-panel[data-mode="full"] .mc-thread, body.gu[data-page="workshop"] .mc-panel[data-mode="docked"] .mc-thread { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
+body.gu[data-page="workshop"] .wt-conv-title { font-size: 13px; color: var(--gu-text-muted); margin: 0 12px 6px; }
+
+@media (max-width: 1000px) { .wt-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) {
+  .wt { padding: var(--gu-s2) 12px 110px; }
+  .wt-title { font-size: 19px; }
+  .wt-board { grid-template-columns: minmax(0, 1fr); padding: 10px; gap: 10px; } .wt-card.wide { grid-column: auto; } .wt-card .grip { display: none; }
+  .wt-reader { padding: 12px; } .wt-view { padding: 10px; }
+  .wt-bottom { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: #293c34; padding: 8px; display: flex; gap: 8px; border-top: 1px solid #0006; }
+  .wt-bottom .wt-btn { flex: 1; }
+  .wt-bottom .wt-btn:not(.primary) { background: var(--gu-surface); }
+  body.gu[data-page="workshop"][data-mc-mode="full"] .mc-panel[data-mode="full"] { height: calc(100dvh - 150px); }
+}
+@media (min-width: 701px) { .wt-bottom { display: none; } }
+
+.wt-inbox { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; border: 1px solid var(--gu-border, #d8d2c8); background: var(--gu-surface-2); border-radius: 12px; padding: 10px 12px; margin: 8px 0 12px; }
+.wt-inbox span { flex: 1 1 260px; overflow-wrap: anywhere; }
+.wt-inbox .wt-btn { min-height: 44px; }
+
+.wt-crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 8px; }
+.wt-crumb .wt-btn { min-height: 44px; }
+.wt-crumb .wt-note { overflow-wrap: anywhere; min-width: 0; flex: 1 1 160px; margin: 0; }
+
+/* The work is the star (Robert, 8 Oct): on a desktop the page's own chrome is one slim row, and the Guild's navigation rows are tighter
+   on this page. Phones keep full-size touch targets. */
+@media (min-width: 701px) {
+  .wt-top .wt-btn, .wt-crumb .wt-btn { min-height: 30px; min-width: 0; padding: 2px 10px; font-size: 13px; border-radius: 6px; }
+  .wt-top .wt-chip { font-size: 12px; padding: 2px 8px; color: var(--gu-text-muted); }
+  .wt-views .wt-btn { min-height: 28px; padding: 2px 11px; }
+  body.gu[data-page="workshop"] { --gu-subnav-h: 32px; }
+  body.gu[data-page="workshop"] .gu-section-band { padding: 2px 20px; gap: 2px; }
+  body.gu[data-page="workshop"] .gu-section-band a { padding: 5px 12px; font-size: 13px; }
+}
+
+/* In-page editing: a large box, not a small window. */
+.wt-editor { display: grid; gap: 8px; }
+.wt-editor textarea { width: 100%; min-height: max(320px, calc(100dvh - 420px)); resize: vertical; border: 1px solid var(--gu-border-strong); border-radius: 10px; padding: 14px 16px; background: var(--gu-surface, #fff); color: inherit; font: 15px/1.6 var(--gu-font-body, inherit); box-sizing: border-box; }
+.wt-editor .wt-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+.wt-editor .wt-acts input { flex: 1 1 220px; min-width: 0; border: 1px solid var(--gu-border-strong); border-radius: 8px; padding: 4px 10px; min-height: 30px; background: var(--gu-surface, #fff); }
+dialog.wt-dialog { width: min(900px, calc(100% - 24px)); }
+dialog.wt-dialog textarea { min-height: 38dvh; resize: vertical; }
+
+/* Quiet, small controls on a desktop: the work is the star, the buttons are not (Robert, 8 Oct). Phones keep 44 px targets. */
+@media (min-width: 701px) {
+  .wt .wt-btn, dialog.wt-dialog .wt-btn { min-height: 28px; min-width: 0; padding: 2px 10px; font-size: 13px; border-radius: 6px; }
+  .wt .wt-btn.primary { font-weight: 600; }
+  .wt-menu button { min-height: 30px; font-size: 13px; padding: 3px 10px; }
+  .wt-card .open { min-height: 28px; font-size: 15px; }
+  .wt-card .grip { min-height: 28px; }
+  .wt-card .more { min-height: 26px; min-width: 28px; }
+  .wt-cmt .acts .wt-btn { min-height: 22px; padding: 0 8px; font-size: 12px; background: transparent; border-color: var(--gu-border); }
+}
+
+/* The Record: one quiet line when closed; compact rows when open. */
+details.wt-journal { margin-top: var(--gu-s3); border-top: 1px solid var(--gu-border); padding-top: 6px; }
+details.wt-journal > summary { display: flex; gap: 10px; align-items: baseline; cursor: pointer; min-height: 32px; list-style: none; padding: 2px 0; }
+details.wt-journal > summary::-webkit-details-marker { display: none; }
+details.wt-journal > summary::before { content: "▸"; color: var(--gu-text-muted); }
+details.wt-journal[open] > summary::before { content: "▾"; }
+.wt-j-title { font: 700 15px var(--gu-font-serif); }
+.wt-j-body ol { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.wt-j-body li { border-left: 3px solid var(--gu-border-strong); padding: 2px 0 2px 10px; font-size: 13.5px; }
+.wt-j-body li[data-via="inbox"] { border-left-color: #d9b84a; }
+.wt-j-head { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.wt-j-head small { color: var(--gu-text-muted); }
+.wt-j-head .wt-badge { font-size: 11px; padding: 0 7px; }
+.wt-j-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.wt-j-text.open { -webkit-line-clamp: unset; display: block; }
+.wt-j-refs { display: block; color: var(--gu-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt-more-text { min-height: 22px !important; padding: 0 6px !important; font-size: 12px !important; }
+.wt-j-add { margin-top: 6px; } .wt-j-add > summary { cursor: pointer; min-height: 28px; color: var(--gu-text-muted); }
+.wt-j-add textarea { width: 100%; min-height: 70px; margin: 6px 0; border: 1px solid var(--gu-border-strong); border-radius: 8px; padding: 8px 10px; box-sizing: border-box; font: inherit; }
+.wt-inbox { font-size: 13px; padding: 6px 10px; }
+.wt-j-body li.fresh { background: #fbf3c9; border-left-color: var(--gu-accent-strong, #344b40); border-radius: 0 8px 8px 0; padding-right: 8px; }
+.wt-j-body .wt-banner { margin: 8px 0; font-size: 13px; }
+
+/* The shared Workshop record inside the Record pane: reuses the page's own banner, badge and list styles. */
+.wt-j-body .wt-banner ul { margin: 4px 0; padding-left: 18px; }
+.wt-j-body .wt-banner small { color: var(--gu-text-muted); }
+.wt-journal li[data-via="journal"] { border-left-color: var(--gu-border-strong); }
+details.wt-j-add .wt-j-head { margin-top: 4px; }
+
+/* On a phone the Record pane's small quiet controls get a thumb-sized hit height (44 px) without growing their text or colour. */
+@media (max-width: 768px) {
+  .wt-journal .wt-btn, .wt-journal summary, details.wt-journal > summary { min-height: 44px; display: inline-flex; align-items: center; }
+  details.wt-journal > summary { display: flex; }
+  .wt-j-add > summary { min-height: 44px; display: flex; align-items: center; }
+}

@@ -2,10 +2,37 @@
 {% from 'guild_floor/_macros.html' import shape %}
 {% block title %}Operate · Guild{% endblock %}
 {% block main %}
-<div class="page-head">
-  <h1 class="page-title">Operate</h1>
-  <p class="page-meta">Current as of <span data-iso="{{ state.observed_at }}">{{ hhmm(state.observed_at) }}</span> · {{ rules_label }} · marks: <span class="src-badge" data-source="live" data-status="ok">live</span> <span class="src-badge" data-source="not_instrumented" data-status="unknown">not instrumented</span></p>
-</div>
+<h1 class="page-title">Operate</h1>
+{% set construction_text = "Operate is being redesigned. What is below works today. Production and Dev health by domain, backlog aging and a short daily note from Master Craftsman are planned, not built." %}
+{% include 'guild_floor/_in_construction.html' %}
+<p>Check the essentials. Ask MC through Chat when something needs a closer look.</p>
+<p><a href="https://github.com/robertvanstedum/personal-ai-agents/issues?q=is%3Aissue+is%3Aopen">Open GitHub backlog ↗</a></p>
+{% if memory_capture.status != 'current' or scheduled_jobs.light.state != 'green' %}
+<section class="card" aria-labelledby="operate-attention"><h2 id="operate-attention">Worth checking</h2>
+{% if memory_capture.status != 'current' %}<p>Memory capture: {{ memory_capture.status }} · {{ memory_capture.reason }}</p>{% endif %}
+{% if scheduled_jobs.light.state != 'green' %}<p>Scheduled jobs: {{ scheduled_jobs.light.word }} · {{ scheduled_jobs.light.reason }}</p>{% endif %}
+</section>
+{% endif %}
+<details class="card" id="memory-capture-details"><summary>Memory capture · {{ memory_capture.status|capitalize }}</summary>
+{% include 'guild_floor/memory_capture.html' %}
+</details>
+<details class="card"><summary>Scheduled jobs · {{ scheduled_jobs.light.word }}</summary>
+<section aria-labelledby="scheduled-jobs-title">
+  <h2 class="h2" id="scheduled-jobs-title">Scheduled jobs · Mac / dev</h2>
+  <p>{{ shape(scheduled_jobs.light) }} {{ scheduled_jobs.light.word }} · {{ scheduled_jobs.light.reason }}</p>
+  <details><summary>Job details</summary>
+  {% for job in scheduled_jobs.jobs %}
+    <section><h3>{{ job.name }} · {{ job.host }}</h3>
+      <p>{{ shape(job.light) }} {{ job.light.word }} · {{ job.light.reason }}</p>
+      <p class="small">Last finished: {{ job.finished or 'Unknown' }}<br>Next due: {{ job.next_due or 'Unknown' }}</p>
+      <ul>{% for part, code in job.results.items() %}<li>{{ part }}: {{ code }}</li>{% endfor %}</ul>
+    </section>
+  {% else %}<p>No job status is available.</p>{% endfor %}
+  </details>
+  <p class="small">Checked {{ scheduled_jobs.light.observed_at or '—' }} · refresh this page for the latest status.</p>
+</section>
+</details>
+<details class="gu-operate-diagnostics"><summary>Guild diagnostics · queue and local systems</summary>
 <ul class="tiles" aria-label="Operate measures">
   {% for t in layout.operate.tiles %}{% set l = tile_lights[t.id] %}
   <li>
@@ -25,8 +52,9 @@
   <p>{{ l.reason }}</p>
   <ul class="light-detail">{% for line in l.detail %}<li>{{ line }}</li>{% endfor %}</ul>
   <p class="small">Source: {{ l.source_mark }}{% if l.evidence %} · {{ l.evidence }}{% endif %}</p>
-  {% if t.id == 'build_queue' %}<p class="panel-links"><a href="{{ urls.queue }}">Open the Build Queue →</a></p>{% endif %}
+  {% if t.id == 'build_queue' %}<p class="panel-links"><a href="{{ urls.build_log }}">Open the Build Log →</a></p>{% endif %}
 </section>
 {% endfor %}
-<p class="small">No next steps, journeys or administration here yet; guest and reset administration stays on the <a href="/guild/operate">current Operate page</a>.</p>
+</details>
+<p class="small"><a href="{{ url_for('.operate_view',view='checks') }}">Operational checks</a> · <a href="/guild/operate">Administration</a></p>
 {% endblock %}
