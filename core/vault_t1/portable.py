@@ -196,7 +196,7 @@ def _stopped(pub: "Publisher", exc: BaseException) -> None:
         if left["files"]:
             exc.detail.update(left_in_place=left["path"], files_left=left["files"])
     elif left["files"]:
-        raise VaultError("output_incomplete", {"left_in_place": left["path"], "files_left": left["files"],
+        raise Damaged("output_incomplete", {"left_in_place": left["path"], "files_left": left["files"],
                                                "cause": getattr(exc, "errno", None)}) from exc
 
 

@@ -809,3 +809,25 @@ def test_R13c_a_workshop_day_missing_its_promised_edition_is_unknown_membership_
     manifest = portable.export(Vault(str(shelf)), str(out), topic="garden-build", allow_incomplete=True)
     assert manifest["complete"] is False and manifest["counts"]["records"] == 1 and manifest["left_out"]["skipped_unreadable"]["topic_membership_unknown"] == 1
     assert manifest["left_out"]["outside_topic"] == 2 and portable.verify(str(out))["ok"] is True
+
+
+def test_output_incomplete_exits_5_like_every_other_output_failure(shelf, tmp_path):
+    """Codex's reporting correction: one exit status for 'the output could not be completed'."""
+    target = tmp_path / "out"
+    code = (
+        "import sys, runpy; sys.path.insert(0, %r)\n"
+        "from core.vault_t1 import portable\n"
+        "real = portable.Publisher.put\n"
+        "n = [0]\n"
+        "def put(self, rel, data):\n"
+        "    n[0] += 1\n"
+        "    if n[0] == 3: raise OSError(28, 'disk full')\n"
+        "    return real(self, rel, data)\n"
+        "portable.Publisher.put = put\n"
+        "sys.argv = ['vault.py', '--root', %r, 'export', '--to', %r]\n"
+        "runpy.run_path(%r, run_name='__main__')\n") % (str(REPO), str(shelf), str(target), CLI)
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, timeout=60, env={"PATH": "/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"})
+    doc = json.loads(r.stdout)
+    assert r.returncode == 5 and doc["reason"] == "output_incomplete" and doc["detail"]["left_in_place"] == str(target)
+    r2 = subprocess.run([sys.executable, CLI, "--root", str(shelf), "export", "--to", str(tmp_path / "x")], capture_output=True, timeout=60)
+    assert r2.returncode == 0
