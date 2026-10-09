@@ -1,0 +1,47 @@
+{
+ "claude-ai:synthetic-export-1": {
+  "date": "2026-09-20",
+  "dir": "naming-the-compost-heap--xmfqrj2p",
+  "first_human": "e4318cbb40bc65ce9e7e65a666bcb9725ea620a3f4a14caf6b714c72119d6e8d",
+  "id": "01M4EZ49YZFZGMNSTRXMFQRJ2P",
+  "kind": "session",
+  "provider": "claude-ai",
+  "title": "naming-the-compost-heap"
+ },
+ "claude-code:synthetic-garden": {
+  "date": "2026-10-01",
+  "dir": "garden-planning--bdevakmn",
+  "first_human": "d2127983bad10dff3977c81f2da3b9ee35b728fd75b7c48d2d60da44f110659a",
+  "id": "01M4EZ49WX4ZSJP26XBDEVAKMN",
+  "kind": "session",
+  "provider": "claude-code",
+  "title": "garden-planning"
+ },
+ "codex:synthetic-review": {
+  "date": "2026-10-02",
+  "dir": "irrigation-review--7q581r2n",
+  "first_human": "cbaae5d7eaf6c522aff6d4882e48051102e8a07cff3511276f0e2f4dc741d0b9",
+  "id": "01M4EZ49YS45QMC07W7Q581R2N",
+  "kind": "session",
+  "provider": "codex",
+  "title": "irrigation-review"
+ },
+ "grok:synthetic-private-mandate": {
+  "date": "2026-09-25",
+  "dir": "orchard-budget-mandate--3pjye6h2",
+  "first_human": "37bd835ae2d4db57bf2185d6ed0ef8ac35b5bae2c7f8c413a6e0bbef3b96947d",
+  "id": "01M4EZ49Z6EAFE5S243PJYE6H2",
+  "kind": "session",
+  "provider": "grok",
+  "title": "orchard-budget-mandate"
+ },
+ "workshop:workshop-neubau:workshop-neubau.local:2026-10-08": {
+  "date": "2026-10-08",
+  "dir": "workshop-2026-10-08--m3mcm8cq",
+  "first_human": null,
+  "id": "01M4EZ4A77ZZS68HR4M3MCM8CQ",
+  "kind": "session",
+  "provider": "workshop",
+  "title": "workshop-2026-10-08"
+ }
+}

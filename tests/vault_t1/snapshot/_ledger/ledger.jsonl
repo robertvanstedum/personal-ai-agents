@@ -1,0 +1,6 @@
+{"at": "2026-10-08T23:56:11Z", "key": "claude-code:synt", "outcome": "captured", "record": "01M4EZ49WX4ZSJP26XBDEVAKMN", "source": "synthetic", "turns": 4}
+{"at": "2026-10-08T23:56:11Z", "key": "claude-code:synt", "outcome": "edition-added", "record": "01M4EZ49WX4ZSJP26XBDEVAKMN", "source": "synthetic", "turns": 6}
+{"at": "2026-10-08T23:56:11Z", "key": "codex:synthetic-", "outcome": "captured", "record": "01M4EZ49YS45QMC07W7Q581R2N", "source": "synthetic", "turns": 3}
+{"at": "2026-10-08T23:56:11Z", "key": "claude-ai:synthe", "outcome": "captured", "record": "01M4EZ49YZFZGMNSTRXMFQRJ2P", "source": "synthetic", "turns": 2}
+{"at": "2026-10-08T23:56:11Z", "key": "grok:synthetic-p", "outcome": "captured", "record": "01M4EZ49Z6EAFE5S243PJYE6H2", "source": "synthetic", "turns": 2}
+{"at": "2026-10-08T23:56:11Z", "key": "9b3e29aa59f1a988", "outcome": "captured", "record": "01M4EZ4A77ZZS68HR4M3MCM8CQ", "source": "workshop-export", "turns": 5}
