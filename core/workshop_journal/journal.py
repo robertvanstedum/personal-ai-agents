@@ -72,10 +72,13 @@ def _shallow_ok(row: dict) -> bool:
             and isinstance(row["item"], str))
 
 
-def scan_bytes(data: bytes, *, deep: bool = True, deep_from: int | None = None, actors: tuple[str, ...] | None = None) -> Scan:
+def scan_bytes(data: bytes, *, deep: bool = True, deep_from: int | None = None, actors: tuple[str, ...] | None = None,
+               tolerate_legacy: bool = False) -> Scan:
     """Scan the journal bytes. ``deep`` validates every v2 row against its own intent hash (about 14 times the cost of a
     shallow scan); ``deep_from`` validates every v2 row that starts at or after that byte offset, which is how an append checks
-    what no earlier deep check covered (the covered prefix is proven by hash, never assumed)."""
+    what no earlier deep check covered (the covered prefix is proven by hash, never assumed). ``tolerate_legacy`` is for the
+    old-screen adapter only: a parseable v1 line that is not a usable event is then skipped and counted instead of being damage; the
+    authoritative journal (appends, verify, brief, history) never sets it."""
     scan = Scan()
     cut = data.rfind(b"\n") + 1
     scan.complete_bytes, scan.tail = cut, data[cut:]
@@ -113,10 +116,10 @@ def scan_bytes(data: bytes, *, deep: bool = True, deep_from: int | None = None, 
                 problem("legacy_after_v2")
                 continue
             if not isinstance(row.get("item"), str) or not isinstance(row.get("kind"), str) or not isinstance(row.get("at"), str):
-                # A valid-JSON v1 line that is not a usable event (no item, kind or time) carries no sequence or ID, so it cannot
-                # break the order of anything: it is skipped and reported, as the shipped screen has always done, instead of
-                # hiding every newer event behind it. (Unparseable lines and sequence breaks are still damage.)
-                scan.skipped += 1
+                if not tolerate_legacy:
+                    problem("bad_legacy_row")                 # damage: reads report the gap, writes are held until a reviewed recovery
+                    continue
+                scan.skipped += 1                             # the adapter's view only: skipped, counted, never "healthy"
                 if len(scan.warnings) < MAX_PROBLEMS:
                     scan.warnings.append({"offset": here, "reason": "legacy_row_skipped"})
                 continue
@@ -665,7 +668,7 @@ class Journal:
             return state
 
     # ── reads (never create, repair or block a writer) ────────────────────────────────────────────────────────────
-    def read(self, *, deep: bool = True) -> ReadResult:
+    def read(self, *, deep: bool = True, tolerate_legacy: bool = False) -> ReadResult:
         try:
             base_fd = self._open_base(create=False)
         except Missing:
@@ -684,7 +687,8 @@ class Journal:
                 return ReadResult("unsupported_writer", reason="no_lock_file")
             in_progress = lock_fd is None
             data = fsutil.read_all(jfd)
-            scan = scan_bytes(data, deep=True) if deep else scan_bytes(data, deep=False, deep_from=self._validated_upto(base_fd, data))
+            scan = (scan_bytes(data, deep=True, tolerate_legacy=tolerate_legacy) if deep else
+                    scan_bytes(data, deep=False, deep_from=self._validated_upto(base_fd, data), tolerate_legacy=tolerate_legacy))
             if scan.problems:
                 return ReadResult("corrupt", scan.events, scan, scan.problems[0]["reason"], data)
             if scan.tail:
@@ -700,7 +704,7 @@ class Journal:
                     except OSError:
                         pass
 
-    def state(self) -> tuple[dict | None, str]:
+    def state(self, *, tolerate_legacy: bool = False) -> tuple[dict | None, str]:
         """(state, source): the derived state, which is always rebuilt from the journal, so the journal always wins.
 
         ``source`` says how the stored ``state.json`` compared: ``file`` when it is exactly what the journal as read now would
@@ -708,7 +712,7 @@ class Journal:
         Nothing is written by a read. ``unreadable`` means the stored file is not JSON (the state returned is then None, as the
         Workshop screen expects); ``refused`` means the journal itself is damaged and no "as of" is reported; ``missing``,
         ``unsupported_writer`` and ``unsafe_root`` pass through."""
-        read = self.read(deep=False)
+        read = self.read(deep=False, tolerate_legacy=tolerate_legacy)
         if read.status in ("missing", "unsupported_writer", "unsafe_root"):
             return None, read.status
         if read.status == "corrupt":
@@ -731,6 +735,9 @@ class Journal:
         rebuilt = reducer.reduce(self.id, read.events, resolver=self.resolver)
         if read.status in ("torn_tail", "tail_in_progress"):
             rebuilt["incomplete"] = {"reason": read.status, "tail_bytes": len(read.scan.tail)}
+            return rebuilt, "incomplete"
+        if read.scan.skipped:                                  # only with tolerate_legacy: usable, but never presented as whole
+            rebuilt["incomplete"] = {"reason": "legacy_rows_skipped", "skipped": read.scan.skipped}
             return rebuilt, "incomplete"
         mark = {"journal_bytes": len(read.data), "journal_sha256": hashlib.sha256(read.data).hexdigest(),
                 "last_seq": read.scan.last_seq, "events": len(read.events), "problems": 0}

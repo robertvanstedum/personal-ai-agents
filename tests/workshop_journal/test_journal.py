@@ -241,27 +241,53 @@ def test_a_state_that_could_not_be_refreshed_is_a_success_with_a_warning(journal
     assert journal.state()[1] == "file"                                               # the next append refreshed it
 
 
-# ── the shipped screen's contract: a usable-looking but unusable v1 line is skipped and reported, not fatal ──────
-def test_a_parseable_but_unusable_v1_line_is_skipped_and_reported_and_hides_nothing_after_it(root):
-    from minimoi_portal.workshop.record import Workshop, load_state
-    ws = Workshop(root, "mac")
-    ws.append({"workshop": "mac", "actor": "codex", "kind": "started", "item": "queue:12", "text": "Building"})
+# ── Codex R17: an unusable-looking old line is damage for the authoritative journal; the old-screen adapter shows it as incomplete ──
+def bad_legacy_lines(root):
     path = Path(root) / "mac" / "events.jsonl"
-    for bad in ({"v": 1, "at": "2026-10-09T01:00:00+00:00", "actor": "codex", "kind": "progress", "text": "no item"},
+    for bad in ({"v": 1, "at": "2026-10-09T01:00:00+00:00", "actor": "codex", "kind": "needs_you", "text": "an owner question with no item"},
                 {"v": 1, "at": 1700000000, "actor": "codex", "kind": "progress", "item": "queue:12", "text": "numeric time"},
                 {"v": 1, "at": "2026-10-09T01:00:00+00:00", "actor": "codex", "item": "queue:12", "text": "no kind"}):
         with open(path, "a") as handle:
             handle.write(json.dumps(bad) + "\n")
-    ws.append({"workshop": "mac", "actor": "codex", "kind": "progress", "item": "queue:12", "text": "after the bad lines"})
+    return path
+
+
+def test_R17_a_malformed_legacy_owner_question_holds_writes_and_every_authoritative_view_says_so(root):
+    from core.workshop_journal import brief as brief_view
+    ws = Workshop(root, "mac")
+    ws.append({"workshop": "mac", "actor": "codex", "kind": "started", "item": "queue:12", "text": "Building"})
+    path = bad_legacy_lines(root)
+    before = path.read_bytes()
     j = Journal(root, "mac")
     read = j.read()
-    assert read.status == "ok" and [e["text"] for e in read.events] == ["Building", "after the bad lines"]    # the later event is not hidden
-    assert read.scan.skipped == 3 and {w["reason"] for w in read.scan.warnings} == {"legacy_row_skipped"}
+    assert read.status == "corrupt" and read.scan.problems[0]["reason"] == "bad_legacy_row"
+    refused = j.append(progress("a v2 event after the damage"))
+    assert (refused.status, refused.committed) == ("corrupt", False)
+    assert j.append_legacy({"v": 1, "at": "2026-10-09T02:00:00+00:00", "actor": "codex", "kind": "progress", "item": "queue:12", "text": "x"}).status == "corrupt"
+    brief = j.brief()
+    assert (brief["status"], brief["reason"]) == ("refused", "journal_damaged")
+    hist = j.history()
+    assert hist["status"] == "refused" and hist["events"] == []
     report = j.verify()
-    assert report["ok"] is True and [w["reason"] for w in report["warnings"]] == ["legacy_row_skipped"] * 3
+    assert report["ok"] is False and report["problems"][0]["reason"] == "bad_legacy_row"
+    assert j.state() == (None, "refused")
+    assert path.read_bytes() == before                                                                   # no silent repair, every byte kept
+
+
+def test_R17_the_old_screens_adapter_still_shows_the_valid_records_but_labels_them_incomplete_with_the_count(root):
+    from minimoi_portal.workshop.record import Workshop, load_state
+    ws = Workshop(root, "mac")
+    ws.append({"workshop": "mac", "actor": "codex", "kind": "started", "item": "queue:12", "text": "Building"})
+    bad_legacy_lines(root)
+    ws2 = Workshop(root, "mac")
+    assert [e["text"] for e in ws2.events()] == ["Building"]
     state, status = load_state(root, "mac")
-    assert state["items"]["queue:12"]["text"] == "after the bad lines"
-    assert j.append_legacy({"v": 1, "at": "2026-10-09T02:00:00+00:00", "actor": "codex", "kind": "progress", "item": "queue:12", "text": "still writable"}).ok
-    with open(path, "a") as handle:
+    assert state["items"]["queue:12"]["text"] == "Building"                                              # valid records are still shown
+    assert state["incomplete"] == {"reason": "legacy_rows_skipped", "skipped": 3} and status in ("ok", "stale")
+    assert Journal(root, "mac").read(tolerate_legacy=True).scan.skipped == 3
+    # only the adapter is tolerant: the writer and the authoritative views are not
+    with pytest.raises(OSError):
+        ws2.append({"workshop": "mac", "actor": "codex", "kind": "progress", "item": "queue:12", "text": "after"})
+    with open(Path(root) / "mac" / "events.jsonl", "a") as handle:
         handle.write("this is not json\n")
-    assert Journal(root, "mac").read().status == "corrupt"                                                      # real damage still stops everything
+    assert load_state(root, "mac") == (None, "unreadable")                                               # real damage still blanks the adapter

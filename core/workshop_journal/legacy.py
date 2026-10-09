@@ -131,7 +131,7 @@ class Workshop:
 
     def events(self) -> list[dict]:
         """The valid prefix of the journal (legacy and v2 rows). An unterminated tail is never part of it."""
-        return self.journal.read(deep=False).events
+        return self.journal.read(deep=False, tolerate_legacy=True).events
 
     def write_state(self) -> dict:
         return self.journal.write_state()
@@ -149,7 +149,7 @@ def load_state(root: str | None, workshop_id: str) -> tuple[dict | None, str]:
         ws = Workshop(root, workshop_id)
     except ValueError:
         return None, "missing"
-    state, source = ws.journal.state()
+    state, source = ws.journal.state(tolerate_legacy=True)
     if state is None:
         return None, "missing" if source in ("missing", "unsupported_writer") else "unreadable"
     host = state.get("host") if isinstance(state.get("host"), dict) else {}
