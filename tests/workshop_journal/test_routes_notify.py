@@ -105,7 +105,7 @@ def test_config_overrides_the_defaults_and_an_unknown_field_is_refused(tmp_path)
         routes.load(str(tmp_path))
 
 
-@pytest.mark.parametrize("home", ["relative/path", "", "/ok\nrm -rf /", "/ok\x00", "/" + "x" * 400, None])
+@pytest.mark.parametrize("home", ["relative/path", "", "/ok\nrm -rf /", "/ok\x00", "/" + "x" * 400, None], ids=["relative", "empty", "newline", "nul_byte", "too_long", "none"])
 def test_R11_an_unsafe_workshop_root_is_refused_and_a_spaced_one_is_quoted(home):
     with pytest.raises(notify.NotNotifiable):
         notify.build(REQUEST, "codex", WORKSHOP, home)

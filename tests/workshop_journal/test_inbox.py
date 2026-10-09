@@ -197,7 +197,7 @@ def test_a_conversation_is_held_as_a_memory_source_never_archived_by_this_route(
     (HEADER.replace("  - LOCAL_WORKSHOP_BACKEND_DESIGN_2026-10-08.md", "  - ../../etc/passwd"), "bad_artifacts"),
     (HEADER.replace("captured: handoff", "captured: handoff\nclassification: private"), "excluded_source"),
     (HEADER.replace("kind: handoff", "kind: handoff\nkind2: x"), "unknown_header_field"),
-])
+], ids=['no_header', 'header_not_closed', 'duplicate_key', 'anchor', 'alias', 'python_tag', 'str_tag', 'bad_yaml', 'unknown_field', 'wrong_workshop', 'sender_robert', 'sender_yes', 'kind_approval', 'bad_topic', 'session_ends_before_start', 'bad_session_ended', 'bad_reply_to', 'bad_recipients', 'bad_artifact_path', 'private_class', 'unknown_field_kind2'])
 def test_I02_a_bad_header_is_held_with_no_entry_and_no_retained_copy(box, root, text, reason):
     inbox, folder, j = box
     drop(folder, text=text)

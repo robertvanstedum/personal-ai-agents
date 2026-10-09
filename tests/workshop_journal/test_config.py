@@ -20,7 +20,7 @@ def test_an_absent_config_is_empty_and_a_good_one_is_read(tmp_path):
     ("{ not json", "config_unreadable"), ('{"v":1,"v":1}', "config_unreadable"), ('{"v":2}', "unknown_config_version"),
     ('{"tokens":{}}', "unknown_config_field"), ("[]", "unknown_config_field"), ('{"v":1,"routes":{"a":NaN}}', "config_unreadable"),
     ('{"pad":"' + "x" * (config.MAX_BYTES + 10) + '"}', "config_too_large"),
-])
+], ids=['not_json', 'duplicate_key', 'unknown_version', 'unknown_field_object', 'unknown_field_array', 'nan_value', 'too_large'])
 def test_a_damaged_or_oversized_or_unknown_config_is_refused(tmp_path, text, reason):
     write_config(tmp_path, text)
     with pytest.raises(config.BadConfig) as caught:

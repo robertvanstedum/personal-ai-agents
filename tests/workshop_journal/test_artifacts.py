@@ -48,7 +48,7 @@ def test_prepare_scrubs_credentials_and_counts_them_without_keeping_the_original
     (b"\xff\xfe binary", "handoff", "not_text"), (b"nul\x00byte", "handoff", "not_text"), (b"", "handoff", "empty"),
     (b"x" * (art.MAX_TEXT_BYTES + 1), "handoff", "too_large"), (b"fine", "private", "excluded_source"),
     (b"fine", "excluded", "excluded_source"), (b"fine", "mystery", "unknown_source_class"),
-])
+], ids=['not_text_binary', 'not_text_nul_byte', 'empty', 'too_large', 'private_class', 'excluded_class', 'unknown_class'])
 def test_prepare_refuses_with_a_fixed_code(data, cls, reason):
     with pytest.raises(SourceRefused) as caught:
         art.prepare(data, source_class=cls)
