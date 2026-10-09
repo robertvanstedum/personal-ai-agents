@@ -173,9 +173,12 @@ def build(workshop_id: str, events: list[dict], *, topic: str | None = None, res
     # decisions: a proposal is only a proposal; the owner resolver alone makes a decision the owner's
     proposals: dict[str, dict] = {}
     owner, links, unconfirmed = [], [], []
+    by_id = {e["event_id"]: e for e in events if e.get("v") == 2}
     for ev in scope:
         if ev.get("supersedes"):
-            links.append({"newer": ev["event_id"], "older": ev["supersedes"], "seq": ev["seq"]})
+            old = by_id.get(ev["supersedes"])
+            links.append({"newer": ev["event_id"], "older": ev["supersedes"], "seq": ev["seq"],
+                          "older_seq": old["seq"] if old else None, "older_text": old["text"] if old else None, "newer_text": ev["text"]})
         if ev["kind"] != "decision":
             continue
         p = ev["payload"]
@@ -307,9 +310,11 @@ def render_markdown(brief: dict) -> str:
               [f"- proposal by {x['actor']} ({x['status']}): seq {x['seq']} {x['text']}" for x in d["proposals"]] + \
               [f"- CLAIMED by {x['actor']}, NOT CONFIRMED as the owner's ({x['record_event_kind']}): seq {x['seq']} {x['text']}" for x in d["unconfirmed"]]
     if d["superseded"]:
-        out += ["- replaced: " + "; ".join(f"seq {x['seq']} replaces {x['older']}" for x in d["superseded"])]
+        out += ["- replaced: " + "; ".join(
+            f"entry {x['seq']} (\"{_snippet(x.get('newer_text'), 50)}\") replaces "
+            + (f"entry {x['older_seq']} (\"{_snippet(x.get('older_text'), 50)}\")" if x.get("older_seq") else x["older"]) for x in d["superseded"])]
     if brief["blocked"]:
-        out += ["", "## Blocked or uncertain"] + [f"- seq {x['seq']} {x['actor']}: {x['reason_code']}" for x in brief["blocked"]]
+        out += ["", "## Blocked or uncertain"] + [f"- entry {x['seq']} {x['actor']} ({x['reason_code']}): \"{_snippet(x['text'])}\"" for x in brief["blocked"]]
     if brief["claims"]:
         out += ["", "## Claims"] + [f"- {c['resource']} gen {c['generation']}: {c['claimant']} ({c['state']})" for c in brief["claims"]]
     if brief["next"]:

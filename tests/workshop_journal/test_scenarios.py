@@ -333,3 +333,17 @@ def test_a_result_says_how_many_entries_came_after_it_so_stale_limits_are_not_ta
     assert "[1 newer entry since: read them before relying on this]" in md
     code.progress("And again.")
     assert "[2 newer entries since:" in brief_view.render_markdown(j.brief(now=NOW))
+
+
+def test_a_replacement_and_a_blocker_say_what_they_replaced_and_what_they_said_not_just_an_id(world):
+    j, code, codex, robert, _ = world
+    old = code.propose("Proposal A: pine beds.")
+    robert_new = j.append({"actor": "robert", "kind": "decision", "item": "topic:scenario", "topic": "scenario", "text": "Cedar. Pine rots.",
+                           "supersedes": old.event_id, "authority_ref": {"type": "owner-control", "ref": "synthetic:c"},
+                           "payload": {"record_event_kind": "approved-direct", "resolves": [], "reason": "c"}})
+    code.blocked("Waiting for the cedar delivery date.")
+    md = brief_view.render_markdown(j.brief(now=NOW))
+    assert 'replaced: entry 2 ("Cedar. Pine rots.") replaces entry 1 ("Proposal A: pine beds.")' in md and old.event_id not in md
+    assert '(waiting_on_input): "Waiting for the cedar delivery date."' in md
+    link = j.brief(now=NOW)["decisions"]["superseded"][0]
+    assert (link["older_seq"], link["older_text"], link["newer_text"]) == (1, "Proposal A: pine beds.", "Cedar. Pine rots.") and robert_new.committed
