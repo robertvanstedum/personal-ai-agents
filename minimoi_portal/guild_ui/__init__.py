@@ -179,6 +179,34 @@ def _make_blueprint(name: str, routes) -> Blueprint:
     return bp
 
 
+# The fixed wording says "Master Craftsman". When another real partner answers here (the Chief of Staff, which production
+# uses because it has no Master Craftsman relay), the words the page SHOWS carry that partner's name. Only the server's own
+# status wording is renamed, by key; a kept note's or reply's text is never touched.
+_PARTNER_WORDING_KEYS = ("message", "mc_header", "notes_text")
+
+
+def _name_the_partner(bp, services):
+    @bp.after_request
+    def rename(response):
+        name = getattr(services.mc, "display_name", None)
+        if not name or name == "Master Craftsman" or response.mimetype != "application/json":
+            return response
+        try:
+            data = response.get_json(silent=True)
+        except Exception:
+            return response
+        if not isinstance(data, dict):
+            return response
+        changed = False
+        for key in _PARTNER_WORDING_KEYS:
+            if isinstance(data.get(key), str) and "Master Craftsman" in data[key]:
+                data[key] = data[key].replace("Master Craftsman", name)
+                changed = True
+        if changed:
+            response.set_data(__import__("json").dumps(data))
+        return response
+
+
 def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, blueprint_name: str,
                       services, routes=B1_ROUTES, base_url: str | None = None, prototype: bool = False):
     """Mount the real Shop floor, or raise GuildBindingError and register nothing."""
@@ -217,6 +245,7 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
         "layout": layout,
         "storage_ns": "guild" + url_prefix.replace("/", "."),
     }
+    _name_the_partner(bp, services)
     app.register_blueprint(bp, url_prefix=url_prefix)
     from .jobs_wiring import attach_jobs
     attach_jobs(app, blueprint_name, services)         # Master Craftsman jobs: nothing happens unless MINIMOI_GUILD_JOBS is on

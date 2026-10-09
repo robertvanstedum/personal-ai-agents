@@ -804,6 +804,10 @@ def mc_private():
     if not services.mc_turns:
         state = floor_state.mc_view(services, notes_ok=True)["state"]
         return json_error("mc_turns_off", MC_WORDS["off"], 409, mc_state=state)
+    if not getattr(services.mc, "supports_private", True):
+        return json_error("private_unsupported", "Private questions are not available through the "
+                          f"{getattr(services.mc, 'display_name', 'assistant')}. Nothing was sent.", 409,
+                          mc_state=floor_state.mc_view(services, notes_ok=True)["state"])
     body = request.get_json(silent=True)
     if not isinstance(body, dict) or set(body) - {"text", "session"}:
         return json_error("invalid", "A Private question is {text, session}. Nothing was sent.", 422)
@@ -1275,6 +1279,9 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         files = _turn_files(conversations, conv, principal, attachment_ids)
     except FilesRefused as exc:
         return {"error": exc.code, "message": exc.message}, exc.status
+    if files is not None and files.report and not getattr(services.mc, "accepts_files", True):
+        return {"error": "files_unsupported", "message": f"The {getattr(services.mc, 'display_name', 'assistant')} does not read "
+                "attached documents. Your note is kept; nothing was sent."}, 422
     if not _mc_acquire(principal):
         return {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
     turn_id = uuid.uuid4().hex

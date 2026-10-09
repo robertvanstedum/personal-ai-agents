@@ -8,6 +8,13 @@ import { live } from './state.js';
 import { newKey } from './actions.js';
 import { setPanelMode } from './conversation.js';
 
+const mcName = () => document.body.dataset.mcName || 'Master Craftsman';
+const mcSay = (text) => String(text).split('Master Craftsman').join(mcName());
+// A partner that reads no documents (the Chief of Staff) cannot be shown a topic item: the "Ask about this" actions are off,
+// not promised and then refused. The server refuses the same turn (files_unsupported).
+const askOff = () => document.body.dataset.mcFiles === 'false';
+const askOffWhy = () => `${mcName()} can’t read topic items yet. Nothing was added to your message.`;
+
 const SPLIT_MIN = 1100;                       // MC about 380 px and the work side about 640 px
 const FLOW = ['queued', 'delivered', 'acknowledged', 'working', 'returned'];
 const KIND_WORDS = { note: 'Note', document: 'Document', design: 'Design', request: 'Request' };
@@ -310,7 +317,7 @@ function cardNode(it, idx, count) {
   art.append(h('p', { class: 'txt' }, it.kind === 'design' ? `Version ${it.current_rev} · ${rev.width || '?'} × ${rev.height || '?'}` : `Version ${it.current_rev} · ${it.by}`));
   art.append(h('div', { class: 'foot' },
     h('span', { class: `wt-badge${it.comments_open ? ' warn' : ''}` }, it.comments_open ? `${it.comments_open} open comment${it.comments_open === 1 ? '' : 's'}` : (it.request ? `To ${it.request.to}` : 'No open comments')),
-    menuButton(`Actions for ${it.title}`, () => [['Open', () => openItem(it.id)], ['Ask Master Craftsman about this', () => askAbout(it.id)],
+    menuButton(`Actions for ${it.title}`, () => [['Open', () => openItem(it.id)], ...(askOff() ? [] : [[mcSay('Ask Master Craftsman about this'), () => askAbout(it.id)]]),
       ['Move earlier', () => move(it.id, -1), idx === 0], ['Move later', () => move(it.id, 1), idx === count - 1],
       [wideCard ? 'Make compact' : 'Make wider', () => toggleWide(it.id)], ['Put away', () => archive(it.id, true)]])));
   return art;
@@ -573,7 +580,7 @@ function readerNode() {
     h('div', { class: 'wt-acts', style: 'margin:0' }, revSel,
       ...(it.kind !== 'design' && !S.editing ? [h('button', { type: 'button', class: 'wt-btn', 'data-wt-edit': '', onclick: startEdit }, 'Edit')] : []),
       h('button', { type: 'button', class: 'wt-btn', 'data-wt-cmode': '', 'aria-pressed': String(S.commenting), onclick: () => { S.commenting = !S.commenting; renderBody(); } }, S.commenting ? 'Commenting: click where' : 'Comment'),
-      menuButton('More', () => [...(it.kind === 'design' ? [['Replace the image', () => reviseDialog(it)]] : []), ['Ask Master Craftsman about this', () => askAbout(it.id)], ['Put away', () => archive(it.id, true)]], 'wt-btn')));
+      menuButton('More', () => [...(it.kind === 'design' ? [['Replace the image', () => reviseDialog(it)]] : []), ...(askOff() ? [] : [[mcSay('Ask Master Craftsman about this'), () => askAbout(it.id)]]), ['Put away', () => archive(it.id, true)]], 'wt-btn')));
   node.append(h('nav', { class: 'wt-crumb', 'aria-label': 'Where you are' },
     h('button', { type: 'button', class: 'wt-btn', 'data-wt-back': '', onclick: () => closeItem() }, '‹ Back to cards'),
     h('span', { class: 'wt-note' }, `${S.topic ? S.topic.title : 'Topic'} › ${it.title}`)), head);
@@ -584,18 +591,19 @@ function readerNode() {
   else { const view = h('div', { class: 'wt-view' }); view.append(itemView(o)); main.append(view); }
   const cm = o.comments; const here = cm.filter((c) => c.rev === S.rev && !c.reply_to);
   const rail = h('aside', { class: 'wt-rail', 'aria-label': 'Comments and questions' });
-  const secC = h('section', { 'aria-labelledby': 'wt-c-h' }, h('h3', { id: 'wt-c-h' }, `💬 Comments on version ${S.rev}`), h('p', { class: 'wt-note' }, 'Seen by everyone on this topic and tied to this version. This is not a chat with Master Craftsman.'));
+  const secC = h('section', { 'aria-labelledby': 'wt-c-h' }, h('h3', { id: 'wt-c-h' }, `💬 Comments on version ${S.rev}`), h('p', { class: 'wt-note' }, mcSay('Seen by everyone on this topic and tied to this version. This is not a chat with Master Craftsman.')));
   const list = h('div', { 'data-wt-comments': '' });
   if (!here.length) list.append(h('p', { class: 'wt-note' }, 'No comments on this version yet. Turn on Comment and click where, or add one on the whole item below.'));
   here.forEach((c) => list.append(commentNode(c, cm)));
   secC.append(list, h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn', onclick: () => commentForm({ type: 'item' }, 'the whole item') }, 'Comment on the whole item')));
-  const secA = h('section', { class: 'ask', 'aria-labelledby': 'wt-a-h' }, h('h3', { id: 'wt-a-h' }, '🛠 Ask Master Craftsman'),
-    h('p', { class: 'wt-note' }, 'Opens the topic’s conversation with this item attached as context. Nothing is sent until you press Send there.'),
-    h('button', { type: 'button', class: 'wt-btn primary', 'data-wt-ask': '', onclick: () => askAbout(it.id) }, 'Ask Master Craftsman about this ›'));
+  const secA = h('section', { class: 'ask', 'aria-labelledby': 'wt-a-h' }, h('h3', { id: 'wt-a-h' }, mcSay('🛠 Ask Master Craftsman')),
+    askOff() ? '' : h('p', { class: 'wt-note' }, 'Opens the topic’s conversation with this item attached as context. Nothing is sent until you press Send there.'),
+    askOff() ? h('p', { class: 'wt-note', 'data-wt-ask-off': '' }, askOffWhy())
+      : h('button', { type: 'button', class: 'wt-btn primary', 'data-wt-ask': '', onclick: () => askAbout(it.id) }, mcSay('Ask Master Craftsman about this ›')));
   rail.append(secC, secA);
   grid.append(main, rail);
   node.append(grid);
-  const bottom = h('div', { class: 'wt-bottom' }, h('button', { type: 'button', class: 'wt-btn', onclick: () => { S.commenting = !S.commenting; renderBody(); } }, 'Comment'), h('button', { type: 'button', class: 'wt-btn primary', onclick: () => askAbout(it.id) }, 'Ask Master Craftsman ›'));
+  const bottom = h('div', { class: 'wt-bottom' }, h('button', { type: 'button', class: 'wt-btn', onclick: () => { S.commenting = !S.commenting; renderBody(); } }, 'Comment'), ...(askOff() ? [] : [h('button', { type: 'button', class: 'wt-btn primary', onclick: () => askAbout(it.id) }, mcSay('Ask Master Craftsman ›'))]));
   if (eff !== 'chat') node.append(bottom);
   return node;
 }
@@ -635,13 +643,14 @@ function editorNode(it) {
 }
 // ── Ask Master Craftsman about this ──
 function askAbout(id) {
+  if (askOff()) { toast(askOffWhy()); return; }
   const it = itemOf(id); if (!it) return;
   const rev = S.openId === id ? S.rev : it.current_rev;
   window.guildTopicContext = [{ topic_id: S.tid, item_id: id, rev }];
   showContextChip(`${KIND_WORDS[it.kind]}: ${it.title} · version ${rev}`, id);
   if (effective() !== 'split') setView('chat', { remember: false });
   const input = $('[data-mc-input]'); if (input) input.focus({ preventScroll: true });
-  announce(`Master Craftsman will see ${it.title} with your next message. Nothing has been sent.`);
+  announce(`${mcName()} will see ${it.title} with your next message. Nothing has been sent.`);
 }
 function showContextChip(text, id) {
   let chip = $('[data-wt-ctx]');
@@ -713,7 +722,7 @@ function renderBody() {
   body.replaceChildren();
   if (!S.tid) { body.append(startNode()); return; }
   if (!S.topic) { body.append(h('p', { class: 'wt-note' }, S.error || 'Loading the topic…')); return; }
-  if (effective() === 'chat') { body.append(h('p', { class: 'wt-note' }, 'The Master Craftsman conversation for this topic is shown. Choose Cards to see the topic’s items.')); return; }
+  if (effective() === 'chat') { body.append(h('p', { class: 'wt-note' }, mcSay('The Master Craftsman conversation for this topic is shown. Choose Cards to see the topic’s items.'))); return; }
   if (S.openId && S.open) body.append(readerNode()); else { body.append(boardNode(), recordNode()); }
   body.scrollTop = scroll;
   if (S.openId && S.open) { const itemTop = $('.wt-reader'); if (itemTop && document.activeElement === document.body) { /* keep focus where it is */ } }

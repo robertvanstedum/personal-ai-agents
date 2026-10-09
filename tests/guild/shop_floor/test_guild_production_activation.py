@@ -82,3 +82,54 @@ def test_staging_default_is_unchanged(load_portal, monkeypatch):
     monkeypatch.delenv("MINIMOI_GUILD_PRIMARY", raising=False)
     portal = load_portal(next_flag="1", base_url="https://dev.minimoi.ai")
     assert portal.owner().get("/guild").status_code == 302
+
+
+# ── production-mode API behaviour (not the staging-only CSRF tests): who may call, who may write ─────────────────────────────
+
+from domains.guild import queue_store as qs  # noqa: E402
+
+from floor_helpers import write_headers  # noqa: E402
+
+ITEM_URL = "/guild-next/api/v1/queue/items/12/status"
+
+
+def _production(load_portal, monkeypatch):
+    monkeypatch.setenv("MINIMOI_GUILD_PRODUCTION", "1")
+    return load_portal(next_flag="1", base_url=PROD)
+
+
+def test_production_api_anonymous_is_401_and_a_guest_is_403(load_portal, monkeypatch):
+    portal = _production(load_portal, monkeypatch)
+    anonymous = portal.client().get("/guild-next/api/v1/session")
+    assert anonymous.status_code == 401 and anonymous.get_json()["error"] == "not_signed_in"
+    guest = portal.guest().get("/guild-next/api/v1/session")
+    assert guest.status_code == 403 and guest.get_json()["error"] == "not_allowed"
+    assert portal.owner().get("/guild-next/api/v1/session").status_code == 200
+
+
+def test_production_owner_write_without_the_token_is_403_csrf_and_writes_nothing(load_portal, monkeypatch):
+    portal = _production(load_portal, monkeypatch)
+    client = portal.owner()
+    before = portal.queue_path.read_bytes()
+    item = next(i for i in qs.QueueStore(str(portal.queue_path)).read_items() if i["id"] == 12)
+    body = {"to": "done", "expect_item_digest": qs.item_digest(item), "idempotency_key": "k" * 16}
+    refused = client.post(ITEM_URL, json=body, headers={"X-Record-Mode": "on_record"})
+    assert refused.status_code == 403 and refused.get_json()["error"] == "csrf"
+    wrong_origin = client.post(ITEM_URL, json=body,
+                               headers=write_headers(portal.csrf(client), origin="https://evil.example"))
+    assert wrong_origin.status_code == 403 and wrong_origin.get_json()["error"] == "csrf"
+    assert portal.queue_path.read_bytes() == before and portal.journal() == []
+    saved = client.post(ITEM_URL, json=body,
+                        headers=write_headers(portal.csrf(client), origin=PROD, fetch_site="same-origin"))
+    assert saved.status_code == 200 and saved.get_json()["result"] == "saved"
+
+
+def test_production_flag_off_leaves_no_new_ui_and_no_api(load_portal, monkeypatch):
+    """The fallback is exactly today's portal: with the production switch off the owner gets 404 on every new route."""
+    monkeypatch.delenv("MINIMOI_GUILD_PRODUCTION", raising=False)
+    portal = load_portal(next_flag="1", base_url=PROD)
+    owner = portal.owner()
+    for url in ("/guild-next/", "/guild-next/guild/build", "/guild-next/api/v1/session", "/guild-next/guild/ui-assets/tokens.css"):
+        assert owner.get(url).status_code == 404, url
+    assert owner.get("/guild").status_code == 200
+    assert "/guild-next" not in (owner.get("/guild").headers.get("Location") or "")

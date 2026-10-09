@@ -35,12 +35,12 @@ import time
 from dataclasses import dataclass, field
 
 from ..adapters.contract import now_iso
-from ..stores import MASTER_CRAFTSMAN, Author
+from ..stores import CHIEF_OF_STAFF, MASTER_CRAFTSMAN, Author
 
 log = logging.getLogger(__name__)
 
 SWITCH_VAR = "MINIMOI_GUILD_MC"
-SWITCH_VALUES = ("off", "stub", "openclaw", "grok")
+SWITCH_VALUES = ("off", "stub", "openclaw", "grok", "cos")
 STATUSES = ("answered", "unavailable", "timeout_uncertain", "cancelled", "refused", "error",
             "duplicate_in_progress", "not_listening")
 # Stub rows: author_kind "platform" (allowed by sql/001_floor_b1.sql), a label
@@ -205,6 +205,9 @@ def backend_from_env(environ, *, http_get=None, http_post=None) -> MasterCraftsm
         if kind == "grok":
             from .grok import GrokMasterCraftsman
             return GrokMasterCraftsman()
+        if kind == "cos":
+            from .cos import ChiefOfStaffBackend
+            return ChiefOfStaffBackend.from_env(environ, http_get=http_get, http_post=http_post)
     except Exception:
         log.exception("master craftsman: the %s backend could not be built; it is unavailable", kind)
         return UnavailableBackend(kind, "misconfigured")
@@ -244,7 +247,8 @@ UNAVAILABLE_WHY = {
 NOTES_TEXT = "On the record, your messages are kept as notes."
 
 
-def view(health: Health, *, notes_ok: bool, turns_on: bool = False, stream_on: bool = False) -> dict:
+def view(health: Health, *, notes_ok: bool, turns_on: bool = False, stream_on: bool = False,
+         name: str = "Master Craftsman", private: bool = True, files: bool = True) -> dict:
     """The Shop floor's Master Craftsman state, header and notes line.
 
     ``state`` is one of off, stub, live, unavailable. ``turns`` says whether a
@@ -276,8 +280,11 @@ def view(health: Health, *, notes_ok: bool, turns_on: bool = False, stream_on: b
         notes = f"{NOTES_TEXT} Master Craftsman is asked, but has not answered yet on this portal."
     else:
         notes = f"{NOTES_TEXT} Master Craftsman does not reply."
+    if name != "Master Craftsman":      # another real partner (the Chief of Staff): the same states, its own name
+        header, notes = header.replace("Master Craftsman", name), notes.replace("Master Craftsman", name)
     return {"state": state, "reason": health.reason if state == "unavailable" else None, "header": header,
             "notes_text": notes, "turns": replies, "stream": bool(replies and stream_on),
+            "name": name, "private": private, "files": files,
             "observed_at": health.observed_at}
 
 
@@ -296,6 +303,8 @@ def reply_author(result: TurnResult) -> Author:
         return MASTER_CRAFTSMAN_STUB
     if result.backend_kind in REAL_KINDS:
         return MASTER_CRAFTSMAN
+    if result.backend_kind == "cos":
+        return CHIEF_OF_STAFF
     raise NotAnAnswer(f"backend {result.backend_kind!r} cannot answer")
 
 

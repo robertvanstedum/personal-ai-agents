@@ -102,7 +102,7 @@
         <li class="fc-file is-pending" data-pending="{{ p.asset_id }}"><span class="fc-file-name">{{ p.name }}</span><span class="fc-pending-note small">Removed here. Its hold in the library is not released yet.</span><button type="button" class="fc-file-remove" data-file-retry="{{ p.asset_id }}" aria-label="Retry releasing {{ p.name }}">Retry</button></li>
         {% endfor %}
       </ul>
-      <p class="fc-note small">Documents go to Master Craftsman as text when you attach them to a message; only that text is kept here. Images are kept as pictures: Master Craftsman can’t see them yet.</p>
+      {% if state.mc and state.mc.files is false %}<p class="fc-note small">{{ state.mc.name }} does not read attached documents: a message with documents attached is not sent. Images are kept as pictures; {{ state.mc.name }} can’t see them.</p>{% else %}<p class="fc-note small">Documents go to Master Craftsman as text when you attach them to a message; only that text is kept here. Images are kept as pictures: Master Craftsman can’t see them yet.</p>{% endif %}
     </section>
   </div>
 </details>

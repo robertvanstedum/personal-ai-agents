@@ -95,7 +95,8 @@ def mc_view(services, *, notes_ok: bool) -> dict:
     backend = getattr(services, "mc", None)
     stream_on = bool(getattr(services, "mc_stream", False) and getattr(backend, "supports_streaming", False))
     return mc_view_of(health, notes_ok=notes_ok, turns_on=bool(getattr(services, "mc_turns", False)),
-                      stream_on=stream_on)
+                      stream_on=stream_on, name=getattr(backend, "display_name", "Master Craftsman"),
+                      private=bool(getattr(backend, "supports_private", True)), files=bool(getattr(backend, "accepts_files", True)))
 
 
 class _NotesRead:
@@ -164,7 +165,7 @@ def compute(c: dict, *, notes_limit: int = 0, conversation: dict | None = None) 
         "mc_state": mc["state"],
         "mc_header": mc["header"],
         "mc": {"state": mc["state"], "reason": mc["reason"], "turns": mc["turns"], "stream": mc["stream"],
-               "observed_at": mc["observed_at"]},
+               "name": mc["name"], "private": mc["private"], "files": mc["files"], "observed_at": mc["observed_at"]},
         "lights": lights,
         "needs": needs,
         "briefing": opening_briefing(lights, needs, observed_at),

@@ -10,6 +10,10 @@ import { live, setOff, onChange } from './state.js';
 import { apiGet, apiPost, apiPrivate, apiStream, apiStop, recordMode } from './api.js';
 import { newKey } from './actions.js';
 import { answerFailed, answerArrived } from './floorlayout.js';
+
+// The conversation partner's name: the server says who answers on this portal (Master Craftsman, or the Chief of Staff).
+const mcName = () => document.body.dataset.mcName || 'Master Craftsman';
+const mcSay = (text) => String(text).split('Master Craftsman').join(mcName());
 import { applyConversation } from './conversations.js';
 import { takeTray, restoreTray, trayBusy } from './attachments.js';
 import { initJobs } from './jobs.js';
@@ -196,14 +200,14 @@ function showAnswer(holder, r) {
   if (r.ok && body.status === 'answered' && body.reply_note) {
     if ($(`[data-note="${body.reply_note.id}"]`)) holder.remove();
     else holder.replaceWith(noteLine(body.reply_note));
-    announce(body.message || 'Master Craftsman answered');
+    announce(body.message || mcSay('Master Craftsman answered'));
     answerArrived();
   } else {
     if (NOT_DISPATCHED.includes(body.error)) { if (turnFiles.length) restoreTray(turnFiles); restoreTopicContext(); }
-    const text = body.message || 'Master Craftsman did not answer. Your message is kept.';
+    const text = body.message || mcSay('Master Craftsman did not answer. Your message is kept.');
     holder.replaceWith(failureLine(text));
     announce(text);
-    answerFailed(body.mc_header || 'Master Craftsman did not answer');
+    answerFailed(body.mc_header || mcSay('Master Craftsman did not answer'));
   }
   follow();
 }
@@ -217,7 +221,7 @@ function showFiles(noteId, files) {
   const note = thread.querySelector(`[data-note="${noteId}"]`);
   if (!note) return;
   for (const old of note.querySelectorAll('[data-note-files]')) old.remove();
-  const ul = el('ul', { class: 'msg-files small', 'data-note-files': '', 'aria-label': 'Files in the request to Master Craftsman' });
+  const ul = el('ul', { class: 'msg-files small', 'data-note-files': '', 'aria-label': mcSay('Files in the request to Master Craftsman') });
   for (const f of files) {
     const li = el('li', { class: 'msg-file', 'data-status': f.status });
     li.append(el('span', { class: 'msg-file-icon', 'aria-hidden': 'true' }, '📄 '), el('span', { class: 'msg-file-name' }, f.name));
@@ -287,7 +291,7 @@ const STREAM_LINE_CAP = 2 * 1024 * 1024;
 
 function streamLine() {
   const li = clone('tpl-mc-stream');
-  setSlot(li, 'label', document.body.dataset.mcState === 'stub' ? 'Master Craftsman stub · scripted' : 'Master Craftsman');
+  setSlot(li, 'label', document.body.dataset.mcState === 'stub' ? mcSay('Master Craftsman stub · scripted') : mcSay('Master Craftsman'));
   const elapsed = slot(li, 'elapsed');
   const started = Date.now();
   li.startedAt = started;
@@ -326,7 +330,7 @@ async function streamMasterCraftsman(note, requestId) {
     const text = 'Unknown · it may have run; nothing was retried. Your note is kept.';
     thread.append(platformLine('Guild platform', text));
     announce(text);
-    answerFailed('Master Craftsman: unknown');
+    answerFailed(mcSay('Master Craftsman: unknown'));
     follow();
     return;
   }
@@ -375,7 +379,7 @@ async function streamMasterCraftsman(note, requestId) {
       if (Array.isArray(ev.files)) showFiles(note.id, ev.files);
       stop.hidden = false;
       follow();
-      announce('Master Craftsman is answering');
+      announce(mcSay('Master Craftsman is answering'));
     } else if (ev.t === 'delta' && typeof ev.text === 'string') {
       li.hasText = true;
       if (!deltas.length) setSlot(li, 'state', 'Writing…');
@@ -399,7 +403,7 @@ async function streamMasterCraftsman(note, requestId) {
       } else li.remove();
       if (ev.job) jobsUi.accepted({ job: ev.job });             // the reply proposed a job and the server started it
       if (live.off) addPlatform('Guild platform', 'This answer was asked for on the record, so it is kept.');
-      announce(ev.message || 'Master Craftsman answered');
+      announce(ev.message || mcSay('Master Craftsman answered'));
       answerArrived();
       follow();
     } else if (ev.t === 'error') {
@@ -407,10 +411,10 @@ async function streamMasterCraftsman(note, requestId) {
       applyHeader(ev);
       endLine(li, ev.failure_class === 'stopped' ? 'Stopped' : '(interrupted)');
       if (!deltas.length) li.remove();          // partial text, if any, stays shown once and is never kept
-      const text = ev.message || 'Master Craftsman did not answer. Your message is kept.';
+      const text = ev.message || mcSay('Master Craftsman did not answer. Your message is kept.');
       thread.append(failureLine(text));
       announce(text);
-      answerFailed(ev.mc_header || 'Master Craftsman did not answer');
+      answerFailed(ev.mc_header || mcSay('Master Craftsman did not answer'));
       follow();
     }
   };
@@ -441,11 +445,11 @@ async function streamMasterCraftsman(note, requestId) {
     endLine(li, acked ? '(interrupted)' : 'unknown');
     if (!deltas.length) li.remove();
     const text = acked
-      ? 'The connection ended before the answer finished · if Master Craftsman finishes, its answer is kept: reload to see it.'
+      ? mcSay('The connection ended before the answer finished · if Master Craftsman finishes, its answer is kept: reload to see it.')
       : 'Unknown · it may have run; nothing was retried. Your message is kept.';
     thread.append(failureLine(text));
     announce(text);
-    answerFailed('Master Craftsman: connection ended');
+    answerFailed(mcSay('Master Craftsman: connection ended'));
     follow();
   }
 }
@@ -478,7 +482,7 @@ window.addEventListener('pagehide', () => { if (live.off) endPrivateSitting(); }
 window.addEventListener('pageshow', (e) => { if (e.persisted && live.off) endPrivateSitting(); });
 
 async function askPrivate(text, input) {
-  if (privateBusy) { refuse('Master Craftsman is still answering your last Private message. Your draft is kept.'); return; }
+  if (privateBusy) { refuse(mcSay('Master Craftsman is still answering your last Private message. Your draft is kept.')); return; }
   privateBusy = true;
   appendOffRecord(text);
   input.value = '';
@@ -502,12 +506,12 @@ async function askPrivate(text, input) {
     const box = slot(li, 'text');
     if (typeof body.reply.html === 'string' && body.reply.html) box.innerHTML = body.reply.html; else box.textContent = body.reply.text;
     wait.replaceWith(li);
-    announce('Master Craftsman answered · not kept by MiniMoi');
+    announce(mcSay('Master Craftsman answered · not kept by MiniMoi'));
   } else {
-    const line = platformLine('Guild platform', body.message || 'Master Craftsman did not answer. MiniMoi kept nothing.');
+    const line = platformLine('Guild platform', body.message || mcSay('Master Craftsman did not answer. MiniMoi kept nothing.'));
     line.dataset.offRecordLine = '';
     wait.replaceWith(line);
-    announce(body.message || 'Master Craftsman did not answer');
+    announce(body.message || mcSay('Master Craftsman did not answer'));
   }
   applyHeader(body);
   follow();
@@ -519,8 +523,9 @@ let noteKey = null;   // one key per composed note; a new one when the text chan
 async function sendNote(input, send) {
   const text = input.value.trim();
   if (!text) return;
+  if (live.off && document.body.dataset.mcPrivate === 'false') { refuse(`Private is not available with the ${mcName()}: it keeps its own record. Nothing was sent. Your draft is kept.`); return; }
   if (live.off) {       // Private: sent, answered, never kept
-    if (document.body.dataset.mcTurns !== 'true') { refuse('Master Craftsman is not switched on here, so nothing was sent. Your draft is kept.'); return; }
+    if (document.body.dataset.mcTurns !== 'true') { refuse(mcSay('Master Craftsman is not switched on here, so nothing was sent. Your draft is kept.')); return; }
     await askPrivate(text, input);
     return;
   }
@@ -533,6 +538,11 @@ async function sendNote(input, send) {
   if (sendingNote) return; // Keep an on-record draft until the current turn finishes.
   if (trayBusy()) {        // a file is still being read: do not send without it, and do not carry it into a later message
     refuse('A file is still being read. Wait for it to finish, or dismiss it, then send. Your draft is kept.');
+    return;
+  }
+  if (document.body.dataset.mcFiles === 'false' && (document.querySelector('[data-mc-tray] .att')
+      || (Array.isArray(window.guildTopicContext) && window.guildTopicContext.length))) {   // this partner reads no documents: say so before anything is kept, sent or locked
+    refuse(`${mcName()} does not read attached documents or topic items. Remove them, then send. Your draft is kept.`);
     return;
   }
   if (!noteKey) noteKey = newKey();
@@ -579,7 +589,7 @@ function renderRecord() {
   const btn = $('[data-mc-record]');
   btn.setAttribute('aria-pressed', String(live.off));
   btn.setAttribute('aria-label', live.off ? 'Exit Private' : 'Go Private');
-  btn.title = live.off ? 'Exit Private: go back on the record' : 'Go Private: Master Craftsman answers, MiniMoi keeps nothing';
+  btn.title = live.off ? 'Exit Private: go back on the record' : mcSay('Go Private: Master Craftsman answers, MiniMoi keeps nothing');
   const privateChip = $('[data-private-chip]');
   if (privateChip) privateChip.hidden = !live.off;
   if (!live.off) closePrivateExplain();

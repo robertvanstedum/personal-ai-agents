@@ -61,6 +61,7 @@ class Author:
 
 
 MASTER_CRAFTSMAN = Author("master_craftsman", "agent", "Master Craftsman")
+CHIEF_OF_STAFF = Author("chief_of_staff", "agent", "Chief of Staff")
 GUILD_PLATFORM = Author("guild_platform", "platform", "Guild platform")
 
 
@@ -442,5 +443,5 @@ class FloorStores(BoardMixin):
         return self._run(work, write=True)
 
 
-__all__ = ["Author", "WriteResult", "FloorStores", "FloorStoreUnavailable", "FloorStoreNotConfigured", "MASTER_CRAFTSMAN",
+__all__ = ["Author", "WriteResult", "FloorStores", "FloorStoreUnavailable", "FloorStoreNotConfigured", "MASTER_CRAFTSMAN", "CHIEF_OF_STAFF",
            "GUILD_PLATFORM", "POSTIT_MAX", "NOTE_MAX", "RAIL_CAP", "DEFAULT_FLOOR", "utc_now"]

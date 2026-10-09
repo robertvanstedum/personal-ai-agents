@@ -1,3 +1,5 @@
+{% set mc_name = (state.mc.name if state is defined and state.mc and state.mc.name else 'Master Craftsman') %}
+{% set mc_private = not (state is defined and state.mc and state.mc.private is false) %}
 {# The conversation, real mode. The explain cards are platform rules, labelled as such.
    Attach keeps an image with the conversation (images only; Master Craftsman does not
    receive it). Invite answers "Coming soon.": no agent is connected. Nothing is filed.
@@ -17,17 +19,17 @@
   {%- endif %}
   {%- set sent = ((conversation.turn_files or {}).get(n.request_id) if conversation else none) %}
   {%- if sent %}
-  <ul class="msg-files small" data-note-files aria-label="Files in the request to Master Craftsman">{% for f in sent %}<li class="msg-file" data-status="{{ f.status }}"><span class="msg-file-icon" aria-hidden="true">📄 </span><span class="msg-file-name">{{ f.name }}</span>{% if f.status == 'partly_read' %} · sent in part ({{ f.reason }}){% elif f.status != 'read' %} · not sent ({{ f.reason }}){% endif %}</li>{% endfor %}</ul>
+  <ul class="msg-files small" data-note-files aria-label="Files in the request">{% for f in sent %}<li class="msg-file" data-status="{{ f.status }}"><span class="msg-file-icon" aria-hidden="true">📄 </span><span class="msg-file-name">{{ f.name }}</span>{% if f.status == 'partly_read' %} · sent in part ({{ f.reason }}){% elif f.status != 'read' %} · not sent ({{ f.reason }}){% endif %}</li>{% endfor %}</ul>
   {%- endif %}
 </li>
 {%- endmacro %}
 <button type="button" class="mc-pill" data-mc-pill aria-controls="mc-panel" aria-expanded="false">
   <img src="/static/guild/guild-mc-portrait.jpg" alt="" width="40" height="40">
-  <span>Chat<span class="visually-hidden"> with Master Craftsman</span></span>
+  <span>Chat<span class="visually-hidden"> with {{ mc_name }}</span></span>
 </button>
 <aside id="mc-panel" class="mc-panel" data-mc-panel data-mode="pill" data-pos="right" aria-label="Conversation">
   <header class="mc-head">
-    <h2 class="mc-title">Master Craftsman</h2>
+    <h2 class="mc-title">{{ mc_name }}</h2>
     <div class="mc-head-actions" role="group" aria-label="Panel mode">
       <button type="button" class="btn-mini" data-mc-dock aria-pressed="false">Dock</button>
       <button type="button" class="btn-mini" data-mc-min>Minimize</button>
@@ -44,7 +46,7 @@
     <button type="button" class="fb-btn fb-history" data-history-toggle aria-expanded="false" aria-controls="floor-history">☰<span class="visually-hidden"> Conversations</span></button>
     <span class="hero-portrait" aria-hidden="true"></span>
     <div class="hero-text">
-      <h1 class="hero-name">Master Craftsman<span class="visually-hidden"> · </span> <span class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</span></h1>
+      <h1 class="hero-name">{{ mc_name }}<span class="visually-hidden"> · </span> <span class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</span></h1>
       <p class="hero-sub"><span class="hero-dot" aria-hidden="true"></span><span data-mc-header>{{ state.mc_header }}</span></p>
     </div>
     {# Folds and opens the context rail (Linked work, Files); on a phone the rail is folded below the chat instead. #}
@@ -101,7 +103,7 @@
     </div>
     <div class="mc-tools">
       <button type="button" class="btn-quiet" data-mc-record-confirm hidden>Confirm on the record</button>
-      <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="Go Private" title="Go Private: Master Craftsman answers, MiniMoi keeps nothing"><span aria-hidden="true">🔒</span></button>
+      <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="{{ 'Go Private' if mc_private else 'Private is not available' }}" title="{{ 'Go Private: ' ~ mc_name ~ ' answers, MiniMoi keeps nothing' if mc_private else 'Private is not available with the ' ~ mc_name ~ ': it keeps its own record' }}"{% if not mc_private %} disabled data-private-off{% endif %}><span aria-hidden="true">🔒</span></button>
       <span class="mc-private-chip" data-private-chip hidden>Private · not kept by MiniMoi
         <button type="button" class="mc-private-why" data-private-why aria-expanded="false" aria-controls="mc-private-explain">What’s this?</button>
         <button type="button" class="mc-private-exit" data-private-exit>Exit</button></span>
@@ -116,7 +118,7 @@
   {# On every page but Chat the assistant is a panel at the bottom of the page; on a phone this jumps to its Ask box (and opens the keyboard
      there). On the Chat page the Ask box is already on screen, so the button would only repeat it. #}
   {% if page_id != 'floor' %}<div class="mc-phone-bar">
-    <button type="button" class="btn mc-type" data-mc-type aria-controls="mc-input">Ask Master Craftsman</button>
+    <button type="button" class="btn mc-type" data-mc-type aria-controls="mc-input">Ask {{ mc_name }}</button>
   </div>{% endif %}
   </div>
 </aside>
@@ -159,7 +161,7 @@
 </template>
 <template id="tpl-private-answer">
   <li class="msg msg-note msg-off" data-kind="private-answer" data-off-record-line>
-    <p class="msg-meta"><span class="mc-mark" aria-hidden="true">MC</span> <span class="msg-label">Master Craftsman · Private · not kept by MiniMoi</span> · <span data-slot="when"></span> · <span class="mc-elapsed" data-slot="elapsed"></span></p>
+    <p class="msg-meta"><span class="mc-mark" aria-hidden="true">MC</span> <span class="msg-label">{{ mc_name }} · Private · not kept by MiniMoi</span> · <span data-slot="when"></span> · <span class="mc-elapsed" data-slot="elapsed"></span></p>
     <div class="msg-text msg-md" data-slot="text"></div>
   </li>
 </template>
