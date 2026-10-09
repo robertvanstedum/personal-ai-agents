@@ -83,7 +83,7 @@ class Publisher:
 
     def __init__(self, target: str):
         path = Path(target)
-        self.created_files: list[tuple[int, str, tuple[int, int]]] = []
+        self.created_files: list[tuple[int, str]] = []
         self.created_dirs: list[tuple[int, str]] = []
         self.root_created = False
         if path.is_symlink():
@@ -141,7 +141,6 @@ class Publisher:
         os.close(fd)
         try:
             os.link(tmp, parts[-1], src_dir_fd=dir_fd, dst_dir_fd=dir_fd, follow_symlinks=False)
-            mine = os.stat(parts[-1], dir_fd=dir_fd, follow_symlinks=False)
         except FileExistsError:
             raise VaultError("destination_taken", {"path": rel}) from None
         finally:
@@ -149,32 +148,36 @@ class Publisher:
                 os.unlink(tmp, dir_fd=dir_fd)
             except OSError:
                 pass
-        self.created_files.append((dir_fd, parts[-1], (mine.st_dev, mine.st_ino)))
+        self.created_files.append((dir_fd, parts[-1]))
 
-    def abort(self) -> None:
-        """Remove only what this publisher made. A file is removed only if the name still holds the very file this publisher
-        created (same device and inode): if another writer replaced it, their file stays and this output is left visibly incomplete.
-        (Between that check and the unlink there is a window no POSIX call can close; the cost of losing it is a deleted file that
-        was already a rival's replacement of ours, which is why a mismatch leaves everything else alone too.) Folders are removed
-        only if empty, and the target only if this publisher created it and it is empty."""
-        for dir_fd, name, ident in reversed(self.created_files):
+    INCOMPLETE_MARKER = ".vault-incomplete"
+
+    def abort(self) -> dict:
+        """Give up without deleting anything that was published. Names this publisher used may already belong to another writer,
+        and no call can tell them apart at the moment of unlinking, so published output is *retained* and marked incomplete rather
+        than cleaned up on a guess. Only an output that published nothing is removed (empty folders this publisher made, then the
+        target if it made it and it is empty). Returns what was left: ``{"files": n, "path": target}``."""
+        left = {"files": len(self.created_files), "path": str(self.path)}
+        if self.created_files:
             try:
-                now = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
-                if (now.st_dev, now.st_ino) == ident:
-                    os.unlink(name, dir_fd=dir_fd)
-            except OSError:
+                self.put(self.INCOMPLETE_MARKER, (json.dumps({"complete": False, "files_published": len(self.created_files),
+                                                            "note": "an export or restore stopped part-way; do not use or extend this folder"}) + "\n").encode())
+            except (OSError, VaultError):
                 pass
-        for dir_fd, name in reversed(self.created_dirs):
-            try:
-                os.rmdir(name, dir_fd=dir_fd)
-            except OSError:
-                pass
+        else:
+            for dir_fd, name in reversed(self.created_dirs):
+                try:
+                    os.rmdir(name, dir_fd=dir_fd)
+                except OSError:
+                    pass
+            self.close()
+            if self.root_created:
+                try:
+                    os.rmdir(self.path)
+                except OSError:
+                    pass
         self.close()
-        if self.root_created:
-            try:
-                os.rmdir(self.path)
-            except OSError:
-                pass
+        return left
 
     def close(self) -> None:
         for fd in self._fds.values():
@@ -183,6 +186,18 @@ class Publisher:
             except OSError:
                 pass
         self._fds = {}
+
+
+def _stopped(pub: "Publisher", exc: BaseException) -> None:
+    """Called when an export or restore fails: retain what was published (marked incomplete), and say where and how much. If the
+    failure was not already a VaultError and files were published, it becomes ``output_incomplete`` carrying the original cause."""
+    left = pub.abort()
+    if isinstance(exc, VaultError):
+        if left["files"]:
+            exc.detail.update(left_in_place=left["path"], files_left=left["files"])
+    elif left["files"]:
+        raise VaultError("output_incomplete", {"left_in_place": left["path"], "files_left": left["files"],
+                                               "cause": getattr(exc, "errno", None)}) from exc
 
 
 def _file_entry(rel: str, data: bytes) -> dict:
@@ -261,8 +276,8 @@ def export(vault: Vault, target: str, *, topic: str | None = None, allow_incompl
         raw = (json.dumps(manifest, indent=1, sort_keys=True, ensure_ascii=False) + "\n").encode()
         pub.put(MANIFEST, raw)
         pub.put(MANIFEST_SHA, (sha256(raw) + "  " + MANIFEST + "\n").encode())
-    except BaseException:
-        pub.abort()
+    except BaseException as exc:
+        _stopped(pub, exc)
         raise
     pub.close()
     return manifest
@@ -323,6 +338,8 @@ def verify_shelf(root: str) -> dict:
                     pass
     if vault.unreadable:
         problems.append({"where": "shelf", "code": "unreadable_records", "count": vault.unreadable})
+    if (Path(root) / Publisher.INCOMPLETE_MARKER).exists():
+        problems.append({"where": "shelf", "code": "output_marked_incomplete"})
     return {"kind": "shelf", "ok": not problems, "checked": checked, "problems": problems}
 
 
@@ -481,8 +498,8 @@ def restore(folder: str, target: str) -> dict:
         check = verify_shelf(str(pub.path))
         if not check["ok"]:
             raise Damaged("restored_shelf_does_not_verify")
-    except BaseException:
-        pub.abort()
+    except BaseException as exc:
+        _stopped(pub, exc)
         raise
     pub.close()
     return {"restored_records": written, "target_verified": True, "checked": check["checked"], "complete": manifest.get("complete")}

@@ -504,7 +504,11 @@ def test_R14_a_file_created_by_someone_else_before_publication_survives_and_the_
     with pytest.raises(VaultError) as caught:
         portable.export(Vault(str(shelf)), str(target))
     assert caught.value.code == "destination_taken" and (target / "manifest.json").read_text() == "SOMEONE ELSE'S DATA"
-    assert target.is_dir() and [p.name for p in target.iterdir()] == ["manifest.json"]                  # our files and folders were removed, theirs kept
+    assert caught.value.detail["left_in_place"] == str(target) and caught.value.detail["files_left"] > 0
+    assert (target / ".vault-incomplete").exists()                                                      # visibly incomplete, never reused
+    with pytest.raises(VaultError) as reuse:
+        portable.export(Vault(str(shelf)), str(target))
+    assert reuse.value.code == "target_not_empty"
 
 
 def test_R14_a_target_created_between_the_check_and_the_creation_is_never_taken_over(shelf, tmp_path, monkeypatch):
@@ -522,7 +526,7 @@ def test_R14_a_target_created_between_the_check_and_the_creation_is_never_taken_
     assert caught.value.code == "target_not_empty" and (target / "theirs.txt").read_text() == "keep" and len(list(target.iterdir())) == 1
 
 
-def test_R14_a_failure_midway_removes_only_what_was_created_and_never_a_callers_folder(shelf, tmp_path, monkeypatch):
+def test_R14_a_failure_midway_keeps_what_was_published_marks_it_incomplete_and_deletes_nothing(shelf, tmp_path, monkeypatch):
     mine = tmp_path / "mine"
     portable_put = portable.Publisher.put
     calls = {"n": 0}
@@ -533,22 +537,36 @@ def test_R14_a_failure_midway_removes_only_what_was_created_and_never_a_callers_
             raise OSError(28, "disk full")
         return portable_put(self, rel, data)
     monkeypatch.setattr(portable.Publisher, "put", failing_put)
-    with pytest.raises(OSError):
+    with pytest.raises(VaultError) as caught:
         portable.export(Vault(str(shelf)), str(mine))
-    assert not mine.exists()                                                                             # we made it, so we removed it
+    assert caught.value.code == "output_incomplete" and caught.value.detail["left_in_place"] == str(mine) and caught.value.detail["cause"] == 28
+    assert caught.value.detail["files_left"] == 3 and (mine / ".vault-incomplete").exists() and not list(mine.rglob("*.tmp"))
+    assert portable.verify(str(mine))["ok"] is False                                                    # no manifest: not a usable export
+    assert "output_marked_incomplete" in {p["code"] for p in portable.verify_shelf(str(mine))["problems"]}
+    with pytest.raises(VaultError):
+        portable.export(Vault(str(shelf)), str(mine))                                                   # and never reused
+    # nothing published yet: an output this publisher created is removed, an adopted empty folder is left as found
+    monkeypatch.undo()
+    first_fails = {"n": 0}
+
+    def fail_first(self, rel, data):
+        raise OSError(28, "disk full")
+    monkeypatch.setattr(portable.Publisher, "put", fail_first)
+    gone = tmp_path / "gone"
+    with pytest.raises(OSError):
+        portable.export(Vault(str(shelf)), str(gone))
+    assert not gone.exists()
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(OSError):
+        portable.export(Vault(str(shelf)), str(empty))
+    assert empty.is_dir() and list(empty.iterdir()) == []
     existing = tmp_path / "callers"
     existing.mkdir()
     (existing / ".keep").write_text("x")
-    calls["n"] = 0
     with pytest.raises(VaultError):
-        portable.export(Vault(str(shelf)), str(existing))                                                # not empty: refused up front
+        portable.export(Vault(str(shelf)), str(existing))
     assert (existing / ".keep").read_text() == "x"
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    calls["n"] = 0
-    with pytest.raises(OSError):
-        portable.export(Vault(str(shelf)), str(empty))
-    assert empty.is_dir() and list(empty.iterdir()) == []                                                # adopted folder is left as found
 
 
 def test_R14_restore_uses_the_same_no_replace_publication(shelf, tmp_path, monkeypatch):
@@ -567,8 +585,8 @@ def test_R14_restore_uses_the_same_no_replace_publication(shelf, tmp_path, monke
     with pytest.raises(VaultError) as caught:
         portable.restore(str(export), str(target))
     assert caught.value.code == "destination_taken" and state["fired"]
-    survivors = [p for p in target.rglob("*") if p.is_file()]
-    assert len(survivors) == 1 and survivors[0].read_text() == "SOMEONE ELSE'S RECORD"                    # everything else we made is gone
+    rival = next(p for p in target.rglob("*.md") if p.read_text() == "SOMEONE ELSE'S RECORD")             # theirs is intact
+    assert rival.exists()                                                                                  # nothing of ours had been published yet, so nothing needs marking
 
 
 # ── Codex R15: the no-link contract holds at the moment of opening ──────────────────────────────────────────────
@@ -704,11 +722,18 @@ def test_R13b_a_record_whose_metadata_declares_no_edition_needs_none(shelf, tmp_
     assert portable.verify(str(out))["ok"] is True and portable.restore(str(out), str(tmp_path / "back"))["target_verified"] is True
 
 
-def test_R14b_cleanup_never_deletes_a_file_another_writer_put_in_place_of_ours(shelf, tmp_path, monkeypatch):
+def test_R14b_abort_never_unlinks_a_published_name_so_a_replacement_at_any_moment_survives(shelf, tmp_path, monkeypatch):
+    """Codex: a check-then-unlink cleanup loses to a replacement that arrives right after the check. The safe rule is to not unlink
+    published names at all."""
     for operation in ("export", "restore"):
         source = made_export(shelf, tmp_path / operation, topic=None) if operation == "restore" else None
         target = tmp_path / f"{operation}-target"
-        original_put, calls = portable.Publisher.put, {"n": 0}
+        original_put, calls, unlinked = portable.Publisher.put, {"n": 0}, []
+        real_unlink = portable.os.unlink
+
+        def spy_unlink(path, *a, **kw):
+            unlinked.append(str(path))
+            return real_unlink(path, *a, **kw)
 
         def failing_put(self, rel, data, target=target, original_put=original_put, calls=calls):
             calls["n"] += 1
@@ -720,10 +745,13 @@ def test_R14b_cleanup_never_deletes_a_file_another_writer_put_in_place_of_ours(s
                 raise OSError(28, "disk full")
             return original_put(self, rel, data)
         monkeypatch.setattr(portable.Publisher, "put", failing_put)
-        with pytest.raises(OSError):
+        monkeypatch.setattr(portable.os, "unlink", spy_unlink)
+        with pytest.raises(VaultError) as caught:
             portable.export(Vault(str(shelf)), str(target)) if operation == "export" else portable.restore(str(source), str(target))
-        survivors = [p for p in target.rglob("*") if p.is_file()]
-        assert [p.read_text() for p in survivors] == ["A RIVAL'S REPLACEMENT"], operation               # theirs stays; ours are gone
+        assert caught.value.code == "output_incomplete", operation
+        files = {p.name: p.read_text(errors="ignore") for p in target.rglob("*") if p.is_file()}
+        assert "A RIVAL'S REPLACEMENT" in files.values() and ".vault-incomplete" in files, operation   # their file stays; ours are kept, marked
+        assert all(name.endswith(".tmp") for name in unlinked), (operation, unlinked)                  # only temporary names were ever unlinked
         monkeypatch.undo()
 
 
@@ -765,3 +793,19 @@ def test_R16_zero_progress_or_a_failure_after_a_short_write_never_reports_succes
     with pytest.raises(OSError) as caught:
         portable.export(Vault(str(shelf)), str(tmp_path / "zero"))
     assert "no progress" in str(caught.value) and not (tmp_path / "zero").exists()
+
+
+def test_R13c_a_workshop_day_missing_its_promised_edition_is_unknown_membership_even_with_another_valid_member(shelf, tmp_path):
+    day = by_title(Vault(str(shelf)), "workshop")
+    shutil.rmtree(day.path.parent / "editions")
+    garden = by_title(Vault(str(shelf)), "garden")
+    garden.path.write_text(garden.path.read_text().replace("tags:\n- claude-code", "tags:\n- claude-code\n- garden-build", 1))     # another valid member
+    members, unknown = Vault(str(shelf)).topic_split("garden-build")
+    assert [m.stem.split("--")[0] for m in members] == ["garden-planning"] and [u.stem.split("--")[0] for u in unknown] == ["workshop-2026-10-08"]
+    with pytest.raises(VaultError) as caught:
+        portable.export(Vault(str(shelf)), str(tmp_path / "out"), topic="garden-build")
+    assert caught.value.code == "source_incomplete" and "topic_membership_unknown" in caught.value.detail["skipped"]
+    out = tmp_path / "partial"
+    manifest = portable.export(Vault(str(shelf)), str(out), topic="garden-build", allow_incomplete=True)
+    assert manifest["complete"] is False and manifest["counts"]["records"] == 1 and manifest["left_out"]["skipped_unreadable"]["topic_membership_unknown"] == 1
+    assert manifest["left_out"]["outside_topic"] == 2 and portable.verify(str(out))["ok"] is True

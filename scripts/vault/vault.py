@@ -73,6 +73,8 @@ def main(argv=None) -> int:
             manifest = portable.export(vault, a.to, topic=a.topic, allow_incomplete=a.allow_incomplete)
             return out({"ok": True, "complete": manifest["complete"], "counts": manifest["counts"], "left_out": manifest["left_out"], "manifest": "manifest.json"})
         return out({"ok": True, **getattr(vault, a.cmd)()})
+    except OSError as exc:
+        return out({"ok": False, "status": "failed", "reason": "output_error", "errno": exc.errno}, 5)
     except VaultError as exc:
         return out({"ok": False, "status": type(exc).__name__.lower(), "reason": exc.code, **({"detail": exc.detail} if exc.detail else {})}, exc.exit)
 

@@ -333,8 +333,12 @@ class Vault:
                 "skipped": dict(sorted(self.skipped.items())), "record_problems": dict(sorted(problems.items()))}
 
     def _workshop_events(self, rec: Record) -> list[dict]:
+        if rec.provider != "workshop":
+            return []
         cur = rec.current()
-        if cur is None or rec.provider != "workshop":
+        if cur is None:
+            if rec.meta.get("edition") is not None:               # promised but absent: unknown, not "no events"
+                raise Damaged("current_edition_missing")
             return []
         _, rows = parse_edition(self.edition_bytes(rec, cur))
         return [t["attrs"]["event"] for t in turns_of(rows) if isinstance(t.get("attrs"), dict) and isinstance(t["attrs"].get("event"), dict)]
