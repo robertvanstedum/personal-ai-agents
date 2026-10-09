@@ -7,6 +7,7 @@ from io import BytesIO
 import json
 import logging
 from pathlib import Path
+import re
 from urllib.parse import urlsplit
 
 from flask import Flask, g, jsonify, request, send_file, session
@@ -16,7 +17,22 @@ from store import Problem, Store
 from platform_access import AccessError, request_credential, request_operation
 
 
-def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False):
+def configured_hosts(value):
+    """Extra exact Host values (host:port) this app answers, from
+    RECORDS_ALLOWED_HOSTS: for the staging container behind the portal bridge
+    (for example minimoi-records:18880). Each must be a plain lowercase
+    hostname with a port; anything else refuses to start."""
+    hosts=set()
+    for item in (value or "").split(","):
+        item=item.strip()
+        if not item: continue
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,62}:[0-9]{2,5}",item):
+            raise ValueError("RECORDS_ALLOWED_HOSTS takes exact host:port values")
+        hosts.add(item)
+    return hosts
+
+
+def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False, allowed_hosts=None):
     app=Flask(__name__,static_folder="static",static_url_path="/static")
     store=Store(data_dir)
     app.config.update(SECRET_KEY=store.session_key,MAX_CONTENT_LENGTH=3_000_000,
@@ -24,6 +40,14 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
                       SESSION_COOKIE_NAME="minimoi_room_poc",PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
                       TESTING=testing)
     app.extensions["records_store"]=store
+    from web_sessions import WebSessions
+    web_sessions=WebSessions(store.connect,app.config["PERMANENT_SESSION_LIFETIME"])
+    app.extensions["web_sessions"]=web_sessions
+    previous_hook=store.platform_access.on_revoke
+    def on_revoke(db,principal,credential_id=None):
+        if previous_hook: previous_hook(db,principal)
+        if credential_id: WebSessions.end_for_credential(db,credential_id)
+    store.platform_access.on_revoke=on_revoke
     from cos_requests import CoSRequests
     if cos_sessions is None:
         import os
@@ -37,7 +61,9 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
     from coordination import Coordination
     coordination=Coordination(store)
     app.extensions["coordination"]=coordination
-    allowed_hosts={f"127.0.0.1:{port}",f"localhost:{port}"}
+    import os
+    extra_hosts=configured_hosts(os.environ.get("RECORDS_ALLOWED_HOSTS")) if allowed_hosts is None else set(allowed_hosts)
+    allowed_hosts={f"127.0.0.1:{port}",f"localhost:{port}"}|extra_hosts
     if testing: allowed_hosts.add("localhost")
 
     @app.before_request
@@ -64,7 +90,12 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
         if authorization.startswith("Bearer "):
             actor=store.authenticate(authorization[7:])
         elif session.get("credential_id"):
-            actor=store.platform_access.authenticate(credential_id=session["credential_id"])
+            # Rooms R3b: a browser session must be live on the server too. A cookie
+            # from before R3b (no session id), a logged-out or revoked one, is refused.
+            if web_sessions.valid(session.get("ws"),session["credential_id"]):
+                actor=store.platform_access.authenticate(credential_id=session["credential_id"])
+            else:
+                session.clear()
         if not actor: raise Problem("Sign in with a local access key",401)
         g.actor=actor
         g.auth_context=request_credential.set(actor["credential_id"])
@@ -75,7 +106,11 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
             operations={"get_room":"read","session_record":"read","events":"post","import_conversation":"post","transfer":"post",
                         "documents":"upload","artifact_link":"link","operation":"receipt",
                         "export":"export","document":"read","rooms":"read","me":"read",
-                        "logout":"read","coordination_inbox":"read","coordination_list":"read","coordination_create":"post","coordination_transition":"post","acknowledge_join":"read"}
+                        "logout":"read","coordination_inbox":"read","coordination_list":"read","coordination_create":"post","coordination_transition":"post","acknowledge_join":"read",
+                        # Rooms R1: a teammate answers its own invitation; the worker's routes need a work scope.
+                        "meeting_rsvp":"rsvp","turns_claim":"work","turns_start":"work","turns_heartbeat":"work",
+                        "turns_fail":"work","turns_cancel_ack":"work","turns_recover":"work","turns_reconciled":"work",
+                        "hosted_teammates":"work","hosted_reachable":"work"}
             if endpoint not in operations: raise Problem("Route unavailable to installation clients",403)
             request_operation.set(operations[endpoint])
             if endpoint=="operation" and not request.args.get("destination"):
@@ -127,10 +162,12 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
         principal=store.authenticate(body().get("token"))
         if not principal: raise Problem("Invalid local access key",401)
         session.clear(); session["actor"]=principal["id"]; session["credential_id"]=principal["credential_id"]; session.permanent=True
+        session["ws"]=web_sessions.start(principal["id"],principal["credential_id"])
         return jsonify(principal)
 
     @app.post("/api/logout")
     def logout():
+        web_sessions.end(session.get("ws"))          # Rooms R3b: ends it on the server, not only in this browser
         session.clear()
         return jsonify(ok=True)
 
@@ -152,8 +189,14 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
     def rooms():
         result=store.rooms(actor())
         if not g.actor["legacy"]:
-            grants=json.loads(g.actor["grants"])
-            result=[room for room in result if "read" in grants.get(room["id"],[])]
+            if g.actor.get("scope")=="work": raise Problem("A worker credential does not list rooms",403)
+            if g.actor.get("scope")=="membership":
+                from meetings import rsvp_of
+                with store.connect() as db:
+                    result=[room for room in result if rsvp_of(db,room["id"],actor())["rsvp"]=="accepted"]
+            else:
+                grants=json.loads(g.actor["grants"])
+                result=[room for room in result if "read" in grants.get(room["id"],[])]
         return jsonify(rooms=result)
 
     # v1 /rooms remains the stable session alias for existing clients/receipts.
@@ -288,6 +331,75 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
     @app.post("/api/v1/backup")
     def backup(): return jsonify(store.backup(actor()))
 
+    # ── Rooms R1 (docs/specs/minimoi-connected-work/ROOMS_R1.md) ─────────────
+    meetings=store.meetings
+
+    @app.post("/api/v1/rooms/<room>/invite")
+    def meeting_invite(room): return jsonify(meetings.invite(actor(),key(),room,body())),201
+
+    @app.post("/api/v1/rooms/<room>/rsvp")
+    def meeting_rsvp(room): return jsonify(meetings.rsvp(actor(),key(),room,body()))
+
+    @app.put("/api/v1/rooms/<room>/presence")
+    def meeting_presence(room): return jsonify(meetings.presence_here(actor(),room,body()))
+
+    @app.get("/api/v1/rooms/<room>/turns")
+    def meeting_turns(room): return jsonify(meetings.status(actor(),room))
+
+    @app.post("/api/v1/rooms/<room>/turns/<turn>/cancel")
+    def meeting_turn_cancel(room,turn): return jsonify(meetings.owner_cancel(actor(),key(),room,turn))
+
+    @app.post("/api/v1/rooms/<room>/turns/<turn>/retry")
+    def meeting_turn_retry(room,turn): return jsonify(meetings.owner_retry(actor(),key(),room,turn,body())),201
+
+    @app.post("/api/v1/rooms/<room>/stop")
+    def meeting_stop(room): return jsonify(meetings.stop(actor(),key(),room))
+
+    @app.post("/api/v1/rooms/<room>/continue")
+    def meeting_continue(room): return jsonify(meetings.continue_conversation(actor(),key(),room)),201
+
+    @app.get("/api/v1/teammates")
+    def teammates(): return jsonify(teammates=meetings.teammates(actor()))
+
+    @app.put("/api/v1/teammates/<principal>")
+    def teammate_card(principal): return jsonify(meetings.put_teammate(actor(),principal,body()))
+
+    @app.post("/api/v1/teammates/<principal>/prove")
+    def teammate_prove(principal): return jsonify(meetings.prove(actor(),key(),principal,body())),202
+
+    @app.get("/api/v1/teammates/<principal>/prove")
+    def teammate_proof(principal): return jsonify(meetings.proof_status(actor(),principal))
+
+    @app.get("/api/v1/hosted-teammates")
+    def hosted_teammates(): return jsonify(meetings.hosted_view(g.actor))
+
+    @app.post("/api/v1/hosted-teammates/<principal>/reachable")
+    def hosted_reachable(principal): return jsonify(meetings.mark_reachable(g.actor,principal,body()))
+
+    @app.post("/api/v1/turns/claim")
+    def turns_claim(): return jsonify(meetings.claim(g.actor,body()))
+
+    @app.post("/api/v1/turns/<turn>/start")
+    def turns_start(turn): return jsonify(meetings.start(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/heartbeat")
+    def turns_heartbeat(turn): return jsonify(meetings.heartbeat(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/fail")
+    def turns_fail(turn): return jsonify(meetings.fail(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/cancel-ack")
+    def turns_cancel_ack(turn): return jsonify(meetings.cancel_ack(g.actor,turn,body()))
+
+    @app.post("/api/v1/turns/<turn>/reconciled")
+    def turns_reconciled(turn): return jsonify(meetings.reconciled(g.actor,turn,body()))
+
+    @app.post("/api/v1/rooms/<room>/renew")
+    def meeting_renew(room): return jsonify(meetings.renew(actor(),key(),room))
+
+    @app.post("/api/v1/turns/<turn>/recover")
+    def turns_recover(turn): return jsonify(meetings.recover(g.actor,turn,body()))
+
     return app
 
 
@@ -295,6 +407,8 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir",required=True)
     parser.add_argument("--port",type=int,default=18880)
+    parser.add_argument("--host",default="127.0.0.1",choices=["127.0.0.1","0.0.0.0"],
+                        help="0.0.0.0 only inside the staging container, on its internal network with no host port")
     parser.add_argument("--ui-preview",action="store_true",
                         help="Also serve the simulated-data UI preview at /preview/ (no login, no store reads)")
     args=parser.parse_args()
@@ -305,4 +419,4 @@ if __name__=="__main__":
     print(f"Access key file: {application.extensions['records_store'].root/'owner-key.txt'}",flush=True)
     # Avoid recording paths/search terms or request bodies in general access logs.
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    application.run(host="127.0.0.1",port=args.port,debug=False,use_reloader=False,threaded=True)
+    application.run(host=args.host,port=args.port,debug=False,use_reloader=False,threaded=True)

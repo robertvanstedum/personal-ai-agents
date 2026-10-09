@@ -116,7 +116,7 @@ def test_the_same_file_twice_is_one_document(turned):
     (b"abc\x00\x01", "blob.txt", 422, "binary"),
     (pdf_bytes(["", ""]), "scan.pdf", 422, "no_text"),
     (b"a" * (5 * 1024 * 1024 + 1), "huge.txt", 413, "too_large"),
-])
+], ids=['image', 'unsupported', 'binary', 'no-text', 'too-large'])
 def test_what_cannot_be_read_is_refused_with_a_plain_reason_and_nothing_is_kept(turned, raw, name, status, code):
     client = turned.owner()
     token = turned.csrf(client)

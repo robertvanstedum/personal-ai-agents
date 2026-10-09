@@ -1,0 +1,19 @@
+# Staging-only: the CoS turn log (Spec 160 path (a), first part). Opt-in:
+# added by scripts/staging/lib.sh only while $STAGING_ROOT/state/cos.turns says
+# "on" (scripts/staging/cos.sh turns on|off, no rebuild);
+# scripts/staging/build.sh makes $STAGING_ROOT/data/cos-turns (0700).
+#
+# Confer voice posts each finished session's transcript to cos-scheduler
+# (POST /ui/voice/transcript, domains/cos/voice_transcripts.py), which appends
+# one html_voice record to data/cos-turns/YYYY/YYYY-MM-DD.jsonl, unless the
+# conversation is Private (Confer's Private switch writes
+# data/cos-turns/_mode.json). Without COS_TURNS_DIR nothing is written, the
+# Private switch shows "n/a" and the page says "not set up here".
+# Production is unchanged (docker-compose.prod.yml).
+
+services:
+  cos-scheduler:
+    environment:
+      - COS_TURNS_DIR=/app/data/cos-turns
+    volumes:
+      - ${MINIMOI_ROOT:?}/data/cos-turns:/app/data/cos-turns

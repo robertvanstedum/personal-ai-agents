@@ -48,6 +48,8 @@ def _is_release_only(path: str) -> bool:
         # for a change under these trees.
         or path.startswith("prototype-lab/")
         or path.startswith("planning-studio/")
+        # The Mac's scheduled jobs and their launchd files (job-observability): run on the laptop, in no service image.
+        or path.startswith(("scripts/jobs/", "scripts/memory/", "infrastructure/launchd/"))
         or path in {"requirements.test.txt", "pytest.ini", ".gitignore"}
         or _is_staging_only(path)
         or path.startswith(DORMANT_PREFIXES)
@@ -62,7 +64,14 @@ def _is_release_only(path: str) -> bool:
 # until the production MC spec. tests/test_release_classifier.py fails if
 # deploy.yml, the deploy script or docker-compose.prod.yml starts using them,
 # so that change must classify them as a real production service.
-DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent")
+DORMANT_PREFIXES = ("docker/mc-agent/", "docker/Dockerfile.mc-agent",
+                    # Records (Rooms) runs only in its own staging project (Guild 1.1 slice 4).
+                    "docker/Dockerfile.records", "docker/requirements.records.txt",
+                    # The Rooms worker (Rooms R1) runs only beside Records in that project.
+                    "docker/Dockerfile.rooms-worker", "docker/requirements.rooms-worker.txt", "docker/Dockerfile.rooms-codex",
+                    "docker/fetch_codex.py", "services/rooms_worker/",
+                    # Rooms R2: the Mac connector and the door sidecar, staging/Mac only.
+                    "services/rooms_connector/", "services/records_door/")
 
 
 # The Mac Docker staging stack (dev.minimoi.ai, scripts/staging/README.md).
@@ -77,6 +86,12 @@ STAGING_ONLY_FILES = frozenset({
     "docker-compose.staging-keys.yml",
     # CoS's own capped gateway key (cos.sh key), staging only.
     "docker-compose.staging-cos-key.yml",
+    # The CoS turn log, scheduled-jobs and MC turn-log mounts, staging only.
+    "docker-compose.staging-cos-turns.yml",
+    "docker-compose.staging-jobs.yml",
+    "docker-compose.staging-mc-turns.yml",
+    # Records (Rooms)' own Compose project (Guild 1.1 slice 4), staging only.
+    "docker-compose.records.yml",
     "services/model_gateway/litellm.staging.yaml",
 })
 STAGING_ONLY_PREFIXES = ("scripts/staging/",)
@@ -84,15 +99,16 @@ STAGING_ONLY_PREFIXES = ("scripts/staging/",)
 
 # Operator tools that run on the owner's laptop: no production service image
 # runs them (the Dockerfiles copy the repository, but nothing starts these).
-LOCAL_TOOL_PREFIXES = ("scripts/workshop/", "scripts/vault/")
+LOCAL_TOOL_PREFIXES = ("scripts/workshop/", "scripts/vault/", "tools/workshop/", "scripts/release/", "scripts/dev/")
 
-# The Workshop backend (journal, Vault readers, the credential scrub they use).
+# The Workshop backend (journal, Vault readers, the credential and payment scrubs they use,
+# the agent-turn writer and the scheduled-job judge the Guild screens read).
 # Its one intended consumer is the portal (the Workshop screen, minimoi_portal/
 # workshop/). No other service imports it:
 # tests/test_release_classifier.py fails if one starts to, so that change must
 # classify the new consumer here.
-WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/")
-WORKSHOP_BACKEND_FILES = frozenset({"utils/credential_scrub.py"})   # exact: no other utils/ file moves
+WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/", "core/agent_turns/", "core/jobs/")
+WORKSHOP_BACKEND_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scrub.py"})   # exact: no other utils/ file moves
 
 
 def _is_staging_only(path: str) -> bool:
@@ -120,8 +136,10 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             # The usage record (usage-record U1/U2): the CoS images copy it
             # (Dockerfile.cos*). The production gateway image does not; the
             # staging gateway mounts it. Production writes nothing until its
-            # environment sets MINIMOI_USAGE_DIR.
-            services.update(("cos-bot", "cos-scheduler"))
+            # environment sets MINIMOI_USAGE_DIR. The portal imports it too
+            # (streaming S1: MC's runtime-stream records; the portal image
+            # copies the repository), so a change here redeploys the portal.
+            services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith("services/model_gateway/"):
             services.update(("model-gateway", "cos-bot", "cos-scheduler"))
         elif path.startswith("docker/cos-agent-a/") or path == "docker/Dockerfile.cos-agent-a":
@@ -130,7 +148,7 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             services.update(("german", "portuguese", "cos-scheduler"))
         elif path.startswith("core/telegram/"):
             services.update(("curator", "system-bot", "cos-bot"))
-        elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path in WORKSHOP_BACKEND_FILES:
+        elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path in WORKSHOP_BACKEND_FILES or path == "config/scheduled_jobs.json":
             services.add("portal")
         elif path.startswith(("core/", "utils/")):
             services.update(PYTHON_SERVICES)

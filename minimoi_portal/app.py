@@ -669,8 +669,19 @@ COS_CSRF_META = "minimoi-csrf-token"
 _COS_MULTIPART_PATHS = {"ui/transcribe"}
 
 
+def _cos_write_guard_on() -> bool:
+    """Whether /app/cos writes need the portal's CSRF token. The guard is paired with Confer's page script (domains/cos), which sends the
+    token; production runs the earlier Confer script, which sends none, so production keeps the earlier contract until the two ship
+    together (MINIMOI_COS_WRITE_GUARD=on turns it on there). A staging origin has the paired script and the guard on; the variable
+    overrides either way."""
+    flag = os.environ.get("MINIMOI_COS_WRITE_GUARD")
+    if flag is not None and flag.strip():
+        return flag.strip().lower() in _guild_mounts.FLAG_VALUES_ON
+    return _guild_mounts.is_staging_origin(_cfg.BASE_URL, os.environ)
+
+
 def _cos_page_meta():
-    return {COS_CSRF_META: _csrf.token(COS_CSRF_SESSION_KEY)}
+    return {COS_CSRF_META: _csrf.token(COS_CSRF_SESSION_KEY)} if _cos_write_guard_on() else None
 
 
 def _cos_write_refused(path: str):
@@ -696,7 +707,7 @@ def cos_root():
 def cos_proxy(path):
     user = _current_user()
     if request.method != "GET":
-        refused = _cos_write_refused(path)
+        refused = _cos_write_refused(path) if _cos_write_guard_on() else None
         if refused is not None:
             return refused
         return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)

@@ -486,6 +486,51 @@ print(' '.join('%s x%d' % (k, v) for k, v in sorted(bad.items())))
   else
     fail "CoS's key was refused on: $refused (a route CoS uses is missing from its scope: fix and re-run cos.sh key, or cos.sh off)"
   fi
+  # Advisory (#276 review): CoS's own direct calls (helper:* records: the direct
+  # Grok backend) refused since the latest cos.sh key. They do not use
+  # the gateway key, so they never fail verify; a refusal is worth a look. It
+  # reads the latest two monthly files in the top level and each writer folder.
+  # Filesystem failures are reported separately; malformed lines are skipped.
+  helpers=$(COS_ENV="$STAGING_COS_ENV" USAGE_DIR="$S/data/usage" RELEASE="$RELEASE_DIR" python3 -c "
+import os, json, re
+from datetime import datetime
+store = os.environ['USAGE_DIR']
+# Read strictly: the ordinary usage reader suppresses filesystem failures.
+folders = [store] + [os.path.join(store, n) for n in sorted(os.listdir(store))
+                    if re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,47}', n) and os.path.isdir(os.path.join(store, n))]
+records = []
+for folder in folders:
+    names = sorted(n for n in os.listdir(folder) if re.fullmatch(r'usage-\d{4}-\d{2}\.jsonl', n))[-2:]
+    for name in names:
+        with open(os.path.join(folder, name), encoding='utf-8') as handle:
+            for line in handle:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue  # torn/foreign entries are outside this advisory
+                if isinstance(record, dict) and record.get('v') == 1:
+                    records.append(record)
+since = os.path.getmtime(os.environ['COS_ENV'])
+seen = {}
+for r in records:
+    if not str(r.get('emitter') or '').startswith('helper:') or r.get('status') != 'refused':
+        continue
+    try:
+        at = datetime.fromisoformat(str(r.get('occurred_at'))).timestamp()
+    except ValueError:
+        continue
+    if at >= since:
+        k = '%s %s %s' % (r.get('emitter'), r.get('route'), r.get('http_status'))
+        seen[k] = seen.get(k, 0) + 1
+print(' '.join('%s x%d' % (k, v) for k, v in sorted(seen.items())))
+" 2>/dev/null || echo "unreadable")
+  if [[ -z "$helpers" ]]; then
+    pass "no refused helper call in readable recent usage files after the last key change (advisory; latest two files per writer, malformed lines skipped)"
+  elif [[ "$helpers" == unreadable ]]; then
+    warn "direct-call usage evidence unavailable or unreadable (advisory)"
+  else
+    warn "CoS's direct calls were refused in recent usage files after the last key change: $helpers (advisory: these do not use the gateway key; check that provider's key or rate limit)"
+  fi
 else
   pass "CoS uses the gateway's master key (state/cos.key off)"
 fi

@@ -32,10 +32,32 @@ def _port():
         return s.getsockname()[1]
 
 
+def sse(obj) -> bytes:
+    return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n".encode()
+
+
+def chunk(text=None, finish=None, **extra):
+    return {"id": "chatcmpl_up", "model": "secret-model", "object": "chat.completion.chunk",
+            "choices": [{"index": 0, "delta": ({"content": text} if text is not None else {}), "finish_reason": finish}],
+            **extra}
+
+
+# A scripted OpenClaw SSE answer: (bytes, seconds to wait before them).
+HAPPY = [(sse(chunk(None) | {"choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]}), 0),
+         (sse(chunk("Hello ")), 0.05), (sse(chunk("wörld")), 0.05),
+         (sse(chunk(None, "stop")), 0.02),
+         (sse({"id": "x", "choices": [], "usage": {"prompt_tokens": 120, "completion_tokens": 7, "total_tokens": 127}}), 0.02),
+         (b"data: [DONE]\n\n", 0.01)]
+
+
 class Upstream:
     def __init__(self):
         self.seen = []
         self.delay = 0
+        self.script = None           # a list of (bytes, delay): answer POSTs as text/event-stream
+        self.status = 200
+        self.finished = threading.Event()
+        self.aborted = threading.Event()
         outer = self
 
         class H(BaseHTTPRequestHandler):
@@ -55,7 +77,30 @@ class Upstream:
 
             def do_POST(self):
                 n = int(self.headers.get("content-length") or 0)
-                self._answer(self.rfile.read(n))
+                body = self.rfile.read(n)
+                if outer.script is None:
+                    return self._answer(body)
+                outer.seen.append({"method": "POST", "path": self.path, "headers": dict(self.headers),
+                                   "body": body.decode()})
+                if outer.status != 200:
+                    data = json.dumps({"error": {"message": "budget exceeded"}}).encode()
+                    self.send_response(outer.status)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                self.send_response(200)
+                self.send_header("content-type", "text/event-stream")
+                self.end_headers()
+                try:
+                    for data, wait in outer.script:
+                        time.sleep(wait)
+                        self.wfile.write(data)
+                        self.wfile.flush()
+                    outer.finished.set()
+                except (BrokenPipeError, ConnectionResetError):
+                    outer.aborted.set()          # the relay closed MC's connection
 
             def log_message(self, *a):
                 pass
@@ -65,24 +110,75 @@ class Upstream:
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
 
 
+def _stop_relay(proc):
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+
+
+def _await_relay(proc, env, base, *, attempts=5, deadline_s=20.0):
+    """Wait until the relay answers /healthz, and return (proc, base).
+
+    The port is picked by binding port 0 and closing it, so by the time node
+    binds 0.0.0.0 on it another socket can hold it (on macOS, typically a
+    client connection in TIME_WAIT): node then exits with EADDRINUSE. That is
+    the flake this replaces (a fixed 5 s loop that never noticed the exit).
+    Now the relay is started again on a fresh port, a few times; any other
+    exit, or no answer within the deadline, fails with the relay's own error."""
+    ready = False
+    try:
+        for attempt in range(attempts):
+            started = time.monotonic()
+            while time.monotonic() - started < deadline_s:
+                if proc.poll() is not None:
+                    break
+                try:
+                    urllib.request.urlopen(base + "/healthz", timeout=1)
+                    ready = True
+                    return proc, base
+                except Exception:
+                    time.sleep(0.05)
+            else:
+                _stop_relay(proc)
+                pytest.fail(f"the relay did not answer /healthz within {deadline_s:.0f} s")
+            err = proc.stderr.read()
+            if "EADDRINUSE" not in err:
+                pytest.fail(f"the relay exited ({proc.returncode}): {err[-400:]}")
+            if attempt + 1 == attempts:
+                break
+            port = _port()
+            env = {**env, "MC_RELAY_PORT": str(port)}
+            proc = subprocess.Popen(["node", str(RELAY)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            base = f"http://127.0.0.1:{port}"
+        pytest.fail(f"the relay could not bind a free port in {attempts} attempts")
+    finally:
+        if not ready:
+            _stop_relay(proc)
+
+
 @pytest.fixture
 def relay():
     up = Upstream()
-    port = _port()
-    env = {"PATH": os.environ["PATH"], "MC_RELAY_PORT": str(port), "MC_RELAY_TARGET": up.url,
-           "MC_RELAY_TOKEN": CALLER, "MC_OPENCLAW_GATEWAY_TOKEN": MC_TOKEN, "MC_RELAY_DEADLINE_MS": "3000"}
-    proc = subprocess.Popen(["node", str(RELAY)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    base = f"http://127.0.0.1:{port}"
-    for _ in range(100):
+    proc = None
+    try:
+        port = _port()
+        env = {"PATH": os.environ["PATH"], "MC_RELAY_PORT": str(port), "MC_RELAY_TARGET": up.url,
+               "MC_RELAY_TOKEN": CALLER, "MC_OPENCLAW_GATEWAY_TOKEN": MC_TOKEN, "MC_RELAY_DEADLINE_MS": "3000",
+               "MC_RELAY_IDLE_MS": "1000", "MC_RELAY_STREAM_TEXT_MAX": "2000", "MC_RELAY_LINE_MAX": "1000"}
+        proc = subprocess.Popen(["node", str(RELAY)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        base = f"http://127.0.0.1:{port}"
+        proc, base = _await_relay(proc, env, base)
+        yield base, up, proc
+    finally:
         try:
-            urllib.request.urlopen(base + "/healthz", timeout=1)
-            break
-        except Exception:
-            time.sleep(0.05)
-    yield base, up, proc
-    proc.terminate()
-    proc.wait(timeout=5)
-    up.server.shutdown()
+            _stop_relay(proc)
+        finally:
+            up.server.shutdown()
+            up.server.server_close()
 
 
 def call(base, path, method="GET", body=None, token=CALLER, headers=None, raw=None):
@@ -134,7 +230,8 @@ def test_only_the_two_paths_pass(relay, path, method, expect):
     ({**GOOD, "model": "openclaw/default"}, "model"),
     ({**GOOD, "model": "openclaw"}, "model"),
     ({**GOOD, "model": "openclaw/cos-agent-a"}, "model"),
-    ({**GOOD, "stream": True}, "stream"),
+    ({**GOOD, "stream": "true"}, "stream"),
+    ({**GOOD, "stream": True, "stream_options": {"include_usage": False}}, "stream_options"),
     ({**GOOD, "user": "cos-probe"}, "user"),
     ({**GOOD, "messages": []}, "messages"),
     ({**GOOD, "messages": [{"role": "tool", "content": "x"}]}, "role"),
@@ -217,3 +314,139 @@ def test_a_token_of_the_right_length_but_wrong_value_is_refused(relay):
     assert call(base, "/readyz", token=wrong)[0] == 401
     assert call(base, "/readyz", token=CALLER + "extra")[0] == 401
     assert up.seen == []
+
+
+
+# ── Streaming (spec v0.2 §3, v0.3 §2) ─────────────────────────────────────────
+import http.client  # noqa: E402
+
+STREAM = {**GOOD, "stream": True}
+
+
+def stream_call(base, body=STREAM, corr="c" * 32, read_lines=None):
+    """POST a streaming turn; return (status, headers, [events]). With
+    read_lines, disconnect after that many lines."""
+    host, port = base.replace("http://", "").split(":")
+    conn = http.client.HTTPConnection(host, int(port), timeout=10)
+    conn.request("POST", "/v1/chat/completions", body=json.dumps(body),
+                 headers={"Authorization": f"Bearer {CALLER}", "Content-Type": "application/json",
+                          "X-MC-Correlation-Id": corr})
+    r = conn.getresponse()
+    headers = {k.lower(): v for k, v in r.getheaders()}
+    if r.status != 200 or "ndjson" not in headers.get("content-type", ""):
+        return r.status, headers, r.read().decode()
+    events = []
+    while True:
+        line = r.readline()
+        if not line:
+            break
+        events.append(json.loads(line))
+        if read_lines is not None and len(events) >= read_lines:
+            conn.sock.close()
+            break
+    return r.status, headers, events
+
+
+def test_a_stream_is_passed_on_as_the_relays_own_minimal_ndjson(relay):
+    base, up, _ = relay
+    up.script = HAPPY + [(sse(chunk(None) | {"choices": [{"index": 0, "delta": {"tool_calls": [{"id": "t"}]}}]}), 0)]
+    status, headers, events = stream_call(base)
+    assert status == 200 and headers["content-type"].startswith("application/x-ndjson")
+    assert headers["cache-control"] == "no-cache, no-transform" and headers["x-accel-buffering"] == "no"
+    assert headers["x-mc-correlation-id"] == "c" * 32
+    assert events == [{"t": "delta", "text": "Hello "}, {"t": "delta", "text": "wörld"},
+                      {"t": "finish", "reason": "stop"},
+                      {"t": "usage", "prompt_tokens": 120, "completion_tokens": 7}]
+    sent = json.loads(up.seen[-1]["body"])
+    assert sent["stream"] is True and sent["stream_options"] == {"include_usage": True}
+    text = json.dumps(events)
+    assert "chatcmpl_up" not in text and "secret-model" not in text and "tool_calls" not in text
+
+
+def test_utf8_split_across_chunks_and_a_tool_call_chunk_is_dropped(relay):
+    base, up, _ = relay
+    raw = sse(chunk("ä€"))
+    cut = raw.index("ä".encode()) + 1                              # split inside a multi-byte character
+    up.script = [(raw[:cut], 0), (raw[cut:], 0.05),
+                 (sse(chunk(None) | {"choices": [{"index": 0, "delta": {"tool_calls": [{"id": "t1"}]}}]}), 0),
+                 (sse(chunk(None, "stop")), 0), (b"data: [DONE]\n\n", 0)]
+    status, _, events = stream_call(base)
+    assert events == [{"t": "delta", "text": "ä€"}, {"t": "finish", "reason": "stop"}]
+
+
+def test_a_non_200_keeps_the_json_error_path(relay):
+    base, up, _ = relay
+    up.script, up.status = HAPPY, 400
+    status, headers, text = stream_call(base)
+    assert status == 400 and "application/json" in headers["content-type"] and "budget" in text
+
+
+@pytest.mark.parametrize("script,cls", [
+    ([(sse(chunk("a")), 0), (sse(chunk("b")), 1.6)], "idle"),                  # 1 s idle in the fixture
+    ([(sse(chunk("x" * 900)), 0), (sse(chunk("x" * 900)), 0), (sse(chunk("x" * 900)), 0)], "too_large"),
+    ([(b"data: " + b"y" * 1500, 0)], "too_large"),                             # a 1,000-byte line cap in the fixture
+    ([(sse({"error": {"message": "upstream exploded"}}), 0)], "upstream"),
+])
+def test_each_limit_trips_cleanly_with_one_error_event(relay, script, cls):
+    base, up, _ = relay
+    up.script = script
+    status, _, events = stream_call(base)
+    assert status == 200 and events[-1] == {"t": "error", "class": cls}
+    assert sum(1 for e in events if e["t"] == "error") == 1
+
+
+def test_the_deadline_trips_even_while_bytes_keep_coming(relay):
+    base, up, _ = relay
+    up.script = [(sse(chunk("t")), 0.5) for _ in range(10)]                    # 5 s of trickle, 3 s deadline
+    status, _, events = stream_call(base)
+    assert events[-1] == {"t": "error", "class": "deadline"}
+
+
+def test_stop_aborts_mcs_call_and_ends_the_stream(relay):
+    base, up, _ = relay
+    up.script = [(sse(chunk("a")), 0)] + [(sse(chunk("b")), 0.3) for _ in range(20)]
+    results = []
+    t = threading.Thread(target=lambda: results.append(stream_call(base, corr="d" * 32)))
+    t.start()
+    time.sleep(0.6)
+    assert call(base, "/v1/turns/stop", "POST", {"correlation_id": "e" * 32})[0] == 404     # not that turn
+    status, _, text = call(base, "/v1/turns/stop", "POST", {"correlation_id": "d" * 32})
+    assert status == 200 and json.loads(text) == {"stopped": True}
+    t.join(timeout=5)
+    events = results[0][2]
+    assert events[-1] == {"t": "error", "class": "stopped"}
+    assert up.aborted.wait(3)                                                  # MC's connection was closed
+    assert call(base, "/v1/turns/stop", "POST", {"correlation_id": "d" * 32})[0] == 404     # finished: nothing to stop
+
+
+def test_stop_needs_the_caller_token_and_a_turn_id(relay):
+    base, _, _ = relay
+    assert call(base, "/v1/turns/stop", "POST", {"correlation_id": "d" * 32}, token=None)[0] == 401
+    assert call(base, "/v1/turns/stop", "POST", {"correlation_id": "nope"})[0] == 400
+
+
+def test_a_caller_that_leaves_does_not_stop_the_run(relay):
+    base, up, proc = relay
+    up.script = [(sse(chunk("a")), 0)] + [(sse(chunk("b")), 0.2) for _ in range(5)] + \
+        [(sse(chunk(None, "stop")), 0), (b"data: [DONE]\n\n", 0)]
+    status, _, events = stream_call(base, read_lines=1)                        # the caller goes after one line
+    assert events == [{"t": "delta", "text": "a"}]
+    time.sleep(0.2)
+    busy = call(base, "/v1/chat/completions", "POST", GOOD)                    # still in flight: MC is still running
+    assert busy[0] == 429
+    assert up.finished.wait(5) and not up.aborted.is_set()                     # MC was read to the end
+    time.sleep(0.3)
+    up.script = None
+    assert call(base, "/v1/chat/completions", "POST", GOOD)[0] == 200           # settled: free again
+
+
+def test_the_stream_path_logs_no_text_or_token(relay):
+    base, up, proc = relay
+    up.script = [(sse(chunk("private-reply-text")), 0), (sse(chunk(None, "stop")), 0), (b"data: [DONE]\n\n", 0)]
+    stream_call(base, body={**STREAM, "messages": [{"role": "user", "content": "private-note-text"}]}, corr="f" * 32)
+    proc.terminate()
+    out, err = proc.communicate(timeout=5)
+    logs = out + err
+    assert "f" * 32 in logs and '"event":"stream"' in logs
+    for secret in (CALLER, MC_TOKEN, "private-note-text", "private-reply-text"):
+        assert secret not in logs

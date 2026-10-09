@@ -247,7 +247,7 @@ def test_answered_only_with_text_and_usage_and_pinned_to_mc_agent():
     (429, '{"error":{"message":"Rate limit reached: rpm 10"}}', "unavailable", "rate_limited"),
     (429, '{"error":{"message":"Budget has been exceeded"}}', "unavailable", "cap_reached"),
     (502, "bad gateway", "error", "runtime_error"),
-])
+], ids=['answered-content', 'answered-no-usage', 'answered-length', 'empty', 'blank', 'none', 'no-reply-placeholder', 'error-field', 'tool-calls-stop', 'content-filter', 'no-choices', 'not-json', '408-timeout', '500-key-refused', '500-budget', '401-unauthorized', '401-invalid-key', '429-in-flight', '429-rate-limit', '429-budget', '502-bad-gateway'])
 def test_answers_by_content_and_errors_are_never_answers(status, text, turn_status, failure):
     backend, _ = _oc(post=Resp(status, text))
     result = backend.turn(REQ)

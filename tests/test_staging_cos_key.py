@@ -227,6 +227,54 @@ def test_verify_fails_on_refused_usage_records_with_coss_key_since_it_was_made(t
     assert "a route CoS uses is missing from its scope" in text
 
 
+@pytest.mark.parametrize("layout", ["top-level", "writer-folders"])
+def test_verify_advises_on_refused_direct_calls_since_the_last_key(tmp_path, layout):
+    """#276 review: an advisory line (never a failure) listing refused helper:*
+    records on CoS's writers since the latest cos.sh key, read from the whole
+    store: the top level (today) or each writer's folder (#276)."""
+    import json
+    import os
+    import re
+    text = (SCRIPTS / "verify.sh").read_text()
+    code = re.search(r'helpers=\$\(COS_ENV="\$STAGING_COS_ENV" USAGE_DIR="\$S/data/usage" RELEASE="\$RELEASE_DIR" '
+                     r'python3 -c "\n(.*?)\n" 2>/dev/null', text, re.S).group(1)
+    cos_env = tmp_path / "cos.env"
+    cos_env.write_text("COS_MODEL_GATEWAY_KEY=x\n")
+    os.utime(cos_env, (1790000000, 1790000000))
+    usage = tmp_path / "usage"
+    folders = {"top-level": (usage, usage), "writer-folders": (usage / "cos-bot", usage / "cos-scheduler")}[layout]
+    for folder in folders:
+        folder.mkdir(parents=True, exist_ok=True)
+
+    def line(at, status, emitter, route="cos-grok-direct:chat", code_=429):
+        return json.dumps({"v": 1, "occurred_at": at, "status": status, "emitter": emitter, "route": route,
+                           "http_status": code_})
+    with open(folders[0] / "usage-2026-09.jsonl", "a") as f:
+        f.write("\n".join([
+            line("2026-09-01T00:00:00+00:00", "refused", "helper:cos-grok-backend"),   # before the key: ignored
+            line("2026-09-29T10:00:00+00:00", "ok", "helper:cos-grok-backend"),
+            line("2026-09-29T10:00:01+00:00", "refused", "helper:cos-grok-backend"),
+            line("2026-09-29T10:00:02+00:00", "refused", "gateway", "minimoi-cos-agent", 403),  # the gateway's: the other check
+            '{"torn": ']) + "\n")
+    with open(folders[1] / "usage-2026-09.jsonl", "a") as f:
+        f.write(line("2026-09-29T10:00:03+00:00", "refused", "helper:cos-grok-backend") + "\n")
+    run = lambda: subprocess.run(["python3", "-c", code], capture_output=True, text=True,   # noqa: E731
+                                 env={**os.environ, "COS_ENV": str(cos_env), "USAGE_DIR": str(usage),
+                                      "RELEASE": str(SCRIPTS.parents[1])}).stdout.strip()
+    assert run() == "helper:cos-grok-backend cos-grok-direct:chat 429 x2"
+    os.utime(cos_env, None)                                        # a new key made now: nothing since
+    assert run() == ""
+    usage.rename(tmp_path / "usage-away")
+    missing = subprocess.run(["python3", "-c", code], capture_output=True, text=True,
+                             env={**os.environ, "COS_ENV": str(cos_env), "USAGE_DIR": str(usage),
+                                  "RELEASE": str(SCRIPTS.parents[1])})
+    assert missing.returncode != 0
+    assert "evidence unavailable or unreadable" in text
+    assert "latest two files per writer, malformed lines skipped" in text
+    block = text[text.index("  helpers=$("):text.index("else\n  pass \"CoS uses the gateway's master key")]
+    assert "warn \"CoS's direct calls were refused" in block and "fail " not in block.split("helpers=$(")[1]
+
+
 def test_runbook_says_cos_off_before_the_key_database_goes_away():
     text = (SCRIPTS / "README.md").read_text()
     assert "run `cos.sh off` **before**" in text and "run `scripts/staging/cos.sh off` first" in text

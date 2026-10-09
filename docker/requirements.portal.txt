@@ -1,15 +1,47 @@
-boto3>=1.34.0
-sentry-sdk[flask]>=2.0.0
-flask==3.1.3
+# Portal image dependencies, pinned (Guild/Workshop UI integration).
+#
+# The first block is the exact package set measured inside the running production
+# portal at 60c553f7 (review-evidence/guild-ui-release/production-packages-60c553f.txt):
+# 26 packages, unchanged, so this release changes no existing dependency. The second
+# block is what the Guild UI adds, at the versions the candidate's tests ran on.
+# Pair with the base image pinned by digest in docker/Dockerfile.portal.
+#
+# To raise a version: change it here, rebuild, run the full suite, and say so in the release note.
+
+# --- production baseline (unchanged) ---
+beautifulsoup4==4.15.0
+blinker==1.9.0
+boto3==1.43.111
+botocore==1.43.111
+certifi==2026.7.22
+charset-normalizer==3.5.2
+click==8.5.0
+Flask==3.1.3
 flask-cors==6.0.2
+idna==3.20
+itsdangerous==2.2.0
+Jinja2==3.1.6
+jmespath==1.1.0
+Markdown==3.11
+MarkupSafe==3.0.4
+psycopg2-binary==2.9.13
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.4
 requests==2.32.5
-beautifulsoup4>=4.14.0
-markdown
-nh3>=0.3,<0.4
-markdown-it-py>=4,<5
-python-dotenv
-psycopg2-binary>=2.9.0
-# The Guild Media library (Guild 1.1 slice 3): decode, check and re-encode uploads.
-pillow>=12,<13
-# Upload reading (Guild 1.1): the text layer of a PDF, read in a bounded child process (guild_ui/doc_reader.py).
+s3transfer==0.19.2
+sentry-sdk[flask]==2.71.0
+six==1.17.0
+soupsieve==2.10
+typing_extensions==4.16.0
+urllib3==2.8.0
+Werkzeug==3.1.9
+
+# --- added by the Guild UI ---
+# Sanitised rendering of notes and replies (guild_ui/markdown.py).
+nh3==0.3.7
+markdown-it-py==4.2.0
+mdurl==0.1.2
+# The Guild Media library: decode, check and re-encode uploads.
+pillow==12.3.0
+# Upload reading: the text layer of a PDF, read in a bounded child process (guild_ui/doc_reader.py).
 pypdf==6.8.0

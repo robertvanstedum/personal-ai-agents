@@ -67,7 +67,7 @@ def test_the_pixel_cap_is_checked_from_the_header_before_any_decode():
     (b"not an image at all", 422),
     (image_bytes("JPEG")[:120], 422),                                        # truncated
     (b"x" * (M.MAX_BYTES + 1), 413),
-])
+], ids=['not-an-image', 'truncated-jpeg', 'over-the-byte-cap'])
 def test_corrupt_unknown_and_oversized_files_are_refused(raw, status):
     with pytest.raises(M.MediaRejected) as err:
         M.sanitize(raw)

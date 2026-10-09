@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "_about": "Every scheduled job MiniMoi runs, on any host. Status contract: docs/jobs_status_contract.md. Loader: core/jobs/registry.py. Each job writes <jobs root>/<status_file>.",
+  "jobs": [
+    {
+      "id": "memory-watch",
+      "name": "Memory capture (daily watch)",
+      "host": "mac",
+      "schedule": {
+        "text": "daily 04:00 Chicago",
+        "kind": "daily",
+        "at": "04:00",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 7200,
+      "grace_s": 7200,
+      "active_from": "2026-10-04T09:00:00Z",
+      "status_file": "memory-watch.json",
+      "owner": "robert",
+      "runbook": "OPERATIONS.md#scheduled-jobs-and-launchd-on-the-mac"
+    },
+    {
+      "id": "jobs-watchdog",
+      "name": "Scheduled-jobs watchdog",
+      "host": "mac",
+      "schedule": {
+        "text": "daily 09:00 Chicago",
+        "kind": "daily",
+        "at": "09:00",
+        "tz": "America/Chicago"
+      },
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 3600,
+      "grace_s": 7200,
+      "active_from": "2026-10-04T14:00:00Z",
+      "status_file": "jobs-watchdog.json",
+      "owner": "robert",
+      "runbook": "OPERATIONS.md#scheduled-jobs-and-launchd-on-the-mac"
+    }
+  ]
+}

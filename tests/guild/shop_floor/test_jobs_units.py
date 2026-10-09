@@ -51,7 +51,7 @@ def test_ids_come_from_the_note_and_never_collide_by_accident():
     assert J.result_request_id("j-0123456789abcdef") != J.job_id_for("j-0123456789abcdef")
 
 
-@pytest.mark.parametrize("text", ["short", "a" * 3600, "para one\n\npara two " * 400, "word " * 2000, "x" * 10000])
+@pytest.mark.parametrize("text", ["short", "a" * 3600, "para one\n\npara two " * 400, "word " * 2000, "x" * 10000], ids=['short', '3600-chars', 'paragraphs', 'words', '10000-chars'])
 def test_the_note_part_of_a_result_always_fits_the_note_limit(text):
     shown = J.shown_in_note(text)
     assert 0 < len(shown) <= 4000

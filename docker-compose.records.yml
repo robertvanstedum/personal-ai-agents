@@ -1,0 +1,186 @@
+# Records (Rooms): its OWN Compose project on staging (Guild 1.1 slice 4,
+# spec §6), like Master Craftsman's (docker-compose.mc.yml). Run only through
+# scripts/staging/records.sh; production has no Records service
+# (scripts/ci/classify_release.py: staging-only).
+#
+# Why a separate project: the main project's service set mirrors production
+# (tests/test_staging_environment.py), and its deploys (up --remove-orphans)
+# never touch Records. The main stack provides the fixed-name internal network
+# Records joins; the portal is on it permanently, so starting Records
+# recreates nothing there.
+#
+# Boundaries: only records-net (internal: no egress); no published port; no
+# env_file; its data only in ${MINIMOI_ROOT}/data/records (mode 700, made by
+# build.sh). Records keeps its own sign-in; nothing here holds a credential.
+
+services:
+  records:
+    image: minimoi-staging/records:${MINIMOI_IMAGE_TAG:?run scripts/staging/records.sh build}
+    pull_policy: never
+    container_name: minimoi-records
+    restart: unless-stopped
+    environment:
+      # The exact Host the portal's bridge sends (Records refuses any other).
+      - RECORDS_ALLOWED_HOSTS=minimoi-records:18880,127.0.0.1:18881
+    volumes:
+      - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/data/records:/data
+    networks:
+      - records-net
+    mem_limit: 256m
+    pids_limit: 128
+    # The image is read-only and every capability is dropped (#288 review F6):
+    # Records only writes its SQLite file and key files in /data, and /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:18880/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Rooms R1 (docs/specs/minimoi-connected-work/ROOMS_R1.md §3.8): the worker
+  # that answers Master Craftsman's meeting turns. A sibling of Records, never
+  # a process in the portal: Rooms keeps answering while the portal is down.
+  # It reaches Records on records-net and the MC relay on mc-front, nothing
+  # else; no published port; no env_file; its secrets only as read-only files.
+  rooms-worker:
+    image: minimoi-staging/rooms-worker:${MINIMOI_IMAGE_TAG:?run scripts/staging/records.sh build}
+    pull_policy: never
+    container_name: minimoi-rooms-worker
+    restart: unless-stopped
+    environment:
+      - RECORDS_URL=http://minimoi-records:18880
+      - MC_RELAY_URL=http://mc-relay:8790
+      - ROOMS_SECRETS_DIR=/run/secrets/rooms
+      - ROOMS_JOURNAL_DIR=/journal
+      - ROOMS_TEAMMATE=mc
+    volumes:
+      - ${MINIMOI_ROOT:?set MINIMOI_ROOT (scripts/staging/lib.sh)}/secrets/rooms-worker:/run/secrets/rooms:ro
+      - rooms-journal:/journal
+    networks:
+      - records-net
+      - mc-front
+    depends_on:
+      - records
+    mem_limit: 128m
+    pids_limit: 64
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; p='/tmp/rooms-worker/alive'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 60 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Rooms R2 (docs/specs/minimoi-connected-work/ROOMS_R2.md §3.1): the Mac
+  # connector's door. Docker publishes no port for a container that is only on
+  # internal networks, so Records keeps none; this sidecar forwards TCP from
+  # 127.0.0.1:18881 on the Mac to minimoi-records:18880 and nowhere else. It
+  # holds no credential; Records authenticates every request.
+  records-door:
+    image: minimoi-staging/rooms-worker:${MINIMOI_IMAGE_TAG:?run scripts/staging/records.sh build}
+    pull_policy: never
+    container_name: minimoi-records-door
+    restart: unless-stopped
+    entrypoint: ["python", "-m", "services.records_door.door"]
+    ports:
+      - "127.0.0.1:18881:18881"
+    networks:
+      - records-net
+      - records-door
+    depends_on:
+      - records
+    mem_limit: 64m
+    pids_limit: 32
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # Rooms R2 v0.4 (docs/specs/minimoi-connected-work/ROOMS_R2.md §3.6): Codex
+  # answers meeting turns from this container through `codex app-server`, one
+  # child per turn, tools off. Nothing of Robert's is mounted: its own sign-in
+  # volume (codex-room.sh login), its state, its two tokens (own volume, read-only), and
+  # tmpfs for the turn folders. records-net reaches Records; codex-egress is
+  # outbound HTTPS for ChatGPT. No published port, no env_file, no API key.
+  rooms-codex:
+    image: minimoi-staging/rooms-codex:${MINIMOI_IMAGE_TAG:?run scripts/staging/records.sh build}
+    pull_policy: never
+    container_name: minimoi-rooms-codex
+    restart: unless-stopped
+    user: "10001:10001"
+    environment:
+      - RECORDS_URL=http://minimoi-records:18880
+      - ROOMS_TEAMMATE=codex
+      - ROOMS_CONNECTOR_SECRETS=/run/secrets/rooms
+      - ROOMS_CONNECTOR_STATE=/state
+      - ROOMS_TURNS=/turns
+      - CODEX_HOME=/codex-home
+    volumes:
+      - rooms-codex-secrets:/run/secrets/rooms:ro
+      - rooms-codex-home:/codex-home
+      - rooms-codex-state:/state
+    tmpfs:
+      - /turns:size=8m,mode=700,uid=10001,gid=10001
+      - /tmp:size=16m,mode=1777
+    networks:
+      - records-net
+      - codex-egress
+    depends_on:
+      - records
+    mem_limit: 512m
+    pids_limit: 128
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  # The worker's turn journal (journal before inference): kept across restarts
+  # so recovery is receipt-first and never re-runs inference. External, so a
+  # compose down cannot remove it.
+  rooms-journal:
+    name: minimoi-staging-rooms-journal
+    external: true
+  # Rooms R2 v0.4: Codex's own sign-in home and its journal/proof state.
+  rooms-codex-home:
+    name: minimoi-staging-rooms-codex-home
+    external: true
+  rooms-codex-state:
+    name: minimoi-staging-rooms-codex-state
+    external: true
+  # Its two Records tokens, copied in by records.sh provision-codex (owned by
+  # uid 10001, mode 600): a host bind would keep the Mac user's ownership.
+  rooms-codex-secrets:
+    name: minimoi-staging-rooms-codex-secrets
+    external: true
+
+networks:
+  records-net:
+    name: minimoi-staging-records
+    external: true
+  mc-front:
+    name: minimoi-staging-mc-front
+    external: true
+  # The door's own ordinary bridge (Rooms R2): only records-door is on it, so
+  # its loopback port can be published. Records itself never joins it.
+  records-door:
+    name: minimoi-staging-records-door
+  # Rooms R2 v0.4: outbound only, for Codex's ChatGPT requests. Only
+  # rooms-codex is on it; Records never joins it.
+  codex-egress:
+    name: minimoi-staging-rooms-codex-egress

@@ -1,0 +1,23 @@
+# Rooms worker (Rooms R1, docs/specs/minimoi-connected-work/ROOMS_R1.md §3.8),
+# STAGING ONLY. A sibling of Records in its own Compose project
+# (docker-compose.records.yml): it claims Master Craftsman's meeting turns from
+# Records and answers them through the MC relay. No portal code is in this
+# image, so Rooms keeps answering while the portal is down.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY docker/requirements.rooms-worker.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY services/__init__.py /app/services/__init__.py
+COPY services/rooms_worker/ /app/services/rooms_worker/
+# Rooms R2: the records-door sidecar runs from this image with its own entrypoint.
+COPY services/records_door/ /app/services/records_door/
+RUN rm -rf /app/services/rooms_worker/tests
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+# Secrets come only as files under /run/secrets/rooms (read-only bind mount):
+# rooms-worker.token, mc.token, mc-relay.token. The journal is a named volume.
+CMD ["python", "-m", "services.rooms_worker.worker"]

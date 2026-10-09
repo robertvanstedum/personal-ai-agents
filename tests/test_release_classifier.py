@@ -153,6 +153,10 @@ def test_the_workshop_backend_deploys_the_portal_only():
     ]
     assert classify(backend) == ("domain", ("portal",))
     assert classify(["scripts/workshop/workshop.py", "scripts/vault/vault.py"]) == ("documents", ())
+    # The Guild screens' own helpers (agent-turn writer, scheduled-job judge, payment scrub) are portal-only too, and the
+    # laptop tools that drive them run in no service.
+    assert classify(["core/agent_turns/writer.py", "core/jobs/judge.py", "utils/payment_scrub.py"]) == ("domain", ("portal",))
+    assert classify(["tools/workshop/topic_inbox.py", "scripts/release/exclude_reserve_pages.py"]) == ("documents", ())
     # Neighbours keep their old ownership: only these exact places moved.
     assert classify(["core/other_module.py"]) == ("domain", ("portal", "curator", "german", "portuguese", "system-bot", "cos-bot", "cos-scheduler"))
     assert classify(["scripts/other_tool.py"]) == ("full", ALL_SERVICES)
@@ -170,10 +174,12 @@ def test_only_the_exact_credential_scrub_file_moves_to_the_portal():
 # imports. Importing the portal's own facade (minimoi_portal.workshop) counts as using the backend, because the facade wraps it.
 import ast
 
-WORKSHOP_BACKEND_MODULES = ("core.workshop_journal", "core.vault_t1", "utils.credential_scrub", "minimoi_portal.workshop")
+WORKSHOP_BACKEND_MODULES = ("core.workshop_journal", "core.vault_t1", "core.agent_turns", "core.jobs", "utils.credential_scrub",
+                            "utils.payment_scrub", "minimoi_portal.workshop")
 # Where an import of the backend is expected: its own code, the portal, laptop tools, tests, and project homes.
-BACKEND_IMPORT_ALLOWED = ("core/workshop_journal/", "core/vault_t1/", "utils/credential_scrub.py", "minimoi_portal/",
-                          "scripts/workshop/", "scripts/vault/", "tests/", "prototype-lab/", "planning-studio/")
+BACKEND_IMPORT_ALLOWED = ("core/workshop_journal/", "core/vault_t1/", "core/agent_turns/", "core/jobs/", "utils/credential_scrub.py",
+                          "utils/payment_scrub.py", "minimoi_portal/", "scripts/workshop/", "scripts/vault/", "scripts/release/",
+                          "tools/workshop/", "scripts/dev/", "tests/", "prototype-lab/", "planning-studio/")
 SKIPPED_DIRS = {".git", "node_modules", "venv", "ai-env", ".venv", "_working", ".claude", "__pycache__"}
 
 

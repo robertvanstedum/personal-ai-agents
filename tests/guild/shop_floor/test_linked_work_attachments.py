@@ -58,7 +58,7 @@ def test_what_can_be_linked(text, expected):
     "https://github.com.evil.example/robertvanstedum/personal-ai-agents/issues/5",
     f"{REPO}/blob/main/../secrets.md", f"{REPO}/blob/feature/docs/x.md",       # traversal; a branch we do not pin
     f"{REPO}/issues/5 and more", "javascript:alert(1)", "x" * 500,
-])
+], ids=['empty', 'blank', 'none', 'int', 'zero', 'hash-zero', 'letters', 'too-many-digits', 'negative', 'other-account', 'other-repo', 'http-not-https', 'other-host', 'lookalike-host', 'dotdot-traversal', 'unpinned-branch', 'trailing-text', 'javascript-url', '500-chars'])
 def test_what_is_refused(text):
     with pytest.raises(linked_work.LinkRefused):
         linked_work.parse(text)

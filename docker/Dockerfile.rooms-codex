@@ -1,0 +1,34 @@
+# Rooms Codex connector (Rooms R2 v0.4, docs/specs/minimoi-connected-work/ROOMS_R2.md §3.6),
+# STAGING ONLY. Codex answers meeting turns from inside this container through
+# `codex app-server`, one child per turn, with every tool switched off except
+# update_plan / request_user_input / view_image (refused: text-only catalog).
+# Nothing of Robert's is in this image or mounted into it; Codex signs in once
+# with his ChatGPT subscription into its own volume (codex-room.sh login).
+
+# Stage 1: fetch the pinned Codex CLI and verify it. Only the codex binary is
+# kept: the package's bundled bwrap, rg, zsh and code-mode host are left out.
+FROM python:3.12-slim AS codex
+ARG CODEX_VERSION=0.145.0
+ARG CODEX_TGZ_SHA512=8OLcPXaAol/FOrRoDxWhIiHIFa73KRsM41EKocjRZOwiT4TcelzJWn3dHyiuSb7teWF25rrslvSPyvhULYRRCQ==
+ARG CODEX_BIN_SHA256=57d79900fe95df2ab854adf581a28ec46d7442f07445032d86453a44b577dced
+COPY docker/fetch_codex.py /fetch_codex.py
+RUN python /fetch_codex.py "$CODEX_VERSION" "$CODEX_TGZ_SHA512" "$CODEX_BIN_SHA256"
+RUN chmod 755 /codex
+
+FROM python:3.12-slim
+WORKDIR /app
+COPY docker/requirements.rooms-worker.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=codex /codex /usr/local/bin/codex
+COPY services/__init__.py /app/services/__init__.py
+COPY services/rooms_worker/ /app/services/rooms_worker/
+COPY services/rooms_connector/__init__.py services/rooms_connector/connector.py \
+     services/rooms_connector/claude_runner.py services/rooms_connector/codex_runner.py \
+     services/rooms_connector/codex_catalog.json /app/services/rooms_connector/
+RUN rm -rf /app/services/rooms_worker/tests \
+ && groupadd -g 10001 rooms && useradd -u 10001 -g 10001 -M -d /codex-home -s /usr/sbin/nologin rooms
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app \
+    ROOMS_TEAMMATE=codex CODEX_HOME=/codex-home CODEX_CLI=/usr/local/bin/codex
+USER 10001:10001
+CMD ["python", "-m", "services.rooms_connector.connector"]

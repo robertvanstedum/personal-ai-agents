@@ -280,6 +280,7 @@ def test_html_channels_share_explicit_note_correlation_contract(channel):
         ("Save a note:   ", "must not be empty"),
         ("/note " + "x" * (MAX_EXPLICIT_NOTE_CHARS + 1), "characters or fewer"),
     ],
+    ids=["empty-note", "blank-note", "too-long-note"],
 )
 def test_invalid_explicit_note_never_calls_backend_or_writer(command, message):
     calls = []
