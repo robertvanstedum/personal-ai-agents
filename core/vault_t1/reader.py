@@ -1,11 +1,13 @@
 """Read-only access to a shelf folder, scoped, with every file checked as it is read."""
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import re
 import stat
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,12 +22,12 @@ MAX_EDITION_BYTES = 256 * 1024 * 1024
 
 
 class VaultError(Exception):
-    """A fixed reason code (never record text). ``code`` is stable; ``exit`` is the CLI exit status."""
+    """A fixed reason code (never record text). ``code`` is stable; ``exit`` is the CLI exit status; ``detail`` holds counts only."""
     exit = 2
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, detail: dict | None = None):
         super().__init__(code)
-        self.code = code
+        self.code, self.detail = code, detail or {}
 
 
 class NotFound(VaultError):
@@ -40,21 +42,93 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def read_file(path: Path, limit: int) -> bytes:
-    """A regular, non-linked file's bytes, bounded."""
+_BASE = getattr(os, "O_CLOEXEC", 0)
+_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | _BASE
+_FILE = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | _BASE
+
+
+def _part(part: str) -> str:
+    if not isinstance(part, str) or part in ("", ".", "..") or "/" in part or "\x00" in part:
+        raise Damaged("unsafe_path")
+    return part
+
+
+def _open_chain(root: str | Path, parts: list[str], *, final_file: bool) -> int:
+    """Open ``root/parts...`` one component at a time with no link followed and the file's type checked on the descriptor, so a
+    swap between a check and the open cannot redirect the read (the final component is opened, then examined, never examined first)."""
     try:
-        st = os.lstat(path)
+        fd = os.open(root, _DIR)
+    except FileNotFoundError:
+        raise NotFound("path_missing") from None
     except OSError:
-        raise NotFound("file_missing") from None
-    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
-        raise Damaged("not_a_regular_file")
-    if st.st_size > limit:
-        raise Damaged("file_too_large")
-    with open(path, "rb") as handle:
-        data = handle.read(limit + 1)
-    if len(data) != st.st_size:
-        raise Damaged("file_changed_while_read")
-    return data
+        raise Damaged("root_not_a_folder") from None
+    try:
+        last = len(parts) - 1
+        for i, part in enumerate(parts):
+            flags = _FILE if (final_file and i == last) else _DIR
+            try:
+                nfd = os.open(_part(part), flags, dir_fd=fd)
+            except FileNotFoundError:
+                raise NotFound("path_missing") from None
+            except OSError as exc:
+                raise Damaged("not_a_regular_file" if exc.errno in (errno.ELOOP, errno.ENXIO, errno.EISDIR, errno.ENOTDIR) else "unreadable") from None
+            os.close(fd)
+            fd = nfd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def read_path(root: str | Path, parts: list[str], limit: int) -> bytes:
+    """A regular file's bytes, found without following any link, bounded, and read from the descriptor that was opened."""
+    fd = _open_chain(root, parts, final_file=True)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise Damaged("not_a_regular_file")
+        if st.st_size > limit:
+            raise Damaged("file_too_large")
+        chunks, total = [], 0
+        while True:
+            chunk = os.read(fd, 1 << 20)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                raise Damaged("file_too_large")
+            chunks.append(chunk)
+        data = b"".join(chunks)
+        if len(data) != st.st_size:
+            raise Damaged("file_changed_while_read")
+        return data
+    finally:
+        os.close(fd)
+
+
+def list_dir(root: str | Path, parts: list[str]) -> list[tuple[str, bool]] | None:
+    """(name, is_regular_file_or_folder_not_link) for each entry of a folder opened without following links; None if absent."""
+    try:
+        fd = _open_chain(root, parts, final_file=False)
+    except NotFound:
+        return None
+    try:
+        out = []
+        for name in sorted(os.listdir(fd)):
+            try:
+                st = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                out.append((name, not stat.S_ISLNK(st.st_mode) and (stat.S_ISREG(st.st_mode) or stat.S_ISDIR(st.st_mode))))
+            except OSError:
+                out.append((name, False))
+        return out
+    finally:
+        os.close(fd)
+
+
+def read_file(path: Path, limit: int) -> bytes:
+    """Compatibility wrapper: the same safe read for a full path (its last component is never followed)."""
+    path = Path(path)
+    return read_path(path.parent, [path.name], limit)
 
 
 def split_record(text: str) -> tuple[dict, str]:
@@ -130,43 +204,60 @@ class Vault:
         if not self.root.is_dir() or self.root.is_symlink():
             raise NotFound("vault_root_missing")
         self.mandates = tuple(m for m in mandates)
-        self.unreadable = 0
+        self.skipped: Counter = Counter()
         self._records: list[Record] | None = None
 
     # ── enumeration ───────────────────────────────────────────────────────────────────────────────────────────────
     def _all(self) -> list[Record]:
         if self._records is not None:
             return self._records
-        out, self.unreadable = [], 0
+        out, self.skipped = [], Counter()
         for kind in RECORD_DIRS:
-            base = self.root / kind
-            if not base.is_dir() or base.is_symlink():
+            try:
+                names = list_dir(self.root, [kind])
+            except Damaged:
+                self.skipped["record_folder_not_a_folder"] += 1
                 continue
-            for entry in sorted(base.iterdir()):
-                md = entry / f"{entry.name}.md" if entry.is_dir() and not entry.is_symlink() else None
-                if md is None or not md.is_file():
+            for name, plain in names or []:
+                if name.startswith("."):
+                    continue
+                if not plain:
+                    self.skipped["entry_is_a_link_or_special"] += 1
                     continue
                 try:
-                    raw = read_file(md, MAX_RECORD_BYTES)
+                    raw = read_path(self.root, [kind, name, f"{name}.md"], MAX_RECORD_BYTES)
                     meta, _ = split_record(raw.decode("utf-8"))
+                except NotFound:
+                    self.skipped["folder_without_record_file"] += 1
+                    continue
                 except (VaultError, UnicodeDecodeError):
-                    self.unreadable += 1
+                    self.skipped["record_unreadable"] += 1
                     continue
                 if not ULID.match(str(meta.get("id", ""))):
-                    self.unreadable += 1
+                    self.skipped["record_without_a_valid_id"] += 1
                     continue
-                rec = Record(meta["id"], kind, entry.name, md, meta, raw)
-                folder = entry / "editions"
-                if folder.is_dir() and not folder.is_symlink():
-                    for f in sorted(folder.iterdir()):
-                        m = EDITION_NAME.match(f.name)
-                        if m and f.is_file() and not f.is_symlink():
-                            rec.editions.append(Edition(int(m.group(1)), m.group(2), m.group(3), f))
-                    rec.editions.sort(key=lambda e: e.number)
+                rec = Record(meta["id"], kind, name, self.root / kind / name / f"{name}.md", meta, raw)
+                try:
+                    entries = list_dir(self.root, [kind, name, "editions"]) or []
+                except Damaged:
+                    self.skipped["editions_folder_not_a_folder"] += 1
+                    entries = []
+                for fname, plain_file in entries:
+                    m = EDITION_NAME.match(fname)
+                    if m and plain_file:
+                        rec.editions.append(Edition(int(m.group(1)), m.group(2), m.group(3), self.root / kind / name / "editions" / fname))
+                    elif not fname.startswith("."):
+                        self.skipped["edition_entry_unusable"] += 1
+                rec.editions.sort(key=lambda e: e.number)
                 out.append(rec)
         out.sort(key=lambda r: (str(r.meta.get("created", "")), r.id))
         self._records = out
         return out
+
+    @property
+    def unreadable(self) -> int:
+        self._all()
+        return sum(self.skipped.values())
 
     def permitted(self, rec: Record) -> bool:
         scope = str(rec.meta.get("scope", ""))
@@ -192,7 +283,7 @@ class Vault:
     def edition_bytes(self, rec: Record, edition: Edition) -> bytes:
         """The exact edition bytes, refused unless they hash to the name they were stored under (and, for the current
         edition, to the hash the record declares)."""
-        data = read_file(edition.path, MAX_EDITION_BYTES)
+        data = read_path(self.root, [rec.kind_dir, rec.stem, "editions", edition.name], MAX_EDITION_BYTES)
         digest = sha256(data)
         if digest[:12] != edition.sha12:
             raise Damaged("edition_hash_mismatch")
@@ -216,7 +307,8 @@ class Vault:
                 "editions": [e.number for e in rec.editions], "turns": norm.get("turns"), "turns_by_role": norm.get("turns_by_role") or {}}
 
     def list(self) -> dict:
-        return {"records": [self.summary(r) for r in self.records()], "withheld_by_scope": self.withheld(), "unreadable": self.unreadable}
+        return {"records": [self.summary(r) for r in self.records()], "withheld_by_scope": self.withheld(), "unreadable": self.unreadable,
+                "skipped": dict(sorted(self.skipped.items()))}
 
     def _workshop_events(self, rec: Record) -> list[dict]:
         cur = rec.current()
@@ -263,7 +355,7 @@ class Vault:
                 roles[k] = roles.get(k, 0) + v
         return {"records": rows, "totals": {**totals, "turns_by_role": dict(sorted(roles.items())), "omitted": dict(sorted(omitted.items())),
                                             "flagged_records": flagged},
-                "withheld_by_scope": self.withheld(), "unreadable": self.unreadable,
+                "withheld_by_scope": self.withheld(), "unreadable": self.unreadable, "skipped": dict(sorted(self.skipped.items())),
                 "words": {"saved": "a retained edition exists on disk (run verify to prove it intact)",
                           "unsupported_or_excluded": "counted under omitted and flags, never silently absent"}}
 

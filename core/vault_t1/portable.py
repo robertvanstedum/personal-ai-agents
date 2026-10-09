@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 from pathlib import Path
 
 from core.vault_t1 import reader
@@ -60,78 +59,169 @@ separate claims that this export makes no statement about.
 """
 
 
-def _write(path: Path, data: bytes) -> None:
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    try:
-        os.write(fd, data)
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-    os.replace(tmp, path)
+_OPEN_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 
 
-def _empty_or_new(target: str) -> Path:
-    path = Path(target)
-    if path.is_symlink():
-        raise VaultError("target_is_a_link")
-    if path.exists() and (not path.is_dir() or any(path.iterdir())):
-        raise VaultError("target_not_empty")
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    return path
+class Publisher:
+    """Writes a new folder tree without ever replacing or removing anything it did not create.
+
+    The target is created here (``mkdir`` is atomic, so a racing creator makes one of us fail), or an existing *empty* real folder
+    is adopted. Every file is written to a temporary name inside the folder it belongs to and then published with ``link``, which
+    refuses to overwrite: if another writer put a file there first, that file survives and this export stops. Folders are walked by
+    descriptor with no link followed. On failure only the files and empty folders this publisher created are removed."""
+
+    def __init__(self, target: str):
+        path = Path(target)
+        self.created_files: list[tuple[int, str]] = []
+        self.created_dirs: list[tuple[int, str]] = []
+        self.root_created = False
+        if path.is_symlink():
+            raise VaultError("target_is_a_link")
+        parent = path.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.mkdir(path, 0o700)
+            self.root_created = True
+        except FileExistsError:
+            pass
+        try:
+            self.root_fd = os.open(path, _OPEN_DIR)
+        except OSError:
+            raise VaultError("target_not_a_folder") from None
+        if not self.root_created and os.listdir(self.root_fd):
+            os.close(self.root_fd)
+            raise VaultError("target_not_empty")
+        self.path = path
+        self._fds = {(): self.root_fd}
+
+    def _dir(self, parts: tuple[str, ...]) -> int:
+        if parts in self._fds:
+            return self._fds[parts]
+        parent = self._dir(parts[:-1])
+        try:
+            os.mkdir(parts[-1], 0o700, dir_fd=parent)
+            self.created_dirs.append((parent, parts[-1]))
+        except FileExistsError:
+            pass
+        try:
+            fd = os.open(parts[-1], _OPEN_DIR, dir_fd=parent)
+        except OSError:
+            raise VaultError("destination_not_a_folder") from None
+        self._fds[parts] = fd
+        return fd
+
+    def put(self, rel: str, data: bytes) -> None:
+        parts = tuple(rel.split("/"))
+        if any(p in ("", ".", "..") or "\x00" in p for p in parts):
+            raise VaultError("unsafe_path")
+        dir_fd = self._dir(parts[:-1])
+        tmp = f".{parts[-1]}.{os.getpid()}.tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dir_fd)
+        try:
+            os.write(fd, data)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        try:
+            os.link(tmp, parts[-1], src_dir_fd=dir_fd, dst_dir_fd=dir_fd, follow_symlinks=False)
+        except FileExistsError:
+            raise VaultError("destination_taken", {"path": rel}) from None
+        finally:
+            os.unlink(tmp, dir_fd=dir_fd)
+        self.created_files.append((dir_fd, parts[-1]))
+
+    def abort(self) -> None:
+        """Remove only what this publisher made: its files, then its folders if they are empty, then the target if it made it and it is empty."""
+        for dir_fd, name in reversed(self.created_files):
+            try:
+                os.unlink(name, dir_fd=dir_fd)
+            except OSError:
+                pass
+        for dir_fd, name in reversed(self.created_dirs):
+            try:
+                os.rmdir(name, dir_fd=dir_fd)
+            except OSError:
+                pass
+        self.close()
+        if self.root_created:
+            try:
+                os.rmdir(self.path)
+            except OSError:
+                pass
+
+    def close(self) -> None:
+        for fd in self._fds.values():
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        self._fds = {}
 
 
 def _file_entry(rel: str, data: bytes) -> dict:
     return {"path": rel, "bytes": len(data), "sha256": sha256(data)}
 
 
-def export(vault: Vault, target: str, *, topic: str | None = None) -> dict:
-    """Write a topic (or everything this caller may read) to a new folder. Returns the manifest."""
+def export(vault: Vault, target: str, *, topic: str | None = None, allow_incomplete: bool = False) -> dict:
+    """Write a topic (or everything this caller may read) to a new folder. Returns the manifest.
+
+    A complete export means every record in the shelf was either exported, out of this caller's scope (counted), or out of the
+    topic (counted). If any entry of the shelf could not be read, the export refuses (``source_incomplete``, with counts) unless
+    ``allow_incomplete`` is set, in which case the manifest says ``complete: false`` and how many entries were skipped."""
     members = vault.topic_members(topic) if topic else vault.records()
     if topic and not members:
         raise NotFound("topic_not_found")
-    out = _empty_or_new(target)
-    files, records, index_lines, terms = [], [], [], {}
-    for rec in members:
-        base = f"records/{rec.stem}"
-        entry = {"id": rec.id, "dir": rec.kind_dir, "name": rec.stem, "source": rec.meta.get("source"), "chair": rec.meta.get("chair"),
-                 "created": rec.meta.get("created"), "tier": rec.meta.get("tier"), "scope": rec.meta.get("scope"),
-                 "edition": rec.meta.get("edition"), "record_file": f"{base}/{rec.stem}.md", "editions": []}
-        _write(out / entry["record_file"], rec.raw)
-        files.append(_file_entry(entry["record_file"], rec.raw))
-        for edition in rec.editions:
-            data = vault.edition_bytes(rec, edition)
-            rel = f"{base}/editions/{edition.name}"
-            _write(out / rel, data)
-            files.append(_file_entry(rel, data))
-            entry["editions"].append({"number": edition.number, "path": rel, "sha256": sha256(data), "bytes": len(data)})
-            if edition.number == rec.meta.get("edition"):
-                _, rows = reader.parse_edition(data)
-                for t in reader.turns_of(rows):
-                    text = str(t.get("text", ""))
-                    who = (t.get("attrs") or {}).get("who")
-                    index_lines.append(json.dumps({"record": rec.id, "edition": edition.number, "ordinal": t["ordinal"], "speaker": t.get("speaker"),
-                                                   "who": who, "sha256": t.get("sha256"), "chars": len(text)}, sort_keys=True))
-                    for word in set(w.lower() for w in TERM.findall(text)):
-                        posting = terms.setdefault(word, [])
-                        if len(posting) < MAX_POSTINGS:
-                            posting.append(f"{rec.id}:{t['ordinal']}")
-        records.append(entry)
-    index = ("\n".join(index_lines) + ("\n" if index_lines else "")).encode()
-    term_doc = (json.dumps({k: terms[k] for k in sorted(terms)}, sort_keys=True, ensure_ascii=False) + "\n").encode()
-    schema = SCHEMA_DOC.encode()
-    for name, data in ((INDEX, index), (TERMS, term_doc), (SCHEMA, schema)):
-        _write(out / name, data)
-        files.append(_file_entry(name, data))
-    manifest = {"format": EXPORT_FORMAT, "tool_version": TOOL_VERSION, "selection": {"topic": topic, "scope": "robert" + "".join(f"+mandate:{m}" for m in vault.mandates)},
-                "records": records, "files": sorted(files, key=lambda f: f["path"]),
-                "counts": {"records": len(records), "editions": sum(len(r["editions"]) for r in records), "turns_indexed": len(index_lines)},
-                "left_out": {"outside_scope": vault.withheld(), "outside_topic": (len(vault.records()) - len(members)) if topic else 0},
-                "schema": SCHEMA, "index": INDEX, "terms": TERMS}
-    raw = (json.dumps(manifest, indent=1, sort_keys=True, ensure_ascii=False) + "\n").encode()
-    _write(out / MANIFEST, raw)
-    _write(out / MANIFEST_SHA, (sha256(raw) + "  " + MANIFEST + "\n").encode())
+    skipped = dict(sorted(vault.skipped.items()))
+    if skipped and not allow_incomplete:
+        raise VaultError("source_incomplete", {"skipped": skipped})
+    pub = Publisher(target)
+    try:
+        files, records, index_lines, terms = [], [], [], {}
+        for rec in members:
+            base = f"records/{rec.stem}"
+            entry = {"id": rec.id, "dir": rec.kind_dir, "name": rec.stem, "source": rec.meta.get("source"), "chair": rec.meta.get("chair"),
+                     "created": rec.meta.get("created"), "tier": rec.meta.get("tier"), "scope": rec.meta.get("scope"),
+                     "edition": rec.meta.get("edition"), "record_file": f"{base}/{rec.stem}.md", "editions": []}
+            pub.put(entry["record_file"], rec.raw)
+            files.append(_file_entry(entry["record_file"], rec.raw))
+            for edition in rec.editions:
+                data = vault.edition_bytes(rec, edition)
+                rel = f"{base}/editions/{edition.name}"
+                pub.put(rel, data)
+                files.append(_file_entry(rel, data))
+                entry["editions"].append({"number": edition.number, "path": rel, "sha256": sha256(data), "bytes": len(data)})
+                if edition.number == rec.meta.get("edition"):
+                    _, rows = reader.parse_edition(data)
+                    for t in reader.turns_of(rows):
+                        text = str(t.get("text", ""))
+                        index_lines.append(json.dumps({"record": rec.id, "edition": edition.number, "ordinal": t["ordinal"], "speaker": t.get("speaker"),
+                                                       "who": (t.get("attrs") or {}).get("who"), "sha256": t.get("sha256"), "chars": len(text)}, sort_keys=True))
+                        for word in set(w.lower() for w in TERM.findall(text)):
+                            posting = terms.setdefault(word, [])
+                            if len(posting) < MAX_POSTINGS:
+                                posting.append(f"{rec.id}:{t['ordinal']}")
+            records.append(entry)
+        index = ("\n".join(index_lines) + ("\n" if index_lines else "")).encode()
+        term_doc = (json.dumps({k: terms[k] for k in sorted(terms)}, sort_keys=True, ensure_ascii=False) + "\n").encode()
+        for name, data in ((INDEX, index), (TERMS, term_doc), (SCHEMA, SCHEMA_DOC.encode())):
+            pub.put(name, data)
+            files.append(_file_entry(name, data))
+        complete = not skipped
+        manifest = {"format": EXPORT_FORMAT, "tool_version": TOOL_VERSION, "complete": complete,
+                    "selection": {"topic": topic, "scope": "robert" + "".join(f"+mandate:{m}" for m in vault.mandates)},
+                    "records": records, "files": sorted(files, key=lambda f: f["path"]),
+                    "counts": {"records": len(records), "editions": sum(len(r["editions"]) for r in records), "turns_indexed": len(index_lines)},
+                    "left_out": {"outside_scope": vault.withheld(), "outside_topic": (len(vault.records()) - len(members)) if topic else 0,
+                                 "skipped_unreadable": skipped},
+                    "limitations": [] if complete else ["some shelf entries could not be read and are not in this export; see left_out.skipped_unreadable"],
+                    "schema": SCHEMA, "index": INDEX, "terms": TERMS}
+        raw = (json.dumps(manifest, indent=1, sort_keys=True, ensure_ascii=False) + "\n").encode()
+        pub.put(MANIFEST, raw)
+        pub.put(MANIFEST_SHA, (sha256(raw) + "  " + MANIFEST + "\n").encode())
+    except BaseException:
+        pub.abort()
+        raise
+    pub.close()
     return manifest
 
 
@@ -193,44 +283,133 @@ def verify_shelf(root: str) -> dict:
     return {"kind": "shelf", "ok": not problems, "checked": checked, "problems": problems}
 
 
-def verify_export(folder: str) -> dict:
-    base = Path(folder)
-    problems, checked = [], {"files": 0}
+NAME_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,150}$")
+TOP_FILES = (SCHEMA, INDEX, TERMS)
+
+
+def _load_export(folder: str) -> tuple[dict | None, dict[str, bytes], list]:
+    """(manifest, {path: bytes}, problems): the whole manifest graph checked, and every byte read exactly once, safely.
+
+    Nothing the manifest points at is read unless it is a listed file with a normalized relative path; every record and edition
+    pointer must name a listed file whose size and hash match; names, IDs and edition numbers must be consistent."""
+    problems, blobs = [], {}
     try:
-        raw = reader.read_file(base / MANIFEST, 64 * 1024 * 1024)
-        side = reader.read_file(base / MANIFEST_SHA, 4096).decode().split()
+        raw = reader.read_path(folder, [MANIFEST], 64 * 1024 * 1024)
+        side = reader.read_path(folder, [MANIFEST_SHA], 4096).decode().split()
     except VaultError as exc:
-        return {"kind": "export", "ok": False, "checked": checked, "problems": [{"where": MANIFEST, "code": exc.code}]}
+        return None, blobs, [{"where": MANIFEST, "code": exc.code}]
     if not side or side[0] != sha256(raw):
         problems.append({"where": MANIFEST, "code": "manifest_hash_mismatch"})
     try:
         manifest = json.loads(raw)
     except ValueError:
-        return {"kind": "export", "ok": False, "checked": checked, "problems": problems + [{"where": MANIFEST, "code": "manifest_not_json"}]}
-    if manifest.get("format") != EXPORT_FORMAT:
-        problems.append({"where": MANIFEST, "code": "unknown_export_format"})
-        return {"kind": "export", "ok": False, "checked": checked, "problems": problems}
-    listed = set()
-    for entry in manifest.get("files", []):
-        rel = entry.get("path", "")
-        if not rel or rel.startswith("/") or ".." in Path(rel).parts:
-            problems.append({"where": rel or "?", "code": "unsafe_path_in_manifest"})
+        return None, blobs, problems + [{"where": MANIFEST, "code": "manifest_not_json"}]
+    if not isinstance(manifest, dict) or manifest.get("format") != EXPORT_FORMAT:
+        return None, blobs, problems + [{"where": MANIFEST, "code": "unknown_export_format"}]
+    listed = {}
+    for entry in manifest.get("files") or []:
+        rel = entry.get("path") if isinstance(entry, dict) else None
+        parts = rel.split("/") if isinstance(rel, str) else []
+        if not parts or any(p in ("", ".", "..") or "\\" in p or "\x00" in p for p in parts) or "/".join(parts) != rel:
+            problems.append({"where": str(rel)[:80], "code": "unsafe_path_in_manifest"})
             continue
-        listed.add(rel)
+        if rel in listed:
+            problems.append({"where": rel, "code": "duplicate_path_in_manifest"})
+            continue
+        if not (rel in TOP_FILES or (parts[0] == "records" and len(parts) >= 3)):
+            problems.append({"where": rel, "code": "path_outside_the_export_layout"})
+            continue
+        listed[rel] = entry
         try:
-            data = reader.read_file(base / rel, reader.MAX_EDITION_BYTES)
+            data = reader.read_path(folder, parts, reader.MAX_EDITION_BYTES)
         except VaultError as exc:
             problems.append({"where": rel, "code": exc.code})
             continue
-        checked["files"] += 1
         if len(data) != entry.get("bytes") or sha256(data) != entry.get("sha256"):
             problems.append({"where": rel, "code": "file_hash_mismatch"})
-        elif "/editions/" in rel:
-            _check_edition(data, Path(rel).name, problems, rel)
-    present = {p.relative_to(base).as_posix() for p in base.rglob("*") if p.is_file() or p.is_symlink()} - {MANIFEST, MANIFEST_SHA}
-    for extra in sorted(present - listed):
+            continue
+        blobs[rel] = data
+    # the records graph: every pointer is a verified listed file, in exactly the layout the exporter writes
+    seen_ids, seen_names = set(), set()
+    for rec in manifest.get("records") or []:
+        if not isinstance(rec, dict):
+            problems.append({"where": "records", "code": "record_entry_malformed"})
+            continue
+        name, rid = rec.get("name"), rec.get("id")
+        if not isinstance(name, str) or not NAME_OK.match(name) or rec.get("dir") not in reader.RECORD_DIRS or not reader.ULID.match(str(rid)):
+            problems.append({"where": str(name)[:80], "code": "record_entry_malformed"})
+            continue
+        if rid in seen_ids or name in seen_names:
+            problems.append({"where": name, "code": "duplicate_record_in_manifest"})
+            continue
+        seen_ids.add(rid)
+        seen_names.add(name)
+        if rec.get("record_file") != f"records/{name}/{name}.md" or rec["record_file"] not in blobs:
+            problems.append({"where": name, "code": "record_pointer_not_a_verified_listed_file"})
+            continue
+        try:
+            meta, _ = reader.split_record(blobs[rec["record_file"]].decode("utf-8"))
+        except (VaultError, UnicodeDecodeError):
+            problems.append({"where": name, "code": "record_file_unreadable"})
+            continue
+        if meta.get("id") != rid:
+            problems.append({"where": name, "code": "record_id_differs_from_manifest"})
+        numbers = []
+        for ed in rec.get("editions") or []:
+            path = ed.get("path") if isinstance(ed, dict) else None
+            m = reader.EDITION_NAME.match(Path(str(path)).name)
+            if (not m or path != f"records/{name}/editions/{m.group(0)}" or int(m.group(1)) != ed.get("number") or path not in blobs
+                    or sha256(blobs[path]) != ed.get("sha256") or m.group(2) != ed["sha256"][:12]):
+                problems.append({"where": f"{name}#{ed.get('number') if isinstance(ed, dict) else '?'}", "code": "edition_pointer_not_a_verified_listed_file"})
+                continue
+            numbers.append(ed["number"])
+            _check_edition(blobs[path], m.group(0), problems, path)
+        if numbers != list(range(1, len(numbers) + 1)):
+            problems.append({"where": name, "code": "edition_numbers_not_contiguous"})
+        if meta.get("edition") not in numbers:
+            problems.append({"where": name, "code": "current_edition_not_in_the_export"})
+    # nothing in the folder that the manifest does not list
+    try:
+        present = _walk(folder)
+    except VaultError as exc:
+        problems.append({"where": "export", "code": exc.code})
+        present = set()
+    for extra in sorted(present - set(listed) - {MANIFEST, MANIFEST_SHA}):
         problems.append({"where": extra, "code": "file_not_in_manifest"})
-    return {"kind": "export", "ok": not problems, "checked": checked, "problems": problems, "counts": manifest.get("counts")}
+    return manifest, blobs, problems
+
+
+def _is_folder(folder: str, parts: list[str]) -> bool:
+    try:
+        os.close(reader._open_chain(folder, parts, final_file=False))
+        return True
+    except VaultError:
+        return False
+
+
+def _walk(folder: str) -> set[str]:
+    """Every file, link or special entry under the export folder, by descriptor walk with no link followed."""
+    out: set[str] = set()
+
+    def walk(parts: list[str]) -> None:
+        for name, plain in reader.list_dir(folder, parts) or []:
+            rel = [*parts, name]
+            if plain and _is_folder(folder, rel):
+                walk(rel)
+            else:
+                out.add("/".join(rel))
+    walk([])
+    return out
+
+
+def verify_export(folder: str) -> dict:
+    manifest, blobs, problems = _load_export(folder)
+    result = {"kind": "export", "ok": not problems, "checked": {"files": len(blobs)}, "problems": problems}
+    if manifest:
+        result["counts"] = manifest.get("counts")
+        result["complete"] = manifest.get("complete")
+        result["limitations"] = manifest.get("limitations") or []
+    return result
 
 
 def verify(path: str) -> dict:
@@ -241,24 +420,26 @@ def verify(path: str) -> dict:
 
 # ── restore ────────────────────────────────────────────────────────────────────────────────────────────────────────
 def restore(folder: str, target: str) -> dict:
-    """Rebuild a shelf-shaped folder from a verified export. Nothing is written unless the export verifies first; the target must
-    be absent or empty; every file is copied verbatim, so every ID, edition and hash is exactly what the export recorded."""
-    report = verify_export(folder)
-    if not report["ok"]:
-        raise Damaged("export_does_not_verify")
-    manifest = json.loads((Path(folder) / MANIFEST).read_bytes())
-    out = _empty_or_new(target)
-    written = 0
-    for rec in manifest["records"]:
-        stem, kind = rec["name"], rec["dir"]
-        if kind not in reader.RECORD_DIRS or "/" in stem or stem in ("", ".", ".."):
-            shutil.rmtree(out, ignore_errors=True)
-            raise Damaged("unsafe_record_in_manifest")
-        _write(out / kind / stem / f"{stem}.md", (Path(folder) / rec["record_file"]).read_bytes())
-        written += 1
-        for edition in rec["editions"]:
-            _write(out / kind / stem / "editions" / Path(edition["path"]).name, (Path(folder) / edition["path"]).read_bytes())
-    check = verify_shelf(str(out))
-    if not check["ok"]:
-        raise Damaged("restored_shelf_does_not_verify")
-    return {"restored_records": written, "target_verified": True, "checked": check["checked"]}
+    """Rebuild a shelf-shaped folder from an export. The whole manifest graph is verified first and restore writes *only those
+    verified bytes* (never a second read), so a pointer cannot lead it anywhere else. Nothing is created if verification fails; the
+    target must be absent or an empty real folder; files are published without replacing anything."""
+    manifest, blobs, problems = _load_export(folder)
+    if problems or manifest is None:
+        raise Damaged("export_does_not_verify", {"problems": len(problems)})
+    pub = Publisher(target)
+    try:
+        written = 0
+        for rec in manifest["records"]:
+            name, kind = rec["name"], rec["dir"]
+            pub.put(f"{kind}/{name}/{name}.md", blobs[rec["record_file"]])
+            written += 1
+            for edition in rec["editions"]:
+                pub.put(f"{kind}/{name}/editions/{Path(edition['path']).name}", blobs[edition["path"]])
+        check = verify_shelf(str(pub.path))
+        if not check["ok"]:
+            raise Damaged("restored_shelf_does_not_verify")
+    except BaseException:
+        pub.abort()
+        raise
+    pub.close()
+    return {"restored_records": written, "target_verified": True, "checked": check["checked"], "complete": manifest.get("complete")}

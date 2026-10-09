@@ -47,6 +47,7 @@ def main(argv=None) -> int:
     e = sub.add_parser("export")
     e.add_argument("--to", required=True)
     e.add_argument("--topic")
+    e.add_argument("--allow-incomplete", action="store_true", help="export what can be read even if some shelf entries cannot (the manifest says so)")
     v = sub.add_parser("verify")
     v.add_argument("path")
     r = sub.add_parser("restore")
@@ -69,11 +70,11 @@ def main(argv=None) -> int:
         if a.cmd == "search":
             return out({"ok": True, **vault.search(a.term, ignore_case=a.ignore_case, all_editions=a.all_editions, limit=max(1, min(a.limit, 500)))})
         if a.cmd == "export":
-            manifest = portable.export(vault, a.to, topic=a.topic)
-            return out({"ok": True, "counts": manifest["counts"], "left_out": manifest["left_out"], "manifest": "manifest.json"})
+            manifest = portable.export(vault, a.to, topic=a.topic, allow_incomplete=a.allow_incomplete)
+            return out({"ok": True, "complete": manifest["complete"], "counts": manifest["counts"], "left_out": manifest["left_out"], "manifest": "manifest.json"})
         return out({"ok": True, **getattr(vault, a.cmd)()})
     except VaultError as exc:
-        return out({"ok": False, "status": type(exc).__name__.lower(), "reason": exc.code}, exc.exit)
+        return out({"ok": False, "status": type(exc).__name__.lower(), "reason": exc.code, **({"detail": exc.detail} if exc.detail else {})}, exc.exit)
 
 
 if __name__ == "__main__":

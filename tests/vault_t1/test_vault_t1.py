@@ -130,7 +130,8 @@ def test_links_folders_and_oversized_files_are_not_read(shelf):
     (folder / "3--aaaaaaaaaaaa.jsonl").symlink_to(victim)
     assert [e.number for e in by_title(Vault(str(shelf)), "garden").editions] == [1, 2]
     (shelf / "sessions-raw" / "linked--00000000").symlink_to(garden.path.parent)
-    assert len(Vault(str(shelf)).records()) == 4
+    seen = Vault(str(shelf))
+    assert len(seen.records()) == 4 and seen.skipped == {"edition_entry_unusable": 1, "entry_is_a_link_or_special": 1}
     with pytest.raises(reader.Damaged):
         reader.read_file(victim, 1)                                                              # over the bound
     link = shelf / "x.md"
@@ -145,7 +146,7 @@ def test_export_a_topic_writes_a_self_describing_folder_that_verifies(shelf, tmp
     out = tmp_path / "topic-export"
     manifest = portable.export(Vault(str(shelf)), str(out), topic="garden-build")
     assert manifest["counts"] == {"records": 1, "editions": 1, "turns_indexed": 5}
-    assert manifest["left_out"] == {"outside_scope": 1, "outside_topic": 3}
+    assert manifest["left_out"] == {"outside_scope": 1, "outside_topic": 3, "skipped_unreadable": {}} and manifest["complete"] is True
     assert {p.name for p in out.iterdir()} == {"manifest.json", "manifest.sha256", "SCHEMA.md", "index.jsonl", "terms.json", "records"}
     assert "vault-export/1" in (out / "SCHEMA.md").read_text() and "needs no MiniMoi" in (out / "SCHEMA.md").read_text()
     index = [json.loads(l) for l in (out / "index.jsonl").read_text().splitlines()]
@@ -365,3 +366,262 @@ def test_V03_a_different_reader_sees_the_same_ids_editions_and_trail_and_nothing
     assert tree_hash(shelf) == before_tree                                                        # exporting and restoring did not touch the source
     assert Vault(str(clean)).withheld() == 0 and len(Vault(str(clean)).records()) == 4           # no access was widened, no hidden record carried over
     assert not any("orchard" in p.name for p in clean.rglob("*"))                                 # and no second archive of the withheld one
+
+
+# ── Codex R12: restore follows only the verified manifest graph ──────────────────────────────────────────────────
+def mutate_manifest(export: Path, edit) -> None:
+    data = json.loads((export / "manifest.json").read_text())
+    edit(data)
+    refresh_manifest(export, data)
+
+
+def made_export(shelf, tmp_path, topic="garden-build") -> Path:
+    export = tmp_path / "export"
+    portable.export(Vault(str(shelf)), str(export), topic=topic)
+    return export
+
+
+@pytest.mark.parametrize("edit,code", [
+    (lambda d: d["records"][0].__setitem__("record_file", "/ABSOLUTE_OUTSIDE"), "record_pointer_not_a_verified_listed_file"),
+    (lambda d: d["records"][0].__setitem__("record_file", "../outside.md"), "record_pointer_not_a_verified_listed_file"),
+    (lambda d: d["records"][0]["editions"][0].__setitem__("path", "/ABSOLUTE_OUTSIDE"), "edition_pointer_not_a_verified_listed_file"),
+    (lambda d: d["records"][0]["editions"][0].__setitem__("path", "records/elsewhere/editions/1--000000000000.jsonl"), "edition_pointer_not_a_verified_listed_file"),
+    (lambda d: d["records"][0].__setitem__("name", "../escape"), "record_entry_malformed"),
+    (lambda d: d["records"][0].__setitem__("dir", "../x"), "record_entry_malformed"),
+    (lambda d: d["records"].append(dict(d["records"][0])), "duplicate_record_in_manifest"),
+    (lambda d: d["records"][0]["editions"][0].__setitem__("number", 7), "edition_pointer_not_a_verified_listed_file"),
+    (lambda d: d["records"][0].__setitem__("id", "01ARZ3NDEKTSV4RRFFQ69G5FAV"), "record_id_differs_from_manifest"),
+    (lambda d: d["files"].append(dict(d["files"][0])), "duplicate_path_in_manifest"),
+    (lambda d: d["files"][0].__setitem__("path", "outside/../records/x"), "unsafe_path_in_manifest"),
+    (lambda d: d["files"].append({"path": "stray.txt", "bytes": 0, "sha256": hashlib.sha256(b"").hexdigest()}), "path_outside_the_export_layout"),
+])
+def test_R12_a_manifest_pointer_outside_the_verified_graph_is_refused_before_anything_is_written(shelf, tmp_path, edit, code):
+    export = made_export(shelf, tmp_path)
+    outside = tmp_path / "ABSOLUTE_OUTSIDE"
+    outside.write_text("---\nid: 01ARZ3NDEKTSV4RRFFQ69G5FAV\n---\nOUTSIDE SENTINEL\n")
+    mutate_manifest(export, lambda d: edit(d))
+    data = (export / "manifest.json").read_text().replace("/ABSOLUTE_OUTSIDE", str(outside))
+    refresh_manifest(export, json.loads(data))
+    codes = {p["code"] for p in portable.verify(str(export))["problems"]}
+    assert code in codes, codes
+    target = tmp_path / "restored"
+    with pytest.raises(reader.Damaged):
+        portable.restore(str(export), str(target))
+    assert not target.exists() and "OUTSIDE SENTINEL" not in "".join(p.read_text(errors="ignore") for p in tmp_path.rglob("*") if p.is_file() and p != outside and "export" not in p.parts)
+
+
+def test_R12_restore_writes_the_bytes_it_verified_not_a_second_read(shelf, tmp_path, monkeypatch):
+    export = made_export(shelf, tmp_path)
+    victim = next((export / "records").rglob("*.jsonl"))
+    swapped = {"done": False}
+    real = reader.read_path
+
+    def read_then_change(root, parts, limit):
+        data = real(root, parts, limit)
+        if not swapped["done"] and parts[-1] == victim.name:
+            swapped["done"] = True
+            victim.write_bytes(b"changed after it was verified\n")
+        return data
+    monkeypatch.setattr(reader, "read_path", read_then_change)
+    target = tmp_path / "restored"
+    result = portable.restore(str(export), str(target))
+    assert swapped["done"] and result["target_verified"] is True
+    restored = next((target).rglob("*.jsonl"))
+    assert restored.read_bytes() != b"changed after it was verified\n" and hashlib.sha256(restored.read_bytes()).hexdigest()[:12] in restored.name
+
+
+# ── Codex R13: an export never claims completeness it does not have ─────────────────────────────────────────────
+def damage_front_matter(shelf: Path, word: str) -> None:
+    garden = by_title(Vault(str(shelf)), word)
+    garden.path.write_text("this is no longer a record\n")
+
+
+def test_R13_an_unreadable_record_makes_a_complete_export_fail_closed_with_counts_only(shelf, tmp_path):
+    damage_front_matter(shelf, "garden")
+    vault = Vault(str(shelf))
+    assert len(vault.records()) == 3 and vault.skipped == {"record_unreadable": 1}
+    with pytest.raises(VaultError) as caught:
+        portable.export(vault, str(tmp_path / "out"))
+    assert caught.value.code == "source_incomplete" and caught.value.detail == {"skipped": {"record_unreadable": 1}}
+    assert not (tmp_path / "out").exists()
+    with pytest.raises(VaultError):
+        portable.export(Vault(str(shelf)), str(tmp_path / "topic"), topic="garden-build")           # a topic cannot be proven complete either
+    r = subprocess.run([sys.executable, CLI, "--root", str(shelf), "export", "--to", str(tmp_path / "cli")], capture_output=True, timeout=60)
+    doc = json.loads(r.stdout)
+    assert r.returncode == 2 and doc["reason"] == "source_incomplete" and doc["detail"]["skipped"] == {"record_unreadable": 1}
+    assert "garden" not in r.stdout.decode().lower()                                                    # no title or ID of the damaged record
+
+
+def test_R13_an_incomplete_export_is_possible_only_on_request_and_says_so_everywhere(shelf, tmp_path):
+    damage_front_matter(shelf, "garden")
+    (shelf / "sessions-raw" / "linked--00000000").symlink_to(shelf)
+    out = tmp_path / "partial"
+    manifest = portable.export(Vault(str(shelf)), str(out), allow_incomplete=True)
+    assert manifest["complete"] is False and manifest["counts"]["records"] == 3
+    assert manifest["left_out"]["skipped_unreadable"] == {"entry_is_a_link_or_special": 1, "record_unreadable": 1} and manifest["limitations"]
+    report = portable.verify(str(out))
+    assert report["ok"] is True and report["complete"] is False and report["limitations"]
+    assert portable.restore(str(out), str(tmp_path / "back"))["complete"] is False
+    r = subprocess.run([sys.executable, CLI, "--root", str(shelf), "export", "--allow-incomplete", "--to", str(tmp_path / "cli")], capture_output=True, timeout=60)
+    assert r.returncode == 0 and json.loads(r.stdout)["complete"] is False
+
+
+@pytest.mark.parametrize("how", ["folder_without_record", "editions_is_a_file", "stray_entry", "bad_id"])
+def test_R13_every_way_a_shelf_entry_can_be_lost_is_counted(shelf, how):
+    garden = by_title(Vault(str(shelf)), "garden")
+    if how == "folder_without_record":
+        garden.path.unlink()
+        expect = {"folder_without_record_file": 1}
+    elif how == "editions_is_a_file":
+        shutil.rmtree(garden.path.parent / "editions")
+        (garden.path.parent / "editions").write_text("x")
+        expect = {"editions_folder_not_a_folder": 1}
+    elif how == "stray_entry":
+        (shelf / "sessions-raw" / "stray.txt").write_text("x")
+        (shelf / "sessions-raw" / ".hidden").write_text("ignored")
+        expect = {"record_unreadable": 1}
+    else:
+        garden.path.write_text(garden.path.read_text().replace(garden.id, "not-a-ulid", 1))
+        expect = {"record_without_a_valid_id": 1}
+    vault = Vault(str(shelf))
+    vault.records()
+    assert dict(vault.skipped) == expect, how
+
+
+# ── Codex R14: publishing never replaces or removes another writer's data ──────────────────────────────────────
+def test_R14_a_file_created_by_someone_else_before_publication_survives_and_the_export_stops(shelf, tmp_path, monkeypatch):
+    target = tmp_path / "out"
+    target.mkdir()                                                                                       # an adopted empty folder
+    real, state = portable.os.link, {"fired": False}
+
+    def racing_link(src, dst, **kw):
+        if not state["fired"] and dst == "manifest.json":
+            state["fired"] = True
+            (target / "manifest.json").write_text("SOMEONE ELSE'S DATA")
+        return real(src, dst, **kw)
+    monkeypatch.setattr(portable.os, "link", racing_link)
+    with pytest.raises(VaultError) as caught:
+        portable.export(Vault(str(shelf)), str(target))
+    assert caught.value.code == "destination_taken" and (target / "manifest.json").read_text() == "SOMEONE ELSE'S DATA"
+    assert target.is_dir() and [p.name for p in target.iterdir()] == ["manifest.json"]                  # our files and folders were removed, theirs kept
+
+
+def test_R14_a_target_created_between_the_check_and_the_creation_is_never_taken_over(shelf, tmp_path, monkeypatch):
+    target = tmp_path / "out"
+    real = portable.os.mkdir
+
+    def racing_mkdir(path, *a, **kw):
+        if Path(path) == target:
+            real(path)
+            (target / "theirs.txt").write_text("keep")
+        return real(path, *a, **kw)
+    monkeypatch.setattr(portable.os, "mkdir", racing_mkdir)
+    with pytest.raises(VaultError) as caught:
+        portable.export(Vault(str(shelf)), str(target))
+    assert caught.value.code == "target_not_empty" and (target / "theirs.txt").read_text() == "keep" and len(list(target.iterdir())) == 1
+
+
+def test_R14_a_failure_midway_removes_only_what_was_created_and_never_a_callers_folder(shelf, tmp_path, monkeypatch):
+    mine = tmp_path / "mine"
+    portable_put = portable.Publisher.put
+    calls = {"n": 0}
+
+    def failing_put(self, rel, data):
+        calls["n"] += 1
+        if calls["n"] == 4:
+            raise OSError(28, "disk full")
+        return portable_put(self, rel, data)
+    monkeypatch.setattr(portable.Publisher, "put", failing_put)
+    with pytest.raises(OSError):
+        portable.export(Vault(str(shelf)), str(mine))
+    assert not mine.exists()                                                                             # we made it, so we removed it
+    existing = tmp_path / "callers"
+    existing.mkdir()
+    (existing / ".keep").write_text("x")
+    calls["n"] = 0
+    with pytest.raises(VaultError):
+        portable.export(Vault(str(shelf)), str(existing))                                                # not empty: refused up front
+    assert (existing / ".keep").read_text() == "x"
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    calls["n"] = 0
+    with pytest.raises(OSError):
+        portable.export(Vault(str(shelf)), str(empty))
+    assert empty.is_dir() and list(empty.iterdir()) == []                                                # adopted folder is left as found
+
+
+def test_R14_restore_uses_the_same_no_replace_publication(shelf, tmp_path, monkeypatch):
+    export = made_export(shelf, tmp_path)
+    target = tmp_path / "restored"
+    target.mkdir()
+    real, state = portable.os.link, {"fired": False}
+
+    def racing_link(src, dst, **kw):
+        if not state["fired"] and dst.endswith(".md"):
+            state["fired"] = True
+            rival = target / "sessions-raw" / dst[:-3] / dst
+            rival.write_text("SOMEONE ELSE'S RECORD")
+        return real(src, dst, **kw)
+    monkeypatch.setattr(portable.os, "link", racing_link)
+    with pytest.raises(VaultError) as caught:
+        portable.restore(str(export), str(target))
+    assert caught.value.code == "destination_taken" and state["fired"]
+    survivors = [p for p in target.rglob("*") if p.is_file()]
+    assert len(survivors) == 1 and survivors[0].read_text() == "SOMEONE ELSE'S RECORD"                    # everything else we made is gone
+
+
+# ── Codex R15: the no-link contract holds at the moment of opening ──────────────────────────────────────────────
+def test_R15_a_file_swapped_for_a_same_sized_link_just_before_it_is_opened_is_not_followed(shelf, tmp_path, monkeypatch):
+    garden = by_title(Vault(str(shelf)), "garden")
+    edition = garden.current()
+    target = garden.path.parent / "editions" / edition.name
+    outside = tmp_path / "outside-same-size.jsonl"
+    outside.write_bytes(b"x" * target.stat().st_size)
+    vault = Vault(str(shelf))
+    real = reader.os.open
+
+    def swapping_open(path, flags, *a, **kw):
+        if path == edition.name and flags & reader.os.O_NOFOLLOW:
+            target.unlink()
+            target.symlink_to(outside)
+        return real(path, flags, *a, **kw)
+    monkeypatch.setattr(reader.os, "open", swapping_open)
+    with pytest.raises(reader.Damaged) as caught:
+        vault.edition_bytes(garden, edition)
+    assert caught.value.code == "not_a_regular_file"
+
+
+def test_R15_a_folder_swapped_for_a_link_before_it_is_walked_is_not_followed(shelf, tmp_path, monkeypatch):
+    garden = by_title(Vault(str(shelf)), "garden")
+    edition = garden.current()
+    folder = garden.path.parent / "editions"
+    elsewhere = tmp_path / "other-editions"
+    shutil.copytree(folder, elsewhere)
+    vault = Vault(str(shelf))
+    real = reader.os.open
+
+    def swapping_open(path, flags, *a, **kw):
+        if path == "editions" and flags & reader.os.O_DIRECTORY and not (folder.is_symlink()):
+            shutil.rmtree(folder)
+            folder.symlink_to(elsewhere)
+        return real(path, flags, *a, **kw)
+    monkeypatch.setattr(reader.os, "open", swapping_open)
+    with pytest.raises(reader.Damaged):
+        vault.edition_bytes(garden, edition)
+
+
+def test_R15_export_verification_reads_never_follow_a_link_swapped_in_during_the_walk(shelf, tmp_path, monkeypatch):
+    export = made_export(shelf, tmp_path)
+    victim = next((export / "records").rglob("*.jsonl"))
+    outside = tmp_path / "outside.jsonl"
+    outside.write_bytes(victim.read_bytes())
+    real = reader.os.open
+
+    def swapping_open(path, flags, *a, **kw):
+        if path == victim.name and flags & reader.os.O_NOFOLLOW and not victim.is_symlink():
+            victim.unlink()
+            victim.symlink_to(outside)
+        return real(path, flags, *a, **kw)
+    monkeypatch.setattr(reader.os, "open", swapping_open)
+    report = portable.verify(str(export))
+    assert report["ok"] is False and any(p["code"] == "not_a_regular_file" for p in report["problems"])
