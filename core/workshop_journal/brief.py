@@ -90,7 +90,7 @@ def _in_topic(events: list[dict], flow: workflow.Flow, topic: str | None) -> lis
 
 
 def build(workshop_id: str, events: list[dict], *, topic: str | None = None, resolver=None, now: datetime | None = None,
-          teammates: tuple[str, ...] = (), journal_status: str = "ok") -> dict:
+          teammates: tuple[str, ...] = (), journal_status: str = "ok", since_seq: int | None = None) -> dict:
     """The brief for the whole workshop or one topic, from journal order alone."""
     flow = workflow.derive(events)
     scope = _in_topic(events, flow, topic)
@@ -235,6 +235,20 @@ def build(workshop_id: str, events: list[dict], *, topic: str | None = None, res
         if c["state"] == "active" and c["uncertain_releases"]:
             gaps.append({"code": "claim_release_uncertain", "claim_id": c["claim_id"],
                          "text": f"{c['claimant']} released {c['resource']} without saying it stopped; the claim stays effective."})
+    if since_seq is not None:
+        newer = [e for e in scope if e["seq"] > since_seq]
+        by_kind: dict[str, int] = {}
+        for e in newer:
+            by_kind[e["kind"]] = by_kind.get(e["kind"], 0) + 1
+        open_ids = {x["event_id"] for x in out["needs_you"]}
+        out["changed_since"] = {
+            "since_seq": since_seq, "entries": len(newer), "by_kind": dict(sorted(by_kind.items())),
+            "new_questions_for_robert": [_line(e) for e in newer if e["kind"] == "needs_you" and e["event_id"] in open_ids],
+            "new_requests": [_line(e) for e in newer if e["kind"] == "request"],
+            "new_results": [_line(e) for e in newer if e["kind"] == "result"],
+            "new_decisions": [_line(e) for e in newer if e["kind"] == "decision"],
+            "new_blockers": [_line(e) for e in newer if e["kind"] == "blocked"],
+            "last_entries": [_line(e) for e in newer[-5:]]}
     out["counts"] = {"events_in_scope": len(scope), "open_requests": sum(1 for r in requests if r["state"] == "open"),
                      "open_owner_questions": len(out["needs_you"]), "gaps": len(gaps)}
     return out
@@ -257,6 +271,16 @@ def render_markdown(brief: dict) -> str:
     out = [f"# Brief: {brief['workshop']}" + (f" / {brief['topic']}" if brief["topic"] else ""),
            f"As of seq {brief['as_of']['seq']} (journal {brief['journal_status']}). Latest entry: {human_time(brief['freshness']['journal_latest']) if brief['freshness']['journal_latest'] else 'none'}. "
            "Native source, capture and production acknowledgement: not observed."]
+    ch = brief.get("changed_since")
+    if ch is not None:
+        if not ch["entries"]:
+            out += ["", f"## Since entry {ch['since_seq']}: nothing new"]
+        else:
+            kinds = ", ".join(f"{n} {k}" for k, n in ch["by_kind"].items())
+            out += ["", f"## Since entry {ch['since_seq']}: {ch['entries']} new ({kinds})"]
+            for title, key in (("new question for Robert", "new_questions_for_robert"), ("new request", "new_requests"),
+                               ("new result", "new_results"), ("new decision", "new_decisions"), ("new blocker", "new_blockers")):
+                out += [f"- {title}, entry {x['seq']} ({x['actor']}, {human_time(x['at'])}): \"{_snippet(x['text'])}\"" for x in ch[key]]
     if brief["needs_you"]:
         out += ["", "## Waiting for Robert"] + [f"- seq {n['seq']}: {n['text']}" for n in brief["needs_you"]]
     out += ["", "## Teammates"] + [

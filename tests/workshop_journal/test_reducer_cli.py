@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 
@@ -345,3 +346,42 @@ def test_cli_notify_prints_the_frozen_notice_and_sends_nothing_and_routes_are_ho
     table = json.loads(cli(root, "routes").stdout)["routes"]
     assert all(r["sends_automatically"] is False for r in table) and {r["actor"]: r["status"] for r in table}["grok-cli"] == "unverified"
     assert json.loads(cli(root, "routes", "--actor", "host").stdout)["routes"][0]["status"] == "unsupported"
+
+
+def test_a_forgotten_id_never_falls_back_to_a_default_workshop(root, tmp_path):
+    env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(REPO), "PYTHONDONTWRITEBYTECODE": "1"}
+    for args in (["append", "--file", write_env(tmp_path, progress("x"))], ["brief"], ["history"], ["checkin"], ["verify", "--json"],
+                 ["pending", "--for", "codex", "--json"]):
+        out = subprocess.run([sys.executable, CLI, "--home", root, *args], capture_output=True, text=True, env=env, timeout=60)
+        doc = json.loads(out.stdout)
+        assert out.returncode == 2 and doc["reason"] == "workshop_id_required", args
+    assert sorted(os.listdir(root)) == []                                                                    # nothing was created anywhere
+    ok = subprocess.run([sys.executable, CLI, "--home", root, "append", "--file", write_env(tmp_path, progress("x"))], capture_output=True, text=True,
+                        env={**env, "MINIMOI_WORKSHOP_ID": WORKSHOP}, timeout=60)
+    assert ok.returncode == 0 and os.listdir(root) == [WORKSHOP]                                            # the environment variable still works
+
+
+def test_the_old_commands_keep_their_default_workshop(tmp_path):
+    env = {"PATH": "/usr/bin:/bin", "PYTHONPATH": str(REPO), "PYTHONDONTWRITEBYTECODE": "1"}
+    out = subprocess.run([sys.executable, CLI, "--home", str(tmp_path), "event", "--actor", "codex", "--kind", "progress", "--item", "queue:1", "--text", "x"],
+                         capture_output=True, text=True, env=env, timeout=60)
+    assert out.returncode == 0 and (tmp_path / "mac" / "events.jsonl").exists()
+
+
+def test_brief_since_lists_what_changed_after_the_entry_you_last_saw(root, tmp_path):
+    for text in ("one", "two"):
+        assert cli(root, "append", "--file", write_env(tmp_path, progress(text), f"{text}.json")).returncode == 0
+    req = {"actor": "claude-code", "kind": "request", "item": "spec:x", "topic": "x", "recipients": ["codex"], "text": "Review this.",
+           "payload": {"action": "review", "expected_result": "Findings."}}
+    assert cli(root, "append", "--file", write_env(tmp_path, req, "req.json")).returncode == 0
+    q = {"actor": "claude-code", "kind": "needs_you", "item": "spec:x", "topic": "x", "recipients": ["robert"], "text": "Which one?",
+         "payload": {"reason_code": "owner_choice", "requested_action": "Pick.", "incident_id": new_id()}}
+    assert cli(root, "append", "--file", write_env(tmp_path, q, "q.json")).returncode == 0
+    doc = json.loads(cli(root, "brief", "--since-seq", "2").stdout)["changed_since"]
+    assert doc["since_seq"] == 2 and doc["entries"] == 2 and doc["by_kind"] == {"needs_you": 1, "request": 1}
+    assert [x["text"] for x in doc["new_questions_for_robert"]] == ["Which one?"] and [x["text"] for x in doc["new_requests"]] == ["Review this."]
+    md = cli(root, "brief", "--since-seq", "2", "--format", "md").stdout
+    assert "## Since entry 2: 2 new (1 needs_you, 1 request)" in md and 'new question for Robert, entry 4' in md
+    nothing = cli(root, "brief", "--since-seq", "4", "--format", "md").stdout
+    assert "## Since entry 4: nothing new" in nothing
+    assert "changed_since" not in json.loads(cli(root, "brief").stdout)

@@ -12,7 +12,8 @@ Runs on the workshop host (the Mac), from the repository, with no model call:
                                      (default $STAGING_ROOT/data/workshops, else ~/minimoi-staging/...); code and secrets never go
 
 Files: $MINIMOI_WORKSHOP_HOME (default ~/minimoi-workshops)/<id>/events.jsonl and state.json.
-The workshop id is $MINIMOI_WORKSHOP_ID (default "mac").
+The workshop id is $MINIMOI_WORKSHOP_ID (default "mac" for the old commands: event, observe, state, sync). The newer commands
+(append, brief, history, ...) have no default: name the workshop with --id, so a forgotten flag never touches the wrong one.
 """
 from __future__ import annotations
 
@@ -333,7 +334,7 @@ def _notice(status: str) -> str:
 
 def cmd_brief(journal: Journal, a) -> int:
     from core.workshop_journal import brief as brief_view
-    doc = journal.brief(topic=a.topic, now=_parse_now(a.now), teammates=tuple(a.teammate or ()))
+    doc = journal.brief(topic=a.topic, now=_parse_now(a.now), teammates=tuple(a.teammate or ()), since_seq=a.since_seq)
     if "status" in doc:                                                  # refused, missing or unsafe: never an empty brief
         print(json.dumps({"ok": False, **doc}, sort_keys=True))
         return {"missing": 8, "refused": 5, "unsafe_root": 2}.get(doc["status"], 5)
@@ -362,7 +363,7 @@ def cmd_history(journal: Journal, a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--home", default=HOME)
-    ap.add_argument("--workshop", "--id", dest="workshop", default=WORKSHOP_ID,
+    ap.add_argument("--workshop", "--id", dest="workshop", default=None,
                     help="the workshop ID (v0.6 writes it --id; --workshop is the older spelling)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("event")
@@ -433,6 +434,7 @@ def main(argv=None) -> int:
     br.add_argument("--topic")
     br.add_argument("--format", choices=["json", "md"], default="json")
     br.add_argument("--now", help="ISO time for overdue checks (default: the clock)")
+    br.add_argument("--since-seq", type=int, help="also list what changed after this journal entry (what you have already seen)")
     br.add_argument("--teammate", action="append", help="name a teammate to list even if silent (repeatable)")
     hi = sub.add_parser("history", help="every entry in a topic up to a sequence number (read only)")
     hi.add_argument("--topic")
@@ -443,6 +445,11 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.cmd in ("append", "prepare", "get", "verify", "repair", "inbox", "artifact", "pending", "receipt", "claim", "release", "result",
                  "brief", "history", "notify", "routes", "checkin"):
+        if not a.workshop and not os.environ.get("MINIMOI_WORKSHOP_ID"):
+            print(json.dumps({"ok": False, "status": "refused", "reason": "workshop_id_required",
+                              "hint": "pass --id <workshop> (or set MINIMOI_WORKSHOP_ID); there is no default for these commands"}))
+            return 2
+        a.workshop = a.workshop or os.environ["MINIMOI_WORKSHOP_ID"]
         try:
             journal = Journal(a.home, a.workshop)
         except Exception as exc:                                   # a refused workshop ID or root; fixed text only
@@ -452,7 +459,7 @@ def main(argv=None) -> int:
                 "inbox": cmd_inbox, "artifact": cmd_artifact, "pending": cmd_pending, "receipt": cmd_receipt, "claim": cmd_claim,
                 "release": cmd_release, "result": cmd_result, "brief": cmd_brief, "history": cmd_history, "notify": cmd_notify,
                 "routes": cmd_routes, "checkin": cmd_checkin}[a.cmd](journal, a)
-    ws = Workshop(a.home, a.workshop)
+    ws = Workshop(a.home, a.workshop or WORKSHOP_ID)
     try:
         return {"event": cmd_event, "observe": cmd_observe, "state": cmd_state, "sync": cmd_sync}[a.cmd](ws, a)
     except ValueError as exc:

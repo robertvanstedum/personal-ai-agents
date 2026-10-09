@@ -48,6 +48,7 @@ class Scan:
     problems: list[dict] = field(default_factory=list)
     warnings: list[dict] = field(default_factory=list)
     after_gap: int = 0
+    skipped: int = 0                                        # parseable v1 lines that are not usable events (skipped, counted)
     offsets: list[int] = field(default_factory=list)       # byte offset of each entry in ``events``
 
     @property
@@ -111,8 +112,13 @@ def scan_bytes(data: bytes, *, deep: bool = True, deep_from: int | None = None, 
             if scan.v2:
                 problem("legacy_after_v2")
                 continue
-            if not isinstance(row.get("item"), str) or not isinstance(row.get("kind"), str):
-                problem("bad_legacy_row")
+            if not isinstance(row.get("item"), str) or not isinstance(row.get("kind"), str) or not isinstance(row.get("at"), str):
+                # A valid-JSON v1 line that is not a usable event (no item, kind or time) carries no sequence or ID, so it cannot
+                # break the order of anything: it is skipped and reported, as the shipped screen has always done, instead of
+                # hiding every newer event behind it. (Unparseable lines and sequence breaks are still damage.)
+                scan.skipped += 1
+                if len(scan.warnings) < MAX_PROBLEMS:
+                    scan.warnings.append({"offset": here, "reason": "legacy_row_skipped"})
                 continue
             eid = row.get("event_id")
             if isinstance(eid, str) and eid in scan.ids:
@@ -736,7 +742,8 @@ class Journal:
         return rebuilt, "rebuilt"
 
     # ── the brief and the history (read only) ─────────────────────────────────────────────────────────────────
-    def brief(self, *, topic: str | None = None, now: datetime | None = None, teammates: tuple[str, ...] = ()) -> dict:
+    def brief(self, *, topic: str | None = None, now: datetime | None = None, teammates: tuple[str, ...] = (),
+              since_seq: int | None = None) -> dict:
         """The deterministic return brief, or a refusal when the journal cannot be trusted (it never reports a stale as-of)."""
         read = self.read(deep=False)
         if read.status in ("missing", "unsafe_root", "unsupported_writer"):
@@ -745,7 +752,7 @@ class Journal:
             return {"v": brief_view.BRIEF_VERSION, "workshop": self.id, "status": "refused", "reason": "journal_damaged",
                     "valid_events": len(read.events)}
         return brief_view.build(self.id, read.events, topic=topic, resolver=self.resolver, now=now, teammates=teammates,
-                                journal_status=read.status)
+                                journal_status=read.status, since_seq=since_seq)
 
     def history(self, *, topic: str | None = None, through_seq: int | None = None) -> dict:
         read = self.read(deep=False)
