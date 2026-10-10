@@ -1,0 +1,17 @@
+<section class="card" aria-labelledby="memory-capture-title">
+  <h2 class="h2" id="memory-capture-title">Memory capture · Mac / dev</h2>
+  <p>{{ memory_capture.status|capitalize }} · {{ memory_capture.reason }}</p>
+  {% if memory_capture.rows %}
+  <div style="overflow-x:auto" tabindex="0" role="region" aria-label="Memory capture by source">
+    <table style="width:100%;text-align:left">
+      <thead><tr><th scope="col">Source</th><th scope="col">Last successful check / capture</th><th scope="col">Records</th><th scope="col">Status</th></tr></thead>
+      <tbody>{% for row in memory_capture.rows %}<tr>
+        <th scope="row">{{ row.label }}{% if row.manual %}<br><span class="small">Manual import</span>{% endif %}</th>
+        <td>{% if row.at %}{{ row.kind }} · <time datetime="{{ row.at }}" title="{{ row.at }}">{{ row.age }}</time>{% else %}{{ row.age }}{% endif %}</td>
+        <td>{{ row.records }}</td><td>{{ row.status|capitalize }}{% if row.status != 'current' %}<br><span class="small">{{ row.reason }}</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% endif %}
+  <p class="small">{% if memory_capture.generated_at %}Report: {{ memory_capture.generated_at }} · {% endif %}Refresh for the latest status. Current means no reported issue; it is not a completeness audit.</p>
+</section>

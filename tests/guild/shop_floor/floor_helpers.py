@@ -109,7 +109,13 @@ def load_portal(monkeypatch, tmp_path):
 
     def _load(*, next_flag: str | None = "1", proto_flag: str | None = None,
               queue: str | Path | None | bool = True, base_url="https://dev.minimoi.ai",
-              ops_url: str | None = None, items=None) -> Portal:
+              ops_url: str | None = None, items=None, reserve_pages: bool = True) -> Portal:
+        # The retired Workbench, Build Queue and Labs pages are served only with this switch (off in Guild 1.1 and
+        # in production). Existing tests of those pages keep running with it on; the exclusion tests pass False.
+        if reserve_pages:
+            monkeypatch.setenv("MINIMOI_GUILD_RESERVE_PAGES", "1")
+        else:
+            monkeypatch.delenv("MINIMOI_GUILD_RESERVE_PAGES", raising=False)
         for name, value in (("MINIMOI_GUILD_NEXT", next_flag), ("MINIMOI_GUILD_PROTO", proto_flag)):
             if value is None:
                 monkeypatch.delenv(name, raising=False)

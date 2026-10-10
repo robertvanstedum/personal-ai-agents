@@ -23,7 +23,8 @@ Turns (stage B of the separate-container plan): the owner-only route
 side, only when the environment's gate ``MINIMOI_GUILD_MC_TURNS`` is on
 (staging only; production never sets it, and /guild-next never mounts
 there). "Live" is shown only after an answered turn: a reachable runtime
-that has not answered yet is "unavailable · connected, no answer yet".
+that has not answered yet says "connected · response not yet verified"
+while retaining its internal unavailable state until an answer is verified.
 """
 from __future__ import annotations
 
@@ -34,12 +35,12 @@ import time
 from dataclasses import dataclass, field
 
 from ..adapters.contract import now_iso
-from ..stores import MASTER_CRAFTSMAN, Author
+from ..stores import CHIEF_OF_STAFF, MASTER_CRAFTSMAN, Author
 
 log = logging.getLogger(__name__)
 
 SWITCH_VAR = "MINIMOI_GUILD_MC"
-SWITCH_VALUES = ("off", "stub", "openclaw", "grok")
+SWITCH_VALUES = ("off", "stub", "openclaw", "grok", "cos")
 STATUSES = ("answered", "unavailable", "timeout_uncertain", "cancelled", "refused", "error",
             "duplicate_in_progress", "not_listening")
 # Stub rows: author_kind "platform" (allowed by sql/001_floor_b1.sql), a label
@@ -50,10 +51,19 @@ HEALTH_TTL_S = 60
 # The per-environment turn gate, read once when /guild-next mounts. Off unless
 # exactly one of FLAG_VALUES_ON; production never sets it.
 TURNS_VAR = "MINIMOI_GUILD_MC_TURNS"
+# The streaming switch (streaming spec v0.2 §5): code default off, staging on.
+# Effective streaming = this switch AND the backend's supports_streaming, and
+# the server computes it; the page never decides for itself.
+STREAM_VAR = "MINIMOI_GUILD_MC_STREAM"
+FLAG_ON = ("1", "true", "on", "yes")
 
 
 def turns_enabled(environ) -> bool:
-    return str(environ.get(TURNS_VAR, "") or "").strip().lower() in ("1", "true", "on", "yes")
+    return str(environ.get(TURNS_VAR, "") or "").strip().lower() in FLAG_ON
+
+
+def stream_enabled(environ) -> bool:
+    return str(environ.get(STREAM_VAR, "") or "").strip().lower() in FLAG_ON
 
 
 @dataclass(frozen=True)
@@ -91,15 +101,34 @@ class Health:
 
 
 class MasterCraftsmanBackend(abc.ABC):
-    """One Master Craftsman runtime behind the Shop floor."""
+    """One Master Craftsman runtime behind the Shop floor.
+
+    Streaming (spec v0.2 §5): ``supports_streaming`` is False unless a backend
+    implements ``stream_turn(req, cancel)``. That call makes its pre-dispatch
+    checks at once (raising ``stream.StreamRefused``: nothing was sent) and
+    returns an iterator that dispatches on its first ``next()`` and yields the
+    runtime-neutral events of ``stream.py``. One dispatch per turn: nothing
+    here ever retries. ``stop(correlation_id)`` asks the runtime to abort that
+    turn; ``settle(result)`` records a finished turn for the header, as
+    ``turn()`` does."""
 
     kind: str = "off"
+    supports_streaming: bool = False
 
     @abc.abstractmethod
     def health(self) -> Health: ...
 
     @abc.abstractmethod
     def turn(self, req: TurnRequest, cancel: threading.Event | None = None) -> TurnResult: ...
+
+    def stream_turn(self, req: TurnRequest, cancel: threading.Event | None = None):
+        raise NotImplementedError(f"the {self.kind} backend does not stream")
+
+    def stop(self, correlation_id: str) -> bool:
+        return False
+
+    def settle(self, result: TurnResult) -> None:
+        return None
 
 
 class OffBackend(MasterCraftsmanBackend):
@@ -176,6 +205,9 @@ def backend_from_env(environ, *, http_get=None, http_post=None) -> MasterCraftsm
         if kind == "grok":
             from .grok import GrokMasterCraftsman
             return GrokMasterCraftsman()
+        if kind == "cos":
+            from .cos import ChiefOfStaffBackend
+            return ChiefOfStaffBackend.from_env(environ, http_get=http_get, http_post=http_post)
     except Exception:
         log.exception("master craftsman: the %s backend could not be built; it is unavailable", kind)
         return UnavailableBackend(kind, "misconfigured")
@@ -203,7 +235,9 @@ UNAVAILABLE_WHY = {
     "health_check_failed": "its health could not be read",
     "misconfigured": "its connection settings are invalid",
     "not_verified": "connected, no answer yet",
-    "deadline": "no answer within the deadline",
+    "deadline": "the relay cancelled the run at its time limit; commands it started may still be running",
+    "local_timeout": "no answer received; outcome unknown, work may still be running",
+    "idle": "the relay cancelled the run after a long silence; commands it started may still be running",
     "runtime_error": "its last answer was an error",
     "malformed_answer": "its last answer could not be read",
     "no_run_status": "its last answer was not a real answer",
@@ -213,7 +247,8 @@ UNAVAILABLE_WHY = {
 NOTES_TEXT = "On the record, your messages are kept as notes."
 
 
-def view(health: Health, *, notes_ok: bool, turns_on: bool = False) -> dict:
+def view(health: Health, *, notes_ok: bool, turns_on: bool = False, stream_on: bool = False,
+         name: str = "Master Craftsman", private: bool = True, files: bool = True) -> dict:
     """The Shop floor's Master Craftsman state, header and notes line.
 
     ``state`` is one of off, stub, live, unavailable. ``turns`` says whether a
@@ -230,7 +265,9 @@ def view(health: Health, *, notes_ok: bool, turns_on: bool = False) -> dict:
     else:
         why = UNAVAILABLE_WHY.get(health.reason or "", "your messages are kept as notes")
         state = "unavailable"
-        header = f"Master Craftsman is unavailable · {why}"
+        header = ("Master Craftsman is connected · response not yet verified"
+                  if health.reason == "not_verified" and health.reachable
+                  else f"Master Craftsman is unavailable · {why}")
     if not notes_ok and state != "off":
         header = HEADER_NO_NOTES
     replies = bool(turns_on and notes_ok and (state in ("stub", "live") or (state == "unavailable" and health.reachable)))
@@ -243,8 +280,12 @@ def view(health: Health, *, notes_ok: bool, turns_on: bool = False) -> dict:
         notes = f"{NOTES_TEXT} Master Craftsman is asked, but has not answered yet on this portal."
     else:
         notes = f"{NOTES_TEXT} Master Craftsman does not reply."
+    if name != "Master Craftsman":      # another real partner (the Chief of Staff): the same states, its own name
+        header, notes = header.replace("Master Craftsman", name), notes.replace("Master Craftsman", name)
     return {"state": state, "reason": health.reason if state == "unavailable" else None, "header": header,
-            "notes_text": notes, "turns": replies, "observed_at": health.observed_at}
+            "notes_text": notes, "turns": replies, "stream": bool(replies and stream_on),
+            "name": name, "private": private, "files": files,
+            "observed_at": health.observed_at}
 
 
 # ── keeping a reply ───────────────────────────────────────────────────────────
@@ -262,6 +303,8 @@ def reply_author(result: TurnResult) -> Author:
         return MASTER_CRAFTSMAN_STUB
     if result.backend_kind in REAL_KINDS:
         return MASTER_CRAFTSMAN
+    if result.backend_kind == "cos":
+        return CHIEF_OF_STAFF
     raise NotAnAnswer(f"backend {result.backend_kind!r} cannot answer")
 
 

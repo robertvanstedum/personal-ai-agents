@@ -1,37 +1,66 @@
-{# The conversation, real mode. Master Craftsman is off: no reply of any kind,
-   no suggested lines, no voice, no attach, no invite, no filing. The opening
-   briefing and the explain cards are platform rules, labelled as such.
+{% set mc_name = (state.mc.name if state is defined and state.mc and state.mc.name else 'Master Craftsman') %}
+{% set mc_private = not (state is defined and state.mc and state.mc.private is false) %}
+{# The conversation, real mode. The explain cards are platform rules, labelled as such.
+   Attach keeps an image with the conversation (images only; Master Craftsman does not
+   receive it). Invite answers "Coming soon.": no agent is connected. Nothing is filed.
    On the record, what Robert sends is kept on the server as a note (S1) and
    shown with its time and context. Off the record, what he types stays in
    this page's memory only and is never sent (S2). #}
 {% macro note_row(n) -%}
-<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-note="{{ n.id }}">
+<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}">
   <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span>{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</p>
+  {%- if n.html %}
+  <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
+  {%- else %}
   <p class="msg-text">{{ n.text }}</p>
+  {%- endif %}
   {%- if n.turn %}
-  <p class="msg-foot" data-turn-foot><span data-turn-done>{{ n.turn.done_text }}</span><span data-turn-usage>{% if n.turn.tokens_text %} · {{ n.turn.tokens_text }}{% endif %}</span></p>
+  <p class="msg-foot" data-turn-foot{% if "not saved" not in n.turn.done_text %} hidden{% endif %}><span data-turn-done>{{ n.turn.done_text }}</span><span data-turn-usage hidden>{% if n.turn.tokens_text %} · {{ n.turn.tokens_text }}{% endif %}</span></p>
+  {%- endif %}
+  {%- set sent = ((conversation.turn_files or {}).get(n.request_id) if conversation else none) %}
+  {%- if sent %}
+  <ul class="msg-files small" data-note-files aria-label="Files in the request">{% for f in sent %}<li class="msg-file" data-status="{{ f.status }}"><span class="msg-file-icon" aria-hidden="true">📄 </span><span class="msg-file-name">{{ f.name }}</span>{% if f.status == 'partly_read' %} · sent in part ({{ f.reason }}){% elif f.status != 'read' %} · not sent ({{ f.reason }}){% endif %}</li>{% endfor %}</ul>
   {%- endif %}
 </li>
 {%- endmacro %}
 <button type="button" class="mc-pill" data-mc-pill aria-controls="mc-panel" aria-expanded="false">
-  <span class="sig-dot" data-state="quiet" aria-hidden="true"></span>
-  <span>Conversation · Master Craftsman off</span>
+  <img src="/static/guild/guild-mc-portrait.jpg" alt="" width="40" height="40">
+  <span>Chat<span class="visually-hidden"> with {{ mc_name }}</span></span>
 </button>
 <aside id="mc-panel" class="mc-panel" data-mc-panel data-mode="pill" data-pos="right" aria-label="Conversation">
   <header class="mc-head">
-    <h2 class="mc-title">Master Craftsman</h2>
+    <h2 class="mc-title">{{ mc_name }}</h2>
     <div class="mc-head-actions" role="group" aria-label="Panel mode">
       <button type="button" class="btn-mini" data-mc-dock aria-pressed="false">Dock</button>
       <button type="button" class="btn-mini" data-mc-min>Minimize</button>
     </div>
   </header>
-  <p class="mc-state" data-mc-header>{{ state.mc_header }}</p>
   <p class="mc-context" data-mc-context>Context: {{ area }} · {{ context_item }} · on the record</p>
+  {% if page_id == 'floor' %}
+  {# The chat's own header, with the hero in it (Guild 1.1 slice 1, the v4
+     design: no hero chooser): Master Craftsman's portrait and state, the
+     conversation, the one place Needs you appears, the record chip, and the
+     rail toggle. The image is decoration (CSS); the words carry the meaning. #}
+  <div class="mc-floorbar mc-hero" data-floorbar data-chat-hero>
+    <div class="mc-banner-art"><img class="hero-art" src="/static/guild/guild-workshop-team.webp" alt="" aria-hidden="true"></div>
+    <button type="button" class="fb-btn fb-history" data-history-toggle aria-expanded="false" aria-controls="floor-history">☰<span class="visually-hidden"> Conversations</span></button>
+    <span class="hero-portrait" aria-hidden="true"></span>
+    <div class="hero-text">
+      <h1 class="hero-name">{{ mc_name }}<span class="visually-hidden"> · </span> <span class="fb-title" data-conv-current-title>{{ conversation.title if conversation else 'Shop floor thread' }}</span></h1>
+      <p class="hero-sub"><span class="hero-dot" aria-hidden="true"></span><span data-mc-header>{{ state.mc_header }}</span></p>
+    </div>
+    {# Folds and opens the context rail (Linked work, Files); on a phone the rail is folded below the chat instead. #}
+    <button type="button" class="fb-btn fb-rail" data-rail-toggle aria-expanded="true" aria-controls="main">Context</button>
+
+  </div>
+  {% else %}
+  <nav class="mc-current small" aria-label="Conversation history">
+    <button type="button" class="btn-quiet" data-conv-new>New chat</button>
+    · <a href="{{ urls.floor }}{% if conversation %}?c={{ conversation.id }}{% endif %}">History</a>
+    <span data-conv-current-title>{{ conversation.title if conversation else '' }}</span>
+  </nav>
+  {% endif %}
   <ol class="mc-thread" data-mc-thread role="log" aria-live="polite" aria-label="Conversation thread">
-    <li class="msg msg-platform" data-kind="briefing" data-briefing>
-      <p class="msg-meta"><span class="msg-label" data-briefing-label>{{ state.briefing.display_label }}</span></p>
-      <p class="msg-text" data-briefing-text>{{ state.briefing.text }}</p>
-    </li>
     {% if state.notes.state != 'ok' %}
     <li class="msg msg-platform" data-kind="platform" data-notes-unavailable>
       <p class="msg-meta"><span class="msg-label">Guild platform</span></p>
@@ -42,27 +71,55 @@
     {% for n in state.notes.recent %}{{ note_row(n) }}{% endfor %}
     {% endif %}
   </ol>
+  {% if page_id == 'floor' %}
+  {# Selection actions (Guild 1.1 slice 1): shown only on the record, for text
+     inside one kept message (js/selection.js). Take to a Room shares the stored note by id (slice 4). #}
+  <div class="sel-bar" data-sel-bar role="toolbar" aria-label="Selected text" hidden>
+    <span class="sel-label">Selection</span>
+    <button type="button" class="sel-act" data-sel-pin>Pin to Board</button>
+    <button type="button" class="sel-act" data-sel-room title="Share this kept message into a Room (the whole stored note, by its id)">Take to a Room</button>
+    <span class="sel-result" data-sel-result role="status" hidden></span>
+  </div>
+  {% endif %}
   <p class="visually-hidden" aria-live="polite" data-mc-announcer></p>
   <p class="mc-refusal" data-mc-refusal role="status" hidden></p>
   <div class="mc-dock-bottom" data-mc-dock-bottom>
+  {# What blocks chat, one short line right above the composer: MC down, the cost level at act or stop, or a failed answer. #}
+  <p class="mc-blocker" data-mc-blocker role="status"{% if not state.blockers %} hidden{% endif %}>{% for b in state.blockers %}<span data-blocker="{{ b.kind }}">{{ b.text }}</span>{% endfor %}</p>
   <form class="mc-composer" data-mc-composer>
-    <label class="visually-hidden" for="mc-input">Type a note</label>
-    <input id="mc-input" class="mc-input" data-mc-input autocomplete="off" maxlength="{{ page_json.note_max }}" placeholder="Type a note">
-    <button type="submit" class="btn" data-mc-send aria-describedby="mc-notes-line">Send</button>
+    {% if page_id == 'floor' %}
+    <div class="mc-tray" data-mc-tray aria-label="Files to attach" hidden></div>
+    {% endif %}
+    <div class="mc-row">
+      {% if page_id == 'floor' %}
+      {# Documents (text, code, Markdown, CSV, JSON, HTML, PDF with text, Word .docx) go with the message and Master
+         Craftsman reads them as text. Images are kept as pictures only; it cannot see them yet. #}
+      <button type="button" class="mc-attach" data-mc-attach aria-label="Attach a file" title="Attach a file: choose one, drop it here, or paste an image">📎</button>
+      <input type="file" data-mc-file accept="image/jpeg,image/png,image/webp,image/gif,{{ page_json.attach.doc_ext|join(',') }}" multiple hidden>
+      {% endif %}
+      <label class="visually-hidden" for="mc-input">Type a note</label>
+      <textarea id="mc-input" class="mc-input" data-mc-input rows="1" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" maxlength="{{ page_json.note_max }}" placeholder="Ask…"></textarea>
+      <button type="submit" class="btn" data-mc-send aria-describedby="mc-notes-line">Send</button>
+    </div>
     <div class="mc-tools">
       <button type="button" class="btn-quiet" data-mc-record-confirm hidden>Confirm on the record</button>
-      <button type="button" class="btn-quiet" data-mc-record aria-pressed="false">Off the record</button>
-      <button type="button" class="btn-quiet" data-mc-invite disabled>Invite</button>
+      <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="{{ 'Go Private' if mc_private else 'Private is not available' }}" title="{{ 'Go Private: ' ~ mc_name ~ ' answers, MiniMoi keeps nothing' if mc_private else 'Private is not available with the ' ~ mc_name ~ ': it keeps its own record' }}"{% if not mc_private %} disabled data-private-off{% endif %}><span aria-hidden="true">🔒</span></button>
+      <span class="mc-private-chip" data-private-chip hidden>Private · not kept by MiniMoi
+        <button type="button" class="mc-private-why" data-private-why aria-expanded="false" aria-controls="mc-private-explain">What’s this?</button>
+        <button type="button" class="mc-private-exit" data-private-exit>Exit</button></span>
+      {# Grey but clickable. It answers with these two words and nothing more: no agent is connected. #}
+      <button type="button" class="btn-quiet mc-invite" data-mc-invite aria-describedby="mc-soon">Invite</button>
+      <span class="mc-soon" id="mc-soon" data-invite-soon role="status" hidden></span>
     </div>
-    <div class="mc-off-lines">
-      <span id="mc-notes-line" data-notes-line data-notes-state="{{ state.notes.state }}">{{ state.notes.text }}</span>
-      <span data-filing-off>{{ filing_off }}</span>
-      <span data-invite-off>{{ invite_off }}</span>
-    </div>
+    <p class="mc-private-explain small" id="mc-private-explain" data-private-explain hidden>{{ page_json.off_record_text }}</p>
+    {% if page_id != 'floor' %}<p class="mc-state small" data-mc-header>{{ state.mc_header }}</p>{% endif %}
+    <span class="visually-hidden" id="mc-notes-line" data-notes-line data-notes-state="{{ state.notes.state }}">{{ state.notes.text }}</span>
   </form>
-  <div class="mc-phone-bar">
-    <button type="button" class="btn mc-type" data-mc-type aria-controls="mc-input">Type</button>
-  </div>
+  {# On every page but Chat the assistant is a panel at the bottom of the page; on a phone this jumps to its Ask box (and opens the keyboard
+     there). On the Chat page the Ask box is already on screen, so the button would only repeat it. #}
+  {% if page_id != 'floor' %}<div class="mc-phone-bar">
+    <button type="button" class="btn mc-type" data-mc-type aria-controls="mc-input">Ask {{ mc_name }}</button>
+  </div>{% endif %}
   </div>
 </aside>
 
@@ -75,23 +132,37 @@
 <template id="tpl-note">
   <li class="msg msg-note" data-kind="note">
     <p class="msg-meta"><span class="msg-label" data-slot="label"></span> · <span data-slot="when"></span><span data-slot="context"></span> · kept as a note</p>
-    <p class="msg-text" data-slot="text"></p>
+    <div class="msg-text msg-md" data-slot="text"></div>
   </li>
 </template>
 <template id="tpl-note-foot">
-  <p class="msg-foot" data-turn-foot><span data-turn-done></span><span data-turn-usage></span></p>
+  <p class="msg-foot" data-turn-foot hidden><span data-turn-done></span><span data-turn-usage hidden></span></p>
 </template>
 <template id="tpl-mc-waiting">
   <li class="msg msg-waiting" data-kind="mc-waiting" data-mc-waiting>
     <span class="mc-mark" aria-hidden="true">MC</span>
-    <span class="mc-waiting-text">Waiting for a response…</span>
+    <span class="mc-waiting-text visually-hidden">Waiting for a response…</span>
     <span class="mc-elapsed" data-slot="elapsed" aria-hidden="true">0s</span>
+  </li>
+</template>
+<template id="tpl-mc-stream">
+  <li class="msg msg-note msg-stream" data-kind="mc-stream" data-mc-stream-line aria-busy="true">
+    <p class="msg-meta"><span class="mc-mark" aria-hidden="true">MC</span> <span class="msg-label" data-slot="label"></span> · <span data-slot="state">…</span> <span class="mc-elapsed" data-slot="elapsed" aria-hidden="true">0s</span></p>
+    <div class="msg-text msg-md" data-slot="rendered"></div>
+    <div class="msg-text msg-stream-tail" data-slot="tail"></div>
+    <p class="msg-foot" data-slot="controls"><button type="button" class="btn-mini" data-mc-stop hidden title="Stop this reply">Stop</button></p>
   </li>
 </template>
 <template id="tpl-off-record">
   <li class="msg msg-off" data-kind="off-record" data-off-record-line>
-    <p class="msg-meta"><span class="msg-label">Off the record · not sent, not kept</span> · <span data-slot="when"></span></p>
+    <p class="msg-meta"><span class="msg-label">Private · not kept by MiniMoi</span> · <span data-slot="when"></span></p>
     <p class="msg-text" data-slot="text"></p>
+  </li>
+</template>
+<template id="tpl-private-answer">
+  <li class="msg msg-note msg-off" data-kind="private-answer" data-off-record-line>
+    <p class="msg-meta"><span class="mc-mark" aria-hidden="true">MC</span> <span class="msg-label">{{ mc_name }} · Private · not kept by MiniMoi</span> · <span data-slot="when"></span> · <span class="mc-elapsed" data-slot="elapsed"></span></p>
+    <div class="msg-text msg-md" data-slot="text"></div>
   </li>
 </template>
 <template id="tpl-explain">

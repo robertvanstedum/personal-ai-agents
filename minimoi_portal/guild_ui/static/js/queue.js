@@ -7,6 +7,7 @@ import { addPlatform } from './conversation.js';
 import { refresh } from './floor.js';
 
 const ACTIVE = ['spec_ready', 'in_build'];
+const TROUBLE = ['blocked', 'rework'];   // need a reason (Guild 1.1 slice 2, spec §4.2)
 const nice = (s) => (s || '').replace('_', ' ');
 let page;
 
@@ -29,7 +30,7 @@ function applyForm(form) {
   const sel = $('[data-status-select]', form);
   const eff = form.dataset.sourceStatus;
   $('[data-save]', form).hidden = sel.value === eff;
-  $('[data-note-wrap]', form).hidden = sel.value !== 'blocked';
+  $('[data-note-wrap]', form).hidden = !TROUBLE.includes(sel.value);
 }
 
 function applyItemToForm(form, item, digest) {

@@ -27,6 +27,15 @@ Rules carried from spec v0.5 §2:
   "unavailable · model gateway down"; a refused key or budget is unavailable
   with its class; a timeout is ``timeout_uncertain``; nothing is retried here.
 * The request is refused before sending above 256 KB.
+
+Streaming (spec v0.2 §3, v0.3 §2): ``stream_turn()`` sends the same body with
+``stream: true`` to the relay, which answers with its own NDJSON. The portal's
+bounded reader (stream.py) reads it: a 125 s wall clock, 105 s idle (the read
+timeout), 256 KB of text, a 64 KB line. ``stop()`` asks the relay to abort the
+turn (POST /v1/turns/stop). A non-200 from the relay is classified exactly as
+the non-streaming path's. The portal's idle limit (105 s) outlasts the relay's
+(30 s by default, up to about 100 s when configured), as its deadline (125 s)
+outlasts the relay's (120 s).
 """
 from __future__ import annotations
 
@@ -34,14 +43,31 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
+from collections import namedtuple
+
 from .backend import Health, MasterCraftsmanBackend, TurnResult
+from .stream import Failure, Limits, StreamRefused, read_stream
+
+# What the header needs to remember about the last turn: its status and failure class, never its reply text, usage or trace
+# (a Private answer must not stay in this process's memory after the request ends; Codex review, 7 Oct).
+_Settled = namedtuple("_Settled", "status failure_class")
 
 MODEL = "openclaw/mc-agent"
+# The conversation lane's agent. The relay (v2) allows exactly these two; mc-chat is the lean, read-only one that proposes jobs.
+# Unset, chat turns go to mc-agent exactly as before.
+CHAT_MODELS = ("openclaw/mc-agent", "openclaw/mc-chat")
 USER_PREFIX = "guild-mc:"
 MAX_REQUEST_BODY_BYTES = 262_144
 CONNECT_TIMEOUT_S = 5
 TURN_DEADLINE_S = 90
 HEALTH_TIMEOUT_S = 5
+# The portal's limits outlast the relay's, so the relay's own in-band error always arrives first (#275 review,
+# finding 5). The relay's source defaults are 120 s and 30 s idle. OpenClaw sends nothing at all while an agent run
+# works through its tools (no headers, no keepalive), so a Dev relay may be configured with a longer idle
+# (MC_RELAY_IDLE_MS, up to about 100 s; its deadline stays 120 s). The portal waits 105 s of silence, so it never
+# gives up before a relay configured that way does, and the relay's 120 s deadline still bounds every turn.
+STREAM_LIMITS = Limits(deadline_s=125.0, idle_s=105.0, text_max=256 * 1024, line_max=64 * 1024)
+STOP_TIMEOUT_S = 5
 # OpenClaw 2026.9.6 (dist/openai-http: the non-streaming chat completion)
 # answers 200 with this text when the agent run produced no reply text, and
 # sets finish_reason to "stop", "length" or (pending client tools) "tool_calls".
@@ -88,9 +114,13 @@ def classify_failure(status: int, body: str) -> tuple[str, str]:
 
 class OpenClawMasterCraftsman(MasterCraftsmanBackend):
     kind = "openclaw"
+    supports_streaming = True
 
     def __init__(self, url: str | None, token: str | None, *, ready_path: str | None = None,
-                 http_get=None, http_post=None):
+                 http_get=None, http_post=None, chat_model: str | None = None):
+        if chat_model and chat_model not in CHAT_MODELS:
+            raise ValueError(f"MC_RUNTIME_CHAT_MODEL must be one of {', '.join(CHAT_MODELS)}")
+        self.chat_model = chat_model or MODEL
         self.url = (url or "").rstrip("/")
         self._token = token or ""
         self.ready_path = ready_path or None
@@ -110,7 +140,8 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
     @classmethod
     def from_env(cls, environ, *, http_get=None, http_post=None):
         return cls(environ.get("MC_RUNTIME_URL"), environ.get("MC_RUNTIME_TOKEN"),
-                   ready_path=environ.get("MC_RUNTIME_READY_PATH"), http_get=http_get, http_post=http_post)
+                   ready_path=environ.get("MC_RUNTIME_READY_PATH"), http_get=http_get, http_post=http_post,
+                   chat_model=(environ.get("MC_RUNTIME_CHAT_MODEL") or "").strip() or None)
 
     @property
     def connected(self) -> bool:
@@ -145,12 +176,92 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
 
     def turn(self, req, cancel=None) -> TurnResult:
         result = self._turn(req, cancel)
-        # Only an attempt that reached (or tried to reach) the runtime changes
-        # what the header says; a refused, cancelled or busy turn does not.
+        self.settle(result)
+        return result
+
+    def settle(self, result: TurnResult) -> None:
+        """Only an attempt that reached (or tried to reach) the runtime changes
+        what the header says; a refused, cancelled or busy turn does not. The
+        streaming path calls this too, so its header turns "live" alike."""
         if result.status in ("answered", "unavailable", "error", "timeout_uncertain") \
                 and result.failure_class not in ("not_connected", "one_turn_in_flight"):
-            self._last = result
-        return result
+            self._last = _Settled(result.status, result.failure_class)
+
+    def _payload(self, req, *, stream: bool = False) -> bytes | TurnResult:
+        context = {k: v for k, v in (req.context or {}).items() if v not in (None, "")}
+        content = req.text if not context else f"[Shop floor context: {json.dumps(context, sort_keys=True)}]\n{req.text}"
+        body = {"model": self.chat_model, "user": self._user(req.conversation_id),
+                "messages": [{"role": "user", "content": content}]}
+        if stream:
+            body["stream"] = True
+        payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        if len(payload) > MAX_REQUEST_BODY_BYTES:
+            return TurnResult("refused", self.kind, failure_class="request_too_large",
+                              message="The turn is larger than 256 KB; nothing was sent")
+        return payload
+
+    def _headers(self, req) -> dict:
+        headers = {**self._auth(), "Content-Type": "application/json"}
+        if req.correlation_id:
+            headers["X-MC-Correlation-Id"] = req.correlation_id
+        return headers
+
+    def stream_turn(self, req, cancel=None):
+        """Pre-dispatch checks now (StreamRefused: nothing was sent); the
+        returned iterator dispatches on its first next()."""
+        if not self.connected:
+            raise StreamRefused("not_connected", "Master Craftsman is not connected yet")
+        payload = self._payload(req, stream=True)
+        if isinstance(payload, TurnResult):
+            raise StreamRefused(payload.failure_class, payload.message)
+        return self._stream(payload, self._headers(req), cancel)
+
+    def _stream(self, payload: bytes, headers: dict, cancel):
+        if cancel is not None and cancel.is_set():
+            yield Failure("stopped", "cancelled")
+            return
+        try:
+            response = self._post(f"{self.url}/chat/completions", data=payload, headers=headers, stream=True,
+                                   timeout=(CONNECT_TIMEOUT_S, STREAM_LIMITS.idle_s))
+        except Exception as exc:
+            name = type(exc).__name__
+            if "Timeout" in name and "Connect" not in name:
+                yield Failure("local_timeout", "timeout_uncertain")
+            else:
+                yield Failure("not_ready", "unavailable")
+            return
+        try:
+            status = getattr(response, "status_code", 0)
+            ctype = str((getattr(response, "headers", None) or {}).get("Content-Type", ""))
+            if status != 200 or "ndjson" not in ctype:
+                text = getattr(response, "text", "") or ""
+                if status == 409 and "relay_stopped" in text:
+                    yield Failure("stopped", "cancelled", http_status=status)
+                    return
+                if status == 504 and "relay_timeout" in text:        # the relay's deadline or idle, before MC's headers
+                    yield Failure("deadline", "timeout_uncertain", http_status=status)
+                    return
+                turn_status, failure = classify_failure(status, text) if status != 200 \
+                    else ("error", "malformed_answer")
+                yield Failure(failure, turn_status, http_status=status)
+                return
+            yield from read_stream(response.iter_content(chunk_size=None), limits=STREAM_LIMITS, cancel=cancel)
+        finally:
+            close = getattr(response, "close", None)
+            if close:
+                close()
+
+    def stop(self, correlation_id: str) -> bool:
+        """Ask the relay to abort this turn's call to MC. True when it was running."""
+        if not self.connected or not correlation_id:
+            return False
+        try:
+            response = self._post(f"{self.url}/turns/stop", data=json.dumps({"correlation_id": correlation_id}),
+                                  headers={**self._auth(), "Content-Type": "application/json"},
+                                  timeout=(CONNECT_TIMEOUT_S, STOP_TIMEOUT_S))
+        except Exception:
+            return False
+        return getattr(response, "status_code", 0) == 200
 
     def _turn(self, req, cancel=None) -> TurnResult:
         if not self.connected:
@@ -158,25 +269,18 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
                               message="Master Craftsman is not connected yet")
         if cancel is not None and cancel.is_set():
             return TurnResult("cancelled", self.kind)
-        context = {k: v for k, v in (req.context or {}).items() if v not in (None, "")}
-        content = req.text if not context else f"[Shop floor context: {json.dumps(context, sort_keys=True)}]\n{req.text}"
-        body = {"model": MODEL, "user": self._user(req.conversation_id),
-                "messages": [{"role": "user", "content": content}]}
-        payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
-        if len(payload) > MAX_REQUEST_BODY_BYTES:
-            return TurnResult("refused", self.kind, failure_class="request_too_large",
-                              message="The turn is larger than 256 KB; nothing was sent")
-        headers = {**self._auth(), "Content-Type": "application/json"}
-        if req.correlation_id:
-            headers["X-MC-Correlation-Id"] = req.correlation_id
+        payload = self._payload(req)
+        if isinstance(payload, TurnResult):
+            return payload
+        headers = self._headers(req)
         try:
             response = self._post(f"{self.url}/chat/completions", data=payload, headers=headers,
                                   timeout=(CONNECT_TIMEOUT_S, TURN_DEADLINE_S))
         except Exception as exc:
             name = type(exc).__name__
             if "Timeout" in name and "Connect" not in name:
-                return TurnResult("timeout_uncertain", self.kind, failure_class="deadline",
-                                  message="No answer within the deadline; it may still have run")
+                return TurnResult("timeout_uncertain", self.kind, failure_class="local_timeout",
+                                  message="No answer received before this page stopped waiting; the outcome is unknown")
             return TurnResult("unavailable", self.kind, failure_class="not_ready",
                               message="Master Craftsman's runtime did not answer")
         if cancel is not None and cancel.is_set():

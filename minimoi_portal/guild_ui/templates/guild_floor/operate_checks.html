@@ -1,0 +1,8 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Checks{% endblock %}
+{% block main %}<article class="gu-reference"><h1>Checks</h1>
+<p>Build Log saves awaiting reconciliation. Scheduled system checks are not connected to this view.</p>
+<p class="small">Source: queue journal · read {{ checks.observed_at }} · {{ checks.status }}</p>
+{% if not checks.ok %}<p role="status">Unknown: the checks journal could not be read.</p>{% else %}
+<ul>{% for check in checks.data %}<li><pre class="gu-document">{{ check|tojson(indent=2) }}</pre></li>{% else %}<li>No unresolved queue checks recorded.</li>{% endfor %}</ul>{% endif %}
+</article>{% endblock %}

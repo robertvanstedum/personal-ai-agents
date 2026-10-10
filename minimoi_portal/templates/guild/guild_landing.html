@@ -173,26 +173,15 @@
   <p class="guild-tagline">Craft the work. Sharpen the craft.</p>
 </div>
 
+{% from 'guild/_build_card.html' import build_card %}
 <div class="guild-card-row">
-
-  <!-- Build -->
-  <a href="/guild/build/queue" class="guild-card">
-    <div class="card-tab">Build</div>
-    <div class="card-illustration">
-      <img src="/static/guild/guild-build.jpg" alt="Build — craftsmen at a workbench">
-    </div>
-    <div class="card-body">
-      <div class="card-kicker">Queue · Log · Roadmap · Docs</div>
-      <div class="card-desc">spec → build → ship</div>
-      <div class="card-cta">Queue →</div>
-    </div>
-  </a>
+{{ build_card() }}
 
   <!-- Operate -->
   <a href="/guild/operate" class="guild-card">
     <div class="card-tab">Operate</div>
     <div class="card-illustration">
-      <img src="/static/guild/guild-operate.jpg" alt="Operate — system health watercolor">
+      <img src="/static/guild/guild-operate.webp" alt="Operate — system health watercolor">
     </div>
     <div class="card-body">
       <div class="card-kicker">Monitor · Maintain</div>
@@ -205,7 +194,7 @@
   <a href="/guild/improve" class="guild-card">
     <div class="card-tab">Improve</div>
     <div class="card-illustration">
-      <img src="/static/guild/guild-improve.jpg" alt="Improve — notebook sketches">
+      <img src="/static/guild/guild-improve.webp" alt="Improve — notebook sketches">
     </div>
     <div class="card-body">
       <div class="card-kicker">Review · Analyze</div>
@@ -218,7 +207,7 @@
   <a href="/guild/experiment" class="guild-card">
     <div class="card-tab">Experiment</div>
     <div class="card-illustration">
-      <img src="/static/guild/guild-experiment.jpg" alt="Experiment — an alchemist at the bench">
+      <img src="/static/guild/guild-experiment.webp" alt="Experiment — an alchemist at the bench">
     </div>
     <div class="card-body">
       <div class="card-kicker">Ideas · Tinkering · Reference demos</div>

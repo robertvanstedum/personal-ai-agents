@@ -1,0 +1,122 @@
+{% extends 'guild_floor/_base.html' %}
+{#
+  Rooms (Guild 1.1 slice 4, spec §6; the v4 rooms look): group chat first,
+  on Records. Every call goes to Records through the dev bridge at
+  /app/records/api/ with Records' own login (its cookie, minimoi_room_poc);
+  this page never holds or sends a Records credential, and Guild's write
+  guard does not apply to Records calls: Records' own actor and grant checks
+  do. Drawn by js/rooms.js. No model call; no live presence is implied.
+#}
+{% block title %}Rooms · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/rooms.css') }}">{% endblock %}
+{% block main %}
+<div class="rm" data-rm data-bridge="{{ rooms_cfg.state }}">
+  <aside class="rm-list" data-rm-list-pane aria-labelledby="rm-list-h">
+    <div class="rm-list-head">
+      <h2 class="rm-list-h" id="rm-list-h">Rooms</h2>
+      <button type="button" class="rm-btn" data-rm-new>＋ New conversation</button>
+      <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Close the room list">✕</button>
+    </div>
+    <ol class="rm-rooms" data-rm-list></ol>
+
+  </aside>
+  <section class="rm-main" aria-labelledby="rm-title">
+    <div class="rm-art" data-room-art><img src="/static/guild/guild-workshop-team.webp" alt="Workshop team artwork" data-room-art-image>
+      <details><summary aria-label="Room picture settings" title="Room picture settings">⚙</summary><label>Picture on this device <select data-room-art-select><option value="theme">Theme artwork</option><option value="none">No picture</option></select></label><p data-room-art-status class="small">Personal photos load from your Media library.</p><a href="{{ urls.media }}">Manage owned photos</a></details>
+    </div>
+    <header class="rm-head">
+      <button type="button" class="rm-btn rm-list-open" data-rm-list-open aria-controls="rm-list-h" aria-label="Show the rooms">☰</button>
+      <h1 class="rm-title" id="rm-title" data-rm-title>Rooms</h1>
+      <span class="rm-state" data-rm-state hidden></span>
+      <button type="button" class="rm-btn" data-rm-panel-toggle aria-controls="rm-participants" aria-expanded="false">People &amp; details</button>
+    </header>
+    <div class="rm-banner" data-rm-off hidden role="status">
+      <strong>Rooms are not connected on this portal.</strong> They run on dev only, through Records; nothing here pretends to work.
+    </div>
+    <div class="rm-banner" data-rm-signin hidden role="status">
+      <strong>Sign in to Rooms.</strong> Rooms use their own Records sign-in, separate from mini-moi.
+      <a class="btn" href="{{ rooms_cfg.login }}" data-rm-signin-link>Sign in to Rooms</a>
+      <span class="small">Your draft is kept in this tab.</span>
+    </div>
+    <div class="rm-banner" data-rm-error hidden role="status"></div>
+    <form class="rm-act" data-rm-act hidden aria-label="Note for the record">
+      <label for="rm-act-note" data-rm-act-label>Note for the record</label>
+      <input id="rm-act-note" data-rm-act-note maxlength="2400" required>
+      <button type="submit" class="rm-btn" data-rm-act-confirm>Confirm</button>
+      <button type="button" class="btn-quiet" data-rm-act-cancel>Cancel</button>
+    </form>
+    <dialog class="rm-dialog" data-rm-invite-dialog aria-labelledby="rm-invite-h">
+      <h2 id="rm-invite-h">Invite to this meeting</h2>
+      <ul class="rm-cards" data-rm-cards></ul>
+      <p class="small rm-humans">Other people: coming with the invitation slice (A0).</p>
+      <p class="small" data-rm-invite-status role="status"></p>
+      <button type="button" class="rm-btn" data-rm-dialog-close>Close</button>
+    </dialog>
+    <dialog class="rm-dialog" data-rm-new-dialog aria-labelledby="rm-new-h">
+      <form data-rm-new-form method="dialog">
+        <h2 id="rm-new-h">New conversation</h2>
+        <label>Title <input name="title" data-rm-new-title maxlength="160" required></label>
+        <label>Purpose <textarea name="purpose" data-rm-new-purpose maxlength="2400" rows="2" required></textarea></label>
+        <fieldset><legend>Teammates</legend><div data-rm-new-cards></div></fieldset>
+        <p class="small">Master Craftsman facilitates: it answers messages addressed to nobody. The conversation is recorded from the start.</p>
+        <p class="small" data-rm-new-status role="status"></p>
+        <button type="submit" class="btn" data-rm-new-create>Start</button>
+        <button type="button" class="btn-quiet" data-rm-new-cancel>Cancel</button>
+      </form>
+    </dialog>
+    <div class="rm-take" data-rm-take hidden aria-label="Take a Chat note to this room">
+      <p class="rm-take-h">From Guild Chat · a kept, on-the-record note</p>
+      <blockquote class="rm-take-text" data-rm-take-text></blockquote>
+      <p class="small" data-rm-take-meta></p>
+      <button type="button" class="btn" data-rm-take-confirm hidden>Confirm on the record</button>
+      <button type="button" class="btn" data-rm-take-send>Share into this room</button>
+      <button type="button" class="btn-quiet" data-rm-take-cancel>Cancel</button>
+      <p class="small" data-rm-take-result role="status" hidden></p>
+    </div>
+    <ol class="rm-thread" data-rm-thread role="log" aria-live="polite" aria-label="Room conversation"></ol>
+    <div class="rm-turns" data-rm-turns role="status" aria-live="polite" hidden></div>
+    <div class="rm-closed" data-rm-closed hidden>
+      <span>This conversation is closed; its record is kept.</span>
+      <button type="button" class="btn" data-rm-continue>Continue conversation</button>
+    </div>
+    <div class="rm-to" data-rm-to hidden aria-label="Send to"></div>
+    <ul class="rm-mentions" data-rm-mentions hidden role="listbox" aria-label="Mention a participant"></ul>
+    <form class="rm-composer" data-rm-composer aria-label="Write to the room">
+      <label class="rm-attach" title="Attach a file (up to 2,000,000 bytes)">📎<span class="visually-hidden">Attach a file</span>
+        <input type="file" class="visually-hidden" data-rm-attach></label>
+      <label class="visually-hidden" for="rm-input">Message</label>
+      <textarea id="rm-input" class="rm-input" data-rm-input rows="1" maxlength="16000" placeholder="Message the room…"></textarea>
+      <button type="button" class="rm-mic" data-rm-mic disabled title="Dictation comes in a later slice">🎙<span class="rm-mic-label">dictation · later</span></button>
+      <button type="submit" class="btn rm-send" data-rm-send>Send</button>
+      <p class="rm-status small" data-rm-status role="status" hidden></p>
+    </form>
+  </section>
+  <aside class="rm-participants" id="rm-participants" aria-label="Room people and controls">
+    <div class="rm-files-head"><h2 class="rm-files-h">People &amp; details</h2><button type="button" class="rm-btn" data-rm-panel-close>Close</button></div>
+      <span class="rm-people" data-rm-people aria-label="Participants"></span>
+      <span class="rm-controls" data-rm-controls hidden>
+        <button type="button" class="rm-btn" data-rm-invite aria-label="Invite participants" title="Invite participants">＋</button>
+        <details class="rm-session-menu"><summary class="rm-btn" aria-label="Conversation controls" title="Conversation controls">⋯</summary><div>
+        <button type="button" class="rm-btn" data-rm-pause>Pause</button>
+        <button type="button" class="rm-btn" data-rm-end>End</button>
+        </div></details>
+        <button type="button" class="rm-btn rm-stop" data-rm-stop title="Stop all replies now and pause the meeting">Stop and pause room</button>
+      </span>
+      <button type="button" class="rm-btn" data-rm-files-toggle aria-expanded="false" aria-controls="rm-files" disabled>Files</button>
+      <details class="rm-more" data-rm-details>
+        <summary class="rm-btn" aria-label="Room details">⋯</summary>
+        <div class="rm-more-body" data-rm-details-body></div>
+      </details>
+  </aside>
+  <aside class="rm-files" id="rm-files" data-rm-files hidden aria-label="Files in this room">
+    <div class="rm-files-head">
+      <button type="button" class="rm-btn" data-rm-files-back hidden>← Back to files</button>
+      <h2 class="rm-files-h" data-rm-files-h>Files</h2>
+      <button type="button" class="rm-btn" data-rm-files-close>Close</button>
+    </div>
+    <div data-rm-files-body></div>
+    <p class="small rm-limit">Files up to 2,000,000 bytes (about 2 MB) each; a larger file needs a managed path, which is later work. Files are kept as shared: nothing is cleaned up automatically.</p>
+  </aside>
+</div>
+<script type="application/json" id="rooms-data">{{ rooms_cfg|tojson }}</script>
+{% endblock %}

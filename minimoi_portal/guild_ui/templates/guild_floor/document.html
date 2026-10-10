@@ -1,0 +1,11 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}{{ reference or 'Spec missing' }}{% endblock %}
+{% block main %}<article class="gu-reference">
+<a href="{{ urls.build_log }}">← Build Log</a> · <a href="{{ urls.docs }}">GitHub docs ↗</a>
+{% if source is none %}<h1>Document unavailable</h1>{% endif %}
+{% if source is not none %}<p class="small">{{ reference }} · {% if git_date %}Last committed {{ git_date }}{% else %}Git date unavailable{% endif %} · review status unknown</p>
+{% if 'archive' in reference|lower %}<p role="note">Archived copy. Check the linked repository for a current replacement.</p>{% endif %}
+<div class="gu-doc-actions">{% if github_url %}<a href="{{ github_url }}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a>{% endif %}<a href="{{ url_for('.document',ref=reference,download='md') }}">Download Markdown</a><button type="button" class="btn-quiet" data-document-print>Print / PDF</button></div>
+<div class="gu-reader">{{ rendered|safe }}</div>
+{% else %}<p role="status">{{ 'Queue unavailable; the spec cannot be resolved.' if unavailable else 'Spec missing or unavailable in this deployment. No similar filename has been substituted.' }}</p>{% endif %}
+</article>{% endblock %}

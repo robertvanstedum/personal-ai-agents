@@ -119,6 +119,22 @@ gateway_keys_on() { [[ -f "$STAGING_KEYS_FILE" && "$(tr -d '[:space:]' < "$STAGI
 STAGING_COS_ENV="$STAGING_ROOT/cos.env"
 STAGING_COS_KEY_FILE="$STAGING_ROOT/state/cos.key"
 STAGING_COS_KEY_OVERLAY="docker-compose.staging-cos-key.yml"
+# The CoS turn log (Spec 160 path (a)): cos-scheduler's data/cos-turns mount
+# and COS_TURNS_DIR. Opt-in: included only while state/cos.turns says "on"
+# (cos.sh turns on|off), so it switches off without a rebuild.
+STAGING_COS_TURNS_OVERLAY="docker-compose.staging-cos-turns.yml"
+STAGING_COS_TURNS_FILE="$STAGING_ROOT/state/cos.turns"
+cos_turns_on() { [[ -f "$STAGING_COS_TURNS_FILE" && "$(tr -d '[:space:]' < "$STAGING_COS_TURNS_FILE")" == on ]]; }
+# Portal-only memory observability switches (#292). No production effect.
+if [[ -z "${STAGING_PORTAL_RELEASE_DIR:-}" && -f "$STAGING_ROOT/state/portal.release" ]]; then
+  STAGING_PORTAL_RELEASE_DIR=$(cat "$STAGING_ROOT/state/portal.release")
+fi
+STAGING_PORTAL_RELEASE_DIR="${STAGING_PORTAL_RELEASE_DIR:-$RELEASE_DIR}"
+STAGING_JOBS_FILE="$STAGING_ROOT/state/jobs.status"
+STAGING_MC_CAPTURE_FILE="$STAGING_ROOT/state/mc.capture"
+jobs_status_on() { [[ -f "$STAGING_JOBS_FILE" && "$(tr -d '[:space:]' < "$STAGING_JOBS_FILE")" == on ]]; }
+mc_capture_on() { [[ -f "$STAGING_MC_CAPTURE_FILE" && "$(tr -d '[:space:]' < "$STAGING_MC_CAPTURE_FILE")" == on ]]; }
+
 cos_key_on() { [[ -f "$STAGING_COS_KEY_FILE" && "$(tr -d '[:space:]' < "$STAGING_COS_KEY_FILE")" == on ]]; }
 
 # The portal's Master Craftsman switches (stage B), from state files; both
@@ -168,6 +184,7 @@ STAGING_VOLUMES=(minimoi-staging-postgres-data minimoi-staging-cos-agent-a-state
 
 file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
 die() { echo "staging: $*" >&2; exit 1; }
+[[ "$STAGING_PORTAL_RELEASE_DIR" == /* ]] || die "portal release directory must be absolute"
 note() { echo "staging: $*"; }
 
 require_absolute_root() {
@@ -264,6 +281,24 @@ staging_compose() {
       || die "state/cos.key is on but $STAGING_COS_ENV is missing or not mode 600 (cos.sh key)"
     extra+=(--env-file "$STAGING_COS_ENV")
     files+=(-f "$RELEASE_DIR/$STAGING_COS_KEY_OVERLAY")
+  fi
+  # The CoS turn log (Spec 160 path (a)): only while state/cos.turns says "on"
+  # (cos.sh turns on); build.sh makes the folder.
+  if cos_turns_on; then
+    [[ -f "$RELEASE_DIR/$STAGING_COS_TURNS_OVERLAY" ]] \
+      || die "state/cos.turns is on but the pinned release has no $STAGING_COS_TURNS_OVERLAY"
+    files+=(-f "$RELEASE_DIR/$STAGING_COS_TURNS_OVERLAY")
+  fi
+  # Fail closed when the pinned release does not yet contain an overlay.
+  if jobs_status_on; then
+    [[ -f "$STAGING_PORTAL_RELEASE_DIR/docker-compose.staging-jobs.yml" ]] || die "jobs.status is on but the pinned release lacks its overlay"
+    mkdir -p "$STAGING_ROOT/data/jobs"; chmod 700 "$STAGING_ROOT/data/jobs"
+    files+=(-f "$STAGING_PORTAL_RELEASE_DIR/docker-compose.staging-jobs.yml")
+  fi
+  if mc_capture_on; then
+    [[ -f "$STAGING_PORTAL_RELEASE_DIR/docker-compose.staging-mc-turns.yml" ]] || die "mc.capture is on but the pinned release lacks its overlay"
+    mkdir -p "$STAGING_ROOT/data/mc-turns"; chmod 700 "$STAGING_ROOT/data/mc-turns"
+    files+=(-f "$STAGING_PORTAL_RELEASE_DIR/docker-compose.staging-mc-turns.yml")
   fi
   mode=$(mc_mode)
   turns=$(mc_turns)

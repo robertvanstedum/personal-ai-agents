@@ -1,0 +1,22 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Workshop{% if topic %} · {{ topic.title }}{% endif %} · Guild{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/workshop_topic.css') }}">{% endblock %}
+{#
+  The topic Workshop (W1). Everything on this page is read through the topic API by js/workshop_topic.js; the server renders only
+  the frame, the topic's title and an honest no-script message. Chat | Cards | Split drives the page's own Master Craftsman
+  panel (the same conversation as on the Chat page): Split docks it beside the cards, Chat fills the page, Cards folds it away.
+  Host diagnostics (disk, laptop, agents) are under Operate → Build host.
+#}
+{% block main %}
+<div class="wt" data-wt data-topic="{{ topic.id if topic else '' }}">
+  <header class="wt-top" data-wt-top>
+    <h1 class="wt-title" data-wt-title>{{ topic.title if topic else 'Workshop' }}</h1>
+    <div class="wt-tools" data-wt-tools role="group" aria-label="Topic tools"></div>
+    <div class="wt-views" data-wt-views role="group" aria-label="View of this topic"></div>
+  </header>
+  <noscript><p class="wt-note">The Workshop needs JavaScript to show your topics. Host diagnostics are under Operate → Build host.</p></noscript>
+  {% if topic_notice %}<p class="wt-note" role="status" data-wt-notice>{{ topic_notice }}</p>{% endif %}
+  <div data-wt-banners></div>
+  <div class="wt-body" data-wt-body aria-live="polite"><p class="wt-note">Loading the topic…</p></div>
+</div>
+{% endblock %}

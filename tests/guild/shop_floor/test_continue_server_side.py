@@ -39,8 +39,11 @@ def test_continue_round_trips_across_two_clients(floored):
     assert seen["continue"]["ref"] == "12" and seen["text"] == "#12 Floor API"
     floor = phone.get(f"{API}/floor", headers={"User-Agent": PHONE_UA}).get_json()["continue"]
     assert floor["state"] == "ok" and floor["target"]["href"] == "/guild-next/guild/build/items/12"
+    # The chat no longer shows "Last opened" (Build refinement, 5 Oct): Continue lives on the wall and the queue.
     page = phone.get("/guild-next/guild/build", headers={"User-Agent": PHONE_UA}).get_data(as_text=True)
-    assert 'href="/guild-next/guild/build/items/12" data-continue-link>#12 Floor API</a>' in page
+    assert "data-continue-link" not in page and "Last opened" not in page
+    wall = phone.get("/guild-next/guild/build/bench", headers={"User-Agent": PHONE_UA}).get_data(as_text=True)
+    assert 'href="/guild-next/guild/build/items/12" data-continue-link>#12 Floor API</a>' in wall
     queue_page = phone.get("/guild-next/guild/build/queue", headers={"User-Agent": PHONE_UA}).get_data(as_text=True)
     assert 'class="ps-continue small">Continue: ' in queue_page and "#12 Floor API" in queue_page
 
@@ -105,5 +108,7 @@ def test_continue_unavailable_is_said_not_blank(load_portal):
     body = client.get(f"{API}/continue").get_json()
     assert body["available"] is False and body["continue"] is None
     assert body["text"] == "Continue unavailable — treat as unknown"
-    page = client.get("/guild-next/guild/build").get_data(as_text=True)
-    assert "Continue unavailable — treat as unknown" in page and "Nothing to continue" not in page
+    wall = client.get("/guild-next/guild/build/bench").get_data(as_text=True)
+    assert "Continue unavailable — treat as unknown" in wall and "Nothing to continue" not in wall
+    page = client.get("/guild-next/guild/build").get_data(as_text=True)      # the chat shows no Continue line at all
+    assert "Nothing to continue" not in page and "Last opened" not in page

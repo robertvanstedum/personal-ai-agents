@@ -1,0 +1,75 @@
+/* The Workshop (Guild 1.1 slice 5), after the v4 workshop look: a dark
+   header with the ops strip (every figure with its source and freshness, or
+   "not measured"), light job-state cards from the workshop record, then the
+   Now, Needs you and Budget cards. Colours come from tokens.css. */
+body.gu[data-page="operate_build_host"] .gu-main { padding-top: var(--gu-s3); }
+.ws-top { position: relative; overflow: hidden; border-radius: 18px; padding: 20px 24px 16px; margin-bottom: var(--gu-s4); color: var(--gu-ws-top-ink);
+  background: radial-gradient(ellipse at 18% 0%, var(--gu-ws-top-glow), transparent 55%), linear-gradient(160deg, var(--gu-ws-top-a), var(--gu-ws-top-b) 60%, var(--gu-ws-top-c)); }
+.ws-art { position: absolute; right: 0; top: 0; bottom: 0; width: 34%; background: url('/static/guild/guild-operate.webp') 50% 40% / cover no-repeat; opacity: 0.16; mix-blend-mode: luminosity; -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%); mask-image: linear-gradient(90deg, transparent, #000 70%); pointer-events: none; }
+.ws-top > * { position: relative; }
+.ws-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ws-title { font: 400 30px/1.15 var(--gu-font-serif); color: var(--gu-ws-top-ink); }
+.ws-target { font-size: 13px; padding: 3px 11px; border-radius: var(--gu-radius-pill); border: 1px solid var(--gu-ws-chip-line); color: var(--gu-ws-top-muted); }
+.ws-sub { font-size: 12.5px; color: var(--gu-ws-top-muted); margin-top: 6px; }
+.ws-status { margin-top: 10px; }
+.ws-status > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.ws-status > summary::-webkit-details-marker { display: none; }
+.sx { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 11px; border-radius: var(--gu-radius-pill); background: var(--gu-ws-chip-bg); border: 1px solid transparent; color: var(--gu-ws-top-ink); }
+.sx::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.sx[data-state="measured"] { color: var(--gu-ws-ok); }
+.sx[data-state="stale"] { color: var(--gu-ws-warn); }
+.sx[data-state="unknown"], .sx[data-state="not_measured"] { color: var(--gu-ws-unk); border: 1px dashed var(--gu-ws-chip-line); background: transparent; }
+.sx[data-state="unknown"]::before, .sx[data-state="not_measured"]::before { content: "?"; width: auto; height: auto; background: none; font-weight: 700; }
+.sx-at { color: var(--gu-ws-top-muted); }
+.sdet { font-size: 12.5px; color: var(--gu-ws-top-muted); margin-left: auto; }
+.ws-table-wrap { overflow-x: auto; margin-top: 10px; }
+.ws-table { width: 100%; border-collapse: collapse; font-size: 13px; color: var(--gu-ws-top-ink); }
+.ws-table th, .ws-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--gu-ws-chip-line); vertical-align: top; }
+.ws-table thead th { font: 700 11px var(--gu-font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--gu-ws-top-muted); }
+.ws-table tr[data-state="not_measured"] td, .ws-table tr[data-state="unknown"] td { color: var(--gu-ws-unk); }
+.ws-table tr[data-state="stale"] td { color: var(--gu-ws-warn); font-style: italic; }
+.ws-snote { font-size: 12px; color: var(--gu-ws-top-muted); margin-top: 6px; }
+
+.ws-jobs { margin-bottom: var(--gu-s4); }
+.ws-jobs-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: var(--gu-s2); }
+.ws-jobs-h { font: 400 22px var(--gu-font-serif); }
+.ws-na { font: inherit; font-size: 12.5px; padding: 3px 11px; min-height: 28px; border-radius: var(--gu-radius-pill); border: 1px dashed var(--gu-border-strong); background: transparent; color: var(--gu-text-muted); cursor: not-allowed; }
+.ws-jobs-head .ws-na { margin-left: auto; }
+.ws-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--gu-s3); }
+.ws-job { background: var(--gu-zone-conv); border: 1px solid var(--gu-zone-edge); border-radius: 12px; padding: var(--gu-s3) var(--gu-s4); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ws-jh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ws-sp { flex: 1 1 auto; }
+.ws-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 1px 9px; border-radius: var(--gu-radius-pill); background: var(--gu-ws-pill-run-bg); color: var(--gu-ws-pill-run-ink); }
+.ws-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ws-job[data-state="needs you"] .ws-pill[data-ws-pill], .ws-job[data-state="in review"] .ws-pill[data-ws-pill] { background: var(--gu-ws-pill-need-bg); color: var(--gu-ws-pill-need-ink); }
+.ws-job[data-state="blocked"] .ws-pill[data-ws-pill] { background: var(--gu-mark-blocker-bg); color: var(--gu-mark-blocker-ink); }
+.ws-job[data-state="completed"] .ws-pill[data-ws-pill] { background: var(--gu-ws-pill-done-bg); color: var(--gu-ws-pill-done-ink); }
+.ws-job[data-state="queued"] .ws-pill[data-ws-pill] { background: transparent; color: var(--gu-text-muted); border: 1px dashed var(--gu-border-strong); }
+.ws-job[data-state="stale"] .ws-pill[data-ws-pill], .ws-job[data-state="unknown"] .ws-pill[data-ws-pill] { background: transparent; color: var(--gu-unknown-ink); border: 1px dashed var(--gu-unknown-border); }
+.ws-jobs[data-stale="true"] .ws-job, .ws-job[data-state="stale"] { border-style: dashed; }
+.ws-pill[data-state="stale"] { background: transparent; color: var(--gu-unknown-ink); border: 1px dashed var(--gu-unknown-border); }
+.ws-ref { font: 600 13px var(--gu-font-mono); color: var(--gu-accent); text-decoration: none; overflow-wrap: anywhere; }
+.ws-job-title { font: 400 18px/1.3 var(--gu-font-serif); }
+.ws-who { font-size: 12.5px; color: var(--gu-text-muted); }
+.ws-ev { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--gu-ws-ev-bg); color: var(--gu-ws-ev-ink); font: 12.5px/1.5 var(--gu-font-mono); display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.ws-jf { font-size: 12px; color: var(--gu-text-muted); }
+.ws-ja { display: flex; flex-wrap: wrap; gap: 6px; }
+.ws-controls-note { margin-top: var(--gu-s2); }
+body.gu[data-page="operate_build_host"] .ws-grid .card { background: var(--gu-zone-conv); border-radius: 12px; }
+
+@media (max-width: 640px) {
+  .ws-top { padding: 16px 14px 12px; border-radius: 14px; }
+  .ws-art { display: none; }
+  .ws-title { font-size: 24px; }
+  .ws-cards { grid-template-columns: minmax(0, 1fr); }
+  .ws-jobs-head .ws-na { margin-left: 0; }
+  .ws-na { min-height: var(--gu-target-phone); }
+  .sdet { margin-left: 0; }
+}
+
+.ws-agents { grid-column:1 / -1; }
+.ws-agent-table-wrap { overflow-x:auto; }
+.ws-agent-table { width:100%; border-collapse:collapse; font-size:var(--gu-size-sm); }
+.ws-agent-table th { text-align:left; color:var(--gu-text-muted); font-size:var(--gu-size-xs); text-transform:uppercase; letter-spacing:.06em; }
+.ws-agent-table th, .ws-agent-table td { padding:10px 12px; border-bottom:1px solid var(--gu-border); }
+.ws-agents summary { cursor:pointer; margin-top:10px; }

@@ -50,6 +50,8 @@ def test_package_has_no_fixture_scenario_or_prototype_only_file():
 def test_no_package_file_mentions_sample_or_prototype_scenario_text():
     offenders = []
     for path in _package_files():
+        if path.suffix in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+            continue                                       # real screenshots (static/prototypes/); images are not text
         text = path.read_text(encoding="utf-8")
         for match in FORBIDDEN_TEXT.finditer(text):
             offenders.append(f"{path.relative_to(REPO)}: {match.group(0)!r}")
@@ -120,7 +122,9 @@ def test_a_queue_item_with_a_prototype_like_id_is_shown_only_because_the_queue_h
 def test_real_floor_says_master_craftsman_is_off_and_filing_is_off(staging):
     body = staging.owner().get("/guild-next/guild/build").get_data(as_text=True)
     assert "Master Craftsman is off" in body
-    assert "Filing is off until the Record is specified (#235). Nothing is filed." in body
-    assert "Inviting agents needs Rooms; not connected" in body
+    # Invite is grey but clickable and says only "Coming soon." (5 Oct); the old filing and invite lines are retired.
+    assert 'data-mc-invite' in body and 'data-mc-invite disabled' not in body and "Filing is off" not in body
+    assert "'Coming soon.'" in (PACKAGE / "static" / "js" / "conversation.js").read_text()
     assert "Hold to talk" not in body
-    assert "Prototype" not in body and "Reset fixtures" not in body
+    # "Prototype Lab" is a navigation entry point (Guild 1.1 slice 1), not the prototype's sample data.
+    assert "Prototype" not in body.replace("Prototype Lab", "") and "Reset fixtures" not in body

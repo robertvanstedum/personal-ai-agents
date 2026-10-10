@@ -1,0 +1,37 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Runbooks · Operate · Guild{% endblock %}
+{% block main %}
+<h1 class="page-title">Runbooks</h1>
+<p>In design.</p>
+<details{% if wiki_item or wiki_query or request.args.get('new') or request.args.get('page') %} open{% endif %}>
+<summary>Existing runbooks</summary>
+<header class="wiki-heading"><h2 class="h2">Runbook library</h2><a class="btn-quiet" href="{{ url_for('.operate_view',view='runbooks',new='1') }}">+ Page</a></header>
+<p class="small">A working wiki for procedures, troubleshooting and operational notes. Edit here; no code deployment needed.</p>
+{% if wiki_error %}<p role="alert" class="unknown-line">{{ wiki_error }}</p>{% endif %}
+<div class="wiki-layout">
+<aside class="card">
+<form method="get"><label for="wiki-search">Search runbooks</label><input id="wiki-search" name="q" value="{{ wiki_query }}" maxlength="200" type="search"><button class="btn-quiet">Search</button></form>
+<ul class="rows">{% for row in wiki_rows %}<li class="row"><a href="{{ url_for('.operate_view',view='runbooks',page=row.page) }}">{{ row.title }}</a></li>{% else %}<li>{{ 'No matching pages.' if wiki_query else 'No pages yet. Add your first procedure or operational note.' }}</li>{% endfor %}</ul>
+</aside>
+<section class="card wiki-content">
+{% if request.args.get('new') or wiki_item %}
+{% if wiki_item %}
+<h2>{{ wiki_item.title }}</h2>
+<p class="small">Revision {{ wiki_item.revision }} · {{ wiki_item.author }} · <time>{{ wiki_item.updated }}</time></p>
+<article class="gu-doc-body">{{ wiki_html|safe }}</article>
+<details><summary>Revision history</summary><ul>{% for rev in wiki_history %}<li><a href="{{ url_for('.operate_view',view='runbooks',page=wiki_item.page,revision=rev.revision) }}">Revision {{ rev.revision }}</a> · {{ rev.author }} · {{ rev.updated }}</li>{% endfor %}</ul></details>
+{% endif %}
+{% if not wiki_item or wiki_item.revision == wiki_history[0].revision %}
+<details {% if not wiki_item %}open{% endif %}><summary>{{ 'Edit page' if wiki_item else 'New page' }}</summary>
+<form data-wiki-editor data-page="{{ wiki_item.page if wiki_item else '' }}" data-revision="{{ wiki_item.revision if wiki_item else 0 }}">
+<label for="wiki-title">Title</label><input id="wiki-title" name="title" required maxlength="160" value="{{ wiki_item.title if wiki_item else '' }}">
+<label for="wiki-body">Content · Markdown supported</label><textarea id="wiki-body" name="body" rows="16" maxlength="24000">{{ wiki_item.body if wiki_item else '' }}</textarea>
+<p class="small">Every save keeps the previous revision and records who made the change.</p>
+<button class="btn" type="submit">Save page</button><p role="status" data-wiki-result></p>
+{% if wiki_item %}<a href="{{ url_for('.operate_view',view='runbooks',page=wiki_item.page) }}" target="_blank" rel="noopener">Open latest in another tab</a>{% endif %}
+</form></details>
+{% else %}<p><a href="{{ url_for('.operate_view',view='runbooks',page=wiki_item.page) }}">Open latest revision to edit</a></p>{% endif %}
+{% else %}<h2>Keep daily operations current</h2><p>Choose a page or create one for an evolving procedure, recurring issue, recovery method or point of focus.</p>{% endif %}
+</section></div>
+</details>
+{% endblock %}

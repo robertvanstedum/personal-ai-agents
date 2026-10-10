@@ -43,18 +43,24 @@ def make(state: str, reason: str, res: SourceResult | None, detail=None) -> dict
 
 
 def queue_light(res: SourceResult) -> dict:
-    """Read failed → unknown; any blocked → red; unknown-status rows → yellow; else green."""
+    """Read failed → unknown; any blocked → red; any rework or unknown-status
+    rows → yellow (amber); else green (rework: Guild 1.1 slice 2, spec §4.2)."""
     if res.status != "ok":
         return make("unknown", "queue read failed", res, [f"treat as unknown — {res.error or 'read failed'}"])
     rows = res.data or []
     blocked = sum(1 for i in rows if i.get("status_known") and i.get("status") == "blocked")
     odd = sum(1 for i in rows if not i.get("status_known"))
     active = sum(1 for i in rows if i.get("status_known") and i.get("status") in ("spec_ready", "in_build"))
+    rework = sum(1 for i in rows if i.get("status_known") and i.get("status") == "rework")
     detail = [f"{active} active (Spec Ready + In Build)", f"{blocked} blocked", f"{len(rows)} rows in the queue file"]
+    if rework:
+        detail.insert(2, f"{rework} in rework")
     if odd:
         detail.append(f"{odd} unknown row{'s' if odd != 1 else ''} (status or fields unreadable)")
     if blocked:
         return make("red", f"{blocked} blocked · {active} active", res, detail)
+    if rework:
+        return make("yellow", f"{rework} in rework · {active} active", res, detail)
     if odd:
         return make("yellow", f"{odd} unknown row{'s' if odd != 1 else ''}", res, detail)
     return make("green", f"{active} active · 0 blocked", res, detail)

@@ -163,7 +163,7 @@ def test_a_broken_queue_is_unknown_never_zero_green_or_empty(staging, breakage):
     assert floor["queue"]["active"] is None and floor["queue"]["status"] == "unknown"
     assert floor["needs"]["status"] == "unknown" and floor["needs"]["total"] is None
     assert floor["needs"]["text"] == "Needs you · unknown — read failed"
-    assert "Queue unknown" in floor["briefing"]["text"] and "needs you unknown" in floor["briefing"]["text"]
+    assert "Build Log unknown" in floor["briefing"]["text"] and "needs you unknown" in floor["briefing"]["text"]
     api = client.get("/guild-next/api/v1/queue").get_json()
     assert api["status"] == "unknown" and api["items"] is None
     page = client.get("/guild-next/guild/build/queue").get_data(as_text=True)

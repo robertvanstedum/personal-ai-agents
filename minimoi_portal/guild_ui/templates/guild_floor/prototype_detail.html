@@ -1,0 +1,87 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}{{ p.title }} · Prototype Lab{% endblock %}
+{#
+  One prototype (Guild 1.1, 5 Oct): Look inside (real screenshots, in the order
+  you would meet them), What it shows, Run it (the prototype's own run book,
+  condensed; every command has a copy button), Documentation (on GitHub) and
+  Where it lives. It starts nothing and checks nothing. Drawn from guild_ui/lab_catalog.py.
+#}
+{% macro cmd(text) -%}
+<div class="proto-cmd"><code>{{ text }}</code><button type="button" class="proto-copy" data-copy="{{ text }}" aria-label="Copy: {{ text }}">copy</button></div>
+{%- endmacro %}
+{% block main %}
+<article class="gu-reference prototype-lab prototype-detail" data-proto-detail>
+<p class="proto-crumb"><a href="{{ urls.experiment }}">Prototype Lab</a> › {{ p.title }}</p>
+<header class="proto-hero">
+<span class="prototype-demo-icon" aria-hidden="true">{{ p.icon }}</span>
+<div class="proto-hero-text"><h1>{{ p.title }}</h1><p>{{ p.subtitle }} · {{ p.kind_label }} · {{ p.status }}</p></div>
+<div class="proto-hero-actions"><a class="btn proto-go" href="#run">Run it</a>
+{% if p.hosted_url %}<a class="btn-quiet" href="{{ p.hosted_url }}" target="_blank" rel="noopener" title="Opens the hosted copy in a new tab. This page does not check that it is running.">Open ↗</a>{% endif %}</div>
+</header>
+<p class="proto-lede">{{ p.description }}</p>
+<nav class="proto-tabs" aria-label="On this page">
+<a href="#look">Look inside</a><a href="#shows">What it shows</a><a href="#run">Run it</a><a href="#docs">Documentation</a><a href="#where">Where it lives</a>
+</nav>
+
+<section class="proto-sec" id="look" aria-labelledby="look-h">
+<h2 id="look-h">Look inside</h2>
+<p class="proto-muted">Real pictures of this prototype, in the order you would meet them. Open one to see it full size.</p>
+<h3 class="proto-sub">The presentation · {{ p.slides|length }} slides</h3>
+<div class="proto-shots">
+{% for s in p.slides %}
+<figure class="proto-shot"><a href="{{ url_for('.asset', filename=s.file) }}" target="_blank" rel="noopener"><img src="{{ url_for('.asset', filename=s.file) }}" alt="{{ s.title }}: {{ s.caption }}" width="1280" height="720" loading="lazy"></a>
+<figcaption><b><span class="proto-num">{{ loop.index }}</span>{{ s.title }}</b><span>{{ s.caption }}</span></figcaption></figure>
+{% endfor %}
+</div>
+<h3 class="proto-sub">The application</h3>
+{% if p.app_screens %}
+<div class="proto-shots">{% for s in p.app_screens %}<figure class="proto-shot"><a href="{{ url_for('.asset', filename=s.file) }}" target="_blank" rel="noopener"><img src="{{ url_for('.asset', filename=s.file) }}" alt="{{ s.title }}" loading="lazy"></a><figcaption><b>{{ s.title }}</b><span>{{ s.caption }}</span></figcaption></figure>{% endfor %}</div>
+{% else %}
+<p class="proto-muted">No screenshots of the running application have been captured yet. To see it, follow Run it below.</p>
+{% endif %}
+</section>
+
+<section class="proto-sec" id="shows" aria-labelledby="shows-h">
+<h2 id="shows-h">What it shows</h2>
+<ul class="proto-list-plain">{% for line in p.shows %}<li>{{ line }}</li>{% endfor %}</ul>
+</section>
+
+<section class="proto-sec" id="run" aria-labelledby="run-h">
+<h2 id="run-h">Run it</h2>
+<p class="proto-muted">Start it on this Mac with Docker. {{ p.run.where }} It is not left running: start it when you want it and stop it when you are done.</p>
+<p class="proto-caution" role="note"><b>Before you start.</b> {{ p.run.caution }}</p>
+<ol class="proto-steps">
+{% for st in p.run.steps %}
+<li><h3>{{ st.title }}</h3>
+{% if st.text %}<p>{{ st.text }}</p>{% endif %}
+{% for c in st.commands %}{{ cmd(c) }}{% endfor %}
+{% if st.urls %}
+<table class="proto-table"><thead><tr><th scope="col">What</th><th scope="col">Address</th></tr></thead><tbody>
+{% for label, url in p.run.urls %}<tr><td>{{ label }}</td><td><code>{{ url }}</code></td></tr>{% endfor %}
+</tbody></table>
+<p class="proto-muted">{{ p.run.urls_note }}</p>
+{% endif %}
+</li>
+{% endfor %}
+</ol>
+<h3 class="proto-sub">If something goes wrong</h3>
+<table class="proto-table"><thead><tr><th scope="col">You see</th><th scope="col">Do this</th></tr></thead><tbody>
+{% for what, fix in p.run.trouble %}<tr><td>{{ what }}</td><td>{{ fix }}</td></tr>{% endfor %}
+</tbody></table>
+<p class="proto-muted">The full run book, with the recovery matrix, SQL access and a fallback without Docker, is <a href="{{ blob(p.repo_path ~ '/HANDS_ON_RUNBOOK.md') }}" target="_blank" rel="noopener">HANDS_ON_RUNBOOK.md on GitHub ↗</a>.</p>
+</section>
+
+<section class="proto-sec" id="docs" aria-labelledby="docs-h">
+<h2 id="docs-h">Documentation</h2>
+<ul class="proto-docs">
+{% for title, path in p.docs %}<li><a href="{{ blob(path) }}" target="_blank" rel="noopener"><b>{{ title }}</b><span>{{ path.rsplit('/', 1)[-1] }} · GitHub ↗</span></a></li>{% endfor %}
+</ul>
+</section>
+
+<section class="proto-sec" id="where" aria-labelledby="where-h">
+<h2 id="where-h">Where it lives</h2>
+<p class="proto-path"><code>{{ p.repo_path }}</code><button type="button" class="proto-copy" data-copy="{{ p.repo_path }}" aria-label="Copy the repository path">copy</button> <a href="{{ tree(p.repo_path) }}" target="_blank" rel="noopener">Open on GitHub ↗</a></p>
+{% if p.hosted_url %}<p class="proto-muted">A hosted copy sits behind the portal sign-in at <code>{{ p.hosted_url }}</code>. This page does not check whether it is running; the run book above does not depend on it.</p>{% endif %}
+</section>
+</article>
+{% endblock %}

@@ -169,6 +169,11 @@ class Store:
                 raise ValueError("Owner access key does not match this database")
         from platform_access import PlatformAccess
         self.platform_access = PlatformAccess(self.connect)
+        # Rooms R1 (ROOMS_R1.md): new tables only; schema_version stays 5 so the
+        # previous image still starts on this database (data-preserving rollback).
+        from meetings import Meetings
+        self.meetings = Meetings(self)
+        self.platform_access.on_revoke = self.meetings.on_revoke
         with self.connect() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS disclosure_grants(
@@ -408,12 +413,18 @@ class Store:
         def action(db):
             if not db.execute("SELECT 1 FROM principals WHERE id=?",(target,)).fetchone():
                 raise Problem("Unknown participant",404)
+            from meetings import card
+            if role != "remove" and card(db,target) and not db.execute(
+                    "SELECT 1 FROM members WHERE room=? AND actor=?",(room,target)).fetchone():
+                # Rooms R1 review F6: a teammate joins only through Invite (and its proof gate).
+                raise Problem("Invite teammates from Rooms; this route changes roles only",409)
             if role == "remove":
                 db.execute("DELETE FROM members WHERE room=? AND actor=?",(room,target))
                 db.execute("UPDATE rooms SET moderator='robert' WHERE id=? AND moderator=?",(room,target))
             else:
                 db.execute("INSERT INTO members VALUES(?,?,?) ON CONFLICT(room,actor) DO UPDATE SET role=excluded.role",
                            (room,target,role))
+            self.meetings.on_membership(db,room,target,role)
             return self._event(db,room,actor,"membership",f"{target}: {role}",target)
         return self.mutate(actor,key,{"op":"membership","room":room,"payload":payload},action,room)
 
@@ -464,6 +475,7 @@ class Store:
                 raise Problem("Closed sessions cannot reopen; open a new session in the room",409)
             body = string(payload.get("checkpoint"),"Closing/resumption checkpoint",2400)
             db.execute("UPDATE rooms SET state=?,version=version+1 WHERE id=?",(state,room))
+            self.meetings.on_state(db,room,state,{"paused":"paused_by_owner","closed":"meeting_ended"}.get(state,"resumed"))
             event = self._event(db,room,actor,"state_change",f"{current['state']} → {state}. {body}")
             return {"state":state,"version":current["version"]+1,"event":event}
         return self.mutate(actor,key,{"op":"state","room":room,"payload":payload},action,room)
@@ -490,7 +502,8 @@ class Store:
         if target is not None: target=string(target,"Target",60)
         if reference is not None: reference=string(reference,"Reference",100)
         expected=payload.get("expected_context")
-        if expected is not None:
+        teammate_post="turn_id" in payload or "claim_id" in payload
+        if expected is not None and not teammate_post:
             if (not isinstance(expected,dict) or set(expected)!={"version","last_seq"}
                     or any(type(expected[k]) is not int or expected[k]<0 for k in expected)):
                 raise Problem("Invalid expected_context guard")
@@ -499,9 +512,12 @@ class Store:
             current=self.access(db,actor,room,True)
             if current["state"] != "active":
                 raise Problem("Session is not recording; resume before contributing",409)
-            if kind in {"decision","task","task_update"} and expected is None:
+            from platform_access import request_credential
+            from meetings import scope_of
+            turn=self.meetings.fence_append(db,actor,room,payload,scope_of(db,request_credential.get()))
+            if turn is None and kind in {"decision","task","task_update"} and expected is None:
                 raise Problem("Consequential contributions require expected_context",409)
-            if expected is not None:
+            if turn is None and expected is not None:
                 latest=db.execute("SELECT COALESCE(MAX(seq),0) FROM events WHERE room=?",(room,)).fetchone()[0]
                 if expected!={"version":current["version"],"last_seq":latest}:
                     raise Problem("Room changed while response was prepared; review current context before a new turn",409)
@@ -518,8 +534,16 @@ class Store:
             if kind == "task_update":
                 if not ref or ref["kind"] != "task": raise Problem("Reference a task")
                 if actor not in {"robert",ref["target"]}: raise Problem("Only the assignee or owner updates this task",403)
-            return self._event(db,room,actor,kind,body,target,reference,provenance,origin)
-        return self.mutate(actor,key,{"op":"append","room":room,"payload":payload},action,room)
+            event=self._event(db,room,actor,kind,body,target,reference,provenance,origin)
+            if turn is not None:
+                self.meetings.commit(db,turn,event,key,payload)       # the only commit of a turn (ROOMS_R1 §3.5)
+            elif actor=="robert" and kind=="message" and origin is None:
+                self.meetings.on_human_message(db,room,event,target)
+            return event
+        # The delivery envelope (claim id) changes on a recovery delivery; the
+        # content and turn do not, so a replay matches (ROOMS_R1 §3.7).
+        fingerprint={k:v for k,v in payload.items() if k!="claim_id"}
+        return self.mutate(actor,key,{"op":"append","room":room,"payload":fingerprint},action,room)
 
     def disclosure(self, actor, key, source, payload):
         self.owner(actor)
@@ -662,7 +686,11 @@ class Store:
         name=string(payload.get("name"),"Filename",200)
         if Path(name).name != name or "\\" in name or any(ord(c)<32 for c in name):
             raise Problem("Use a filename, not a path")
-        note=string(payload.get("source_note"),"Source/provenance note",2400)
+        # An optional human description (Guild 1.1 slice 4, spec §6): files may
+        # be shared untagged. Provenance never depends on it: the uploader
+        # actor, time, sha256 and the supporting event are kept automatically.
+        raw_note=payload.get("source_note")
+        note="" if raw_note is None or (isinstance(raw_note,str) and not raw_note.strip()) else string(raw_note,"Description",2400)
         provenance=context_class(payload,actor)
         try:
             encoded=payload.get("base64","")
@@ -683,7 +711,9 @@ class Store:
             record=dict(id=uid(),room=room,actor=actor,name=name,mime=mime,sha256=digest(content),created=now(),source_note=note,context_class=provenance)
             db.execute("INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                        (record["id"],room,actor,name,mime,record["sha256"],content,text_content,record["created"],note,provenance))
-            self._event(db,room,actor,"document",f"Filed source: {name}",reference=record["id"])
+            event=self._event(db,room,actor,"document",f"Filed source: {name}",reference=record["id"])
+            record["event_id"]=event["id"]
+            record["size"]=len(content)
             return record
         return self.mutate(actor,key,{"op":"document","room":room,"payload":payload},action,room)
 

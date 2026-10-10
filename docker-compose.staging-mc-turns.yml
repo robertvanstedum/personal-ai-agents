@@ -1,0 +1,20 @@
+# Staging-only: the Master Craftsman text-turn log (memory build, v0.5.1 §8).
+# Opt-in, the same way as docker-compose.staging-cos-turns.yml: a staging
+# script includes it only while a state file says "on" (nothing in
+# scripts/staging includes it yet); the folder $STAGING_ROOT/data/mc-turns
+# must exist (0700).
+#
+# The portal appends one mc_turn record per answered, live Master Craftsman
+# turn (plain and streamed) to data/mc-turns/YYYY/YYYY-MM-DD.jsonl
+# (minimoi_portal/guild_ui/mc/turn_capture.py), through the writer CoS shares
+# (core/agent_turns). Off the record writes nothing. Without MC_TURNS_DIR
+# nothing is written and the answer carries no history_saved. Not to be
+# confused with mc_turns.jsonl, MC's timing trace beside the build queue.
+# Production is unchanged (docker-compose.prod.yml never sets MC_TURNS_DIR).
+
+services:
+  portal:
+    environment:
+      - MC_TURNS_DIR=/app/data/mc-turns
+    volumes:
+      - ${MINIMOI_ROOT:?}/data/mc-turns:/app/data/mc-turns

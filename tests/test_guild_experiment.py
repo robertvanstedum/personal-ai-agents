@@ -133,7 +133,7 @@ def test_landing_has_four_cards_and_experiment_links_to_the_page(portal_client):
     assert html.count('class="guild-card"') == 4
     assert 'href="/guild/experiment" class="guild-card"' in html
     assert "Ideas · Tinkering · Reference demos" in html
-    assert "/static/guild/guild-experiment.jpg" in html
+    assert "/static/guild/guild-experiment.webp" in html   # the landing serves the webp artwork (the jpg stays as the static fallback)
     for href in ('href="/guild/build/queue"', 'href="/guild/operate"', 'href="/guild/improve"'):
         assert href in html, href
 
@@ -872,8 +872,10 @@ def test_the_three_original_landing_cards_are_still_present():
     """§9.2 guard, relaxed after G1 shipped: the landing keeps its three original
     cards and their links; wording may change deliberately (PR #197 renamed the
     Improve kicker), so the byte-identical comparison against origin/main is gone."""
-    current = (Path(__file__).resolve().parent.parent
-               / "minimoi_portal" / "templates" / "guild" / "guild_landing.html").read_text()
+    templates = Path(__file__).resolve().parent.parent / "minimoi_portal" / "templates" / "guild"
+    # The Build card is the shared partial (also on the Shop floor's rail); the landing includes it.
+    current = (templates / "guild_landing.html").read_text() + (templates / "_build_card.html").read_text()
+    assert "{{ build_card() }}" in current
     blocks = _card_blocks(current)
     assert set(blocks) == {"Build", "Operate", "Improve"}
     assert 'href="/guild/build/queue"' in blocks["Build"]
