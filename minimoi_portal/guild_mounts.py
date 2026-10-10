@@ -246,8 +246,18 @@ def is_production_activation(base_url, environ) -> bool:
             and flag_on(environ, NEXT_FLAG) and flag_on(environ, PRODUCTION_FLAG))
 
 
+CHAT_VAR = "MINIMOI_GUILD_CHAT"
+
+
 def production_environ(environ) -> dict:
-    return {k: v for k, v in dict(environ).items() if k not in PRODUCTION_HELD_OFF}
+    """The environment the production mount reads. Master Craftsman is removed; the only conversation partner that can be
+    switched on is the existing Chief of Staff, by the explicit MINIMOI_GUILD_CHAT=cos (it uses COS_BACKEND, the address the
+    portal already proxies /app/cos to). Anything else leaves the chat honestly "off"."""
+    env = {k: v for k, v in dict(environ).items() if k not in PRODUCTION_HELD_OFF}
+    if str(env.get(CHAT_VAR, "")).strip().lower() == "cos":
+        env["MINIMOI_GUILD_MC"] = "cos"
+        env["MINIMOI_GUILD_MC_TURNS"] = "1"
+    return env
 
 
 MC_LOGGER = "guild_ui.mc"

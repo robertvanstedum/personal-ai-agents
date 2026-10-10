@@ -133,3 +133,27 @@ def test_production_flag_off_leaves_no_new_ui_and_no_api(load_portal, monkeypatc
         assert owner.get(url).status_code == 404, url
     assert owner.get("/guild").status_code == 200
     assert "/guild-next" not in (owner.get("/guild").headers.get("Location") or "")
+
+def test_production_chat_is_off_unless_cos_is_explicitly_chosen(load_portal, monkeypatch):
+    monkeypatch.setenv("MINIMOI_GUILD_PRODUCTION", "1")
+    monkeypatch.setenv("COS_BACKEND", "http://cos-scheduler:8769")
+    for value in (None, "", "mc", "stub", "openclaw", "1"):
+        if value is None:
+            monkeypatch.delenv("MINIMOI_GUILD_CHAT", raising=False)
+        else:
+            monkeypatch.setenv("MINIMOI_GUILD_CHAT", value)
+        monkeypatch.setenv("MINIMOI_GUILD_MC", "stub")
+        portal = load_portal(next_flag="1", base_url=PROD)
+        services = portal.app.extensions["guild_ui_next"]["services"]
+        assert services.mc.kind == "off" and services.mc_turns is False
+
+
+def test_production_chat_cos_uses_the_chief_of_staff_over_the_existing_address(load_portal, monkeypatch):
+    monkeypatch.setenv("MINIMOI_GUILD_PRODUCTION", "1")
+    monkeypatch.setenv("COS_BACKEND", "http://cos-scheduler:8769")
+    monkeypatch.setenv("MINIMOI_GUILD_CHAT", "cos")
+    monkeypatch.setenv("MINIMOI_GUILD_MC", "openclaw")            # still ignored
+    portal = load_portal(next_flag="1", base_url=PROD)
+    services = portal.app.extensions["guild_ui_next"]["services"]
+    assert services.mc.kind == "cos" and services.mc.base_url == "http://cos-scheduler:8769"
+    assert services.mc_turns is True and services.mc_stream is False
