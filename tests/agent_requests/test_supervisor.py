@@ -352,13 +352,13 @@ def test_a_claude_session_is_marked_created_only_after_its_first_accepted_turn_s
         assert wait_for(lambda: subprocess.run(["pgrep", "-f", os.path.join(str(tmp_path), "claude.py")], capture_output=True, text=True).stdout.split(), 10)
         ident = json.load(open(os.path.join(root, "connection", "claude-code", "identity.json")))
         assert "created" not in ident                                                                      # started, but no turn yet: NOT created
-        cmd = subprocess.run(["ps", "-o", "command=", "-p", subprocess.run(["pgrep", "-f", os.path.join(str(tmp_path), "claude.py")], capture_output=True, text=True).stdout.split()[0]],
+        cmd = subprocess.run(["ps", "-ww", "-o", "command=", "-p", subprocess.run(["pgrep", "-f", os.path.join(str(tmp_path), "claude.py")], capture_output=True, text=True).stdout.split()[0]],
                              capture_output=True, text=True).stdout
         assert "--session-id" in cmd and "--resume" not in cmd                                             # the first start creates
         for pid in subprocess.run(["pgrep", "-f", os.path.join(str(tmp_path), "claude.py")], capture_output=True, text=True).stdout.split():
             os.kill(int(pid), signal.SIGKILL)                                                              # it dies before any turn
         assert wait_for(lambda: subprocess.run(["pgrep", "-f", os.path.join(str(tmp_path), "claude.py")], capture_output=True, text=True).stdout.split(), 15)
-        cmd2 = subprocess.run(["ps", "-o", "command=", "-p", subprocess.run(["pgrep", "-f", os.path.join(str(tmp_path), "claude.py")], capture_output=True, text=True).stdout.split()[0]],
+        cmd2 = subprocess.run(["ps", "-ww", "-o", "command=", "-p", subprocess.run(["pgrep", "-f", os.path.join(str(tmp_path), "claude.py")], capture_output=True, text=True).stdout.split()[0]],
                               capture_output=True, text=True).stdout
         assert "--session-id" in cmd2 and "--resume" not in cmd2                                           # still no turn: it creates again, never a doomed resume
         a = _ask(root, "a", "claude-code")
