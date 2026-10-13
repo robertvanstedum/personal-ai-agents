@@ -8,6 +8,7 @@ export class ConferVoiceController {
     bootstrapUrl,
     turnUrl,
     conversationId = "owner",
+    requestHeaders = null,
     onStateChange,
     onProvisionalTranscript,
     onUserTurn,
@@ -19,6 +20,8 @@ export class ConferVoiceController {
     this._bootstrapUrl = bootstrapUrl;
     this._turnUrl = turnUrl;
     this._conversationId = conversationId;
+    // Optional extra headers for the session request (a host page that guards its writes with a token). Unset: unchanged.
+    this._requestHeaders = requestHeaders;
     this._onStateChange = onStateChange || (() => {});
     this._onProvisionalTranscript = onProvisionalTranscript || (() => {});
     this._onUserTurn = onUserTurn || (() => {});
@@ -26,6 +29,8 @@ export class ConferVoiceController {
     this._onWarning = onWarning || (() => {});
     this._onError = onError || (() => {});
     this._provider = null;
+    this._startToken = 0;       // a stop() invalidates every start, bootstrap, connect or reconnect still awaiting
+    this._starting = false;
     this._adapter = null;
     this._partials = new Map();
     this._completedItems = new Set();
@@ -34,6 +39,8 @@ export class ConferVoiceController {
     this._reconnectAttempted = false;
     this._turnChain = Promise.resolve();
     this._audio = null;
+    this._audioUrl = null;
+    this._speechAbort = null;
     this._durationTimer = null;
     this._startedAt = null;
     this._warningMinutes = 13;
@@ -50,38 +57,56 @@ export class ConferVoiceController {
   }
 
   async start(provider = null) {
-    if (this._active) return;
-    const capabilities = await this.availableProviders();
-    const available = capabilities.providers || [];
-    const saved = localStorage.getItem(PREFERENCE_KEY);
-    this._provider = provider || (
-      available.some((item) => item.provider === saved)
-        ? saved
-        : capabilities.default_provider
-    );
-    if (!available.some((item) => item.provider === this._provider)) {
-      throw new Error(`Voice provider ${this._provider || "(none)"} is unavailable`);
-    }
-    localStorage.setItem(PREFERENCE_KEY, this._provider);
-    this._active = true;
-    this._startedAt = Date.now();
-    this._onStateChange("requesting", { provider: this._provider });
+    if (this._active || this._starting) return;
+    const token = ++this._startToken;
+    this._starting = true;
+    this._turnChain = Promise.resolve(); // a restarted session never waits on an abandoned turn
+    this._partials.clear();
+    this._completedItems.clear();
+    this._reconnectAttempted = false;                               // a new start gets its own one reconnect
     try {
-      await this._openSession();
-      this._startDurationGuard();
-    } catch (error) {
-      this._fail({ reason: "start_failed", detail: error.message });
-      throw error;
+      const capabilities = await this.availableProviders();
+      if (token !== this._startToken) return;                       // stopped while the capabilities call was out
+      const available = capabilities.providers || [];
+      const saved = localStorage.getItem(PREFERENCE_KEY);
+      this._provider = provider || (
+        available.some((item) => item.provider === saved)
+          ? saved
+          : capabilities.default_provider
+      );
+      if (!available.some((item) => item.provider === this._provider)) {
+        throw new Error(`Voice provider ${this._provider || "(none)"} is unavailable`);
+      }
+      localStorage.setItem(PREFERENCE_KEY, this._provider);
+      this._active = true;
+      this._startedAt = Date.now();
+      this._onStateChange("requesting", { provider: this._provider });
+      try {
+        await this._openSession(token);
+        if (token !== this._startToken) return;
+        this._startDurationGuard();
+      } catch (error) {
+        if (token !== this._startToken || error?.cancelled) return;   // a stop is not a failure
+        this._fail({ reason: "start_failed", detail: error.message });
+        throw error;
+      }
+    } finally {
+      if (token === this._startToken) this._starting = false;
     }
   }
 
-  async _openSession() {
+  async _openSession(token = this._startToken) {
+    const stale = () => token !== this._startToken || !this._active;
     const response = await fetch(this._bootstrapUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(typeof this._requestHeaders === "function" ? this._requestHeaders() : (this._requestHeaders || {})),
+      },
       body: JSON.stringify({ provider: this._provider }),
     });
     const credentials = await response.json().catch(() => ({}));
+    if (stale()) return;                                            // stopped while the session request was out: connect nothing
     if (!response.ok || !credentials.ok) {
       throw new Error(credentials.error || `Voice session failed (HTTP ${response.status})`);
     }
@@ -92,13 +117,10 @@ export class ConferVoiceController {
     this._maxMinutes = credentials.max_minutes || 15;
 
     const generation = ++this._generation;
-    // Confer is conversational: a short silence completes one user turn and
-    // sends it to the configured CoS reasoning backend.
-    // The provider owns conversation turn detection. COS receives the same
-    // completed-turn events as Gespräche/Conversas without running a second
-    // browser timer or allowing the speech model to generate the reply.
+    // Transcription-only gpt-live-transcribe session. Browser VAD commits
+    // on a pause; the speech provider cannot answer for CoS/MC.
     const adapter = new OpenAITranscriptionWebRTCAdapter({
-      autoCommitOnSilence: false,
+      autoCommitOnSilence: true,
     });
     this._adapter = adapter;
     adapter.on("connected", () => {
@@ -118,7 +140,13 @@ export class ConferVoiceController {
     adapter.on("fatal_error", (error) => {
       if (this._isCurrent(generation)) this._fail(error);
     });
-    await adapter.connect(credentials);
+    try {
+      await adapter.connect(credentials);
+    } catch (error) {
+      if (stale() || error?.cancelled) { adapter.end("cancelled"); return; }
+      throw error;
+    }
+    if (stale()) adapter.end("cancelled");                          // stopped while connecting: close the microphone and the connection
   }
 
   _isCurrent(generation) {
@@ -138,9 +166,14 @@ export class ConferVoiceController {
         // The same id follows this committed transcript through submission so
         // an explicit note cannot be duplicated by a correlated retry.
         const requestId = crypto.randomUUID();
+        const token = this._startToken;                              // the session this transcript belongs to
         this._turnChain = this._turnChain
-          .then(() => this._submitTurn(text, requestId))
+          .then(() => {
+            if (token !== this._startToken || !this._active) return undefined;     // stopped (or restarted) while this waited its turn: drop it
+            return this._submitTurn(text, requestId, token);
+          })
           .catch((error) => {
+            if (token !== this._startToken) return;                  // a failure of a session that has since ended is not reported into the new one
             this._onError({ reason: "turn_failed", detail: error.message });
             if (this._active) this._onStateChange("listening");
           });
@@ -157,8 +190,8 @@ export class ConferVoiceController {
     );
   }
 
-  async _submitTurn(text, requestId) {
-    if (!this._active) return;
+  async _submitTurn(text, requestId, token = this._startToken) {
+    if (!this._active || token !== this._startToken) return;
     this._onUserTurn(text);
     this._onStateChange("thinking");
     const response = await fetch(this._turnUrl, {
@@ -173,43 +206,75 @@ export class ConferVoiceController {
       }),
     });
     const body = await response.json().catch(() => ({}));
+    if (token !== this._startToken || !this._active) return;       // stopped or restarted while the answer was on its way: show and speak nothing
     if (!response.ok) {
       throw new Error(body.reply || body.error || `CoS turn failed (HTTP ${response.status})`);
     }
     this._onAssistantTurn(body.reply || "(empty reply)", body);
-    if (body.speech_url && this._active) {
-      await this._play(body.speech_url);
-    } else if (this._active) {
+    if (body.speech_url) {
+      await this._play(body.speech_url, token);
+    } else {
       this._onStateChange("listening");
     }
   }
 
-  async _play(url) {
+  async _play(url, token = this._startToken) {
+    if (!this._active || token !== this._startToken) return;
     this._cancelPlayback("superseded");
-    const audio = new Audio(url);
-    this._audio = audio;
-    this._onStateChange("speaking");
-    await audio.play();
-    await new Promise((resolve) => {
-      audio.addEventListener("ended", resolve, { once: true });
-      audio.addEventListener("error", resolve, { once: true });
-      audio.addEventListener("pause", resolve, { once: true });
-    });
-    if (this._audio === audio) this._audio = null;
-    if (this._active) this._onStateChange("listening");
+    const abort = new AbortController();
+    this._speechAbort = abort;
+    let audio = null, objectUrl = null;
+    try {
+      // Exactly one paid request. A refusal is JSON, so read its actual
+      // explanation before creating Audio; never retry the speech endpoint.
+      const response = await fetch(url, { credentials: "same-origin", signal: abort.signal });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(`${body.error || `The answer could not be read aloud (HTTP ${response.status}).`} The answer is in the chat.`);
+      }
+      const blob = await response.blob();
+      if (abort.signal.aborted || !this._active || token !== this._startToken) return;
+      objectUrl = URL.createObjectURL(blob);
+      this._audioUrl = objectUrl;
+      audio = new Audio(objectUrl);
+      this._audio = audio;
+      this._onStateChange("speaking");
+      await audio.play();
+      if (!this._active || token !== this._startToken || abort.signal.aborted) { audio.pause(); return; }
+      await new Promise((resolve, reject) => {
+        audio.addEventListener("ended", resolve, { once: true });
+        audio.addEventListener("pause", resolve, { once: true });
+        audio.addEventListener("error", () => reject(new Error("The answer could not be read aloud. It remains in the chat.")), { once: true });
+      });
+    } catch (error) {
+      if (!abort.signal.aborted && this._active && token === this._startToken) throw error;
+    } finally {
+      if (this._speechAbort === abort) this._speechAbort = null;
+      if (this._audio === audio) this._audio = null;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (this._audioUrl === objectUrl) this._audioUrl = null;
+      if (this._active && token === this._startToken) this._onStateChange("listening");
+    }
   }
 
   _cancelPlayback(reason) {
-    if (!this._audio) return;
-    this._audio.pause();
-    this._audio.removeAttribute("src");
-    this._audio.load();
-    this._audio = null;
-    this._onStateChange("interrupted", { reason });
+    const hadPlayback = Boolean(this._audio || this._speechAbort);
+    this._speechAbort?.abort();
+    this._speechAbort = null;
+    if (this._audio) {
+      this._audio.pause();
+      this._audio.removeAttribute("src");
+      this._audio.load();
+      this._audio = null;
+    }
+    if (this._audioUrl) URL.revokeObjectURL(this._audioUrl);
+    this._audioUrl = null;
+    if (hadPlayback) this._onStateChange("interrupted", { reason });
   }
 
   async _recover(error) {
     if (!this._active) return;
+    const token = this._startToken;                                  // bound to this session: a stop, or a stop and a new start, ends it
     if (this._reconnectAttempted) {
       this._fail(error);
       return;
@@ -219,14 +284,21 @@ export class ConferVoiceController {
     ++this._generation;
     this._adapter?.end("reconnect");
     try {
-      await this._openSession();
+      await this._openSession(token);
     } catch (reconnectError) {
+      if (token !== this._startToken || reconnectError?.cancelled) return;     // never fail a newly restarted session for the old one's reconnect
       this._fail({ reason: "reconnect_failed", detail: reconnectError.message });
     }
   }
 
   stop(reason = "user_ended") {
-    if (!this._active) return;
+    const pending = this._starting;
+    ++this._startToken;                                              // any start, bootstrap, connect or reconnect still awaiting is now stale
+    this._starting = false;
+    if (!this._active) {
+      if (pending) this._onStateChange("stopped", { reason });
+      return;
+    }
     this._active = false;
     clearInterval(this._durationTimer);
     ++this._generation;

@@ -22,7 +22,11 @@ _REQUEST_TIMEOUT_SECONDS = 10
 
 
 class OpenAIRealtimeError(Exception):
-    pass
+    """``status_code`` is the provider's HTTP status when it answered (None for a timeout or dropped connection); the voice budget releases an allowance only for a 4xx."""
+
+    def __init__(self, message: str = "", status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def _require_api_key() -> str:
@@ -67,75 +71,20 @@ def mint_confer_transcription_credential(
     transcription_prompt: str | None = None,
     transcription_keywords: list[str] | None = None,
 ) -> dict:
-    """Mint a server-VAD session for a chained agent conversation.
+    """Mint a transcription-only connection for a chained conversation.
 
-    The Realtime session performs turn detection and transcription only.
-    ``create_response=False`` prevents the speech provider from competing with
-    the platform-selected CoS runtime for reasoning or assistant output.
+    gpt-live-transcribe does not support server/semanticVAD. The browser uses
+    its existing local detector and explicitly commits each completed turn.
+    No realtime reasoning model, output audio or tools are present.
     """
-    api_key = _require_api_key()
-    prompt = transcription_prompt or ""
-    if transcription_keywords:
-        prompt = (
-            f"{prompt} Relevant terms: {', '.join(transcription_keywords)}."
-        ).strip()
-    transcription = {
-        "model": "gpt-4o-transcribe",
-        "language": transcription_language,
-    }
-    if prompt:
-        transcription["prompt"] = prompt
-    payload = {
-        "session": {
-            "type": "realtime",
-            "model": _DEFAULT_MODEL,
-            "instructions": (
-                "This is a chained transcription session. Do not create an "
-                "assistant response; the platform owns reasoning and speech."
-            ),
-            "audio": {
-                "output": {"voice": "marin"},
-                "input": {
-                    "turn_detection": conversation_turn_detection(
-                        "openai", create_response=False
-                    ),
-                    "transcription": transcription,
-                },
-            },
-        },
-    }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "OpenAI-Safety-Identifier": _hash_user_id(
-            user_id_for_safety_identifier
-        ),
-    }
-    try:
-        resp = requests.post(
-            _CLIENT_SECRETS_URL,
-            json=payload,
-            headers=headers,
-            timeout=_REQUEST_TIMEOUT_SECONDS,
-        )
-        resp.raise_for_status()
-    except requests.RequestException as error:
-        raise OpenAIRealtimeError(
-            f"OpenAI chained transcription credential request failed: {error}"
-        ) from error
-    data = resp.json()
-    client_secret = data.get("value")
-    if not client_secret:
-        raise OpenAIRealtimeError("OpenAI response missing client secret value")
-    return {
-        "provider": "openai",
-        "client_secret": client_secret,
-        "expires_at": data.get("expires_at"),
-        "model": _DEFAULT_MODEL,
-        "transcription_model": "gpt-4o-transcribe",
-        "transport": "webrtc",
-        "turn_detection": "server_vad",
-    }
+    return _mint_transcription_credential(
+        transcription_language=transcription_language,
+        user_id_for_safety_identifier=user_id_for_safety_identifier,
+        turn_detection=None,
+        transcription_delay="low",
+        transcription_prompt=transcription_prompt,
+        transcription_keywords=transcription_keywords,
+    )
 
 
 def _mint_transcription_credential(
@@ -185,7 +134,7 @@ def _mint_transcription_credential(
         )
         resp.raise_for_status()
     except requests.RequestException as e:
-        raise OpenAIRealtimeError(f"OpenAI transcription credential request failed: {e}")
+        raise OpenAIRealtimeError(f"OpenAI transcription credential request failed: {e}", getattr(getattr(e, "response", None), "status_code", None))
 
     data = resp.json()
     client_secret = data.get("value")
@@ -256,7 +205,7 @@ def mint_ephemeral_credential(
         )
         resp.raise_for_status()
     except requests.RequestException as e:
-        raise OpenAIRealtimeError(f"OpenAI ephemeral credential request failed: {e}")
+        raise OpenAIRealtimeError(f"OpenAI ephemeral credential request failed: {e}", getattr(getattr(e, "response", None), "status_code", None))
 
     data = resp.json()
     client_secret = data.get("value")

@@ -1,4 +1,4 @@
-"""The isolated alpha cannot enable incomplete shared voice, even in staging."""
+"""The release boundary can still disable shared voice, even with flags set."""
 import pytest
 
 from floor_helpers import load_portal, write_headers  # noqa: F401
@@ -15,6 +15,7 @@ from minimoi_portal.guild_ui import dictation, mc_voice, voice_release, feature_
     ("get", "/mc/voice/static/realtime-confer-controller.js"),
 ])
 def test_flags_cannot_enable_partial_voice_routes(turned, monkeypatch, method, path):
+    monkeypatch.setattr(voice_release, "SHARED_VOICE_READY", False)
     monkeypatch.setenv("MINIMOI_DICTATION", "1")
     monkeypatch.setenv("MINIMOI_MC_VOICE", "1")
     client = turned.owner()
@@ -25,6 +26,7 @@ def test_flags_cannot_enable_partial_voice_routes(turned, monkeypatch, method, p
 
 
 def test_flags_cannot_expose_controls_or_provider_origin(turned, monkeypatch):
+    monkeypatch.setattr(voice_release, "SHARED_VOICE_READY", False)
     monkeypatch.setenv("MINIMOI_DICTATION", "1")
     monkeypatch.setenv("MINIMOI_MC_VOICE", "1")
     response = turned.owner().get("/guild-next/guild/build")

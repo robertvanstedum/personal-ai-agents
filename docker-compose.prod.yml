@@ -171,6 +171,10 @@ services:
       - FLASK_ENV=production
       - PORT=5001
       - COS_BACKEND=http://cos-scheduler:8769
+      # Shared voice beta: on-record MC speech and insertion-only dictation.
+      - MINIMOI_GUILD_VOICE_PRODUCTION=1
+      - MINIMOI_MC_VOICE=1
+      - MINIMOI_DICTATION=1
       # IoT Connect reference demo runs as its own Compose project
       # (docker-compose.iotconnect.prod.yml, project "iotconnect"); the portal
       # reaches it over the shared edge network created below.
@@ -252,6 +256,8 @@ services:
     env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
     environment:
       - MINIMOI_ROLE=production
+      - MINIMOI_VOICE_BUDGET=1
+      - MINIMOI_LIMITS_DIR=/app/runtime/guild/limits
       - TELEGRAM_CHAT_ID=8379221702
       - PORT=8769
       - DISABLE_TELEGRAM_POLL=1
@@ -262,6 +268,8 @@ services:
       - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
       - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
     volumes:
+      # Same owner limit registry as the portal, including next-day limits.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/limits:/app/runtime/guild/limits:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json

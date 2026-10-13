@@ -58,6 +58,7 @@ EXPECTED_PROD_MOUNTS = [
     ("cos-bot", "/opt/minimoi/cos_memory.md", "/app/data/cos_memory.md"),
     ("cos-bot", "/opt/minimoi/data/model_gateway_receipts.jsonl", "/app/data/model_gateway_receipts.jsonl"),
     ("cos-bot", "/opt/minimoi/data/guild/cos_context.json", "/app/domains/guild/config/cos_context.json"),
+    ("cos-scheduler", "/opt/minimoi/data/guild/limits", "/app/runtime/guild/limits"),
     ("cos-scheduler", "/opt/minimoi/cos_memory.md", "/app/data/cos_memory.md"),
     ("cos-scheduler", "/opt/minimoi/data/model_gateway_receipts.jsonl", "/app/data/model_gateway_receipts.jsonl"),
     ("cos-scheduler", "/opt/minimoi/data/guild/cos_context.json", "/app/domains/guild/config/cos_context.json"),

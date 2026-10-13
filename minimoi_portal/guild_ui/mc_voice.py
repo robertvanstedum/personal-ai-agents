@@ -4,9 +4,9 @@ Chained, not a talking model: the browser streams the microphone straight to the
 account key); the final transcript becomes an ordinary kept note and an ordinary Master Craftsman turn (``POST /notes`` then ``/mc/turns``, in the page); and MC's own kept
 reply text is read aloud by the provider's text-to-speech from this server. So the words that are spoken are exactly the words MC wrote, and no model answers for him.
 
-Held off in this alpha until the shared implementation is included; then off unless ``MINIMOI_MC_VOICE=1``. What is checked up front is only that the shared transport lists the OpenAI provider (a static table): it does NOT prove a key is
+Off unless ``MINIMOI_MC_VOICE=1``. What is checked up front is only that the shared transport lists the OpenAI provider (a static table): it does NOT prove a key is
 configured or accepted. A missing or refused key shows when a session is started, as a bounded 502 with the provider's plain message and never a key; the page then says
-"Voice could not start" and typing carries on. Nothing here changes the provider, the key, the spending cap or the owner's records. It does not keep audio or any provider transcript; the page keeps only what the ordinary note path keeps. On the record only: Private is a bounded gap,
+"Voice could not start" and typing carries on. Every paid call first reserves a conservative allowance against the shared daily voice budget (core.realtime_voice.budget: $20 per America/Chicago day, durable, atomic, fail-closed; a reserved allowance, not a bill) and is refused with a plain message when the day's allowance is used up. Nothing here changes the provider, the key or the owner's records. It does not keep audio or any provider transcript; the page keeps only what the ordinary note path keeps. On the record only: Private is a bounded gap,
 not a policy (see the work record)."""
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ import os
 import re
 
 from flask import Response, jsonify, request, send_from_directory, stream_with_context
+
+from core.realtime_voice import budget
 
 from . import cfg, feature_enabled, voice_release
 from .security import check_write, json_error
@@ -23,7 +25,7 @@ SPEECH_MAX_CHARS = 3500                                # a longer reply is read 
 _NOTE_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
 _STATIC_OK = ("realtime-confer-controller.js", "adapters/openai-transcription-webrtc-adapter.js")
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "core", "realtime_voice", "static")
-# A hint to the transcriber about the setting. The enforcement that no provider answer exists is the session configuration (create_response=False), not this wording.
+# A hint to the transcriber about the setting. The enforcement that no provider answer exists is the transcription-only session type, not this wording.
 TRANSCRIBE_ONLY_PROMPT = "Transcribe the speaker's words for a conversation with Master Craftsman, the MiniMoi build partner. Keep names and product terms as spoken."
 SPEAKING_INSTRUCTIONS = (
     "Speak naturally and clearly as Master Craftsman, an AI build partner. "
@@ -60,7 +62,11 @@ def capabilities():
         mode, default, listed = _providers()
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
-    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed]})
+    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status()})
+
+
+def _budget_refusal(exc):
+    return jsonify({"ok": False, "error": exc.public, "budget": budget.public_status()}), exc.status
 
 
 def bootstrap():
@@ -78,18 +84,23 @@ def bootstrap():
     principal = _principal()
     if not check_voice_rate_limit(principal):
         return jsonify({"ok": False, "error": "rate limited"}), 429
+    guard = DurationGuard(warning_minutes=int(os.environ.get("VOICE_CONFER_WARNING_MINUTES", 13)), max_minutes=int(os.environ.get("VOICE_CONFER_MAX_MINUTES", 15)))
     try:
         _mode, _default, _listed = _providers()
-        # The shared chained helper: server turn detection and transcription only, create_response=False, so the speech provider can never produce an answer of its own.
-        credential = openai_realtime.mint_confer_transcription_credential(
-            transcription_language="en", user_id_for_safety_identifier=principal, transcription_prompt=TRANSCRIBE_ONLY_PROMPT)
+        # Reserve the provider-bound exposure (the provider's 60-minute maximum at the live-transcription rate) before the provider is contacted. The page's 15-minute timer is a browser timer, not a billing cap, and the browser talks to the provider directly, so there is no early-end rebate.
+        with budget.admit(kind="transcription_session", domain="mc", principal=principal, required=True,
+                          amount_micro=budget.session_allowance_micro()):
+            # The shared chained helper: transcription-only helper and browser turn commits, so the speech provider can never produce an answer of its own.
+            credential = openai_realtime.mint_confer_transcription_credential(
+                transcription_language="en", user_id_for_safety_identifier=principal, transcription_prompt=TRANSCRIBE_ONLY_PROMPT)
+    except budget.VoiceBudgetError as exc:
+        return _budget_refusal(exc)
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     except openai_realtime.OpenAIRealtimeError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
-    guard = DurationGuard(warning_minutes=int(os.environ.get("VOICE_CONFER_WARNING_MINUTES", 13)), max_minutes=int(os.environ.get("VOICE_CONFER_MAX_MINUTES", 15)))
     return jsonify({"ok": True, **credential, "warning_minutes": guard.warning_minutes, "max_minutes": guard.max_minutes})
 
 
@@ -131,8 +142,11 @@ def speech(note_request_id):
         return json_error("not_found", "There is no answer to read for that note.", 404)
     from core.realtime_voice.providers import openai_speech
     try:
-        upstream = openai_speech.create_speech_stream(
-            text=text, user_id=principal, instructions=SPEAKING_INSTRUCTIONS)
+        with budget.admit(kind="tts", domain="mc", principal=principal, required=True, amount_micro=budget.tts_allowance_micro(text)):
+            upstream = openai_speech.create_speech_stream(
+                text=text, user_id=principal, instructions=SPEAKING_INSTRUCTIONS)
+    except budget.VoiceBudgetError as exc:
+        return json_error("budget", exc.public, exc.status)
     except openai_speech.OpenAISpeechError:
         return json_error("unavailable", "The voice service could not read the answer just now.", 502)
 

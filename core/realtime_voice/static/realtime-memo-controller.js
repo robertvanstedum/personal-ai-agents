@@ -12,8 +12,10 @@ function joinText(left, right) {
 }
 
 export class RealtimeMemoController {
-  constructor({ bootstrapUrl, provider, initialText = "", onStateChange, onTranscript, onWarning, onError }) {
+  constructor({ bootstrapUrl, provider, initialText = "", requestHeaders = null, onStateChange, onTranscript, onWarning, onError }) {
     this._bootstrapUrl = bootstrapUrl;
+    // Optional extra headers for the session request (a host page that guards its writes with a token). Unset: unchanged.
+    this._requestHeaders = requestHeaders;
     this._provider = provider;
     this._initialText = initialText;
     this._onStateChange = onStateChange || (() => {});
@@ -26,6 +28,8 @@ export class RealtimeMemoController {
     this._adapter = null;
     this._generation = 0;
     this._stopping = false;
+    this._closed = false;           // set once the session has ended: nothing later may touch the text
+    this._startToken = 0;           // a stop() or _fail() invalidates every start, session request, connect or reconnect still awaiting
     this._reconnectAttempted = false;
     this._durationTimer = null;
     this._startedAt = null;
@@ -34,19 +38,31 @@ export class RealtimeMemoController {
   }
 
   async start() {
+    const token = ++this._startToken;
     this._startedAt = Date.now();
     this._onStateChange("requesting");
-    await this._openSession();
-    this._startDurationGuard();
+    try {
+      await this._openSession(token);
+      if (token !== this._startToken || this._stopping) return;       // stopped while connecting: no timer, nothing left running
+      this._startDurationGuard();
+    } catch (error) {
+      if (token !== this._startToken || error?.cancelled) return;     // a stop is not a failure
+      throw error;
+    }
   }
 
-  async _openSession() {
+  async _openSession(token = this._startToken) {
+    const stale = () => token !== this._startToken || this._stopping;
     const response = await fetch(this._bootstrapUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(typeof this._requestHeaders === "function" ? this._requestHeaders() : (this._requestHeaders || {})),
+      },
       body: JSON.stringify({ provider: this._provider }),
     });
     const credentials = await response.json().catch(() => ({}));
+    if (stale()) return;                                              // stopped while the session request was out: connect nothing
     if (!response.ok || !credentials.ok) {
       throw new Error(credentials.error || `Voice session failed (HTTP ${response.status})`);
     }
@@ -79,10 +95,17 @@ export class RealtimeMemoController {
     adapter.on("fatal_error", (error) => {
       if (generation === this._generation && !this._stopping) this._fail(error);
     });
-    await adapter.connect(credentials);
+    try {
+      await adapter.connect(credentials);
+    } catch (error) {
+      if (stale() || error?.cancelled) { adapter.end("cancelled"); return; }
+      throw error;
+    }
+    if (stale()) adapter.end("cancelled");                            // stopped while connecting: close the microphone and the connection
   }
 
   _addTranscript(event) {
+    if (this._closed) return;                                         // a late event of an ended session never changes the text
     if (event.provider_event_id) {
       if (this._seenEventIds.has(event.provider_event_id)) return;
       this._seenEventIds.add(event.provider_event_id);
@@ -117,15 +140,33 @@ export class RealtimeMemoController {
   async stop(reason = "user_ended") {
     if (this._stopping) return;
     this._stopping = true;
+    ++this._startToken;                                               // any start, session request, connect or reconnect still awaiting is now stale
     clearInterval(this._durationTimer);
     this._onStateChange("finalizing");
     try {
       await this._adapter?.finish();
     } finally {
+      const cancelled = this._closed;                                 // cancel() ran while this was waiting for the last words: it already closed everything
       this._adapter?.end(reason);
-      this._onTranscript(this.text(), { completed: true });
-      this._onStateChange("stopped", { reason });
+      if (!cancelled) {
+        this._onTranscript(this.text(), { completed: true });
+        this._closed = true;
+        this._onStateChange("stopped", { reason });
+      }
     }
+  }
+
+  // Ends the session at once, without committing or waiting for a final transcript: the microphone and connection close now and nothing more is written.
+  // (stop() is the owner finishing: it commits and waits for the last words. A host that must release the microphone immediately uses this.)
+  cancel(reason = "cancelled") {
+    if (this._closed) return;
+    this._stopping = true;
+    ++this._startToken;
+    ++this._generation;
+    clearInterval(this._durationTimer);
+    this._adapter?.end(reason);
+    this._closed = true;
+    this._onStateChange("stopped", { reason });
   }
 
   async _recover(error) {
@@ -134,13 +175,15 @@ export class RealtimeMemoController {
       return;
     }
     this._reconnectAttempted = true;
+    const token = this._startToken;                                   // bound to this session
     this._onStateChange("reconnecting");
     const oldAdapter = this._adapter;
     ++this._generation;
     oldAdapter?.end("reconnect");
     try {
-      await this._openSession();
+      await this._openSession(token);
     } catch (reconnectError) {
+      if (token !== this._startToken || reconnectError?.cancelled) return;
       this._fail({ reason: "reconnect_failed", detail: reconnectError.message });
     }
   }
@@ -148,15 +191,18 @@ export class RealtimeMemoController {
   _fail(error) {
     if (this._stopping) return;
     this._stopping = true;
+    ++this._startToken;
     clearInterval(this._durationTimer);
     ++this._generation;
     this._adapter?.end("error");
     this._onTranscript(this.text(), { completed: true });
+    this._closed = true;
     this._onStateChange("error", error);
     this._onError(error);
   }
 
   _startDurationGuard() {
+    clearInterval(this._durationTimer);
     let warned = false;
     this._durationTimer = setInterval(() => {
       const elapsedMinutes = (Date.now() - this._startedAt) / 60000;

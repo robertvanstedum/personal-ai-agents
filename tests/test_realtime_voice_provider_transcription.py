@@ -66,33 +66,17 @@ def test_openai_memo_uses_transcription_only_session_without_turn_detection():
     }
 
 
-def test_openai_confer_uses_server_vad_without_provider_response():
+def test_openai_confer_is_transcription_only_with_browser_turn_commits():
     with (
         patch("core.realtime_voice.providers.openai_realtime.get_secret", return_value="secret"),
-        patch(
-            "core.realtime_voice.providers.openai_realtime.requests.post",
-            return_value=_response({"value": "ephemeral", "expires_at": 123}),
-        ) as post,
+        patch("core.realtime_voice.providers.openai_realtime.requests.post", return_value=_response({"value":"ephemeral","expires_at":123})) as post,
     ):
-        openai_realtime.mint_confer_transcription_credential(
-            transcription_language="en",
-            user_id_for_safety_identifier="42",
-        )
-
-    session = post.call_args.kwargs["json"]["session"]
-    assert session["type"] == "realtime"
-    assert session["model"] == "gpt-realtime-2.1"
-    assert session["audio"]["input"]["turn_detection"] == {
-        "type": "server_vad",
-        "prefix_padding_ms": 300,
-        "silence_duration_ms": 1200,
-        "create_response": False,
-        "interrupt_response": False,
-    }
-    assert session["audio"]["input"]["transcription"] == {
-        "model": "gpt-4o-transcribe",
-        "language": "en",
-    }
+        result=openai_realtime.mint_confer_transcription_credential(transcription_language="en",user_id_for_safety_identifier="42")
+    # Access the requests mock explicitly; the credential has no speech model,
+    # output or tools and cannot produce an alternate assistant answer.
+    session=post.call_args.kwargs["json"]["session"]
+    assert session=={"type":"transcription","audio":{"input":{"turn_detection":None,"transcription":{"model":"gpt-live-transcribe","languages":["en"],"delay":"low"}}}}
+    assert result["model"]=="gpt-live-transcribe"
 
 
 def test_openai_confer_translates_secret_store_failure():

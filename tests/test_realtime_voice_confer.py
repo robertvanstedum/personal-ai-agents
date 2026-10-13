@@ -24,90 +24,64 @@ def test_confer_capabilities_require_identity():
     assert response.status_code == 401
 
 
-def test_confer_capabilities_advertise_realtime_provider_choices():
-    response = _client().get(
-        "/api/realtime-voice/confer/capabilities",
-        headers={"X-Minimoi-Auth-Id": "42"},
-    )
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data["mode"] == "agent_conversation"
-    assert data["default_provider"] == "openai"
-    assert [provider["provider"] for provider in data["providers"]] == ["openai", "xai"]
+@pytest.fixture(autouse=True)
+def voice_ledger(monkeypatch,tmp_path):
+    from core.realtime_voice import budget
+    monkeypatch.setenv(budget.ENV_DSN,f"sqlite:///{tmp_path / 'voice.db'}")
+    monkeypatch.setenv("MINIMOI_LIMITS_DIR",str(tmp_path / 'limits'))
+    monkeypatch.setattr(budget,"_default",None)
+    ledger=budget.default_budget()
+    ledger.ensure_schema()
+    return ledger
 
 
-def test_confer_bootstrap_mints_openai_realtime_conversation_credential():
-    with patch(
-        "core.realtime_voice.confer.openai_realtime.mint_ephemeral_credential",
-        return_value={
-            "provider": "openai",
-            "client_secret": "ephemeral",
-            "model": "gpt-realtime-2.1",
-        },
-    ) as mint:
-        response = _client().post(
-            "/api/realtime-voice/confer/bootstrap",
-            json={"provider": "openai"},
-            headers={"X-Minimoi-Auth-Id": "42"},
-        )
-    assert response.status_code == 200
-    assert response.get_json()["model"] == "gpt-realtime-2.1"
-    kwargs = mint.call_args.kwargs
-    assert kwargs["instructions"].startswith("COS voice for 42\n\nSession facts:")
-    assert "active voice provider is OpenAI (openai)" in kwargs["instructions"]
-    assert "completed transcript to Confer" in kwargs["instructions"]
-    assert kwargs["voice"] == "cedar"
-    assert kwargs["user_id_for_safety_identifier"] == "42"
-    assert kwargs["tool_choice"] == "auto"
-    assert [tool["name"] for tool in kwargs["tools"]] == [
-        "consult_cos_agent", "save_cos_note",
-    ]
-    note_tool = kwargs["tools"][1]
-    assert "Do not prefix it with 'User asked'" in (
-        note_tool["parameters"]["properties"]["note"]["description"]
-    )
+def test_confer_capabilities_offer_transcription_for_the_selected_agent():
+    response=_client().get("/api/realtime-voice/confer/capabilities",headers={"X-Minimoi-Auth-Id":"42"})
+    assert response.status_code==200
+    data=response.get_json()
+    assert data["mode"]=="agent_conversation" and data["default_provider"]=="openai"
+    assert [p["provider"] for p in data["providers"]]==["openai"]
+    assert data["budget"]["cap_usd"]==20.0
+
+
+def test_confer_bootstrap_transcribes_instead_of_minting_a_second_assistant(voice_ledger):
+    with patch("core.realtime_voice.confer.openai_realtime.mint_confer_transcription_credential",return_value={"provider":"openai","client_secret":"ephemeral","model":"gpt-live-transcribe"}) as mint:
+        response=_client().post("/api/realtime-voice/confer/bootstrap",json={"provider":"openai"},headers={"X-Minimoi-Auth-Id":"42"})
+    assert response.status_code==200 and response.get_json()["model"]=="gpt-live-transcribe"
+    assert mint.call_args.kwargs["user_id_for_safety_identifier"]=="42"
+    assert mint.call_args.kwargs["transcription_language"]=="en"
+    assert voice_ledger.status()["reserved_usd"]==1.02
 
 
 def test_confer_bootstrap_returns_configured_session_duration(monkeypatch):
-    monkeypatch.setenv("VOICE_CONFER_WARNING_MINUTES", "18")
-    monkeypatch.setenv("VOICE_CONFER_MAX_MINUTES", "20")
-    with patch(
-        "core.realtime_voice.confer.openai_realtime.mint_ephemeral_credential",
-        return_value={"provider": "openai", "client_secret": "ephemeral"},
-    ) as mint:
-        response = _client().post(
-            "/api/realtime-voice/confer/bootstrap",
-            json={"provider": "openai"},
-            headers={"X-Minimoi-Auth-Id": "42"},
-        )
-
-    assert response.status_code == 200
-    assert response.get_json()["max_minutes"] == 20
-    assert mint.call_count == 1
+    monkeypatch.setenv("VOICE_CONFER_WARNING_MINUTES","18")
+    monkeypatch.setenv("VOICE_CONFER_MAX_MINUTES","20")
+    with patch("core.realtime_voice.confer.openai_realtime.mint_confer_transcription_credential",return_value={"provider":"openai","client_secret":"ephemeral"}) as mint:
+        response=_client().post("/api/realtime-voice/confer/bootstrap",json={"provider":"openai"},headers={"X-Minimoi-Auth-Id":"42"})
+    assert response.status_code==200 and response.get_json()["max_minutes"]==20 and mint.call_count==1
 
 
-def test_confer_bootstrap_mints_xai_realtime_conversation_credential():
-    with patch(
-        "core.realtime_voice.confer.xai_voice.mint_ephemeral_credential",
-        return_value={
-            "provider": "xai",
-            "ephemeral_token": "ephemeral",
-            "model": "grok-voice-latest",
-            "session_config": {},
-        },
-    ) as mint:
-        response = _client().post(
-            "/api/realtime-voice/confer/bootstrap",
-            json={"provider": "xai"},
-            headers={"X-Minimoi-Auth-Id": "43"},
-        )
-    assert response.status_code == 200
-    assert response.get_json()["model"] == "grok-voice-latest"
-    assert mint.call_args.kwargs["instructions"].startswith(
-        "COS voice for 43\n\nSession facts:"
-    )
-    assert "active voice provider is Grok (xai)" in mint.call_args.kwargs["instructions"]
-    assert mint.call_args.kwargs["tool_choice"] == "auto"
+def test_confer_refuses_a_separate_speech_assistant_before_provider_contact():
+    with patch("core.realtime_voice.confer.openai_realtime.mint_confer_transcription_credential") as mint:
+        response=_client().post("/api/realtime-voice/confer/bootstrap",json={"provider":"xai"},headers={"X-Minimoi-Auth-Id":"42"})
+    assert response.status_code==400 and not mint.called
+
+
+def test_confer_requires_the_shared_allowance_and_refuses_before_provider(voice_ledger):
+    from core.realtime_voice import budget
+    voice_ledger.reserve(kind="tts",domain="mc",principal="owner",amount_micro=budget.micro(19.0))
+    with patch("core.realtime_voice.confer.openai_realtime.mint_confer_transcription_credential") as mint:
+        response=_client().post("/api/realtime-voice/confer/bootstrap",json={"provider":"openai"},headers={"X-Minimoi-Auth-Id":"42"})
+    assert response.status_code==429 and "used up" in response.get_json()["error"] and not mint.called
+
+
+def test_confer_refuses_an_unavailable_ledger_before_provider(monkeypatch,tmp_path):
+    from core.realtime_voice import budget
+    monkeypatch.setenv(budget.ENV_DSN,f"sqlite:///{tmp_path / 'not_initialized.db'}")
+    monkeypatch.setattr(budget,"_default",None)
+    with patch("core.realtime_voice.confer.openai_realtime.mint_confer_transcription_credential") as mint:
+        response=_client().post("/api/realtime-voice/confer/bootstrap",json={"provider":"openai"},headers={"X-Minimoi-Auth-Id":"42"})
+    assert response.status_code==503 and not mint.called
 
 
 def test_spoken_reply_store_is_user_scoped_and_bounded(monkeypatch):
