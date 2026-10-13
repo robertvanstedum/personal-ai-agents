@@ -32,7 +32,7 @@ def migrate_pg(url: str = PG_URL) -> None:
     conn.autocommit = True
     try:
         with conn.cursor() as cur:
-            for name in ("001_floor_b1.sql", "002_board.sql", "003_media.sql"):
+            for name in ("001_floor_b1.sql", "002_board.sql", "003_media.sql", "004_board_place.sql", "005_board_size.sql"):
                 cur.execute((SQL / name).read_text())
     finally:
         conn.close()

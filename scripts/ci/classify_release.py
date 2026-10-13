@@ -54,6 +54,8 @@ def _is_release_only(path: str) -> bool:
         or _is_staging_only(path)
         or path.startswith(DORMANT_PREFIXES)
         or path.startswith(LOCAL_TOOL_PREFIXES)
+        or path in GUILD_LOCAL_TOOLS
+        or path.startswith("services/agent_installer/")
     )
 
 
@@ -111,6 +113,14 @@ WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/", "core/a
 WORKSHOP_BACKEND_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scrub.py"})   # exact: no other utils/ file moves
 
 
+# Current production consumers are the Guild portal only. Agent runners and
+# installers also use these modules on the laptop; ownership tests fail if a
+# second production consumer appears. Unknown core/scripts paths stay broad.
+GUILD_BACKEND_PREFIXES = ("core/agent_requests/",)
+GUILD_BACKEND_FILES = frozenset({"core/limits.py"})
+GUILD_LOCAL_TOOLS = frozenset({"scripts/agent_connection.py", "scripts/agent_requests.py"})
+
+
 def _is_staging_only(path: str) -> bool:
     return path in STAGING_ONLY_FILES or path.startswith(STAGING_ONLY_PREFIXES)
 
@@ -149,6 +159,8 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
         elif path.startswith("core/telegram/"):
             services.update(("curator", "system-bot", "cos-bot"))
         elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path in WORKSHOP_BACKEND_FILES or path == "config/scheduled_jobs.json":
+            services.add("portal")
+        elif path.startswith(GUILD_BACKEND_PREFIXES) or path in GUILD_BACKEND_FILES:
             services.add("portal")
         elif path.startswith(("core/", "utils/")):
             services.update(PYTHON_SERVICES)

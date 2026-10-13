@@ -2,15 +2,17 @@
 {#
   Rooms (Guild 1.1 slice 4, spec §6; the v4 rooms look): group chat first,
   on Records. Every call goes to Records through the dev bridge at
-  /app/records/api/ with Records' own login (its cookie, minimoi_room_poc);
-  this page never holds or sends a Records credential, and Guild's write
-  guard does not apply to Records calls: Records' own actor and grant checks
-  do. Drawn by js/rooms.js. No model call; no live presence is implied.
+  /app/records/api/, signed in with mini-moi and nothing else (no Records
+  sign-in); this page never holds or sends a Records credential, and Guild's
+  write guard does not apply to Records calls: Records' own actor and
+  membership checks do. Three different problems are never confused: the
+  mini-moi session ended (sign in to mini-moi), no Rooms access (ask the
+  owner), Rooms unavailable or not set up (a connection problem). Drawn by js/rooms.js. No model call; no live presence is implied.
 #}
 {% block title %}Rooms · Guild{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/rooms.css') }}">{% endblock %}
 {% block main %}
-<div class="rm" data-rm data-bridge="{{ rooms_cfg.state }}">
+<div class="rm" data-rm data-bridge="{{ rooms_cfg.state }}" data-access="{{ rooms_cfg.access }}">
   <aside class="rm-list" data-rm-list-pane aria-labelledby="rm-list-h">
     <div class="rm-list-head">
       <h2 class="rm-list-h" id="rm-list-h">Rooms</h2>
@@ -18,11 +20,16 @@
       <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Close the room list">✕</button>
     </div>
     <ol class="rm-rooms" data-rm-list></ol>
-
+    <nav class="rm-list-pages" data-rm-list-pages aria-label="Room list pages" hidden>
+      <button type="button" class="btn-quiet" data-rm-newer>Newer</button>
+      <span class="small" data-rm-list-range></span>
+      <button type="button" class="btn-quiet" data-rm-older>Older</button>
+    </nav>
   </aside>
   <section class="rm-main" aria-labelledby="rm-title">
-    <div class="rm-art" data-room-art><img src="/static/guild/guild-workshop-team.webp" alt="Workshop team artwork" data-room-art-image>
-      <details><summary aria-label="Room picture settings" title="Room picture settings">⚙</summary><label>Picture on this device <select data-room-art-select><option value="theme">Theme artwork</option><option value="none">No picture</option></select></label><p data-room-art-status class="small">Personal photos load from your Media library.</p><a href="{{ urls.media }}">Manage owned photos</a></details>
+    <div class="rm-art area-hero" data-room-art>
+      <div class="area-hero-text"><p class="prototype-eyebrow">Guild</p><p class="area-hero-title" aria-hidden="true">Rooms</p><p>Grab a room and think out loud, with people and agents.</p></div>
+      <div class="area-hero-art area-hero-art-wide"><img src="/static/guild/guild-workshop-team.webp" alt="Workshop team artwork" data-room-art-image width="1152" height="864"></div>
     </div>
     <header class="rm-head">
       <button type="button" class="rm-btn rm-list-open" data-rm-list-open aria-controls="rm-list-h" aria-label="Show the rooms">☰</button>
@@ -33,10 +40,10 @@
     <div class="rm-banner" data-rm-off hidden role="status">
       <strong>Rooms are not connected on this portal.</strong> They run on dev only, through Records; nothing here pretends to work.
     </div>
-    <div class="rm-banner" data-rm-signin hidden role="status">
-      <strong>Sign in to Rooms.</strong> Rooms use their own Records sign-in, separate from mini-moi.
-      <a class="btn" href="{{ rooms_cfg.login }}" data-rm-signin-link>Sign in to Rooms</a>
-      <span class="small">Your draft is kept in this tab.</span>
+    <div class="rm-banner" data-rm-blocked hidden role="status">
+      <strong data-rm-blocked-title></strong> <span data-rm-blocked-text></span>
+      <a class="btn" href="{{ rooms_cfg.login }}" data-rm-blocked-link hidden>Sign in to mini-moi</a>
+      <span class="small" data-rm-blocked-note>Your draft is kept in this tab.</span>
     </div>
     <div class="rm-banner" data-rm-error hidden role="status"></div>
     <form class="rm-act" data-rm-act hidden aria-label="Note for the record">
@@ -51,6 +58,22 @@
       <p class="small rm-humans">Other people: coming with the invitation slice (A0).</p>
       <p class="small" data-rm-invite-status role="status"></p>
       <button type="button" class="rm-btn" data-rm-dialog-close>Close</button>
+    </dialog>
+    <dialog class="rm-dialog" data-rm-handoff-dialog aria-labelledby="rm-handoff-h">
+      <form data-rm-handoff-form method="dialog">
+        <h2 id="rm-handoff-h">Hand this to agents</h2>
+        <blockquote class="small" data-rm-handoff-quote></blockquote>
+        <p class="small">This creates a work request through the request ledger, citing this message and the scope below. A message in a room cannot start work by itself; this click can. Only approved agents are listed.</p>
+        <fieldset><legend>Hand to</legend>
+          <label><input type="checkbox" name="agent" value="claude-code" data-rm-handoff-agent> Claude Code</label>
+          <label><input type="checkbox" name="agent" value="codex" data-rm-handoff-agent> Codex</label>
+        </fieldset>
+        <label>Scope <textarea name="scope" data-rm-handoff-scope maxlength="600" rows="2"></textarea></label>
+        <label>References <input name="tickets" data-rm-handoff-tickets maxlength="60" placeholder="#296 #297"></label>
+        <p class="small" data-rm-handoff-status role="status"></p>
+        <button type="submit" class="btn" data-rm-handoff-send>Hand over</button>
+        <button type="button" class="btn-quiet" data-rm-handoff-cancel>Close</button>
+      </form>
     </dialog>
     <dialog class="rm-dialog" data-rm-new-dialog aria-labelledby="rm-new-h">
       <form data-rm-new-form method="dialog">
@@ -86,9 +109,11 @@
         <input type="file" class="visually-hidden" data-rm-attach></label>
       <label class="visually-hidden" for="rm-input">Message</label>
       <textarea id="rm-input" class="rm-input" data-rm-input rows="1" maxlength="16000" placeholder="Message the room…"></textarea>
-      <button type="button" class="rm-mic" data-rm-mic disabled title="Dictation comes in a later slice">🎙<span class="rm-mic-label">dictation · later</span></button>
+      {% if dictation_on %}<button type="button" class="rm-mic" data-rm-mic data-dictate="#rm-input" aria-pressed="false" hidden>🎙<span class="rm-mic-label">Dictate</span></button>{% endif %}
       <button type="submit" class="btn rm-send" data-rm-send>Send</button>
+      {% if dictation_on %}<p class="rm-status small" data-dictation-status role="status" aria-live="polite" hidden></p>{% endif %}
       <p class="rm-status small" data-rm-status role="status" hidden></p>
+      <div class="rm-banner" data-rm-attach-error hidden role="alert"></div>
     </form>
   </section>
   <aside class="rm-participants" id="rm-participants" aria-label="Room people and controls">
@@ -103,8 +128,31 @@
         <button type="button" class="rm-btn rm-stop" data-rm-stop title="Stop all replies now and pause the meeting">Stop and pause room</button>
       </span>
       <button type="button" class="rm-btn" data-rm-files-toggle aria-expanded="false" aria-controls="rm-files" disabled>Files</button>
+      <details class="rm-about" data-rm-about>
+        <summary class="btn-quiet">ⓘ About Rooms</summary>
+        <p class="small">A shared conversation with the people and agents listed here. Choose a recipient or mention a teammate; otherwise Master Craftsman answers. Messages are kept in the room.</p>
+      </details>
+      <details class="rm-manage" data-rm-manage>
+        <summary class="btn-quiet">Manage access</summary>
+      <details class="rm-access" data-rm-access hidden>
+        <summary class="rm-btn" aria-label="Who can use Rooms">Who can use Rooms</summary>
+        <div class="rm-more-body">
+          <p class="small">The owner switches Rooms on or off for each mini-moi account. Switching it on prepares the person; only the owner's Rooms page is open today, so nobody else can use Rooms yet. Withdrawing applies on the next click they make.</p>
+          <ul class="rm-access-list" data-rm-access-list></ul>
+          <p class="small" data-rm-access-status role="status" hidden></p>
+        </div>
+      </details>
+      <details class="rm-access" data-rm-agents>
+        <summary class="rm-btn">Approved agents</summary>
+        <div class="rm-more-body">
+          <ul class="rm-access-list" data-rm-agents-list></ul>
+          <p class="small" data-rm-agents-status role="status">Loading approvals…</p>
+          <p class="small">Rooms access and connection status are separate. Repository and folder grants are not enabled yet.</p>
+        </div>
+      </details>
+      </details>
       <details class="rm-more" data-rm-details>
-        <summary class="rm-btn" aria-label="Room details">⋯</summary>
+        <summary class="rm-btn" aria-label="Room details">Room details</summary>
         <div class="rm-more-body" data-rm-details-body></div>
       </details>
   </aside>

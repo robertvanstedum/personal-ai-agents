@@ -13,7 +13,7 @@
 <article class="gu-reference prototype-lab prototype-detail" data-proto-detail>
 <p class="proto-crumb"><a href="{{ urls.experiment }}">Prototype Lab</a> › {{ p.title }}</p>
 <header class="proto-hero">
-<span class="prototype-demo-icon" aria-hidden="true">{{ p.icon }}</span>
+{% if p.cover %}<img class="proto-tile-art" src="{{ url_for('.asset', filename=p.cover) }}" alt="" width="112" height="72">{% else %}<span class="prototype-demo-icon" aria-hidden="true">{{ p.icon }}</span>{% endif %}
 <div class="proto-hero-text"><h1>{{ p.title }}</h1><p>{{ p.subtitle }} · {{ p.kind_label }} · {{ p.status }}</p></div>
 <div class="proto-hero-actions"><a class="btn proto-go" href="#run">Run it</a>
 {% if p.hosted_url %}<a class="btn-quiet" href="{{ p.hosted_url }}" target="_blank" rel="noopener" title="Opens the hosted copy in a new tab. This page does not check that it is running.">Open ↗</a>{% endif %}</div>

@@ -196,12 +196,12 @@ function cell(r, k) {
     }
     case 'title': {
       const td = el('td', { 'data-col': 'title' });
-      const b = el('a', { class: 'bl-open', href: page.urls.item_spec.replace('__ID__', r.id), 'aria-label': `Open spec for #${r.id} ${r.title}` });
+      // One line unless the title needs more (10 Oct, Robert). Choosing the row opens the side panel; there is no Details button and no full spec page.
+      const b = el('button', { type: 'button', class: 'bl-open', 'data-bl-open': r.id, title: r.title, 'aria-label': `Open #${r.id} ${r.title}` });
       b.append(el('span', { class: 'bl-id' }, `#${r.id}`), ' ', el('span', { class: 'bl-ttl' }, r.title));
       td.append(b);
       if (!r.spec_file) td.append(el('small', {}, ' · Spec missing'));
       if (r.trouble) td.append(el('small', {}, ' · Action needed: ' + (r.trouble_reason || nice(r.status))));
-      td.append(el('button', { type: 'button', 'data-bl-open': r.id, class: 'bl-text-action bl-details' }, 'Details'));
       return td;
     }
     case 'status': return statusCell(r);
@@ -434,11 +434,10 @@ function renderDrawer() {
   const spec = el('section', { class: 'bl-dsec' });
   spec.append(el('h3', {}, 'Spec'));
   if (r.spec_file) {
-    const a = el('a', { href: page.urls.item_spec.replace('__ID__', r.id), 'data-bl-spec': true }, r.spec_file);
-    spec.append(h('p', {}, a));
+    if (r.spec_github) spec.append(h('p', {}, el('a', { href: r.spec_github, target: '_blank', rel: 'noopener noreferrer', 'data-bl-spec': true, title: 'Opens the spec on GitHub in a new tab' }, `${r.spec_file} ↗`)));
+    else spec.append(h('p', {}, el('span', { 'data-bl-spec-name': true }, r.spec_file), el('small', { class: 'small' }, ' · not on GitHub (main) from here')));
   } else spec.append(el('p', { class: 'small' }, 'No spec file.'));
-  parts.push(spec, statusBlock(r), rankBlock(r), historyBlock(),
-    h('p', { class: 'small' }, el('a', { href: page.urls.item.replace('__ID__', r.id) }, 'Open the item page →')));
+  parts.push(spec, statusBlock(r), rankBlock(r), historyBlock());
   d.replaceChildren(...parts);
   d.hidden = false;
   layout.classList.add('bl-drawer-open');
@@ -572,7 +571,7 @@ function bind() {
     const detail = e.target.closest('[data-bl-open]');
     if (detail) { openItem(Number(detail.dataset.blOpen)); return; }
     const tr = e.target.closest('[data-bl-row]');
-    if (tr) window.location.assign(page.urls.item_spec.replace('__ID__', tr.dataset.blRow));
+    if (tr) openItem(Number(tr.dataset.blRow));
   });
   document.addEventListener('change', (e) => {
     const select = e.target.closest('[data-bl-inline-rank]');

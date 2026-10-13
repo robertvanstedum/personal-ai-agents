@@ -1,0 +1,6 @@
+{# Shared title-and-art hero. Existing illustrations are decorative, not live readings.
+   12 Oct: wide artwork beside the title. Pass hero_title, hero_tagline, hero_art. #}
+<header class="area-hero" data-area-hero>
+<div class="area-hero-text"><p class="prototype-eyebrow">Guild</p><h1 class="page-title">{{ hero_title }}</h1><p>{{ hero_tagline }}</p></div>
+<div class="area-hero-art{% if hero_wide %} area-hero-art-wide{% endif %}"><img src="{{ hero_art }}" alt="" width="{{ 1152 if hero_wide else 784 }}" height="{{ 864 if hero_wide else 1168 }}" decoding="async"></div>
+</header>

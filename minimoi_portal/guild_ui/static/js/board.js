@@ -6,18 +6,28 @@
 // version, the board's order and trash revisions). Only the view (Show,
 // label, search) stays in the page. No model call.
 import { $, $$, el, announce, localTime } from './dom.js';
-import { apiGet, apiPost, apiUpload, recordMode } from './api.js';
+import { apiGet, apiPost, apiUpload, recordMode, RECORD_UNKNOWN_TEXT } from './api.js';
+import { live } from './state.js';
 import { kindOf, newKey } from './actions.js';
+import { W as BOARD_W, NOTE_W, NOTE_H, STEP, layoutAll, boardHeight, nearestFree, stepFrom, movesFor, snap, clamp, widthOf, heightOf, isFree, MIN_W, MIN_H, MAX_W, MAX_H } from './board_layout.js';
 
 let page;
 let data;                         // { status, active, done, trash, order_rev, trash_rev, counts, labels }
+let editing = null;               // the note being edited in place: { id, value, conflict }
+let creating = null;              // a new note being typed straight into the Board: { value }
+let syncRev = null;               // the Board's change signal as of the last read (GET /board/rev)
+let syncPending = false;          // a change was seen while a note was being edited; shown when that finishes
+let syncBusy = false;
+let geometryBusy = false;
+const channel = 'BroadcastChannel' in window ? new BroadcastChannel('guild-board') : null;   // a hint only; the server is the truth
+const POLL_MS = 15000;
 const ui = { show: 'active', label: '', q: '' };
 const keys = new Map();
 const opened = new Set();      // long notes the owner expanded; kept across redraws
-const SETTLED = ['added', 'done', 'undone', 'labelled', 'linked', 'moved', 'emptied', 'restored', 'binned',
-  'conflict', 'idempotency_mismatch', 'invalid', 'not_found', 'in_trash', 'already_done', 'already_active',
+const SETTLED = ['added', 'done', 'undone', 'labelled', 'linked', 'moved', 'emptied', 'restored', 'binned', 'edited', 'unchanged', 'occupied',
+  'conflict', 'idempotency_mismatch', 'invalid', 'not_found', 'in_trash', 'not_a_note', 'already_done', 'already_active',
   'already_binned', 'asset_trashed', 'gone', 'duplicate', 'trashed'];
-const OK = ['added', 'done', 'undone', 'labelled', 'linked', 'binned', 'restored', 'moved', 'emptied'];
+const OK = ['added', 'done', 'undone', 'labelled', 'linked', 'binned', 'restored', 'moved', 'emptied', 'edited', 'unchanged'];
 const LABEL_NAMES = { decide: 'Decide', blocked: 'Blocked', remember: 'Remember', followup: 'Follow-up', idea: 'Idea', fyi: 'FYI' };
 
 function h(tag, attrs, ...kids) { const n = el(tag, attrs); n.append(...kids); return n; }
@@ -29,6 +39,7 @@ function say(text, kind = 'ok', where = $('[data-bd-result]')) {
   where.dataset.kind = kind;
   where.textContent = text || '';
   if (text) announce(text);
+  if (text && kind === 'ok') window.setTimeout(() => { if (where.textContent === text) where.hidden = true; }, 2200);       // a confirmation is not a notice: it fades (the live region already said it)
 }
 
 const list = (name) => (data && Array.isArray(data[name]) ? data[name] : []);
@@ -53,38 +64,233 @@ function linkLine(p) {
   return line;
 }
 
-function editBox(p, withDiscard = false) {
+// Every action on a note lives in one small ⋯ menu (10 Oct, Robert: no buttons inside the Post-it; 11 Oct: "a lot of options on a post-it"). The note itself is
+// edited by clicking its text and moved by dragging; the menu holds only Edit and Discard (plus the order buttons, until placement replaces them). Labels, links
+// and Done are no longer set from here: notes that already have them keep them, and Done notes are still reachable under the Done filter.
+function menuBox(p, n, shown, reorderable) {
+  const photo = p.kind === 'photo';
   const box = el('details', { class: 'bd-edit' });
-  const sum = el('summary', { title: 'Label, link, discard', 'aria-label': `More for this note: label, link${withDiscard ? ', discard' : ''}` }, '⋯');
-  box.append(sum);
+  box.append(el('summary', { title: 'Actions for this note', 'aria-label': `Actions for this ${photo ? 'photo' : 'note'}` }, '⋯'));
   const body = el('div', { class: 'bd-edit-body' });
-  const sel = el('select', { 'data-bd-edit-label': p.id, 'aria-label': 'Label' });
-  sel.append(el('option', { value: '' }, 'no label'));
-  for (const l of data.labels || []) {
-    const o = el('option', { value: l }, LABEL_NAMES[l] || l);
-    if (p.label === l) o.selected = true;
-    sel.append(o);
+  const btn = (label, attrs, cls = '') => el('button', { type: 'button', class: `bd-btn ${cls}`.trim(), ...attrs }, label);
+  if (ui.show === 'active') {
+    if (!photo) body.append(btn('Edit text', { 'data-bd-edit-open': p.id, 'aria-label': `Edit "${p.text.slice(0, 30)}"` }));
+    if (reorderable) {
+    const prev = btn('Move earlier ‹', { 'data-bd-move': 'prev', 'data-id': p.id, 'aria-label': `Move "${p.text.slice(0, 30)}" earlier` }, 'bd-move');
+    const next = btn('Move later ›', { 'data-bd-move': 'next', 'data-id': p.id, 'aria-label': `Move "${p.text.slice(0, 30)}" later` }, 'bd-move');
+    prev.disabled = n === 0; next.disabled = n === shown.length - 1;
+    body.append(prev, next);
+    }
+    body.append(btn(photo ? 'Remove' : 'Discard', { 'data-bd-bin': p.id }, 'bd-discard'));
+  } else if (ui.show === 'done') {
+    body.append(btn('Undone', { 'data-bd-undone': p.id }), btn('Discard', { 'data-bd-bin': p.id }, 'bd-discard'));
+  } else {
+    body.append(btn('Restore', { 'data-bd-restore': p.id }));
   }
-  const item = el('input', { 'data-bd-edit-item': p.id, 'aria-label': 'Work item number', inputmode: 'numeric',
-    placeholder: '#', value: p.item_ref ? String(p.item_ref) : '' });
-  body.append(sel, el('button', { type: 'button', class: 'bd-btn', 'data-bd-save-label': p.id }, 'Save label'),
-    item, el('button', { type: 'button', class: 'bd-btn', 'data-bd-save-link': p.id }, 'Save link'));
-  if (withDiscard) body.append(el('button', { type: 'button', class: 'bd-btn bd-discard', 'data-bd-bin': p.id }, 'Discard'));
   box.append(body);
   return box;
 }
 
+
+// A pasted text longer than a note holds is cut at the limit by the browser, silently. Say so, so nobody believes a long paste was kept whole.
+function watchPaste(ta) {
+  const max = Number(page.postit_max || 280);
+  ta.addEventListener('paste', (e) => {
+    const pasted = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    const selected = ta.selectionEnd - ta.selectionStart;
+    if (ta.value.length - selected + pasted.length > max) say(`That is longer than a note holds (${max} characters), so only the start was kept. Split it into more than one note.`, 'warn');
+  });
+}
+
+// ── a new note, typed straight into the Board ───────────────────────────────
+function newCard() {
+  const li = el('li', { class: 'bd-note bd-new', 'data-bd-new-card': '' });
+  const ta = el('textarea', { class: 'bd-edit-text', 'data-bd-new-field': '', maxlength: String(page.postit_max || 280),
+    'aria-label': 'New note', placeholder: 'Type or paste…', rows: '3', title: 'Leaving the note saves it · an empty note is never kept · Esc cancels' });
+  ta.value = creating.value;
+  watchPaste(ta);
+  ta.addEventListener('input', () => { creating.value = ta.value; });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); stopCreating(); }
+    else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNew(); }
+  });
+  li.addEventListener('focusout', () => setTimeout(() => {
+    if (li.isConnected && creating && !li.contains(document.activeElement)) { if (creating.value.trim()) saveNew(); else stopCreating(); }   // leaving it saves it; an empty note is never kept
+  }, 0));
+  li.append(ta);
+  return li;
+}
+
+async function startCreating() {
+  if (creating) { const f = $('[data-bd-new-field]'); if (f) f.focus(); return; }
+  if (editing) { if (editing.conflict) { say('Finish the note that changed in another window first.', 'warn'); return; } await leaveEdit(editing.id); if (editing) return; }
+  ui.show = 'active';
+  creating = { value: '' };
+  render();
+  const f = $('[data-bd-new-field]'); if (f) f.focus();
+}
+
+async function stopCreating() {
+  creating = null;
+  render();
+  if (syncPending) { syncPending = false; await syncNow(true); }
+}
+
+async function saveNew() {
+  if (!creating) return;
+  const text = creating.value.trim();
+  if (!text) { await stopCreating(); return; }
+  const body = { text, label: null, item_ref: null };
+  const name = `add:${JSON.stringify(body)}`;
+  const mine = creating.value;
+  creating = null;                                                    // the blur that follows must not save it twice
+  const r = await apiPost('/postits', { ...body, idempotency_key: keyFor(name), record_mode: recordMode() });
+  const res = r.body || {};
+  const code = res.result || res.error || 'failed';
+  settle(name, code);
+  say(res.message || 'Nothing was added', code === 'added' ? 'ok' : kindOf(code));
+  if (code !== 'added') {
+    if (!creating && !editing) { creating = { value: mine }; render(); const f = $('[data-bd-new-field]'); if (f) f.focus(); return; }   // their words are kept
+    say(`The new note could not be saved, and you have moved on. Your words: "${mine.slice(0, 280)}"`, 'warn');                         // never over a newer draft
+    return;
+  }
+  await reload();
+  announceChange();
+}
+
+// ── editing a note in place ─────────────────────────────────────────────────
+function textEditor(p) {
+  const box = el('div', { class: 'bd-texteditor' });
+  const ta = el('textarea', { class: 'bd-edit-text', 'data-bd-edit-field': p.id, maxlength: String(page.postit_max || 280),
+    'aria-label': 'Note text', rows: '3', title: 'Leaving the note saves it · Esc cancels' });
+  ta.value = editing.value;
+  watchPaste(ta);
+  ta.addEventListener('input', () => { editing.value = ta.value; });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); stopEditing(false); }
+    else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(p.id); }
+  });
+  box.append(ta);
+  if (editing.conflict) {                                 // the one time buttons are needed: two versions exist, so the person chooses
+    box.append(el('p', { class: 'bd-conflict', role: 'status' }, 'This note changed in another window. Your text is kept here.'),
+      h('div', { class: 'bd-edit-row' },
+        el('button', { type: 'button', class: 'bd-btn', 'data-bd-edit-save': p.id }, 'Replace with mine'),
+        el('button', { type: 'button', class: 'bd-btn', 'data-bd-edit-cancel': p.id }, 'Keep the current note')));
+  } else {
+    box.addEventListener('focusout', () => setTimeout(() => { if (box.isConnected && editing && editing.id === p.id && !editing.conflict && !box.contains(document.activeElement)) leaveEdit(p.id); }, 0));
+  }
+  return box;
+}
+
+async function startEditing(id) {
+  const p0 = noteById(id);
+  if (!p0 || p0.kind === 'photo' || p0.state === 'binned') return;
+  if (editing && editing.id !== id) { if (editing.conflict) return; await leaveEdit(editing.id); if (editing) return; }   // one edit at a time: the other is finished first
+  const p = noteById(id);
+  if (!p) return;
+  editing = { id, value: p.text, conflict: false };
+  render();
+  const ta = $(`[data-bd-edit-field="${id}"]`);
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+
+async function stopEditing(saved, inst = null) {
+  if (inst && editing !== inst) { if (syncPending && !editing && !creating) { syncPending = false; await syncNow(true); } return; }     // a newer editor exists: an older save never clears it
+  editing = null;
+  render();
+  if (syncPending) { syncPending = false; await syncNow(true); }
+}
+
+// Leaving the note (clicking elsewhere) saves a changed note, leaves an unchanged one alone, and never turns a note into an empty one.
+let leaving = null;                                  // one leave at a time: the blur and the click that caused it share the same save
+function leaveEdit(id) {
+  if (leaving) return leaving;
+  if (!editing || editing.id !== id) return Promise.resolve();
+  leaving = (async () => {
+    if (!editing.value.trim()) { await stopEditing(false); return; }
+    await saveEdit(id);
+  })().finally(() => { leaving = null; });
+  return leaving;
+}
+
+function saveEdit(id) {                                              // the keyboard save, the blur and the click all come through here: one save per editor at a time
+  if (!editing || editing.id !== id) return Promise.resolve();
+  const inst = editing;
+  if (inst.saving) return inst.saving;
+  inst.saving = saveEditNow(id, inst).finally(() => { inst.saving = null; });
+  return inst.saving;
+}
+
+async function saveEditNow(id, inst) {                               // this editor, whatever happens to the page while the save is away
+  const p = noteById(id);
+  const text = inst.value.trim();
+  const where = $(`[data-bd-note-result="${id}"]`);
+  if (!p) { await stopEditing(false, inst); return; }
+  if (!text) { say('A note cannot be empty. Use Discard to remove it.', 'warn', where || $('[data-bd-result]')); return; }
+  if (text === p.text) { await stopEditing(false, inst); return; }
+  const mine = inst.value;
+  const { code } = await write(`/postits/${id}/text`, { text, version: p.version }, `text:${id}:${p.version}:${text}`, id, { keepEditing: true });
+  if ((code === 'edited' || code === 'unchanged') && editing === inst && inst.value.trim() !== text) { render(); return; }   // more was typed in this editor while the save was away: it stays open with those words
+  if (code === 'edited' || code === 'unchanged') await stopEditing(true, inst);
+  else if (editing === inst) {
+    editing = { id, value: mine, conflict: code === 'conflict' };      // their words are never lost: kept in the editor
+    render();
+    const ta = $(`[data-bd-edit-field="${id}"]`); if (ta) ta.focus();
+  } else say('That note could not be saved just now, and you have moved on. Its text is kept in the note as it was; open it to try again.', 'warn');
+}
+
+// ── free placement (11 Oct): beside a wide window the board is a surface and a note sits where it was put; narrower, or filtered, it is the list again ──
+const FREE_MIN_PX = 900;                  // the board's drawn width below which the page keeps the list (a placement is never rewritten by a resize)
+let free = null;                          // { scale, layout: Map(id -> {x, y, placed}), height } while the board is drawn as a surface
+const anyPlaced = () => list('active').some((p) => Number.isInteger(p.pos_x) && Number.isInteger(p.pos_y));
+
+function corkWidth() { const c = $('.bd-cork'); return c ? c.clientWidth : 0; }
+
+function freeWanted() {
+  return !!(data && data.status === 'ok' && ui.show === 'active' && !filtersOn() && corkWidth() >= FREE_MIN_PX);
+}
+
+function applyFree(grid, items) {
+  const cork = grid.closest('.bd-cork');
+  const layout = layoutAll(items);
+  const scale = clamp(corkWidth() / BOARD_W, FREE_MIN_PX / BOARD_W, 1.5);
+  free = { scale, layout, height: boardHeight(layout) };
+  cork.dataset.free = 'true';
+  grid.classList.add('bd-free');
+  grid.style.setProperty('--bd-scale', String(scale));
+  cork.style.height = `${Math.ceil(free.height * scale)}px`;
+  return layout;
+}
+
+function leaveFree(grid) {
+  free = null;
+  const cork = grid.closest('.bd-cork');
+  if (cork) { delete cork.dataset.free; cork.style.height = ''; }
+  grid.classList.remove('bd-free');
+  grid.style.removeProperty('--bd-scale');
+}
+
+function placeAt(li, pos) { li.style.setProperty("--note-lines", String(Math.max(2,Math.floor((heightOf(pos)-70)/21)))); li.style.setProperty("--card-w", `${widthOf(pos)}px`); li.style.setProperty("--card-h", `${heightOf(pos)}px`); li.style.setProperty('--x', String(pos.x)); li.style.setProperty('--y', String(pos.y)); }
+
 function card(p, n, shown) {
   const photo = p.kind === 'photo';
-  const li = el('li', { class: `bd-note${photo ? ' bd-photo' : ''}`, 'data-bd-note': p.id, 'data-state': p.state,
+  const size = photo ? 'm' : (p.text.length > 150 || p.text.split('\n').length > 4 ? 'l' : p.text.length > 48 || p.text.includes('\n') ? 'm' : 's');
+  const li = el('li', { class: `bd-note${photo ? ' bd-photo' : ''}`, 'data-bd-note': p.id, 'data-state': p.state, 'data-size': size,
     'data-label': p.label || '', tabindex: '0', 'aria-label': `${photo ? 'Photo' : 'Note'}: ${p.text}` });
-  const reorderable = ui.show === 'active' && !filtersOn();
+  if (p.size_w != null) { li.dataset.resized = "true"; li.style.setProperty("--card-w", `${p.size_w}px`); li.style.setProperty("--card-h", `${p.size_h}px`); }
+  const reorderable = ui.show === 'active' && !filtersOn() && !free && !anyPlaced();       // list order is changed by dragging only while no note has been placed on the board
   if (reorderable) li.draggable = true;
   if (!photo) li.append(el('p', { class: 'bd-kicker' }, p.label ? (LABEL_NAMES[p.label] || p.label) : ''));
   if (photo) {
-    li.append(el('img', { src: p.thumb_url, alt: p.text === 'Photo' ? 'A photo on the Board' : p.text, loading: 'lazy' }));
+    // The picture moves with its card; the browser's native image drag would cancel our pointer gesture.
+    li.append(el('img', { src: p.thumb_url, alt: p.text === 'Photo' ? 'A photo on the Board' : p.text, loading: 'lazy', draggable: 'false' }));
   }
-  li.append(el('p', { class: 'bd-text' }, p.text));
+  if (editing && editing.id === p.id && !photo) li.append(textEditor(p));
+  else {
+    const t = el('p', { class: 'bd-text' }, p.text);
+    if (!photo && ui.show !== 'trash') { t.dataset.bdEditText = p.id; t.title = 'Click to edit'; }
+    li.append(t);
+  }
   {
     // Every note and photo caption can open in place. The button is shown only while the text is really
     // cut off (fitMore below), so a short note has none, and a narrow screen that wraps more lines gets one.
@@ -98,24 +304,9 @@ function card(p, n, shown) {
   const when = ui.show === 'trash' ? p.binned_at : (ui.show === 'done' ? p.done_at : p.created_at);
   li.append(el('p', { class: 'bd-meta' }, `${p.author_label} · ${ui.show === 'trash' ? 'binned ' : ui.show === 'done' ? 'done ' : ''}${localTime(when)}`));
   const acts = el('div', { class: 'bd-acts' });
-  if (ui.show === 'active') {
-    const prev = el('button', { type: 'button', class: 'bd-btn bd-move', 'data-bd-move': 'prev', 'data-id': p.id,
-      'aria-label': `Move "${p.text.slice(0, 30)}" earlier` }, '‹');
-    const next = el('button', { type: 'button', class: 'bd-btn bd-move', 'data-bd-move': 'next', 'data-id': p.id,
-      'aria-label': `Move "${p.text.slice(0, 30)}" later` }, '›');
-    prev.disabled = !reorderable || n === 0;
-    next.disabled = !reorderable || n === shown.length - 1;
-    acts.append(prev, next, el('span', { class: 'bd-sp' }));
-    if (!photo) acts.append(el('button', { type: 'button', class: 'bd-btn bd-done', 'data-bd-done': p.id }, 'Done'));
-    if (photo) acts.append(el('button', { type: 'button', class: 'bd-btn', 'data-bd-bin': p.id }, 'Remove'));
-  } else if (ui.show === 'done') {
-    acts.append(el('button', { type: 'button', class: 'bd-btn', 'data-bd-undone': p.id }, 'Undone'),
-      el('button', { type: 'button', class: 'bd-btn', 'data-bd-bin': p.id }, 'Discard'));
-  } else {
-    acts.append(el('button', { type: 'button', class: 'bd-btn', 'data-bd-restore': p.id }, 'Restore'));
-  }
+  acts.append(menuBox(p, n, shown, reorderable));
   li.append(acts);
-  if (ui.show !== 'trash' && !photo) acts.append(editBox(p, ui.show === 'active'));
+  if (free && ui.show === 'active' && !editing) li.append(el('button', { type: 'button', class: 'bd-resize', 'data-bd-resize': p.id, 'aria-label': `Resize ${photo ? 'picture' : 'note'}; arrow keys change size`, title: 'Drag to resize; arrow keys when focused' }));
   li.append(el('p', { class: 'bd-result', 'data-bd-note-result': p.id, role: 'status', hidden: true }));
   return li;
 }
@@ -142,25 +333,67 @@ window.addEventListener('resize', () => {
 });
 
 function render() {
+  const act = document.activeElement;                  // keep the person's place in a note they are typing in across a redraw
+  let keep = null;
+  if (act && act.matches && (act.matches('[data-bd-new-field]') || act.matches('[data-bd-edit-field]'))) {
+    keep = { sel: act.matches('[data-bd-new-field]') ? '[data-bd-new-field]' : `[data-bd-edit-field="${act.dataset.bdEditField}"]`, s: act.selectionStart, e: act.selectionEnd };
+  } else if (act && act.matches && act.matches('[data-bd-resize], [data-bd-note]')) {
+    // Layout/image loading and background refresh may redraw between key presses.
+    keep = { sel: act.matches('[data-bd-resize]') ? `[data-bd-resize="${act.dataset.bdResize}"]` : `[data-bd-note="${act.dataset.bdNote}"]` };
+  }
+  drawBoard();
+  if (keep) { const f = $(keep.sel); if (f && document.activeElement !== f) { f.focus({ preventScroll: true }); try { f.setSelectionRange(keep.s, keep.e); } catch (e) { /* no selection to restore */ } } }
+}
+
+function drawBoard() {
   const known = data && data.status === 'ok';
   const counts = (data && data.counts) || {};
-  const countsEl = $('[data-bd-counts]');
-  if (known) {
-    countsEl.replaceChildren(el('strong', {}, String(counts.active)), ' active · ', el('strong', {}, String(counts.done)),
-      ' done · ', el('strong', {}, String(counts.trash)), ' in Trash');
-  } else countsEl.textContent = 'unknown';
-  const trashOpt = $('[data-bd-show] option[value="trash"]');
-  trashOpt.textContent = known ? `Trash (${counts.trash})` : 'Trash (?)';
-  const shown = list(ui.show).filter(matches);
+  for (const button of $$('[data-bd-view]')) {
+    const view = button.dataset.bdView;
+    const label = { active: 'Active', done: 'Done', trash: 'Bin' }[view];
+    button.textContent = `${label} ${known ? counts[view] : '?'}`;
+    button.setAttribute('aria-pressed', String(ui.show === view));
+  }
+  const unk = $('[data-bd-unknown]'); if (unk) unk.hidden = known;
+  let shown = list(ui.show).filter(matches);
+  if (editing && !shown.some((p) => p.id === editing.id)) editing = null;     // the edited note is no longer on screen
   const grid = $('[data-bd-grid]');
-  grid.replaceChildren(...shown.map((p, n) => card(p, n, shown)));
+  const surface = freeWanted();
+  let layout = null;
+  if (surface) layout = applyFree(grid, [...(creating ? [{ id: 0 }] : []), ...shown]);
+  else {
+    leaveFree(grid);
+    // A narrower window shows the same arrangement as a list: by where the notes sit (top to bottom, left to right), never rewriting any position.
+    if (ui.show === 'active' && !filtersOn() && anyPlaced()) {
+      const lay = layoutAll(shown);
+      shown = [...shown].sort((a, b) => (lay.get(a.id).y - lay.get(b.id).y) || (lay.get(a.id).x - lay.get(b.id).x) || (b.id - a.id));
+    }
+  }
+  const cards = shown.map((p, n) => card(p, n, shown));
+  const fresh = creating ? newCard() : null;
+  if (layout) {
+    shown.forEach((p, i) => placeAt(cards[i], layout.get(p.id)));
+    if (fresh) placeAt(fresh, layout.get(0));
+    cards.sort((a, b) => (layout.get(Number(a.dataset.bdNote)).y - layout.get(Number(b.dataset.bdNote)).y) || (layout.get(Number(a.dataset.bdNote)).x - layout.get(Number(b.dataset.bdNote)).x));
+  }
+  grid.replaceChildren(...(fresh ? [fresh] : []), ...cards);
   fitMore();
   const note = $('[data-bd-state-note]');
   if (!known) note.textContent = '';
-  else if (ui.show === 'active') note.textContent = filtersOn() ? 'Clear the label and search to change the order.' : 'Drag a note, use ‹ ›, or Alt+Arrow to change the order.';
+  else if (ui.show === 'active') note.textContent = filtersOn() ? 'Clear the label and search to change the order.' : surface ? 'Drag a note anywhere there is room, or use the arrow keys on a selected note.' : anyPlaced() ? 'The notes keep the places you gave them on a wider screen; here they are listed in that order.' : 'Drag a note to change the order.';
   else if (ui.show === 'done') note.textContent = 'Done notes have left Active. Undone puts one back.';
   else note.textContent = 'Discarded notes stay here until you empty the Trash. Restore puts one back as it was. Emptying never changes linked work or library images.';
-  if (known && !shown.length) grid.append(el('li', { class: 'bd-empty' }, ui.show === 'trash' ? 'The Trash is empty.' : filtersOn() ? 'No notes match.' : ui.show === 'done' ? 'Nothing done yet.' : 'No notes on the Board.'));
+  if (known && !shown.length && !creating) {
+    if (ui.show === 'active' && !filtersOn()) {                // a truly empty Board: a playful example, plainly NOT a saved note (never shown while loading or unreadable)
+      const li = el('li', { class: 'bd-empty bd-example' });
+      const note = h('div', { class: 'bd-note bd-example-note', 'data-bd-example': '', role: 'img', 'aria-label': 'An example Post-it, not a saved note' },
+        el('p', { class: 'bd-kicker' }, 'Example · not a saved note'),
+        el('p', { class: 'bd-text bd-example-text' }, 'Paste a link, jot a thought, doodle an idea ✏️'),
+        h('p', { class: 'bd-example-art', 'aria-hidden': 'true' }, '🎨  ✦  ☕'));
+      li.append(note, el('p', { class: 'bd-empty-line' }, 'No notes on the Board yet. Tap ＋ to add one: type or paste straight into it.'));
+      grid.append(li);
+    } else grid.append(el('li', { class: 'bd-empty' }, ui.show === 'trash' ? 'The Trash is empty.' : filtersOn() ? 'No notes match.' : ui.show === 'done' ? 'Nothing done yet.' : 'No notes on the Board.'));
+  }
   if (known && ui.show === 'trash' && list('trash').length) {
     const empty = el('li', { class: 'bd-empty' });
     empty.append(el('button', { type: 'button', class: 'btn', 'data-bd-empty': true }, `Empty trash (${list('trash').length})`));
@@ -168,22 +401,84 @@ function render() {
   }
 }
 
+async function peekRev() {
+  const r = await apiGet('/board/rev');
+  return r.ok && r.body && r.body.status === 'ok' ? r.body.rev : null;
+}
+
+// A refresh that fails never wipes notes that were already shown (10 Oct, Dev: a stalled read blanked the main Board while the pop-out still had the notes,
+// and the page then believed it was up to date and never looked again). The last good notes stay, the page says so, and it tries again on the next beat.
+let needsRetry = false;
 async function reload() {
+  const rev = await peekRev();
   const r = await apiGet('/board');
   const body = r.body || {};
-  if (r.ok && body.status === 'ok') data = { ...data, ...body, status: 'ok' };
-  else if (r.status !== 0) data = { ...data, status: 'unknown', active: null, done: null, trash: null };
+  if (r.ok && body.status === 'ok') { data = { ...data, ...body, status: 'ok' }; if (rev != null) syncRev = rev; needsRetry = false; stamp('Up to date'); }
+  else {
+    needsRetry = true;
+    if (data && data.status === 'ok') stamp(r.status === 0 ? 'Cannot reach the server · showing what was last loaded' : 'Could not refresh just now · showing what was last loaded · trying again', true);
+    else if (r.status !== 0) data = { ...data, status: 'unknown', active: null, done: null, trash: null };
+    else stamp('Cannot reach the server', true);
+  }
   render();
+}
+
+// ── keeping a second window current (the Board and its pop-out) ─────────────
+function announceChange() { if (channel) channel.postMessage({ t: 'changed' }); }
+
+function stamp(text, warn = false) {
+  const el_ = $('[data-bd-sync]');
+  if (!el_) return;
+  const t = new Date();
+  el_.dataset.kind = warn ? 'warn' : 'ok';
+  el_.textContent = warn ? text : `${text} · ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+}
+
+async function syncNow(force = false) {
+  if (syncBusy) return;
+  if (editing || creating || geometryBusy) { syncPending = true; say('The Board changed in another window. It will update when you finish editing.', 'warn'); return; }
+  syncBusy = true;
+  try {
+    const rev = await peekRev();
+    if (rev == null) { stamp('Cannot reach the server · showing what was last loaded', true); return; }
+    if (force || needsRetry || rev !== syncRev) await reload(); else stamp('Up to date');
+  } finally { syncBusy = false; }
+}
+
+function startSync() {
+  if (channel) channel.onmessage = () => { syncNow(); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); });
+  window.addEventListener('focus', () => { syncNow(); });
+  window.setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, POLL_MS);
+}
+
+// ── Pop out: the same Board in its own window ───────────────────────────────
+function popOut() {
+  const url = `${page.urls.board}/popout`.replace('//', '/');
+  const small = window.matchMedia('(max-width: 640px)').matches;              // a phone opens it as a tab
+  let w = null;
+  try { w = window.open(url, 'guild-board-popout', small ? '' : 'popup=yes,width=440,height=720,left=40,top=60'); } catch (e) { w = null; }
+  const out = $('[data-bd-result]');
+  if (!w) {
+    out.hidden = false; out.dataset.kind = 'warn';
+    out.replaceChildren('Your browser blocked the pop-out. Allow pop-ups for this site and try again, or ',
+      el('a', { href: url, target: '_blank', rel: 'noopener' }, 'open the Board in its own tab'), '.');
+    announce('The pop-out was blocked by the browser. A link to open it in a tab is shown.');
+    return;
+  }
+  try { w.focus(); } catch (e) { /* ignore */ }
+  say('The Board is open in its own window. It is the same Board: change it in either place.', 'ok');
 }
 
 function noteById(id) { return allNotes().find((p) => p.id === id); }
 
-async function write(path, body, name, where) {
+async function write(path, body, name, where, opts = {}) {
   const r = await apiPost(path, { ...body, idempotency_key: keyFor(name), record_mode: recordMode() });
   const res = r.body || {};
   const code = res.result || res.error || 'failed';
   settle(name, code);
   await reload();
+  if (r.ok) announceChange();
   const out = (where && $(`[data-bd-note-result="${where}"]`)) || $('[data-bd-result]');
   say(res.message || 'Nothing was changed', OK.includes(code) ? 'ok' : kindOf(code), out);
   return { code, body: res };
@@ -204,6 +499,114 @@ async function reorder(body) {
   const name = `reorder:${JSON.stringify(body)}:${data.order_rev}`;
   const { code } = await write('/postits/reorder', { ...body, expect_order_rev: data.order_rev }, name);
   if (code === 'conflict') say('The order changed elsewhere. Here is the current order; move it again if you still want to.', 'warn');
+}
+
+// Place a note: the first move saves where every note is drawn (so nothing jumps), later ones only the moved note. The server refuses an overlap and a stale arrangement.
+async function commitPlace(id, to) {
+  const moves = movesFor(id, to, free.layout, anyPlaced());
+  const name = `place:${data.order_rev}:${JSON.stringify(moves)}`;
+  const { code } = await write('/postits/layout', { moves, expect_order_rev: data.order_rev }, name);
+  if (code === 'conflict') say('The board changed in another window. Here it is now; place the note again if you still want to.', 'warn');
+  else if (code === 'occupied') say('That spot is taken by another note. Nothing moved.', 'warn');
+  const again = $(`[data-bd-note="${id}"]`);
+  if (again && !document.activeElement.closest('[data-bd-note]')) again.focus({ preventScroll: true });
+}
+
+function othersThan(id) {
+  return [...free.layout.entries()].filter(([k]) => k !== id && k !== 0).map(([, p]) => ({ ...p }));
+}
+
+function bindPlace(grid) {
+  let drag = null;
+  let suppressClick = false;
+  const interactive = (t) => t.closest('button, a, summary, details, textarea, input, select, [data-bd-edit-text-active]');
+  grid.addEventListener('pointerdown', (e) => {
+    if (!free || geometryBusy || e.button !== 0 || (e.pointerType === 'touch' && false)) return;
+    const li = e.target.closest('[data-bd-note]');
+    const resizing = !!e.target.closest("[data-bd-resize]");
+    if (!li || (!resizing && interactive(e.target)) || (editing && editing.id === Number(li.dataset.bdNote))) return;
+    const id = Number(li.dataset.bdNote);
+    const pos = free.layout.get(id);
+    if (!pos) return;
+    drag = { id, li, pos, sx: e.clientX, sy: e.clientY, moved: false, resizing, pid: e.pointerId };
+  });
+  grid.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pid) return;
+    const dx = (e.clientX - drag.sx) / free.scale;
+    const dy = (e.clientY - drag.sy) / free.scale;
+    if (!drag.moved && Math.hypot(dx, dy) * free.scale < 5) return;
+    if (!drag.moved) { opened.delete(drag.id); delete drag.li.dataset.open; drag.moved = true; geometryBusy = true; drag.li.dataset.dragging = 'true'; try { drag.li.setPointerCapture(e.pointerId); } catch (err) { /* the drag still works without capture */ } }
+    if (drag.resizing) {
+      const now = { ...drag.pos, w: clamp(snap(widthOf(drag.pos) + dx), MIN_W, Math.min(MAX_W, BOARD_W - drag.pos.x)), h: clamp(snap(heightOf(drag.pos) + dy), MIN_H, MAX_H) };
+      if (isFree(now, othersThan(drag.id))) drag.now = now;
+      else if (!drag.now) drag.now = drag.pos;
+    } else drag.now = { ...drag.pos, x: clamp(drag.pos.x + dx, 0, BOARD_W - widthOf(drag.pos)), y: Math.max(0, drag.pos.y + dy) };
+    placeAt(drag.li, drag.now);
+    const previewHeight = Math.max(free.height, drag.now.y + heightOf(drag.now) + 40);
+    grid.closest('.bd-cork').style.height = `${Math.ceil(previewHeight * free.scale)}px`;
+  });
+  const finish = async (e, cancelled) => {
+    if (!drag || (e && e.pointerId !== drag.pid)) return;
+    const d = drag;
+    drag = null;
+    delete d.li.dataset.dragging;
+    if (!d.moved) return;
+    geometryBusy = false;
+    suppressClick = true;                                         // the click that follows a drag is not an edit
+    window.setTimeout(() => { suppressClick = false; }, 0);
+    if (cancelled) { placeAt(d.li, d.pos); grid.closest('.bd-cork').style.height = `${Math.ceil(free.height * free.scale)}px`; if (syncPending) { syncPending = false; await syncNow(true); } return; }
+    const to = d.resizing ? d.now : nearestFree({ ...d.now, x: snap(d.now.x), y: snap(d.now.y) }, othersThan(d.id));
+    if (!to) { placeAt(d.li, d.pos); say('There is no free spot for it on the board.', 'warn'); return; }
+    if (d.pos.placed && to.x === d.pos.x && to.y === d.pos.y && widthOf(to) === widthOf(d.pos) && heightOf(to) === heightOf(d.pos)) { placeAt(d.li, d.pos); return; }
+    geometryBusy = true;
+    try { await commitPlace(d.id, to); } finally { geometryBusy = false; }
+  };
+  grid.addEventListener('pointerup', (e) => finish(e, false));
+  grid.addEventListener('pointercancel', (e) => finish(e, true));
+  grid.addEventListener('lostpointercapture', (e) => finish(e, true));
+  window.addEventListener('blur', () => finish(null, true));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') finish(null, true); });
+  grid.addEventListener('click', (e) => { if (suppressClick) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  grid.addEventListener('keydown', async (e) => {
+    if (free && e.key === 'Escape' && drag) { e.preventDefault(); finish(null, true); return; }
+    const handle = e.target.closest('[data-bd-resize]');
+    if (free && handle && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+      e.preventDefault(); if (geometryBusy) return;
+      const id = Number(handle.dataset.bdResize), pos = free.layout.get(id);
+      const delta = e.shiftKey ? STEP * 5 : STEP;
+      const to = {...pos, w: clamp(widthOf(pos) + (e.key === 'ArrowRight' ? delta : e.key === 'ArrowLeft' ? -delta : 0), MIN_W, Math.min(MAX_W, BOARD_W-pos.x)), h: clamp(heightOf(pos) + (e.key === 'ArrowDown' ? delta : e.key === 'ArrowUp' ? -delta : 0), MIN_H, MAX_H)};
+      if (!isFree(to, othersThan(id))) { announce('Another note is in the way.'); return; }
+      geometryBusy = true;
+      try { await commitPlace(id,to); } finally { geometryBusy = false; }
+      $(`[data-bd-resize="${id}"]`)?.focus({preventScroll:true});
+      announce(`Size ${to.w} by ${to.h}; minimum ${MIN_W} by ${MIN_H}, maximum ${MAX_W} by ${MAX_H}`); return;
+    }
+    if (!free || geometryBusy || e.altKey || e.ctrlKey || e.metaKey || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    const li = e.target.closest('[data-bd-note]');
+    if (!li || e.target !== li) return;                          // arrows inside a text box keep moving the caret
+    const id = Number(li.dataset.bdNote);
+    const pos = free.layout.get(id);
+    if (!pos) return;
+    e.preventDefault();
+    const to = stepFrom(pos, e.key, othersThan(id), e.shiftKey);
+    if (!to) { say('There is a note in the way, or this is the edge of the board.', 'warn'); return; }
+    geometryBusy = true;
+    try { await commitPlace(id, to); } finally { geometryBusy = false; }
+    announce(`Moved to column ${Math.floor(to.x / STEP) + 1}, row ${Math.floor(to.y / STEP) + 1}`);
+  });
+  // A resize or a zoom redraws the surface at the new scale (or the list, when narrow); it never saves anything.
+  let lastWidth = 0;
+  let frame = null;
+  const cork = grid.closest('.bd-cork');
+  if (cork && 'ResizeObserver' in window) {
+    new ResizeObserver(() => {
+      const w = cork.clientWidth;
+      if (w === lastWidth) return;
+      lastWidth = w;
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => { if (!editing && !creating && !drag && !geometryBusy) render(); });
+    }).observe(cork);
+  }
 }
 
 function bindDrag(grid) {
@@ -311,42 +714,95 @@ async function uploadThenPick(file) {
   say(`${body.message}. Place it on the Board, with a caption if you like.`, 'ok', out);
 }
 
+// Pasting/dropping a picture is one gesture. Keep both keys through an uncertain
+// response so an explicit retry reconciles the original operation, never adds twice.
+let pastedPicture = null;
+let pictureBusy = false;
+function pictureFailure(response) {
+  const uncertain = response.status === 0 || response.status >= 500 || response.body?.error === 'unreadable';
+  say(uncertain ? 'The picture could not be confirmed. Retry to check the same picture without adding it twice.'
+    : (response.body?.message || 'The picture was not added.'), 'warn');
+  $('[data-bd-paste-actions]').hidden = false;
+  // Validation refusals need a different picture, not the same request again.
+  $('[data-bd-paste-retry]').hidden = [400, 413, 415, 422].includes(response.status);
+}
+async function placePastedPicture() {
+  if (!pastedPicture || pictureBusy) return;
+  if (!live.known || live.off) { say(!live.known ? RECORD_UNKNOWN_TEXT : page.off_record_text, 'warn'); return; }
+  const attempt = pastedPicture;
+  pictureBusy = true;
+  $('[data-bd-paste-actions]').hidden = true;
+  say('Adding picture…', 'working');
+  try {
+    if (!attempt.asset) {
+      const up = await apiUpload('/media', attempt.file, attempt.uploadKey);
+      if (!up.ok || !up.body?.asset) { pictureFailure(up); return; }
+      attempt.asset = up.body.asset.id;
+      attempt.file = null;
+    }
+    const placed = await apiPost('/postits/photo', { asset_id: attempt.asset, caption: null,
+      idempotency_key: attempt.placeKey, record_mode: recordMode() });
+    if (!placed.ok || placed.body?.result !== 'added') { pictureFailure(placed); return; }
+    pastedPicture = null;
+    ui.show = 'active'; ui.q = ''; ui.label = '';
+    $('[data-bd-search]').value = ''; $('[data-bd-label-filter]').value = '';
+    await reload();
+    announceChange();
+    say('Picture added.');
+  } finally { pictureBusy = false; }
+}
+function takePictureFiles(files) {
+  if (!live.known || live.off) { say(!live.known ? RECORD_UNKNOWN_TEXT : page.off_record_text, 'warn'); return; }
+  if (pastedPicture) { say(pictureBusy ? 'A picture is still being added.' : 'Retry or dismiss the previous picture first.', 'warn'); return; }
+  if (files.length !== 1) { say('Add one picture at a time.', 'warn'); return; }
+  const file = files[0];
+  if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) { say('Use a JPEG, PNG, WebP or GIF picture.', 'warn'); return; }
+  const max = page.attach?.max_bytes || 8 * 1024 * 1024;
+  if (!file.size || file.size > max) { say(`Use a picture smaller than ${Math.round(max / 1048576)} MB.`, 'warn'); return; }
+  pastedPicture = { file, uploadKey: newKey(), placeKey: newKey(), asset: null };
+  void placePastedPicture();
+}
+function bindPicturePaste() {
+  // Text fields and the MC panel retain their own paste/drop behaviour.
+  const elsewhere = (target) => target instanceof Element && target.closest('input, textarea, select, [contenteditable], [data-mc-panel]');
+  document.addEventListener('paste', (event) => {
+    if (elsewhere(event.target)) return;
+    const files = Array.from(event.clipboardData?.files || []);
+    if (!files.length) return;
+    event.preventDefault(); takePictureFiles(files);
+  });
+  const cork = $('[data-bd-cork]');
+  cork.addEventListener('dragover', (event) => {
+    if (!elsewhere(event.target) && Array.from(event.dataTransfer?.types || []).includes('Files')) event.preventDefault();
+  });
+  cork.addEventListener('drop', (event) => {
+    if (elsewhere(event.target)) return;
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (!files.length) return;       // internal note drags never become uploads
+    event.preventDefault(); takePictureFiles(files);
+  });
+  $('[data-bd-paste-retry]').addEventListener('click', () => { void placePastedPicture(); });
+  $('[data-bd-paste-dismiss]').addEventListener('click', () => {
+    if (pictureBusy) return;
+    pastedPicture = null; $('[data-bd-paste-actions]').hidden = true;
+    say('Picture retry dismissed. Any picture already saved is kept.', 'warn');
+  });
+}
+
 function bind() {
-  $('[data-bd-show]').addEventListener('change', (e) => { ui.show = e.target.value; render(); });
+  bindPicturePaste();
+  for (const button of $$('[data-bd-view]')) button.addEventListener('click', () => { ui.show = button.dataset.bdView; render(); });
   $('[data-bd-label-filter]').addEventListener('change', (e) => { ui.label = e.target.value; render(); });
   $('[data-bd-search]').addEventListener('input', (e) => { ui.q = e.target.value; render(); });
-  const add = $('[data-bd-add]');
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-bd-open]');
     if (!b) return;
-    add.open = false;
-    $('[data-bd-note-form]').hidden = b.dataset.bdOpen !== 'note';
     $('[data-bd-photo-form]').hidden = true;
-    if (b.dataset.bdOpen === 'note') $('[data-bd-note-text]').focus();
-    else openPhoto();
+    openPhoto();
   });
-  document.addEventListener('click', (e) => { if (add.open && !add.contains(e.target)) add.open = false; });
+  document.addEventListener('click', (e) => { for (const d of $$('.bd-edit[open]')) if (!d.contains(e.target)) d.open = false; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const d of $$('.bd-edit[open]')) { d.open = false; const sm = d.querySelector('summary'); if (sm) sm.focus(); } });
   for (const c of $$('[data-bd-close]')) c.addEventListener('click', () => { c.closest('form').hidden = true; });
-  const text = $('[data-bd-note-text]');
-  text.addEventListener('input', () => { $('[data-bd-note-count]').textContent = `${text.value.length} / ${page.postit_max}`; });
-  $('[data-bd-note-form]').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const out = $('[data-bd-add-result]');
-    const t = text.value.trim();
-    const label = $('[data-bd-note-label]').value || null;
-    const itemRaw = $('[data-bd-note-item]').value.trim().replace(/^#/, '');
-    if (!t) { say('Write something first.', 'warn', out); return; }
-    if (itemRaw && !/^\d+$/.test(itemRaw)) { say('A work item is a number, like 12.', 'warn', out); return; }
-    const body = { text: t, label, item_ref: itemRaw ? Number(itemRaw) : null };
-    const name = `add:${JSON.stringify(body)}`;
-    const r = await apiPost('/postits', { ...body, idempotency_key: keyFor(name), record_mode: recordMode() });
-    const res = r.body || {};
-    const code = res.result || res.error || 'failed';
-    settle(name, code);
-    say(res.message || 'Nothing was added', code === 'added' ? 'ok' : kindOf(code), out);
-    if (code === 'added') { text.value = ''; $('[data-bd-note-item]').value = ''; ui.show = 'active'; $('[data-bd-show]').value = 'active'; }
-    await reload();
-  });
   $('[data-bd-pick]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-bd-pick-asset]');
     if (!b) return;
@@ -368,8 +824,13 @@ function bind() {
     say(res.message || 'Nothing was added', code === 'added' ? 'ok' : kindOf(code), $('[data-bd-photo-result]'));
     if (code === 'added') { $('[data-bd-photo-caption]').value = ''; $('[data-bd-photo-file]').value = ''; }
     await reload();
+    if (code === 'added') announceChange();
   });
   const grid = $('[data-bd-grid]');
+  grid.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-bd-edit-text]');
+    if (t && !e.target.closest('textarea')) startEditing(Number(t.dataset.bdEditText));
+  });
   grid.addEventListener('click', async (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -382,6 +843,16 @@ function bind() {
       if (li) li.dataset.open = String(on);
       b.setAttribute('aria-expanded', String(on));
       b.textContent = on ? 'Less' : 'More';
+    } else if (b.hasAttribute('data-bd-new-save')) {
+      await saveNew();
+    } else if (b.hasAttribute('data-bd-new-cancel')) {
+      await stopCreating();
+    } else if (b.hasAttribute('data-bd-edit-open')) {
+      startEditing(pick('data-bd-edit-open'));
+    } else if (b.hasAttribute('data-bd-edit-save')) {
+      await saveEdit(pick('data-bd-edit-save'));
+    } else if (b.hasAttribute('data-bd-edit-cancel')) {
+      await stopEditing(false);
     } else if (b.hasAttribute('data-bd-done') || b.hasAttribute('data-bd-undone')) {
       const done = b.hasAttribute('data-bd-done');
       const p = noteById(pick(done ? 'data-bd-done' : 'data-bd-undone'));
@@ -394,16 +865,6 @@ function bind() {
       await write(`/postits/${id}/restore`, {}, `restore:${id}:${noteById(id).version}`);
     } else if (b.hasAttribute('data-bd-move')) {
       await move(Number(b.dataset.id), b.dataset.bdMove);
-    } else if (b.hasAttribute('data-bd-save-label')) {
-      const p = noteById(pick('data-bd-save-label'));
-      const label = $(`[data-bd-edit-label="${p.id}"]`).value || null;
-      await write(`/postits/${p.id}/label`, { label, version: p.version }, `label:${p.id}:${p.version}:${label}`, p.id);
-    } else if (b.hasAttribute('data-bd-save-link')) {
-      const p = noteById(pick('data-bd-save-link'));
-      const raw = $(`[data-bd-edit-item="${p.id}"]`).value.trim().replace(/^#/, '');
-      if (raw && !/^\d+$/.test(raw)) { say('A work item is a number, like 12.', 'warn', $(`[data-bd-note-result="${p.id}"]`)); return; }
-      const item = raw ? Number(raw) : null;
-      await write(`/postits/${p.id}/link`, { item_ref: item, version: p.version }, `link:${p.id}:${p.version}:${item}`, p.id);
     } else if (b.hasAttribute('data-bd-empty')) {
       const n = list('trash').length;
       $('[data-bd-confirm-text]').textContent = `Delete ${n} note${n === 1 ? '' : 's'} in the Trash permanently? Linked work and library images are kept.`;
@@ -419,6 +880,7 @@ function bind() {
     move(Number(li.dataset.bdNote), ['ArrowLeft', 'ArrowUp'].includes(e.key) ? 'prev' : 'next');
   });
   bindDrag(grid.closest('.bd-cork') || grid);
+  bindPlace(grid);
   $('[data-bd-confirm-no]').addEventListener('click', () => { $('[data-bd-confirm]').hidden = true; });
   $('[data-bd-confirm-yes]').addEventListener('click', async () => {
     $('[data-bd-confirm]').hidden = true;
@@ -434,9 +896,18 @@ export function initBoard(p) {
   const raw = document.getElementById('board-data');
   if (!raw || !$('[data-bd-grid]')) return;
   data = JSON.parse(raw.textContent);
-  for (const sel of [$('[data-bd-label-filter]'), $('[data-bd-note-label]')]) {
-    for (const l of data.labels || []) sel.append(el('option', { value: l }, LABEL_NAMES[l] || l));
-  }
+  for (const l of data.labels || []) $('[data-bd-label-filter]').append(el('option', { value: l }, LABEL_NAMES[l] || l));
   bind();
+  const pop = $('[data-bd-popout]');
+  if (pop) pop.addEventListener('click', popOut);
+  const fresh = $('[data-bd-new]');
+  if (fresh) fresh.addEventListener('click', startCreating);
+  const retry = $('[data-bd-retry]');
+  if (retry) retry.addEventListener('click', () => { retry.disabled = true; syncNow(true).finally(() => { retry.disabled = false; }); });
   render();
+  if (data.status !== 'ok') {                                  // the page was drawn while the Board could not be read: never treat that as "current"
+    needsRetry = true;
+    for (const ms of [1500, 4000, 9000]) window.setTimeout(() => { if (needsRetry) syncNow(true); }, ms);
+    startSync();
+  } else peekRev().then((rev) => { if (rev != null) syncRev = rev; startSync(); });
 }

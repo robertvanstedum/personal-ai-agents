@@ -11,13 +11,14 @@
 {% if p.hosted_url %}<a class="proto-open" href="{{ p.hosted_url }}" target="_blank" rel="noopener" title="Opens the hosted copy in a new tab. This page does not check that it is running.">Open ↗</a>
 {%- elif p.kind == 'demo' %}<span class="proto-open is-off" aria-disabled="true" title="No hosted copy. Use Run it to start it.">Open ↗</span>{% endif %}
 {%- endmacro %}
+{% macro preview(p, view) -%}
+{% if p.cover %}<img class="proto-{{ view }}-art" src="{{ url_for('.asset', filename=p.cover) }}" alt="" width="{{ 112 if view == 'tile' else 48 }}" height="{{ 72 if view == 'tile' else 34 }}">
+{% else %}<span class="prototype-demo-icon proto-{{ view }}-icon" aria-hidden="true">{{ p.icon }}</span>{% endif %}
+{%- endmacro %}
 {% block main %}
-<article class="gu-reference prototype-lab" data-proto-lab>
-<header class="prototype-lab-intro">
-<div><p class="prototype-eyebrow">Guild · Explore</p><h1>Prototype Lab</h1>
-<p>Working ideas. Real demos. Room to experiment.</p></div>
-<img src="/static/guild/guild-experiment.webp" alt="An inventor experimenting at a glowing laboratory bench" width="180" height="180">
-</header>
+<article class="gu-reference prototype-lab area-page" data-proto-lab>
+{% set hero_title = "Prototype Lab" %}{% set hero_tagline = "Ideas, demos and experiments." %}{% set hero_art = "/static/guild/guild-experiment.webp" %}{% set hero_wide = true %}
+{% include 'guild_floor/_area_hero.html' %}
 <div class="proto-controls">
 {% set kinds = prototypes|map(attribute='kind')|unique|list %}
 {% if kinds|length > 1 %}
@@ -33,31 +34,28 @@
 </div>
 </div>
 <div class="proto-views" data-proto-views data-view="cards">
-<div class="prototype-gallery" aria-label="Prototypes" data-proto-cards>
+{# Cards: just the icon and the name, as small launchers (10 Oct, Robert). List: # · icon · name · what it is · links, so a list of demos is known at a glance. #}
+<ul class="prototype-gallery proto-tiles" aria-label="Prototypes" data-proto-cards>
 {% for p in prototypes %}
-<section class="prototype-demo" aria-labelledby="proto-{{ p.slug }}" data-proto="{{ p.slug }}" data-kind="{{ p.kind }}" data-text="{{ (p.title ~ ' ' ~ p.subtitle ~ ' ' ~ p.description)|lower }}">
-<div class="prototype-demo-brand"><span class="prototype-demo-icon" aria-hidden="true">{{ p.icon }}</span>
-<div><h2 id="proto-{{ p.slug }}">{{ p.title }}</h2><p>{{ p.subtitle }}</p></div></div>
-{% if p.cover %}<a class="proto-cover" href="{{ url_for('.prototype_detail', slug=p.slug) }}" tabindex="-1" aria-hidden="true"><img src="{{ url_for('.asset', filename=p.cover) }}" alt="" width="1280" height="720" loading="lazy"></a>{% endif %}
-<div class="prototype-demo-body">
-<p class="proto-desc">{{ p.description }}</p>
-<p class="proto-pills"><span class="proto-pill is-kind">{{ p.kind_label }}</span><span class="proto-pill">{{ p.status }}</span>{% if p.slides %}<span class="proto-pill">{{ p.slides|length }} slides</span>{% endif %}</p>
-<div class="prototype-demo-footer">
-<div class="proto-actions"><a class="btn" href="{{ url_for('.prototype_detail', slug=p.slug) }}">Look inside</a><a class="btn-quiet" href="{{ url_for('.prototype_detail', slug=p.slug) }}#run">Run it</a>{{ open_link(p) }}</div>
-<p class="proto-path"><code>{{ p.repo_path }}</code><button type="button" class="proto-copy" data-copy="{{ p.repo_path }}" aria-label="Copy the repository path of {{ p.title }}">copy</button></p>
-</div></div></section>
-{% endfor %}
-</div>
-<ul class="proto-list" data-proto-list aria-label="Prototypes, list">
-{% for p in prototypes %}
-<li class="proto-row" data-proto="{{ p.slug }}" data-kind="{{ p.kind }}" data-text="{{ (p.title ~ ' ' ~ p.subtitle ~ ' ' ~ p.description)|lower }}">
-<span class="prototype-demo-icon proto-row-icon" aria-hidden="true">{{ p.icon }}</span>
-<div class="proto-row-main"><strong>{{ p.title }}</strong><span class="proto-row-sub">{{ p.subtitle }}</span><span class="proto-row-path"><code>{{ p.repo_path }}</code></span></div>
-<span class="proto-pill is-kind">{{ p.kind_label }}</span>
-<div class="proto-actions"><a class="btn-quiet" href="{{ url_for('.prototype_detail', slug=p.slug) }}">Look inside</a><a class="btn-quiet" href="{{ url_for('.prototype_detail', slug=p.slug) }}#run">Run it</a>{{ open_link(p) }}</div>
+<li class="prototype-demo proto-tile" data-proto="{{ p.slug }}" data-kind="{{ p.kind }}" data-text="{{ (p.title ~ ' ' ~ p.subtitle ~ ' ' ~ p.description)|lower }}">
+<a class="proto-tile-link" href="{{ url_for('.prototype_detail', slug=p.slug) }}" title="{{ p.subtitle }}: look inside">{{ preview(p, 'tile') }}<span class="proto-tile-title">{{ p.title }}</span></a>
 </li>
 {% endfor %}
 </ul>
+<table class="proto-list proto-table" data-proto-list aria-label="Prototypes, list">
+<thead><tr><th scope="col" class="pt-id">#</th><th scope="col" class="pt-icon"><span class="visually-hidden">Look inside</span></th><th scope="col">Demo</th><th scope="col" class="pt-what">What it is</th><th scope="col" class="pt-links"><span class="visually-hidden">Links</span></th></tr></thead>
+<tbody>
+{% for p in prototypes %}
+<tr class="proto-row" data-proto="{{ p.slug }}" data-kind="{{ p.kind }}" data-text="{{ (p.title ~ ' ' ~ p.subtitle ~ ' ' ~ p.description)|lower }}">
+<td class="pt-id">{{ loop.index }}</td>
+<td class="pt-icon"><a href="{{ url_for('.prototype_detail', slug=p.slug) }}" class="proto-icon-link" aria-label="Look inside {{ p.title }}" title="Look inside: a preview">{{ preview(p, 'row') }}</a></td>
+<th scope="row" class="pt-name"><span title="{{ p.description }}">{{ p.title }}</span></th>
+<td class="pt-what">{{ p.subtitle }}</td>
+<td class="pt-links"><a href="{{ url_for('.prototype_detail', slug=p.slug) }}#run">Details</a>{{ open_link(p) }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
 </div>
 </article>
 {% endblock %}

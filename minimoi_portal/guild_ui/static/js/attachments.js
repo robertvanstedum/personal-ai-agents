@@ -111,7 +111,7 @@ export function initAttachments(page) {
       { asset_id: up.body.asset.id, name: file.name || 'image', idempotency_key: newKey() });
     if (!done.ok) { end(r, 'failed', `Not attached: ${(done.body && done.body.message) || 'it could not be kept with this conversation.'}`); retryable(r, file); return; }
     reconcile(done.body && done.body.conversation);
-    ok(r, up.body.asset.id, file.name || 'image', 'image', 'Kept as a picture · Master Craftsman can’t see images yet, it will be told it is attached');
+    ok(r, up.body.asset.id, file.name || 'image', 'image', 'Kept as a picture · Master Craftsman can’t see inside it, but can send it to Codex or Claude Code if you ask');
   }
 
   async function attachDocument(file, r) {
@@ -158,7 +158,7 @@ export function initAttachments(page) {
     for (const f of files || []) {
       if (ready.has(f.id)) continue;
       const r = row({ name: f.name }, f.kind);
-      ok(r, f.id, f.name, f.kind, f.kind === 'image' ? 'Kept as a picture · Master Craftsman can’t see images yet' : '');
+      ok(r, f.id, f.name, f.kind, f.kind === 'image' ? 'Kept as a picture · Master Craftsman can’t see inside it, but can send it to Codex or Claude Code if you ask' : '');
     }
   };
 

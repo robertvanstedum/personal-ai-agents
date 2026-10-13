@@ -13,6 +13,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from . import cfg, owner_api, owner_page
 from .adapters.contract import now_iso
 from .api import _author, _clean_text, _floor, _principal, _source, _store_down, _write_body
+from .stores import POSTIT_MAX
 from .board import LABELS, PHOTO_CAPTION_MAX
 from .media import (MAX_BYTES, OWNER_RE, MediaRejected, media_of, root_problem, sanitize, thumb_key)
 from .security import check_upload, json_error
@@ -21,9 +22,12 @@ from .stores import FloorStoreUnavailable
 WORDS = {
     "done": "Marked done", "undone": "Back on the board", "already_done": "Already done",
     "already_active": "Already on the board", "labelled": "Label saved", "linked": "Link saved",
-    "added": "Added to the Board", "moved": "Moved",
+    "added": "Added to the Board", "moved": "Moved", "edited": "Saved", "unchanged": "Nothing to change",
+    "not_a_note": "That is a photo; its caption is not edited here. Nothing was changed",
     "emptied": "Trash emptied · receipt {receipt}",
     "conflict": "This changed since you opened it. Here is the current state; nothing was changed",
+    "invalid": "That size or position extends beyond the board. Nothing was changed",
+    "occupied": "That spot is taken by another note. Nothing was changed",
     "in_trash": "That note is in the Trash. Restore it first; nothing was changed",
     "not_found": "Not found. Nothing was changed",
     "gone": "That image was deleted from the library. Nothing was changed",
@@ -33,7 +37,7 @@ WORDS = {
     "duplicate": "Already in your library: the same image is used", "purged": "Deleted permanently · receipt {receipt}",
     "in_use": "Still used, so nothing was deleted. Remove it where it is used first",
 }
-HTTP = {"conflict": 409, "in_trash": 409, "asset_trashed": 409, "in_use": 409, "idempotency_mismatch": 409,
+HTTP = {"invalid": 422,"conflict": 409, "occupied": 409, "in_trash": 409, "not_a_note": 409, "asset_trashed": 409, "in_use": 409, "idempotency_mismatch": 409,
         "not_found": 404, "gone": 410}
 MEDIA_DOWN = "The media library is unavailable right now. Nothing was changed"
 
@@ -119,6 +123,8 @@ def _postit_change(postit_id, fn):
     except FloorStoreUnavailable as exc:
         return _store_down(exc, {"unavailable": "The Board is unavailable — nothing was changed",
                                  "not_configured": "The Board is not configured on this portal — nothing was changed"})
+    if hasattr(done, "status_code"):         # the change refused before it reached the store
+        return done
     if done.value and isinstance(done.value, dict) and "id" in done.value:
         _decorate([done.value], _queue_index() if done.value.get("item_ref") else {})
     return _answer(done)
@@ -144,6 +150,27 @@ def postit_label(postit_id: int):
             raise ValueError(f"a label is one of {', '.join(LABELS)}, or none")
         return _floor().set_label(postit_id, label, _author(), expect_version=v, idempotency_key=body["_key"])
     return _postit_change(postit_id, fn)
+
+
+@owner_api
+def postit_text(postit_id: int):
+    """Edit what a Post-it says, in place. {text, version, idempotency_key}:
+    scrubbed and length-checked like an add, then behind the note's version."""
+    def fn(body, v):
+        text, bad = _clean_text(body.get("text"), POSTIT_MAX, "post-it")
+        if bad is not None:
+            return bad                       # a refusal response: nothing was sent to the store
+        return _floor().set_text(postit_id, text, _author(), expect_version=v, idempotency_key=body["_key"])
+    return _postit_change(postit_id, fn)
+
+
+@owner_api
+def board_rev():
+    """The Board's change signal for a second window: a short string that differs
+    after any change (the page then fetches /board). Cheap; no notes are sent."""
+    res = _floor().fingerprint()
+    return jsonify({**_source(res), **({"rev": res.data["rev"]} if res.ok else {"rev": None}),
+                    "observed_at": now_iso()})
 
 
 def _check_item_ref(value):
@@ -226,6 +253,25 @@ def postits_reorder():
         return _store_down(exc, {"unavailable": "The Board is unavailable — nothing was changed",
                                  "not_configured": "The Board is not configured on this portal — nothing was changed"})
     return _answer(done, value_key="order")
+
+
+@owner_api
+def postits_layout():
+    """Place notes on the board: {moves: [{id, x, y}], expect_order_rev}. One transaction; a placement that would overlap is refused (409 occupied)."""
+    refusal, body = _write_body()
+    if refusal is not None:
+        return refusal
+    rev = body.get("expect_order_rev")
+    if not isinstance(rev, int) or isinstance(rev, bool):
+        return json_error("invalid", "Send moves and expect_order_rev. Nothing was changed.", 422)
+    try:
+        done = _floor().place(body.get("moves"), expect_order_rev=rev, by=_author(), idempotency_key=body["_key"])
+    except ValueError as exc:
+        return json_error("invalid", f"That placement is not allowed ({exc}). Nothing was changed.", 422)
+    except FloorStoreUnavailable as exc:
+        return _store_down(exc, {"unavailable": "The Board is unavailable — nothing was changed",
+                                 "not_configured": "The Board is not configured on this portal — nothing was changed"})
+    return _answer(done, value_key="layout")
 
 
 @owner_api
@@ -465,12 +511,15 @@ def media_file(asset_id: str, variant: str):
 
 RULES = [
     ("/board", "api_board", board_view, ["GET"]),
+    ("/board/rev", "api_board_rev", board_rev, ["GET"]),
+    ("/postits/<int:postit_id>/text", "api_postit_text", postit_text, ["POST"]),
     ("/postits/<int:postit_id>/done", "api_postit_done", postit_done, ["POST"]),
     ("/postits/<int:postit_id>/undone", "api_postit_undone", postit_undone, ["POST"]),
     ("/postits/<int:postit_id>/label", "api_postit_label", postit_label, ["POST"]),
     ("/postits/<int:postit_id>/link", "api_postit_link", postit_link, ["POST"]),
     ("/postits/photo", "api_postit_photo", postit_photo, ["POST"]),
     ("/postits/reorder", "api_postits_reorder", postits_reorder, ["POST"]),
+    ("/postits/layout", "api_postits_layout", postits_layout, ["POST"]),
     ("/postits/trash/empty", "api_trash_empty", trash_empty, ["POST"]),
     ("/notes/<int:note_id>/share", "api_note_share", note_share, ["POST"]),
     ("/media", "api_media", media_list, ["GET"]),

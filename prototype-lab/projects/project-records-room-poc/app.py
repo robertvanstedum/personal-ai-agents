@@ -15,6 +15,18 @@ from werkzeug.exceptions import HTTPException, NotFound
 
 from store import Problem, Store
 from platform_access import AccessError, request_credential, request_operation
+import portal_identity
+
+# Routes the signed-in mini-moi person may reach through the portal (the browser's own routes). The worker and
+# credential-management routes are not on it: an installation or a worker is not a person. Unknown routes fail closed.
+PORTAL_HUMAN_ROUTES = frozenset({
+    "approved_agents_brief","approved_agents_list","approved_agents_change","me","status","rooms","persistent_rooms","create_persistent_room","persistent_room","create_session","session_record","operation",
+    "create_room","get_room","events","disclosure","transfer","import_conversation","state","moderator",
+    "coordination_inbox","coordination_list","coordination_create","coordination_transition","executive_snapshot",
+    "cos_status","cos_request","cos_reconcile","cos_auto","acknowledge_join","principals","principal","portal_principal","membership",
+    "documents","notes","artifact_link","artifact_history","document","search","export","backup",
+    "meeting_invite","meeting_rsvp","meeting_presence","meeting_turns","meeting_turn_cancel","meeting_turn_retry",
+    "meeting_stop","meeting_continue","meeting_renew","teammates","teammate_card","teammate_prove","teammate_proof"})
 
 
 def configured_hosts(value):
@@ -32,10 +44,10 @@ def configured_hosts(value):
     return hosts
 
 
-def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False, allowed_hosts=None):
+def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False, allowed_hosts=None, portal_key=None, installer_key=None):
     app=Flask(__name__,static_folder="static",static_url_path="/static")
     store=Store(data_dir)
-    app.config.update(SECRET_KEY=store.session_key,MAX_CONTENT_LENGTH=3_000_000,
+    app.config.update(SECRET_KEY=store.session_key,MAX_CONTENT_LENGTH=12_000_000,
                       SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Strict",
                       SESSION_COOKIE_NAME="minimoi_room_poc",PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
                       TESTING=testing)
@@ -43,6 +55,12 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
     from web_sessions import WebSessions
     web_sessions=WebSessions(store.connect,app.config["PERMANENT_SESSION_LIFETIME"])
     app.extensions["web_sessions"]=web_sessions
+    import os as _os
+    with store.connect() as _db: _db.executescript(portal_identity.SCHEMA)
+    portal_env=_os.environ.get("RECORDS_PORTAL_ENV","dev")
+    def current_portal_key():
+        # Read at each use, so putting the key file in place (or rotating it) needs no code change; no file means a portal identity is refused.
+        return portal_key() if callable(portal_key) else (portal_key if portal_key is not None else portal_identity.load_key(_os.environ.get("RECORDS_PORTAL_KEY_FILE")))
     previous_hook=store.platform_access.on_revoke
     def on_revoke(db,principal,credential_id=None):
         if previous_hook: previous_hook(db,principal)
@@ -85,9 +103,34 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
             payload=request.get_json(silent=True)
             if not isinstance(payload,dict): raise Problem("Expected a JSON object")
         if request.path == "/api/login": return
+        if request.endpoint in {'agent_install_pending','agent_install_issue','agent_install_ack'}:
+            import hmac
+            expected=installer_key
+            if expected is None:
+                try:
+                    key_path=Path(os.environ.get('RECORDS_AGENT_INSTALLER_KEY','/run/secrets/agent-installer/token'))
+                    if key_path.is_symlink(): raise OSError()
+                    expected=key_path.read_text().strip()
+                except OSError: expected=''
+            supplied=request.headers.get('Authorization','')
+            if not expected or len(expected)<32 or not hmac.compare_digest(supplied.encode('utf-8'),('Bearer '+expected).encode('utf-8')):
+                raise Problem('Installer authentication required',401)
+            if request.headers.get(portal_identity.HEADER) is not None or origin:
+                raise Problem('Installer channel is not a browser or portal route',403)
+            return
         authorization=request.headers.get("Authorization","")
         actor=None
-        if authorization.startswith("Bearer "):
+        portal_header=request.headers.get(portal_identity.HEADER)
+        if portal_header is not None:
+            # Signed in to mini-moi: the portal vouches for exactly this request. A bad assertion is refused outright; it never falls back
+            # to a cookie or a key, and a person never acquires an agent's identity.
+            try:
+                principal=portal_identity.verify(portal_header,current_portal_key(),env=portal_env,method=request.method,
+                    target=portal_identity.canonical_target(request.path,request.query_string),body=request.get_data(),connect=store.connect)
+                with store.connect() as db: actor=portal_identity.actor_for(db,principal)
+            except portal_identity.Refused as refused:
+                raise Problem(refused.message,refused.status)
+        elif authorization.startswith("Bearer "):
             actor=store.authenticate(authorization[7:])
         elif session.get("credential_id"):
             # Rooms R3b: a browser session must be live on the server too. A cookie
@@ -100,9 +143,18 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
         g.actor=actor
         g.auth_context=request_credential.set(actor["credential_id"])
         g.operation_context=request_operation.set("read")
-        if not actor["legacy"]:
+        if actor.get("scope")=="portal":
+            if request.endpoint not in PORTAL_HUMAN_ROUTES: raise Problem("Route unavailable to a signed-in person through the portal",403)
+        elif not actor["legacy"]:
             # Explicit allowlist for installation clients. Unknown routes fail closed.
             endpoint=request.endpoint
+            with store.connect() as db:
+                approved_key=db.execute("SELECT 1 FROM agent_credential_generations WHERE credential=?", (actor["credential_id"],)).fetchone()
+            if approved_key and endpoint not in {
+                "get_room","session_record","events","documents","document","artifact_link","operation",
+                "rooms","me","logout","meeting_rsvp","turns_claim","turns_start","turns_heartbeat",
+                "turns_fail","turns_cancel_ack","turns_recover","turns_reconciled","hosted_teammates","hosted_reachable"}:
+                raise Problem("Route unavailable to approved Rooms agents",403)
             operations={"get_room":"read","session_record":"read","events":"post","import_conversation":"post","transfer":"post",
                         "documents":"upload","artifact_link":"link","operation":"receipt",
                         "export":"export","document":"read","rooms":"read","me":"read",
@@ -115,6 +167,33 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
             request_operation.set(operations[endpoint])
             if endpoint=="operation" and not request.args.get("destination"):
                 raise Problem("Receipt lookup requires an explicit destination")
+
+    @app.get('/api/v1/approved-agents')
+    def approved_agents_list():
+        return jsonify({'agents':store.approved_agents.inventory(g.actor['id'])})
+
+    @app.post('/api/v1/approved-agents/<agent>')
+    def approved_agents_change(agent):
+        payload=request.get_json()
+        return jsonify(store.approved_agents.change(g.actor['id'],agent,payload.get('enabled'),payload.get('brief')))
+
+    @app.post('/api/v1/approved-agents/<agent>/brief')
+    def approved_agents_brief(agent):
+        return jsonify(store.approved_agents.edit_brief(g.actor['id'],agent,request.get_json().get('brief')))
+
+    @app.get('/api/v1/agent-installer/pending')
+    def agent_install_pending():
+        return jsonify({'pending':store.approved_agents.pending()})
+
+    @app.post('/api/v1/agent-installer/<agent>/issue')
+    def agent_install_issue(agent):
+        response=jsonify(store.approved_agents.issue(agent,request.get_json().get('generation')))
+        response.headers['Cache-Control']='no-store'
+        return response
+
+    @app.post('/api/v1/agent-installer/<agent>/ack')
+    def agent_install_ack(agent):
+        return jsonify(store.approved_agents.acknowledge(agent,request.get_json()))
 
     @app.teardown_request
     def clear_authority(error):
@@ -188,7 +267,9 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
     @app.get("/api/v1/rooms")
     def rooms():
         result=store.rooms(actor())
-        if not g.actor["legacy"]:
+        if g.actor.get("scope")=="portal":
+            pass        # the owner sees every room; anyone else only rooms they belong to (store.rooms)
+        elif not g.actor["legacy"]:
             if g.actor.get("scope")=="work": raise Problem("A worker credential does not list rooms",403)
             if g.actor.get("scope")=="membership":
                 from meetings import rsvp_of
@@ -293,6 +374,13 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
 
     @app.post("/api/v1/principals")
     def principal(): return jsonify(store.add_principal(actor(),key(),body())),201
+
+    @app.post("/api/v1/portal/principals")
+    def portal_principal():
+        # Only the owner's portal, speaking for the owner, creates the person a mini-moi grant needs (portal_identity); no bearer or cookie may.
+        if g.actor.get("scope")!="portal": raise Problem("Only the portal creates mini-moi people",403)
+        b=body()
+        return jsonify(store.add_human_principal(actor(),b.get("id"),b.get("label")))
 
     @app.post("/api/v1/rooms/<room>/members")
     def membership(room): return jsonify(store.membership(actor(),key(),room,body()))

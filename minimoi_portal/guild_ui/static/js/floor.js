@@ -8,7 +8,7 @@
 // as "signed out". The rules are in freshness.js.
 import { $, $$, el, shapeSvg, localTime, localizeTimes } from './dom.js';
 import { apiGet } from './api.js';
-import { explain, setBriefing } from './conversation.js';
+import { setBriefing } from './conversation.js';
 import { freshnessOf, lightView, needsView, bannerText, briefingText, sinceText } from './freshness.js';
 import { applyFloorZones } from './zones.js';
 import { renderFloorNeeds, renderBlockers, updateQuiet } from './floorlayout.js';
@@ -217,14 +217,5 @@ export function initFloorState(p) {
   const sheetBtn = $('[data-sheet-toggle]');     // the pre-1.1 floor's post-it sheet; gone from the 1.1 layout
   if (sheetBtn) sheetBtn.addEventListener('click', () => toggle('sheetOpen', sheetBtn));
   // (The context rail's folding follows the width: floorlayout.js.)
-  for (const b of $$('[data-ask]')) {
-    b.addEventListener('click', () => {
-      const light = (current.lights || []).find((l) => l.id === b.dataset.ask);
-      if (!light) return;
-      if (fresh.mode === 'live') { explain(light); return; }
-      const v = lightView(light, fresh.mode, since());
-      explain({ ...light, word: v.word, reason: v.reason, source_mark: v.src, detail: [v.src, ...(light.detail || [])] });
-    });
-  }
 }
 

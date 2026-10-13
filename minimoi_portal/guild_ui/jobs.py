@@ -688,7 +688,7 @@ class JobManager:
                 "writes_verified": verified, "audit_note": MESSAGES["audit"], "enforced": False,
                 "result_note_id": job.get("result_note_id"), "result_truncated": bool(job.get("result_truncated")),
                 "result_full": bool(job.get("result_in_note_cut")), "result_chars": job.get("result_chars") or 0,
-                "error_class": job.get("error_class")}
+                "error_class": job.get("error_class"), "ended_ago_s": (max(0, int(now - end)) if end else None)}
 
     def views(self, cid, principal, limit=20) -> list:
         return [self.view(j) for j in self.store.list(cid) if j.get("principal") == principal][:limit]

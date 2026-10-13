@@ -1,0 +1,16 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Board{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('.asset', filename='css/board.css') }}">
+<link rel="stylesheet" href="{{ url_for('.asset', filename='css/board_popout.css') }}">{% endblock %}
+{#
+  The Board in its own window (the owner's notepad): the SAME Board and notes as the Board page. No portal bar and no sections bar (`bare`), but
+  the small Master Craftsman head works here exactly as on the Board page, so he can be asked anything from this window while the main Guild window
+  is closed. It reads and writes through the same API, so a change in either window shows in the other, and it stays open while the main window
+  moves to other pages or reloads. It is also a plain address (/guild/board/popout): bookmark it and open it on its own, on a desktop or a phone.
+#}
+{% block main %}
+<div class="bd-popout">
+  {% set popout = true %}
+  {% include 'guild_floor/_board_view.html' %}
+</div>
+{% endblock %}

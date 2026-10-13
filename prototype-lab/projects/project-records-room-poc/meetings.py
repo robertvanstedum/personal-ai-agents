@@ -73,7 +73,7 @@ HERE_TTL_S = 90
 REACHABLE_TTL_S = 180
 READYZ_FRESH_S = 60
 SNAPSHOT_LIMIT = 40
-DEFAULT_MAX_TURNS = 20
+DEFAULT_MAX_TURNS = 200       # per participant and per meeting, per hour window; the owner renews a meeting to reset it
 DEFAULT_WINDOW_S = 3600
 PROOF_WINDOW_S = 900
 PROOF_QUESTION = ("Proof turn: please introduce yourself in one or two sentences and say what you can "
@@ -317,6 +317,8 @@ class Meetings:
             raise Problem("An agent reply must name its claimed turn", 409)
         sweep(db)
         row = db.execute("SELECT * FROM turns WHERE id=? AND room=?", (turn_id, room)).fetchone()
+        from approved_agents import turn_allowed
+        if row and not turn_allowed(db,row): raise Problem("Approval changed; reply not added",409)
         expected = payload.get("expected_context")
         if (not row or row["addressee"] != actor or row["claim_id"] != claim_id
                 or row["state"] not in ("running", "recovering") or not row["lease_until"] or row["lease_until"] <= now()
@@ -439,6 +441,12 @@ class Meetings:
         db.execute("""INSERT INTO turns(id,room,generation,addressee,trigger_seq,attempt,state,created,expires,updated)
             VALUES(?,?,?,?,?,?,'queued',?,?,?)""", (turn, room, generation(db, room), principal, trigger_seq,
                                                      attempt, now(), stamp(ttl), now()))
+        from approved_agents import approval
+        granted=approval(db,principal)
+        if granted:
+            db.execute('UPDATE turns SET approval_generation=? WHERE id=?',(granted['generation'],turn))
+            if granted['state']!='active':
+                set_turn(db,turn,state='cancelled',disposition='not_approved')
         return turn
 
     # ── owner routes ─────────────────────────────────────────────────────────
@@ -469,6 +477,8 @@ class Meetings:
             raise Problem("Invalid teammate role")
 
         def action(db):
+            from approved_agents import allowed
+            if not allowed(db,target): raise Problem('Agent is not approved',403)
             current = self.store.access(db, actor, room, True)
             if current["state"] == "closed":
                 raise Problem("Closed sessions take no new participants; continue the conversation instead", 409)
@@ -815,6 +825,9 @@ class Meetings:
     # ── worker routes (work-scoped credential; spec §3.4) ────────────────────
     @staticmethod
     def require_work(db, auth):
+        from platform_access import PlatformAccess
+        if not PlatformAccess.lookup(db, credential_id=auth.get("credential_id")):
+            raise Problem("Worker credential expired or revoked", 401)
         scope = scope_of(db, auth.get("credential_id"))
         if not scope or scope["scope"] != "work":
             raise Problem("This route needs a work-scoped worker credential", 403)
@@ -836,6 +849,8 @@ class Meetings:
 
     def admission(self, db, t):
         """Dispatch admission D (spec §3.4). The failing check's name, or None."""
+        from approved_agents import turn_allowed
+        if not turn_allowed(db,t): return "not_approved"
         room = db.execute("SELECT state FROM rooms WHERE id=?", (t["room"],)).fetchone()
         meeting = db.execute("SELECT * FROM meetings WHERE room=?", (t["room"],)).fetchone()
         if not room or room["state"] != "active":
@@ -947,6 +962,8 @@ class Meetings:
             return {"turn": None}
 
     def claim_refusal(self, db, t):
+        from approved_agents import turn_allowed
+        if not turn_allowed(db,t): return "not_approved"
         room = db.execute("SELECT state FROM rooms WHERE id=?", (t["room"],)).fetchone()
         if not room or room["state"] != "active":
             return "meeting_not_active"
@@ -958,6 +975,10 @@ class Meetings:
         if meeting["window_expires"] <= now():
             return "window_expired"       # absolute; only Robert renews it (review F5)
         if meeting["remaining"] <= 0:
+            return "budget_exhausted"
+        limit = card(db, t["addressee"])
+        spent = db.execute("SELECT COUNT(*) FROM turns WHERE room=? AND addressee=? AND budget_reserved=1", (t["room"],t["addressee"])).fetchone()[0]
+        if limit and spent >= limit["max_turns_per_meeting"]:
             return "budget_exhausted"
         if not accepted_member(db, t["room"], t["addressee"]):
             return "membership_ended"
@@ -975,13 +996,20 @@ class Meetings:
             out.update(self.snapshot(db, t))
         return out
 
+    @staticmethod
+    def _file_facts(db, room, doc_id):
+        """What a transcript line for a shared file carries: the document id, its name, size, kind and hash, so a teammate that can fetch files (a managed agent) can ask for
+        the content with its own credential (membership is checked again there). Never the bytes: the snapshot stays small."""
+        d = db.execute("SELECT id,name,mime,sha256,length(content) AS n FROM documents WHERE id=? AND room=?", (doc_id, room)).fetchone() if doc_id else None
+        return {"file": {"id": d["id"], "name": d["name"], "mime": d["mime"], "sha256": d["sha256"], "bytes": d["n"]}} if d else {}
+
     def snapshot(self, db, t):
         """Bounded, attributed context at claim: through trigger_seq-1; the trigger once (spec §3.6)."""
         accepted = [r["actor"] for r in db.execute("SELECT actor FROM members WHERE room=?", (t["room"],))
                     if rsvp_of(db, t["room"], r["actor"])["rsvp"] == "accepted"]
         marks = ",".join("?" * len(accepted)) or "''"
         kinds = ",".join("?" * len(SNAPSHOT_KINDS))
-        rows = db.execute(f"""SELECT e.seq,e.id,e.actor,e.kind,e.body,e.created,p.label FROM events e
+        rows = db.execute(f"""SELECT e.seq,e.id,e.actor,e.kind,e.body,e.created,e.reference,p.label FROM events e
             JOIN principals p ON p.id=e.actor WHERE e.room=? AND e.seq<? AND e.actor IN ({marks})
             AND e.kind IN ({kinds}) ORDER BY e.seq DESC""",
                           (t["room"], t["trigger_seq"], *accepted, *SNAPSHOT_KINDS)).fetchall()
@@ -992,7 +1020,7 @@ class Meetings:
             for prior in db.execute("""SELECT t.result FROM turn_order o JOIN turns t ON t.id=o.turn_id
                     WHERE o.round_id=? AND o.position<? AND t.state='committed'""", (order["round_id"], order["position"])):
                 event_id = json.loads(prior["result"])["event_id"]
-                e = db.execute("""SELECT e.seq,e.id,e.actor,e.kind,e.body,e.created,p.label FROM events e
+                e = db.execute("""SELECT e.seq,e.id,e.actor,e.kind,e.body,e.created,e.reference,p.label FROM events e
                     JOIN principals p ON p.id=e.actor WHERE e.id=?""", (event_id,)).fetchone()
                 if e:
                     earlier.append(e)
@@ -1005,7 +1033,11 @@ class Meetings:
         participants = [{"id": r["id"], "label": r["label"], "kind": r["kind"]} for r in db.execute(
             """SELECT p.id,p.label,p.kind FROM members m JOIN principals p ON p.id=m.actor WHERE m.room=?""",
             (t["room"],)) if r["id"] in accepted]
-        return {"brief": {"title": session["title"], "purpose": session["purpose"],
+        from approved_agents import approval
+        approved = approval(db, t["addressee"])
+        return {"standing_brief": {"text": approved["brief"], "hash": approved["brief_hash"]} if approved else None,
+                "attachment_delivery": "metadata_only",
+                "brief": {"title": session["title"], "purpose": session["purpose"],
                           "facilitator": meeting["facilitator"] if meeting else None,
                           "facilitator_label": label_of(db, meeting["facilitator"]) if meeting and meeting["facilitator"] else None,
                           "language": (meeting["language"] if meeting else None) or "the language Robert writes in",
@@ -1014,6 +1046,7 @@ class Meetings:
                                 "speaker": r["label"], "kind": r["kind"],
                                 "text": r["body"] if r["kind"] != "document" else "(shared a file: " + r["body"] + ")",
                                 "created": r["created"],
+                                **(self._file_facts(db, t["room"], r["reference"]) if r["kind"] == "document" else {}),
                                 **({"note": "earlier in this round"} if r["id"] in earlier_ids else {})} for r in kept],
                 "coverage": {"through_seq": t["trigger_seq"] - 1, "included": len(kept),
                              "omitted": max(0, len(combined) - len(kept)),

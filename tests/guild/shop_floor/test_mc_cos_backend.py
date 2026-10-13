@@ -145,7 +145,7 @@ def test_a_kept_note_is_answered_by_the_chief_of_staff_and_kept_as_hers(floored)
     db = floored.extra["floor"]
     client = floored.owner()
     token = floored.csrf(client)
-    assert client.get(f"{API}/floor").get_json()["mc_header"].startswith("Chief of Staff is live")
+    assert client.get(f"{API}/floor").get_json()["mc_header"].startswith("Chief of Staff is ready")
     note = _keep(client, token, "How is the build going?")
     r = client.post(f"{API}/mc/turns", json={"note_request_id": note["request_id"], "record_mode": "on_record"},
                     headers=write_headers(token))
@@ -153,7 +153,7 @@ def test_a_kept_note_is_answered_by_the_chief_of_staff_and_kept_as_hers(floored)
     assert r.status_code == 200 and body["status"] == "answered" and body["backend_kind"] == "cos"
     assert body["reply_note"]["text"] == "Build is on track."
     assert body["reply_note"]["who"] == "chief_of_staff" and body["reply_note"]["author_label"] == "Chief of Staff"
-    assert "Master Craftsman" not in body["mc_header"] and body["mc_header"].startswith("Chief of Staff is live")
+    assert "Master Craftsman" not in body["mc_header"] and body["mc_header"].startswith("Chief of Staff is ready")
     assert len(calls["post"]) == 1 and calls["post"][0][1]["text"] == "How is the build going?"
     assert [row["author"] for row in db.rows("floor_messages")] == ["robert", "chief_of_staff"]
 
@@ -237,9 +237,7 @@ def test_the_composer_refuses_private_and_documents_before_anything_is_kept_sent
     assert "window.guildTopicContext" in send[refusal:send.index("sendingNote = true;")]                 # topic items count as documents
 
 
-def test_ask_about_this_is_off_not_promised_when_the_partner_reads_no_documents():
+def test_the_workshop_log_has_no_ask_about_this_because_it_has_no_composer():
     js = (JS / "workshop_topic.js").read_text()
-    assert "const askOff = () => document.body.dataset.mcFiles === 'false';" in js
-    assert js.count("askOff()") >= 5                                                  # both menus, both buttons, and askAbout itself
-    ask = js[js.index("function askAbout(id) {"):]
-    assert ask.index("if (askOff())") < ask.index("window.guildTopicContext = [")     # nothing is added to the next message
+    assert "askAbout" not in js and "askOff" not in js and "data-mc-composer" not in js      # no second composer; "Discuss in Chat" goes to the conversation
+    assert "Discuss in Chat" in js

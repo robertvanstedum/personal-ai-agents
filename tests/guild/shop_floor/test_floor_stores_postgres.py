@@ -1,8 +1,10 @@
 """The floor store on a real Postgres, for the end-to-end tester (skipped
 unless GUILD_FLOOR_TEST_DATABASE_URL is set).
 
-Run it against the staging database after Robert has applied
-sql/001_floor_b1.sql, for example from inside the portal container:
+Use a disposable test database with the current forward migrations 001–005
+applied in order. The current store uses Board metadata and size columns too;
+001 alone is no longer sufficient. Any staging use still requires Robert's
+approved setup. For example, from inside a test portal container:
 
     GUILD_FLOOR_TEST_DATABASE_URL="$DATABASE_URL" python3 -m pytest \\
         tests/guild/shop_floor/test_floor_stores_postgres.py -q -p no:cacheprovider
@@ -24,7 +26,7 @@ from minimoi_portal.guild_ui.stores import MASTER_CRAFTSMAN, Author, FloorStores
 URL = os.environ.get("GUILD_FLOOR_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="GUILD_FLOOR_TEST_DATABASE_URL is not set")
 ROBERT = Author("robert", "owner", "Robert")
-TABLES = ("floor_messages", "floor_postits", "floor_continue", "floor_requests")
+TABLES = ("floor_messages", "floor_postits", "floor_continue", "floor_requests", "floor_board_meta")
 
 
 @pytest.fixture

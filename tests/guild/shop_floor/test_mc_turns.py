@@ -97,7 +97,7 @@ def test_a_kept_note_reaches_mc_through_the_relay_and_the_answer_is_kept_as_mcs(
     assert body["reply_note"]["text"] == "Item 12 is in build."
     assert body["reply_note"]["who"] == "master_craftsman" and body["reply_note"]["author_label"] == "Master Craftsman"
     assert body["reply_note"]["context"] == {"area": "Build Queue", "item_ref": 12, "page": "item"}
-    assert body["mc_state"] == "live" and body["mc_header"].startswith("Master Craftsman is live")
+    assert body["mc_state"] == "live" and body["mc_header"].startswith("Master Craftsman is ready")
     sent = turned.extra["runtime"].sent[0]
     assert sent["url"] == "http://mc-relay:8790/v1/chat/completions"
     assert sent["body"]["model"] == "openclaw/mc-agent" and sent["body"]["user"].startswith("guild-mc:")

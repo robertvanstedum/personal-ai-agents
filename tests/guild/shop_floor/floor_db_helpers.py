@@ -44,6 +44,7 @@ def sqlite_ddl(sql: str | None = None) -> str:
 
 BOARD = REPO / "minimoi_portal" / "guild_ui" / "sql" / "002_board.sql"
 MEDIA = REPO / "minimoi_portal" / "guild_ui" / "sql" / "003_media.sql"
+PLACE = REPO / "minimoi_portal" / "guild_ui" / "sql" / "004_board_place.sql"
 
 
 def sqlite_ddl_board(sql: str | None = None) -> str:
@@ -57,6 +58,13 @@ def sqlite_ddl_board(sql: str | None = None) -> str:
     sql = sql.replace("ADD COLUMN IF NOT EXISTS", "ADD COLUMN").replace("TIMESTAMPTZ", "TEXT").replace("UUID", "TEXT")
     sql = re.sub(r"CREATE INDEX IF NOT EXISTS (\w+) ON guild\.(\w+)", r"CREATE INDEX IF NOT EXISTS guild.\1 ON \2", sql)
     return sql
+
+
+def sqlite_ddl_place(sql: str | None = None) -> str:
+    """004_board_place.sql for SQLite: the two position columns."""
+    sql = PLACE.read_text() if sql is None else sql
+    sql = "\n".join(line for line in sql.splitlines() if not line.lstrip().startswith("--"))
+    return sql.replace("ADD COLUMN IF NOT EXISTS", "ADD COLUMN")
 
 
 def sqlite_ddl_media(sql: str | None = None) -> str:
@@ -85,6 +93,8 @@ class SqliteFloor:
             conn = self.connect()
             conn.executescript(sqlite_ddl())
             conn.executescript(sqlite_ddl_board())       # Guild 1.1 slice 3
+            conn.executescript(sqlite_ddl_place())
+            conn.executescript(sqlite_ddl_place((PLACE.parent / "005_board_size.sql").read_text()))       # free placement (11 Oct)
             conn.executescript(sqlite_ddl_media())
             conn.commit()
             conn.close()

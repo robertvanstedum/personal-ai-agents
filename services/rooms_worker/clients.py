@@ -42,7 +42,7 @@ class Records:
         self.session.trust_env = False
 
     def call(self, method, path, body=None, key=None, missing_ok=False):
-        headers = {"Authorization": "Bearer " + self.token, "Accept": "application/json"}
+        headers = {"Authorization": "Bearer " + (self.token() if callable(self.token) else self.token), "Accept": "application/json"}
         if method != "GET":
             headers["Content-Type"] = "application/json"
             if key:
@@ -60,6 +60,21 @@ class Records:
         if missing_ok and r.status_code == 404:
             return 404, None
         return r.status_code, data
+
+    def get_bytes(self, path, limit=8 * 1024 * 1024):
+        """GET a file route with this identity and return (status, bytes or None). Used for a room's shared files; the bytes are capped, never partly returned."""
+        headers = {"Authorization": "Bearer " + (self.token() if callable(self.token) else self.token)}
+        try:
+            r = self.session.request("GET", self.base + "/api/v1" + path, headers=headers, timeout=self.timeout, allow_redirects=False, stream=True)
+        except requests.RequestException as error:
+            raise Unavailable(type(error).__name__) from None
+        try:
+            if r.status_code != 200:
+                return r.status_code, None
+            data = r.raw.read(limit + 1, decode_content=True)
+            return (200, data) if len(data) <= limit else (413, None)
+        finally:
+            r.close()
 
     def operation(self, key, destination):
         """Receipt lookup: (True, response) committed, (False, None) confirmed absent."""

@@ -76,6 +76,14 @@ class PlatformAccess:
             LEFT JOIN credential_scopes s ON s.credential_id=c.id WHERE ''' + where, (value,)).fetchone()
         if not row or row['revoked'] or (row['expires'] and row['expires'] <= stamp()):
             return None
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='agent_approvals'").fetchone():
+            binding=db.execute('SELECT agent,generation FROM agent_credential_generations WHERE credential=?',(row['credential_id'],)).fetchone()
+            if binding:
+                state=db.execute('SELECT state,generation FROM agent_approvals WHERE agent=?',(binding['agent'],)).fetchone()
+                if not state or state['state']!='active' or state['generation']!=binding['generation']:
+                    return None
+            elif db.execute('SELECT 1 FROM agent_approvals WHERE agent=?',(row['id'].removesuffix('-manual'),)).fetchone() or db.execute('SELECT 1 FROM hosted_teammates h JOIN agent_approvals a ON a.agent=h.principal WHERE h.installation_id=?',(row['installation_id'],)).fetchone():
+                return None  # legacy/side-issued keys cannot bypass an adopted approval
         return dict(row)
 
     def authenticate(self, token=None, credential_id=None):
@@ -86,6 +94,13 @@ class PlatformAccess:
     def enforce(db, principal, destination, operation):
         cid = request_credential.get()
         if cid is None:  # trusted in-process callers; HTTP always installs context
+            return
+        if isinstance(cid, str) and cid.startswith('portal:'):
+            # A person signed in through mini-moi (portal_identity): the principal must still exist as a human and be the one the request
+            # was made for. Membership, roles and owner-only rules are enforced by the store as for any person.
+            row = db.execute("SELECT kind FROM principals WHERE id=?", (cid[7:],)).fetchone()
+            if not row or row['kind'] != 'human' or cid[7:] != principal:
+                raise AccessError('Portal identity is not valid for this request', 401)
             return
         auth = PlatformAccess.lookup(db, credential_id=cid)
         if not auth or auth['id'] != principal:

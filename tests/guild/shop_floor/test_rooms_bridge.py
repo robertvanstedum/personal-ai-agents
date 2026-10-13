@@ -1,7 +1,9 @@
-"""Guild 1.1 slice 4 (spec §6, §11, R4): Rooms on Records through the portal's
-dev-only bridge. Records keeps its own sign-in and its own grant checks; the
-portal never forwards its cookie or identity and never injects a credential;
-the bridge reaches exactly one configured internal origin and is never
+"""Guild 1.1 slice 4 (spec §6, §11, R4) and the Rooms identity (draft 3): Rooms on
+Records through the portal's dev-only bridge. There is no second sign-in: the
+mini-moi login is the identity, a Rooms binding (data the owner controls, checked
+live on every call) names the Records principal, and the bridge sends one signed
+assertion per request. The portal never forwards its cookie, a Records cookie or a
+credential; the bridge reaches exactly one configured internal origin and is never
 installed in production. The real Records app (prototype-lab) answers, on a
 temporary folder, through a transport into its test client."""
 from __future__ import annotations
@@ -25,29 +27,47 @@ from floor_db_helpers import SqliteFloor, attach, keyed
 from rooms_helpers import (BACKEND, DEV, RECORDS_DIR, RecordsTransport, dev_owner, owner_key, records_app,
                            records_login, rget, rpost)
 
+KEY = ("k1", "p" * 48)
 ROOM = {"title": "Screen review", "purpose": "Review the Rooms slice", "mode": "meeting", "recording_acknowledged": True}
 
 
 @pytest.fixture
 def records(tmp_path):
-    return records_app(tmp_path / "records")
+    return records_app(tmp_path / "records", portal_key=KEY)
+
+
+def _bind(directory, rows):
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "bindings.json").write_text(json.dumps({"version": 1, "bindings": rows}))
+
+
+def _binding(account="account:robert", principal="robert", active=True):
+    return {"account": account, "principal": principal, "active": active, "granted_by": "test", "granted_at": "2026-10-11T00:00:00Z"}
 
 
 @pytest.fixture
-def bridged(load_portal, records, monkeypatch):
+def bridged(load_portal, records, monkeypatch, tmp_path):
     monkeypatch.setenv("RECORDS_BACKEND", BACKEND)
+    access = tmp_path / "rooms-access"
+    _bind(access, [_binding()])
+    keyfile = tmp_path / "portal-bridge.key"
+    keyfile.write_text(f"{KEY[0]}:{KEY[1]}\n")
+    monkeypatch.setenv("MINIMOI_ROOMS_ACCESS_DIR", str(access))
+    monkeypatch.setenv("RECORDS_PORTAL_KEY_FILE", str(keyfile))
+    import minimoi_portal.auth as auth
+    users = [{"username": "robert", "tier": "owner", "display_name": "Robert"}, {"username": "test-agent-full", "tier": "owner"},
+             {"username": "dana", "tier": "family", "display_name": "Dana"}]
+    monkeypatch.setattr(auth, "load_users", lambda: list(users))
     transport = RecordsTransport(records)
     monkeypatch.setattr(RB, "_TRANSPORT", transport)
     portal = load_portal()
-    portal.extra.update(records=records, transport=transport)
+    portal.extra.update(records=records, transport=transport, access=access, keyfile=keyfile, users=users)
     return portal
 
 
 def _signed_in(portal):
-    client = dev_owner(portal)
-    r = records_login(client, owner_key(portal.extra["records"]))
-    assert r.status_code == 200, r.data
-    return client
+    """The portal owner: signed in to mini-moi, nothing else (no Records sign-in exists any more)."""
+    return dev_owner(portal)
 
 
 def _room(client, key=None):
@@ -93,13 +113,124 @@ def test_the_allowed_backend_origins(url):
 
 # ── R4: Records' own sign-in, no identity forwarded ──────────────────────────
 
-def test_without_a_records_login_the_api_answers_401_and_the_page_can_say_sign_in(bridged):
+def test_a_bound_owner_reaches_rooms_with_no_second_sign_in_and_the_page_has_no_records_login(bridged):
     client = dev_owner(bridged)
-    r = rget(client, "/v1/rooms")
-    assert r.status_code == 401 and "Sign in" in r.get_json()["error"]
+    r = rget(client, "/v1/me")
+    assert r.status_code == 200 and r.get_json()["id"] == "robert"
     page = client.get("/guild-next/guild/rooms", base_url=DEV).get_data(as_text=True)
-    assert "Sign in to Rooms" in page and 'href="/app/records/"' in page
-    assert '"state": "on"' in page
+    assert "Sign in to Rooms" not in page and 'href="/app/records/"' not in page and "Records sign-in" not in page
+    assert '"state": "on"' in page and '"access": "ok"' in page
+
+
+def test_an_account_without_a_binding_gets_403_and_nothing_reaches_records(bridged):
+    other = bridged.app.test_client()
+    from floor_helpers import OWNER
+    with other.session_transaction(base_url=DEV) as sess:
+        sess["user"] = {**OWNER, "username": "test-agent-full"}                    # an owner-tier account with no Rooms binding
+    r = rget(other, "/v1/rooms")
+    assert r.status_code == 403 and r.get_json()["code"] == "rooms_no_access"
+    assert "access to Rooms" in r.get_json()["error"] and "Sign in" not in r.get_json()["error"]
+    assert bridged.extra["transport"].calls == []
+    page = other.get("/guild-next/guild/rooms", base_url=DEV).get_data(as_text=True)
+    assert '"access": "no_access"' in page and "Sign in to Rooms" not in page
+
+
+def test_a_withdrawn_or_damaged_binding_or_a_missing_key_or_a_removed_account_applies_on_the_very_next_call(bridged, monkeypatch):
+    client = dev_owner(bridged)
+    access, keyfile = bridged.extra["access"], bridged.extra["keyfile"]
+    assert rget(client, "/v1/me").status_code == 200
+    _bind(access, [_binding(active=False)])                                   # withdrawn
+    assert rget(client, "/v1/me").get_json()["code"] == "rooms_no_access"
+    (access / "bindings.json").write_text("{not json")                        # unreadable: refused, not trusted
+    r = rget(client, "/v1/me")
+    assert r.status_code == 503 and r.get_json()["code"] == "rooms_unavailable"
+    _bind(access, [_binding()])
+    assert rget(client, "/v1/me").status_code == 200
+    keyfile.rename(keyfile.with_suffix(".gone"))                              # the signing key is not in place
+    assert rget(client, "/v1/me").status_code == 503
+    keyfile.with_suffix(".gone").rename(keyfile)
+    assert rget(client, "/v1/me").status_code == 200
+    import minimoi_portal.domain_auth as dauth
+    monkeypatch.setattr(dauth, "get_user_by_id", lambda _id: None)                                    # no domain row either
+    bridged.extra["users"][:] = [u for u in bridged.extra["users"] if u["username"] != "robert"]     # the account no longer exists
+    assert rget(client, "/v1/me").get_json()["code"] == "rooms_no_access"
+    calls_before = len(bridged.extra["transport"].calls)
+    rget(client, "/v1/me")
+    assert len(bridged.extra["transport"].calls) == calls_before             # refused before Records
+
+
+def test_what_records_receives_is_one_signed_assertion_and_never_a_cookie_or_a_credential(bridged):
+    client = dev_owner(bridged)
+    calls = bridged.extra["transport"].calls
+    n = len(calls)
+    client.post("/app/records/api/v1/rooms?b=2&a=1", base_url=DEV, data=json.dumps(ROOM), content_type="application/json",
+                headers={"Origin": DEV, "Idempotency-Key": "identity-0001", "Authorization": "Bearer not-forwarded",
+                         "X-Forwarded-User": "robert", "X-User": "robert", "X-CSRF-Token": "portal-token",
+                         "X-Forwarded-For": "1.2.3.4", "Host": "dev.minimoi.ai", "X-Portal-Identity": "client-forged",
+                         "Cookie": "minimoi_room_poc=forged"})
+    sent = calls[n]
+    assert sent["url"].startswith(f"{BACKEND}/api/v1/rooms") and sent["allow_redirects"] is False
+    assert set(sent["headers"]) <= {"Accept", "Content-Type", "Idempotency-Key", "Origin", "X-Portal-Identity"}
+    assert sent["headers"]["X-Portal-Identity"].startswith("v2.") and "forged" not in sent["headers"]["X-Portal-Identity"]
+    assert sent["headers"]["Origin"] == BACKEND and sent["headers"]["Idempotency-Key"] == "identity-0001"
+    for call in calls:
+        assert "Authorization" not in call["headers"] and "Cookie" not in call["headers"]
+    assert not any(c.key == "minimoi_room_poc" for c in client._cookies.values()) if hasattr(client, "_cookies") else True
+
+
+def test_a_records_refusal_of_the_assertion_is_a_connection_fault_never_a_sign_in_prompt(bridged, tmp_path, monkeypatch):
+    wrong = records_app(tmp_path / "records-other-key", portal_key=("k1", "z" * 48))        # Records holds a different secret
+    bridged.extra["transport"].app = wrong
+    bridged.extra["transport"].client = wrong.test_client(use_cookies=False)
+    r = rget(dev_owner(bridged), "/v1/rooms")
+    assert r.status_code == 502 and r.get_json()["code"] == "rooms_integration"
+    assert "not a sign-in problem" in r.get_json()["error"] and r.status_code != 401
+    monkeypatch.delenv("RECORDS_PORTAL_KEY_FILE")                                           # (same process: the portal already holds its own path)
+    unkeyed = records_app(tmp_path / "records-no-key")                                       # Records has no key at all
+    bridged.extra["transport"].client = unkeyed.test_client(use_cookies=False)
+    r = rget(dev_owner(bridged), "/v1/rooms")
+    assert r.status_code == 503 and r.get_json()["code"] == "rooms_unavailable"
+
+
+def test_a_second_person_bound_to_their_own_principal_sees_only_their_rooms(bridged):
+    """The binding names the principal, so a second account acts as a member-only person: only invited rooms, no owner routes."""
+    owner = _signed_in(bridged)
+    shared = _room(owner, "room-shared-0001")
+    private = rpost(owner, "/v1/rooms", {**ROOM, "title": "Private budget talk", "purpose": "Not for Dana"}, "room-priv-0001").get_json()["result"]
+    store = bridged.extra["records"].extensions["records_store"]
+    with store.connect() as db:
+        db.execute("INSERT INTO principals VALUES('dana','Dana','human','x','2026-01-01T00:00:00+00:00')")
+    assert rpost(owner, f"/v1/rooms/{shared['id']}/members", {"actor": "dana", "role": "contributor"}, "member-dana-0001").status_code == 200
+    _bind(bridged.extra["access"], [_binding(), _binding("account:test-agent-full", "dana")])
+    dana = bridged.app.test_client()
+    from floor_helpers import OWNER
+    with dana.session_transaction(base_url=DEV) as sess:
+        sess["user"] = {**OWNER, "username": "test-agent-full"}
+    assert [r["id"] for r in rget(dana, "/v1/rooms").get_json()["rooms"]] == [shared["id"]]
+    denied = rget(dana, f"/v1/rooms/{private['id']}")
+    assert denied.status_code in (403, 404) and "Private budget talk" not in denied.get_data(as_text=True)
+    assert rget(dana, "/v1/principals").status_code == 403
+    assert rget(dana, "/v1/me").get_json()["id"] == "dana"
+
+
+def test_the_portal_signs_what_records_verifies(tmp_path):
+    from minimoi_portal import rooms_identity as RI
+    import portal_identity as PI                                                     # Records' side, imported from prototype-lab
+    body = b'{"a":1}'
+    target = RI.canonical_target("/api/v1/rooms", "z=1&a=2&a=1")
+    header = RI.sign(KEY, principal="robert", method="post", target=target, body=body, env="dev")
+    db = tmp_path / "n.sqlite"
+    import sqlite3
+
+    class Conn:
+        def __enter__(self):
+            self.c = sqlite3.connect(db, isolation_level=None)
+            self.c.executescript(PI.SCHEMA)
+            return self.c
+
+        def __exit__(self, *a):
+            self.c.close()
+    assert PI.verify(header, KEY, env="dev", method="POST", target=PI.canonical_target("/api/v1/rooms", b"a=1&z=1&a=2"), body=body, connect=Conn) == "robert"
 
 
 def test_the_portal_owner_guard_comes_first(bridged):
@@ -110,27 +241,6 @@ def test_the_portal_owner_guard_comes_first(bridged):
     for client in (guest, bridged.app.test_client()):
         assert rget(client, "/v1/rooms").status_code in (302, 403)
     assert bridged.extra["transport"].calls == []                       # never reached Records
-
-
-def test_no_portal_cookie_or_identity_reaches_records_and_the_records_cookie_is_scoped(bridged):
-    client = _signed_in(bridged)
-    cookie = client.get_cookie(RB.COOKIE, domain="dev.minimoi.ai", path="/app/records/")
-    assert cookie is not None and cookie.path == "/app/records/" and cookie.http_only and cookie.secure
-    assert cookie.same_site == "Strict"
-    calls = bridged.extra["transport"].calls
-    n = len(calls)
-    client.post("/app/records/api/v1/rooms", base_url=DEV, data=json.dumps(ROOM), content_type="application/json",
-                headers={"Origin": DEV, "Idempotency-Key": "identity-0001", "Authorization": "Bearer not-forwarded",
-                         "X-Forwarded-User": "robert", "X-User": "robert", "X-CSRF-Token": "portal-token",
-                         "X-Forwarded-For": "1.2.3.4", "Host": "dev.minimoi.ai"})
-    sent = calls[n]
-    assert sent["url"] == f"{BACKEND}/api/v1/rooms" and sent["allow_redirects"] is False
-    assert set(sent["headers"]) <= {"Accept", "Content-Type", "Idempotency-Key", "Cookie", "Origin"}
-    assert sent["headers"]["Cookie"].startswith(f"{RB.COOKIE}=") and "session=" not in sent["headers"]["Cookie"]
-    assert ";" not in sent["headers"]["Cookie"]                         # the Records cookie only
-    assert sent["headers"]["Origin"] == BACKEND and sent["headers"]["Idempotency-Key"] == "identity-0001"
-    for call in calls:
-        assert "Authorization" not in call["headers"]                    # the owner credential is never injected
 
 
 def test_a_cross_origin_or_origin_less_write_through_the_bridge_is_403(bridged):
@@ -167,30 +277,21 @@ def test_a_paused_room_refuses_writes_with_409(bridged):
 
 
 def _agent_with_grant_on(owner_client, records, room_id, label="Claude Code"):
-    agent = rpost(owner_client, "/v1/principals", {"id": "claude-code", "label": label}, "principal-0001").get_json()
-    rpost(owner_client, f"/v1/rooms/{room_id}/members", {"actor": "claude-code", "role": "contributor"}, "member-0001")
-    issued = rpost(owner_client, "/v1/platform/credentials", {
+    """Provision an agent and its key directly in Records (as the owner's operator tools do): credential management is not reachable
+    through the portal on purpose."""
+    direct = records.test_client()
+    base = {"base_url": BACKEND}
+    bearer = {"Authorization": "Bearer " + owner_key(records)}
+    agent = direct.post("/api/v1/principals", json={"id": "claude-code", "label": label},
+                        headers={**bearer, "Idempotency-Key": "principal-0001"}, **base).get_json()
+    direct.post(f"/api/v1/rooms/{room_id}/members", json={"actor": "claude-code", "role": "contributor"},
+                headers={**bearer, "Idempotency-Key": "member-0001"}, **base)
+    issued = direct.post("/api/v1/platform/credentials", json={
         "principal": "claude-code", "label": "Claude Code on the Mac",
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-        "grants": {room_id: ["read", "post"]}}, "credential-0001")
+        "grants": {room_id: ["read", "post"]}}, headers={**bearer, "Idempotency-Key": "credential-0001"}, **base)
     assert issued.status_code == 201, issued.data
     return agent, issued.get_json()["access_token"]
-
-
-def test_a_room_without_a_grant_is_403_and_leaks_nothing(bridged):
-    owner = _signed_in(bridged)
-    allowed = _room(owner, "room-a-0001")
-    secret = rpost(owner, "/v1/rooms", {**ROOM, "title": "Private budget talk", "purpose": "Not for agents"},
-                   "room-b-0001").get_json()["result"]
-    _agent, token = _agent_with_grant_on(owner, bridged.extra["records"], allowed["id"])
-    agent = dev_owner(bridged)                                            # another browser, same portal owner
-    assert records_login(agent, token).status_code == 200
-    denied = rget(agent, f"/v1/rooms/{secret['id']}")
-    assert denied.status_code == 403
-    assert "Private budget talk" not in denied.get_data(as_text=True) and "Not for agents" not in denied.get_data(as_text=True)
-    listed = rget(agent, "/v1/rooms").get_json()["rooms"]
-    assert [r["id"] for r in listed] == [allowed["id"]]
-    assert rget(agent, f"/v1/rooms/{allowed['id']}").status_code == 200
 
 
 def _free_port():
@@ -229,7 +330,7 @@ def test_a_roomctl_agent_message_is_attributed_to_the_agent(bridged, tmp_path):
     assert posted[0]["actor_label"] == "Claude Code"
 
 
-def test_files_may_be_untagged_and_keep_their_provenance_within_2_000_000_bytes(bridged):
+def test_files_may_be_untagged_and_keep_their_provenance_within_8_000_000_bytes(bridged):
     import base64
     client = _signed_in(bridged)
     room = _room(client)
@@ -249,8 +350,8 @@ def test_files_may_be_untagged_and_keep_their_provenance_within_2_000_000_bytes(
         "sha256": doc["sha256"], "label": "notes.md"}, "save-0001")
     assert saved.status_code == 201 and saved.get_json()["result"]["revision"] == "v1"
     too_big = rpost(client, f"/v1/rooms/{room['id']}/documents",
-                    {"name": "big.bin", "base64": base64.b64encode(b"x" * 2_000_001).decode()}, "file-0002")
-    assert too_big.status_code == 400 and "2,000,000" in too_big.get_json()["error"]
+                    {"name": "big.bin", "base64": base64.b64encode(b"x" * 8_000_001).decode()}, "file-0002")
+    assert too_big.status_code == 400 and "8,000,000" in too_big.get_json()["error"] and "8,000,001" in too_big.get_json()["error"]
 
 
 # ── Take to a Room: a stored on-the-record note, by id only ─────────────────
@@ -323,31 +424,6 @@ def test_records_answers_only_exact_configured_hosts(value, ok):
 
 # ── #288 review: cookies, loopback ───────────────────────────────────────────
 
-class _Headers(dict):
-    def getlist(self, name):
-        return list(self.get(name, []))
-
-
-class _Upstream:
-    def __init__(self, cookies):
-        self.raw = type("Raw", (), {"headers": _Headers({"Set-Cookie": cookies})})()
-        self.headers = {"Set-Cookie": ", ".join(cookies)}
-
-
-def test_records_cookie_with_max_age_only_or_among_others_never_crashes():
-    """F5: Max-Age without Expires used to raise (a 500); several Set-Cookie
-    headers joined left stray commas in the attributes."""
-    up = _Upstream(["other=1; Path=/; Expires=Wed, 01 Oct 2026 10:00:00 GMT",
-                    f"{RB.COOKIE}=abc; Max-Age=60; Path=/; HttpOnly"])
-    assert RB._records_cookie(up) == ("abc", 60, None)
-    up = _Upstream([f"{RB.COOKIE}=; Max-Age=0; Path=/"])
-    assert RB._records_cookie(up) == ("", 0, None)
-    up = _Upstream([f"{RB.COOKIE}=x; Max-Age=soon"])
-    assert RB._records_cookie(up) == ("x", None, None)
-    assert RB._records_cookie(_Upstream(["unrelated=1"])) is None
-    assert RB._records_cookie(_Upstream(['bad"cookie=\x00'])) is None
-
-
 @pytest.mark.parametrize("url", ["http://127.0.0.1:5001", "http://127.0.0.1", "http://127.0.0.1:80"])
 def test_loopback_backend_must_not_be_the_portal_itself(url):
     """F7: the backend may not be the portal's own port."""
@@ -362,3 +438,104 @@ def test_local_hosts_are_accepted_only_beside_a_loopback_backend():
     assert not RB._allowed_host("127.0.0.1:5001", "http://minimoi-records:18880")
     assert RB._allowed_host("127.0.0.1:5001", "http://127.0.0.1:18880")
     assert not RB._allowed_host("evil.example", "http://127.0.0.1:18880")
+
+
+# ── Slice 2: the owner switches Rooms on or off for an account ────────────────
+
+def _api(client, method, path, body=None):
+    from floor_helpers import write_headers
+    import minimoi_portal.guild_ui.security as sec
+    token = client.get("/guild-next/api/v1/session", base_url=DEV).get_json()["csrf_token"]
+    headers = write_headers(token)
+    url = f"/guild-next/api/v1{path}"
+    if method == "GET":
+        return client.get(url, base_url=DEV)
+    return client.post(url, base_url=DEV, json={**(body or {}), "idempotency_key": body.get("idempotency_key") if body and "idempotency_key" in body else uuid.uuid4().hex[:24]},
+                       headers={**headers, "Origin": DEV})
+
+
+def _bindings(bridged):
+    return {r["account"]: r for r in json.loads((bridged.extra["access"] / "bindings.json").read_text())["bindings"]}
+
+
+def test_the_owner_sees_every_account_and_who_has_rooms(bridged):
+    owner = dev_owner(bridged)
+    r = _api(owner, "GET", "/rooms/access")
+    assert r.status_code == 200 and r.get_json()["enabled"] is True
+    rows = {a["username"]: a for a in r.get_json()["accounts"]}
+    assert rows["robert"]["state"] == "granted" and rows["robert"]["is_owner"] is True
+    assert rows["dana"]["state"] == "none" and rows["test-agent-full"]["state"] == "none"
+
+
+def test_granting_creates_the_person_in_records_then_activates_and_is_idempotent(bridged):
+    owner = dev_owner(bridged)
+    first = _api(owner, "POST", "/rooms/access/grant", {"username": "dana"})
+    assert first.status_code == 200 and first.get_json() == {"username": "dana", "state": "granted", "changed": True}
+    row = _bindings(bridged)["account:dana"]
+    assert row["active"] is True and row["pending"] is False and row["principal"].startswith("u-dana-") and row["granted_by"] == "robert"
+    store = bridged.extra["records"].extensions["records_store"]
+    with store.connect() as db:
+        person = db.execute("SELECT kind FROM principals WHERE id=?", (row["principal"],)).fetchone()
+    assert person["kind"] == "human"
+    again = _api(owner, "POST", "/rooms/access/grant", {"username": "dana"})
+    assert again.status_code == 200 and again.get_json()["changed"] is False
+    with store.connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM principals WHERE id LIKE 'u-dana-%'").fetchone()[0] == 1       # never two people
+    events = [json.loads(l)["event"] for l in (bridged.extra["access"] / "audit.jsonl").read_text().splitlines()]
+    assert events.count("grant_started") == 1 and events.count("grant_completed") == 1
+    assert [a["state"] for a in _api(owner, "GET", "/rooms/access").get_json()["accounts"] if a["username"] == "dana"] == ["granted"]
+
+
+def test_a_grant_whose_records_step_fails_stays_pending_and_never_active_then_finishes_on_retry(bridged, tmp_path):
+    owner = dev_owner(bridged)
+    transport = bridged.extra["transport"]
+    good = transport.client
+    broken = records_app(tmp_path / "records-down", portal_key=("k1", "z" * 48))          # Records refuses the portal: the step cannot finish
+    transport.client = broken.test_client(use_cookies=False)
+    failed = _api(owner, "POST", "/rooms/access/grant", {"username": "dana"})
+    assert failed.status_code == 502 and failed.get_json()["state"] == "pending" and "try again" in failed.get_json()["message"]
+    row = _bindings(bridged)["account:dana"]
+    assert row["active"] is False and row["pending"] is True                                  # never active before the person exists
+    assert [a["state"] for a in _api(owner, "GET", "/rooms/access").get_json()["accounts"] if a["username"] == "dana"] == ["pending"]
+    transport.client = good
+    done = _api(owner, "POST", "/rooms/access/grant", {"username": "dana"})
+    assert done.status_code == 200 and _bindings(bridged)["account:dana"]["active"] is True
+    assert _bindings(bridged)["account:dana"]["principal"] == row["principal"]               # the same person, not a second one
+
+
+def test_withdrawing_applies_at_once_keeps_the_audit_and_never_touches_the_owner(bridged):
+    owner = dev_owner(bridged)
+    _api(owner, "POST", "/rooms/access/grant", {"username": "dana"})
+    gone = _api(owner, "POST", "/rooms/access/withdraw", {"username": "dana"})
+    assert gone.status_code == 200 and gone.get_json()["state"] == "withdrawn"
+    from minimoi_portal import rooms_identity as RI
+    assert RI.RoomsAccess(str(bridged.extra["access"])).decide("account:dana").kind == "no_access"
+    assert "withdrawn" in (bridged.extra["access"] / "audit.jsonl").read_text()
+    refused = _api(owner, "POST", "/rooms/access/withdraw", {"username": "robert"})
+    assert refused.status_code == 409 and _bindings(bridged)["account:robert"]["active"] is True
+
+
+def test_only_the_owner_changes_access_and_input_is_checked(bridged):
+    from floor_helpers import GUEST
+    guest = bridged.app.test_client()
+    with guest.session_transaction(base_url=DEV) as sess:
+        sess["user"] = dict(GUEST)
+    assert guest.get("/guild-next/api/v1/rooms/access", base_url=DEV).status_code in (401, 403)
+    owner = dev_owner(bridged)
+    assert _api(owner, "POST", "/rooms/access/grant", {"username": "nobody-here"}).status_code == 404
+    assert _api(owner, "POST", "/rooms/access/grant", {}).status_code == 422
+    no_key = owner.post("/guild-next/api/v1/rooms/access/grant", base_url=DEV, json={"username": "dana"},
+                        headers={**__import__("floor_helpers").write_headers(owner.get("/guild-next/api/v1/session", base_url=DEV).get_json()["csrf_token"]), "Origin": DEV})
+    assert no_key.status_code == 422
+    assert owner.post("/guild-next/api/v1/rooms/access/grant", base_url=DEV, json={"username": "dana", "idempotency_key": "abcdefgh1234"}).status_code == 403   # no CSRF token
+
+
+def test_a_granted_family_account_still_cannot_open_the_owners_rooms_page_yet(bridged):
+    """The honest limit of this slice: a grant prepares the person; the portal's owner guard still keeps every Guild page, Rooms included, to the owner."""
+    owner = dev_owner(bridged)
+    _api(owner, "POST", "/rooms/access/grant", {"username": "dana"})
+    dana = bridged.app.test_client()
+    with dana.session_transaction(base_url=DEV) as sess:
+        sess["user"] = {"username": "dana", "tier": "family", "display_name": "Dana"}
+    assert dana.get("/guild-next/guild/rooms", base_url=DEV).status_code in (302, 403)
+    assert dana.get("/app/records/api/v1/rooms", base_url=DEV).status_code in (302, 403)

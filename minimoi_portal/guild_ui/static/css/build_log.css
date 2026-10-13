@@ -151,3 +151,13 @@ body.gu[data-page="build_log"] .gu-main { padding: var(--gu-s3) var(--gu-s5) 96p
 
 [data-bl-inline-rank] { width:5rem; max-width:100%; font:inherit; padding:4px; border:1px solid var(--gu-border); border-radius:4px; background:var(--gu-input-bg); }
 .bl-only { font-size:.85rem; }
+
+/* One line per item (10 Oct, Robert): the row is as tall as its text needs, not forced to two lines by a Details button. Choosing a row opens the side panel. */
+.bl-matrix [data-col="title"] { width: 34%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bl-matrix .bl-open { display: inline; padding: 0; max-width: 100%; text-align: left; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bl-matrix .bl-open .bl-ttl { display: inline; max-width: none; white-space: nowrap; overflow: visible; }
+.bl-matrix tbody td { padding-top: 5px; padding-bottom: 5px; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bl-matrix tbody tr[data-bl-row] { cursor: pointer; }
+.bl-matrix tbody tr[data-bl-row]:hover { background: var(--gu-surface-2); }
+.bl-matrix [data-col="notes"] .bl-nx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .bl-matrix [data-col="title"] { min-width: 170px; white-space: normal; } .bl-matrix tbody td { white-space: normal; } }

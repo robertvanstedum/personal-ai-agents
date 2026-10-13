@@ -8,6 +8,11 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
 .rm-list { border-right: 1px solid var(--gu-zone-edge); padding: var(--gu-s3); overflow-y: auto; background: var(--gu-surface); }
 .rm-list-head { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; justify-content: space-between; }
 .rm-list-h { flex: none; white-space: nowrap; font: 700 var(--gu-size-xs) var(--gu-font-body); text-transform: uppercase; letter-spacing: 0.12em; color: var(--gu-zone-h-ink); }
+.rm-list-pages { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.rm-list-pages button { min-height: 44px; }
+.rm-about { margin-top: 12px; }
+.rm-about > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.rm-about > p { margin: 8px 0; }
 .rm-list-close, .rm-list-open { display: none; }
 .rm-rooms { display: flex; flex-direction: column; gap: 4px; margin: var(--gu-s2) 0; }
 .rm-rooms a { display: block; padding: 8px 10px; border-radius: var(--gu-radius); text-decoration: none; color: var(--gu-text); }
@@ -25,6 +30,12 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
 .rm-more { position: relative; flex: none; }
 .rm-more > summary { list-style: none; }
 .rm-more > summary::-webkit-details-marker { display: none; }
+.rm-handoff-open { margin-top: 4px; font-size: var(--gu-size-xs); opacity: .8; }
+.rm-access { position: relative; flex: none; }
+.rm-access > summary { list-style: none; }
+.rm-access > summary::-webkit-details-marker { display: none; }
+.rm-access-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rm-access-list li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .rm-more-body { position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; width: 320px; padding: var(--gu-s3); background: var(--gu-surface); border: 1px solid var(--gu-border-strong); border-radius: var(--gu-radius); box-shadow: var(--gu-shadow-float); font-size: var(--gu-size-sm); display: flex; flex-direction: column; gap: 6px; }
 .rm-more-body input { font: inherit; min-height: 30px; padding: 3px 8px; border: 1px solid var(--gu-border-strong); border-radius: var(--gu-radius); }
 .rm-banner { margin: var(--gu-s3) var(--gu-s4) 0; padding: var(--gu-s2) var(--gu-s3); border-radius: var(--gu-radius); background: var(--gu-banner-bg); color: var(--gu-banner-ink); display: flex; flex-wrap: wrap; gap: 6px var(--gu-s3); align-items: center; font-size: var(--gu-size-sm); }
@@ -181,3 +192,25 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
  .rm-participants .rm-pname, .rm-participants .rm-rsvp { display: inline; }
  .rm-participants .rm-controls, .rm-participants .rm-people { order: initial; flex: none; }
 }
+
+/* The same thin banner as Prototype Lab, Operate and Improve (10 Oct): title and a line on the left, the whole picture framed at the right. */
+.rm .rm-art.area-hero { height: 112px; min-height: 0; margin: 0; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--gu-zone-edge); background: linear-gradient(90deg, #efe6d3 0%, #f1e8d6 45%, #f3ead9 100%); display: grid; grid-template-columns: minmax(0, 1fr) auto; flex: none; position: relative; }
+.rm .rm-art.area-hero .area-hero-art img { width: 100%; height: 100%; object-fit: contain; }
+.rm .area-hero-title { font: 600 28px/1.15 var(--gu-font-display); margin: 0 0 2px; color: var(--gu-paper-ink, #2b2113); }
+.rm .rm-art.area-hero details { top: 6px; right: 6px; z-index: 3; }
+.rm .rm-art.area-hero .area-hero-art { margin-right: 44px; }
+@media (max-width: 760px) { .rm .rm-art.area-hero { height: 96px; } .rm .area-hero-title { font-size: 24px; } .rm .rm-art.area-hero .area-hero-text p:not(.prototype-eyebrow):not(.area-hero-title) { display: none; } .rm .rm-art.area-hero .area-hero-art { height: 78px; width: 104px; } }
+.rm .rm-art.area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) min(46%, 520px); }
+.rm .rm-art.area-hero .area-hero-art.area-hero-art-wide { margin-right: 0; width: auto; }
+.rm .rm-art.area-hero .area-hero-art.area-hero-art-wide img { object-fit: cover; }
+@media (max-width: 760px) { .rm .rm-art.area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) 42%; } .rm .rm-art.area-hero .area-hero-art.area-hero-art-wide { height: 100%; width: auto; } }
+.rm .rm-art.area-hero { height: 130px; }
+.rm .rm-art.area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) 48%; }
+.rm .rm-art.area-hero .area-hero-art.area-hero-art-wide { width: auto; height: 100%; aspect-ratio: 4 / 3; margin: 0; }
+@media (max-width: 760px) { .rm .rm-art.area-hero { height: 96px; } }
+.rm .rm-art.area-hero { grid-template-rows: 130px; }
+.rm .rm-art.area-hero .area-hero-art.area-hero-art-wide { height: 130px; width: 100%; aspect-ratio: auto; align-self: start; }
+.rm .rm-art.area-hero .area-hero-art.area-hero-art-wide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 760px) { .rm .rm-art.area-hero { grid-template-rows: 96px; } .rm .rm-art.area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) 42%; } .rm .rm-art.area-hero .area-hero-art.area-hero-art-wide { height: 96px; } }
+.rm .rm-art.area-hero .area-hero-text p.area-hero-title { font: 600 28px/1.15 var(--gu-font-display); margin: 0 0 2px; color: var(--gu-paper-ink, #2b2113); }
+@media (max-width: 760px) { .rm .rm-art.area-hero .area-hero-text p.area-hero-title { font-size: 24px; } }

@@ -31,10 +31,10 @@ def records_module():
     return module
 
 
-def records_app(data_dir: Path, *, hosts=("minimoi-records:18880",), port=18880):
+def records_app(data_dir: Path, *, hosts=("minimoi-records:18880",), port=18880, portal_key=None):
     data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     data_dir.chmod(0o700)
-    return records_module().create_app(str(data_dir), port=port, allowed_hosts=set(hosts))
+    return records_module().create_app(str(data_dir), port=port, allowed_hosts=set(hosts), portal_key=portal_key)
 
 
 class RecordsTransport:

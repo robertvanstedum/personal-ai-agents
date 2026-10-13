@@ -2920,13 +2920,57 @@ GUILD_MOUNTS = _guild_mounts.mount_all(
 
 
 # ── Rooms (Records) at /app/records, dev only (Guild 1.1 slice 4, spec §6) ──
-# Records keeps its own login and cookie; the portal adds only its owner guard
-# and never forwards its own cookie or identity. Installed only when BASE_URL
-# is the dev origin and RECORDS_BACKEND names the one allowed internal origin.
+# Rooms identity (draft 3): there is no second sign-in. The portal's own login is
+# the identity; a Rooms binding (a data file the owner controls, checked live on
+# every call) says which Records principal a signed-in account acts as, and the
+# bridge sends Records one signed assertion per request. Installed only when
+# BASE_URL is the dev origin and RECORDS_BACKEND names the one allowed internal origin.
 from minimoi_portal import records_bridge as _records_bridge  # noqa: E402
+from minimoi_portal import rooms_identity as _rooms_identity  # noqa: E402
 
-RECORDS_BRIDGE = _records_bridge.install_if_dev(app, base_url=_cfg.BASE_URL, environ=os.environ,
-                                                require_login=_require_login, require_owner=_require_owner)
+
+def _rooms_account_active(user) -> bool:
+    """The signed-in account must still exist and be active (a removed, demoted or deactivated account loses Rooms at once): a permanent account
+    with the same tier in users.json, an unexpired guest, or a domain user whose auth.users row is active."""
+    name, tier, auth_id = (user or {}).get("username"), (user or {}).get("tier"), (user or {}).get("auth_id")
+    if not name:
+        return False
+    if any(u.get("username") == name and u.get("tier") == tier for u in _auth.load_users()):
+        return True
+    if auth_id:
+        row = _dauth.get_user_by_id(auth_id)
+        return bool(row and row.get("is_active", True) and row.get("email") == name)
+    return any(g.get("username") == name and not g.get("expired") for g in _auth.list_guests())
+
+
+_ROOMS_ACCESS = _rooms_identity.RoomsAccess(os.environ.get("MINIMOI_ROOMS_ACCESS_DIR", _records_bridge.ACCESS_DIR_DEFAULT))
+
+
+def _rooms_accounts():
+    """The mini-moi accounts the owner may grant Rooms to (never a list in code): permanent accounts, active guests, and signed-in domain users
+    (their session username is their e-mail). A source that cannot be read raises, so the screen says 'unavailable' instead of showing fewer."""
+    seen, out = set(), []
+    for u in _auth.load_users():
+        out.append({"username": u["username"], "label": u.get("display_name") or u["username"], "tier": u.get("tier", "")})
+    for g in _auth.list_guests():
+        if not g.get("expired") and g.get("username"):
+            out.append({"username": g["username"], "label": g.get("display_name") or g["username"], "tier": "guest"})
+    try:
+        for u in _dauth.list_users_with_access():
+            if u.get("is_active", True) and u.get("email"):
+                out.append({"username": u["email"], "label": u.get("name") or u["email"], "tier": "domain"})
+    except Exception as exc:
+        app.logger.warning("rooms access: domain users not listed (%s)", type(exc).__name__)
+    return [a for a in out if not (a["username"] in seen or seen.add(a["username"]))]
+
+
+RECORDS_BRIDGE = _records_bridge.install_if_dev(
+    app, base_url=_cfg.BASE_URL, environ=os.environ, require_login=_require_login, require_owner=_require_owner,
+    identity={"access": _ROOMS_ACCESS,
+              "key_file": os.environ.get("RECORDS_PORTAL_KEY_FILE", _records_bridge.KEY_FILE_DEFAULT),
+              "current_user": _current_user, "account_active": _rooms_account_active})
+app.extensions["rooms_access"] = _ROOMS_ACCESS
+app.extensions["rooms_accounts"] = _rooms_accounts
 
 
 @app.route("/health")

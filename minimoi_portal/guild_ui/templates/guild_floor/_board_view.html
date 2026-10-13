@@ -1,0 +1,49 @@
+{# The Board's toolbar, forms and grid: shared by the Board page and its pop-out window. Drawn by js/board.js from the
+   answer GET /api/v1/board gives (embedded at the end). `popout` is true in the pop-out window. #}
+<div class="bd-tool" role="toolbar" aria-label="Board controls">
+  <h1 class="page-title">Board</h1>
+  <span class="bd-counts" data-bd-counts role="group" aria-label="Show notes" aria-live="polite" aria-atomic="true">
+    <button type="button" data-bd-view="active" aria-pressed="true">Active</button>
+    <button type="button" data-bd-view="done" aria-pressed="false">Done</button>
+    <button type="button" data-bd-view="trash" aria-pressed="false">Bin</button>
+  </span>
+  <label class="visually-hidden" for="bd-label">Label</label>
+  <select id="bd-label" data-bd-label-filter><option value="">All labels</option></select>
+  <input type="search" data-bd-search placeholder="Search notes, #ids…" aria-label="Search the Board">
+  <span class="bd-sp"></span>
+  <button class="bd-plus" type="button" data-bd-new aria-label="New note" title="New note: type or paste straight into it">＋</button>
+  {% if popout %}<a class="bd-icon" href="{{ urls.home }}" target="_blank" rel="noopener" data-bd-home aria-label="Open MiniMoi in a new tab (this notepad stays open)" title="Open MiniMoi in a new tab">⌂</a>{% endif %}
+  {% if not popout %}<button class="bd-icon" type="button" data-bd-popout aria-describedby="bd-popout-help" aria-label="Pop out the Board in its own window" title="Pop out: the same Board in its own window, to keep open or bookmark while you work">⧉</button>{% endif %}
+  <button class="bd-icon" type="button" data-bd-open="photo" aria-label="Add a photo" title="Add a photo">📷</button>
+</div>
+<form class="bd-panel" data-bd-photo-form hidden aria-label="New photo">
+  <label for="bd-photo-file">Picture</label>
+  <input id="bd-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-bd-photo-file>
+  <label for="bd-photo-caption">Caption</label>
+  <input id="bd-photo-caption" data-bd-photo-caption maxlength="140" placeholder="optional">
+  <button type="submit" class="btn" data-bd-photo-add disabled>Add image</button>
+  <button type="button" class="btn-quiet" data-bd-close>Cancel</button>
+  <details class="bd-existing-photos"><summary>Use an existing picture</summary>
+    <div class="bd-pick" data-bd-pick role="group" aria-label="Library photos"></div>
+    <a class="bd-quiet-link" href="{{ urls.media }}" data-bd-media-link>Manage pictures</a>
+  </details>
+  <p class="save-result" data-bd-photo-result role="status" hidden></p>
+</form>
+<div class="bd-paste-retry" data-bd-paste-actions hidden>
+  <button type="button" class="btn-quiet" data-bd-paste-retry>Retry picture</button>
+  <button type="button" class="btn-quiet" data-bd-paste-dismiss>Dismiss</button>
+</div>
+<p class="save-result bd-note-line" data-bd-result role="status" hidden></p>
+<p class="bd-sync small" data-bd-sync role="status" aria-live="polite"></p>
+{% if not popout %}<p class="visually-hidden" id="bd-popout-help">Pop out opens this same Board in its own small window. It stays open while you go to other pages or other apps, and a change in either window shows in the other. Whether it stays on top of other windows depends on your computer.</p>{% endif %}
+<div class="bd-confirm" data-bd-confirm hidden role="alertdialog" aria-labelledby="bd-confirm-text">
+  <span id="bd-confirm-text" data-bd-confirm-text></span>
+  <button type="button" class="btn" data-bd-confirm-yes>Delete permanently</button>
+  <button type="button" class="btn-quiet" data-bd-confirm-no>Cancel</button>
+</div>
+<p class="bd-state-note" data-bd-state-note></p>
+<div class="bd-cork" data-bd-cork>
+  <p class="unknown-line" data-bd-unknown{% if res.ok %} hidden{% endif %}>The Board is <strong>unknown</strong>: {% if res.reason == 'not_configured' %}the floor database is not configured on this portal{% else %}it could not be read just now. Your notes are not lost; this page is trying again{% endif %}. Nothing here is empty or zero. <button type="button" class="bd-quiet-link" data-bd-retry>Try again</button></p>
+  <ol class="bd-grid" data-bd-grid aria-label="Notes"></ol>
+</div>
+<script type="application/json" id="board-data">{{ board_data|tojson }}</script>

@@ -1,20 +1,21 @@
 {% set section = 'operate' if page_id.startswith('operate') else 'improve' if page_id == 'improve' else 'experiment' if page_id in ('experiment', 'labs') else 'build' %}
 <div class="gu-section-band" aria-label="Sections">
 <details class="gu-section-picker"><summary>{{ 'Prototype Lab' if section == 'experiment' else section|title }} · {{ 'design → build → ship' if section == 'build' else 'monitor → maintain' if section == 'operate' else 'review → analyze → improve' if section == 'improve' else 'try → prove → keep' }}</summary><div>
-{% for id,label in [('build','Build'),('operate','Operate'),('improve','Improve'),('experiment','Prototype Lab')] %}<a href="{{ urls[id] }}">{{ label }}</a>{% endfor %}</div></details>
+{% for id,label,href in [('build','Build',urls.floor),('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Prototype Lab',urls.experiment)] %}<a href="{{ href }}">{{ label }}</a>{% endfor %}</div></details>
 {% for id, label, href in [('build','Build',urls.floor),('operate','Operate',urls.operate),('improve','Improve',urls.improve),('experiment','Prototype Lab',urls.experiment)] %}
 <a href="{{ href }}"{% if section == id %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
 
 </div>
-{% if section in ('build', 'operate') %}
+{% if section == 'build' %}
 <div class="guild-subnav guild-sections">
 {% if section == 'build' %}
-{# Build is Chat · Board · Build Log · Workshop · Rooms. No More menu (5 Oct): repository and spec links open on GitHub from where they are relevant. #}
-{% for id,label,href,ids in [('chat','Chat',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('workshop','Workshop',urls.workshop,('workshop',)),('rooms','Rooms',urls.rooms,('rooms',))] %}
+{# Build is Chat · Board · Build Log · Workshop Log · Rooms (11 Oct, Robert: the original Craftsman Chat is the Build landing again; the Workshop Log keeps the topic work, in construction). No More menu (5 Oct): repository and spec links open on GitHub from where they are relevant. #}
+{% for id,label,href,ids in [('chat','Chat',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('workshop','Workshop Log',urls.workshop,('workshop',)),('rooms','Rooms',urls.rooms,('rooms',))] %}
 <a href="{{ href }}" class="subnav-link{% if page_id in ids %} subnav-active{% endif %}" data-section="{{ id }}"{% if page_id in ids %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
-{% elif section == 'operate' %}
-{% for label,href,id in [('Status',urls.operate,'operate'),('Agents',url_for('.operate_view',view='agents'),'operate_agents'),('Runbooks',url_for('.operate_view',view='runbooks'),'operate_runbooks'),('Build host',urls.build_host,'operate_build_host')] %}<a class="subnav-link{% if page_id == id %} subnav-active{% endif %}" href="{{ href }}">{{ label }}{% if id not in ('operate', 'operate_build_host') %} · In design{% endif %}</a>{% endfor %}
-<details class="subnav-more" data-subnav-more><summary class="subnav-link">More ▾</summary><div class="subnav-menu" data-subnav-menu><a href="{{ url_for('.operate_view',view='tending') }}">MC tending</a><a href="/guild/operate">Admin</a></div></details>
 {% endif %}
 </div>
+{% elif section == 'operate' and page_id != 'operate' %}
+{# Operate is under construction (10 Oct, Robert): its provisional sub-tabs are gone, so no information architecture is presented as settled. The working
+   tools are reached from the quiet links in Operate's body; a tool's page has one plain way back. #}
+<div class="guild-subnav guild-crumb"><a class="subnav-link" href="{{ urls.operate }}" data-operate-back>‹ Operate</a></div>
 {% endif %}

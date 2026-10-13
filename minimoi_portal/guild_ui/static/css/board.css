@@ -3,17 +3,16 @@
    prints, one toolbar. Colours come from tokens.css. */
 body.gu[data-page="board"] .gu-main, body.gu[data-page="media"] .gu-main { padding: var(--gu-s3) var(--gu-s5) 96px; }
 .bd-tool { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gu-s2) var(--gu-s3); margin-bottom: var(--gu-s3); }
-.bd-counts { font-size: var(--gu-size-sm); color: var(--gu-text-muted); }
+.bd-counts { display: flex; align-items: center; gap: 10px; font-size: var(--gu-size-sm); color: var(--gu-text-muted); }
+.bd-counts button { font: inherit; color: inherit; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 4px 0; min-height: 30px; cursor: pointer; }
+.bd-counts button[aria-pressed="true"] { color: var(--gu-text); border-bottom-color: var(--gu-accent); }
+.bd-existing-photos { flex: 1 1 100%; }
+.bd-existing-photos > summary { cursor: pointer; color: var(--gu-text-muted); }
+.bd-existing-photos .bd-pick { margin: 8px 0; }
 .bd-counts strong { color: var(--gu-text); }
 .bd-tool select, .bd-tool input[type="search"] { font: inherit; font-size: var(--gu-size-sm); min-height: 32px; padding: 3px 8px; border: 1px solid var(--gu-border-strong); border-radius: var(--gu-radius); background: var(--gu-input-bg); }
 .bd-tool input[type="search"] { width: min(220px, 100%); }
 .bd-sp { flex: 1 1 auto; }
-.bd-add { position: relative; }
-.bd-add > summary { list-style: none; cursor: pointer; }
-.bd-add > summary::-webkit-details-marker { display: none; }
-.bd-add-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; display: flex; flex-direction: column; min-width: 160px; padding: 4px; background: var(--gu-surface); border: 1px solid var(--gu-border-strong); border-radius: var(--gu-radius); box-shadow: var(--gu-shadow-float); }
-.bd-add-menu button { font: inherit; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 4px; cursor: pointer; min-height: 32px; }
-.bd-add-menu button:hover, .bd-add-menu button:focus-visible { background: var(--gu-surface-2); }
 .bd-panel { margin: 0 0 var(--gu-s3); padding: var(--gu-s3); background: var(--gu-surface); border: 1px solid var(--gu-border); border-radius: var(--gu-radius); display: flex; flex-wrap: wrap; gap: var(--gu-s2); align-items: center; font-size: var(--gu-size-sm); }
 .bd-panel textarea { font: 16px/1.4 var(--gu-font-body); flex: 1 1 100%; min-height: 64px; padding: 6px 8px; border: 1px solid var(--gu-border-strong); border-radius: var(--gu-radius); }
 .bd-panel input, .bd-panel select { font: inherit; min-height: 32px; padding: 3px 8px; border: 1px solid var(--gu-border-strong); border-radius: var(--gu-radius); }
@@ -83,7 +82,6 @@ body.gu[data-page="board"] .gu-main, body.gu[data-page="media"] .gu-main { paddi
   .bd-tool select { min-height: var(--gu-target-phone); }
   .bd-btn { min-height: var(--gu-target-phone); padding: 3px 14px; }
   .bd-move { min-width: var(--gu-target-phone); }
-  .bd-add-menu { position: fixed; left: 8px; right: 8px; top: auto; }
   .md-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -125,8 +123,103 @@ body.gu[data-page="board"] .gu-main, body.gu[data-page="media"] .gu-main { paddi
   .bd-acts { flex-wrap: wrap; }
   .bd-note:nth-child(n) { transform: none; }
   .bd-tool .bd-sp { order: 1; flex: 1 1 0; }
-  .bd-tool > .btn, .bd-tool > .bd-add { order: 2; }
+  .bd-tool > .btn { order: 2; }
   .bd-tool > select, .bd-tool > input[type="search"] { order: 3; }
 }
-@media (max-width: 360px) { .bd-counts { display: none; } }
+@media (max-width: 640px) { .bd-counts { flex: 1 1 auto; } .bd-counts button { min-height: var(--gu-target-phone); } }
 .bd-more[hidden] { display: none; }
+
+/* editing a note in place, and the quiet line that says the Board is current (the page and its pop-out) */
+.bd-text[data-bd-edit-text] { cursor: text; }
+.bd-texteditor { display: grid; gap: 6px; }
+.bd-edit-text { font: 17px/1.35 var(--gu-font-hand); width: 100%; min-height: 84px; padding: 4px 6px; background: rgba(255, 255, 255, .55); border: 1px dashed var(--gu-note-kicker); border-radius: 4px; color: inherit; resize: vertical; }
+.bd-edit-text:focus-visible { outline: var(--gu-focus); }
+.bd-edit-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.bd-edit-hint { color: var(--gu-note-kicker); }
+.bd-conflict { margin: 0; padding: 6px 8px; border-radius: 4px; background: var(--gu-banner-bg); color: var(--gu-banner-ink); font-size: var(--gu-size-sm); }
+.bd-sync { margin: 0 0 var(--gu-s2); color: var(--gu-text-muted); }
+.bd-sync[data-kind="warn"] { color: var(--gu-banner-ink); }
+.bd-popout-help { margin: 0 0 var(--gu-s2); color: var(--gu-text-muted); max-width: 60ch; }
+
+.bd-new { outline: 2px dashed var(--gu-note-kicker); outline-offset: -4px; }
+
+/* ── 10 Oct, Robert: a quieter Board. A small ＋ and a discreet pop-out; no buttons inside a Post-it (click the text to edit, drag to move, one ⋯ menu for the rest);
+   lighter filters; a playful, plainly labelled example only when the Board is truly empty. ── */
+.bd-tool { gap: 6px 12px; margin-bottom: var(--gu-s2); }
+.bd-tool .page-title { font-size: 22px; margin: 0; }
+.bd-tool select, .bd-tool input[type="search"] { border: 0; border-bottom: 1px solid var(--gu-border-strong); border-radius: 0; background: transparent; min-height: 28px; padding: 2px 2px; font-size: 13px; color: var(--gu-text-muted); }
+.bd-tool input[type="search"] { width: min(150px, 100%); }
+.bd-tool input[type="search"]:focus, .bd-tool select:focus { color: var(--gu-text); }
+.bd-plus, .bd-icon { display: inline-grid; place-items: center; min-width: 30px; min-height: 30px; padding: 0 6px; border: 1px solid var(--gu-border-strong); border-radius: 50%; background: transparent; color: var(--gu-text-muted); font: inherit; font-size: 16px; line-height: 1; cursor: pointer; list-style: none; }
+.bd-plus { font-size: 20px; color: var(--gu-text); }
+.bd-icon::-webkit-details-marker { display: none; }
+.bd-plus:hover, .bd-icon:hover, .bd-plus:focus-visible, .bd-icon:focus-visible { background: var(--gu-surface-2); color: var(--gu-text); }
+@media (max-width: 640px) { .bd-plus, .bd-icon { min-width: var(--gu-target-phone); min-height: var(--gu-target-phone); } .bd-tool > .bd-plus { order: 0; } .bd-tool .bd-sp { display: none; } }
+.bd-acts { position: absolute; top: 2px; right: 3px; margin: 0; padding: 0; gap: 0; z-index: 2; }
+.bd-edit > summary { min-width: 24px; min-height: 24px; border-color: transparent; background: transparent; opacity: .45; font-size: 16px; }
+.bd-note:hover .bd-edit > summary, .bd-note:focus-within .bd-edit > summary, .bd-edit[open] > summary { opacity: 1; background: rgba(255, 255, 255, .55); }
+@media (hover: none) { .bd-edit > summary { opacity: .8; } }
+.bd-edit[open] .bd-edit-body { top: calc(100% + 2px); bottom: auto; right: 0; width: 200px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.bd-edit-body .bd-btn { text-align: left; border-radius: 6px; background: transparent; border-color: transparent; min-height: 28px; }
+.bd-edit-body .bd-btn:hover:not(:disabled), .bd-edit-body .bd-btn:focus-visible { background: var(--gu-surface-2); }
+.bd-edit-body .bd-btn:disabled { opacity: .4; }
+.bd-edit-body .bd-discard { margin-left: 0; color: var(--gu-mark-blocker-ink); }
+.bd-edit-body select, .bd-edit-body input { width: 100%; }
+.bd-kicker { padding-right: 26px; }
+.bd-meta { opacity: .75; }
+.bd-example { list-style: none; grid-column: 1 / -1; display: grid; justify-items: center; gap: 10px; padding: 8px 0; }
+.bd-example-note { max-width: 240px; transform: rotate(-1.5deg); border: 0; opacity: .92; }
+.bd-example-note .bd-text { font-size: 17px; }
+.bd-example-art { margin: 0; font-size: 20px; letter-spacing: .3em; text-align: center; }
+.bd-empty-line { margin: 0; color: var(--gu-text-muted); }
+.bd-quiet-link { background: transparent; border: 0; padding: 0; font: inherit; color: var(--gu-accent); text-decoration: underline; cursor: pointer; }
+.bd-sync { font-size: 11px; opacity: .8; }
+@media (max-width: 640px) {
+  .bd-edit-body .bd-btn, .bd-edit-body select, .bd-edit-body input { min-height: var(--gu-target-phone); font-size: 15px; }
+  .bd-edit > summary { min-width: var(--gu-target-phone); min-height: var(--gu-target-phone); opacity: .85; }
+}
+
+/* ── 10 Oct (Robert): a Post-it is a blank slate with its own size. Small, medium and large follow how much is written; none grows to the size of the
+   screen; a note being typed is medium. The board itself is big, with room to spare. ── */
+.bd-grid { display: flex; flex-wrap: wrap; gap: 20px 16px; align-items: flex-start; }
+.bd-note { flex: 0 0 auto; width: 176px; max-width: 100%; }
+.bd-note[data-size="m"], .bd-note.bd-new, .bd-note:has(.bd-texteditor) { width: 248px; }
+.bd-note[data-size="l"] { width: 340px; }
+.bd-note.bd-photo { width: 248px; }
+.bd-example { flex: 1 1 100%; }
+.bd-cork { min-height: calc(100dvh - 300px); }
+[data-page="board_popout"] .bd-cork { min-height: calc(100dvh - 190px); }
+[data-page="board_popout"] .bd-grid { display: flex; gap: 22px 14px; }
+.bd-edit-text { min-height: 64px; resize: none; }
+@media (max-width: 640px) { .bd-note, .bd-note[data-size], .bd-note.bd-new, .bd-note.bd-photo, .bd-note:has(.bd-texteditor) { width: 100%; } .bd-cork { min-height: calc(100dvh - 260px); } }
+.bd-note:has(.bd-edit[open]) { z-index: 50; }
+
+/* ── 11 Oct: free placement. Beside a wide window the board is a 1200-unit surface scaled to the window; a note is a fixed footprint at (--x, --y).
+   Narrower, filtered, or in Done/Trash the list above is used. ── */
+.bd-cork[data-free] { padding: 0; overflow: hidden; min-height: 0; }
+.bd-grid.bd-free { display: block; position: relative; width: 1200px; margin: 0; transform-origin: 0 0; transform: scale(var(--bd-scale, 1)); }
+.bd-free > .bd-note, .bd-free > .bd-note[data-size], .bd-free > .bd-note.bd-new, .bd-free > .bd-note.bd-photo, .bd-free > .bd-note:has(.bd-texteditor) {
+  position: absolute; left: calc(var(--x, 0) * 1px); top: calc(var(--y, 0) * 1px); width: 180px; height: 170px; max-width: none; margin: 0; transform: none; touch-action: none; cursor: grab; }
+.bd-free > .bd-note[data-dragging="true"] { cursor: grabbing; opacity: .85; z-index: 60; }
+.bd-free > .bd-note:has(.bd-texteditor) { height: auto; min-height: 170px; z-index: 50; }
+.bd-free > .bd-note[data-open="true"] { height: auto; min-height: 170px; z-index: 40; }
+.bd-free > .bd-photo img { aspect-ratio: auto; height: 90px; }
+.bd-free > .bd-photo .bd-text { -webkit-line-clamp: 2; }
+.bd-free .bd-text[data-bd-edit-text] { cursor: text; }
+@media (prefers-reduced-motion: no-preference) { .bd-free > .bd-note { transition: left .12s ease, top .12s ease; } .bd-free > .bd-note[data-dragging="true"] { transition: none; } }
+
+/* Stored geometry; responsive list views never write sizes back. */
+.bd-free > .bd-note, .bd-free > .bd-note[data-size], .bd-free > .bd-note.bd-photo { width: var(--card-w,180px); height: var(--card-h,170px); }
+.bd-note[data-resized="true"] { max-width:100%; min-width:0; width: var(--card-w); min-height: var(--card-h); }
+.bd-free > .bd-photo img { width:100%; flex:0 0 auto; min-height:0; height:calc(var(--card-h,170px) - 70px); max-height:none; object-fit:contain; }
+.bd-note.bd-photo img { object-fit: contain; -webkit-user-drag:none; user-select:none; }
+/* Keep the full handle target and keyboard control, with only a small, light grip visible. */
+.bd-resize { position:absolute; bottom:0; right:0; width:24px; height:24px; border:0; background:transparent; color:var(--gu-note-ink); cursor:nwse-resize; touch-action:none; padding:0; }
+.bd-resize::after { content:""; position:absolute; right:5px; bottom:5px; width:9px; height:9px; opacity:.28; background:repeating-linear-gradient(135deg,transparent 0 3px,currentColor 3px 4px); clip-path:polygon(100% 0,100% 100%,0 100%); }
+.bd-resize:hover::after, .bd-resize:focus-visible::after { opacity:.7; }
+.bd-free .bd-text { min-height:0; flex-shrink:1; overflow:hidden; }
+.bd-free > .bd-note[data-open="true"] { height:auto; min-height:var(--card-h,170px); }
+@media(max-width:640px) { .bd-note[data-resized="true"] { max-width:100%; min-width:0; width:100%; min-height:0; } }
+
+.bd-free > .bd-note:not(.bd-photo) .bd-text { -webkit-line-clamp:var(--note-lines,4); }
+.bd-free > .bd-note[data-open="true"] .bd-text { -webkit-line-clamp:unset; }

@@ -100,7 +100,7 @@ def test_create_is_idempotent_and_can_link_a_work_item(floored):
     assert one["conversation"]["id"] == two["conversation"]["id"]
     assert one["conversation"]["work_item"]["ref"] == "12" and one["conversation"]["work_item"]["label"].startswith("#12")
     page = client.get(f"/guild-next/guild/build?c={one['conversation']['id']}").get_data(as_text=True)
-    assert "data-linked-link" in page and "#12 Floor API" in page and "Build Log item" in page
+    assert "data-linked-link" not in page and "data-linked-work" not in page         # the Chat page no longer draws linked work (11 Oct); the API still stores it
     assert "This conversation is about" not in page and "Last opened" not in page
 
 
@@ -282,7 +282,26 @@ def test_the_page_shows_the_conversation_list_and_actions(floored):
     archived = client.get("/guild-next/guild/build?view=archived").get_data(as_text=True)
     assert "Nothing archived." in archived
     wall = client.get("/guild-next/guild/build/bench").get_data(as_text=True)
-    assert "New chat" in wall and ">History</a>" in wall  # context history is explicit
+    assert "New chat" in wall and 'data-conv-picker' in wall  # history stays in the contextual panel
+
+
+def test_history_is_ten_at_a_time_without_archiving_or_losing_the_current_chat(floored):
+    import html
+    import re
+    client = floored.owner()
+    token = floored.csrf(client)
+    for index in range(13):
+        _new(client, token, title=f"Conversation {index}")
+    all_rows = _listing(client)
+    cid = all_rows[0]["id"]
+    page = client.get(f"/guild-next/guild/build?c={cid}&history_page=0").get_data(as_text=True)
+    assert page.count('data-conv-link') == 10
+    older = html.unescape(re.search(r'href="([^"]+)" data-conv-older', page)[1])
+    assert f'c={cid}' in older
+    next_page = client.get(older).get_data(as_text=True)
+    assert next_page.count('data-conv-link') == len(all_rows) - 10
+    assert 'data-conv-newer' in next_page and 'data-conv-older' not in next_page
+    assert len(_listing(client)) == len(all_rows) and _listing(client, 'archived') == []
 
 
 def test_unreadable_conversation_files_leave_the_thread_working_and_say_so(floored):
@@ -374,7 +393,7 @@ def test_popup_does_not_replay_build_but_explicit_history_still_opens(floored):
     _note(client, token, 'old build acceptance conversation', cid=old['id'])
     page = client.get('/guild-next/guild/operate').get_data(as_text=True)
     assert 'old build acceptance conversation' not in page
-    assert 'New chat' in page and '>History</a>' in page
+    assert 'New chat' in page and 'data-conv-picker' in page
     assert 'old build acceptance conversation' in client.get(
         f"/guild-next/guild/operate?c={old['id']}").get_data(as_text=True)
     assert client.post(f'{API}/conversations', json=keyed(scope='evil'),

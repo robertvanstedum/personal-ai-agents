@@ -122,9 +122,8 @@ def test_a_queue_item_with_a_prototype_like_id_is_shown_only_because_the_queue_h
 def test_real_floor_says_master_craftsman_is_off_and_filing_is_off(staging):
     body = staging.owner().get("/guild-next/guild/build").get_data(as_text=True)
     assert "Master Craftsman is off" in body
-    # Invite is grey but clickable and says only "Coming soon." (5 Oct); the old filing and invite lines are retired.
-    assert 'data-mc-invite' in body and 'data-mc-invite disabled' not in body and "Filing is off" not in body
-    assert "'Coming soon.'" in (PACKAGE / "static" / "js" / "conversation.js").read_text()
+    # Robert retired the placeholder Invite control on 12 Oct; Rooms provides the collaboration entry point.
+    assert 'data-mc-invite' not in body and "Filing is off" not in body
     assert "Hold to talk" not in body
     # "Prototype Lab" is a navigation entry point (Guild 1.1 slice 1), not the prototype's sample data.
     assert "Prototype" not in body.replace("Prototype Lab", "") and "Reset fixtures" not in body

@@ -180,11 +180,12 @@ def test_rendering_never_writes_the_workshop_record(ws):
     assert after == before
 
 
-def test_the_build_host_sits_in_the_operate_nav_and_the_old_address_moved_here(ws):
+def test_the_build_host_is_a_quiet_link_from_operate_and_the_old_address_moved_here(ws):
     _record(ws)
     page = ws.owner().get(PAGE).get_data(as_text=True)
-    nav = page[page.index('<div class="guild-subnav guild-sections">'):page.index("</nav>")]
-    assert re.search(r'class="subnav-link subnav-active" href="/guild-next/guild/operate/build-host">Build host</a>', nav)
+    assert 'data-operate-back' in page and "guild-sections" not in page                      # no Operate sub-tabs; one way back
+    operate = ws.owner().get("/guild-next/guild/operate").get_data(as_text=True)
+    assert 'href="/guild-next/guild/operate/build-host">Build host</a>' in operate
     old = ws.owner().get("/guild-next/guild/workshop?item=12")
     assert old.status_code == 302 and old.headers["Location"].endswith("/guild/operate/build-host?item=12")      # old queue-item links keep working
     assert ws.owner().get("/guild-next/guild/workshop?item=").status_code == 302

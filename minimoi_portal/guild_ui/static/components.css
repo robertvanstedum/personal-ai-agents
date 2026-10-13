@@ -416,6 +416,7 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
 .mc-thread .msg-waiting { background: none; border: 0; box-shadow: none; display: flex; align-items: center; gap: 6px; font-size: var(--gu-size-sm); color: var(--gu-text-muted); }
 .mc-mark { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font: 700 9px/1 var(--gu-font-mono); color: var(--gu-text-muted); border: 1px solid var(--gu-border-strong); }
 .mc-elapsed { font-variant-numeric: tabular-nums; }
+.mc-still { font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
 .msg-foot { margin-top: 2px; font-size: var(--gu-size-xs); color: var(--gu-text-muted); }
 
 /* Markdown in thread entries (MC's replies, Robert's notes), rendered and
@@ -607,7 +608,19 @@ body.gu[data-off-record="true"] .mc-hero { filter: grayscale(1); }
 body.gu[data-off-record="true"] .sel-bar, body.gu[data-record-known="false"] .sel-bar { display: none; }
 .mc-blocker { margin: 0 0 var(--gu-s2); padding: 4px 10px; font-size: var(--gu-size-sm); color: var(--gu-mark-blocker-ink); background: var(--gu-mark-blocker-bg); border-radius: var(--gu-radius); display: flex; flex-direction: column; gap: 2px; }
 .mc-blocker[hidden] { display: none; }
-.mc-current { margin: 0 var(--gu-s3); color: var(--gu-text-muted); }
+.mc-current { position: relative; margin: 0 var(--gu-s3); color: var(--gu-text-muted); }
+.mc-history { position: static; }
+.mc-history[open] { flex-basis: 100%; }
+.mc-panel:has(.mc-history[open]) .mc-thread { display: none; }
+.mc-history summary { cursor: pointer; color: var(--gu-accent); }
+.mc-history-body { margin-top: 6px; max-height: min(35dvh, 280px); overflow: auto; padding: 8px; background: var(--gu-paper, #fff9ef); border: 1px solid var(--gu-border, #b8a789); border-radius: 10px; }
+.mc-history-list { list-style: none; margin: 0; padding: 0; }
+.mc-history-list a { display: block; padding: 8px 4px; overflow-wrap: anywhere; }
+.mc-history-list a[aria-current] { font-weight: 700; }
+.mc-voice[aria-pressed="true"] { font-weight: 700; color: var(--gu-accent); }
+.mc-voice-status { margin: 4px var(--gu-s3) 0; color: var(--gu-text-muted); overflow-wrap: anywhere; }
+.mc-voice-status[hidden], .mc-voice[hidden] { display: none; }
+.mc-history-controls { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
 /* The status strip, low and compact. */
 .floor-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--gu-s3); margin: 0 var(--gu-gutter) var(--gu-s2); padding: 4px var(--gu-s3); }
 .floor-strip .status-compact { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; flex: 1 1 auto; background: transparent; border: 0; padding: 2px 0; font: inherit; font-size: var(--gu-size-sm); color: var(--gu-text); cursor: pointer; text-align: left; }
@@ -761,6 +774,7 @@ body.gu[data-page="floor"][data-lights-open="true"] .floor-strip .lights { displ
 .gu-section-art { object-fit:cover; border-radius:8px; float:right; margin:0 0 16px 20px; }
 
 .mc-hero .fb-rail { flex-shrink:0; white-space:nowrap; }
+@media (min-width: 1200px) { .fb-rail { display: none; } }          /* the rail is always beside the chat when wide: nothing to toggle */
 
 /* Composer secondary actions share typography, including disabled Invite. */
 .mc-tools .btn-quiet { font-family:inherit; font-size:var(--gu-size-xs); font-weight:400; line-height:1.4; }
@@ -1027,4 +1041,351 @@ body.gu[data-page="floor"] .mc-panel { position: relative; }
 @media (max-width: 640px) {
   body.gu input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="hidden"]),
   body.gu textarea, body.gu select, body.gu .mc-input { font-size: 16px !important; }
+}
+
+/* The ask bar (M, 10 Oct): on The Work, Board and Build Log the conversation is one slim bar under the work. It opens as a sheet over the work
+   only when used and folds back with Minimize. It is the same panel, the same thread and the same draft; nothing here is a second chat.
+   A phone keeps its own bottom bar (the rules above). */
+@media (min-width: 641px) {
+  body.gu:is([data-page="workshop"], [data-page="build_log"]) .mc-pill { left: 50%; right: auto; transform: translateX(-50%); width: min(960px, calc(100vw - 24px)); justify-content: flex-start; border-radius: 12px; background: var(--gu-surface); color: var(--gu-text); border: 1px solid var(--gu-border-strong); padding: 6px 14px 6px 8px; }
+  body.gu:is([data-page="workshop"], [data-page="build_log"]) .mc-pill [data-mc-ask-label] { color: var(--gu-text-muted); }
+  body.gu:is([data-page="workshop"], [data-page="build_log"]) .mc-panel[data-mode="floating"] { left: 50%; right: auto; transform: translateX(-50%); bottom: 0; width: min(960px, calc(100vw - 16px)); max-height: 68dvh; border-radius: 14px 14px 0 0; }
+  body.gu:is([data-page="workshop"], [data-page="build_log"]) .gu-main { padding-bottom: 84px; }
+}
+
+/* Prototype Lab hero (M, 10 Oct): the title on the left, the alchemist art large on the right fading into the page; the cards are compact.
+   The art is the existing 4:3 picture: a thin full-width band would show only a sliver, so it is a panel, not a stretched banner. */
+.prototype-lab-intro.lab-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 42%); align-items: stretch; gap: 0; min-height: 320px; overflow: hidden; border-radius: 14px; background: linear-gradient(90deg, #efe6d3 0%, #f1e8d6 40%, #f3ead9 100%); box-shadow: var(--gu-paper-shadow, 0 2px 10px #3028171a); margin-bottom: 18px; }
+.lab-hero-text { position: relative; z-index: 2; align-self: center; padding: 26px 8px 26px 34px; color: var(--gu-paper-ink, #2b2113); }
+.lab-hero-text h1 { font-size: clamp(30px, 3.6vw, 46px); line-height: 1.1; margin: 2px 0 6px; }
+.lab-hero-text p { margin: 0; max-width: 24ch; font-size: 17px; color: #4a3d30; }
+.lab-hero-text .prototype-eyebrow { color: #6a5640; font-size: 11px; max-width: none; margin-bottom: 8px; }
+.lab-hero-art { position: relative; min-width: 0; }
+.prototype-lab-intro .lab-hero-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 40%; border-radius: 0; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 20%); mask-image: linear-gradient(90deg, transparent 0, #000 20%); }
+.prototype-gallery { grid-template-columns: repeat(auto-fill, minmax(260px, 320px)); }
+@media (max-width: 640px) {
+  .prototype-lab-intro.lab-hero { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .lab-hero-art { order: -1; width: 100%; height: min(66vw, 360px); }
+  .prototype-lab-intro .lab-hero-art img { object-position: 50% 40%; -webkit-mask-image: linear-gradient(0deg, transparent 0, #000 26%); mask-image: linear-gradient(0deg, transparent 0, #000 26%); }
+  .lab-hero-text { padding: 6px 18px 18px; margin-top: -34px; }
+  .lab-hero-text p { max-width: none; }
+  .prototype-gallery { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* In construction (M, 10 Oct): the area's own illustration shown large (a stand-in), with a diagonal ribbon. What works today stays below. */
+.gu-poster { position: relative; overflow: hidden; border-radius: 14px; height: 210px; background: #d9ccb5; border: 1px solid var(--gu-border); margin: 0 0 12px; }
+@media (min-width: 760px) { .gu-poster { height: 250px; } }
+.gu-poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 32%; }
+.gu-ribbon { position: absolute; z-index: 3; top: 30px; right: -52px; width: 230px; text-align: center; transform: rotate(35deg); background: var(--gu-sig-attention, #e0a63b); color: #2a1f14; font-weight: 700; font-size: 15px; padding: 6px 0; box-shadow: 0 2px 8px #0005; letter-spacing: .03em; }
+@media (max-width: 520px) { .gu-ribbon { top: 26px; right: -56px; width: 200px; font-size: 14px; } }
+
+/* Prototype Lab, tightened (M follow-up, 10 Oct, Robert's walkthrough): a thinner banner nearer the top with the art on the right (the head, hair,
+   hands and beaker all in view; sharp, with a soft edge into the page), and a compact entry: a clickable thumbnail at the left, the name, kind and
+   the actions beside it, and the long description behind Details. No new artwork. */
+.prototype-lab { padding-top: 10px; }
+.prototype-lab-intro.lab-hero { grid-template-columns: minmax(0, 1fr) minmax(260px, 420px); min-height: 0; height: 226px; margin-bottom: 12px; }
+.lab-hero-text { padding: 14px 8px 14px 30px; }
+.lab-hero-text h1 { font-size: clamp(28px, 3vw, 40px); }
+.lab-hero-text p { max-width: 36ch; font-size: 16px; }
+.prototype-lab-intro .lab-hero-art img { object-position: 50% 14%; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14%); mask-image: linear-gradient(90deg, transparent 0, #000 14%); }
+.prototype-gallery { grid-template-columns: repeat(auto-fill, minmax(min(100%, 430px), 1fr)); gap: 14px; align-items: start; }
+.prototype-demo { display: grid; grid-template-columns: 168px minmax(0, 1fr); }
+.prototype-demo.no-thumb, .prototype-demo:not(:has(.proto-thumb)) { grid-template-columns: minmax(0, 1fr); }
+.prototype-demo-brand { grid-column: 1 / -1; padding: 10px 14px; gap: 10px; }
+.prototype-demo-brand h2 { font-size: 18px; margin: 0 0 1px; }
+.prototype-demo-brand p { font-size: 12.5px; }
+.prototype-demo-icon { flex: 0 0 36px; height: 36px; font-size: 22px; border-radius: 9px; }
+.proto-thumb { align-self: stretch; border-bottom: 0; border-right: 1px solid var(--gu-border); min-height: 96px; }
+.proto-thumb img { height: 100%; aspect-ratio: auto; object-fit: cover; object-position: 0 0; }
+.prototype-demo-body { padding: 10px 14px 10px; min-width: 0; }
+.prototype-demo-body .proto-pills { margin: 0 0 8px; }
+.proto-details { margin-top: 8px; border-top: 1px dashed var(--gu-border); padding-top: 4px; }
+.proto-details > summary { cursor: pointer; font-size: 13px; color: var(--gu-text-muted); min-height: 28px; display: flex; align-items: center; }
+.proto-details .proto-desc { display: block; -webkit-line-clamp: unset; margin: 6px 0 8px; font-size: 13.5px; line-height: 1.5; }
+@media (max-width: 640px) {
+  .prototype-lab { padding-top: 6px; }
+  .prototype-lab-intro.lab-hero { height: auto; grid-template-columns: minmax(0, 1fr); }
+  .lab-hero-art { width: 100%; height: min(52vw, 230px); }
+  .prototype-lab-intro .lab-hero-art img { object-position: 60% 14%; }
+  .lab-hero-text { padding: 8px 16px 14px; margin-top: -6px; }
+  .prototype-demo { grid-template-columns: minmax(0, 1fr); }
+  .proto-thumb { border-right: 0; border-bottom: 1px solid var(--gu-border); min-height: 0; height: 130px; }
+}
+
+/* Prototype Lab, refinement (Robert, 10 Oct): the Cards / List switch is small and quiet (text, not selection boxes; the chosen one is bold and underlined),
+   and in Cards each entry keeps a small piece of its own artwork at the left. */
+.proto-seg { border: 0; border-radius: 0; overflow: visible; background: transparent; gap: 0; align-items: center; }
+.proto-seg button { background: transparent; color: var(--gu-text-muted); border: 0; border-radius: 6px; padding: 2px 8px; min-height: 28px; min-width: 28px; font-size: 13px; cursor: pointer; text-decoration: none; }
+.proto-seg button + button::before { content: "·"; margin-right: 10px; margin-left: -2px; color: var(--gu-text-dim); }
+.proto-seg button[aria-pressed="true"] { background: transparent; color: var(--gu-text); font-weight: 700; text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 2px; }
+.proto-seg button:hover { color: var(--gu-text); }
+.proto-seg button:focus-visible { outline: 2px solid var(--gu-accent-strong, #344b40); outline-offset: 1px; }
+.proto-controls { margin-bottom: 8px; }
+.prototype-demo { grid-template-columns: 120px minmax(0, 1fr); }
+.prototype-demo-brand { grid-column: 2; }
+.prototype-demo .proto-thumb { grid-column: 1; grid-row: 1 / span 2; min-height: 0; border-right: 1px solid var(--gu-border); background: var(--gu-surface-2); }
+.prototype-demo .proto-thumb img { object-fit: cover; object-position: 12% 30%; }
+.prototype-demo:not(:has(.proto-thumb)) .prototype-demo-brand { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .proto-seg button { min-height: 44px; min-width: 44px; padding: 0 12px; }
+  .prototype-demo { grid-template-columns: 84px minmax(0, 1fr); }                 /* a small thumbnail at the left on a phone too */
+  .prototype-demo .proto-thumb { height: auto; border-bottom: 0; border-right: 1px solid var(--gu-border); }
+}
+
+/* Operate and Improve (10 Oct, Robert): a compact title-and-art hero under the navigation like the Prototype Lab's, the existing illustration FITTED whole
+   (not an enlarged crop); the "In construction" notice sits in the body, on the unfinished part, with a corner ribbon. The working controls are untouched. */
+.area-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; height: 220px; overflow: hidden; border-radius: 14px; background: linear-gradient(90deg, #efe6d3 0%, #f1e8d6 45%, #f3ead9 100%); box-shadow: var(--gu-paper-shadow, 0 2px 10px #3028171a); margin: 0 0 12px; }
+.area-hero-text { align-self: center; padding: 12px 8px 12px 30px; color: var(--gu-paper-ink, #2b2113); position: relative; z-index: 2; min-width: 0; }
+.area-hero-text .prototype-eyebrow { color: #6a5640; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; margin: 0 0 6px; }
+.area-hero-text h1 { font-size: clamp(28px, 3vw, 40px); line-height: 1.1; margin: 0 0 6px; }
+.area-hero-text p:not(.prototype-eyebrow) { margin: 0; max-width: 44ch; font-size: 16px; color: #4a3d30; }
+/* The existing portrait illustration (2:3) is shown WHOLE as a framed picture at the right, never cropped or enlarged. */
+.area-hero-art { align-self: center; height: 200px; width: 133px; margin: 10px 18px 10px 0; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px #3028172e; background: #f3ead9; }
+.area-hero-art img { display: block; width: 100%; height: 100%; object-fit: contain; }
+@media (max-width: 640px) {
+  .area-hero { height: 168px; }
+  .area-hero-text { padding: 10px 6px 10px 16px; }
+  .area-hero-text h1 { font-size: 26px; }
+  .area-hero-text p:not(.prototype-eyebrow) { font-size: 14px; }
+  .area-hero-art { margin-right: 12px; height: 148px; width: 99px; }
+}
+.gu-construction { position: relative; overflow: hidden; padding-right: 150px; }
+.gu-construction::after { content: "In construction"; position: absolute; top: 0; right: 0; bottom: 0; display: flex; align-items: center; padding: 0 14px 0 22px; background: var(--gu-sig-attention, #e0a63b); color: #2a1f14; font: 700 12px/1.1 var(--gu-font-body, inherit); letter-spacing: .04em; text-transform: uppercase; clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 8px 50%); }
+@media (max-width: 520px) { .gu-construction { padding-right: 112px; } .gu-construction::after { padding: 0 10px 0 20px; font-size: 11px; } }
+
+/* The conversation panel, quieter (10 Oct, Robert): Float / Side panel / Minimize are small text controls, not selection boxes; the healthy status line is
+   discreet (failures, offline and unsaved states keep their weight); a floating panel is movable by its header on a desktop. */
+.mc-head .btn-mini { background: transparent; border: 0; color: var(--gu-on-dark); opacity: .78; font-size: 12px; min-height: 24px; min-width: 24px; padding: 2px 6px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #ffffff55; }
+.mc-head .btn-mini:hover, .mc-head .btn-mini:focus-visible { opacity: 1; background: #ffffff1f; }
+.mc-head .btn-mini[aria-pressed="true"] { background: transparent; }
+.mc-state { font-size: 12px; font-weight: 400; }
+body.gu[data-mc-state="live"] .mc-state { color: var(--gu-text-muted); opacity: .85; }
+@media (min-width: 641px) {
+  .mc-panel[data-mode="floating"] .mc-head { cursor: grab; touch-action: none; user-select: none; }
+  .mc-panel[data-mode="floating"].is-dragging .mc-head { cursor: grabbing; }
+  .mc-panel[data-mode="floating"] .mc-head:focus-visible { outline: 2px solid #ffffffcc; outline-offset: -3px; }
+  .mc-panel[data-mode="floating"] .mc-head button { cursor: pointer; }
+  body.gu:is([data-page="workshop"], [data-page="build_log"]) .mc-panel[data-mode="floating"][data-pos="xy"] { left: var(--mc-x, 24px); top: var(--mc-y, 90px); right: auto; bottom: auto; transform: none; border-radius: 14px; max-height: calc(100dvh - var(--mc-y, 90px) - 8px); }
+}
+
+/* The Board (and its pop-out): MC is a small head, not a bar (10 Oct, Robert). It opens a compact chat at the corner; Minimize folds it back. */
+body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-pill { padding: 3px; gap: 0; border-radius: 50%; background: var(--gu-surface); border: 1px solid var(--gu-border-strong); box-shadow: 0 2px 8px #0003; right: 14px; bottom: 14px; }
+body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-pill img { width: 36px; height: 36px; }
+body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-panel[data-mode="floating"] { right: 12px; bottom: 12px; left: auto; width: min(380px, calc(100vw - 16px)); max-height: min(560px, 80dvh); }
+@media (min-width: 641px) { body.gu:is([data-page="board"], [data-page="board_popout"]) .gu-main { padding-bottom: 72px; } }
+@media (max-width: 640px) {
+  /* On a phone the Board is the whole page and MC is one tap away: a small head that opens a bottom sheet, not a bar and not a panel left under the notes. */
+  body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-pill { display: inline-flex; z-index: 80; right: 12px; bottom: 12px; }
+  body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-panel[data-mode="pill"] { display: none; }
+  body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-panel[data-mode="floating"], body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-panel[data-mode="docked"] { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: 100%; max-height: 82dvh; z-index: 90; border-radius: 14px 14px 0 0; border-width: 1px; box-shadow: 0 -6px 24px #0004; overflow: auto; }
+  body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-head-actions { display: flex; }
+  body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-phone-bar { display: none; }
+  body.gu:is([data-page="board"], [data-page="board_popout"]) { padding-bottom: 0; }
+  body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-panel[data-mode="floating"] [data-mc-dock], body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-panel[data-mode="floating"] [data-mc-resetpos] { display: none; }
+}
+body.gu:is([data-page="board"], [data-page="board_popout"]) .mc-panel[data-mode="floating"][data-pos="xy"] { left: var(--mc-x, 24px); top: var(--mc-y, 90px); right: auto; bottom: auto; }
+
+/* Prototype Lab, once more (10 Oct, Robert): a thin banner; Cards are small launchers (icon and name); List is a table: # · icon · demo · what it is · links. */
+.prototype-lab-intro.lab-hero { height: 128px; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(200px, 300px); margin-bottom: 8px; }
+.lab-hero-text { padding: 8px 8px 8px 24px; }
+.lab-hero-text h1 { font-size: clamp(24px, 2.6vw, 32px); margin: 0 0 2px; }
+.lab-hero-text p { font-size: 14px; }
+.lab-hero-text .prototype-eyebrow { margin-bottom: 2px; }
+.prototype-lab-intro .lab-hero-art img { object-position: 50% 18%; }
+.prototype-lab { padding-top: 6px; }
+.proto-controls { margin: 0 0 6px; }
+.proto-tiles { list-style: none; margin: 0; padding: 4px 2px; display: flex; flex-wrap: wrap; gap: 18px 22px; align-items: flex-start; }
+.proto-tiles.prototype-gallery { grid-template-columns: none; }
+.proto-tile { display: block; width: 112px; overflow: visible; border: 0; background: transparent; box-shadow: none; text-align: center; }
+.proto-tile-link { display: grid; justify-items: center; gap: 8px; padding: 8px 4px; border-radius: 12px; text-decoration: none; color: var(--gu-text); }
+.proto-tile-link:hover, .proto-tile-link:focus-visible { background: var(--gu-surface-2); }
+.proto-tile-icon { width: 60px; height: 60px; flex: none; border-radius: 50%; font-size: 32px; }
+.proto-tile-title { font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.proto-table { width: 100%; border-collapse: collapse; background: var(--gu-surface); border: 1px solid var(--gu-border); border-radius: 10px; overflow: hidden; }
+.proto-views[data-view="cards"] .proto-table, .proto-views[data-view="list"] .proto-tiles { display: none; }
+.proto-table th, .proto-table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--gu-border); vertical-align: middle; font-size: 14px; }
+.proto-table thead th { font: 700 11px var(--gu-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gu-text-muted); background: var(--gu-surface-2); padding-top: 5px; padding-bottom: 5px; }
+.proto-table tbody tr:last-child th, .proto-table tbody tr:last-child td { border-bottom: 0; }
+.proto-table tr[hidden] { display: none; }
+.proto-table .pt-id { width: 38px; color: var(--gu-text-muted); }
+.proto-table .pt-icon { width: 54px; padding-right: 0; }
+.proto-table .pt-name { font-weight: 700; white-space: nowrap; }
+.proto-table .pt-what { color: var(--gu-text-muted); }
+.proto-table .pt-links { white-space: nowrap; text-align: right; }
+.proto-table .pt-links a { margin-left: 12px; font-size: 13px; color: var(--gu-accent); }
+.proto-icon-link { display: inline-block; border-radius: 10px; line-height: 0; }
+.proto-icon-link:hover .proto-row-icon, .proto-icon-link:focus-visible .proto-row-icon { outline: 2px solid var(--gu-accent); outline-offset: 2px; }
+.proto-table .proto-row-icon { width: 34px; height: 34px; font-size: 19px; border-radius: 9px; }
+.proto-table .proto-open { margin-left: 12px; }
+@media (max-width: 640px) {
+  .prototype-lab-intro.lab-hero { height: auto; grid-template-columns: minmax(0, 1fr); }
+  .lab-hero-art { height: 110px; }
+  .proto-table .pt-what { display: none; }
+  .proto-table .pt-links a:not(.proto-open) { margin-left: 0; }
+  .proto-table .pt-name { white-space: normal; }
+}
+/* Operate and Improve: the same thin banner, and a short "In construction" instead of a paragraph. */
+.area-hero { height: 112px; margin-bottom: 8px; }
+.area-hero-text { padding: 8px 8px 8px 24px; }
+.area-hero-text h1 { font-size: clamp(24px, 2.6vw, 32px); margin: 0 0 2px; }
+.area-hero-text p:not(.prototype-eyebrow) { font-size: 14px; }
+.area-hero-text .prototype-eyebrow { margin-bottom: 2px; }
+.area-hero-art { height: 94px; width: 63px; margin: 9px 18px 9px 0; }
+.gu-construction { padding: 0 150px 0 12px; min-height: 34px; align-items: center; margin: 4px 0 12px; }
+@media (max-width: 640px) { .area-hero { height: 108px; } .area-hero-art { height: 88px; width: 59px; } .gu-construction { padding-right: 112px; } }
+
+/* One banner for Prototype Lab, Operate and Improve (10 Oct): the same thin height, the same text, the whole existing picture framed at the right. */
+.area-hero-art-wide { width: 125px; }
+@media (max-width: 640px) { .area-hero-art-wide { width: 117px; } }
+
+/* ── One type scale for the Guild (10 Oct, Robert: sizes and styles were inconsistent) ──
+   Navigation (bands and tabs): body face, 15 px, sentence case. Page titles: the display serif at 22 px; banner titles 28 px. Small labels: body face, 11 px,
+   capitals. Text 14 px, quiet text 13 px. The monospace face is for ids, paths and commands only. */
+body.gu .guild-subnav .subnav-link, body.gu .subnav-link { font: 500 14px var(--gu-font-body); text-transform: none; letter-spacing: 0; }
+body.gu .subnav-link.subnav-active { font-weight: 700; }
+body.gu .gu-section-band a { font: 500 14px var(--gu-font-body); }
+body.gu .gu-section-band a[aria-current] { font-weight: 700; }
+body.gu .page-title, body.gu .wt-title, body.gu .wt .wt-topicsel, body.gu .bd-tool .page-title, body.gu .bl-title, body.gu .gu-reference > h1, body.gu .gu-main > h1 { font: 600 22px/1.25 var(--gu-font-display); }
+body.gu .area-hero-text h1 { font: 600 28px/1.15 var(--gu-font-display); margin: 0 0 2px; }
+body.gu .prototype-eyebrow, body.gu .wt-rail-h, body.gu .wt-docs-label, body.gu .wt-label, body.gu .wt-eyebrow, body.gu .wt-where-h, body.gu .wt-kind { font: 600 11px var(--gu-font-body); letter-spacing: .1em; text-transform: uppercase; }
+body.gu .proto-table thead th, body.gu .bl-matrix thead th { font: 600 11px var(--gu-font-body); letter-spacing: .1em; text-transform: uppercase; }
+body.gu .wt-rail-item, body.gu .wt-docsmenu, body.gu .wt-doclink, body.gu .wt-link, body.gu .proto-table td, body.gu .proto-table th[scope="row"] { font-size: 14px; }
+@media (max-width: 640px) { body.gu .guild-subnav .subnav-link, body.gu .subnav-link { font-size: 14px; padding: 0 10px; } body.gu .area-hero-text h1 { font-size: 24px; } }
+/* the same scale on the Board's toolbar: counts and filters 14 px, the hint line 13 px */
+body.gu .bd-counts, body.gu .bd-tool select, body.gu .bd-tool input[type="search"] { font-size: 14px; }
+body.gu .bd-state-note, body.gu .bd-sync { font-size: 13px; }
+body.gu .bd-tool .page-title { margin: 0; }
+.proto-table .proto-row { display: table-row; padding: 0; border: 0; }
+.proto-table.proto-list { display: table; border-radius: 0; }
+.proto-views[data-view="cards"] .proto-table.proto-list { display: none; }
+
+/* Landscape pictures (Prototype Lab, Rooms) FILL their end of the banner, edge to edge and fading softly into the page, so they can be seen (Robert, 10 Oct).
+   Portrait pictures (Operate, Improve) stay whole in a frame: cropping them to a strip is what made them unrecognisable. */
+.area-hero { grid-template-columns: minmax(0, 1fr) auto; }
+.area-hero-art.area-hero-art-wide { width: 100%; height: 100%; margin: 0; border-radius: 0; box-shadow: none; background: transparent; overflow: hidden; align-self: stretch; }
+.area-hero-art.area-hero-art-wide img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 42%; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 26%); mask-image: linear-gradient(90deg, transparent 0, #000 26%); }
+.area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) min(46%, 560px); }
+@media (max-width: 640px) { .area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) 42%; } .area-hero-art.area-hero-art-wide { width: auto; } }
+
+/* One size for every level of navigation, from the portal bar to the tabs (14 px), one for text (14 px), one for quiet text (13 px). */
+body.gu .mc-panel, body.gu .mc-composer, body.gu .msg-text { font-size: 14px; }
+body.gu .rm-title { font: 600 22px/1.25 var(--gu-font-display); }
+body.gu .bl-seg button, body.gu .bl-views button, body.gu .bl-views a { font-size: 13px; }
+/* nothing explains itself in the Board (10 Oct): the hints and the "up to date" stamp stay for screen readers and show only when something is wrong */
+body.gu .bd-state-note, body.gu .bd-sync[data-kind="ok"], body.gu .bd-sync:empty { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 640px) { body.gu .guild-subnav .subnav-link, body.gu .subnav-link { font-size: 14px; } }
+
+/* ── The conversation, the way the chat tools you already use do it (10 Oct, Robert: "just copy them; let's not be worse") ──
+   Plain left-aligned replies with Markdown; your own messages as a soft bubble on the right; almost no chrome around the thread; one rounded composer at
+   the bottom with a round send button. The retention words ("kept as a note"), the time and the context are still there, quiet, and show on hover or focus;
+   the Private lock, files and the Chief of Staff's limits keep their places and their words. Same data, same behaviour. */
+body.gu:not([data-page="floor"]) .mc-panel { background: var(--gu-zone-conv); border: 1px solid var(--gu-border); border-radius: 16px; overflow: hidden; box-shadow: none; gap: 0; padding-bottom: 12px; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-head { background: transparent; color: var(--gu-text); border-radius: 0; border-bottom: 1px solid var(--gu-border); padding: 8px 16px; cursor: default; min-height: 40px; }
+body.gu:not([data-page="floor"]) .mc-panel[data-mode="floating"] .mc-head { cursor: grab; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-title { font: 600 14px var(--gu-font-body); color: var(--gu-text); }
+body.gu:not([data-page="floor"]) .mc-panel .mc-head .btn-mini { color: var(--gu-text-muted); text-decoration-color: var(--gu-border-strong); }
+body.gu:not([data-page="floor"]) .mc-panel .mc-head .btn-mini:hover { background: var(--gu-surface-2); color: var(--gu-text); }
+body.gu:not([data-page="floor"]) .mc-panel .mc-current { margin: 4px 16px 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 12.5px; color: var(--gu-text-muted); }
+body.gu:not([data-page="floor"]) .mc-panel .mc-current .btn-quiet { min-height: 26px; padding: 0 2px; border: 0; background: transparent; color: var(--gu-accent); text-decoration: underline; text-underline-offset: 3px; font: inherit; font-size: 12.5px; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-thread { padding: 12px max(16px, calc((100% - 760px) / 2)) 4px; gap: 14px; margin: 0; }
+body.gu:not([data-page="floor"]) .mc-panel .msg { background: transparent; border: 0; border-radius: 0; padding: 0; box-shadow: none; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-note .msg-text, body.gu:not([data-page="floor"]) .mc-panel .msg-md { font-size: 14.5px; line-height: 1.6; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"] { align-self: flex-end; max-width: min(78%, 620px); background: var(--gu-surface-2); border-radius: 16px 16px 4px 16px; padding: 8px 14px; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-note:not([data-author-kind="owner"]) { align-self: stretch; max-width: 760px; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-meta { margin: 0 0 2px; font-size: 11.5px; color: var(--gu-text-muted); font-style: normal; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"] .msg-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
+body.gu:not([data-page="floor"]) .mc-panel .msg-label { font-weight: 600; font-style: normal; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-extra { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+body.gu:not([data-page="floor"]) .mc-panel .msg:hover .msg-extra, body.gu:not([data-page="floor"]) .mc-panel .msg:focus-within .msg-extra, body.gu:not([data-page="floor"]) .mc-panel .msg[data-details="open"] .msg-extra { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; white-space: normal; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-platform { align-self: center; max-width: 640px; font-size: 12.5px; color: var(--gu-text-muted); text-align: center; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-foot, body.gu:not([data-page="floor"]) .mc-panel .msg-files { font-size: 12px; color: var(--gu-text-muted); }
+/* the composer: one rounded box, a growing text area, a round send button */
+body.gu:not([data-page="floor"]) .mc-panel .mc-dock-bottom { padding: 0 max(16px, calc((100% - 760px) / 2)); }
+body.gu:not([data-page="floor"]) .mc-panel .mc-composer { background: #fff; border: 1px solid var(--gu-border-strong); border-radius: 18px; padding: 8px 10px 6px 14px; gap: 2px; box-shadow: 0 1px 4px #3028170f; margin: 0; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-composer:focus-within { border-color: var(--gu-accent-strong, #344b40); box-shadow: 0 0 0 2px #344b4026; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-input { border: 0; background: transparent; padding: 6px 0; min-height: 28px; font-size: 14.5px; line-height: 1.5; outline: none; box-shadow: none; }
+body.gu:not([data-page="floor"]) .mc-panel [data-mc-send] { width: 34px; height: 34px; min-width: 34px; min-height: 34px; padding: 0; border-radius: 50%; font-size: 0; position: relative; flex: none; }
+body.gu:not([data-page="floor"]) .mc-panel [data-mc-send]::after { content: "↑"; font-size: 18px; line-height: 1; position: absolute; inset: 0; display: grid; place-items: center; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-tools { gap: 6px; align-items: center; padding: 0; margin: 0; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-tools .mc-lock { border: 0; background: transparent; min-height: 26px; min-width: 26px; opacity: .7; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-tools .mc-lock:hover, body.gu:not([data-page="floor"]) .mc-panel .mc-tools .mc-lock[aria-pressed="true"] { opacity: 1; }
+body.gu[data-page="workshop"] .mc-panel [data-mc-invite], body.gu[data-page="workshop"] .mc-panel .mc-soon { display: none; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-state, body.gu:not([data-page="floor"]) .mc-panel .mc-private-explain { margin: 6px max(16px, calc((100% - 760px) / 2)) 0; font-size: 12px; color: var(--gu-text-muted); font-weight: 400; text-align: center; }
+body.gu[data-page="workshop"] .mc-panel .mc-state { text-align: left; margin-left: 4px; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-blocker { margin: 0 0 6px; }
+@media (max-width: 640px) { body.gu:not([data-page="floor"]) .mc-panel .mc-thread { padding: 10px 12px 4px; } body.gu:not([data-page="floor"]) .mc-panel .mc-dock-bottom { padding: 0 12px; } body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"] { max-width: 88%; } }
+body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"] .msg-meta { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"]:hover .msg-meta, body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"][data-details="open"] .msg-meta { width: auto; height: auto; margin: 0; overflow: visible; clip: auto; right: 0; top: -17px; background: var(--gu-zone-conv); padding: 0 4px; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"] { position: relative; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-composer .mc-row { width: 100%; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-composer .mc-tools { width: auto; flex: 0 0 auto; }
+body.gu:not([data-page="floor"]) .mc-panel .mc-composer .mc-state { flex: 1 1 0; min-width: 0; margin: 0 0 0 6px; text-align: right; align-self: center; font-size: 11.5px; }
+body.gu[data-page="workshop"] .mc-panel [data-conv-current-title] { display: none; }
+
+/* a real, keyboard- and tap-reachable way to see a message's time, context and retention (hover is only a bonus) */
+.msg-info { background: transparent; border: 0; padding: 0 5px; margin-left: 4px; min-width: 22px; min-height: 22px; border-radius: 11px; font: 600 11px var(--gu-font-body); color: var(--gu-text-muted); cursor: pointer; opacity: .5; vertical-align: baseline; }
+.msg:hover .msg-info, .msg-info:focus-visible, .msg[data-details="open"] .msg-info { opacity: 1; }
+.msg-info:focus-visible { outline: 2px solid var(--gu-accent-strong, #344b40); outline-offset: 1px; }
+body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"] .msg-info { position: absolute; right: 2px; top: -22px; }
+@media (max-width: 640px) { .msg-info { min-width: 32px; min-height: 32px; } body.gu:not([data-page="floor"]) .mc-panel .msg-note[data-author-kind="owner"] .msg-info { right: -4px; top: -24px; } }
+
+/* 12 Oct: wider artwork, shared banner height and frame across Guild areas. */
+.area-hero, .prototype-lab-intro.lab-hero { height: 130px; }
+.area-hero-art.area-hero-art-wide { width: 100%; aspect-ratio: auto; height: 100%; justify-self: stretch; }
+.area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) 48%; }
+.area-hero-art.area-hero-art-wide img { object-fit: cover; object-position: 50% 50%; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22%); mask-image: linear-gradient(90deg, transparent 0, #000 22%); }
+.area-hero-art { height: 108px; width: 72px; }
+.proto-tile { width: 132px; background: var(--gu-surface); border: 1px solid var(--gu-border-strong); border-radius: 14px; box-shadow: 0 1px 4px #3028171a; }
+.proto-tile-link:hover, .proto-tile-link:focus-visible { background: var(--gu-surface-2); border-radius: 13px; }
+.proto-tile-link { padding: 14px 8px 12px; }
+@media (max-width: 640px) { .area-hero, .prototype-lab-intro.lab-hero { height: 112px; } .area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) 42%; } .area-hero-art { height: 88px; width: 59px; } }
+.area-hero-art { align-self: stretch; }
+.area-hero-art.area-hero-art-wide { width: 100%; height: 130px; aspect-ratio: auto; align-self: start; justify-self: stretch; }
+.area-hero-art.area-hero-art-wide img { width: 100%; height: 100%; display: block; }
+@media (max-width: 640px) { .area-hero-art.area-hero-art-wide { height: 112px; } }
+.area-hero-text p:not(.prototype-eyebrow) { line-height: 1.35; }
+@media (max-width: 640px) { .area-page .area-hero-text .prototype-eyebrow { display: none; } .area-page .area-hero-text { padding: 8px 4px 8px 16px; } .area-page .area-hero-text p:not(.prototype-eyebrow) { font-size: 13px; } }
+.proto-tile-art { display: block; width: 112px; height: 72px; object-fit: contain; background: #fff; border-radius: 6px; }
+.proto-row-art { display: block; width: 48px; height: 34px; object-fit: contain; background: #fff; }
+@media (max-width: 640px) { .proto-row-art { width: 34px; height: 30px; } }
+
+
+/* One page frame for Prototype Lab, Operate and Improve (11 Oct, Robert: headers, size and location still differed): the same width, the same side and top spacing, so
+   the banner and everything under it start in the same place on all three. (Before, the Lab used a 1280 px article, Improve a 1100 px one with its own margin, and
+   Operate had no frame at all.) */
+body.gu .area-page { width: 100%; max-width: 1280px; box-sizing: border-box; margin: 0 auto; padding: 24px 24px 0; }
+@media (max-width: 640px) { body.gu .area-page { padding: 20px 16px 0; } }
+.operate-overview { margin: 16px 0 8px; border: 1px solid var(--gu-border); border-radius: 10px; overflow: hidden; background: var(--gu-surface); }
+.operate-overview > details.card { margin: 0; border: 0; border-bottom: 1px solid var(--gu-border); border-radius: 0; padding: 0; }
+.operate-overview > details:last-child { border-bottom: 0; }
+.operate-overview > details > summary { display: grid; grid-template-columns: minmax(130px, 1fr) 80px minmax(0, 2fr); gap: 12px; align-items: baseline; padding: 14px 16px; cursor: pointer; }
+.operate-overview > details > summary h2::before { content: '›'; display: inline-block; width: 16px; }
+.operate-overview > details[open] > summary h2::before { content: '⌄'; }
+.operate-overview > details > summary b { font-size: 13px; font-weight: 600; }
+.operate-overview > details > summary small { color: var(--gu-text-muted); }
+.operate-overview > details > section, .operate-overview > details > article, .operate-overview > details > div { padding: 0 16px 16px; }
+.area-preview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 24px; align-items: center; max-width: 860px; margin: 36px 0 20px; padding: 20px; border: 1px solid var(--gu-border); border-radius: 12px; background: var(--gu-surface); }
+.area-preview > img { width: 100%; max-height: 260px; object-fit: contain; border-radius: 8px; }
+.area-preview h2 { font: 600 25px/1.2 var(--gu-font-display); margin: 12px 0; }
+.area-preview p { color: var(--gu-text-muted); line-height: 1.5; }
+.area-preview .gu-construction { max-width: 250px; }
+@media (max-width: 640px) {
+  .operate-overview > details > summary { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 12px; }
+  .operate-overview > details > summary small { grid-column: 1 / -1; padding-left: 16px; }
+  .area-preview { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; margin-top: 24px; }
+  .area-preview > img { max-height: 180px; }
+}
+
+/* A compact status row still makes a warning visible before it is opened. */
+.operate-overview > details > summary h2 { margin: 0; font: inherit; font-weight: 600; }
+.operate-overview > details:is([data-health="watch"], [data-health="yellow"], [data-health="unknown"], [data-health="red"]) > summary { border-left: 4px solid #ad681c; background: #f3e5cd; }
+.operate-overview > details:is([data-health="problem"], [data-health="red"]) > summary { border-left-color: #a63d2c; background: #f5e1dc; }
+@media (max-width: 640px) {
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-pill { display: inline-flex; z-index: 80; right: 12px; bottom: 12px; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-panel[data-mode="pill"] { display: none; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-panel:is([data-mode="floating"], [data-mode="docked"]) { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: 100%; max-height: 82dvh; z-index: 90; border-radius: 14px 14px 0 0; border-width: 1px; box-shadow: 0 -6px 24px #0004; overflow: auto; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-head-actions { display: flex; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-phone-bar { display: none; }
+  /* Leave room to scroll the final content clear of the floating Chat pill. */
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .area-page { padding-bottom: 84px; }
 }

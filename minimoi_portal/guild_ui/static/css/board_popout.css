@@ -1,0 +1,10 @@
+/* The Board's pop-out window and standalone page: the same Board, compact, to sit beside other work (or fill a phone). */
+body.gu[data-page="board_popout"] { margin: 0; }
+body.gu[data-page="board_popout"] .gu-layout { display: block; }
+body.gu[data-page="board_popout"] .gu-main { padding: 10px 12px 72px; max-width: none; }
+[data-page="board_popout"] .bd-tool { gap: 6px 8px; margin-bottom: 8px; }
+[data-page="board_popout"] .page-title { font-size: 1.15rem; margin: 0; }
+[data-page="board_popout"] .bd-cork { padding: 14px 12px; min-height: 200px; border-radius: 10px; }
+[data-page="board_popout"] .bd-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 22px 14px; }
+[data-page="board_popout"] .bd-sync { margin: 0 0 6px; }
+[data-page="board_popout"] .mc-phone-bar { display: none; }

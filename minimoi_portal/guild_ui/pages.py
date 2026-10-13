@@ -117,11 +117,26 @@ def _urls(c) -> dict:
     }
 
 
+def _private_max() -> int:
+    from .api import PRIVATE_TEXT_MAX                       # the Private question limit the server enforces, so the page can say it before anything is sent
+    return PRIVATE_TEXT_MAX
+
+
+def _agent_requests_state(c, conversation) -> dict:
+    svc = c.get("agent_asks")
+    if svc is None or not conversation:
+        return {"enabled": False, "outstanding": 0}
+    try:
+        return {"enabled": True, "outstanding": svc.outstanding(conversation["id"])}
+    except Exception:
+        return {"enabled": True, "outstanding": 0}
+
+
 def _context(page_id: str, area: str, context_item: str, *, conversation_id=None, **extra) -> dict:
     c = cfg()
     scope = None if page_id == "floor" else (
         "operate" if page_id.startswith("operate") else
-        {"workshop": "workshop", "board": "board", "postits": "board",
+        {"workshop": "workshop", "board": "board", "board_popout": "board", "postits": "board",
          "improve": "improve", "experiment": "prototype"}.get(page_id, "build"))
     conversation, conv_notice = _current_conversation(c, scope, force_id=conversation_id)
     state = floor_state.compute(c, notes_limit=NOTES_ON_PAGE, conversation=conversation)
@@ -136,10 +151,11 @@ def _context(page_id: str, area: str, context_item: str, *, conversation_id=None
         "layout": {"version": layout["layout_version"],
                    **({"bench": layout["bench"]} if reserve_pages_enabled() else {})},
         "floor": state, "off_record_text": OFF_RECORD_TEXT, "rules_label": RULES_LABEL,
-        "postit_max": POSTIT_MAX, "note_max": NOTE_MAX, "attach": {"max_bytes": MAX_BYTES, "doc_max_bytes": doc_reader.MAX_UPLOAD_BYTES,
+        "postit_max": POSTIT_MAX, "note_max": NOTE_MAX, "private_max": _private_max(), "attach": {"max_bytes": MAX_BYTES, "doc_max_bytes": doc_reader.MAX_UPLOAD_BYTES,
                    "doc_ext": doc_reader.ACCEPT, "doc_chars": doc_reader.MAX_STORED_CHARS},
         "conversation": public(conversation) if conversation else None, "conv_notice": conv_notice,
         "jobs": {"enabled": bool(c.get("jobs"))},
+        "agent_requests": _agent_requests_state(c, conversation),
     }
     page.update(extra.pop("page_extra", {}))
     page_open = extra.pop("page_open", False)
@@ -148,7 +164,17 @@ def _context(page_id: str, area: str, context_item: str, *, conversation_id=None
                 user=c["current_user"](), page_json=page, urls=urls, phone_numbers=phone_numbers,
                 filing_off=FILING_OFF, invite_off=INVITE_OFF, rules_label=RULES_LABEL,
                 hhmm=hhmm, age=age, badge=badge, statuses=STATUSES, conversation=conversation,
-                conv_notice=conv_notice, **extra)
+                conv_notice=conv_notice, mc_voice_on=_mc_voice_on(), dictation_on=_dictation_on(), **extra)
+
+
+def _mc_voice_on() -> bool:
+    from . import mc_voice
+    return mc_voice.enabled()
+
+
+def _dictation_on() -> bool:
+    from . import dictation
+    return dictation.enabled()
 
 
 def _current_conversation(c, scope=None, force_id=None):
@@ -175,7 +201,7 @@ def _current_conversation(c, scope=None, force_id=None):
 # each mapped to where it goes on /guild-next today. The Build door's image is
 # the shared Build card's (templates/guild/_build_card.html).
 DOORS = (
-    {"id": "build", "label": "Build", "href": "floor", "img": None,  # Build opens Master Craftsman chat
+    {"id": "build", "label": "Build", "href": "floor", "img": None,  # Build opens the Craftsman Chat
      "kicker": "Chat · Board · Build Log", "flow": "design → build", "cta": "Chat →"},
     {"id": "operate", "label": "Operate", "href": "operate", "img": "/static/guild/guild-operate.webp",
      "alt": "Operate — system health watercolor",
@@ -225,13 +251,19 @@ def build_log():
 def rooms():
     """Rooms (Guild 1.1 slice 4, spec §6): group chat first, on Records. The
     page talks to Records only through the dev bridge at /app/records/api/,
-    with Records' own login; it never holds a Records credential. When the
-    bridge is not installed here, it says so."""
+    signed in with mini-moi and nothing else (no Records login); it never holds
+    a Records credential. When the bridge is not installed here, or this account
+    has no Rooms access, it says so."""
     from flask import current_app
     bridge = current_app.extensions.get("records_bridge") or {"state": "off_not_dev"}
     ctx = _context("rooms", "Rooms", "Rooms", page_open=True)
-    rooms_cfg = {"state": bridge.get("state"), "api": "/app/records/api", "login": "/app/records/",
-                 "max_bytes": 2_000_000, "take": request.args.get("take", type=int)}
+    access = "unknown"
+    who = current_app.extensions.get("rooms_who")
+    if bridge.get("state") == "on" and who is not None:
+        decision, _key = who()
+        access = {"ok": "ok", "no_access": "no_access"}.get(decision.kind, "unavailable")      # the same live check every Rooms call makes
+    rooms_cfg = {"state": bridge.get("state"), "access": access, "api": "/app/records/api",
+                 "login": "/login?next=/guild-next/guild/rooms", "max_bytes": 8_000_000, "take": request.args.get("take", type=int)}
     return render_template("guild_floor/rooms.html", rooms_cfg=rooms_cfg, **ctx)
 
 
@@ -244,11 +276,38 @@ def floor():
     try:
         store = conversations_of(cfg()["services"])
         rows = store.list(principal, archived=view == "archived")
-        conv_list = {"state": "ok", "rows": rows, "unreadable": store.unreadable}
+        # A short recent list, with older conversations still reachable. No archival or deletion is implied.
+        page_number = request.args.get("history_page", type=int)
+        if page_number is None:
+            current_id = (ctx.get("conversation") or {}).get("id")
+            page_number = next((i // 10 for i, row in enumerate(rows) if row["id"] == current_id), 0)
+        page_number = max(0, min(page_number, max(0, (len(rows) - 1) // 10)))
+        def history_url(index):
+            return url_for(".floor", view=view, history_page=index, c=(ctx.get("conversation") or {}).get("id"))
+        conv_list = {"state": "ok", "rows": rows[page_number * 10:(page_number + 1) * 10], "unreadable": store.unreadable,
+                     "newer": history_url(page_number - 1) if page_number else None,
+                     "older": history_url(page_number + 1) if (page_number + 1) * 10 < len(rows) else None}
     except ConversationStoreUnavailable:
         conv_list = {"state": "unavailable", "rows": [], "unreadable": 0}
     return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], conv_list=conv_list,
-                           conv_view=view, **ctx)
+                           conv_view=view, topic_link=_topic_link(ctx, principal), **ctx)
+
+
+def _topic_link(ctx, principal):
+    """One quiet link from a conversation that belongs to a Workshop Log topic to that topic's materials (documents, versions, comments, record).
+    None when the conversation has none, or when the topic store cannot be read (a link is never invented)."""
+    conv = ctx.get("conversation") or {}
+    cid = conv.get("id") if isinstance(conv, dict) else getattr(conv, "id", None)
+    if not cid:
+        return None
+    try:
+        from .topics import topics_of
+        for t in topics_of(cfg()["services"]).list_topics(principal):
+            if t.get("conversation_id") == cid:
+                return {"href": f"{url_for('.workshop')}?topic={t['id']}", "title": t["title"], "cards": t["cards"]}
+    except Exception:
+        return None
+    return None
 
 
 def _build_host(item_id):
@@ -285,7 +344,7 @@ def workshop():
         notice = "That topic was not found; showing your latest."
     except TopicStoreUnavailable:
         notice = "The topic workshop is unavailable right now."
-    ctx = _context("workshop", "Workshop", f"Workshop · {topic['title']}" if topic else "Workshop", page_open=True,
+    ctx = _context("workshop", "The Work", f"The Work · {topic['title']}" if topic else "The Work", page_open=True,
                    page_extra={"topic_id": topic["id"] if topic else None, "topic_notice": notice,
                                "workshop_view": request.args.get("view") if request.args.get("view") in ("chat", "cards", "split") else None,
                                "workshop_item": request.args.get("item_id") if ITEM_RE.fullmatch(request.args.get("item_id") or "") else None},
@@ -373,7 +432,30 @@ def operate():
     lights = {l["id"]: l for l in ctx["state"]["lights"]}
     from .scheduled_jobs import overview
     from .memory_capture import overview as memory_overview
-    return render_template("guild_floor/operate.html", memory_capture=memory_overview(), scheduled_jobs=overview(), selected_tile=selected, tile_lights=lights, **ctx)
+    from . import limits_view
+    from .agent_ask import service as _ask_service
+    asks = _ask_service()
+    try:
+        claude_status = asks.manager_status("claude-code") if asks is not None else None
+    except Exception:
+        claude_status = None
+    return render_template("guild_floor/operate.html", memory_capture=memory_overview(), scheduled_jobs=overview(), selected_tile=selected, tile_lights=lights,
+                           usage_limits=limits_view.overview(agent_status=claude_status), **ctx)
+
+
+def _board_payload():
+    """(res, board_data): the Board's answer as the page embeds it (the same shape GET /api/v1/board gives)."""
+    from .board import LABELS
+    from .board_api import _decorate, _queue_index
+    res = cfg()["services"].floor.board()
+    data = res.data if res.ok else {}
+    index = _queue_index() if res.ok else None
+    for name in ("active", "done", "trash"):
+        _decorate(data.get(name), index)
+    board_data = {"status": res.status, "reason": res.reason, "labels": list(LABELS),
+                  **({k: data.get(k) for k in ("active", "done", "trash", "order_rev", "trash_rev", "counts")}
+                     if res.ok else {"active": None, "done": None, "trash": None})}
+    return res, board_data
 
 
 @owner_page
@@ -383,18 +465,23 @@ def board():
     buttons or Alt+Arrow; Trash with Restore and a confirmed Empty. The page
     embeds the same answer GET /api/v1/board gives; its script writes only
     through the API. No review workflow, no model call."""
-    from .board import LABELS
-    from .board_api import _decorate, _queue_index
-    res = cfg()["services"].floor.board()
-    data = res.data if res.ok else {}
-    index = _queue_index() if res.ok else None
-    for name in ("active", "done", "trash"):
-        _decorate(data.get(name), index)
+    res, board_data = _board_payload()
     ctx = _context("board", "Board", "Board", page_open=True)
-    board_data = {"status": res.status, "reason": res.reason, "labels": list(LABELS),
-                  **({k: data.get(k) for k in ("active", "done", "trash", "order_rev", "trash_rev", "counts")}
-                     if res.ok else {"active": None, "done": None, "trash": None})}
     return render_template("guild_floor/board.html", res=res, board_data=board_data, **ctx)
+
+
+@owner_page
+def board_popout():
+    """The Board in its own small window (the owner's desktop notepad): the same Board and notes, nothing else.
+    A light page: no portal bar, no sections bar, no conversation panel, and it does not compute the whole floor.
+    Its script (js/popout.js) reads and writes through the same API as the Board page, keeps itself current
+    (a change in either window shows in the other) and stays open while the main window moves on."""
+    from .stores import POSTIT_MAX
+    res, board_data = _board_payload()
+    c = cfg()
+    ctx = _context("board_popout", "Board", "Board", page_open=True)
+    return render_template("guild_floor/board_popout.html", res=res, board_data=board_data,
+                           popout=True, bare=True, **ctx)
 
 
 @owner_page

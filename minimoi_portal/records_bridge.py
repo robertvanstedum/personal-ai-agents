@@ -6,39 +6,52 @@ configured internal origin (RECORDS_BACKEND, for example
 http://minimoi-records:18880) instead of a fixed loopback address, still
 with no client-selected hosts.
 
-What it keeps (R4):
-* Records keeps its own login. Its session cookie, minimoi_room_poc, is the
-  only cookie forwarded, and it is re-issued scoped to /app/records/
-  (HttpOnly, SameSite=Strict, Secure on dev).
+What it keeps (R4) and what changed (Rooms identity, draft 3):
+* Records no longer asks for its own sign-in here. The portal has already signed
+  the person in; for each request the bridge asks minimoi_portal.rooms_identity
+  whether this account has a Rooms binding (data the owner controls, checked live
+  on every call) and, if so, sends Records one signed assertion naming that
+  principal for that exact request (method, path, sorted query, body digest,
+  30 s, single use). No Records cookie is forwarded or re-issued, no credential
+  is in the page, and no binding means a plain 403, never another identity.
 * The portal cookie, bearer tokens, forwarded identity and every other
-  request header are never passed through. The owner credential is never
-  injected: Robert signs in to Records separately.
+  request header are never passed through. A client-supplied X-Portal-Identity is
+  dropped; the bridge sets its own.
 * Records answers only on the dev origin (and a local test host). A non-GET
   needs Origin equal to that origin; the Idempotency-Key header passes
   through; bodies are capped (3,000,000 bytes) while streaming.
-* Records' own actor and grant checks decide every action; the portal adds
-  only its owner guard in front.
+* Records' own actor, membership and owner checks decide every action; the
+  portal adds its login and owner guard in front.
+* Error meanings stay apart: the portal session ended (the portal's own redirect
+  or 401), no Rooms access (403 rooms_no_access), Rooms unavailable or not set up
+  (502/503 rooms_unavailable / rooms_integration). A Records 401 for the
+  assertion is an integration fault, never a request to sign in.
 
 Installed only when BASE_URL is the dev origin and RECORDS_BACKEND is set
 and valid; in production nothing is registered and /app/records/ is 404.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
-from http.cookies import SimpleCookie
 from urllib.parse import quote, urlsplit
 
 import requests
 from flask import Response, request
 
+from minimoi_portal import rooms_identity as RI
+
 log = logging.getLogger(__name__)
 
 PREFIX = "/app/records"
-COOKIE = "minimoi_room_poc"
+ENV_NAME = "dev"
+RI_HEADER = "X-Portal-Identity"
+KEY_FILE_DEFAULT = "/run/secrets/rooms-bridge/portal-bridge.key"
+ACCESS_DIR_DEFAULT = "/app/runtime/guild/rooms"
 DEV_ORIGIN = "https://dev.minimoi.ai"
 DEV_HOST = "dev.minimoi.ai"
-MAX_BODY = 3_000_000
+MAX_BODY = 12_000_000
 # The only hostnames RECORDS_BACKEND may name: the staging container, or the
 # loopback address for a local run beside a native portal.
 BACKEND_HOSTS = {"minimoi-records", "127.0.0.1"}
@@ -93,8 +106,33 @@ def _allowed_host(host: str, backend: str) -> bool:
     return host == DEV_HOST or (host in LOCAL_HOSTS and backend.startswith("http://127.0.0.1:"))
 
 
-def install(portal, require_login, require_owner, *, backend: str, transport=None) -> str:
+def _json(status: int, code: str, message: str) -> Response:
+    return Response(json.dumps({"error": message, "code": code}), status=status, content_type="application/json")
+
+
+def install(portal, require_login, require_owner, *, backend: str, transport=None, identity=None) -> str:
     backend = validate_backend(backend)
+    identity = identity or {}
+    access = identity.get("access")
+    key_file = identity.get("key_file") or KEY_FILE_DEFAULT
+    current_user = identity.get("current_user") or (lambda: None)
+    account_active = identity.get("account_active") or (lambda user: True)
+
+    def who():
+        """(Decision, signing key). The decision is live on every call: signed in, account active, binding active."""
+        user = current_user() or {}
+        account = f"account:{user['username']}" if user.get("username") else None
+        if access is None:
+            return RI.Decision("unavailable", reason="Rooms access is not configured"), None
+        try:
+            active = bool(account_active(user))
+        except Exception:
+            return RI.Decision("unavailable", reason="the account list cannot be read"), None
+        decision = access.decide(account, account_active=active)
+        key = RI.load_key(key_file) if decision.ok else None
+        if decision.ok and key is None:
+            return RI.Decision("unavailable", reason="the Rooms signing key is not in place"), None
+        return decision, key
 
     def forward(path=""):
         if not _allowed_host(request.host, backend):
@@ -107,15 +145,21 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
             return Response("Request too large", status=413)
         if any(part in {".", ".."} for part in path.split("/")):
             return Response("Invalid path", status=400)
+        decision, key = who()
+        if decision.kind == "no_access":
+            log.info("rooms bridge: no access (%s)", decision.reason)
+            return _json(403, "rooms_no_access", "You don't have access to Rooms. Ask the owner to switch it on for your account.")
+        if not decision.ok:
+            log.warning("rooms bridge: unavailable (%s)", decision.reason)
+            return _json(503, "rooms_unavailable", "Rooms is not set up for sign-in here right now. Nothing was sent.")
         # Only these headers reach Records: never the portal cookie, a bearer
-        # token, forwarded identity, or a client-chosen host.
+        # token, forwarded identity (a client-supplied X-Portal-Identity included),
+        # or a client-chosen host. The identity header is the bridge's own.
         headers = {"Accept": request.headers.get("Accept", "*/*")}
         if request.headers.get("Content-Type"):
             headers["Content-Type"] = request.headers["Content-Type"]
         if request.headers.get("Idempotency-Key"):
             headers["Idempotency-Key"] = request.headers["Idempotency-Key"]
-        if request.cookies.get(COOKIE):
-            headers["Cookie"] = COOKIE + "=" + request.cookies[COOKIE]
         if request.method not in {"GET", "HEAD"}:
             headers["Origin"] = backend
         try:
@@ -125,6 +169,8 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
             payload = request.stream.read(MAX_BODY + 1)
             if len(payload) > MAX_BODY:
                 return Response("Request too large", status=413)
+            headers[RI_HEADER] = RI.sign(key, principal=decision.principal, method=request.method,
+                                         target=RI.canonical_target("/" + path, request.query_string), body=payload, env=ENV_NAME)
             sender = transport if transport is not None else _TRANSPORT
             if sender is not None:
                 upstream = sender.request(request.method, target, headers=headers, data=payload, timeout=20,
@@ -141,6 +187,12 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
                             content_type="application/json")
         if 300 <= upstream.status_code < 400:
             return Response("Unexpected Records redirect", status=502)
+        if upstream.status_code == 401 or (upstream.status_code == 403 and _identity_refusal(upstream)):
+            # Records refused the assertion itself: a connection or set-up fault, never a request to sign in (the person IS signed in).
+            log.warning("rooms bridge: Records refused the portal identity (%s)", upstream.status_code)
+            return _json(502, "rooms_integration", "Rooms could not confirm your account just now. This is a connection problem, not a sign-in problem; nothing was sent.")
+        if upstream.status_code == 503 and path.startswith("api/"):
+            return _json(503, "rooms_unavailable", "Rooms is not set up for sign-in here right now. Nothing was sent.")
         content = upstream.content
         content_type = upstream.headers.get("Content-Type", "application/octet-stream")
         if (not path or path.startswith("static/")) and any(t in content_type for t in ("text/html", "javascript", "text/css")):
@@ -151,14 +203,39 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
                 response.headers[name] = upstream.headers[name]
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Records-Environment"] = "dev"
-        cookie = _records_cookie(upstream)
-        if cookie is not None:
-            value, max_age, expires = cookie
-            response.set_cookie(COOKIE, value, path=PREFIX + "/", httponly=True, samesite="Strict",
-                                secure=request.host == DEV_HOST, max_age=max_age,
-                                expires=None if max_age is not None else expires)
         return response
 
+    def call_records(method: str, path: str, payload: dict | None = None, *, operation_key=None):
+        """One server-to-server call to Records as the signed-in OWNER (used by the access grant to create the person a grant needs).
+        Returns (status, json or None); status 0 means Records could not be reached. Refused unless the caller acts as the owner principal."""
+        decision, key = who()
+        if not decision.ok or decision.principal != RI.OWNER_PRINCIPAL:
+            return 403, None
+        raw = json.dumps(payload).encode("utf-8") if payload is not None else b""
+        headers = {"Accept": "application/json", RI_HEADER: RI.sign(key, principal=decision.principal, method=method,
+                                                                    target=RI.canonical_target(path, b""), body=raw, env=ENV_NAME)}
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+            headers["Origin"] = backend
+        if operation_key:
+            headers["Idempotency-Key"] = operation_key
+        try:
+            sender = transport if transport is not None else _TRANSPORT
+            if sender is not None:
+                up = sender.request(method, backend + path, headers=headers, data=raw, timeout=20, allow_redirects=False)
+            else:
+                with requests.Session() as connection:
+                    connection.trust_env = False
+                    up = connection.request(method, backend + path, headers=headers, data=raw, timeout=20, allow_redirects=False)
+        except (requests.RequestException, UnicodeError, OSError):
+            return 0, None
+        try:
+            return up.status_code, json.loads(up.content.decode("utf-8")) if up.content else None
+        except ValueError:
+            return up.status_code, None
+
+    portal.extensions["rooms_call"] = call_records
+    portal.extensions["rooms_who"] = who          # the Rooms page asks the same live question the bridge does
     wrapped = require_login(require_owner(forward))
     portal.add_url_rule(PREFIX, endpoint="records_dev_root", view_func=wrapped, methods=["GET", "HEAD"],
                         defaults={"path": ""})
@@ -169,41 +246,15 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
     return backend
 
 
-def _set_cookie_headers(upstream) -> list[str]:
-    """Each Set-Cookie header on its own: joined into one string they cannot
-    be split safely (an Expires date has a comma)."""
-    raw = getattr(getattr(upstream, "raw", None), "headers", None)
-    if raw is not None and hasattr(raw, "getlist"):
-        return list(raw.getlist("Set-Cookie"))
-    joined = upstream.headers.get("Set-Cookie")
-    return [joined] if joined else []
+def _identity_refusal(upstream) -> bool:
+    """Records says 403 for 'This account has no Rooms identity' (the assertion named a principal that is not a person there)."""
+    try:
+        return "no Rooms identity" in (upstream.json() or {}).get("error", "")
+    except Exception:
+        return False
 
 
-def _records_cookie(upstream):
-    """(value, max_age as int or None, expires or None) of Records' own cookie,
-    or None. A malformed attribute is dropped, never a 500 (#288 review F5)."""
-    for header in _set_cookie_headers(upstream):
-        jar = SimpleCookie()
-        try:
-            jar.load(header)
-        except Exception:                                  # a cookie we cannot parse is not re-issued
-            continue
-        if COOKIE not in jar:
-            continue
-        morsel = jar[COOKIE]
-        max_age = None
-        raw_age = (morsel["max-age"] or "").strip().rstrip(",")
-        if raw_age:
-            try:
-                max_age = max(0, int(raw_age))
-            except ValueError:
-                max_age = None
-        expires = (morsel["expires"] or "").strip().rstrip(",") or None
-        return morsel.value, max_age, expires
-    return None
-
-
-def install_if_dev(portal, *, base_url: str | None, environ, require_login, require_owner) -> dict:
+def install_if_dev(portal, *, base_url: str | None, environ, require_login, require_owner, identity=None) -> dict:
     """Install the bridge only on the dev origin with a valid RECORDS_BACKEND.
     Returns the state, also kept at portal.extensions["records_bridge"]."""
     if (base_url or "").rstrip("/") != DEV_ORIGIN:
@@ -212,7 +263,7 @@ def install_if_dev(portal, *, base_url: str | None, environ, require_login, requ
         state = {"state": "off_no_backend"}
     else:
         try:
-            backend = install(portal, require_login, require_owner, backend=environ.get("RECORDS_BACKEND"))
+            backend = install(portal, require_login, require_owner, backend=environ.get("RECORDS_BACKEND"), identity=identity)
             state = {"state": "on", "prefix": PREFIX, "backend_host": urlsplit(backend).hostname}
         except BackendRefused as exc:
             log.warning("records bridge: not installed: %s", exc)

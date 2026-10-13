@@ -20,7 +20,7 @@ def _code(path):
     return "\n".join(line for line in path.read_text().splitlines() if not line.lstrip().startswith("--"))
 
 
-@pytest.mark.parametrize("name", ["002_board.sql", "003_media.sql"])
+@pytest.mark.parametrize("name", ["002_board.sql", "003_media.sql", "004_board_place.sql"])
 def test_the_up_scripts_are_additive_and_idempotent(name):
     code = _code(SQL / name).upper()
     for word in ("DROP", "DELETE", "TRUNCATE", "RENAME", "ALTER COLUMN", "UPDATE "):
@@ -85,3 +85,35 @@ def test_the_media_folder_is_mounted_read_write_on_staging_only():
     assert "data/media" not in prod and "MINIMOI_MEDIA_DIR" not in prod
     assert 'mkdir -p "$STAGING_ROOT/data/media"' in (REPO / "scripts" / "staging" / "build.sh").read_text()
     assert re.search(r"(?im)^pillow", (REPO / "docker" / "requirements.portal.txt").read_text())
+
+
+def test_004_adds_exactly_the_two_position_columns_and_is_idempotent_on_sqlite():
+    code = _code(SQL / "004_board_place.sql")
+    assert re.findall(r"ALTER TABLE guild\.floor_postits ADD COLUMN IF NOT EXISTS (\w+)", code) == ["pos_x", "pos_y"]
+    down = _code(SQL / "004_board_place_down.sql")
+    assert "disposable" in (SQL / "004_board_place_down.sql").read_text().lower() and "DROP COLUMN IF EXISTS pos_y" in down
+    from floor_db_helpers import sqlite_ddl_place
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE floor_postits (id INTEGER PRIMARY KEY)")
+    conn.executescript(sqlite_ddl_place().replace("guild.floor_postits", "floor_postits"))
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(floor_postits)")]
+    assert cols == ["id", "pos_x", "pos_y"]
+
+
+def test_005_sizes_are_nullable_bounded_and_preserve_existing_data():
+    code=_code(SQL/'005_board_size.sql')
+    assert 'IF NOT EXISTS' in code and 'DROP' not in code.upper()
+    conn=sqlite3.connect(':memory:')
+    conn.execute('CREATE TABLE floor_postits(id INTEGER PRIMARY KEY,text TEXT)')
+    conn.execute("INSERT INTO floor_postits VALUES(1,'keep me')")
+    from floor_db_helpers import sqlite_ddl_place
+    ddl=sqlite_ddl_place(code).replace('guild.floor_postits','floor_postits')
+    conn.executescript(ddl)
+    assert conn.execute('SELECT * FROM floor_postits').fetchone()==(1,'keep me',None,None)
+    with pytest.raises(sqlite3.IntegrityError):conn.execute('UPDATE floor_postits SET size_w=480 WHERE id=1')
+    conn.execute('UPDATE floor_postits SET size_w=480,size_h=450 WHERE id=1')
+    with pytest.raises(sqlite3.IntegrityError):conn.execute('UPDATE floor_postits SET size_w=481')
+    with pytest.raises(sqlite3.IntegrityError):conn.execute('UPDATE floor_postits SET size_h=129')
+    down=_code(SQL/'005_board_size_down.sql').replace('guild.floor_postits','floor_postits').replace('DROP COLUMN IF EXISTS','DROP COLUMN')
+    conn.executescript(down)
+    assert conn.execute('SELECT * FROM floor_postits').fetchone()==(1,'keep me')

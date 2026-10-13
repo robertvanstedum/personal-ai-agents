@@ -220,7 +220,7 @@ HEADER_OFF = "Master Craftsman is off · your messages are kept as notes"
 HEADER_OFF_NO_NOTES = "Master Craftsman is off · notes unavailable, nothing you send is kept"
 HEADER_NO_NOTES = "Master Craftsman can't take turns · notes unavailable, nothing you send is kept"
 HEADER_STUB = "Master Craftsman stub · scripted replies, not an agent"
-HEADER_LIVE = "Master Craftsman is live · your messages are kept as notes"
+HEADER_LIVE = "Master Craftsman is ready · your messages are saved in the conversation"
 UNAVAILABLE_WHY = {
     "not_connected": "not connected yet",
     "not_ready": "its runtime is not answering",

@@ -41,6 +41,9 @@ def _private_on(page):
     expect(page.locator("[data-private-explain]")).to_have_text(OFF_TEXT)
 
 
+ROOMS_KEY = ("k1", "q" * 48)       # the shared Rooms identity secret of these tests (a test value; Records gets the same one)
+
+
 @pytest.fixture(scope="module")
 def server():
     import core.get_secret as secrets_module
@@ -49,6 +52,14 @@ def server():
              qs._running_in_container, os.environ.get("MINIMOI_GUILD_NEXT"))
     saved_backend = os.environ.get("RECORDS_BACKEND")
     os.environ["RECORDS_BACKEND"] = "http://127.0.0.1:18880"           # Rooms (slice 4): loopback, as local hosts need (F7)
+    rooms_dir = Path(tempfile.mkdtemp())                                 # Rooms identity: the owner's binding and the shared key, as data
+    (rooms_dir / "access").mkdir()
+    (rooms_dir / "access" / "bindings.json").write_text(json.dumps({"version": 1, "bindings": [
+        {"account": "account:robert", "principal": "robert", "active": True, "granted_by": "test", "granted_at": "2026-10-11T00:00:00Z"}]}))
+    (rooms_dir / "portal-bridge.key").write_text(f"{ROOMS_KEY[0]}:{ROOMS_KEY[1]}\n")
+    saved_rooms_env = (os.environ.get("MINIMOI_ROOMS_ACCESS_DIR"), os.environ.get("RECORDS_PORTAL_KEY_FILE"))
+    os.environ["MINIMOI_ROOMS_ACCESS_DIR"] = str(rooms_dir / "access")
+    os.environ["RECORDS_PORTAL_KEY_FILE"] = str(rooms_dir / "portal-bridge.key")
     secrets_module.get_secret = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no secrets in tests"))
     qs._running_in_container = lambda: False
     folder = Path(tempfile.mkdtemp()) / "guild"
@@ -71,6 +82,9 @@ def server():
             os.environ.pop("RECORDS_BACKEND", None)
         else:
             os.environ["RECORDS_BACKEND"] = saved_backend
+    import minimoi_portal.auth as _portal_auth
+    saved_load_users = _portal_auth.load_users
+    _portal_auth.load_users = lambda: [{"username": "robert", "tier": "owner", "display_name": "Robert"}, {"username": "dana", "tier": "family", "display_name": "Dana"}]
     qs._running_in_container = lambda: False  # the store checks this on every Save
     app = module.app
     assert module.GUILD_MOUNTS["guild_next"] == "on"
@@ -89,18 +103,24 @@ def server():
     from minimoi_portal import records_bridge as RB
     from rooms_helpers import RecordsTransport, records_app
     saved_rb = (RB._TRANSPORT, RB.LOCAL_HOSTS)
-    RB._TRANSPORT = RecordsTransport(records_app(Path(tempfile.mkdtemp()) / "records"))
+    RB._TRANSPORT = RecordsTransport(records_app(Path(tempfile.mkdtemp()) / "records", portal_key=ROOMS_KEY))
     RB.LOCAL_HOSTS = {f"127.0.0.1:{port}"}
     # The retired Workbench, Build Queue and Labs pages are served only with this switch (off in Guild 1.1). The suite's
     # older tests of those pages run with it on; the exclusion journeys switch it off for their own duration.
     saved_reserve = os.environ.get("MINIMOI_GUILD_RESERVE_PAGES")
     os.environ["MINIMOI_GUILD_RESERVE_PAGES"] = "1"
-    yield {"url": f"http://127.0.0.1:{port}", "queue": queue, "app": app}
+    yield {"url": f"http://127.0.0.1:{port}", "queue": queue, "app": app, "rooms_access": rooms_dir / "access"}
+    _portal_auth.load_users = saved_load_users
     if saved_reserve is None:
         os.environ.pop("MINIMOI_GUILD_RESERVE_PAGES", None)
     else:
         os.environ["MINIMOI_GUILD_RESERVE_PAGES"] = saved_reserve
     RB._TRANSPORT, RB.LOCAL_HOSTS = saved_rb
+    for name, value in zip(("MINIMOI_ROOMS_ACCESS_DIR", "RECORDS_PORTAL_KEY_FILE"), saved_rooms_env):
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
     srv.shutdown()
     qs._running_in_container = saved[3]
 
@@ -160,10 +180,8 @@ def test_desktop_floor_lights_briefing_and_explain_card(browser, server, fresh_q
     expect(page.locator('[data-light="systems"] [data-light-word]')).to_have_text("Unknown")
     expect(page.locator("[data-briefing-text]")).to_have_count(0)           # the chat no longer prints the briefing paragraph (5 Oct)
     page.click("[data-lights-toggle]")          # Guild 1.1: the lights are a compact strip low on the page
-    page.click('[data-ask="usage"]')
-    card = page.locator('[data-explain="usage"]')
-    expect(card).to_contain_text("Guild platform · rules · no model")
-    expect(card).to_contain_text("Usage watch arrives in B2")
+    expect(page.locator("[data-ask]")).to_have_count(0)                      # 11 Oct: no per-light Ask buttons (Robert: "we have chat")
+    expect(page.locator("[data-explain]")).to_have_count(0)
     expect(page.locator("text=Hold to talk")).to_have_count(0)
     assert not errors, errors
     ctx.close()
@@ -442,7 +460,7 @@ def test_w4_opening_an_item_sets_continue_and_the_phone_shows_it(browser, server
     assert floor.rows("floor_continue")[0]["ref"] == "12"
     go(page, f"{server['url']}/guild-next/guild/build")
     expect(page.locator("[data-rail-continue]")).to_have_count(0)    # 5 Oct: Continue no longer appears in the chat rail
-    expect(page.locator("[data-linked-empty]")).to_be_visible()      # and opening an item never links it to a conversation
+    expect(page.locator("[data-linked-work], [data-linked-empty]")).to_have_count(0)      # Linked work is off the page (11 Oct); opening an item never links it to a conversation
     assert not errors, errors
     desk.close()
 
@@ -766,63 +784,26 @@ def _seed_topic(page, server, title):
     return tid, ids
 
 
-def _wt_open(page, server, tid, view="cards", item=None):
-    q = f"?topic={tid}&view={view}" + (f"&item_id={item}" if item else "")
+def _wt_open(page, server, tid, view=None, item=None):
+    q = f"?topic={tid}" + (f"&item_id={item}" if item else "")
     go(page, f"{server['url']}/guild-next/guild/workshop{q}")
-    page.wait_for_selector("[data-wt-board], .wt-reader, [data-wt-views] button")
+    page.wait_for_selector("[data-wt-log], [data-wt-reader]", state="attached")
+    page.wait_for_selector("[data-wt-rail] .wt-rail-item, [data-wt-topicsel]", state="attached")
 
 
-def test_w1_the_workshop_starts_a_topic_and_the_old_host_page_moved_to_operate(browser, server):
-    ctx, page = _context(browser, server, 1440, 900)
-    errors = _errors(page)
-    go(page, f"{server['url']}/guild-next/guild/workshop")
-    expect(page.locator("[data-wt-body]")).to_contain_text("Start a topic")
-    page.fill("input[aria-label='Name for the topic']", "Guild workshop trial")
-    page.click("text=Start topic")
-    page.wait_for_selector("[data-wt-board]")
-    expect(page.locator("[data-wt-title]")).to_have_text("Guild workshop trial")
-    assert "topic=t-" in page.url and "view=split" in page.url                                   # a wide window starts as chat | topic
-    expect(page.locator("[data-wt-board] .wt-empty")).to_contain_text("Nothing on the desk yet")
-    expect(page.locator("[data-wt-views] button")).to_have_text(["Chat", "Cards", "Split"])
-    go(page, f"{server['url']}/guild-next/guild/operate/build-host")
-    expect(page.locator("h1.page-title")).to_have_text("Build host")
-    expect(page.locator(".guild-subnav .subnav-active")).to_contain_text("Build host")
-    assert not errors, errors
-    ctx.close()
+def _doc(page, name):
+    """The Workshop Log is a plain list: open a document by its title."""
+    page.locator(".wt-logtitle", has_text=name).first.click()
 
 
-def test_w2_every_card_opens_in_the_same_work_area_and_back_keeps_arrangement(browser, server):
-    ctx, page = _context(browser, server, 1440, 900)
-    errors = _errors(page)
-    tid, ids = _seed_topic(page, server, "W2 cards")
-    _wt_open(page, server, tid)
-    cards = page.locator(".wt-card")
-    expect(cards).to_have_count(4)
-    titles = cards.locator(".open").all_inner_texts()
-    cards.first.locator(".more").click()
-    page.get_by_role("menuitem", name="Move later").click()                                   # arrangement is saved on the server
-    expect(cards.nth(1).locator(".open")).to_have_text(titles[0])                              # it re-draws once the server has saved the order
-    moved = cards.locator(".open").all_inner_texts()
-    assert moved != titles
-    for name in ("What should stay visible?", "Review the Files layout", "Spec · topic records", "Files panel · phone"):
-        page.get_by_role("button", name=name, exact=True).click()
-        expect(page.locator(".wt-reader")).to_have_count(1)
-        assert page.locator("dialog[open]").count() == 0                                         # never a different kind of window
-        expect(page.locator("#wt-item-title")).to_have_text(name)
-        page.keyboard.press("Escape")                                                            # back to the cards
-        expect(page.locator("[data-wt-board]")).to_be_visible()
-        assert page.locator(".wt-card .open").all_inner_texts() == moved                         # the arrangement is exactly as left
-    page.reload(); page.wait_for_selector("[data-wt-board]")
-    assert page.locator(".wt-card .open").all_inner_texts() == moved                             # and it survived a reload
-    expect(page.locator("[data-wt-board] .wt-steps li[aria-current=step]")).to_have_text("Queued")
-    page.locator(".wt-card").filter(has_text="What should stay visible?").locator(".more").click()
-    page.get_by_role("menuitem", name="Put away").click()
-    expect(cards).to_have_count(3)
-    page.get_by_role("button", name="Previous (1)").click()
-    page.get_by_role("button", name="Bring back").click()
-    expect(cards).to_have_count(4)
-    assert not errors, errors
-    ctx.close()
+def _doc_id(page, item_id):
+    page.locator(f"[data-wt-open='{item_id}']").first.click()
+
+
+def _topic_menu(page, name):
+    """The topic record is one quiet link on the log (Attach is the other)."""
+    assert "Topic record" in name
+    page.locator("[data-wt-open-record]").click()
 
 
 def test_w3_comments_are_anchored_to_a_paragraph_and_a_revision_with_reply_resolve_and_disposition(browser, server):
@@ -831,6 +812,7 @@ def test_w3_comments_are_anchored_to_a_paragraph_and_a_revision_with_reply_resol
     tid, ids = _seed_topic(page, server, "W3 comments")
     _wt_open(page, server, tid, item=ids["doc"])
     expect(page.locator(".wt-doc [data-block]")).to_have_count(4)
+    page.locator("[data-wt-discussion] > summary").click()
     page.locator("[data-wt-cmode]").click()
     page.locator(".wt-doc [data-block='2']").click()
     page.fill("textarea[aria-label^='Comment on paragraph 3']", "Say what deleted means here.")
@@ -839,13 +821,14 @@ def test_w3_comments_are_anchored_to_a_paragraph_and_a_revision_with_reply_resol
     expect(cmt).to_contain_text("paragraph 3"); expect(cmt).to_contain_text("version A")
     expect(page.locator(".wt-doc [data-block='2'].marked")).to_have_count(1)
     cmt.get_by_role("button", name="Reply").click()
-    page.fill("dialog textarea", "Deleted means removed from disk; it never is.")
+    assert page.locator("dialog[open]").count() == 0                                             # the reply is written under the comment, not in a window
+    page.fill(".wt-replyform textarea", "Deleted means removed from disk; it never is.")
     page.get_by_role("button", name="Add reply").click()
     expect(page.locator(".wt-cmt .reply")).to_contain_text("never is")
     page.locator(".wt-cmt [data-disp='accepted']").click()
     expect(page.locator(".wt-cmt")).to_contain_text("Accepted · ")
     page.locator(".wt-cmt").get_by_role("button", name="Resolve").click()
-    expect(page.locator(".wt-cmt .wt-badge.ok").first).to_be_visible()
+    expect(page.locator(".wt-cmt").first).to_contain_text("Resolved")
     # editing keeps the first version exactly as it was (no window, no ceremony), and the comment stays on the first
     page.locator("[data-wt-edit]").click()
     page.fill("textarea[data-wt-editor]", "# Topic records\n\nPut away keeps the card.\n\nNothing is removed from disk.")
@@ -867,6 +850,7 @@ def test_w4_a_design_is_an_image_and_a_comment_points_at_a_place_in_it(browser, 
     img = page.locator(".wt-img img")
     expect(img).to_be_visible()
     assert img.evaluate("i => i.naturalWidth") == 60
+    page.locator("[data-wt-discussion] > summary").click()
     page.locator("[data-wt-cmode]").click()
     box = img.bounding_box()
     page.mouse.click(box["x"] + box["width"] * 0.3, box["y"] + box["height"] * 0.5)
@@ -900,282 +884,6 @@ def _wt_mc(server):
     return services, saved, sent
 
 
-def test_w5_ask_master_craftsman_about_this_selects_context_and_sends_nothing_until_send(browser, server, floor):
-    services, saved, sent = _wt_mc(server)
-    try:
-        ctx, page = _context(browser, server, 1440, 900)
-        errors = _errors(page)
-        tid, ids = _seed_topic(page, server, "W5 ask")
-        _wt_open(page, server, tid)
-        page.locator(".wt-card").filter(has_text="Spec · topic records").locator(".more").click()
-        page.get_by_role("menuitem", name="Ask Master Craftsman about this").click()
-        chip = page.locator("[data-wt-ctx]")
-        expect(chip).to_be_visible(); expect(chip).to_contain_text("Document: Spec · topic records · version A")
-        assert page.locator("body").get_attribute("data-mc-mode") == "full"                         # Chat view: the conversation fills the page
-        assert sent == []                                                                          # choosing context sent nothing
-        page.fill("[data-mc-input]", "What does the spec say about archiving?")
-        assert sent == []                                                                          # typing sent nothing
-        page.click("[data-mc-send]")
-        expect(page.locator("[data-mc-thread]")).to_contain_text("Noted.", timeout=10000)
-        assert len(sent) == 1 and "What does the spec say about archiving?" in sent[0] and "BEGIN ITEM 1" in sent[0] and "Put away keeps the card." in sent[0]
-        expect(page.locator("[data-wt-ctx]")).to_have_count(0)                                      # the item is not attached to later messages
-        expect(page.locator("[data-mc-thread]")).to_contain_text("Spec · topic records")           # the report under the message names what was included
-        page.fill("[data-mc-input]", "And one more thing")
-        page.click("[data-mc-send]")
-        for _ in range(100):
-            if len(sent) >= 2:
-                break
-            page.wait_for_timeout(100)
-        assert len(sent) == 2 and "And one more thing" in sent[1] and "BEGIN ITEM" not in sent[1]
-        assert not errors, errors
-        ctx.close()
-    finally:
-        services.mc, services.mc_health, services.mc_turns = saved
-
-
-def test_w6_chat_cards_split_one_conversation_and_state_kept_across_views_and_resizes(browser, server, floor):
-    services, saved, sent = _wt_mc(server)
-    try:
-        ctx, page = _context(browser, server, 1440, 900)
-        errors = _errors(page)
-        tid, ids = _seed_topic(page, server, "W6 views")
-        _wt_open(page, server, tid)
-        mode = lambda: page.locator("body").get_attribute("data-mc-mode")
-        assert mode() == "pill"                                                                    # Cards: the chat is folded away
-        page.locator("[data-view='split']").click()
-        assert mode() == "docked"
-        chat, work = page.locator("[data-mc-panel]").bounding_box(), page.locator("[data-wt-body]").bounding_box()
-        assert chat["x"] + chat["width"] <= work["x"] + 2 and chat["width"] >= 380 and work["width"] >= 640    # two columns, MC left
-        page.fill("[data-mc-input]", "a draft I have not sent")
-        page.get_by_role("button", name="Spec · topic records", exact=True).click()
-        expect(page.locator(".wt-reader")).to_have_count(1)
-        expect(page.locator("[data-mc-input]")).to_have_value("a draft I have not sent")            # opening an item does not touch the draft
-        page.set_viewport_size({"width": 900, "height": 900})                                        # narrow while a draft and an item are open
-        expect(page.locator("[data-wt-narrow]")).to_be_visible()
-        assert mode() == "pill" and page.locator(".wt-reader").count() == 1
-        assert page.locator("[data-view='split']").is_disabled()
-        page.locator("[data-view='chat']").click()
-        assert mode() == "full"
-        expect(page.locator("[data-mc-input]")).to_have_value("a draft I have not sent")            # the same conversation, same draft
-        page.set_viewport_size({"width": 1440, "height": 900})
-        page.locator("[data-view='cards']").click()
-        expect(page.locator(".wt-reader")).to_have_count(1)                                          # the item is recoverable after visiting Chat
-        assert sent == []                                                                            # switching views sent nothing
-        assert not errors, errors
-        ctx.close()
-    finally:
-        services.mc, services.mc_health, services.mc_turns = saved
-
-
-def test_w7_on_a_phone_chat_and_cards_are_single_full_width_views_with_clear_back(browser, server):
-    ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
-    page = ctx.new_page(); page.goto(f"{server['url']}/__b1_test_sign_in")
-    errors = _errors(page)
-    tid, ids = _seed_topic(page, server, "W7 phone")
-    _wt_open(page, server, tid)
-    assert page.locator("[data-view='split']").is_disabled()
-    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
-    page.get_by_role("button", name="Spec · topic records", exact=True).click()
-    expect(page.locator(".wt-reader")).to_be_visible()
-    assert page.locator(".wt-bottom").is_visible() and page.locator(".wt-bottom button").count() == 2
-    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
-    page.locator(".wt-bottom").get_by_role("button", name="Ask Master Craftsman ›").click()
-    expect(page.locator("[data-wt-ctx]")).to_be_visible()
-    assert page.locator("body").get_attribute("data-mc-mode") == "full"
-    page.locator("[data-view='cards']").click()
-    expect(page.locator(".wt-reader")).to_have_count(1)                                              # the document is still open
-    page.go_back()                                                                                   # the phone's Back closes the item
-    expect(page.locator("[data-wt-board]")).to_be_visible()
-    assert not errors, errors
-    ctx.close()
-
-
-def test_w8_the_record_shows_who_wrote_what_and_marks_inbox_entries_as_claimed(browser, server):
-    ctx, page = _context(browser, server, 1440, 900)
-    errors = _errors(page)
-    tid, ids = _seed_topic(page, server, "W8 record")
-    topics = server["app"].extensions["guild_ui_next"]["services"]
-    from minimoi_portal.guild_ui.topics import topics_of
-    store = topics_of(topics)
-    store.append_journal(tid, "robert", author={"kind": "agent", "name": "Codex", "model": "gpt-5.5"}, via="inbox", kind="disagreement",
-                         text="Ask MC belongs in the card menu.", refs=[{"type": "file", "ref": "UI_AND_MORNING_REVIEW_codex.md"}])
-    _wt_open(page, server, tid)
-    expect(page.locator("details.wt-journal")).not_to_have_attribute("open", "")                      # the Record is one quiet line until opened
-    page.locator("details.wt-journal > summary").click()
-    expect(page.locator(".wt-journal li")).to_contain_text("disagreement")
-    expect(page.locator(".wt-journal li")).to_contain_text("Codex (gpt-5.5)")
-    expect(page.locator(".wt-journal li .wt-badge")).to_have_text("claimed")
-    page.locator("details.wt-j-add > summary").click()
-    page.select_option("select[aria-label='Kind of entry']", "decision")
-    page.fill("textarea[aria-label='Your entry']", "Go with F.")
-    page.get_by_role("button", name="Add entry").click()
-    expect(page.locator(".wt-journal li").first).to_contain_text("decision")
-    expect(page.locator(".wt-journal li").first).to_contain_text("Go with F.")
-    expect(page.locator(".wt-journal li").first.locator(".wt-badge")).to_have_count(0)               # the owner's own entry carries no 'claimed' label
-    assert not errors, errors
-    ctx.close()
-
-
-def test_w9_waiting_contributions_are_counted_and_join_the_record_only_when_imported(browser, server):
-    ctx, page = _context(browser, server, 390, 844)
-    errors = _errors(page)
-    tid, ids = _seed_topic(page, server, "W9 inbox")
-    from minimoi_portal.guild_ui.topics import topics_of
-    store = topics_of(server["app"].extensions["guild_ui_next"]["services"])
-    store.put_inbox(tid, "codex", kind="decision", text="Use version F.", model="gpt-5.5")
-    store.put_inbox(tid, "grok", kind="finding", text="The card menu is hard to reach.")
-    _wt_open(page, server, tid)
-    expect(page.locator("details.wt-journal > summary")).to_contain_text("2 waiting")                  # visible even while the Record is closed
-    page.locator("details.wt-journal > summary").click()
-    expect(page.locator(".wt-inbox")).to_contain_text("2 contributions waiting from codex (1), grok (1)")
-    expect(page.locator(".wt-journal li")).to_have_count(1)                                          # looking imported nothing ("Nothing recorded yet")
-    assert store.inbox_waiting(tid, "robert") == {"codex": 1, "grok": 1}
-    page.get_by_role("button", name="Import contributions").click()
-    expect(page.locator(".wt-inbox")).to_have_count(0)
-    expect(page.locator(".wt-journal li")).to_have_count(2)
-    expect(page.locator("[data-wt-import-note]")).to_contain_text("Imported 2 from the inbox")           # it says what came in and where it went
-    expect(page.locator("[data-wt-import-note]")).to_contain_text("a proposal from codex")
-    expect(page.locator("[data-wt-import-note]")).to_contain_text("a finding from grok")
-    expect(page.locator(".wt-journal li.fresh")).to_have_count(2)                                      # and the new rows are marked
-    expect(page.locator(".wt-journal")).to_contain_text("proposal · not a decision")
-    expect(page.locator(".wt-journal")).to_contain_text("only the owner decides")
-    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-    assert not errors, errors
-    ctx.close()
-
-
-def test_w10_a_topic_with_no_conversation_is_linked_by_an_explicit_step_and_never_by_looking(browser, server, floor):
-    ctx, page = _context(browser, server, 1440, 900)
-    errors = _errors(page)
-    tid, ids = _seed_topic(page, server, "W10 no link")
-    from pathlib import Path
-    import json as _json
-    from minimoi_portal.guild_ui.topics import topics_of
-    store = topics_of(server["app"].extensions["guild_ui_next"]["services"])
-    f = Path(store.dir) / tid / "topic.json"
-    doc = _json.loads(f.read_text()); doc.pop("conversation_id", None); f.write_text(_json.dumps(doc))
-    reads = page.evaluate("async (u) => { const r = await fetch(u, {credentials:'same-origin'}); return (await r.json()).conversation_missing }", f"{server['url']}/guild-next/api/v1/topics/{tid}")
-    assert reads is True and "conversation_id" not in _json.loads(f.read_text())                      # a GET alone left it unlinked
-    _wt_open(page, server, tid)                                                                      # the page then links it with its own guarded POST
-    expect(page.locator("[data-wt-board]")).to_be_visible()
-    assert _json.loads(f.read_text()).get("conversation_id")
-    assert not errors, errors
-    ctx.close()
-
-
-def test_w11_an_opened_item_has_a_visible_back_to_cards_control_on_phone_and_desktop(browser, server):
-    for width, height in ((390, 844), (1440, 900)):
-        ctx, page = _context(browser, server, width, height)
-        errors = _errors(page)
-        tid, ids = _seed_topic(page, server, f"W11 back {width}")
-        for kind in ("doc", "note", "req", "design"):
-            _wt_open(page, server, tid)
-            page.locator(f".wt-card[data-id='{ids[kind]}'] .open").first.click()
-            back = page.locator("[data-wt-back]")
-            expect(back).to_be_visible()
-            assert back.bounding_box()["height"] >= (43 if width < 701 else 28) and page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-            expect(page.locator(".wt-crumb")).to_contain_text("W11 back")
-            back.click()                                                                              # the real control, not Escape or the browser's Back
-            expect(page.locator("[data-wt-board]")).to_be_visible()
-            expect(page.locator(".wt-reader")).to_have_count(0)
-            assert page.evaluate("document.activeElement && document.activeElement.closest('.wt-card') && document.activeElement.closest('.wt-card').dataset.id") == ids[kind]   # focus returns to the card
-        # a direct link to an item has no board history before it: the control still returns to the board
-        _wt_open(page, server, tid, item=ids["doc"])
-        expect(page.locator(".wt-reader")).to_be_visible()
-        page.locator("[data-wt-back]").click()
-        expect(page.locator("[data-wt-board]")).to_be_visible()
-        assert not errors, errors
-        ctx.close()
-
-
-def test_w12_in_chat_view_the_conversation_starts_under_the_heading_and_its_composer_is_on_screen(browser, server, floor):
-    """Robert, 8 Oct: the chat placement was too low. The panel must start right under the heading (not a screen below) and
-    the Ask box must be visible without scrolling, at laptop and phone sizes."""
-    for width, height in ((1470, 745), (1440, 900), (1920, 1080), (390, 844)):
-        ctx, page = _context(browser, server, width, height)
-        errors = _errors(page)
-        tid, ids = _seed_topic(page, server, f"W12 chat {width}")
-        go(page, f"{server['url']}/guild-next/guild/workshop?topic={tid}&view=chat")
-        page.wait_for_selector("body[data-mc-mode='full']")
-        page.wait_for_timeout(400)
-        m = page.evaluate("""() => { const p = document.querySelector('.mc-panel[data-mode=full]').getBoundingClientRect();
-          const h = document.querySelector('.wt-top').getBoundingClientRect(); const ta = document.querySelector('.mc-panel[data-mode=full] textarea, .mc-panel[data-mode=full] input[type=text]');
-          const c = ta ? ta.getBoundingClientRect() : null;
-          return { panelTop: p.top + scrollY, headBottom: h.bottom + scrollY, composerBottom: c ? c.bottom : null, vh: innerHeight, scrollable: document.documentElement.scrollHeight - innerHeight } }""")
-        assert m["panelTop"] - m["headBottom"] <= 40, m                                              # right under the heading
-        assert m["composerBottom"] is not None and m["composerBottom"] <= m["vh"], m                   # the Ask box is on screen without scrolling
-        assert not errors, errors
-        ctx.close()
-
-
-def test_w13_the_work_starts_high_and_the_chat_panel_has_the_page_margin_on_desktop(browser, server, floor):
-    """Robert, 8 Oct: six rows of chrome before the work, big navigation buttons, and the Split chat panel bleeding to the left edge.
-    The cards start within a fixed distance of the top of the page, the page chrome is one slim row, and the docked panel is inset
-    with rounded corners (its dark header never touches the left edge)."""
-    for width, height in ((1470, 745), (1440, 900)):
-        ctx, page = _context(browser, server, width, height)
-        errors = _errors(page)
-        tid, ids = _seed_topic(page, server, f"W13 high {width}")
-        for view in ("cards", "split"):
-            go(page, f"{server['url']}/guild-next/guild/workshop?topic={tid}&view={view}")
-            page.wait_for_selector("[data-wt-board]")
-            page.wait_for_timeout(300)
-            m = page.evaluate("""() => { const r = (s) => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null };
-              const board = r('[data-wt-board]'), top = r('.wt-top'), views = r('.wt-views'), panel = r('.mc-panel[data-mode=docked]'), nav = r('.guild-subnav');
-              return { board: board && board.top + scrollY, topH: top && top.height, navBottom: nav && nav.bottom + scrollY, viewsH: views && views.height,
-                       panelLeft: panel && panel.left, panelTop: panel && panel.top + scrollY, radius: panel && getComputedStyle(document.querySelector('.mc-panel[data-mode=docked]')).borderTopLeftRadius,
-                       overflow: panel && getComputedStyle(document.querySelector('.mc-panel[data-mode=docked]')).overflow } }""")
-            assert m["topH"] <= 60 and m["viewsH"] <= 36, m                                             # one slim header row, quiet view control
-            assert m["board"] - m["navBottom"] <= 80, m                                                  # the cards start right under the navigation
-            if view == "split":
-                assert m["panelLeft"] >= 12 and m["radius"] != "0px" and m["overflow"] == "hidden", m    # inset, rounded, clipped: no bleed
-                assert m["panelTop"] - m["navBottom"] <= 24, m
-        assert not errors, errors
-        ctx.close()
-
-
-def test_w14_the_columns_are_sized_by_dragging_and_the_chat_can_be_moved_or_closed(browser, server, floor):
-    """Robert, 8 Oct: size the columns dynamically, not with fixed view buttons; chat prominent while talking, topic while reviewing;
-    a close, minimise or move control on the chat box."""
-    ctx, page = _context(browser, server, 1440, 900)
-    errors = _errors(page)
-    tid, ids = _seed_topic(page, server, "W14 columns")
-    go(page, f"{server['url']}/guild-next/guild/workshop?topic={tid}")
-    page.wait_for_selector("[data-wt-board]")
-    assert page.locator("body").get_attribute("data-mc-mode") == "docked"                              # a wide window starts as chat | topic
-    div = page.locator("[data-wt-divider]")
-    expect(div).to_be_visible()
-    width = lambda sel: page.evaluate("(s) => document.querySelector(s).getBoundingClientRect().width", sel)
-    chat0, topic0 = width(".mc-panel"), width(".gu-main")
-    box = div.bounding_box()
-    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 80)
-    page.mouse.down(); page.mouse.move(box["x"] + 330, box["y"] + 80, steps=6); page.mouse.up()       # drag it right: the chat grows
-    chat1, topic1 = width(".mc-panel"), width(".gu-main")
-    assert chat1 > chat0 + 200 and topic1 < topic0 - 200, (chat0, chat1, topic0, topic1)
-    page.reload(); page.wait_for_selector("[data-wt-board]")
-    assert abs(width(".mc-panel") - chat1) < 8                                                         # the width is remembered
-    div.focus(); page.keyboard.press("ArrowLeft"); page.keyboard.press("ArrowLeft")
-    assert width(".mc-panel") < chat1 - 20                                                             # the keyboard moves it too
-    page.keyboard.press("Enter")
-    assert abs(width(".mc-panel") / (width(".mc-panel") + width(".gu-main")) - 0.42) < 0.05           # Enter resets it
-    # move: the chat swaps sides
-    left0 = page.evaluate("document.querySelector('.mc-panel').getBoundingClientRect().left")
-    page.locator("[data-wt-swap]").click()
-    left1 = page.evaluate("document.querySelector('.mc-panel').getBoundingClientRect().left")
-    assert left1 > left0 + 400, (left0, left1)
-    page.locator("[data-wt-swap]").click()
-    # dragging all the way left folds the chat; all the way right gives it the whole page
-    box = div.bounding_box()
-    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 80); page.mouse.down(); page.mouse.move(8, box["y"] + 80, steps=8); page.mouse.up()
-    assert page.locator("body").get_attribute("data-mc-mode") == "pill"
-    page.locator("[data-view='split']").click()
-    page.locator("[data-wt-close]").click()                                                            # the close control folds the chat; the Chat button brings it back
-    assert page.locator("body").get_attribute("data-mc-mode") == "pill"
-    expect(page.locator("[data-wt-board]")).to_be_visible()
-    assert not errors, errors
-    ctx.close()
-
-
 def test_w15_editing_happens_in_the_page_in_a_large_box_and_keeps_the_earlier_version(browser, server):
     ctx, page = _context(browser, server, 1440, 900)
     errors = _errors(page)
@@ -1187,7 +895,8 @@ def test_w15_editing_happens_in_the_page_in_a_large_box_and_keeps_the_earlier_ve
     expect(page.locator("dialog[open]")).to_have_count(0)                                              # no small window
     assert ta.bounding_box()["height"] >= 300 and ta.bounding_box()["width"] >= 500
     ta.fill("# Edited\n\nA new paragraph.")
-    page.locator(".wt-crumb [data-wt-back]").click()                                                    # leaving with unsaved text is refused, not lost
+    page.locator("[data-wt-back]").click()                                                              # going back with unsaved text is refused, not lost
+    expect(page.locator("#wt-item-title")).to_have_text("Spec · topic records")
     expect(page.locator("textarea[data-wt-editor]")).to_have_value("# Edited\n\nA new paragraph.")
     page.keyboard.press("Escape")                                                                      # Escape does not discard an edit either
     expect(page.locator("textarea[data-wt-editor]")).to_be_visible()
@@ -1203,37 +912,653 @@ def test_w15_editing_happens_in_the_page_in_a_large_box_and_keeps_the_earlier_ve
     ctx.close()
 
 
-def test_w16_a_card_menu_always_opens_inside_the_window(browser, server):
-    for width, height in ((390, 844), (1440, 900), (1000, 500)):
-        ctx, page = _context(browser, server, width, height)
-        errors = _errors(page)
-        tid, ids = _seed_topic(page, server, f"W16 menu {width}")
-        _wt_open(page, server, tid)
-        for card in page.locator(".wt-card").all():
-            btn = card.locator(".more")
-            btn.scroll_into_view_if_needed()
-            page.evaluate("(el) => { const r = el.getBoundingClientRect(); window.scrollBy(0, r.top - (innerHeight - 56)); }", btn.element_handle())   # the button sits at the bottom edge
-            tops = page.evaluate("(el) => el.getBoundingClientRect().bottom", btn.element_handle())
-            btn.click()
-            m = page.locator(".wt-menu").bounding_box()
-            assert m and m["y"] >= 0 and m["y"] + m["height"] <= height + 1 and m["x"] >= 0 and m["x"] + m["width"] <= width + 1, (width, height, m)
-            page.keyboard.press("Escape")
-        assert not errors, errors
-        ctx.close()
-
-
 def test_w17_buttons_are_small_and_quiet_on_a_desktop(browser, server):
     ctx, page = _context(browser, server, 1440, 900)
     errors = _errors(page)
     tid, ids = _seed_topic(page, server, "W17 buttons")
     _wt_open(page, server, tid, item=ids["doc"])
+    page.locator("[data-wt-discussion] > summary").click()
     page.locator("[data-wt-cmode]").click(); page.locator(".wt-doc [data-block='1']").click()
     page.fill("textarea[aria-label^='Comment on paragraph']", "Check this."); page.get_by_role("button", name="Add comment").click()
     expect(page.locator(".wt-cmt[data-cid]")).to_have_count(1)
-    big = page.evaluate("""() => [...document.querySelectorAll('.wt button, .wt-views button')].filter((b) => b.offsetParent).map((b) => [b.textContent.trim().slice(0, 24), Math.round(b.getBoundingClientRect().height)]).filter(([, h]) => h > 36)""")
+    big = page.evaluate("""() => [...document.querySelectorAll('.wt button')].filter((b) => b.offsetParent).map((b) => [b.textContent.trim().slice(0, 24), Math.round(b.getBoundingClientRect().height)]).filter(([, h]) => h > 36)""")
     assert big == [], big                                                                                # nothing on the page is a big button
     small = page.evaluate("""() => [...document.querySelectorAll('.wt-cmt .acts button')].map((b) => Math.round(b.getBoundingClientRect().height))""")
     assert small and max(small) <= 26, small                                                            # the comment actions are quiet chips
+    assert not errors, errors
+    ctx.close()
+
+
+def test_wl0_the_build_landing_is_the_original_craftsman_chat_and_says_so(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    expect(page.locator("body")).to_have_attribute("data-page", "floor")
+    expect(page.locator("a[data-section='chat']")).to_have_attribute("aria-current", "page")             # navigation names it: Chat
+    expect(page.locator("a[data-section='chat']")).to_have_text("Chat")
+    expect(page.locator("[data-conv-list]")).to_be_visible()                                              # conversations on the left
+    expect(page.locator("img.fc-art")).to_be_visible()                                                    # the workshop artwork on the right
+    expect(page.locator("[data-linked-work]")).to_have_count(0)                                           # no Linked work (11 Oct) ...
+    expect(page.locator("[data-conv-files-sec]")).to_be_visible()                                         # ... only the Files
+    expect(page.locator("[data-mc-input]")).to_be_visible()                                               # the composer in the centre
+    assert not errors, errors
+    ctx.close()
+
+
+def test_wl1_the_workshop_log_is_a_plain_list_in_construction_with_no_chat_of_its_own(browser, server):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    tid, ids = _seed_topic(page, server, "WL1 first")
+    _wt_open(page, server, tid)
+    expect(page.locator("[data-wt-rail] [aria-current=true]")).to_have_text("WL1 first")                # the topics are a list on the left
+    page.click("[data-wt-newtopic]")                                                                     # a new topic starts from the list
+    page.fill("input[aria-label='Name for the new topic']", "Guild workshop trial")
+    page.keyboard.press("Enter")
+    page.wait_for_url(re.compile(r"topic=t-"))
+    page.wait_for_selector("[data-wt-rail] [aria-current=true]")
+    expect(page.locator("[data-wt-rail] [aria-current=true]")).to_have_text("Guild workshop trial")
+    assert "topic=t-" in page.url
+    expect(page.locator("[data-wt-construction]")).to_have_text("In construction")
+    expect(page.locator("[data-wt-nodocs]")).to_be_visible()
+    for gone in ("[data-mc-input]", "[data-mc-composer]", "[data-mc-panel]", "[data-mc-pill]", "[data-wt-docs]", "[data-wt-where]"):
+        assert page.locator(gone).count() == 0 or not page.locator(gone).first.is_visible(), gone      # no large chat, no second composer, no launcher
+    assert page.locator("textarea:visible").count() == 0
+    expect(page.locator("a[data-section='workshop']")).to_have_attribute("aria-current", "page")
+    assert page.title().startswith("Workshop Log")
+    go(page, f"{server['url']}/guild-next/guild/operate/build-host")
+    expect(page.locator("h1.page-title")).to_have_text("Build host")                                    # the old host page is still under Operate
+    assert not errors, errors
+    ctx.close()
+
+
+def test_wl2_each_document_is_a_row_that_opens_for_review_and_comes_back_to_the_log(browser, server):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    tid, ids = _seed_topic(page, server, "WL2 documents")
+    _wt_open(page, server, tid)
+    rows = page.locator(".wt-logrow")
+    expect(rows).to_have_count(4)
+    titles = page.locator(".wt-logtitle").all_inner_texts()
+    assert "Spec · topic records" in titles and "Files panel · phone" in titles and "Review the Files layout" in titles
+    assert page.locator(".wt-logrow[data-kind='request'] .wt-logmeta").inner_text().startswith("Request · version A")
+    expect(page.locator(".wt-reader")).to_have_count(0)
+    _doc(page, "Spec · topic records")
+    expect(page.locator("#wt-item-title")).to_have_text("Spec · topic records")                        # opens for review, in place, with no window
+    assert page.locator("dialog[open]").count() == 0
+    page.get_by_role("button", name="‹ Back to the log").click()
+    expect(page.locator("[data-wt-log]")).to_be_visible()
+    assert page.evaluate("document.activeElement && document.activeElement.dataset.wtOpen") == ids["doc"]   # focus returns to the row you came from
+    _doc(page, "Files panel · phone")
+    expect(page.locator(".wt-reader")).to_have_count(1)
+    page.go_back()                                                                                      # the browser's Back is the same step
+    expect(page.locator("[data-wt-log]")).to_be_visible()
+    _doc(page, "Review the Files layout")
+    page.keyboard.press("Escape")                                                                       # and so is Escape
+    expect(page.locator("[data-wt-log]")).to_be_visible()
+    assert not errors, errors
+    ctx.close()
+
+
+def test_wl3_attach_adds_a_document_or_an_image_and_put_away_keeps_it_in_earlier(browser, server, tmp_path):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    failed_resources = []
+    page.on("response", lambda r: failed_resources.append((r.status, r.url)) if r.status >= 400 else None)
+    tid, ids = _seed_topic(page, server, "WL3 attach")
+    _wt_open(page, server, tid)
+    md = tmp_path / "Release plan.md"; md.write_text("# Release plan\n\nShip it on Friday.\n")
+    page.set_input_files("[data-wt-attach-input]", str(md))
+    expect(page.locator(".wt-logrow")).to_have_count(5)
+    _doc(page, "Release plan")
+    expect(page.locator(".wt-doc")).to_contain_text("Ship it on Friday.")
+    page.get_by_role("button", name="‹ Back to the log").click()
+    big = tmp_path / "huge.txt"; big.write_text("x" * 250000)
+    page.set_input_files("[data-wt-attach-input]", str(big))
+    expect(page.locator("[data-toast]")).to_contain_text("too large")                                   # refused plainly, nothing added
+    expect(page.locator(".wt-logrow")).to_have_count(5)
+    _doc(page, "Release plan")
+    page.get_by_role("button", name="More").click(); page.get_by_role("menuitem", name="Put away").click()
+    page.get_by_role("button", name="‹ Back to the log").click()
+    expect(page.locator("[data-wt-log] > .wt-loglist .wt-logrow")).to_have_count(4)                     # off the list, not deleted
+    expect(page.locator("[data-wt-earlier] > summary")).to_have_text("Earlier (1)")
+    page.locator("[data-wt-earlier] > summary").click()
+    page.locator("[data-wt-earlier] .wt-logtitle", has_text="Release plan").click()
+    page.get_by_role("button", name="More").click(); page.get_by_role("menuitem", name="Bring back").click()
+    assert not errors, (errors, failed_resources)
+    ctx.close()
+
+
+def test_workshop_back_wins_over_late_archive_reader_refresh(browser, server):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    tid, ids = _seed_topic(page, server, "Late archive refresh")
+    _wt_open(page, server, tid, item=ids["doc"])
+    expect(page.locator(".wt-doc")).to_contain_text("Put away keeps the card")
+    held, requests, item_requests = [], [], []
+    page.on('request', lambda r: item_requests.append(r.url) if '/items/' in r.url else None)
+    def hold_second_index(route):
+        requests.append(route.request.url)
+        # Archive refreshes the index, then refreshOpen reads it once more.
+        # Hold the latter so Back runs at the exact former /items/null race.
+        if len(requests) == 2:
+            held.append(route)
+        else:
+            route.continue_()
+    page.route(f"**/api/v1/topics/{tid}", hold_second_index)
+    page.get_by_role("button", name="More").click()
+    page.get_by_role("menuitem", name="Put away").click()
+    _wait_held(page, held)
+    page.get_by_role("button", name="‹ Back to the log").click()
+    expect(page.locator("[data-wt-log]")).to_be_visible()
+    held[0].continue_()
+    expect(page.locator("[data-toast]")).to_contain_text("Put away")
+    expect(page.locator("[data-wt-log]")).to_be_visible()
+    expect(page.locator("[data-wt-earlier] > summary")).to_have_text("Earlier (1)")
+    assert not [url for url in item_requests if '/items/null' in url]
+    assert not errors, errors
+    ctx.close()
+
+
+@pytest.mark.parametrize('kind', ['stage', 'edit', 'image'])
+def test_workshop_back_wins_over_late_saved_revision_refresh(browser, server, tmp_path, kind):
+    import base64
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    tid, ids = _seed_topic(page, server, 'Late save ' + kind)
+    _wt_open(page, server, tid, item=ids[{'stage': 'req', 'edit': 'doc', 'image': 'design'}[kind]])
+    expect(page.locator('[data-wt-reader]')).to_be_visible()
+    held, reads = [], []
+    page.route(f'**/api/v1/topics/{tid}', lambda route: held.append(route))
+    if kind == 'stage':
+        page.get_by_label('Stage', exact=True).select_option('working')
+        page.get_by_role('button', name='Save stage and recipient').click()
+    elif kind == 'edit':
+        page.click('[data-wt-edit]')
+        page.fill('[data-wt-editor]', '# Updated\n\nA new saved version.')
+        page.click('[data-wt-save]')
+    else:
+        page.get_by_role('button', name='More').click()
+        page.get_by_role('menuitem', name='Replace the image').click()
+        picture = tmp_path / 'replacement.png'
+        picture.write_bytes(base64.b64decode(_png_b64()))
+        page.get_by_label('New image').set_input_files(str(picture))
+        page.locator('dialog').get_by_role('button', name='Save', exact=True).click()
+    _wait_held(page, held)
+    page.get_by_role('button', name='‹ Back to the log').click()
+    expect(page.locator('[data-wt-log]')).to_be_visible()
+    page.on('request', lambda r: reads.append(r.url) if r.method == 'GET' and '/items/' in r.url else None)
+    held[0].continue_()
+    page.wait_for_load_state('networkidle')
+    expect(page.locator('[data-wt-log]')).to_be_visible()
+    assert not reads, reads
+    assert not errors, errors
+    ctx.close()
+
+
+def test_wl4_a_comment_is_written_under_the_document_and_its_draft_stays_with_it(browser, server):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    tid, ids = _seed_topic(page, server, "WL4 comments")
+    _wt_open(page, server, tid, item=ids["doc"])
+    expect(page.locator("[data-wt-discussion]")).not_to_have_attribute("open", "")
+    page.locator("[data-wt-discussion] > summary").click()
+    box = page.locator("textarea[data-wt-draft]")
+    expect(box).to_have_attribute("data-wt-draft", ids["doc"])
+    assert page.locator("dialog[open]").count() == 0
+    box.fill("A half-written thought about this document")
+    page.get_by_role("button", name="‹ Back to the log").click()
+    _doc(page, "What should stay visible?")                                                              # another document has its own, empty box
+    page.locator("[data-wt-discussion] > summary").click()
+    expect(page.locator("textarea[data-wt-draft]")).to_have_value("")
+    page.get_by_role("button", name="‹ Back to the log").click()
+    _doc(page, "Spec · topic records")
+    page.locator("[data-wt-discussion] > summary").click()
+    expect(page.locator("textarea[data-wt-draft]")).to_have_value("A half-written thought about this document")
+    page.locator("[data-wt-send-comment]").click()
+    expect(page.locator(".wt-cmt[data-cid]")).to_have_count(1)
+    page.get_by_role("button", name="‹ Back to the log").click()
+    expect(page.locator(f".wt-logrow[data-id='{ids['doc']}'] .wt-logmeta")).to_contain_text("1 open comment")
+    assert not errors, errors
+    ctx.close()
+
+
+def test_wl5_the_record_and_waiting_contributions_are_reached_from_the_log(browser, server):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    tid, ids = _seed_topic(page, server, "WL5 record")
+    from minimoi_portal.guild_ui.topics import topics_of
+    store = topics_of(server["app"].extensions["guild_ui_next"]["services"])
+    store.append_journal(tid, "robert", author={"kind": "agent", "name": "Codex", "model": "gpt-5.5"}, via="inbox", kind="disagreement",
+                         text="Ask MC belongs in the card menu.", refs=[{"type": "file", "ref": "UI_AND_MORNING_REVIEW_codex.md"}])
+    store.put_inbox(tid, "codex", kind="decision", text="Use version F.", model="gpt-5.5")
+    store.put_inbox(tid, "grok", kind="finding", text="The card menu is hard to reach.")
+    _wt_open(page, server, tid)
+    page.wait_for_timeout(700)
+    assert page.locator("details.wt-journal").count() == 0                                              # the record is one quiet link, not on the log itself
+    expect(page.locator("[data-wt-open-record]")).to_contain_text("2 waiting")
+    page.locator("[data-wt-open-record]").click()
+    expect(page.locator(".wt-journal li").first).to_contain_text("Codex (gpt-5.5)")
+    expect(page.locator(".wt-inbox")).to_contain_text("2 contributions waiting from codex (1), grok (1)")
+    assert store.inbox_waiting(tid, "robert") == {"codex": 1, "grok": 1}                                # looking imported nothing
+    page.get_by_role("button", name="Import contributions").click()
+    expect(page.locator(".wt-inbox")).to_have_count(0)
+    expect(page.locator("[data-wt-import-note]")).to_contain_text("Imported 2 from the inbox")
+    expect(page.locator(".wt-journal")).to_contain_text("only the owner decides")
+    page.locator("details.wt-j-add > summary").click()
+    page.select_option("select[aria-label='Kind of entry']", "decision")
+    page.fill("textarea[aria-label='Your entry']", "Go with F.")
+    page.get_by_role("button", name="Add entry").click()
+    expect(page.locator(".wt-journal li").first).to_contain_text("Go with F.")
+    assert not errors, errors
+    ctx.close()
+
+
+def test_wl6_looking_never_links_a_conversation_and_a_linked_topic_goes_back_to_its_craftsman_chat(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    tid, ids = _seed_topic(page, server, "WL6 chat link")
+    from minimoi_portal.guild_ui.topics import topics_of
+    store = topics_of(server["app"].extensions["guild_ui_next"]["services"])
+    f = Path(store.dir) / tid / "topic.json"
+    cid = json.loads(f.read_text()).get("conversation_id")
+    assert cid
+    _wt_open(page, server, tid)
+    link = page.locator("[data-wt-chat-link]")
+    expect(link).to_have_attribute("href", f"/guild-next/guild/build?c={cid}")                           # the explicit conversation id is kept
+    link.click()
+    page.wait_for_url(re.compile(r"/guild-next/guild/build\?c="))
+    expect(page.locator("body")).to_have_attribute("data-page", "floor")
+    expect(page.locator("[data-mc-input]")).to_be_visible()                                              # the original Craftsman Chat, composer and all
+    mat = page.locator("[data-topic-materials] a")
+    expect(mat).to_have_attribute("href", f"/guild-next/guild/workshop?topic={tid}")                     # one quiet contextual link back
+    expect(mat).to_contain_text("Workshop Log materials")
+    # a topic with no linked conversation: the log has no Chat link and looking does not link one
+    doc = json.loads(f.read_text()); doc.pop("conversation_id", None); f.write_text(json.dumps(doc))
+    _wt_open(page, server, tid)
+    page.wait_for_timeout(800)
+    expect(page.locator("[data-wt-chat-link]")).to_have_count(0)
+    assert "conversation_id" not in json.loads(f.read_text())                                            # the page wrote nothing
+    assert not errors, errors
+    ctx.close()
+
+
+def test_wl7_on_a_phone_the_log_fits_and_a_document_has_a_clear_back(browser, server):
+    ctx, page = _context(browser, server, 390, 844)
+    errors = _errors(page)
+    tid, ids = _seed_topic(page, server, "WL7 phone")
+    _wt_open(page, server, tid)
+    expect(page.locator("[data-wt-topicsel]")).to_be_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    _doc(page, "Spec · topic records")
+    expect(page.locator("#wt-item-title")).to_be_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    page.get_by_role("button", name="‹ Back to the log").click()
+    expect(page.locator("[data-wt-log]")).to_be_visible()
+    assert not errors, errors
+    ctx.close()
+
+def test_ar4_a_look_that_never_answers_is_cut_off_and_a_bad_payload_does_not_stick(browser, server, floor, tmp_path):
+    """First look never settles (cut off by the page, one request live at a time), second returns a damaged payload (the page recovers), third is real."""
+    svc, helper, rid, ctx, page, restore = _ask_mc_once(browser, server, tmp_path)
+    try:
+        convo_url = page.url
+        page.goto("about:blank")
+        assert helper("receipt", rid, "--as", "claude-code", "--session", "session-test").returncode == 0
+        assert helper("result", rid, "--as", "claude-code", "Done", "ok.").returncode == 0
+        seen = {"n": 0, "live": 0, "max_live": 0, "held": []}
+
+        def odd(route):
+            seen["n"] += 1
+            seen["live"] += 1
+            seen["max_live"] = max(seen["max_live"], seen["live"])
+            if seen["n"] == 1:
+                seen["held"].append(route)                         # never answered: the page's own cut-off must end it
+            elif seen["n"] == 2:
+                seen["live"] -= 1
+                route.fulfill(status=200, content_type="application/json", body='{"outstanding":0,"notes":[null]}')
+            else:
+                seen["live"] -= 1
+                route.continue_()
+        page.on("requestfailed", lambda r: seen.__setitem__("live", max(0, seen["live"] - 1)) if "agent-requests/sync" in r.url else None)
+        page.route("**/agent-requests/sync", odd)
+        page.goto(convo_url)
+        try:
+            expect(page.locator("[data-mc-thread]")).to_contain_text("Claude Code's report", timeout=60000)
+        except AssertionError:
+            raise AssertionError(f"seen={ {k: v for k, v in seen.items() if k != 'held'} }")
+        assert seen["n"] >= 3 and seen["max_live"] == 1, seen["max_live"]
+        expect(page.locator("[data-mc-thread] li", has_text="Claude Code's report")).to_have_count(1)
+        ctx.close()
+    finally:
+        restore()
+
+def test_ar5_a_damaged_answer_is_retried_a_bounded_number_of_times_then_the_page_rests(browser, server, floor, tmp_path):
+    """Every look comes back damaged (200 with not-JSON, then a wrong shape, then [null]): the page retries on the backoff, stops at the cap, and a later return to the page starts fresh."""
+    svc, helper, rid, ctx, page, restore = _ask_mc_once(browser, server, tmp_path)
+    try:
+        convo_url = page.url
+        page.goto("about:blank")
+        assert helper("receipt", rid, "--as", "claude-code", "--session", "session-test").returncode == 0
+        assert helper("result", rid, "--as", "claude-code", "Done", "ok.").returncode == 0
+        bodies = ["not json at all", '{"outstanding":"x","notes":[]}', '{"outstanding":0,"notes":[null]}']
+        state = {"n": 0, "good": False}
+
+        def damaged(route):
+            if state["good"]:
+                return route.continue_()
+            state["n"] += 1
+            route.fulfill(status=200, content_type="application/json", body=bodies[(state["n"] - 1) % len(bodies)])
+        page.clock.install()
+        page.route("**/agent-requests/sync", damaged)
+        page.goto(convo_url)
+        page.wait_for_selector("[data-mc-thread]")
+        page.wait_for_timeout(500)
+        for delay in (3000, 6000, 12000, 30000, 60000):                # exactly the backoff steps, so the 20 s cut-off never fires in fake time
+            page.clock.run_for(delay)
+            page.wait_for_timeout(500)
+        first = state["n"]
+        assert first == 6, first                                      # one at load, then five retries on the backoff; then it rests
+        page.clock.run_for(300000)
+        page.wait_for_timeout(200)
+        assert state["n"] == first, state["n"]                        # no perpetual polling after the cap
+        assert page.locator("[data-mc-thread] li", has_text="Claude Code's report").count() == 0
+        expect(page.locator("[data-ar-status]")).to_have_text("Could not refresh agent replies. Reconnect or reload to try again.")     # it says so, quietly
+        state["good"] = True
+        page.evaluate("window.dispatchEvent(new Event('online'))")      # connectivity returns: one look, no reload
+        expect(page.locator("[data-mc-thread]")).to_contain_text("Claude Code's report", timeout=30000)
+        expect(page.locator("[data-ar-status]")).to_be_hidden()
+        page.reload()                                                 # a return to the page starts fresh and shows the notes
+        expect(page.locator("[data-mc-thread]")).to_contain_text("Claude Code's report", timeout=30000)
+        ctx.close()
+    finally:
+        restore()
+
+def test_ar6_a_failed_token_refresh_during_the_look_is_retried_not_treated_as_a_refusal(browser, server, floor, tmp_path):
+    """The look is refused for a stale token (403 csrf); the refresh fails first by a dropped connection, then by a 503, then works: the page retries and shows the notes once."""
+    svc, helper, rid, ctx, page, restore = _ask_mc_once(browser, server, tmp_path)
+    try:
+        convo_url = page.url
+        page.goto("about:blank")
+        assert helper("receipt", rid, "--as", "claude-code", "--session", "session-test").returncode == 0
+        assert helper("result", rid, "--as", "claude-code", "Done", "ok.").returncode == 0
+        st = {"sync": 0, "session": 0}
+
+        def sync_route(route):
+            st["sync"] += 1
+            if st["sync"] <= 3:
+                route.fulfill(status=403, content_type="application/json", body='{"error":"csrf"}')
+            else:
+                route.continue_()
+
+        def session_route(route):
+            st["session"] += 1
+            if st["session"] == 1:
+                route.abort()
+            elif st["session"] == 2:
+                route.fulfill(status=503, content_type="application/json", body='{"error":"unavailable"}')
+            else:
+                route.continue_()
+        page.route("**/agent-requests/sync", sync_route)
+        page.route("**/api/v1/session", session_route)
+        page.goto(convo_url)
+        expect(page.locator("[data-mc-thread]")).to_contain_text("Claude Code's report", timeout=40000)
+        assert st["session"] == 3 and st["sync"] == 4, st
+        expect(page.locator("[data-mc-thread] li", has_text="Claude Code's report")).to_have_count(1)
+        ctx.close()
+    finally:
+        restore()
+
+
+def test_ar1_mc_asks_an_agent_and_the_receipt_and_report_come_back_in_the_same_conversation(browser, server, floor, tmp_path):
+    """MC front door, slice 1, in a real browser. MC proposes ASK; the portal writes the ledger and claims no delivery; the REAL helper script acts as the
+    agent (receipt, report); the page polls and shows each as one attributed note in the same conversation, without a reload."""
+    import subprocess
+    import minimoi_portal.guild_ui.mc.openclaw as oc
+    from minimoi_portal.guild_ui.mc import CachedHealth
+    from minimoi_portal.guild_ui import agent_ask
+    from core import agent_requests as ar
+    services = server["app"].extensions["guild_ui_next"]["services"]
+
+    class Resp:
+        def __init__(self, status, text, headers=None):
+            self.status_code, self.text, self.headers = status, text, headers or {}
+
+    def post(url, data=None, headers=None, timeout=None):
+        return Resp(200, json.dumps({"id": "c", "object": "chat.completion", "model": "openclaw/mc-agent",
+                                     "choices": [{"index": 0, "message": {"role": "assistant", "content": "ASK claude-code: Check the tabs\nI have already sent it."}, "finish_reason": "stop"}],
+                                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}),
+                    {"X-MC-Correlation-Id": (headers or {}).get("X-MC-Correlation-Id")})
+    saved = (services.mc, services.mc_health, services.mc_turns)
+    backend = oc.OpenClawMasterCraftsman("http://mc-relay:8790/v1", "t" * 40, http_get=lambda *a, **k: Resp(200, "{}"), http_post=post)
+    services.mc, services.mc_health, services.mc_turns = backend, CachedHealth(backend), True
+    svc = agent_ask.AskService(str(tmp_path / "agent_requests"))
+    server["app"].extensions["guild_ui_next"]["agent_asks"] = svc
+    cli = os.path.join(REPO, "scripts", "agent_requests.py")
+
+    def helper(*args):
+        return subprocess.run([sys.executable, cli, "--root", svc.root, *args], capture_output=True, text=True, timeout=30)
+    try:
+        ctx, page = _context(browser, server, 1440, 900)
+        errors = _errors(page)
+        go(page, f"{server['url']}/guild-next/guild/build")
+        page.fill("[data-mc-input]", "Please ask Claude Code to check the Workshop Log tabs.")
+        page.click("[data-mc-send]")
+        thread = page.locator("[data-mc-thread]")
+        expect(thread).to_contain_text("Asked Claude Code", timeout=15000)
+        expect(thread).to_contain_text("Nothing has been delivered yet")
+        assert "ASK claude-code" not in thread.inner_text() and "already sent" not in thread.inner_text()      # the marker and MC's own claim are not shown
+        rid = os.listdir(os.path.join(svc.root, "requests"))[0]
+        request = json.loads(open(os.path.join(svc.root, "requests", rid, "request.json")).read())
+        assert request["action"] == "Please ask Claude Code to check the Workshop Log tabs." and request["to"] == "claude-code"
+        assert "picked up" not in thread.inner_text()                                                          # nothing claimed before a receipt
+        assert helper("receipt", rid, "--as", "claude-code", "--session", "session-test").returncode == 0
+        expect(thread).to_contain_text("Claude Code (session session-test) picked up the request", timeout=20000)   # the page polled; no reload; it names the actual session
+        assert helper("result", rid, "--as", "claude-code", "Tabs", "are", "fine; one label is long.").returncode == 0
+        expect(thread).to_contain_text("Claude Code's report", timeout=20000)
+        expect(thread).to_contain_text("one label is long.")
+        report = page.locator("[data-mc-thread] li[data-author-kind='agent']", has_text="Claude Code's report")
+        expect(report).to_have_count(1)
+        expect(report.locator(".msg-label")).to_have_text("Claude Code")
+        page.reload()
+        page.wait_for_selector("[data-mc-thread]")
+        expect(page.locator("[data-mc-thread] li", has_text="Claude Code's report")).to_have_count(1)         # kept once: still one after a reload
+        expect(page.locator("[data-mc-thread] li", has_text="picked up the request")).to_have_count(1)
+        assert not errors, errors
+        ctx.close()
+    finally:
+        services.mc, services.mc_health, services.mc_turns = saved
+        server["app"].extensions["guild_ui_next"].pop("agent_asks", None)
+
+def _ask_mc_once(browser, server, tmp_path):
+    """Shared set-up for the reopen tests: MC proposes one ASK, the ledger gets one request, returns (svc, helper, rid, ctx, page, restore)."""
+    import subprocess
+    import minimoi_portal.guild_ui.mc.openclaw as oc
+    from minimoi_portal.guild_ui.mc import CachedHealth
+    from minimoi_portal.guild_ui import agent_ask
+    services = server["app"].extensions["guild_ui_next"]["services"]
+
+    class Resp:
+        def __init__(self, status, text, headers=None):
+            self.status_code, self.text, self.headers = status, text, headers or {}
+
+    def post(url, data=None, headers=None, timeout=None):
+        return Resp(200, json.dumps({"id": "c", "object": "chat.completion", "model": "openclaw/mc-agent",
+                                     "choices": [{"index": 0, "message": {"role": "assistant", "content": "ASK claude-code: Check the tabs\nI have already sent it."}, "finish_reason": "stop"}],
+                                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}),
+                    {"X-MC-Correlation-Id": (headers or {}).get("X-MC-Correlation-Id")})
+    saved = (services.mc, services.mc_health, services.mc_turns)
+    backend = oc.OpenClawMasterCraftsman("http://mc-relay:8790/v1", "t" * 40, http_get=lambda *a, **k: Resp(200, "{}"), http_post=post)
+    services.mc, services.mc_health, services.mc_turns = backend, CachedHealth(backend), True
+    svc = agent_ask.AskService(str(tmp_path / "agent_requests"))
+    server["app"].extensions["guild_ui_next"]["agent_asks"] = svc
+    cli = os.path.join(REPO, "scripts", "agent_requests.py")
+
+    def helper(*args):
+        return subprocess.run([sys.executable, cli, "--root", svc.root, *args], capture_output=True, text=True, timeout=30)
+
+    def restore():
+        services.mc, services.mc_health, services.mc_turns = saved
+        server["app"].extensions["guild_ui_next"].pop("agent_asks", None)
+    ctx, page = _context(browser, server, 1440, 900)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.fill("[data-mc-input]", "Please ask Claude Code to check the Workshop Log tabs.")
+    page.click("[data-mc-send]")
+    expect(page.locator("[data-mc-thread]")).to_contain_text("Asked Claude Code", timeout=15000)
+    rid = os.listdir(os.path.join(svc.root, "requests"))[0]
+    return svc, helper, rid, ctx, page, restore
+
+
+def test_ar2_a_request_finished_while_the_browser_was_closed_shows_its_notes_when_reopened(browser, server, floor, tmp_path):
+    """The browser is closed (the page is gone) while the agent receives and answers; the reopened conversation shows both notes exactly once, with nothing outstanding."""
+    svc, helper, rid, ctx, page, restore = _ask_mc_once(browser, server, tmp_path)
+    try:
+        convo_url = page.url
+        page.goto("about:blank")                                            # the page is closed: nothing is polling
+        assert helper("receipt", rid, "--as", "claude-code", "--session", "session-test").returncode == 0
+        assert helper("result", rid, "--as", "claude-code", "Tabs", "are", "fine.").returncode == 0
+        page.goto(convo_url)
+        thread = page.locator("[data-mc-thread]")
+        expect(thread).to_contain_text("Claude Code's report", timeout=20000)
+        expect(page.locator("[data-mc-thread] li", has_text="Claude Code's report")).to_have_count(1)
+        expect(page.locator("[data-mc-thread] li", has_text="picked up the request")).to_have_count(1)
+        page.reload()
+        page.wait_for_selector("[data-mc-thread]")
+        expect(page.locator("[data-mc-thread] li", has_text="Claude Code's report")).to_have_count(1)
+        ctx.close()
+    finally:
+        restore()
+
+
+def test_ar3_a_failed_look_is_retried_and_does_not_duplicate_notes(browser, server, floor, tmp_path):
+    """The sync look fails twice (a 503, then a dropped connection); the page retries on a backoff and shows each note once."""
+    svc, helper, rid, ctx, page, restore = _ask_mc_once(browser, server, tmp_path)
+    try:
+        convo_url = page.url
+        page.goto("about:blank")
+        assert helper("receipt", rid, "--as", "claude-code", "--session", "session-test").returncode == 0
+        assert helper("result", rid, "--as", "claude-code", "All", "good.").returncode == 0
+        seen = {"n": 0}
+
+        def flaky(route):
+            seen["n"] += 1
+            if seen["n"] == 1:
+                route.fulfill(status=503, content_type="application/json", body='{"error":"unavailable"}')
+            elif seen["n"] == 2:
+                route.abort()
+            else:
+                route.continue_()
+        page.route("**/agent-requests/sync", flaky)
+        page.goto(convo_url)
+        expect(page.locator("[data-mc-thread]")).to_contain_text("Claude Code's report", timeout=30000)
+        assert seen["n"] >= 3
+        expect(page.locator("[data-mc-thread] li", has_text="Claude Code's report")).to_have_count(1)
+        expect(page.locator("[data-mc-thread] li", has_text="picked up the request")).to_have_count(1)
+        ctx.close()
+    finally:
+        restore()
+
+
+def _unicode_text(n):
+    """Exactly ``n`` characters (code points): multibyte, an emoji, accents and line breaks, then padding."""
+    base = "Zürich café 日本語 😀 naïve\nsecond line ✓\n"
+    out = (base * (n // len(base) + 1))[:n].rstrip()
+    out += "x" * (n - len(out))                                      # exactly n characters, ending in a visible one (the page trims whitespace)
+    assert len(out) == n and not out.endswith(("\n", " "))
+    return out
+
+
+def test_ln1_a_message_over_the_limit_is_never_clipped_the_whole_draft_stays_and_nothing_is_sent(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    posts = []
+    page.on("request", lambda r: posts.append(r.url) if r.method == "POST" and "/api/v1/notes" in r.url else None)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    assert page.locator("[data-mc-input]").get_attribute("maxlength") is None                             # no silent HTML clipping
+    text = _unicode_text(2500)
+    page.fill("[data-mc-input]", text)
+    assert page.locator("[data-mc-input]").input_value() == text                                          # every character is still in the box
+    expect(page.locator("[data-mc-refusal]")).to_be_visible()
+    expect(page.locator("[data-mc-refusal]")).to_contain_text("This message is 2,500 characters; the limit is 2,000.")
+    expect(page.locator("[data-mc-refusal]")).to_contain_text("Nothing was sent, and your full text is still here")
+    assert page.locator("[data-mc-input]").get_attribute("aria-invalid") == "true"
+    page.click("[data-mc-send]")
+    page.wait_for_timeout(400)
+    assert posts == [] and page.locator("[data-mc-input]").input_value() == text                          # Send refuses; nothing left the page; the draft is intact
+    page.fill("[data-mc-input]", _unicode_text(2000))                                                     # shortened to the limit: the message goes away
+    expect(page.locator("[data-mc-refusal]")).to_be_hidden()
+    assert page.locator("[data-mc-input]").get_attribute("aria-invalid") is None
+    assert not errors, errors
+    ctx.close()
+
+
+def test_ln2_a_message_of_exactly_the_limit_is_kept_and_sent_in_full_multibyte_and_multiline(browser, server, floor):
+    services, saved, sent = _wt_mc(server)
+    try:
+        ctx, page = _context(browser, server, 1440, 900)
+        errors = _errors(page)
+        go(page, f"{server['url']}/guild-next/guild/build")
+        text = _unicode_text(2000)
+        page.fill("[data-mc-input]", text)
+        expect(page.locator("[data-mc-refusal]")).to_be_hidden()
+        page.click("[data-mc-send]")
+        expect(page.locator("[data-mc-thread]")).to_contain_text("Noted.", timeout=15000)
+        assert sent and text in sent[0] and len(text) == 2000                                    # the whole text reached MC, byte for byte
+        kept = [r for r in floor["floor"].rows("floor_messages") if r["author_kind"] == "owner" and r["text"].startswith("Zürich café")] if isinstance(floor, dict) and "floor" in floor else None
+        if kept is not None:
+            assert kept and kept[-1]["text"] == text
+        page.fill("[data-mc-input]", _unicode_text(2001))                                                 # one over: refused, with the exact count
+        expect(page.locator("[data-mc-refusal]")).to_contain_text("2,001 characters")
+        assert not errors, errors
+        ctx.close()
+    finally:
+        services.mc, services.mc_health, services.mc_turns = saved
+
+
+def test_ln3_when_the_server_cannot_be_reached_the_draft_stays_nothing_is_called_kept_and_a_retry_saves_it_once(browser, server, floor):
+    services, saved, sent = _wt_mc(server)
+    try:
+        ctx, page = _context(browser, server, 1440, 900)
+        errors = _errors(page)
+        go(page, f"{server['url']}/guild-next/guild/build")
+        page.route("**/api/v1/notes", lambda route: route.abort())                                         # the Dev host is unreachable
+        page.fill("[data-mc-input]", "A message while the host is down")
+        page.click("[data-mc-send]")
+        expect(page.locator("[data-mc-refusal]")).to_be_visible(timeout=10000)
+        expect(page.locator("[data-mc-refusal]")).to_contain_text("could not be reached")
+        assert page.locator("[data-mc-input]").input_value() == "A message while the host is down"        # the draft is still there
+        assert "kept as a note" not in page.locator("[data-mc-thread]").inner_text() and sent == []         # nothing claims to be saved; nothing reached MC
+        assert page.locator("[data-mc-send]").is_enabled()                                                 # and Send is usable again
+        page.unroute("**/api/v1/notes")                                                                    # the host is back
+        page.click("[data-mc-send]")
+        expect(page.locator("[data-mc-thread]")).to_contain_text("Noted.", timeout=15000)
+        assert page.locator("[data-mc-thread] li", has_text="A message while the host is down").count() == 1   # saved once, not twice
+        assert page.locator("[data-mc-input]").input_value() == ""
+        ctx.close()
+    finally:
+        services.mc, services.mc_health, services.mc_turns = saved
+
+
+def test_ln4_private_has_its_own_limit_said_before_sending_and_the_oversized_draft_is_kept(browser, server, floor):
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    sent = []
+    page.on("request", lambda r: sent.append(r.url) if r.method == "POST" and ("/mc/private" in r.url or "/api/v1/notes" in r.url) else None)
+    go(page, f"{server['url']}/guild-next/guild/build")
+    assert page.evaluate("JSON.parse(document.getElementById('guild-page').textContent).private_max") == 4000
+    page.click("[data-mc-record]")                                                                          # Private
+    _private_on(page)
+    text = _unicode_text(4001)
+    page.fill("[data-mc-input]", text)
+    expect(page.locator("[data-mc-refusal]")).to_contain_text("This message is 4,001 characters; the limit is 4,000.")
+    page.click("[data-mc-send]")
+    page.wait_for_timeout(400)
+    assert sent == [] and page.locator("[data-mc-input]").input_value() == text                             # nothing left the page; the draft is intact
+    page.fill("[data-mc-input]", _unicode_text(3000))                                                       # over the on-record limit but within Private's: fine
+    expect(page.locator("[data-mc-refusal]")).not_to_contain_text("characters; the limit")
+    page.click("[data-mc-record]")                                                                          # back on the record (leaving Private ends that sitting)
+    page.wait_for_timeout(200)
+    page.fill("[data-mc-input]", _unicode_text(3000))                                                       # the same length now meets the 2,000 limit
+    expect(page.locator("[data-mc-refusal]")).to_contain_text("This message is 3,000 characters; the limit is 2,000.")
     assert not errors, errors
     ctx.close()
 
@@ -1291,6 +1616,28 @@ def test_a_long_markdown_reply_renders_as_structure_live_and_after_a_reload(brow
         services.mc, services.mc_health, services.mc_turns = saved
 
 
+def test_mc_waiting_line_adds_a_quiet_still_working_after_twenty_seconds(browser, server, floor):
+    """11 Oct: a healthy turn can think for 20 s before its first word, and a bare counter looked like a stall. After 20 s of waiting the line adds
+    'still working' (no claim about what it is doing); before that it is not shown."""
+    ctx, page = _context(browser, server)
+    held = []
+    page.route("**/api/v1/mc/turns", lambda route: held.append(route))
+    go(page, f"{server['url']}/guild-next/guild/build")
+    _mc_turns_on(page)
+    page.clock.install()
+    page.fill("#mc-input", "What is stuck on the board?")
+    page.click("[data-mc-send]")
+    waiting = page.locator("[data-mc-thread] [data-mc-waiting]")
+    expect(waiting).to_have_count(1)
+    expect(waiting.locator('[data-slot="still"]')).to_be_hidden()
+    page.clock.run_for(10000)
+    expect(waiting.locator('[data-slot="still"]')).to_be_hidden()
+    page.clock.run_for(11000)
+    expect(waiting.locator('[data-slot="still"]')).to_be_visible()
+    expect(waiting.locator('[data-slot="still"]')).to_have_text("still working")
+    ctx.close()
+
+
 def test_mc_waiting_line_sits_where_the_reply_goes_and_is_replaced_in_place(browser, server, floor):
     """Robert, 2026-09-29 (after his own OpenClaw chat): no "Asking Master
     Craftsman" platform entry. Under the note, MC's mark, "Waiting for a
@@ -1323,7 +1670,7 @@ def test_mc_waiting_line_sits_where_the_reply_goes_and_is_replaced_in_place(brow
                                       "output_tokens": None, "tokens_text": None}}      # tokens not recorded yet
     held[0].fulfill(status=200, content_type="application/json", body=json.dumps({
         "status": "answered", "reply_note": reply, "message": "Master Craftsman answered · kept on the record",
-        "mc_state": "live", "mc_header": "Master Craftsman is live · your messages are kept as notes"}))
+        "mc_state": "live", "mc_header": "Master Craftsman is ready · your messages are saved in the conversation"}))
     expect(waiting).to_have_count(0)
     answered = thread.locator('[data-note="9001"]')
     expect(answered).to_contain_text("Item 12 is waiting on review.")
@@ -1519,19 +1866,17 @@ def test_slice1_desktop_history_chat_and_context_with_the_hero_in_the_chat_heade
     h, c, r = _box(page, "[data-floor-history]"), _box(page, "[data-mc-thread]"), _box(page, "#main")
     assert h["x"] < c["x"] < r["x"]                                              # history | chat | rail
     assert c["width"] <= 730                                                     # the text column is capped
-    # 5 Oct: no Needs-you badge, no urgent line, no quiet line in the Chat. The rail is Linked work and Files.
+    # 5 Oct: no Needs-you badge, no urgent line, no quiet line in the Chat. The rail is the picture and the Files (Linked work left on 11 Oct).
     expect(page.locator("[data-needs-badge], [data-floor-urgent], [data-rail-quiet], [data-open-wall]")).to_have_count(0)
-    expect(rail.locator("[data-linked-work]")).to_be_visible()
+    expect(rail.locator("[data-linked-work]")).to_have_count(0)
     expect(rail.locator("[data-conv-files-sec]")).to_be_visible()
     # The status strip sits low, under the chat.
     assert _box(page, "[data-zone='status']")["y"] > _box(page, "[data-mc-composer]")["y"]
-    # The rail collapses by hand, and that is remembered.
-    page.click("[data-rail-toggle]")
-    expect(rail).to_be_hidden()
+    # Wide: the rail is always beside the chat and there is no Context/Files button to toggle it (11 Oct), even if an old "closed" was remembered.
+    expect(page.locator("[data-rail-toggle]")).to_be_hidden()
+    page.evaluate("() => { try { localStorage.setItem('guild.floor.rail.v2', JSON.stringify('closed')); } catch (e) {} }")
     page.reload()
     page.wait_for_selector("body[data-ready=true]")
-    expect(page.locator("#main")).to_be_hidden()
-    page.click("[data-rail-toggle]")
     expect(page.locator("#main")).to_be_visible()
     assert not errors, errors
     ctx.close()
@@ -1568,7 +1913,7 @@ def test_slice1_quiet_rail_when_nothing_needs_attention(browser, server, floor):
         expect(page.locator("[data-open-wall]")).to_have_count(0)
         expect(page.locator("[data-floor-urgent]")).to_have_count(0)
         expect(page.locator("[data-rail-continue]")).to_have_count(0)
-        expect(page.locator("[data-linked-empty]")).to_be_visible()
+        expect(page.locator("[data-linked-empty]")).to_have_count(0)
         ctx.close()
     finally:
         write_queue(server["queue"], QUEUE_ITEMS)
@@ -1594,7 +1939,7 @@ def test_slice1_a_failed_answer_shows_one_line_above_the_composer_until_the_next
     b, comp = _box(page, "[data-mc-blocker]"), _box(page, "[data-mc-composer]")
     assert b["y"] + b["height"] <= comp["y"] + 1                                 # directly above the composer
     replies.append({"status": "answered", "mc_state": "live", "message": "Master Craftsman answered",
-                    "mc_header": "Master Craftsman is live · your messages are kept as notes",
+                    "mc_header": "Master Craftsman is ready · your messages are saved in the conversation",
                     "reply_note": {"id": 7001, "request_id": "mc-x", "author_kind": "agent", "author_label": "Master Craftsman",
                                    "who": "master_craftsman", "text": "Here.", "html": "<p>Here.</p>",
                                    "created_at": "2026-09-29T09:00:00+00:00", "context": {}}})
@@ -1675,16 +2020,15 @@ def test_slice1_the_wall_filters_and_carries_the_same_conversation(browser, serv
 
 
 def test_slice1_navigation_reaches_every_guild_page_and_the_truthful_labs_page(browser, server, fresh_queue):
-    # Build is Chat · Board · Build Log · Workshop · Rooms, with no More menu (5 Oct).
+    # Build is Chat · Board · Build Log · Workshop Log · Rooms, with no More menu (5 Oct; the original Craftsman Chat restored as Build's landing 11 Oct).
     ctx, page = _context(browser, server, 1440, 900)
     errors = _errors(page)
     go(page, f"{server['url']}/guild-next/guild/build")
     nav = page.locator(".guild-subnav")
-    expect(nav.locator("> a")).to_have_text(["Chat", "Board", "Build Log", "Workshop", "Rooms"])
+    expect(nav.locator("> a")).to_have_text(["Chat", "Board", "Build Log", "Workshop Log", "Rooms"])
     expect(page.locator("[data-subnav-more]")).to_have_count(0)
     for label, where in (("Board", "/guild-next/guild/board"), ("Build Log", "/guild-next/guild/build/log"),
-                         ("Workshop", "/guild-next/guild/workshop"),
-                         ("Rooms", "/guild-next/guild/rooms"), ("Chat", "/guild-next/guild/build")):
+                         ("Rooms", "/guild-next/guild/rooms"), ("Workshop Log", "/guild-next/guild/workshop"), ("Chat", "/guild-next/guild/build")):
         with page.expect_navigation():
             nav.locator("> a", has_text=label).click()
         page.wait_for_selector("body[data-ready=true]")
@@ -1809,7 +2153,7 @@ def test_fix_rotating_a_phone_to_landscape_keeps_the_context_reachable(browser, 
     page.set_viewport_size({"width": 844, "height": 390})
     expect(page.locator("[data-floor-context]")).to_have_attribute("open", "")
     page.click("[data-rail-toggle]")
-    expect(page.locator("[data-linked-work]")).to_be_visible()                     # the rail (Linked work, Files) stays reachable
+    expect(page.locator("[data-conv-files-sec]")).to_be_visible()                  # the rail (Files) stays reachable
     ctx.close()
 
 
@@ -1821,12 +2165,10 @@ def test_fix_polish_bubbles_folded_help_and_no_platform_card_in_the_chat(browser
     expect(page.locator("#main [data-briefing-text]")).to_have_count(0)               # the generic status paragraph is retired (5 Oct)
     expect(page.locator("[data-mc-off-lines]")).to_have_count(0)                      # so is the folded help
     expect(page.locator("[data-mc-record]")).to_be_visible()
-    expect(page.locator("[data-mc-invite]")).to_be_visible()
-    page.click("[data-mc-invite]")                                                    # grey, clickable, one answer
-    expect(page.locator("[data-invite-soon]")).to_have_text("Coming soon.")
+    expect(page.locator("[data-mc-invite]")).to_have_count(0)
     page.route("**/api/v1/mc/turns", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({
         "status": "answered", "mc_state": "live", "message": "Master Craftsman answered",
-        "mc_header": "Master Craftsman is live · your messages are kept as notes",
+        "mc_header": "Master Craftsman is ready · your messages are saved in the conversation",
         "reply_note": {"id": 7101, "request_id": "mc-b", "author_kind": "agent", "author_label": "Master Craftsman",
                        "who": "master_craftsman", "text": "Left side.", "html": "<p>Left side.</p>",
                        "created_at": "2026-09-29T09:00:00+00:00", "context": {}}})))
@@ -1999,7 +2341,7 @@ def test_slice4a_the_workshop_opens_from_a_queue_item_and_refreshes_honestly(bro
     model_calls = _requests(page, "/mc/turns")
     go(page, f"{server['url']}/guild-next/guild/workshop?item=12")             # the old address: it now lands on Operate → Build host
     assert "/guild-next/guild/operate/build-host?item=12" in page.url
-    expect(page.locator(".guild-subnav .subnav-active")).to_contain_text("Build host")
+    expect(page.locator("[data-operate-back]")).to_contain_text("Operate")                  # Operate has no sub-tabs: one way back
     expect(page.locator("[data-ws-admission]")).to_have_attribute("data-verdict", "tight")
     expect(page.locator("[data-ws-runs]")).to_contain_text("1 agent session running on this Mac (outside Docker)")
     expect(page.locator("[data-ws-background]")).to_contain_text("Codex desktop (ChatGPT app)")
@@ -2052,10 +2394,12 @@ def test_slice4a_phone_shows_now_needs_you_budget_then_the_chat(browser, server,
     # Now, Needs you, Budget and the rest in that order, still above the chat.
     expect(page.locator("[data-ws-op='disk']")).to_be_visible()
     expect(page.locator("[data-ws-now]")).to_be_hidden()
-    ys0 = _visible_order(page, ["[data-ws-op='disk']", "details.card > summary", ".mc-panel"])
+    # 12 Oct (Codex's phone fix): a minimized chat on a phone is a fixed pill, not an in-flow panel, so the order below no longer includes the chat; the pill is asserted instead.
+    ys0 = _visible_order(page, ["[data-ws-op='disk']", "details.card > summary"])
+    expect(page.locator(".mc-pill")).to_be_visible()
     assert ys0 == sorted(ys0), ys0
     _open_host_observations(page)
-    ys = _visible_order(page, ["[data-ws-now]", "[data-ws-needs]", "[data-ws-budget]", "[data-ws-more]", ".mc-panel"])
+    ys = _visible_order(page, ["[data-ws-now]", "[data-ws-needs]", "[data-ws-budget]", "[data-ws-more]"])
     assert ys == sorted(ys), ys
     expect(page.locator("[data-ws-more]")).not_to_have_attribute("open", "")      # scope, queue and recovery stay folded on a phone
     expect(page.locator("[data-ws-scope]")).to_be_hidden()
@@ -2464,11 +2808,11 @@ def test_s1_the_guild_home_is_paired_with_curator(browser, server, fresh_queue, 
         assert all(boxes[i + 1]["y"] > boxes[i]["y"] for i in range(3))
         assert boxes[0]["width"] >= width - 40
     expect(page.locator("text=/tunnel/i")).to_have_count(0)
-    expect(page.locator(".guild-subnav > a")).to_have_text(["Chat", "Board", "Build Log", "Workshop", "Rooms"])
+    expect(page.locator(".guild-subnav > a")).to_have_text(["Chat", "Board", "Build Log", "Workshop Log", "Rooms"])
     expect(page.locator("[data-subnav-more]")).to_have_count(0)
     assert _no_page_overflow(page)
     with page.expect_navigation():
-        drawers.nth(0).click()                                                    # Build → the Chat
+        drawers.nth(0).click()                                                    # Build → the Craftsman Chat
     page.wait_for_selector("body[data-ready=true]")
     assert page.url.split("?")[0].endswith("/guild-next/guild/build")
     assert not errors, errors
@@ -2497,7 +2841,7 @@ def test_s1_the_guild_bar_and_no_page_overflow_anywhere(browser, server, floor, 
         page.wait_for_load_state("load")
         if path in BUILD_PAGES:
             tabs = page.locator(".guild-subnav > a")
-            expect(tabs).to_have_text(["Chat", "Board", "Build Log", "Workshop", "Rooms"])
+            expect(tabs).to_have_text(["Chat", "Board", "Build Log", "Workshop Log", "Rooms"])
             for i in range(5):
                 expect(tabs.nth(i)).to_be_in_viewport()                           # all five tabs fit, phone included
             expect(page.locator("[data-subnav-more]")).to_have_count(0)
@@ -2881,6 +3225,15 @@ def _bd_discard(page, note_id):
     page.locator(f'[data-bd-note="{note_id}"] .bd-edit > summary').click()
     page.locator(f'[data-bd-bin="{note_id}"]').click()
 
+def _act(page, selector):
+    """Click an action that lives in a note's small ⋯ menu (10 Oct: no buttons inside a Post-it): open that note's menu, then the action."""
+    target = page.locator(selector).first
+    summary = target.locator("xpath=ancestor::li[@data-bd-note]").locator(".bd-edit > summary")
+    if not target.is_visible():
+        summary.click()
+    target.click()
+
+
 
 def test_s3_desktop_notes_done_order_trash_and_empty(browser, server, board_media):
     from minimoi_portal.guild_ui.stores import Author
@@ -2894,48 +3247,40 @@ def test_s3_desktop_notes_done_order_trash_and_empty(browser, server, board_medi
     go(page, f"{server['url']}/guild-next/guild/board")
     expect(page.locator(".guild-subnav > [aria-current='page']")).to_have_text("Board")
     assert _bd_ids(page) == ids[::-1]                                              # newest on top
-    # + Note ▾ → Note, with a label and a linked work item.
-    page.click("[data-bd-add] > summary")
-    page.click('[data-bd-open="note"]')
-    page.fill("[data-bd-note-text]", "Decide how long Done notes stay")
-    page.locator("[data-bd-note-form] details > summary").click()                     # label, link and image sit under "More"
-    page.select_option("[data-bd-note-label]", "decide")
-    page.fill("[data-bd-note-item]", "12")
-    page.click("[data-bd-note-add]")
-    expect(page.locator("[data-bd-add-result]")).to_have_text("Post-it added")
+    # The toolbar is plain (11 Oct): ＋ , Photo, pop-out; picture management is tucked away; no ⋯ menu and no label/link form.
+    expect(page.locator("[data-bd-add], [data-bd-note-form], [data-bd-open='note']")).to_have_count(0)
+    expect(page.locator("[data-bd-media-link]")).to_be_hidden()
+    page.click("[data-bd-new]")                                                          # a note is typed straight into the Board
+    page.fill("[data-bd-new-field]", "Decide how long Done notes stay")
+    page.click("body", position={"x": 5, "y": 400})                                      # leaving the note saves it
     new = page.locator("[data-bd-note]").first
-    expect(new).to_have_attribute("data-label", "decide")
-    expect(new.locator("[data-bd-item]")).to_have_text("#12")
-    expect(new.locator(".bd-linkline")).to_contain_text("Floor API")
+    expect(new).to_contain_text("Decide how long Done notes stay")
     new_id = _bd_ids(page)[0]
-    # Order: › button, Alt+Arrow, and drag.
-    page.locator(f'[data-bd-move="next"][data-id="{new_id}"]').click()
-    expect(page.locator("[data-bd-note]").nth(1)).to_have_attribute("data-bd-note", str(new_id))
-    page.locator(f'[data-bd-note="{new_id}"]').focus()
-    page.keyboard.press("Alt+ArrowLeft")
-    expect(page.locator("[data-bd-note]").first).to_have_attribute("data-bd-note", str(new_id))
-    page.locator(f'[data-bd-note="{ids[0]}"]').drag_to(page.locator(f'[data-bd-note="{new_id}"]'),
-                                                         target_position={"x": 5, "y": 40})
-    expect(page.locator("[data-bd-note]").first).to_have_attribute("data-bd-note", str(ids[0]))
-    order = _bd_ids(page)
-    assert [p["id"] for p in store.board().data["active"]] == order                 # the server has the order
-    # Done leaves Active and shows under Done; Undone brings it back.
-    page.locator(f'[data-bd-done="{ids[1]}"]').click()
+    # (Placing and ordering have their own tests below: test_bp_*.)
+    # The note menu holds only Edit and Discard; Done, label, link and order buttons are not offered (11 Oct).
+    page.locator(f'[data-bd-note="{ids[1]}"] .bd-edit > summary').click()
+    expect(page.locator(f'[data-bd-note="{ids[1]}"] .bd-edit-body button:visible, [data-bd-note="{ids[1]}"] .bd-edit-body select:visible, [data-bd-note="{ids[1]}"] .bd-edit-body input:visible')).to_have_count(2)
+    expect(page.locator(f'[data-bd-done="{ids[1]}"], [data-bd-save-label], [data-bd-save-link], [data-bd-edit-label]')).to_have_count(0)
+    page.keyboard.press("Escape")
+    # A note that was already Done is still reachable under the Done filter, and Undone brings it back.
+    store.set_done(ids[1], True, robert, expect_version=store.board().data["active"][[p["id"] for p in store.board().data["active"]].index(ids[1])]["version"], idempotency_key="s3-done-seed-0001")
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
     expect(page.locator(f'[data-bd-note="{ids[1]}"]')).to_have_count(0)
-    page.select_option("[data-bd-show]", "done")
+    page.click('[data-bd-view="done"]')
     expect(page.locator(f'[data-bd-note="{ids[1]}"]')).to_be_visible()
-    page.locator(f'[data-bd-undone="{ids[1]}"]').click()
+    _act(page, f'[data-bd-undone="{ids[1]}"]')
     expect(page.locator(f'[data-bd-note="{ids[1]}"]')).to_have_count(0)
     # Discard → Trash (with its count) → Restore → Discard again → Empty, confirmed.
-    page.select_option("[data-bd-show]", "active")
+    page.click('[data-bd-view="active"]')
     _bd_discard(page, ids[2])
-    expect(page.locator('[data-bd-show] option[value="trash"]')).to_have_text("Trash (1)")
-    page.select_option("[data-bd-show]", "trash")
-    page.locator(f'[data-bd-restore="{ids[2]}"]').click()
-    expect(page.locator('[data-bd-show] option[value="trash"]')).to_have_text("Trash (0)")
-    page.select_option("[data-bd-show]", "active")
+    expect(page.locator('[data-bd-view="trash"]')).to_have_text("Bin 1")
+    page.click('[data-bd-view="trash"]')
+    _act(page, f'[data-bd-restore="{ids[2]}"]')
+    expect(page.locator('[data-bd-view="trash"]')).to_have_text("Bin 0")
+    page.click('[data-bd-view="active"]')
     _bd_discard(page, ids[2])
-    page.select_option("[data-bd-show]", "trash")
+    page.click('[data-bd-view="trash"]')
     page.click("[data-bd-empty]")
     expect(page.locator("[data-bd-confirm]")).to_be_visible()
     page.click("[data-bd-confirm-no]")
@@ -2954,7 +3299,6 @@ def test_s3_photo_upload_place_and_library_purge_refused_while_used(browser, ser
     errors = _errors(page)
     uploads = _requests(page, "/api/v1/media")
     go(page, f"{server['url']}/guild-next/guild/board")
-    page.click("[data-bd-add] > summary")
     page.click('[data-bd-open="photo"]')
     expect(page.locator("[data-bd-pick]")).to_contain_text("no photos yet")
     page.set_input_files("[data-bd-photo-file]", str(_jpeg_file(tmp_path)))
@@ -2993,9 +3337,9 @@ def test_s3_off_the_record_the_board_writes_nothing(browser, server, board_media
     page.click("[data-mc-pill]")
     page.click("[data-mc-record]")
     page.click("[data-mc-min]")
-    page.locator(f'[data-bd-done="{pid}"]').click()
+    page.locator(f'[data-bd-note="{pid}"] .bd-edit > summary').click()
+    page.locator(f'[data-bd-bin="{pid}"]').click()                                       # a menu action is refused too
     expect(page.locator("[data-bd-result]")).to_contain_text("Private")
-    page.click("[data-bd-add] > summary")
     page.click('[data-bd-open="photo"]')
     page.set_input_files("[data-bd-photo-file]", str(_jpeg_file(tmp_path)))
     expect(page.locator("[data-bd-photo-result]")).to_contain_text("Private")
@@ -3022,7 +3366,8 @@ def test_s3_phone_board_and_library(browser, server, board_media, path):
     if path.endswith("board"):
         boxes = [page.locator("[data-bd-note]").nth(i).bounding_box() for i in range(3)]
         assert max(b["x"] for b in boxes) - min(b["x"] for b in boxes) < 4          # one column on a phone (tilted notes)
-        assert page.locator("[data-bd-done]").first.bounding_box()["height"] >= 43   # touch targets
+        page.locator(".bd-edit > summary").first.click()
+        assert page.locator("[data-bd-edit-open]").first.bounding_box()["height"] >= 43   # touch targets (inside the note's menu)
     assert not errors, errors
     ctx.close()
 
@@ -3035,7 +3380,7 @@ def rooms(server, floor, tmp_path):
     """The real Records app on a temporary folder behind the portal's bridge."""
     from minimoi_portal import records_bridge as RB
     from rooms_helpers import RecordsTransport, owner_key, records_app
-    app = records_app(tmp_path / "records")
+    app = records_app(tmp_path / "records", portal_key=ROOMS_KEY)
     transport = RecordsTransport(app)
     saved = (RB._TRANSPORT, RB.LOCAL_HOSTS)
     RB._TRANSPORT = transport
@@ -3077,8 +3422,6 @@ def _agent_post(rooms, room_id, text):
 
 
 def _rooms_ready(page, server, rooms, title="Screen review"):
-    r = _records_fetch(page, "/login", {"token": rooms["owner_key"]}, "login-0001")
-    assert r["status"] == 200
     r = _records_fetch(page, "/v1/rooms", {"title": title, "purpose": "Review the Rooms slice", "mode": "meeting",
                                            "recording_acknowledged": True}, f"room-{title[:6]}-0001")
     assert r["status"] == 201
@@ -3090,13 +3433,13 @@ def test_s4_desktop_signin_draft_chat_files_agent_and_pause(browser, server, roo
     errors = _errors(page)
     go(page, f"{server['url']}/guild-next/guild/rooms")
     expect(page.locator(".guild-subnav > [aria-current='page']")).to_have_text("Rooms")
-    # No Records sign-in yet: say so, and keep the draft.
-    expect(page.locator("[data-rm-signin]")).to_be_visible()
-    expect(page.locator("[data-rm-signin-link]")).to_have_attribute("href", "/app/records/")
+    # Signed in to mini-moi and nothing else: no Records sign-in is offered, and the draft is kept.
+    expect(page.locator("[data-rm-blocked]")).to_be_hidden()
+    assert "Sign in to Rooms" not in page.content() and "/app/records/\"" not in page.content()
     page.fill("[data-rm-input]", "A draft written before signing in")
     room_id = _rooms_ready(page, server, rooms)
     go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
-    expect(page.locator("[data-rm-signin]")).to_be_hidden()
+    expect(page.locator("[data-rm-blocked]")).to_be_hidden()
     expect(page.locator("[data-rm-title]")).to_have_text("Screen review")
     expect(page.locator("[data-rm-composer]")).to_be_in_viewport()
     # The draft typed before signing in followed into the room (#288 review F3).
@@ -3129,9 +3472,9 @@ def test_s4_desktop_signin_draft_chat_files_agent_and_pause(browser, server, roo
     agent = page.locator('.rm-msg[data-actor="codex"]')
     expect(agent).to_contain_text("Codex: p.12 still says kept.")
     expect(agent.locator('[data-tag="agent"]')).to_have_text("agent")
-    expect(page.locator("[data-rm-mic]")).to_be_disabled()
-    expect(page.locator("[data-rm-mic]")).to_contain_text("dictation · later")
+    expect(page.locator("[data-rm-mic]")).to_have_count(0)                              # no greyed "later" control: the dictation button exists only while the flag is on
     # Pause: the room says so and writes are refused.
+    page.click("[data-rm-manage] > summary")
     page.click("[data-rm-details] > summary")
     page.fill("[data-rm-state-note]", "Lunch break")
     page.click("[data-rm-set-state='paused']")
@@ -3141,7 +3484,7 @@ def test_s4_desktop_signin_draft_chat_files_agent_and_pause(browser, server, roo
     refused = _records_fetch(page, f"/v1/rooms/{room_id}/events", {"body": "x", "kind": "message"}, "paused-0001")
     assert refused["status"] == 409
     assert _no_page_overflow(page)
-    assert not [e for e in errors if "401" not in e and "409" not in e], errors     # 401 before sign-in, 409 by design
+    assert not [e for e in errors if "409" not in e], errors     # 409 by design (a paused room refuses writes)
     ctx.close()
 
 
@@ -3276,21 +3619,9 @@ def test_s4_a_take_in_a_tab_with_unknown_mode_waits_for_confirm_and_off_drops_it
     ctx.close()
 
 
-def _end_records_session(ctx, page):
-    """Clear Records' session cookie and make sure it stays cleared. The room page polls, and Records re-sets its cookie on
-    every answer, so a poll that was already in flight can put the cookie back a moment after a single clear; the test then
-    sent its message with a live session (the old flake, about one run in four). Wait for the page to be quiet, clear,
-    and check again until the cookie is really gone."""
-    for _ in range(8):
-        page.wait_for_load_state("networkidle")
-        ctx.clear_cookies(name="minimoi_room_poc")
-        page.wait_for_timeout(250)
-        if not any(c["name"] == "minimoi_room_poc" for c in ctx.cookies()):
-            return
-    raise AssertionError("the Records session cookie kept coming back")
-
-
-def test_s4_an_expired_records_login_says_sign_in_and_keeps_the_draft(browser, server, rooms):
+def test_s4_an_ended_mini_moi_session_says_sign_in_to_mini_moi_and_keeps_the_draft(browser, server, rooms):
+    """The only sign-in is mini-moi's. When that session ends the page says so with a link to the portal login, keeps the draft, sends nothing,
+    and signing in to mini-moi again brings the room back with the draft."""
     ctx, page = _context(browser, server, 1440, 900)
     writes = []
     page.on("request", lambda r: writes.append(r.url) if r.method == "POST" and "/app/records/api/v1/rooms/" in r.url else None)
@@ -3299,20 +3630,72 @@ def test_s4_an_expired_records_login_says_sign_in_and_keeps_the_draft(browser, s
     go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
     expect(page.locator("[data-rm-title]")).to_have_text("Expiry room")
     page.fill("[data-rm-input]", "Half-written thought about the art")
-    _end_records_session(ctx, page)                                  # Records' own session ends
+    ctx.clear_cookies()                                              # the mini-moi session ends
     page.click("[data-rm-send]")
-    expect(page.locator("[data-rm-signin]")).to_be_visible()
+    expect(page.locator("[data-rm-blocked]")).to_be_visible()
+    expect(page.locator("[data-rm-blocked-title]")).to_have_text("Your mini-moi session ended.")
+    expect(page.locator("[data-rm-blocked-link]")).to_have_attribute("href", "/login?next=/guild-next/guild/rooms")
     expect(page.locator("[data-rm-input]")).to_have_value("Half-written thought about the art")
     expect(page.locator("[data-rm-send]")).to_be_disabled()
-    page.reload()
-    page.wait_for_selector("body[data-ready=true]")
-    expect(page.locator("[data-rm-signin]")).to_be_visible()
-    # Signing in again brings the room back with the draft.
-    _records_fetch(page, "/login", {"token": rooms["owner_key"]}, "login-0002")
-    page.reload()
-    page.wait_for_selector("body[data-ready=true]")
+    assert len(writes) <= 1                                          # the one attempt the portal turned back; nothing reached Records
+    page.goto(f"{server['url']}/__b1_test_sign_in")                   # signing in to mini-moi again
+    go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
+    expect(page.locator("[data-rm-blocked]")).to_be_hidden()
     expect(page.locator("[data-rm-input]")).to_have_value("Half-written thought about the art")
-    assert len(writes) == 1                                           # the one refused attempt; nothing else sent
+    ctx.close()
+
+
+def test_s4_the_owner_switches_rooms_on_and_off_for_an_account_and_it_survives_a_reload(browser, server, rooms):
+    """Access is the owner's switch (data, audited): Dana starts Off, Switch on sets her up, Withdraw turns her off; the owner's own row cannot be switched."""
+    access = server["rooms_access"]
+    before = (access / "bindings.json").read_text()
+    ctx, page = _context(browser, server, 1440, 900)
+    try:
+        go(page, f"{server['url']}/guild-next/guild/rooms")
+        room_id = _rooms_ready(page, server, rooms, title="Access room")
+        go(page, f"{server['url']}/guild-next/guild/rooms?room={room_id}")
+        page.click("[data-rm-manage] > summary")
+        page.click("[data-rm-access] > summary")
+        row = page.locator('[data-rm-access-row="dana"]')
+        expect(row).to_contain_text("Off")
+        expect(page.locator('[data-rm-access-toggle="robert"]')).to_be_disabled()
+        row.locator("button").click()
+        expect(page.locator("[data-rm-access-status]")).to_have_text("Rooms switched on.")
+        expect(page.locator('[data-rm-access-row="dana"]')).to_contain_text("On")
+        page.reload()
+        page.wait_for_selector("body[data-ready=true]")
+        page.click("[data-rm-manage] > summary")
+        page.click("[data-rm-access] > summary")
+        expect(page.locator('[data-rm-access-row="dana"]')).to_contain_text("On")
+        page.locator('[data-rm-access-row="dana"] button').click()
+        expect(page.locator("[data-rm-access-status]")).to_have_text("Rooms withdrawn.")
+        expect(page.locator('[data-rm-access-row="dana"]')).to_contain_text("Off")
+    finally:
+        (access / "bindings.json").write_text(before)
+    ctx.close()
+
+
+def test_s4_an_account_without_rooms_access_is_told_so_and_nothing_is_sent(browser, server, rooms):
+    """Access is a binding the owner controls: withdrawn, the very next page says 'no access' (not sign-in, not an error), and no Rooms call is made."""
+    import json as _json
+    path = server["rooms_access"] / "bindings.json"
+    original = path.read_text()
+    ctx, page = _context(browser, server, 1440, 900)
+    try:
+        go(page, f"{server['url']}/guild-next/guild/rooms")
+        calls = []
+        page.on("request", lambda r: calls.append(r.url) if "/app/records/api/" in r.url else None)
+        doc = _json.loads(original)
+        doc["bindings"][0]["active"] = False
+        path.write_text(_json.dumps(doc))
+        page.reload()
+        page.wait_for_selector("body[data-ready=true]")
+        expect(page.locator("[data-rm-blocked-title]")).to_have_text("You don't have access to Rooms.")
+        expect(page.locator("[data-rm-blocked-link]")).to_be_hidden()
+        expect(page.locator("[data-rm-send]")).to_be_disabled()
+        assert not calls, calls
+    finally:
+        path.write_text(original)
     ctx.close()
 
 
@@ -3348,7 +3731,7 @@ def test_s5_desktop_ops_strip_job_cards_and_controls_not_available(browser, serv
     errors = _errors(page)
     writes = _writes(page)
     go(page, f"{server['url']}/guild-next/guild/operate/build-host")
-    expect(page.locator(".guild-subnav .subnav-active")).to_contain_text("Build host")
+    expect(page.locator("[data-operate-back]")).to_contain_text("Operate")                  # Operate has no sub-tabs: one way back
     _open_host_observations(page)
     expect(page.locator("[data-ws-top] .ws-title")).to_have_text("Host observations")
     for key, text in (("memory", "Memory free 46.0%"), ("swap", "Swap used 1.2 GB"), ("disk", "Disk free 80.0 GB"),
@@ -3423,10 +3806,11 @@ def test_s5_phone_workshop_in_the_shell_without_overflow(browser, server, worksh
     page = ctx.new_page()
     errors = _errors(page)
     page.goto(f"{server['url']}/__b1_test_sign_in")
-    page.goto(f"{server['url']}/guild-next/guild/operate")                         # Operate, then its Build host tab
+    page.goto(f"{server['url']}/guild-next/guild/operate")                         # Operate, then its Build host (a quiet link in the body)
     page.wait_for_load_state("load")
+    assert page.locator(".guild-subnav").count() == 0                              # the provisional sub-tabs are gone
     with page.expect_navigation():
-        page.click(".guild-subnav a:has-text('Build host')")
+        page.click("[data-operate-tools] a:has-text('Build host')")
     page.wait_for_selector("body[data-ready=true]")
     assert page.url.endswith("/guild-next/guild/operate/build-host")
     _open_host_observations(page)
@@ -3498,8 +3882,7 @@ def test_r1_desktop_new_conversation_prove_inline_reply_stop_end_continue(browse
     ctx, page = _context(browser, server, 1440, 900)
     errors = _errors(page)
     go(page, f"{server['url']}/guild-next/guild/rooms")
-    assert _records_fetch(page, "/login", {"token": rooms_r1["owner_key"]}, "login-r1-0001")["status"] == 200
-    go(page, f"{server['url']}/guild-next/guild/rooms")
+    go(page, f"{server['url']}/guild-next/guild/rooms")                  # signed in to mini-moi is all it takes
     # New conversation, with MC (not yet proven) as a teammate.
     page.click("[data-rm-new]")
     expect(page.locator("[data-rm-new-dialog]")).to_be_visible()
@@ -3711,23 +4094,9 @@ def test_b5_linked_work_invite_and_private_in_the_chat(browser, server, board_me
     ctx, page = _context(browser, server, 1440, 900)
     errors = _errors(page)
     go(page, f"{server['url']}/guild-next/guild/build")
-    expect(page.locator("[data-linked-empty]")).to_be_visible()                      # empty until Robert attaches something
+    expect(page.locator("[data-linked-work]")).to_have_count(0)                      # Linked work is off the page (11 Oct)
     expect(page.locator("[data-rail-continue], [data-floor-urgent], [data-open-wall]")).to_have_count(0)
-    page.fill("[data-linked-input]", "https://example.com/not-this-repo")
-    page.press("[data-linked-input]", "Enter")
-    expect(page.locator("[data-linked-error]")).to_contain_text("Nothing was changed")
-    page.fill("[data-linked-input]", "12")
-    page.press("[data-linked-input]", "Enter")
-    expect(page.locator("[data-linked-link]")).to_have_text("#12 Floor API")
-    expect(page.locator("[data-linked-meta]")).to_have_text("Build Log item")
-    page.reload()
-    expect(page.locator("[data-linked-link]")).to_have_text("#12 Floor API")           # saved on the conversation
-    page.click("[data-linked-remove]")
-    expect(page.locator("[data-linked-empty]")).to_be_visible()
-    page.reload()
-    expect(page.locator("[data-linked-empty]")).to_be_visible()
-    page.click("[data-mc-invite]")                                                    # grey, clickable, one answer
-    expect(page.locator("[data-invite-soon]")).to_have_text("Coming soon.")
+    expect(page.locator("[data-mc-invite]")).to_have_count(0)
     page.click("[data-mc-record]")                                                    # Private: a compact chip, attach off
     expect(page.locator("[data-private-chip]")).to_be_visible()
     expect(page.locator("[data-mc-attach]")).to_be_disabled()
@@ -3751,7 +4120,7 @@ def test_b5_an_image_is_kept_as_a_picture_and_unreadable_files_are_refused(brows
     go(page, f"{server['url']}/guild-next/guild/build")
     _nav_click(page, "[data-conv-new]")                                                      # a fresh conversation: no leftovers
     page.set_input_files("[data-mc-file]", [str(png), str(sheet)])
-    expect(page.locator('.att[data-state="ok"]')).to_contain_text("Master Craftsman can’t see images yet")
+    expect(page.locator('.att[data-state="ok"]')).to_contain_text("Master Craftsman can’t see inside it, but can send it to Codex or Claude Code if you ask")
     expect(page.locator('.att[data-state="failed"]')).to_contain_text(".xlsx files can’t be read yet")
     expect(page.locator("[data-conv-files] .fc-file")).to_have_count(1)
     page.reload()                                                                     # kept: it is still listed
@@ -3911,15 +4280,14 @@ def test_b16_on_a_phone_the_fold_is_named_for_what_is_in_it_files_come_before_th
     page.goto(f"{server['url']}/__b1_test_sign_in")
     errors = _errors(page)
     _fresh_conversation(page, server)
-    expect(page.locator(".floor-context-sum")).to_have_text("Files and linked work")
+    expect(page.locator(".floor-context-sum")).to_have_text("Files in this conversation")
     page.click(".floor-context-sum")
     art = page.locator(".fc-art").bounding_box()["y"]
-    assert page.locator("[data-linked-work]").bounding_box()["y"] < art                  # linked work above the picture
     assert page.locator("[data-conv-files-sec]").bounding_box()["y"] < art               # files above the picture
     assert page.locator(".fc-art").is_visible()                                          # the picture is still there
     assert float(page.evaluate("parseFloat(getComputedStyle(document.body).paddingBottom)")) >= 24   # room under the last thing
     page.set_viewport_size({"width": 1440, "height": 900})
-    assert page.locator(".fc-art").bounding_box()["y"] < page.locator("[data-linked-work]").bounding_box()["y"]   # on a computer the picture still leads
+    assert page.locator(".fc-art").bounding_box()["y"] < page.locator("[data-conv-files-sec]").bounding_box()["y"]   # on a computer the picture still leads
     assert not errors, errors
     ctx.close()
 
@@ -4265,7 +4633,7 @@ def test_b7_a_message_carries_its_files_and_the_page_says_exactly_what_was_sent(
     sent = page.locator("[data-note-files]").last
     expect(sent).to_contain_text("plan.txt")
     expect(sent).not_to_contain_text("sent in full")
-    expect(sent).to_contain_text("board.png · not sent (Master Craftsman can't see images yet)")
+    expect(sent).to_contain_text("board.png · not sent (Master Craftsman can't see inside pictures; ask him to send it to Codex or Claude Code)")
     [post] = [p for p in streaming_mc["runtime"].posts if p["url"].endswith("/chat/completions")]
     content = post["body"]["messages"][0]["content"]
     assert "\nWhen do we launch?\n\n[Files the owner attached" in content                     # what the page said is what left
@@ -4469,20 +4837,14 @@ def _fresh_conversation(page, server):
 
 
 @pytest.mark.parametrize("width,height", [(1440, 900), (390, 780)])
-def test_b9_linked_work_opens_its_build_log_item_and_comes_back_without_the_workbench(browser, server, monkeypatch, width, height):
+def test_b9_a_build_log_item_opened_from_a_conversation_comes_back_without_the_workbench(browser, server, monkeypatch, width, height):
     monkeypatch.delenv("MINIMOI_GUILD_RESERVE_PAGES", raising=False)
     ctx, page = _context(browser, server, width, height)
     bad = []
     page.on("response", lambda r: bad.append((r.status, r.url)) if r.status >= 400 else None)
     cid = _fresh_conversation(page, server)
-    if width < 1000:
-        page.locator("[data-floor-context] > summary").click()                                # the phone's folded Context area
-    page.fill("[data-linked-input]", "12")
-    page.press("[data-linked-input]", "Enter")
-    expect(page.locator("[data-linked-link]")).to_have_text("#12 Floor API")
-    assert page.get_attribute("[data-linked-link]", "href").endswith(f"/items/12?c={cid}")
-    with page.expect_navigation():
-        page.click("[data-linked-link]")
+    # Linked work is off the Chat page (11 Oct); an item opened with the asking conversation's id still gets its way back.
+    page.goto(f"{server['url']}/guild-next/guild/build/items/12?c={cid}")
     page.wait_for_selector("body[data-ready=true]")
     expect(page.locator("h1.page-title")).to_contain_text("#12")
     crumbs = page.locator(".crumbs")
@@ -4504,10 +4866,7 @@ def test_b9_linked_work_opens_its_build_log_item_and_comes_back_without_the_work
     with page.expect_navigation():                                                          # back to the asking conversation
         page.click("[data-back-conversation]")
     page.wait_for_selector("body[data-ready=true]")
-    assert f"?c={cid}" in page.url and "/guild/build" in page.url
-    if width < 1000:
-        page.locator("[data-floor-context] > summary").click()
-    expect(page.locator("[data-linked-link]")).to_have_text("#12 Floor API")                 # still attached; nothing was lost
+    assert f"?c={cid}" in page.url and "/guild/build" in page.url                           # back in the asking conversation
     assert not [b for b in bad if b[0] != 401 and "/api/v1/continue" not in b[1]], bad    # Continue has no floor database in this test server: unknown, by design
     ctx.close()
 
@@ -4578,15 +4937,319 @@ def test_b5_the_board_fits_twelve_notes_and_long_notes_open_in_place(browser, se
     more.click()
     expect(more).to_have_text("Less")
     assert more.evaluate("b => getComputedStyle(b.parentElement.querySelector('.bd-text')).display") == "block"
-    first = page.locator("[data-bd-note] .bd-text").first.inner_text()
-    page.locator("[data-bd-note]").first.focus()
-    page.keyboard.press("Alt+ArrowRight")                                             # keyboard reorder, kept
-    page.reload()
-    assert page.locator("[data-bd-note] .bd-text").nth(1).inner_text() == first
     page.locator(".bd-edit > summary").first.click()                                  # Discard lives in the small menu
     page.locator(".bd-discard").first.click()
     expect(page.locator("[data-bd-note]")).to_have_count(11)
     assert not errors, errors
+    ctx.close()
+
+
+# ── Board free placement (11 Oct) ────────────────────────────────────────────
+
+def _seed_notes(floor, n, prefix="pl"):
+    from minimoi_portal.guild_ui.stores import Author
+    robert = Author("robert", "owner", "Robert")
+    store = floor.store()
+    return [store.add_postit(f"{prefix} note {i}", robert, idempotency_key=f"{prefix}-seed-{i:04d}").value["id"] for i in range(n)], store
+
+
+def _positions(store):
+    return {p["id"]: (p["pos_x"], p["pos_y"]) for p in store.board().data["active"]}
+
+
+def _drag(page, selector, dx, dy):
+    box = page.locator(selector).bounding_box()
+    x, y = box["x"] + box["width"] / 2, box["y"] + 60
+    page.mouse.move(x, y)
+    page.mouse.down()
+    page.mouse.move(x + dx / 2, y + dy / 2, steps=4)
+    page.mouse.move(x + dx, y + dy, steps=4)
+    page.mouse.up()
+
+
+def _drag_save(page, selector, dx, dy):
+    """Drag and wait until the placement has been saved (the page answers the drop before the save returns)."""
+    with page.expect_response("**/postits/layout"):
+        _drag(page, selector, dx, dy)
+    page.wait_for_function("() => !document.querySelector('[data-dragging]')")
+
+
+def _rel(page, selector):
+    """A note's position relative to the board surface, so changes above it (the sync line) do not matter."""
+    return page.evaluate("""(sel) => { const n = document.querySelector(sel).getBoundingClientRect(); const g = document.querySelector('[data-bd-grid]').getBoundingClientRect();
+        return { x: n.x - g.x, y: n.y - g.y, w: n.width }; }""", selector)
+
+
+def _board_go(page, server, count):
+    go(page, f"{server['url']}/guild-next/guild/board")
+    expect(page.locator("[data-bd-note]")).to_have_count(count)
+    page.wait_for_timeout(300)                                                        # the surface has been drawn and settled
+
+
+def _no_overlaps(pos):
+    pts = list(pos.values())
+    for i, a in enumerate(pts):
+        for b in pts[i + 1:]:
+            assert abs(a[0] - b[0]) >= 180 or abs(a[1] - b[1]) >= 170, (a, b)
+
+
+def test_bp1_an_unplaced_board_is_laid_out_without_saving_and_a_drag_places_a_note_anywhere_and_keeps_it(browser, server, board_media):
+    floor, _media = board_media
+    ids, store = _seed_notes(floor, 3)
+    ctx, page = _context(browser, server, 1440, 900)
+    errors = _errors(page)
+    _board_go(page, server, 3)
+    expect(page.locator("[data-bd-grid].bd-free")).to_have_count(1)
+    assert all(v == (None, None) for v in _positions(store).values())                # drawing a board saves nothing
+    boxes = {i: _rel(page, f'[data-bd-note="{i}"]') for i in ids}
+    assert max(b["y"] for b in boxes.values()) - min(b["y"] for b in boxes.values()) < 5      # three notes: one row
+    target = ids[0]
+    start = boxes[target]
+    _drag_save(page, f'[data-bd-note="{target}"]', 0, 260)                          # down, into the empty space below
+    placed = _positions(store)
+    assert all(v[0] is not None for v in placed.values())                            # the first move saved every note where it was drawn
+    _no_overlaps(placed)
+    page.wait_for_timeout(400)                                                        # the settle animation
+    moved = _rel(page, f'[data-bd-note="{target}"]')
+    assert moved["y"] > start["y"] + 150 and abs(moved["x"] - start["x"]) < 40       # genuinely two-dimensional: it left its row
+    page.reload()
+    page.wait_for_selector("body[data-ready=true]")
+    page.wait_for_timeout(400)
+    again = _rel(page, f'[data-bd-note="{target}"]')
+    assert abs(again["x"] - moved["x"]) < 3 and abs(again["y"] - moved["y"]) < 3     # still there after a reload
+    assert not errors, errors
+    ctx.close()
+
+
+def test_bp2_dropping_on_another_note_lands_in_the_nearest_free_spot_never_on_top(browser, server, board_media):
+    floor, _media = board_media
+    ids, store = _seed_notes(floor, 3, "pb")
+    ctx, page = _context(browser, server, 1440, 900)
+    _board_go(page, server, 3)
+    a, b = ids[0], ids[1]
+    expect(page.locator("[data-bd-note]")).to_have_count(3)
+    page.wait_for_timeout(300)
+    ba = page.locator(f'[data-bd-note="{a}"]').bounding_box()
+    bb = page.locator(f'[data-bd-note="{b}"]').bounding_box()
+    _drag_save(page, f'[data-bd-note="{a}"]', bb["x"] - ba["x"] + 10, 12)                 # right onto the middle note
+    pos = _positions(store)
+    _no_overlaps(pos)
+    assert all(v[0] is not None for v in pos.values())
+    ctx.close()
+
+
+def test_bp3_arrow_keys_move_a_selected_note_one_step_and_refuse_a_blocked_step(browser, server, board_media):
+    floor, _media = board_media
+    ids, store = _seed_notes(floor, 2, "pk")
+    ctx, page = _context(browser, server, 1440, 900)
+    _board_go(page, server, 2)
+    note = page.locator(f'[data-bd-note="{ids[0]}"]')
+    note.focus()
+    with page.expect_response("**/postits/layout"):
+        page.keyboard.press("ArrowDown")
+    pos = _positions(store)
+    assert pos[ids[0]][1] is not None and pos[ids[1]][0] is not None                  # the first move saved the whole arrangement
+    y0 = pos[ids[0]][1]
+    sel = f'[data-bd-note="{ids[0]}"]'
+    page.wait_for_function("([sel, y]) => document.querySelector(sel)?.style.getPropertyValue('--y') === String(y)", arg=[sel, y0])
+    page.locator(sel).focus()
+    with page.expect_response("**/postits/layout"):
+        page.keyboard.press("Shift+ArrowDown")
+    assert _positions(store)[ids[0]][1] == y0 + 100                                   # Shift = five steps of 20
+    page.wait_for_function("([sel, y]) => document.querySelector(sel)?.style.getPropertyValue('--y') === String(y)", arg=[sel, y0 + 100])
+    page.locator(sel).focus()
+    page.keyboard.press("ArrowUp")
+    _no_overlaps(_positions(store))
+    ctx.close()
+
+
+def test_bp4_a_resize_redraws_but_never_rewrites_a_saved_arrangement_and_a_narrow_window_lists_it_in_place_order(browser, server, board_media):
+    floor, _media = board_media
+    ids, store = _seed_notes(floor, 3, "pr")
+    ctx, page = _context(browser, server, 1440, 900)
+    _board_go(page, server, 3)
+    _drag_save(page, f'[data-bd-note="{ids[2]}"]', 0, 300)
+    saved = _positions(store)
+    page.wait_for_timeout(400)
+    wide = _rel(page, f'[data-bd-note="{ids[2]}"]')
+    page.set_viewport_size({"width": 1100, "height": 900})
+    page.wait_for_timeout(500)
+    assert _rel(page, f'[data-bd-note="{ids[2]}"]')["w"] < wide["w"]                  # drawn smaller
+    page.set_viewport_size({"width": 700, "height": 900})
+    page.wait_for_function("() => !document.querySelector('[data-bd-grid]').classList.contains('bd-free')")
+    listed = _bd_ids(page)
+    assert listed[-1] == ids[2]                                                       # the note placed lowest comes last in the list
+    assert [i for i in listed if i != ids[2]] == sorted((i for i in ids if i != ids[2]), key=lambda i: (saved[i][1], saved[i][0]))
+    expect(page.locator("[data-bd-move], [data-bd-edit-label]")).to_have_count(0)    # no order buttons: the order follows the placement
+    assert _positions(store) == saved                                                 # nothing was rewritten by resizing
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.wait_for_function("() => document.querySelector('[data-bd-grid]').classList.contains('bd-free')")
+    page.wait_for_timeout(400)
+    again = _rel(page, f'[data-bd-note="{ids[2]}"]')
+    assert abs(again["x"] - wide["x"]) < 3 and abs(again["y"] - wide["y"]) < 3
+    ctx.close()
+
+
+def test_bp5_a_narrow_board_with_nothing_placed_keeps_the_list_and_its_keyboard_order(browser, server, board_media):
+    floor, _media = board_media
+    ids, store = _seed_notes(floor, 3, "pn")
+    ctx, page = _context(browser, server, 700, 900)
+    _board_go(page, server, 3)
+    expect(page.locator("[data-bd-grid].bd-free")).to_have_count(0)
+    assert _bd_ids(page) == ids[::-1]
+    page.locator(f'[data-bd-note="{ids[2]}"]').focus()
+    with page.expect_response("**/postits/reorder"):
+        page.keyboard.press("Alt+ArrowRight")
+    assert [p["id"] for p in store.board().data["active"]][:2] == [ids[1], ids[2]]
+    assert all(v == (None, None) for v in _positions(store).values())                # ordering never places
+    ctx.close()
+
+
+def test_bp6_the_note_menu_in_free_mode_holds_only_edit_and_discard(browser, server, board_media):
+    floor, _media = board_media
+    ids, _store = _seed_notes(floor, 1, "pm")
+    ctx, page = _context(browser, server, 1440, 900)
+    _board_go(page, server, 1)
+    page.locator(f'[data-bd-note="{ids[0]}"] .bd-edit > summary').click()
+    menu = page.locator(f'[data-bd-note="{ids[0]}"] .bd-edit-body')
+    expect(menu.locator("button")).to_have_text(["Edit text", "Discard"])
+    ctx.close()
+
+
+def test_bp7_a_second_window_sees_a_placement_and_a_window_that_missed_a_change_is_told_so(browser, server, board_media):
+    from minimoi_portal.guild_ui.stores import Author
+    floor, _media = board_media
+    ids, store = _seed_notes(floor, 2, "ps")
+    ctx, page = _context(browser, server, 1440, 900)
+    _board_go(page, server, 2)
+    other = ctx.new_page()
+    _board_go(other, server, 2)
+    page.bring_to_front()
+    _drag_save(page, f'[data-bd-note="{ids[0]}"]', 0, 260)
+    first = _rel(page, f'[data-bd-note="{ids[0]}"]')
+    other.bring_to_front()
+    other.wait_for_function("([sel, y]) => { const n = document.querySelector(sel); const g = document.querySelector('[data-bd-grid]'); return n && n.getBoundingClientRect().y - g.getBoundingClientRect().y > y; }",
+                            arg=[f'[data-bd-note="{ids[0]}"]', first["y"] - 5], timeout=20000)          # the second window follows
+    # A change made behind a window's back (here straight in the store, with no signal) makes that window's next placement a conflict, said plainly.
+    board = store.board().data
+    robert = Author("robert", "owner", "Robert")
+    pos = _positions(store)
+    store.place([{"id": ids[1], "x": pos[ids[1]][0], "y": pos[ids[1]][1] + 200}], expect_order_rev=board["order_rev"], by=robert, idempotency_key="bp7-behind-0001")
+    with other.expect_response("**/postits/layout") as resp:
+        _drag(other, f'[data-bd-note="{ids[0]}"]', 300, 0)
+    assert resp.value.status == 409
+    expect(other.locator("[data-bd-result]")).to_contain_text("changed in another window")
+    assert _positions(store)[ids[0]] == pos[ids[0]]                                   # the stale move was not applied
+    ctx.close()
+
+
+@pytest.mark.parametrize("width,height", [(1470, 745), (1440, 900), (1280, 720), (768, 1024), (390, 844), (320, 700)])
+def test_b5b_the_lab_has_a_thin_standard_banner_small_launcher_cards_and_a_list_you_can_scan(browser, server, floor, width, height):
+    """Robert, 10 Oct: a thin banner (the same on Prototype Lab, Operate and Improve); Cards are just an icon and a name; List is # · icon · demo · what it
+    is · links, so a list of demos is known at a glance; the icon is the preview, the link is the detail."""
+    ctx, page = _context(browser, server, width, height)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/experiment")
+    page.wait_for_selector("[data-proto-cards] .proto-tile")
+    page.wait_for_function("() => [...document.querySelectorAll('.area-hero-art img')].every((i) => i.complete && i.naturalWidth > 0)")
+    m = page.evaluate("""() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
+      const hero = r('.area-hero'), tile = r('.proto-tile'), link = r('.proto-tile-link');
+      return { heroH: hero.height, heroTop: hero.top, tileBottom: link.bottom, tileW: tile.width, vh: innerHeight } }""")
+    assert m["heroH"] <= (135 if width > 640 else 160), m                                              # a thin banner
+    assert m["tileBottom"] <= m["vh"], m                                                               # the first launcher is on screen
+    expect(page.locator(".proto-tile .proto-tile-title").first).to_have_text("IoT Connect")
+    assert page.locator(".proto-tile .btn, .proto-tile .proto-pills, .proto-tile .proto-desc, .proto-tile .proto-path").count() == 0     # just an icon and a name
+    img = page.evaluate("() => { const i = document.querySelector('.area-hero-art img'); return [i.naturalWidth, i.naturalHeight, getComputedStyle(i).objectFit]; }")
+    assert img == [1152, 864, "cover"]                                                                 # the existing artwork, unreplaced, filling its end of the banner
+    art = page.evaluate("() => { const a = document.querySelector('.area-hero-art').getBoundingClientRect(), h = document.querySelector('.area-hero').getBoundingClientRect(); return [a.width / h.width, a.height / h.height, a.right >= h.right - 1]; }")
+    assert art[1] >= 0.98 and art[2], art                                                               # it fills the banner's height and sits against its right edge
+    assert 0.40 <= art[0] <= 0.50, art                                                                  # 12 Oct: artwork occupies nearly half of the banner
+    box = page.evaluate("() => { const t = document.querySelector('.proto-tile'); const c = getComputedStyle(t); return [c.borderTopWidth, c.backgroundColor]; }")
+    assert box[0] != "0px" and box[1] != "rgba(0, 0, 0, 0)", box                                         # the box around the icon is visible
+    page.click('[data-proto-view="list"]')
+    table = page.locator("[data-proto-list]")
+    expect(table).to_be_visible()
+    heads = table.locator("thead th").all_inner_texts()
+    heads = [h.lower() for h in heads]
+    assert heads[0] == "#" and "demo" in heads[2] and (width <= 640 or "what it is" in heads[3]), heads
+    row = table.locator("tbody tr").first
+    expect(row.locator(".pt-id")).to_have_text("1")
+    expect(row.locator(".pt-name")).to_contain_text("IoT Connect")
+    if width > 640:
+        expect(row.locator(".pt-what")).to_contain_text("Enterprise Connectivity Management")
+    expect(row.locator("a.proto-icon-link")).to_have_attribute("aria-label", "Look inside IoT Connect")      # the icon is the preview
+    assert row.locator("a.proto-icon-link").get_attribute("href").endswith("/experiment/iot-connect")
+    assert row.locator(".pt-links a", has_text="Details").get_attribute("href").endswith("/experiment/iot-connect#run")   # the link is the detail
+    expect(row.locator("a.proto-open")).to_be_visible()                                                    # the hosted copy stays, small
+    assert row.bounding_box()["height"] <= (64 if width > 640 else 84)                              # a one-line row (a little taller when a phone wraps the name)
+    assert _no_page_overflow(page)
+    assert not [e for e in errors if "401" not in e], errors
+    ctx.close()
+
+
+def _banner_box(page):
+    return page.evaluate("""() => { const h = document.querySelector('.area-hero').getBoundingClientRect(), a = document.querySelector('.area-hero-art').getBoundingClientRect(),
+      i = document.querySelector('.area-hero-art img'), t = document.querySelector('.area-hero-text h1'), e = document.querySelector('.area-hero-text .prototype-eyebrow');
+      return { heroH: Math.round(h.height), artW: Math.round(a.width), artH: Math.round(a.height), artRight: Math.round(h.right - a.right), natural: [i.naturalWidth, i.naturalHeight], fit: getComputedStyle(i).objectFit,
+               title: getComputedStyle(t).fontSize + ' ' + getComputedStyle(t).fontFamily.split(',')[0], eyebrow: getComputedStyle(e).fontSize } }""")
+
+
+@pytest.mark.parametrize("width,height", [(1440, 900), (768, 1024), (390, 844), (320, 700)])
+def test_m3_prototype_lab_improve_operate_and_rooms_share_one_banner_in_size_place_and_style(browser, server, floor, width, height):
+    """Robert, 10 Oct: the Improve banner was not consistent with the Prototype Lab's. Same height, same picture shape and size, against the same edge, the same title and label
+    styles, on every page that has one; and "In construction" is a short label, with the working controls untouched."""
+    ctx, page = _context(browser, server, width, height)
+    errors = _errors(page)
+    boxes = {}
+    for name, path in (("lab", "experiment"), ("operate", "operate"), ("improve", "improve")):
+        go(page, f"{server['url']}/guild-next/guild/{path}")
+        page.wait_for_function("() => [...document.querySelectorAll('.area-hero img')].every((i) => i.complete && i.naturalWidth > 0)")
+        boxes[name] = _banner_box(page)
+        boxes[name]["frame"] = page.evaluate("""() => { const r = document.querySelector('.area-hero').getBoundingClientRect(); const f = document.querySelector('.area-page').getBoundingClientRect();
+          return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(f.left), Math.round(f.width)]; }""")
+        assert _no_page_overflow(page), (name, width)
+    base = boxes["lab"]
+    for name in ("operate", "improve"):                                          # 11 Oct, Robert: location still differed. Same left edge, top, width and frame.
+        assert boxes[name]["frame"] == base["frame"], (name, boxes[name]["frame"], base["frame"])
+    for name in ("operate", "improve"):
+        b = boxes[name]
+        assert (b["heroH"], b["artW"], b["artH"], b["artRight"], b["fit"], b["title"], b["eyebrow"]) == (base["heroH"], base["artW"], base["artH"], base["artRight"], base["fit"], base["title"], base["eyebrow"]), (name, b, base)
+    assert 120 <= base["heroH"] <= 135 or width <= 640, base
+    assert base["natural"] == [1152, 864] and boxes["operate"]["natural"] == [784, 588] and boxes["improve"]["natural"] == [784, 588]   # the existing pictures, cut to the same 4:3 shape
+    go(page, f"{server['url']}/guild-next/guild/improve")
+    expect(page.locator("[data-in-construction]")).to_be_visible()
+    assert page.locator("[data-in-construction]").evaluate("e => e.getBoundingClientRect().height") <= 56                 # a short label on one line, not a paragraph
+    expect(page.locator("#library-query")).to_be_enabled()                                                       # the working controls are untouched
+    expect(page.locator("form.library-search button.btn")).to_be_visible()
+    go(page, f"{server['url']}/guild-next/guild/operate")
+    expect(page.get_by_role("link", name="Administration")).to_be_visible()
+    assert not [e for e in errors if "401" not in e], errors
+    ctx.close()
+
+
+@pytest.mark.parametrize("width,height", [(1440, 900), (390, 844), (320, 700)])
+def test_m4_operate_and_improve_have_no_provisional_subtabs_and_every_tool_is_still_reachable(browser, server, floor, width, height):
+    ctx, page = _context(browser, server, width, height)
+    errors = _errors(page)
+    go(page, f"{server['url']}/guild-next/guild/operate")
+    assert page.locator(".guild-subnav").count() == 0 and page.locator("[data-subnav-more]").count() == 0 and page.locator("text=In design").count() == 0
+    expect(page.locator(".gu-section-band")).to_be_visible()                                   # the main Build / Operate / Improve / Prototype Lab navigation stays
+    for label, ends in (("Build host", "/operate/build-host"), ("Runbooks", "/operate/runbooks"), ("Agents", "/operate/agents"), ("MC tending", "/operate/tending"), ("Operational checks", "/operate/checks")):
+        with page.expect_navigation():
+            page.click(f"[data-operate-tools] a:has-text('{label}')")
+        assert page.url.split("?")[0].endswith(ends), (label, page.url)
+        expect(page.locator("[data-operate-back]")).to_be_visible()                            # a tool's page has one plain way back
+        assert _no_page_overflow(page)
+        with page.expect_navigation():
+            page.click("[data-operate-back]")
+        assert page.url.split("?")[0].endswith("/guild-next/guild/operate")
+    go(page, f"{server['url']}/guild-next/guild/improve")
+    assert page.locator(".guild-subnav").count() == 0                                          # Improve has none either
+    assert page.locator(".gu-section-band a[href$='/guild/build']").count() == 2             # Build (picker and band) opens the Craftsman Chat, on a phone too
+    go(page, f"{server['url']}/guild-next/guild/workshop")
+    page.wait_for_selector(".guild-subnav .subnav-link")
+    expect(page.locator(".guild-subnav > a")).to_have_text(["Chat", "Board", "Build Log", "Workshop Log", "Rooms"])
+    assert not [e for e in errors if "401" not in e], errors
     ctx.close()
 
 
@@ -4599,9 +5262,9 @@ def test_b5_the_prototype_lab_has_cards_list_and_a_run_book(browser, server, flo
     expect(page.locator("[data-proto-list]")).to_be_visible()
     page.reload()
     expect(page.locator("[data-proto-list]")).to_be_visible()                         # remembered
-    page.click('[data-proto-view="cards"]')
     expect(page.locator("a.proto-open").first).to_have_attribute("href", "https://minimoi.ai/app/iotconnect/")
-    page.locator('a:has-text("Look inside")').first.click()
+    page.click('[data-proto-view="cards"]')
+    page.locator("a.proto-tile-link").first.click()                                       # the launcher goes to the demo's detail
     expect(page.locator("h1")).to_have_text("IoT Connect")
     page.evaluate("document.querySelectorAll('.proto-shot img').forEach(i => { i.loading = 'eager'; })")
     page.wait_for_function("() => [...document.querySelectorAll('.proto-shot img')].every(i => i.complete && i.naturalWidth > 0)", timeout=15000)
@@ -4667,7 +5330,7 @@ def test_b5_attachment_messages_are_fully_readable_on_a_phone(browser, server, b
         go(page, f"{server['url']}/guild-next/guild/build")
         page.set_input_files("[data-mc-file]", [str(png), str(sheet), str(notes)])
         expect(page.locator('.att[data-state="ok"]')).to_have_count(2)
-        expect(page.locator('.att[data-state="ok"] .att-status').first).to_contain_text("can’t see images yet")
+        expect(page.locator('.att[data-state="ok"] .att-status').first).to_contain_text("can’t see inside it")
         expect(page.locator('.att[data-state="ok"] .att-status').nth(1)).to_have_text("")
         expect(page.locator('.att[data-state="failed"] .att-status')).to_contain_text("can’t be read yet")
         rows = page.evaluate("""() => [...document.querySelectorAll('.att')].map(a => {
@@ -4760,3 +5423,37 @@ def test_b5_a_stale_retry_cannot_remove_a_file_that_was_attached_again(browser, 
 
 
 
+
+
+def test_w19_each_message_has_a_keyboard_and_tap_reachable_details_control_and_the_author_is_still_announced(browser, server, floor):
+    """Codex review (10 Oct): the routine time, context and retention words are quiet but must be reachable without a mouse; the author stays available to assistive
+    technology; warnings are never put behind it."""
+    services, saved, sent = _wt_mc(server)
+    try:
+        ctx, page = _context(browser, server, 1440, 900)
+        errors = _errors(page)
+        go(page, f"{server['url']}/guild-next/guild/board")                                            # the details control is on the restyled panels (the Chat page keeps its original look)
+        if not page.locator("[data-mc-input]").is_visible():
+            page.locator("[data-mc-pill]").click()
+        page.fill("[data-mc-input]", "A question for details")
+        page.click("[data-mc-send]")
+        expect(page.locator("[data-mc-thread]")).to_contain_text("Noted.", timeout=10000)
+        mine = page.locator("[data-mc-thread] li.msg-note[data-author-kind='owner']").last
+        theirs = page.locator("[data-mc-thread] li.msg-note:not([data-author-kind='owner'])").last
+        for li in (mine, theirs):
+            btn = li.locator(".msg-info")
+            expect(btn).to_have_count(1)
+            assert "Details of this message from" in (btn.get_attribute("aria-label") or "")
+        assert "Robert" in (mine.locator(".msg-label").text_content() or "")                          # the author is still in the page for a screen reader
+        assert mine.locator(".msg-extra").evaluate("e => e.getBoundingClientRect().width") <= 2         # quiet until asked
+        mine.locator(".msg-info").focus()                                                              # by keyboard: Tab to it, Enter opens it
+        page.keyboard.press("Enter")
+        expect(mine.locator(".msg-info")).to_have_attribute("aria-expanded", "true")
+        expect(mine.locator(".msg-extra")).to_contain_text("kept as a note")
+        assert mine.locator(".msg-extra").evaluate("e => e.getBoundingClientRect().width") > 20
+        page.keyboard.press("Enter")                                                                   # and closes again
+        expect(mine.locator(".msg-info")).to_have_attribute("aria-expanded", "false")
+        assert not errors, errors
+        ctx.close()
+    finally:
+        services.mc, services.mc_health, services.mc_turns = saved

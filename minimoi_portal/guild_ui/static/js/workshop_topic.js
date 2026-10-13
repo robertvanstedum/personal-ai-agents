@@ -1,29 +1,19 @@
-// The topic Workshop (W1): topics, cards, comments and the collaboration record over the topic's own Master Craftsman
-// conversation. Chat | Cards | Split drives the page's chat panel (js/conversation.js): Split docks it beside the cards, Chat fills the
-// page, Cards folds it away. Reads and writes only through the topic API (js/api.js guards). All data is set with textContent; the
-// only HTML inserted is the server's sanitised Markdown render. Nothing here calls a model or sends a message by itself.
-import { $, $$, toast, announce } from './dom.js';
+// The Workshop Log: a topic's documents, versions, comments and the collaboration record, as a plain list (the conversation itself is the Craftsman Chat page).
+// Reads and writes only through the topic API (js/api.js guards). All data is set with textContent; the only HTML inserted is the server's sanitised
+// Markdown render. Nothing here calls a model or sends a message.
+import { $, $$, toast } from './dom.js';
 import { apiGet, apiPost, recordMode } from './api.js';
 import { live } from './state.js';
 import { newKey } from './actions.js';
-import { setPanelMode } from './conversation.js';
 
-const mcName = () => document.body.dataset.mcName || 'Master Craftsman';
-const mcSay = (text) => String(text).split('Master Craftsman').join(mcName());
-// A partner that reads no documents (the Chief of Staff) cannot be shown a topic item: the "Ask about this" actions are off,
-// not promised and then refused. The server refuses the same turn (files_unsupported).
-const askOff = () => document.body.dataset.mcFiles === 'false';
-const askOffWhy = () => `${mcName()} can’t read topic items yet. Nothing was added to your message.`;
 
-const SPLIT_MIN = 1100;                       // MC about 380 px and the work side about 640 px
 const FLOW = ['queued', 'delivered', 'acknowledged', 'working', 'returned'];
 const KIND_WORDS = { note: 'Note', document: 'Document', design: 'Design', request: 'Request' };
 const DISP_WORDS = { accepted: 'Accepted', changed: 'Changed', declined: 'Declined', deferred: 'Deferred' };
 const JOURNAL_KINDS = [['note', 'Note'], ['question', 'Question'], ['decision', 'Decision'], ['evidence', 'Evidence'], ['alternative', 'Alternative'], ['disagreement', 'Disagreement'], ['finding', 'Finding']];
-const wide = () => window.innerWidth >= SPLIT_MIN;
-const phone = () => window.matchMedia('(max-width: 700px)').matches;
 
 let page, root, S;
+let readerRequest = 0;
 
 function h(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
@@ -119,96 +109,76 @@ const menuButton = (label, items, cls = 'wt-btn wt-quiet more') => {
   return wrap;
 };
 
-// ── views: Chat | Cards | Split ──
-function effective() { return S.view === 'split' && !wide() ? 'cards' : S.view; }
-function setView(v, { remember = true } = {}) {
-  S.view = v;
-  if (remember) { S.pref = v; if (v !== 'chat') S.last = v; if (S.tid && !live.off) apiPost(`/topics/${S.tid}/layout`, { idempotency_key: newKey(), last_view: v }); }
-  applyView();
-}
-function applyView() {
-  const eff = effective();
-  document.body.dataset.wtView = eff;
-  setPanelMode(eff === 'split' ? 'docked' : eff === 'chat' ? 'full' : 'pill');
-  renderControl();
+// ── the Workshop Log page: a topic's documents as a plain list (the 'discuss' pane is the log), with the topic record and Attach ──
+// A document or the record opens in the same place for review (a "pane") and has one way back. There is no conversation here: "Discuss in Chat" goes to the
+// topic's Craftsman conversation. Everything written before (items, versions, comments, the record) is kept and reachable from its row or the record link.
+function applyPane() {
+  document.body.dataset.wtPane = S.pane;
+  renderHead();
   renderBanners();
   renderBody();
-  const u = sp(); u.set('view', eff); if (S.tid) u.set('topic', S.tid); S.openId ? u.set('item_id', S.openId) : u.delete('item_id');
+  const u = sp(); u.delete('view'); if (S.tid) u.set('topic', S.tid);
+  if (S.pane === 'doc' && S.openId) u.set('item_id', S.openId); else u.delete('item_id');
   window.history.replaceState(window.history.state, '', `${window.location.pathname}?${u}`);
 }
-function renderControl() {
-  const eff = effective(); const box = $('[data-wt-views]'); box.replaceChildren();
-  const seg = (id, label, on, extra = {}) => h('button', { type: 'button', class: 'wt-btn', 'data-view': id, 'aria-pressed': String(on), ...extra, onclick: () => setView(id) }, label);
-  box.append(seg('chat', 'Chat', eff === 'chat'), seg('cards', 'Cards', eff === 'cards'),
-    seg('split', 'Split', eff === 'split', wide() ? {} : { disabled: true, title: 'Split needs a window about 1100 px wide', 'aria-describedby': 'wt-split-why' }),
-    h('span', { id: 'wt-split-why', class: 'visually-hidden' }, 'Split is available on windows about 1100 pixels wide or more.'));
-  $('[data-wt-title]').textContent = S.topic ? S.topic.title : 'Workshop';
+const here = () => window.location.pathname;
+function goTopic(id) { window.location.href = `${here()}?topic=${id}`; }
+const narrow = () => window.matchMedia('(max-width: 900px)').matches;
+// The topics are a list on the left (a narrow window has the topic as a short list with ‹ ›). Beside the title, two quiet things: the documents (only
+// when there are some) and a small ⋯ for Attach and the topic record. Documents are optional; most topics have none.
+function renderHead() {
+  const box = $('[data-wt-top]'); if (!box) return;
+  box.replaceChildren();
+  renderRail();
+  if (!S.tid || !S.topic) { box.append(h('h1', { class: 'wt-title', 'data-wt-title': '' }, 'Workshop Log')); return; }
+  if (narrow()) {
+    const list = (S.topics || []).slice();
+    if (!list.some((t) => t.id === S.tid)) list.unshift({ id: S.tid, title: S.topic.title });
+    const i = list.findIndex((t) => t.id === S.tid);
+    const sel = h('select', { class: 'wt-topicsel', 'aria-label': 'Topic', 'data-wt-topicsel': '' }, list.map((t) => h('option', { value: t.id, ...(t.id === S.tid ? { selected: true } : {}) }, t.title)), h('option', { value: '__new' }, '＋ Start a new topic…'));
+    sel.addEventListener('change', () => { if (sel.value === '__new') { S.naming = true; renderRail(); renderHead(); } else if (sel.value !== S.tid) goTopic(sel.value); });
+    if (S.naming) {
+      box.append(newTopicInput());
+    } else {
+      box.append(h('h1', { class: 'visually-hidden', 'data-wt-title': '' }, `Workshop Log · ${S.topic.title}`),
+        h('button', { type: 'button', class: 'wt-step', 'data-wt-prev': '', 'aria-label': 'Previous topic', disabled: i <= 0, onclick: () => goTopic(list[i - 1].id) }, '‹'), sel,
+        h('button', { type: 'button', class: 'wt-step', 'data-wt-next': '', 'aria-label': 'Next topic', disabled: i < 0 || i >= list.length - 1, onclick: () => goTopic(list[i + 1].id) }, '›'));
+    }
+  } else box.append(h('h1', { class: 'wt-title', 'data-wt-title': '' }, S.topic.title));
+  box.append(h('span', { class: 'wt-construction', 'data-wt-construction': '' }, 'In construction'));
+}
+function newTopicInput() {
+  const name = h('input', { type: 'text', 'aria-label': 'Name for the new topic', maxlength: '120', placeholder: 'Name the topic, then Enter', 'data-wt-newname': '' });
+  const make = async () => { if (!name.value.trim()) { S.naming = false; renderHead(); return; } const r = await post('/topics/create', { title: name.value }); if (r) goTopic(r.topic.id); };
+  name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); make(); } else if (e.key === 'Escape') { S.naming = false; renderRail(); renderHead(); } });
+  name.addEventListener('blur', () => setTimeout(() => { if (S.naming && !name.value.trim()) { S.naming = false; renderRail(); renderHead(); } }, 150));
+  window.requestAnimationFrame(() => name.focus());
+  return name;
+}
+function renderRail() {
+  const lay = document.querySelector('.gu-layout'); if (!lay) return;
+  let rail = $('[data-wt-rail]');
+  if (!rail) { rail = h('nav', { class: 'wt-rail', 'aria-label': 'Topics', 'data-wt-rail': '' }); lay.prepend(rail); }
+  rail.replaceChildren();
+  if (!S.tid || !S.topic) return;
+  const list = (S.topics || []).slice();
+  if (!list.some((t) => t.id === S.tid)) list.unshift({ id: S.tid, title: S.topic.title });
+  rail.append(h('p', { class: 'wt-rail-h' }, 'Topics'));
+  const ul = h('ul', { class: 'wt-rail-list' });
+  for (const t of list) ul.append(h('li', {}, h('button', { type: 'button', class: 'wt-rail-item', 'data-id': t.id, title: t.title, ...(t.id === S.tid ? { 'aria-current': 'true' } : {}), onclick: () => { if (t.id !== S.tid) goTopic(t.id); } }, t.title)));
+  rail.append(ul);
+  if (S.naming && !narrow()) rail.append(h('div', { class: 'wt-rail-new' }, newTopicInput()));
+  else rail.append(h('button', { type: 'button', class: 'wt-link wt-rail-add', 'data-wt-newtopic': '', onclick: () => { S.naming = true; renderRail(); } }, '＋ New topic'));
 }
 function renderBanners() {
   const b = $('[data-wt-banners]'); b.replaceChildren();
-  if (S.view === 'split' && !wide()) b.append(h('div', { class: 'wt-banner info', role: 'status', 'data-wt-narrow': '' }, h('span', {}, h('strong', {}, 'Split needs a wider window (about 1100 px). '), 'Showing Cards instead. Your chat draft and the open item are kept, and widening the window brings Split back.')));
   if (S.error) b.append(h('div', { class: 'wt-banner bad', role: 'alert' }, h('span', {}, h('strong', {}, S.error)), h('button', { type: 'button', class: 'wt-btn', onclick: () => load() }, 'Retry')));
-  if (live.off) b.append(h('div', { class: 'wt-banner warn', role: 'status' }, 'You are off the record (Private): looking is fine; adding, commenting and moving cards are paused.'));
+  if (live.off) b.append(h('div', { class: 'wt-banner warn', role: 'status' }, 'You are off the record (Private): looking is fine; adding and commenting are paused.'));
   if (S.convNote) b.append(h('div', { class: 'wt-banner warn', role: 'status' }, S.convNote));
   const R = S.record;
-  if (R && ['damaged', 'incomplete', 'missing', 'unavailable'].includes(R.status)) {
+  if (R && ['damaged', 'incomplete', 'missing', 'unavailable'].includes(R.status) && S.pane === 'record') {
     b.append(h('div', { class: `wt-banner ${R.status === 'damaged' ? 'bad' : 'warn'}`, role: 'status', 'data-wt-record-banner': R.status }, h('span', {}, h('strong', {}, 'Shared record: '), R.notice), R.failed ? h('button', { type: 'button', class: 'wt-btn', 'data-wt-record-retry': '', onclick: async () => { await loadRecord(); renderBody(); } }, 'Try again') : null));
   }
-}
-
-// ── the divider: the owner sizes the chat and the topic by dragging, instead of choosing a fixed view ──
-function setupDivider() {
-  const lay = document.querySelector('.gu-layout'); if (!lay || lay.querySelector('[data-wt-divider]')) return;
-  const MIN = 18, MAX = 82, DEFAULT = 42;
-  const d = h('div', { class: 'wt-divider', role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'data-wt-divider': '',
-    'aria-label': 'Resize the chat and the topic. Arrow keys move it, Enter resets it.', 'aria-valuemin': String(MIN), 'aria-valuemax': String(MAX) });
-  lay.append(d);
-  const stored = () => { try { const v = parseFloat(window.localStorage.getItem('wt-chat-pct')); return v >= MIN && v <= MAX ? v : DEFAULT; } catch (e) { return DEFAULT; } };
-  const keep = (v) => { try { window.localStorage.setItem('wt-chat-pct', String(v)); } catch (e) { /* the width is a convenience, not a record */ } };
-  const clamp = (v) => Math.max(MIN, Math.min(MAX, v));
-  const apply = (v) => { lay.style.setProperty('--wt-chat-w', `${v}%`); d.setAttribute('aria-valuenow', String(Math.round(v))); };
-  const side = () => { try { return window.localStorage.getItem('wt-chat-side') === 'right' ? 'right' : 'left'; } catch (e) { return 'left'; } };
-  const showSide = () => { document.body.dataset.wtSide = side(); };
-  showSide();
-  let now = stored(), raw = now, sizing = false;
-  apply(now);
-  const head = document.querySelector('.mc-panel .mc-head');          // small controls in the chat's own header: move it, or close it
-  if (head && !head.querySelector('[data-wt-panelctl]')) {
-    head.append(h('div', { class: 'wt-panelctl', 'data-wt-panelctl': '' },
-      h('button', { type: 'button', class: 'wt-pc', 'data-wt-swap': '', title: 'Move the chat to the other side', 'aria-label': 'Move the chat to the other side', onclick: () => {
-        try { window.localStorage.setItem('wt-chat-side', side() === 'left' ? 'right' : 'left'); } catch (e) { /* a convenience only */ }
-        showSide();
-      } }, '⇄'),
-      h('button', { type: 'button', class: 'wt-pc', 'data-wt-close': '', title: 'Close the chat (the Chat button brings it back)', 'aria-label': 'Close the chat', onclick: () => setView('cards') }, '✕')));
-  }
-  d.addEventListener('pointerdown', (e) => { e.preventDefault(); sizing = true; d.setPointerCapture(e.pointerId); lay.classList.add('wt-sizing'); });
-  d.addEventListener('pointermove', (e) => {
-    if (!sizing) return;
-    const r = lay.getBoundingClientRect(); raw = Math.max(4, Math.min(96, (((side() === 'left' ? e.clientX - r.left : r.right - e.clientX)) / r.width) * 100));
-    now = clamp(raw); apply(now);
-  });
-  const stop = (e, commit) => {
-    if (!sizing) return;
-    sizing = false; lay.classList.remove('wt-sizing');
-    try { d.releasePointerCapture(e.pointerId); } catch (er) { /* already released */ }
-    if (!commit) { apply(now = stored()); return; }
-    if (raw <= 12) { apply(now = stored()); setView('cards'); }              // dragged all the way left: the chat folds away
-    else if (raw >= 88) { apply(now = stored()); setView('chat'); }          // all the way right: the topic steps aside
-    else keep(now);
-  };
-  d.addEventListener('pointerup', (e) => stop(e, true));
-  d.addEventListener('pointercancel', (e) => stop(e, false));
-  d.addEventListener('keydown', (e) => {
-    const step = (e.shiftKey ? 10 : 3) * (side() === 'left' ? 1 : -1);
-    if (e.key === 'ArrowLeft') now = clamp(now - step);
-    else if (e.key === 'ArrowRight') now = clamp(now + step);
-    else if (e.key === 'Home') now = MIN;
-    else if (e.key === 'End') now = MAX;
-    else if (e.key === 'Enter') now = DEFAULT;
-    else return;
-    e.preventDefault(); apply(now); keep(now);
-  });
-  d.addEventListener('dblclick', () => { apply(now = DEFAULT); keep(now); });
 }
 
 // ── loading ──
@@ -217,27 +187,16 @@ async function load() {
   const r = await apiGet(`/topics/${S.tid}`);
   if (!r.ok) { S.error = (r.body && r.body.message) || 'The topic could not be loaded.'; S.topic = S.topic || null; renderBanners(); renderBody(); return; }
   S.topic = r.body.topic; S.items = r.body.items; S.layout = r.body.layout; S.conv = r.body.conversation;
-  if (r.body.conversation_missing) {                  // looking never writes: linking the topic's conversation is its own guarded step
-    if (live.off) { S.convNote = 'This topic has no conversation yet. Leave Private to link one.'; }
-    else {
-      const linked = await post(`/topics/${S.tid}/conversation`, {});
-      if (linked) { window.location.replace(`${window.location.pathname}?topic=${S.tid}`); return; }
-      S.convNote = 'The topic’s conversation could not be linked just now. Cards still work.';
-    }
-  }
-  if (S.topic.conversation_id && (!page.conversation || page.conversation.id !== S.topic.conversation_id)) {
-    let again = false;
-    try { again = window.sessionStorage.getItem(`wt-relink-${S.tid}`) === '1'; window.sessionStorage.setItem(`wt-relink-${S.tid}`, '1'); } catch (e) { again = true; }
-    if (!again) { window.location.replace(`${window.location.pathname}?topic=${S.tid}`); return; }          // the page's own chat was built for another conversation
-  }
-  const asked = sp().get('view');
-  const start = ['chat', 'cards', 'split'].includes(asked) ? asked : (S.layout && S.layout.last_view) || (wide() ? 'split' : 'cards');
-  S.pref = start; S.last = start === 'chat' ? 'cards' : start;
-  S.view = start;
   const want = sp().get('item_id');
-  applyView();
-  if (want && itemOf(want)) openItem(want, { push: false });
+  S.pane = 'discuss';
+  applyPane();
+  if (want && itemOf(want)) await openItem(want, { push: false });
   await loadJournal();
+}
+async function loadTopics() {                         // the topics to step through: a plain read; nothing is created by looking
+  const r = await apiGet('/topics');
+  S.topics = r.ok && r.body && Array.isArray(r.body.topics) ? r.body.topics : [];
+  if (S.topic) renderHead();
 }
 async function loadJournal() {
   const r = await apiGet(`/topics/${S.tid}/journal`);
@@ -245,7 +204,7 @@ async function loadJournal() {
   const w = await apiGet(`/topics/${S.tid}/inbox`);            // looking only counts files; nothing is imported until asked
   S.inbox = w.ok ? w.body : { waiting: {}, total: 0 };
   await loadRecord();
-  if (!S.openId) renderBody();
+  if (!S.editing) { renderHead(); renderBody(); }               // a half-written edit is never redrawn over
 }
 // The shared Workshop record (the journal) for the topic this one is linked to. Read only; a failure is shown as a failure.
 async function loadRecord() {
@@ -287,8 +246,7 @@ async function archive(id, away) {
   const r = await post(`/topics/${S.tid}/items/${id}/archive`, { archived: away });
   if (!r) return;
   await refreshIndex();
-  if (S.openId === id && away) closeItem();
-  renderBody();
+  if (S.openId === id) await refreshOpen(); else { renderHead(); renderBody(); }
   toast(away ? 'Put away. The item and its discussion are kept.' : 'Brought back to current work.');
 }
 function stepsNode(req) {
@@ -296,53 +254,26 @@ function stepsNode(req) {
   return h('ol', { class: 'wt-steps', 'aria-label': `Delivery to ${req.to}` }, FLOW.map((s, i) => h('li', { class: req.stage === 'paused' ? '' : i < at ? 'done' : i === at ? 'here' : '', ...(i === at ? { 'aria-current': 'step' } : {}) }, s[0].toUpperCase() + s.slice(1))),
     req.stage === 'paused' ? h('li', { class: 'here', 'aria-current': 'step' }, 'Paused') : null);
 }
-function cardNode(it, idx, count) {
-  const wideCard = ((S.layout && S.layout.wide) || []).includes(it.id);
-  const art = h('article', { class: `wt-card${wideCard ? ' wide' : ''}`, 'data-kind': it.kind, 'data-id': it.id });
-  const grip = h('button', { type: 'button', class: 'grip', draggable: 'true', 'aria-label': `Drag ${it.title}`, title: 'Drag to reorder' }, '⠿');
-  grip.addEventListener('dragstart', (e) => { S.dragId = it.id; art.classList.add('dragging'); e.dataTransfer.setData('text/plain', it.id); });
-  grip.addEventListener('dragend', () => art.classList.remove('dragging'));
-  art.addEventListener('dragover', (e) => e.preventDefault());
-  art.addEventListener('drop', async (e) => {
-    e.preventDefault(); if (!S.dragId || S.dragId === it.id) return;
-    const ids = orderedItems().map((i) => i.id); const a = ids.indexOf(S.dragId); const b = ids.indexOf(it.id);
-    if (a < 0 || b < 0) return; ids.splice(b, 0, ids.splice(a, 1)[0]); S.dragId = null;
-    if (await saveLayout({ order: ids })) renderBody();
-  });
-  art.append(h('div', { class: 'top' }, h('span', { class: 'wt-eyebrow' }, KIND_WORDS[it.kind]), grip),
-    h('button', { type: 'button', class: 'open', onclick: () => openItem(it.id) }, it.title));
-  if (it.kind === 'design') art.append(h('img', { class: 'thumb', src: api(`/topics/${S.tid}/items/${it.id}/image?v=thumb`), alt: '', loading: 'lazy' }));
-  if (it.request) art.append(stepsNode(it.request));
-  const rev = it.revisions.find((r) => r.rev === it.current_rev) || {};
-  art.append(h('p', { class: 'txt' }, it.kind === 'design' ? `Version ${it.current_rev} · ${rev.width || '?'} × ${rev.height || '?'}` : `Version ${it.current_rev} · ${it.by}`));
-  art.append(h('div', { class: 'foot' },
-    h('span', { class: `wt-badge${it.comments_open ? ' warn' : ''}` }, it.comments_open ? `${it.comments_open} open comment${it.comments_open === 1 ? '' : 's'}` : (it.request ? `To ${it.request.to}` : 'No open comments')),
-    menuButton(`Actions for ${it.title}`, () => [['Open', () => openItem(it.id)], ...(askOff() ? [] : [[mcSay('Ask Master Craftsman about this'), () => askAbout(it.id)]]),
-      ['Move earlier', () => move(it.id, -1), idx === 0], ['Move later', () => move(it.id, 1), idx === count - 1],
-      [wideCard ? 'Make compact' : 'Make wider', () => toggleWide(it.id)], ['Put away', () => archive(it.id, true)]])));
-  return art;
+async function attachFiles(files) {
+  let added = 0;
+  for (const f of files) {
+    const name = (f.name.replace(/\.[^.]+$/, '') || 'Document').slice(0, 120);
+    let r = null;
+    if (/^image\//.test(f.type)) r = await upload(`/topics/${S.tid}/items/design`, f, { title: name });
+    else {
+      if (f.size > 200000) { toast(`“${f.name}” is too large to attach here (200 KB of text). Nothing was added.`); continue; }
+      const text = await f.text();
+      if (!text.trim()) { toast(`“${f.name}” has no text. Nothing was added.`); continue; }
+      r = await post(`/topics/${S.tid}/items`, { kind: 'document', title: name, text });
+    }
+    if (r) added += 1;
+  }
+  if (added) { await refreshIndex(); renderHead(); renderBody(); toast(`Attached ${added === 1 ? 'one document' : `${added} documents`}. It opens from the Documents row.`); }
 }
-function renderTools() {                       // the toolbar lives in the header row, beside the title: the cards start right under it
-  const box = $('[data-wt-tools]'); if (!box) return;
-  box.replaceChildren();
-  if (!S.tid || !S.topic || S.openId || effective() === 'chat') return;
-  const items = orderedItems();
-  const away = S.items.filter((i) => i.archived).length;
-  box.append(
-    menuButton('+ New', () => [['Note', () => newDialog('note')], ['Document', () => newDialog('document')], ['Design (image)', () => newDialog('design')], ['Request or handoff', () => newDialog('request')]], 'wt-btn primary'),
-    h('button', { type: 'button', class: 'wt-btn', onclick: previousDialog }, `Previous (${away})`),
-    h('button', { type: 'button', class: 'wt-btn', onclick: topicsDialog }, 'Topics'),
-    h('span', { class: 'wt-chip' }, `${items.length} card${items.length === 1 ? '' : 's'}`, ' · ', `${items.filter((i) => i.request && ['queued', 'delivered', 'acknowledged', 'working'].includes(i.request.stage)).length} waiting`));
-}
-function boardNode() {
-  const items = orderedItems();
-  const wrap = h('div', {});
-  const board = h('div', { class: 'wt-board', 'data-wt-board': '' });
-  if (!items.length) board.append(h('div', { class: 'wt-empty' }, h('h2', {}, 'Nothing on the desk yet'), h('p', { class: 'wt-note' }, 'Add a note, a document or a design, or bring something back from Previous.'),
-    h('button', { type: 'button', class: 'wt-btn primary', onclick: () => newDialog('note') }, '+ Add a note')));
-  items.forEach((it, i) => board.append(cardNode(it, i, items.length)));
-  wrap.append(board);
-  return wrap;
+function openRecord() {
+  readerRequest += 1;
+  if (S.pane === 'discuss') window.history.pushState({ wt: 'record' }, '', window.location.href);
+  S.pane = 'record'; S.openId = null; S.open = null; applyPane(); window.scrollTo({ top: 0 });
 }
 
 // ── the record (journal): quiet by default, one line per entry, everything still there when you open it ──
@@ -469,25 +400,37 @@ function linkDialog() {
 function localTimeText(iso) { try { return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return iso; } }
 
 // ── an opened item ──
-async function openItem(id, { push = true, rev = null } = {}) {
+async function openItem(id, { push = true, rev = null, quiet = false } = {}) {
+  if (!id) return;
+  if (dirty() && id !== S.openId) { toast('You have unsaved changes. Save or Cancel first.'); return; }
+  const token = ++readerRequest;
   const r = await apiGet(`/topics/${S.tid}/items/${id}${rev ? `?rev=${rev}` : ''}`);
-  if (!r.ok) { toast((r.body && r.body.message) || 'That item could not be opened.'); return; }
-  if (S.openId !== id) S.scrollBoard = window.scrollY;
-  S.openId = id; S.open = r.body; S.rev = r.body.item.rev.rev; S.commenting = false; S.editing = false; S.editText = null;
-  if (push) window.history.pushState({ wt: id }, '', window.location.href);
-  if (effective() === 'chat') setView(wide() && S.pref === 'split' ? 'split' : 'cards', { remember: false }); else applyView();
-  window.scrollTo({ top: 0 });
-  const t = $('#wt-item-title'); if (t) t.focus({ preventScroll: true });
+  if (token !== readerRequest) return;
+  if (!r.ok) { toast((r.body && r.body.message) || 'That document could not be opened.'); return; }
+  if (S.pane === 'discuss' && push) window.history.pushState({ wt: id }, '', window.location.href);      // Back returns to the log
+  S.pane = 'doc'; S.openId = id; S.open = r.body; S.rev = r.body.item.rev.rev; S.commenting = false; S.editing = false; S.editText = null; S.replyTo = null;
+  applyPane();
+  if (!quiet) { window.scrollTo({ top: 0 }); const t = $('#wt-item-title'); if (t) t.focus({ preventScroll: true }); }
 }
+// After a comment, a reply or a resolve the document is drawn again with the same version and place.
+async function refreshOpen({ id = S.openId, rev = S.rev, token = readerRequest, quiet = true } = {}) {
+  if (!id) return;
+  await refreshIndex();
+  // Back, another document, or the topic record wins over a late refresh.
+  if (token !== readerRequest || S.openId !== id || S.pane !== 'doc') return;
+  return openItem(id, { push: false, rev, quiet });
+}
+// The one way back to the log (the button, Escape, and the browser's Back are the same step).
 function closeItem({ fromPop = false } = {}) {
-  if (dirty()) { toast('You have unsaved changes. Save or Cancel first.'); if (fromPop) window.history.pushState({ wt: S.openId }, '', window.location.href); return; }
-  if (!fromPop && window.history.state && window.history.state.wt) { window.history.back(); return; }     // Back and Escape are the same step: the popstate below closes it
-  const id = S.openId; S.openId = null; S.open = null; S.commenting = false; S.editing = false; S.editText = null;
-  applyView();
-  window.scrollTo({ top: S.scrollBoard || 0 });
-  const c = id && document.querySelector(`.wt-card[data-id="${id}"] .open`); if (c) c.focus({ preventScroll: true });
+  if (dirty()) { toast('You have unsaved changes. Save or Cancel first.'); if (fromPop) window.history.pushState({ wt: S.openId || 'record' }, '', window.location.href); return; }
+  readerRequest += 1;
+  if (!fromPop && window.history.state && window.history.state.wt) { window.history.back(); return; }
+  const id = S.openId; S.pane = 'discuss'; S.openId = null; S.open = null; S.commenting = false; S.editing = false; S.editText = null; S.replyTo = null;
+  applyPane();
+  window.scrollTo({ top: 0 });
+  const c = id && document.querySelector(`[data-wt-open="${id}"]`); if (c) c.focus({ preventScroll: true });
 }
-window.addEventListener('popstate', () => { if (S && S.openId) closeItem({ fromPop: true }); });
+window.addEventListener('popstate', () => { if (S && S.pane !== 'discuss') closeItem({ fromPop: true }); });
 
 function anchorWords(a) {
   if (!a || a.type === 'item') return 'the whole item';
@@ -496,17 +439,28 @@ function anchorWords(a) {
 }
 function commentNode(c, all) {
   const replies = all.filter((x) => x.reply_to === c.id);
-  const n = h('div', { class: 'wt-cmt', 'data-cid': c.id });
-  n.append(h('div', {}, h('strong', {}, c.by.name), ` · version ${c.rev} · `, h('button', { type: 'button', class: 'wt-btn wt-quiet', 'data-jump': '', onclick: () => jumpTo(c) }, `on ${anchorWords(c.anchor)} ↗`)),
+  const n = h('li', { class: 'wt-cmt', 'data-cid': c.id });
+  n.append(h('div', { class: 'wt-ch' }, h('strong', {}, c.by.name), h('span', { class: 'wt-small' }, ` · version ${c.rev} · ${localTimeText(c.at || c.created)} · `),
+    h('button', { type: 'button', class: 'wt-btn wt-quiet', 'data-jump': '', onclick: () => jumpTo(c) }, `on ${anchorWords(c.anchor)} ↗`)),
     h('p', {}, c.text));
   for (const r of replies) n.append(h('div', { class: 'reply' }, h('strong', {}, r.by.name), ' · ', h('span', {}, r.text)));
   if (c.status === 'resolved') n.append(h('span', { class: 'wt-badge ok' }, 'Resolved'));
   if (c.disposition) n.append(' ', h('span', { class: 'wt-badge ok' }, `${DISP_WORDS[c.disposition.value]} · ${c.disposition.by} · version ${c.disposition.rev}`));
   const acts = h('div', { class: 'acts' });
-  acts.append(h('button', { type: 'button', class: 'wt-btn', onclick: () => replyDialog(c) }, 'Reply'),
-    h('button', { type: 'button', class: 'wt-btn', onclick: async () => { if (await post(`/topics/${S.tid}/items/${S.openId}/comments/${c.id}/resolve`, { resolved: c.status !== 'resolved' })) openItem(S.openId, { push: false, rev: S.rev }); } }, c.status === 'resolved' ? 'Reopen' : 'Resolve'));
-  if (!c.disposition) for (const [v, label] of Object.entries(DISP_WORDS)) acts.append(h('button', { type: 'button', class: 'wt-btn', 'data-disp': v, onclick: async () => { if (await post(`/topics/${S.tid}/items/${S.openId}/comments/${c.id}/disposition`, { value: v })) openItem(S.openId, { push: false, rev: S.rev }); } }, label));
+  acts.append(h('button', { type: 'button', class: 'wt-btn', 'aria-expanded': String(S.replyTo === c.id), onclick: () => { S.replyTo = S.replyTo === c.id ? null : c.id; renderBody(); const t = $(`.wt-cmt[data-cid="${c.id}"] textarea`); if (t) t.focus(); } }, 'Reply'),
+    h('button', { type: 'button', class: 'wt-btn', onclick: async () => { if (await post(`/topics/${S.tid}/items/${S.openId}/comments/${c.id}/resolve`, { resolved: c.status !== 'resolved' })) refreshOpen(); } }, c.status === 'resolved' ? 'Reopen' : 'Resolve'));
+  if (!c.disposition) for (const [v, label] of Object.entries(DISP_WORDS)) acts.append(h('button', { type: 'button', class: 'wt-btn', 'data-disp': v, onclick: async () => { if (await post(`/topics/${S.tid}/items/${S.openId}/comments/${c.id}/disposition`, { value: v })) refreshOpen(); } }, label));
   n.append(acts);
+  if (S.replyTo === c.id) {                                                  // the reply is written here, under the comment: no window
+    const ta = h('textarea', { 'aria-label': `Your reply to ${c.by.name}`, rows: '2', maxlength: '4000' });
+    ta.value = (S.replyDraft && S.replyDraft[c.id]) || '';
+    ta.addEventListener('input', () => { (S.replyDraft = S.replyDraft || {})[c.id] = ta.value; });
+    n.append(h('div', { class: 'wt-replyform', 'data-wt-reply': '' }, ta, h('div', { class: 'wt-acts' },
+      h('button', { type: 'button', class: 'wt-btn primary', onclick: async () => {
+        if (!ta.value.trim()) return;
+        if (await post(`/topics/${S.tid}/items/${S.openId}/comments`, { text: ta.value, reply_to: c.id })) { delete (S.replyDraft || {})[c.id]; S.replyTo = null; refreshOpen(); }
+      } }, 'Add reply'), h('button', { type: 'button', class: 'wt-btn', onclick: () => { S.replyTo = null; renderBody(); } }, 'Cancel'))));
+  }
   return n;
 }
 function jumpTo(c) {
@@ -514,15 +468,6 @@ function jumpTo(c) {
   if (a && a.type === 'block') t = document.querySelector(`.wt-doc [data-block="${a.index}"]`);
   else if (a && a.type === 'point') t = document.querySelector('.wt-img');
   if (t) { t.scrollIntoView({ block: 'center' }); t.classList.add('marked'); setTimeout(() => t.classList.remove('marked'), 1500); }
-}
-function replyDialog(c) {
-  const ta = h('textarea', { 'aria-label': 'Your reply' });
-  const d = dialog('Reply', h('p', { class: 'wt-note' }, `To ${c.by.name} on ${anchorWords(c.anchor)}, version ${c.rev}.`), ta,
-    h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn primary', onclick: async () => {
-      if (!ta.value.trim()) return;
-      if (await post(`/topics/${S.tid}/items/${S.openId}/comments`, { text: ta.value, reply_to: c.id })) { d.close(); openItem(S.openId, { push: false, rev: S.rev }); }
-    } }, 'Add reply')));
-  ta.focus();
 }
 function itemView(o) {
   const it = o.item;
@@ -553,14 +498,14 @@ function itemView(o) {
   });
   return doc;
 }
-function commentForm(anchor, where) {
-  const ta = h('textarea', { 'aria-label': `Comment on ${where}` });
-  const form = h('div', { class: 'wt-cmt', 'data-wt-form': '' }, h('label', {}, `Comment on ${where} · version ${S.rev}`), ta,
+function commentForm(anchor, where) {           // a comment on one paragraph or one point: written under the discussion, with the item
+  const ta = h('textarea', { 'aria-label': `Comment on ${where}`, maxlength: '4000' });
+  const form = h('li', { class: 'wt-cmt', 'data-wt-form': '' }, h('label', {}, `Comment on ${where} · version ${S.rev}`), ta,
     h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn primary', onclick: async () => {
       if (!ta.value.trim()) return;
-      if (await post(`/topics/${S.tid}/items/${S.openId}/comments`, { text: ta.value, rev: S.rev, anchor })) { S.commenting = false; openItem(S.openId, { push: false, rev: S.rev }); }
+      if (await post(`/topics/${S.tid}/items/${S.openId}/comments`, { text: ta.value, rev: S.rev, anchor })) { S.commenting = false; refreshOpen(); }
     } }, 'Add comment'), h('button', { type: 'button', class: 'wt-btn', onclick: () => form.remove() }, 'Cancel')));
-  const list = $('[data-wt-comments]'); if (list) { list.prepend(form); ta.focus(); }
+  const list = $('[data-wt-comments]'); if (list) { $$('[data-wt-form]', list).forEach((f) => f.remove()); list.append(form); form.scrollIntoView({ block: 'nearest' }); ta.focus(); }
 }
 function requestControls(it) {
   const req = it.request; const box = h('div', { class: 'wt-view', style: 'min-height:0;margin-bottom:10px' });
@@ -569,49 +514,68 @@ function requestControls(it) {
   const sel = h('select', { 'aria-label': 'Stage' }, ['queued', 'delivered', 'acknowledged', 'working', 'returned', 'paused'].map((s) => h('option', { value: s, ...(s === req.stage ? { selected: true } : {}) }, s)));
   const who = h('input', { type: 'text', 'aria-label': 'Recipient', value: req.to });
   box.append(h('div', { class: 'wt-acts' }, h('label', {}, 'Stage'), sel, h('label', {}, 'Recipient'), who,
-    h('button', { type: 'button', class: 'wt-btn', onclick: async () => { if (await post(`/topics/${S.tid}/items/${it.id}/stage`, { stage: sel.value, recipient: who.value })) { await refreshIndex(); openItem(it.id, { push: false, rev: S.rev }); } } }, 'Save stage and recipient')));
+    h('button', { type: 'button', class: 'wt-btn', onclick: async () => {
+      const token = readerRequest, rev = S.rev;
+      if (await post(`/topics/${S.tid}/items/${it.id}/stage`, { stage: sel.value, recipient: who.value })) {
+        await refreshOpen({ id: it.id, rev, token });
+      }
+    } }, 'Save stage and recipient')));
   return box;
 }
 function readerNode() {
-  const o = S.open; const it = o.item; const eff = effective();
-  const node = h('section', { class: 'wt-reader', 'aria-labelledby': 'wt-item-title' });
-  const revSel = it.revisions.length > 1 ? h('select', { 'aria-label': 'Version', ...(S.editing ? { disabled: true } : {}), onchange: (e) => openItem(it.id, { push: false, rev: e.target.value }) }, it.revisions.map((r) => h('option', { value: r.rev, ...(r.rev === S.rev ? { selected: true } : {}) }, `Version ${r.rev}${r.rev === it.current_rev ? ' (current)' : ''}`))) : null;
-  const head = h('div', { class: 'wt-head' }, h('div', {}, h('div', { class: 'wt-eyebrow' }, `${KIND_WORDS[it.kind]} · version ${S.rev} · ${o.item.rev.by}`), h('h2', { id: 'wt-item-title', tabindex: '-1' }, it.title)),
+  const o = S.open; const it = o.item;
+  const node = h('section', { class: 'wt-reader', 'aria-labelledby': 'wt-item-title', 'data-wt-reader': '' });
+  const revSel = it.revisions.length > 1 ? h('select', { 'aria-label': 'Version', ...(S.editing ? { disabled: true } : {}), onchange: (e) => openItem(it.id, { push: false, rev: e.target.value, quiet: true }) }, it.revisions.map((r) => h('option', { value: r.rev, ...(r.rev === S.rev ? { selected: true } : {}) }, `Version ${r.rev}${r.rev === it.current_rev ? ' (current)' : ''}`))) : null;
+  const where = it.archived ? 'previous' : 'current';
+  const head = h('div', { class: 'wt-head' }, h('div', {}, h('div', { class: 'wt-eyebrow', 'data-wt-kindline': '' }, `${KIND_WORDS[it.kind]} · ${where} · version ${S.rev} · ${o.item.rev.by}`), h('h2', { id: 'wt-item-title', tabindex: '-1' }, it.title)),
     h('div', { class: 'wt-acts', style: 'margin:0' }, revSel,
-      ...(it.kind !== 'design' && !S.editing ? [h('button', { type: 'button', class: 'wt-btn', 'data-wt-edit': '', onclick: startEdit }, 'Edit')] : []),
-      h('button', { type: 'button', class: 'wt-btn', 'data-wt-cmode': '', 'aria-pressed': String(S.commenting), onclick: () => { S.commenting = !S.commenting; renderBody(); } }, S.commenting ? 'Commenting: click where' : 'Comment'),
-      menuButton('More', () => [...(it.kind === 'design' ? [['Replace the image', () => reviseDialog(it)]] : []), ...(askOff() ? [] : [[mcSay('Ask Master Craftsman about this'), () => askAbout(it.id)]]), ['Put away', () => archive(it.id, true)]], 'wt-btn')));
-  node.append(h('nav', { class: 'wt-crumb', 'aria-label': 'Where you are' },
-    h('button', { type: 'button', class: 'wt-btn', 'data-wt-back': '', onclick: () => closeItem() }, '‹ Back to cards'),
-    h('span', { class: 'wt-note' }, `${S.topic ? S.topic.title : 'Topic'} › ${it.title}`)), head);
-  const grid = h('div', { class: 'wt-grid' });
-  const main = h('div', {});
+      ...(it.kind !== 'design' && !S.editing && !it.archived ? [h('button', { type: 'button', class: 'wt-btn', 'data-wt-edit': '', onclick: startEdit }, 'Edit')] : []),
+      menuButton('More', () => [...(it.kind === 'design' ? [['Replace the image', () => reviseDialog(it)]] : []), ...(S.topic && S.topic.conversation_id ? [['Discuss in Chat', () => { window.location.href = chatHref(); }]] : []),
+        it.archived ? ['Bring back', () => archive(it.id, false)] : ['Put away', () => archive(it.id, true)]], 'wt-btn')));
+  node.append(h('nav', { class: 'wt-crumb', 'aria-label': 'Where you are' }, h('button', { type: 'button', class: 'wt-btn', 'data-wt-back': '', onclick: () => closeItem() }, '‹ Back to the log')));
+  node.append(head);
+  const main = h('div', { class: 'wt-readmain' });
   if (it.request) main.append(requestControls(it));
   if (S.editing && it.kind !== 'design') main.append(editorNode(it));
   else { const view = h('div', { class: 'wt-view' }); view.append(itemView(o)); main.append(view); }
-  const cm = o.comments; const here = cm.filter((c) => c.rev === S.rev && !c.reply_to);
-  const rail = h('aside', { class: 'wt-rail', 'aria-label': 'Comments and questions' });
-  const secC = h('section', { 'aria-labelledby': 'wt-c-h' }, h('h3', { id: 'wt-c-h' }, `💬 Comments on version ${S.rev}`), h('p', { class: 'wt-note' }, mcSay('Seen by everyone on this topic and tied to this version. This is not a chat with Master Craftsman.')));
-  const list = h('div', { 'data-wt-comments': '' });
-  if (!here.length) list.append(h('p', { class: 'wt-note' }, 'No comments on this version yet. Turn on Comment and click where, or add one on the whole item below.'));
-  here.forEach((c) => list.append(commentNode(c, cm)));
-  secC.append(list, h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn', onclick: () => commentForm({ type: 'item' }, 'the whole item') }, 'Comment on the whole item')));
-  const secA = h('section', { class: 'ask', 'aria-labelledby': 'wt-a-h' }, h('h3', { id: 'wt-a-h' }, mcSay('🛠 Ask Master Craftsman')),
-    askOff() ? '' : h('p', { class: 'wt-note' }, 'Opens the topic’s conversation with this item attached as context. Nothing is sent until you press Send there.'),
-    askOff() ? h('p', { class: 'wt-note', 'data-wt-ask-off': '' }, askOffWhy())
-      : h('button', { type: 'button', class: 'wt-btn primary', 'data-wt-ask': '', onclick: () => askAbout(it.id) }, mcSay('Ask Master Craftsman about this ›')));
-  rail.append(secC, secA);
-  grid.append(main, rail);
-  node.append(grid);
-  const bottom = h('div', { class: 'wt-bottom' }, h('button', { type: 'button', class: 'wt-btn', onclick: () => { S.commenting = !S.commenting; renderBody(); } }, 'Comment'), ...(askOff() ? [] : [h('button', { type: 'button', class: 'wt-btn primary', onclick: () => askAbout(it.id) }, mcSay('Ask Master Craftsman ›'))]));
-  if (eff !== 'chat') node.append(bottom);
+  node.append(main, discussionNode(o));
   return node;
+}
+// The Discussion belongs to this item and this version. The comment box sits directly under it: choosing an item, reading it and
+// commenting happen in one place, with no second window. A half-written comment is kept per item until it is sent.
+function discussionNode(o) {
+  const it = o.item; const cm = o.comments; const here = cm.filter((c) => c.rev === S.rev && !c.reply_to);
+  const sec = h('details', { class: 'wt-discussion', 'aria-labelledby': 'wt-c-h', 'data-wt-discussion': '', ...(here.length || S.commentsOpen ? { open: true } : {}) });
+  sec.addEventListener('toggle', () => { S.commentsOpen = sec.open; });
+  sec.append(h('summary', { id: 'wt-c-h' }, here.length ? `Comments on this version (${here.length})` : 'Comments on this version · none yet'));
+  sec.append(h('p', { class: 'wt-note' }, 'Seen by everyone on this topic and tied to this version. This is not a chat; the conversation is on the Chat page.'));
+  const list = h('ol', { class: 'wt-comments', 'data-wt-comments': '', 'aria-label': 'Comments' });
+  here.forEach((c) => list.append(commentNode(c, cm)));
+  sec.append(list);
+  const draft = (S.drafts = S.drafts || {});
+  const ta = h('textarea', { id: 'wt-ct', 'data-wt-draft': it.id, rows: '2', maxlength: '4000', placeholder: 'Write a comment', 'aria-label': `Comment on this ${KIND_WORDS[it.kind].toLowerCase()}: ${it.title}, version ${S.rev}` });
+  ta.value = draft[it.id] || '';
+  ta.addEventListener('input', () => { draft[it.id] = ta.value; });
+  const send = async () => {
+    if (!ta.value.trim()) return;
+    if (await post(`/topics/${S.tid}/items/${it.id}/comments`, { text: ta.value, rev: S.rev, anchor: { type: 'item' } })) { delete draft[it.id]; S.commentsOpen = true; refreshOpen(); }
+  };
+  ta.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); send(); } });
+  sec.append(h('form', { class: 'wt-commentform', 'data-wt-commentform': '', autocomplete: 'off', onsubmit: (e) => e.preventDefault() },
+    h('label', { for: 'wt-ct', class: 'wt-small' }, `Comment on this ${KIND_WORDS[it.kind].toLowerCase()} · ${it.title} · version ${S.rev} `, h('span', {}, '(kept with it; not a question)')), ta,
+    h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn primary', 'data-wt-send-comment': '', onclick: send }, 'Comment'),
+      h('button', { type: 'button', class: 'wt-btn', 'data-wt-cmode': '', 'aria-pressed': String(S.commenting), onclick: () => { S.commenting = !S.commenting; S.commentsOpen = true; renderBody(); } }, S.commenting ? (it.kind === 'design' ? 'Click the place in the image' : 'Click the paragraph') : (it.kind === 'design' ? 'Comment on a place in the image' : 'Comment on a paragraph')),
+      live.off ? h('small', { class: 'wt-note' }, 'Off the record (Private): commenting is paused.') : null)));
+  return sec;
 }
 function reviseDialog(it) {                      // only for a design: choose a new image. Text is edited in the page itself (startEdit)
   const f = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', 'aria-label': 'New image' }); const note = h('input', { type: 'text', 'aria-label': 'Note (optional)' });
   const d = dialog('Replace the image', h('p', { class: 'wt-note' }, 'The earlier image is kept; choose it again in the Version menu.'), h('label', {}, 'Image'), f, h('label', {}, 'Note (optional)'), note, h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn primary', onclick: async () => {
     if (!f.files[0]) { toast('Choose an image first.'); return; }
-    if (await upload(`/topics/${S.tid}/items/${it.id}/revisions/design`, f.files[0], { note: note.value })) { d.close(); await refreshIndex(); openItem(it.id, { push: false }); }
+    const token = readerRequest;
+    if (await upload(`/topics/${S.tid}/items/${it.id}/revisions/design`, f.files[0], { note: note.value })) {
+      d.close(); await refreshOpen({ id: it.id, rev: null, token, quiet: false });
+    }
   } }, 'Save')));
 }
 // Editing a note, document or request happens in the page, in a large box, not in a small window. Saving keeps the earlier text as an
@@ -621,11 +585,12 @@ function startEdit() { S.editing = true; S.editText = S.open.text; renderBody();
 function cancelEdit() { S.editing = false; S.editText = null; renderBody(); }
 async function saveEdit(note) {
   const it = S.open.item;
+  const token = readerRequest;
   if (!S.editText || !S.editText.trim()) { toast('There is nothing to save.'); return; }
   if (S.editText === S.open.text) { toast('Nothing changed.'); return; }
   if (await post(`/topics/${S.tid}/items/${it.id}/revisions`, { text: S.editText, note: note || '' })) {
-    S.editing = false; S.editText = null;
-    await refreshIndex(); await openItem(it.id, { push: false });
+    if (token === readerRequest && S.openId === it.id) { S.editing = false; S.editText = null; }
+    await refreshOpen({ id: it.id, rev: null, token, quiet: false });
     toast('Saved. The earlier version is kept: choose it in the Version menu.');
   }
 }
@@ -641,118 +606,81 @@ function editorNode(it) {
       h('button', { type: 'button', class: 'wt-btn primary', 'data-wt-save': '', onclick: () => saveEdit(note.value) }, 'Save'),
       h('button', { type: 'button', class: 'wt-btn', 'data-wt-cancel': '', onclick: cancelEdit }, 'Cancel')));
 }
-// ── Ask Master Craftsman about this ──
-function askAbout(id) {
-  if (askOff()) { toast(askOffWhy()); return; }
-  const it = itemOf(id); if (!it) return;
-  const rev = S.openId === id ? S.rev : it.current_rev;
-  window.guildTopicContext = [{ topic_id: S.tid, item_id: id, rev }];
-  showContextChip(`${KIND_WORDS[it.kind]}: ${it.title} · version ${rev}`, id);
-  if (effective() !== 'split') setView('chat', { remember: false });
-  const input = $('[data-mc-input]'); if (input) input.focus({ preventScroll: true });
-  announce(`${mcName()} will see ${it.title} with your next message. Nothing has been sent.`);
-}
-function showContextChip(text, id) {
-  let chip = $('[data-wt-ctx]');
-  const form = $('[data-mc-composer]'); if (!form) return;
-  if (!chip) { chip = h('div', { class: 'wt-ctx', 'data-wt-ctx': '', role: 'status' }); form.before(chip); }
-  chip.replaceChildren(h('span', {}, '📄 About: ', h('strong', { 'data-wt-ctx-title': '' }, text), ' ', h('span', { class: 'wt-sim' }, 'for your next message')),
-    h('span', { class: 'wt-acts', style: 'margin:0' }, h('button', { type: 'button', class: 'wt-btn wt-quiet', onclick: () => { if (effective() === 'chat') setView('cards', { remember: false }); openItem(id); } }, 'Back to the item'),
-      h('button', { type: 'button', class: 'wt-btn wt-quiet', 'aria-label': 'Remove the item from this question', onclick: () => { window.guildTopicContext = []; chip.remove(); } }, '✕')));
-  chip.hidden = false;
-}
-document.addEventListener('guild:topic-context-sent', () => { const c = $('[data-wt-ctx]'); if (c) c.remove(); toast('Sent with your message. The item is not attached to later ones.'); });
-document.addEventListener('guild:topic-context-restored', () => { const c = (window.guildTopicContext || [])[0]; const it = c && itemOf(c.item_id); if (it) showContextChip(`${KIND_WORDS[it.kind]}: ${it.title} · version ${c.rev || it.current_rev}`, it.id); });
-
-// ── dialogs: new items, previous, topics ──
-function newDialog(kind) {
-  const title = h('input', { type: 'text', 'aria-label': 'Title', maxlength: '120' });
-  const body = [h('label', {}, 'Title'), title];
-  let text, file, to, included;
-  if (kind === 'design') { file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', 'aria-label': 'Image' }); body.push(h('label', {}, 'Image (JPEG, PNG, WebP or GIF; metadata is removed)'), file); }
-  else {
-    text = h('textarea', { 'aria-label': kind === 'note' ? 'Your thought' : 'Text' }); body.push(h('label', {}, kind === 'note' ? 'Your thought' : kind === 'request' ? 'What you are asking' : 'Text (Markdown)'), text);
-    if (kind === 'document') { file = h('input', { type: 'file', accept: '.md,.markdown,.txt,text/plain,text/markdown', 'aria-label': 'Or choose a text file' }); body.push(h('label', {}, 'Or choose a .md or .txt file'), file); file.addEventListener('change', async () => { if (file.files[0]) { text.value = await file.files[0].text(); if (!title.value) title.value = file.files[0].name.replace(/\.[^.]+$/, ''); } }); }
+// ── the log: a plain list of the topic's documents, a short "In construction", and a link back to its Craftsman conversation ──
+// No composer here: the conversation lives on the Craftsman Chat page (one chat, one place). Reading, versions, comments, Attach and the record work as before.
+const chatHref = () => `${page.urls.floor}${S.topic && S.topic.conversation_id ? `?c=${encodeURIComponent(S.topic.conversation_id)}` : ''}`;
+function logNode() {
+  const items = orderedItems(); const gone = orderedItems(true);
+  const sec = h('section', { class: 'wt-log', 'data-wt-log': '', 'aria-label': 'Workshop Log' });
+  const bar = h('div', { class: 'wt-logbar' });
+  if (S.topic.conversation_id) bar.append(h('a', { class: 'wt-link', 'data-wt-chat-link': '', href: chatHref() }, 'Discuss in Chat →'));
+  const input = h('input', { type: 'file', class: 'visually-hidden', 'data-wt-attach-input': '', multiple: true, tabindex: '-1', 'aria-label': 'Attach a document or an image',
+    accept: '.md,.markdown,.txt,text/plain,text/markdown,image/png,image/jpeg,image/webp,image/gif' });
+  input.addEventListener('change', async () => { const files = [...input.files]; input.value = ''; await attachFiles(files); });
+  const waiting = ((S.inbox && S.inbox.total) || 0) + ((S.record && S.record.waiting_for_you) || []).length;
+  bar.append(input, h('button', { type: 'button', class: 'wt-link', 'data-wt-attach': '', onclick: () => input.click() }, '＋ Attach'),
+    h('button', { type: 'button', class: 'wt-link', 'data-wt-open-record': '', onclick: openRecord }, waiting ? `Topic record · ${waiting} waiting` : 'Topic record'));
+  sec.append(bar);
+  if (!items.length) sec.append(h('p', { class: 'wt-note', 'data-wt-nodocs': '' }, gone.length ? 'Everything here is put away. Open Earlier below, or attach a document.' : 'No documents on this topic yet. Attach one, or discuss it in Chat.'));
+  const list = h('ul', { class: 'wt-loglist', 'aria-label': 'Documents' });
+  const row = (it) => h('li', { class: 'wt-logrow', 'data-id': it.id, 'data-kind': it.kind },
+    h('button', { type: 'button', class: 'wt-logtitle', 'data-wt-open': it.id, onclick: () => openItem(it.id) }, it.title),
+    h('span', { class: 'wt-logmeta' }, `${KIND_WORDS[it.kind]} · version ${it.current_rev}${it.comments_open ? ` · ${it.comments_open} open comment${it.comments_open === 1 ? '' : 's'}` : ''}${it.request ? ` · to ${it.request.to}, ${it.request.stage}` : ''}`),
+    h('span', { class: 'wt-logwhen' }, localTimeText(it.updated || it.created)));
+  items.forEach((it) => list.append(row(it)));
+  sec.append(list);
+  if (gone.length) {
+    const d = h('details', { class: 'wt-earlier', 'data-wt-earlier': '' }, h('summary', {}, `Earlier (${gone.length})`));
+    const old = h('ul', { class: 'wt-loglist' }); gone.forEach((it) => old.append(row(it))); d.append(old); sec.append(d);
   }
-  if (kind === 'request') { to = h('input', { type: 'text', 'aria-label': 'To', placeholder: 'Codex, Claude Code, Grok CLI…' }); included = h('input', { type: 'text', 'aria-label': 'What is included' }); body.push(h('label', {}, 'To'), to, h('label', {}, 'What is included (version, files)'), included, h('p', { class: 'wt-note' }, 'This records the request. No agent is connected, so nothing is delivered; you set the stage by hand.')); }
-  const d = dialog(`New ${KIND_WORDS[kind].toLowerCase()}`, ...body, h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn primary', onclick: async () => {
-    let r;
-    if (kind === 'design') { if (!file.files[0]) { toast('Choose an image first.'); return; } r = await upload(`/topics/${S.tid}/items/design`, file.files[0], { title: title.value }); }
-    else {
-      const t = (title.value || (text.value.trim().split('\n')[0] || '')).slice(0, 120);
-      if (!t.trim() || (kind !== 'request' && !text.value.trim())) { toast('Add a title and some text first.'); return; }
-      r = await post(`/topics/${S.tid}/items`, { kind, title: t, text: text.value, ...(kind === 'request' ? { request: { to: to.value, included: included.value } } : {}) });
-    }
-    if (r) { d.close(); await refreshIndex(); renderBody(); toast('Added.'); }
-  } }, 'Add')));
-  title.focus();
-}
-function previousDialog() {
-  const list = h('div', {});
-  const gone = orderedItems(true);
-  if (!gone.length) list.append(h('p', { class: 'wt-note' }, 'Nothing has been put away. Putting away is not deleting.'));
-  for (const it of gone) list.append(h('div', { class: 'wt-cmt' }, h('strong', {}, it.title), ` · ${KIND_WORDS[it.kind]} · version ${it.current_rev}`, h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn', onclick: async () => { await archive(it.id, false); d.close(); } }, 'Bring back'))));
-  const d = dialog('Previous', h('p', { class: 'wt-note' }, 'Earlier work for this topic. Bringing an item back does not replace anything.'), list);
-}
-async function topicsDialog() {
-  const q = h('input', { type: 'search', 'aria-label': 'Search topics by words', placeholder: 'For example: files, private, chat…', autocomplete: 'off' });
-  const res = h('div', {});
-  const paint = async () => {
-    const r = await apiGet(`/topics?q=${encodeURIComponent(q.value)}`); res.replaceChildren();
-    const rows = r.ok ? r.body.topics : [];
-    for (const t of rows) res.append(h('button', { type: 'button', class: 'wt-btn', style: 'display:block;width:100%;text-align:left;margin:6px 0', onclick: () => { window.location.href = `${window.location.pathname}?topic=${t.id}`; } }, h('strong', {}, t.title), h('br'), h('span', { class: 'wt-note' }, `${t.cards} cards · ${t.waiting} waiting`)));
-    if (!rows.length) res.append(h('p', { class: 'wt-note' }, q.value ? 'No topic matches those words.' : 'No topics yet.'));
-  };
-  q.addEventListener('input', paint);
-  const title = h('input', { type: 'text', 'aria-label': 'Name for a new topic', maxlength: '120' });
-  dialog('Find or start a topic', h('label', {}, 'Search by words'), q, res, h('label', {}, 'Start a new topic (no spec or issue number needed)'), title,
-    h('div', { class: 'wt-acts' }, h('button', { type: 'button', class: 'wt-btn primary', onclick: async () => {
-      if (!title.value.trim()) { toast('Give the topic a name first.'); return; }
-      const r = await post('/topics/create', { title: title.value });
-      if (r) window.location.href = `${window.location.pathname}?topic=${r.topic.id}`;
-    } }, 'Start topic')));
-  paint();
+  return sec;
 }
 
 // ── body ──
 function renderBody() {
   const body = $('[data-wt-body]'); if (!body) return;
-  renderTools();
   const scroll = body.scrollTop;
   body.replaceChildren();
   if (!S.tid) { body.append(startNode()); return; }
   if (!S.topic) { body.append(h('p', { class: 'wt-note' }, S.error || 'Loading the topic…')); return; }
-  if (effective() === 'chat') { body.append(h('p', { class: 'wt-note' }, mcSay('The Master Craftsman conversation for this topic is shown. Choose Cards to see the topic’s items.'))); return; }
-  if (S.openId && S.open) body.append(readerNode()); else { body.append(boardNode(), recordNode()); }
+  if (S.pane === 'doc' && S.open) body.append(readerNode());
+  else if (S.pane === 'record') {
+    S.recOpen = true;
+    body.append(h('nav', { class: 'wt-crumb', 'aria-label': 'Where you are' }, h('button', { type: 'button', class: 'wt-btn', 'data-wt-back': '', onclick: () => closeItem() }, '‹ Back to the log')), recordNode());
+  } else body.append(logNode());
   body.scrollTop = scroll;
-  if (S.openId && S.open) { const itemTop = $('.wt-reader'); if (itemTop && document.activeElement === document.body) { /* keep focus where it is */ } }
 }
 function startNode() {
-  const box = h('div', { class: 'wt-empty' }, h('h2', {}, 'Start a topic'), h('p', { class: 'wt-note' }, 'A topic is a place to gather design, documents, discussion and handoffs about one subject. It does not need a spec or issue number.'));
+  const box = h('div', { class: 'wt-empty' }, h('h2', {}, 'Start a topic'), h('p', { class: 'wt-note' }, 'A topic is a place to talk through one subject. Documents are optional and it does not need a spec or issue number.'));
   const title = h('input', { type: 'text', 'aria-label': 'Name for the topic', maxlength: '120', placeholder: 'Guild chat improvements' });
-  box.append(title, h('button', { type: 'button', class: 'wt-btn primary', onclick: async () => {
+  const make = async () => {
     if (!title.value.trim()) { toast('Give the topic a name first.'); return; }
     const r = await post('/topics/create', { title: title.value });
     if (r) window.location.href = `${window.location.pathname}?topic=${r.topic.id}`;
-  } }, 'Start topic'), h('button', { type: 'button', class: 'wt-btn', onclick: topicsDialog }, 'Find an existing topic'));
+  };
+  title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); make(); } });
+  box.append(title, h('button', { type: 'button', class: 'wt-btn primary', onclick: make }, 'Start topic'));
   return box;
 }
 
 document.addEventListener('keydown', (e) => {
-  if (!S || e.key !== 'Escape' || !S.openId || S.editing || document.querySelector('dialog[open]') || document.querySelector('.wt-menu')) return;
+  if (!S || e.key !== 'Escape' || S.pane === 'discuss' || S.editing || document.querySelector('dialog[open]') || document.querySelector('.wt-menu')) return;
   if (document.activeElement && document.activeElement.matches('textarea,input,select')) return;
   closeItem();
 });
 
-export function initWorkshopTopics(p) {
+export async function initWorkshopTopics(p) {
   page = p;
   if (page.page !== 'workshop') return;
   root = $('[data-wt]');
-  S = { tid: page.topic_id || null, topic: null, items: [], layout: { order: [], wide: [], last_view: null }, journal: [], record: null, convNote: null, inbox: { waiting: {}, total: 0 }, recOpen: false, recAll: false, view: 'cards', pref: 'cards', last: 'cards', openId: null, open: null, rev: null, commenting: false, error: null };
-  document.body.dataset.wtView = 'cards';
-  setupDivider();
-  window.guildTopicContext = [];
-  window.matchMedia(`(min-width:${SPLIT_MIN}px)`).addEventListener('change', () => { if (S.tid && S.topic) applyView(); });
-  if (!S.tid) { S.view = 'cards'; applyView(); return; }
+  S = { tid: page.topic_id || null, topic: null, topics: [], items: [], layout: { order: [], wide: [], last_view: null }, journal: [], record: null, convNote: null, inbox: { waiting: {}, total: 0 }, recOpen: false, recAll: false, pane: 'discuss', openId: null, open: null, rev: null, commenting: false, error: null, naming: false };
+  document.body.dataset.wtPane = 'discuss';
+  if (!S.tid) {                                       // no topic in the address: go to the most recent one (a plain read), or offer to start the first
+    const r = await apiGet('/topics');
+    const rows = r.ok && r.body && Array.isArray(r.body.topics) ? r.body.topics : [];
+    if (rows.length) { window.location.replace(`${window.location.pathname}?topic=${rows[0].id}`); return; }
+    S.topics = []; applyPane(); return;
+  }
+  loadTopics();
   load();
 }

@@ -92,6 +92,13 @@ class StreamRuntime:
 
 
 @pytest.fixture(autouse=True)
+def _no_busy_wait_by_default(monkeypatch):
+    """The wait for a busy Master Craftsman is its own feature (tested below); everywhere else a "relay busy" answer is reported at once, as before."""
+    import minimoi_portal.guild_ui.mc.openclaw as oc
+    monkeypatch.setattr(oc, "IN_FLIGHT_WAIT_S", 0)
+
+
+@pytest.fixture(autouse=True)
 def _fresh_dispatch_state():
     """The dispatched-set and the in-flight set live for the process: each test starts clean."""
     from minimoi_portal.guild_ui.api import _MC_INFLIGHT
@@ -675,3 +682,66 @@ def test_a_relay_timeout_before_headers_is_a_deadline_and_an_unrecorded_abort(st
     _wait_idle()
     [rec] = [u for u in _usage_lines(streaming.extra["usage"]) if u["correlation_id"] == end["turn_id"]]
     assert rec["status"] == "error" and rec["cost_source"] == "unrecorded-abort"
+
+
+# ── a turn that arrives while Master Craftsman is busy (a Rooms turn counts) waits its turn ──
+
+def _busy_then_free(busy_posts):
+    """A runtime that answers "one turn at a time" (429) for the first ``busy_posts`` posts, then streams the happy path."""
+    runtime = StreamRuntime()
+    real = runtime.post
+
+    def post(url, data=None, headers=None, stream=False, **kw):
+        runtime.status = 429 if len([p for p in runtime.posts if not p["url"].endswith("/turns/stop")]) < busy_posts else 200
+        runtime.error_text = "another turn is running" if runtime.status == 429 else ""
+        return real(url, data=data, headers=headers, stream=stream, **kw)
+    runtime.post = post
+    return runtime
+
+
+def _backend(runtime):
+    from minimoi_portal.guild_ui.mc.openclaw import OpenClawMasterCraftsman
+    b = OpenClawMasterCraftsman("http://mc-relay:8790/v1", RELAY_TOKEN, http_get=runtime.get, http_post=runtime.post)
+    b.slept = []
+    b.sleep = b.slept.append
+    return b
+
+
+def _run(backend, cancel=None):
+    return list(backend._stream(b'{"model":"m","messages":[]}', {}, cancel))
+
+
+def test_a_turn_that_arrives_while_mc_is_busy_waits_and_is_then_answered(monkeypatch):
+    monkeypatch.setattr("minimoi_portal.guild_ui.mc.openclaw.IN_FLIGHT_WAIT_S", 45)
+    runtime = _busy_then_free(2)
+    b = _backend(runtime)
+    out = _run(b)
+    assert len(runtime.posts) == 3 and len(b.slept) == 2                        # two refusals waited out, the third went through
+    assert not any(type(x).__name__ == "Failure" for x in out) and out
+
+
+def test_the_wait_is_bounded_and_then_it_says_another_turn_is_still_running(monkeypatch):
+    monkeypatch.setattr("minimoi_portal.guild_ui.mc.openclaw.IN_FLIGHT_WAIT_S", 45)
+    runtime = _busy_then_free(10_000)
+    b = _backend(runtime)
+    now = {"t": 0.0}
+    b.clock = lambda: now["t"]
+    b.sleep = lambda s: now.__setitem__("t", now["t"] + s)
+    out = _run(b)
+    assert len(out) == 1 and out[0].cls == "one_turn_in_flight" and out[0].turn_status == "duplicate_in_progress"
+    assert now["t"] >= 45 and len(runtime.posts) < 60                          # it waited about the limit, not forever and not in a hot loop
+
+
+def test_a_real_rate_limit_is_not_waited_out_and_the_owner_can_stop_the_wait(monkeypatch):
+    monkeypatch.setattr("minimoi_portal.guild_ui.mc.openclaw.IN_FLIGHT_WAIT_S", 45)
+    runtime = StreamRuntime()
+    runtime.status, runtime.error_text = 429, "rate limit exceeded"
+    b = _backend(runtime)
+    _run(b)
+    assert len(runtime.posts) == 1 and b.slept == []                           # a rate limit is a different failure; nothing is retried
+    runtime2 = _busy_then_free(10_000)
+    b2 = _backend(runtime2)
+    stop = threading.Event()
+    stop.set()
+    out = _run(b2, stop)
+    assert len(runtime2.posts) == 0                                            # already stopped: nothing is even sent
