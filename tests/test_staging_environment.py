@@ -46,10 +46,15 @@ REQUIRED_VARS = {
     "MINIMOI_MODEL_GATEWAY_RECEIPT_KEY": "x", "COS_AGENT_A_GATEWAY_TOKEN": "x",
 }
 
-# Frozen from main (plus PR #237's queue folder): (service, host, container).
+# Maintained production mount contract, including the owner-approved shared
+# CoS/MC project access (13 October 2026): (service, host, container).
 EXPECTED_PROD_MOUNTS = [
     ("cos-agent-a", "cos-agent-a-state", "/home/node/.openclaw"),
     ("cos-agent-a", "cos-agent-a-auth", "/home/node/.config/openclaw"),
+    ("cos-agent-a", "/opt/minimoi/data", "/minimoi/data"),
+    ("cos-agent-a", "/opt/minimoi/docs", "/minimoi/docs"),
+    ("cos-agent-a", "/opt/minimoi/scripts", "/minimoi/scripts"),
+    ("cos-agent-a", "/opt/minimoi/agent_logs", "/minimoi/agent_logs"),
     ("cos-bot", "/opt/minimoi/cos_memory.md", "/app/data/cos_memory.md"),
     ("cos-bot", "/opt/minimoi/data/model_gateway_receipts.jsonl", "/app/data/model_gateway_receipts.jsonl"),
     ("cos-bot", "/opt/minimoi/data/guild/cos_context.json", "/app/domains/guild/config/cos_context.json"),

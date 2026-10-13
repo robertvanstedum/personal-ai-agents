@@ -197,6 +197,11 @@ services:
     volumes:
       - cos-agent-a-state:/home/node/.openclaw
       - cos-agent-a-auth:/home/node/.config/openclaw
+      # Robert-approved shared CoS/MC full-access experiment (13 October).
+      - ${MINIMOI_ROOT:-.}/data:/minimoi/data
+      - ${MINIMOI_ROOT:-.}/docs:/minimoi/docs
+      - ${MINIMOI_ROOT:-.}/scripts:/minimoi/scripts
+      - ${MINIMOI_ROOT:-.}/agent_logs:/minimoi/agent_logs
     mem_limit: 1400m
     # The image's own check runs only every 180 s; the deploy waits 360 s.
     # Probe the unauthenticated liveness endpoint with the image's node.
