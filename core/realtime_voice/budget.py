@@ -227,7 +227,10 @@ class VoiceBudget:
         """Explicit one-time creation (the operator runs ``python -m core.realtime_voice.budget --init``); never done implicitly on a request."""
         with self._tx() as run:
             if not (self._dsn or default_dsn(self._environ) or "").startswith("sqlite:///"):
-                run("CREATE SCHEMA IF NOT EXISTS guild")
+                # IF NOT EXISTS still checks database CREATE privileges on
+                # PostgreSQL. The live role only needs its existing schema.
+                if run("SELECT 1 FROM pg_namespace WHERE nspname = 'guild'").fetchone() is None:
+                    run("CREATE SCHEMA guild")
             for statement in SCHEMA:
                 run(statement)
 

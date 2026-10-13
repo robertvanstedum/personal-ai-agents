@@ -1,8 +1,8 @@
 -- Voice budget (core/realtime_voice/budget.py): one row per America/Chicago day and an audit entry per reservation.
 -- Additive and idempotent. Applied by hand (or `python -m core.realtime_voice.budget --init`) BEFORE voice is switched on; never needed to run existing features.
 
--- Use the existing application-owned Guild schema; public access is not required.
-CREATE SCHEMA IF NOT EXISTS guild;
+-- Requires the existing application-owned Guild schema. No database CREATE
+-- privilege or public access is required.
 
 CREATE TABLE IF NOT EXISTS guild.voice_budget_day (
     day TEXT PRIMARY KEY,
