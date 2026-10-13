@@ -108,3 +108,25 @@ def test_real_renderer_checks_only_the_vault_synthesis_ranges():
     assert answer.count("[unsupported:") == 1
     assert "citation is not a passage" in answer
     assert "[VAULT_SYNTHESIS]" not in answer
+
+
+def test_actual_openclaw_adapter_receives_evidence_as_system_data():
+    from domains.cos.backends.openclaw_backend import OpenClawBackend
+    renderer = pytest.importorskip("core.memory_ask.context")
+    built = renderer.build({"keyword": [HIT], "meaning": []})
+    result = SimpleNamespace(prompt_block=built.block, built=built, report=built.report)
+    sent = []
+    def post(url, **kwargs):
+        sent.append(kwargs["json"])
+        return SimpleNamespace(status_code=200, json=lambda: {
+            "choices": [{"message": {"content": "The agent's answer."}}],
+            "model": "openclaw/cos-agent-a"})
+    backend = OpenClawBackend(write_memory=lambda _: True, dispatch_tool=lambda *_: {},
+        gateway_url="http://cos-agent-a:18789/v1", gateway_token="synthetic-token", http_post=post)
+    context = {"system_prompt": "Standing instructions", "confer": {"conversation_id": "synthetic-vault"}}
+    call_with_vault(backend, "Explain the earlier choice", context, {},
+        retrieve=lambda _, **kwargs: result, environ=CONFIG)
+    assert len(sent) == 1
+    assert sent[0]["messages"][1] == {"role": "user", "content": "Explain the earlier choice"}
+    assert built.block in sent[0]["messages"][0]["content"]
+    assert "private-token" not in str(sent)

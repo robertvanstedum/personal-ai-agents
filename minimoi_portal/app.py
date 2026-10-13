@@ -2972,6 +2972,10 @@ RECORDS_BRIDGE = _records_bridge.install_if_dev(
 app.extensions["rooms_access"] = _ROOMS_ACCESS
 app.extensions["rooms_accounts"] = _rooms_accounts
 
+# Machine Ask uses its own live agent registry; portal sign-in conveys no grant.
+from minimoi_portal import vault_bridge as _vault_bridge  # noqa: E402
+_vault_bridge.install_if_dev(app, base_url=_cfg.BASE_URL, environ=os.environ)
+
 
 @app.route("/health")
 def health():
