@@ -47,16 +47,16 @@ def test_dev_staging_portal_uses_a_state_folder_outside_worktrees():
         assert not volume.split(":")[1].rstrip("/") == "/app/data/guild"
 
 
-def test_no_other_service_reads_the_queue():
-    """cos-bot, cos-scheduler and the rest never open build_queue.json, so they
-    need no queue mount. Only the portal (and its queue store) reads it."""
+def test_only_declared_services_reference_the_queue():
+    """The portal reads the queue directly. CoS names its current path for the
+    owner-approved OpenClaw filesystem reader; other services remain excluded."""
     readers = set()
     for path in list(REPO.glob("domains/**/*.py")) + list(REPO.glob("minimoi_portal/**/*.py")) \
             + list(REPO.glob("core/**/*.py")) + list(REPO.glob("services/**/*.py")):
         if "build_queue" in path.read_text(encoding="utf-8", errors="ignore"):
             readers.add(path.relative_to(REPO).as_posix())
     assert readers <= {"minimoi_portal/app.py", "minimoi_portal/config.py",
-                       "domains/guild/queue_store.py"}, readers
+                       "domains/guild/queue_store.py", "domains/cos/chief_of_staff.py"}, readers
 
 
 def _ignored(patterns, path):
