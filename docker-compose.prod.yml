@@ -71,6 +71,11 @@ services:
     volumes:
       - cos-agent-a-state:/home/node/.openclaw
       - cos-agent-a-auth:/home/node/.config/openclaw
+      # Robert-approved shared CoS/MC full-access experiment (13 October).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data:/minimoi/data
+      - ${MINIMOI_ROOT:-/opt/minimoi}/docs:/minimoi/docs
+      - ${MINIMOI_ROOT:-/opt/minimoi}/scripts:/minimoi/scripts
+      - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/minimoi/agent_logs
     # Real turns on staging peaked at about 1,031 MB (a 900m probe OOMed in 11
     # of 17 starts); cap it so it can never starve the rest of the host. The
     # staging override inherits this limit. NODE_OPTIONS stays unset: a heap

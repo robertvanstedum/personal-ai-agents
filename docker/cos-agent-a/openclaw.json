@@ -86,6 +86,10 @@
         "timeoutSeconds": 60,
         "cacheTtlMinutes": 15
       }
+    },
+    "profile": "full",
+    "exec": {
+      "mode": "full"
     }
   },
   "agents": {
@@ -120,35 +124,10 @@
           "mode": "off"
         },
         "tools": {
-          "allow": [
-            "session_status",
-            "web_search"
-          ],
-          "deny": [
-            "group:fs",
-            "group:runtime",
-            "web_fetch",
-            "x_search",
-            "group:ui",
-            "group:messaging",
-            "cron",
-            "gateway",
-            "nodes",
-            "sessions_spawn",
-            "subagents",
-            "group:automation",
-            "group:nodes",
-            "group:agents",
-            "group:media",
-            "group:memory",
-            "group:plugins",
-            "sessions_send",
-            "conversations_send",
-            "conversations_turn"
-          ],
           "elevated": {
             "enabled": false
-          }
+          },
+          "profile": "full"
         }
       }
     }
