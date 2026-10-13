@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from urllib.parse import urlparse
 
 from collections import namedtuple
@@ -59,6 +60,8 @@ CHAT_MODELS = ("openclaw/mc-agent", "openclaw/mc-chat")
 USER_PREFIX = "guild-mc:"
 MAX_REQUEST_BODY_BYTES = 262_144
 CONNECT_TIMEOUT_S = 5
+IN_FLIGHT_WAIT_S = 45         # Master Craftsman does one turn at a time (Rooms turns count). A note that arrives meanwhile waits this long for its turn instead of failing at once.
+IN_FLIGHT_POLL_S = 1.5
 TURN_DEADLINE_S = 90
 HEALTH_TIMEOUT_S = 5
 # The portal's limits outlast the relay's, so the relay's own in-band error always arrives first (#275 review,
@@ -135,6 +138,7 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
             http_get = http_get or requests.get
             http_post = http_post or requests.post
         self._get, self._post = http_get, http_post
+        self.clock, self.sleep = time.monotonic, time.sleep
         self._last = None          # the last completed turn on this process (for honest "live")
 
     @classmethod
@@ -220,16 +224,34 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         if cancel is not None and cancel.is_set():
             yield Failure("stopped", "cancelled")
             return
-        try:
-            response = self._post(f"{self.url}/chat/completions", data=payload, headers=headers, stream=True,
-                                   timeout=(CONNECT_TIMEOUT_S, STREAM_LIMITS.idle_s))
-        except Exception as exc:
-            name = type(exc).__name__
-            if "Timeout" in name and "Connect" not in name:
-                yield Failure("local_timeout", "timeout_uncertain")
-            else:
-                yield Failure("not_ready", "unavailable")
-            return
+        waited_until = self.clock() + IN_FLIGHT_WAIT_S
+        while True:
+            try:
+                response = self._post(f"{self.url}/chat/completions", data=payload, headers=headers, stream=True,
+                                       timeout=(CONNECT_TIMEOUT_S, STREAM_LIMITS.idle_s))
+            except Exception as exc:
+                name = type(exc).__name__
+                if "Timeout" in name and "Connect" not in name:
+                    yield Failure("local_timeout", "timeout_uncertain")
+                else:
+                    yield Failure("not_ready", "unavailable")
+                return
+            # Only a "one turn at a time" answer is waited out, and only nothing-was-sent can be: the relay answered 429 before starting any run.
+            if getattr(response, "status_code", 0) == 429 and self.clock() < waited_until \
+                    and classify_failure(429, getattr(response, "text", "") or "") == ("duplicate_in_progress", "one_turn_in_flight"):
+                close = getattr(response, "close", None)
+                if close:
+                    close()
+                if cancel is not None and hasattr(cancel, "wait"):
+                    stopped = cancel.wait(IN_FLIGHT_POLL_S)         # wakes at once if the owner stops the turn
+                else:
+                    self.sleep(IN_FLIGHT_POLL_S)
+                    stopped = False
+                if stopped:
+                    yield Failure("stopped", "cancelled")
+                    return
+                continue
+            break
         try:
             status = getattr(response, "status_code", 0)
             ctype = str((getattr(response, "headers", None) or {}).get("Content-Type", ""))
@@ -301,6 +323,7 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             return TurnResult("error", self.kind, failure_class="malformed_answer", message="unreadable answer")
         trace["response_id"] = str(data.get("id") or "")[:80]
+        trace["finish_reason"] = str(finish) if finish else "none"            # server-side only; lets a caller tell a complete answer ("stop") from a cut one
         # Usage is deliberately ignored: OpenClaw 2026.9.6 always reports zeros
         # (usage None = not reported). The answer signals are below.
         if (data.get("error") or not isinstance(reply, str) or not reply.strip()

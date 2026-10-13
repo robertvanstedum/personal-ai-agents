@@ -4,6 +4,7 @@ the earlier replies of its round; a lost teammate is skipped, fenced or
 released by Records so it can never start late; delivery-only recovery of a
 saved reply survives the inference deadline."""
 from datetime import datetime, timedelta, timezone
+from meetings import DEFAULT_MAX_TURNS
 import json
 from types import SimpleNamespace
 from uuid import uuid4
@@ -108,7 +109,7 @@ def test_a_skipped_away_teammate_never_starts_later(env):
     assert cc is not None
     assert env.claim(env.mcw, "mc") is None                              # MC's connector returns: nothing starts
     with env.store.connect() as d:
-        assert d.execute("SELECT remaining FROM meetings WHERE room=?", (env.room,)).fetchone()[0] == 19   # no slot taken
+        assert d.execute("SELECT remaining FROM meetings WHERE room=?", (env.room,)).fetchone()[0] == DEFAULT_MAX_TURNS - 1   # no slot taken
 
 
 def test_an_expired_predecessor_is_fenced_and_its_late_post_refused(env):

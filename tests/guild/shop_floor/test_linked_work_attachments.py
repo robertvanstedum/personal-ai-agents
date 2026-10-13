@@ -72,7 +72,7 @@ def test_linked_work_starts_empty_and_only_an_explicit_attach_sets_it(floored):
     conv = _new(client, token)
     assert conv["work_item"] is None and conv["attachments"] == []
     page = client.get(f"/guild-next/guild/build?c={conv['id']}").get_data(as_text=True)
-    assert 'data-linked-empty' in page and "Last opened" not in page and "This conversation is about" not in page
+    assert "data-linked-empty" not in page and "data-linked-work" not in page and "Last opened" not in page and "This conversation is about" not in page   # the section left the page on 11 Oct; the API stays
     # Browsing and opening an item never attaches anything.
     client.get("/guild-next/guild/build/items/12")
     client.get("/guild-next/guild/build/log")
@@ -111,10 +111,10 @@ def test_a_pasted_pull_request_and_a_line_anchor_are_kept_exactly(floored):
     item = _link(client, token, cid, f"{REPO}/blob/main/docs/memory_ask.md#L10-L20").get_json()["conversation"]["work_item"]
     assert item["href"] == f"{REPO}/blob/main/docs/memory_ask.md#L10-L20" and item["label"] == "memory_ask.md#L10-L20"
     page = client.get(f"/guild-next/guild/build?c={cid}").get_data(as_text=True)
-    assert "memory_ask.md#L10-L20" in page and "GitHub file" in page
+    assert "data-linked-work" not in page                                  # kept by the API exactly, no longer drawn on the Chat page (11 Oct)
     item = _link(client, token, cid, f"{REPO}/pull/78").get_json()["conversation"]["work_item"]
     page = client.get(f"/guild-next/guild/build?c={cid}").get_data(as_text=True)
-    assert "GitHub pull request · title not loaded" in page and "Build Log number, or a GitHub link" in page
+    assert "Build Log number, or a GitHub link" not in page
 
 
 def test_a_spec_file_link_keeps_only_a_validated_path(floored):

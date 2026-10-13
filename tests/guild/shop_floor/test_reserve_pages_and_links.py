@@ -142,8 +142,8 @@ def test_linked_work_opens_its_build_log_item_with_the_conversation_to_come_back
     cid = _new(client, token)
     assert client.post(f"{API}/conversations/{cid}/work-item", json=keyed(ref="12"), headers=write_headers(token)).status_code == 200
     rail = client.get(f"{BASE}/guild/build?c={cid}").get_data(as_text=True)
-    link = re.search(r'<a data-linked-link href="([^"]+)"', rail).group(1)
-    assert link == f"{BASE}/guild/build/items/12?c={cid}"                      # the stored href is unchanged; ?c= is added when shown
+    assert "data-linked-link" not in rail                                          # the Chat page no longer draws linked work (11 Oct); the API still stores it
+    link = f"{BASE}/guild/build/items/12?c={cid}"                                  # an item opened with the conversation id still gets its way back
     page = client.get(link).get_data(as_text=True)
     assert "Floor API" in page and "data-back-conversation" in page
 
@@ -161,11 +161,11 @@ def test_a_saved_legacy_style_link_and_a_github_link_both_render_correctly(v11, 
                          "source": "number"}                                     # the shape the owner's saved links already have
     path.write_text(json.dumps(conv))
     rail = client.get(f"{BASE}/guild/build?c={cid}").get_data(as_text=True)
-    assert f'href="{BASE}/guild/build/items/150?c={cid}"' in rail and "_blank" not in rail.split("data-linked-link")[1][:200]
+    assert "data-linked-link" not in rail                                          # not drawn on the Chat page any more (11 Oct)
     assert client.post(f"{API}/conversations/{cid}/work-item", json=keyed(ref="https://github.com/robertvanstedum/personal-ai-agents/pull/9"),
-                       headers=write_headers(token)).status_code == 200
-    rail = client.get(f"{BASE}/guild/build?c={cid}").get_data(as_text=True)
-    assert 'href="https://github.com/robertvanstedum/personal-ai-agents/pull/9"' in rail and "?c=" not in rail.split("data-linked-link")[1][:200]
+                       headers=write_headers(token)).status_code == 200            # a GitHub link is still accepted and kept by the API
+    stored = json.loads(path.read_text())["work_item"]
+    assert stored["href"] == "https://github.com/robertvanstedum/personal-ai-agents/pull/9"
 
 
 # ── the reserve code is excluded from a release tree ──────────────────────────────

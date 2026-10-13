@@ -137,7 +137,7 @@ def mount_guild_next(app, *, environ, owner_guard, current_user, queue_path, ope
                                   records_db=records_db, database_url=database_url, audit=audit, mc=mc,
                                   mc_turns=mc_turns, mc_stream=mc_stream)
         register_guild_ui(app, owner_guard=owner_guard, current_user=current_user, url_prefix=NEXT_PREFIX,
-                          blueprint_name=NEXT_NAME, services=services, base_url=base_url)
+                          blueprint_name=NEXT_NAME, services=services, base_url=base_url, feature_environ=environ)
         log.info("guild mount: /guild-next registered")
     except Exception:
         log.exception("guild mount: /guild-next failed to register; answering 503 there")
@@ -211,9 +211,11 @@ ALLOWED_HOSTS_VAR = "MINIMOI_GUILD_ALLOWED_HOSTS"
 # switch below. Not part of allowed_hosts(): the staging allowlist still refuses it.
 PRODUCTION_HOSTS = frozenset({"minimoi.ai"})
 PRODUCTION_FLAG = "MINIMOI_GUILD_PRODUCTION"
-# Master Craftsman has no relay in production: these are removed before the mount
-# reads them, so the backend is "off" and no turn is sent, whatever the file says.
-PRODUCTION_HELD_OFF = ("MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MINIMOI_GUILD_MC_STREAM")
+# The local MC relay/files and the new speech features await their own production
+# review. Remove them before binding the mount; raw shared-container flags must
+# not activate any of these paths. This filtered snapshot changes on restart.
+PRODUCTION_HELD_OFF = ("MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MINIMOI_GUILD_MC_STREAM",
+                       "MINIMOI_MC_VOICE", "MINIMOI_DICTATION", "MINIMOI_MC_FILES_HOST_ROOT")
 
 
 def origin_host(base_url) -> str:

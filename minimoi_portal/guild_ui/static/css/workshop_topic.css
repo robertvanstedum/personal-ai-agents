@@ -99,8 +99,10 @@ dialog.wt-dialog textarea { min-height: 120px; }
 .wt-ctx { display: flex; gap: 8px 12px; justify-content: space-between; align-items: center; flex-wrap: wrap; padding: 8px 12px; margin: 0 0 6px; background: #e6eddf; border: 1px solid #b9c7ae; border-radius: 10px; font-size: 14px; }
 
 /* the chat panel inside this page: Split docks it left of the work; Chat fills the page; Cards folds it away */
-body.gu[data-page="workshop"] .mc-pill { display: none; }
-body.gu[data-page="workshop"] .mc-head-actions, body.gu[data-page="workshop"] .mc-context { display: none; }
+body.gu[data-page="workshop"] .mc-context { display: none; }
+body.gu[data-page="workshop"][data-mc-mode="full"] .mc-head-actions, body.gu[data-page="workshop"][data-mc-mode="docked"] .mc-head-actions { display: none; }
+@media (max-width: 1099px) { body.gu[data-page="workshop"] [data-mc-dock] { display: none; } }
+body.gu[data-page="workshop"][data-mc-mode="full"] .mc-pill, body.gu[data-page="workshop"][data-mc-mode="docked"] .mc-pill { display: none; }
 body.gu[data-page="workshop"][data-mc-mode="docked"] .gu-layout { display: grid; grid-template-columns: clamp(300px, var(--wt-chat-w, 42%), calc(100% - 460px)) 14px minmax(0, 1fr); gap: 0; align-items: start; padding: var(--gu-s2) var(--gu-gutter) 0; }
 body.gu[data-page="workshop"][data-mc-mode="docked"][data-wt-side="right"] .gu-layout { grid-template-columns: minmax(0, 1fr) 14px clamp(300px, var(--wt-chat-w, 42%), calc(100% - 460px)); }
 body.gu[data-page="workshop"][data-mc-mode="docked"] .wt { padding-left: 0; padding-right: 0; }
@@ -160,9 +162,6 @@ body.gu[data-page="workshop"] .wt-conv-title { font-size: 13px; color: var(--gu-
   .wt-top .wt-btn, .wt-crumb .wt-btn { min-height: 30px; min-width: 0; padding: 2px 10px; font-size: 13px; border-radius: 6px; }
   .wt-top .wt-chip { font-size: 12px; padding: 2px 8px; color: var(--gu-text-muted); }
   .wt-views .wt-btn { min-height: 28px; padding: 2px 11px; }
-  body.gu[data-page="workshop"] { --gu-subnav-h: 32px; }
-  body.gu[data-page="workshop"] .gu-section-band { padding: 2px 20px; gap: 2px; }
-  body.gu[data-page="workshop"] .gu-section-band a { padding: 5px 12px; font-size: 13px; }
 }
 
 /* In-page editing: a large box, not a small window. */
@@ -219,3 +218,156 @@ details.wt-j-add .wt-j-head { margin-top: 4px; }
   details.wt-journal > summary { display: flex; }
   .wt-j-add > summary { min-height: 44px; display: flex; align-items: center; }
 }
+
+/* The Work (M): a shelf beside the reader. The reader holds the item, then its Discussion, then the comment box. */
+.wt-work { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.wt-shelf { position: sticky; top: 8px; max-height: calc(100dvh - 160px); overflow: auto; border: 1px solid var(--gu-border); border-radius: 12px; padding: 10px; background: #fbf7ee; min-width: 0; }
+.wt-shelfh { font: 700 15px var(--gu-font-serif); margin: 0 0 4px; }
+.wt-label { margin: 6px 0 2px; font: 700 11px var(--gu-font-mono); text-transform: uppercase; letter-spacing: .1em; color: var(--gu-text-muted); }
+.wt-shelflist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.wt-shelfitem { display: flex; gap: 2px; align-items: stretch; border: 1px solid transparent; border-radius: 8px; }
+.wt-shelfitem:hover { background: var(--gu-surface-2); }
+.wt-pick { flex: 1 1 auto; min-width: 0; text-align: left; border: 0; background: transparent; border-radius: 8px; padding: 8px 8px; cursor: pointer; color: inherit; display: grid; gap: 1px; font: inherit; }
+.wt-pick[aria-current="true"] { background: #fff; box-shadow: inset 3px 0 0 var(--gu-accent-strong, #344b40); }
+.wt-pick strong { overflow-wrap: anywhere; font-size: 14px; }
+.wt-pick small { color: var(--gu-text-muted); font-size: 12px; }
+.wt-kind { font: 700 10px var(--gu-font-mono); text-transform: uppercase; letter-spacing: .12em; color: var(--gu-text-muted); }
+.wt-shelfitem .more { align-self: center; border-color: transparent; background: transparent; font-size: 18px; line-height: 1; }
+.wt-prev { margin-top: 10px; border-top: 1px solid var(--gu-border); padding-top: 6px; }
+.wt-prev > summary { cursor: pointer; min-height: 30px; color: var(--gu-text-muted); }
+.wt-readerwrap { min-width: 0; }
+.wt-readmain { min-width: 0; }
+.wt-discussion { margin-top: 18px; border-top: 1px solid var(--gu-border); padding-top: 12px; }
+.wt-discussion h3 { font: 700 16px var(--gu-font-serif); margin: 0 0 4px; }
+.wt-comments { list-style: none; margin: 8px 0; padding: 0; }
+.wt-ch { display: flex; flex-wrap: wrap; gap: 0 4px; align-items: baseline; }
+.wt-small { font-size: 13px; color: var(--gu-text-muted); }
+.wt-commentform { margin-top: 10px; display: grid; gap: 6px; }
+.wt-commentform label { margin: 0; }
+.wt-replyform { margin: 6px 0 0 16px; }
+@media (max-width: 1000px) { .wt-work { grid-template-columns: minmax(0, 1fr); } .wt-shelf { position: static; max-height: none; } }
+@media (max-width: 700px) {
+  .wt-work.has-item .wt-shelf { display: none; }                      /* a phone shows the shelf or the reader; the reader has "back to the shelf" */
+  .wt-work:not(.has-item) .wt-readerwrap { display: none; }
+  .wt-pick { padding: 12px 10px; }
+}
+@media (min-width: 701px) { .wt-pick { padding: 5px 8px; } .wt-shelfitem .more { min-height: 26px; min-width: 28px; } }
+
+
+/* ── The Work, discussion first (10 Oct, Robert) ──
+   One line to step through topics, a short "Where we are", quiet document links, then the conversation filling the rest of the window. The pill, the
+   side-by-side controls and the window's own header buttons are not used on this page. */
+.wt { padding: 4px var(--gu-gutter) 0; max-width: 1100px; }
+.wt-top { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.wt-title { font: 700 19px/1.25 var(--gu-font-serif); margin: 0; }
+.wt-step { min-width: 30px; min-height: 30px; border: 1px solid var(--gu-border-strong); border-radius: 50%; background: transparent; color: var(--gu-text-muted); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; padding: 0; }
+.wt-step:hover:not(:disabled), .wt-step:focus-visible { background: var(--gu-surface-2); color: var(--gu-text); }
+.wt-step:disabled { opacity: .35; cursor: default; }
+.wt-topicsel { flex: 0 1 auto; min-width: 0; max-width: min(100%, 560px); font: 700 19px/1.25 var(--gu-font-serif); color: var(--gu-text); background: transparent; border: 0; border-bottom: 1px dashed var(--gu-border-strong); border-radius: 0; padding: 2px 4px; text-overflow: ellipsis; cursor: pointer; width: auto; min-height: 30px; }
+.wt-top input[type="text"] { flex: 1 1 260px; max-width: 460px; min-height: 30px; }
+.wt-link { background: transparent; border: 0; padding: 0 2px; font: inherit; font-size: 13px; color: var(--gu-accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; min-height: 24px; }
+.wt-link:hover, .wt-link:focus-visible { color: var(--gu-text); }
+.wt-where { margin: 0 0 6px; padding: 6px 10px; border-left: 3px solid var(--gu-accent-strong, #344b40); background: var(--gu-surface-2); border-radius: 0 8px 8px 0; font-size: 14px; }
+.wt-where-h { font: 700 11px var(--gu-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--gu-text-muted); margin: 0 0 2px; }
+.wt-where-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.wt-where-meta, .wt-where-empty { margin: 2px 0 0; font-size: 12px; color: var(--gu-text-muted); }
+.wt-where-empty { font-size: 13px; }
+.wt-where textarea { min-height: 64px; }
+.wt-docs { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin: 0 0 8px; font-size: 13px; }
+.wt-docs-label { font: 700 11px var(--gu-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--gu-text-muted); }
+.wt-doclink { background: transparent; border: 0; padding: 0 2px; font: inherit; font-size: 13px; color: var(--gu-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 24px; }
+.wt-doclink:hover, .wt-doclink:focus-visible { color: var(--gu-accent); }
+.wt-earlier { display: inline-block; position: relative; }
+.wt-earlier > summary { cursor: pointer; color: var(--gu-text-muted); }
+.wt-earlier[open] { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.wt-discussion > summary { cursor: pointer; font: 700 16px var(--gu-font-serif); }
+.wt-comments { padding-left: 0; }
+/* the conversation is the page: full mode, filling the window under what is above it; the launcher and the panel's own header buttons are not needed here */
+body.gu[data-page="workshop"] .mc-pill, body.gu[data-page="workshop"] .mc-phone-bar { display: none; }
+body.gu[data-page="workshop"] .wt-panelctl, body.gu[data-page="workshop"] .mc-head-actions, body.gu[data-page="workshop"] .mc-context { display: none; }
+body.gu[data-page="workshop"][data-mc-mode="full"] [data-wt-body] { display: block; }
+body.gu[data-page="workshop"][data-mc-mode="full"] .mc-panel[data-mode="full"] { height: var(--wt-chat-h, calc(100dvh - 270px)); min-height: 360px; max-width: 1100px; margin: 0 auto; }
+body.gu[data-page="workshop"] .gu-layout { padding-bottom: 8px; }
+body.gu[data-page="workshop"][data-wt-pane="doc"][data-mc-mode] .mc-panel[data-mode], body.gu[data-page="workshop"][data-wt-pane="record"][data-mc-mode] .mc-panel[data-mode] { display: none; }
+body.gu[data-page="workshop"] .gu-main { padding-bottom: 0; }
+@media (max-width: 700px) {
+  .wt { padding: 2px 12px 0; }
+  .wt-title, .wt-topicsel { font-size: 17px; }
+  .wt-step { min-width: var(--gu-target-phone); min-height: var(--gu-target-phone); }
+  .wt-link, .wt-doclink { min-height: var(--gu-target-phone); display: inline-flex; align-items: center; }
+  body.gu[data-page="workshop"][data-mc-mode="full"] .mc-panel[data-mode="full"] { height: var(--wt-chat-h, calc(100dvh - 220px)); }
+}
+.wt .wt-top { flex-wrap: nowrap; }
+.wt .wt-topicsel { flex: 1 1 auto; width: auto; min-width: 0; max-width: 560px; border: 0; border-bottom: 1px dashed var(--gu-border-strong); border-radius: 0; background: transparent; padding: 2px 4px; min-height: 30px; }
+.wt .wt-step { flex: 0 0 auto; }
+@media (max-width: 700px) {
+  .wt .wt-topicsel { min-height: var(--gu-target-phone); font-size: 17px; }
+  .wt .wt-step { min-width: 40px; min-height: 40px; }
+  .wt-link, .wt-doclink { min-height: 34px; }
+  .wt-docs { gap: 0 12px; }
+  .wt-where { padding: 4px 10px; }
+  .wt-where-empty { display: flex; flex-wrap: wrap; gap: 0 12px; align-items: baseline; }
+  .wt-where-acts { display: inline-flex; flex-wrap: wrap; gap: 0 12px; }
+}
+.wt-sumrow { margin: 2px 0 0; font-size: 12px; }
+
+/* ── The Work, v3 (10 Oct, Robert): the topics are a list on the left and the conversation is the page; no summary; documents tucked away ── */
+.wt-where, .wt-docs, .wt-sumrow { display: none; }
+body.gu[data-page="workshop"][data-mc-mode] .gu-layout { display: grid; grid-template-columns: 236px minmax(0, 1fr); column-gap: 14px; align-items: start; padding: 4px var(--gu-gutter) 8px; max-width: 1500px; margin: 0 auto; }
+body.gu[data-page="workshop"] .wt-rail { grid-column: 1; grid-row: 1 / span 3; position: sticky; top: 8px; align-self: start; max-height: calc(100dvh - 150px); overflow: auto; padding: 4px 2px; }
+body.gu[data-page="workshop"] .gu-layout > .gu-main { grid-column: 2; grid-row: 1; padding: 0; }
+body.gu[data-page="workshop"] .gu-layout > .mc-panel { grid-column: 2; grid-row: 2; }
+body.gu[data-page="workshop"] .wt { padding: 0; max-width: none; }
+.wt-rail-h { font: 700 11px var(--gu-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--gu-text-muted); margin: 2px 8px 4px; }
+.wt-rail-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.wt-rail-item { width: 100%; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 14px; color: var(--gu-text); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 34px; }
+.wt-rail-item:hover, .wt-rail-item:focus-visible { background: var(--gu-surface-2); }
+.wt-rail-item[aria-current="true"] { background: #fff; font-weight: 700; box-shadow: inset 3px 0 0 var(--gu-accent-strong, #344b40); }
+.wt-rail-add { margin: 6px 8px 0; }
+.wt-rail-new input { width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; min-height: 34px; margin: 6px 0 0; }
+.wt-top { flex-wrap: nowrap; margin: 0 0 6px; min-height: 34px; }
+.wt-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; }
+.wt-tools-line { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; position: relative; }
+.wt-docsmenu { position: relative; font-size: 13px; }
+.wt-docsmenu > summary { cursor: pointer; color: var(--gu-text-muted); list-style: none; padding: 2px 6px; }
+.wt-docsmenu > summary::-webkit-details-marker { display: none; }
+.wt-docsmenu[open] > summary { color: var(--gu-text); }
+.wt-docslist { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 220px; max-width: 360px; display: grid; gap: 2px; padding: 6px; background: var(--gu-zone-conv); border: 1px solid var(--gu-border-strong); border-radius: 10px; box-shadow: 0 8px 28px #0003; }
+.wt-docslist .wt-doclink { max-width: none; text-align: left; padding: 4px 6px; text-decoration: none; border-radius: 6px; white-space: normal; }
+.wt-docslist .wt-doclink:hover { background: var(--gu-surface-2); }
+.wt-tools-line .more { font-size: 18px; min-height: 28px; min-width: 28px; }
+body.gu[data-page="workshop"][data-mc-mode="full"] .mc-panel[data-mode="full"] { max-width: none; margin: 0; }
+@media (max-width: 900px) {
+  body.gu[data-page="workshop"][data-mc-mode] .gu-layout { display: block; padding: 2px 12px 8px; }
+  body.gu[data-page="workshop"] .wt-rail { display: none; }
+  .wt-top { flex-wrap: wrap; }
+  .wt-tools-line { margin-left: 0; width: 100%; justify-content: flex-end; }
+}
+
+.wt-short { display: none; }
+@media (max-width: 900px) {
+  .wt .wt-top { flex-wrap: nowrap; gap: 4px; }
+  .wt-tools-line { margin-left: auto; width: auto; flex: 0 0 auto; }
+  .wt .wt-topicsel { min-width: 0; flex: 1 1 0; }
+  .wt-long { display: none; } .wt-short { display: inline; }
+  .wt-docslist { right: 0; max-width: min(320px, 90vw); }
+  .wt-top input[type="text"] { flex: 1 1 0; min-width: 0; }
+}
+
+
+/* ── The Workshop Log (11 Oct): topics left, the topic's documents in the middle, no conversation panel ── */
+body.gu[data-page="workshop"] .mc-panel, body.gu[data-page="workshop"] .mc-pill, body.gu[data-page="workshop"] .mc-phone-bar { display: none !important; }
+body.gu[data-page="workshop"][data-mc-mode] .gu-layout { grid-template-columns: 236px minmax(0, 1fr); }
+.wt-construction { margin-left: auto; font: 600 11px var(--gu-font-body); letter-spacing: .1em; text-transform: uppercase; color: #6a4a12; background: var(--gu-sig-attention, #e0a63b); border-radius: 999px; padding: 3px 10px; flex: 0 0 auto; }
+.wt-log { max-width: 900px; }
+.wt-logbar { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; margin: 4px 0 10px; }
+.wt-loglist { list-style: none; margin: 0; padding: 0; border: 1px solid var(--gu-border); border-radius: 12px; background: var(--gu-surface); overflow: hidden; }
+.wt-logrow { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--gu-border); }
+.wt-logrow:last-child { border-bottom: 0; }
+.wt-logrow:hover { background: var(--gu-surface-2); }
+.wt-logtitle { background: transparent; border: 0; padding: 0; text-align: left; font: 600 14px var(--gu-font-body); color: var(--gu-text); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 28px; }
+.wt-logtitle:hover, .wt-logtitle:focus-visible { color: var(--gu-accent); text-decoration: underline; text-underline-offset: 3px; }
+.wt-logmeta, .wt-logwhen { font-size: 13px; color: var(--gu-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt-earlier { margin-top: 10px; }
+.wt-earlier > summary { cursor: pointer; color: var(--gu-text-muted); font-size: 13px; min-height: 28px; }
+@media (max-width: 700px) { .wt-logrow { grid-template-columns: minmax(0, 1fr); } .wt-logwhen { display: none; } .wt-construction { margin-left: 0; } }

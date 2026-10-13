@@ -17,8 +17,12 @@ const LABELS = { queued: 'Job waiting', dispatching: 'Job starting', running: 'J
 // One plain line per tool call. A call with no target (checking on a background command) still says what it was.
 const TOOL_WORDS = { exec: 'ran a command', process: 'checked on a background command', read: 'read', write: 'wrote', edit: 'edited', ls: 'listed', dir_list: 'listed',
   grep: 'searched', find: 'searched', web_search: 'searched the web', web_fetch: 'fetched a web page' };
+// The relay writes this placeholder when a tool call's record could not be read; it says nothing useful, so the line says what is known instead (11 Oct).
+const UNREADABLE_TARGET = /^\[Malformed diagnostic JSON redacted\]$/;
+
 export function toolWords(t) {
   const what = TOOL_WORDS[t.name] || t.name || 'did something';
+  if (t.target && UNREADABLE_TARGET.test(String(t.target).trim())) return `${what} (its details could not be read)`;
   return t.target ? `${what}: ${t.target}` : what;
 }
 

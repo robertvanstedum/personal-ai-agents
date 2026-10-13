@@ -43,6 +43,10 @@
     {% endfor %}
     {% if conv_view == 'archived' and not conv_list.rows %}<li class="fh-empty small">Nothing archived.</li>{% endif %}
   </ol>
+  {% if conv_list.newer or conv_list.older %}<nav class="fh-view small" aria-label="More conversations">
+    {% if conv_list.newer %}<a href="{{ conv_list.newer }}" data-conv-newer>Newer</a>{% endif %}
+    {% if conv_list.older %}<a href="{{ conv_list.older }}" data-conv-older>Older</a>{% endif %}
+  </nav>{% endif %}
   {% if conv_list.unreadable %}<p class="fh-unavailable small" data-conv-unreadable>{{ conv_list.unreadable }} conversation{{ '' if conv_list.unreadable == 1 else 's' }} couldn't be read.</p>{% endif %}
   <p class="fh-view small">{% if conv_view == 'archived' %}<a href="{{ urls.floor }}" data-conv-view="active">← Conversations</a>{% else %}<a href="{{ urls.floor }}?view=archived" data-conv-view="archived">Archive</a>{% endif %}</p>
 </aside>
@@ -54,40 +58,19 @@
    is explicitly tied to (empty until Robert attaches one: no browsing-history
    fallback, no "Last opened"), and the files kept with it. Nothing else: no
    urgent-item line, no generated status paragraph, no link to the old Wall.
-   js/linked_work.js and js/attachments.js write only through the API. #}
-{% set work = conversation.work_item if conversation else none %}
+   js/attachments.js writes only through the API. #}
 {% set files = (conversation.attachments or []) if conversation else [] %}
 {% set docs = (conversation.documents or []) if conversation else [] %}
 <details class="floor-context" data-floor-context>
-  <summary class="floor-context-sum">Files and linked work</summary>
+  <summary class="floor-context-sum">Files in this conversation</summary>
   <div class="fc-body">
-    {# The artwork leads the rail, as Robert likes it (6 Oct); Linked work and Files sit under it. #}
+    {# The artwork leads the rail, as Robert likes it (6 Oct); the files kept with this conversation sit under it. (Linked work was taken off the page on 11 Oct: "we have chat". The API stays.) #}
     <img class="fc-art" src="/static/guild/guild-build.webp" alt="Craftspeople working together at a workshop bench" width="784" height="1168">
     {# Only when a read failed: the honest "unknown", never a generic status paragraph. #}
     <p class="fc-empty" data-needs-summary{% if state.needs.status == "ok" %} hidden{% endif %}>{{ state.needs.text }}</p>
-    <section class="fc-sec" data-linked-work aria-labelledby="fc-linked-h">
-      <h2 class="fc-h" id="fc-linked-h">Linked work</h2>
-      <div data-linked-empty{% if work %} hidden{% endif %}>
-        <p class="fc-empty">None. A conversation is only tied to a spec or issue when you attach one.</p>
-        <form class="fc-link-form" data-linked-form autocomplete="off">
-          <label class="visually-hidden" for="fc-link-input">Spec or issue</label>
-          <input id="fc-link-input" class="fc-link-input" data-linked-input inputmode="text" maxlength="400" placeholder="Build Log number, or a GitHub link">
-          <button type="submit" class="btn-quiet" data-linked-attach>Attach</button>
-        </form>
-      </div>
-      <div class="fc-linked" data-linked-card{% if not work %} hidden{% endif %}>
-        <p class="fc-linked-title"><a data-linked-link href="{{ (work.href ~ '?c=' ~ conversation.id) if work and work.kind == 'item' and conversation else (work.href if work else '#') }}"{% if work and work.kind != 'item' %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ work.label if work else '' }}</a></p>
-        <p class="fc-linked-meta small" data-linked-meta>{% if work %}{{ 'Build Log item' if work.kind == 'item' else 'GitHub file' if work.kind == 'github_file' else 'GitHub pull request · title not loaded' if work.github_kind == 'pull' else 'GitHub issue · title not loaded' if work.github_kind == 'issue' else 'GitHub issue or pull request · title not loaded' }}{% endif %}</p>
-        <div class="fc-linked-acts">
-          <button type="button" class="btn-quiet" data-linked-replace>Replace</button>
-          <button type="button" class="btn-quiet" data-linked-remove>Remove</button>
-        </div>
-      </div>
-      <p class="fc-linked-error small" data-linked-error role="alert" hidden></p>
-    </section>
+    {% if topic_link %}<p class="fc-topic small" data-topic-materials><a href="{{ topic_link.href }}">Workshop Log materials for this conversation →</a>{% if topic_link.cards %} <span>({{ topic_link.cards }} document{{ '' if topic_link.cards == 1 else 's' }})</span>{% endif %}</p>{% endif %}
     <section class="fc-sec" data-conv-files-sec aria-labelledby="fc-files-h">
       <h2 class="fc-h" id="fc-files-h">Files in this conversation</h2>
-      <p class="fc-empty" data-conv-files-empty{% if files or docs %} hidden{% endif %}>No files yet. Files you attach stay here. They do not link this conversation to any work.</p>
       <ul class="fc-files" data-conv-files>
         {% for f in files %}
         <li class="fc-file" data-file="{{ f.asset_id }}"><a href="{{ urls.media_file.replace('__ID__', f.asset_id).replace('__V__', 'full') }}" target="_blank" rel="noopener"><img src="{{ urls.media_file.replace('__ID__', f.asset_id).replace('__V__', 'thumb') }}" alt="" width="36" height="36" loading="lazy"><span class="fc-file-name">{{ f.name }}</span></a><button type="button" class="fc-file-remove" data-file-remove="{{ f.asset_id }}" aria-label="Remove {{ f.name }} from this conversation">Remove</button></li>
@@ -102,7 +85,6 @@
         <li class="fc-file is-pending" data-pending="{{ p.asset_id }}"><span class="fc-file-name">{{ p.name }}</span><span class="fc-pending-note small">Removed here. Its hold in the library is not released yet.</span><button type="button" class="fc-file-remove" data-file-retry="{{ p.asset_id }}" aria-label="Retry releasing {{ p.name }}">Retry</button></li>
         {% endfor %}
       </ul>
-      {% if state.mc and state.mc.files is false %}<p class="fc-note small">{{ state.mc.name }} does not read attached documents: a message with documents attached is not sent. Images are kept as pictures; {{ state.mc.name }} can’t see them.</p>{% else %}<p class="fc-note small">Documents go to Master Craftsman as text when you attach them to a message; only that text is kept here. Images are kept as pictures: Master Craftsman can’t see them yet.</p>{% endif %}
     </section>
   </div>
 </details>
@@ -128,7 +110,6 @@
         <span class="light-word" data-light-word>{{ l.word }}</span>
         <span class="light-reason"><span data-light-reason>{{ l.reason }}</span> <span class="light-src" data-light-src data-source="{{ l.source }}">{{ l.source_mark }}</span></span>
       </span>
-      <button type="button" class="btn-mini light-ask" data-ask="{{ l.id }}" aria-label="Explain {{ l.label }} (platform rules, no model)">Ask</button>
     </li>
     {% endfor %}
   </ul>

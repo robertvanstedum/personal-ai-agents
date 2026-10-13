@@ -65,9 +65,9 @@ def test_selection_actions_are_on_the_record_only_and_rooms_takes_a_note_id(stag
 def test_hero_has_no_secondary_actions_but_context_remains_accessible(staging):
     page = _floor(staging)
     assert "data-needs-badge" not in page and "data-record-chip" not in page
-    assert "data-rail-toggle" in page and ">Context</button>" in page
+    assert "data-rail-toggle" in page and ">Files</button>" in page             # 11 Oct: the Files button (the rail overlay) replaced the Context button
     assert "Most urgent" not in page and "Open wall" not in page and "data-briefing-text" not in page   # retired, 5 Oct
-    assert "data-linked-work" in page and "data-conv-files" in page
+    assert "data-linked-work" not in page and "data-conv-files" in page          # Linked work left the page (11 Oct); the files stay
 
 
 def test_build_art_is_reused_only_by_the_approved_chat_rail_and_landing():
@@ -97,7 +97,7 @@ def test_the_floor_api_carries_the_conversation_focus_and_chat_blockers(floored)
     floor = client.get("/guild-next/api/v1/floor").get_json()
     assert floor["focus"]["target"]["label"] == "#12 Floor API"
     page = client.get("/guild-next/guild/build").get_data(as_text=True)
-    assert "Last opened" not in page and "data-linked-empty" in page   # never a stand-in for Linked work (5 Oct)
+    assert "Last opened" not in page and "data-linked-empty" not in page   # never a stand-in for Linked work (5 Oct); Linked work left the page (11 Oct)
 
 
 def test_the_conversation_focus_seam_prefers_a_conversations_own_work_item():

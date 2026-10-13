@@ -77,15 +77,37 @@ class Decision:
 
 
 class JobHook:
-    """Lets the conversation lane PROPOSE a job. The model may start a reply with the single line ``JOB: <title>``; this
-    object, not the model, decides what that means. It never lets the model's words become the task (the task is the owner's
-    kept note), starts at most one job per turn, and tells the owner honestly when a proposed job could not start."""
+    """Lets the conversation lane PROPOSE work. The model may start a reply with the single line ``JOB: <title>`` (a background job) or
+    ``ASK <claude-code|codex|both>: <title>`` (a request to an existing agent session, MC front door); this object, not the model, decides what
+    that means. It never lets the model's words become the task (the task is the owner's kept note), acts on at most one proposal per turn, and
+    tells the owner honestly when a proposal could not be carried out. Either half can be off: with jobs off a ``JOB:`` line is plain text,
+    with agent requests off an ``ASK`` line is plain text."""
 
     MAX_HOLD = 100                       # a first line longer than this is not a proposal
 
-    def __init__(self, manager, conv, principal, note, note_id, doc_ids):
+    def __init__(self, manager, conv, principal, note, note_id, doc_ids, asks=None):
         self.manager, self.conv, self.principal, self.note, self.note_id = manager, conv, principal, note, note_id
         self.doc_ids = list(doc_ids or []) or None
+        self.asks = asks
+        self._buffer = None
+        from flask import copy_current_request_context, has_request_context
+        from .meeting_action import enabled, execute
+        self._meeting = None
+        if has_request_context() and enabled():
+            @copy_current_request_context
+            def meeting(text):
+                return execute(text, self.note, self.note_id, self.conv)
+            self._meeting = meeting
+        self._evidence = None
+        if has_request_context() and asks is not None:
+            @copy_current_request_context
+            def evidence(mode, rid):
+                from .agent_evidence import choose, stage
+                from .api import _conversations
+                from .board_api import _media, _owner
+                chosen = choose(_conversations().get(self.conv.get("id"), self.principal), mode, self.doc_ids)
+                return stage(self.asks.root, rid, chosen, store=_conversations(), media=_media(), cid=self.conv.get("id"), principal=self.principal, owner=_owner())
+            self._evidence = evidence
 
     @classmethod
     def holding(cls, text: str) -> bool:
@@ -94,32 +116,105 @@ class JobHook:
             return False
         return "JOB: ".startswith(text[:5]) if len(text) < 5 else text.startswith("JOB: ")
 
-    @staticmethod
-    def first_line_candidate(text: str) -> bool:
-        return text.startswith("JOB: ") and "\n" in text
+    def holds(self, text: str) -> bool:
+        """Like ``holding``, for whichever proposals are switched on (a job line, an ASK line)."""
+        if "\n" in text:
+            return False
+        if self._meeting is not None and len(text) <= 170 and ("MEETING ".startswith(text) or text.startswith("MEETING ")):
+            return True
+        if self.manager is not None and len(text) <= self.MAX_HOLD and self.holding(text):
+            return True
+        if self.asks is not None:
+            from .agent_ask import TITLE_ACCEPT_MAX, holding_prefix
+            return len(text) <= TITLE_ACCEPT_MAX + 40 and holding_prefix(text)         # a long first line is still held, never shown as raw "ASK ..." text
+        return False
+
+    def buffers_whole_reply(self) -> bool:
+        """True when nothing of this turn's reply may be streamed: agent requests are on and the turn could plausibly produce one (see AskService.may_carry_a_request). The reply is shown
+        whole at the finish, or replaced by the platform's outcome: a false "queuing" sentence can never appear first. The cost is that such a reply arrives at once, not word by word."""
+        from .meeting_action import authorized_text
+        if self._meeting is not None and authorized_text((self.note or {}).get("text", "")):
+            return True
+        if self.asks is None:
+            return False
+        if self._buffer is None:                                       # decided once per turn (it scans the conversation's requests)
+            try:
+                self._buffer = bool(self.asks.may_carry_a_request((self.note or {}).get("text", ""), (self.conv or {}).get("id", "")))
+            except Exception:
+                self._buffer = True
+        return self._buffer
+
+    def visible_prefix(self, text: str) -> str:
+        """For a streaming reply: the part that may be shown now (nothing from a possible ASK line on). Without agent requests switched on, all of it."""
+        if self.asks is None:
+            return text
+        from .agent_ask import visible_prefix
+        return visible_prefix(text)
+
+    def first_line_candidate(self, text: str) -> bool:
+        if "\n" not in text:
+            return False
+        return (self.manager is not None and text.startswith("JOB: ")) or (self.asks is not None and text.startswith("ASK "))
 
     def decide(self, text: str, *, clean: bool):
-        from .jobs import parse_proposal
-        proposal = parse_proposal(text, ended_cleanly=clean)
-        if proposal is None:
-            return None
-        job, refusal = self.manager.start(self.conv, self.principal, self.note, self.note_id, self.doc_ids, title=proposal["title"])
-        rest = proposal["rest"].strip()
-        if refusal is not None:
-            words = f"Not started. {refusal[1]}"
-            return Decision((rest + "\n\n" if rest else "") + f"**{words}**")
-        self.manager.wake.set()
-        return Decision(rest or ANNOUNCE, self.manager.view(job))
+        if text.strip().startswith("MEETING "):
+            if self._meeting is None:
+                return Decision("Meeting setup is not available right now.")
+            if not clean:
+                return Decision("No meeting was created: the response was interrupted.")
+            try:
+                return Decision(self._meeting(text))
+            except Exception:
+                return Decision("Meeting setup could not be confirmed. Retry the same request; do not assume another room is needed.")
+        if self.manager is not None:
+            from .jobs import parse_proposal
+            proposal = parse_proposal(text, ended_cleanly=clean)
+            if proposal is not None and self.asks is not None:
+                from .agent_ask import MULTIPLE, scan_asks
+                if scan_asks(text, ended_cleanly=clean) is not None:       # a job AND an ask in one reply: two proposals, so neither is acted on, and it says so
+                    return Decision(MULTIPLE)
+            if proposal is not None:
+                job, refusal = self.manager.start(self.conv, self.principal, self.note, self.note_id, self.doc_ids, title=proposal["title"])
+                rest = proposal["rest"].strip()
+                if refusal is not None:
+                    words = f"Not started. {refusal[1]}"
+                    return Decision((rest + "\n\n" if rest else "") + f"**{words}**")
+                self.manager.wake.set()
+                return Decision(rest or ANNOUNCE, self.manager.view(job))
+        if self.asks is not None:
+            from .agent_ask import scan_asks
+            found = scan_asks(text, ended_cleanly=clean)
+            if found is None:
+                return None
+            from .agent_ask import MULTIPLE, job_lines
+            if "failure" not in found and job_lines(text):               # an ask AND a job line anywhere in one reply (either order): two proposals, so neither is acted on
+                return Decision(MULTIPLE)
+            if "failure" in found:                                      # ambiguous, malformed or cut off: said plainly, never shown raw, never claimed queued
+                return Decision(found["failure"])
+            try:
+                made = self.asks.ask(self.conv, self.note, self.note_id, found["proposal"]["to"], files=found["proposal"].get("files"), evidence=self._evidence)
+                return Decision(self.asks.words(made))
+            except Exception:                                           # nothing may escape: a raw "ASK ..." line must never be shown or kept
+                __import__("logging").getLogger("guild_ui.agent_ask").exception("an ask could not be handled")
+                return Decision("**Not sent.** The request could not be handled just now, so I cannot say whether it was recorded. Check the conversation before asking again.")
+        return None
 
 
 def make_hook(services, conv, principal, note, note_id, attachment_ids):
-    """A JobHook when jobs are on, else None (and then a reply is kept exactly as the model wrote it). Never raises: outside a
+    """A JobHook when jobs or agent requests are on, else None (and then a reply is kept exactly as the model wrote it). Never raises: outside a
     request (the operator probes) there is no manager."""
     try:
         mgr = manager()
     except Exception:
+        mgr = None
+    try:
+        from .agent_ask import service as _asks
+        asks = _asks()
+    except Exception:
+        asks = None
+    if mgr is None and asks is None:
         return None
-    return JobHook(mgr, conv, principal, note, note_id, attachment_ids) if mgr is not None else None
+    return JobHook(mgr, conv, principal, note, note_id, attachment_ids, asks)
 
 
 def _owned(cid, job_id):

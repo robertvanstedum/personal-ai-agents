@@ -34,6 +34,10 @@ from . import stores as S
 
 LABELS = ("decide", "blocked", "remember", "followup", "idea", "fyi")
 STEP = 1024                      # the gap between renumbered sort keys
+BOARD_W, BOARD_MAX_Y = 1200, 20000   # the logical board: 1200 wide, growing downward (sql/004_board_place.sql)
+NOTE_W, NOTE_H = 180, 170            # the footprint of every note and photo on it
+SIZE_MIN_W, SIZE_MIN_H, SIZE_MAX_W, SIZE_MAX_H = 140, 130, 480, 450
+MAX_MOVES = 200
 PHOTO_CAPTION_MAX = 140
 
 
@@ -157,7 +161,7 @@ class BoardMixin:
                 return "already_active", cur, False
             if done:
                 return "done", self._update_row(q, postit_id, "done_at = %s, done_by = %s", [now, by.id]), True
-            return "undone", self._update_row(q, postit_id, "done_at = NULL, done_by = NULL", []), True
+            return "undone", self._restore_position(q, self._update_row(q, postit_id, "done_at = NULL, done_by = NULL", [])), True
         return self._versioned(postit_id, by, idempotency_key, op="postit.done" if done else "postit.undone",
                                value=done, expect_version=expect_version, change=change)
 
@@ -177,6 +181,38 @@ class BoardMixin:
             return "linked", self._update_row(q, postit_id, "item_ref = %s", [item_ref]), False
         return self._versioned(postit_id, by, idempotency_key, op="postit.link", value=item_ref,
                                expect_version=expect_version, change=change)
+
+    def set_text(self, postit_id: int, text: str, by, *, expect_version: int, idempotency_key: str):
+        """Change what a note says (the Board's click-to-edit). Behind the same
+        version check as Done, label and link: a stale version is a ``conflict``
+        carrying the current note and nothing is changed. A note in the Trash is
+        restored first ("in_trash"); a photo's caption is not edited here
+        ("not_a_note"). The caller has already scrubbed and length-checked."""
+        def change(q, cur, now):
+            if cur["state"] == "binned":
+                return "in_trash", cur, False
+            if cur.get("kind") == "photo":
+                return "not_a_note", cur, False
+            if cur["text"] == text:
+                return "unchanged", cur, False
+            return "edited", self._update_row(q, postit_id, "text = %s", [text]), False
+        return self._versioned(postit_id, by, idempotency_key, op="postit.text", value=text,
+                               expect_version=expect_version, change=change)
+
+    def fingerprint(self):
+        """A cheap "did anything on the Board change" signal for a second window
+        (the pop-out): the two revisions plus how many notes there are, the sum of
+        their versions and the newest id. Every change to a note bumps its
+        version, and every add, bin, restore, reorder and purge moves a revision,
+        a count or the newest id, so it differs after any change. Read-only; no
+        schema change."""
+        def work(q):
+            order_rev, trash_rev = self._revs(q)
+            n, total, newest = q("SELECT COUNT(*), COALESCE(SUM(version), 0), COALESCE(MAX(id), 0) "
+                                 "FROM guild.floor_postits WHERE floor = %s", [self.floor])[0]
+            return {"rev": f"{order_rev}.{trash_rev}.{int(n)}.{int(total)}.{int(newest)}",
+                    "order_rev": order_rev, "trash_rev": trash_rev}
+        return self._read(work, fresh_for_s=5)
 
     # ── photos ───────────────────────────────────────────────────────────
     def add_photo(self, asset_id: str, owner: str, caption: str | None, by, *, idempotency_key: str):
@@ -285,6 +321,99 @@ class BoardMixin:
             value["renumbered"] = renumber
             return S.WriteResult("moved", value, False)
         return self._run(work, write=True)
+
+    # ── free placement (sql/004_board_place.sql) ─────────────────────────
+    @staticmethod
+    def _overlap(a, b) -> bool:
+        aw, ah = a[2:] if len(a) == 4 else (NOTE_W, NOTE_H)
+        bw, bh = b[2:] if len(b) == 4 else (NOTE_W, NOTE_H)
+        return a[0] < b[0] + bw and b[0] < a[0] + aw and a[1] < b[1] + bh and b[1] < a[1] + ah
+
+    def _restore_position(self, q, card):
+        """Keep a restored card's dimensions and relocate only it if its old space was reused."""
+        if card["state"] != "active" or card["pos_x"] is None:
+            return card
+        w, h = card["size_w"] or NOTE_W, card["size_h"] or NOTE_H
+        others = [(p["pos_x"], p["pos_y"], p["size_w"] or NOTE_W, p["size_h"] or NOTE_H)
+                  for p in self._active(q) if p["id"] != card["id"] and p["pos_x"] is not None]
+        def free(x, y):
+            return x + w <= BOARD_W and not any(self._overlap((x,y,w,h),o) for o in others)
+        if free(card["pos_x"], card["pos_y"]):
+            return card
+        for y in range(10, BOARD_MAX_Y + 1, 20):
+            for x in range(10, BOARD_W - w + 1, 20):
+                if free(x,y):
+                    q("UPDATE guild.floor_postits SET pos_x=%s,pos_y=%s WHERE id=%s AND floor=%s", [x,y,card["id"],self.floor])
+                    return {**card,"pos_x":x,"pos_y":y}
+        raise S.FloorStoreUnavailable("no free position for restored card")
+
+    def place(self, moves: list[dict], *, expect_order_rev: int, by, idempotency_key: str):
+        """Put notes at positions on the board, in one transaction: ``moves`` is [{id, x, y}]. Outcome "moved", "conflict" (the arrangement changed:
+        the value carries the current positions and order_rev), "occupied" (a note would overlap another: nothing is changed, the value carries
+        the positions), "not_found" or "invalid" (ValueError). Placing never changes a note's text version, so an open edit is not disturbed."""
+        if not isinstance(moves, list) or not 1 <= len(moves) <= MAX_MOVES:
+            raise ValueError("send between 1 and %d moves" % MAX_MOVES)
+        clean, seen = [], set()
+        for m in moves:
+            if not isinstance(m, dict):
+                raise ValueError("each move is {id, x, y}")
+            i, x, y = m.get("id"), m.get("x"), m.get("y")
+            if any(isinstance(v, bool) or not isinstance(v, int) for v in (i, x, y)) or i <= 0 or i in seen:
+                raise ValueError("each move needs a distinct whole-number id, x and y")
+            w, h = m.get("w"), m.get("h")
+            if (w is None) != (h is None) or (w is not None and (
+                    any(isinstance(v, bool) or not isinstance(v, int) for v in (w, h))
+                    or not SIZE_MIN_W <= w <= SIZE_MAX_W or not SIZE_MIN_H <= h <= SIZE_MAX_H)):
+                raise ValueError("send both whole-number width and height within the size limits")
+            if not (0 <= x <= BOARD_W and 0 <= y <= BOARD_MAX_Y):
+                raise ValueError("a position is outside the board")
+            seen.add(i)
+            clean.append((i, x, y, w, h))
+        now = S.utc_now()
+        target = json.dumps({"m": sorted([list(c[:3]) if c[3] is None else list(c) for c in clean]), "r": int(expect_order_rev)}, sort_keys=True)
+
+        def work(q):
+            prior = self._claim(q, idempotency_key, by.id, "postit.place", target, now)
+            if prior is not None:
+                if not prior["same"]:
+                    return S.WriteResult("idempotency_mismatch", None, True)
+                return S.WriteResult(prior["outcome"], self._place_value(q), True)
+            order_rev, _trash = self._meta(q)
+            if order_rev != int(expect_order_rev):
+                self._settle(q, idempotency_key, "conflict", None)
+                return S.WriteResult("conflict", self._place_value(q), False)
+            rows = q(f"SELECT id, pos_x, pos_y, size_w, size_h FROM guild.floor_postits WHERE floor = %s AND binned_at IS NULL "
+                     f"AND done_at IS NULL{self._for_update}", [self.floor])
+            final = {int(r[0]): (None if r[1] is None else int(r[1]), None if r[2] is None else int(r[2]), int(r[3] or NOTE_W), int(r[4] or NOTE_H)) for r in rows}
+            if any(i not in final for i, _x, _y, _w, _h in clean):
+                self._settle(q, idempotency_key, "not_found", None)
+                return S.WriteResult("not_found", self._place_value(q), False)
+            for i, x, y, w, h in clean:
+                fw, fh = (w, h) if w is not None else final[i][2:]
+                if x + fw > BOARD_W:
+                    self._settle(q, idempotency_key, "invalid", None)
+                    return S.WriteResult("invalid", self._place_value(q), False)
+                final[i] = (x, y, fw, fh)
+            placed = [(i, p) for i, p in final.items() if p[0] is not None]
+            moved_ids = {i for i, _x, _y, _w, _h in clean}
+            for i, p in placed:
+                if i in moved_ids and any(j != i and self._overlap(p, o) for j, o in placed):
+                    self._settle(q, idempotency_key, "occupied", None)
+                    return S.WriteResult("occupied", self._place_value(q), False)
+            for i, x, y, w, h in clean:
+                if w is not None:
+                    q("UPDATE guild.floor_postits SET size_w = %s, size_h = %s WHERE id = %s AND floor = %s", [w, h, i, self.floor])
+                q("UPDATE guild.floor_postits SET pos_x = %s, pos_y = %s WHERE id = %s AND floor = %s", [x, y, i, self.floor])
+            self._bump(q, order=True)
+            self._settle(q, idempotency_key, "moved", None)
+            return S.WriteResult("moved", self._place_value(q), False)
+        return self._run(work, write=True)
+
+    def _place_value(self, q) -> dict:
+        order_rev, _trash = self._revs(q)
+        return {"order_rev": order_rev,
+                "positions": {str(p["id"]): [p["pos_x"], p["pos_y"]] for p in self._active(q) if p["pos_x"] is not None},
+                "sizes": {str(p["id"]): [p["size_w"] or NOTE_W, p["size_h"] or NOTE_H] for p in self._active(q)}}
 
     def _order_value(self, q) -> dict:
         order_rev, _trash = self._revs(q)

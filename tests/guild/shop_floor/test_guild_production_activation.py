@@ -157,3 +157,52 @@ def test_production_chat_cos_uses_the_chief_of_staff_over_the_existing_address(l
     services = portal.app.extensions["guild_ui_next"]["services"]
     assert services.mc.kind == "cos" and services.mc.base_url == "http://cos-scheduler:8769"
     assert services.mc_turns is True and services.mc_stream is False
+
+
+@pytest.mark.parametrize('chat', ['', 'cos'])
+def test_production_filters_voice_and_dictation_for_pages_csp_and_provider_routes(load_portal, monkeypatch, chat):
+    from core.realtime_voice.providers import openai_realtime, openai_speech
+    from minimoi_portal.guild_mounts import production_environ
+    from minimoi_portal.guild_ui import mc_voice, dictation, mc_files, voice_release
+    # Exercise the independent production filter even after shared voice ships.
+    # The unpatched alpha readiness hold has separate HTTP/HTML/CSP tests.
+    monkeypatch.setattr(voice_release, "SHARED_VOICE_READY", True)
+    calls = []
+    monkeypatch.setattr(openai_realtime, 'mint_confer_transcription_credential', lambda **kw: calls.append(kw))
+    monkeypatch.setattr(openai_realtime, 'mint_transcription_credential', lambda **kw: calls.append(kw))
+    monkeypatch.setattr(openai_speech, 'create_speech_stream', lambda **kw: calls.append(kw))
+    monkeypatch.setenv('MINIMOI_GUILD_PRODUCTION', '1')
+    monkeypatch.setenv('MINIMOI_GUILD_CHAT', chat)
+    monkeypatch.setenv('MINIMOI_MC_VOICE', '1')
+    monkeypatch.setenv('MINIMOI_DICTATION', '1')
+    monkeypatch.setenv(mc_files.ENV, '/tmp/sample/agent_requests')
+    admitted = production_environ({'MINIMOI_MC_VOICE': '1', 'MINIMOI_DICTATION': '1', mc_files.ENV: '/tmp/sample/agent_requests'})
+    assert not mc_voice.enabled(admitted) and not dictation.enabled(admitted)
+    assert mc_files.host_root(admitted) is None
+    portal = load_portal(next_flag='1', base_url=PROD)
+    client = portal.owner()
+    for path in ('/guild-next/guild/build', '/guild-next/guild/rooms'):
+        response = client.get(path)
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        assert 'data-mc-voice="true"' not in html and 'data-dictation="true"' not in html
+        assert 'api.openai.com' not in response.headers['Content-Security-Policy']
+    prefix = '/guild-next/api/v1'
+    for path in ('mc/voice/capabilities', 'mc/voice/speech/some-note-id-1',
+                 'mc/voice/static/realtime-confer-controller.js', 'dictation/capabilities',
+                 'dictation/static/realtime-memo-controller.js'):
+        assert client.get(f'{prefix}/{path}').status_code == 404
+    for path in ('mc/voice/bootstrap', 'dictation/bootstrap'):
+        assert client.post(f'{prefix}/{path}', json={}).status_code == 404
+    assert not calls
+    # Same raw flags in the same process: staging admits them, production does
+    # not inherit that mapping or change when another mount is registered.
+    staging = load_portal(next_flag='1', base_url='https://dev.minimoi.ai')
+    response = staging.owner().get('/guild-next/guild/build')
+    html = response.get_data(as_text=True)
+    assert 'data-mc-voice="true"' in html and 'data-dictation="true"' in html
+    assert 'api.openai.com' in response.headers['Content-Security-Policy']
+    assert mc_files.host_root(staging.app.extensions['guild_ui_next']['feature_environ']) == '/tmp/sample/agent_requests'
+    assert client.get(f'{prefix}/mc/voice/capabilities').status_code == 404
+    assert client.get(f'{prefix}/dictation/capabilities').status_code == 404
+    assert not calls

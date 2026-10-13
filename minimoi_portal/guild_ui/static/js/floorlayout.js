@@ -1,7 +1,7 @@
 // The Shop floor's layout (Guild 1.1 dev, slice 1; Robert, September 29):
-//  * the context rail: open beside the chat at >= 1200 px, where Robert can
-//    collapse it (remembered per browser); below 1200 px a Context button
-//    opens it over the chat; on a phone it is folded below the conversation;
+//  * the files rail: always open beside the chat at >= 1200 px (no button: there
+//    is nothing to toggle); below 1200 px a Files button opens it over the chat;
+//    on a phone it is folded below the conversation;
 //  * the conversation history: a column at >= 900 px, a drawer below;
 //  * Needs you in exactly one place, the chat header's badge (hidden at zero);
 //  * the rail's one quiet line when nothing needs attention;
@@ -44,6 +44,7 @@ function setRail(open, persist, focus = null) {
     // The first control actually shown (the folded summary is hidden off a phone).
     const first = $$('#main a, #main button, #main summary').find((n) => n.getClientRects().length > 0);
     if (first) first.focus();
+    else { const rail = $('#main'); if (rail) { rail.setAttribute('tabindex', '-1'); rail.focus(); } }       // nothing to press yet (no files): focus the rail itself
   } else if (focus === 'back') {
     const t = $('[data-rail-toggle]');
     if (t) t.focus();
@@ -77,7 +78,7 @@ function fitRailToWidth() {
   const phone = window.matchMedia(PHONE).matches;
   if (context) context.open = !phone;
   if (phone) { setRail(true, false); return; }
-  setRail(window.matchMedia(WIDE).matches ? railPref() === 'open' : false, false);
+  setRail(window.matchMedia(WIDE).matches, false);                       // beside the chat when wide, closed (a Files button opens it) when medium
 }
 
 // Needs you: the badge is the one place it appears; the rail shows only the

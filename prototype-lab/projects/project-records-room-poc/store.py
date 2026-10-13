@@ -61,6 +61,10 @@ def context_class(payload, actor):
     return value  # Missing metadata is explicitly unknown, never inferred from uploader.
 
 
+DOC_MAX_BYTES = 8_000_000                       # one file shared in a room
+DOC_MAX_BASE64 = 11_200_000                     # its base64 form in the request
+
+
 class Problem(Exception):
     def __init__(self, message, status=400):
         self.message, self.status = message, status
@@ -174,6 +178,8 @@ class Store:
         from meetings import Meetings
         self.meetings = Meetings(self)
         self.platform_access.on_revoke = self.meetings.on_revoke
+        from approved_agents import ApprovedAgents
+        self.approved_agents = ApprovedAgents(self)
         with self.connect() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS disclosure_grants(
@@ -382,6 +388,22 @@ class Store:
         self.owner(actor)
         with self.connect() as db:
             return [dict(r) for r in db.execute("SELECT id,label,kind,created FROM principals ORDER BY created")]
+
+    def add_human_principal(self, actor, principal_id, label):
+        """A person who signs in through mini-moi (portal_identity): created by the owner's portal when access is granted. Idempotent (the same id
+        again is the same person), never an agent or service (an existing non-human id is refused), always `u-`-prefixed so it can never be
+        `robert` or one of the agents, and it gets no key: the only way in is the portal's signed assertion."""
+        self.owner(actor)
+        if not isinstance(principal_id,str) or not re.fullmatch(r"u-[a-z0-9][a-z0-9_-]{0,57}",principal_id):
+            raise Problem("A mini-moi person's ID starts with u- and uses lowercase letters, digits, - and _")
+        label = string(label,"Participant label",100)
+        with self.connect() as db:
+            row = db.execute("SELECT kind,label FROM principals WHERE id=?",(principal_id,)).fetchone()
+            if row:
+                if row["kind"] != "human": raise Problem("Participant already exists",409)
+                return {"id":principal_id,"label":row["label"],"kind":"human","created":False}
+            db.execute("INSERT INTO principals VALUES(?,?,?,?,?)",(principal_id,label,"human",digest(secrets.token_bytes(36)),now()))
+        return {"id":principal_id,"label":label,"kind":"human","created":True}
 
     def add_principal(self, actor, key, payload):
         name = string(payload.get("id"),"Participant ID",60)
@@ -694,11 +716,11 @@ class Store:
         provenance=context_class(payload,actor)
         try:
             encoded=payload.get("base64","")
-            if not isinstance(encoded,str) or len(encoded)>2_800_000: raise ValueError()
+            if not isinstance(encoded,str) or len(encoded)>DOC_MAX_BASE64: raise ValueError()
             content=base64.b64decode(encoded,validate=True)
         except (ValueError,TypeError):
             raise Problem("Invalid or oversized file")
-        if not content or len(content)>2_000_000: raise Problem("File must contain 1–2,000,000 bytes")
+        if not content or len(content)>DOC_MAX_BYTES: raise Problem(f"That file is {len(content):,} bytes; a Room file can be between 1 and {DOC_MAX_BYTES:,} bytes")
         mime="text/plain" if name.lower().endswith((".txt",".md",".csv",".json")) else "application/octet-stream"
         text_content=None
         if mime=="text/plain":

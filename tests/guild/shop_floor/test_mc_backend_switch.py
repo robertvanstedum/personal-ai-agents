@@ -82,7 +82,7 @@ def test_view_per_state():
     assert unavailable["header"] == "Master Craftsman is unavailable · not connected yet"
     assert unavailable["notes_text"].endswith("Master Craftsman does not reply.")
     live = view(Health("ready"), notes_ok=True)
-    assert live["state"] == "live" and live["header"] == "Master Craftsman is live · your messages are kept as notes"
+    assert live["state"] == "live" and live["header"] == "Master Craftsman is ready · your messages are saved in the conversation"
     assert "does not reply yet" in live["notes_text"]   # turn wiring is stage B
     for health in (Health("off"), Health("stub"), Health("ready"), Health("unavailable", "x")):
         assert view(health, notes_ok=True)["turns"] is False                   # no turn is sent in 1a
@@ -151,7 +151,7 @@ def test_openclaw_mode_without_a_runtime_never_shows_an_answer_or_the_stub(load_
     monkeypatch.delenv("MC_RUNTIME_TOKEN", raising=False)
     body = load_portal().owner().get("/guild-next/guild/build").get_data(as_text=True)
     assert "stub" not in body.lower()
-    assert "Master Craftsman is live" not in body
+    assert "Master Craftsman is ready" not in body
 
 
 def test_the_switch_is_ignored_off_a_staging_origin(load_portal, monkeypatch):

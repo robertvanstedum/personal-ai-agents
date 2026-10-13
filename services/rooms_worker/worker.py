@@ -197,6 +197,8 @@ class Worker:
             first = False
             if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
                 continue                     # the answer is too old to send on: ask again
+            if getattr(self.relay, "delivers_files", False):
+                turn["attachment_delivery"] = "verified_copies_in_request"      # a managed agent is handed verified copies of the room's files with this turn's request
             messages = adapter.messages(turn)
             if time.monotonic() - asked_at >= DISPATCH_FRESH_S:
                 continue
@@ -349,6 +351,10 @@ class Watcher(threading.Thread):
                                                      {"claim_id": self.turn["claim_id"]}, key=str(uuid4()))
             except Unavailable:
                 continue
+            if status in (401,403):
+                self.cancelled = True
+                self.worker.relay.stop(self.correlation)
+                return
             state = (data or {}).get("state")
             if state == "cancel_requested" or state in ("cancelled", "uncertain", "abandoned", "expired"):
                 self.cancelled = True
@@ -369,9 +375,9 @@ def main():
     records_url = env.get("RECORDS_URL", "http://minimoi-records:18880")
     relay_url = env.get("MC_RELAY_URL", "http://mc-relay:8790")
     secrets = Path(env.get("ROOMS_SECRETS_DIR", "/run/secrets/rooms"))
-    worker = Worker(Records(records_url, read_secret(secrets / "rooms-worker.token")),
-                    Records(records_url, read_secret(secrets / "mc.token")),
-                    Relay(relay_url, read_secret(secrets / "mc-relay.token")),
+    worker = Worker(Records(records_url, lambda: read_secret(secrets / "rooms-worker.token")),
+                    Records(records_url, lambda: read_secret(secrets / "mc.token")),
+                    Relay(relay_url, read_secret(Path(env.get("MC_RELAY_TOKEN_FILE", str(secrets / "mc-relay.token"))))),
                     TurnJournal(journal_dir / "turns"), teammate=env.get("ROOMS_TEAMMATE", "mc"),
                     alive_path="/tmp/rooms-worker/alive")
     log(event="started", records=records_url, relay=relay_url, teammate=worker.teammate)

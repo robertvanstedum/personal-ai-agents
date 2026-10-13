@@ -1,7 +1,9 @@
 // Rooms (Guild 1.1 slice 4, spec §6): group chat on Records, through the dev
-// bridge at /app/records/api/ with Records' own sign-in. This page never
-// holds a Records credential: a 401 shows "Sign in to Rooms" (Records' own
-// page) and the draft stays in this tab. Records' own actor and grant checks
+// bridge at /app/records/api/, signed in with mini-moi and nothing else. This
+// page never holds a Records credential. Three different problems are never
+// confused: the mini-moi session ended (Sign in to mini-moi), no Rooms access
+// (ask the owner), Rooms unavailable or not set up (a connection problem,
+// never a sign-in prompt); the draft stays in this tab. Records' own actor and grant checks
 // decide every action; a paused room refuses writes (409) and says so. Agent
 // messages carry their Records actor and an "agent" label; no live presence
 // is implied. Take to a Room shares a kept, on-the-record Chat note by id
@@ -11,13 +13,15 @@
 // shows the meeting from Records (/turns): who is here or reachable, what MC
 // is doing, and what Robert can do next (Retry, Continue without, End).
 import { $, $$, el, announce } from './dom.js';
-import { apiPost, recordMode } from './api.js';
+import { apiGet, apiPost, recordMode } from './api.js';
 import { live, onChange, setOff } from './state.js';
 import { newKey } from './actions.js';
 
 let cfg;
 let page;
 let rooms = [];
+let listPage = 0;
+const ROOMS_PER_PAGE = 10;
 let room = null;              // the open room, as Records answers it
 let current = null;           // its id
 let signedOut = false;
@@ -60,23 +64,32 @@ async function records(path, { method = 'GET', body, key } = {}) {
   if (res.type === 'opaqueredirect') { portalSignedOut(); return { status: 401, body: { error: 'Your mini-moi sign-in ended.' } }; }
   let data = {};
   try { data = await res.json(); } catch (e) { data = {}; }
-  if (res.status === 401) showSignin();
+  if (res.status === 401) showBlocked('session');
+  else if (res.status === 403 && data.code === 'rooms_no_access') showBlocked('no_access');
+  else if ((res.status === 502 || res.status === 503) && data.code) { status(''); error(data.error || 'Rooms is not available right now.'); }
   return { status: res.status, body: data };
 }
 
 function portalSignedOut() {
-  // The portal session (not Records') ended: the bridge redirects to the
-  // mini-moi login. Say so instead of showing nothing (#288 review F9).
-  signedOut = true;
-  $('[data-rm-send]').disabled = true;
-  error('Your mini-moi sign-in ended. Sign in again, then come back; your draft is kept.');
+  // The portal session ended: the portal's own redirect to the mini-moi login answered. Say so, with the link back; nothing else.
+  showBlocked('session');
 }
 
-function showSignin() {
+const BLOCKED = {
+  session: ['Your mini-moi session ended.', 'Sign in to mini-moi, then come back to Rooms.', true],
+  no_access: ["You don't have access to Rooms.", 'Ask the owner to switch it on for your account.', false],
+};
+
+function showBlocked(kind) {
   signedOut = true;
-  $('[data-rm-signin]').hidden = false;
+  const [title, text, link] = BLOCKED[kind];
+  $('[data-rm-blocked-title]').textContent = title;
+  $('[data-rm-blocked-text]').textContent = text;
+  $('[data-rm-blocked-link]').hidden = !link;
+  $('[data-rm-blocked-note]').hidden = kind !== 'session';
+  $('[data-rm-blocked]').hidden = false;
   $('[data-rm-send]').disabled = true;
-  announce('Sign in to Rooms. Your draft is kept.');
+  announce(`${title} ${text}`);
 }
 
 function error(text) {
@@ -84,6 +97,17 @@ function error(text) {
   box.hidden = !text;
   box.textContent = text || '';
 }
+
+// A file that was NOT shared is said in an alert that stays until the next attempt or send; the small status line is not enough (it is cleared by the next poll).
+function attachError(text) {
+  const box = $('[data-rm-attach-error]');
+  if (!box) return;
+  box.hidden = !text;
+  box.textContent = text || '';
+  if (text) announce(text);
+}
+
+function megabytes(n) { return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)} MB`; }
 
 function status(text) {
   const out = $('[data-rm-status]');
@@ -95,13 +119,19 @@ function status(text) {
 // ── the room list ────────────────────────────────────────────────────────────
 function renderList() {
   const list = $('[data-rm-list]');
-  list.replaceChildren(...rooms.map((r) => {
+  listPage = Math.min(listPage, Math.max(0, Math.ceil(rooms.length / ROOMS_PER_PAGE) - 1));
+  const start = listPage * ROOMS_PER_PAGE;
+  list.replaceChildren(...rooms.slice(start, start + ROOMS_PER_PAGE).map((r) => {
     const a = el('a', { href: `?room=${encodeURIComponent(r.id)}`, 'data-rm-room': r.id });
     a.append(el('span', {}, r.title), el('small', {}, `${r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}`));
     if (r.id === current) a.setAttribute('aria-current', 'true');
     return h('li', {}, a);
   }));
-  if (!rooms.length && !signedOut) list.append(el('li', { class: 'small' }, 'No rooms yet. Open one in Records.'));
+  if (!rooms.length && !signedOut) list.append(el('li', { class: 'small' }, 'No rooms yet.'));
+  $('[data-rm-list-pages]').hidden = rooms.length <= ROOMS_PER_PAGE;
+  $('[data-rm-newer]').disabled = listPage === 0;
+  $('[data-rm-older]').disabled = start + ROOMS_PER_PAGE >= rooms.length;
+  $('[data-rm-list-range]').textContent = `${start + 1}–${Math.min(start + ROOMS_PER_PAGE, rooms.length)}`;
 }
 
 // ── the conversation ─────────────────────────────────────────────────────────
@@ -122,6 +152,10 @@ function eventLine(e) {
   if (earlier().has(e.id)) meta.append(el('span', { class: 'rm-tag', 'data-tag': 'earlier', title: 'You wrote again while this reply was being written.' }, 'answered an earlier message'));
   if (lateInRound().has(e.id)) meta.append(el('span', { class: 'rm-tag', 'data-tag': 'late', title: 'The round went on without this reply; it arrived afterwards.' }, 'answered later in this round'));
   card.append(meta);
+  if (e.actor === 'robert' && e.kind === 'message' && Number.isInteger(e.seq) && cfg.access === 'ok' && room && room.state !== 'closed' && $('[data-rm-handoff-dialog]')) {
+    card.append(el('button', { type: 'button', class: 'rm-handoff-open btn-quiet', 'data-rm-handoff': String(e.seq), 'data-rm-handoff-text': String(e.body || '').slice(0, 600),
+      title: 'Turn this message into a work request for Claude Code and/or Codex, through the request ledger' }, 'Hand to agents…'));
+  }
   if (e.kind === 'document') {
     const doc = (room.documents || []).find((d) => d.id === e.reference);
     card.append(el('p', { class: 'rm-body' }, 'Shared a file'));
@@ -155,6 +189,7 @@ function renderRoom() {
   $('[data-rm-send]').disabled = !writable;
   $('[data-rm-attach]').disabled = !writable;
   $('[data-rm-input]').disabled = room.state === 'closed' || signedOut;
+  $('[data-rm-input]').dataset.roomState = room.state;                 // dictation reads this: a paused or closed room takes no new writing
   $('[data-rm-closed]').hidden = room.state !== 'closed';
   renderControls();
   if (room.state !== 'active') status(room.state === 'paused' ? 'Paused: this room is not recording, so nothing can be added. Your draft is kept.' : 'Closed: the record is kept. Continue the conversation to go on.');
@@ -184,7 +219,7 @@ function renderDetails() {
 
 async function loadRoom(id) {
   const r = await records(`/v1/rooms/${encodeURIComponent(id)}`);
-  if (r.status === 200) { const changed = room?.id !== r.body.id; if (changed) { targets.clear(); recipientFilter = ''; } room = r.body; error(''); renderRoom(); loadMeeting(); if (changed) heartbeat(); return true; }
+  if (r.status === 200) { const changed = room?.id !== r.body.id; if (changed) { targets.clear(); recipientFilter = ''; } room = r.body; error(''); renderRoom(); loadMeeting(); if (changed) { heartbeat(); reportHandoffs(id); } return true; }
   if (r.status === 401) return false;
   room = null;
   renderRoom();
@@ -194,13 +229,15 @@ async function loadRoom(id) {
 
 async function loadAll() {
   if (cfg.state !== 'on') { $('[data-rm-off]').hidden = false; $('[data-rm-send]').disabled = true; return; }
+  if (cfg.access === 'no_access') { showBlocked('no_access'); renderList(); return; }       // the same live check the bridge makes; nothing is sent
   const r = await records('/v1/rooms');
-  if (r.status !== 200) { if (r.status !== 401) error(r.body.error || 'Rooms could not be read.'); renderList(); return; }
+  if (r.status !== 200) { if (r.status !== 401 && !(r.status === 403 && r.body.code === 'rooms_no_access')) error(r.body.error || 'Rooms could not be read.'); renderList(); return; }
   signedOut = false;
-  $('[data-rm-signin]').hidden = true;
+  $('[data-rm-blocked]').hidden = true;
   rooms = r.body.rooms || [];
   const wanted = new URLSearchParams(window.location.search).get('room') || store.get(`${page.storage_ns}.rooms.last`);
   current = rooms.some((x) => x.id === wanted) ? wanted : (rooms[0] && rooms[0].id) || null;
+  listPage = Math.floor(Math.max(0, rooms.findIndex((r) => r.id === current)) / ROOMS_PER_PAGE);
   renderList();
   if (current) {
     store.set(`${page.storage_ns}.rooms.last`, current);
@@ -249,15 +286,23 @@ async function send() {
 
 async function attach(file) {
   if (!file || !current) return;
-  if (file.size > cfg.max_bytes) { status(`Not shared: ${file.name} is larger than ${cfg.max_bytes.toLocaleString()} bytes, today's limit for a Room file.`); return; }
+  attachError('');
+  if (file.size > cfg.max_bytes) { attachError(`${file.name} was NOT shared: it is ${megabytes(file.size)}, over the ${megabytes(cfg.max_bytes)} limit for a Room file. Nothing was sent to the room.`); return; }
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = '';
   for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
   const name = `file:${current}:${file.name}:${file.size}:${file.lastModified}`;
   status(`Sharing ${file.name}…`);
-  const r = await records(`/v1/rooms/${encodeURIComponent(current)}/documents`, { method: 'POST', body: { name: file.name, base64: btoa(binary) }, key: keyFor(name) });
-  if (r.status === 201 || r.status === 200) { keys.delete(name); status(`Shared ${file.name}.`); await loadRoom(current); }
-  else if (r.status !== 401) status(`Not shared: ${r.body.error || 'Rooms answered with an error'}.`);
+  let r;
+  try { r = await records(`/v1/rooms/${encodeURIComponent(current)}/documents`, { method: 'POST', body: { name: file.name, base64: btoa(binary) }, key: keyFor(name) }); }
+  catch (e) { status(''); attachError(`${file.name} was NOT shared: the connection to Rooms failed. Try again.`); return; }
+  if (r.status === 201 || r.status === 200) { keys.delete(name); attachError(''); status(`Shared ${file.name}. The teammates in this room are given a verified copy of it with their next turn.`); await loadRoom(current); }
+  else if (r.status === 401) { status(''); }
+  else {
+    status('');
+    const why = r.status === 413 ? `it is too large for Rooms (${megabytes(file.size)}; the limit is ${megabytes(cfg.max_bytes)})` : ((r.body && (r.body.error || r.body.message)) || `Rooms answered with an error (${r.status})`);
+    attachError(`${file.name} was NOT shared: ${why}. Nothing was sent to the room.`);
+  }
 }
 
 // ── files ────────────────────────────────────────────────────────────────────
@@ -315,7 +360,7 @@ async function loadPreview(d, box) {
   let res;
   try { res = await fetch(`${cfg.api}/v1/documents/${encodeURIComponent(d.id)}`, { credentials: 'same-origin', cache: 'no-store', redirect: 'manual' }); } catch (e) { box.textContent = 'The preview could not be loaded.'; return; }
   if (res.type === 'opaqueredirect') { portalSignedOut(); box.textContent = 'Sign in to mini-moi again to see this file.'; return; }
-  if (res.status === 401) { showSignin(); box.textContent = 'Sign in to Rooms to see this file.'; return; }
+  if (res.status === 401) { showBlocked('session'); box.textContent = 'Sign in to mini-moi again to see this file.'; return; }
   if (!res.ok) { box.textContent = 'The preview could not be loaded.'; return; }
   const blob = await res.blob();
   if (TEXT.test(d.name)) {
@@ -417,6 +462,8 @@ async function sendTake() {
 }
 
 function bind() {
+  $('[data-rm-newer]').addEventListener('click', () => { listPage = Math.max(0, listPage - 1); renderList(); });
+  $('[data-rm-older]').addEventListener('click', () => { listPage += 1; renderList(); });
   const input = $('[data-rm-input]');
   input.addEventListener('input', () => {
     store.set(draftKey(), input.value);
@@ -484,7 +531,7 @@ function bind() {
       prepareTake();                         // confirmed on the record after loading: prepare it now
     }
   });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && current && !signedOut) loadRoom(current); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && current && !signedOut) { loadRoom(current); const a=$('[data-rm-agents]'); if (a && a.open && !a.contains(document.activeElement)) loadAgents(); } });
 }
 
 // ── the meeting (Rooms R1, ROOMS_R1.md §3.11) ────────────────────────────────
@@ -589,6 +636,9 @@ function failureText(who, reason, principal) {
     case 'startup_inputs': return `${who} did not start: your Mac has settings or files for it that Rooms does not allow.`;
     case 'not_proven_with_this_runner': return `${who} is not proven yet. Use Invite → Prove first.`;
     case 'runner_changed_since_proof': return `${who} was updated since it was proven. Use Invite → Prove again.`;
+    case 'agent_budget_limit': return `${who} hit its cost cap for this session, so it did not answer. Nothing is running. The limit is in Operate → Usage & limits; Retry after it is raised or the session restarts.`;
+    case 'agent_usage_hold': return `${who} is holding new work because of its usage limits (see Operate → Usage & limits), so it did not answer. Retry once that clears.`;
+    case 'agent_turn_failed': return `${who}'s own turn failed before it could answer. Nothing was received. Retry, or check its status in Operate.`;
     case 'relay_busy': return `${who} was busy.`;
     case 'empty_reply': return `${who} answered with nothing.`;
     case 'signed_out_after_start': return `${who}'s sign-in was rejected partway through. It may have started answering; nothing was received. To fix: ${signIn}, then Retry.`;
@@ -981,6 +1031,123 @@ function bindMeeting() {
   document.addEventListener('visibilitychange', heartbeat);
 }
 
+// ── who can use Rooms (the owner's switch; the server keeps the data, audited) ──
+const ACCESS_WORDS = { granted: 'On', none: 'Off', withdrawn: 'Off', pending: 'Setting up, try again' };
+
+async function loadAccess() {
+  const box = $('[data-rm-access]');
+  if (!box || cfg.state !== 'on' || cfg.access !== 'ok') return;
+  const r = await apiGet('/rooms/access');
+  if (!r.ok || !r.body || !r.body.enabled) return;
+  const list = $('[data-rm-access-list]');
+  list.replaceChildren(...r.body.accounts.map((a) => {
+    const on = a.state === 'granted';
+    const btn = el('button', { type: 'button', class: 'rm-btn', 'data-rm-access-toggle': a.username, 'data-rm-access-want': on ? 'withdraw' : 'grant' },
+      a.is_owner ? 'Owner' : on ? 'Withdraw' : a.state === 'pending' ? 'Try again' : 'Switch on');
+    btn.disabled = a.is_owner;
+    return h('li', { 'data-rm-access-row': a.username }, el('span', {}, `${a.label}`), el('small', {}, ` ${a.tier || ''} · ${a.is_owner ? 'On (owner)' : ACCESS_WORDS[a.state] || a.state} `), btn);
+  }));
+  box.hidden = false;
+}
+
+async function toggleAccess(btn) {
+  const status = $('[data-rm-access-status]');
+  const want = btn.dataset.rmAccessWant;
+  btn.disabled = true;
+  const r = await apiPost(`/rooms/access/${want}`, { username: btn.dataset.rmAccessToggle, idempotency_key: newKey() });
+  status.hidden = false;
+  status.textContent = r.ok ? (want === 'grant' ? 'Rooms switched on.' : 'Rooms withdrawn.') : ((r.body && r.body.message) || 'Nothing was changed.');
+  await loadAccess();
+}
+
+async function loadAgents() {
+  const list = $('[data-rm-agents-list]');
+  const status = $('[data-rm-agents-status]');
+  if (!list) return;
+  const r = await apiGet('/rooms/agents');
+  if (!r.ok || !Array.isArray(r.body.agents)) { status.textContent = 'Agent approvals are unavailable.'; return; }
+  const words = {active: 'Approved', pending: 'Setting up', off: 'Off', legacy: 'Legacy access — not adopted'};
+  list.replaceChildren(...r.body.agents.map(a => {
+    const on = a.state === 'active' || a.state === 'pending';
+    const toggle = el('button', {type:'button', class:'rm-btn'}, on ? 'Switch off' : 'Approve');
+    const brief = el('textarea', {'aria-label': `${a.label} standing brief`, rows:'3', maxlength:'8000'});
+    brief.value = a.brief || '';
+    toggle.addEventListener('click', async () => {
+      toggle.disabled = true;
+      const changed = await apiPost(`/rooms/agents/${a.agent}`, {enabled: !on, ...(!on ? {brief:brief.value} : {}), idempotency_key:newKey()});
+      const resultText = changed.ok ? (on ? 'Rooms access revoked.' : 'Current Rooms access has ended. It returns when the installer finishes.') : (changed.body?.message || 'Change unconfirmed. Refresh before retrying.');
+      await loadAgents();
+      status.textContent = resultText;
+    });
+    const saveBrief = el('button', {type:'button', class:'rm-btn'}, 'Save brief');
+    saveBrief.hidden = a.state === 'legacy';
+    saveBrief.disabled = a.state === 'pending';
+    brief.disabled = a.state === 'pending';
+    saveBrief.addEventListener('click', async () => {
+      saveBrief.disabled = true;
+      const changed = await apiPost(`/rooms/agents/${a.agent}/brief`, {brief:brief.value, idempotency_key:newKey()});
+      if (changed.ok) await loadAgents();
+      else saveBrief.disabled = false;
+      status.textContent = changed.ok ? 'Brief saved for the next turn. Access is unchanged.' : (changed.body?.message || 'Brief change unconfirmed.');
+    });
+    const pending = a.state === 'pending' ? ' · pending '+Math.max(0,Math.floor((Date.now()-Date.parse(a.changed_at))/60000))+' min; Rooms access paused' : '';
+    const legacyOff = el('button', {type:'button', class:'rm-btn'}, 'Switch off legacy access');
+    legacyOff.hidden = a.state !== 'legacy';
+    legacyOff.addEventListener('click', async () => {
+      legacyOff.disabled = true;
+      const changed = await apiPost(`/rooms/agents/${a.agent}`, {enabled:false, idempotency_key:newKey()});
+      await loadAgents();
+      status.textContent = changed.ok ? 'Legacy Rooms access revoked.' : (changed.body?.message || 'Change unconfirmed. Refresh before retrying.');
+    });
+    return h('li', {}, el('strong', {}, a.label), el('p', {class:'small'}, `${words[a.state] || 'Unknown'} · ${a.availability || 'Unknown'}${pending}`),
+      el('p', {class:'small'}, `Files: attachment metadata only; image understanding not delivered.${a.brief_hash ? ' Brief '+a.brief_hash.slice(0,12) : ''}`), brief, saveBrief, toggle, legacyOff);
+  }));
+  status.textContent = 'Approval lasts until switched off. Offline agents remain approved.';
+}
+
+// ── Hand to agents (#298, G1): the owner's own message becomes a ledger request, by one click ──
+let handoffSeq = null;
+
+function openHandoff(btn) {
+  const dlg = $('[data-rm-handoff-dialog]');
+  handoffSeq = Number(btn.dataset.rmHandoff);
+  $('[data-rm-handoff-quote]').textContent = btn.dataset.rmHandoffText || '';
+  for (const c of $$('[data-rm-handoff-agent]')) c.checked = false;
+  $('[data-rm-handoff-scope]').value = 'Spec, build and review as discussed; Dev only; nothing to production; no push or merge.';
+  $('[data-rm-handoff-tickets]').value = '';
+  $('[data-rm-handoff-status]').textContent = '';
+  $('[data-rm-handoff-send]').disabled = false;
+  if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+}
+
+async function sendHandoff(e) {
+  e.preventDefault();
+  const status = $('[data-rm-handoff-status]');
+  const agents = $$('[data-rm-handoff-agent]').filter((c) => c.checked).map((c) => c.value);
+  if (!agents.length) { status.textContent = 'Choose Claude Code and/or Codex.'; return; }
+  const send = $('[data-rm-handoff-send]');
+  send.disabled = true;
+  const r = await apiPost('/rooms/handoff', { room: current, seq: handoffSeq, agents, scope: $('[data-rm-handoff-scope]').value, tickets: $('[data-rm-handoff-tickets]').value, idempotency_key: newKey() });
+  if (!r.ok) { status.textContent = (r.body && r.body.message) || 'Nothing was sent.'; send.disabled = false; return; }
+  const lines = (r.body.handed || []).map((m) => (m.ok === true ? `${m.name}: request ${m.request_id} ${m.created ? 'recorded' : 'was already recorded'}; ${m.listening ? 'a listener is running' : 'no listener seen just now'}. Nothing is delivered until it picks it up.`
+    : `${m.name}: ${m.error || 'not sent'}.`));
+  status.textContent = lines.join(' ') + ' Pickup, questions, reports and failures will be posted in this meeting as platform updates.';
+  announce(status.textContent);
+  handoffOpen.add(current);
+  reportHandoffs(current);
+}
+
+// The room hears what really happened to the work handed over: asked once when a room is opened and every poll while any handoff is still open. The server posts each milestone
+// once (its own record and an idempotency key), so reloads, a second tab and retries add nothing.
+const handoffOpen = new Set();
+async function reportHandoffs(id) {
+  if (!id || cfg.access === 'no_access') return;
+  const r = await apiPost('/rooms/handoff/sync', { room: id, idempotency_key: newKey() });
+  if (!r.ok || !r.body) return;
+  if (r.body.open > 0) handoffOpen.add(id); else handoffOpen.delete(id);
+  if (r.body.posted > 0 && current === id) loadRoom(id);
+}
+
 export function initRooms(p) {
   page = p;
   const raw = document.getElementById('rooms-data');
@@ -989,7 +1156,17 @@ export function initRooms(p) {
   bind();
   bindMeeting();
   loadAll();
-  poll = window.setInterval(() => { if (!document.hidden && current && !signedOut) loadRoom(current); }, 15000);
+  loadAccess();
+  loadAgents();
+  const threadEl = $('[data-rm-thread]');
+  if (threadEl) threadEl.addEventListener('click', (e) => { const b = e.target.closest('[data-rm-handoff]'); if (b) openHandoff(b); });
+  const hform = $('[data-rm-handoff-form]');
+  if (hform) { hform.addEventListener('submit', sendHandoff); $('[data-rm-handoff-cancel]').addEventListener('click', () => $('[data-rm-handoff-dialog]').close()); }
+  const agentsBox = $('[data-rm-agents]');
+  if (agentsBox) agentsBox.addEventListener('toggle', () => { if (agentsBox.open) loadAgents(); });
+  const accessBox = $('[data-rm-access]');
+  if (accessBox) accessBox.addEventListener('click', (e) => { const b = e.target.closest('[data-rm-access-toggle]'); if (b) toggleAccess(b); });
+  poll = window.setInterval(() => { if (!document.hidden && current && !signedOut) { if (handoffOpen.has(current)) reportHandoffs(current); loadRoom(current); const a=$('[data-rm-agents]'); if (a && a.open && !a.contains(document.activeElement)) loadAgents(); } }, 15000);
 }
 
 export const _forTests = { stop: () => { window.clearInterval(poll); window.clearInterval(here); window.clearTimeout(fast); } };

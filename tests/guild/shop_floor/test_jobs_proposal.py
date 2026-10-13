@@ -27,6 +27,7 @@ class Runtime(StreamRuntime):
         super().__init__()
         self.jobs = FakeJobRelay()
         self.nonstream_text = None                    # when set, a non-streaming chat turn answers with this text
+        self.nonstream_finish = "stop"                # ... and this finish_reason (None: the field is absent)
 
     def get(self, url, **kw):
         return self.jobs.get(url, **kw) if "/jobs" in url else super().get(url, **kw)
@@ -36,7 +37,11 @@ class Runtime(StreamRuntime):
             return self.jobs.post(url, data=data, headers=headers, **kw)
         if not stream and self.nonstream_text is not None and url.endswith("/chat/completions"):
             from test_mc_turns import Resp
-            return Resp(200, json.dumps({"choices": [{"message": {"content": self.nonstream_text}, "finish_reason": "stop"}]}))
+            self.posts.append({"url": url, "body": json.loads(data), "headers": dict(headers or {}), "stream": stream})
+            choice = {"message": {"content": self.nonstream_text}}
+            if self.nonstream_finish is not None:
+                choice["finish_reason"] = self.nonstream_finish
+            return Resp(200, json.dumps({"choices": [choice]}))
         return super().post(url, data=data, headers=headers, stream=stream, **kw)
 
 

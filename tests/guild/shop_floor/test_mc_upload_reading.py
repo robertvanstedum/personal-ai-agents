@@ -236,9 +236,9 @@ def test_an_image_is_reported_not_read_and_the_model_is_told_it_was_not_shown(tu
     doc = _doc(client, token, cid, "Some words.", "words.txt")
     body = _ask(client, token, _note(client, token, cid)["request_id"], cid, [asset, doc]).get_json()
     assert [(e["name"], e["status"]) for e in body["files"]] == [("board.png", "not_read"), ("words.txt", "read")]
-    assert body["files"][0]["reason"] == "Master Craftsman can't see images yet" and body["files"][0]["chars_sent"] == 0
+    assert body["files"][0]["reason"] == "Master Craftsman can't see inside pictures; ask him to send it to Codex or Claude Code" and body["files"][0]["chars_sent"] == 0
     content = _sent(turned)
-    assert 'Attached but NOT shown to you: "board.png" (an image; you cannot see images)' in content
+    assert 'Attached but NOT shown to you: "board.png" (an image; you cannot see inside images, but you can forward it to Codex or Claude Code with ASK <agent> +files)' in content
     assert _files_in(content)[0][3] == "Some words." and len(_files_in(content)) == 1
     assert "PNG" not in content and "\x89" not in content                   # no image bytes, ever
 

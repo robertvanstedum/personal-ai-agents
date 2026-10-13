@@ -20,7 +20,7 @@ function signedOut() {
   }
 }
 
-async function call(method, path, body, etag) {
+async function call(method, path, body, etag, signal) {
   // Off the record, no write leaves the page (review B1c #3); the server
   // would refuse it too (409), but nothing is even sent.
   if (method !== 'GET' && live.off) {
@@ -47,6 +47,7 @@ async function call(method, path, body, etag) {
     res = await fetch(`${page.urls.api}${path}`, {
       method, headers, credentials: 'same-origin', cache: 'no-store',
       body: body == null ? undefined : JSON.stringify(body),
+      signal,
     });
   } catch (e) {
     return { ok: false, status: 0, body: { error: 'network', message: 'The server could not be reached. Nothing was changed.' } };
@@ -54,6 +55,24 @@ async function call(method, path, body, etag) {
   if (res.status === 304) return { ok: true, status: 304, notModified: true, body: null, etag };
   let data = null;
   try { data = await res.json(); } catch (e) { data = { error: 'unreadable', message: 'The server answer could not be read.' }; }
+  if (res.status === 403 && data && data.error === 'csrf' && method !== 'GET' && !call.retrying) {
+    // A window kept open for hours (the Board's pop-out) can hold a CSRF token the server no longer knows (a sign-in, a restart):
+    // fetch a fresh one once and send the same request again, with the same idempotency key, so it can never apply twice.
+    try {
+      const s = await fetch(`${page.urls.api}/session`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, signal });
+      const sj = s.ok ? await s.json() : null;
+      if (sj && sj.csrf_token) {
+        page.csrf_token = sj.csrf_token;
+        call.retrying = true;
+        try { return await call(method, path, body, etag, signal); } finally { call.retrying = false; }
+      }
+      // A caller that passes a signal (a read-reconciliation that retries by itself) is told when the refresh failed in a way that can pass: not a refusal.
+      if (signal && (s.status >= 500 || s.status === 408 || s.status === 429)) return { ok: false, status: s.status, body: { error: 'unavailable', message: 'The server could not be reached. Nothing was changed.' } };
+    } catch (e) {
+      if (signal) return { ok: false, status: 0, body: { error: 'network', message: 'The server could not be reached. Nothing was changed.' } };     // cut off or dropped: a failed look, not a refusal
+      /* otherwise fall through: the refusal is shown as it is */
+    }
+  }
   if (res.status === 401) signedOut();
   return { ok: res.ok, status: res.status, body: data || {}, etag: res.headers.get('ETag') };
 }
@@ -108,7 +127,7 @@ export async function apiStop(path) {
 }
 
 export const apiGet = (path, etag) => call('GET', path, null, etag);
-export const apiPost = (path, body) => call('POST', path, body || {});
+export const apiPost = (path, body, signal) => call('POST', path, body || {}, undefined, signal);
 export const apiPut = (path, body) => call('PUT', path, body || {});
 
 // A media upload (Guild 1.1 slice 3): multipart, so the idempotency key goes

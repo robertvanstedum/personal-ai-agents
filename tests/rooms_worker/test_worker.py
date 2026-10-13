@@ -150,7 +150,7 @@ def test_busy_relay_retries_inside_the_same_reservation(env):
     assert len(env.relay.calls) == 3 and env.clock.slept == 10
     assert env.turns()[0]["state"] == "committed"
     with env.store.connect() as d:
-        assert d.execute("SELECT remaining FROM meetings WHERE room=?", (env.room,)).fetchone()[0] == 19
+        assert d.execute("SELECT remaining FROM meetings WHERE room=?", (env.room,)).fetchone()[0] == __import__('meetings').DEFAULT_MAX_TURNS - 1
 
 
 def test_pause_during_a_busy_wait_stops_dispatch(env):

@@ -173,6 +173,7 @@ class StreamContext:
     cancel: threading.Event = field(default_factory=threading.Event)
     files: list | None = None            # the per-turn report of files that went with the message (turn_files.summary)
     on_dispatch: Callable[[], None] = lambda: None   # called once, right before the request is sent
+    on_answered: Callable[[], None] = lambda: None   # called once, only when the turn ended answered and its reply was kept (never for a failure, timeout or cancel)
     job_hook: object = None              # jobs.JobHook: lets the reply PROPOSE a job (None: a reply is kept exactly as written)
 
 
@@ -267,6 +268,7 @@ class StreamRun:
         answered: TurnResult | None = None
         reply_note = None
         decided = False
+        emitted = 0
         _log.info("mc turn %s stream start backend=%s", ctx.turn_id, ctx.backend.kind)
         try:
             ctx.on_dispatch()
@@ -277,21 +279,36 @@ class StreamRun:
                 if isinstance(event, Delta):
                     parts.append(event.text)
                     hook = ctx.job_hook
+                    if hook is not None and getattr(hook, "buffers_whole_reply", lambda: False)():
+                        continue                                            # a turn that may carry a request is shown whole at the finish (or replaced by the platform's outcome)
                     if hook is not None and not decided:
                         # A reply may begin with a "JOB: " proposal line. Until the first line is known, show the browser nothing,
                         # and never show the marker line itself (what is kept, and shown at the end, is decided at the finish).
                         so_far = "".join(parts)
-                        if hook.holding(so_far):
+                        if (hook.holds if hasattr(hook, "holds") else hook.holding)(so_far):
                             continue
                         decided = True
-                        shown = so_far.partition("\n")[2] if hook.first_line_candidate(so_far) else so_far
+                        consumed = so_far.partition("\n")[0].__len__() + 1 if hook.first_line_candidate(so_far) else 0
+                        emitted = consumed
+                        shown = so_far[consumed:]
+                        if hasattr(hook, "visible_prefix"):
+                            shown = hook.visible_prefix(so_far)[consumed:]
                         if shown:
                             self._put(("delta", shown))
+                        emitted = max(consumed, consumed + len(shown))
+                    elif hook is not None and hasattr(hook, "visible_prefix"):
+                        # An ASK line can also come LATER in the reply: nothing from such a line on is shown (the platform's outcome replaces the reply at the finish).
+                        full = "".join(parts)
+                        vis = hook.visible_prefix(full)
+                        if len(vis) > emitted:
+                            self._put(("delta", vis[emitted:]))
+                            emitted = len(vis)
                     else:
                         self._put(("delta", event.text))
                 elif isinstance(event, Finish):
                     if final_at is None:
                         final_at = self.clock()
+                        self._clean_finish = event.reason == "stop"       # a reply cut short (e.g. "length") is kept, but is not a complete answer
                         text = "".join(parts)
                         if (event.reason in STREAM_ANSWER_FINISH_REASONS and text.strip()
                                 and text.strip() != OPENCLAW_NO_RESPONSE):
@@ -362,6 +379,11 @@ class StreamRun:
                 history_saved = ctx.capture(reply_note)
             except Exception:
                 history_saved = False
+        if status == "answered" and getattr(self, "_clean_finish", False):
+            try:
+                ctx.on_answered()
+            except Exception:
+                _log.warning("mc turn %s: the answered hook failed", ctx.turn_id)
         if ctx.turn_log is not None:
             ctx.turn_log.record(turn_id=ctx.turn_id, status=status, backend_kind=kind, duration_ms=duration_ms,
                                 failure_class=cls, reply_request_id=ctx.reply_key if status == "answered" else None,

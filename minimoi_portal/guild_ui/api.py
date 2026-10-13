@@ -779,7 +779,7 @@ def mc_turn():
 
 PRIVATE_TEXT_MAX = 4000
 _PRIVATE_SESSION = re.compile(r"[A-Za-z0-9_-]{16,64}")
-PRIVATE_NO_JOB = ("That needs a background job, and jobs are not available in Private. "
+PRIVATE_NO_JOB = ("That needs a background job or a request to another agent, and neither is available in Private. "
                   "Ask it in a normal conversation, where the result can be kept.")
 
 
@@ -840,7 +840,7 @@ def mc_private():
               "observed_at": now_iso(), "mc_state": shown["state"], "mc_header": shown["header"]}
     if result.status == "answered":
         reply = (result.text or "").strip()
-        if reply.split("\n", 1)[0].startswith("JOB:"):
+        if reply.split("\n", 1)[0].startswith("JOB:") or any(l.rstrip("\r").startswith("ASK ") for l in reply.split("\n")):
             reply = PRIVATE_NO_JOB
         shown_reply = {"text": reply}
         with_html([shown_reply])
@@ -936,32 +936,61 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         return "refused", {"error": "mc_unavailable", "mc_state": shown["state"], "reason": shown["reason"],
                            "message": f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman."}, 503
     from .turn_files import FilesRefused
+    turn_id = uuid.uuid4().hex
     try:
-        files = _turn_files(conversations, conv, principal, attachment_ids)
+        files = _turn_files(conversations, conv, principal, attachment_ids)           # validates the WHOLE selection; copies nothing
     except FilesRefused as exc:
         return "refused", {"error": exc.code, "message": exc.message}, exc.status
-    turn_id = uuid.uuid4().hex
     ctx = note.get("context") or {}
     sent_text = scrub(note["text"])
-    turn_req = TurnRequest(conversation_id=session_conversation_id(conv, principal),
-                           text=_with_files(sent_text, files),
+    agent_state = _agent_state(conv)
+
+    def request_for(built):
+        return TurnRequest(conversation_id=session_conversation_id(conv, principal),
+                           text=_with_context(_with_agent(_with_files(sent_text, built), agent_state), sent_text, conv, principal),
                            note_request_id=note_id, correlation_id=turn_id,
                            context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
-    cancel = threading.Event()
-    try:
-        events = services.mc.stream_turn(turn_req, cancel)
-    except StreamRefused as exc:
+
+    def refused_turn(exc):
         return "refused", {"error": "mc_unavailable", "reason": exc.failure_class,
                            "message": f"{exc.message or 'Master Craftsman cannot take this turn'}. Nothing was sent."}, \
             413 if exc.failure_class == "request_too_large" else 503
-    if observe is not None:
-        events = observe(events)
+
+    cancel = threading.Event()
+    try:
+        getattr(services.mc.stream_turn(request_for(files), cancel), "close", lambda: None)()      # the pre-dispatch checks only (the generator has not started)
+    except StreamRefused as exc:
+        return refused_turn(exc)
     if not _mc_acquire(principal):
         return "refused", {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
     earlier = DISPATCHED.claim(request_id, principal, turn_id)
     if earlier is not None:
         _mc_release(principal)
         return "refused", DISPATCHED.refusal(earlier, principal), 409
+    # Accepted: only now are verified copies made for Master Craftsman. Any refusal from here undoes the claim and the copies.
+    staged_copy = None
+    try:
+        files = _turn_files(conversations, conv, principal, attachment_ids, turn_id)
+        staged_copy = files.staged if files is not None else None
+        events = services.mc.stream_turn(request_for(files), cancel)
+    except FilesRefused as exc:
+        _mc_release(principal)
+        DISPATCHED.forget(request_id)
+        return "refused", {"error": exc.code, "message": exc.message}, exc.status
+    except StreamRefused as exc:
+        from . import mc_files
+        mc_files.discard(staged_copy)
+        _mc_release(principal)
+        DISPATCHED.forget(request_id)
+        return refused_turn(exc)
+    except BaseException:
+        from . import mc_files
+        mc_files.discard(staged_copy)
+        _mc_release(principal)
+        DISPATCHED.forget(request_id)
+        raise
+    if observe is not None:
+        events = observe(events)
     turns = turn_log_of(services)
 
     def annotate(reply):
@@ -978,6 +1007,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         touch=lambda: _touch_in(conversations, conv, principal), annotate=annotate,
         usage_folder=portal_usage_folder(), cancel=cancel, files=_files_view(files),
         on_dispatch=_files_recorder(conversations, conv, principal, note_id, files),
+        on_answered=agent_state.mark if agent_state is not None else (lambda: None),
         capture=(capturer(turn_id=turn_id, conversation_id=conv.get("id"), note=note, note_id=note_id,
                           user_text=sent_text, backend_kind=getattr(services.mc, "kind", None)) if capture else None)))
     return "stream", run, browser_events(run, render=render_markdown.__wrapped__)
@@ -1275,8 +1305,9 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         return {"error": "mc_unavailable", "message": f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
                 "mc_state": shown["state"], "reason": shown["reason"]}, 503
     from .turn_files import FilesRefused
+    turn_id = uuid.uuid4().hex
     try:
-        files = _turn_files(conversations, conv, principal, attachment_ids)
+        files = _turn_files(conversations, conv, principal, attachment_ids)           # validates the WHOLE selection; copies nothing
     except FilesRefused as exc:
         return {"error": exc.code, "message": exc.message}, exc.status
     if files is not None and files.report and not getattr(services.mc, "accepts_files", True):
@@ -1284,20 +1315,28 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                 "attached documents. Your note is kept; nothing was sent."}, 422
     if not _mc_acquire(principal):
         return {"error": "busy", "message": MC_WORDS["busy"], "mc_state": shown["state"]}, 409
-    turn_id = uuid.uuid4().hex
     if request_id:
         earlier = DISPATCHED.claim(request_id, principal, turn_id)
         if earlier is not None:
             _mc_release(principal)
             return DISPATCHED.refusal(earlier, principal), 409
+    staged_copy = None
     try:
         from .conversations import session_conversation_id
         ctx = note.get("context") or {}
+        # The dispatch is accepted (not busy, not a duplicate): only now are verified copies made for Master Craftsman.
+        try:
+            files = _turn_files(conversations, conv, principal, attachment_ids, turn_id)
+        except FilesRefused as exc:
+            DISPATCHED.forget(request_id)
+            return {"error": exc.code, "message": exc.message}, exc.status
+        staged_copy = getattr(files, "staged", None)
         # Each conversation is its own session in the backend (the adapter maps
         # the id: OpenClaw hashes it into its `user` field). Only this note is
         # sent: other conversations never reach the model's context.
         sent_text = scrub(note["text"])
-        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=_with_files(sent_text, files),
+        agent_state = _agent_state(conv)
+        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=_with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal),
                           note_request_id=note_id, correlation_id=turn_id,
                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
@@ -1307,6 +1346,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None
         if result.status == "answered":
+            if agent_state is not None and (result.trace or {}).get("finish_reason", "stop") == "stop":
+                agent_state.mark()                              # a complete ("stop") answer: MC has seen the status. A failure, timeout, cancel or cut-off reply consumes nothing
             from .jobs_api import make_hook
             hook = make_hook(services, conv, principal, note, note_id, attachment_ids)
             try:
@@ -1374,7 +1415,33 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     return answer, 200
 
 
-def _turn_files(conversations, conv, principal, ids):
+def _stage_for_mc(conv, ids, principal, turn_id):
+    """(staged copies, reason a wanted copy failed) for this turn (mc_files). ({}, None) when the host root is not configured, nothing needs a copy or no server turn id
+    exists, so a turn without it is exactly what it was. A failure never stops the turn: the text path still works, and the report says what was not offered."""
+    if not ids or not conv or not turn_id:
+        return {}, None
+    from . import feature_environ, mc_files
+    host = mc_files.host_root(feature_environ())
+    if host is None:
+        return {}, None
+    chosen = mc_files.picks(conv, ids)
+    if not chosen:
+        return {}, None
+    try:
+        from .board_api import _media, _owner
+        folder = getattr(cfg()["services"].store, "folder", None)
+        if not folder:
+            return {}, "no copy could be placed just now"
+        return mc_files.stage(os.path.join(folder, "agent_requests"), host, channel="portal-chat", scope=conv["id"], principal=principal, owner=_owner(),
+                              turn_id=turn_id, chosen=chosen, store=_conversations(), media=_media()), None
+    except mc_files.EvidenceRefused as exc:
+        return {}, exc.message.rstrip(".").lower()
+    except Exception:
+        _mc_log().warning("mc file staging failed", exc_info=True)
+        return {}, "no copy could be placed just now"
+
+
+def _turn_files(conversations, conv, principal, ids, turn_id=None):
     """The Built files for one turn (turn_files.build), or None when none were chosen. Raises FilesRefused before
     anything is sent: an id not in this conversation, or too many documents."""
     try:
@@ -1392,18 +1459,54 @@ def _turn_files(conversations, conv, principal, ids):
         except (DocumentGone, ConversationNotFound, ConversationStoreUnavailable):
             raise LookupError(doc_id) from None
 
-    built = build(conv, ids, load=load, scrub=scrub) if ids else Built()
+    staged, failed = _stage_for_mc(conv, ids, principal, turn_id)
+    built = build(conv, ids, load=load, scrub=scrub, staged=staged, stage_failed=failed) if ids else Built()
+    built.staged = staged or None
     if refs:                                           # the owner's chosen topic items ride the same data block and report
         from .topic_context import build as build_context
         from .topics import topics_of
         block, report = build_context(refs, store=topics_of(cfg()["services"]), principal=principal, scrub=scrub)
-        built = Built("\n\n".join(x for x in (built.block, block) if x), [*built.report, *report])
+        built = Built("\n\n".join(x for x in (built.block, block) if x), [*built.report, *report], staged=built.staged)
     return built
 
 
 def _with_files(text: str, files) -> str:
     """The owner's words, then (only when files were chosen) the data block. The stored note and the capture keep the words."""
     return f"{text}\n\n{files.block}" if files is not None and files.block else text
+
+
+def _agent_state(conv):
+    """What the agents have reported on THIS conversation's requests, for the next MC turn (None when there is nothing, or the switch is off)."""
+    from .agent_ask import turn_state
+    return turn_state(conv)
+
+
+def _with_agent(text: str, state) -> str:
+    """The owner's words (and files), then the agents' status as clearly marked DATA. Stored notes and the capture keep the owner's words only."""
+    return f"{text}\n\n{state.text}" if state is not None else text
+
+
+def _with_context(text: str, owner_text: str, conv, principal: str) -> str:
+    """Then, as more marked DATA, what a quick question needs in the SAME turn (#298): the GitHub items the owner's words point at, and the true state of this
+    conversation's jobs. Any trouble reading either leaves the turn exactly as it was. Never reached by a Private turn."""
+    from . import mc_context
+    extra = []
+    try:
+        from .payment_scrub import scrub
+        block = mc_context.github_block(owner_text, scrub=scrub)
+        if block:
+            extra.append(block)
+    except Exception:
+        pass
+    try:
+        mgr = cfg().get("jobs")
+        if mgr is not None and conv:
+            block = mc_context.jobs_block(mgr.views(conv["id"], principal))
+            if block:
+                extra.append(block)
+    except Exception:
+        pass
+    return "\n\n".join([text, *extra]) if extra else text
 
 
 def _files_view(files):
@@ -1619,6 +1722,25 @@ RULES.append(("/library/links", "library_save_link", library_save_link, ["POST"]
 from .jobs_api import RULES as _JOB_RULES
 RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _JOB_RULES)
 
+# Speaking with Master Craftsman (MC voice, v1): owner-only, off unless MINIMOI_MC_VOICE=1.
+from .mc_voice import RULES as _VOICE_RULES
+RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _VOICE_RULES)
+
+# Dictation (insertion-only speech to text in a draft box): owner-only, off unless MINIMOI_DICTATION=1.
+from .dictation import RULES as _DICTATION_RULES
+RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _DICTATION_RULES)
+
+# Asking Claude Code / Codex through Master Craftsman (MC front door, slice 1): owner-only, off unless MINIMOI_GUILD_AGENT_REQUESTS is on.
+from .agent_ask import RULES as _ASK_RULES
+RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _ASK_RULES)
+
 # The topic workshop (Workshop W1): file-first topics, items, comments and the collaboration journal.
+from .rooms_access_api import RULES as _ROOMS_ACCESS_RULES
+RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _ROOMS_ACCESS_RULES)
 from .topics_api import RULES as _TOPIC_RULES
 RULES.extend(_TOPIC_RULES)
+
+from .rooms_handoff_api import RULES as _HANDOFF_RULES
+RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _HANDOFF_RULES)
+from .approved_agents_api import RULES as _APPROVED_AGENT_RULES
+RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _APPROVED_AGENT_RULES)

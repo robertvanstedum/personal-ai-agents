@@ -1,5 +1,5 @@
 """Guild 1.1 slice 1 (spec §3): the Guild bar is Chat · Board · Build Log ·
-Rooms · More ▾ on every /guild-next page, the Guild home included.
+Workshop Log · Rooms on every /guild-next page, the Guild home included.
 
 Chat is the Shop floor; Board is the wall (the Workbench) and its post-its
 page; Build Log is the real page since slice 2, Rooms since slice 4.
@@ -16,7 +16,8 @@ from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 DOCS = "https://github.com/robertvanstedum/personal-ai-agents/tree/main/docs"
 DAILY = [("chat", "Chat", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/board"),
-         ("build-log", "Build Log", "/guild-next/guild/build/log"), ("workshop", "Workshop", "/guild-next/guild/workshop"), ("rooms", "Rooms", "/guild-next/guild/rooms")]
+         ("build-log", "Build Log", "/guild-next/guild/build/log"), ("workshop", "Workshop Log", "/guild-next/guild/workshop"),
+         ("rooms", "Rooms", "/guild-next/guild/rooms")]
 MORE = [("workshop", "Workshop", "/guild-next/guild/workshop"), ("media", "Media library", "/guild-next/guild/media"),
         ("home", "Guild home", "/guild-next/"),
         ("operate", "Operate", "/guild-next/guild/operate"), ("labs", "Labs", "/guild-next/guild/labs"),

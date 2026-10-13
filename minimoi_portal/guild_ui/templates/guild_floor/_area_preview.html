@@ -1,0 +1,9 @@
+{# A clearly labelled design direction, never a live dashboard or fabricated result. #}
+<section class="area-preview" aria-label="Planned direction">
+  {% if hero_art %}<img src="{{ hero_art }}" alt="" width="784" height="588" loading="lazy">{% endif %}
+  <div>
+    {% include 'guild_floor/_in_construction.html' %}
+    <h2>{{ preview_title }}</h2>
+    <p>{{ preview_text }}</p>
+  </div>
+</section>

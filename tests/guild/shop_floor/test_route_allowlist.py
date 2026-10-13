@@ -30,6 +30,7 @@ EXPECTED = {
     "/guild-next/guild/rooms",
     # Guild 1.1 slice 3: the Board, the Media library, and owner-only image serving.
     "/guild-next/guild/board",
+    "/guild-next/guild/board/popout",
     "/guild-next/guild/media",
     "/guild-next/media/<asset_id>/<variant>",
     "/guild-next/guild/ui-assets/<path:filename>",
@@ -77,12 +78,15 @@ EXPECTED = {
     "/guild-next/api/v1/postits/<int:postit_id>/restore",
     # Guild 1.1 slice 3 (spec §5.1-5.2): the Board's writes and the Media library.
     "/guild-next/api/v1/board",
+    "/guild-next/api/v1/board/rev",
     "/guild-next/api/v1/postits/<int:postit_id>/done",
     "/guild-next/api/v1/postits/<int:postit_id>/undone",
     "/guild-next/api/v1/postits/<int:postit_id>/label",
+    "/guild-next/api/v1/postits/<int:postit_id>/text",
     "/guild-next/api/v1/postits/<int:postit_id>/link",
     "/guild-next/api/v1/postits/photo",
     "/guild-next/api/v1/postits/reorder",
+    "/guild-next/api/v1/postits/layout",
     "/guild-next/api/v1/postits/trash/empty",
     # Guild 1.1 slice 4: Take to a Room (a kept note, by id only).
     "/guild-next/api/v1/notes/<int:note_id>/share",
@@ -121,6 +125,29 @@ EXPECTED = {
     "/guild-next/api/v1/conversations/<cid>/jobs/<job_id>/stop",
     "/guild-next/api/v1/conversations/<cid>/jobs/<job_id>/result",
     "/guild-next/api/v1/conversations/<cid>/jobs/<job_id>/note",
+    # MC front door, slice 1 (11 Oct): asking Claude Code / Codex through MC; owner-only, off unless MINIMOI_GUILD_AGENT_REQUESTS is on.
+    "/guild-next/api/v1/conversations/<cid>/agent-requests",
+    "/guild-next/api/v1/conversations/<cid>/agent-requests/sync",
+    # MC voice, v1 (12 Oct): owner-only; every one answers "not switched on" (404) unless MINIMOI_MC_VOICE=1; the bootstrap is a CSRF-checked on-the-record write.
+    "/guild-next/api/v1/mc/voice/capabilities",
+    "/guild-next/api/v1/mc/voice/bootstrap",
+    "/guild-next/api/v1/mc/voice/speech/<note_request_id>",
+    "/guild-next/api/v1/mc/voice/static/<path:name>",
+    # Dictation (12 Oct): owner-only; every one answers "not switched on" (404) unless MINIMOI_DICTATION=1; the bootstrap is a CSRF-checked on-the-record write.
+    "/guild-next/api/v1/dictation/capabilities",
+    "/guild-next/api/v1/dictation/bootstrap",
+    "/guild-next/api/v1/dictation/static/<path:name>",
+    # Rooms identity, slice 2 (11 Oct): the owner switches Rooms on or off for a mini-moi account; owner-only, CSRF-checked, no model calls.
+    "/guild-next/api/v1/rooms/access",
+    # Hand to agents (11 Oct, #298 G1): the owner turns his own room message into ledger requests; owner-only, CSRF-checked.
+    "/guild-next/api/v1/rooms/handoff",
+    "/guild-next/api/v1/rooms/handoff/sync",
+    "/guild-next/api/v1/rooms/access/grant",
+    "/guild-next/api/v1/rooms/access/withdraw",
+    # Approved agents (11 Oct, Codex): the owner's approval list, per-agent switch and standing brief; owner-only, CSRF-checked.
+    "/guild-next/api/v1/rooms/agents",
+    "/guild-next/api/v1/rooms/agents/<agent>",
+    "/guild-next/api/v1/rooms/agents/<agent>/brief",
     "/guild-next/api/v1/library/links",
     "/guild-next/api/v1/",
     "/guild-next/api/v1/<path:rest>",

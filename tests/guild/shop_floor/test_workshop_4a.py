@@ -71,7 +71,7 @@ def test_the_workshop_opens_from_a_queue_item_with_its_scope_and_the_host(ws):
     assert "Pick the refresh cadence" in page                              # Needs you, from the workshop
     assert "#7 Queue lock hardening" in page and "Streaming S1 after review" in page   # queued work
     assert "Headroom on this Mac (outside Docker): memory free 46.0% · swap used 1.2 GB · disk free 80.0 GB" in page
-    assert "Build host</a>" in page                                           # in the Operate section nav (the topic Workshop is under Build)
+    assert "data-operate-back" in page and "‹ Operate</a>" in page            # one plain way back to Operate (its sub-tabs are gone; the topic Workshop is under Build)
 
 
 def test_an_item_not_approved_says_so_and_a_missing_item_is_named(ws):

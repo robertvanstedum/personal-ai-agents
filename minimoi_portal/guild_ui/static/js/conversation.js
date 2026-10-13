@@ -3,11 +3,11 @@
 // record, Send keeps the message on the server as a note; then, only when the
 // server says Master Craftsman takes turns (data-mc-turns), the kept note is
 // sent to it server side (POST /mc/turns) and its answer, or an honest
-// "did not answer", is shown. Off the record, what is typed stays in this
-// page's memory only: it is never sent, never kept, never reaches MC.
+// "did not answer", is shown. Private questions reach MC through the private
+// path; their thread and drafts stay in page memory and are not kept by MiniMoi.
 import { $, $$, clone, slot, setSlot, el, announce, localTime } from './dom.js';
 import { live, setOff, onChange } from './state.js';
-import { apiGet, apiPost, apiPrivate, apiStream, apiStop, recordMode } from './api.js';
+import { apiGet, apiPost, apiPrivate, apiStream, apiStop, recordMode, RECORD_UNKNOWN_TEXT } from './api.js';
 import { newKey } from './actions.js';
 import { answerFailed, answerArrived } from './floorlayout.js';
 
@@ -17,10 +17,28 @@ const mcSay = (text) => String(text).split('Master Craftsman').join(mcName());
 import { applyConversation } from './conversations.js';
 import { takeTray, restoreTray, trayBusy } from './attachments.js';
 import { initJobs } from './jobs.js';
+import { initAgentRequests } from './agent_requests.js';
 
 let page, panel, thread, pill;
 const inPage = () => document.body.dataset.page === 'floor';
 let mode = 'pill';
+
+// An unsent on-record draft follows this conversation within this browser tab.
+// Private and unknown-mode drafts never enter storage. This is not a server note.
+const draftKey = () => page?.conversation?.id ? `${page.storage_ns || 'guild'}.chat-draft.${page.conversation.id}` : null;
+function keepDraft(input) {
+  const key = draftKey();
+  if (!key || !live.known || live.off) return;
+  try { if (input.value) window.sessionStorage.setItem(key, input.value); else window.sessionStorage.removeItem(key); } catch (e) { /* typing still works without storage */ }
+}
+function restoreDraft(input) {
+  const key = draftKey();
+  if (!key || !live.known || live.off) return;
+  try { input.value = window.sessionStorage.getItem(key) || ''; } catch (e) { /* no saved draft available */ }
+}
+function forgetSentDraft(key, text) {
+  try { if (key && window.sessionStorage.getItem(key) === text) window.sessionStorage.removeItem(key); } catch (e) { /* storage is optional */ }
+}
 
 // The Workshop page chooses topic items for ONE message ("Ask Master Craftsman about this"): ids only, owner-checked on the server,
 // sent with that message and then forgotten here. Nothing is added unless the page put it in window.guildTopicContext.
@@ -49,6 +67,8 @@ function applyMode() {
   const dock = $('[data-mc-dock]');
   dock.setAttribute('aria-pressed', String(mode === 'docked'));
   dock.textContent = mode === 'docked' ? 'Float panel' : 'Side panel';
+  const head = $('.mc-head', panel);                                   // the header is a tab stop only while the panel floats and can be moved
+  if (head) { if (mode === 'floating' && window.matchMedia('(min-width: 641px)').matches) head.setAttribute('tabindex', '0'); else head.removeAttribute('tabindex'); }
 }
 
 function fitPanel() {
@@ -56,7 +76,62 @@ function fitPanel() {
   const top = Math.max(0, panel.getBoundingClientRect().top);
   panel.style.setProperty('--mc-panel-height', `${Math.max(180, (window.visualViewport?.height || window.innerHeight) - top)}px`);
 }
-function setMode(next) { mode = next; applyMode(); requestAnimationFrame(fitPanel); }
+function setMode(next) { mode = next; applyMode(); syncFloatPosition(); requestAnimationFrame(fitPanel); requestAnimationFrame(syncFloatPosition); }
+
+// A floating panel can be moved by its header on a desktop (never by a button or a field inside it). The position is kept in this browser, is
+// pulled back inside the window after a resize, and can be moved with the arrow keys (Home puts it back). A phone keeps its own bottom dock.
+const POS_KEY = 'guild.mc.pos';
+const canMove = () => mode === 'floating' && !inPage() && window.matchMedia('(min-width: 641px)').matches;
+const keptPos = () => { try { const v = JSON.parse(window.localStorage.getItem(POS_KEY) || 'null'); return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null; } catch (e) { return null; } };
+function placePanel(x, y, { keep = true } = {}) {
+  const r = panel.getBoundingClientRect();
+  const nx = Math.round(Math.min(Math.max(8, x), Math.max(8, window.innerWidth - r.width - 8)));
+  const ny = Math.round(Math.min(Math.max(8, y), Math.max(8, window.innerHeight - 56)));      // the header always stays on screen
+  panel.style.setProperty('--mc-x', `${nx}px`); panel.style.setProperty('--mc-y', `${ny}px`);
+  panel.dataset.pos = 'xy';
+  const reset = $('[data-mc-resetpos]'); if (reset) reset.hidden = false;
+  if (keep) { try { window.localStorage.setItem(POS_KEY, JSON.stringify({ x: nx, y: ny })); } catch (e) { /* the place is a convenience */ } }
+}
+function resetPanel() {
+  panel.style.removeProperty('--mc-x'); panel.style.removeProperty('--mc-y'); panel.dataset.pos = 'right';
+  const reset = $('[data-mc-resetpos]'); if (reset) reset.hidden = true;
+  try { window.localStorage.removeItem(POS_KEY); } catch (e) { /* nothing was kept */ }
+}
+function syncFloatPosition() {                       // on opening, on resize: where it was left, or the default; never off screen, never on a phone
+  if (!panel) return;
+  const kept = keptPos();
+  if (canMove() && kept) { placePanel(kept.x, kept.y, { keep: false }); return; }
+  if (panel.dataset.pos === 'xy') { panel.dataset.pos = 'right'; panel.style.removeProperty('--mc-x'); panel.style.removeProperty('--mc-y'); }
+  const reset = $('[data-mc-resetpos]'); if (reset) reset.hidden = !(canMove() && kept);
+}
+function initMove() {
+  const head = $('.mc-head', panel); if (!head || inPage()) return;
+  head.setAttribute('role', 'group');
+  head.setAttribute('aria-label', 'Conversation window. When this is focused, the arrow keys move it and Home puts it back.');
+  let drag = null;
+  head.addEventListener('pointerdown', (e) => {
+    if (!canMove() || e.button !== 0 || e.target.closest('button, a, input, textarea, select')) return;
+    const r = panel.getBoundingClientRect();
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId };
+    head.setPointerCapture(e.pointerId); panel.classList.add('is-dragging');
+  });
+  head.addEventListener('pointermove', (e) => { if (drag && e.pointerId === drag.id) placePanel(e.clientX - drag.dx, e.clientY - drag.dy, { keep: false }); });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag = null; panel.classList.remove('is-dragging');
+    try { head.releasePointerCapture(e.pointerId); } catch (er) { /* already released */ }
+    const r = panel.getBoundingClientRect(); placePanel(r.left, r.top);
+  };
+  head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+  head.addEventListener('keydown', (e) => {
+    if (e.target !== head || !canMove()) return;
+    const step = e.shiftKey ? 64 : 16; const r = panel.getBoundingClientRect();
+    const to = { ArrowLeft: [r.left - step, r.top], ArrowRight: [r.left + step, r.top], ArrowUp: [r.left, r.top - step], ArrowDown: [r.left, r.top + step] }[e.key];
+    if (to) { e.preventDefault(); placePanel(to[0], to[1]); } else if (e.key === 'Home') { e.preventDefault(); resetPanel(); announce('The conversation window is back in its usual place.'); }
+  });
+  const reset = $('[data-mc-resetpos]'); if (reset) reset.addEventListener('click', () => { resetPanel(); announce('The conversation window is back in its usual place.'); });
+  window.addEventListener('resize', () => syncFloatPosition());
+}
 // The Workshop page's Chat | Cards | Split control drives the same panel: docked (Split), pill (Cards), full (Chat).
 export function setPanelMode(next) { if (['docked', 'pill', 'full', 'floating'].includes(next)) setMode(next); }
 export const panelMode = () => mode;
@@ -99,6 +174,20 @@ export function explain(light) {
   follow();
   announce(`${light.label}: ${light.word}, ${light.reason}`);
   if (!inPage() && mode === 'pill') setMode('floating');
+}
+
+// Each message has one small details control (reachable by keyboard and by tap): it shows the time, the context and "kept as a note". Not on the Chat page.
+function decorateMessages() {
+  if (inPage() || !thread) return;
+  for (const li of $$('li.msg-note', thread)) {
+    if (li.dataset.detailsReady) continue;
+    li.dataset.detailsReady = '1';
+    const meta = li.querySelector('.msg-meta'); if (!meta) continue;
+    const who = ((li.querySelector('.msg-label') || {}).textContent || '').trim() || 'message';
+    const b = el('button', { type: 'button', class: 'msg-info', 'aria-expanded': 'false', 'aria-label': `Details of this message from ${who}`, title: 'Time, context and how this is kept' }, 'ⓘ');
+    b.addEventListener('click', () => { const on = li.dataset.details !== 'open'; if (on) li.dataset.details = 'open'; else delete li.dataset.details; b.setAttribute('aria-expanded', String(on)); });
+    meta.append(b);
+  }
 }
 
 export function setBriefing(briefing) {
@@ -180,7 +269,14 @@ function waitingLine() {
   const li = clone('tpl-mc-waiting');
   const elapsed = li.querySelector('[data-slot="elapsed"]');
   const started = Date.now();
-  const tick = () => { elapsed.textContent = clock(Math.floor((Date.now() - started) / 1000)); };
+  const still = li.querySelector('[data-slot="still"]');
+  // After 20 s of silence a quiet "still working" joins the clock (11 Oct: a healthy turn can think for 20 s before its first word, and a bare counter
+  // looked like a stall). It claims nothing about what Master Craftsman is doing; it only says this page is still waiting for the answer.
+  const tick = () => {
+    const secs = Math.floor((Date.now() - started) / 1000);
+    elapsed.textContent = clock(secs);
+    if (still) still.hidden = secs < 20;
+  };
   li.stopTicking = () => window.clearInterval(li.ticker);
   li.ticker = window.setInterval(tick, 1000);
   thread.append(li);
@@ -198,10 +294,12 @@ function showAnswer(holder, r) {
   const body = r.body || {};
   applyHeader(body);
   if (r.ok && body.status === 'answered' && body.reply_note) {
+    lastAnswered = true;
     if ($(`[data-note="${body.reply_note.id}"]`)) holder.remove();
     else holder.replaceWith(noteLine(body.reply_note));
     announce(body.message || mcSay('Master Craftsman answered'));
     answerArrived();
+    agentUi.kick();
   } else {
     if (NOT_DISPATCHED.includes(body.error)) { if (turnFiles.length) restoreTray(turnFiles); restoreTopicContext(); }
     const text = body.message || mcSay('Master Craftsman did not answer. Your message is kept.');
@@ -215,7 +313,7 @@ function showAnswer(holder, r) {
 // Which files went into the request for a note, exactly as the server reports them (it computes this from the text it
 // really put in the request). "Sent" is the honest word: it says what the request carried, not that the model read it.
 // A file that went in full is only a chip with its name; a cut or a file that did not go says so.
-const FILE_WORDS = { read: () => '', partly_read: (f) => `sent in part (${f.reason})`, not_read: (f) => `not sent (${f.reason})` };
+const FILE_WORDS = { read: () => '', partly_read: (f) => `sent in part (${f.reason})`, staged: (f) => `copy placed for Master Craftsman to open (${f.reason})`, not_read: (f) => `not sent (${f.reason})` };
 function showFiles(noteId, files) {
   if (!Array.isArray(files) || !files.length) return;
   const note = thread.querySelector(`[data-note="${noteId}"]`);
@@ -250,21 +348,24 @@ const NOT_DISPATCHED = ['not_found', 'invalid', 'too_many', 'too_large', 'busy',
   'jobs_off', 'queue_full', 'not_connected', 'not_a_conversation', 'no_original', 'too_big', 'quota', 'bad_ids', 'exists'];
 let turnFiles = [];
 let jobsUi = { accepted() {}, refresh() {} };
+let agentUi = { kick() {} };
 
 // One turn per kept note: streamed when the server says so (data-mc-stream,
 // computed from the switch and the backend), else the non-streaming path.
 // One request id per turn, so the server can refuse any second dispatch.
-function askMasterCraftsman(note, files) {
+function askMasterCraftsman(note, files, opts) {
   turnFiles = files || [];
   clearFailureLines();
   if (live.off || document.body.dataset.mcTurns !== 'true') { restoreTray(turnFiles); return undefined; }   // no turn: nothing was sent, the files stay in the tray
-  takeTopicContext();
+  if (opts && opts.voice) turnCtx = [];           // a spoken message carries no chosen topic items and no tray: those stay for the next typed message
+  else takeTopicContext();
   const requestId = newKey();
   return document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(note, requestId)
     : turnMasterCraftsman(note, requestId);
 }
 
 const fileIds = () => turnFiles.map((f) => f.id);
+let lastAnswered = false;     // set when a turn's answer was kept and shown; read by the voice path to know there is a reply to read aloud
 
 async function turnMasterCraftsman(note, requestId, holder) {
   const waiting = holder || waitingLine();
@@ -394,6 +495,7 @@ async function streamMasterCraftsman(note, requestId) {
     } else if (ev.t === 'done') {
       ended = true;
       li.stopTicking();
+      if (ev.reply_note) lastAnswered = true;
       applyHeader(ev);
       if (ev.reply_note && !$(`[data-note="${ev.reply_note.id}"]`)) {
         const done = noteLine(ev.reply_note);
@@ -405,6 +507,7 @@ async function streamMasterCraftsman(note, requestId) {
       if (live.off) addPlatform('Guild platform', 'This answer was asked for on the record, so it is kept.');
       announce(ev.message || mcSay('Master Craftsman answered'));
       answerArrived();
+      agentUi.kick();
       follow();
     } else if (ev.t === 'error') {
       ended = true;
@@ -475,7 +578,7 @@ export function endPrivateSitting() {
   privateGen += 1; privateSession = null; privateBusy = false;
   for (const n of $$('[data-off-record-line]')) n.remove();
   const box = $('[data-mc-input]');
-  if (box) { box.value = ''; box.style.height = 'auto'; }      // a draft typed in Private is private too
+  if (box) { box.value = ''; restoreDraft(box); checkLength(box); box.style.height = 'auto'; }      // never carry a Private draft back on the record
 }
 onChange(() => { if (!live.off && (privateSession || $('[data-off-record-line]'))) endPrivateSitting(); });
 window.addEventListener('pagehide', () => { if (live.off) endPrivateSitting(); });
@@ -520,9 +623,78 @@ async function askPrivate(text, input) {
 let sendingNote = false;
 let noteKey = null;   // one key per composed note; a new one when the text changes
 
+// The History picker hides the thread while it is open, so a send closes it and the answer is seen arriving.
+function closeHistory() {
+  const picker = $('[data-conv-picker]');
+  if (picker && picker.open) picker.open = false;
+}
+
+// A spoken message (MC voice, v1): the owner's final transcript, kept as an ordinary note and put to Master Craftsman exactly like a typed one, but on the record
+// only, with no tray, no topic items and no change to the typed draft. One turn at a time (shared with typing). Resolves to {ok, note_request_id} or {ok:false, reason, message}.
+// The caller (mc_voice.js) speaks the kept answer; nothing is spoken unless this says an answer was kept.
+export async function submitVoiceUtterance(text, requestId) {
+  const say = (reason, message) => ({ ok: false, reason, message });
+  text = (text || '').trim();
+  if (!text) return say('empty', 'Nothing was heard, so nothing was sent.');
+  if (!live.known) return say('record_unknown', RECORD_UNKNOWN_TEXT);
+  if (live.off) return say('private', 'Voice is not built for Private yet, so nothing was sent.');
+  if (document.body.dataset.mcTurns !== 'true') return say('mc_off', mcSay('Master Craftsman is not switched on here, so nothing was sent.'));
+  if (page.chat_scope && !page.conversation) return say('no_conversation', 'This conversation is unavailable, so nothing was sent.');
+  if (page.note_max && codePoints(text) > page.note_max) return say('too_long', `That was ${codePoints(text).toLocaleString('en-US')} characters; the limit is ${page.note_max.toLocaleString('en-US')}. Nothing was sent.`);
+  if (sendingNote) return say('busy', 'A message is still being answered, so nothing was sent. Say it again when it finishes.');
+  closeHistory();
+  sendingNote = true;
+  const send = $('[data-mc-send]');
+  if (send) send.disabled = true;
+  try {
+    const r = await apiPost('/notes', { request_id: requestId, text, record_mode: recordMode(), chat_scope: page.chat_scope,
+      conversation_id: page.conversation ? page.conversation.id : undefined,
+      context: { area: document.body.dataset.area || null, item_ref: page.item_id || null, page: page.page } });
+    const body = r.body || {};
+    if (!(r.ok && body.result === 'kept')) return say('not_kept', body.message || 'Not saved — notes unavailable');
+    if (body.repeated) return say('duplicate', 'That message was already sent; nothing was sent again.');
+    if (!$(`[data-note="${body.note.id}"]`)) appendNote(body.note);
+    applyConversation(body.conversation);
+    announce(body.message);
+    lastAnswered = false;
+    await askMasterCraftsman(body.note, [], { voice: true });
+    return lastAnswered ? { ok: true, note_request_id: body.note.request_id } : say('no_answer', 'Master Craftsman did not answer. Your message is kept.');
+  } finally {
+    sendingNote = false;
+    if (send) send.disabled = false;
+  }
+}
+
+// A long message is never silently clipped (an HTML maxlength would cut a paste without a word): the whole text stays in the box, a plain line says how long it is and what the
+// limit is, and nothing is sent until it fits. Counted in characters (code points), the way the server counts them.
+const codePoints = (s) => { let n = 0; for (const _c of s) n += 1; return n; };    // eslint-disable-line no-unused-vars
+let lengthShown = false;
+function checkLength(input) {
+  const max = live.off ? page.private_max : page.note_max;           // a Private question has its own, longer limit; both are said before anything is sent
+  if (!max) { clearLength(input); return false; }
+  const n = codePoints(input.value.trim());
+  if (n <= max) { clearLength(input); return false; }
+  const text = `This message is ${n.toLocaleString('en-US')} characters; the limit is ${max.toLocaleString('en-US')}. Nothing was sent, and your full text is still here. Shorten it, or send it as two messages.`;
+  const r = $('[data-mc-refusal]');
+  if (!lengthShown) refuse(text); else { r.hidden = false; r.textContent = text; }   // announced once, then updated quietly as the count changes
+  lengthShown = true;
+  input.setAttribute('aria-invalid', 'true');
+  return true;
+}
+function clearLength(input) {
+  if (!lengthShown) return;
+  lengthShown = false;
+  input.removeAttribute('aria-invalid');
+  const r = $('[data-mc-refusal]');
+  if (r) { r.hidden = true; r.textContent = ''; }
+}
+
 async function sendNote(input, send) {
+  const originalDraft = input.value;
+  const originalDraftKey = draftKey();
   const text = input.value.trim();
   if (!text) return;
+  if (checkLength(input)) return;
   if (live.off && document.body.dataset.mcPrivate === 'false') { refuse(`Private is not available with the ${mcName()}: it keeps its own record. Nothing was sent. Your draft is kept.`); return; }
   if (live.off) {       // Private: sent, answered, never kept
     if (document.body.dataset.mcTurns !== 'true') { refuse(mcSay('Master Craftsman is not switched on here, so nothing was sent. Your draft is kept.')); return; }
@@ -546,6 +718,7 @@ async function sendNote(input, send) {
     return;
   }
   if (!noteKey) noteKey = newKey();
+  closeHistory();
   sendingNote = true;
   send.disabled = true;
   const files = takeTray();         // the ready files go with THIS message; a message that is not kept gives them back
@@ -558,8 +731,12 @@ async function sendNote(input, send) {
   if (r.ok && body.result === 'kept') {
     if (!$(`[data-note="${body.note.id}"]`)) appendNote(body.note);
     applyConversation(body.conversation);
-    input.value = '';
-    input.style.height = 'auto';
+    forgetSentDraft(originalDraftKey, originalDraft);
+    // A note may finish saving after another draft was typed or Private began.
+    if (!live.off && input.value === originalDraft) {
+      input.value = '';
+      input.style.height = 'auto';
+    }
     noteKey = null;
     for (const n of $$('[data-notes-unavailable]')) n.remove();
     const r2 = $('[data-mc-refusal]');
@@ -585,6 +762,7 @@ export function refuse(text) {
 }
 
 function renderRecord() {
+  const draftBox = $('[data-mc-input]');
   $('[data-mc-send]').disabled = sendingNote && !live.off;
   const btn = $('[data-mc-record]');
   btn.setAttribute('aria-pressed', String(live.off));
@@ -604,6 +782,7 @@ function renderRecord() {
   const r = $('[data-mc-refusal]');
   r.hidden = true;
   r.textContent = '';             // the chip explains Private on demand; a refusal shows again from refuse()
+  if (draftBox) checkLength(draftBox); // after clearing old messages: restored and mode-specific limits must stay visible
   document.body.dataset.offRecord = String(live.off);
   document.body.dataset.recordKnown = String(live.known);
   for (const n of $$('[data-mc-header]')) {
@@ -625,27 +804,22 @@ function closePrivateExplain() {
   if (why) why.setAttribute('aria-expanded', 'false');
 }
 
-let soonTimer = null;
-function inviteSoon() {
-  const out = $('[data-invite-soon]');
-  if (!out) return;
-  out.textContent = 'Coming soon.';
-  out.hidden = false;
-  announce('Coming soon.');
-  window.clearTimeout(soonTimer);
-  soonTimer = window.setTimeout(() => { out.hidden = true; out.textContent = ''; }, 5000);
-}
-
 export function initConversation(p) {
   page = p;
   panel = $('[data-mc-panel]'); thread = $('[data-mc-thread]'); pill = $('[data-mc-pill]');
-  pill.addEventListener('click', () => { setMode('docked'); const i = $('[data-mc-input]'); if (i) i.focus(); });
+  decorateMessages();
+  new MutationObserver(decorateMessages).observe(thread, { childList: true, subtree: true });
+  // On The Work, Board and Build Log the pill is the ask bar and opens as a sheet over the work; elsewhere it opens the side panel.
+  const asksInPlace = ['board', 'board_popout', 'build_log'].includes(document.body.dataset.page);
+  pill.addEventListener('click', () => { setMode(asksInPlace ? 'floating' : 'docked'); const i = $('[data-mc-input]'); if (i) i.focus(); });
   $('[data-mc-min]').addEventListener('click', () => { setMode('pill'); pill.focus(); });
+  initMove();
   $('[data-mc-dock]').addEventListener('click', () => setMode(mode === 'docked' ? 'floating' : 'docked'));
   panel.addEventListener('keydown', (e) => {
     if (!inPage() && e.key === 'Escape' && mode === 'floating') { setMode('pill'); pill.focus(); }
   });
-  if (!inPage() && new URLSearchParams(window.location.search).get('chat') === 'open') setMode('docked');
+  const requestedMode = new URLSearchParams(window.location.search).get('chat');
+  if (!inPage() && ['open', 'floating'].includes(requestedMode)) setMode(requestedMode === 'floating' ? 'floating' : 'docked');
   window.addEventListener('resize', fitPanel);
   window.addEventListener('scroll', fitPanel, { passive: true });
   const chip = $('[data-record-chip]');
@@ -657,7 +831,8 @@ export function initConversation(p) {
     e.preventDefault();
     sendNote(input, send);
   });
-  input.addEventListener('input', () => { noteKey = null; });
+  input.addEventListener('input', () => { noteKey = null; checkLength(input); keepDraft(input); });
+  restoreDraft(input);
   const confirm = $('[data-mc-record-confirm]');
   if (confirm) {
     confirm.addEventListener('click', () => {
@@ -685,9 +860,6 @@ export function initConversation(p) {
   }
   const exit = $('[data-private-exit]');
   if (exit) exit.addEventListener('click', () => $('[data-mc-record]').click());
-  // Invite: grey but clickable; the whole answer is "Coming soon.". No agent is connected.
-  const invite = $('[data-mc-invite]');
-  if (invite) invite.addEventListener('click', inviteSoon);
   const typeBtn = $('[data-mc-type]');
   if (typeBtn) typeBtn.addEventListener('click', () => {
     document.body.dataset.typing = 'true';
@@ -698,6 +870,7 @@ export function initConversation(p) {
   // Enter sends on a computer; Shift+Enter starts a new line. On a phone Enter is a new line and the Send button sends.
   const fit = () => { input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 150)}px`; };
   input.addEventListener('input', fit);
+  fit();
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !window.matchMedia('(pointer: coarse)').matches) {
       e.preventDefault();
@@ -714,6 +887,5 @@ export function initConversation(p) {
   renderRecord();
   follow();
   jobsUi = initJobs({ page, thread, noteLine, follow });
+  agentUi = initAgentRequests({ page, thread, noteLine, follow });
 }
-
-

@@ -37,12 +37,16 @@ Payment details are stripped by the API before any text reaches this module
 from __future__ import annotations
 
 import hashlib
+import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
 
 from .adapters.contract import READ_FAILED, SourceResult, live_ok, live_unknown, not_configured
 from .board import BoardMixin
+
+log = logging.getLogger(__name__)
 
 EVIDENCE = "guild.floor_messages, guild.floor_postits, guild.floor_continue (read)"
 DEFAULT_FLOOR = "guild"
@@ -62,6 +66,8 @@ class Author:
 
 MASTER_CRAFTSMAN = Author("master_craftsman", "agent", "Master Craftsman")
 CHIEF_OF_STAFF = Author("chief_of_staff", "agent", "Chief of Staff")
+CLAUDE_CODE = Author("claude_code", "agent", "Claude Code")
+CODEX = Author("codex", "agent", "Codex")
 GUILD_PLATFORM = Author("guild_platform", "platform", "Guild platform")
 
 
@@ -97,13 +103,17 @@ def iso(value) -> str | None:
 
 def _default_connect(url: str):
     import psycopg2
-    return psycopg2.connect(url, connect_timeout=2, options="-c statement_timeout=2000")
+    # Dev runs in a small VM that stalls under load (a connect took 2.2 s while the Mac's load average was 10, 10 Oct): two seconds read a healthy
+    # database as "unreadable". Four is still short enough to refuse a database that is really down.
+    return psycopg2.connect(url, connect_timeout=4, options="-c statement_timeout=4000")
 
 
 _POSTIT_COLS = ("id, text, author, author_kind, author_label, created_at, "
                 "binned_at, binned_by, binned_by_label, restored_at, restored_by, restored_by_label, "
                 # Guild 1.1 slice 3 (sql/002_board.sql)
-                "done_at, done_by, label, item_ref, kind, asset_id, sort_key, version")
+                "done_at, done_by, label, item_ref, kind, asset_id, sort_key, version, "
+                # free placement (sql/004_board_place.sql)
+                "pos_x, pos_y, size_w, size_h")
 _NOTE_COLS = "id, request_id, author, author_kind, author_label, text, area, item_ref, page, created_at"
 _CONTINUE_COLS = "kind, ref, label, updated_at"
 
@@ -111,7 +121,7 @@ _CONTINUE_COLS = "kind, ref, label, updated_at"
 def _postit(row) -> dict:
     (pid, text, author, kind, label, created, binned, binned_by, binned_by_label, restored,
      restored_by, restored_by_label, done_at, done_by, board_label, item_ref, note_kind, asset_id,
-     sort_key, version) = row
+     sort_key, version, pos_x, pos_y, size_w, size_h) = row
     # State precedence (spec §5.1): Trash wins over Done; otherwise active.
     state = "binned" if binned is not None else ("done" if done_at is not None else "active")
     return {"id": int(pid), "text": text, "author": author, "author_kind": kind, "author_label": label,
@@ -122,6 +132,8 @@ def _postit(row) -> dict:
             "item_ref": int(item_ref) if item_ref is not None else None, "kind": note_kind or "note",
             "asset_id": str(asset_id) if asset_id is not None else None,
             "sort_key": int(sort_key) if sort_key is not None else None, "version": int(version or 1),
+            "pos_x": int(pos_x) if pos_x is not None else None, "pos_y": int(pos_y) if pos_y is not None else None,
+            "size_w": int(size_w) if size_w is not None else None, "size_h": int(size_h) if size_h is not None else None,
             "state": state}
 
 
@@ -218,12 +230,19 @@ class FloorStores(BoardMixin):
     def _read(self, work, fresh_for_s=60) -> SourceResult:
         if not self.configured():
             return not_configured(EVIDENCE, "the floor database")
-        try:
-            return live_ok(self._run(work, write=False), EVIDENCE, fresh_for_s=fresh_for_s)
-        except FloorStoreNotConfigured:
-            return not_configured(EVIDENCE, "the floor database")
-        except FloorStoreUnavailable as exc:
-            return live_unknown(READ_FAILED, f"floor store {exc}", EVIDENCE)
+        started = time.monotonic()
+        last = None
+        for attempt in (1, 2):                       # a read is safe to repeat: one more try before it is called unreadable
+            try:
+                return live_ok(self._run(work, write=False), EVIDENCE, fresh_for_s=fresh_for_s)
+            except FloorStoreNotConfigured:
+                return not_configured(EVIDENCE, "the floor database")
+            except FloorStoreUnavailable as exc:
+                last = exc
+                log.warning("floor store read failed (attempt %s, %.2fs): %s", attempt, time.monotonic() - started, exc)
+                if attempt == 1:
+                    time.sleep(0.2)
+        return live_unknown(READ_FAILED, f"floor store {last}", EVIDENCE)
 
     # ── reads ───────────────────────────────────────────────────────────
     def _active(self, q, limit=None):
@@ -384,6 +403,8 @@ class FloorStores(BoardMixin):
             if rows:
                 self._bump(q, order=True, trash=True)
                 outcome, postit = done, _postit(rows[0])
+                if not to_bin:
+                    postit = self._restore_position(q, postit)
             else:
                 postit = self._postit_by_id(q, postit_id)
                 outcome = already if postit else "not_found"
@@ -443,5 +464,5 @@ class FloorStores(BoardMixin):
         return self._run(work, write=True)
 
 
-__all__ = ["Author", "WriteResult", "FloorStores", "FloorStoreUnavailable", "FloorStoreNotConfigured", "MASTER_CRAFTSMAN", "CHIEF_OF_STAFF",
+__all__ = ["Author", "WriteResult", "FloorStores", "FloorStoreUnavailable", "FloorStoreNotConfigured", "MASTER_CRAFTSMAN", "CHIEF_OF_STAFF", "CLAUDE_CODE", "CODEX",
            "GUILD_PLATFORM", "POSTIT_MAX", "NOTE_MAX", "RAIL_CAP", "DEFAULT_FLOOR", "utc_now"]

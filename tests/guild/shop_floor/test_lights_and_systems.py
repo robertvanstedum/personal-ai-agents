@@ -198,7 +198,7 @@ def test_every_reason_is_one_short_line(staging):
 def test_explain_card_is_labelled_platform_rules_no_model(staging):
     body = staging.owner().get("/guild-next/guild/build").get_data(as_text=True)
     assert 'id="tpl-explain"' in body
-    assert body.count('data-ask="') == 5
+    assert body.count('data-ask="') == 0                     # the per-light Ask buttons were taken off on 11 Oct
     page_json = body[body.index('id="guild-page"'):]
     assert '"rules_label": "Guild platform \\u00b7 rules \\u00b7 no model"' in page_json
 

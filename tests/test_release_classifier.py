@@ -268,3 +268,90 @@ def test_no_other_service_imports_the_workshop_backend():
     """The guard for the portal-only rule, on the real repository: the day a CoS, language or bot file imports the Workshop
     backend (or its facade), this fails and that change must classify the new consumer."""
     assert _backend_importers(Path(__file__).resolve().parent.parent) == []
+
+
+# Guild request/limit helpers are used by the portal and the laptop agents.
+# Keep their release ownership coupled to actual imports and startup wiring.
+GUILD_MODULES = ("core.agent_requests", "core.limits", "services.agent_installer",
+                 "scripts.agent_connection", "scripts.agent_requests")
+GUILD_ALLOWED_PREFIXES = ("core/agent_requests/", "minimoi_portal/", "tests/",
+                          "prototype-lab/projects/project-records-room-poc/tests/",
+                          "services/rooms_connector/", "services/rooms_worker/",
+                          "services/agent_installer/")
+GUILD_ALLOWED_FILES = {"core/limits.py", "scripts/agent_connection.py", "scripts/agent_requests.py"}
+LOCAL_GUILD_ALLOWED_PREFIXES = ("tests/", "prototype-lab/projects/project-records-room-poc/tests/",
+                                "services/rooms_connector/", "services/rooms_worker/", "services/agent_installer/")
+LOCAL_GUILD_ALLOWED_FILES = {"scripts/agent_connection.py", "scripts/agent_requests.py"}
+
+
+def _guild_importers(root):
+    found = []
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root).as_posix()
+        if SKIPPED_DIRS.intersection(rel.split("/")):
+            continue
+        try:
+            names = _imported_names(path.read_text(errors="ignore"))
+        except SyntaxError:
+            continue
+        for module in GUILD_MODULES:
+            if not any(name == module or name.startswith(module + ".") for name in names):
+                continue
+            # Core helpers may be consumed by the portal. Installer/CLI code is
+            # documents-only, so even a new PORTAL consumer must trip the guard.
+            prefixes, files = ((GUILD_ALLOWED_PREFIXES, GUILD_ALLOWED_FILES) if module.startswith("core.")
+                               else (LOCAL_GUILD_ALLOWED_PREFIXES, LOCAL_GUILD_ALLOWED_FILES))
+            if not rel.startswith(prefixes) and rel not in files:
+                found.append(rel)
+                break
+    return found
+
+
+def test_guild_backend_and_laptop_tools_keep_the_release_on_portal():
+    assert classify(["core/agent_requests/ledger.py", "core/limits.py",
+                     "scripts/agent_requests.py", "scripts/agent_connection.py",
+                     "services/agent_installer/installer.py"]) == ("domain", ("portal",))
+    assert classify(["scripts/agent_connection.py", "services/agent_installer/installer.py"]) == ("documents", ())
+    # Similar names do not inherit this exception.
+    assert classify(["core/limits_extra.py"])[1] == ALL_SERVICES[:7]
+    assert classify(["scripts/agent_connection_extra.py"]) == ("full", ALL_SERVICES)
+    assert classify(["services/agent_installer_extra/start.py"]) == ("full", ALL_SERVICES)
+
+
+def test_guild_guard_detects_new_consumers_even_with_dynamic_or_aliased_imports(tmp_path):
+    forms = ["from core import limits as caps", "from core.agent_requests import ledger",
+             "import services.agent_installer.installer as installer",
+             "import importlib; importlib.import_module('core.agent_requests.connection')",
+             "from scripts import agent_connection"]
+    for index, source in enumerate(forms):
+        root = tmp_path / str(index)
+        target = root / "domains" / "cos" / "consumer.py"
+        target.parent.mkdir(parents=True)
+        target.write_text(source)
+        assert _guild_importers(root) == ["domains/cos/consumer.py"]
+
+
+def test_guild_runtime_has_no_unclassified_production_consumer():
+    root = Path(__file__).resolve().parent.parent
+    assert _guild_importers(root) == []
+    markers = ("agent_installer", "agent_connection.py", "agent_requests.py",
+               "core.agent_requests", "core/agent_requests", "core.limits", "core/limits.py",
+               "rooms_worker", "rooms_connector", "rooms-worker", "rooms-connector")
+    # A new production entrypoint/mount must update service ownership too.
+    paths = [root / ".github/workflows/deploy.yml", root / "docker-compose.prod.yml",
+             root / "docker-compose.yml", root / "scripts/operations/deploy_scoped_release.sh"]
+    paths.extend(p for p in (root / "docker").rglob("*") if p.is_file()
+                 and p.name not in {"Dockerfile.rooms-worker", "Dockerfile.rooms-codex", "requirements.rooms-worker.txt"}
+                 and "mc-agent" not in str(p))
+    violations = [(str(p.relative_to(root)), marker) for p in paths for marker in markers if marker in p.read_text(errors="ignore")]
+    assert violations == []
+
+
+def test_portal_cannot_silently_start_using_documents_only_agent_tools(tmp_path):
+    for module in ("services.agent_installer.installer", "scripts.agent_connection", "scripts.agent_requests"):
+        path = tmp_path / "minimoi_portal" / "consumer.py"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(f"import {module}\n")
+        assert _guild_importers(tmp_path) == ["minimoi_portal/consumer.py"]
+    path.write_text("from core.agent_requests import ledger\nfrom core import limits\n")
+    assert _guild_importers(tmp_path) == []

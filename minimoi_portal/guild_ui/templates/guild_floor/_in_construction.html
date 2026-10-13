@@ -1,5 +1,6 @@
-{# A quiet banner for an area that is being redesigned (5 Oct): what is below still works and nothing is removed. #}
+{# An area being redesigned (5 Oct). 10 Oct: the notice sits in the BODY, on the unfinished part, with a small ribbon; the header above it stays as the
+   finished design will look. What is below still works and nothing is removed, hidden or disabled. #}
 <aside class="gu-construction" role="note" data-in-construction>
-  <b>In construction</b>
-  <span>{{ construction_text }}</span>
+  <b class="visually-hidden">In construction.</b>
+  {% if construction_text %}<span class="visually-hidden">{{ construction_text }}</span>{% endif %}
 </aside>

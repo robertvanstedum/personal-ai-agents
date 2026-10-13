@@ -6,6 +6,7 @@ membership-scoped credential. No model is called; the "worker" here is the
 test, speaking the same HTTP contract the real worker uses.
 """
 from datetime import datetime, timedelta, timezone
+from meetings import DEFAULT_MAX_TURNS
 import importlib.util
 import json
 import subprocess
@@ -187,7 +188,7 @@ def test_one_honest_meeting_end_to_end(env):
     env.say("Earlier context")
     env.call("POST", env.owner, f"/rooms/{env.room}/events", {"body": "What should we build first?"})
     t = env.claim()
-    assert t["state"] == "claimed" and env.remaining() == 19
+    assert t["state"] == "claimed" and env.remaining() == DEFAULT_MAX_TURNS - 1
     assert t["trigger"]["text"] == "What should we build first?"
     assert all(x["text"] != t["trigger"]["text"] for x in t["transcript"])      # the trigger appears once
     assert t["coverage"]["through_seq"] == t["trigger_seq"] - 1
@@ -204,7 +205,7 @@ def test_one_honest_meeting_end_to_end(env):
     assert result["execution"]["caller_correlation"] == "a" * 32 and result["execution"]["prompt_tokens"] == 10
     receipt = env.call("GET", env.mc, f"/operations/{t['response_key']}?destination={env.room}")
     assert receipt.status_code == 200 and receipt.json["receipt"]["actor"] == "mc"
-    assert env.remaining() == 19                                                   # spent once, at claim
+    assert env.remaining() == DEFAULT_MAX_TURNS - 1                                                   # spent once, at claim
 
 
 def test_lost_post_response_replays_without_a_second_row(env):
@@ -335,12 +336,12 @@ def test_last_slot_runs_and_a_second_turn_cannot_claim(env):
 def test_cancel_before_send_still_consumes_the_slot(env):
     env.prove(); env.join(); env.say("Q")
     t = env.claim()
-    assert env.remaining() == 19
+    assert env.remaining() == DEFAULT_MAX_TURNS - 1
     env.call("POST", env.owner, f"/rooms/{env.room}/turns/{t['id']}/cancel", {})
     env.call("POST", env.owner, f"/rooms/{env.room}/turns/{t['id']}/cancel", {})
     ack = env.call("POST", env.worker, f"/turns/{t['id']}/cancel-ack", {"claim_id": t["claim_id"], "late_output": False})
     env.call("POST", env.worker, f"/turns/{t['id']}/cancel-ack", {"claim_id": t["claim_id"]})
-    assert ack.json["state"] == "cancelled" and env.remaining() == 19              # never returned
+    assert ack.json["state"] == "cancelled" and env.remaining() == DEFAULT_MAX_TURNS - 1              # never returned
 
 
 @pytest.mark.parametrize("change", ["remove", "downgrade", "revoke", "window", "turn_expiry", "pause"])
@@ -364,7 +365,7 @@ def test_dispatch_refused_after_a_change_during_a_busy_relay_wait(env, change):
         env.call("POST", env.owner, f"/rooms/{env.room}/state", {"state": "paused", "version": version, "checkpoint": "p"})
     out = hb()
     assert out["dispatch"] is False and out["state"] == "cancel_requested"
-    assert env.remaining() == 19
+    assert env.remaining() == DEFAULT_MAX_TURNS - 1
 
 
 def test_plain_heartbeat_renews_lease_only(env):
@@ -374,7 +375,7 @@ def test_plain_heartbeat_renews_lease_only(env):
     out = env.call("POST", env.worker, f"/turns/{t['id']}/heartbeat", {"claim_id": t["claim_id"]}).json
     after = env.turn(t["id"])
     assert out["dispatch"] is False and after["expires"] == before["expires"] and after["lease_until"] >= before["lease_until"]
-    assert env.remaining() == 19
+    assert env.remaining() == DEFAULT_MAX_TURNS - 1
 
 
 # ── proof gate (M1) ─────────────────────────────────────────────────────────
@@ -506,7 +507,7 @@ def test_recovery_delivers_saved_reply_once_and_replaces_the_claim(env):
     r = env.call("POST", env.worker, f"/turns/{t['id']}/recover", {"prior_claim_id": t["claim_id"]}).json
     assert r["state"] == "recovering"
     new = r["turn"]
-    assert new["claim_id"] != t["claim_id"] and env.remaining() == 19            # delivery spends nothing
+    assert new["claim_id"] != t["claim_id"] and env.remaining() == DEFAULT_MAX_TURNS - 1            # delivery spends nothing
     assert env.reply(t).status_code == 409                                        # the old claim is dead
     assert env.reply(t, claim_id=new["claim_id"]).status_code == 201
     count = event_count(env)
@@ -731,7 +732,7 @@ def test_expired_window_is_refused_until_robert_renews_it(env):
     assert env.status()["turns"][0]["disposition"] == "window_expired"
     assert env.call("POST", env.mc, f"/rooms/{env.room}/renew", {}).status_code == 403
     r = env.call("POST", env.owner, f"/rooms/{env.room}/renew", {})
-    assert r.status_code == 200 and r.json["result"]["remaining"] == 20
+    assert r.status_code == 200 and r.json["result"]["remaining"] == DEFAULT_MAX_TURNS
     env.say("Q again")
     assert env.claim()["trigger"]["text"] == "Q again"
 
@@ -812,3 +813,28 @@ def test_mc_is_the_facilitator_whatever_the_invitation_order(env):
     env.call("POST", env.owner, f"/rooms/{env.room}/invite", {"actor": "claude-code"})
     env.call("POST", env.owner, f"/rooms/{env.room}/invite", {"actor": "mc"})
     assert env.status()["meeting"]["facilitator"] == "mc"
+
+
+def test_a_shared_file_reaches_the_turn_snapshot_with_its_facts_never_its_bytes(env):
+    import base64, hashlib
+    env.prove()
+    env.join()
+    data = b"# Notes\nThe real file text.\n"
+    r = env.call("POST", env.owner, f"/rooms/{env.room}/documents", {"name": "notes.md", "base64": base64.b64encode(data).decode()})
+    assert r.status_code == 201, r.json
+    env.say("Please read the file I just shared.")
+    t = env.claim()
+    line = next(x for x in t["transcript"] if x["kind"] == "document")
+    assert line["text"] == "(shared a file: Filed source: notes.md)" or "notes.md" in line["text"]
+    assert line["file"] == {"id": r.json["result"]["id"], "name": "notes.md", "mime": "text/plain", "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+    assert "The real file text" not in str(t["transcript"])
+
+
+def test_a_picture_sized_file_is_accepted_and_an_oversize_one_is_refused_with_the_real_numbers(env):
+    import base64
+    ok = b"\x89PNG" + b"0" * 3_000_000                                  # the 3 MB picture that used to be refused
+    r = env.call("POST", env.owner, f"/rooms/{env.room}/documents", {"name": "art.png", "base64": base64.b64encode(ok).decode()})
+    assert r.status_code == 201, r.json
+    big = b"x" * 8_000_001
+    r = env.call("POST", env.owner, f"/rooms/{env.room}/documents", {"name": "huge.bin", "base64": base64.b64encode(big).decode()})
+    assert r.status_code in (400, 422) and "8,000,001 bytes" in str(r.json) and "8,000,000" in str(r.json)

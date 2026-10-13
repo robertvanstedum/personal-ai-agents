@@ -23,7 +23,7 @@ import json
 import logging
 from pathlib import Path
 
-from flask import Blueprint, current_app, request, send_from_directory
+from flask import Blueprint, current_app, has_request_context, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 log = logging.getLogger(__name__)
@@ -34,6 +34,14 @@ LAYOUT = PACKAGE / "config" / "layout.json"
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
        "frame-ancestors 'none'; form-action 'self'")
+
+def _csp() -> str:
+    """The page policy. While MC voice or dictation is switched on, connect-src also reaches the speech provider's session endpoint (the browser sends the microphone audio there);
+    everything else is unchanged, and with voice off this is exactly CSP."""
+    from . import dictation, mc_voice
+    extra = mc_voice.csp_connect_extra() or dictation.csp_connect_extra()       # one origin, however many of the voice features are on
+    return CSP.replace("connect-src 'self';", f"connect-src 'self'{extra};") if extra else CSP
+
 
 ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "buildlog", "board",
               "media", "rooms", "references", "assets", "api")
@@ -46,6 +54,21 @@ class GuildBindingError(RuntimeError):
 
 def cfg() -> dict:
     return current_app.extensions[request.blueprint]
+
+
+def feature_environ() -> dict:
+    """Use this mount's admitted settings, never the unfiltered process environment.
+
+    No bound request/mount means off. Production supplies its filtered mapping;
+    a stray shared-container flag cannot enable provider-backed features there.
+    """
+    if not has_request_context():
+        return {}
+    return current_app.extensions.get(request.blueprint, {}).get("feature_environ", {})
+
+
+def feature_enabled(name: str) -> bool:
+    return feature_environ().get(name) == "1"
 
 
 def load_layout() -> dict:
@@ -73,7 +96,7 @@ def owner_api(view):
 
 def _headers(response):
     """Scoped to this blueprint's responses; host-app routes are untouched."""
-    response.headers.setdefault("Content-Security-Policy", CSP)        # a download sets its own stricter one
+    response.headers.setdefault("Content-Security-Policy", _csp())        # a download sets its own stricter one
     response.headers["X-Content-Type-Options"] = "nosniff"
     # A stream is never stored either, and must not be transformed (compressed
     # or buffered) on its way (streaming spec v0.2 §3; no-store is stricter
@@ -155,7 +178,7 @@ def _make_blueprint(name: str, routes) -> Blueprint:
         "buildlog": [("/guild/build/log", "build_log", pages.build_log)],
         # The Board and the Media library (Guild 1.1 slice 3, spec §5); images
         # are served to their owner only, same origin.
-        "board": [("/guild/board", "board", pages.board)],
+        "board": [("/guild/board", "board", pages.board), ("/guild/board/popout", "board_popout", pages.board_popout)],
         "media": [("/guild/media", "media_library", pages.media_library),
                   ("/media/<asset_id>/<variant>", "media_file", board_api.media_file)],
         # Rooms (slice 4, spec §6): group chat on Records, through the dev bridge.
@@ -208,7 +231,8 @@ def _name_the_partner(bp, services):
 
 
 def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, blueprint_name: str,
-                      services, routes=B1_ROUTES, base_url: str | None = None, prototype: bool = False):
+                      services, routes=B1_ROUTES, base_url: str | None = None, prototype: bool = False,
+                      feature_environ=None):
     """Mount the real Shop floor, or raise GuildBindingError and register nothing."""
     if prototype:
         raise GuildBindingError("prototype mode lives in prototype-lab")
@@ -242,6 +266,7 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
         "routes": routes,
         "services": services,
         "base_url": base_url,
+        "feature_environ": feature_environ if feature_environ is not None else {},
         "layout": layout,
         "storage_ns": "guild" + url_prefix.replace("/", "."),
     }
@@ -249,6 +274,8 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
     app.register_blueprint(bp, url_prefix=url_prefix)
     from .jobs_wiring import attach_jobs
     attach_jobs(app, blueprint_name, services)         # Master Craftsman jobs: nothing happens unless MINIMOI_GUILD_JOBS is on
+    from .agent_ask import attach as attach_agent_asks
+    attach_agent_asks(app, blueprint_name, services)   # asking Claude Code / Codex through MC: nothing happens unless MINIMOI_GUILD_AGENT_REQUESTS is on
     return bp
 
 

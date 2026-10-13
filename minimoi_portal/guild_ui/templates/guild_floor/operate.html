@@ -2,24 +2,34 @@
 {% from 'guild_floor/_macros.html' import shape %}
 {% block title %}Operate · Guild{% endblock %}
 {% block main %}
-<h1 class="page-title">Operate</h1>
-{% set construction_text = "Operate is being redesigned. What is below works today. Production and Dev health by domain, backlog aging and a short daily note from Master Craftsman are planned, not built." %}
-{% include 'guild_floor/_in_construction.html' %}
-<p>Check the essentials. Ask MC through Chat when something needs a closer look.</p>
-<p><a href="https://github.com/robertvanstedum/personal-ai-agents/issues?q=is%3Aissue+is%3Aopen">Open GitHub backlog ↗</a></p>
-{% if memory_capture.status != 'current' or scheduled_jobs.light.state != 'green' %}
-<section class="card" aria-labelledby="operate-attention"><h2 id="operate-attention">Worth checking</h2>
-{% if memory_capture.status != 'current' %}<p>Memory capture: {{ memory_capture.status }} · {{ memory_capture.reason }}</p>{% endif %}
-{% if scheduled_jobs.light.state != 'green' %}<p>Scheduled jobs: {{ scheduled_jobs.light.word }} · {{ scheduled_jobs.light.reason }}</p>{% endif %}
+<div class="area-page" data-area-page>
+{% set hero_title = "Operate" %}{% set hero_tagline = "Monitor · Maintain" %}{% set hero_art = "/static/guild/guild-operate-banner.webp" %}{% set hero_wide = true %}
+{% include 'guild_floor/_area_hero.html' %}
+<div class="operate-overview" aria-label="Current operations">
+<details class="card" id="usage-limits" data-usage-limits data-health="{{ usage_limits.light.state }}"><summary><h2>Usage &amp; limits</h2><b>{{ usage_limits.light.word }}</b><small>{{ usage_limits.light.reason }}</small></summary>
+<section aria-label="Usage and limits details">
+  <p class="small">Dollars are Claude Code's estimate, not a billing record. Subscription versus API billing is not verified here. The owner controls the limits.</p>
+  <table class="ul-table"><thead><tr><th scope="col">Limit</th><th scope="col">Value</th><th scope="col">Used</th><th scope="col">Status</th><th scope="col">What it does</th></tr></thead><tbody>
+  {% for r in usage_limits.rows %}
+  <tr data-limit="{{ r.id }}" data-limit-state="{{ r.state }}">
+    <th scope="row">{{ r.label }}{% if not r.editable %} <span class="small">(fixed here)</span>{% endif %}</th>
+    <td>{% if r.runtime_off %}Off*{% else %}{% if r.unit == 'seconds' %}{{ '%g'|format(r.value) }} s{% elif r.unit == 'fraction' %}{{ '%d'|format((r.value * 100)|round) }}%{% else %}${{ '%g'|format(r.value) }}{% endif %}{% if r.is_default %} <span class="small">default</span>{% endif %}{% endif %}</td>
+    <td>{% if r.unit in ('seconds', 'fraction') %}—{% elif r.used is none %}Unknown{% else %}${{ '%.2f'|format(r.used) }}{% if r.share is not none %} · {{ '%d'|format((r.share * 100)|round) }}%{% endif %}{% endif %}</td>
+    <td>{{ {'ok': 'OK', 'info': '—', 'watch': 'Watch', 'problem': 'Problem', 'unknown': 'Unknown'}[r.state] }}{% if r.trip %}<br><span class="small">{{ r.trip }}</span>{% elif r.note %}<br><span class="small">{{ r.note }}</span>{% endif %}</td>
+    <td class="small">{{ r.what }} <em>Enforced by {{ r.enforced_by }}; a change applies {{ r.reload }}; allowed range {% if r.unit == 'seconds' %}{{ '%g'|format(r.hard_min) }}-{{ '%g'|format(r.hard_max) }} s{% elif r.unit == 'fraction' %}{{ '%d'|format((r.hard_min * 100)|round) }}-{{ '%d'|format((r.hard_max * 100)|round) }}%{% else %}${{ '%g'|format(r.hard_min) }}-${{ '%g'|format(r.hard_max) }}{% endif %}.</em></td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+  {% if usage_limits.footnote %}<p class="small" data-ceiling-footnote>{{ usage_limits.footnote }}</p>{% endif %}
+  <p class="small">Checked {{ usage_limits.observed_at }} · refresh this page for the latest.</p>
 </section>
-{% endif %}
-<details class="card" id="memory-capture-details"><summary>Memory capture · {{ memory_capture.status|capitalize }}</summary>
+</details>
+<details class="card" id="memory-capture-details" data-health="{{ memory_capture.status }}"><summary><h2>Memory capture</h2><b>{{ memory_capture.status|capitalize }}</b><small>{{ memory_capture.reason }}</small></summary>
 {% include 'guild_floor/memory_capture.html' %}
 </details>
-<details class="card"><summary>Scheduled jobs · {{ scheduled_jobs.light.word }}</summary>
-<section aria-labelledby="scheduled-jobs-title">
-  <h2 class="h2" id="scheduled-jobs-title">Scheduled jobs · Mac / dev</h2>
-  <p>{{ shape(scheduled_jobs.light) }} {{ scheduled_jobs.light.word }} · {{ scheduled_jobs.light.reason }}</p>
+<details class="card" data-health="{{ scheduled_jobs.light.state }}"><summary><h2>Scheduled jobs</h2><b>{{ scheduled_jobs.light.word }}</b><small>{{ scheduled_jobs.light.reason }}</small></summary>
+<section aria-label="Scheduled job details">
+  <p class="small">Mac / dev</p>
   <details><summary>Job details</summary>
   {% for job in scheduled_jobs.jobs %}
     <section><h3>{{ job.name }} · {{ job.host }}</h3>
@@ -32,6 +42,7 @@
   <p class="small">Checked {{ scheduled_jobs.light.observed_at or '—' }} · refresh this page for the latest status.</p>
 </section>
 </details>
+</div>
 <details class="gu-operate-diagnostics"><summary>Guild diagnostics · queue and local systems</summary>
 <ul class="tiles" aria-label="Operate measures">
   {% for t in layout.operate.tiles %}{% set l = tile_lights[t.id] %}
@@ -56,5 +67,10 @@
 </section>
 {% endfor %}
 </details>
-<p class="small"><a href="{{ url_for('.operate_view',view='checks') }}">Operational checks</a> · <a href="/guild/operate">Administration</a></p>
+<p class="small" data-operate-tools>Also here: <a href="{{ urls.build_host }}">Build host</a> · <a href="{{ url_for('.operate_view',view='runbooks') }}">Runbooks</a> · <a href="{{ url_for('.operate_view',view='agents') }}">Agents</a> · <a href="{{ url_for('.operate_view',view='tending') }}">MC tending</a> · <a href="{{ url_for('.operate_view',view='checks') }}">Operational checks</a> · <a href="/guild/operate">Administration</a></p>
+{% set preview_title = "A clearer view of the system" %}
+{% set preview_text = "Domain health, recent activity and the few things that need attention. This dashboard is still being designed." %}
+{% set construction_text = "Operate is being redesigned. The status checks above work today. The dashboard shown by the artwork is a concept, not live telemetry." %}
+{% include 'guild_floor/_area_preview.html' %}
+</div>
 {% endblock %}

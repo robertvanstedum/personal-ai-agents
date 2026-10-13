@@ -5,13 +5,54 @@
 // Switching conversations is a navigation (?c=<id>): the page and Master
 // Craftsman's session are then that conversation's only.
 import { $, $$, el, notice } from './dom.js';
-import { apiPost, recordMode } from './api.js';
+import { apiGet, apiPost, recordMode } from './api.js';
 import { newKey } from './actions.js';
 
 let page;
 
 function floorUrl(cid) {
+  if (page.chat_scope) {
+    const next = new URL(window.location.href);
+    if (cid) next.searchParams.set('c', cid); else next.searchParams.delete('c');
+    next.searchParams.set('chat', document.body.dataset.mcMode === 'floating' ? 'floating' : 'open');
+    return next.href;
+  }
   return cid ? `${page.urls.floor}?c=${encodeURIComponent(cid)}` : page.urls.floor;
+}
+
+function initPicker() {
+  const picker = $('[data-conv-picker]'), body = $('[data-conv-picker-body]');
+  if (!picker || !body) return;
+  let rows = [], offset = 0, archived = false, generation = 0;
+  const button = (label, action) => { const b = el('button', {type: 'button', class: 'btn-quiet'}, label); b.addEventListener('click', action); return b; };
+  function draw() {
+    const list = el('ol', {class: 'mc-history-list', 'aria-label': archived ? 'Archived conversations' : 'Recent conversations'});
+    for (const conv of rows.slice(offset, offset + 10)) {
+      const link = el('a', {href: floorUrl(conv.id), 'data-conv-pick': conv.id}, conv.title);
+      if (conv.id === page.conversation?.id) link.setAttribute('aria-current', 'true');
+      const row = el('li'); row.append(link); list.append(row);
+    }
+    body.replaceChildren(list);
+    if (!rows.length) body.append(el('p', {}, archived ? 'Nothing archived.' : 'No conversations yet.'));
+    const controls = el('div', {class: 'mc-history-controls'});
+    if (offset) controls.append(button('Newer', () => { offset -= 10; draw(); }));
+    if (offset + 10 < rows.length) controls.append(button('Older', () => { offset += 10; draw(); }));
+    controls.append(button(archived ? 'Recent' : 'Archived', () => { archived = !archived; load(); }));
+    body.append(controls);
+  }
+  async function load() {
+    const current = ++generation;
+    body.replaceChildren(el('p', {role: 'status'}, 'Loading…'));
+    const r = await apiGet(`/conversations?view=${archived ? 'archived' : 'active'}`);
+    if (current !== generation) return;
+    if (!r.ok || !Array.isArray(r.body?.conversations)) {
+      body.replaceChildren(el('p', {role: 'status'}, 'History is unavailable right now.'), button('Retry', load)); return;
+    }
+    rows = r.body.conversations; offset = 0; draw();
+    if (r.body.unreadable) body.append(el('p', {role: 'status'}, 'Some conversations could not be read.'));
+  }
+  picker.addEventListener('toggle', () => { if (picker.open) load(); });
+  picker.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); picker.open = false; picker.querySelector('summary').focus(); } });
 }
 
 // A kept note may have titled its conversation (the first message): show it.
@@ -69,6 +110,7 @@ function startRename(row, cid) {
 
 export function initConversations(p) {
   page = p;
+  initPicker();
   if (page.conv_notice) notice(page.conv_notice);
   for (const b of $$('[data-conv-new]')) {
     b.addEventListener('click', async () => {
@@ -77,12 +119,7 @@ export function initConversations(p) {
       if (page.chat_scope) body.scope = page.chat_scope;
       const r = await write('/conversations', body);
       if (r.ok && r.body && r.body.conversation) {
-        if (page.chat_scope) {
-          const next = new URL(window.location.href);
-          next.searchParams.set('c', r.body.conversation.id);
-          next.searchParams.set('chat', 'open');
-          window.location.assign(next.href);
-        } else window.location.assign(floorUrl(r.body.conversation.id));
+        window.location.assign(floorUrl(r.body.conversation.id));
       }
     });
   }

@@ -19,6 +19,22 @@ from domains.guild import queue_store as qs
 from .contract import INVALID, READ_FAILED, SourceResult, live_ok, live_unknown
 from .spec_author import spec_author
 
+
+def spec_github(spec_file):
+    """The spec's address on GitHub (main), when the file is in this repository's documents; None when it is not. Read time only, no network."""
+    ref = _text(spec_file)
+    if not ref:
+        return None
+    try:
+        from ..references import ROOT, resolve
+        path = resolve(ref)
+        if not path:
+            return None
+        from urllib.parse import quote
+        return "https://github.com/robertvanstedum/personal-ai-agents/blob/main/" + quote(path.relative_to(ROOT).as_posix())
+    except Exception:
+        return None
+
 STATUSES = qs.STATUSES
 ACTIVE = ("spec_ready", "in_build")
 TROUBLE = qs.TROUBLE            # blocked or rework (Guild 1.1 slice 2, spec §4.2)
@@ -113,6 +129,7 @@ def normalize(item: dict) -> dict:
         "notes": _text(item.get("notes")),
         "owner_rank": item.get("owner_rank") if qs.valid_rank(item.get("owner_rank")) else None,
         "spec_author": spec_author(item.get("spec_file")),       # read time, never stored; blank when absent
+        "spec_github": spec_github(item.get("spec_file")),       # read time, never stored; None when the spec is not in the repository
         "trouble": known and raw in TROUBLE,
         "trouble_reason": _text(item.get("trouble_reason")) or (
             _text(item.get("blocked_reason")) if known and raw == "blocked" else ""),
