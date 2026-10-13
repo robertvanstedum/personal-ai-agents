@@ -6,21 +6,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_confer_page_uses_shared_controller_and_keeps_typed_path():
-    template = (ROOT / "domains/cos/templates/cos_ui.html").read_text()
-    assert "realtime-voice-controller.js?v=20260816-cos1" in template
-    assert "bootstrapUrl: '../api/realtime-voice/confer/bootstrap'" in template
-    assert 'id="voice-provider-select"' in template
-    assert "OpenAI Voice" in template
-    assert "Grok Voice" in template
-    assert "onFunctionCall" in template
-    assert "speech_output: false" in template
-    assert "onFinalize: (result)" in template
+    template=(ROOT / "domains/cos/templates/cos_ui.html").read_text()
+    assert "realtime-confer-controller.js?v=20261013-chained1" in template
+    assert "bootstrapUrl:'../api/realtime-voice/confer/bootstrap'" in template
+    assert "turnUrl:'send'" in template
+    assert 'id="voice-provider-select"' not in template
+    assert "onFunctionCall" not in template and "onFinalize" not in template
+    assert "onAssistantTurn:text=>appendMsg('cos',text)" in template
+    assert "controller.stop('pagehide')" in template
     assert 'aria-label="Start voice conversation">🎤</button>' in template
-    assert "voiceButton.textContent = voiceActive ? '■' : '🎤'" in template
-    assert "Voice is AI-generated." in template
-    assert "channel: 'html_text'" in template
-    assert "captureWithVAD" not in template
-    assert "/ui/transcribe" not in template
+    assert "Voice is AI-generated." in template and "channel: 'html_text'" in template
 
 
 def test_confer_relative_voice_paths_work_directly_and_through_portal():
@@ -50,7 +45,7 @@ def test_shared_confer_controller_keeps_voice_and_agent_boundaries_separate():
         ROOT / "core/realtime_voice/static/realtime-confer-controller.js"
     ).read_text()
     assert 'channel: "html_voice"' in source
-    assert "autoCommitOnSilence: false" in source
+    assert "autoCommitOnSilence: true" in source
     assert "openai-transcription-webrtc-adapter.js?v=20260815-confer8" in source
     assert "const requestId = crypto.randomUUID()" in source
     assert "request_id: requestId" in source
@@ -61,7 +56,7 @@ def test_shared_confer_controller_keeps_voice_and_agent_boundaries_separate():
     assert "OpenClaw" not in source
 
 
-def test_confer_uses_provider_turn_detection_not_browser_timer():
+def test_confer_uses_browser_commits_for_live_transcription():
     source = (
         ROOT
         / "core/realtime_voice/static/adapters/openai-transcription-webrtc-adapter.js"
@@ -73,5 +68,5 @@ def test_confer_uses_provider_turn_detection_not_browser_timer():
     controller = (
         ROOT / "core/realtime_voice/static/realtime-confer-controller.js"
     ).read_text()
-    assert "autoCommitOnSilence: false" in controller
+    assert "autoCommitOnSilence: true" in controller
     assert "silenceMs:" not in controller

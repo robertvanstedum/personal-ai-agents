@@ -82,6 +82,7 @@ export function initMcVoice(page) {
           const c = page.conversation ? `?c=${encodeURIComponent(page.conversation.id)}` : '';
           await this._play(`${api}/mc/voice/speech/${encodeURIComponent(result.note_request_id)}${c}`);
         }
+
       }
       const guarded = (fn) => (...args) => { if (current()) fn(...args); };     // nothing from an older attempt repaints the page
       const c = new McVoiceController({

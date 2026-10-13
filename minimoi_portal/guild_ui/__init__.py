@@ -40,7 +40,9 @@ def _csp() -> str:
     everything else is unchanged, and with voice off this is exactly CSP."""
     from . import dictation, mc_voice
     extra = mc_voice.csp_connect_extra() or dictation.csp_connect_extra()       # one origin, however many of the voice features are on
-    return CSP.replace("connect-src 'self';", f"connect-src 'self'{extra};") if extra else CSP
+    policy = CSP.replace("connect-src 'self';", f"connect-src 'self'{extra};") if extra else CSP
+    # Speech is fetched once, validated, then played as a temporary Blob URL.
+    return policy + "; media-src 'self' blob:" if mc_voice.enabled() else policy
 
 
 ALL_ROUTES = ("floor", "bench", "labs", "workshop", "queue", "item", "postits", "operate", "buildlog", "board",

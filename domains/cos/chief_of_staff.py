@@ -1367,11 +1367,18 @@ def ui_speech(turn_id):
     if reply.provider != "openai":
         return jsonify({"error": "speech provider unavailable"}), 503
 
+    from core.realtime_voice import budget as voice_budget
     try:
-        provider_response = openai_speech.create_speech_stream(
-            text=reply.text,
-            user_id=str(user_id),
-        )
+        # Existing route: gated only when MINIMOI_VOICE_BUDGET=1 is set for this service (required=False); then a conservative allowance is reserved first.
+        with voice_budget.admit(kind="tts", domain="cos", principal=str(user_id), required=False,
+                                amount_micro=voice_budget.tts_allowance_micro(reply.text)):
+            provider_response = openai_speech.create_speech_stream(
+                text=reply.text,
+                user_id=str(user_id),
+            )
+    except voice_budget.VoiceBudgetError as error:
+        _log_file("ui_speech_budget", error.public)
+        return jsonify({"error": error.public}), error.status
     except openai_speech.OpenAISpeechError as error:
         _log_file("ui_speech_error", str(error))
         return jsonify({"error": str(error)}), 502
@@ -1413,6 +1420,11 @@ def ui_repository():
     return jsonify(_get_agent_log_listing())
 
 
+def voice_budget_error():
+    from core.realtime_voice.budget import VoiceBudgetError
+    return VoiceBudgetError
+
+
 @app.route("/ui/transcribe", methods=["POST"])
 def ui_transcribe():
     if "audio" not in request.files:
@@ -1425,15 +1437,26 @@ def ui_transcribe():
         if not api_key:
             return jsonify({"error": "OPENAI_API_KEY not configured"}), 500
         client = _OAI(api_key=api_key)
+        audio_file.stream.seek(0, 2)
+        nbytes = audio_file.stream.tell()
         audio_file.stream.seek(0)
         fname = audio_file.filename or "audio.webm"
         content_type = audio_file.content_type or "audio/webm"
-        response = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=(fname, audio_file.stream, content_type),
-            response_format="text",
-        )
+        from core.realtime_voice import budget as voice_budget
+        if voice_budget.enforced() and nbytes > voice_budget.UPLOAD_MAX_BYTES:
+            return jsonify({"error": f"That recording is too large to transcribe (over {voice_budget.UPLOAD_MAX_BYTES // (1024 * 1024)} MB)."}), 413
+        uid = resolve_user_id(request)
+        # Gated only when MINIMOI_VOICE_BUDGET=1 is set for this service. The allowance is ESTIMATED from the file size (its real duration is not read): an estimate, not a spend bound.
+        with voice_budget.admit(kind="upload_transcription", domain="cos", principal=str(uid or "anonymous"), required=False,
+                                amount_micro=voice_budget.upload_allowance_micro(nbytes)):
+            response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=(fname, audio_file.stream, content_type),
+                response_format="text",
+            )
         return jsonify({"transcript": response})
+    except voice_budget_error() as e:
+        return jsonify({"error": e.public}), e.status
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

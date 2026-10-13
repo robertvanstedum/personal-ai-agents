@@ -206,3 +206,28 @@ def test_production_filters_voice_and_dictation_for_pages_csp_and_provider_route
     assert client.get(f'{prefix}/mc/voice/capabilities').status_code == 404
     assert client.get(f'{prefix}/dictation/capabilities').status_code == 404
     assert not calls
+
+
+def test_voice_beta_requires_explicit_production_gate_and_shared_cos_partner(load_portal,monkeypatch,tmp_path):
+    from minimoi_portal.guild_mounts import production_environ
+    from minimoi_portal.guild_ui import mc_files
+    from voice_budget_helpers import install
+    install(monkeypatch,tmp_path)
+    flags={'MINIMOI_GUILD_VOICE_PRODUCTION':'1','MINIMOI_GUILD_CHAT':'cos','MINIMOI_MC_VOICE':'1','MINIMOI_DICTATION':'1',mc_files.ENV:'/tmp/synthetic/agent_requests'}
+    admitted=production_environ(flags)
+    assert admitted['MINIMOI_MC_VOICE']=='1' and admitted['MINIMOI_DICTATION']=='1'
+    assert mc_files.ENV not in admitted
+    assert 'MINIMOI_MC_VOICE' not in production_environ(dict(flags,MINIMOI_GUILD_CHAT=''))
+    for name,value in flags.items():monkeypatch.setenv(name,value)
+    monkeypatch.setenv('MINIMOI_GUILD_PRODUCTION','1')
+    monkeypatch.setenv('COS_BACKEND','http://cos-scheduler:8769')
+    portal=load_portal(next_flag='1',base_url=PROD)
+    client=portal.owner()
+    response=client.get('/guild-next/guild/build')
+    assert response.status_code==200
+    html=response.get_data(as_text=True)
+    assert 'data-mc-voice="true"' in html and 'data-dictation="true"' in html
+    assert "media-src 'self' blob:" in response.headers['Content-Security-Policy']
+    assert client.get('/guild-next/api/v1/mc/voice/capabilities').status_code==200
+    assert client.get('/guild-next/api/v1/dictation/capabilities').status_code==200
+    assert portal.app.test_client().get('/guild-next/api/v1/mc/voice/capabilities').status_code==401

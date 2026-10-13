@@ -3,14 +3,16 @@
 The shared memo controller streams the microphone straight to the speech provider for TRANSCRIPTION only (an ephemeral credential minted here, never the account key);
 the page puts the words into the box the owner is writing in, at the cursor or over a selection, and never sends anything. No agent answers and no model speaks.
 
-Held off in this alpha until the shared implementation is included; then off unless ``MINIMOI_DICTATION=1``. What is checked up front is only that the shared transport lists the OpenAI memo provider (a static table): it does NOT prove a key is
+Off unless ``MINIMOI_DICTATION=1``. What is checked up front is only that the shared transport lists the OpenAI memo provider (a static table): it does NOT prove a key is
 configured or accepted. A missing or refused key shows when a session is started, as a bounded 502 with the provider's plain message and never a key.
-Private is a bounded gap, not a policy: the page does not start dictation there. Nothing here changes the provider, the key, the spending cap or any record."""
+Private is a bounded gap, not a policy: the page does not start dictation there. Every credential first reserves a conservative allowance against the shared daily voice budget (core.realtime_voice.budget: $20 per America/Chicago day; a reserved allowance, not a bill) and is refused with a plain message when the day's allowance is used up. Nothing here changes the provider, the key or any record."""
 from __future__ import annotations
 
 import os
 
 from flask import jsonify, send_from_directory
+
+from core.realtime_voice import budget
 
 from . import cfg, feature_enabled, voice_release
 from .security import check_write, json_error
@@ -50,7 +52,7 @@ def capabilities():
         mode, default, listed = _providers()
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
-    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed]})
+    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status()})
 
 
 def bootstrap():
@@ -68,17 +70,22 @@ def bootstrap():
     principal = _principal()
     if not check_voice_rate_limit(principal):
         return jsonify({"ok": False, "error": "rate limited"}), 429
+    guard = DurationGuard(warning_minutes=int(os.environ.get("VOICE_MEMO_WARNING_MINUTES", 13)), max_minutes=int(os.environ.get("VOICE_MEMO_MAX_MINUTES", 15)))
     try:
         _providers()
-        credential = openai_realtime.mint_transcription_credential(
-            transcription_language="en", user_id_for_safety_identifier=principal, transcription_prompt=PROMPT)
+        # The provider-bound exposure (60-minute maximum at the live-transcription rate) is reserved before the provider is contacted. The page's 15-minute timer is a browser timer, not a billing cap; there is no early-end rebate.
+        with budget.admit(kind="transcription_session", domain="dictation", principal=principal, required=True,
+                          amount_micro=budget.session_allowance_micro()):
+            credential = openai_realtime.mint_transcription_credential(
+                transcription_language="en", user_id_for_safety_identifier=principal, transcription_prompt=PROMPT)
+    except budget.VoiceBudgetError as exc:
+        return jsonify({"ok": False, "error": exc.public, "budget": budget.public_status()}), exc.status
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     except openai_realtime.OpenAIRealtimeError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
-    guard = DurationGuard(warning_minutes=int(os.environ.get("VOICE_MEMO_WARNING_MINUTES", 13)), max_minutes=int(os.environ.get("VOICE_MEMO_MAX_MINUTES", 15)))
     return jsonify({"ok": True, **credential, "warning_minutes": guard.warning_minutes, "max_minutes": guard.max_minutes})
 
 

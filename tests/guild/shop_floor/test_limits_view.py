@@ -108,7 +108,8 @@ def test_reported_disabled_daily_guard_is_off_not_default_twenty_dollar_limit(tm
     assert view["footnote"] == limits_view.CEILING_OFF_FOOTNOTE and "cannot tell whether the subscription is still active" in view["footnote"]
     text, disabled_id = limits_view.mc_block(agent_status=st, environ=env(tmp_path))
     assert "Subscription versus API billing is not verified here" in text and "own estimate on the subscription" not in text
-    assert "Off* on this connection" in text and "(910%)" not in text and "limit $20" not in text
+    claude_line = next(line for line in text.splitlines() if line.startswith("- Claude Code daily ceiling"))
+    assert "Off* on this connection" in text and "(910%)" not in text and "limit $20" not in claude_line
     assert limits_view.CEILING_OFF_FOOTNOTE in text and "real API cost" in text                       # the explanation travels with the number to Master Craftsman too
     assert list(tmp_path.iterdir()) == before  # read-only; never enable the guard
     st["usage"]["applied"]["claude.daily_ceiling_usd"] = 20

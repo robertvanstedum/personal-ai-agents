@@ -1,4 +1,11 @@
 /** Browser-direct OpenAI transcription transport using an ephemeral key. */
+// connect() rejects with this when end() ran first (a stop is not a failure and emits no error).
+function cancelled() {
+  const error = new Error("cancelled");
+  error.cancelled = true;
+  return error;
+}
+
 export class OpenAITranscriptionWebRTCAdapter {
   constructor({ autoCommitOnSilence = false, finishTimeoutMs = 2500 } = {}) {
     this._listeners = {};
@@ -36,8 +43,14 @@ export class OpenAITranscriptionWebRTCAdapter {
         },
       });
     } catch (error) {
+      if (this._ending) throw cancelled();
       this._emit("fatal_error", { reason: "microphone_denied", detail: String(error) });
       throw error;
+    }
+    // end() may have run while the browser was still asking for the microphone: release it now, open nothing.
+    if (this._ending) {
+      for (const track of this._micStream?.getAudioTracks() || []) track.stop();
+      throw cancelled();
     }
 
     this._pc = new RTCPeerConnection();
@@ -69,7 +82,9 @@ export class OpenAITranscriptionWebRTCAdapter {
     });
 
     const offer = await this._pc.createOffer();
+    if (this._ending) throw cancelled();
     await this._pc.setLocalDescription(offer);
+    if (this._ending) throw cancelled();
 
     // The ephemeral credential is already bound to the transcription session
     // and model. The GA WebRTC contract posts the SDP to /v1/realtime/calls
@@ -85,12 +100,15 @@ export class OpenAITranscriptionWebRTCAdapter {
         body: offer.sdp,
       }
     );
+    if (this._ending) throw cancelled();
     if (!response.ok) {
       const error = new Error(`OpenAI transcription connection failed (HTTP ${response.status})`);
       this._emit("fatal_error", { reason: "provider_rejected", detail: error.message });
       throw error;
     }
-    await this._pc.setRemoteDescription({ type: "answer", sdp: await response.text() });
+    const answer = await response.text();
+    if (this._ending) throw cancelled();
+    await this._pc.setRemoteDescription({ type: "answer", sdp: answer });
   }
 
   async finish() {
