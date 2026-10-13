@@ -72,7 +72,7 @@ def test_cos_change_does_not_restart_language_domains():
 
 def test_shared_voice_change_reaches_all_voice_consumers():
     assert classify(["core/realtime_voice/confer.py"]) == (
-        "domain", ("german", "portuguese", "cos-scheduler")
+        "domain", ("portal", "german", "portuguese", "cos-bot", "cos-scheduler")
     )
 
 
@@ -279,6 +279,7 @@ GUILD_ALLOWED_PREFIXES = ("core/agent_requests/", "minimoi_portal/", "tests/",
                           "services/rooms_connector/", "services/rooms_worker/",
                           "services/agent_installer/")
 GUILD_ALLOWED_FILES = {"core/limits.py", "scripts/agent_connection.py", "scripts/agent_requests.py"}
+SHARED_LIMIT_CONSUMERS = {"core/realtime_voice/budget.py"}
 LOCAL_GUILD_ALLOWED_PREFIXES = ("tests/", "prototype-lab/projects/project-records-room-poc/tests/",
                                 "services/rooms_connector/", "services/rooms_worker/", "services/agent_installer/")
 LOCAL_GUILD_ALLOWED_FILES = {"scripts/agent_connection.py", "scripts/agent_requests.py"}
@@ -297,6 +298,8 @@ def _guild_importers(root):
         for module in GUILD_MODULES:
             if not any(name == module or name.startswith(module + ".") for name in names):
                 continue
+            if module == "core.limits" and rel in SHARED_LIMIT_CONSUMERS:
+                continue
             # Core helpers may be consumed by the portal. Installer/CLI code is
             # documents-only, so even a new PORTAL consumer must trip the guard.
             prefixes, files = ((GUILD_ALLOWED_PREFIXES, GUILD_ALLOWED_FILES) if module.startswith("core.")
@@ -308,10 +311,12 @@ def _guild_importers(root):
 
 
 def test_guild_backend_and_laptop_tools_keep_the_release_on_portal():
-    assert classify(["core/agent_requests/ledger.py", "core/limits.py",
+    assert classify(["core/agent_requests/ledger.py",
                      "scripts/agent_requests.py", "scripts/agent_connection.py",
                      "services/agent_installer/installer.py"]) == ("domain", ("portal",))
     assert classify(["scripts/agent_connection.py", "services/agent_installer/installer.py"]) == ("documents", ())
+    assert classify(["core/limits.py"]) == ("domain", ("portal", "cos-bot", "cos-scheduler"))
+    assert classify(["core/realtime_voice/budget.py"]) == ("domain", ("portal", "german", "portuguese", "cos-bot", "cos-scheduler"))
     # Similar names do not inherit this exception.
     assert classify(["core/limits_extra.py"])[1] == ALL_SERVICES[:7]
     assert classify(["scripts/agent_connection_extra.py"]) == ("full", ALL_SERVICES)

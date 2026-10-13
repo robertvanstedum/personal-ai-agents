@@ -113,8 +113,10 @@ WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/", "core/a
 WORKSHOP_BACKEND_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scrub.py"})   # exact: no other utils/ file moves
 
 
-# Current production consumers are the Guild portal only. Agent runners and
-# installers also use these modules on the laptop; ownership tests fail if a
+# Agent request helpers are consumed by the Guild portal only. Shared voice
+# also reads core.limits in the CoS images; keep that exact file distinct.
+# Agent runners and installers also use these modules on the laptop;
+# ownership tests fail if a
 # second production consumer appears. Unknown core/scripts paths stay broad.
 GUILD_BACKEND_PREFIXES = ("core/agent_requests/",)
 GUILD_BACKEND_FILES = frozenset({"core/limits.py"})
@@ -155,11 +157,13 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
         elif path.startswith("docker/cos-agent-a/") or path == "docker/Dockerfile.cos-agent-a":
             services.add("cos-agent-a")
         elif path.startswith("core/realtime_voice/"):
-            services.update(("german", "portuguese", "cos-scheduler"))
+            services.update(("portal", "german", "portuguese", "cos-bot", "cos-scheduler"))
         elif path.startswith("core/telegram/"):
             services.update(("curator", "system-bot", "cos-bot"))
         elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path in WORKSHOP_BACKEND_FILES or path == "config/scheduled_jobs.json":
             services.add("portal")
+        elif path == "core/limits.py":
+            services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith(GUILD_BACKEND_PREFIXES) or path in GUILD_BACKEND_FILES:
             services.add("portal")
         elif path.startswith(("core/", "utils/")):
