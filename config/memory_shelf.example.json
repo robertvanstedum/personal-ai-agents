@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "shelf_root": "~/minimoi-staging/data/memory",
+  "inbox_root": "~/minimoi-inbox",
+  "repo_root": ".",
+  "headroom": {"min_free_bytes": 5368709120},
+  "never_copy": [],
+  "sources": {
+    "claude-code": {"kind": "claude-code", "root": "~/.claude/projects", "never_copy": []},
+    "codex": {"kind": "codex", "root": "~/.codex/sessions", "never_copy": []},
+    "rooms": {"kind": "rooms", "root": "<records data dir>/transcripts", "source_instance_id": "<the store's transcript_origin id>",
+              "owner_ids": ["<the owner's participant id in Records>"], "never_copy": []}
+  }
+}
