@@ -60,7 +60,9 @@ The domains stay independent. Each exports what I authored, in its own format, o
 
 ## 5. What "forever" means
 
-The Vault never overwrites. A correction is a new edition that points at the old one. Removing something by choice leaves a tombstone with the item's fingerprint, provable in every replica and backup. Forever means the record of what was there, and that I chose to remove it, survives. It does not mean I cannot fix a mistake or take something out.
+The Vault never overwrites. A correction is a new edition that points at the old one. Removing something by choice leaves a tombstone with the item's fingerprint, which every replica and every backup made from then on carries. Forever means the record of what was there, and that I chose to remove it, survives. It does not mean I cannot fix a mistake or take something out.
+
+Two different things happen when I delete, and the Vault keeps them apart. The first is that the deleted record must not come back: a tombstone cannot appear inside a backup taken before it existed, so a restore from an older backup replays the tombstones recorded since, and the record stays gone. The second is that the content itself is physically purged: that only happens when every backup that still holds it has aged out of retention, or when I ask for an explicit purge that rewrites those backups. The tombstone is a promise about the first; the retention period, stated in the custody rules, is the honest answer about the second.
 
 An explicit Private or off-record instruction keeps its established meaning and is the only exception to capture.
 
@@ -82,21 +84,21 @@ Three kinds of question, in order of how often I ask them:
 2. **What do I know about X?** Semantic, across domains, returning raw passages with provenance, never a summary in place of them.
 3. **What happened this week?** Temporal and aggregate: what changed, what recurred, what is open. A scheduled reflection job proposes this; I review it; nothing becomes a curated record without my approval.
 
-**Borrowing, not building.** The dedicated memory layers (mem0, Zep/Graphiti, Letta) do retrieval better than mini-moi will on its own. They are used as rebuildable indexes over the Vault's files, never as the store, self-hosted, with no cloud mode. First experiment: Graphiti, because its two time axes (when a fact was true, when it was recorded) match the Vault's decisions and supersessions; mem0 as the simpler fallback. Letta's idea of a budgeted working set the agent curates is borrowed; its runtime is not. The experiment is bounded in the Prototype Lab style and compared against the existing Ask on the same questions; the better one with citations stays.
+**Borrowing, not building.** The dedicated memory layers (mem0, Zep/Graphiti, Letta) are built for retrieval and may well do it better than mini-moi will on its own; that is the claim to test, not a finding. None is installed. If one is adopted it would be a rebuildable index over the Vault's files, never the store, self-hosted, with no cloud mode. The proposed first candidate is Graphiti, because its two time axes (when a fact was true, when it was recorded) match the Vault's decisions and supersessions; mem0 is the simpler alternative. Letta's idea of a budgeted working set the agent curates is worth borrowing; its runtime is not. The comparison is a bounded experiment in the Prototype Lab style against the existing Ask on the same questions; the existing Ask is the baseline and stays unless a candidate beats it with citations. This is decision 6 in section 9, still open.
 
 **How it learns.** A gold set of about twenty questions in my own words, with answers I confirm, re-run monthly. A query log recording each question, what came back and whether I used it. Together these show which tags matter, which sources are missing, and whether an index earns its place. The use week is the first run.
 
 **What this is not.** Not retrieval of raw-tier material by default (curated first, raw by exact reference), not an agent reading the whole Vault into every turn, and not a model summary that can remove a gap or add an approval.
 
-## 8. Usable next week
+## 8. Usable next week: a proposed target
 
-The public claim and the private use have to be true at the same time. For the week of 19 October:
+The public claim and the private use have to be true at the same time. The list below is the proposed target for the week of 19 October, pending the decisions in section 9 and Codex's 1.2 run; it is not a commitment and nothing on it is done yet:
 
 - The Vault backup runs on a schedule and has been restored once.
 - One domain (Curator) exports my ratings and notes to the Vault through a dry run, with the coverage matrix showing every domain as full, partial or none.
 - The private data repository is chosen and holds the career working documents and Planning Studio content, once Codex's 1.2 run is finished.
 - One capability has its public worked example in the repository on example data: the resume method with a John Smith set, or the Acme Co deck, whichever is ready first.
-- The first twenty gold-set questions are written in my words, and the existing Ask path answers them with citations; the Graphiti or mem0 comparison is set up as a bounded experiment, not yet judged.
+- The first twenty gold-set questions are written in my words, and the existing Ask path answers them with citations; the Graphiti-or-mem0 comparison is at most set up as a bounded experiment, with nothing installed until decision 6 is taken.
 
 ## 9. Decisions still open
 
@@ -105,7 +107,7 @@ The public claim and the private use have to be true at the same time. For the w
 3. Must every capability have its public worked example before it is described in the README? (Recommended: yes; that is what makes the claim honest.)
 4. Archive pruning thresholds: age and size, set once.
 5. Which domain exports first (Curator is the recommendation because its notes are the simplest shape).
-6. First retrieval experiment: Graphiti (temporal facts) or mem0 (simpler), as a rebuildable index over the shelf, self-hosted. (Recommended: Graphiti first, mem0 as fallback; the existing Ask stays the baseline either way.)
+6. First retrieval experiment, and whether to run one at all: Graphiti (temporal facts) or mem0 (simpler), as a rebuildable index over the shelf, self-hosted, compared against the existing Ask. (Recommended: Graphiti first, mem0 as fallback; the existing Ask stays the baseline either way.)
 
 ## 10. Facts to add (Claude Code)
 
@@ -170,3 +172,9 @@ Verdict: the rule is right; keep it. Layers are distinct and the "usable next we
 
 ### 2026-10-14 — Claude Chat (disposition of Grok's review)
 (1) added to section 1 as the coverage paragraph. (2), (3), (4), (5) are already the document's positions, written as recommendations in section 9 pending Robert's decision; once he decides, sections 3, 6, 7 and 9 are reworded as rules. The "what not to do" points are consistent with sections 5, 7 and 8 and need no change. No disagreement.
+
+### 2026-10-14 — Codex (second review, across the three October documents)
+Two points for this document: keep retrieval choices provisional (Graphiti/mem0 are candidates to compare against Ask, not installed components or proven improvements; "usable next week" is a proposed target); and distinguish, for deletion, preventing a deleted record from returning on restore from physically purging its contents through backup retention or an explicit mechanism, since a tombstone cannot appear in an older immutable backup.
+
+### 2026-10-14 — Claude Chat (disposition)
+Both applied: section 7a reworded to candidates and a test, section 8 retitled as a proposed target, section 5 given the restore-versus-purge paragraph. Version stays v0.1 until Robert's section 9 decisions produce v0.2.
