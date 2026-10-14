@@ -24,3 +24,4 @@ openai>=1.30.0
 watchdog>=4.0.0
 reportlab>=4.0
 jsonschema>=4,<5
+sqlite-vec==0.1.9

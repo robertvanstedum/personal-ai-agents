@@ -39,7 +39,8 @@
             "id": "minimoi-cos-agent",
             "name": "MinimoI COS Agent",
             "input": [
-              "text"
+              "text",
+              "image"
             ],
             "contextWindow": 131072,
             "maxTokens": 8192
@@ -94,6 +95,9 @@
   },
   "agents": {
     "defaults": {
+      "imageModel": {
+        "primary": "minimoi-gateway/minimoi-cos-agent"
+      },
       "model": {
         "primary": "minimoi-gateway/minimoi-cos-agent"
       },

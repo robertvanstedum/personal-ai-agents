@@ -54,6 +54,8 @@ def _is_release_only(path: str) -> bool:
         or _is_staging_only(path)
         or path.startswith(DORMANT_PREFIXES)
         or path.startswith(LOCAL_TOOL_PREFIXES)
+        or path.startswith(VAULT_LOCAL_PREFIXES)
+        or path in VAULT_LOCAL_FILES
         or path in GUILD_LOCAL_TOOLS
         or path.startswith("services/agent_installer/")
     )
@@ -103,14 +105,24 @@ STAGING_ONLY_PREFIXES = ("scripts/staging/",)
 # runs them (the Dockerfiles copy the repository, but nothing starts these).
 LOCAL_TOOL_PREFIXES = ("scripts/workshop/", "scripts/vault/", "tools/workshop/", "scripts/release/", "scripts/dev/")
 
-# The Workshop backend (journal, Vault readers, the credential and payment scrubs they use,
-# the agent-turn writer and the scheduled-job judge the Guild screens read).
-# Its one intended consumer is the portal (the Workshop screen, minimoi_portal/
-# workshop/). No other service imports it:
-# tests/test_release_classifier.py fails if one starts to, so that change must
-# classify the new consumer here.
+# Workshop readers/writers remain portal-owned, with laptop-only callers.
+# The two exact scrub modules also serve the CoS Vault context renderer below;
+# changing them must rebuild all three production consumers. Import guards keep
+# expected laptop homes separate from any newly introduced production consumer.
 WORKSHOP_BACKEND_PREFIXES = ("core/workshop_journal/", "core/vault_t1/", "core/agent_turns/", "core/jobs/")
-WORKSHOP_BACKEND_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scrub.py"})   # exact: no other utils/ file moves
+SHARED_SCRUB_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scrub.py"})
+
+# Only the remote consumer, renderer and citation checker are loaded by CoS.
+# The actual Ask service/query log, shelf, index and backup remain on the laptop.
+# Unknown neighbouring paths retain the conservative fallback; import guards
+# fail if a production service starts depending on a laptop-only module.
+VAULT_COS_FILES = frozenset({"core/memory_ask/consumer.py", "core/memory_ask/context.py", "core/memory_ask/citation.py"})
+VAULT_LOCAL_PREFIXES = ("core/memory_shelf/", "core/memory_index/", "core/memory_backup/")
+VAULT_LOCAL_FILES = frozenset({"core/memory_ask/agents_cli.py", "core/memory_ask/ask.py", "core/memory_ask/canary_check.py",
+                             "core/memory_ask/cli.py", "core/memory_ask/identity.py", "core/memory_ask/querylog.py",
+                             "core/memory_ask/service.py", "core/memory_ask/tool.py",
+                             # Pure shelf export seam: only fixture/laptop callers, never a portal entrypoint.
+                             "core/workshop_journal/vault_export.py"})
 
 
 # Agent request helpers are consumed by the Guild portal only. Shared voice
@@ -160,7 +172,11 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             services.update(("portal", "german", "portuguese", "cos-bot", "cos-scheduler"))
         elif path.startswith("core/telegram/"):
             services.update(("curator", "system-bot", "cos-bot"))
-        elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path in WORKSHOP_BACKEND_FILES or path == "config/scheduled_jobs.json":
+        elif path in SHARED_SCRUB_FILES:
+            services.update(("portal", "cos-bot", "cos-scheduler"))
+        elif path in VAULT_COS_FILES:
+            services.update(("cos-bot", "cos-scheduler"))
+        elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path == "config/scheduled_jobs.json":
             services.add("portal")
         elif path == "core/limits.py":
             services.update(("portal", "cos-bot", "cos-scheduler"))

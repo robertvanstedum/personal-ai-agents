@@ -4,9 +4,9 @@ from playwright.sync_api import expect
 from browser_checks_b1 import browser, server, fresh_queue, floor, _context, go, _wt, _no_page_overflow  # noqa:F401
 
 
-@pytest.mark.parametrize('width', [390, 1440])
-def test_history_picker_keeps_board_and_panel_mode_with_ten_recent_chats(browser, server, floor, width):
-    ctx, page = _context(browser, server, width, 900)
+@pytest.mark.parametrize('width,height', [(320,900), (390,900), (768,900), (900,900), (1440,900), (390,480)])
+def test_history_picker_keeps_board_and_panel_mode_with_ten_recent_chats(browser, server, floor, width, height):
+    ctx, page = _context(browser, server, width, height)
     go(page, server['url'] + '/guild-next/guild/board')
     for index in range(12):
         answer = _wt(page, '/conversations', {'title': f'History check {index}'})
@@ -19,10 +19,10 @@ def test_history_picker_keeps_board_and_panel_mode_with_ten_recent_chats(browser
     picker_box = page.locator('[data-conv-picker-body]').bounding_box()
     panel_box = page.locator('[data-mc-panel]').bounding_box()
     assert picker_box['y'] >= panel_box['y']
-    assert picker_box['y'] + picker_box['height'] <= min(900, panel_box['y'] + panel_box['height'])
+    assert picker_box['y'] + picker_box['height'] <= min(height, panel_box['y'] + panel_box['height'])
     send_box = page.locator('[data-mc-send]').bounding_box()
-    assert send_box['y'] + send_box['height'] <= min(900, panel_box['y'] + panel_box['height'])
-    page.screenshot(path=f'/private/tmp/mc-history-{width}.png')
+    assert send_box['y'] + send_box['height'] <= min(height, panel_box['y'] + panel_box['height'])
+    page.screenshot(path=f'/private/tmp/mc-history-{width}x{height}.png')
     first_recent = page.locator('[data-conv-pick]').first.get_attribute('data-conv-pick')
     page.locator('[data-conv-picker-body]').get_by_role('button', name='Older', exact=True).click()
     expect(page.locator('[data-conv-pick]').first).not_to_have_attribute('data-conv-pick', first_recent)
@@ -102,3 +102,24 @@ def test_restored_long_draft_keeps_full_text_and_immediately_shows_limit(browser
     expect(box).to_have_attribute('aria-invalid', 'true')
     expect(page.locator('[data-mc-refusal]')).to_contain_text('Nothing was sent')
     ctx.close()
+
+
+def test_cos_disabled_private_control_keeps_truthful_accessible_label(browser, server, floor):
+    from types import SimpleNamespace
+    from minimoi_portal.guild_ui.mc.cos import ChiefOfStaffBackend
+    from minimoi_portal.guild_ui.mc.backend import CachedHealth
+    services = server['app'].extensions['guild_ui_next']['services']
+    saved = services.mc, services.mc_health, services.mc_turns
+    backend = ChiefOfStaffBackend('http://unused.invalid', http_get=lambda *a, **k: SimpleNamespace(status_code=200))
+    services.mc, services.mc_health, services.mc_turns = backend, CachedHealth(backend), True
+    ctx, page = _context(browser, server, 390, 900)
+    try:
+        go(page, server['url'] + '/guild-next/guild/board?chat=floating')
+        expect(page.locator('body')).to_have_attribute('data-mc-private', 'false')
+        button = page.locator('[data-mc-record]')
+        expect(button).to_be_disabled()
+        expect(button).to_have_attribute('aria-label', 'Private is not available')
+        expect(button).to_have_attribute('title', 'Private is not available with the Chief of Staff: it keeps its own record')
+    finally:
+        ctx.close()
+        services.mc, services.mc_health, services.mc_turns = saved

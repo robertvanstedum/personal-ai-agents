@@ -8,7 +8,8 @@ What it deliberately does not do:
 * No new credential, key, token or privilege: it is the same internal call the portal's CoS proxy makes, and only an owner
   who passed the Shop floor's owner guard and write guard reaches it.
 * No Private / no-retention claim: CoS keeps its own conversation record, so a Private question is refused here.
-* No files: a note with attached documents is refused rather than sent to CoS in text form.
+* Files only through verified private copies: a note with attached documents is refused unless the portal is configured to place verified copies in the shared agent's private
+  folder (``MINIMOI_MC_COS_FILES_DIR`` / ``..._AGENT_DIR``); then the agent is told the path. The message claims ``staged`` only, never that anything was opened or seen.
 * No streaming, no retries: one POST per note; an unknown outcome is ``timeout_uncertain``, never re-sent.
 * No fallback: an unreachable CoS is "unavailable"; nothing is ever answered in its place.
 """
@@ -32,11 +33,11 @@ CHANNEL = "api_text"
 class ChiefOfStaffBackend(MasterCraftsmanBackend):
     kind = "cos"
     display_name = "Chief of Staff"
-    accepts_files = False
     supports_private = False
 
-    def __init__(self, base_url: str, *, http_get=None, http_post=None):
+    def __init__(self, base_url: str, *, http_get=None, http_post=None, accepts_files: bool = False):
         self.base_url = base_url.rstrip("/")
+        self.accepts_files = bool(accepts_files)
         self._get = http_get or requests.get
         self._post = http_post or requests.post
 
@@ -45,7 +46,8 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
         base = str(environ.get("COS_BACKEND", "") or "").strip()
         if not base.startswith(("http://", "https://")):
             return UnavailableBackend(cls.kind, "not_connected")
-        return cls(base, http_get=http_get, http_post=http_post)
+        from ..mc_files import cos_dirs
+        return cls(base, http_get=http_get, http_post=http_post, accepts_files=cos_dirs(environ) is not None)
 
     def health(self) -> Health:
         try:

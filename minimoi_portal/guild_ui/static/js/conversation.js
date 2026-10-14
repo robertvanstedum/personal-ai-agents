@@ -766,8 +766,13 @@ function renderRecord() {
   $('[data-mc-send]').disabled = sendingNote && !live.off;
   const btn = $('[data-mc-record]');
   btn.setAttribute('aria-pressed', String(live.off));
-  btn.setAttribute('aria-label', live.off ? 'Exit Private' : 'Go Private');
-  btn.title = live.off ? 'Exit Private: go back on the record' : mcSay('Go Private: Master Craftsman answers, MiniMoi keeps nothing');
+  if (document.body.dataset.mcPrivate === 'false' || btn.hasAttribute('data-private-off')) {
+    btn.setAttribute('aria-label', 'Private is not available');
+    btn.title = `Private is not available with the ${mcName()}: it keeps its own record`;
+  } else {
+    btn.setAttribute('aria-label', live.off ? 'Exit Private' : 'Go Private');
+    btn.title = live.off ? 'Exit Private: go back on the record' : mcSay('Go Private: Master Craftsman answers, MiniMoi keeps nothing');
+  }
   const privateChip = $('[data-private-chip]');
   if (privateChip) privateChip.hidden = !live.off;
   if (!live.off) closePrivateExplain();

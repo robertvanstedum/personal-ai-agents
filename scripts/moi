@@ -1,0 +1,13 @@
+#!/bin/sh
+# moi: the memory shelf's owner CLI (see core/memory_shelf/cli.py). Uses the project venv (system python3 lacks yaml).
+here="$(cd "$(dirname "$0")/.." && pwd)"
+py="${MOI_PYTHON:-$here/venv/bin/python}"
+[ -x "$py" ] || py=python3
+# The index commands (rebuild, index ...) live in core/memory_index/cli.py, `ask` in core/memory_ask/cli.py; everything else is the shelf's.
+case "$1" in
+  rebuild|index) mod=core.memory_index.cli ;;
+  ask) shift; mod=core.memory_ask.cli ;;
+  ask-agents) shift; mod=core.memory_ask.agents_cli ;;
+  *) mod=core.memory_shelf.cli ;;
+esac
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -m "$mod" "$@"

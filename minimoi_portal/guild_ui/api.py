@@ -1416,20 +1416,34 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
 
 
 def _stage_for_mc(conv, ids, principal, turn_id):
-    """(staged copies, reason a wanted copy failed) for this turn (mc_files). ({}, None) when the host root is not configured, nothing needs a copy or no server turn id
-    exists, so a turn without it is exactly what it was. A failure never stops the turn: the text path still works, and the report says what was not offered."""
+    """(staged copies, reason a wanted copy failed) for this turn (mc_files). ({}, None) when staging is not configured, nothing needs a copy or no server turn id
+    exists, so a turn without it is exactly what it was. A failure never stops the turn: the text path still works, and the report says what was not offered.
+    Master Craftsman's relay reads the host ledger folder (MINIMOI_MC_FILES_HOST_ROOT); the shared Chief of Staff agent reads one private folder under the portal's
+    shared data mount (MINIMOI_MC_COS_FILES_DIR / _AGENT_DIR)."""
     if not ids or not conv or not turn_id:
         return {}, None
     from . import feature_environ, mc_files
-    host = mc_files.host_root(feature_environ())
-    if host is None:
-        return {}, None
-    chosen = mc_files.picks(conv, ids)
-    if not chosen:
-        return {}, None
+    environ = feature_environ()
     try:
         from .board_api import _media, _owner
-        folder = getattr(cfg()["services"].store, "folder", None)
+        services = cfg()["services"]
+        if getattr(services.mc, "kind", None) == "cos":
+            dirs = mc_files.cos_dirs(environ)
+            if dirs is None:
+                return {}, None
+            chosen = mc_files.picks(conv, ids)
+            if not chosen:
+                return {}, None
+            portal_dir, agent_dir = dirs
+            return mc_files.stage(os.path.dirname(portal_dir), os.path.dirname(agent_dir), channel="portal-chat", scope=conv["id"], principal=principal, owner=_owner(),
+                                  turn_id=turn_id, chosen=chosen, store=_conversations(), media=_media(), folder=mc_files.COS_FOLDER, copy_owner=mc_files.cos_owner(environ)), None
+        host = mc_files.host_root(environ)
+        if host is None:
+            return {}, None
+        chosen = mc_files.picks(conv, ids)
+        if not chosen:
+            return {}, None
+        folder = getattr(services.store, "folder", None)
         if not folder:
             return {}, "no copy could be placed just now"
         return mc_files.stage(os.path.join(folder, "agent_requests"), host, channel="portal-chat", scope=conv["id"], principal=principal, owner=_owner(),

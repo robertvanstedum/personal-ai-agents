@@ -731,7 +731,8 @@ def call_backend(prompt: str, context: dict, tool_policy: dict) -> str:
     """
     if _backend is None:
         raise RuntimeError("Backend not initialized — init_backend() was not called in main()")
-    return _backend.call_backend(prompt, context, tool_policy)
+    from domains.cos.vault_context import call_with_vault
+    return call_with_vault(_backend, prompt, context, tool_policy)
 
 
 def _build_confer_context() -> dict:
