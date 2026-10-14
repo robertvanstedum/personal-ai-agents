@@ -17,7 +17,7 @@ The direction itself is in the repository's architecture (local-first data, mode
 Kept for provenance; folded into the October 2026 snapshot.
 
 - [2026-10-14_codex_brief_v0.1.md](superseded/2026-10-14_codex_brief_v0.1.md) — Codex's owner-directed brief and reading list.
-- [2026-10-14_claude-chat_companion_v0.1.md](superseded/2026-10-14_claude-chat_companion_v0.1.md) — Claude Chat's review and the "local model's first job is the Vault" proposal.
+- [2026-10-14_claude-chat_companion_v0.1.md](superseded/2026-10-14_claude-chat_companion_v0.1.md) — Claude Chat's review and the "local model's first job is the Vault" proposal (since downgraded to one candidate among several; see the snapshot's §4 and §10).
 
 ## Related
 
