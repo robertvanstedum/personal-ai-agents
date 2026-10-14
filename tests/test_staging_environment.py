@@ -52,6 +52,8 @@ EXPECTED_PROD_MOUNTS = [
     ("cos-agent-a", "cos-agent-a-state", "/home/node/.openclaw"),
     ("cos-agent-a", "cos-agent-a-auth", "/home/node/.config/openclaw"),
     ("cos-agent-a", "/opt/minimoi/data", "/minimoi/data"),
+    ("cos-agent-a", "/opt/minimoi/data/guild/mc-evidence",
+     "/home/node/.openclaw/workspace-cos-agent-a/mc-evidence"),
     ("cos-agent-a", "/opt/minimoi/docs", "/minimoi/docs"),
     ("cos-agent-a", "/opt/minimoi/scripts", "/minimoi/scripts"),
     ("cos-agent-a", "/opt/minimoi/agent_logs", "/minimoi/agent_logs"),
@@ -158,6 +160,7 @@ def test_prod_mounts_and_env_files_are_unchanged_with_root_unset():
         for name, service in services.items() for v in service.get("volumes", [])
     )
     assert mounts == sorted(EXPECTED_PROD_MOUNTS)
+    assert ROOT_VAR + "/data/guild/mc-evidence:/home/node/.openclaw/workspace-cos-agent-a/mc-evidence:ro" in services["cos-agent-a"]["volumes"]
     env_files = {name: _default_root(s["env_file"]) for name, s in services.items() if "env_file" in s}
     assert env_files == EXPECTED_ENV_FILES
 
