@@ -147,29 +147,30 @@ def test_production_builds_exactly_the_classifier_services():
 def test_the_workshop_backend_deploys_the_portal_only():
     """The Workshop backend's one consumer is the portal; its laptop tools run in no service."""
     backend = [
-        "core/workshop_journal/journal.py", "core/vault_t1/reader.py", "utils/credential_scrub.py",
+        "core/workshop_journal/journal.py", "core/vault_t1/reader.py",
         "minimoi_portal/workshop/record.py", "scripts/workshop/workshop.py", "scripts/vault/vault.py",
         "tests/workshop_journal/test_journal.py", "tests/test_credential_scrub.py",
     ]
     assert classify(backend) == ("domain", ("portal",))
     assert classify(["scripts/workshop/workshop.py", "scripts/vault/vault.py"]) == ("documents", ())
-    # The Guild screens' own helpers (agent-turn writer, scheduled-job judge, payment scrub) are portal-only too, and the
+    # The Guild screens' own helpers (agent-turn writer and scheduled-job judge) are portal-only too, and the
     # laptop tools that drive them run in no service.
-    assert classify(["core/agent_turns/writer.py", "core/jobs/judge.py", "utils/payment_scrub.py"]) == ("domain", ("portal",))
+    assert classify(["core/agent_turns/writer.py", "core/jobs/judge.py"]) == ("domain", ("portal",))
     assert classify(["tools/workshop/topic_inbox.py", "scripts/release/exclude_reserve_pages.py"]) == ("documents", ())
     # Neighbours keep their old ownership: only these exact places moved.
     assert classify(["core/other_module.py"]) == ("domain", ("portal", "curator", "german", "portuguese", "system-bot", "cos-bot", "cos-scheduler"))
     assert classify(["scripts/other_tool.py"]) == ("full", ALL_SERVICES)
 
 
-def test_only_the_exact_credential_scrub_file_moves_to_the_portal():
-    assert classify(["utils/credential_scrub.py"]) == ("domain", ("portal",))
+def test_only_the_exact_scrub_files_reach_portal_and_cos_consumers():
+    for path in ("utils/credential_scrub.py", "utils/payment_scrub.py"):
+        assert classify([path]) == ("domain", ("portal", "cos-bot", "cos-scheduler"))
     assert classify(["utils/credential_scrub.py.bak"]) == classify(["utils/other_helper.py"])     # neighbours keep the shared rule
     assert classify(["utils/credential_scrub.pyc"])[1] == classify(["utils/other_helper.py"])[1]
 
 
 # --- the ownership guard -------------------------------------------------------------------------------------------------
-# The portal-only rule above is honest only while no other service imports the Workshop backend. The guard reads each file's
+# The backend ownership above is honest only while no unclassified service imports it. The guard reads each file's
 # imports with the parser (so formatting, aliases, parentheses and nesting do not matter) and also looks for string-named dynamic
 # imports. Importing the portal's own facade (minimoi_portal.workshop) counts as using the backend, because the facade wraps it.
 import ast
@@ -180,6 +181,17 @@ WORKSHOP_BACKEND_MODULES = ("core.workshop_journal", "core.vault_t1", "core.agen
 BACKEND_IMPORT_ALLOWED = ("core/workshop_journal/", "core/vault_t1/", "core/agent_turns/", "core/jobs/", "utils/credential_scrub.py",
                           "utils/payment_scrub.py", "minimoi_portal/", "scripts/workshop/", "scripts/vault/", "scripts/release/",
                           "tools/workshop/", "scripts/dev/", "tests/", "prototype-lab/", "planning-studio/")
+# Exact new homes and only their actual backend dependencies, not a package/domain waiver.
+BACKEND_IMPORT_EXPECTED = {
+    "core/memory_ask/context.py": ("utils.credential_scrub", "utils.payment_scrub"),
+    "core/memory_ask/querylog.py": ("core.agent_turns.writer",),
+    "core/memory_backup/backup.py": ("core.vault_t1",),
+    "core/memory_shelf/render.py": ("utils.credential_scrub", "utils.payment_scrub"),
+    "core/memory_shelf/report.py": ("core.jobs",),
+    "scripts/jobs/watchdog.py": ("core.jobs",),
+    "scripts/memory/daily_watch.py": ("core.jobs",),
+    "scripts/memory/index_job.py": ("core.jobs",),
+}
 SKIPPED_DIRS = {".git", "node_modules", "venv", "ai-env", ".venv", "_working", ".claude", "__pycache__"}
 
 
@@ -216,7 +228,10 @@ def _backend_importers(root):
         if SKIPPED_DIRS.intersection(rel.split("/")) or rel.startswith(BACKEND_IMPORT_ALLOWED):
             continue
         try:
-            if _uses_workshop_backend(path.read_text(errors="ignore")):
+            used = {name for name in _imported_names(path.read_text(errors="ignore"))
+                    if any(name == module or name.startswith(module + ".") for module in WORKSHOP_BACKEND_MODULES)}
+            expected = BACKEND_IMPORT_EXPECTED.get(rel, ())
+            if any(not any(name == module or name.startswith(module + ".") for module in expected) for name in used):
                 found.append(rel)
         except SyntaxError:
             continue
@@ -265,8 +280,7 @@ def test_the_ownership_guard_ignores_what_is_not_an_import_or_is_allowed(tmp_pat
 
 
 def test_no_other_service_imports_the_workshop_backend():
-    """The guard for the portal-only rule, on the real repository: the day a CoS, language or bot file imports the Workshop
-    backend (or its facade), this fails and that change must classify the new consumer."""
+    """New production consumers or unexpected dependencies in the exact laptop/context homes must update ownership."""
     assert _backend_importers(Path(__file__).resolve().parent.parent) == []
 
 
@@ -360,3 +374,82 @@ def test_portal_cannot_silently_start_using_documents_only_agent_tools(tmp_path)
         assert _guild_importers(tmp_path) == ["minimoi_portal/consumer.py"]
     path.write_text("from core.agent_requests import ledger\nfrom core import limits\n")
     assert _guild_importers(tmp_path) == []
+
+
+def test_vault_release_ownership_separates_cos_context_from_laptop_ask_and_custody():
+    from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES
+    for path in VAULT_COS_FILES:
+        assert classify([path]) == ("domain", ("cos-bot", "cos-scheduler"))
+    for path in VAULT_LOCAL_FILES | {"core/memory_shelf/render.py", "core/memory_index/search.py", "core/memory_backup/backup.py"}:
+        assert classify([path]) == ("documents", ())
+    assert classify(["core/memory_ask/new_consumer.py"])[1] == ALL_SERVICES[:7]
+    assert classify(["core/memory_ask/context.py.bak"])[1] == ALL_SERVICES[:7]
+    assert classify(["scripts/unclassified_vault_tool.py"]) == ("full", ALL_SERVICES)
+
+
+def test_expected_vault_backend_homes_do_not_waive_unrelated_dependencies(tmp_path):
+    for rel, modules in BACKEND_IMPORT_EXPECTED.items():
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("\n".join("import " + module for module in modules))
+    assert _backend_importers(tmp_path) == []
+    for rel in BACKEND_IMPORT_EXPECTED:
+        target = tmp_path / rel
+        original = target.read_text()
+        target.write_text(original + "\nimport core.workshop_journal\n")
+        assert _backend_importers(tmp_path) == [rel]
+        target.write_text(original)
+
+
+def _vault_runtime_importers(root):
+    """Laptop retrieval/custody cannot silently enter production; CoS can load only its three reviewed context modules."""
+    from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES, VAULT_LOCAL_PREFIXES
+    packages = ("core.memory_ask", "core.memory_shelf", "core.memory_index", "core.memory_backup", "core.workshop_journal.vault_export")
+    expected_host = {"domains/cos/vault_context.py": ("core.memory_ask.consumer",)}
+    found = []
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root).as_posix()
+        if SKIPPED_DIRS.intersection(rel.split("/")) or rel.startswith(("tests/", "scripts/memory/", "scripts/vault/", "prototype-lab/", "planning-studio/")):
+            continue
+        if rel in VAULT_LOCAL_FILES or rel.startswith(VAULT_LOCAL_PREFIXES):
+            continue
+        try:
+            names = _imported_names(path.read_text(errors="ignore"))
+        except SyntaxError:
+            continue
+        # from package import module reports both names; check the specific module
+        # when available, but a bare package dependency is conservatively rejected.
+        used = {name for name in names if any(name == module or name.startswith(module + ".") for module in packages)}
+        used = {name for name in used if not any(other.startswith(name + ".") for other in used)}
+        allowed = tuple("core.memory_ask." + Path(file).stem for file in VAULT_COS_FILES) if rel in VAULT_COS_FILES else (() if rel not in expected_host else expected_host[rel])
+        if any(not any(name == module or name.startswith(module + ".") for module in allowed) for name in used):
+            found.append(rel)
+    return found
+
+
+def test_vault_runtime_has_no_unclassified_production_consumer():
+    assert _vault_runtime_importers(Path(__file__).resolve().parent.parent) == []
+
+
+def test_vault_guard_rejects_production_laptop_retrieval_and_scrub_dependency_expansion(tmp_path):
+    paths = {"domains/cos/vault_context.py": "from core.memory_ask.consumer import retrieve",
+             "core/memory_ask/context.py": "from core.memory_ask import citation"}
+    for rel, source in paths.items():
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source)
+    assert _vault_runtime_importers(tmp_path) == []
+    for rel in ("domains/cos/vault_context.py", "core/memory_ask/context.py", "minimoi_portal/new_reader.py", "domains/german/new_reader.py"):
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        original = target.read_text() if target.exists() else ""
+        target.write_text(original + "\nfrom core.memory_ask import querylog\n")
+        assert _vault_runtime_importers(tmp_path) == [rel]
+        target.write_text(original)
+
+
+def test_laptop_workshop_export_seam_cannot_silently_become_a_portal_consumer(tmp_path):
+    target = tmp_path / "minimoi_portal" / "exporter.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("from core.workshop_journal import vault_export\n")
+    assert _vault_runtime_importers(tmp_path) == ["minimoi_portal/exporter.py"]

@@ -181,3 +181,14 @@ def test_same_source_needs_an_exact_conversation_id_never_title_or_overlap():
     assert not editions.same_source(a, {**a, "source_id": "conv-2"})          # same title and text, different id
     assert not editions.same_source({**a, "source_id": None}, {**a, "source_id": None})   # paste: possible match only
     assert not editions.same_source(a, {**a, "provider": "codex"})
+
+
+def test_workshop_aggregate_chair_preserves_provenance_and_coordination():
+    # Existing Workshop exports name the channel, not a model or an invented human chair.
+    m = meta(chair="Workshop", source="workshop:room:main:2026-10-08")
+    body = "coordination: Codex — retained journal prefix"
+    loaded, retained = record.load(record.dump(m, body))
+    assert loaded['chair'] == 'Workshop' and loaded['source'] == m['source']
+    assert retained.strip() == body
+    with pytest.raises(record.InvalidRecord):
+        record.check({**loaded, 'chair': 'gpt-6.1-sol'})
