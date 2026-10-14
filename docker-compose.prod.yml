@@ -73,6 +73,8 @@ services:
       - cos-agent-a-auth:/home/node/.config/openclaw
       # Robert-approved shared CoS/MC full-access experiment (13 October).
       - ${MINIMOI_ROOT:-/opt/minimoi}/data:/minimoi/data
+      # Native image tools admit this exact owner-selected evidence workspace.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/mc-evidence:/home/node/.openclaw/workspace-cos-agent-a/mc-evidence:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/docs:/minimoi/docs
       - ${MINIMOI_ROOT:-/opt/minimoi}/scripts:/minimoi/scripts
       - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/minimoi/agent_logs
