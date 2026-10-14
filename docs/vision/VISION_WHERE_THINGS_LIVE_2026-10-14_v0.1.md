@@ -86,7 +86,7 @@ Three kinds of question, in order of how often I ask them:
 
 **Borrowing, not building.** The dedicated memory layers (mem0, Zep/Graphiti, Letta) are built for retrieval and may well do it better than mini-moi will on its own; that is the claim to test, not a finding. None is installed. If one is adopted it would be a rebuildable index over the Vault's files, never the store, self-hosted, with no cloud mode. The proposed first candidate is Graphiti, because its two time axes (when a fact was true, when it was recorded) match the Vault's decisions and supersessions; mem0 is the simpler alternative. Letta's idea of a budgeted working set the agent curates is worth borrowing; its runtime is not. The comparison is a bounded experiment in the Prototype Lab style against the existing Ask on the same questions; the existing Ask is the baseline and stays unless a candidate beats it with citations. This is decision 6 in section 9, still open.
 
-**How it learns.** A gold set of about twenty questions in my own words, with answers I confirm, re-run monthly. A query log recording each question, what came back and whether I used it. Together these show which tags matter, which sources are missing, and whether an index earns its place. The use week is the first run.
+**How it learns.** A gold set of about twenty questions in my own words, with answers I confirm, re-run monthly. The set is split in two, as the local-intelligence snapshot states (its section 4.1): local-only cases, about records that must never leave locally controlled processing, where my confirmed answer is the only baseline and no hosted answer is produced; and shareable comparison cases, about records already within a hosted model's permitted scope, where a hosted answer is a second reference beside mine. A query log recording each question, what came back and whether I used it. Together these show which tags matter, which sources are missing, and whether an index earns its place. The use week is the first run.
 
 **What this is not.** Not retrieval of raw-tier material by default (curated first, raw by exact reference), not an agent reading the whole Vault into every turn, and not a model summary that can remove a gap or add an approval.
 
@@ -178,3 +178,9 @@ Two points for this document: keep retrieval choices provisional (Graphiti/mem0 
 
 ### 2026-10-14 — Claude Chat (disposition)
 Both applied: section 7a reworded to candidates and a test, section 8 retitled as a proposed target, section 5 given the restore-versus-purge paragraph. Version stays v0.1 until Robert's section 9 decisions produce v0.2.
+
+### 2026-10-14 — Grok Chat (final review of the three October documents; approved by Robert)
+Consistent with each other and with the direction. Two points for this document: section 11 over-claims distinctiveness for a README audience, so the README version keeps only the short list of what is distinct (provenance across vendors, the build loop with receipts, domains that are products for the owner) and drops the long comparison; decision 6 must not delay the backup restore or the first Curator export, since the existing Ask with citations suffices for the next-week target. From the snapshot review: repeat the gold-set split (local-only versus shareable) here so the two files do not drift.
+
+### 2026-10-14 — Claude Chat (disposition)
+Gold-set split added to section 7a. The section 11 instruction goes to the audit's Pass A handoff, since it concerns the README, not this document. Decision 6 ordering is already section 8's position; no change.
