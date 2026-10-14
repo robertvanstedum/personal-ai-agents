@@ -20,6 +20,13 @@ from .agent_evidence import ALL_MAX_BYTES, FILES_MAX, FILE_MAX_BYTES, MANIFEST_R
 from core.agent_requests import evidence_files as _core
 
 ENV = "MINIMOI_MC_FILES_HOST_ROOT"
+# The production conversation partner is the Chief of Staff's one shared agent (no relay, no Mac ledger). Its copies go to ONE private folder under the portal's existing shared
+# data mount, named for the portal and for the agent separately because the two containers mount the same host folder at different paths. Server configuration only.
+ENV_COS_DIR = "MINIMOI_MC_COS_FILES_DIR"              # the folder as the PORTAL sees it, e.g. /app/runtime/guild/mc-evidence
+ENV_COS_AGENT_DIR = "MINIMOI_MC_COS_FILES_AGENT_DIR"   # the same folder as the AGENT sees it, an absolute path it can open
+ENV_COS_UID = "MINIMOI_MC_COS_FILES_UID"
+ENV_COS_GID = "MINIMOI_MC_COS_FILES_GID"
+COS_FOLDER = "mc-evidence"
 LEDGER_NAME = "agent_requests"          # the folder the portal's ledger lives in, on the host as in the container
 DOMAIN = "mc-evidence-v1"
 
@@ -32,6 +39,33 @@ def host_root(environ=None) -> str | None:
     if not os.path.isabs(value) or os.path.normpath(value) != value or os.path.basename(value) != LEDGER_NAME:
         return None
     return value
+
+
+def cos_dirs(environ=None) -> tuple[str, str] | None:
+    """(portal folder, agent folder) for the shared agent, or None (off). Explicit UID/GID are required. Both paths must be absolute, normalized, free of NUL, and end in ``mc-evidence``; the two are only
+    ever used to place a copy and to tell the agent where it is."""
+    environ = {} if environ is None else environ
+    if cos_owner(environ) is None:
+        return None
+    out = []
+    for name in (ENV_COS_DIR, ENV_COS_AGENT_DIR):
+        value = environ.get(name)
+        if not isinstance(value, str) or not value or "\x00" in value or not os.path.isabs(value) or os.path.normpath(value) != value or os.path.basename(value) != COS_FOLDER:
+            return None
+        out.append(value)
+    return out[0], out[1]
+
+
+def cos_owner(environ=None) -> tuple[int, int] | None:
+    """Explicit non-root runtime IDs; malformed or missing ownership keeps copies off."""
+    environ = {} if environ is None else environ
+    out = []
+    for name in (ENV_COS_UID, ENV_COS_GID):
+        value = environ.get(name)
+        if not isinstance(value, str) or not value.isascii() or not value.isdecimal() or len(value) > 10 or not 0 < int(value) < 2**31:
+            return None
+        out.append(int(value))
+    return out[0], out[1]
 
 
 def request_id(channel: str, scope: str, principal: str, turn_id: str, wanted) -> str:
@@ -49,13 +83,15 @@ class Staged(dict):
     """{file id: {name, path, sha256, bytes}} plus ``root`` and ``rid`` so a refused dispatch can take its own copy away again."""
     root: str | None = None
     rid: str | None = None
+    folder: str = FOLDER
 
 
 def discard(staged) -> None:
-    """Remove the folder this turn's staging created (a turn that was staged and then not sent). Never touches anything but ``evidence/<its own id>``."""
+    """Remove the folder this turn's staging created (a turn that was staged and then not sent). Never touches anything but its validated evidence folder and request id."""
     root, rid = getattr(staged, "root", None), getattr(staged, "rid", None)
-    if root and rid and _core.RID_RE.fullmatch(rid):
-        target = os.path.join(root, FOLDER, rid)
+    folder = getattr(staged, "folder", FOLDER)
+    if root and rid and _core.RID_RE.fullmatch(rid) and _core.FOLDER_RE.fullmatch(folder):
+        target = os.path.join(root, folder, rid)
         if os.path.isdir(target) and not os.path.islink(target):
             shutil.rmtree(target, ignore_errors=True)
 
@@ -74,7 +110,7 @@ def picks(conv: dict, ids: list[str]) -> list[tuple[str, str]]:
     return out
 
 
-def stage(ledger_root: str, host: str, *, channel: str, scope: str, principal: str, owner: str, turn_id: str, chosen, store, media) -> Staged:
+def stage(ledger_root: str, host: str, *, channel: str, scope: str, principal: str, owner: str, turn_id: str, chosen, store, media, folder: str = FOLDER, copy_owner: tuple[int, int] | None = None) -> Staged:
     """Copy ``chosen`` for this turn. Returns {file id: {"name", "path", "sha256", "bytes"}} with ABSOLUTE host paths built from the verified manifest's own leaf names.
     Every call first reads the CURRENT originals (access, still present, still the uploaded hash), even when a finished copy already exists, and a reused copy must match
     those bytes: a source deleted, trashed or changed after the first staging is never served from the old copy. Raises EvidenceRefused (nothing is claimed staged then)."""
@@ -93,13 +129,13 @@ def stage(ledger_root: str, host: str, *, channel: str, scope: str, principal: s
     current = {fid: hashlib.sha256(data).hexdigest() for _k, fid, _n, data in gathered}
 
     manifest = _core.stage_files(ledger_root, rid, [[k, f] for k, f in chosen], lambda: gathered, scope, file_max=FILE_MAX_BYTES, all_max=ALL_MAX_BYTES,
-                                 reserve=MANIFEST_RESERVE)
-    out.root, out.rid = ledger_root, rid
+                                 reserve=MANIFEST_RESERVE, folder=folder, owner=copy_owner)
+    out.root, out.rid, out.folder = ledger_root, rid, folder
     for row in manifest["files"]:
         leaf = os.path.basename(row["path"])
-        if os.path.dirname(row["path"]) != f"{FOLDER}/{rid}" or leaf != os.path.basename(leaf):
+        if os.path.dirname(row["path"]) != f"{folder}/{rid}" or leaf != os.path.basename(leaf):
             raise EvidenceRefused("unavailable", "A copy was not where it should be, so it was not offered.")
         if row["sha256"] != current.get(row["id"]):
             raise EvidenceRefused("changed", "A file changed after it was first copied, so the old copy was not offered.")
-        out[row["id"]] = {"name": row["name"], "path": os.path.join(host, FOLDER, rid, leaf), "sha256": row["sha256"], "bytes": row["bytes"]}
+        out[row["id"]] = {"name": row["name"], "path": os.path.join(host, folder, rid, leaf), "sha256": row["sha256"], "bytes": row["bytes"]}
     return out

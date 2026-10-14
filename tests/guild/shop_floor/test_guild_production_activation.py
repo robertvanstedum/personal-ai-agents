@@ -231,3 +231,32 @@ def test_voice_beta_requires_explicit_production_gate_and_shared_cos_partner(loa
     assert client.get('/guild-next/api/v1/mc/voice/capabilities').status_code==200
     assert client.get('/guild-next/api/v1/dictation/capabilities').status_code==200
     assert portal.app.test_client().get('/guild-next/api/v1/mc/voice/capabilities').status_code==401
+
+
+@pytest.mark.parametrize("chat", [None, "", "mc", "openclaw", "stub", "cos"])
+def test_production_shared_files_follow_only_existing_cos_selection(chat):
+    from minimoi_portal.guild_mounts import production_environ, PRODUCTION_COS_FILES
+    from minimoi_portal.guild_ui import mc_files
+    config = {mc_files.ENV_COS_DIR: "/app/runtime/guild/mc-evidence", mc_files.ENV_COS_AGENT_DIR: "/minimoi/data/guild/mc-evidence",
+              mc_files.ENV_COS_UID: "1000", mc_files.ENV_COS_GID: "1000", mc_files.ENV: "/tmp/agent_requests",
+              "MINIMOI_GUILD_MC": "openclaw", "MINIMOI_GUILD_MC_STREAM": "1"}
+    if chat is not None:
+        config["MINIMOI_GUILD_CHAT"] = chat
+    admitted = production_environ(config)
+    assert set(PRODUCTION_COS_FILES).issubset(admitted) == (chat == "cos")
+    assert mc_files.ENV not in admitted and "MINIMOI_GUILD_MC_STREAM" not in admitted
+    if chat == "cos":
+        assert admitted["MINIMOI_GUILD_MC"] == "cos" and admitted["MINIMOI_GUILD_MC_TURNS"] == "1"
+    else:
+        assert "MINIMOI_GUILD_MC" not in admitted and "MINIMOI_GUILD_MC_TURNS" not in admitted
+
+
+@pytest.mark.parametrize("missing", ["MINIMOI_MC_COS_FILES_DIR", "MINIMOI_MC_COS_FILES_AGENT_DIR", "MINIMOI_MC_COS_FILES_UID", "MINIMOI_MC_COS_FILES_GID"])
+def test_incomplete_production_shared_file_config_is_all_held_off(missing):
+    from minimoi_portal.guild_mounts import production_environ, PRODUCTION_COS_FILES
+    config = {"MINIMOI_GUILD_CHAT": "cos", "MINIMOI_MC_COS_FILES_DIR": "/app/runtime/guild/mc-evidence",
+              "MINIMOI_MC_COS_FILES_AGENT_DIR": "/minimoi/data/guild/mc-evidence", "MINIMOI_MC_COS_FILES_UID": "1000", "MINIMOI_MC_COS_FILES_GID": "1000"}
+    del config[missing]
+    admitted = production_environ(config)
+    assert set(PRODUCTION_COS_FILES).isdisjoint(admitted)
+    assert admitted["MINIMOI_GUILD_MC"] == "cos"  # Existing text-only selection stays available.

@@ -1,0 +1,5 @@
+# Standalone Vault capture/index/Ask runtime; install separately from app images.
+# Uses the existing Python runtime; sqlite-vec loads into its SQLite connection.
+Flask==3.1.3
+PyYAML==6.0.3
+sqlite-vec==0.1.9

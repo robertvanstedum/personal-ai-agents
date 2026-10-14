@@ -214,6 +214,8 @@ PRODUCTION_FLAG = "MINIMOI_GUILD_PRODUCTION"
 # The local MC relay/files and the new speech features await their own production
 # review. Remove them before binding the mount; raw shared-container flags must
 # not activate any of these paths. This filtered snapshot changes on restart.
+PRODUCTION_COS_FILES = ("MINIMOI_MC_COS_FILES_DIR", "MINIMOI_MC_COS_FILES_AGENT_DIR",
+                        "MINIMOI_MC_COS_FILES_UID", "MINIMOI_MC_COS_FILES_GID")
 PRODUCTION_HELD_OFF = ("MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MINIMOI_GUILD_MC_STREAM",
                        "MINIMOI_MC_VOICE", "MINIMOI_DICTATION", "MINIMOI_MC_FILES_HOST_ROOT")
 
@@ -254,8 +256,14 @@ CHAT_VAR = "MINIMOI_GUILD_CHAT"
 def production_environ(environ) -> dict:
     """The environment the production mount reads. Master Craftsman is removed; the only conversation partner that can be
     switched on is the existing Chief of Staff, by the explicit MINIMOI_GUILD_CHAT=cos (it uses COS_BACKEND, the address the
-    portal already proxies /app/cos to). Anything else leaves the chat honestly "off"."""
-    held_off = set(PRODUCTION_HELD_OFF)
+    portal already proxies /app/cos to). The four shared-agent attachment settings are admitted only for that selection and valid paths/UID/GID. Anything else leaves the chat honestly "off"."""
+    held_off = set(PRODUCTION_HELD_OFF) | set(PRODUCTION_COS_FILES)
+    # The existing explicit CoS selection is the authority; file paths and runtime
+    # ownership must all validate before any attachment configuration is admitted.
+    if str(environ.get(CHAT_VAR, "")).strip().lower() == "cos":
+        from .guild_ui.mc_files import cos_dirs
+        if cos_dirs(environ) is not None:
+            held_off.difference_update(PRODUCTION_COS_FILES)
     if flag_on(environ, "MINIMOI_GUILD_VOICE_PRODUCTION") and str(environ.get(CHAT_VAR, "")).strip().lower() == "cos":
         held_off.difference_update({"MINIMOI_MC_VOICE", "MINIMOI_DICTATION"})
     env = {k: v for k, v in dict(environ).items() if k not in held_off}

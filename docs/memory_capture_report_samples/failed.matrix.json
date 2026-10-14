@@ -1,0 +1,35 @@
+{
+ "generated_at": "2026-10-04T12:00:00Z",
+ "job": {
+  "reason": null,
+  "state": "failed"
+ },
+ "overall": "watch",
+ "rows": [
+  {
+   "captured_records": 1,
+   "label": "Claude Code",
+   "last_check_kind": "capture",
+   "last_new_capture_at": "2026-10-04T12:00:00Z",
+   "last_success_at": "2026-10-04T12:00:00Z",
+   "mode": "scheduled",
+   "reason": "ok",
+   "source": "claude-code",
+   "status": "current"
+  },
+  {
+   "captured_records": 2,
+   "label": "Codex",
+   "last_check_kind": "capture",
+   "last_new_capture_at": "2026-10-04T12:00:00Z",
+   "last_success_at": "2026-10-04T12:00:00Z",
+   "mode": "scheduled",
+   "reason": "capture_failed",
+   "source": "codex",
+   "status": "watch"
+  }
+ ],
+ "run_id": "20261004T120000Z-abc123",
+ "schema": "minimoi.memory-capture-matrix.v1",
+ "stale_after_s": 172800
+}
