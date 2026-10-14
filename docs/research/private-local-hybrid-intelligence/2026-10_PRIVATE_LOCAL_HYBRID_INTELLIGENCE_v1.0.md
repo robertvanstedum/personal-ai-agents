@@ -37,6 +37,7 @@ Robert's direction of 14 October, restated:
 - Work continues across models without losing the project's context or the reasons behind decisions. The Vault provides that continuity; models are replaceable engines.
 - Finish the Vault's functionality first. The vision does not become an infrastructure project that delays it.
 - Bounded comparisons precede any commitment to a model, vendor or hardware.
+- **Always have a local model.** mini-moi keeps a local model running and in use at all times, even for very limited tasks. This is discipline, not a workload decision: the local path stays exercised so it is there when it is needed.
 
 In one sentence: mini-moi owns its continuity and supports privately controlled execution wherever it is capable enough, with deliberate access to hosted intelligence when that is better. The owner's context is the lasting asset; models are teammates.
 
@@ -109,9 +110,17 @@ The gold set is split in two. Local-only cases cover records that must never lea
 
 When a machine with enough memory exists, one coding comparison, with testing work (writing or running a test suite against a known defect) as an equally good candidate: a task already done once with a hosted agent, with acceptance held separately. A good candidate is a bounded Workshop journal fix of the kind reproduced in the October 8 review (a torn-tail defect with a known test), or a domain export adapter with a dry-run contract. Same brief, isolated checkouts, same tools and resource limits; correctness and rework measured before anyone judges the explanation. Not anything on the career path, which has a deadline and an audience.
 
-### 4.3 Already local, kept
+### 4.3 Already local, kept, and the standing rule
 
 Curator's research triage and Mein Deutsch's last-tier translation fallback stay local. They are small, proven, and the public documents already describe them. They are also the first places to try a newer small model when one is worth trying, because the acceptance is already defined.
+
+**The standing rule (editor in chief, 14 October): always have a local model, even for very limited tasks.** As of this snapshot the rule is met on the workshop Mac only by habit, not by anything that enforces it, and it is not met in production:
+
+- The dev gateway routes `minimoi-cos-agent-local` to `qwen3:4b` on Ollama as the third fallback; Mein Deutsch's last tier calls `gemma3:1b`; Curator's research triage calls `gemma3:1b`. Three call sites, two models, no single declaration of "the local model".
+- `tests/test_local_llm.py` exercises the local path but skips, rather than fails, when no Ollama server is reachable. If Ollama stops on the Mac, nothing notices.
+- Production and staging omit the Ollama route by design (`litellm.prod.yaml`), and Mein Deutsch's local tier points at `localhost:11434`, which is nothing inside the production container: the tier exists in code and is dead where mini-moi runs.
+
+Closing the gap is a small chunk, not a project: one named local model declared in the gateway configuration and read from there by German and Curator, listed in the LLM registry's current rotation; a `MINIMOI_LOCAL_MODEL_REQUIRED` setting on the workshop machine that turns the test's skip into a failure, with a daily "local model answered" line in the Workshop journal; and a production decision (section 10) between a small CPU-class model on the EC2 for the limited tasks that belong there, and a written exception until the local server exists, with the dead tier removed so the code stops promising it.
 
 ### 4.4 Stays hosted, for now
 
@@ -167,6 +176,7 @@ No model downloaded, no benchmark run, no job scheduled, no hardware priced beyo
 2. The first small model for tagging and reflection drafts on the 8 GB machine (a 4-billion-class quantized model is the realistic ceiling; the embedding model already running is the first candidate for embeddings).
 3. Whether the monthly local-versus-hosted gold-set result appears in the morning brief or only in the quarterly snapshot.
 4. Hardware: deferred until the Vault pass and the restore drill; confirm. When the time comes, the first question is server or laptop, and the document's suggestion is server first.
+5. Production and the always-a-local-model rule (section 4.3): a small CPU-class model on the EC2 for limited tasks, or a written exception until the local server, with the dead local tier removed. The document's suggestion is the written exception: a documented exception is discipline, a half-working tier is not.
 
 ## 11. Cadence
 
@@ -237,4 +247,5 @@ Editorial abstracts written for the editor in chief, not the authors' own. Each 
 
 - **October 2026, v1.0:** first standing snapshot. Direction restated from the public repository and the owner's 14 October clarification; field state researched (gap, availability, hardware classes, cost case, routing, debate); Vault pass named as the strongest candidate local workload, with no order decided (editor in chief, 14 October: candidates exist throughout mini-moi, coding and testing included); hardware deferred on evidence; Codex brief and companion folded in.
 - **14 October 2026, Codex review applied before v1.0 is treated as settled:** privacy enforcement restated as a requirement verified at the retrieval and routing boundaries, not a delivered property of the gateway; embedding-identity gap closed (index pins digest and dimensions); Vault-first downgraded from decision to candidate and "stays hosted" made evidence-qualified; Epoch cited directly and the four-month lag kept historical, benchmark dates frozen at June 2026; hardware thresholds and throughput figures scoped to the runtime that published them; cost study's fix-commit ratio described as repair commits, qualification carried into the abstract; owner-controlled encrypted off-site backups permitted and the gold set split into local-only and shareable cases; five reading abstracts restored; C5 link corrected.
+- **14 October 2026, standing rule added:** always have a local model, even for very limited tasks (section 1.2); the current gap recorded in section 4.3 with a small closing chunk; production exception or CPU model opened as item 10.5.
 - **Not performed:** hardware purchase, model download, local benchmark, automatic routing, legal clearance, new release scope, public publication.
