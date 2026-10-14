@@ -1,0 +1,13 @@
+{
+  "python": "/Users/vanstedum/Projects/personal-ai-agents/venv/bin/python3",
+  "shelf_root": "~/minimoi-staging/data/memory",
+  "inbox_root": "~/minimoi-inbox",
+  "jobs_root": "~/minimoi-staging/data/jobs",
+  "logs_root": "~/minimoi-staging/logs",
+  "ask_registry": "~/minimoi-staging/data/memory-ask/agents.json",
+  "age_bin": "~/minimoi-staging/bin/age",
+  "age_version": "v1.3.2",
+  "backup_dest": "s3://minimoi-backups/vault",
+  "public_recipient": "age1REPLACE_WITH_PUBLIC_RECIPIENT",
+  "launch_agents": "~/Library/LaunchAgents"
+}
