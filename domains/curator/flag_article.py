@@ -42,7 +42,8 @@ def parse_latest_briefing() -> Optional[Dict]:
     Parse the most recent curator briefing to extract article metadata.
     Returns dict mapping article numbers to metadata.
     """
-    briefing_file = PROJECT_ROOT / "curator_output.txt"
+    # CURATOR_OUTPUT_PATH: the mounted data/curator copy in production (#305).
+    briefing_file = Path(os.environ.get("CURATOR_OUTPUT_PATH") or PROJECT_ROOT / "curator_output.txt")
     
     if not briefing_file.exists():
         print("Error: No curator briefing found (curator_output.txt)", file=sys.stderr)

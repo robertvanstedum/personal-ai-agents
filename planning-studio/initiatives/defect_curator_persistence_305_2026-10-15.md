@@ -144,19 +144,34 @@ Checked against deployed code `86c3b658`. The cron runs
 | Output | Who reads it | Proposal |
 |---|---|---|
 | `curator_cache/<hash>.json` (`curator_rss_v2.py:1475,1520`) | `curator_feedback.py:166,225` loads an article by hash, date-rank or `yesterday-N`; Library enrichment, `curator_server.py:333` | **Mount it.** This is not a daily file. It is the growing store of full article records that the mounted `curator_history.json` points to. Each container replacement empties it, so feedback and scans on any earlier article fail with "not in cache" even though the history still lists the article. |
-| `curator_output.txt` (cwd, `:3481`) | `curator_feedback.py:34,90` (feedback CLI on today's articles); `core/telegram/telegram_bot.py:183` in another container | **Move behind an env override** into the mounted `data/curator` folder, defaulting to the old path, as was done for the event log. No single-file bind. It is rewritten every run, so only the window between a replacement and the next run is at risk. |
+| `curator_output.txt` (cwd, `:3481`) | `curator_feedback.py:34,90` (feedback CLI on today's articles); `core/telegram/telegram_bot.py:183` | **Move behind an env override** into the mounted `data/curator` folder, defaulting to the old path, as was done for the event log. No single-file bind. It is rewritten every run, so only the window between a replacement and the next run is at risk. |
 | `curator_latest.html`, `curator_briefing.html` (`domains/curator/`, `:3522,3531`) | `/briefing` and `/curator_briefing.html` serve them only as a fallback when `data/curator/curator_latest.json` (already mounted) can't be loaded | **Don't mount.** Both are git-tracked, and a bind would shadow the tracked copy. The normal path renders from the mounted JSON. |
 | `curator_index.html` (cwd `/app`, `:3352`) | `/curator_index.html` serves `domains/curator/curator_index.html`, a different path | **Don't mount.** The writer and the route already point at different files, so nothing a mount keeps is ever served. Leave it as a separate small cleanup. |
 
-If approved, the build is one PR that reuses the #306 machinery:
-- add `curator_cache` (dir) to `curator_state.map` and Compose;
-- add a `CURATOR_OUTPUT_PATH`-style env override for `curator_output.txt`;
-- the deploy-time snapshot seeds both (the snapshot already captures them
-  as writable-layer files); the preflight and post-deploy check cover them.
-
-Before that deploy, run a read-only production check: the size and file
-count of `/app/curator_cache`, and free disk space. Then it follows the same
-dev-first, approval-gated deploy as B.
+**E built (15 Oct; Robert approved building it; it deploys with the other
+#305 fixes after review):**
+- `curator_cache` is a new map kind, `appdir`: a dir bind for a folder the app
+  creates itself (not in the image).
+  - If the deploy-time snapshot holds it, the seed copies it.
+  - If the snapshot records it absent, the seed creates it empty. The
+    container had none, so the empty mount hides nothing.
+  - `dir` keeps refusing that case: an absent `annotations` would be an
+    anomaly.
+- `CURATOR_OUTPUT_PATH=/app/data/curator/curator_output.txt` (a `moved` row).
+  The writer (`curator_rss_v2.py`) and every active reader use it:
+  `curator_feedback.py`, `flag_article.py`, `core/telegram/telegram_bot.py`
+  (run inside the Curator container by the EC2 cron),
+  `scripts/send_briefing_telegram.py`. A test fails if a new reader skips it.
+  - The bot's old default, `core/telegram/curator_output.txt`, never existed.
+    The env fixes it in production; the dev default is unchanged.
+- `curator_preserve.sh` knows both old paths, so the first deploy snapshots
+  and seeds them. Later deploys find them mounted, or absent at the old path.
+- Production read (15 Oct, after #306): the 18:44 replacement had already
+  emptied `/app/curator_cache` and removed `curator_output.txt`. They come
+  back at the next daily run, so the first deploy of E should come after a
+  run.
+- Disk: ample headroom on EC2 (receipt in private operator storage); the
+  folder grows a few MB a day.
 
 ## 4. Rollback
 

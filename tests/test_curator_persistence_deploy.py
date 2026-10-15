@@ -33,14 +33,15 @@ def test_state_map_matches_production_compose_binds_exactly():
         assert volume.startswith(HOST_PREFIX), volume
         source, target = volume[len(HOST_PREFIX):].split(":")[:2]
         binds.add((source, target))
-    mapped = {(host, target) for kind, _old, host, target in _map_rows() if kind in ("dir", "file")}
+    mapped = {(host, target) for kind, _old, host, target in _map_rows() if kind in ("dir", "appdir", "file")}
     assert binds == mapped
 
 
 def test_moved_state_env_points_into_the_mounted_curator_folder():
     env = dict(item.split("=", 1) for item in _curator_service()["environment"])
     moved = {target for kind, _old, _host, target in _map_rows() if kind == "moved"}
-    assert {env["CURATOR_SIGNAL_STORE_PATH"], env["CURATOR_X_PULL_STATE_PATH"]} == moved
+    assert {env["CURATOR_SIGNAL_STORE_PATH"], env["CURATOR_X_PULL_STATE_PATH"],
+            env["CURATOR_OUTPUT_PATH"]} == moved
     assert all(path.startswith("/app/data/curator/") for path in moved)
 
 
@@ -110,6 +111,8 @@ SEEDED = {
     "/app/domains/curator/curator_sources.json": "[]\n",
     "/app/signal_store.jsonl": "{\"e\": 1}\n",
     "/app/x_pull_state.json": "{\"last_pull_at\": null}\n",
+    "/app/curator_cache/abc12.json": "{\"hash_id\": \"abc12\"}\n",
+    "/app/curator_output.txt": "1. Article\n",
 }
 EXISTING = ["data/curator/", "data/curator_archive/", "data/curator_history.json",
             "data/curator_costs.json", "data/interests/", "data/research-intelligence/"]
@@ -371,3 +374,51 @@ def test_deploy_proves_curator_absence_from_a_listing_not_a_failed_inspect():
     assert 'docker inspect "$CURATOR_CONTAINER" >/dev/null 2>&1' not in script
     assert "if curator_container_exists; then" in body
     assert "docker ps -a --format '{{.Names}}'" in script
+
+
+def test_seed_creates_the_article_folder_empty_only_when_the_snapshot_proves_it_absent(tmp_path):
+    host = _host(tmp_path)
+    no_articles = {k: v for k, v in SEEDED.items() if not k.startswith("/app/curator_cache/")}
+    result = _run("curator_seed_state.sh", str(_snapshot(tmp_path, no_articles)), host=host)
+    assert result.returncode == 0, result.stderr
+    assert (host / "data/curator_cache").is_dir()
+    assert list((host / "data/curator_cache").iterdir()) == []
+    assert _run("curator_bind_preflight.sh", host=host).returncode == 0
+
+    # With articles in the snapshot they are copied, never replaced by an empty folder.
+    host2 = _host(tmp_path / "second")
+    result = _run("curator_seed_state.sh", str(_snapshot(tmp_path / "second")), host=host2)
+    assert result.returncode == 0, result.stderr
+    assert (host2 / "data/curator_cache/abc12.json").read_text() == "{\"hash_id\": \"abc12\"}\n"
+    assert (host2 / "data/curator/curator_output.txt").read_text() == "1. Article\n"
+
+
+def test_preflight_rejects_an_article_folder_that_is_a_file(tmp_path):
+    host = _host(tmp_path)
+    _run("curator_seed_state.sh", str(_snapshot(tmp_path)), host=host)
+    import shutil
+    shutil.rmtree(host / "data/curator_cache")
+    (host / "data/curator_cache").write_text("not a folder\n")
+    result = _run("curator_bind_preflight.sh", host=host)
+    assert result.returncode == 1 and "curator_cache should be a directory" in result.stderr
+
+
+def test_every_reader_of_the_briefing_text_honours_the_moved_path():
+    files = subprocess.run(["git", "grep", "-l", "curator_output.txt", "--", "*.py", "*.sh",
+                            ":!docs/archive", ":!tests", ":!scripts/operations"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+    assert files
+    for rel in files:
+        if rel == "domains/curator/curator_server.py":
+            continue  # mentions the file only in a docstring
+        assert "CURATOR_OUTPUT_PATH" in (ROOT / rel).read_text(), rel
+
+
+def test_feedback_reads_the_briefing_text_from_the_env_path(monkeypatch, tmp_path):
+    from domains.curator import curator_feedback
+
+    monkeypatch.delenv("CURATOR_OUTPUT_PATH", raising=False)
+    assert importlib.reload(curator_feedback).CURATOR_OUTPUT == ROOT / "curator_output.txt"
+    monkeypatch.setenv("CURATOR_OUTPUT_PATH", str(tmp_path / "curator_output.txt"))
+    assert importlib.reload(curator_feedback).CURATOR_OUTPUT == tmp_path / "curator_output.txt"
+    monkeypatch.delenv("CURATOR_OUTPUT_PATH")
+    importlib.reload(curator_feedback)
