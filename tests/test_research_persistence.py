@@ -182,3 +182,38 @@ def test_dive_keeps_different_comments_that_share_a_note_id(tmp_path, monkeypatc
         ("second wording", "observe"),
         ("second wording", "sessions"),
     ]
+
+
+def test_dive_orders_mixed_timestamps_without_dropping_any_record(tmp_path, monkeypatch):
+    module = _load_generate_dive_module()
+    research_comments = tmp_path / "research" / "annotations"
+    general_comments = tmp_path / "general" / "annotations"
+    (research_comments / "new-topic").mkdir(parents=True)
+    (general_comments / "new-topic").mkdir(parents=True)
+    (tmp_path / "threads" / "new-topic" / "sessions").mkdir(parents=True)
+    (research_comments / "new-topic" / "2026-10-15.json").write_text(json.dumps([
+        {"note_id": "num", "timestamp": 1760000000, "note": "numeric date"},
+        {"note_id": "late", "timestamp": "2026-10-15T09:00:00", "note": "later"},
+        {"note_id": "null", "timestamp": None, "note": "null date"},
+    ]))
+    (general_comments / "new-topic" / "2026-10-15.json").write_text(json.dumps([
+        {"note_id": "missing", "note": "no date field"},
+        {"note_id": "early", "timestamp": "2026-03-27T10:00:00", "note": "earlier"},
+        {"note_id": "empty", "timestamp": "", "note": "empty date", "ref_text": 42},
+    ]))
+
+    monkeypatch.setattr(module, "TOPICS_DIR", tmp_path / "topics")
+    monkeypatch.setattr(module, "THREADS_DIR", tmp_path / "threads")
+    monkeypatch.setattr(module, "ANNOTATIONS_DIR", research_comments)
+    monkeypatch.setattr(module, "GENERAL_ANNOTATIONS_DIR", general_comments)
+
+    kept = module.load_thread_data("new-topic")["annotations"]
+
+    # Dated records by time first, then the rest in load order; none dropped.
+    assert [a["note_id"] for a in kept] == ["early", "late", "num", "null", "missing", "empty"]
+    text = module._format_annotations(kept)
+    assert "[2026-03-27] (reaction) earlier" in text
+    assert "[1760000000] (reaction) numeric date" in text
+    assert "[undated] (reaction) null date" in text
+    assert "[undated] (reaction) no date field" in text
+    assert '[undated] (reaction) re: "42" — empty date' in text
