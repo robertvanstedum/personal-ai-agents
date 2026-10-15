@@ -7,8 +7,9 @@
 # agent_logs only). See docs/specs/defect_container_persistence_2026-07-14.md.
 #
 # This file is the installed EC2 copy (sha256 fa6ae387..., 15 Jul) plus the
-# #305 additions. Every host path in scripts/operations/curator_state.map
-# must be listed below; tests/test_backup_coverage.py checks that.
+# #305 additions. Every host path in scripts/operations/curator_state.map,
+# and every data/ bind source in docker-compose.prod.yml, must be listed
+# below; tests/test_backup_coverage.py checks both.
 #
 # Retention: the 14-day prune removes only this host's dated copies. Each one
 # reaches S3 at 03:00 the same day, and S3 is the kept history (see
@@ -72,6 +73,10 @@ rsync_path "${DATA_DIR}/annotations/"            "annotations/"
 rsync_path "${DATA_DIR}/research-library/"       "research-library/"
 rsync_path "${DATA_DIR}/research-config/"        "research-config/"
 rsync_path "${DATA_DIR}/curator-config/"         "curator-config/"
+# Guild and CoS state, gateway receipts and research dives (follow-up to #305)
+rsync_path "${DATA_DIR}/guild/"                  "guild/"
+rsync_path "${DATA_DIR}/model_gateway_receipts.jsonl" "model_gateway_receipts.jsonl"
+rsync_path "${DATA_DIR}/research_dives/"         "research_dives/"
 rsync_path "${DATA_DIR}/german/"                 "german/"
 rsync_path "${DATA_DIR}/portuguese/"             "portuguese/"
 rsync_path "${AUTH_DIR}/"                        "auth/"
