@@ -39,13 +39,15 @@ S="$STAGING_ROOT"
 
 # A missing single-file bind source would make Docker create a DIRECTORY in
 # its place, so every one must exist before compose runs.
-for f in data/curator_history.json data/curator_costs.json auth/users.json auth/guests.json \
+for f in data/curator_history.json data/curator_costs.json data/research-config/config.json \
+         data/curator-config/curator_sources.json auth/users.json auth/guests.json \
          cos_memory.md data/model_gateway_receipts.jsonl data/guild/cos_context.json \
          data/guild/build_queue.json config/litellm.staging.yaml \
          config/usage/usage_record.py config/usage/litellm_recorder.py; do
   [[ -f "$S/$f" ]] || die "missing $S/$f; run seed.sh (and build.sh for config/)"
 done
-for d in data/curator data/curator_archive data/interests data/research-intelligence data/german \
+for d in data/curator data/curator_archive data/interests data/research-intelligence \
+         data/annotations data/research-library data/german \
          data/portuguese data/guild data/usage data/usage/portal data/workshops docs/design docs/specs agent_logs; do
   [[ -d "$S/$d" ]] || die "missing folder $S/$d; run seed.sh"
 done
