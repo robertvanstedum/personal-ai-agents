@@ -186,25 +186,21 @@ copy yet (see C).
     counted once. Records that share a `note_id` but differ are all kept
     (Codex review).
   - Comments are ordered by timestamp.
-- Library/bookmarks, **no code change yet**:
+- Library/bookmarks: **confirmed and fixed (#313)**:
   - Every history writer uses `/app/curator_history.json`, the mounted host
     file `data/curator_history.json`:
     - `curator_rss_v2.py:1479` (cron output dir);
     - `curator_feedback.py:165,1616`;
     - `scan_job.py:19`.
-  - The readers in `curator_intelligence.py:47` and `curator_server.py:1079`
-    (archive sources) use that same root file.
-  - Exception: `/api/library` (`curator_server.py:365`) reads
-    `CURATOR_DATA_DIR/curator_history.json`. Compose doesn't set
-    `CURATOR_DATA_DIR`, so that is `/app/data/curator/curator_history.json`,
-    a different file. If it is missing, the Library shows no bookmarks; if it
-    is an old copy, the bookmarks it shows are stale.
-  - Before choosing a fix, read production read-only:
-    - whether `/opt/minimoi/.env` sets `CURATOR_DATA_DIR`;
-    - whether `data/curator/curator_history.json` exists, and its size and
-      mtime next to the root file.
-  - Likely fix: `/api/library` reads the root history file. That fix moves no
-    data and deletes nothing.
+  - `/api/library` read `CURATOR_DATA_DIR/curator_history.json` instead.
+  - A read-only production check (15 Oct) found:
+    - `CURATOR_DATA_DIR` is unset;
+    - `data/curator/curator_history.json` does not exist, on the host or in
+      the container;
+    - the root file holds 40 bookmarks, which the Library never showed.
+  - Dev has the same gap.
+  - Fix: one `HISTORY_PATH`, the root file, read by both `/api/library` and
+    the archive sources. No data moves.
 
 **E. Daily-run outputs: proposal (15 Oct, for Codex review and Robert's decision)**
 
