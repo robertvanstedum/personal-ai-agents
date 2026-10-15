@@ -3478,7 +3478,9 @@ def main():
     
     # Save text output (production → curator_output.txt, dry run → curator_preview.txt)
     if not dry_run:
-        output_file = "curator_output.txt"
+        # Production sets CURATOR_OUTPUT_PATH into the mounted data/curator
+        # folder so the day's briefing text survives container replacement (#305).
+        output_file = os.environ.get("CURATOR_OUTPUT_PATH") or "curator_output.txt"
         with open(output_file, "w") as f:
             f.write(output)
         print(f"💾 Results saved to {output_file}")

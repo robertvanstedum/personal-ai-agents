@@ -180,7 +180,8 @@ def send_article(token, chat_id, num, title, url, source, category, score):
 
 def send_briefing(token, chat_id):
     """Read curator_output.txt and send top articles"""
-    output_file = BASE_DIR / 'curator_output.txt'
+    # CURATOR_OUTPUT_PATH: the mounted data/curator copy in production (#305).
+    output_file = Path(os.environ.get('CURATOR_OUTPUT_PATH') or BASE_DIR / 'curator_output.txt')
     
     if not output_file.exists():
         send_message(token, chat_id, "❌ curator_output.txt not found — has the curator run today?")

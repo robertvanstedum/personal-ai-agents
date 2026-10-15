@@ -10,7 +10,10 @@
 #    recorded as copied but missing from its tree -> REFUSE)
 #   snapshot lacks it, host path present -> keep (already durable)
 #   snapshot lacks it, host path missing -> moved: fine (created on first
-#                                           write); dir/file: REFUSE
+#                                           write); appdir recorded
+#                                           "absent": create it empty (the
+#                                           container had none, so nothing is
+#                                           hidden); dir/file: REFUSE
 #   wrong type or a symlink on either side -> REFUSE
 #
 # Content comes only from the snapshot: never from dev, the image or the repo.
@@ -85,7 +88,7 @@ while read -r kind old host _target; do
   [[ -z "$kind" || "$kind" == \#* || "$old" == "-" ]] && continue
   src="$SNAP/tree$old"
   dst="$ROOT/$host"
-  want="$kind"; [[ "$kind" == moved ]] && want=file
+  want="$kind"; [[ "$kind" == moved ]] && want=file; [[ "$kind" == appdir ]] && want=dir
   src_kind="$(kind_of "$src")"
   dst_kind="$(kind_of "$dst")"
   record="$(recorded "$old")"
@@ -101,6 +104,11 @@ while read -r kind old host _target; do
   [[ "$dst_kind" == missing || "$dst_kind" == "$want" ]] ||
     fail "$dst is a $dst_kind, expected a $want"
   if [[ "$src_kind" == missing ]]; then
+    if [[ "$dst_kind" == missing && "$kind" == appdir && "$record" == absent ]]; then
+      plan+=("-|$dst")
+      echo "create  $dst (empty; the container had no $old)"
+      continue
+    fi
     if [[ "$dst_kind" == missing && "$kind" != moved ]]; then
       fail "$old is not in the snapshot and $dst does not exist; nothing to mount"
     fi
@@ -119,6 +127,10 @@ for item in "${plan[@]}"; do
   src="${item%%|*}"
   dst="${item#*|}"
   mkdir -p "$(dirname "$dst")"
+  if [[ "$src" == "-" ]]; then
+    mkdir "$dst"
+    continue
+  fi
   stage="$dst.seeding.$$"
   rm -rf -- "$stage"
   cp -a "$src" "$stage"

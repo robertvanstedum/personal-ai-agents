@@ -115,6 +115,8 @@ services:
       # (#305). The cursor is saved by rename, so it needs a folder mount.
       - CURATOR_SIGNAL_STORE_PATH=/app/data/curator/signal_store.jsonl
       - CURATOR_X_PULL_STATE_PATH=/app/data/curator/x_pull_state.json
+      # The day's briefing text, read by feedback, flagging and Telegram (#305).
+      - CURATOR_OUTPUT_PATH=/app/data/curator/curator_output.txt
     volumes:
       # Every bind source here is listed in scripts/operations/curator_state.map,
       # seeded from the deploy-time production snapshot and checked before and
@@ -140,6 +142,9 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-library:/app/_NewDomains/research-intelligence/library
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-config/config.json:/app/_NewDomains/research-intelligence/agent/config.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator-config/curator_sources.json:/app/domains/curator/curator_sources.json
+      # Full article files (<hash>.json) that curator_history.json points to;
+      # feedback and Library enrichment load them by hash (#305).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_cache:/app/curator_cache
       # Not mounted on purpose: research-intelligence/topics. If that folder
       # exists, research sessions are written there instead of data/threads.
     ports:

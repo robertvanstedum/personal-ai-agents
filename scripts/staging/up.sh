@@ -47,7 +47,7 @@ for f in data/curator_history.json data/curator_costs.json data/research-config/
   [[ -f "$S/$f" ]] || die "missing $S/$f; run seed.sh (and build.sh for config/)"
 done
 for d in data/curator data/curator_archive data/interests data/research-intelligence \
-         data/annotations data/research-library data/german \
+         data/annotations data/research-library data/curator_cache data/german \
          data/portuguese data/guild data/usage data/usage/portal data/workshops docs/design docs/specs agent_logs; do
   [[ -d "$S/$d" ]] || die "missing folder $S/$d; run seed.sh"
 done

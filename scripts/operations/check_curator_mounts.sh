@@ -52,17 +52,18 @@ while read -r kind old host target; do
   [[ -z "$kind" || "$kind" == \#* ]] && continue
   src="$ROOT/$host"
   case "$kind" in
-    dir|file)
+    dir|appdir|file)
       case ";$MOUNTS" in
         *";bind|$src|$target|true;"*) ;;
         *) fail "$CONTAINER has no read-write bind $src -> $target" ;;
       esac
-      same_both_sides "$src" "$target" "$kind" || fail "$target inside $CONTAINER differs from $src"
+      same_both_sides "$src" "$target" "${kind/appdir/dir}" || fail "$target inside $CONTAINER differs from $src"
       ;;
     moved)
       case "$target" in
         */signal_store.jsonl) var=CURATOR_SIGNAL_STORE_PATH ;;
         */x_pull_state.json) var=CURATOR_X_PULL_STATE_PATH ;;
+        */curator_output.txt) var=CURATOR_OUTPUT_PATH ;;
         *) fail "no env var known for $target" ;;
       esac
       value="$(docker exec "$CONTAINER" printenv "$var" || true)"
