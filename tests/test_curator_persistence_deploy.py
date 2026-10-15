@@ -71,6 +71,12 @@ def test_workflow_ships_the_curator_kit_before_deploying():
                  "check_curator_mounts.sh", "curator_state.map"):
         assert name in workflow.split("CURATOR_STATE_KIT=")[1].split("\n")[0]
     assert "tar -xzf - --no-same-owner -C /opt/minimoi/scripts" in workflow
+    kit_step = workflow.index("- name: Push Curator preservation kit to EC2")
+    assert workflow.index("- name: Push docker-compose.prod.yml to EC2") < kit_step
+    assert kit_step < workflow.index("- name: Deploy on EC2")
+    # The kit travels in its own SSM command, not the near-limit compose sync.
+    compose_step = workflow[workflow.index("- name: Push docker-compose.prod.yml to EC2"):kit_step]
+    assert "CURATOR_STATE_KIT" not in compose_step
 
 
 def test_legacy_paths_stay_the_default_and_env_moves_them(monkeypatch, tmp_path):
