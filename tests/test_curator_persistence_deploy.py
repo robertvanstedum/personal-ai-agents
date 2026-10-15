@@ -431,3 +431,16 @@ def test_feedback_reads_the_briefing_text_from_the_env_path(monkeypatch, tmp_pat
     assert importlib.reload(curator_feedback).CURATOR_OUTPUT == tmp_path / "curator_output.txt"
     monkeypatch.delenv("CURATOR_OUTPUT_PATH")
     importlib.reload(curator_feedback)
+
+
+def test_images_never_carry_curator_runtime_state_that_moved_to_host_mounts():
+    ignored = {line.strip() for line in (ROOT / ".dockerignore").read_text().splitlines()
+               if line.strip() and not line.startswith("#")}
+    for kind, old, _host, _target in _map_rows():
+        if kind not in ("moved", "appdir"):
+            continue
+        rel = old.removeprefix("/app/")
+        assert "/" not in rel, old  # build-context root patterns only
+        assert (rel + "/" if kind == "appdir" else rel) in ignored, old
+    for name in ("curator_output.txt", "signal_store.jsonl", "x_pull_state.json"):
+        assert name in ignored

@@ -18,6 +18,13 @@ curator_media/
 curator_archive/
 curator_cache/
 curator_history.json
+# Curator runtime state that production keeps on host mounts (#305). An image
+# must never carry a copy: check_curator_mounts.sh fails the release when an
+# old in-container path exists. tests/test_curator_persistence_deploy.py ties
+# this list to the moved/appdir rows of scripts/operations/curator_state.map.
+curator_output.txt
+signal_store.jsonl
+x_pull_state.json
 
 # The live Guild Build Queue is state, not code. Keep the repository copy out
 # of every image so a portal without its folder mount cannot read or Save a
