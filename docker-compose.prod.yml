@@ -111,7 +111,15 @@ services:
     environment:
       - FLASK_ENV=production
       - PORT=8766
+      # Event log and X pull cursor live in the mounted data/curator folder
+      # (#305). The cursor is saved by rename, so it needs a folder mount.
+      - CURATOR_SIGNAL_STORE_PATH=/app/data/curator/signal_store.jsonl
+      - CURATOR_X_PULL_STATE_PATH=/app/data/curator/x_pull_state.json
     volumes:
+      # Every bind source here is listed in scripts/operations/curator_state.map,
+      # seeded from the deploy-time production snapshot and checked before and
+      # after the container is created (#305). Keep the two in step.
+      #
       # curator_signals.json, curator_latest.json, curator_radar.json now live
       # inside this same mounted directory (data/curator/curator_*.json) rather
       # than as separate top-level mounts -- see Phase 2 Slice 5. REQUIRES the
@@ -124,6 +132,16 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_costs.json:/app/curator_costs.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/interests:/app/interests
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-intelligence:/app/_NewDomains/research-intelligence/data
+      # Formerly container-only (#305): general comments, research library,
+      # runtime-edited research config and source trust list. The two config
+      # files are production copies: repo edits to them no longer reach
+      # production without a reviewed merge into the host file.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/annotations:/app/data/annotations
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-library:/app/_NewDomains/research-intelligence/library
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-config/config.json:/app/_NewDomains/research-intelligence/agent/config.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator-config/curator_sources.json:/app/domains/curator/curator_sources.json
+      # Not mounted on purpose: research-intelligence/topics. If that folder
+      # exists, research sessions are written there instead of data/threads.
     ports:
       - "127.0.0.1:8766:8766"
     depends_on:

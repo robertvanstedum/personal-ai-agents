@@ -42,8 +42,24 @@ AGENT_A_VERSION_LABEL='{{index .Config.Labels "org.opencontainers.image.version"
 AGENT_A_STOPPED=0
 AGENT_A_PENDING_SET=""
 
-restart_agent_a_on_exit() {
+# Curator keeps some state only in its container (#305). Before it is
+# recreated, curator_preserve.sh stops it and copies that state out,
+# curator_seed_state.sh fills the durable host paths from that copy (never from
+# dev or the image), and curator_bind_preflight.sh refuses a missing or
+# wrong-type bind source. Any failure before `up -d` starts the old container
+# again via the EXIT trap. Snapshots are never pruned here.
+CURATOR_CONTAINER="minimoi-curator"
+CURATOR_STOPPED=0
+OPS_SCRIPTS="/opt/minimoi/scripts"
+
+restart_stopped_on_exit() {
   local status=$?
+  if [[ "$CURATOR_STOPPED" == "1" ]]; then
+    echo "Deploy stopped while $CURATOR_CONTAINER was down; starting the previous container again."
+    docker start "$CURATOR_CONTAINER" >/dev/null 2>&1 ||
+      echo "WARNING: could not start $CURATOR_CONTAINER; start it by hand"
+    [[ "$status" -ne 0 ]] || status=1
+  fi
   if [[ "$AGENT_A_STOPPED" == "1" ]]; then
     echo "Deploy stopped while $AGENT_A_CONTAINER was down; starting the previous container again."
     if [[ -n "$AGENT_A_PENDING_SET" && ! -f "$AGENT_A_PENDING_SET/SNAPSHOT" ]]; then
@@ -55,7 +71,7 @@ restart_agent_a_on_exit() {
   fi
   exit "$status"
 }
-trap restart_agent_a_on_exit EXIT
+trap restart_stopped_on_exit EXIT
 
 # "2026.7.1" -> "2026.7"; empty -> "unknown".
 openclaw_line() {
@@ -129,14 +145,34 @@ snapshot_agent_a_volumes() {
   prune_agent_a_snapshots "$new_line" || echo "WARNING: Agent A snapshot pruning failed; continuing"
 }
 
+preserve_curator_state() {
+  if docker inspect "$CURATOR_CONTAINER" >/dev/null 2>&1; then
+    local output snapshot
+    # Set first: if the snapshot fails after stopping Curator, the trap restarts it.
+    CURATOR_STOPPED=1
+    output="$("$OPS_SCRIPTS/curator_preserve.sh" snapshot --keep-stopped)"
+    echo "$output"
+    snapshot="$(sed -n 's/^snapshot_dir=//p' <<< "$output")"
+    [[ -n "$snapshot" ]] || { echo "Curator snapshot reported no folder; not replacing Curator."; exit 1; }
+    "$OPS_SCRIPTS/curator_seed_state.sh" "$snapshot"
+  else
+    echo "No existing $CURATOR_CONTAINER; nothing to preserve or seed."
+  fi
+  "$OPS_SCRIPTS/curator_bind_preflight.sh"
+}
+
 # Preserve unaffected containers: pull and recreate only the selected services.
 "${COMPOSE[@]}" pull "${SERVICES[@]}"
 if [[ " ${SERVICES[*]} " == *" cos-agent-a "* ]]; then
   snapshot_agent_a_volumes
 fi
+if [[ " ${SERVICES[*]} " == *" curator "* ]]; then
+  preserve_curator_state
+fi
 "${COMPOSE[@]}" up -d --no-deps --remove-orphans "${SERVICES[@]}"
-# Agent A has been recreated (or was never stopped); nothing to restart now.
+# Agent A and Curator have been recreated (or were never stopped); nothing to restart now.
 AGENT_A_STOPPED=0
+CURATOR_STOPPED=0
 
 expected_image() {
   case "$1" in
@@ -205,6 +241,10 @@ for service in "${SERVICES[@]}"; do
     curl -sf "${HEALTH_URLS[$service]}" >/dev/null
   fi
 done
+
+if [[ " ${SERVICES[*]} " == *" curator "* ]]; then
+  "$OPS_SCRIPTS/check_curator_mounts.sh"
+fi
 
 /opt/minimoi/scripts/install_lesen_refresh_cron.sh
 runuser -u ec2-user -- /opt/minimoi/scripts/setup_ec2_cron.sh

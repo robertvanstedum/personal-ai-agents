@@ -14,13 +14,19 @@ Key design decisions:
 """
 
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-# Signal Store location (repo root, same as curator_history.json and other runtime state)
-SIGNAL_STORE_PATH = Path(__file__).parent.parent.parent / "signal_store.jsonl"
+# Signal Store location. Defaults to the repo root (dev). Production sets
+# CURATOR_SIGNAL_STORE_PATH into the mounted data/curator folder so the log
+# survives container replacement (#305).
+SIGNAL_STORE_PATH = Path(
+    os.environ.get("CURATOR_SIGNAL_STORE_PATH")
+    or Path(__file__).parent.parent.parent / "signal_store.jsonl"
+)
 
 # Session ID: generated once per script run, shared across all events in that run
 # This allows slicing the store by session to see exactly what one run did

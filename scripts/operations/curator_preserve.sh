@@ -232,6 +232,7 @@ chmod -R go-rwx "$WORK"
 mv "$WORK" "$DEST"
 
 echo "Curator state preserved: $DEST ($copied paths, $(wc -l < "$DEST/FILES.sha256") files, $(du -sh "$DEST" | cut -f1))"
+echo "snapshot_dir=$DEST"
 if [[ "$STOPPED" == "1" && "$KEEP_STOPPED" == "1" ]]; then
   echo "$CONTAINER left stopped for replacement."
   STOPPED=0

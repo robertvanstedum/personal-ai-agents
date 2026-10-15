@@ -46,6 +46,7 @@ From Codex's read-only audit (15 Oct) plus a read of the deployed code:
 | Source trust list | `curator_intelligence.py:48,131`; `curator_priority_feed.py:189,213` | in-place `write_text` | file bind `/opt/minimoi/data/curator-config/curator_sources.json` → `/app/domains/curator/curator_sources.json` |
 | Static topics | `agent/research.py:486-488` | — | **Do not mount.** If the folder exists, sessions go there instead of the durable `data/threads`, so an empty mount would redirect writes. |
 | Core data, archive, history, costs, interests, research data | — | — | Already mounted; unchanged. |
+| Daily-run outputs: `curator_cache/`, `curator_output.txt`, `curator_index.html`, `curator_latest.html`, `curator_briefing.html` | `curator_rss_v2.py:1475,3352,3481,3522,3531` | rewritten each run | **Rebuilt, not mounted (yet).** A replacement between runs shows the git copy of the briefing, and feedback on that day's articles fails until the next run. Snapshots keep them. Follow-up, not in B. |
 
 Signal events and the X cursor move into the existing `data/curator` mount,
 behind an env override that defaults to the old path. That needs no new
@@ -77,7 +78,13 @@ single-file binds and keeps dev unchanged.
   audit did. Run `check`, then `snapshot` outside the midnight–06:00 Chicago
   job window. Keep the result path in the private operator record.
 
-**B. Gate and mounts (next PR, after this spec is reviewed)**
+**Production result of A (15 Oct, approved by Robert):** `check`, then
+`snapshot`. 30 paths and 35 files were kept, root-only on EC2. Curator
+restarted in the same container and its health check is OK. Live hashes match
+the snapshot; the receipt is in private operator storage. There is no off-host
+copy yet (see C).
+
+**B. Gate and mounts (built on this branch; not deployed)**
 - `deploy_scoped_release.sh`: if Curator is in the release, run
   `curator_preserve.sh snapshot --keep-stopped` before `up -d`. The EXIT trap
   restarts the old container on any failure, following the Agent A pattern.
@@ -95,9 +102,23 @@ single-file binds and keeps dev unchanged.
   - the mounts are present;
   - host and container SHA-256 match for each moved path;
   - an `ismount` probe passes inside the running container.
-- Dev test: a disposable copy of the snapshot layout. Replace the container
-  twice and show that the hashes survive. No provider calls and no fake
-  comments in production.
+- Seeding uses the **deploy-time** snapshot of the container being replaced.
+  The 15 Oct snapshot is the baseline and is kept. Seeding from it at deploy
+  time would miss events written since, so the seed refuses a snapshot taken
+  from any other container.
+- The workflow ships the five Curator files to `/opt/minimoi/scripts` as one
+  compressed archive inside the existing Compose-sync SSM command.
+- The preflight covers all of Curator's file binds, including the
+  `curator_costs.json` case in #179; #179 stays open for the other services.
+- Tests: `tests/test_curator_persistence_deploy.py` covers map vs Compose,
+  ordering, env overrides, and every seed/preflight outcome. A rehearsal with
+  throwaway containers ran the real scripts through two replacements: state
+  identical after the first, new writes kept after the second, archive
+  untouched. It also confirmed that the preflight and the post-deploy check
+  each block their broken case. No Curator image, provider call or production
+  host was used.
+- A busy refusal (a Curator job running) fails the deploy with the old
+  container still running. Retry the deploy after the job finishes.
 
 **C. Stop data promotion and fix backup coverage**
 - `scripts/sync_data.sh` refuses to run and points to this spec.
@@ -127,7 +148,10 @@ single-file binds and keeps dev unchanged.
 
 1. **Config ownership.** Once `config.json` and `curator_sources.json` are bound
    to production copies, repo edits to them no longer reach production on their
-   own; a reviewed merge step is needed. Recommended: the production copy wins.
+   own; a reviewed merge step is needed. B implements the recommendation (the
+   production copy wins). **This needs Robert's confirmation before B deploys.**
 2. **Snapshot retention.** Recommended: never prune automatically. Copy off the
    host alongside the S3 backup, after a capacity check.
-3. **Approval to run** `check` then `snapshot` on production now, ahead of B.
+3. ~~Approval to run `check` then `snapshot`~~ — approved and done 15 Oct.
+4. **Deploy approval for B**, after Codex's diff review. It will run outside the
+   midnight–06:00 Chicago job window.
