@@ -371,3 +371,16 @@ def test_deploy_proves_curator_absence_from_a_listing_not_a_failed_inspect():
     assert 'docker inspect "$CURATOR_CONTAINER" >/dev/null 2>&1' not in script
     assert "if curator_container_exists; then" in body
     assert "docker ps -a --format '{{.Names}}'" in script
+
+
+def test_images_never_carry_curator_runtime_state_that_moved_to_host_mounts():
+    ignored = {line.strip() for line in (ROOT / ".dockerignore").read_text().splitlines()
+               if line.strip() and not line.startswith("#")}
+    for kind, old, _host, _target in _map_rows():
+        if kind not in ("moved", "appdir"):
+            continue
+        rel = old.removeprefix("/app/")
+        assert "/" not in rel, old  # build-context root patterns only
+        assert (rel + "/" if kind == "appdir" else rel) in ignored, old
+    for name in ("curator_output.txt", "signal_store.jsonl", "x_pull_state.json"):
+        assert name in ignored
