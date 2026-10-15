@@ -71,6 +71,10 @@ EXPECTED_PROD_MOUNTS = [
     ("curator", "/opt/minimoi/data/curator_costs.json", "/app/curator_costs.json"),
     ("curator", "/opt/minimoi/data/interests", "/app/interests"),
     ("curator", "/opt/minimoi/data/research-intelligence", "/app/_NewDomains/research-intelligence/data"),
+    ("curator", "/opt/minimoi/data/annotations", "/app/data/annotations"),
+    ("curator", "/opt/minimoi/data/research-library", "/app/_NewDomains/research-intelligence/library"),
+    ("curator", "/opt/minimoi/data/research-config/config.json", "/app/_NewDomains/research-intelligence/agent/config.json"),
+    ("curator", "/opt/minimoi/data/curator-config/curator_sources.json", "/app/domains/curator/curator_sources.json"),
     ("german", "/opt/minimoi/data/german", "/app/domains/german/data"),
     ("portal", "/opt/minimoi/data/guild", "/app/runtime/guild"),
     ("portal", "/opt/minimoi/docs/design", "/app/docs/design"),
@@ -481,6 +485,7 @@ def test_seed_copies_sources_without_changing_them(tmp_path, shell):
         "docs/specs/s.md": "s", "docs/design/d.md": "d", "minimoi_portal/auth/users.json": "{}",
         "minimoi_portal/auth/guests.json": "{}", "curator_history.json": "[]", "curator_costs.json": "{}",
         "data/cos_memory.md": "m", "agent_logs/log.txt": "l", "curator_archive/old.json": "{}",
+        "_NewDomains/research-intelligence/agent/config.json": "{}", "domains/curator/curator_sources.json": "[]",
     }
     for rel, content in files.items():
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -763,13 +768,15 @@ def _staging_world(tmp_path, *, launchctl=FAKE_LAUNCHCTL_CLEAN, bots_on=False, t
             _tool(tool)
     root, release, fake = tmp_path / "root", tmp_path / "release", tmp_path / "fake"
     sha = _release_repo(release)
-    for rel in ("data/curator_history.json", "data/curator_costs.json", "auth/users.json", "auth/guests.json",
+    for rel in ("data/curator_history.json", "data/curator_costs.json", "data/research-config/config.json",
+                "data/curator-config/curator_sources.json", "auth/users.json", "auth/guests.json",
                 "cos_memory.md", "data/model_gateway_receipts.jsonl", "data/guild/cos_context.json",
                 "data/guild/build_queue.json", "config/litellm.staging.yaml",
                 "config/usage/usage_record.py", "config/usage/litellm_recorder.py"):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text("x")
     for rel in ("data/curator", "data/curator_archive", "data/interests", "data/research-intelligence",
+                "data/annotations", "data/research-library",
                 "data/german", "data/portuguese", "data/guild", "data/usage", "data/usage/portal", "data/workshops", "docs/design", "docs/specs", "agent_logs",
                 "state"):
         (root / rel).mkdir(parents=True, exist_ok=True)

@@ -178,7 +178,7 @@ def test_deploy_snapshots_agent_a_volumes_before_recreating_it():
     assert "sha256sum" in body
     # Any failure while Agent A is stopped restarts it (EXIT trap), cleared
     # only after `up -d`; behaviour is exercised in test_agent_a_deploy_snapshot.
-    assert "trap restart_agent_a_on_exit EXIT" in script
+    assert "trap restart_stopped_on_exit EXIT" in script
     assert script.index("AGENT_A_STOPPED=1") < script.index('docker stop --time 30')
     assert up < script.rindex("\nAGENT_A_STOPPED=0\n")
     # backup_local.sh prunes only dated folders (20*-*-*) under backups/, and

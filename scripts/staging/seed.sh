@@ -168,6 +168,12 @@ seed_files() {
   copy_file "$R/curator_costs.json" data/curator_costs.json
   copy_dir "$R/interests" data/interests
   copy_dir "$R/_NewDomains/research-intelligence/data" data/research-intelligence optional
+  # Formerly container-only Curator state, now bind-mounted (#305).
+  copy_dir "$R/data/annotations" data/annotations optional
+  copy_dir "$R/_NewDomains/research-intelligence/library" data/research-library optional
+  mkdir -p "$S/data/research-config" "$S/data/curator-config"
+  copy_file "$R/_NewDomains/research-intelligence/agent/config.json" data/research-config/config.json
+  copy_file "$R/domains/curator/curator_sources.json" data/curator-config/curator_sources.json
 
   # German and Portuguese: tracked base, then the live dev state on top
   git_tree "$sha:domains/german/data" data/german
