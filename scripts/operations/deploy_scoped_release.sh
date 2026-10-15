@@ -145,8 +145,16 @@ snapshot_agent_a_volumes() {
   prune_agent_a_snapshots "$new_line" || echo "WARNING: Agent A snapshot pruning failed; continuing"
 }
 
+# Absence is proven by a successful listing; a Docker error fails the deploy
+# instead of skipping preservation (#305 review).
+curator_container_exists() {
+  local names
+  names="$(docker ps -a --format '{{.Names}}')" || { echo "Could not list Docker containers; not replacing Curator."; exit 1; }
+  grep -qxF -- "$CURATOR_CONTAINER" <<< "$names"
+}
+
 preserve_curator_state() {
-  if docker inspect "$CURATOR_CONTAINER" >/dev/null 2>&1; then
+  if curator_container_exists; then
     local output snapshot
     # Set first: if the snapshot fails after stopping Curator, the trap restarts it.
     CURATOR_STOPPED=1

@@ -6,6 +6,8 @@
 #   snapshot has it, host path missing   -> copy it in (staged, then renamed)
 #   snapshot has it, host path identical -> keep (already seeded)
 #   snapshot has it, host path differs   -> REFUSE: never overwrite, never merge
+#   (a path the snapshot did not record as copied, absent or mounted, or
+#    recorded as copied but missing from its tree -> REFUSE)
 #   snapshot lacks it, host path present -> keep (already durable)
 #   snapshot lacks it, host path missing -> moved: fine (created on first
 #                                           write); dir/file: REFUSE
@@ -29,13 +31,21 @@ MAP="${CURATOR_STATE_MAP:-$(dirname "$0")/curator_state.map}"
 fail() { echo "seed REFUSED: $*" >&2; exit 1; }
 
 [[ -f "$MAP" ]] || fail "state map $MAP missing"
-[[ -f "$SNAP/SNAPSHOT" && -f "$SNAP/FILES.sha256" && -d "$SNAP/tree" ]] ||
+[[ -f "$SNAP/SNAPSHOT" && -f "$SNAP/FILES.sha256" && -f "$SNAP/PATHS" && -d "$SNAP/tree" ]] ||
   fail "$SNAP is not a complete curator_preserve.sh snapshot"
 ( cd "$SNAP/tree" && sha256sum -c --quiet ../FILES.sha256 ) ||
   fail "$SNAP does not match its own manifest"
 
+# Exact-name lookup in a successful container listing. A Docker or daemon
+# error stops the script: it is never read as "no container" (#305 review).
+container_exists() {
+  local names
+  names="$(docker ps -a --format '{{.Names}}')" || { echo "REFUSED: could not list Docker containers" >&2; exit 1; }
+  grep -qxF -- "$1" <<< "$names"
+}
+
 snap_container="$(sed -n 's/^container_id=//p' "$SNAP/SNAPSHOT")"
-if docker inspect "$CONTAINER" >/dev/null 2>&1; then
+if container_exists "$CONTAINER"; then
   live_container="$(docker inspect --format '{{.Id}}' "$CONTAINER")"
   [[ "$snap_container" == "$live_container" ]] ||
     fail "snapshot is from container ${snap_container:0:12}, not the current ${live_container:0:12}"
@@ -56,6 +66,19 @@ same_content() {
   fi
 }
 
+# research-intelligence/topics stays unmounted on purpose: if the folder
+# exists, research sessions are written there instead of the durable
+# data/threads. A snapshot keeps it as evidence, but recreation would drop the
+# live folder, so a release cannot proceed while it exists (#305 review).
+TOPICS=/app/_NewDomains/research-intelligence/topics
+if grep -F -x -q "copied $TOPICS" "$SNAP/PATHS"; then
+  fail "$TOPICS exists in the running container; its sessions would not stay live after recreation. Preserve it live (a reviewed change) before releasing Curator"
+fi
+
+# What the snapshot itself recorded for a path: copied, absent or mounted.
+# No line at all prints nothing (and must not trip set -e/pipefail).
+recorded() { { grep -F -x -e "copied $1" -e "absent $1" -e "mounted $1" "$SNAP/PATHS" || true; } | head -1 | cut -d' ' -f1; }
+
 # Check every entry before changing anything, so a refusal leaves the host as it was.
 plan=()
 while read -r kind old host _target; do
@@ -65,6 +88,14 @@ while read -r kind old host _target; do
   want="$kind"; [[ "$kind" == moved ]] && want=file
   src_kind="$(kind_of "$src")"
   dst_kind="$(kind_of "$dst")"
+  record="$(recorded "$old")"
+  [[ -n "$record" ]] || fail "the snapshot does not account for $old"
+  if [[ "$record" == copied && "$src_kind" == missing ]]; then
+    fail "the snapshot says it copied $old but its tree does not hold it"
+  fi
+  if [[ "$record" != copied && "$src_kind" != missing ]]; then
+    fail "the snapshot records $old as $record but its tree holds it"
+  fi
   [[ "$src_kind" == missing || "$src_kind" == "$want" ]] ||
     fail "$old in the snapshot is a $src_kind, expected a $want"
   [[ "$dst_kind" == missing || "$dst_kind" == "$want" ]] ||

@@ -57,7 +57,15 @@ KNOWN_PATHS=(
 # A Curator job running inside the container must not be cut off mid-write.
 BUSY_PATTERN='curator_rss_v2|curator_intelligence|curator_priority_feed|x_pull_incremental|research\.py|run\.py|generate_dive|thread_expiry'
 
-if ! docker inspect "$CONTAINER" >/dev/null 2>&1; then
+# Exact-name lookup in a successful container listing. A Docker or daemon
+# error stops the script: it is never read as "no container" (#305 review).
+container_exists() {
+  local names
+  names="$(docker ps -a --format '{{.Names}}')" || { echo "REFUSED: could not list Docker containers" >&2; exit 1; }
+  grep -qxF -- "$1" <<< "$names"
+}
+
+if ! container_exists "$CONTAINER"; then
   echo "No $CONTAINER container; nothing to preserve."
   exit 0
 fi
@@ -89,9 +97,12 @@ is_known() {
 # (/app, /app/data, a mount point's parent) is skipped: its changed children
 # are listed on their own, and copying it would copy the whole image tree.
 # Compiled Python is code, not state, and is left out (recorded).
+# Reads `docker diff` output on stdin. Each line is "<A|C|D> <path>"; the path
+# is everything after the status and its space, so names with spaces survive.
+layer_entries() { sed -n 's/^[AC] //p'; }
 extra_layer_paths() {
   local all
-  all="$(docker diff "$CONTAINER" | awk '$1 == "A" || $1 == "C" { print $2 }' | sort)"
+  all="$(layer_entries | LC_ALL=C sort)"
   printf '%s\n' "$all" | awk '{ p[NR] = $0 }
     END { for (i = 1; i <= NR; i++) { parent = 0
             for (j = 1; j <= NR; j++) if (j != i && index(p[j], p[i] "/") == 1) { parent = 1; break }
@@ -118,13 +129,15 @@ if [[ "$MODE" == "check" ]]; then
   for path in "${KNOWN_PATHS[@]}"; do
     if under_mount "$path"; then
       echo "mounted  $path"
-    elif docker cp "$CONTAINER:$path" - >/dev/null 2>&1; then
+    elif err="$(docker cp "$CONTAINER:$path" - 2>&1 >/dev/null)"; then
       echo "UNMOUNTED $path"
-    else
+    elif [[ "$err" == *"Could not find the file"* ]]; then
       echo "absent   $path"
+    else
+      echo "ERROR    $path: ${err:0:200}"
     fi
   done
-  extras="$(extra_layer_paths)"
+  extras="$(docker diff "$CONTAINER" | extra_layer_paths)"
   echo "other writable-layer entries outside mounts: $(printf '%s' "$extras" | grep -c . || true)"
   printf '%s\n' "$extras" | sed '/^$/d; s/^/  /' | head -50
   jobs="$(busy_jobs)"
@@ -170,19 +183,47 @@ if [[ "$was_running" == "true" ]]; then
   docker stop --time 30 "$CONTAINER" >/dev/null
 fi
 
-# Re-read the layer after the stop: nothing can change it now.
-mapfile -t EXTRAS < <(extra_layer_paths)
+# Read the layer after the stop: nothing can change it now. Written to a file
+# first so a failing `docker diff` stops the snapshot (set -e) instead of
+# yielding an empty list.
 docker diff "$CONTAINER" > "$WORK/docker-diff.txt"
+mapfile -t EXTRAS < <(extra_layer_paths < "$WORK/docker-diff.txt")
 
+# The writable layer added or changed this path, or something beneath it.
+in_layer() {
+  local path="$1" entry
+  while IFS= read -r entry; do
+    [[ "$entry" == "$path" || "$entry" == "$path"/* ]] && return 0
+  done < <(layer_entries < "$WORK/docker-diff.txt")
+  return 1
+}
+
+# Fail closed. A path counts as absent only when Docker answers "Could not find
+# the file" AND the writable layer does not show it. Any other failure (disk
+# full, I/O, daemon, permissions, an unreadable archive) stops the snapshot:
+# the partial copy and Docker's message stay in the .partial folder as
+# evidence, nothing is published, and the EXIT trap starts the old container.
 copied=0
 copy_path() {
-  local path="$1" name archive
+  local path="$1" name archive err
   name="$(printf '%s' "$path" | sed 's#^/##; s#/#__#g')"
   archive="$WORK/archives/$name.tar"
-  if ! docker cp "$CONTAINER:$path" - > "$archive" 2>/dev/null; then
-    rm -f "$archive"
+  err="$WORK/archives/$name.cp-error"
+  if docker cp "$CONTAINER:$path" - > "$archive.partial" 2> "$err"; then
+    if ! tar -tf "$archive.partial" >/dev/null 2>&1; then
+      echo "REFUSED: the copy of $path is not a readable archive; kept at $archive.partial" >&2
+      exit 1
+    fi
+    mv "$archive.partial" "$archive"
+    rm -f "$err"
+  elif grep -q "Could not find the file" "$err" && ! in_layer "$path"; then
+    rm -f "$archive.partial" "$err"
     echo "absent $path" >> "$WORK/PATHS"
     return 0
+  else
+    echo "REFUSED: could not copy $path: $(head -c 300 "$err" | tr '\n' ' ')" >&2
+    echo "  partial copy and error kept in $WORK/archives" >&2
+    exit 1
   fi
   mkdir -p "$WORK/tree$(dirname "$path")"
   tar -xf "$archive" -C "$WORK/tree$(dirname "$path")"
