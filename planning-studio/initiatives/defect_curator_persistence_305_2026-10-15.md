@@ -148,8 +148,14 @@ copy yet (see C).
 
 1. **Config ownership.** Once `config.json` and `curator_sources.json` are bound
    to production copies, repo edits to them no longer reach production on their
-   own; a reviewed merge step is needed. B implements the recommendation (the
-   production copy wins). **This needs Robert's confirmation before B deploys.**
+   own; a reviewed merge step is needed. **Decided by Robert, 15 Oct: production
+   wins for both files.** The source trust list grows in production and is not
+   kept in step with dev. Sync runs the other way: **dev is refreshed from
+   production**, never production from dev. That sync is a separate follow-up
+   and is not in B. Until the research config is split (repo-owned settings
+   vs. production-owned saved searches), any repo change to either file needs
+   an explicit, reviewed "apply to the server copy" step.
+   Today both production copies are byte-identical to the repo's.
 2. **Snapshot retention.** Recommended: never prune automatically. Copy off the
    host alongside the S3 backup, after a capacity check.
 3. ~~Approval to run `check` then `snapshot`~~ — approved and done 15 Oct.
