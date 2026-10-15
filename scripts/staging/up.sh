@@ -39,18 +39,45 @@ S="$STAGING_ROOT"
 
 # A missing single-file bind source would make Docker create a DIRECTORY in
 # its place, so every one must exist before compose runs.
-for f in data/curator_history.json data/curator_costs.json data/research-config/config.json \
-         data/curator-config/curator_sources.json auth/users.json auth/guests.json \
+for f in auth/users.json auth/guests.json \
          cos_memory.md data/model_gateway_receipts.jsonl data/guild/cos_context.json \
          data/guild/build_queue.json config/litellm.staging.yaml \
          config/usage/usage_record.py config/usage/litellm_recorder.py; do
   [[ -f "$S/$f" ]] || die "missing $S/$f; run seed.sh (and build.sh for config/)"
 done
-for d in data/curator data/curator_archive data/interests data/research-intelligence \
-         data/annotations data/research-library data/german \
+for d in data/german \
          data/portuguese data/guild data/usage data/usage/portal data/workshops docs/design docs/specs agent_logs; do
   [[ -d "$S/$d" ]] || die "missing folder $S/$d; run seed.sh"
 done
+
+# Curator's own bind sources: the bind rows of scripts/operations/curator_state.map,
+# mounted by no other service (tests/test_staging_environment.py checks both).
+# They are checked only when curator will start. A focus set that keeps curator
+# stopped starts the kept services with --no-deps, so nothing mounts them, and a
+# missing Curator source must not block German, Portuguese or the portal (#305).
+# Without a focus set, compose may start curator directly or as the portal's
+# dependency, so they are always checked.
+CURATOR_BIND_FILES="data/curator_history.json data/curator_costs.json data/research-config/config.json data/curator-config/curator_sources.json"
+CURATOR_BIND_DIRS="data/curator data/curator_archive data/interests data/research-intelligence data/annotations data/research-library"
+curator_will_start() {
+  [[ -n "$(focus_stopped)" ]] || return 0
+  if [[ $# -gt 0 ]]; then
+    local service
+    for service in "$@"; do [[ "$service" != curator ]] || return 0; done
+    return 1
+  fi
+  ! is_focus_stopped curator
+}
+if curator_will_start "$@"; then
+  for f in $CURATOR_BIND_FILES; do
+    [[ -f "$S/$f" ]] || die "missing $S/$f; run seed.sh"
+  done
+  for d in $CURATOR_BIND_DIRS; do
+    [[ -d "$S/$d" ]] || die "missing folder $S/$d; run seed.sh"
+  done
+else
+  note "curator stays stopped; its bind sources are not checked (they are checked whenever curator starts)"
+fi
 for v in "${STAGING_VOLUMES[@]}"; do
   docker volume inspect "$v" >/dev/null 2>&1 || die "missing volume $v; run seed.sh --postgres (README step 1b)"
 done

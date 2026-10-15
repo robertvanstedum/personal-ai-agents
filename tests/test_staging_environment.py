@@ -1022,3 +1022,96 @@ def test_production_compose_still_takes_the_full_deploy():
 def test_prod_gateway_config_still_restarts_the_gateway():
     release_class, services = classify(["services/model_gateway/litellm.prod.yaml"])
     assert release_class == "domain" and "model-gateway" in services
+
+
+# ── Curator's bind sources are checked only when curator starts (#305) ───────
+
+def _curator_bind_lists():
+    text = (SCRIPTS / "up.sh").read_text()
+    files = text.split('CURATOR_BIND_FILES="')[1].split('"')[0].split()
+    dirs = text.split('CURATOR_BIND_DIRS="')[1].split('"')[0].split()
+    return files, dirs
+
+
+def test_up_curator_bind_lists_are_exactly_the_curator_only_binds_in_the_state_map():
+    files, dirs = _curator_bind_lists()
+    rows = [line.split() for line in (REPO / "scripts/operations/curator_state.map").read_text().splitlines()
+            if line.strip() and not line.lstrip().startswith("#")]
+    assert set(files) == {host for kind, _old, host, _t in rows if kind == "file"}
+    assert set(dirs) == {host for kind, _old, host, _t in rows if kind in ("dir", "appdir")}
+    prefix = "${MINIMOI_ROOT:-/opt/minimoi}/"
+    compose = yaml.safe_load((REPO / "docker-compose.prod.yml").read_text())
+    for name, service in compose["services"].items():
+        if name == "curator":
+            continue
+        for volume in service.get("volumes") or []:
+            if isinstance(volume, str) and volume.startswith(prefix):
+                assert volume[len(prefix):].split(":")[0] not in files + dirs, (name, volume)
+
+
+def _focus_keeps_stopped(env, stopped):
+    state = Path(env["STAGING_ROOT"]) / "state"
+    (state / "focus").write_text("mc\n")
+    (state / "focus.stopped").write_text(stopped + "\n")
+
+
+def _remove_one_curator_source(env):
+    files, dirs = _curator_bind_lists()
+    (Path(env["STAGING_ROOT"]) / files[-1]).unlink()
+    shutil.rmtree(Path(env["STAGING_ROOT"]) / dirs[-1])
+    return files[-1], dirs[-1]
+
+
+def test_up_starts_other_services_when_focus_keeps_curator_stopped_and_its_sources_are_missing(tmp_path, shell):
+    env, fake, _release = _staging_world(tmp_path)
+    _focus_keeps_stopped(env, "curator german portuguese system-bot")
+    _remove_one_curator_source(env)
+    result = _up(shell, env)
+    assert result.returncode == 0, result.stderr
+    assert "curator stays stopped; its bind sources are not checked" in result.stdout
+    started = [line for line in (fake / "compose.log").read_text().splitlines() if " up -d " in line][0]
+    assert "--no-deps" in started and " curator" not in started and "portal" in started
+
+
+def test_up_still_refuses_a_missing_non_curator_source_while_curator_is_stopped(tmp_path, shell):
+    env, fake, _release = _staging_world(tmp_path)
+    _focus_keeps_stopped(env, "curator")
+    (Path(env["STAGING_ROOT"]) / "auth/users.json").unlink()
+    result = _up(shell, env)
+    assert result.returncode != 0 and "auth/users.json" in result.stderr
+    assert not (fake / "compose.log").exists()
+
+
+def test_up_refuses_missing_curator_sources_whenever_curator_may_start(tmp_path, shell):
+    # No focus: compose may start curator directly or as the portal's dependency.
+    env, fake, _release = _staging_world(tmp_path)
+    missing_file, _missing_dir = _remove_one_curator_source(env)
+    result = _up(shell, env)
+    assert result.returncode != 0 and missing_file in result.stderr
+    assert not (fake / "compose.log").exists()
+
+    # Focus that keeps curator running.
+    env, fake, _release = _staging_world(tmp_path / "kept")
+    _focus_keeps_stopped(env, "german portuguese")
+    missing_file, _missing_dir = _remove_one_curator_source(env)
+    result = _up(shell, env)
+    assert result.returncode != 0 and missing_file in result.stderr
+    assert not (fake / "compose.log").exists()
+
+    # Focus keeps curator stopped, but curator is named explicitly.
+    env, fake, _release = _staging_world(tmp_path / "named")
+    _focus_keeps_stopped(env, "german")
+    (Path(env["STAGING_ROOT"]) / "state/focus.stopped").write_text("german\n")
+    missing_file, _missing_dir = _remove_one_curator_source(env)
+    result = _up(shell, env, "curator")
+    assert result.returncode != 0 and missing_file in result.stderr
+    assert not (fake / "compose.log").exists()
+
+
+def test_up_with_curator_stopped_and_named_services_skips_curator_sources(tmp_path, shell):
+    env, fake, _release = _staging_world(tmp_path)
+    _focus_keeps_stopped(env, "curator")
+    _remove_one_curator_source(env)
+    result = _up(shell, env, "portal")
+    assert result.returncode == 0, result.stderr
+    assert "up -d --no-build --no-deps portal" in (fake / "compose.log").read_text()
