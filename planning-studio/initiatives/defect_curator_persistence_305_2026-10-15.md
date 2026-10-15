@@ -136,6 +136,28 @@ copy yet (see C).
 - The Library/bookmark history-path question gets checked against deployed
   code before anything changes.
 
+**E. Daily-run outputs: proposal (15 Oct, for Codex review and Robert's decision)**
+
+Checked against deployed code `86c3b658`. The cron runs
+`curator_rss_v2.py` inside the container with cwd `/app`.
+
+| Output | Who reads it | Proposal |
+|---|---|---|
+| `curator_cache/<hash>.json` (`curator_rss_v2.py:1475,1520`) | `curator_feedback.py:166,225` loads an article by hash, date-rank or `yesterday-N`; Library enrichment, `curator_server.py:333` | **Mount it.** This is not a daily file. It is the growing store of full article records that the mounted `curator_history.json` points to. Each container replacement empties it, so feedback and scans on any earlier article fail with "not in cache" even though the history still lists the article. |
+| `curator_output.txt` (cwd, `:3481`) | `curator_feedback.py:34,90` (feedback CLI on today's articles); `core/telegram/telegram_bot.py:183` in another container | **Move behind an env override** into the mounted `data/curator` folder, defaulting to the old path, as was done for the event log. No single-file bind. It is rewritten every run, so only the window between a replacement and the next run is at risk. |
+| `curator_latest.html`, `curator_briefing.html` (`domains/curator/`, `:3522,3531`) | `/briefing` and `/curator_briefing.html` serve them only as a fallback when `data/curator/curator_latest.json` (already mounted) can't be loaded | **Don't mount.** Both are git-tracked, and a bind would shadow the tracked copy. The normal path renders from the mounted JSON. |
+| `curator_index.html` (cwd `/app`, `:3352`) | `/curator_index.html` serves `domains/curator/curator_index.html`, a different path | **Don't mount.** The writer and the route already point at different files, so nothing a mount keeps is ever served. Leave it as a separate small cleanup. |
+
+If approved, the build is one PR that reuses the #306 machinery:
+- add `curator_cache` (dir) to `curator_state.map` and Compose;
+- add a `CURATOR_OUTPUT_PATH`-style env override for `curator_output.txt`;
+- the deploy-time snapshot seeds both (the snapshot already captures them
+  as writable-layer files); the preflight and post-deploy check cover them.
+
+Before that deploy, run a read-only production check: the size and file
+count of `/app/curator_cache`, and free disk space. Then it follows the same
+dev-first, approval-gated deploy as B.
+
 ## 4. Rollback
 
 - B's changes are additive host paths. To roll back: the previous Compose file
