@@ -28,6 +28,10 @@ REPO_ROOT = BASE_DIR.parent.parent  # for the Mac-native venv/, not present in D
 # Override with CURATOR_DATA_DIR env var on EC2 or any non-default layout.
 _DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
+# Bookmark and appearance history. Every writer (curator_rss_v2, feedback,
+# scan_job) uses the repo-root file, which production bind-mounts at
+# /app/curator_history.json. It is not under _DATA_DIR (#305).
+HISTORY_PATH = REPO_ROOT / 'curator_history.json'
 
 app = Flask(__name__,
             template_folder=str(BASE_DIR / 'templates'),
@@ -362,7 +366,7 @@ def api_library():
                     }
 
     # ── 2. Load bookmarked from curator_history.json + enrich existing ────────
-    history_path = workspace / 'curator_history.json'
+    history_path = HISTORY_PATH
     if history_path.exists():
         history = json.loads(history_path.read_text())
 
@@ -1076,7 +1080,7 @@ def _archive_daily_editions():
 
 def _archive_sources():
     """Bookmarked articles from curator_history.json. Most recent first."""
-    hist_path = REPO_ROOT / 'curator_history.json'
+    hist_path = HISTORY_PATH
     articles = []
     try:
         hist = json.loads(hist_path.read_text())
