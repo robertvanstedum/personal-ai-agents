@@ -113,3 +113,43 @@ def test_thread_record_preserves_dynamic_research_directions():
 
     assert restored.session_searches == ["query one"]
     assert restored.triage_targets == ["target one"]
+
+
+def test_dive_reads_research_and_general_comments_without_moving_them(
+    tmp_path, monkeypatch
+):
+    module = _load_generate_dive_module()
+    research_comments = tmp_path / "research-intelligence" / "annotations"
+    general_comments = tmp_path / "app" / "annotations"
+    (research_comments / "new-topic").mkdir(parents=True)
+    (general_comments / "new-topic").mkdir(parents=True)
+    research_file = research_comments / "new-topic" / "2026-03-27.json"
+    general_file = general_comments / "new-topic" / "2026-10-15.json"
+    research_file.write_text(json.dumps([
+        {"note_id": "aaa", "timestamp": "2026-03-27T10:00:00", "note": "older research note", "page": "sessions"},
+        {"note_id": "dup", "timestamp": "2026-03-28T10:00:00", "note": "same note in both", "page": "sessions"},
+    ]))
+    general_file.write_text(json.dumps([
+        {"note_id": "bbb", "timestamp": "2026-10-15T09:00:00", "note": "general comment", "page": "observe", "domain": "research"},
+        {"note_id": "dup", "timestamp": "2026-03-28T10:00:00", "note": "same note in both", "page": "sessions"},
+        "not a record",
+    ]))
+    (tmp_path / "threads" / "new-topic" / "sessions").mkdir(parents=True)
+    before = {p: p.read_bytes() for p in (research_file, general_file)}
+
+    monkeypatch.setattr(module, "TOPICS_DIR", tmp_path / "topics")
+    monkeypatch.setattr(module, "THREADS_DIR", tmp_path / "threads")
+    monkeypatch.setattr(module, "ANNOTATIONS_DIR", research_comments)
+    monkeypatch.setattr(module, "GENERAL_ANNOTATIONS_DIR", general_comments)
+
+    data = module.load_thread_data("new-topic")
+
+    assert [a["note_id"] for a in data["annotations"]] == ["aaa", "dup", "bbb"]
+    assert data["annotations"][2]["page"] == "observe"
+    assert data["annotations"][2]["domain"] == "research"
+    assert {p: p.read_bytes() for p in before} == before
+
+
+def test_dive_general_comments_folder_is_the_mounted_app_annotations_folder():
+    module = _load_generate_dive_module()
+    assert module.GENERAL_ANNOTATIONS_DIR == ROOT / "data" / "annotations" / "research"
