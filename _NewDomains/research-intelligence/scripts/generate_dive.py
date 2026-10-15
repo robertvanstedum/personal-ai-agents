@@ -195,7 +195,7 @@ def load_thread_data(topic: str) -> dict:
                     continue
                 seen_records.add(key)
                 annotations.append(entry)
-    annotations.sort(key=lambda a: a.get('timestamp') or '')
+    annotations.sort(key=_timestamp_order)
 
     return {
         'topic':       topic,
@@ -204,6 +204,24 @@ def load_thread_data(topic: str) -> dict:
         'sessions':    sessions,
         'annotations': annotations,
     }
+
+
+def _timestamp_order(annotation: dict) -> tuple:
+    """Sort key: dated records (ISO strings) by time, then every record whose
+    timestamp is missing, null, empty or not a string, in load order (the sort
+    is stable). Never compares a number with a string, and drops nothing."""
+    ts = annotation.get('timestamp')
+    if isinstance(ts, str) and ts:
+        return (0, ts)
+    return (1, '')
+
+
+def _display_date(ts) -> str:
+    if isinstance(ts, str) and ts:
+        return ts[:10]
+    if ts is None or ts == '':
+        return 'undated'
+    return str(ts)
 
 
 # ── Empty session guard ───────────────────────────────────────────────────────
@@ -239,12 +257,12 @@ def _format_annotations(annotations: list) -> str:
         return '(none)'
     lines = []
     for a in annotations:
-        note = a.get('note', '').strip()
+        note = str(a.get('note') or '').strip()
         if not note:
             continue
-        ts   = a.get('timestamp', '')[:10]
-        atype = a.get('type', 'reaction')
-        ref  = a.get('ref_text', '') or ''
+        ts   = _display_date(a.get('timestamp'))
+        atype = a.get('type') or 'reaction'
+        ref  = str(a.get('ref_text') or '')
         if ref:
             lines.append(f"[{ts}] ({atype}) re: \"{ref[:80]}\" — {note}")
         else:
