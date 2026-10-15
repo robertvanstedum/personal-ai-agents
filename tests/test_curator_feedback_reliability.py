@@ -219,3 +219,33 @@ def test_intelligence_script_exposes_repo_root_when_launched_by_file_path(tmp_pa
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_library_lists_bookmarks_from_the_history_file_every_writer_uses(tmp_path, monkeypatch):
+    # #305: /api/library read CURATOR_DATA_DIR/curator_history.json, a file no
+    # writer touches, so production's bookmarks never appeared in the Library.
+    assert curator_server.HISTORY_PATH == curator_server.REPO_ROOT / "curator_history.json"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    history = tmp_path / "curator_history.json"
+    history.write_text(json.dumps({
+        "abc12": {
+            "url": "https://example.com/kept",
+            "title": "Bookmarked article",
+            "source": "Example",
+            "bookmarked": True,
+            "bookmark_date": "2026-10-14",
+            "appearances": [{"date": "2026-10-14", "rank": 1, "score": 9}],
+        },
+        "def34": {"url": "https://example.com/seen", "title": "Only seen", "appearances": []},
+    }))
+    before = history.read_bytes()
+    monkeypatch.setattr(curator_server, "_DATA_DIR", data_dir)
+    monkeypatch.setattr(curator_server, "HISTORY_PATH", history)
+
+    response = curator_server.app.test_client().get("/api/library")
+
+    assert response.status_code == 200
+    urls = [a["url"] for a in response.get_json()["articles"]]
+    assert urls == ["https://example.com/kept"]
+    assert history.read_bytes() == before
