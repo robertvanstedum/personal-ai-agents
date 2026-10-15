@@ -136,6 +136,35 @@ copy yet (see C).
 - The Library/bookmark history-path question gets checked against deployed
   code before anything changes.
 
+**D result (15 Oct, deployed code = `86c3b658`):**
+- Dives: `generate_dive.py` now reads research `data/annotations/research/<topic>`
+  and then `/app/data/annotations/research/<topic>` (the durable mount).
+  - Nothing is moved or rewritten, and records are used exactly as written,
+    so `domain`, `page` and `ref_*` keep their attribution.
+  - Only a record identical in every field, found in both folders, is
+    counted once. Records that share a `note_id` but differ are all kept
+    (Codex review).
+  - Comments are ordered by timestamp.
+- Library/bookmarks, **no code change yet**:
+  - Every history writer uses `/app/curator_history.json`, the mounted host
+    file `data/curator_history.json`:
+    - `curator_rss_v2.py:1479` (cron output dir);
+    - `curator_feedback.py:165,1616`;
+    - `scan_job.py:19`.
+  - The readers in `curator_intelligence.py:47` and `curator_server.py:1079`
+    (archive sources) use that same root file.
+  - Exception: `/api/library` (`curator_server.py:365`) reads
+    `CURATOR_DATA_DIR/curator_history.json`. Compose doesn't set
+    `CURATOR_DATA_DIR`, so that is `/app/data/curator/curator_history.json`,
+    a different file. If it is missing, the Library shows no bookmarks; if it
+    is an old copy, the bookmarks it shows are stale.
+  - Before choosing a fix, read production read-only:
+    - whether `/opt/minimoi/.env` sets `CURATOR_DATA_DIR`;
+    - whether `data/curator/curator_history.json` exists, and its size and
+      mtime next to the root file.
+  - Likely fix: `/api/library` reads the root history file. That fix moves no
+    data and deletes nothing.
+
 ## 4. Rollback
 
 - B's changes are additive host paths. To roll back: the previous Compose file
