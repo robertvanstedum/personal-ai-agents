@@ -172,7 +172,10 @@ def load_thread_data(topic: str) -> dict:
 
     # Annotations
     annotations = []
-    seen_note_ids = set()
+    # Only a byte-for-byte identical record (the same comment present in both
+    # folders) is counted once. Records that share a note_id but differ in any
+    # field are all kept; nothing is merged or dropped.
+    seen_records = set()
     for ann_root in (ANNOTATIONS_DIR, GENERAL_ANNOTATIONS_DIR):
         ann_dir = ann_root / topic
         if not ann_dir.exists():
@@ -187,11 +190,10 @@ def load_thread_data(topic: str) -> dict:
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
-                note_id = entry.get('note_id')
-                if note_id and note_id in seen_note_ids:
+                key = json.dumps(entry, sort_keys=True, ensure_ascii=False)
+                if key in seen_records:
                     continue
-                if note_id:
-                    seen_note_ids.add(note_id)
+                seen_records.add(key)
                 annotations.append(entry)
     annotations.sort(key=lambda a: a.get('timestamp') or '')
 

@@ -141,7 +141,9 @@ copy yet (see C).
   and then `/app/data/annotations/research/<topic>` (the durable mount).
   - Nothing is moved or rewritten, and records are used exactly as written,
     so `domain`, `page` and `ref_*` keep their attribution.
-  - A record found in both folders (same `note_id`) is counted once.
+  - Only a record identical in every field, found in both folders, is
+    counted once. Records that share a `note_id` but differ are all kept
+    (Codex review).
   - Comments are ordered by timestamp.
 - Library/bookmarks, **no code change yet**:
   - Every history writer uses `/app/curator_history.json`, the mounted host

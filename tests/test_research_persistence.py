@@ -153,3 +153,32 @@ def test_dive_reads_research_and_general_comments_without_moving_them(
 def test_dive_general_comments_folder_is_the_mounted_app_annotations_folder():
     module = _load_generate_dive_module()
     assert module.GENERAL_ANNOTATIONS_DIR == ROOT / "data" / "annotations" / "research"
+
+
+def test_dive_keeps_different_comments_that_share_a_note_id(tmp_path, monkeypatch):
+    module = _load_generate_dive_module()
+    research_comments = tmp_path / "research" / "annotations"
+    general_comments = tmp_path / "general" / "annotations"
+    (research_comments / "new-topic").mkdir(parents=True)
+    (general_comments / "new-topic").mkdir(parents=True)
+    (tmp_path / "threads" / "new-topic" / "sessions").mkdir(parents=True)
+    (research_comments / "new-topic" / "2026-10-15.json").write_text(json.dumps([
+        {"note_id": "same", "timestamp": "2026-10-15T09:00:00", "note": "first wording", "page": "sessions"},
+    ]))
+    (general_comments / "new-topic" / "2026-10-15.json").write_text(json.dumps([
+        {"note_id": "same", "timestamp": "2026-10-15T09:00:00", "note": "second wording", "page": "observe"},
+        {"note_id": "same", "timestamp": "2026-10-15T09:00:00", "note": "second wording", "page": "sessions"},
+    ]))
+
+    monkeypatch.setattr(module, "TOPICS_DIR", tmp_path / "topics")
+    monkeypatch.setattr(module, "THREADS_DIR", tmp_path / "threads")
+    monkeypatch.setattr(module, "ANNOTATIONS_DIR", research_comments)
+    monkeypatch.setattr(module, "GENERAL_ANNOTATIONS_DIR", general_comments)
+
+    kept = module.load_thread_data("new-topic")["annotations"]
+
+    assert sorted((a["note"], a["page"]) for a in kept) == [
+        ("first wording", "sessions"),
+        ("second wording", "observe"),
+        ("second wording", "sessions"),
+    ]
