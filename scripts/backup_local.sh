@@ -72,6 +72,8 @@ rsync_path "${DATA_DIR}/annotations/"            "annotations/"
 rsync_path "${DATA_DIR}/research-library/"       "research-library/"
 rsync_path "${DATA_DIR}/research-config/"        "research-config/"
 rsync_path "${DATA_DIR}/curator-config/"         "curator-config/"
+# Full article files that curator_history.json points to (#305, #309)
+rsync_path "${DATA_DIR}/curator_cache/"          "curator_cache/"
 rsync_path "${DATA_DIR}/german/"                 "german/"
 rsync_path "${DATA_DIR}/portuguese/"             "portuguese/"
 rsync_path "${AUTH_DIR}/"                        "auth/"
