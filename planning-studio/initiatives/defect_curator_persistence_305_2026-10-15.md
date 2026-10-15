@@ -128,6 +128,47 @@ copy yet (see C).
   from the repo. Add the new host paths and `backups/curator-preserve` to
   coverage. Verify a restore into an isolated folder.
 
+**C backup result (15 Oct, read-only; receipts in private operator storage):**
+- **What is installed.** `backup_local.sh` copies a fixed list of paths, not
+  all of `data/`. The repo copy (rsync of all of `data/`, Postgres dump,
+  agent_logs) was never installed. `backup_s3.sh` copies that day's dated
+  folder plus a Postgres dump. Dropbox gets a weekly copy of the local dated
+  folder.
+- **Gaps.** None of the #305 paths was backed up: `annotations`,
+  `research-library`, `research-config`, `curator-config`. Neither was
+  `curator_costs.json`, nor `backups/curator-preserve`, which had no off-host
+  copy.
+- **Restore check.** The 15 Oct S3 copy of `curator/` and
+  `curator_history.json` was restored with the instance role into a
+  temporary folder, then removed:
+  - 97 files came back, byte-identical to the local dated copy;
+  - the JSON parses and the history has its full entry count.
+- **This PR.** The repo copies become the installed scripts plus:
+  - four `rsync_path` lines for the #305 folders and one for
+    `curator_costs.json`;
+  - an additive S3 sync of `backups/curator-preserve` (no `--delete`,
+    `*.partial` skipped).
+  - `tests/test_backup_coverage.py` fails if a host path in
+    `curator_state.map` is ever missing from the backup.
+- **Install (needs Robert's approval).** Copy both scripts to
+  `/opt/minimoi/scripts` over SSM, keeping the old copies beside them. No
+  cron change. Then read back the next 02:00 and 03:00 runs.
+- **Retention, made explicit:**
+  - Local dated folders: pruned after 14 days, the same as now. Each one is
+    in S3 the same day.
+  - Preservation snapshots: never pruned, on the host or in S3.
+  - S3: never deleted by our scripts. The bucket is versioned, but it has an
+    **expiry rule covering every object**. With versioning on, that rule
+    hides old backups rather than destroying them.
+  - **Decision for Robert:** remove that rule, or limit it to an explicitly
+    disposable prefix, so all production history stays restorable without
+    version recovery. It is an AWS console or root-credential change, not
+    part of this PR.
+- **Outside Curator, still not backed up (follow-up, not #305):**
+  - `data/guild/` (CoS context);
+  - `data/model_gateway_receipts.jsonl`;
+  - `data/research_dives/`.
+
 **D. Readers (linked, not blocking A–B)**
 - Dive generation reads research `data/annotations/research`
   (`generate_dive.py`), but general comments write
