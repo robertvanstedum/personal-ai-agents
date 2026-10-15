@@ -75,6 +75,7 @@ EXPECTED_PROD_MOUNTS = [
     ("curator", "/opt/minimoi/data/research-library", "/app/_NewDomains/research-intelligence/library"),
     ("curator", "/opt/minimoi/data/research-config/config.json", "/app/_NewDomains/research-intelligence/agent/config.json"),
     ("curator", "/opt/minimoi/data/curator-config/curator_sources.json", "/app/domains/curator/curator_sources.json"),
+    ("curator", "/opt/minimoi/data/curator_cache", "/app/curator_cache"),
     ("german", "/opt/minimoi/data/german", "/app/domains/german/data"),
     ("portal", "/opt/minimoi/data/guild", "/app/runtime/guild"),
     ("portal", "/opt/minimoi/docs/design", "/app/docs/design"),
@@ -776,7 +777,7 @@ def _staging_world(tmp_path, *, launchctl=FAKE_LAUNCHCTL_CLEAN, bots_on=False, t
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text("x")
     for rel in ("data/curator", "data/curator_archive", "data/interests", "data/research-intelligence",
-                "data/annotations", "data/research-library",
+                "data/annotations", "data/research-library", "data/curator_cache",
                 "data/german", "data/portuguese", "data/guild", "data/usage", "data/usage/portal", "data/workshops", "docs/design", "docs/specs", "agent_logs",
                 "state"):
         (root / rel).mkdir(parents=True, exist_ok=True)

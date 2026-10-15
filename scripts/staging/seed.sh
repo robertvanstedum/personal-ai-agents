@@ -171,6 +171,7 @@ seed_files() {
   # Formerly container-only Curator state, now bind-mounted (#305).
   copy_dir "$R/data/annotations" data/annotations optional
   copy_dir "$R/_NewDomains/research-intelligence/library" data/research-library optional
+  copy_dir "$R/curator_cache" data/curator_cache optional
   mkdir -p "$S/data/research-config" "$S/data/curator-config"
   copy_file "$R/_NewDomains/research-intelligence/agent/config.json" data/research-config/config.json
   copy_file "$R/domains/curator/curator_sources.json" data/curator-config/curator_sources.json
