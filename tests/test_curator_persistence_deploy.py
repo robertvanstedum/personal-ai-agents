@@ -371,3 +371,12 @@ def test_deploy_proves_curator_absence_from_a_listing_not_a_failed_inspect():
     assert 'docker inspect "$CURATOR_CONTAINER" >/dev/null 2>&1' not in script
     assert "if curator_container_exists; then" in body
     assert "docker ps -a --format '{{.Names}}'" in script
+
+
+def test_legacy_local_to_production_data_sync_refuses_to_run(tmp_path):
+    script = ROOT / "scripts" / "sync_data.sh"
+    result = subprocess.run(["bash", str(script), "203.0.113.1"], capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode != 0
+    assert "retired" in result.stderr
+    assert "rsync" not in script.read_text()
+    assert "sync_data.sh" not in (ROOT / "scripts" / "bootstrap_ec2.sh").read_text()
