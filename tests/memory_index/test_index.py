@@ -212,8 +212,8 @@ def test_failed_rebuild_leaves_the_old_index_untouched(built, monkeypatch):
     def flaky(texts):
         calls["n"] += 1
         if calls["n"] > 1:
-            from core.memory_index.embedder import EmbedderUnavailable
-            raise EmbedderUnavailable("down")
+            # Raise the exception bound by the loaded unit, even if another test reimports its dependency.
+            raise indexer.EmbedderUnavailable("down")
         return real(texts)
     broken._embed = flaky
     result = indexer.rebuild(shelf.root, broken, min_free_bytes=0)
