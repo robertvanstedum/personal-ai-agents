@@ -33,6 +33,9 @@ def test_prepare_has_complete_pin_candidates_and_preserves_old_jobs(tmp_path, mo
     pin = Path(result['runtime'])
     assert not Path(cfg['jobs_root']).exists() and not Path(cfg['ask_registry']).exists()
     assert (pin / 'core/agent_turns/writer.py').exists()
+    for script in ('query_suite.py', 'assets.py'):
+        assert (pin / 'scripts/vault' / script).exists()
+        assert result['runtime_file_hashes']['scripts/vault/' + script]
     assert result['runtime_file_hashes']['utils/credential_scrub.py']
     shelf = json.loads((pin / 'config/memory_shelf.json').read_text())
     assert shelf['never_copy'] == [] and set(shelf['sources']) == {'claude-code','codex'}

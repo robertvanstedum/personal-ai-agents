@@ -1,0 +1,21 @@
+{% extends 'guild_floor/_base.html' %}
+{% block title %}Admin · Build · Guild{% endblock %}
+{% block main %}
+<section class="gu-page" aria-labelledby="admin-title">
+  <h1 id="admin-title" class="page-title">Build Admin</h1>
+  <section aria-labelledby="admin-role-title">
+    <h2 id="admin-role-title">Master Craftsman</h2>
+    <p data-role-adoption>Starting role approved.</p>
+    <ul>
+      {% for doc in role_documents %}
+      <li>{% if doc.available %}<a href="{{ doc.href }}">{{ doc.label }}</a>{% else %}{{ doc.label }} <span class="small">— unavailable in this deployment</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section aria-labelledby="admin-agents-title">
+    <h2 id="admin-agents-title">Agents</h2>
+    <p><a href="{{ agents_href }}">Agent access and status</a></p>
+  </section>
+  <p class="small"><a href="{{ urls.workshop }}">Workshop Log materials</a></p>
+</section>
+{% endblock %}

@@ -31,7 +31,12 @@ load_dotenv()
 
 # File paths
 REPO_ROOT = Path(__file__).parent.parent.parent  # domains/curator -> domains -> repo root
-CURATOR_OUTPUT = REPO_ROOT / "curator_output.txt"
+sys.path.insert(0,str(REPO_ROOT))
+from domains.curator.research.paths import configured as research_paths
+_RESEARCH_DATA = research_paths().data
+# Production sets CURATOR_OUTPUT_PATH into the mounted data/curator folder so
+# the day's briefing text survives container replacement (#305).
+CURATOR_OUTPUT = Path(os.environ.get("CURATOR_OUTPUT_PATH") or REPO_ROOT / "curator_output.txt")
 # Canonical preferences location — shared with curator_server.py and curator_rss_v2.py.
 # Defaults to data/curator/ in the repo; override with CURATOR_DATA_DIR env var on EC2.
 _DATA_DIR = Path(os.environ.get("CURATOR_DATA_DIR", str(REPO_ROOT / "data" / "curator")))
@@ -400,7 +405,7 @@ def regenerate_scans_index():
     scans.sort(key=lambda x: x['date'], reverse=True)
 
     # ── Collect Dives (thread-level analyses) ────────────────────────────────
-    research_dd_dir = REPO_ROOT / "_NewDomains" / "research-intelligence" / "data" / "dives"
+    research_dd_dir = _RESEARCH_DATA / "dives"
     dives = []
 
     if research_dd_dir.exists():

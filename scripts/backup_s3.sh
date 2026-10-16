@@ -2,6 +2,13 @@
 # Tier 2 backup: sync today's local EC2 backup + Postgres dump to S3.
 # Runs daily at 3am UTC via cron (see setup_backup_cron.sh).
 # Requires: EC2 IAM instance role with s3:PutObject/GetObject/ListBucket on minimoi-backups.
+#
+# This file is the installed EC2 copy (sha256 c2aa82d5..., 9 Jul) plus the
+# #305 off-host copy of Curator preservation snapshots.
+#
+# Retention: Robert keeps all production content and history. This script
+# never deletes in S3 (no --delete). The bucket is versioned. Its lifecycle
+# rule must not expire backups; see the #305 spec, section 3 C.
 
 set -euo pipefail
 
@@ -44,15 +51,21 @@ else
     log "WARNING: Local backup dir ${LOCAL_BACKUP} not found — skipping file sync"
 fi
 
+# Curator preservation snapshots (#305): copy every completed snapshot off
+# the host. Additive only; an in-progress *.partial folder is skipped.
+PRESERVE_DIR="/opt/minimoi/backups/curator-preserve"
+if [ -d "$PRESERVE_DIR" ]; then
+    log "Syncing ${PRESERVE_DIR} → ${S3_BUCKET}/curator-preserve/"
+    aws s3 sync "${PRESERVE_DIR}/" "${S3_BUCKET}/curator-preserve/" --exclude "*.partial/*" --quiet
+    log "Curator preservation sync complete"
+else
+    log "WARNING: ${PRESERVE_DIR} not found — skipping Curator preservation sync"
+fi
+
 # Postgres dump piped directly to S3 (no EC2 disk pressure)
 log "Dumping Postgres personal_agents → ${S3_BUCKET}/${DATE}/postgres.dump"
 docker exec postgres-ai-agents pg_dump -U postgres personal_agents | \
     aws s3 cp - "${S3_BUCKET}/${DATE}/postgres.dump"
 log "Postgres dump complete"
-
-# Sync agent logs to S3 (persistent path, not date-partitioned)
-log "Syncing agent_logs → ${S3_BUCKET}/agent_logs/"
-aws s3 sync /opt/minimoi/agent_logs/ "${S3_BUCKET}/agent_logs/" --quiet
-log "Agent logs sync complete"
 
 log "=== S3 backup complete: ${S3_BUCKET}/${DATE}/ ==="

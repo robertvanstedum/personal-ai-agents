@@ -78,7 +78,8 @@ def send_briefing():
     chat_id = os.environ.get('TELEGRAM_CHAT_ID', 'YOUR_TELEGRAM_CHAT_ID')
     
     # Parse curator output
-    with open('curator_output.txt', 'r') as f:
+    # CURATOR_OUTPUT_PATH: the mounted data/curator copy in production (#305).
+    with open(os.environ.get('CURATOR_OUTPUT_PATH') or 'curator_output.txt', 'r') as f:
         content = f.read()
     
     # Send header

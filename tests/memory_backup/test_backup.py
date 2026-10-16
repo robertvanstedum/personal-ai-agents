@@ -708,3 +708,26 @@ def test_captured_extract_estimate_includes_parent_directories(tmp_path):
             tar.addfile(member, io.BytesIO(b"x"))
     # Two file blocks plus root/a/a-b/a-c directory blocks and metadata slack.
     assert B.captured_extract_need(archive) == 6 * B.BLOCK + (16 << 20)
+
+
+@pytest.mark.parametrize("orphan", [False, True])
+def test_captured_native_assets_have_verified_counts_and_orphan_warning(world, orphan):
+    from core.vault_t1 import assets
+    source = world["tmp"] / "native.txt"
+    source.write_bytes(b"synthetic native original")
+    world["shelf"].chmod(0o700)
+    assets.capture(world["shelf"], source, source_instance="test", source_id="native-one")
+    if orphan:
+        blob = b"verified unreferenced native bytes"
+        digest = hashlib.sha256(blob).hexdigest()
+        (world["shelf"] / assets.object_path(digest)).write_bytes(blob)
+    result = backup(world)
+    stored = json.loads((latest(world) / "manifest.json").read_text())
+    assert stored["shelf"]["records"] == 4
+    assert stored["shelf"]["native_assets"] == {
+        "accepted": 1, "editions": 1, "referenced_objects": 1,
+        "unreferenced_objects": int(orphan),
+    }
+    assert result["state"] == ("warn" if orphan else "ok")
+    assert "native-one" not in json.dumps(stored)
+    assert not list(world["work"].iterdir())

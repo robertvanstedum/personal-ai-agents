@@ -1,0 +1,53 @@
+# OPTIONAL, default-off. Never included by the normal nine-service deployment.
+# All referenced production state/key/network/image must already be provisioned
+# and independently verified. No dev state, keys, grants or bootstrap here.
+services:
+  minimoi-records:
+    profiles: [records-production]
+    image: ${MINIMOI_RECORDS_IMAGE:?immutable reviewed portal image digest required}
+    container_name: minimoi-records
+    restart: "no"
+    command: [python, -m, services.records_runtime, --data-dir, /var/lib/minimoi-records, --execute]
+    environment:
+      BASE_URL: https://minimoi.ai
+      MINIMOI_ROLE: production
+      MINIMOI_RECORDS_PROFILE: production
+      MINIMOI_RECORDS_PRODUCTION: "1"
+      RECORDS_PORTAL_ENV: production
+      RECORDS_ALLOWED_HOSTS: minimoi-records:18880
+      RECORDS_PORTAL_KEY_FILE: /run/secrets/rooms-bridge/portal-bridge.key
+      PYTHONDONTWRITEBYTECODE: "1"
+      AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - type: bind
+        source: ${MINIMOI_RECORDS_STATE:?existing independently prepared production state required}
+        target: /var/lib/minimoi-records
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MINIMOI_RECORDS_PORTAL_KEY:?existing distinct production bridge key required}
+        target: /run/secrets/rooms-bridge/portal-bridge.key
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      records-production:
+        aliases: [minimoi-records]
+    read_only: true
+    tmpfs: [/tmp:size=16m,mode=1777]
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.5
+    pids_limit: 64
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18880/health', headers={'Host':'minimoi-records:18880'}), timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+networks:
+  records-production:
+    external: true
+    name: ${MINIMOI_RECORDS_NETWORK:?existing internal production-only network required}

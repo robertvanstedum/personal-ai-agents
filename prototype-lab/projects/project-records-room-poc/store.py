@@ -189,6 +189,8 @@ class Store:
                     id TEXT PRIMARY KEY,actor TEXT NOT NULL,source TEXT NOT NULL,destination TEXT NOT NULL,
                     event_ids TEXT NOT NULL,grant_id TEXT NOT NULL,created TEXT NOT NULL);
             """)
+        from archive import Archive
+        self.archive = Archive(self)
         os.chmod(self.path, 0o600)
 
     def _secret(self, name):
@@ -300,6 +302,9 @@ class Store:
                             {**record,"origin":canonical(origin) if origin is not None else None})
         record["seq"] = cursor.lastrowid
         db.execute("UPDATE rooms SET updated=? WHERE id=?", (record["created"], room))
+        # Archiving only changes visibility. New recorded activity reveals it,
+        # without pausing/closing/cancelling any session or pending work.
+        db.execute("UPDATE room_archive SET archived_at=NULL,archived_by=NULL,version=version+1,restored_at=?,restored_by=? WHERE room=? AND archived_at IS NOT NULL",(record['created'],actor,room))
         return record
 
     def create_room(self, actor, key, payload):
@@ -354,35 +359,49 @@ class Store:
             return dict(db.execute("SELECT * FROM rooms WHERE id=?",(session_id,)).fetchone())
         return self.mutate(actor,key,{"op":"create_session","parent":parent,"payload":payload},action)
 
-    def persistent_rooms(self, actor):
+    @staticmethod
+    def _archive_view(view):
+        if view not in {"active","archived","all"}:raise Problem("Unknown archive view")
+        return view
+
+    def persistent_rooms(self, actor, view="active"):
+        self._archive_view(view)
         with self.connect() as db:
-            # Shared membership is session-scoped. Do not leak sibling counts.
             return [dict(r) for r in db.execute("""SELECT p.id,p.title,p.purpose,p.created,
-                (SELECT COUNT(*) FROM rooms s WHERE s.parent_room_id=p.id AND
+                (SELECT COUNT(*) FROM rooms s LEFT JOIN room_archive a ON a.room=s.id
+                 WHERE s.parent_room_id=p.id AND (?='all' OR (?='active' AND a.archived_at IS NULL)
+                 OR (?='archived' AND a.archived_at IS NOT NULL)) AND
                  (?='robert' OR EXISTS(SELECT 1 FROM members m WHERE m.room=s.id AND m.actor=?))) AS visible_session_count
                 FROM persistent_rooms p WHERE ?='robert' OR EXISTS(
                  SELECT 1 FROM rooms s JOIN members m ON m.room=s.id
-                 WHERE s.parent_room_id=p.id AND m.actor=?) ORDER BY p.created,p.id""",(actor,actor,actor,actor))]
+                 WHERE s.parent_room_id=p.id AND m.actor=?) ORDER BY p.created,p.id""",(view,view,view,actor,actor,actor,actor))]
 
-    def persistent_room(self, actor, parent):
+    def persistent_room(self, actor, parent, view="active"):
+        self._archive_view(view)
         with self.connect() as db:
             db.execute("BEGIN")
             record=db.execute("SELECT id,title,purpose,created FROM persistent_rooms WHERE id=?",(parent,)).fetchone()
-            sessions=[dict(r) for r in db.execute("""SELECT s.* FROM rooms s WHERE s.parent_room_id=? AND
+            visible=db.execute("SELECT 1 FROM rooms s JOIN members m ON m.room=s.id WHERE s.parent_room_id=? AND m.actor=? LIMIT 1",(parent,actor)).fetchone()
+            if not record or (actor!="robert" and not visible):raise Problem("Room not found",404)
+            sessions=[dict(r) for r in db.execute("""SELECT s.*,a.archived_at,COALESCE(a.version,0) AS archive_version
+                FROM rooms s LEFT JOIN room_archive a ON a.room=s.id WHERE s.parent_room_id=? AND
+                (?='all' OR (?='active' AND a.archived_at IS NULL) OR (?='archived' AND a.archived_at IS NOT NULL)) AND
                 (?='robert' OR EXISTS(SELECT 1 FROM members m WHERE m.room=s.id AND m.actor=?))
-                ORDER BY s.created,s.id""",(parent,actor,actor))]
-            if not record or (actor!="robert" and not sessions):
-                raise Problem("Room not found",404)
-            return {**dict(record),"sessions":sessions,"visible_session_count":len(sessions)}
+                ORDER BY s.created,s.id""",(parent,view,view,view,actor,actor))]
+            return {**dict(record),"sessions":sessions,"visible_session_count":len(sessions),"archive_view":view}
 
-    def rooms(self, actor):
+    def rooms(self, actor, view="active"):
+        self._archive_view(view)
         with self.connect() as db:
-            return [dict(row) for row in db.execute("""SELECT r.*,
+            return [dict(row) for row in db.execute("""SELECT r.*,a.archived_at,COALESCE(a.version,0) AS archive_version,
                 (SELECT COUNT(*) FROM events e WHERE e.room=r.id) AS event_count,
                 (SELECT COALESCE(MAX(seq),0) FROM events e WHERE e.room=r.id) AS latest_seq
-                FROM rooms r WHERE ?='robert' OR EXISTS
-                (SELECT 1 FROM members m WHERE m.room=r.id AND m.actor=?)
-                ORDER BY updated DESC""", (actor,actor))]
+                FROM rooms r LEFT JOIN room_archive a ON a.room=r.id
+                WHERE (?='all' OR (?='active' AND a.archived_at IS NULL)
+                       OR (?='archived' AND a.archived_at IS NOT NULL))
+                AND (?='robert' OR EXISTS
+                (SELECT 1 FROM members m WHERE m.room=r.id AND m.actor=?))
+                ORDER BY r.updated DESC""", (view,view,view,actor,actor))]
 
     def principals(self, actor):
         self.owner(actor)

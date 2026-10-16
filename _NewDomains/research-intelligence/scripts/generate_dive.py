@@ -35,6 +35,10 @@ from core.get_secret import get_secret
 TOPICS_DIR   = ROOT / 'topics'
 THREADS_DIR  = ROOT / 'data' / 'threads'
 ANNOTATIONS_DIR = ROOT / 'data' / 'annotations' / 'research'
+# General comments (scripts/annotations.py, the "comment anywhere" box) write
+# here; in production that is the durable /app/data/annotations mount (#305).
+# Dives read both folders. Nothing is moved and records are used as written.
+GENERAL_ANNOTATIONS_DIR = REPO_ROOT / 'data' / 'annotations' / 'research'
 OUTPUT_DIR   = ROOT / 'data' / 'dives'
 READING_ROOM = ROOT / 'data' / 'reading_room'
 PROMPTS_DIR  = ROOT / 'prompts' / 'v1'
@@ -168,15 +172,30 @@ def load_thread_data(topic: str) -> dict:
 
     # Annotations
     annotations = []
-    ann_dir = ANNOTATIONS_DIR / topic
-    if ann_dir.exists():
+    # Only a byte-for-byte identical record (the same comment present in both
+    # folders) is counted once. Records that share a note_id but differ in any
+    # field are all kept; nothing is merged or dropped.
+    seen_records = set()
+    for ann_root in (ANNOTATIONS_DIR, GENERAL_ANNOTATIONS_DIR):
+        ann_dir = ann_root / topic
+        if not ann_dir.exists():
+            continue
         for jf in sorted(ann_dir.glob('*.json')):
             try:
                 entries = json.loads(jf.read_text())
-                if isinstance(entries, list):
-                    annotations.extend(entries)
             except (json.JSONDecodeError, OSError):
-                pass
+                continue
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                key = json.dumps(entry, sort_keys=True, ensure_ascii=False)
+                if key in seen_records:
+                    continue
+                seen_records.add(key)
+                annotations.append(entry)
+    annotations.sort(key=_timestamp_order)
 
     return {
         'topic':       topic,
@@ -185,6 +204,24 @@ def load_thread_data(topic: str) -> dict:
         'sessions':    sessions,
         'annotations': annotations,
     }
+
+
+def _timestamp_order(annotation: dict) -> tuple:
+    """Sort key: dated records (ISO strings) by time, then every record whose
+    timestamp is missing, null, empty or not a string, in load order (the sort
+    is stable). Never compares a number with a string, and drops nothing."""
+    ts = annotation.get('timestamp')
+    if isinstance(ts, str) and ts:
+        return (0, ts)
+    return (1, '')
+
+
+def _display_date(ts) -> str:
+    if isinstance(ts, str) and ts:
+        return ts[:10]
+    if ts is None or ts == '':
+        return 'undated'
+    return str(ts)
 
 
 # ── Empty session guard ───────────────────────────────────────────────────────
@@ -220,12 +257,12 @@ def _format_annotations(annotations: list) -> str:
         return '(none)'
     lines = []
     for a in annotations:
-        note = a.get('note', '').strip()
+        note = str(a.get('note') or '').strip()
         if not note:
             continue
-        ts   = a.get('timestamp', '')[:10]
-        atype = a.get('type', 'reaction')
-        ref  = a.get('ref_text', '') or ''
+        ts   = _display_date(a.get('timestamp'))
+        atype = a.get('type') or 'reaction'
+        ref  = str(a.get('ref_text') or '')
         if ref:
             lines.append(f"[{ts}] ({atype}) re: \"{ref[:80]}\" — {note}")
         else:

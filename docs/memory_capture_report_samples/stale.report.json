@@ -27,6 +27,20 @@
    "state": "unknown"
   },
   "overall": "watch",
+  "quality": {
+   "fidelity": {
+    "at": "2026-10-04T11:30:00Z",
+    "checked": 3,
+    "failed": 0,
+    "method": "random_sample",
+    "ok": 3,
+    "sample_size": 3,
+    "scope": "storage_and_edition_same_parser",
+    "seed": 20261004,
+    "skipped": {},
+    "state": "ok"
+   }
+  },
   "rows": [
    {
     "captured_records": 1,
@@ -54,6 +68,20 @@
   "run_id": "20261004T120000Z-abc123",
   "schema": "minimoi.memory-capture-matrix.v1",
   "stale_after_s": 172800
+ },
+ "quality": {
+  "fidelity": {
+   "at": "2026-10-04T11:30:00Z",
+   "checked": 3,
+   "failed": 0,
+   "method": "random_sample",
+   "ok": 3,
+   "sample_size": 3,
+   "scope": "storage_and_edition_same_parser",
+   "seed": 20261004,
+   "skipped": {},
+   "state": "ok"
+  }
  },
  "run_id": "20261004T120000Z-abc123",
  "schema": "minimoi.memory-capture-report.v1",
@@ -111,11 +139,12 @@
     },
     "fidelity": {
      "at": "2026-10-04T11:30:00Z",
-     "checked": 3,
+     "attribution": "sampled_source",
+     "checked": 1,
      "failed": 0,
      "method": "random_sample",
-     "ok": 3,
-     "sample_size": 10,
+     "ok": 1,
+     "sample_size": 1,
      "scope": "storage_and_edition_same_parser",
      "seed": 20261004,
      "skipped": {},
@@ -214,11 +243,12 @@
     },
     "fidelity": {
      "at": "2026-10-04T11:30:00Z",
-     "checked": 3,
+     "attribution": "sampled_source",
+     "checked": 2,
      "failed": 0,
      "method": "random_sample",
-     "ok": 3,
-     "sample_size": 10,
+     "ok": 2,
+     "sample_size": 2,
      "scope": "storage_and_edition_same_parser",
      "seed": 20261004,
      "skipped": {},

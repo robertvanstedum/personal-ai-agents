@@ -1381,11 +1381,19 @@ body.gu .area-page { width: 100%; max-width: 1280px; box-sizing: border-box; mar
 .operate-overview > details:is([data-health="watch"], [data-health="yellow"], [data-health="unknown"], [data-health="red"]) > summary { border-left: 4px solid #ad681c; background: #f3e5cd; }
 .operate-overview > details:is([data-health="problem"], [data-health="red"]) > summary { border-left-color: #a63d2c; background: #f5e1dc; }
 @media (max-width: 640px) {
-  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-pill { display: inline-flex; z-index: 80; right: 12px; bottom: 12px; }
-  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-panel[data-mode="pill"] { display: none; }
-  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-panel:is([data-mode="floating"], [data-mode="docked"]) { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: 100%; max-height: 82dvh; z-index: 90; border-radius: 14px 14px 0 0; border-width: 1px; box-shadow: 0 -6px 24px #0004; overflow: auto; }
-  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-head-actions { display: flex; }
-  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .mc-phone-bar { display: none; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"], [data-page="admin"]) .mc-pill { display: inline-flex; z-index: 80; right: 12px; bottom: 12px; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"], [data-page="admin"]) .mc-panel[data-mode="pill"] { display: none; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"], [data-page="admin"]) .mc-panel:is([data-mode="floating"], [data-mode="docked"]) { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: 100%; max-height: 82dvh; z-index: 90; border-radius: 14px 14px 0 0; border-width: 1px; box-shadow: 0 -6px 24px #0004; overflow: auto; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"], [data-page="admin"]) .mc-head-actions { display: flex; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"], [data-page="admin"]) .mc-phone-bar { display: none; }
   /* Leave room to scroll the final content clear of the floating Chat pill. */
-  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"]) .area-page { padding-bottom: 84px; }
+  body.gu:is([data-page^="operate"], [data-page="improve"], [data-page="experiment"], [data-page="admin"]) .area-page { padding-bottom: 84px; }
+}
+
+/* Open contextual panels keep managed voice controls inside their narrow composer. */
+body.gu:not([data-page="floor"]):not([data-page="workshop"]) .mc-panel:is([data-mode="floating"], [data-mode="docked"]) .mc-composer .mc-tools { width: 100%; max-width: 100%; min-width: 0; flex: 1 1 100%; }
+body.gu:not([data-page="floor"]):not([data-page="workshop"]) .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-managed-settings]:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; max-width: 100%; }
+body.gu:not([data-page="floor"]):not([data-page="workshop"]) .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-managed-settings] label { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  body.gu:not([data-page="floor"]):not([data-page="workshop"]):is([data-mc-mode="floating"], [data-mc-mode="docked"]) .mc-pill { display: none; }
 }

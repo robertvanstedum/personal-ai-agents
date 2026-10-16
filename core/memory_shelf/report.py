@@ -252,12 +252,39 @@ def _fidelity_state(doc: dict, now: datetime) -> str:
     return "ok" if checked > 0 else "unknown"
 
 
-def _fidelity_block(shelf, now: datetime) -> dict:
+def _fidelity_block(shelf, now: datetime, source: str | None = None) -> dict:
     doc = _read_quality(shelf, "fidelity")
     if not doc:
         return {"state": "not_run"}
     keep = {k: doc[k] for k in ("at", "method", "sample_size", "checked", "ok", "failed", "skipped", "seed", "scope") if k in doc}
-    return {"state": _fidelity_state(doc, now), **keep}
+    if source is None:
+        return {"state": _fidelity_state(doc, now), **keep}
+    rows = doc.get("by_source")
+    if not isinstance(rows, dict):
+        # Historical global-only samples cannot identify a failing provider.
+        return {"state": "unknown", "attribution": "global_sample_not_attributed"}
+    def valid_row(row):
+        if not isinstance(row, dict):
+            return False
+        counts = [row.get(k) for k in ("sample_size", "checked", "ok", "failed")]
+        skipped = row.get("skipped")
+        if any(type(v) is not int or v < 0 for v in counts) or not isinstance(skipped, dict) or any(type(v) is not int or v < 0 for v in skipped.values()):
+            return False
+        size, checked, ok, failed = counts
+        return checked == ok + failed and size == checked + sum(skipped.values())
+    totals = Counter()
+    valid = all(valid_row(row) for row in rows.values())
+    if valid:
+        for row in rows.values():
+            totals.update(row["skipped"])
+    if not valid or any(sum(row[key] for row in rows.values()) != doc.get(key) for key in ("checked", "ok", "failed")) or dict(totals) != doc.get("skipped", {}):
+        return {"state": "unknown", "attribution": "source_counts_invalid"}
+    row = rows.get(source)
+    if not isinstance(row, dict):
+        return {"state": "unknown", "attribution": "not_sampled"}
+    keep = {k: doc[k] for k in ("at", "method", "seed", "scope") if k in doc}
+    keep.update({k: row[k] for k in ("sample_size", "checked", "ok", "failed", "skipped", "storage") if k in row})
+    return {"state": _fidelity_state(keep, now), "attribution": "sampled_source", **keep}
 
 
 def _semantic_block(shelf) -> dict:
@@ -284,6 +311,7 @@ def build(shelf, cfg: Config, now: datetime | None = None, *, jobs_root=None, ru
     job = _job_block(jobs_root, now)
     sources: dict[str, dict] = {}
     for name in names:
+        source_fidelity = _fidelity_block(shelf, now, name)
         row = per.get(name) or _blank_source()
         scfg = configured.get(name)
         manual = name in MANUAL_PROVIDERS
@@ -320,7 +348,7 @@ def build(shelf, cfg: Config, now: datetime | None = None, *, jobs_root=None, ru
         quality = {"classification": {"findings": findings, "records_on_older_parser": row["behind"],
                                       "current_parser_version": migration.current_version(name)},
                    "duplicates": dup,
-                   "fidelity": fidelity,
+                   "fidelity": source_fidelity,
                    "semantic_audit": semantic}
         evidence = {"attachment_references": by_disposition.get("attachment_reference", 0),
                     "attachment_content_excluded_items": by_disposition.get("attachment_content_excluded", 0),
@@ -329,7 +357,7 @@ def build(shelf, cfg: Config, now: datetime | None = None, *, jobs_root=None, ru
                     "handoffs_duplicate": row["handoffs_duplicate"]}
         status = _source_status(now, name=name, manual=manual, configured=scfg is not None, approval=approval, status_doc=status_doc,
                                 success=success, kind=kind, new_at=new_at, row=row, findings=findings, quality_items=quality_items,
-                                fidelity=fidelity, unknown_kinds=unknown_kinds, led_row=led_row, has_records=row["records"] > 0)
+                                fidelity=source_fidelity, unknown_kinds=unknown_kinds, led_row=led_row, has_records=row["records"] > 0)
         sources[name] = {"label": LABELS.get(name, name), "mode": "manual" if manual else "scheduled", "capture": capture,
                          "selection": selection, "quality": quality, "evidence": evidence, "status": status}
     run = run_id or f"{now.strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(3)}"
@@ -341,7 +369,7 @@ def build(shelf, cfg: Config, now: datetime | None = None, *, jobs_root=None, ru
               "source_snapshot": _snapshot(shelf, now), "versions": {"policy": POLICY_VERSION, "report_schema": 1,
                                                                         "parsers": {n: migration.current_version(n) for n in sorted(names)}},
               "cadence": {"expected_every_s": EXPECTED_EVERY_S, "missed_after_s": MISSED_AFTER_S, "stale_report_after_s": STALE_REPORT_AFTER_S},
-              "job": job, "sources": sources, "totals": totals}
+              "job": job, "sources": sources, "totals": totals, "quality": {"fidelity": fidelity}}
     report["history"] = _history_summary(shelf, report)
     report["operate"] = matrix(report)
     return report
@@ -480,7 +508,10 @@ def matrix(report: dict) -> dict:
                      "last_new_capture_at": st["last_new_capture_at"], "captured_records": src["capture"]["records"],
                      "status": st["state"], "reason": st["reason"]})
     worst = max((r["status"] for r in rows), key=lambda s: _WORST[s], default="unknown")
-    return {"schema": MATRIX_SCHEMA, "run_id": report["run_id"], "generated_at": report["generated_at"],
+    global_fidelity = report.get("quality", {}).get("fidelity", {})
+    if global_fidelity.get("state") == "failed":
+        worst = "watch"
+    return {"schema": MATRIX_SCHEMA, "run_id": report["run_id"], "generated_at": report["generated_at"], "quality": {"fidelity": global_fidelity},
             "stale_after_s": STALE_REPORT_AFTER_S, "job": {"state": report["job"].get("state"), "reason": report["job"].get("reason")},
             "overall": worst if rows else "unknown", "rows": rows}
 

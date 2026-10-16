@@ -1,25 +1,12 @@
 #!/bin/bash
-# Sync data files from Mac to EC2.
-# Usage: ./scripts/sync_data.sh <ec2-public-ip>
-# Requires: SSH key configured for ec2-user@<ip>
-set -euo pipefail
-
-EC2_IP="${1:?Usage: sync_data.sh <ec2-public-ip>}"
-EC2_USER="ec2-user"
-EC2_DATA="/opt/minimoi/data"
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-
-echo "=== Syncing curator data files ==="
-rsync -avz --progress \
-  "${REPO_ROOT}/data/curator/curator_signals.json" \
-  "${REPO_ROOT}/data/curator/curator_latest.json" \
-  "${REPO_ROOT}/data/curator/curator_radar.json" \
-  "${EC2_USER}@${EC2_IP}:${EC2_DATA}/curator/"
-
-echo "=== Syncing German domain data ==="
-rsync -avz --progress \
-  "${REPO_ROOT}/domains/german/data/" \
-  "${EC2_USER}@${EC2_IP}:${EC2_DATA}/german/"
-
-echo "=== Sync complete ==="
-echo "Data is at ${EC2_DATA} on ${EC2_IP}"
+# RETIRED (issue #305). This script used to push data files from a Mac to
+# production. Production owns its data; any sync runs production to dev only,
+# never dev or a Mac to production. #99's Mac-to-production step stays
+# superseded.
+#
+# See planning-studio/initiatives/defect_curator_persistence_305_2026-10-15.md
+# (section 3 C). Restores come from a production snapshot or backup, never
+# from a local copy.
+echo "sync_data.sh is retired: production data is never pushed from a local copy (#305)." >&2
+echo "See planning-studio/initiatives/defect_curator_persistence_305_2026-10-15.md" >&2
+exit 1

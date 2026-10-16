@@ -292,3 +292,24 @@ def test_concurrent_placement_and_purge_never_leave_a_broken_placement(board):
         if placements:
             assert final["purged_at"] is None, (placed, purged)            # never a placement of a purged asset
         assert placed in ("added", "asset_trashed", "gone") and purged in ("purged", "in_use")
+
+
+def test_referenced_postits_read_is_explicit_bounded_and_floor_scoped(board):
+    a = add(board, "the real Board note")
+    other = board.floor.for_floor("unrelated").add_postit("private other floor", board.author, idempotency_key=key()).value
+    result = board.floor.referenced_postits([a["id"], other["id"], 999999])
+    assert result.ok and [p["id"] for p in result.data["postits"]] == [a["id"]]
+    assert result.data["postits"][0]["text"] == "the real Board note"
+    with pytest.raises(ValueError):
+        board.floor.referenced_postits([1,2,3,4])
+    with pytest.raises(ValueError):
+        board.floor.referenced_postits([True])
+
+
+def test_referenced_postits_preserve_done_and_trash_states(board):
+    a = add(board, "already completed")
+    b = add(board, "in recoverable bin")
+    board.floor.set_done(a["id"], True, board.author, expect_version=a["version"], idempotency_key=key())
+    board.floor.bin_postit(b["id"], board.author, idempotency_key=key())
+    rows = {r["id"]:r for r in board.floor.referenced_postits([a["id"],b["id"]]).data["postits"]}
+    assert rows[a["id"]]["state"] == "done" and rows[b["id"]]["state"] == "binned"

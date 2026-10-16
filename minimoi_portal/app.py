@@ -681,7 +681,7 @@ def _cos_write_guard_on() -> bool:
 
 
 def _cos_page_meta():
-    return {COS_CSRF_META: _csrf.token(COS_CSRF_SESSION_KEY)} if _cos_write_guard_on() else None
+    return {COS_CSRF_META: _csrf.token(COS_CSRF_SESSION_KEY)} if (_cos_write_guard_on() or os.environ.get("MINIMOI_COS_MANAGED_REALTIME") == "1") else None
 
 
 def _cos_write_refused(path: str):
@@ -707,10 +707,14 @@ def cos_root():
 def cos_proxy(path):
     user = _current_user()
     if request.method != "GET":
-        refused = _cos_write_refused(path) if _cos_write_guard_on() else None
+        managed_voice = path.strip("/").startswith("api/realtime-voice/managed/")
+        refused = _cos_write_refused(path) if (_cos_write_guard_on() or managed_voice) else None
         if refused is not None:
             return refused
-        return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user)
+        # Marker is derived after the authenticated owner and CSRF gates. Proxy
+        # forwarding strips every browser-supplied X-Minimoi-* value first.
+        return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user,
+                               verified_cos_voice_write=managed_voice)
     return _proxy.proxy_to(_cfg.COS_BACKEND, path, "/app/cos", user=user, head_meta=_cos_page_meta())
 
 
@@ -2333,13 +2337,8 @@ def guild_build_spec(filename):
     if not re.match(r'^[\w\-\. ()]+\.md$', filename):
         return "Not found", 404
     repo_root = Path(__file__).parent.parent
-    candidates = [
-        repo_root / "docs" / "specs" / filename,
-        repo_root / "docs" / "design" / filename,
-        repo_root / "docs" / filename,
-        repo_root / "_working" / filename,
-    ]
-    spec_path = next((p for p in candidates if p.exists()), None)
+    from minimoi_portal.guild_ui.references import resolve as _resolve_reference
+    spec_path = _resolve_reference(filename, root=repo_root)
     if not spec_path:
         return render_template("guild/spec_detail.html",
                                content="<p><em>Spec file not found.</em></p>",
@@ -2359,13 +2358,8 @@ def guild_build_spec_raw(filename):
     if not re.match(r'^[\w\-\. ()]+\.md$', filename):
         return "Not found", 404
     repo_root = Path(__file__).parent.parent
-    candidates = [
-        repo_root / "docs" / "specs" / filename,
-        repo_root / "docs" / "design" / filename,
-        repo_root / "docs" / filename,
-        repo_root / "_working" / filename,
-    ]
-    spec_path = next((p for p in candidates if p.exists()), None)
+    from minimoi_portal.guild_ui.references import resolve as _resolve_reference
+    spec_path = _resolve_reference(filename, root=repo_root)
     if not spec_path:
         return "Not found", 404
     raw = spec_path.read_text()
@@ -2392,12 +2386,8 @@ def guild_build_check(item_id):
     if not spec_file:
         return jsonify({"error": "no spec file attached to this entry"}), 400
     repo_root = Path(__file__).parent.parent
-    candidates = [
-        repo_root / "docs" / "specs" / spec_file,
-        repo_root / "docs" / spec_file,
-        repo_root / "_working" / spec_file,
-    ]
-    spec_path = next((p for p in candidates if p.exists()), None)
+    from minimoi_portal.guild_ui.references import resolve as _resolve_reference
+    spec_path = _resolve_reference(spec_file, root=repo_root)
     if not spec_path:
         return jsonify({"error": f"{spec_file} not found", "failures": [f"file missing: {spec_file}"]})
     content = spec_path.read_text()
@@ -2964,13 +2954,16 @@ def _rooms_accounts():
     return [a for a in out if not (a["username"] in seen or seen.add(a["username"]))]
 
 
-RECORDS_BRIDGE = _records_bridge.install_if_dev(
+RECORDS_BRIDGE = _records_bridge.install_configured(
     app, base_url=_cfg.BASE_URL, environ=os.environ, require_login=_require_login, require_owner=_require_owner,
     identity={"access": _ROOMS_ACCESS,
               "key_file": os.environ.get("RECORDS_PORTAL_KEY_FILE", _records_bridge.KEY_FILE_DEFAULT),
               "current_user": _current_user, "account_active": _rooms_account_active})
 app.extensions["rooms_access"] = _ROOMS_ACCESS
 app.extensions["rooms_accounts"] = _rooms_accounts
+
+from minimoi_portal import records_machine_bridge as _records_machine_bridge  # noqa: E402
+_records_machine_bridge.install_configured(app, base_url=_cfg.BASE_URL, environ=os.environ)
 
 # Machine Ask uses its own live agent registry; portal sign-in conveys no grant.
 from minimoi_portal import vault_bridge as _vault_bridge  # noqa: E402

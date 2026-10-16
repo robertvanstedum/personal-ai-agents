@@ -1299,7 +1299,20 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         return {"error": "unavailable", "message": MC_WORDS["notes_down"],
                 "reason": "not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"}, 503
     if existing is not None:
-        return _repeated_answer(services, existing), 200
+        answer = _repeated_answer(services, existing)
+        from . import feature_environ
+        if services.mc.kind == "cos" and feature_environ().get("MINIMOI_MC_BOARD_OUTCOMES") == "1":
+            from .mc_context import board_ids
+            # Read historical receipts only: a retry never consumes a late
+            # proposal or performs a write after an interrupted turn.
+            try:
+                receipts = [_floor().outcome_receipt(n, turn_key=note_id) for n in board_ids(note["text"])]
+                saved = [r for r in receipts if r["state"] == "saved"]
+                if saved:
+                    answer["board_outcome"] = saved[0]
+            except Exception:
+                answer["board_outcome"] = {"state":"unknown"}
+        return answer, 200
     shown = floor_state.mc_view(services, notes_ok=True)
     if not shown["turns"]:
         return {"error": "mc_unavailable", "message": f"{shown['header']}. Your note is kept; nothing was sent to Master Craftsman.",
@@ -1336,7 +1349,20 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         # sent: other conversations never reach the model's context.
         sent_text = scrub(note["text"])
         agent_state = _agent_state(conv)
-        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=_with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal),
+        # Opt-in on the non-streaming shared CoS transport only. Authority is
+        # this authenticated kept owner turn; Board/model text grants nothing.
+        from .mc import board_outcomes
+        from . import feature_environ
+        board_plan, board_proposal = None, None
+        if services.mc.kind == "cos" and feature_environ().get("MINIMOI_MC_BOARD_OUTCOMES") == "1":
+            try:
+                board_plan = board_outcomes.prepare(sent_text, _floor(), note_id)
+            except Exception:
+                _mc_log().warning("mc turn %s: Board proposal preparation unavailable", turn_id)
+        context_text = _with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal)
+        if board_plan is not None:
+            context_text += "\n\n" + board_plan.contract()
+        req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=context_text,
                           note_request_id=note_id, correlation_id=turn_id,
                           context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
@@ -1345,11 +1371,21 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         result = services.mc.turn(req)
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None
+        if board_plan is not None and result.status == "answered":
+            from .mc import TurnResult
+            try:
+                board_proposal = board_outcomes.parse(board_plan, result.text)
+                if board_proposal is not None:
+                    result = TurnResult("answered", result.backend_kind, text=board_proposal["answer"], usage=result.usage, trace=result.trace)
+            except (ValueError, TypeError):
+                result = TurnResult("answered", result.backend_kind,
+                                    text="The proposed Board outcome could not be validated. Nothing was saved on the Board.",
+                                    usage=result.usage, trace=result.trace)
         if result.status == "answered":
             if agent_state is not None and (result.trace or {}).get("finish_reason", "stop") == "stop":
                 agent_state.mark()                              # a complete ("stop") answer: MC has seen the status. A failure, timeout, cancel or cut-off reply consumes nothing
             from .jobs_api import make_hook
-            hook = make_hook(services, conv, principal, note, note_id, attachment_ids)
+            hook = make_hook(services, conv, principal, note, note_id, attachment_ids) if board_plan is None else None
             try:
                 decision = hook.decide(result.text, clean=True) if hook is not None else None
             except Exception:
@@ -1389,6 +1425,22 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             DISPATCHED.finish(request_id, refused)
             return refused, 200
         answer["reply_note"] = kept.value
+        if board_plan is not None:
+            try:
+                receipt = board_outcomes.commit(board_plan, board_proposal, _floor(),
+                    clean=(result.trace or {}).get("finish_reason") == "stop", answer_kept=True)
+            except Exception:
+                receipt = {"state":"unknown"}
+            answer["board_outcome"] = receipt
+            if receipt["state"] == "saved":
+                receipt_text = (f"Board outcome saved as note #{receipt['postit_id']} for source note #{receipt['source_id']}. "
+                                "This confirms the record was saved; task success depends on the reported evidence.")
+            else:
+                receipt_text = "Board outcome not confirmed saved. Check the Board before requesting another attempt."
+            try:
+                floor.add_note(reply_key + "-board-receipt", receipt_text, GUILD_PLATFORM, area="Board", page="board")
+            except FloorStoreUnavailable:
+                answer["board_receipt_note_saved"] = False
         _touch_in(conversations, conv, principal)
         history_saved = None
         if capture:
@@ -1502,11 +1554,30 @@ def _with_agent(text: str, state) -> str:
 
 def _with_context(text: str, owner_text: str, conv, principal: str) -> str:
     """Then, as more marked DATA, what a quick question needs in the SAME turn (#298): the GitHub items the owner's words point at, and the true state of this
-    conversation's jobs. Any trouble reading either leaves the turn exactly as it was. Never reached by a Private turn."""
+    conversation's jobs, plus explicitly referenced Board notes. Board read failure is explicit DATA; it never becomes completion. Never reached by a Private turn."""
     from . import mc_context
     extra = []
+    from . import feature_environ
+    from .. import config as portal_config
+    origins = {name: getattr(portal_config, name, None)
+               for name in ("CURATOR_BACKEND", "GERMAN_BACKEND", "PORTUGUESE_BACKEND")}
+    health_env = feature_environ()
+    # Standalone operator probes have no authenticated mount configuration.
+    # Resolve floor/origin only for an admitted liveness capability; an
+    # unbound call must not inherit process settings or fail ordinary turns.
+    if (health_env.get("MINIMOI_MC_DOMAIN_HEALTH") == "1"
+            or health_env.get("MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION") == "1"):
+        health = mc_context.domain_health_block(owner_text, _floor(), config=origins,
+                                               origin=cfg().get("base_url", ""), environ=health_env)
+        if health:
+            extra.append(health)
     try:
-        from .payment_scrub import scrub
+        block = mc_context.board_block(owner_text, _floor(), scrub=scrub)
+        if block:
+            extra.append(block)
+    except Exception:
+        pass
+    try:
         block = mc_context.github_block(owner_text, scrub=scrub)
         if block:
             extra.append(block)
@@ -1758,3 +1829,6 @@ from .rooms_handoff_api import RULES as _HANDOFF_RULES
 RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _HANDOFF_RULES)
 from .approved_agents_api import RULES as _APPROVED_AGENT_RULES
 RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _APPROVED_AGENT_RULES)
+
+from .rooms_archive_api import RULES as _ROOM_ARCHIVE_RULES
+RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _ROOM_ARCHIVE_RULES)

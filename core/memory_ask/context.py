@@ -34,7 +34,8 @@ PREFACE = (
 ERRORS = {"bad_arguments", "empty_query", "bad_k", "bad_date", "invalid_json", "unauthorized",
           "tier_not_permitted", "too_large", "unsupported_media_type", "rate_limited", "registry_unavailable",
           "index_missing", "index_incompatible", "pin_mismatch", "bad_caller", "unavailable"}
-HIT_TEXT = ("chunk_id", "record_id", "speaker", "date", "chair", "tier", "provenance", "turn_kind", "attribution", "label", "basis")
+HIT_TEXT = ("chunk_id", "record_id", "speaker", "date", "chair", "tier", "provenance", "turn_kind", "attribution", "label", "basis",
+            "decision_status", "decision_authority", "decision_gap")
 
 
 @dataclass(frozen=True)

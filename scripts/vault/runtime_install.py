@@ -23,7 +23,8 @@ ROOTS = ('core/memory_shelf', 'core/memory_index', 'core/memory_ask', 'core/memo
 FILES = ('core/__init__.py', 'core/agent_turns/__init__.py', 'core/agent_turns/writer.py',
          'utils/__init__.py', 'utils/credential_scrub.py', 'utils/payment_scrub.py',
          'scripts/moi', 'scripts/jobs/watchdog.py', 'scripts/vault/backup.py',
-         'scripts/vault/runtime_install.py', 'requirements-vault.txt')
+         'scripts/vault/runtime_install.py', 'scripts/vault/query_suite.py',
+         'scripts/vault/assets.py', 'requirements-vault.txt')
 LABELS = {'capture': 'com.vanstedum.minimoi-memory-watch', 'index': 'com.vanstedum.minimoi-memory-index',
           'backup': 'com.vanstedum.minimoi-vault-backup', 'watchdog': 'com.vanstedum.minimoi-jobs-watchdog',
           'ask': 'com.vanstedum.minimoi-vault-ask'}
@@ -187,6 +188,11 @@ def run_job(cfg, job, pin=None):
                 os.replace(temp, jobs / f'{job}-admission.json')
                 print(json.dumps(result)); return 1
         env = os.environ.copy(); env.update(environment(pin, cfg))
+        if job != 'watchdog':
+            admitted = datetime.now(ZoneInfo('America/Chicago'))
+            if admitted.hour >= 6:
+                print(json.dumps({'job': job, 'state': 'skipped', 'reason': 'outside_window'})); return 1
+            env['MOI_BATCH_DEADLINE_EPOCH'] = str(admitted.replace(hour=6, minute=0, second=0, microsecond=0).timestamp())
         return subprocess.run(commands(pin, cfg, job), cwd=pin, env=env, pass_fds=(fd,) if job != 'watchdog' else ()).returncode
     finally:
         os.close(fd)

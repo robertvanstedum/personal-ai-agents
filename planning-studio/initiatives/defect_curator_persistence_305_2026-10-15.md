@@ -128,6 +128,47 @@ copy yet (see C).
   from the repo. Add the new host paths and `backups/curator-preserve` to
   coverage. Verify a restore into an isolated folder.
 
+**C backup result (15 Oct, read-only; receipts in private operator storage):**
+- **What is installed.** `backup_local.sh` copies a fixed list of paths, not
+  all of `data/`. The repo copy (rsync of all of `data/`, Postgres dump,
+  agent_logs) was never installed. `backup_s3.sh` copies that day's dated
+  folder plus a Postgres dump. Dropbox gets a weekly copy of the local dated
+  folder.
+- **Gaps.** None of the #305 paths was backed up: `annotations`,
+  `research-library`, `research-config`, `curator-config`. Neither was
+  `curator_costs.json`, nor `backups/curator-preserve`, which had no off-host
+  copy.
+- **Restore check.** The 15 Oct S3 copy of `curator/` and
+  `curator_history.json` was restored with the instance role into a
+  temporary folder, then removed:
+  - 97 files came back, byte-identical to the local dated copy;
+  - the JSON parses and the history has its full entry count.
+- **This PR.** The repo copies become the installed scripts plus:
+  - four `rsync_path` lines for the #305 folders and one for
+    `curator_costs.json`;
+  - an additive S3 sync of `backups/curator-preserve` (no `--delete`,
+    `*.partial` skipped).
+  - `tests/test_backup_coverage.py` fails if a host path in
+    `curator_state.map` is ever missing from the backup.
+- **Install (needs Robert's approval).** Copy both scripts to
+  `/opt/minimoi/scripts` over SSM, keeping the old copies beside them. No
+  cron change. Then read back the next 02:00 and 03:00 runs.
+- **Retention, made explicit:**
+  - Local dated folders: pruned after 14 days, the same as now. Each one is
+    in S3 the same day.
+  - Preservation snapshots: never pruned, on the host or in S3.
+  - S3: never deleted by our scripts. The bucket is versioned, but it has an
+    **expiry rule covering every object**. With versioning on, that rule
+    hides old backups rather than destroying them.
+  - **Decision for Robert:** remove that rule, or limit it to an explicitly
+    disposable prefix, so all production history stays restorable without
+    version recovery. It is an AWS console or root-credential change, not
+    part of this PR.
+- **Outside Curator, still not backed up (follow-up, not #305):**
+  - `data/guild/` (CoS context);
+  - `data/model_gateway_receipts.jsonl`;
+  - `data/research_dives/`.
+
 **D. Readers (linked, not blocking A–B)**
 - Dive generation reads research `data/annotations/research`
   (`generate_dive.py`), but general comments write
@@ -135,6 +176,68 @@ copy yet (see C).
   with no data moved and attribution kept.
 - The Library/bookmark history-path question gets checked against deployed
   code before anything changes.
+
+**D result (15 Oct, deployed code = `86c3b658`):**
+- Dives: `generate_dive.py` now reads research `data/annotations/research/<topic>`
+  and then `/app/data/annotations/research/<topic>` (the durable mount).
+  - Nothing is moved or rewritten, and records are used exactly as written,
+    so `domain`, `page` and `ref_*` keep their attribution.
+  - Only a record identical in every field, found in both folders, is
+    counted once. Records that share a `note_id` but differ are all kept
+    (Codex review).
+  - Comments are ordered by timestamp.
+- Library/bookmarks: **confirmed and fixed (#313)**:
+  - Every history writer uses `/app/curator_history.json`, the mounted host
+    file `data/curator_history.json`:
+    - `curator_rss_v2.py:1479` (cron output dir);
+    - `curator_feedback.py:165,1616`;
+    - `scan_job.py:19`.
+  - `/api/library` read `CURATOR_DATA_DIR/curator_history.json` instead.
+  - A read-only production check (15 Oct) found:
+    - `CURATOR_DATA_DIR` is unset;
+    - `data/curator/curator_history.json` does not exist, on the host or in
+      the container;
+    - the root file holds 40 bookmarks, which the Library never showed.
+  - Dev has the same gap.
+  - Fix: one `HISTORY_PATH`, the root file, read by both `/api/library` and
+    the archive sources. No data moves.
+
+**E. Daily-run outputs: proposal (15 Oct, for Codex review and Robert's decision)**
+
+Checked against deployed code `86c3b658`. The cron runs
+`curator_rss_v2.py` inside the container with cwd `/app`.
+
+| Output | Who reads it | Proposal |
+|---|---|---|
+| `curator_cache/<hash>.json` (`curator_rss_v2.py:1475,1520`) | `curator_feedback.py:166,225` loads an article by hash, date-rank or `yesterday-N`; Library enrichment, `curator_server.py:333` | **Mount it.** This is not a daily file. It is the growing store of full article records that the mounted `curator_history.json` points to. Each container replacement empties it, so feedback and scans on any earlier article fail with "not in cache" even though the history still lists the article. |
+| `curator_output.txt` (cwd, `:3481`) | `curator_feedback.py:34,90` (feedback CLI on today's articles); `core/telegram/telegram_bot.py:183` | **Move behind an env override** into the mounted `data/curator` folder, defaulting to the old path, as was done for the event log. No single-file bind. It is rewritten every run, so only the window between a replacement and the next run is at risk. |
+| `curator_latest.html`, `curator_briefing.html` (`domains/curator/`, `:3522,3531`) | `/briefing` and `/curator_briefing.html` serve them only as a fallback when `data/curator/curator_latest.json` (already mounted) can't be loaded | **Don't mount.** Both are git-tracked, and a bind would shadow the tracked copy. The normal path renders from the mounted JSON. |
+| `curator_index.html` (cwd `/app`, `:3352`) | `/curator_index.html` serves `domains/curator/curator_index.html`, a different path | **Don't mount.** The writer and the route already point at different files, so nothing a mount keeps is ever served. Leave it as a separate small cleanup. |
+
+**E built (15 Oct; Robert approved building it; it deploys with the other
+#305 fixes after review):**
+- `curator_cache` is a new map kind, `appdir`: a dir bind for a folder the app
+  creates itself (not in the image).
+  - If the deploy-time snapshot holds it, the seed copies it.
+  - If the snapshot records it absent, the seed creates it empty. The
+    container had none, so the empty mount hides nothing.
+  - `dir` keeps refusing that case: an absent `annotations` would be an
+    anomaly.
+- `CURATOR_OUTPUT_PATH=/app/data/curator/curator_output.txt` (a `moved` row).
+  The writer (`curator_rss_v2.py`) and every active reader use it:
+  `curator_feedback.py`, `flag_article.py`, `core/telegram/telegram_bot.py`
+  (run inside the Curator container by the EC2 cron),
+  `scripts/send_briefing_telegram.py`. A test fails if a new reader skips it.
+  - The bot's old default, `core/telegram/curator_output.txt`, never existed.
+    The env fixes it in production; the dev default is unchanged.
+- `curator_preserve.sh` knows both old paths, so the first deploy snapshots
+  and seeds them. Later deploys find them mounted, or absent at the old path.
+- Production read (15 Oct, after #306): the 18:44 replacement had already
+  emptied `/app/curator_cache` and removed `curator_output.txt`. They come
+  back at the next daily run, so the first deploy of E should come after a
+  run.
+- Disk: ample headroom on EC2 (receipt in private operator storage); the
+  folder grows a few MB a day.
 
 ## 4. Rollback
 

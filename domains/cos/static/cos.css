@@ -326,6 +326,7 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
 
 #send-input {
   flex: 1;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: white;
@@ -559,4 +560,19 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
   font-style: italic;
   font-size: 0.85rem;
   padding: 24px 0;
+}
+
+/* Dictation uses the same composer controls on phone and desktop. */
+#btn-dictate {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--ink-mid);
+  padding: 8px 12px; font: inherit; cursor: pointer; flex-shrink: 0;
+  min-height: 44px;
+}
+#btn-dictate:disabled { opacity: 0.45; cursor: default; }
+#btn-dictate[aria-pressed="true"] { background: #8A3020; color: #F5F0E8; }
+@media (max-width: 600px) {
+  .input-row { flex-wrap: wrap; }
+  #send-input { flex-basis: 100%; }
+  #btn-voice, #btn-send { min-height: 44px; }
 }

@@ -34,8 +34,9 @@ def read_secret(path):
 
 
 class Records:
-    def __init__(self, base_url, token, *, session=None, timeout=15):
-        self.base = base_url.rstrip("/")
+    def __init__(self, base_url, token, *, session=None, timeout=15, profile="dev"):
+        from .transport_profile import validate_endpoint
+        self.base = validate_endpoint(base_url, profile)
         self.token = token
         self.timeout = timeout
         self.session = session or requests.Session()

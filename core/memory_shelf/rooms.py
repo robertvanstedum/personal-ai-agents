@@ -203,9 +203,18 @@ def _manifest(doc: dict) -> dict:
     return doc
 
 
-def verify_bundle(path: Path) -> tuple[dict, dict[str, bytes]]:
+def verify_bundle(path: Path, *, max_total_bytes: int | None = None) -> tuple[dict, dict[str, bytes]]:
     """The manifest and the payload bytes, after every structural and integrity check; raises ``Refusal``."""
     path = Path(path)
+    if max_total_bytes is not None and (type(max_total_bytes) is not int or max_total_bytes <= 0):
+        raise ValueError("invalid_bundle_read_budget")
+    remaining = max_total_bytes
+    def read_bounded(name, cap):
+        nonlocal remaining
+        data = _read_bytes(path / name, cap if remaining is None else min(cap, remaining))
+        if remaining is not None:
+            remaining -= len(data)
+        return data
     try:
         if not stat.S_ISDIR(os.lstat(path).st_mode):
             raise Refusal(codes.BAD_BUNDLE_FILES)
@@ -215,8 +224,8 @@ def verify_bundle(path: Path) -> tuple[dict, dict[str, bytes]]:
     if names != sorted(FILES):
         raise Refusal(codes.BAD_BUNDLE_FILES)
     try:
-        manifest = _manifest(_load(_read_bytes(path / "manifest.json", MAX_MANIFEST), codes.BAD_MANIFEST))
-        payload = {name: _read_bytes(path / name, MAX_FILE) for name in PAYLOAD}
+        manifest = _manifest(_load(read_bounded("manifest.json", MAX_MANIFEST), codes.BAD_MANIFEST))
+        payload = {name: read_bounded(name, MAX_FILE) for name in PAYLOAD}
     except OSError:
         raise Refusal(codes.BAD_BUNDLE_FILES) from None
     for name, content in payload.items():
@@ -348,9 +357,9 @@ def _links_ok(doc: dict) -> None:
                 raise Refusal(codes.BAD_TRANSCRIPT)
 
 
-def read_bundle(path: Path, cfg: SourceCfg) -> Read:
+def read_bundle(path: Path, cfg: SourceCfg, *, max_total_bytes: int | None = None) -> Read:
     """Verify, check identity, apply D2, and turn one bundle into a ``Parsed``. Raises ``Refusal`` / ``Excluded``."""
-    manifest, payload = verify_bundle(path)
+    manifest, payload = verify_bundle(path, max_total_bytes=max_total_bytes)
     doc = _load(payload["transcript.json"], codes.BAD_TRANSCRIPT)
     if doc.get("schema_version") != manifest["schema_version"]:
         raise Refusal(codes.BAD_IDENTITY)                     # the manifest and the transcript must declare the same schema

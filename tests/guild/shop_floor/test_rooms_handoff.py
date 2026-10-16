@@ -40,6 +40,8 @@ class Records:
                 return self.post_status, {}
             self.posts.setdefault(operation_key, payload["body"])             # Records de-duplicates by the operation key
             return 201, {"seq": 10 + len(self.posts)}
+        if path == f"/api/v1/rooms/{ROOM}/archive-check":
+            return 200, {"archived_at": None}
         if path == "/api/v1/approved-agents":
             return 200, {"agents": [{"agent": a, "approved": a in self.approved} for a in ("mc", "claude-code", "codex")]}
         if path == f"/api/v1/rooms/{ROOM}":
@@ -54,6 +56,9 @@ def hand(asks):
     app.extensions["rooms_call"] = rec
     app.extensions["rooms_who"] = lambda: (SimpleNamespace(ok=True, principal="robert"), None)
     folder = asks.extra["asks"].root
+    import os
+    os.makedirs(folder,mode=0o700,exist_ok=True)
+    os.makedirs(os.path.join(folder,"requests"),mode=0o700,exist_ok=True)
     app.extensions["rooms_access"] = SimpleNamespace(directory=folder + "-access")
     client = asks.owner()
     asks.extra["rec"] = rec

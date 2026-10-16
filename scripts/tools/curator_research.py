@@ -10,7 +10,7 @@ Usage (CLI):
   python3 scripts/tools/curator_research.py pull narrow <slug>
   python3 scripts/tools/curator_research.py --help
 
-Data files (all under _NewDomains/research-intelligence/data/):
+Data files (all under configured CURATOR_RESEARCH_DATA_DIR/):
   sources/sources.json   — Source records (append-only, one flat array)
   tag_aliases.json       — Hand-edited alias map: {"prc": "china", "quad-security": "quad"}
   threads/{slug}/thread.json  — Topic records
@@ -30,7 +30,11 @@ from typing import Optional
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _REPO_ROOT    = Path(__file__).parent.parent.parent   # scripts/tools/ is two levels below repo root
-_RESEARCH_DIR = _REPO_ROOT / "_NewDomains" / "research-intelligence" / "data"
+import sys
+sys.path.insert(0,str(_REPO_ROOT))
+from domains.curator.research.paths import configured
+PATHS = configured()
+_RESEARCH_DIR = PATHS.data
 _SOURCES_FILE = _RESEARCH_DIR / "sources" / "sources.json"
 _ALIASES_FILE = _RESEARCH_DIR / "tag_aliases.json"
 _TOPICS_DIR   = _RESEARCH_DIR / "threads"   # reuses existing thread dir
@@ -796,7 +800,7 @@ Robert is always the gate; nothing links automatically.
 
 _CURATOR_LATEST  = _REPO_ROOT / "data" / "curator" / "curator_latest.json"
 _GROUPS_FILE     = _RESEARCH_DIR / "groups" / "groups.json"
-_AGENT_CONFIG    = _REPO_ROOT / "_NewDomains" / "research-intelligence" / "agent" / "config.json"
+_AGENT_CONFIG    = PATHS.config
 
 
 def _load_feed() -> list[dict]:
@@ -1028,7 +1032,7 @@ Group schema:
   created_at     — ISO timestamp
   schema_version — "1.0"
 
-Storage: _NewDomains/research-intelligence/data/groups/groups.json (flat array)
+Storage: configured CURATOR_RESEARCH_DATA_DIR/groups/groups.json (flat array)
 
 Pull scoping:
   narrow_pull_context(slug)       — one Topic's queries + tags + motivation
@@ -1545,7 +1549,7 @@ def _cli_tag_aliases(_args) -> None:
     """Print all tag aliases."""
     aliases = _load_tag_aliases()
     if not aliases:
-        print("No tag aliases defined. Edit: _NewDomains/research-intelligence/data/tag_aliases.json")
+        print("No tag aliases defined. Edit: configured CURATOR_RESEARCH_DATA_DIR/tag_aliases.json")
         return
     print(f"{'ALIAS':<24} → CANONICAL")
     print("─" * 40)
@@ -1557,8 +1561,7 @@ def _cli_tag_aliases(_args) -> None:
 
 def _cli_leanings(args):
     """List all leanings."""
-    sys.path.insert(0, str(_REPO_ROOT / "_NewDomains" / "research-intelligence"))
-    from agent.leanings import list_leanings, needs_badge
+    from domains.curator.research.agent.leanings import list_leanings, needs_badge
     leanings = list_leanings()
     if not leanings:
         print("No leanings yet. Use 'create-leaning' to add one.")
@@ -1575,8 +1578,7 @@ def _cli_leanings(args):
 
 def _cli_create_leaning(args):
     """Create a new leaning."""
-    sys.path.insert(0, str(_REPO_ROOT / "_NewDomains" / "research-intelligence"))
-    from agent.leanings import create_leaning
+    from domains.curator.research.agent.leanings import create_leaning
     leaning = create_leaning(
         title  = args.title,
         state  = args.state,
@@ -1588,8 +1590,7 @@ def _cli_create_leaning(args):
 
 def _cli_leaning_state(args):
     """Advance a leaning's state."""
-    sys.path.insert(0, str(_REPO_ROOT / "_NewDomains" / "research-intelligence"))
-    from agent.leanings import update_leaning
+    from domains.curator.research.agent.leanings import update_leaning
     l = update_leaning(args.id, state=args.state)
     if l is None:
         print(f"Error: leaning '{args.id}' not found.", file=sys.stderr)
@@ -1599,8 +1600,7 @@ def _cli_leaning_state(args):
 
 def _cli_add_evidence(args):
     """Add an evidence item to a leaning."""
-    sys.path.insert(0, str(_REPO_ROOT / "_NewDomains" / "research-intelligence"))
-    from agent.leanings import add_evidence
+    from domains.curator.research.agent.leanings import add_evidence
     ev = add_evidence(
         leaning_id = args.id,
         title      = args.title,

@@ -13,6 +13,16 @@ ENV OPENCLAW_NO_AUTO_UPDATE=1
 COPY --chown=root:root docker/cos-agent-a/openclaw.json /opt/minimoi/cos-agent-a/openclaw.json
 COPY --chown=root:root docker/cos-agent-a/apply-config.sh /opt/minimoi/cos-agent-a/apply-config.sh
 COPY --chown=root:root docker/cos-agent-a/AGENTS.md /opt/minimoi/cos-agent-a/AGENTS.md
+COPY --chown=root:root docker/cos-agent-a/build-mc-role.mjs docker/cos-agent-a/mc-role-lock.json /opt/minimoi/cos-agent-a/
+COPY --chown=root:root planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MASTER_CRAFTSMAN_JOB_DESCRIPTION.md /opt/minimoi/cos-agent-a/owner-role/MASTER_CRAFTSMAN_JOB_DESCRIPTION.md
+COPY --chown=root:root planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MASTER_CRAFTSMAN_PERSONA.md /opt/minimoi/cos-agent-a/owner-role/MASTER_CRAFTSMAN_PERSONA.md
+COPY --chown=root:root planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MASTER_CRAFTSMAN_WORKING_AGREEMENT_2026-10-12.md /opt/minimoi/cos-agent-a/owner-role/MASTER_CRAFTSMAN_WORKING_AGREEMENT_2026-10-12.md
+USER root
+RUN node /opt/minimoi/cos-agent-a/build-mc-role.mjs /opt/minimoi/cos-agent-a/AGENTS.md /opt/minimoi/cos-agent-a/owner-role /opt/minimoi/cos-agent-a/mc-role-lock.json /opt/minimoi/cos-agent-a/AGENTS.md /opt/minimoi/cos-agent-a/ROLE_LOAD.json
+COPY --chown=root:root services/mc_operations/handbook /opt/minimoi/cos-agent-a/handbook
+COPY --chown=root:root docker/cos-agent-a/build-mc-handbook.mjs /opt/minimoi/cos-agent-a/build-mc-handbook.mjs
+RUN node /opt/minimoi/cos-agent-a/build-mc-handbook.mjs /opt/minimoi/cos-agent-a/AGENTS.md /opt/minimoi/cos-agent-a/handbook /opt/minimoi/cos-agent-a/AGENTS.md /opt/minimoi/cos-agent-a/ROLE_LOAD.json
+USER node
 
 # Seed a newly created state volume (config + agent workspace policy).
 COPY --chown=node:node docker/cos-agent-a/openclaw.json /home/node/.openclaw/openclaw.json

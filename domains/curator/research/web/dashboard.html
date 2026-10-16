@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/research/static/css/nav.css">
+  <style>
+    :root {
+      --bg: #f5f0e8;
+      --bg-texture: #ede8df;
+      --surface: #faf7f2;
+      --surface2: #f0ebe0;
+      --border: #ddd6c8;
+      --border2: #c8bfaf;
+      --text: #2a2418;
+      --text-muted: #6b5f4e;
+      --text-dim: #9e9080;
+      --accent: #8b5e2a;
+      --accent-dim: rgba(139,94,42,0.08);
+      --accent-glow: rgba(139,94,42,0.18);
+      --shadow: rgba(42,36,24,0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Source Sans 3', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: block;
+    }
+
+    /* ── Subnav ── */
+    nav.curator-subnav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 44px;
+      background: rgba(245,240,232,0.96);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 1.5rem;
+    }
+    .subnav-tab {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0 14px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s;
+    }
+    .subnav-tab:hover { color: var(--text); }
+    .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .subnav-focus { margin-left: auto; }
+
+
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      font-weight: normal;
+      letter-spacing: 0.02em;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+    }
+
+    /* ── Header Nav ── */
+    .header-nav { display: flex; gap: 4px; }
+    .nav-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+    .nav-link:hover { color: var(--text); background: var(--surface2); }
+    .nav-link.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(139,94,42,0.2); }
+    .nav-link.nav-focus { letter-spacing: 0; }
+
+    /* ── Nav more dropdown ── */
+    .nav-more-wrapper { position: relative; }
+    .nav-more-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .nav-more-btn:hover { color: var(--text); background: var(--surface2); }
+    .nav-more-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px;
+      min-width: 140px;
+      box-shadow: 0 4px 16px rgba(42,36,24,0.12);
+      z-index: 200;
+    }
+    .nav-more-dropdown.open { display: block; }
+    .nav-more-dropdown a {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 7px 12px;
+      border-radius: 5px;
+      transition: all 0.12s;
+    }
+    .nav-more-dropdown a:hover { background: var(--surface2); color: var(--text); }
+    .nav-more-dropdown a.active { color: var(--accent); background: var(--accent-dim); }
+
+    /* ── Domain Rail ── */
+    .domain-rail {
+      width: 210px;
+      min-width: 210px;
+      background: #f9f5ed;
+      border-right: 1px solid var(--border);
+      box-shadow: 2px 0 4px rgba(42,36,24,0.06);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: hidden;
+      transition: width 0.2s ease, min-width 0.2s ease;
+      z-index: 90;
+      flex-shrink: 0;
+    }
+    .domain-rail.collapsed { width: 48px; min-width: 48px; }
+
+    .rail-toggle {
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      color: var(--text-dim);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 14px 16px;
+      text-align: right;
+      transition: color 0.15s;
+      align-self: flex-end;
+    }
+    .rail-toggle:hover { color: var(--accent); }
+    .domain-rail.collapsed .rail-toggle { transform: scaleX(-1); }
+
+    .rail-nav {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 12px;
+      overflow: hidden;
+    }
+
+    .rail-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--text-muted);
+      transition: all 0.15s;
+      cursor: pointer;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .rail-item:hover:not(.rail-coming) { background: var(--surface2); color: var(--text); }
+    .rail-item.active {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-color: rgba(139,94,42,0.2);
+    }
+    .rail-item.rail-coming { opacity: 0.4; }
+
+    .rail-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
+    .rail-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      font-weight: 500;
+    }
+    .domain-rail.collapsed .rail-label { display: none; }
+    .domain-rail.collapsed .rail-item { justify-content: center; }
+
+    .rail-settings {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 16px;
+      transition: color 0.15s;
+      border-top: 1px solid var(--border);
+    }
+    .rail-settings:hover { color: var(--accent); }
+
+    .main-content { overflow-x: hidden; min-height: 100vh; background: var(--bg); }
+
+    /* ── Budget bar (demoted — slim status line, no card) ── */
+    .budget-row {
+      margin-bottom: 1.75rem;
+    }
+
+    .budget-label {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 0.35rem;
+    }
+
+    .budget-label .budget-used {
+      color: var(--text-muted);
+    }
+
+    .budget-track {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .budget-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: #7a9e6e;
+      transition: width 0.4s ease;
+    }
+
+    .budget-fill.warn { background: #c4933a; }
+    .budget-fill.over { background: #b84a3a; }
+
+    /* ── Thread list ── */
+    .thread-list {
+      margin-top: 0.5rem;
+    }
+
+    .thread-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.1s;
+      margin: 0 -1rem;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+
+    .thread-row:last-child { border-bottom: none; }
+
+    .thread-row:hover { background: rgba(139,94,42,0.04); }
+
+    .thread-name {
+      font-size: 0.95rem;
+      color: var(--text);
+      flex-shrink: 0;
+    }
+
+    .thread-stats {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-left: 0.75rem;
+      white-space: nowrap;
+    }
+
+    .thread-last-run {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-left: auto;
+      white-space: nowrap;
+      padding-left: 1.5rem;
+    }
+
+    .thread-empty { opacity: 0.55; }
+
+    .thread-spacer { flex: 1; min-width: 0; }
+
+    .thread-run-btn {
+      display: none;
+      margin-left: 0.5rem;
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      opacity: 0.7;
+      transition: opacity 0.1s;
+    }
+    .thread-run-btn:hover { opacity: 1; }
+    .thread-row:hover .thread-run-btn { display: inline-block; }
+    .thread-row.running .thread-run-btn { display: none; }
+
+    .thread-running-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: #7a9e6e;
+      margin-left: 0.5rem;
+      display: none;
+      flex-shrink: 0;
+    }
+    .thread-row.running .thread-running-badge { display: inline; }
+
+    /* ── Status bar ── */
+    .status-bar {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      text-align: right;
+      margin-top: 1.5rem;
+    }
+
+    .status-bar .agent-active {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #7a9e6e;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    .status-bar .agent-idle {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--border);
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    /* ── Expired thread state ── */
+    .thread-row.thread-expired {
+      border-left: 3px solid #f59e0b;
+      padding-left: calc(1rem - 3px);
+    }
+
+    .thread-expired-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #f59e0b;
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-left: 0.5rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .btn-deeper-dive {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-left: 0.5rem;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-deeper-dive:hover { background: #7a4e20; }
+
+    .btn-archive {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      background: none;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-left: 0.25rem;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      display: none;
+    }
+    .thread-row.thread-expired:hover .btn-archive { display: inline-block; }
+    .btn-archive:hover { color: var(--text); border-color: var(--border2); }
+
+    /* ── Generating state (DD in progress) ── */
+    .thread-row.thread-generating {
+      border-left: 3px solid var(--accent);
+      padding-left: calc(1rem - 3px);
+      opacity: 0.75;
+    }
+
+    .thread-generating-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--accent);
+      margin-left: 0.5rem;
+      flex-shrink: 0;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    /* ── Closed thread with Deeper Dive ── */
+    .thread-row.thread-closed {
+      opacity: 0.6;
+    }
+
+    .btn-view-dd {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--accent);
+      text-decoration: none;
+      margin-left: auto;
+      padding-left: 1rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-view-dd:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .topic-stats { gap: 1rem; }
+      .stat-value  { font-size: 1.2rem; }
+    }
+
+    /* ── Thread section kickers ── */
+    .thread-section-kicker {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+      padding: 1.5rem 0 0.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .thread-section-kicker:first-child { padding-top: 0.25rem; }
+  </style>
+</head>
+<body>
+
+<nav class="curator-subnav">
+  <a href="/briefing" class="subnav-tab">Daily</a>
+  <a href="/curator_library.html" class="subnav-tab">Reading Room</a>
+  <a href="/scans-dives" class="subnav-tab">Scans &amp; Dives</a>
+  <a href="/research/leanings" class="subnav-tab">Leanings</a>
+  <a href="/archive" class="subnav-tab">Archive</a>
+  <a href="/research/dashboard" class="subnav-tab subnav-focus active">Desk</a>
+</nav>
+
+<div class="main-content">
+  <div class="container">
+
+  <h1>The Desk</h1>
+  <p class="subtitle">Your active research threads</p>
+
+  <div class="budget-row" id="budget-row" style="display:none">
+    <div class="budget-label">
+      <span>Pilot budget</span>
+      <span><span class="budget-used" id="budget-used">—</span> of <span id="budget-total">—</span> used · <span id="budget-pct">—</span>%</span>
+    </div>
+    <div class="budget-track">
+      <div class="budget-fill" id="budget-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="thread-list" id="thread-list"></div>
+
+  <div class="status-bar" id="status-bar"></div>
+
+  <!-- ── Agent status panel (Phase 1 scaffold — live in Phase 2/3) ── -->
+  <div style="margin-top:2rem; border-top:1px solid var(--border); padding-top:1.25rem;">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text-dim);margin-bottom:0.75rem;">Agents</div>
+    <div style="display:flex;flex-direction:column;gap:0;">
+      <div style="display:flex;align-items:center;gap:1rem;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px;">
+        <span style="min-width:160px;color:var(--text);">Chief of Staff</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">not yet running</span>
+        <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">—</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;padding:8px 0;font-size:13px;">
+        <span style="min-width:160px;color:var(--text);">Operations</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">not yet running</span>
+        <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);">—</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const REFRESH_MS = 60000;
+  let refreshTimer = null;
+
+  // ── Deeper Dive generation state ─────────────────────────────────────────────
+  let _ddGeneratingTopic = null;
+  let _ddPollTimer = null;
+  let _ddPollCount = 0;
+  const DD_MAX_POLLS = 40; // 40 × 10s = ~6 min ceiling
+
+  async function load() {
+    try {
+      const res  = await fetch('/api/research/dashboard');
+      const data = await res.json();
+      if (!data.ok) { showError(data.error || 'API error'); return; }
+      render(data);
+      scheduleRefresh(data.agent_active);
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
+  function render(data) {
+    const now = new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+
+    // Budget bar
+    const b = data.budget;
+    document.getElementById('budget-row').style.display = '';
+    document.getElementById('budget-used').textContent  = '$' + b.used.toFixed(2);
+    document.getElementById('budget-total').textContent = '$' + b.total.toFixed(2);
+    document.getElementById('budget-pct').textContent   = b.pct.toFixed(1);
+
+    const fill = document.getElementById('budget-fill');
+    fill.style.width = Math.min(b.pct, 100) + '%';
+    fill.className   = 'budget-fill' +
+      (b.used >= b.warn  ? ' over' :
+       b.used >= b.warn * 0.85 ? ' warn' : '');
+
+    // Thread list — two groups: Active (sessions > 0) and Not yet run (sessions === 0)
+    const container = document.getElementById('thread-list');
+    container.innerHTML = '';
+
+    const visible = data.topics.filter(t => t.status !== 'archived' && t.status !== 'retired');
+    const active  = visible.filter(t => t.session_count > 0)
+                           .sort((a, b) => b.session_count - a.session_count);
+    const unrun   = visible.filter(t => t.session_count === 0);
+
+    if (active.length) {
+      container.appendChild(sectionKicker('Active'));
+      active.forEach(t => { const row = buildRow(t); if (row) container.appendChild(row); });
+    }
+    if (unrun.length) {
+      container.appendChild(sectionKicker('Not yet run'));
+      unrun.forEach(t => { const row = buildRow(t); if (row) container.appendChild(row); });
+    }
+
+    // Status bar
+    const bar = document.getElementById('status-bar');
+    if (data.agent_active) {
+      bar.innerHTML = '<span class="agent-active"></span> Agent running · auto-refresh on';
+    } else {
+      bar.innerHTML = '<span class="agent-idle"></span> Agent idle · last refreshed ' + now;
+    }
+  }
+
+  function sectionKicker(label) {
+    const el = document.createElement('div');
+    el.className = 'thread-section-kicker';
+    el.textContent = label;
+    return el;
+  }
+
+  function buildRow(t) {
+    const isEmpty      = t.session_count === 0;
+    const isExpired    = t.status === 'expired';
+    const isClosed     = t.status === 'closed';
+    const isGenerating = _ddGeneratingTopic === t.topic;
+    const lastRun      = t.last_run
+      ? new Date(t.last_run).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})
+      : 'never run';
+    const parts = [];
+    parts.push(`${t.session_count} session${t.session_count !== 1 ? 's' : ''}`);
+    if (t.saved_count)     parts.push(`${t.saved_count} saved`);
+    if (t.candidate_count) parts.push(`${t.candidate_count} candidates`);
+    const statsText = parts.join(' · ');
+
+    // ── Generating (DD in progress) ──────────────────────────────────────────
+    if (isGenerating) {
+      const row = document.createElement('div');
+      row.className = 'thread-row thread-generating';
+      row.style.cursor = 'default';
+      row.innerHTML = `
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
+        <span class="thread-stats">${statsText}</span>
+        <span class="thread-generating-badge">✦ generating…</span>
+      `;
+      return row;
+    }
+
+    // ── Closed with Deeper Dive ───────────────────────────────────────────────
+    if (isClosed) {
+      const row = document.createElement('div');
+      row.className = 'thread-row thread-closed';
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', (e) => {
+        if (!e.target.closest('button, .btn-view-dd')) {
+          window.location = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
+        }
+      });
+      row.addEventListener('mouseenter', () => {
+        const btn = row.querySelector('.thread-run-btn');
+        if (btn && !row.classList.contains('running')) btn.style.display = 'inline-block';
+      });
+      row.addEventListener('mouseleave', () => {
+        const btn = row.querySelector('.thread-run-btn');
+        if (btn) btn.style.display = 'none';
+      });
+      let ddLink = '';
+      if (t.deeper_dive_generated && t.deeper_dive_path) {
+        // Derive URL: data/deeper_dives/strait-of-hormuz-deeper-dive-005.md → stem
+        const stem = t.deeper_dive_path.split('/').pop().replace(/\.md$/, '');
+        ddLink = `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/dive-result/${encodeURIComponent(stem)}'">View Deeper Dive →</span>`;
+      }
+      row.innerHTML = `
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
+        <span class="thread-stats">${statsText}</span>
+        <span class="thread-spacer"></span>
+        <span class="thread-running-badge">running…</span>
+        <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
+        ${ddLink || `<span class="thread-last-run">${lastRun}</span>`}
+      `;
+      return row;
+    }
+
+    // ── Expired (Ready to close) ──────────────────────────────────────────────
+    if (isExpired) {
+      const row = document.createElement('div');
+      row.className = 'thread-row thread-expired';
+      row.style.cursor = 'default';
+      row.innerHTML = `
+        <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
+        <span class="thread-stats">${statsText}</span>
+        <span class="thread-expired-badge">Ready to close</span>
+        <a class="btn-deeper-dive" href="/research/dive-confirm?topic=${encodeURIComponent(t.topic)}">✦ Deeper Dive</a>
+        <button class="btn-archive" onclick="archiveThread(event, '${t.topic}')">Archive</button>
+        <span class="thread-last-run">${lastRun}</span>
+      `;
+      return row;
+    }
+
+    // ── Active ────────────────────────────────────────────────────────────────
+    const row = document.createElement('div');
+    row.className = 'thread-row' + (isEmpty ? ' thread-empty' : '');
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', (e) => {
+      if (!e.target.closest('button, .btn-view-dd')) {
+        window.location = `/research/sessions?topic=${encodeURIComponent(t.topic)}`;
+      }
+    });
+    row.addEventListener('mouseenter', () => {
+      const btn = row.querySelector('.thread-run-btn');
+      if (btn && !row.classList.contains('running')) btn.style.display = 'inline-block';
+    });
+    row.addEventListener('mouseleave', () => {
+      const btn = row.querySelector('.thread-run-btn');
+      if (btn) btn.style.display = 'none';
+    });
+    const canGenerateDD = t.session_count > (t.sessions_at_last_dive || 0)
+                          && t.session_count >= 2;
+    row.innerHTML = `
+      <span class="thread-name">${t.topic.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
+      <span class="thread-stats">${statsText}</span>
+      <span class="thread-spacer"></span>
+      <span class="thread-running-badge">running…</span>
+      <button class="thread-run-btn" onclick="runSession(event, '${t.topic}')">▶</button>
+      ${canGenerateDD
+        ? `<span class="btn-view-dd" onclick="event.stopPropagation();window.location='/research/dive-confirm?topic=${encodeURIComponent(t.topic)}'">Generate Deeper Dive →</span>`
+        : `<span class="thread-last-run">${lastRun}</span>`}
+    `;
+    return row;
+  }
+
+  async function archiveThread(e, topic) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Archive thread "${topic}"? It will be hidden from the dashboard.`)) return;
+    try {
+      const res  = await fetch(`/api/research/thread/${encodeURIComponent(topic)}/archive`, {method: 'POST'});
+      const data = await res.json();
+      if (!data.ok) { showToast(data.error || 'Archive failed', true); return; }
+      showToast(`Thread "${topic}" archived`);
+      load();
+    } catch (err) {
+      showToast('Network error', true);
+    }
+  }
+
+  function scheduleRefresh(agentActive) {
+    clearTimeout(refreshTimer);
+    if (agentActive) {
+      refreshTimer = setTimeout(load, REFRESH_MS);
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('subtitle').textContent = '⚠ ' + msg;
+  }
+
+  // ── On-demand session trigger ────────────────────────────────────────────────
+
+  let pollTimer  = null;
+  let pollCount  = 0;
+  const MAX_POLLS = 30; // 5 minutes at 10s intervals
+
+  async function runSession(e, topic) {
+    e.preventDefault();
+    e.stopPropagation();
+    const row = e.target.closest('.thread-row');
+    row.classList.add('running');
+    try {
+      const res  = await fetch('/api/research/run-session', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({topic}),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        row.classList.remove('running');
+        showToast(data.error || 'Failed to start session', true);
+        return;
+      }
+      showToast(`Session ${data.session_name} started`);
+      startTightPoll();
+    } catch (err) {
+      row.classList.remove('running');
+      showToast('Network error', true);
+    }
+  }
+
+  function startTightPoll() {
+    clearTimeout(pollTimer);
+    pollCount = 0;
+    pollStatus();
+  }
+
+  async function pollStatus() {
+    pollCount++;
+    if (pollCount > MAX_POLLS) {
+      // Stalled or very long session — stop tight polling
+      showToast('Session still running — check back later');
+      document.querySelectorAll('.thread-row.running').forEach(r => r.classList.remove('running'));
+      load();
+      return;
+    }
+    try {
+      const res  = await fetch('/api/research/run-session/status');
+      const data = await res.json();
+      if (!data.running) {
+        document.querySelectorAll('.thread-row.running').forEach(r => r.classList.remove('running'));
+        if (data.failed) {
+          showToast('Session failed: ' + (data.error || 'unknown error').slice(0, 160), true);
+        }
+        load(); // reload thread list with updated stats
+        return;
+      }
+    } catch (_) { /* network blip — keep polling */ }
+    pollTimer = setTimeout(pollStatus, 10000);
+  }
+
+  function showToast(msg, isErr) {
+    let t = document.getElementById('run-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'run-toast';
+      t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#4a8c28;color:#fff;font-family:"DM Mono",monospace;font-size:0.82rem;padding:10px 18px;border-radius:6px;display:none;z-index:200;';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.background = isErr ? '#8b2020' : '#4a8c28';
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3500);
+  }
+
+  // On load, check if a session is already running and restore row state
+  async function restoreRunningState() {
+    try {
+      const res  = await fetch('/api/research/run-session/status');
+      const data = await res.json();
+      if (data.running && data.topic) {
+        // Find the matching row and mark it running, then start polling
+        const rows = document.querySelectorAll('.thread-row');
+        rows.forEach(row => {
+          if (row.querySelector('.thread-name')?.textContent === data.topic) {
+            row.classList.add('running');
+          }
+        });
+        startTightPoll();
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  // ── Deeper Dive generation polling ───────────────────────────────────────────
+
+  function startDDPoll() {
+    clearTimeout(_ddPollTimer);
+    _ddPollCount = 0;
+    _ddPollTimer = setTimeout(pollDDStatus, 10000);
+  }
+
+  async function pollDDStatus() {
+    _ddPollCount++;
+    if (_ddPollCount > DD_MAX_POLLS) {
+      _ddGeneratingTopic = null;
+      load();
+      return;
+    }
+    try {
+      const res  = await fetch('/api/research/generate-dive/status');
+      const data = await res.json();
+      if (!data.running) {
+        _ddGeneratingTopic = null;
+        showToast('Deeper Dive ready');
+        load();
+        return;
+      }
+    } catch (_) { /* network blip — keep polling */ }
+    _ddPollTimer = setTimeout(pollDDStatus, 10000);
+  }
+
+  async function restoreDDState() {
+    try {
+      const res  = await fetch('/api/research/generate-dive/status');
+      const data = await res.json();
+      if (data.running && data.topic) {
+        _ddGeneratingTopic = data.topic;
+        // Re-render so the generating row shows immediately, then start polling
+        load().then(() => startDDPoll());
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  load().then(() => {
+    restoreRunningState();
+    restoreDDState();
+  });
+</script>
+</div>
+</div>
+<script src="/research/static/js/nav.js"></script>
+</div><!-- /.main-content -->
+</body>
+</html>

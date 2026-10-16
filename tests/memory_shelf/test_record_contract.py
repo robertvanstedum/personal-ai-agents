@@ -21,7 +21,12 @@ def meta(**kw):
 
 
 def at(day, kind, **kw):
-    return ev.make_event(kind, kw.pop("by", "Robert"), now=datetime(2026, 10, day, 12, tzinfo=timezone.utc), **kw)
+    by = kw.pop("by", "Robert")
+    now = datetime(2026, 10, day, 12, tzinfo=timezone.utc)
+    if kind == "superseded":
+        # Historical stored metadata is read as-is; this is not a newly authenticated write.
+        return {"at": ev.stamp(now), "kind": kind, "by": by, **kw}
+    return ev.make_event(kind, by, now=now, **kw)
 
 
 # ── ULID and filenames ────────────────────────────────────────────────────────

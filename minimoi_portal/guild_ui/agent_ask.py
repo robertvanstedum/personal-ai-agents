@@ -25,6 +25,19 @@ from core import agent_requests as ar
 from .security import check_write, json_error
 from .stores import CLAUDE_CODE, CODEX, GUILD_PLATFORM
 
+REPORT_NOTE_MAX = 4000                 # existing guild.floor_messages SQL constraint, not the owner's input limit
+
+def report_note(name: str, request_id: str, text: str) -> str:
+    """Bound only the conversation presentation. The original ledger is never cut."""
+    header = f"**{name}'s report** (agent-authored; not a verification and not an approval)\n\n"
+    if len(header) + len(text) <= REPORT_NOTE_MAX:
+        return header + text
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    notice = (f"**Excerpt only — full report retained in the request ledger; it is not available in full here.**\n\n"
+              f"Request: `{request_id}` · Full report: {len(text):,} characters · SHA-256: `{digest}`\n\n---\n\n")
+    available = max(0, REPORT_NOTE_MAX - len(header) - len(notice))
+    return header + notice + text[:available]
+
 VAR = "MINIMOI_GUILD_AGENT_REQUESTS"
 TITLE_MAX = 80                         # the routing title shown to the owner is cut to this
 TITLE_ACCEPT_MAX = 300                 # a longer first line from MC is still understood; the title is only a label (the task is the owner's own message)
@@ -167,6 +180,132 @@ NOT_UNDERSTOOD = ("**Not sent.** I could not read that request to the agent, so 
 def holding_prefix(text: str) -> bool:
     """True while the text so far could still turn out to be an ``ASK `` first line (the browser is shown nothing yet)."""
     return "ASK ".startswith(text[:4]) if len(text) < 4 else text.startswith("ASK ")
+
+
+
+OWNER_INTENT_REFUSED = ("**Not sent.** The proposed recipient does not match a clear instruction in your current message. Nothing was put to any agent. Please name Claude Code, Codex, or both explicitly.")
+OWNER_FILES_REFUSED = ("**Not sent.** I could not match the requested files to your current instruction and attachments. Nothing was put to any agent. Please attach the file to this message or explicitly request the latest file.")
+_OWNER_AGENT = r"(?:claude[ -]code|codex|both)"
+_OWNER_DIRECT = re.compile(r"\b(?:ask|tell|task|contact)\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
+_OWNER_TO = re.compile(r"\b(?:hand|send|pass|forward|give|assign)\b[^.!?;\n]{0,250}?\bto\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
+_OWNER_NEGATIVE = re.compile(r"\b(?:not|never|without|don't|do not|do\s+not)\b", re.I)
+_OWNER_FILE = re.compile(r"\b(?:files?|attachments?|diffs?|patch(?:es)?|screenshots?|images?|documents?)\b", re.I)
+
+
+def _owner_clauses(text):
+    # Strip fenced/blockquoted DATA before parsing other quoted spans; quote
+    # removal can never expose a command that was originally inside a fence.
+    lines = []
+    blockquoted = False
+    for _, line, fenced in _scan_lines(text):
+        if not line.strip():
+            blockquoted = False
+            if not fenced:
+                lines.append('')
+            continue
+        if line.lstrip().startswith('>'):
+            blockquoted = True
+        if fenced or blockquoted or line.startswith('    ') or line.startswith('\t'):
+            continue
+        lines.append(line)
+    visible = "\n".join(lines)
+    while True:
+        opener = re.search(r'`+', visible)
+        if opener is None:
+            break
+        closer = re.search(r'(?<!`)' + re.escape(opener[0]) + r'(?!`)', visible[opener.end():])
+        if closer is None:
+            return  # Unclosed inline DATA is ambiguous through end-of-note.
+        end = opener.end() + closer.end()
+        visible = visible[:opener.start()] + ' ' + visible[end:]
+    visible = re.sub('"[^"]*"|“[^”]*”|(?<!\\w)\'[^\']*\'', ' ', visible, flags=re.S)
+    if '"' in visible or '“' in visible or '”' in visible:
+        return
+    for clause in re.split(r'[.!?;\n]', visible):
+        yield clause
+
+
+def owner_ask_proposal(owner_text, proposal, current_doc_ids):
+    """Validate model routing against ONLY this authenticated kept owner note.
+
+    No history fallback, title-only inference, file-body authority, inferred
+    both, or automatic request retry. AskService remains a trusted primitive.
+    """
+    if not isinstance(owner_text, str):
+        return None, OWNER_INTENT_REFUSED
+    recipients = []
+    recipient_clauses = []
+    excluded = set()
+    clauses = list(_owner_clauses(owner_text))
+    for clause in clauses:
+        matches = sorted([* _OWNER_DIRECT.finditer(clause), * _OWNER_TO.finditer(clause)], key=lambda m: m.start())
+        for match in matches:
+            prefix = clause[:match.start()].strip()
+            who = match['agent'].lower().replace(' ', '-')
+            if _OWNER_NEGATIVE.search(prefix) or re.search(r'\bno\b', prefix, re.I):
+                excluded |= {'claude-code', 'codex'} if who == 'both' else {who}
+                continue
+            if not re.fullmatch(r'(?:(?:please|(?:can|could|would) you)\s*)*(?:for this (?:check|test|task|request),?\s*)?', prefix, re.I):
+                continue
+            suffix = clause[match.end():]
+            other = re.match(r'\s+(and|or)\s+(' + _OWNER_AGENT + r')\b', suffix, re.I)
+            if other is None and re.match(r'\s+(?:and|or)\b', suffix, re.I):
+                return None, OWNER_INTENT_REFUSED
+            if re.match(r'\s*[,/&]', suffix) and not re.match(r'\s*,\s*(?:not|never|except|excluding)\b', suffix, re.I):
+                return None, OWNER_INTENT_REFUSED
+            if other and re.match(r'\s*(?:,|and\b|or\b|[&/])', suffix[other.end():], re.I):
+                return None, OWNER_INTENT_REFUSED
+            if other and other[1].lower() == 'or':
+                return None, OWNER_INTENT_REFUSED
+            found = {'claude-code', 'codex'} if who == 'both' else {who}
+            if other:
+                second = other[2].lower().replace(' ', '-')
+                found |= {'claude-code', 'codex'} if second == 'both' else {second}
+            recipients.append(found)
+            recipient_clauses.append(clause)
+    for clause in clauses:
+        for match in re.finditer(r'\b(?:not|never|except|excluding)\s+(' + _OWNER_AGENT + r')\b', clause, re.I):
+            who = match[1].lower().replace(' ', '-')
+            excluded |= {'claude-code', 'codex'} if who == 'both' else {who}
+    if not recipients or any(group != recipients[0] for group in recipients) or recipients[0] & excluded:
+        return None, OWNER_INTENT_REFUSED
+    expected = recipients[0]
+    proposed = proposal.get('to')
+    if not isinstance(proposed, list) or len(proposed) != len(set(proposed)) or set(proposed) != expected:
+        return None, OWNER_INTENT_REFUSED
+    file_clauses = recipient_clauses
+    current = any((re.search(r'\battached\b', c, re.I) and _OWNER_FILE.search(c)) or re.search(r'\bthese attachments\b', c, re.I) for c in file_clauses)
+    latest = any(re.search(r'\b(?:latest|newest)\b', c, re.I) and _OWNER_FILE.search(c) for c in file_clauses)
+    denied = any(re.search(r"\b(?:without|no)\s+(?:any\s+)?(?:" + _OWNER_FILE.pattern[2:-2] + r")\b", c, re.I) or
+                 re.search(r"\b(?:don't|do not|never)\s+(?:send|share|include|forward)\b[^;\n]{0,50}", c, re.I) and _OWNER_FILE.search(c)
+                 for c in clauses)
+    unbound_file_directive = any(c not in recipient_clauses and re.match(r'^\s*(?:please\s+)?(?:include|attach|forward|send|share)\b', c, re.I) and _OWNER_FILE.search(c) for c in clauses)
+    if unbound_file_directive:
+        return None, OWNER_FILES_REFUSED
+    if current or latest:
+        uncertain_file_intent = any(re.search(r'\b(?:whether|should|if|might|could|would|consider|decide|permission|not|never|without)\b', c, re.I) for c in file_clauses)
+        file_action = any(_OWNER_TO.search(c) or re.search(r'\b(?:review|read|check|inspect|analy[sz]e|examine|audit)\s+(?:(?:the|this|these|all|my)\s+)?(?:attached|latest|newest)\b', c, re.I) for c in file_clauses)
+        if uncertain_file_intent or not file_action:
+            return None, OWNER_FILES_REFUSED
+    requested = proposal.get('files')
+    if current and latest or denied and (current or latest or requested):
+        return None, OWNER_FILES_REFUSED
+    result = dict(proposal)
+    if current:
+        plural = any(re.search(r'\ball attached (?:files|attachments)\b|\bthese attachments\b', c, re.I) for c in file_clauses)
+        subset = any(re.search(r'\b(?:except|excluding|without)\b|\bbut not\b', c, re.I) for c in file_clauses)
+        if len(set(current_doc_ids or ())) > 1 and (not plural or subset):
+            return None, OWNER_FILES_REFUSED
+        if not current_doc_ids or requested not in (None, 'turn'):
+            return None, OWNER_FILES_REFUSED
+        result['files'] = 'turn'  # Required current attachments cannot be silently dropped.
+    elif latest:
+        if requested not in (None, 'latest'):
+            return None, OWNER_FILES_REFUSED
+        result['files'] = 'latest'  # Existing owner-conversation resolver still enforces scope.
+    elif requested:
+        return None, OWNER_FILES_REFUSED
+    return result, None
 
 
 class AskService:
@@ -324,13 +463,13 @@ class AskService:
                 out.append((f"reqnu-{r['request_id']}-{e['event_id']}", f"**{name} needs you:** {e['text']}", AUTHORS[to]))
         res = next((e for e in doc["events"] if e["kind"] == "result"), None)
         if res is not None:
-            out.append((f"reqres-{r['request_id']}", f"**{name}'s report** (agent-authored; not a verification and not an approval)\n\n{res['text']}", AUTHORS[to]))
+            out.append((f"reqres-{r['request_id']}", report_note(name, r["request_id"], res["text"]), AUTHORS[to]))
         return out
 
     def sync(self, conv: dict, floor) -> dict:
         """Keep every new receipt, question and report of this conversation's requests as one note each. Returns the notes (for the page), the
         requests and what is still outstanding. A note that cannot be kept now is retried on the next sync."""
-        notes, requests, outstanding = [], [], 0
+        notes, requests, outstanding, unkept = [], [], 0, 0
         for doc in ar.for_conversation(self.root, conv.get("id", "")):
             r = doc["request"]
             requests.append({"request_id": r["request_id"], "to": r["to"], "stage": doc["stage"], "closed": doc["closed"],
@@ -354,7 +493,10 @@ class AskService:
                     note = None
                 if note:
                     notes.append(note)
-        return {"notes": notes, "requests": requests, "outstanding": outstanding}
+                else:
+                    unkept += 1
+                    logging.getLogger("guild_ui.agent_ask").warning("agent request note could not be kept (%s)", rid)
+        return {"notes": notes, "requests": requests, "outstanding": outstanding, "unkept": unkept}
 
     # ── slice 2: what MC is told on its next turn ──
     def _told_path(self, conversation_id: str) -> str:

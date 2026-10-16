@@ -191,8 +191,12 @@ class JobHook:
                 return Decision(MULTIPLE)
             if "failure" in found:                                      # ambiguous, malformed or cut off: said plainly, never shown raw, never claimed queued
                 return Decision(found["failure"])
+            from .agent_ask import owner_ask_proposal
+            proposal, refusal = owner_ask_proposal((self.note or {}).get("text", ""), found["proposal"], self.doc_ids)
+            if refusal is not None:
+                return Decision(refusal)
             try:
-                made = self.asks.ask(self.conv, self.note, self.note_id, found["proposal"]["to"], files=found["proposal"].get("files"), evidence=self._evidence)
+                made = self.asks.ask(self.conv, self.note, self.note_id, proposal["to"], files=proposal.get("files"), evidence=self._evidence)
                 return Decision(self.asks.words(made))
             except Exception:                                           # nothing may escape: a raw "ASK ..." line must never be shown or kept
                 __import__("logging").getLogger("guild_ui.agent_ask").exception("an ask could not be handled")

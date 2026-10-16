@@ -45,3 +45,19 @@ mdurl==0.1.2
 pillow==12.3.0
 # Upload reading: the text layer of a PDF, read in a bounded child process (guild_ui/doc_reader.py).
 pypdf==6.8.0
+# Shared server-owned MC realtime transport; same SDK pin as CoS.
+openai==3.22.0
+websockets==15.0.1
+# Added SDK dependency closure, measured in the dev candidate; existing portal
+# package versions are unchanged.
+sniffio==1.3.1
+truststore==0.10.5
+typing-inspection==0.4.4
+annotated-types==0.8.0
+anyio==4.15.1
+pydantic==2.14.1
+httpx2==2.13.1
+jiter==0.17.0
+h11==0.16.0
+pydantic_core==2.50.1
+httpcore2==2.13.1

@@ -15,9 +15,8 @@ import ipaddress
 import json
 import os
 import re
-import urllib.error
 import urllib.parse
-import urllib.request
+import time
 from dataclasses import dataclass, field
 
 from core.memory_ask import context
@@ -28,7 +27,7 @@ MAX_K = 5
 MAX_RESPONSE_BYTES = 256 * 1024
 TIMEOUT_S = 8.0
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
-_HTTP_CODES = {400: "bad_arguments", 401: "unauthorized", 403: "tier_not_permitted", 413: "too_large", 415: "unsupported_media_type", 429: "rate_limited", 503: "registry_unavailable"}
+_HTTP_CODES = {400: "bad_arguments", 401: "unauthorized", 403: "unavailable", 413: "too_large", 415: "unsupported_media_type", 429: "rate_limited", 503: "unavailable"}
 
 
 @dataclass(frozen=True)
@@ -92,19 +91,47 @@ def endpoint(config: Config) -> str | None:
         return None
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *a, **k):                       # a redirect could carry the token elsewhere: refuse
-        return None
-
-
 def default_post(url: str, headers: dict, body: bytes, timeout: float) -> tuple[int, bytes]:
-    opener = urllib.request.build_opener(_NoRedirect)
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    """One per-call session, no ambient proxies/cookies and no redirects.
+
+    Admission and streamed progress share one elapsed budget. A blocking DNS/
+    socket operation may return after that budget; such a result is refused,
+    never accepted as timely. No background thread or automatic retry is used.
+    Requests is already a dependency of the CoS/portal runtime; load it only
+    when transport is actually needed, preserving dependency-free fake hooks.
+    """
+    import requests
+    deadline = time.monotonic() + timeout
+    session = requests.Session()
+    session.trust_env = False
+    def remaining():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("vault_transport_deadline")
+        return left
     try:
-        with opener.open(req, timeout=timeout) as resp:
-            return resp.status, resp.read(MAX_RESPONSE_BYTES + 1)
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read(MAX_RESPONSE_BYTES + 1)
+        left = remaining()
+        connect = min(2.0, left / 2)
+        with session.post(url, data=body, headers=headers,
+                          timeout=(connect, left - connect),
+                          allow_redirects=False, stream=True) as response:
+            remaining()
+            if 300 <= response.status_code < 400:
+                return response.status_code, b""
+            raw = bytearray()
+            # Single-byte progress exposes a slowly trickling response to the
+            # elapsed guard instead of waiting for a large buffered chunk.
+            for chunk in response.iter_content(chunk_size=1):
+                remaining()
+                if not chunk:
+                    continue
+                raw.extend(chunk[:MAX_RESPONSE_BYTES + 1 - len(raw)])
+                if len(raw) > MAX_RESPONSE_BYTES:
+                    return response.status_code, bytes(raw)
+            remaining()
+            return response.status_code, bytes(raw)
+    finally:
+        session.close()
 
 
 def _unavailable(code: str) -> Retrieved:

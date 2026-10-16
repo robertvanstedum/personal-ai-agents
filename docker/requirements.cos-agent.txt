@@ -41,6 +41,8 @@ keyring==25.7.0
 MarkupSafe==3.0.3
 more-itertools==11.1.0
 openai==3.22.0
+# Server-owned Realtime sideband; compatible with this SDK's >=13,<16 extra.
+websockets==15.0.1
 psycopg2-binary==2.9.13
 pycparser==3.0
 pydantic==2.13.5

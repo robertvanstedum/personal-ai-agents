@@ -22,6 +22,8 @@ Per source:
 """
 from __future__ import annotations
 
+from core.jobs import batch_window
+
 import hashlib
 import os
 import re
@@ -30,9 +32,31 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core.memory_shelf import approvals, codes, coverage, fsio, ledger, render, review, rooms, sessions
+from core.memory_shelf import approvals, codes, coverage, fsio, ledger, render, review, rooms, sessions, capture_limits
 from core.memory_shelf import bundle as bundles
 from core.memory_shelf.config import SourceCfg, never_copied
+
+DEFAULT_MAX_SOURCE_BYTES = 64 << 20
+SOURCE_TOO_LARGE = "source_too_large"
+
+
+class SourceTooLarge(ValueError):
+    """Resource hold: never copy source content into an error."""
+
+
+def _bounded_lines(handle, limit, max_line_bytes=None):
+    remaining = limit
+    while True:
+        raw = handle.readline(min(remaining, max_line_bytes) + 1 if max_line_bytes else remaining + 1)
+        if max_line_bytes and len(raw) > max_line_bytes:
+            raise capture_limits.ResourceLimit("source_line_limit")
+        if len(raw) > remaining:
+            raise SourceTooLarge(SOURCE_TOO_LARGE)
+        if not raw:
+            return
+        remaining -= len(raw)
+        yield raw
+
 
 PARSERS = {"claude-code": sessions.parse_claude_code, "codex": sessions.parse_codex}
 _UUID_TAIL = re.compile(r"([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$")
@@ -142,10 +166,30 @@ def _write_status(shelf, name: str, status: str, counts: dict, now: datetime) ->
     fsio.write_json(path, {k: v for k, v in doc.items() if v is not None})
 
 
-def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_seconds: float = 0) -> dict:
+def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_seconds: float = 0,
+               max_source_bytes: int | None = None, source_ids=None,
+               codex_limits: capture_limits.CodexLimits | None = None) -> dict:
     """One watcher pass. Returns ``{"status": ..., "counts": {...}}``; never raises on bad session data."""
     now = now or datetime.now(timezone.utc)
     name, counts = cfg.name, {}
+    if max_source_bytes is None:
+        raw_limit = os.environ.get("MOI_CAPTURE_MAX_SOURCE_BYTES", str(DEFAULT_MAX_SOURCE_BYTES))
+        try:
+            max_source_bytes = int(raw_limit)
+        except (ValueError, TypeError):
+            return {"status": "capture_limit_invalid", "counts": {codes.FAILED: 1}}
+    if type(max_source_bytes) is not int or max_source_bytes <= 0:
+        return {"status": "capture_limit_invalid", "counts": {codes.FAILED: 1}}
+    selected = source_ids is not None
+    if selected and (not isinstance(source_ids, (tuple, list)) or not 1 <= len(source_ids) <= 20
+                     or any(not isinstance(s, str) or not re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", s) for s in source_ids) or len(set(source_ids)) != len(source_ids)):
+        return {"status": "source_selection_invalid", "counts": {codes.FAILED: 1}}
+    if selected and cfg.kind != "codex":
+        return {"status": "source_selection_unsupported", "counts": {codes.FAILED: 1}}
+    if codex_limits is not None and (not isinstance(codex_limits, capture_limits.CodexLimits) or cfg.kind != "codex" or not selected):
+        return {"status": "bounded_codex_selection_required", "counts": {codes.FAILED: 1}}
+    if max_source_bytes > DEFAULT_MAX_SOURCE_BYTES and (codex_limits is None or not selected or cfg.kind != "codex"):
+        return {"status": "bounded_codex_selection_required", "counts": {codes.FAILED: 1}}
     status = approvals.source_status(shelf, name, cfg.fingerprint())
     if status != approvals.APPROVED:
         listing = fsio.read_json(approvals.dry_run_path(shelf, name)) if status != approvals.NO_DRY_RUN else None
@@ -155,6 +199,14 @@ def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_sec
             return {"status": "dry_run_only", "counts": {}}
         _write_status(shelf, name, codes.NOT_APPROVED, {}, now)
         return {"status": codes.NOT_APPROVED, "counts": {}}
+    candidates = discover(cfg) if cfg.kind != "rooms" else []
+    if selected:
+        if cfg.kind == "rooms":
+            return {"status": "source_selection_unsupported", "counts": {codes.FAILED: 1}}
+        matches = {sid: [c for c in candidates if session_id_from_name(cfg.kind, c.rel) == sid] for sid in source_ids}
+        if any(len(v) != 1 for v in matches.values()):
+            return {"status": "source_selection_missing_or_ambiguous", "counts": {codes.FAILED: 1}}
+        candidates = [matches[sid][0] for sid in source_ids]
     shelf.init_layout()
     if shelf.headroom():
         _write_status(shelf, name, codes.DISK_LOW, {}, now)
@@ -172,7 +224,12 @@ def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_sec
             fsio.write_json(_state_path(shelf, name), {"files": state})
         return _finish(shelf, name, state, counts, now)
     try:
-        for cand in discover(cfg):
+        for cand in candidates:
+            try:
+                batch_window.remaining()
+            except batch_window.BatchDeadline as exc:
+                counts[exc.code] = counts.get(exc.code, 0) + 1
+                break
             lkey = bundles.ledger_key_for(name, cand.rel)
             prev = state.get(lkey) or {}
             if never_copied(cand.rel, cfg.never_copy) or cand.size == 0:
@@ -182,14 +239,26 @@ def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_sec
                 state[lkey] = {"outcome": codes.EXCLUDED, "reason": reason}
                 tally(codes.EXCLUDED)
                 continue
+            if cand.size > max_source_bytes:
+                ledger.record(shelf, name, lkey, codes.FAILED, reason=SOURCE_TOO_LARGE, now=now)
+                state[lkey] = {**prev, "outcome": codes.FAILED, "reason": SOURCE_TOO_LARGE,
+                               "observed_size": cand.size, "limit_bytes": max_source_bytes}
+                tally(codes.FAILED); tally(SOURCE_TOO_LARGE)
+                continue
             current = sessions.NORMALIZER_VERSION[cfg.kind]
-            if (prev.get("outcome") in codes.OK_OUTCOMES and prev.get("size") == cand.size
+            if (not selected and prev.get("outcome") in codes.OK_OUTCOMES and prev.get("size") == cand.size
                     and prev.get("mtime_ns") == cand.mtime_ns
                     and prev.get("normalizer", sessions.DEFAULT_NORMALIZER) == current):
                 tally("skipped_unchanged")
                 continue
             ledger.record(shelf, name, lkey, codes.DISCOVERED, now=now)
-            outcome, rid, sha, cov = _capture(shelf, cfg, cand, lkey, prev, now, settle_seconds)
+            outcome, rid, sha, cov = _capture(shelf, cfg, cand, lkey, prev, now, settle_seconds, max_source_bytes, codex_limits,
+                                                session_id_from_name(cfg.kind, cand.rel) if selected else None)
+            if outcome == SOURCE_TOO_LARGE or outcome in capture_limits.CODES:
+                state[lkey] = {**prev, "outcome": codes.FAILED, "reason": outcome,
+                               "observed_size": cand.size, "limit_bytes": max_source_bytes}
+                tally(codes.FAILED); tally(outcome)
+                continue
             if outcome in codes.OK_OUTCOMES and cov is not None:
                 _sync_coverage(shelf, name, lkey, cand, cov)
                 flags = cov.get("flags") or []
@@ -203,16 +272,22 @@ def run_source(shelf, cfg: SourceCfg, *, now: datetime | None = None, settle_sec
             tally(outcome)
     finally:
         fsio.write_json(_state_path(shelf, name), {"files": state})
-    return _finish(shelf, name, state, counts, now)
+    return _finish(shelf, name, state, counts, now, selected=selected)
 
 
-def _finish(shelf, name: str, state: dict, counts: dict, now: datetime) -> dict:
+def _finish(shelf, name: str, state: dict, counts: dict, now: datetime, *, selected=False) -> dict:
     for flag in (coverage.POSSIBLE_GAP, coverage.UNKNOWN_KIND):
         flagged = sum(1 for entry in state.values() if flag in (entry.get("flags") or []))
         if flagged:
             counts[flag] = flagged                          # files flagged now, not only this pass: a gap stays a warning
-    _write_status(shelf, name, "ok", counts, now)
-    return {"status": "ok", "counts": counts}
+    status = "batch_deadline_invalid" if counts.get("batch_deadline_invalid") else ("outside_window" if counts.get("outside_window") else "ok")
+    if selected:
+        status = "selected_only"
+        fsio.write_json(Path(shelf.status_dir) / f"watch-{name}-selected.json",
+                        {"at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "status": status, "counts": counts})
+    else:
+        _write_status(shelf, name, status, counts, now)
+    return {"status": status, "counts": counts}
 
 
 def _rooms_pass(shelf, cfg: SourceCfg, state: dict, counts: dict, now: datetime, settle_seconds: float) -> None:
@@ -231,6 +306,11 @@ def _rooms_pass(shelf, cfg: SourceCfg, state: dict, counts: dict, now: datetime,
             counts[reason] = counts.get(reason, 0) + 1
 
     for cand in cands:
+        try:
+            batch_window.remaining()
+        except batch_window.BatchDeadline as exc:
+            counts[exc.code] = counts.get(exc.code, 0) + 1
+            break
         skey = bundles.ledger_key_for(name, cand.rel)
         lkey = rooms.session_key(name, cand.session)
         prev = state.get(skey) or {}
@@ -265,7 +345,7 @@ def _sync_coverage(shelf, source: str, lkey: str, cand: Candidate, cov: dict) ->
 
 
 def _capture(shelf, cfg: SourceCfg, cand: Candidate, lkey: str, prev: dict, now: datetime,
-             settle_seconds: float) -> tuple[str, str | None, str | None, dict | None]:
+             settle_seconds: float, max_source_bytes: int = DEFAULT_MAX_SOURCE_BYTES, codex_limits=None, expected_source_id=None) -> tuple[str, str | None, str | None, dict | None]:
     """(outcome, record id, sha256, coverage). Coverage is None when the file was not re-read into a record."""
     name = cfg.name
     if settle_seconds and (now.timestamp() - cand.mtime_ns / 1e9) < settle_seconds:
@@ -273,9 +353,23 @@ def _capture(shelf, cfg: SourceCfg, cand: Candidate, lkey: str, prev: dict, now:
         return codes.UNSTABLE, None, None, None
     try:
         sha, size = render.hash_file(cand.path)
+        if size > max_source_bytes:
+            raise SourceTooLarge(SOURCE_TOO_LARGE)
         with open(cand.path, "rb") as handle:
-            parsed = coverage.parse_with_coverage(cfg.kind, handle, PARSERS)
+            effective_limits = codex_limits or (capture_limits.CodexLimits() if expected_source_id is not None else None)
+            lines = _bounded_lines(handle, max_source_bytes, effective_limits.line_bytes if effective_limits else None)
+            if effective_limits is not None:
+                lines = capture_limits.checked_codex_lines(lines, effective_limits, expected_source_id)
+            parsed = coverage.parse_with_coverage(cfg.kind, lines, PARSERS)
+            if expected_source_id is not None and parsed.source_id != expected_source_id:
+                raise capture_limits.ResourceLimit("source_identity_mismatch")
         after = cand.path.stat()
+    except capture_limits.ResourceLimit as exc:
+        ledger.record(shelf, name, lkey, codes.FAILED, reason=exc.code, now=now)
+        return exc.code, None, None, None
+    except SourceTooLarge:
+        ledger.record(shelf, name, lkey, codes.FAILED, reason=SOURCE_TOO_LARGE, now=now)
+        return SOURCE_TOO_LARGE, None, None, None
     except OSError:
         ledger.record(shelf, name, lkey, codes.FAILED, reason="read_failed", now=now)
         return codes.FAILED, None, None, None

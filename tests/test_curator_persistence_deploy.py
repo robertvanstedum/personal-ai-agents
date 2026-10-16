@@ -33,14 +33,15 @@ def test_state_map_matches_production_compose_binds_exactly():
         assert volume.startswith(HOST_PREFIX), volume
         source, target = volume[len(HOST_PREFIX):].split(":")[:2]
         binds.add((source, target))
-    mapped = {(host, target) for kind, _old, host, target in _map_rows() if kind in ("dir", "file")}
+    mapped = {(host, target) for kind, _old, host, target in _map_rows() if kind in ("dir", "appdir", "file")}
     assert binds == mapped
 
 
 def test_moved_state_env_points_into_the_mounted_curator_folder():
     env = dict(item.split("=", 1) for item in _curator_service()["environment"])
     moved = {target for kind, _old, _host, target in _map_rows() if kind == "moved"}
-    assert {env["CURATOR_SIGNAL_STORE_PATH"], env["CURATOR_X_PULL_STATE_PATH"]} == moved
+    assert {env["CURATOR_SIGNAL_STORE_PATH"], env["CURATOR_X_PULL_STATE_PATH"],
+            env["CURATOR_OUTPUT_PATH"]} == moved
     assert all(path.startswith("/app/data/curator/") for path in moved)
 
 
@@ -50,7 +51,7 @@ def test_every_formerly_unmounted_path_is_covered_and_topics_is_not_mounted():
     for old in seeded:
         assert f"  {old}\n" in preserve, old
     targets = [target for *_rest, target in _map_rows()]
-    assert not any("research-intelligence/topics" in target for target in targets)
+    assert not any(target in ("/app/_NewDomains/research-intelligence/topics", "/app/research-state/topics") for target in targets)
 
 
 def test_deploy_preserves_and_seeds_before_up_and_checks_after_health():
@@ -110,6 +111,8 @@ SEEDED = {
     "/app/domains/curator/curator_sources.json": "[]\n",
     "/app/signal_store.jsonl": "{\"e\": 1}\n",
     "/app/x_pull_state.json": "{\"last_pull_at\": null}\n",
+    "/app/curator_cache/abc12.json": "{\"hash_id\": \"abc12\"}\n",
+    "/app/curator_output.txt": "1. Article\n",
 }
 EXISTING = ["data/curator/", "data/curator_archive/", "data/curator_history.json",
             "data/curator_costs.json", "data/interests/", "data/research-intelligence/"]
@@ -275,11 +278,12 @@ def test_seed_refuses_snapshot_records_that_do_not_match_its_tree(tmp_path):
     assert result.returncode == 1 and "does not account for /app/x_pull_state.json" in result.stderr
 
 
-def test_seed_refuses_while_topics_exists_in_the_running_container(tmp_path):
+@pytest.mark.parametrize("topics", ["/app/_NewDomains/research-intelligence/topics", "/app/research-state/topics"])
+def test_seed_refuses_while_topics_exists_in_the_running_container(tmp_path, topics):
     host = _host(tmp_path)
-    files = {**SEEDED, "/app/_NewDomains/research-intelligence/topics/t/s.md": "session\n"}
+    files = {**SEEDED, topics + "/t/s.md": "session\n"}
     paths = [f"copied {old}" for kind, old, _h, _t in _map_rows() if old != "-"]
-    paths.append("copied /app/_NewDomains/research-intelligence/topics")
+    paths.append("copied " + topics)
     result = _run("curator_seed_state.sh", str(_snapshot(tmp_path, files, paths)), host=host)
     assert result.returncode == 1 and "topics exists in the running container" in result.stderr
     assert not (host / "data/annotations").exists()
@@ -371,3 +375,87 @@ def test_deploy_proves_curator_absence_from_a_listing_not_a_failed_inspect():
     assert 'docker inspect "$CURATOR_CONTAINER" >/dev/null 2>&1' not in script
     assert "if curator_container_exists; then" in body
     assert "docker ps -a --format '{{.Names}}'" in script
+
+
+def test_legacy_local_to_production_data_sync_refuses_to_run(tmp_path):
+    script = ROOT / "scripts" / "sync_data.sh"
+    result = subprocess.run(["bash", str(script), "203.0.113.1"], capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode != 0
+    assert "retired" in result.stderr
+    assert "rsync" not in script.read_text()
+    assert "sync_data.sh" not in (ROOT / "scripts" / "bootstrap_ec2.sh").read_text()
+
+
+def test_seed_creates_the_article_folder_empty_only_when_the_snapshot_proves_it_absent(tmp_path):
+    host = _host(tmp_path)
+    no_articles = {k: v for k, v in SEEDED.items() if not k.startswith("/app/curator_cache/")}
+    result = _run("curator_seed_state.sh", str(_snapshot(tmp_path, no_articles)), host=host)
+    assert result.returncode == 0, result.stderr
+    assert (host / "data/curator_cache").is_dir()
+    assert list((host / "data/curator_cache").iterdir()) == []
+    assert _run("curator_bind_preflight.sh", host=host).returncode == 0
+
+    # With articles in the snapshot they are copied, never replaced by an empty folder.
+    host2 = _host(tmp_path / "second")
+    result = _run("curator_seed_state.sh", str(_snapshot(tmp_path / "second")), host=host2)
+    assert result.returncode == 0, result.stderr
+    assert (host2 / "data/curator_cache/abc12.json").read_text() == "{\"hash_id\": \"abc12\"}\n"
+    assert (host2 / "data/curator/curator_output.txt").read_text() == "1. Article\n"
+
+
+def test_preflight_rejects_an_article_folder_that_is_a_file(tmp_path):
+    host = _host(tmp_path)
+    _run("curator_seed_state.sh", str(_snapshot(tmp_path)), host=host)
+    import shutil
+    shutil.rmtree(host / "data/curator_cache")
+    (host / "data/curator_cache").write_text("not a folder\n")
+    result = _run("curator_bind_preflight.sh", host=host)
+    assert result.returncode == 1 and "curator_cache should be a directory" in result.stderr
+
+
+def test_every_reader_of_the_briefing_text_honours_the_moved_path():
+    files = subprocess.run(["git", "grep", "-l", "curator_output.txt", "--", "*.py", "*.sh",
+                            ":!docs/archive", ":!tests", ":!scripts/operations"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+    assert files
+    for rel in files:
+        if rel == "domains/curator/curator_server.py":
+            continue  # mentions the file only in a docstring
+        assert "CURATOR_OUTPUT_PATH" in (ROOT / rel).read_text(), rel
+
+
+def test_feedback_reads_the_briefing_text_from_the_env_path(monkeypatch, tmp_path):
+    from domains.curator import curator_feedback
+
+    monkeypatch.delenv("CURATOR_OUTPUT_PATH", raising=False)
+    assert importlib.reload(curator_feedback).CURATOR_OUTPUT == ROOT / "curator_output.txt"
+    monkeypatch.setenv("CURATOR_OUTPUT_PATH", str(tmp_path / "curator_output.txt"))
+    assert importlib.reload(curator_feedback).CURATOR_OUTPUT == tmp_path / "curator_output.txt"
+    monkeypatch.delenv("CURATOR_OUTPUT_PATH")
+    importlib.reload(curator_feedback)
+
+
+def test_images_never_carry_curator_runtime_state_that_moved_to_host_mounts():
+    ignored = {line.strip() for line in (ROOT / ".dockerignore").read_text().splitlines()
+               if line.strip() and not line.startswith("#")}
+    for kind, old, _host, _target in _map_rows():
+        if kind not in ("moved", "appdir"):
+            continue
+        rel = old.removeprefix("/app/")
+        assert "/" not in rel, old  # build-context root patterns only
+        assert (rel + "/" if kind == "appdir" else rel) in ignored, old
+    for name in ("curator_output.txt", "signal_store.jsonl", "x_pull_state.json"):
+        assert name in ignored
+
+
+def test_relocated_state_mounts_keep_canonical_host_sources_without_nested_data():
+    service = _curator_service()
+    env = dict(item.split("=", 1) for item in service["environment"])
+    assert env["CURATOR_RESEARCH_STATE_DIR"] == "/app/research-state"
+    targets = {host: target for kind, _old, host, target in _map_rows() if kind in ("dir", "appdir", "file")}
+    assert targets["data/research-intelligence"] == "/app/data/research-intelligence"
+    assert targets["data/research-library"] == "/app/research-state/library"
+    assert targets["data/research-config/config.json"] == "/app/research-state/agent/config.json"
+    assert all(not target.startswith("/app/data/research-intelligence/") for target in targets.values())
+    rows = {host: old for _kind, old, host, _target in _map_rows()}
+    assert rows["data/research-library"] == "/app/_NewDomains/research-intelligence/library"
+    assert rows["data/research-config/config.json"] == "/app/_NewDomains/research-intelligence/agent/config.json"

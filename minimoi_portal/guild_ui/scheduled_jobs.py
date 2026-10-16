@@ -7,8 +7,10 @@ from .lights import make
 from .adapters.contract import SourceResult
 
 
-def overview(root=None, *, registry_path=None, host="mac", now=None):
+def overview(root=None, *, registry_path=None, host=None, now=None):
     now = now or datetime.now(timezone.utc)
+    registry_path = registry_path if registry_path is not None else (os.environ.get("MINIMOI_JOBS_REGISTRY") or None)
+    host = host if host is not None else os.environ.get("MINIMOI_JOBS_HOST", "mac")
     root = root if root is not None else os.environ.get("MINIMOI_JOBS_DIR")
     observed = now.isoformat()
     def light(state, reason):

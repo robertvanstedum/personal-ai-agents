@@ -368,15 +368,16 @@ class Watcher(threading.Thread):
 
 def main():
     env = os.environ
+    from .transport_profile import admit_runtime
+    records_url, profile = admit_runtime(env, kind="worker")
     journal_dir = Path(env.get("ROOMS_JOURNAL_DIR", "/journal"))
     journal_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     lock = open(journal_dir / "worker.lock", "a")
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)        # one worker per journal
-    records_url = env.get("RECORDS_URL", "http://minimoi-records:18880")
     relay_url = env.get("MC_RELAY_URL", "http://mc-relay:8790")
     secrets = Path(env.get("ROOMS_SECRETS_DIR", "/run/secrets/rooms"))
-    worker = Worker(Records(records_url, lambda: read_secret(secrets / "rooms-worker.token")),
-                    Records(records_url, lambda: read_secret(secrets / "mc.token")),
+    worker = Worker(Records(records_url, lambda: read_secret(secrets / "rooms-worker.token"), profile=profile),
+                    Records(records_url, lambda: read_secret(secrets / "mc.token"), profile=profile),
                     Relay(relay_url, read_secret(Path(env.get("MC_RELAY_TOKEN_FILE", str(secrets / "mc-relay.token"))))),
                     TurnJournal(journal_dir / "turns"), teammate=env.get("ROOMS_TEAMMATE", "mc"),
                     alive_path="/tmp/rooms-worker/alive")

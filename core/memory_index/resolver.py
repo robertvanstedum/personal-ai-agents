@@ -106,7 +106,44 @@ def resolve(shelf_root: Path, row: dict, caller: policy.Caller, source: str,
     if (own.turn, own.speaker) != (row["turn"], row["speaker"]):
         return fail(TURN_MISMATCH)                    # right lines, but the index named another turn or speaker
     attribution = _TURN_ATTRIBUTION.get(own.turn_kind)
-    provenance = weight.derive(meta)["line"]
+    decision = weight.derive(meta)
+    provenance = decision["line"]
+    decisive = next((e for e in reversed(meta.get("events") or []) if e["kind"] in weight.DECISIVE), None)
+    owner_confirmed = bool(decisive and decisive.get("by") == "robert" and
+        decisive["kind"] in ("approved-direct", "approved-under-mandate"))
+    successor_evidence = None
+    decision_gap = None
+    if decision["weight"] == "superseded":
+        # Resolve the successor under the same effective caller gate before
+        # reading its original edition or disclosing an identity/range.
+        try:
+            from core.memory_shelf.shelf import Shelf
+            from core.memory_shelf import approvals
+            source_shelf = Shelf(shelf_root)
+            import re
+            event = decisive
+            if not event or event.get("kind") != "superseded":
+                raise approvals.ApprovalRefused("annotation_reference_invalid")
+            approvals._annotation_ref_shape(event.get("source_ref"))
+            approvals._annotation_ref_shape(event.get("successor_ref"))
+            if (event["source_ref"]["record_id"] != meta["id"] or
+                event["successor_ref"]["record_id"] != decision["successor"] or
+                event["successor_ref"]["record_id"] == meta["id"] or
+                not isinstance(event.get("request_id"), str) or
+                not re.fullmatch("[0-9a-f]{32}", event["request_id"])):
+                raise approvals.ApprovalRefused("annotation_identity_mismatch")
+            successor_path, successor_meta, _ = approvals._annotation_record(source_shelf, event["successor_ref"]["record_id"])
+            if policy.allowed(successor_meta, caller) or policy.record_gate(successor_meta):
+                raise approvals.ApprovalRefused("annotation_successor_unavailable")
+            if (meta.get("scope"),meta.get("tier"),meta.get("kind")=="canary") != (successor_meta.get("scope"),successor_meta.get("tier"),successor_meta.get("kind")=="canary"):
+                raise approvals.ApprovalRefused("annotation_access_boundary")
+            approvals.annotation_reference_evidence(source_shelf, event["source_ref"])
+            successor_evidence = approvals.annotation_reference_evidence(source_shelf, event["successor_ref"])
+            owner_confirmed = event.get("by") == "robert"
+        except Exception:
+            decision_gap = "successor_evidence_unavailable"
+            provenance = f"written by {meta.get('chair', 'unknown')} · superseded; successor evidence unavailable in this caller scope"
+
     if attribution:
         provenance += " Turn attribution: " + attribution
     return {
@@ -115,6 +152,10 @@ def resolve(shelf_root: Path, row: dict, caller: policy.Caller, source: str,
         "date": str(meta.get("created", ""))[:10], "chair": meta.get("chair"), "tier": policy.effective_tier(meta),
         "provenance": provenance, "passage": piece.decode("utf-8", errors="replace"),
         "turn_kind": own.turn_kind, "attribution": attribution,
+        "decision_status": decision["weight"],
+        "successor_evidence": successor_evidence,
+        "decision_gap": decision_gap,
+        "decision_authority": "owner_event" if owner_confirmed else "record_event" if decisive else "not_approved",
         "score": row.get("score"),
     }, None
 

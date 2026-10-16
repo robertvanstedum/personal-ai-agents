@@ -52,6 +52,17 @@ def fresh_cache():
     ("Give me the open issues", [], True),
     ("what are the latest issues?", [], True),
     ("the 12 apples", [], False),
+    ("Please pick up Board note #14 and report the results on the Board.", [], False),
+    ("Board item number 14", [], False),
+    ("Board notes #14 and #15", [], False),
+    ("post-its #14, #15", [], False),
+    ("Board notes #14 and #15 and GitHub issue #296", [296], False),
+    ("Board notes #1, #2, #3 and #4; PR #297", [297], False),
+    ("Board #14", [], False),
+    ("post-it #14", [], False),
+    ("Board note #14 and GitHub issue #296", [296], False),
+    ("GitHub issue #14 and Board note #14", [14], False),
+    ("Board note #14 and the latest issues", [], True),
     ("see https://example.com/page#12 for details", [], False),                  # a URL fragment is not an issue
     ("#296 and the new issues", [296], False),                                  # a number wins over "recent"
 ])
@@ -192,3 +203,65 @@ def test_an_unreadable_tool_record_is_shown_as_what_is_known_not_as_a_redaction_
     assert done.returncode == 0, done.stderr
     words = json.loads(done.stdout)
     assert words[0] == "ran a command (its details could not be read)" and words[1] == "ran a command: gh issue list" and "Malformed" not in "".join(words)
+
+
+def test_board_note_reference_does_not_fetch_an_unrelated_github_issue():
+    calls = []
+    block = C.github_block(
+        "Please pick up Board note #14, check which MiniMoi domains are available in dev.",
+        http_get=lambda *a, **k: calls.append(a) or Resp(200, issue(14)), environ=ENV,
+    )
+    assert block == ""
+    assert calls == []
+
+
+def test_board_context_is_bounded_and_distinguishes_missing_and_unavailable():
+    from types import SimpleNamespace
+    calls = []
+    class Floor:
+        def referenced_postits(self, ids):
+            calls.append(ids)
+            return SimpleNamespace(ok=True, observed_at="2026-10-15T17:00:00Z", data={"postits": [
+                {"id":14,"state":"active","version":1,"text":"SECRET check dev","item_ref":99},
+                {"id":80,"state":"active","version":1,"text":"other floor must not appear"}]})
+    block = C.board_block("Board notes #14 and #15; GitHub issue #296", Floor(), scrub=lambda t:t.replace("SECRET", "[removed]"))
+    assert calls == [[14,15]]
+    assert "Board note #14: state=active; version=1" in block
+    assert "Board note #15: not found on this floor" in block
+    assert "[removed] check dev" in block and "SECRET" not in block
+    assert "other floor" not in block and "not a GitHub mapping" in block
+    assert C.board_block("GitHub issue #14", Floor()) == ""
+    class Down:
+        def referenced_postits(self, ids):
+            raise OSError("private connection detail")
+    block = C.board_block("Board #14", Down())
+    assert "Board unavailable" in block and "private connection detail" not in block
+
+
+def test_board_context_reaches_the_actual_turn(lane):
+    from types import SimpleNamespace
+    import minimoi_portal.guild_ui.api as api
+    from unittest.mock import patch
+    floor = SimpleNamespace(referenced_postits=lambda ids: SimpleNamespace(ok=True, observed_at="now", data={"postits":[
+        {"id":14,"state":"active","version":1,"text":"Check the actual dev domains","item_ref":None}]}))
+    original = C.board_block
+    # Replace only the context read, preserving the normal floor used by turn writes.
+    with patch.object(C, "board_block", wraps=lambda text, actual_floor, **kw: original(text, floor, **kw)):
+        _plain_turn(lane, None, "Please pick up Board note #14")
+    [sent] = _sent_texts(lane)
+    assert "Check the actual dev domains" in sent and "Board note #14: state=active" in sent
+
+
+def test_board_reference_ids_are_explicit_and_capped():
+    assert C.board_ids("Board notes #1, #2, #3 and #4; issue #5") == [1,2,3]
+    assert C.board_ids("issue #14 or plain #15") == []
+
+
+def test_private_turn_never_reads_board_context(lane, monkeypatch):
+    calls = []
+    monkeypatch.setattr(C, "board_block", lambda *a, **k: calls.append(a) or "")
+    client = lane.owner()
+    token = lane.csrf(client)
+    response = client.post("/guild-next/api/v1/mc/private", json={"text":"Board note #14", "session":"s" * 20}, headers=write_headers(token, mode="off_record"))
+    assert response.status_code == 200
+    assert calls == []

@@ -35,7 +35,7 @@ from core.memory_index.embedder import OllamaEmbedder, DEFAULT_URL  # noqa: E402
 
 JOB_ID = "memory-index"
 DEFAULT_JOBS_ROOT = "~/minimoi-staging/data/jobs"
-WARN_UPDATE = frozenset({indexer.EMBEDDER_UNAVAILABLE, indexer.DISK_LOW, indexer.BUSY})
+WARN_UPDATE = frozenset({indexer.EMBEDDER_UNAVAILABLE, indexer.DISK_LOW, indexer.BUSY, indexer.OUTSIDE_WINDOW})
 FAIL_UPDATE = frozenset({indexer.PIN_MISMATCH, indexer.INCOMPATIBLE})
 
 

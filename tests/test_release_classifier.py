@@ -185,7 +185,14 @@ BACKEND_IMPORT_ALLOWED = ("core/workshop_journal/", "core/vault_t1/", "core/agen
 BACKEND_IMPORT_EXPECTED = {
     "core/memory_ask/context.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_ask/querylog.py": ("core.agent_turns.writer",),
-    "core/memory_backup/backup.py": ("core.vault_t1",),
+    "core/memory_backup/backup.py": ("core.vault_t1.reader", "core.vault_t1.portable", "core.jobs.batch_window"),
+    "core/memory_index/embedder.py": ("core.jobs.batch_window",),
+    "core/memory_index/indexer.py": ("core.jobs.batch_window",),
+    "core/memory_shelf/approvals.py": ("core.vault_t1.reader",),
+    "core/memory_shelf/cli.py": ("core.vault_t1.reader",),
+    "core/memory_shelf/watchers.py": ("core.jobs.batch_window",),
+    "scripts/mc/morning.py": ("core.jobs.registry", "core.jobs.schedule", "core.jobs.status"),
+    "scripts/rooms/archive.py": ("core.jobs.registry", "core.jobs.schedule", "core.jobs.status"),
     "core/memory_shelf/render.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_shelf/report.py": ("core.jobs",),
     "scripts/jobs/watchdog.py": ("core.jobs",),
@@ -230,6 +237,8 @@ def _backend_importers(root):
         try:
             used = {name for name in _imported_names(path.read_text(errors="ignore"))
                     if any(name == module or name.startswith(module + ".") for module in WORKSHOP_BACKEND_MODULES)}
+            # AST records both package and imported leaf; judge the most specific dependency.
+            used = {name for name in used if not any(other.startswith(name + ".") for other in used)}
             expected = BACKEND_IMPORT_EXPECTED.get(rel, ())
             if any(not any(name == module or name.startswith(module + ".") for module in expected) for name in used):
                 found.append(rel)
@@ -403,15 +412,16 @@ def test_expected_vault_backend_homes_do_not_waive_unrelated_dependencies(tmp_pa
 
 def _vault_runtime_importers(root):
     """Laptop retrieval/custody cannot silently enter production; CoS can load only its three reviewed context modules."""
-    from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES, VAULT_LOCAL_PREFIXES
-    packages = ("core.memory_ask", "core.memory_shelf", "core.memory_index", "core.memory_backup", "core.workshop_journal.vault_export")
+    from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES, VAULT_LOCAL_PREFIXES, LOCAL_TOOL_FILES
+    packages = ("core.memory_ask", "core.memory_shelf", "core.memory_index", "core.memory_backup", "core.workshop_journal.vault_export") + tuple(
+        path[:-3].replace("/", ".") for path in LOCAL_TOOL_FILES)
     expected_host = {"domains/cos/vault_context.py": ("core.memory_ask.consumer",)}
     found = []
     for path in sorted(root.rglob("*.py")):
         rel = path.relative_to(root).as_posix()
         if SKIPPED_DIRS.intersection(rel.split("/")) or rel.startswith(("tests/", "scripts/memory/", "scripts/vault/", "prototype-lab/", "planning-studio/")):
             continue
-        if rel in VAULT_LOCAL_FILES or rel.startswith(VAULT_LOCAL_PREFIXES):
+        if rel in VAULT_LOCAL_FILES or rel in LOCAL_TOOL_FILES or rel.startswith(VAULT_LOCAL_PREFIXES):
             continue
         try:
             names = _imported_names(path.read_text(errors="ignore"))
@@ -453,3 +463,48 @@ def test_laptop_workshop_export_seam_cannot_silently_become_a_portal_consumer(tm
     target.parent.mkdir(parents=True)
     target.write_text("from core.workshop_journal import vault_export\n")
     assert _vault_runtime_importers(tmp_path) == ["minimoi_portal/exporter.py"]
+
+
+def test_only_reviewed_laptop_entrypoints_are_release_only():
+    from scripts.ci.classify_release import LOCAL_TOOL_FILES
+    assert LOCAL_TOOL_FILES == {"scripts/mc/morning.py", "scripts/mc/regression.py", "scripts/rooms/archive.py"}
+    for path in LOCAL_TOOL_FILES:
+        assert classify([path]) == ("documents", ())
+        assert classify([path.removesuffix(".py") + "_extra.py"]) == ("full", ALL_SERVICES)
+    for path in ("core/memory_ask/assessment.py", "core/memory_ask/regression.py", "core/memory_ask/runner.py"):
+        assert classify([path]) == ("documents", ())
+        assert classify([path.removesuffix(".py") + "_extra.py"])[1] == ALL_SERVICES[:7]
+
+
+def test_exact_laptop_files_cannot_become_production_dependencies(tmp_path):
+    for module in ("core.memory_ask.assessment", "core.memory_ask.regression", "core.memory_ask.runner",
+                   "scripts.mc.morning", "scripts.mc.regression", "scripts.rooms.archive"):
+        target = tmp_path / "domains/cos/new_consumer.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("import " + module + "\n")
+        assert _vault_runtime_importers(tmp_path) == ["domains/cos/new_consumer.py"]
+        target.unlink()
+
+
+def test_precise_laptop_backend_imports_refuse_new_dependencies(tmp_path):
+    sources = {
+        "core/memory_backup/backup.py": "from core.jobs import batch_window\nfrom core.vault_t1 import portable\nfrom core.vault_t1.reader import Vault\n",
+        "core/memory_index/embedder.py": "from core.jobs import batch_window\n",
+        "core/memory_shelf/approvals.py": "from core.vault_t1 import reader\n",
+        "scripts/mc/morning.py": "from core.jobs import registry, schedule, status\n",
+        "scripts/rooms/archive.py": "from core.jobs import registry, schedule, status\n",
+    }
+    for rel, source in sources.items():
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source)
+    assert _backend_importers(tmp_path) == []
+    for rel, source in sources.items():
+        target = tmp_path / rel
+        target.write_text(source + "from core.jobs import unrelated_new_module\n")
+        assert _backend_importers(tmp_path) == [rel]
+        target.write_text(source)
+    nested = tmp_path / "scripts/mc/nested/morning.py"
+    nested.parent.mkdir(parents=True)
+    nested.write_text(sources["scripts/mc/morning.py"])
+    assert _backend_importers(tmp_path) == ["scripts/mc/nested/morning.py"]

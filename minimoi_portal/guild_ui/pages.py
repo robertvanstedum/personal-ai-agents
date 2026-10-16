@@ -107,7 +107,7 @@ def _urls(c) -> dict:
         "item": url_for(".item", item_id=987654321).replace("987654321", "__ID__"),
         "api": f"{c['url_prefix']}/api/v1",
         "legacy_build": "/guild/build", "labs": url_for(".labs") if reserve_pages_enabled() else url_for(".experiment"),
-        "workshop": url_for(".workshop"), "build_host": url_for(".operate_view", view="build-host"),
+        "admin": url_for(".admin"), "workshop": url_for(".workshop"), "build_host": url_for(".operate_view", view="build-host"),
         "build_log": url_for(".build_log"), "rooms": url_for(".rooms"),
         "board": url_for(".board"), "media": url_for(".media_library"),
         "improve": url_for(".improve"), "experiment": url_for(".experiment"), "docs": DOCS_URL,
@@ -539,6 +539,27 @@ def _document(reference, path, unavailable=False):
                            rendered=render_document(source, resolve_link) if source is not None else None,
                            github_url=github_url, git_date=git_date,
                            unavailable=unavailable, **ctx), (200 if source is not None else 503 if unavailable else 404)
+
+
+ROLE_DOCUMENT_HOME = "planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/"
+ROLE_DOCUMENTS = (
+    ("Job description", "MASTER_CRAFTSMAN_JOB_DESCRIPTION.md"),
+    ("Persona", "MASTER_CRAFTSMAN_PERSONA.md"),
+    ("Working agreement", "MASTER_CRAFTSMAN_WORKING_AGREEMENT_2026-10-12.md"),
+)
+
+
+@owner_page
+def admin():
+    from .references import resolve
+    roles = []
+    for label, name in ROLE_DOCUMENTS:
+        reference = ROLE_DOCUMENT_HOME + name
+        roles.append({"label": label, "available": resolve(reference) is not None,
+                      "href": url_for(".document", ref=reference)})
+    return render_template("guild_floor/admin.html", role_documents=roles,
+                           agents_href=url_for(".operate_view", view="agents"),
+                           **_context("admin", "Build", "Build Admin", page_open=True))
 
 
 @owner_page

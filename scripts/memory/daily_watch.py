@@ -42,7 +42,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from core.jobs import alert, registry, schedule, status  # noqa: E402
+from core.jobs import alert, registry, schedule, status, batch_window  # noqa: E402
 
 JOB_ID = "memory-watch"
 SOURCES = ("claude-code", "codex")              # the approved-memory sources; the inbox is deliberately absent
@@ -50,7 +50,7 @@ OPTIONAL_SOURCES = ("rooms",)                   # Rooms export bundles: run only
 DEFAULT_JOBS_ROOT = "~/minimoi-staging/data/jobs"
 WATCH_TIMEOUT_S = 3600
 OK, WARN, FAILED = "ok", "warn", "failed"
-WARN_CODES = frozenset({"not_approved", "stale", "not_configured", "disk_low", "ok_unstable", "ok_failed_files",
+WARN_CODES = frozenset({"outside_window", "ok_outside_window","not_approved", "stale", "not_configured", "disk_low", "ok_unstable", "ok_failed_files",
                         "ok_possible_gap", "ok_unknown_kind", "ok_refused_files", "ok_unknown_participant", "unreadable",
                         "report_failed", "report_unparseable", "report_timeout"})
 EXIT = {OK: 0, WARN: 0, FAILED: 1}
@@ -123,6 +123,8 @@ def code_for_watch(returncode: int, stdout: str) -> str:
             return "unparseable"
         if not isinstance(counts, dict):
             return "unparseable"
+        if counts.get("outside_window"):
+            return "ok_outside_window"
         failed, unstable = counts.get("failed", 0), counts.get("unstable", 0)
         if isinstance(failed, int) and failed > 0:
             return "ok_failed_files"
@@ -143,6 +145,8 @@ def code_for_watch(returncode: int, stdout: str) -> str:
         if isinstance(unknown, int) and unknown > 0:
             return "ok_unknown_kind"
         return "ok"
+    if word in ("outside_window", "batch_deadline_invalid"):
+        return word
     if word == "disk_low":
         return "disk_low"
     if word in ("not_approved", "dry_run_only"):
@@ -177,6 +181,11 @@ def capture(approval: Callable[[str], str], watch: Callable[[str], tuple[int, st
     except ApprovalUnavailable:
         return {"approvals": "approval_unavailable"}
     for source, gate in gates.items():
+        try:
+            batch_window.remaining()
+        except batch_window.BatchDeadline as exc:
+            results[source] = exc.code
+            continue
         if gate != "approved":                  # never captured; not an error
             results[source] = gate if gate in ("stale", "not_configured") else "not_approved"
             continue
@@ -207,7 +216,10 @@ def _job(registry_path) -> tuple[registry.Job, dict[str, str]]:
 def publish_report(jobs_root, report: Callable[[object], tuple[int, str]]) -> dict[str, str]:
     """The report step: a failure here is a warning (the capture itself may be fine) and never an exception."""
     try:
+        batch_window.remaining()
         code = code_for_report(*report(jobs_root))
+    except batch_window.BatchDeadline as exc:
+        return {"report": exc.code}
     except subprocess.TimeoutExpired:
         return {"report": "report_timeout"}
     except Exception:                           # noqa: BLE001 - a fixed code, never the message

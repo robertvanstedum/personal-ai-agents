@@ -8,8 +8,13 @@
 #   dir / file  a bind mount. The host source must exist with this type before
 #               the container is created, or Docker would create an empty
 #               directory in its place and hide the data.
+#   appdir      a dir bind for a folder the app creates on first write (it is
+#               not in the image). If the deploy-time snapshot proves the
+#               container had none, the seed creates it empty; an empty mount
+#               then hides nothing.
 #   moved       a file inside an already-mounted folder, located by an env var
-#               (CURATOR_SIGNAL_STORE_PATH, CURATOR_X_PULL_STATE_PATH). It may
+#               (CURATOR_SIGNAL_STORE_PATH, CURATOR_X_PULL_STATE_PATH,
+#               CURATOR_OUTPUT_PATH). It may
 #               not exist yet; the app creates it on first write.
 #
 # Existing binds, never seeded:
@@ -18,12 +23,14 @@ dir   -                                                        data/curator_arch
 file  -                                                        data/curator_history.json                 /app/curator_history.json
 file  -                                                        data/curator_costs.json                   /app/curator_costs.json
 dir   -                                                        data/interests                            /app/interests
-dir   -                                                        data/research-intelligence                /app/_NewDomains/research-intelligence/data
+dir   -                                                        data/research-intelligence                /app/data/research-intelligence
 # New binds, seeded once from the deploy-time production snapshot:
 dir   /app/data/annotations                                    data/annotations                          /app/data/annotations
-dir   /app/_NewDomains/research-intelligence/library           data/research-library                     /app/_NewDomains/research-intelligence/library
-file  /app/_NewDomains/research-intelligence/agent/config.json data/research-config/config.json          /app/_NewDomains/research-intelligence/agent/config.json
+dir   /app/_NewDomains/research-intelligence/library           data/research-library                     /app/research-state/library
+file  /app/_NewDomains/research-intelligence/agent/config.json data/research-config/config.json          /app/research-state/agent/config.json
 file  /app/domains/curator/curator_sources.json                data/curator-config/curator_sources.json  /app/domains/curator/curator_sources.json
+appdir /app/curator_cache                                      data/curator_cache                        /app/curator_cache
 # Moved into the existing data/curator mount:
 moved /app/signal_store.jsonl                                  data/curator/signal_store.jsonl           /app/data/curator/signal_store.jsonl
 moved /app/x_pull_state.json                                   data/curator/x_pull_state.json            /app/data/curator/x_pull_state.json
+moved /app/curator_output.txt                                  data/curator/curator_output.txt           /app/data/curator/curator_output.txt

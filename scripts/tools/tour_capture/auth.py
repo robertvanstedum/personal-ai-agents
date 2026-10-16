@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import os
+import json
+import tempfile
+
+from .paths import auth_root, ensure_private_directory, validate_private_file
 from pathlib import Path
 
 
@@ -48,8 +52,16 @@ def credentials_for(profile: str) -> tuple[str, str]:
 
 
 def storage_state_path(repo_root: Path, profile: str) -> Path:
-    path = repo_root / "_working" / "tour-capture" / "auth" / f"{profile}.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # Keep the legacy argument for existing callers; auth is never checkout-local.
+    if profile not in PROFILE_KEYS:
+        raise CaptureAuthError("unknown capture authentication profile")
+    configured = auth_root()
+    if (any(part in {"_working", "_NewDomains"} for part in configured.parts)
+            or configured.is_relative_to(repo_root.absolute())):
+        raise CaptureAuthError("capture authentication state must be outside the checkout")
+    root = ensure_private_directory(configured)
+    path = root / f"{profile}.json"
+    validate_private_file(path)
     return path
 
 
@@ -81,8 +93,21 @@ def ensure_authenticated(
             message = error.inner_text().strip() or message
         raise CaptureAuthError(message) from exc
 
-    context.storage_state(path=str(state_path))
-    state_path.chmod(0o600)
+    # Browser state contains session credentials. Atomic replacement never follows
+    # an existing destination leaf; the private parent is validated again.
+    ensure_private_directory(state_path.parent)
+    validate_private_file(state_path)
+    state = context.storage_state()
+    fd, temporary = tempfile.mkstemp(prefix=".state-", dir=state_path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            json.dump(state, output)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, state_path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
     page.goto(target, wait_until="domcontentloaded")
     if "/login" in page.url:
         raise CaptureAuthError(f"profile {profile!r} cannot access {start_path}")

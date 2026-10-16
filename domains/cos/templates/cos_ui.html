@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chief of Staff</title>
-  <link rel="stylesheet" href="/static/cos.css?v=3">
+  <link rel="stylesheet" href="/static/cos.css?v=20261015-dictation1">
 </head>
 <body>
 
@@ -39,6 +39,7 @@
         <div class="input-row">
           <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
           <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎤</button>
+          <button id="btn-dictate" type="button" disabled aria-label="Dictate into the message draft">Dictate</button>
           <button id="btn-send">Send</button>
         </div>
         <div class="talk-meta">
@@ -47,6 +48,10 @@
           <span>Voice is AI-generated.</span>
           <a href="/ui/memory" target="_blank">memory ↗</a>
         </div>
+        {% if managed_realtime_ready %}
+        <label>Voice mode <select id="voice-mode"><option value="realtime">Realtime · OpenAI</option><option value="chained">Voice · turn by turn</option></select></label>
+        <label><input type="checkbox" id="voice-keep-transcript">Download transcript on End</label>
+        {% endif %}
         <div id="voice-transcript" aria-live="polite"></div>
       </div>
 
@@ -159,7 +164,13 @@ function appendThinking() {
 btnSend.addEventListener('click', sendMessage);
 sendInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
 
+function cosWriteHeaders() {
+  const token = document.querySelector('meta[name="minimoi-csrf-token"]')?.content;
+  return token ? { 'X-CSRF-Token': token } : {};
+}
+
 async function sendMessage() {
+  if(sendInput.disabled||sendInput.readOnly)return;
   const text = sendInput.value.trim();
   if (!text) return;
   const requestId = crypto.randomUUID();
@@ -170,7 +181,7 @@ async function sendMessage() {
   try {
     const resp = await fetch('/ui/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...cosWriteHeaders() },
       body: JSON.stringify({
         text,
         channel: 'html_text',
@@ -178,12 +189,21 @@ async function sendMessage() {
         request_id: requestId,
       }),
     });
-    const data = await resp.json();
+    const data = await resp.json().catch(() => ({}));
     thinking.remove();
-    appendMsg('cos', data.reply || '(empty reply)');
+    if (!resp.ok || !data || typeof data !== 'object' || Array.isArray(data) || typeof data.reply !== 'string' || !data.reply.trim()) {
+      if (!sendInput.value.trim()) sendInput.value = text;
+      const confirmedRefusal = resp.status === 403 && data?.error === 'csrf';
+      appendMsg('cos', confirmedRefusal
+        ? 'Message was not sent: request verification failed. Your draft is preserved.'
+        : 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
+      return;
+    }
+    appendMsg('cos', data.reply);
   } catch(err) {
     thinking.remove();
-    appendMsg('cos', 'Error: ' + err.message);
+    if (!sendInput.value.trim()) sendInput.value = text;
+    appendMsg('cos', 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
   } finally {
     setInputDisabled(false);
     sendInput.focus();
@@ -322,14 +342,20 @@ activateTab(INITIAL_TAB, false);
 if (INITIAL_TAB !== 'confer') loadTab(INITIAL_TAB);
 </script>
 <script type="module">
-import { ConferVoiceController } from "../static/realtime-voice/realtime-confer-controller.js?v=20261013-chained1";
+import { ConferVoiceController } from "../static/realtime-voice/realtime-confer-controller.js?v=20261015-token1";
+import { RealtimeVoiceController } from "../static/realtime-voice/realtime-voice-controller.js?v=20261015-managed-end1";
+import { bindConferDictation, conferVoiceAvailability } from "../static/realtime-voice/confer-input-controls.js?v=20261015-dictation1";
 const button=document.getElementById('btn-voice');
 const status=document.getElementById('voice-status');
 const provider=document.getElementById('voice-provider');
 const transcript=document.getElementById('voice-transcript');
-let active=false;
+let active=false; let activeController=null; let stopping=null; let voiceRestartBlocked=false;
+const mode=document.getElementById('voice-mode');
+const keepTranscript=document.getElementById('voice-keep-transcript');
 const labels={requesting:'Connecting…',listening:'Listening',thinking:'Working on it…',speaking:'Speaking…',reconnecting:'Reconnecting…',interrupted:'Listening'};
+const csrfHeaders=cosWriteHeaders;
 const controller=new ConferVoiceController({
+  requestHeaders:csrfHeaders,
   capabilitiesUrl:'../api/realtime-voice/confer/capabilities',
   bootstrapUrl:'../api/realtime-voice/confer/bootstrap',
   turnUrl:'send',conversationId:'owner',
@@ -348,18 +374,78 @@ const controller=new ConferVoiceController({
   onWarning:()=>{status.textContent='Voice will stop in about two minutes.';},
   onError:error=>{transcript.textContent=`Voice: ${error.detail||error.reason||'could not continue'}. Typing still works.`;},
 });
-try {
-  const capabilities=await controller.availableProviders();
-  button.disabled=!(capabilities.providers||[]).length;
-  provider.textContent='Voice with Chief of Staff';
-} catch(error) {button.disabled=true;provider.textContent='Voice unavailable';}
+let legacyReady=false;
+const realtime=new RealtimeVoiceController({
+  managedBootstrap:{sessionUrl:'../api/realtime-voice/managed/session'},requestHeaders:csrfHeaders,
+  includeTranscriptAfterEnd:true,
+  onStateChange:state=>{
+    active=!['idle','ended'].includes(state);
+    button.disabled=voiceRestartBlocked||state==='ending';
+    button.textContent=active?'■':'🎤';button.classList.toggle('recording',active);
+    button.setAttribute('aria-pressed',String(active));
+    button.title=active?'End voice conversation':'Start voice conversation';
+    button.setAttribute('aria-label',button.title);status.textContent=state;
+    if(mode)mode.disabled=active||voiceRestartBlocked;
+  },
+  // Realtime transcript stays out of the working conversation while speaking;
+  // optional export is offered only after End. Native consultations keep their
+  // own canonical receipts through the existing Confer service.
+  onFatalError:error=>{
+    if(['termination_uncertain','voice_session_unresolved','agent_action_unresolved'].includes(error.reason)){voiceRestartBlocked=true;button.disabled=true;if(mode)mode.disabled=true;}
+    transcript.textContent=error.detail||'Voice stopped. Typing still works.';
+  },
+  onWarning:()=>{status.textContent='Voice will stop in about two minutes.';},
+  onFinalize:receipt=>{
+    if(receipt.partial||!keepTranscript?.checked||!receipt.turns?.length)return;
+    const data=receipt.turns.map(t=>`${t.speaker}: ${t.text}${t.completed?'':' [partial]'}`).join('\n\n');
+    const url=URL.createObjectURL(new Blob([data],{type:'text/plain;charset=utf-8'}));
+    const link=document.createElement('a');link.href=url;link.download='minimoi-voice-transcript.txt';link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),0);
+  },
+});
+const dictation=bindConferDictation({
+  button:document.getElementById('btn-dictate'),input:document.getElementById('send-input'),
+  bootstrapUrl:'../api/realtime-voice/confer/bootstrap',requestHeaders:csrfHeaders,
+  beforeStart:async()=>{await stopVoice('dictation_started');if(voiceRestartBlocked)throw new Error('Earlier voice termination needs verification; typing still works');},
+  onStatus:text=>{status.textContent=text;},
+  onBusy:busy=>{document.getElementById('btn-send').disabled=busy||document.getElementById('send-input').disabled;},
+});
+function stopVoice(reason){
+  if(stopping)return stopping;
+  const selected=activeController;
+  const pending=(async()=>{
+    try{if(selected===realtime)await realtime.endSession(reason);else await controller.stop(reason);}
+    finally{active=false;}
+  })().finally(()=>{if(stopping===pending)stopping=null;updateVoiceAvailability();});
+  stopping=pending;return pending;
+}
+function updateVoiceAvailability(){
+  const availability=conferVoiceAvailability({legacyReady,realtimeReady:Boolean(mode),mode});
+  button.disabled=!availability.voiceReady||Boolean(stopping)||voiceRestartBlocked;
+  if(mode)mode.disabled=active||Boolean(stopping)||voiceRestartBlocked;
+  dictation.setAvailable(availability.dictationReady);
+  provider.textContent=availability.voiceReady?'Voice with Chief of Staff':'Voice unavailable · typing still works';
+}
+updateVoiceAvailability();
+async function refreshLegacyAvailability(){
+  try {
+    const capabilities=await controller.availableProviders();
+    legacyReady=(capabilities.providers||[]).some(item=>item.provider==='openai');
+  } catch(error) {legacyReady=false;}
+  updateVoiceAvailability();
+}
 button.addEventListener('click',async()=>{
-  if(active){controller.stop('user_ended');return;}
+  if(stopping||voiceRestartBlocked)return;
+  if(active){await stopVoice('user_ended');return;}
+  await dictation.stop('voice_started');
   active=true;
-  try {await controller.start('openai');}
+  try {activeController=mode?.value==='realtime'?realtime:controller;
+    if(activeController===realtime)await realtime.startSession({provider:'openai',conversation_id:'owner'});
+    else await controller.start('openai');}
   catch(error){active=false;transcript.textContent=`Voice could not start: ${error.message}. Typing still works.`;}
 });
-window.addEventListener('pagehide',()=>controller.stop('pagehide'));
+window.addEventListener('pagehide',()=>{dictation.stop('pagehide');controller.stop('pagehide');realtime.endSession('pagehide');});
+void refreshLegacyAvailability();
 </script>
 </body>
 </html>

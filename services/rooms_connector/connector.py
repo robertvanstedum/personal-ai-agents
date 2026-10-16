@@ -24,6 +24,9 @@ from services.rooms_worker.worker import Worker, log
 
 
 def build(env=os.environ):
+    from services.rooms_worker.transport_profile import from_env, admit_runtime
+    # Refuse cross-profile URLs before reading credentials or creating ledgers.
+    admit_runtime(env, kind="connector")
     teammate = env.get("ROOMS_TEAMMATE", "claude-code")
     if env.get("ROOMS_MANAGED_LEDGER"):
         from services.rooms_connector.managed_runner import ManagedRunner
@@ -48,15 +51,16 @@ def build(env=os.environ):
         url = env.get("RECORDS_URL", "http://127.0.0.1:18881")
         runner = ClaudeRunner(cli=env.get("CLAUDE_CLI", "/opt/homebrew/bin/claude"), state_dir=state)
         work_token, runtime_name = "rooms-connector-mac.token", "Claude Code CLI"
+    url, profile = from_env(env, url)
     state.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         runner.fingerprint()
     except Exception:
         pass
-    teammate_records = Records(url, lambda: read_secret(secrets / f"{teammate}.token"))
+    teammate_records = Records(url, lambda: read_secret(secrets / f"{teammate}.token"), profile=profile)
     if hasattr(runner, "bind_files"):
         runner.bind_files(teammate_records.get_bytes)          # the teammate fetches a room's shared files with ITS OWN credential, so membership is checked again by Records
-    worker = Worker(Records(url, lambda: read_secret(secrets / work_token)),
+    worker = Worker(Records(url, lambda: read_secret(secrets / work_token), profile=profile),
                     teammate_records,
                     runner, TurnJournal(state / "journal"), teammate=teammate,
                     agent_id=teammate, runtime=f"{runtime_name} {runner.version or 'unknown'}")
@@ -65,6 +69,8 @@ def build(env=os.environ):
 
 
 def main():
+    from services.rooms_worker.transport_profile import admit_runtime
+    admit_runtime(os.environ, kind="connector")
     # Managed workers share a canonical lock regardless of their journal path.
     # Old standalone workers must be retired during the reviewed cutover.
     managed_lock = None

@@ -51,7 +51,12 @@ KNOWN_PATHS=(
   /app/_NewDomains/research-intelligence/library
   /app/_NewDomains/research-intelligence/agent/config.json
   /app/domains/curator/curator_sources.json
+  /app/curator_cache
+  /app/curator_output.txt
   /app/_NewDomains/research-intelligence/topics
+  /app/research-state/library
+  /app/research-state/agent/config.json
+  /app/research-state/topics
 )
 
 # A Curator job running inside the container must not be cut off mid-write.

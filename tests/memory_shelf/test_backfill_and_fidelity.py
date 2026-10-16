@@ -207,7 +207,8 @@ def test_a_source_that_grew_or_vanished_is_skipped_not_failed(tmp_path):
     src = cfg.sources["claude-code"].root / "p/s-1.jsonl"
     src.write_text(src.read_text() + cc_lines("s-1", ("human", "five")))
     r = fidelity.check_record(cfg, main_for(shelf, "claude-code:s-1"))
-    assert r == {"record": r["record"], "status": "skipped", "reason": fidelity.SOURCE_CHANGED}
+    assert r["status"] == "skipped" and r["reason"] == fidelity.SOURCE_CHANGED
+    assert r["storage"] == {"status": "ok"} and r["source_replay"] == {"status": "skipped", "reason": fidelity.SOURCE_CHANGED}
     src.unlink()
     assert fidelity.check_record(cfg, main_for(shelf, "claude-code:s-1"))["reason"] == fidelity.SOURCE_MISSING
 

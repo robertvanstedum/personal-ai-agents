@@ -1,13 +1,21 @@
 services:
   neo4j:
-    image: neo4j:latest
+    # Freeze the already installed release; retained volume provenance still needs a store-version check.
+    image: neo4j:2026.08.1-community@sha256:d8f4c156caa3af76499134947deb11d13042e471d9733060449f2a01eb7a248e
     container_name: neo4j-context-graph
+    profiles: [local-graph]
     restart: unless-stopped
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env, no insecure default}
+      - NEO4J_server_memory_heap_initial__size=256M
+      - NEO4J_server_memory_heap_max__size=512M
+      - NEO4J_server_memory_pagecache_size=128M
+    # Admission budget for an explicitly started small dev graph, not a workload guarantee.
+    mem_limit: 1g
+    cpus: 1.0
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     volumes:
       - neo4j-data:/data
 
@@ -35,7 +43,7 @@ services:
     volumes:
       - ./data/curator:/app/data/curator
       - ./interests:/app/interests
-      - ./_NewDomains/research-intelligence/data:/app/_NewDomains/research-intelligence/data
+      - ./data/research-intelligence:/app/data/research-intelligence
       - ./curator_costs.json:/app/curator_costs.json
 
   german:

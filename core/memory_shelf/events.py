@@ -4,11 +4,13 @@ Who made a record is a fact (``chair``, ``source``); what has been done with it
 is a fact (``events``); how much weight it carries is derived at read time
 (``weight.py``). Events are appended, never edited or removed.
 
-**Approval cannot come from text.** ``approved-direct`` and
+**Owner actions cannot come from text.** ``approved-direct`` and
 ``approved-under-mandate`` are accepted only with an ``OwnerAuthority`` token,
 which only the owner's authenticated entry points create (``moi approve``, a
 Guild owner control). A transcript, a summary, an agent's note or an imported
-file saying "approved" has no way to build one; the normalizer and every
+file saying "approved" has no way to build one; supersession requires the same
+construction-time token. This token is a Python trust boundary, not a cryptographic
+proof of who authorized an imported event; the normalizer and every
 parser in this package never import it (a test checks that).
 """
 from __future__ import annotations
@@ -22,11 +24,12 @@ KINDS = frozenset({
     "superseded", "withdrawn", "designated-curated", "edition-added",
 })
 APPROVALS = frozenset({"approved-direct", "approved-under-mandate"})
+OWNER_ACTIONS = APPROVALS | {"superseded"}
 # Which extra key each kind may carry (besides at, kind, by).
 _EXTRA = {
     "proposed": {"via", "note"}, "approved-direct": {"via", "note"},
     "approved-under-mandate": {"via", "note"}, "verified": {"via", "note"},
-    "rejected": {"via", "note"}, "superseded": {"successor", "note"},
+    "rejected": {"via", "note"}, "superseded": {"successor", "note", "source_ref", "successor_ref", "request_id"},
     "withdrawn": {"note"}, "designated-curated": {"via", "note"},
     "edition-added": {"edition", "source_hash", "note"},
 }
@@ -59,9 +62,10 @@ def make_event(kind: str, by: str, *, now: datetime | None = None,
     """Build one valid event or raise ``EventRefused``."""
     if kind not in KINDS:
         raise EventRefused("kind is not in the closed vocabulary")
+    if kind in OWNER_ACTIONS:
+        if not isinstance(authority, OwnerAuthority) or by != authority.owner:
+            raise EventRefused("an owner action needs the owner's authenticated entry point")
     if kind in APPROVALS:
-        if authority is None or by != authority.owner:
-            raise EventRefused("an approval needs the owner's authenticated action")
         extra.setdefault("via", authority.entry_point)
         if kind == "approved-under-mandate":
             mandate = extra.pop("mandate", None)
@@ -97,4 +101,4 @@ def check_events(events: object) -> list[dict]:
     return events
 
 
-__all__ = ["KINDS", "APPROVALS", "OwnerAuthority", "EventRefused", "make_event", "check_events", "stamp"]
+__all__ = ["KINDS", "APPROVALS", "OWNER_ACTIONS", "OwnerAuthority", "EventRefused", "make_event", "check_events", "stamp"]

@@ -54,6 +54,7 @@ def _is_release_only(path: str) -> bool:
         or _is_staging_only(path)
         or path.startswith(DORMANT_PREFIXES)
         or path.startswith(LOCAL_TOOL_PREFIXES)
+        or path in LOCAL_TOOL_FILES
         or path.startswith(VAULT_LOCAL_PREFIXES)
         or path in VAULT_LOCAL_FILES
         or path in GUILD_LOCAL_TOOLS
@@ -104,6 +105,8 @@ STAGING_ONLY_PREFIXES = ("scripts/staging/",)
 # Operator tools that run on the owner's laptop: no production service image
 # runs them (the Dockerfiles copy the repository, but nothing starts these).
 LOCAL_TOOL_PREFIXES = ("scripts/workshop/", "scripts/vault/", "tools/workshop/", "scripts/release/", "scripts/dev/")
+# Exact laptop operator entrypoints; no production service starts or mounts these.
+LOCAL_TOOL_FILES = frozenset({"scripts/mc/morning.py", "scripts/mc/regression.py", "scripts/rooms/archive.py"})
 
 # Workshop readers/writers remain portal-owned, with laptop-only callers.
 # The two exact scrub modules also serve the CoS Vault context renderer below;
@@ -118,7 +121,8 @@ SHARED_SCRUB_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scru
 # fail if a production service starts depending on a laptop-only module.
 VAULT_COS_FILES = frozenset({"core/memory_ask/consumer.py", "core/memory_ask/context.py", "core/memory_ask/citation.py"})
 VAULT_LOCAL_PREFIXES = ("core/memory_shelf/", "core/memory_index/", "core/memory_backup/")
-VAULT_LOCAL_FILES = frozenset({"core/memory_ask/agents_cli.py", "core/memory_ask/ask.py", "core/memory_ask/canary_check.py",
+VAULT_LOCAL_FILES = frozenset({"core/memory_ask/assessment.py", "core/memory_ask/regression.py", "core/memory_ask/runner.py",
+                             "core/memory_ask/agents_cli.py", "core/memory_ask/ask.py", "core/memory_ask/canary_check.py",
                              "core/memory_ask/cli.py", "core/memory_ask/identity.py", "core/memory_ask/querylog.py",
                              "core/memory_ask/service.py", "core/memory_ask/tool.py",
                              # Pure shelf export seam: only fixture/laptop callers, never a portal entrypoint.
@@ -142,6 +146,15 @@ def _is_staging_only(path: str) -> bool:
 def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
     services: set[str] = set()
     for path in (item.strip() for item in paths if item.strip()):
+        # Records is no longer an unrelated prototype: the approved production
+        # profile reuses the portal image as its code consumer. Until the actual
+        # production service/deploy closure is installed, retain full fallback
+        # rather than inventing a deployable Records service in ALL_SERVICES.
+        prefix = "prototype-lab/projects/project-records-room-poc/"
+        relative = path.removeprefix(prefix)
+        if (path.startswith(prefix) and not relative.startswith(("tests/", "docs/"))
+                and not relative.endswith((".md", ".pdf"))):
+            return "full", ALL_SERVICES
         if _is_release_only(path):
             continue
         if path.startswith("domains/german/"):

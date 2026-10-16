@@ -114,7 +114,7 @@ def test_redirect_or_bad_upstream_refused(upstream):
     assert upstream.closed
 
 
-@pytest.mark.parametrize("raw", [b"not json SECRET", b"[]", b"x" * (bridge.MAX_RESPONSE + 1)])
+@pytest.mark.parametrize("raw", [b"not json SECRET", b"[]", b"x" * (bridge.MAX_RESPONSE + 1)], ids=["invalid-json", "json-not-object", "response-too-large"])
 def test_malformed_or_oversized_answer_refused(raw):
     upstream = Upstream()
     upstream.raw = raw

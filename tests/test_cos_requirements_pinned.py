@@ -1,4 +1,4 @@
-"""docker/requirements.cos-agent.txt: every dependency pinned exactly to the set measured in the running production CoS image (cos-bot, cos-scheduler)."""
+"""Pinned measured CoS production baseline plus the reviewed server-sideband dependency."""
 import re
 from pathlib import Path
 
@@ -20,7 +20,9 @@ def _pins():
 
 def test_every_cos_dependency_is_pinned_exactly_to_the_measured_production_set():
     pins = _pins()
-    assert len(pins) == 51
+    # The measured 51-package baseline plus the reviewed server-sideband extra.
+    assert len(pins) == 52
+    assert pins["websockets"] == "15.0.1"
     # the ten packages a fresh build used to move, held at what production runs
     assert {k: pins[k] for k in ("openai", "pydantic", "pydantic-core", "boto3", "botocore", "cryptography",
                                  "markupsafe", "charset-normalizer", "pycparser", "python-dotenv")} == {

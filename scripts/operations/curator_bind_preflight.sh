@@ -25,7 +25,7 @@ while read -r kind _old host _target; do
     echo "preflight: $path is a symlink, expected a real $kind" >&2; problems=$((problems + 1))
   elif [[ ! -e "$path" ]]; then
     echo "preflight: $path is missing (Docker would mount an empty directory)" >&2; problems=$((problems + 1))
-  elif [[ "$kind" == dir && ! -d "$path" ]]; then
+  elif [[ ( "$kind" == dir || "$kind" == appdir ) && ! -d "$path" ]]; then
     echo "preflight: $path should be a directory" >&2; problems=$((problems + 1))
   elif [[ "$kind" == file && ! -f "$path" ]]; then
     echo "preflight: $path should be a regular file" >&2; problems=$((problems + 1))

@@ -105,7 +105,9 @@
         "allow": [
           "minimoi-gateway/minimoi-cos-agent"
         ]
-      }
+      },
+      "bootstrapMaxChars": 32000,
+      "bootstrapTotalMaxChars": 64000
     },
     "entries": {
       "cos-agent-a": {

@@ -10,7 +10,10 @@
 #    recorded as copied but missing from its tree -> REFUSE)
 #   snapshot lacks it, host path present -> keep (already durable)
 #   snapshot lacks it, host path missing -> moved: fine (created on first
-#                                           write); dir/file: REFUSE
+#                                           write); appdir recorded
+#                                           "absent": create it empty (the
+#                                           container had none, so nothing is
+#                                           hidden); dir/file: REFUSE
 #   wrong type or a symlink on either side -> REFUSE
 #
 # Content comes only from the snapshot: never from dev, the image or the repo.
@@ -70,10 +73,11 @@ same_content() {
 # exists, research sessions are written there instead of the durable
 # data/threads. A snapshot keeps it as evidence, but recreation would drop the
 # live folder, so a release cannot proceed while it exists (#305 review).
-TOPICS=/app/_NewDomains/research-intelligence/topics
-if grep -F -x -q "copied $TOPICS" "$SNAP/PATHS"; then
-  fail "$TOPICS exists in the running container; its sessions would not stay live after recreation. Preserve it live (a reviewed change) before releasing Curator"
-fi
+for TOPICS in /app/_NewDomains/research-intelligence/topics /app/research-state/topics; do
+  if grep -F -x -q "copied $TOPICS" "$SNAP/PATHS"; then
+    fail "$TOPICS exists in the running container; its sessions would not stay live after recreation. Preserve it live (a reviewed change) before releasing Curator"
+  fi
+done
 
 # What the snapshot itself recorded for a path: copied, absent or mounted.
 # No line at all prints nothing (and must not trip set -e/pipefail).
@@ -85,7 +89,7 @@ while read -r kind old host _target; do
   [[ -z "$kind" || "$kind" == \#* || "$old" == "-" ]] && continue
   src="$SNAP/tree$old"
   dst="$ROOT/$host"
-  want="$kind"; [[ "$kind" == moved ]] && want=file
+  want="$kind"; [[ "$kind" == moved ]] && want=file; [[ "$kind" == appdir ]] && want=dir
   src_kind="$(kind_of "$src")"
   dst_kind="$(kind_of "$dst")"
   record="$(recorded "$old")"
@@ -101,6 +105,11 @@ while read -r kind old host _target; do
   [[ "$dst_kind" == missing || "$dst_kind" == "$want" ]] ||
     fail "$dst is a $dst_kind, expected a $want"
   if [[ "$src_kind" == missing ]]; then
+    if [[ "$dst_kind" == missing && "$kind" == appdir && "$record" == absent ]]; then
+      plan+=("-|$dst")
+      echo "create  $dst (empty; the container had no $old)"
+      continue
+    fi
     if [[ "$dst_kind" == missing && "$kind" != moved ]]; then
       fail "$old is not in the snapshot and $dst does not exist; nothing to mount"
     fi
@@ -115,16 +124,24 @@ while read -r kind old host _target; do
   fi
 done < "$MAP"
 
-for item in "${plan[@]}"; do
-  src="${item%%|*}"
-  dst="${item#*|}"
-  mkdir -p "$(dirname "$dst")"
-  stage="$dst.seeding.$$"
-  rm -rf -- "$stage"
-  cp -a "$src" "$stage"
-  same_content "$src" "$stage" || fail "copy of $src into $stage did not verify"
-  [[ ! -e "$dst" ]] || fail "$dst appeared while seeding; nothing overwritten (staged copy left at $stage)"
-  mv "$stage" "$dst"
-done
+# Bash 3.2 with nounset treats an empty array expansion as unset.
+# A verified empty plan is an idempotent no-op, not a reason to seed anything.
+if (( ${#plan[@]} )); then
+  for item in "${plan[@]}"; do
+    src="${item%%|*}"
+    dst="${item#*|}"
+    mkdir -p "$(dirname "$dst")"
+    if [[ "$src" == "-" ]]; then
+      mkdir "$dst"
+      continue
+    fi
+    stage="$dst.seeding.$$"
+    rm -rf -- "$stage"
+    cp -a "$src" "$stage"
+    same_content "$src" "$stage" || fail "copy of $src into $stage did not verify"
+    [[ ! -e "$dst" ]] || fail "$dst appeared while seeding; nothing overwritten (staged copy left at $stage)"
+    mv "$stage" "$dst"
+  done
+fi
 
 echo "Curator state seeded from $SNAP (${#plan[@]} new, nothing overwritten)"

@@ -2,6 +2,7 @@
 (decision B, S1a); nothing calls a model, a paid provider or any other host."""
 from __future__ import annotations
 
+import ast
 import re
 import socket
 import sys
@@ -74,11 +75,62 @@ def test_the_briefing_is_a_pure_function_of_lights_and_needs():
 PROVIDER_MODULES = ("anthropic", "openai", "litellm", "xai_sdk", "groq", "google.generativeai", "mistralai", "cohere")
 
 
-def test_the_package_imports_no_model_provider():
+def _provider_import_violations(text, filename):
+    tree = ast.parse(text)
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    bad = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            modules = [node.module or ""]
+        else:
+            continue
+        if not any(m == provider or m.startswith(provider + ".") for m in modules for provider in PROVIDER_MODULES):
+            continue
+        functions = []
+        cursor = node
+        while cursor in parents:
+            cursor = parents[cursor]
+            if isinstance(cursor, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                functions.append(cursor.name)
+        # The opt-in managed host constructs its provider only inside this lazy factory.
+        # Page rendering and rules-only briefing must still never import a provider.
+        allowed = (filename == "mc_managed_realtime.py" and isinstance(node, ast.ImportFrom)
+                   and node.module == "openai" and node.level == 0
+                   and [(n.name, n.asname) for n in node.names] == [("OpenAI", None)]
+                   and functions == ["provider_factory", "install"])
+        if not allowed:
+            bad.append(node.lineno)
+    return bad
+
+
+def test_the_package_imports_no_model_provider_except_the_opt_in_lazy_factory():
     for path in PACKAGE.rglob("*.py"):
-        text = path.read_text()
-        for name in PROVIDER_MODULES:
-            assert not re.search(rf"^\s*(import|from)\s+{re.escape(name)}\b", text, re.M), (path, name)
+        assert not _provider_import_violations(path.read_text(), path.relative_to(PACKAGE).as_posix()), path
+
+
+@pytest.mark.parametrize("text,filename", [
+    ("from openai import OpenAI", "mc_managed_realtime.py"),
+    ("def install():\n def provider_factory():\n  from openai import OpenAI", "nested/mc_managed_realtime.py"),
+    ("def install():\n def provider_factory():\n  from openai import OpenAI", "briefing.py"),
+    ("def install():\n def other():\n  from openai import OpenAI", "mc_managed_realtime.py"),
+    ("def install():\n def provider_factory():\n  import anthropic", "mc_managed_realtime.py"),
+    ("def install():\n def provider_factory():\n  from openai import OpenAI as Alias", "mc_managed_realtime.py"),
+])
+def test_provider_import_guard_rejects_eager_or_unapproved_imports(text, filename):
+    assert _provider_import_violations(text, filename)
+
+
+def test_disabled_managed_voice_installs_no_provider_or_routes():
+    from flask import Flask
+    from minimoi_portal.guild_ui import mc_managed_realtime
+    app = Flask("managed-off")
+    app.extensions["floor"] = {}
+    def forbidden_provider():
+        pytest.fail("a disabled managed host constructed a provider")
+    assert mc_managed_realtime.install(app, "floor", environ={}, provider_factory=forbidden_provider) is False
+    assert [rule.rule for rule in app.url_map.iter_rules()] == ["/static/<path:filename>"]
 
 
 class OutboundBlocked(OSError):

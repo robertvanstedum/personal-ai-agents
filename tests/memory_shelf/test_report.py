@@ -23,7 +23,9 @@ def build(shelf, cfg, now=NOW, **kw):
 def record_fidelity(shelf, *, now=NOW, failed=0, ok=3, size=3, at=None):
     report.record_quality(shelf, "fidelity", {"at": (at or now).strftime("%Y-%m-%dT%H:%M:%SZ"), "method": "random_sample", "seed": 20261004,
                                               "sample_size": size, "checked": ok + failed, "ok": ok, "failed": failed, "skipped": {},
-                                              "scope": "storage_and_edition_same_parser"})
+                                              "scope": "storage_and_edition_same_parser",
+                                              "by_source": {"claude-code": {"sample_size": min(ok, 1), "checked": min(ok, 1), "ok": min(ok, 1), "failed": 0, "skipped": {}},
+                                                            "codex": {"sample_size": ok + failed - min(ok, 1), "checked": ok + failed - min(ok, 1), "ok": ok - min(ok, 1), "failed": failed, "skipped": {}}}})
 
 
 def tree_digest(root):
@@ -139,7 +141,7 @@ def test_fidelity_not_run_is_not_passed_and_a_recorded_result_carries_its_method
     q = build(shelf, cfg)["sources"]["codex"]["quality"]
     assert q["fidelity"] == {"state": "not_run"} and q["semantic_audit"] == {"state": "not_run"}
     record_fidelity(shelf, ok=5, size=5)
-    f = build(shelf, cfg)["sources"]["codex"]["quality"]["fidelity"]
+    f = build(shelf, cfg)["quality"]["fidelity"]
     assert f["state"] == "ok" and f["sample_size"] == 5 and f["method"] == "random_sample" and f["at"] == "2026-10-04T12:00:00Z"
     assert f["scope"] == "storage_and_edition_same_parser"
 
@@ -538,11 +540,11 @@ def test_a_fidelity_sample_is_ok_only_when_it_checked_records_and_adds_up(tmp_pa
     base = {"at": NOW.strftime("%Y-%m-%dT%H:%M:%SZ"), "method": "random_sample", "seed": 1, "sample_size": 3, "scope": "x"}
     report.record_quality(shelf, "fidelity", {**base, **doc})
     rep = build(shelf, cfg)
-    assert rep["sources"]["codex"]["quality"]["fidelity"]["state"] == expected
+    assert rep["quality"]["fidelity"]["state"] == expected
     if expected == "unknown":
         assert rep["sources"]["codex"]["status"]["state"] == "unknown"             # never a healthy source on that evidence
     if expected == "ok":
-        assert rep["sources"]["codex"]["status"]["state"] == "current"
+        assert rep["sources"]["codex"]["status"]["state"] == "unknown"  # global evidence is not attributable
 
 
 # ── the embedded job state settles after the job finishes (Codex, 5 Oct: it stayed "running" after the job ended ok) ──

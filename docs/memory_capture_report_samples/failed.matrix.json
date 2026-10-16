@@ -5,6 +5,20 @@
   "state": "failed"
  },
  "overall": "watch",
+ "quality": {
+  "fidelity": {
+   "at": "2026-10-04T11:30:00Z",
+   "checked": 3,
+   "failed": 0,
+   "method": "random_sample",
+   "ok": 3,
+   "sample_size": 3,
+   "scope": "storage_and_edition_same_parser",
+   "seed": 20261004,
+   "skipped": {},
+   "state": "ok"
+  }
+ },
  "rows": [
   {
    "captured_records": 1,

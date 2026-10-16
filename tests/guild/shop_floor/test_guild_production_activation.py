@@ -12,6 +12,14 @@ from floor_helpers import load_portal  # noqa: F401  (pytest fixture)
 PROD = "https://minimoi.ai"
 
 
+def test_new_managed_voice_stays_out_of_production_even_with_legacy_voice_approved():
+    from minimoi_portal.guild_mounts import production_environ
+    filtered=production_environ({'MINIMOI_GUILD_CHAT':'cos','MINIMOI_MC_VOICE':'1',
+        'MINIMOI_GUILD_VOICE_PRODUCTION':'1','MINIMOI_MC_MANAGED_REALTIME':'1'})
+    assert filtered['MINIMOI_MC_VOICE']=='1'
+    assert 'MINIMOI_MC_MANAGED_REALTIME' not in filtered
+
+
 def _rules(app, prefix):
     return [r.rule for r in app.url_map.iter_rules() if r.rule.startswith(prefix)]
 

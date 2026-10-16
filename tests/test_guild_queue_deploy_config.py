@@ -64,7 +64,7 @@ def _ignored(patterns, path):
                for p in patterns)
 
 
-def test_dockerignore_excludes_only_the_queue_file():
+def test_dockerignore_excludes_only_the_queue_and_curator_runtime_data():
     lines = [l.strip() for l in (REPO / ".dockerignore").read_text().splitlines()]
     patterns = [l for l in lines if l and not l.startswith("#") and not l.startswith("!")]
     assert "data/guild/build_queue.json" in patterns
@@ -72,4 +72,6 @@ def test_dockerignore_excludes_only_the_queue_file():
     assert not _ignored(patterns, "data/guild/experiment_projection.json")
     assert not _ignored(patterns, "data/guild/cos_context.json")
     data_patterns = [p for p in patterns if p.startswith("data")]
-    assert data_patterns == ["data/guild/build_queue.json"]
+    assert data_patterns == ["data/guild/build_queue.json", "data/research-intelligence/"]
+    assert _ignored(patterns, "data/research-intelligence/synthetic-runtime.json")
+    assert not _ignored(patterns, "data/unrelated/synthetic.json")

@@ -1,11 +1,5 @@
-"""Guild 1.1 slice 1 (spec §3): the Guild bar is Chat · Board · Build Log ·
-Workshop Log · Rooms on every /guild-next page, the Guild home included.
-
-Chat is the Shop floor; Board is the wall (the Workbench) and its post-its
-page; Build Log is the real page since slice 2, Rooms since slice 4.
-More holds the Workshop, the Guild home, the Docs line with its GitHub link,
-Operate, Labs and Design Studio (Planning Studio, under CoS, linked honestly
-to the Labs entry point). The portal's workspace bar is unchanged."""
+"""Build navigation has five owner-approved tabs: Chat, Board, Build Log, Admin and Rooms.
+Workshop remains available through Admin and its retained route, outside the main tabs."""
 from __future__ import annotations
 
 import re
@@ -16,7 +10,7 @@ from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 DOCS = "https://github.com/robertvanstedum/personal-ai-agents/tree/main/docs"
 DAILY = [("chat", "Chat", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/board"),
-         ("build-log", "Build Log", "/guild-next/guild/build/log"), ("workshop", "Workshop Log", "/guild-next/guild/workshop"),
+         ("build-log", "Build Log", "/guild-next/guild/build/log"), ("admin", "Admin", "/guild-next/guild/admin"),
          ("rooms", "Rooms", "/guild-next/guild/rooms")]
 MORE = [("workshop", "Workshop", "/guild-next/guild/workshop"), ("media", "Media library", "/guild-next/guild/media"),
         ("home", "Guild home", "/guild-next/"),
@@ -26,7 +20,7 @@ PAGES = {"/guild-next/": None, "/guild-next/guild/build": "chat", "/guild-next/g
          "/guild-next/guild/build/postits": "board", "/guild-next/guild/board": "board",
          "/guild-next/guild/media": None, "/guild-next/guild/build/queue": "build-log",
          "/guild-next/guild/build/log": "build-log", "/guild-next/guild/rooms": "rooms",
-         "/guild-next/guild/workshop": "workshop"}
+         "/guild-next/guild/workshop": None, "/guild-next/guild/admin": "admin"}
 
 
 def _nav(page):

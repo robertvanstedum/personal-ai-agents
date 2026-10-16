@@ -115,6 +115,10 @@ services:
       # (#305). The cursor is saved by rename, so it needs a folder mount.
       - CURATOR_SIGNAL_STORE_PATH=/app/data/curator/signal_store.jsonl
       - CURATOR_X_PULL_STATE_PATH=/app/data/curator/x_pull_state.json
+      # The day's briefing text, read by feedback, flagging and Telegram (#305).
+      - CURATOR_OUTPUT_PATH=/app/data/curator/curator_output.txt
+      # Private state remains on the existing production host binds.
+      - CURATOR_RESEARCH_STATE_DIR=/app/research-state
     volumes:
       # Every bind source here is listed in scripts/operations/curator_state.map,
       # seeded from the deploy-time production snapshot and checked before and
@@ -131,16 +135,19 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_history.json:/app/curator_history.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_costs.json:/app/curator_costs.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/interests:/app/interests
-      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-intelligence:/app/_NewDomains/research-intelligence/data
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-intelligence:/app/data/research-intelligence
       # Formerly container-only (#305): general comments, research library,
       # runtime-edited research config and source trust list. The two config
       # files are production copies: repo edits to them no longer reach
       # production without a reviewed merge into the host file.
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/annotations:/app/data/annotations
-      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-library:/app/_NewDomains/research-intelligence/library
-      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-config/config.json:/app/_NewDomains/research-intelligence/agent/config.json
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-library:/app/research-state/library
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/research-config/config.json:/app/research-state/agent/config.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator-config/curator_sources.json:/app/domains/curator/curator_sources.json
-      # Not mounted on purpose: research-intelligence/topics. If that folder
+      # Full article files (<hash>.json) that curator_history.json points to;
+      # feedback and Library enrichment load them by hash (#305).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/curator_cache:/app/curator_cache
+      # Not mounted on purpose: /app/research-state/topics. If that folder
       # exists, research sessions are written there instead of data/threads.
     ports:
       - "127.0.0.1:8766:8766"
@@ -195,6 +202,17 @@ services:
       - MINIMOI_GUILD_VOICE_PRODUCTION=1
       - MINIMOI_MC_VOICE=1
       - MINIMOI_DICTATION=1
+      # Explicit controls; activation follows reviewed production schema/runtime checks.
+      - MINIMOI_ROLE=production
+      - MINIMOI_MC_BOARD_OUTCOMES=${MINIMOI_MC_BOARD_OUTCOMES:-0}
+      - MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION=${MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION:-0}
+      - MINIMOI_MC_MANAGED_REALTIME=${MINIMOI_MC_MANAGED_REALTIME:-0}
+      - MINIMOI_COS_MANAGED_REALTIME=${MINIMOI_COS_MANAGED_REALTIME:-0}
+      - MINIMOI_COS_WRITE_GUARD=${MINIMOI_COS_WRITE_GUARD:-}
+      - MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO=${MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO:-}
+      # Dev liveness stays off; production requires its separate explicit opt-in.
+      - MINIMOI_MC_DOMAIN_HEALTH=0
+      - MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION=${MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION:-0}
       # IoT Connect reference demo runs as its own Compose project
       # (docker-compose.iotconnect.prod.yml, project "iotconnect"); the portal
       # reaches it over the shared edge network created below.
@@ -277,6 +295,8 @@ services:
     environment:
       - MINIMOI_ROLE=production
       - MINIMOI_VOICE_BUDGET=1
+      - MINIMOI_COS_MANAGED_REALTIME=${MINIMOI_COS_MANAGED_REALTIME:-0}
+      - MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO=${MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO:-}
       - MINIMOI_LIMITS_DIR=/app/runtime/guild/limits
       - TELEGRAM_CHAT_ID=8379221702
       - PORT=8769
