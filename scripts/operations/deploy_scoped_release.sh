@@ -14,6 +14,15 @@ SERVICES=("$@")
 COMPOSE=(docker-compose -f /opt/minimoi/docker-compose.prod.yml)
 REGISTRY="332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi"
 
+# Host-owned nonsecret activation survives image/Compose updates. Never source/eval it.
+# Fail before any ECR/Docker mutation when present configuration is invalid.
+ACTIVATION_ENV="$(python3 /opt/minimoi/scripts/production_activation.py)"
+if [[ -n "$ACTIVATION_ENV" ]]; then
+  while IFS='=' read -r activation_key activation_value; do
+    export "$activation_key=$activation_value"
+  done <<< "$ACTIVATION_ENV"
+fi
+
 cd /opt/minimoi
 aws ecr get-login-password --region us-east-1 |
   docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com

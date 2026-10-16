@@ -53,6 +53,17 @@ docker exec minimoi-curator python -m scripts.x.x_pull_incremental 2>&1 || \
 echo "$LOG_PREFIX Running RSS curation (grok-4.3)..."
 docker exec minimoi-curator python domains/curator/curator_rss_v2.py \
   --model=grok-4.3 --fallback --temperature=0.7
+RSS_STATUS=$?
+
+# Fail closed (#305): a failed curation must never reach Telegram or the
+# briefing_date stamp. This wrapper used to ignore curator_rss_v2.py's exit
+# status, so a crash could still be followed by the send and by a stamp that
+# marks whatever curator_latest.json holds as today's briefing, which also
+# stops the hourly retry. Without the stamp, the next hourly run retries.
+if [ $RSS_STATUS -ne 0 ]; then
+  echo "$LOG_PREFIX ERROR: curator_rss_v2.py exited with status $RSS_STATUS — not sending Telegram and not stamping briefing_date; the next hourly run in the window retries"
+  exit 1
+fi
 
 echo "$LOG_PREFIX Sending Telegram briefing (system bot)..."
 docker exec -e TELEGRAM_CHAT_ID=8379221702 minimoi-curator python core/telegram/telegram_bot.py --send

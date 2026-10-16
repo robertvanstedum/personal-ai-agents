@@ -32,6 +32,7 @@ def preflight(data_dir,environ,*,port=18880):
     root=Path(data_dir);refuse(root.is_absolute() and str(root)==os.path.normpath(str(root)) and not root.is_symlink(),'private_data_root_required')
     for p in (root,*root.parents):refuse(not p.is_symlink(),'symlink_refused')
     s=root.stat();refuse(stat.S_ISDIR(s.st_mode) and s.st_uid==os.geteuid() and not s.st_mode&0o077,'private_data_root_required')
+    refuse(not os.path.lexists(root/'INCOMPLETE'),'preparation_incomplete')
     marker=json.loads(private_file(root/MANIFEST,16384))
     required={'format','environment','data_dir','schema_sha256','owner_key_sha256','session_key_sha256','portal_key_kid'}
     refuse(isinstance(marker,dict) and set(marker)==required and marker['format']=='records-production-runtime/1' and marker['environment']=='production' and marker['data_dir']==str(root),'prepared_manifest_required')

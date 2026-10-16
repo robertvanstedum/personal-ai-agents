@@ -1,0 +1,33 @@
+# OPTIONAL explicit opt-in, never part of the ordinary nine-service release.
+# Include with docker-compose.prod.yml AND docker-compose.records-production.yml
+# only after reviewed empty state/key custody/access binding + network admission.
+# Existing network must be Internal=true with exactly the reviewed membership;
+# external:true references it and does not establish that runtime property.
+# This connects the portal only. It provisions no account, grant, state or key.
+services:
+  portal:
+    environment:
+      BASE_URL: https://minimoi.ai
+      MINIMOI_ROLE: production
+      MINIMOI_RECORDS_PROFILE: production
+      MINIMOI_RECORDS_PRODUCTION: "1"
+      RECORDS_BACKEND: http://minimoi-records:18880
+      RECORDS_PORTAL_KEY_FILE: /run/secrets/rooms-bridge/portal-bridge.key
+      # Already within the normal portal's RW Guild data mount. Owner-reviewed
+      # bindings must exist; a missing binding still grants nobody access.
+      MINIMOI_ROOMS_ACCESS_DIR: /app/runtime/guild/rooms
+    volumes:
+      - type: bind
+        source: ${MINIMOI_RECORDS_PORTAL_KEY:?existing distinct production bridge key required}
+        target: /run/secrets/rooms-bridge/portal-bridge.key
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - default
+      - iotconnect-edge
+      - records-production
+networks:
+  records-production:
+    external: true
+    name: ${MINIMOI_RECORDS_NETWORK:?existing internal production-only network required}

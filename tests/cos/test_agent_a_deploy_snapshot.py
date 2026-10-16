@@ -82,6 +82,11 @@ def _write_exe(path: Path, text: str) -> None:
 def harness(tmp_path):
     opt = tmp_path / "opt"
     (opt / "scripts").mkdir(parents=True)
+    # Exercise the real activation reader against an isolated absent host config.
+    reader = (ROOT / "scripts/operations/production_activation.py").read_text()
+    (opt / "scripts/production_activation.py").write_text(reader.replace(
+        "/etc/minimoi/production-activation.json",
+        str(tmp_path / "etc/minimoi/production-activation.json"), 1))
     for name in ("install_lesen_refresh_cron.sh", "setup_ec2_cron.sh"):
         _write_exe(opt / "scripts" / name, "#!/bin/bash\nexit 0\n")
     script = tmp_path / "deploy_scoped_release.sh"
