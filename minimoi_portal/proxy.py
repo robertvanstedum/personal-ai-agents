@@ -242,7 +242,8 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
              user: dict | None = None,
              strip_header_prefixes: tuple[str, ...] = (),
              forward_prefix: bool = False,
-             head_meta: dict[str, str] | None = None) -> Response:
+             head_meta: dict[str, str] | None = None,
+             verified_cos_voice_write: bool = False) -> Response:
     """
     Forward the current Flask request to backend_url/path.
     Rewrites URLs in HTML, CSS, and JS responses so they resolve
@@ -271,6 +272,10 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
 
     # Forward request headers minus hop-by-hop; identity is the portal's own.
     fwd_headers = _forward_headers(user, strip_header_prefixes)
+    if (verified_cos_voice_write is True and portal_prefix == "/app/cos" and
+            request.method == "POST" and user and user.get("tier") == "owner" and
+            path.strip("/").startswith("api/realtime-voice/managed/")):
+        fwd_headers["X-Minimoi-Voice-Write-Verified"] = "1"
 
     try:
         resp = requests.request(

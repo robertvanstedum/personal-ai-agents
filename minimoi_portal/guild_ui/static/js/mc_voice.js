@@ -1,3 +1,5 @@
+// Optional managed realtime uses the shared controlled-session host and controller.
+// The chained behavior below remains the fallback when managed metadata is absent.
 // Speaking with Master Craftsman (MC voice, v1). Off unless the server says so (data-mc-voice) AND the capabilities call answers.
 //
 // Chained, on the shared Confer controller: the microphone goes straight to the speech provider for TRANSCRIPTION only; each final transcript is submitted through the
@@ -25,42 +27,66 @@ export function initMcVoice(page) {
   if (!button || !status || document.body.dataset.mcVoice !== 'true') return;
   const api = page.urls.api;
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
-  let controller = null, starting = false, session = 0, provider = null, showingError = false;
+  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null;
 
   const say = (text, { loud = false, error = false } = {}) => { showingError = error; status.textContent = text; status.hidden = !text; if (loud && text) announce(text); };
-  const paint = (on) => { button.setAttribute('aria-pressed', String(on)); button.textContent = on ? 'Stop voice' : 'Voice'; };
-  const headers = () => ({ 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode() });
-  const busy = () => Boolean(controller || starting);
+  const paint = (on) => { button.setAttribute('aria-pressed', String(on)); button.textContent = on ? 'Stop voice' : ending ? 'Ending voice…' : 'Voice'; button.disabled=restartBlocked||Boolean(ending); };
+  const headers = () => ({ 'Content-Type':'application/json', 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode() });
+  const busy = () => Boolean(controller || starting || ending);
 
   async function available() {
     try {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.ok || !(body.providers || []).length) return null;
+      managed=body.managed_realtime || null;
+      if (managed) $('[data-mc-managed-settings]').hidden=false;
       return body.providers[0].label || body.providers[0].provider || 'the speech provider';
     } catch (e) { return null; }
   }
 
   // Ends the attempt in every state: still loading the code, still asking the provider, connected, or working on a turn.
   function stop(reason, { quiet = false } = {}) {
-    session += 1;
-    const c = controller;
-    controller = null;
-    starting = false;
-    if (c) { try { c.stop(reason); } catch (e) { /* already closed */ } }
-    paint(false);
-    if (!quiet) say(WORDS[reason] || '', { loud: Boolean(WORDS[reason]) });
+    const privateStop=['private','record_unknown','minimized','pagehide'].includes(reason);
+    if(privateStop){transcriptEnding=null;const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';}
+    if(ending)return ending;
+    endedAttempt=session;
+    transcriptEnding=['user_ended','limit'].includes(reason)?session:null;
+    const stoppedSession=++session,c=controller;
+    controller=null;starting=false;
+    let result;
+    try{result=c?.stop(reason);}catch(_){restartBlocked=true;say('Voice termination could not be verified. Do not retry yet; typing still works.',{loud:true,error:true});}
+    const finish=()=>{
+      if(session!==stoppedSession)return;
+      transcriptEnding=null;
+      for(const selector of ['[data-mc-voice-provider]','[data-mc-voice-transcript-choice]']){const node=$(selector);if(node)node.disabled=false;}
+      paint(false);
+      if(!quiet&&!showingError)say(WORDS[reason]||'Voice ended. Agent work already accepted may still finish.',{loud:Boolean(WORDS[reason])});
+    };
+    if(result&&typeof result.then==='function'){
+      const pending=Promise.resolve(result).catch(()=>{
+        if(session!==stoppedSession)return;
+        restartBlocked=true;say('Voice termination could not be verified. Do not retry yet; typing still works.',{loud:true,error:true});
+      }).finally(()=>{if(ending===pending)ending=null;finish();});
+      ending=pending;
+      paint(false);
+      if(!quiet&&!showingError)say('Ending voice… microphone stopped; waiting for termination confirmation.');
+      return pending;
+    }
+    finish();
   }
 
   async function start() {
-    if (busy()) return;
+    if (busy() || restartBlocked) return;
     if (!live.known) { say(WORDS.record_unknown, { loud: true, error: true }); return; }
     if (live.off) { say('Voice is not built for Private yet. Go back on the record to use it; typing in Private works as before.', { loud: true, error: true }); return; }
     document.dispatchEvent(new CustomEvent('guild:mic-claim', { detail: { who: 'voice' } }));        // dictation yields the microphone
     starting = true;
     const mine = ++session;
+    endedAttempt=null;
     const current = () => mine === session;
     paint(true);
+    if (managed) {await startManaged(mine,current);return;}
     say(`Connecting… Your speech is sent to ${provider} to be turned into text, and Master Craftsman's replies are read aloud by the same service.`);
     try {
       const { ConferVoiceController } = await import(`${api}/mc/voice/static/realtime-confer-controller.js`);
@@ -115,9 +141,68 @@ export function initMcVoice(page) {
     }
   }
 
+  async function startManaged(mine,current) {
+    const cid=page.conversation?.id;
+    if (!cid) {stop('failed',{quiet:true});say('Open a saved conversation before using voice.',{error:true});return;}
+    const selector=$('[data-mc-voice-provider]'),choice=$('[data-mc-voice-transcript-choice]');
+    const keepTranscript=Boolean(choice?.checked);
+    let terminal=false,failed=false;
+    selector.disabled=true;choice.disabled=true;
+    $('[data-mc-voice-transcript]').hidden=true;$('[data-mc-voice-transcript-text]').textContent='';
+    say('Connecting to OpenAI voice. It speaks directly and consults the shared CoS/MC agent when needed.');
+    try {
+      const {RealtimeVoiceController}=await import(`${api}/mc/voice/static/realtime-voice-controller.js`);
+      if (!current()) return;
+      const c=new RealtimeVoiceController({managedBootstrap:{sessionUrl:managed.session_url},openingInstruction:null,
+        requestHeaders:headers,includeTranscriptAfterEnd:keepTranscript,
+        onStateChange:state=>{
+          if(!current())return;
+          if(state==='active'&&!terminal&&!failed)say('Listening…');
+          if(state==='ended'){
+            terminal=true;endedAttempt=mine;controller=null;starting=false;paint(false);
+            selector.disabled=false;choice.disabled=false;
+            if(!showingError)say('Voice ended. Agent work already accepted may still finish.');
+          }
+        },
+        onInputState:phase=>{
+          if(!current()||terminal||failed||showingError)return;
+          const text={consulting:'Consulting the shared agent…',speech_started:'Listening…',
+            speech_stopped:'Understanding your speech…',understood:'Preparing a reply…'}[phase];
+          if(text)say(text);
+        },
+        onWarning:()=>{if(current()&&!terminal&&!failed)say('Voice will stop in about two minutes.',{loud:true});},
+        onStop:()=>{if(current())stop('limit');},
+        onFatalError:error=>{
+          if(!(current()||endedAttempt===mine))return;
+          failed=true;
+          if(['voice_session_unresolved','agent_action_unresolved'].includes(error?.reason)){
+            restartBlocked=true;button.disabled=true;
+            const message=error.reason==='voice_session_unresolved'
+              ? 'An earlier voice session has not been confirmed ended. Its status needs verification before voice can start. Typing still works.'
+              : 'An earlier agent action needs verification before voice can start. Typing still works.';
+            say(message,{loud:true,error:true});
+          }else if(error?.reason==='termination_uncertain'){
+            restartBlocked=true;button.disabled=true;
+            say('Voice stopped on this page, but provider termination is unconfirmed. Do not retry yet; typing still works.',{loud:true,error:true});
+          }else if(!restartBlocked){
+            say('Voice stopped. Any agent action already accepted may still finish; check its record. Typing still works.',{loud:true,error:true});
+          }
+        },
+        onFinalize:result=>{
+          if (!(current()||transcriptEnding===mine)||live.off||!live.known||page.conversation?.id!==cid||!keepTranscript)return;
+          const turns=(result.turns||[]).map(t=>`${t.speaker==='user'?'You':'Voice'}: ${t.text}${t.completed?'':' [partial]'}`);
+          $('[data-mc-voice-transcript-text]').textContent=turns.join('\n\n');
+          $('[data-mc-voice-transcript]').hidden=turns.length===0;
+        }});
+      controller={stop:reason=>c.endSession(reason)};
+      await c.startSession({provider:selector.value,conversation_id:cid});
+    } catch (_) {if(current()){stop('failed',{quiet:true});say(restartBlocked?'The earlier voice session needs verification before another can start. Typing still works.':'Voice could not start. No new session was confirmed; typing still works.',{loud:true,error:true});}}
+    finally {if(current())starting=false;if(!busy()){selector.disabled=false;choice.disabled=false;}}
+  }
+
   button.addEventListener('click', () => { if (busy()) stop('user_ended'); else start(); });
   document.addEventListener('guild:mic-claim', (e) => { if (e.detail?.who !== 'voice' && busy()) stop('user_ended', { quiet: true }); });
-  onChange(() => { if (busy() && (live.off || !live.known)) stop(live.off ? 'private' : 'record_unknown'); });
+  onChange(() => { if (live.off || !live.known) {if(busy())stop(live.off?'private':'record_unknown');const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';} });
   new MutationObserver(() => { if (busy() && panelMode() === 'pill') stop('minimized'); }).observe(document.body, { attributes: true, attributeFilter: ['data-mc-mode'] });
   window.addEventListener('pagehide', () => { if (busy()) stop('pagehide', { quiet: true }); });
 

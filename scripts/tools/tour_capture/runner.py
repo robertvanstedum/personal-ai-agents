@@ -12,6 +12,7 @@ from shutil import copy2
 from urllib.parse import urlparse
 
 from .auth import ensure_authenticated, storage_state_path
+from .paths import ensure_private_directory
 from .imaging import build_contact_sheet, optimize_png
 from .manifest import CapturedScene, write_manifest, write_report, write_review_page
 from .readiness import wait_for_checkpoint
@@ -180,10 +181,15 @@ class CaptureRunner:
         self.last_action = "not started"
 
     def _new_run_dir(self) -> Path:
+        output_root = self.output_root.expanduser()
+        if not output_root.is_absolute():
+            output_root = Path.cwd() / output_root
+        self.output_root = ensure_private_directory(output_root)
         stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
-        run_dir = self.output_root / self.scenario["id"] / stamp
+        scenario_dir = ensure_private_directory(self.output_root / self.scenario["id"])
+        run_dir = ensure_private_directory(scenario_dir / stamp)
         for name in ("raw", "optimized", "diagnostics"):
-            (run_dir / name).mkdir(parents=True, exist_ok=True)
+            ensure_private_directory(run_dir / name)
         return run_dir
 
     def _url(self, path: str) -> str:

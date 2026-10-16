@@ -340,6 +340,15 @@ def verify_shelf(root: str) -> dict:
         problems.append({"where": "shelf", "code": "unreadable_records", "count": vault.unreadable})
     if (Path(root) / Publisher.INCOMPLETE_MARKER).exists():
         problems.append({"where": "shelf", "code": "output_marked_incomplete"})
+    if (Path(root) / "assets").exists() or (Path(root) / "assets").is_symlink():
+        from core.vault_t1 import assets
+        native = assets.verify(root)
+        checked.update(native['checked'])
+        problems.extend(native['problems'])
+        orphaned=native.get('warnings',{}).get('unreferenced_objects',0)
+        if orphaned:
+            return {"kind":"shelf","ok":not problems,"checked":checked,"problems":problems,
+                    "warnings":[{"where":"assets","code":"unreferenced_objects","count":orphaned}]}
     return {"kind": "shelf", "ok": not problems, "checked": checked, "problems": problems}
 
 
@@ -462,7 +471,20 @@ def _walk(folder: str) -> set[str]:
     return out
 
 
+def _asset_export_format(folder: str) -> bool:
+    # The native asset format is deliberately separate; legacy conversation
+    # exports and their verification/restore contracts remain unchanged.
+    try:
+        doc = json.loads(reader.read_path(folder, [MANIFEST], 64 * 1024 * 1024))
+        return isinstance(doc, dict) and doc.get('format') == 'vault-assets-export/1'
+    except (VaultError, ValueError, UnicodeDecodeError):
+        return False
+
+
 def verify_export(folder: str) -> dict:
+    if _asset_export_format(folder):
+        from core.vault_t1 import assets
+        return assets.verify_export(folder)
     manifest, blobs, problems = _load_export(folder)
     result = {"kind": "export", "ok": not problems, "checked": {"files": len(blobs)}, "problems": problems}
     if manifest:
@@ -483,6 +505,9 @@ def restore(folder: str, target: str) -> dict:
     """Rebuild a shelf-shaped folder from an export. The whole manifest graph is verified first and restore writes *only those
     verified bytes* (never a second read), so a pointer cannot lead it anywhere else. Nothing is created if verification fails; the
     target must be absent or an empty real folder; files are published without replacing anything."""
+    if _asset_export_format(folder):
+        from core.vault_t1 import assets
+        return assets.restore(folder, target)
     manifest, blobs, problems = _load_export(folder)
     if problems or manifest is None:
         raise Damaged("export_does_not_verify", {"problems": len(problems)})

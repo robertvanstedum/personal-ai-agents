@@ -8,6 +8,8 @@
                                      so it runs only at a real terminal
     moi dry-run <source>             write the dry-run listing (claude-code | codex | inbox | backfill-guild | backfill-curator)
     moi watch <source>               one watcher pass (dry run only until approved)
+    moi watch codex --id UUID --bounded-codex --max-source-bytes N
+                                     explicit bounded targeted refresh; never changes whole-source freshness
     moi inbox                        one inbox pass (nothing but the canary moves until `approve-source inbox`)
     moi drain                        apply the outbox to the shelf
     moi canary emit | check          write the canary into the inbox | audit it (read-only)
@@ -198,7 +200,7 @@ def cmd_report(cfg, shelf, args, out, clock) -> int:
             sample = fidelity.sample(shelf, cfg, n=args.fidelity, seed=int(clock.strftime("%Y%m%d")))
             report.record_quality(shelf, "fidelity", {
                 "at": clock.strftime("%Y-%m-%dT%H:%M:%SZ"), "method": "random_sample", "seed": int(clock.strftime("%Y%m%d")),
-                "sample_size": args.fidelity, "checked": sample["checked"], "ok": sample["ok"], "failed": sample["failed"],
+                "sample_size": args.fidelity, "checked": sample["checked"], "ok": sample["ok"], "failed": sample["failed"], "by_source": sample["by_source"],
                 "skipped": sample["skipped"], "scope": "storage_and_edition_same_parser"})
         jobs_root = args.jobs_root or os.environ.get("MINIMOI_JOBS_ROOT") or "~/minimoi-staging/data/jobs"
         doc = report.build(shelf, cfg, clock, jobs_root=Path(jobs_root).expanduser())
@@ -236,11 +238,16 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("review")
     p = sub.add_parser("approve"); p.add_argument("id"); p.add_argument("--under")
+    p = sub.add_parser("supersede"); p.add_argument("id"); p.add_argument("successor")
+    p.add_argument("--source-ref", required=True); p.add_argument("--successor-ref", required=True); p.add_argument("--request-id", required=True)
     p = sub.add_parser("approve-source"); p.add_argument("source")
     p = sub.add_parser("designate"); p.add_argument("ids", nargs="+")
     p = sub.add_parser("list"); p.add_argument("source", nargs="?"); p.add_argument("--canary", action="store_true")
     p = sub.add_parser("dry-run"); p.add_argument("source")
     p = sub.add_parser("watch"); p.add_argument("source")
+    p.add_argument("--id", action="append", dest="source_ids")
+    p.add_argument("--max-source-bytes", type=int)
+    p.add_argument("--bounded-codex", action="store_true")
     sub.add_parser("inbox")
     sub.add_parser("drain")
     p = sub.add_parser("canary"); p.add_argument("action", choices=["emit", "check"])
@@ -304,6 +311,28 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
             outcome[result] = outcome.get(result, 0) + 1
         print(f"repair\t{json.dumps(outcome, sort_keys=True)}", file=out)
         return OK if set(outcome) <= {"repaired"} else REFUSED
+    if args.cmd == "supersede":
+        if not is_tty():
+            print("refused: not_interactive", file=out); return REFUSED
+        try:
+            from core.vault_t1 import reader
+            refs=[]
+            for name in (args.source_ref,args.successor_ref):
+                path=Path(name).absolute()
+                refs.append(json.loads(reader.read_path('/',list(path.parts[1:]),16384)))
+            if refs[0].get('record_id')!=args.id or refs[1].get('record_id')!=args.successor:
+                raise approvals.ApprovalRefused('annotation_identity_mismatch')
+            for reference in refs:approvals._annotation_ref_shape(reference)
+            description='; '.join(f"{r['record_id']} edition {r['edition']} SHA256 {r['edition_sha256']} lines {r['lines'][0]}-{r['lines'][1]} range SHA256 {r['range_sha256']}" for r in refs)
+            auth=_authority(confirm, f"supersede first record with second: {description}; no successor approval", out)
+            if not auth:return REFUSED
+            result=approvals.supersede_record(shelf,*refs,auth,request_id=args.request_id,now=now)
+        except fsio.PublicationUncertain:
+            print("uncertain: annotation_publication_uncertain; reconcile the same request before further action",file=out);return REFUSED
+        except (approvals.ApprovalRefused,reader.VaultError,ValueError,AttributeError):
+            print("refused: annotation_input_or_action", file=out); return REFUSED
+        print(json.dumps({'superseded':True,'repeated':result['repeated'],'index_refresh_required':True}),file=out)
+        return OK
     if args.cmd == "approve":
         auth = _authority(confirm, f"approve record {args.id}" + (f" under mandate {args.under}" if args.under else ""), out)
         if not auth:
@@ -356,8 +385,17 @@ def main(argv: Sequence[str] | None = None, *, confirm: Callable[[str], bool] = 
         if args.source not in cfg.sources:
             print("unknown source", file=out)
             return USAGE
-        res = watchers.run_source(shelf, cfg.sources[args.source], now=clock)
+        kwargs = {}
+        if args.source_ids is not None: kwargs['source_ids'] = args.source_ids
+        if args.max_source_bytes is not None: kwargs['max_source_bytes'] = args.max_source_bytes
+        if args.bounded_codex:
+            from core.memory_shelf.capture_limits import CodexLimits
+            kwargs['codex_limits'] = CodexLimits()
+        res = watchers.run_source(shelf, cfg.sources[args.source], now=clock, **kwargs)
         print(f"watch\t{args.source}\t{res['status']}\t{json.dumps(res['counts'], sort_keys=True)}", file=out)
+        if kwargs and (res['status'] not in ('ok', 'selected_only') or any(res['counts'].get(k) for k in
+                       ('failed', 'unstable', 'disk_low', 'outside_window', 'batch_deadline_invalid'))):
+            return REFUSED
         return OK
     if args.cmd == "inbox":
         res = inbox.run(shelf, cfg.inbox_root, now=clock, never_copy=cfg.never_copy)

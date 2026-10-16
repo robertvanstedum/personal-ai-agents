@@ -217,7 +217,8 @@ PRODUCTION_FLAG = "MINIMOI_GUILD_PRODUCTION"
 PRODUCTION_COS_FILES = ("MINIMOI_MC_COS_FILES_DIR", "MINIMOI_MC_COS_FILES_AGENT_DIR",
                         "MINIMOI_MC_COS_FILES_UID", "MINIMOI_MC_COS_FILES_GID")
 PRODUCTION_HELD_OFF = ("MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MINIMOI_GUILD_MC_STREAM",
-                       "MINIMOI_MC_VOICE", "MINIMOI_DICTATION", "MINIMOI_MC_FILES_HOST_ROOT")
+                       "MINIMOI_MC_VOICE", "MINIMOI_DICTATION", "MINIMOI_MC_FILES_HOST_ROOT",
+                       "MINIMOI_MC_MANAGED_REALTIME")
 
 
 def origin_host(base_url) -> str:
@@ -266,6 +267,10 @@ def production_environ(environ) -> dict:
             held_off.difference_update(PRODUCTION_COS_FILES)
     if flag_on(environ, "MINIMOI_GUILD_VOICE_PRODUCTION") and str(environ.get(CHAT_VAR, "")).strip().lower() == "cos":
         held_off.difference_update({"MINIMOI_MC_VOICE", "MINIMOI_DICTATION"})
+        # Separate production admission: ordinary speech opt-in alone must not
+        # enable controlled sessions. Schema/runtime checks remain in install().
+        if flag_on(environ, "MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION"):
+            held_off.discard("MINIMOI_MC_MANAGED_REALTIME")
     env = {k: v for k, v in dict(environ).items() if k not in held_off}
     if str(env.get(CHAT_VAR, "")).strip().lower() == "cos":
         env["MINIMOI_GUILD_MC"] = "cos"

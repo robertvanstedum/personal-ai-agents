@@ -1,4 +1,4 @@
-"""Records (Rooms) behind the portal on dev only (Guild 1.1 slice 4, spec §6).
+"""Records (Rooms) behind the portal with explicit named transport profiles (Guild 1.1 slice 4, spec §6).
 
 Reviewed copy of prototype-lab/projects/project-records-room-poc/
 dev_portal_bridge.py, with one reviewed change: the backend is exactly one
@@ -17,7 +17,7 @@ What it keeps (R4) and what changed (Rooms identity, draft 3):
 * The portal cookie, bearer tokens, forwarded identity and every other
   request header are never passed through. A client-supplied X-Portal-Identity is
   dropped; the bridge sets its own.
-* Records answers only on the dev origin (and a local test host). A non-GET
+* Records answers only on the selected profile origin (dev also allows its existing local test host). A non-GET
   needs Origin equal to that origin; the Idempotency-Key header passes
   through; bodies are capped (3,000,000 bytes) while streaming.
 * Records' own actor, membership and owner checks decide every action; the
@@ -27,8 +27,9 @@ What it keeps (R4) and what changed (Rooms identity, draft 3):
   (502/503 rooms_unavailable / rooms_integration). A Records 401 for the
   assertion is an integration fault, never a request to sign in.
 
-Installed only when BASE_URL is the dev origin and RECORDS_BACKEND is set
-and valid; in production nothing is registered and /app/records/ is 404.
+Legacy install_if_dev remains dev-only. install_configured additionally admits
+only an explicitly selected production role/profile/origin/switch with the fixed
+production backend. Configuration alone creates no Records owner, binding or key.
 """
 from __future__ import annotations
 
@@ -41,6 +42,7 @@ import requests
 from flask import Response, request
 
 from minimoi_portal import rooms_identity as RI
+from minimoi_portal.transport_profiles import DEV, PRODUCTION, select_records_profile
 
 log = logging.getLogger(__name__)
 
@@ -69,10 +71,14 @@ class BackendRefused(ValueError):
     """RECORDS_BACKEND is not exactly one allowed internal HTTP origin."""
 
 
-def validate_backend(url: str | None) -> str:
+def validate_backend(url: str | None, *, profile=DEV) -> str:
     """The configured backend as a canonical origin, or BackendRefused.
     http only; a hostname from BACKEND_HOSTS (exact); an optional port; no
     user info, path, query or fragment."""
+    if profile not in (DEV, PRODUCTION):
+        raise BackendRefused("Records profile refused")
+    if profile == PRODUCTION and url != PRODUCTION.backend:
+        raise BackendRefused("Production Records backend must match its fixed profile")
     if not isinstance(url, str) or not url or url != url.strip():
         raise BackendRefused("RECORDS_BACKEND is not set")
     try:
@@ -110,8 +116,8 @@ def _json(status: int, code: str, message: str) -> Response:
     return Response(json.dumps({"error": message, "code": code}), status=status, content_type="application/json")
 
 
-def install(portal, require_login, require_owner, *, backend: str, transport=None, identity=None) -> str:
-    backend = validate_backend(backend)
+def install(portal, require_login, require_owner, *, backend: str, transport=None, identity=None, profile=DEV) -> str:
+    backend = validate_backend(backend, profile=profile)
     identity = identity or {}
     access = identity.get("access")
     key_file = identity.get("key_file") or KEY_FILE_DEFAULT
@@ -135,10 +141,15 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
         return decision, key
 
     def forward(path=""):
-        if not _allowed_host(request.host, backend):
-            return Response("Records is available only on dev.minimoi.ai", status=404)
+        # Never sign archive proof from a generic browser payload. Only the
+        # owner orchestration route checks sources and retains admission locks.
+        import re
+        if request.method not in {'GET','HEAD'} and re.fullmatch(r'api/v1/rooms/[0-9a-f-]{36}/(?:archive|archive-reconcile)',path):
+            return _json(403,'archive_orchestrator_required','Use the owner archive action.')
+        if not (request.host == profile.host if profile == PRODUCTION else _allowed_host(request.host, backend)):
+            return Response("Records is unavailable on this host", status=404)
         if request.method not in {"GET", "HEAD"}:
-            expected = DEV_ORIGIN if request.host == DEV_HOST else "http://" + request.host
+            expected = profile.origin if request.host == profile.host else "http://" + request.host
             if request.headers.get("Origin") != expected:
                 return Response("Same-origin request required", status=403)
         if request.content_length and request.content_length > MAX_BODY:
@@ -170,7 +181,7 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
             if len(payload) > MAX_BODY:
                 return Response("Request too large", status=413)
             headers[RI_HEADER] = RI.sign(key, principal=decision.principal, method=request.method,
-                                         target=RI.canonical_target("/" + path, request.query_string), body=payload, env=ENV_NAME)
+                                         target=RI.canonical_target("/" + path, request.query_string), body=payload, env=profile.assertion_env)
             sender = transport if transport is not None else _TRANSPORT
             if sender is not None:
                 upstream = sender.request(request.method, target, headers=headers, data=payload, timeout=20,
@@ -202,7 +213,7 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
             if name in upstream.headers:
                 response.headers[name] = upstream.headers[name]
         response.headers["Cache-Control"] = "no-store"
-        response.headers["X-Records-Environment"] = "dev"
+        response.headers["X-Records-Environment"] = profile.assertion_env
         return response
 
     def call_records(method: str, path: str, payload: dict | None = None, *, operation_key=None):
@@ -213,7 +224,7 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
             return 403, None
         raw = json.dumps(payload).encode("utf-8") if payload is not None else b""
         headers = {"Accept": "application/json", RI_HEADER: RI.sign(key, principal=decision.principal, method=method,
-                                                                    target=RI.canonical_target(path, b""), body=raw, env=ENV_NAME)}
+                                                                    target=RI.canonical_target(path, b""), body=raw, env=profile.assertion_env)}
         if payload is not None:
             headers["Content-Type"] = "application/json"
             headers["Origin"] = backend
@@ -234,6 +245,7 @@ def install(portal, require_login, require_owner, *, backend: str, transport=Non
         except ValueError:
             return up.status_code, None
 
+    portal.extensions["records_transport_profile"] = profile.name
     portal.extensions["rooms_call"] = call_records
     portal.extensions["rooms_who"] = who          # the Rooms page asks the same live question the bridge does
     wrapped = require_login(require_owner(forward))
@@ -268,5 +280,26 @@ def install_if_dev(portal, *, base_url: str | None, environ, require_login, requ
         except BackendRefused as exc:
             log.warning("records bridge: not installed: %s", exc)
             state = {"state": "refused_backend", "reason": str(exc)}
+    portal.extensions["records_bridge"] = state
+    return state
+
+
+def install_configured(portal, *, base_url, environ, require_login, require_owner, identity=None):
+    """Explicit production opt-in, legacy dev behavior otherwise unchanged."""
+    profile = select_records_profile(base_url, environ)
+    if profile == DEV:
+        return install_if_dev(portal, base_url=base_url, environ=environ,
+            require_login=require_login, require_owner=require_owner, identity=identity)
+    if profile != PRODUCTION:
+        state = {"state":"off_not_dev"}
+    elif not environ.get("RECORDS_BACKEND"):
+        state = {"state":"off_no_backend"}
+    else:
+        try:
+            backend = install(portal, require_login, require_owner,
+                backend=environ["RECORDS_BACKEND"], identity=identity, profile=profile)
+            state = {"state":"on", "prefix":PREFIX, "backend_host":urlsplit(backend).hostname, "profile":profile.name}
+        except BackendRefused:
+            state = {"state":"refused_backend", "reason":"Production Records backend profile mismatch"}
     portal.extensions["records_bridge"] = state
     return state

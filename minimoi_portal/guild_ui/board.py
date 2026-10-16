@@ -103,6 +103,75 @@ class BoardMixin:
                     "counts": {"active": len(active), "done": done_total, "trash": len(trash)}}
         return self._read(work, fresh_for_s=30)
 
+    def referenced_postits(self, ids):
+        """Read at most three explicit IDs on this floor; no cross-floor fallback."""
+        ids = list(dict.fromkeys(ids))
+        if len(ids) > 3 or any(type(n) is not int or n < 1 for n in ids):
+            raise ValueError("At most three positive Board IDs required")
+        def work(q):
+            if not ids:
+                return {"postits": []}
+            marks = ", ".join(["%s"] * len(ids))
+            rows = q(f"SELECT {S._POSTIT_COLS} FROM guild.floor_postits "
+                     f"WHERE floor = %s AND id IN ({marks})", [self.floor, *ids])
+            return {"postits": [S._postit(r) for r in rows]}
+        return self._read(work, fresh_for_s=0)
+
+    def outcome_receipt(self, source_id: int, *, turn_key: str):
+        """Read a durable historical outcome receipt; never retry a mutation."""
+        key = "mc-outcome-" + hashlib.sha256(f"{turn_key}\0{source_id}".encode()).hexdigest()[:40]
+        def work(q):
+            rows = q("SELECT outcome, result_ref FROM guild.floor_requests "
+                     "WHERE floor = %s AND idempotency_key = %s AND op = %s AND principal = %s",
+                     [self.floor, key, "postit.outcome", S.MASTER_CRAFTSMAN.id])
+            if not rows:
+                return {"state":"not_recorded"}
+            outcome, ref = rows[0]
+            if outcome == "added" and ref:
+                return {"state":"saved", "source_id":source_id, "postit_id":int(ref)}
+            return {"state":"not_saved", "reason":outcome}
+        return self._run(work, write=False)
+
+    def add_outcome(self, source_id: int, expect_version: int, text: str, *, turn_key: str):
+        """Platform-mediated MC outcome; preserve source and serialize against edits.
+
+        turn_key is the authenticated owner note's stable request ID, never model
+        selected. One outcome per owner turn/source; content changes conflict.
+        The transaction's retained idempotency row is the durable write receipt.
+        """
+        if (type(source_id) is not int or source_id < 1 or type(expect_version) is not int
+                or expect_version < 1 or not isinstance(text, str) or not text.strip()
+                or len(text) > S.POSTIT_MAX or not isinstance(turn_key, str)
+                or not turn_key or len(turn_key) > 200):
+            raise ValueError("Invalid Board outcome")
+        key = "mc-outcome-" + hashlib.sha256(f"{turn_key}\0{source_id}".encode()).hexdigest()[:40]
+        target = hashlib.sha256(json.dumps([source_id, expect_version, text], ensure_ascii=False).encode()).hexdigest()
+        now = S.utc_now()
+        by = S.MASTER_CRAFTSMAN
+        def work(q):
+            prior = self._claim(q, key, by.id, "postit.outcome", target, now)
+            if prior is not None:
+                if not prior["same"]:
+                    return S.WriteResult("idempotency_mismatch", None, True)
+                value = self._postit_by_id(q, prior["ref"]) if prior["ref"] else None
+                return S.WriteResult(prior["outcome"], value, True)
+            self._meta(q)
+            source = self._locked_postit(q, source_id)
+            if source is None:
+                self._settle(q, key, "not_found", None)
+                return S.WriteResult("not_found", None, False)
+            if source["version"] != expect_version or source["state"] == "binned":
+                self._settle(q, key, "conflict", None)
+                return S.WriteResult("conflict", None, False)
+            rows = q(f"INSERT INTO guild.floor_postits (floor, text, author, author_kind, author_label, created_at, label) "
+                     f"VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING {S._POSTIT_COLS}",
+                     [self.floor, text, by.id, by.kind, by.label, now, "fyi"])
+            value = S._postit(rows[0])
+            self._bump(q, order=True)
+            self._settle(q, key, "added", value["id"])
+            return S.WriteResult("added", value, False)
+        return self._run(work, write=True)
+
     def note_text(self, note_id: int) -> dict | None:
         """A stored, on-the-record note on this floor or one of its
         conversations (``<floor>/<id>``), by id: {id, text, floor}, or None."""

@@ -1,0 +1,68 @@
+{
+  "schema": "minimoi.regression-catalog.v1",
+  "version": "2026-10-15.v1",
+  "registered_on": "2026-10-15",
+  "owner_role": "master-craftsman",
+  "status": "foundation_pending_owner_acceptance",
+  "scope": "CI-independent pre-deployment, post-deployment and on-demand review",
+  "privacy": "Code and sanitized definitions may be reviewed for GitHub; private questions, answers, screenshots, credentials and results stay outside Git. No publication by this catalog.",
+  "phases": [
+    "pre_deployment",
+    "post_deployment",
+    "on_demand"
+  ],
+  "suites": [
+    {
+      "suite_id": "vault-retrieval",
+      "title": "Vault retrieval and answer evidence",
+      "implementation": "existing_runner",
+      "entrypoint": "scripts/vault/query_suite.py",
+      "acceptance_note": "Draft questions, 17 need review; 3 unsupported temporal cases. Retrieval only; generated-answer evaluation not built.",
+      "runner_suite_id": "minimoi-retrieval"
+    },
+    {
+      "suite_id": "cos-mc",
+      "title": "CoS and MC conversations, attachments and Board follow-through",
+      "implementation": "manual_checks_defined",
+      "entrypoint": null,
+      "acceptance_note": "Confirm text conversation, document/image reading and one genuine assigned Board follow-through; cite actual receipts."
+    },
+    {
+      "suite_id": "shared-voice",
+      "title": "Shared voice and Dictate",
+      "implementation": "manual_checks_defined",
+      "entrypoint": null,
+      "acceptance_note": "Natural two-way conversation without Send; Dictate stays editable; provider selection and transcript behavior. Owner phone acceptance pending."
+    },
+    {
+      "suite_id": "rooms",
+      "title": "Rooms collaboration and archive",
+      "implementation": "manual_checks_defined",
+      "entrypoint": null,
+      "acceptance_note": "Membership, assigned turn and retained history; inspect actual archive job receipt and counts. First successful schedule pending."
+    },
+    {
+      "suite_id": "vault-recovery",
+      "title": "Vault backup and isolated restore",
+      "implementation": "manual_checks_defined",
+      "entrypoint": null,
+      "acceptance_note": "Verify exact remote completion chain and isolated restored records. Backup proven, separate restore pending."
+    },
+    {
+      "suite_id": "domain-journeys",
+      "title": "Curator, Mein Deutsch, Meu Portugues and Guild",
+      "implementation": "manual_checks_defined",
+      "entrypoint": null,
+      "acceptance_note": "Signed-in owner journeys and signed-out gates in complete dev topology; domain availability not assumed."
+    },
+    {
+      "suite_id": "release-smoke",
+      "title": "Deployment smoke and continued production usability",
+      "implementation": "manual_checks_defined",
+      "entrypoint": null,
+      "acceptance_note": "Exact deployed versions, sign-in and key domain journeys before and after deployment. Production execution requires existing approval."
+    }
+  ],
+  "authority": "A catalog entry or report grants no execution, production, capture or publication authority. Manual checks are definitions, not executed results.",
+  "cadence": "on_demand; recurring schedule not enabled"
+}

@@ -200,6 +200,17 @@ services:
       - MINIMOI_GUILD_VOICE_PRODUCTION=1
       - MINIMOI_MC_VOICE=1
       - MINIMOI_DICTATION=1
+      # Explicit controls; activation follows reviewed production schema/runtime checks.
+      - MINIMOI_ROLE=production
+      - MINIMOI_MC_BOARD_OUTCOMES=${MINIMOI_MC_BOARD_OUTCOMES:-0}
+      - MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION=${MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION:-0}
+      - MINIMOI_MC_MANAGED_REALTIME=${MINIMOI_MC_MANAGED_REALTIME:-0}
+      - MINIMOI_COS_MANAGED_REALTIME=${MINIMOI_COS_MANAGED_REALTIME:-0}
+      - MINIMOI_COS_WRITE_GUARD=${MINIMOI_COS_WRITE_GUARD:-}
+      - MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO=${MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO:-}
+      # Dev liveness stays off; production requires its separate explicit opt-in.
+      - MINIMOI_MC_DOMAIN_HEALTH=0
+      - MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION=${MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION:-0}
       # IoT Connect reference demo runs as its own Compose project
       # (docker-compose.iotconnect.prod.yml, project "iotconnect"); the portal
       # reaches it over the shared edge network created below.
@@ -282,6 +293,8 @@ services:
     environment:
       - MINIMOI_ROLE=production
       - MINIMOI_VOICE_BUDGET=1
+      - MINIMOI_COS_MANAGED_REALTIME=${MINIMOI_COS_MANAGED_REALTIME:-0}
+      - MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO=${MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO:-}
       - MINIMOI_LIMITS_DIR=/app/runtime/guild/limits
       - TELEGRAM_CHAT_ID=8379221702
       - PORT=8769

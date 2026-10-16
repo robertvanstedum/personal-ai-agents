@@ -1131,6 +1131,10 @@ app = Flask(__name__)
 app.register_blueprint(create_confer_voice_blueprint(
     build_voice_instructions=_build_cos_voice_instructions,
 ))
+from domains.cos.managed_realtime import install as _install_managed_realtime
+_cos_managed_realtime_ready = _install_managed_realtime(app, environ=os.environ,
+    process_turn=_process_confer_turn, instructions=_build_cos_voice_instructions)
+
 
 
 @app.route("/internal/model-gateway/receipt", methods=["POST"])
@@ -1301,7 +1305,7 @@ def ui():
 def ui_tab(tab):
     if tab not in _VALID_TABS:
         return redirect("/ui")
-    return render_template("cos_ui.html", initial_tab=tab)
+    return render_template("cos_ui.html", initial_tab=tab, managed_realtime_ready=_cos_managed_realtime_ready)
 
 
 @app.route("/ui/send", methods=["POST"])

@@ -141,7 +141,7 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "portuguese-learning-archive.webp",
     ]
     guild_desktop_assets = [
-        "01-guild-landing-desktop.webp",
+        "guild-main-desktop.jpg",
         "02-guild-build-queue-desktop.webp",
         "03-guild-specification-desktop.webp",
         "04-guild-spec-evaluation-desktop.webp",
@@ -163,8 +163,7 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         "06-cos-store-desktop.webp",
     ]
     guild_mobile_assets = [
-        "01-guild-landing-mobile.webp",
-        "02-guild-landing-partners-mobile.webp",
+        "guild-main-mobile.jpg",
         "03-guild-build-log-mobile.webp",
         "04-guild-spec-mobile.webp",
         "05-guild-roadmap-mobile.webp",
@@ -191,7 +190,7 @@ def test_tour_supports_distinct_desktop_and_mobile_story_collections():
         assert (ROOT / "minimoi_portal/static/tour" / asset).is_file()
     for asset in guild_desktop_assets:
         with Image.open(ROOT / "minimoi_portal/static/tour" / asset) as screenshot:
-            assert screenshot.size == (2880, 1800)
+            assert screenshot.size == ((1440, 654) if asset == "guild-main-desktop.jpg" else (2880, 1800))
 
     assert 'class="tour-mobile-gallery"' in template
     assert template.count('class="tour-mobile-shot-link"') == len(mobile_assets)

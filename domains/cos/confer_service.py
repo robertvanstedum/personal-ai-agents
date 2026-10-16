@@ -74,6 +74,7 @@ class ConferTurnResult:
     served_provider: str | None = None
     fallback_position: int | None = None
     fallback_reason: str | None = None
+    completion_verified: bool = False
 
     def public_dict(self) -> dict:
         """Return response metadata without echoing the user's full input."""
@@ -86,6 +87,8 @@ class ConferTurnResult:
             "model_label": self.model_label,
             "created_at": self.created_at,
         }
+        if self.completion_verified:
+            payload["completion"] = {"state":"complete", "source":"openclaw_connector"}
         if self.operation is not None:
             payload["operation"] = self.operation
         if self.served_provider is not None:
@@ -269,4 +272,5 @@ class ConferTurnService:
             served_provider=runtime_route.get("served_provider"),
             fallback_position=runtime_route.get("fallback_position"),
             fallback_reason=runtime_route.get("fallback_reason"),
+            completion_verified=context.get("completion_evidence") == {"state":"complete", "source":"openclaw_connector"},
         )

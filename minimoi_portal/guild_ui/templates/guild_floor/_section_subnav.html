@@ -9,8 +9,8 @@
 {% if section == 'build' %}
 <div class="guild-subnav guild-sections">
 {% if section == 'build' %}
-{# Build is Chat · Board · Build Log · Workshop Log · Rooms (11 Oct, Robert: the original Craftsman Chat is the Build landing again; the Workshop Log keeps the topic work, in construction). No More menu (5 Oct): repository and spec links open on GitHub from where they are relevant. #}
-{% for id,label,href,ids in [('chat','Chat',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('workshop','Workshop Log',urls.workshop,('workshop',)),('rooms','Rooms',urls.rooms,('rooms',))] %}
+{# Build is Chat · Board · Build Log · Admin · Rooms (11 Oct, Robert: the original Craftsman Chat is the Build landing again; Workshop Log keeps its existing route and topic work, linked from Admin). No More menu (5 Oct): repository and spec links open on GitHub from where they are relevant. #}
+{% for id,label,href,ids in [('chat','Chat',urls.floor,('floor',)),('board','Board',urls.board,('board','bench','postits')),('build-log','Build Log',urls.build_log,('build_log','queue','item')),('admin','Admin',urls.admin,('admin',)),('rooms','Rooms',urls.rooms,('rooms',))] %}
 <a href="{{ href }}" class="subnav-link{% if page_id in ids %} subnav-active{% endif %}" data-section="{{ id }}"{% if page_id in ids %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
 {% endif %}
 </div>

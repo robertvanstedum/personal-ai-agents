@@ -14,9 +14,12 @@ from .report_world import FIXED_RUN, NOW, OWNER, build_world
 
 
 def _fidelity(shelf, *, failed=0):
-    report.record_quality(shelf, "fidelity", {"at": "2026-10-04T11:30:00Z", "method": "random_sample", "seed": 20261004, "sample_size": 10,
+    report.record_quality(shelf, "fidelity", {"at": "2026-10-04T11:30:00Z", "method": "random_sample", "seed": 20261004, "sample_size": 3,
                                               "checked": 3, "ok": 3 - failed, "failed": failed, "skipped": {},
-                                              "scope": "storage_and_edition_same_parser"})
+                                              "scope": "storage_and_edition_same_parser",
+                                              "by_source": {
+                                                  "claude-code": {"sample_size": 1, "checked": 1, "ok": 1 - failed, "failed": failed, "skipped": {}},
+                                                  "codex": {"sample_size": 2, "checked": 2, "ok": 2, "failed": 0, "skipped": {}}}})
 
 
 def _job(jobs: Path, state="ok", finished="2026-10-04T11:59:00Z"):

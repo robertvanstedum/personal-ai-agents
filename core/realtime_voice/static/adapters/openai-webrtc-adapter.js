@@ -61,6 +61,10 @@ export class OpenAIWebRTCAdapter {
       this._emit("fatal_error", { reason: "microphone_denied", detail: String(err) });
       return;
     }
+    if (credentials.isCurrent && !credentials.isCurrent()) {
+      for (const track of this._micStream.getTracks()) track.stop();
+      return;
+    }
     for (const track of this._micStream.getAudioTracks()) {
       this._pc.addTrack(track, this._micStream);
     }
@@ -77,6 +81,17 @@ export class OpenAIWebRTCAdapter {
       // The ephemeral credential is already bound to the configured session
       // and model. The GA WebRTC contract accepts the SDP at this URL without
       // a model query parameter.
+      if (credentials.exchangeSdp) {
+        if (credentials.isCurrent && !credentials.isCurrent()) return;
+        const answer = await credentials.exchangeSdp(offer.sdp);
+        this._emit("session_identity", {session_id: answer.session_id});
+        if (credentials.isCurrent && !credentials.isCurrent()) {
+          this.end("stale_connection");
+          return;
+        }
+        await this._pc.setRemoteDescription({type: "answer", sdp: answer.sdp});
+        return;
+      }
       resp = await fetch(
         "https://api.openai.com/v1/realtime/calls",
         {
@@ -116,8 +131,15 @@ export class OpenAIWebRTCAdapter {
     for (const track of this._micStream?.getAudioTracks() || []) track.enabled = true;
   }
 
-  end(reason) {
+  stopCapture() {
     for (const track of this._micStream?.getAudioTracks() || []) track.stop();
+    // Stop local capture/playback immediately, retaining the transport until
+    // the server has attempted its single provider hangup.
+    this._remoteAudioEl?.pause?.();
+  }
+
+  end(reason) {
+    this.stopCapture();
     this._dc?.close();
     this._pc?.close();
     this._emit("closed", { reason });

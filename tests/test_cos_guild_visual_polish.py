@@ -71,7 +71,7 @@ def test_public_cos_confer_slide_restores_photo_version():
 def test_guild_and_cos_cards_use_full_landscape_captures():
     workspaces = {workspace["key"]: workspace for workspace in WORKSPACES}
     expected = {
-        "guild": "/static/tour/01-guild-landing-desktop.webp?v=20260805-guildrefresh1",
+        "guild": "/static/tour/guild-catalog-desktop.jpg?v=20261014-g8-review1",
         "cos": "/static/tour/01-cos-landing-desktop.webp",
     }
 
@@ -83,7 +83,7 @@ def test_guild_and_cos_cards_use_full_landscape_captures():
             / public_path.split("?", 1)[0].removeprefix("/static/")
         )
         with Image.open(asset) as image:
-            assert image.size == (2880, 1800)
+            assert image.size == ((1180, 331) if key == "guild" else (2880, 1800))
 
 
 def test_guild_public_slides_are_the_approved_privacy_safe_refresh():
@@ -120,3 +120,28 @@ def test_guild_landing_card_tabs_use_readable_cream_type():
     assert "color: #F5EDE0;" in template
     assert "font-size: 10px;" in template
     assert "font-weight: 500;" in template
+
+
+def test_guild_four_area_capture_bytes_and_actual_dimensions():
+    # Exact reviewed dev-capture identity; this does not assert owner acceptance.
+    expected = {
+        "guild-main-desktop.jpg": ("9b8140bf95e889037f658d9dc3ee691cf5b4e99b1fcf9c5ddd9bc4b1b1825ea2", (1440, 654)),
+        "guild-catalog-desktop.jpg": ("b9494fbaa3797d8811a5479bf2aea18dedf7033a829d6b2fd47923119e0610e6", (1180, 331)),
+        "guild-main-mobile.jpg": ("cf38008856084bd255ef6fd4eef1ddc1d7324411eccfa8be9d9cddeb7941e7db", (390, 1874)),
+    }
+    for name, (digest, dimensions) in expected.items():
+        path = ROOT / "minimoi_portal/static/tour" / name
+        assert _sha256(path) == digest
+        with Image.open(path) as image:
+            assert image.size == dimensions
+
+
+def test_guild_capture_source_keeps_four_areas():
+    from minimoi_portal.guild_ui.pages import DOORS
+    assert [door["label"] for door in DOORS] == [
+        "Build", "Operate", "Improve", "Prototype Lab"
+    ]
+    template = (ROOT / "minimoi_portal/templates/tour.html").read_text()
+    assert "Guild overview with Build, Operate, Improve and Prototype Lab" in template
+    assert "Build has two partners" not in template
+    assert "artwork illustrates the Guild areas" in template

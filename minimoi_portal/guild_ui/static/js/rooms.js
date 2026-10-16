@@ -21,6 +21,9 @@ let cfg;
 let page;
 let rooms = [];
 let listPage = 0;
+let archiveView = new URLSearchParams(window.location.search).get("view") === "archived" ? "archived" : "active";
+let listGeneration = 0;
+let archiveSnapshot = null;
 const ROOMS_PER_PAGE = 10;
 let room = null;              // the open room, as Records answers it
 let current = null;           // its id
@@ -122,12 +125,12 @@ function renderList() {
   listPage = Math.min(listPage, Math.max(0, Math.ceil(rooms.length / ROOMS_PER_PAGE) - 1));
   const start = listPage * ROOMS_PER_PAGE;
   list.replaceChildren(...rooms.slice(start, start + ROOMS_PER_PAGE).map((r) => {
-    const a = el('a', { href: `?room=${encodeURIComponent(r.id)}`, 'data-rm-room': r.id });
-    a.append(el('span', {}, r.title), el('small', {}, `${r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}`));
+    const a = el('a', { href: `?view=${archiveView}&room=${encodeURIComponent(r.id)}`, 'data-rm-room': r.id });
+    a.append(el('span', {}, r.title), el('small', {}, `${r.archived_at ? 'archived' : r.state === 'active' ? 'recording' : r.state} · ${when(r.updated)}`));
     if (r.id === current) a.setAttribute('aria-current', 'true');
     return h('li', {}, a);
   }));
-  if (!rooms.length && !signedOut) list.append(el('li', { class: 'small' }, 'No rooms yet.'));
+  if (!rooms.length && !signedOut) list.append(el('li', { class: 'small' }, archiveView === 'archived' ? 'No archived conversations.' : 'No rooms yet.'));
   $('[data-rm-list-pages]').hidden = rooms.length <= ROOMS_PER_PAGE;
   $('[data-rm-newer]').disabled = listPage === 0;
   $('[data-rm-older]').disabled = start + ROOMS_PER_PAGE >= rooms.length;
@@ -213,13 +216,21 @@ function renderDetails() {
     const note = el('input', { 'data-rm-state-note': true, placeholder: next === 'paused' ? 'Why pause? (required)' : 'Resumption note (required)', 'aria-label': 'Checkpoint note' });
     parts.push(note, el('button', { type: 'button', class: 'rm-btn', 'data-rm-set-state': next }, next === 'paused' ? 'Pause recording' : 'Resume recording'));
   }
+  if (archiveSnapshot?.room === room.id) {
+    parts.push(el('p', {class:'small'}, archiveSnapshot.archived_at ? 'Archived from the Active list. The record is kept.' : 'An idle conversation can be archived after 30 days. The record is kept; pending work blocks archive.'));
+    parts.push(el('button', {type:'button',class:'rm-btn','data-rm-archive-action':archiveSnapshot.archived_at ? 'restore':'archive'}, archiveSnapshot.archived_at ? 'Restore to Active':'Archive if idle'));
+  }
   parts.push(el('a', { href: `${cfg.api}/v1/rooms/${encodeURIComponent(room.id)}/export?format=markdown` }, 'Download the transcript (Markdown)'));
   box.replaceChildren(...parts);
 }
 
 async function loadRoom(id) {
   const r = await records(`/v1/rooms/${encodeURIComponent(id)}`);
-  if (r.status === 200) { const changed = room?.id !== r.body.id; if (changed) { targets.clear(); recipientFilter = ''; } room = r.body; error(''); renderRoom(); loadMeeting(); if (changed) { heartbeat(); reportHandoffs(id); } return true; }
+  if (id !== current) return false;
+  if (r.status === 200) { const changed = room?.id !== r.body.id; if (changed) { targets.clear(); recipientFilter = ''; } room = r.body; archiveSnapshot = null; error(''); renderRoom();
+    const snapshot = await records(`/v1/rooms/${encodeURIComponent(id)}/archive-check`);
+    if (id !== current) return false;
+    if (snapshot.status === 200 && snapshot.body.room === id) { archiveSnapshot = snapshot.body; renderDetails(); } loadMeeting(); if (changed) { heartbeat(); reportHandoffs(id); } return true; }
   if (r.status === 401) return false;
   room = null;
   renderRoom();
@@ -227,16 +238,18 @@ async function loadRoom(id) {
   return false;
 }
 
-async function loadAll() {
+async function loadAll({keepCurrent=false}={}) {
+  const generation=++listGeneration, selectedView=archiveView;
   if (cfg.state !== 'on') { $('[data-rm-off]').hidden = false; $('[data-rm-send]').disabled = true; return; }
   if (cfg.access === 'no_access') { showBlocked('no_access'); renderList(); return; }       // the same live check the bridge makes; nothing is sent
-  const r = await records('/v1/rooms');
+  const r = await records(`/v1/rooms?view=${selectedView}`);
+  if (generation !== listGeneration) return;
   if (r.status !== 200) { if (r.status !== 401 && !(r.status === 403 && r.body.code === 'rooms_no_access')) error(r.body.error || 'Rooms could not be read.'); renderList(); return; }
   signedOut = false;
   $('[data-rm-blocked]').hidden = true;
   rooms = r.body.rooms || [];
   const wanted = new URLSearchParams(window.location.search).get('room') || store.get(`${page.storage_ns}.rooms.last`);
-  current = rooms.some((x) => x.id === wanted) ? wanted : (rooms[0] && rooms[0].id) || null;
+  current = keepCurrent && current ? current : wanted || (rooms[0] && rooms[0].id) || null;
   listPage = Math.floor(Math.max(0, rooms.findIndex((r) => r.id === current)) / ROOMS_PER_PAGE);
   renderList();
   if (current) {
@@ -244,7 +257,7 @@ async function loadAll() {
     // A draft typed before the Records sign-in (or before any room) was kept
     // under "none"; it follows into the room now (#288 review F3).
     const early = store.get(signedOutDraftKey());
-    const draft = store.get(draftKey()) || early || $('[data-rm-input]').value;
+    const draft = keepCurrent ? $('[data-rm-input]').value : store.get(draftKey()) || early || $('[data-rm-input]').value;
     $('[data-rm-input]').value = draft;
     if (early) { store.set(draftKey(), draft); store.set(signedOutDraftKey(), ''); }
     await loadRoom(current);
@@ -462,6 +475,28 @@ async function sendTake() {
 }
 
 function bind() {
+  $('[data-rm-archive-view]').value=archiveView;
+  $('[data-rm-archive-view]').addEventListener('change',async event=>{
+    if (current) store.set(draftKey(),$('[data-rm-input]').value);
+    archiveView=event.target.value==='archived'?'archived':'active';listPage=0;
+    const url=new URL(window.location.href);url.searchParams.set('view',archiveView);window.history.replaceState(null,'',url);
+    await loadAll({keepCurrent:true});
+  });
+  $('[data-rm-details-body]').addEventListener('click',async event=>{
+    const button=event.target.closest('[data-rm-archive-action]');
+    if (!button || !archiveSnapshot || archiveSnapshot.room!==current) return;
+    if (live.off || !live.known) {status('Choose on the record before changing archive visibility.');return;}
+    const id=current, snapshot=archiveSnapshot, action=button.dataset.rmArchiveAction;
+    if (!['archive','restore'].includes(action)) return;
+    button.disabled=true;
+    const body=Object.fromEntries(['version','archive_version','latest_seq','last_activity'].map(k=>[k,snapshot[k]]));
+    const name=`archive:${action}:${id}:${JSON.stringify(body)}`, key=keyFor(name);
+    const response=action==='restore' ? await records(`/v1/rooms/${encodeURIComponent(id)}/restore`,{method:'POST',body,key}) : await apiPost('/rooms/archive',{room:id,...body,idempotency_key:key});
+    if (id!==current) {await loadAll({keepCurrent:true});return;}
+    const ok=action==='restore' ? response.status===200 : response.ok;
+    if (ok) {keys.delete(name);status(action==='restore'?'Restored to Active.':'Archived; the record is kept.');await loadAll({keepCurrent:true});}
+    else {button.disabled=false;status(!response.status || response.status>=500 ? 'Archive change is unconfirmed; check before retrying.' : response.body?.message||response.body?.error||'Archive change was refused.');}
+  });
   $('[data-rm-newer]').addEventListener('click', () => { listPage = Math.max(0, listPage - 1); renderList(); });
   $('[data-rm-older]').addEventListener('click', () => { listPage += 1; renderList(); });
   const input = $('[data-rm-input]');

@@ -70,10 +70,20 @@ screenshots because the operator chooses the number of frames during the run.
 Successful output is written beneath:
 
 ```text
-_working/tour-capture/portuguese-reading/<UTC timestamp>/
+~/minimoi-runtime/operators/tour-capture/runs/portuguese-reading/<UTC timestamp>/
 ```
 
 Each other scenario uses its own scenario ID in the same directory structure.
+`MINIMOI_CAPTURE_OUTPUT_ROOT` changes this default; explicit `--output-root`
+takes precedence and may be relative to the current directory. Existing output
+roots and run directories must be owner-only0700; symlinks or writable parents
+are refused rather than silently repaired.
+
+Browser session state is stored separately at
+`~/minimoi-runtime/credentials/tour-capture/owner_session.json`, with directory
+permissions0700 and file permissions0600. `MINIMOI_CAPTURE_AUTH_ROOT` may select
+an absolute private directory outside the checkout. Old `_working/` session
+cookies are not imported; authenticate again when needed.
 
 Open the printed `review.html` path. The folder also contains raw PNGs,
 optimized WebPs, `manifest.json`, `report.json`, and `contact-sheet.webp`.
@@ -126,9 +136,9 @@ To bundle several runs (for example desktop and mobile) into one PDF:
 
 ```bash
 python -m scripts.tools.tour_capture.review_pdf \
-  _working/tour-capture/prototype-review/<UTC> \
-  _working/tour-capture/prototype-review-mobile/<UTC> \
-  -o _working/tour-capture/prototype-review.pdf --title "Prototype review"
+  ~/minimoi-runtime/operators/tour-capture/runs/prototype-review/<UTC> \
+  ~/minimoi-runtime/operators/tour-capture/runs/prototype-review-mobile/<UTC> \
+  -o ~/minimoi-runtime/operators/tour-capture/runs/prototype-review.pdf --title "Prototype review"
 ```
 
 The PDF has a cover page (title, date, source URLs, scenarios, and a note
@@ -142,7 +152,9 @@ caption with title, description, device profile, viewport, and capture time.
 
 - The runner accepts only localhost, `127.0.0.1`, or `dev.minimoi.ai`.
 - `auth_profile: none` is refused for any host other than localhost or `127.0.0.1`.
-- Authentication state and output remain under ignored `_working/`.
+- Authentication state and default capture output stay in private directories
+  under `~/minimoi-runtime/`, outside the checkout; old `_working/` files remain
+  untouched.
 - No production capture or write path exists.
 - A failed run retains a diagnostic screenshot and structured report.
 - Promotion into `minimoi_portal/static/tour/` remains a separate reviewed

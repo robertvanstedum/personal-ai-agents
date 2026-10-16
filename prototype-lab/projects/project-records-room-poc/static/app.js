@@ -1,6 +1,6 @@
 "use strict";
 const $=id=>document.getElementById(id);
-const state={me:null,rooms:[],parents:[],parent:null,room:null,view:"rooms",pending:null,authEpoch:0,navigation:0,drafts:{}};
+const state={me:null,rooms:[],parents:[],parent:null,room:null,view:"rooms",archiveView:"active",listGeneration:0,pending:null,authEpoch:0,navigation:0,drafts:{}};
 const modeLabels={conversation:"One-to-one thinking",meeting:"Team meeting",bridge:"Operational bridge"};
 const kindLabels={message:"Message",checkpoint:"Checkpoint",proposal:"Proposal",decision:"Owner decision",task:"Assignment",task_update:"Task update"};
 const element=(tag,content,cls)=>{const node=document.createElement(tag);if(content!==undefined)node.textContent=content;if(cls)node.className=cls;return node;};
@@ -37,9 +37,9 @@ async function checkReceipt(){const pending=state.pending;if(!pending||pending.a
 function showLogin(){window.dispatchEvent(new Event("records-signout"));state.authEpoch++;state.navigation++;state.me=null;state.room=null;state.rooms=[];state.parents=[];state.parent=null;$("parent-title").textContent="";$("parent-purpose").textContent="";clear($("parent-sessions"));$("parent-workspace").classList.add("hidden");state.pending=null;state.drafts={};for(const id of ["activity-list","search-results","principal-list","messages","room-list","modal-fields","checkpoint","decisions","tasks","participants","documents","store-status","artifact-links","meeting-notes"])clear($(id));$("composer").reset();$("search-query").value="";$("backup-result").textContent="";$("activity-status").textContent="";$("room-title").textContent="";$("room-purpose").textContent="";$("messages").dataset.last="";$("pending-operation").classList.add("hidden");$("toast").classList.add("hidden");if($("modal").open)$("modal").close();$("workspace").classList.add("hidden");$("login").classList.remove("hidden");}
 async function enter(){state.me=await api("/api/v1/me");$("login").classList.add("hidden");$("workspace").classList.remove("hidden");$("profile-name").textContent=state.me.label;$("profile-initial").textContent=state.me.label[0];const owner=state.me.id==="robert";["new-room","new-room-small","new-room-empty","new-project","new-child-session"].forEach(id=>$(id).classList.toggle("hidden",!owner));$("backup").disabled=!owner;$("new-principal").disabled=!owner;const saved=sessionStorage.getItem(`minimoi.pending.${state.me.id}`);if(saved){try{const pending=JSON.parse(saved);if(pending.actor===state.me.id){state.pending=pending;$("pending-operation").classList.remove("hidden");}}catch(error){toast("Unrecognized recovery metadata; inspect prior records before resubmitting.",true);}}await refreshRooms();await navigate();if(state.pending)await checkReceipt();}
 async function refreshRooms(){
-  const epoch=state.authEpoch;
-  const [sessions,parents]=await Promise.all([api("/api/v1/rooms"),api("/api/v2/rooms")]);
-  if(epoch!==state.authEpoch)return;
+  const epoch=state.authEpoch,generation=++state.listGeneration,view=state.archiveView;
+  const [sessions,parents]=await Promise.all([api(`/api/v1/rooms?view=${view}`),api(`/api/v2/rooms?view=${view}`)]);
+  if(epoch!==state.authEpoch||generation!==state.listGeneration)return;
   state.rooms=sessions.rooms;state.parents=parents.rooms;renderRoomList();
 }
 function renderRoomList(){
@@ -50,7 +50,7 @@ function renderRoomList(){
     heading.onclick=()=>{location.hash=`project/${parent.id}`;};group.append(heading);
     for(const room of state.rooms.filter(s=>s.parent_room_id===parent.id)){
       const button=element("button",undefined,"room-link session-link"+(state.room?.id===room.id?" active":""));
-      button.dataset.session=room.id;button.append(element("strong",room.title),element("small",`${modeLabels[room.mode]} · ${room.state}`));
+      button.dataset.session=room.id;button.append(element("strong",room.title),element("small",`${modeLabels[room.mode]} · ${room.archived_at?"archived":room.state}`));
       button.onclick=()=>{location.hash=`room/${room.id}`;};group.append(button);
     }
     $("room-list").append(group);
@@ -80,13 +80,13 @@ async function loadParent(id,generation=state.navigation){
   $("message-body").value="";$("message-body").disabled=true;$("send-message").disabled=true;
   $("room-workspace").classList.add("hidden");$("empty-room").classList.add("hidden");
   clear($("parent-sessions"));$("parent-title").textContent="";$("parent-purpose").textContent="";
-  const parent=await api(`/api/v2/rooms/${id}`);
+  const parent=await api(`/api/v2/rooms/${id}?view=${state.archiveView}`);
   if(epoch!==state.authEpoch||generation!==state.navigation||state.view!=="rooms")return;
   state.parent=parent;$("parent-title").textContent=parent.title;$("parent-purpose").textContent=parent.purpose;
   $("parent-workspace").classList.remove("hidden");$("new-child-session").classList.toggle("hidden",state.me.id!=="robert");
   if(!parent.sessions.length)$("parent-sessions").append(element("p","No sessions yet. This room is quiet; no recording or agent has started.","muted"));
   for(const session of parent.sessions){
-    const button=element("button",`${session.title} · ${session.state}`,"room-link");
+    const button=element("button",`${session.title} · ${session.archived_at?"archived":session.state}`,"room-link");
     button.onclick=()=>{location.hash=`room/${session.id}`;};$("parent-sessions").append(button);
   }
   renderRoomList();
@@ -300,3 +300,9 @@ async function loadActivity(generation=state.navigation){
 $("refresh-activity").onclick=()=>{++state.navigation;loadActivity(state.navigation);};
 
 $("message-body").addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();if(!$("send-message").disabled)$("composer").requestSubmit();}});
+
+$("room-archive-view").addEventListener("change",async event=>{
+  ++state.navigation;
+  state.archiveView=event.target.value==="archived"?"archived":"active";
+  try{await refreshRooms();if(state.parent)await loadParent(state.parent.id);}catch(error){toast(error.message,true);}
+});

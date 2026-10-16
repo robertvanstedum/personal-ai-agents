@@ -5,6 +5,8 @@ from __future__ import annotations
 from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 EXPECTED = {
+    "/guild-next/guild/admin",
+    "/guild-next/api/v1/rooms/archive",
     "/guild-next/rooms",
     "/guild-next/guild/docs",
     "/guild-next/guild/docs/read",

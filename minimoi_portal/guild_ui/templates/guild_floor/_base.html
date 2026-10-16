@@ -19,7 +19,7 @@
 </nav>{% endif %}
 <p class="gu-notice" data-notice role="status" hidden></p>
 {% block above %}{% endblock %}
-{% if not bare and page_id not in ('floor', 'bench', 'workshop', 'operate_build_host', 'build_log', 'board', 'media', 'rooms', 'experiment', 'improve', 'operate', 'operate_agents', 'operate_runbooks', 'operate_checks') %}{% include 'guild_floor/_phone_summary.html' %}{% endif %}{# the wall's first cards are Needs you and Continue; the Workshop leads with Now and its own Needs you; Prototype Lab, Improve and Operate carry no Build summary (5 Oct) #}
+{% if not bare and page_id not in ('floor', 'bench', 'admin', 'workshop', 'operate_build_host', 'build_log', 'board', 'media', 'rooms', 'experiment', 'improve', 'operate', 'operate_agents', 'operate_runbooks', 'operate_checks') %}{% include 'guild_floor/_phone_summary.html' %}{% endif %}{# the wall's first cards are Needs you and Continue; the Workshop leads with Now and its own Needs you; Prototype Lab, Improve and Operate carry no Build summary (5 Oct) #}
 <div class="gu-layout" data-layout>
   {% block before_main %}{% endblock %}
   <main id="main" class="gu-main" tabindex="-1" data-page-content>

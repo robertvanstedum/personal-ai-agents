@@ -5,6 +5,11 @@
   "state": "unknown"
  },
  "overall": "unknown",
+ "quality": {
+  "fidelity": {
+   "state": "not_run"
+  }
+ },
  "rows": [
   {
    "captured_records": 0,

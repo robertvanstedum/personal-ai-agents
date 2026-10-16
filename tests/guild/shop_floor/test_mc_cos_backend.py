@@ -241,3 +241,9 @@ def test_the_workshop_log_has_no_ask_about_this_because_it_has_no_composer():
     js = (JS / "workshop_topic.js").read_text()
     assert "askAbout" not in js and "askOff" not in js and "data-mc-composer" not in js      # no second composer; "Discuss in Chat" goes to the conversation
     assert "Discuss in Chat" in js
+
+
+@pytest.mark.parametrize("completion,expected",[(None,None),({"state":"complete","source":"model"},None),({"state":"complete","source":"openclaw_connector"},{"finish_reason":"stop"})])
+def test_completion_marker_is_explicit_connector_evidence(completion,expected):
+    backend,_=_backend(post=Resp(200,{"reply":"Report", "completion":completion}))
+    assert backend.turn(REQ).trace == expected

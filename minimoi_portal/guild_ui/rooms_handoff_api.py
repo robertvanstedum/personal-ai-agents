@@ -36,6 +36,37 @@ def _api():
 
 
 def handoff():
+    from .rooms_archive_api import room_lock,WorkUnknown
+    from . import agent_ask
+    api=_api();refusal,body=api._write_body()
+    if refusal is not None:return refusal
+    room,seq,agents=body.get('room'),body.get('seq'),body.get('agents')
+    scope=str(body.get('scope') or DEFAULT_SCOPE).strip();tickets=str(body.get('tickets') or '').strip()
+    if (not isinstance(room,str) or not _ROOM.fullmatch(room) or type(seq) is not int or seq<1
+            or not isinstance(agents,list) or not agents or len(agents)>2
+            or any(a not in AGENTS for a in agents) or len(set(agents))!=len(agents)
+            or not scope or len(scope)>SCOPE_MAX or not _TICKETS.fullmatch(tickets)):
+        return json_error('invalid','Choose one owner message, approved agents and a short scope.',422)
+    svc=agent_ask.service();call=current_app.extensions.get('rooms_call')
+    if svc is None or call is None:return json_error('unavailable','Rooms handoff admission is unavailable.',409)
+    try:
+        with room_lock(svc.root,room):
+            from .rooms_archive_api import strict_mapping
+            if strict_mapping(svc.root,room).get('archive_attempt'):
+                return json_error('archive_uncertain','An archive attempt is unresolved; reconcile it before new work.',409)
+            status,metadata=call('GET',f'/api/v1/rooms/{room}/archive-check')
+            if status!=200:
+                return json_error('unavailable','Rooms could not confirm archive state; nothing was sent.',502)
+            if not isinstance(metadata,dict) or 'archived_at' not in metadata:
+                raise WorkUnknown('archive_state_unknown')
+            if metadata['archived_at'] is not None:
+                return json_error('archived','Restore this session before handing new work to agents.',409)
+            return _handoff_locked()
+    except Exception:
+        return json_error('unavailable','Rooms handoff admission could not be confirmed. Check before retrying.',409)
+
+
+def _handoff_locked():
     api = _api()
     from core import agent_requests as ar
     from . import agent_ask, meeting_action, meeting_followup as MF
@@ -98,6 +129,13 @@ def handoff():
             + (f"References: {tickets}\n" if tickets else "")
             + f"Meeting: {link}\n"
             "Do only what his message and the scope authorise. If anything is unclear or outside it, ask him (needs-you) before acting. Nothing here approves production.")
+    # Save all deterministic IDs before creating any executable request.
+    # A partial/failed admission stays visible as unknown until reconciled.
+    try:
+        remember(svc.root,room,[{'request_id':ar.request_id_for(f'handoff:{room}:{seq}:{agent}'),
+                                'agent':agent,'seq':seq} for agent in agents])
+    except Exception:
+        return json_error('unavailable','The handoff mapping could not be saved. Nothing was sent.',503)
     made = []
     for agent in agents:
         rid = ar.request_id_for(f"handoff:{room}:{seq}:{agent}")
@@ -108,10 +146,6 @@ def handoff():
             made.append({"agent": agent, "name": NAMES[agent], "ok": False, "error": exc.message})
         except Exception:
             made.append({"agent": agent, "name": NAMES[agent], "ok": None, "error": "The request could not be confirmed. Check the ledger before sending again."})
-    try:
-        remember(svc.root, room, [{"request_id": m["request_id"], "agent": m["agent"], "seq": seq} for m in made if m.get("request_id") and m.get("ok") is not False])
-    except OSError:
-        pass                                             # the requests exist either way; the room just will not hear about them until this is mapped by a retry of the click
     return jsonify({"handed": made, "linked_conversation": bool(conv_id), "meeting": link})
 
 
@@ -124,33 +158,13 @@ def _map_file(root: str, room: str) -> str:
 
 
 def _mapped(root: str, room: str) -> dict:
-    try:
-        with open(_map_file(root, room), encoding="utf-8") as f:
-            doc = json.load(f)
-        return doc if isinstance(doc, dict) and isinstance(doc.get("items"), list) else {"items": [], "posted": []}
-    except (OSError, ValueError):
-        return {"items": [], "posted": []}
+    from .rooms_archive_api import strict_mapping
+    return strict_mapping(root,room)
 
 
 def _locked_update(root: str, room: str, change) -> dict:
-    folder = os.path.join(root, MAP_FOLDER)
-    if os.path.islink(folder):
-        raise OSError("room-handoffs is a link")
-    os.makedirs(folder, mode=0o700, exist_ok=True)
-    fd = os.open(os.path.join(folder, f".{room}.lock"), os.O_RDWR | os.O_CREAT, 0o600)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        doc = _mapped(root, room)
-        change(doc)
-        tmp = os.path.join(folder, f".{room}.{secrets.token_hex(4)}.tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(doc, f)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, _map_file(root, room))
-        return doc
-    finally:
-        os.close(fd)
+    from .rooms_archive_api import update_mapping
+    return update_mapping(root,room,change)
 
 
 def remember(root: str, room: str, items: list) -> None:
@@ -190,6 +204,22 @@ def milestones(doc: dict, agent: str) -> list[tuple[str, str]]:
 
 
 def sync():
+    from .rooms_archive_api import room_lock
+    from . import agent_ask
+    api=_api();refusal,body=api._write_body()
+    if refusal is not None:return refusal
+    if not isinstance(body.get('room'),str) or not _ROOM.fullmatch(body['room']):
+        return json_error('invalid','Name the room.',422)
+    svc=agent_ask.service()
+    if svc is None:return json_error('unavailable','Handoff state is not connected.',409)
+    try:
+        with room_lock(svc.root,body.get('room')):
+            return _sync_locked()
+    except Exception:
+        return json_error('unavailable','Handoff state could not be confirmed.',409)
+
+
+def _sync_locked():
     """Report new milestones of this room's handoffs INTO the room, once each. Safe to call as often as the page likes: every milestone has its own idempotency key and a record
     that it was posted, so reloads, second tabs and retries add nothing."""
     api = _api()

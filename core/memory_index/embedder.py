@@ -12,6 +12,8 @@ so cosine distance in sqlite-vec is well defined whatever the server returns.
 """
 from __future__ import annotations
 
+from core.jobs import batch_window
+
 import json
 import math
 import urllib.error
@@ -73,6 +75,7 @@ class Embedder:
     def embed_documents(self, texts: list[str], max_chars: int) -> list[list[float]]:
         out: list[list[float]] = []
         for i in range(0, len(texts), BATCH):
+            batch_window.remaining()
             batch = [DOC_PREFIX + t[:max_chars] for t in texts[i:i + BATCH]]
             out.extend(normalize(v) for v in self._embed(batch))
         return out
@@ -90,12 +93,12 @@ class OllamaEmbedder(Embedder):
         self._ident: Identity | None = None
         self._used = False
 
-    def _post(self, path: str, doc: dict | None) -> dict:
+    def _post(self, path: str, doc: dict | None, *, cleanup=False) -> dict:
         data = None if doc is None else json.dumps(doc).encode()
         req = urllib.request.Request(self.url + path, data=data, headers={"Content-Type": "application/json"},
                                      method="GET" if doc is None else "POST")
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout if cleanup else batch_window.remaining(self.timeout)) as resp:
                 return json.loads(resp.read())
         except (urllib.error.URLError, OSError, ValueError):
             raise EmbedderUnavailable("embedder not reachable") from None
@@ -122,7 +125,7 @@ class OllamaEmbedder(Embedder):
         if not self._used:
             return
         try:
-            self._post("/api/embed", {"model": self.model, "input": ["release"], "keep_alive": 0})
+            self._post("/api/embed", {"model": self.model, "input": ["release"], "keep_alive": 0}, cleanup=True)
         except EmbedderUnavailable:
             pass
         self._used = False

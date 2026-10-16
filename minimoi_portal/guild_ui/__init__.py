@@ -17,6 +17,8 @@ bundle are required, and only the allowlisted routes are registered.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 import functools
 import hashlib
 import json
@@ -54,8 +56,20 @@ class GuildBindingError(RuntimeError):
     """Registration refused: the floor would not be real, guarded and ready."""
 
 
+_WORKER_CONFIG = ContextVar('guild_actual_worker_config',default=None)
+
+@contextmanager
+def _worker_config(app,config):
+    token=_WORKER_CONFIG.set((app,config))
+    try:yield
+    finally:_WORKER_CONFIG.reset(token)
+
+
 def cfg() -> dict:
-    return current_app.extensions[request.blueprint]
+    if has_request_context():return current_app.extensions[request.blueprint]
+    bound=_WORKER_CONFIG.get()
+    if bound is not None and bound[0] is current_app._get_current_object():return bound[1]
+    raise RuntimeError('No authenticated Guild configuration bound')
 
 
 def feature_environ() -> dict:
@@ -64,9 +78,10 @@ def feature_environ() -> dict:
     No bound request/mount means off. Production supplies its filtered mapping;
     a stray shared-container flag cannot enable provider-backed features there.
     """
-    if not has_request_context():
-        return {}
-    return current_app.extensions.get(request.blueprint, {}).get("feature_environ", {})
+    if has_request_context():
+        return current_app.extensions.get(request.blueprint, {}).get("feature_environ", {})
+    try:return cfg().get("feature_environ",{})
+    except RuntimeError:return {}
 
 
 def feature_enabled(name: str) -> bool:
@@ -185,7 +200,8 @@ def _make_blueprint(name: str, routes) -> Blueprint:
                   ("/media/<asset_id>/<variant>", "media_file", board_api.media_file)],
         # Rooms (slice 4, spec §6): group chat on Records, through the dev bridge.
         "rooms": [("/guild/rooms", "rooms", pages.rooms), ("/rooms", "rooms_short", pages.rooms)],
-        "references": [("/guild/docs", "docs", pages.docs),
+        "references": [("/guild/admin", "admin", pages.admin),
+                       ("/guild/docs", "docs", pages.docs),
                        ("/guild/docs/read", "document", pages.document),
                        ("/guild/build/items/<int:item_id>/spec", "item_spec", pages.item_spec),
                        ("/guild/improve", "improve", pages.improve),
@@ -278,6 +294,8 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
     attach_jobs(app, blueprint_name, services)         # Master Craftsman jobs: nothing happens unless MINIMOI_GUILD_JOBS is on
     from .agent_ask import attach as attach_agent_asks
     attach_agent_asks(app, blueprint_name, services)   # asking Claude Code / Codex through MC: nothing happens unless MINIMOI_GUILD_AGENT_REQUESTS is on
+    from .mc_managed_realtime import install as attach_mc_realtime
+    attach_mc_realtime(app,blueprint_name,environ=app.extensions[blueprint_name]['feature_environ'])
     return bp
 
 

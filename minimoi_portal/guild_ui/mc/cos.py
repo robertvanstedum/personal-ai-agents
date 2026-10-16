@@ -83,7 +83,9 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
         except Exception:
             payload = None
         if status == 200 and isinstance(payload, dict) and str(payload.get("reply") or "").strip():
-            return TurnResult("answered", self.kind, text=str(payload["reply"]))
+            completion = payload.get("completion")
+            trace = {"finish_reason":"stop"} if completion == {"state":"complete", "source":"openclaw_connector"} else None
+            return TurnResult("answered", self.kind, text=str(payload["reply"]), trace=trace)
         if status == 200:
             return TurnResult("error", self.kind, failure_class="malformed_answer")
         if status in (502, 503, 504):

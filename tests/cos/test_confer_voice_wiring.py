@@ -7,11 +7,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_confer_page_uses_shared_controller_and_keeps_typed_path():
     template=(ROOT / "domains/cos/templates/cos_ui.html").read_text()
-    assert "realtime-confer-controller.js?v=20261013-chained1" in template
+    assert "realtime-confer-controller.js?v=20261015-token1" in template
     assert "bootstrapUrl:'../api/realtime-voice/confer/bootstrap'" in template
     assert "turnUrl:'send'" in template
     assert 'id="voice-provider-select"' not in template
-    assert "onFunctionCall" not in template and "onFinalize" not in template
+    assert "onFunctionCall" not in template
+    assert "onFinalize:receipt" in template
+    assert "receipt.partial||!keepTranscript?.checked||!receipt.turns?.length" in template
+    assert "Download transcript on End" in template
+    assert 'id="btn-dictate"' in template
+    assert "bindConferDictation" in template
     assert "onAssistantTurn:text=>appendMsg('cos',text)" in template
     assert "controller.stop('pagehide')" in template
     assert 'aria-label="Start voice conversation">🎤</button>' in template

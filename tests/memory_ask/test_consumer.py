@@ -100,7 +100,6 @@ def test_empty_and_non_text_queries_are_refused_without_a_call():
 
 
 def test_redirects_are_never_followed_and_the_default_transport_has_no_extra_authority():
-    assert C._NoRedirect().redirect_request(None, None, 302, "Found", {}, "http://elsewhere/") is None
     assert C.Config.from_env({C.ENV_URL: "http://localhost:8781", C.ENV_TOKEN: "t", C.ENV_HOSTS: " A.example , b.example "}).allow_hosts == ("a.example", "b.example")
 
 
@@ -120,3 +119,80 @@ def test_nothing_in_the_settings_the_body_or_the_error_can_make_the_hook_raise()
         assert C.retrieve("q", CFG, post=bad_post).status == "unavailable"
     assert C.retrieve("q", None, post=p).status in ("disabled", "unavailable")                                    # from_env with nothing set
     assert C.retrieve(object(), CFG, post=p).status == "unavailable"
+
+
+@pytest.mark.parametrize("status", [403, 503])
+def test_unknown_transport_error_does_not_claim_ask_permission_or_registry_failure(status):
+    r = C.retrieve("q", CFG, post=Post(status, {"transport_detail": "not an Ask error"}))
+    assert r.code == "unavailable"
+
+
+class Response:
+    def __init__(self, code=200, chunks=None, boom=None):
+        self.status_code=code; self.chunks=chunks or [json.dumps(GOOD).encode()]; self.closed=False; self.boom=boom
+    def __enter__(self): return self
+    def __exit__(self,*args): self.closed=True
+    def iter_content(self,chunk_size):
+        assert chunk_size==1
+        if self.boom: raise self.boom
+        yield from self.chunks
+
+
+class Session:
+    def __init__(self,response): self.response=response; self.closed=False; self.calls=[]; self.trust_env=True
+    def post(self,url,**kwargs):
+        self.calls.append((url,kwargs)); assert self.trust_env is False
+        return self.response
+    def close(self): self.closed=True
+
+
+def test_default_transport_no_redirect_proxy_retry_and_percall_cleanup(monkeypatch):
+    import requests
+    responses=[Response(302),Response()]; sessions=[]
+    def factory():
+        s=Session(responses[len(sessions)]);sessions.append(s);return s
+    monkeypatch.setattr(requests,"Session",factory)
+    assert C.default_post("https://allowed/v1/ask",{},b"{}",8)==(302,b"")
+    code,raw=C.default_post("https://allowed/v1/ask",{},b"{}",8)
+    assert code==200 and json.loads(raw)==GOOD
+    assert len(sessions)==2 and all(s.closed and s.response.closed and len(s.calls)==1 for s in sessions)
+    assert all(s.calls[0][1]["allow_redirects"] is False and s.calls[0][1]["stream"] is True for s in sessions)
+
+
+def test_default_transport_oversize_is_bounded_and_closes(monkeypatch):
+    import requests
+    s=Session(Response(chunks=[b"x"*(C.MAX_RESPONSE_BYTES+10)]));monkeypatch.setattr(requests,"Session",lambda:s)
+    code,raw=C.default_post("http://localhost/v1/ask",{},b"{}",8)
+    assert len(raw)==C.MAX_RESPONSE_BYTES+1 and s.closed and s.response.closed
+    r=C.retrieve("q",CFG,post=lambda *a:(code,raw));assert r.code=="too_large"
+
+
+def test_default_transport_elapsed_progress_timeout_closes_and_never_retries(monkeypatch):
+    import requests
+    s=Session(Response(chunks=[b"a",b"b"]));monkeypatch.setattr(requests,"Session",lambda:s)
+    clock=iter([0,0,1,2,9]);monkeypatch.setattr(C.time,"monotonic",lambda:next(clock))
+    with pytest.raises(TimeoutError):C.default_post("http://localhost/v1/ask",{},b"{}",8)
+    assert s.closed and s.response.closed and len(s.calls)==1
+
+
+def test_default_transport_tcp_failure_is_unavailable_not_grant_failure(monkeypatch):
+    import requests
+    s=Session(Response(boom=ConnectionError("synthetic failure")));monkeypatch.setattr(requests,"Session",lambda:s)
+    r=C.retrieve("q",CFG,post=C.default_post)
+    assert r.code=="unavailable" and s.closed and s.response.closed and len(s.calls)==1
+
+
+def test_default_transport_concurrent_calls_do_not_share_sessions(monkeypatch):
+    import requests
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    sessions=[];lock=threading.Lock()
+    def factory():
+        session=Session(Response())
+        with lock:sessions.append(session)
+        return session
+    monkeypatch.setattr(requests,"Session",factory)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results=list(pool.map(lambda _:C.default_post("http://localhost/v1/ask",{},b"{}",8),range(2)))
+    assert all(code==200 for code,_ in results)
+    assert len(sessions)==2 and all(s.closed and len(s.calls)==1 for s in sessions)

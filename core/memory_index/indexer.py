@@ -27,6 +27,7 @@ from typing import Callable, Iterable
 
 import sqlite_vec
 
+from core.jobs import batch_window
 from core.memory_index import chunker, policy, store
 from core.memory_index.embedder import Embedder, EmbedderUnavailable, Identity, PinMismatch
 from core.memory_shelf import fsio
@@ -34,6 +35,7 @@ from core.memory_shelf.shelf import Shelf, read_front_matter
 
 INDEX_DIR = "memory-index"          # a sibling of the shelf root: the index never writes inside the shelf
 LOCK_WAIT_S = 60.0
+OUTSIDE_WINDOW = "outside_window"
 
 # Result codes (fixed vocabulary).
 OK, DISK_LOW, BUSY, EMBEDDER_UNAVAILABLE, PIN_MISMATCH, INCOMPATIBLE = (
@@ -225,12 +227,21 @@ def _sync(con, shelf_root: Path, embedder: Embedder, ident: Identity, now, only:
         entries = entries[:limit]
     try:
         for rid, rel, path in entries:
+            batch_window.remaining()
             run.record(rid, rel, path)
+    except batch_window.BatchDeadline as exc:
+        con.commit()
+        return run.result(exc.code, started)
     except EmbedderUnavailable:
         con.commit()
         return run.result(EMBEDDER_UNAVAILABLE, started)
     finally:
         embedder.release()
+    try:
+        batch_window.remaining()
+    except batch_window.BatchDeadline as exc:
+        con.commit()
+        return run.result(exc.code, started)
     if only is None and limit is None:
         run.drop_missing({e[0] for e in entries})
     store.set_meta(con, updated_at=_utc(now()))

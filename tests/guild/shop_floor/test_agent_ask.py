@@ -60,9 +60,10 @@ def test_an_ask_line_writes_the_owners_own_words_to_the_ledger_and_claims_no_del
 
 
 def test_a_listener_is_reported_only_when_one_was_seen_recently(asks):
+    owner_text = TEXT.replace("Claude Code", "both")
     ar.arm(_ledger(asks), "claude-code")
     _reply(asks, "ASK both: Check it\n")
-    client, token, cid, note, events = _ask(asks, TEXT)
+    client, token, cid, note, events = _ask(asks, owner_text)
     words = events[-1]["reply_note"]["text"]
     assert words.startswith("Asked Claude Code and Codex.")
     assert "- Claude Code: a listener is running, so it should see this soon." in words            # each agent keeps its own, separate state
@@ -125,8 +126,9 @@ def test_a_retried_turn_makes_no_second_request(asks):
 
 
 def test_receipts_questions_and_reports_come_back_as_attributed_notes_once_each(asks):
+    owner_text = TEXT.replace("Claude Code", "Codex")
     _reply(asks, "ASK codex: Review it\n")
-    client, token, cid, note, events = _ask(asks, TEXT)
+    client, token, cid, note, events = _ask(asks, owner_text)
     root, sync = _ledger(asks), f"{API}/conversations/{cid}/agent-requests/sync"
     [doc] = _requests(asks)
     rid = doc["request"]["request_id"]
@@ -139,7 +141,7 @@ def test_receipts_questions_and_reports_come_back_as_attributed_notes_once_each(
     assert first["notes"] == [] and first["outstanding"] == 1 and first["requests"][0]["stage"] == "queued"        # nothing claimed before a receipt
     ar.receipt(root, rid, "codex", session_ref="thread-9")
     second = post()
-    assert [n["text"] for n in second["notes"]] == ["Codex (session thread-9) picked up the request: “" + TEXT + "”"] and second["notes"][0]["author_kind"] == "platform"
+    assert [n["text"] for n in second["notes"]] == ["Codex (session thread-9) picked up the request: “" + owner_text + "”"] and second["notes"][0]["author_kind"] == "platform"
     ar.needs_you(root, rid, "codex", "Which branch?")
     ar.result(root, rid, "codex", "Two tabs are missing: A and B.")
     third = post()
@@ -157,8 +159,9 @@ def test_receipts_questions_and_reports_come_back_as_attributed_notes_once_each(
 
 
 def test_sync_keeps_nothing_while_off_the_record_and_is_owner_only(asks):
+    owner_text = TEXT.replace("Claude Code", "Codex")
     _reply(asks, "ASK codex: Review it\n")
-    client, token, cid, note, events = _ask(asks, TEXT)
+    client, token, cid, note, events = _ask(asks, owner_text)
     sync = f"{API}/conversations/{cid}/agent-requests/sync"
     assert client.post(sync, json={}, headers=write_headers(token, mode="off_record")).status_code in (403, 409, 422)
     assert client.post(sync, json={}).status_code in (400, 403)                                                      # no token
@@ -184,25 +187,28 @@ def test_parse_ask_is_strict():
 
 
 def test_when_the_request_cannot_be_written_it_says_so_and_drops_mcs_own_sentence(asks, monkeypatch):
+    owner_text = TEXT.replace("Claude Code", "Codex")
     def boom(*a, **k):
         raise ar.Refused("unsafe", "The ledger folder is a link; nothing was written.")
     monkeypatch.setattr(ar, "create_request", boom)
     _reply(asks, "ASK codex: Review it\nI have sent it to Codex.")
-    client, token, cid, note, events = _ask(asks, TEXT)
+    client, token, cid, note, events = _ask(asks, owner_text)
     text = events[-1]["reply_note"]["text"]
     assert text.startswith("**Not sent.**") and "Nothing was delivered." in text and "I have sent it" not in text and "ASK" not in text.replace("Not sent", "")
 
 
 def test_an_unexpected_failure_inside_the_ask_handling_never_leaves_a_raw_ask_line(asks, monkeypatch):
+    owner_text = TEXT.replace("Claude Code", "both")
     monkeypatch.setattr(asks.extra["asks"], "words", lambda made: (_ for _ in ()).throw(RuntimeError("boom")))
     _reply(asks, "ASK both: Review it\nI have sent it.")
-    client, token, cid, note, events = _ask(asks, TEXT)
+    client, token, cid, note, events = _ask(asks, owner_text)
     text = events[-1]["reply_note"]["text"]
     assert text.startswith("**Not sent.**") and "ASK" not in text.replace("Not sent", "") and "I have sent it" not in text
     assert "cannot say whether it was recorded" in text                                                   # honest: the requests may exist
 
 
 def test_both_agents_first_recorded_second_failed_says_exactly_that_and_a_retry_adds_only_the_missing_one(asks, monkeypatch):
+    owner_text = TEXT.replace("Claude Code", "both")
     real = ar.create_request
 
     def second_fails(root, **kw):
@@ -211,7 +217,7 @@ def test_both_agents_first_recorded_second_failed_says_exactly_that_and_a_retry_
         return real(root, **kw)
     monkeypatch.setattr(ar, "create_request", second_fails)
     _reply(asks, "ASK both: Review it\nBoth sent.")
-    client, token, cid, note, events = _ask(asks, TEXT)
+    client, token, cid, note, events = _ask(asks, owner_text)
     text = events[-1]["reply_note"]["text"]
     assert text.startswith("Asked Claude Code.") and "- Claude Code:" in text and "- Codex: **not recorded.**" in text and "ask again to retry it" in text
     assert "Nothing was delivered." not in text and "Nothing has been delivered yet" not in text and "Both sent" not in text   # no blanket claim in a mixed outcome, no MC claim
@@ -256,7 +262,7 @@ def _plain_turn(portal, cid, text):
 def _open_one(asks, to="claude-code", seed="seed"):
     """A conversation with one request put to ``to`` (through the real ASK path); returns (client, token, cid, rid)."""
     _reply(asks, f"ASK {to}: Check it\n")
-    client, token, cid, note, events = _ask(asks, TEXT)
+    client, token, cid, note, events = _ask(asks, TEXT.replace("Claude Code", "Codex" if to == "codex" else "both" if to == "both" else "Claude Code"))
     [doc] = [d for d in _requests(asks) if d["request"]["conversation_id"] == cid]
     return client, token, cid, doc["request"]["request_id"]
 
@@ -652,22 +658,30 @@ def test_a_saved_note_whose_mc_turn_never_started_stays_saved_but_unrouted_and_a
     assert asks.extra["runtime"].posts == [] and _requests(asks) == []                                    # KNOWN LIMITATION (documented): it is not routed by a retry; a new message is
 
 
-def test_closing_the_browser_mid_turn_still_records_the_ask_and_keeps_mcs_reply(asks):
+def test_closing_the_browser_mid_turn_still_records_the_ask_and_keeps_mcs_reply(asks, monkeypatch):
     from test_mc_streaming import _stream, _wait_idle, nd
-    client, token, cid, note = _boundary_rig(asks, "Please check the Workshop Log tabs and tell me what is missing.")
+    # ACK precedes run.start(); consume a short real PING to advance the generator
+    # and start the buffered worker before disconnecting. No deployed code changes.
+    from minimoi_portal.guild_ui.mc import streaming
+    original_browser_events = streaming.browser_events
+    def short_ping(*args, **kwargs):
+        kwargs["ping_s"] = .01
+        return original_browser_events(*args, **kwargs)
+    monkeypatch.setattr(streaming, "browser_events", short_ping)
+    client, token, cid, note = _boundary_rig(asks, TEXT)
     runtime = asks.extra["runtime"]
     runtime.script = [nd({"t": "delta", "text": "Sure, I will ask Claude.\nASK claude-code: Check it\n"}), nd({"t": "delta", "text": "Done."}), "WAIT", nd({"t": "finish", "reason": "stop"}),
                       nd({"t": "usage", "prompt_tokens": 5, "completion_tokens": 3})]
     resp = _stream(client, token, note["request_id"], request_id=uuid.uuid4().hex, conversation_id=cid)
     stream = iter(resp.response)
     next(stream)                                                                                           # the acknowledgement
-    assert json.loads(next(stream))["t"] == "delta"                                                        # and the visible prose before the ASK line (the ASK line itself is never shown)
+    ping = json.loads(next(stream)); assert ping["t"] == "ping"
     assert runtime.waiting.wait(5)
     resp.close()                                                                                           # the browser is closed mid-turn, before the turn finishes
     runtime.gate.set()
     _wait_idle()
     [req] = _requests(asks)
-    assert req["request"]["action"] == "Please check the Workshop Log tabs and tell me what is missing." and req["request"]["to"] == "claude-code" and req["stage"] == "queued"      # the ASK was recorded without any browser
+    assert req["request"]["action"] == TEXT and req["request"]["to"] == "claude-code" and req["stage"] == "queued"      # the ASK was recorded without any browser
     notes = [r for r in asks.extra["floor"].rows("floor_messages") if r["author_kind"] == "agent"]
     assert any("Asked Claude Code" in r["text"] for r in notes)                                            # and MC's honest reply was kept
 
@@ -767,7 +781,7 @@ def test_the_ask_line_is_held_back_while_streaming_in_odd_pieces_even_when_it_st
     client, token, cid, note, events = _ask(asks, "Please check the Workshop Log tabs and tell me what is missing.")           # no agent is named, so this turn streams: the prefix hold is what keeps the raw line off the screen
     shown = _shown(events)
     assert "ASK" not in shown and "AS" not in shown.replace("Understood", "").replace("One moment", "") and shown.startswith("Understood. One moment.")
-    assert events[-1]["reply_note"]["text"].startswith("Asked Codex: ") and [d["request"]["to"] for d in _requests(asks)] == ["codex"]
+    assert events[-1]["reply_note"]["text"].startswith("**Not sent.**") and _requests(asks) == []  # no current owner recipient; never infer from model
 
 
 @pytest.mark.parametrize("reply,words", [
@@ -792,19 +806,19 @@ def test_an_ask_in_a_reply_that_did_not_end_cleanly_is_not_routed_and_says_so(as
 
 def test_a_fenced_example_of_the_syntax_is_ordinary_text_but_a_real_line_after_it_still_routes(asks):
     _reply(asks, "To ask someone I write:\n```\nASK codex: Title\n```\nDoing it now:\nASK codex: Check it\n")
-    client, token, cid, note, events = _ask(asks, TEXT)
+    client, token, cid, note, events = _ask(asks, TEXT.replace("Claude Code", "Codex"))
     assert [d["request"]["to"] for d in _requests(asks)] == ["codex"]                                       # exactly one: the example in the fence did not count
     assert events[-1]["reply_note"]["text"].startswith("Asked Codex")
 
 
 def test_repeat_follow_ups_in_the_same_conversation_each_route_once_with_their_own_request(asks):
     _reply(asks, "ASK both: First check\n")
-    client, token, cid, note, events = _ask(asks, "First question")
+    client, token, cid, note, events = _ask(asks, "Ask both: First question")
     _reply(asks, "Summary of the first answers.\nNow asking again:\nASK both: Second check\n")
-    _ask(asks, "Second question", cid=cid)
+    _ask(asks, "Ask both: Second question", cid=cid)
     rows = _requests(asks)
     assert len(rows) == 4 and sorted((d["request"]["to"], d["request"]["action"]) for d in rows) == [
-        ("claude-code", "First question"), ("claude-code", "Second question"), ("codex", "First question"), ("codex", "Second question")]
+        ("claude-code", "Ask both: First question"), ("claude-code", "Ask both: Second question"), ("codex", "Ask both: First question"), ("codex", "Ask both: Second question")]
     assert len({d["request"]["request_id"] for d in rows}) == 4
 
 
@@ -841,7 +855,7 @@ def test_a_follow_up_in_a_conversation_that_already_has_requests_is_held_even_wi
     client, token, cid, rid = _open_one(asks)
     _reply(asks, "Understood.\n", "Let me check on that now:\n", "ASK codex: Look again\n")
     _, _, _, _, events = _ask(asks, "And the second one as well", cid=cid)
-    assert _shown(events) == "" and events[-1]["reply_note"]["text"].startswith("Asked Codex")
+    assert _shown(events) == "" and events[-1]["reply_note"]["text"].startswith("**Not sent.**")  # history alone cannot authorize a fresh recipient
 
 
 def test_an_ordinary_chat_still_streams_word_by_word_and_is_not_held(asks):

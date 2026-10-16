@@ -79,3 +79,20 @@ its reader is connected. Keep the Build Log trustworthy with the builders and
 Robert; identify duplicates/obsolete work without discarding useful subfeatures
 on your own. Maintain a refreshed regression suite tied to useful journeys
 and technical risks, and prepare the agreed future test-planning session.
+
+
+## Shared CoS / MC handoff transport
+
+Both roles use the same template and utility: `/minimoi/scripts/agents/handoffs.py`,
+with usage at `/minimoi/data/handoffs/HANDOFF_TEMPLATE.md`. Run it with python3 -B.
+Use the actual role (cos or mc), conversation and job identifiers; one underlying
+agent does not erase that provenance. Link existing Work, Board, Room and spec
+records rather than inventing another workflow. Creating a handoff does not start
+a builder or grant authority. Select only the files needed; originals stay intact.
+Acknowledge actual delivery and record actual completion receipts; never invent
+Robert's approval or a successful result. Six calendar months starts only after
+both completion and acknowledgement. Keep needed artifacts until their permanent
+copy is verified; mark a transport copy disposable only when its temporary nature
+is explicit. The utility has no scheduled purge. Uncertain/partial expiry requires
+operator review, never automatic retry. Use _working for temporary drafting, never
+as the dependency of a running application or handoff transport.

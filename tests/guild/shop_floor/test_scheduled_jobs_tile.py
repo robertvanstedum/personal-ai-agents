@@ -46,3 +46,24 @@ def test_null_results_safe_to_render(tmp_path):
     (root/"test.json").write_text(json.dumps(doc))
     rows=overview(str(root),registry_path=registry,now=NOW)["jobs"]
     assert Environment().from_string("{% for part, code in job.results.items() %}{{ code }}{% endfor %}").render(job=rows[0]) == ""
+
+
+def test_configured_ec2_host_visible_without_changing_explicit_host(tmp_path, monkeypatch):
+    root, registry = setup(tmp_path)
+    document = json.loads(registry.read_text())
+    document["jobs"][0]["host"] = "ec2"
+    registry.write_text(json.dumps(document))
+    receipt = build(job_id="test", host="ec2", run_id="test-run", state="ok",
+                    started_at=NOW, finished_at=NOW, last_success_at=NOW, exit_code=0)
+    write_json_atomic(root, "test.json", receipt)
+    monkeypatch.setenv("MINIMOI_JOBS_HOST", "ec2")
+    view = overview(str(root), registry_path=registry, now=NOW)
+    assert len(view["jobs"]) == 1 and view["jobs"][0]["host"] == "ec2"
+    assert view["light"]["state"] == "green"
+    assert overview(str(root), registry_path=registry, host="mac", now=NOW)["jobs"] == []
+
+
+def test_unconfigured_host_retains_mac_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("MINIMOI_JOBS_HOST", raising=False)
+    root, registry = setup(tmp_path)
+    assert overview(str(root), registry_path=registry, now=NOW)["jobs"][0]["host"] == "mac"

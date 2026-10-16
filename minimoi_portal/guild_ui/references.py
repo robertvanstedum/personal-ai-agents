@@ -9,6 +9,16 @@ ROOT = Path(__file__).resolve().parents[2]
 ROOTS = ("docs", "planning-studio/initiatives", "prototype-lab/projects")
 CORE = ("ARCHITECTURE.md", "OPERATIONS.md", "ROADMAP.md")
 
+# Exact historical queue names whose bytes already match canonical documents.
+# These aliases never fall back to private working files if a target is missing.
+LEGACY_ALIASES = {
+    'docs_COS_PAGE_ROADMAP_2026-06-17.md': 'docs/COS_PAGE_ROADMAP.md',
+    'docs_DESIGN_SESSION_PROMPT_2026-06-16.md': 'docs/DESIGN_SESSION_PROMPT.md',
+    'docs_GESPRACHE_FORWARD_SPEC_2026-06-17.md': 'docs/GESPRACHE_FORWARD_SPEC.md',
+    'docs_LEARNING_SYSTEM_ROADMAP_2026-06-16.md': 'docs/LEARNING_SYSTEM_ROADMAP.md',
+    'dr_decision_record_practice_mvp_2026-06-17.md': 'docs/decision-records/dr_decision_record_practice_mvp_2026-06-17.md',
+}
+
 def resolve(reference, root=None):
     root = Path(root or ROOT).resolve()
     if not isinstance(reference, str) or not reference or "\\" in reference:
@@ -16,8 +26,9 @@ def resolve(reference, root=None):
     name = PurePosixPath(reference)
     if name.is_absolute() or any(p in ("", ".", "..") for p in reference.split("/")) or name.suffix.lower() != ".md":
         return None
-    candidates = [root / reference]
-    if len(name.parts) == 1 and reference not in CORE:
+    alias = LEGACY_ALIASES.get(reference)
+    candidates = [root / (alias or reference)]
+    if alias is None and len(name.parts) == 1 and reference not in CORE:
         candidates = [root / d / reference for d in ("docs/specs", "docs/design", "docs", "_working")]
     for candidate in candidates:
         try:
@@ -25,7 +36,7 @@ def resolve(reference, root=None):
             allowed = any(resolved.is_relative_to(root / d) for d in ROOTS)
             allowed |= resolved in [root / f for f in CORE]
             # Preserve exact legacy flat references, never enumerate private working files.
-            allowed |= len(name.parts) == 1 and resolved.parent == root / "_working"
+            allowed |= alias is None and len(name.parts) == 1 and resolved.parent == root / "_working"
             if allowed and resolved.is_file() and resolved.stat().st_size <= 1_000_000:
                 return resolved
         except (OSError, ValueError):

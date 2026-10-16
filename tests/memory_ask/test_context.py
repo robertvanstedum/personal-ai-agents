@@ -57,6 +57,22 @@ def test_embedded_roles_and_boundary_text_remain_inside_one_data_line():
     assert context.build(record).block != built.block  # fresh boundary per turn
 
 
+def test_decision_metadata_survives_without_making_successor_pointer_citable():
+    record = result()
+    record["keyword"][0].update(
+        decision_status="superseded", decision_authority="owner_event",
+        decision_gap="successor_evidence_unavailable",
+        successor_evidence={"file": "records/successor.md", "lines": [1, 2]},
+    )
+    built = context.build(record)
+    prepared = payload(built)["keyword"][0]
+    assert prepared["decision_status"] == "superseded"
+    assert prepared["decision_authority"] == "owner_event"
+    assert prepared["decision_gap"] == "successor_evidence_unavailable"
+    assert "successor_evidence" not in prepared
+    assert citation.check("See [records/successor.md:1-2].", built.citations)[0]["state"] == "invalid_citation"
+
+
 def test_credentials_and_payment_text_removed_from_every_exported_text_field():
     record = result()
     for name in context.HIT_TEXT:

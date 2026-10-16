@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from core.jobs import batch_window
 from core.vault_t1 import portable
 from core.vault_t1.reader import Vault
 
@@ -76,6 +77,14 @@ class BackupError(RuntimeError):
         self.code, self.detail = code, detail
 
 
+def batch_timeout(limit: float = 3600) -> float:
+    """Nightly admission/budget; cleanup deliberately never calls this guard."""
+    try:
+        return batch_window.remaining(limit)
+    except batch_window.BatchDeadline as exc:
+        raise BackupError(exc.code) from None
+
+
 def ensure_space(path, need: int, *, usage=shutil.disk_usage) -> None:
     """Refuse (``insufficient_space``) unless ``need`` more bytes fit on the filesystem holding ``path`` AND the reserve would still remain afterwards."""
     probe = Path(path)
@@ -89,6 +98,7 @@ def sha256_file(path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for block in iter(lambda: f.read(1 << 20), b""):
+            batch_timeout()
             h.update(block)
     return h.hexdigest()
 
@@ -198,6 +208,7 @@ class Dest:
         """Write one object. ``replace=False`` (every attempt object) is a real conditional create: the local file is published with an exclusive hard link (it either becomes
         the object or fails, atomically, whoever else is writing) and S3 gets ``PutObject`` with ``If-None-Match: *`` (a 412 means the key already exists). Neither is a
         check followed by a write. Only the small ``latest.json`` pointer is replaced."""
+        batch_timeout()
         if self.kind == "file":
             target = self.base / key
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -224,7 +235,7 @@ class Dest:
             return
         if replace:
             try:
-                self.run([self.aws, "s3", "cp", str(local), f"{self.url}/{key}", "--sse", "AES256", "--only-show-errors"], check=True, capture_output=True, timeout=3600)
+                self.run([self.aws, "s3", "cp", str(local), f"{self.url}/{key}", "--sse", "AES256", "--only-show-errors"], check=True, capture_output=True, timeout=batch_timeout())
             except (OSError, subprocess.SubprocessError):
                 raise BackupError("upload_failed") from None
             return
@@ -234,7 +245,7 @@ class Dest:
         full_key = f"{prefix}/{key}" if prefix else key
         try:
             done = self.run([self.aws, "s3api", "put-object", "--bucket", bucket, "--key", full_key, "--body", str(local), "--if-none-match", "*",
-                             "--server-side-encryption", "AES256"], capture_output=True, text=True, timeout=3600)
+                             "--server-side-encryption", "AES256"], capture_output=True, text=True, timeout=batch_timeout())
         except (OSError, subprocess.SubprocessError):
             raise BackupError("upload_failed") from None
         if done.returncode != 0:
@@ -262,6 +273,7 @@ def footprint(shelf_root: str) -> dict:
         directories += 1
         alloc += BLOCK
         for name in filenames:
+            batch_timeout()
             try:
                 st = os.lstat(os.path.join(dirpath, name))
             except OSError:
@@ -324,6 +336,7 @@ def snapshot_tar(shelf_root: str, out: Path) -> dict:
         for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
             dirnames.sort()
             for name in sorted(filenames):
+                batch_timeout()
                 path = Path(dirpath) / name
                 rel = path.relative_to(root).as_posix()
                 if path.is_symlink() or SKIP.search(rel) or not path.is_file():
@@ -343,7 +356,7 @@ def encrypt(age_bin: str, recipient: str, src: Path, dst: Path) -> None:
     if not RECIPIENT.match(recipient):
         raise BackupError("recipient_malformed")
     try:
-        subprocess.run([age_bin, "-r", recipient, "-o", str(dst), str(src)], check=True, capture_output=True, timeout=3600)
+        subprocess.run([age_bin, "-r", recipient, "-o", str(dst), str(src)], check=True, capture_output=True, timeout=batch_timeout())
     except (OSError, subprocess.SubprocessError):
         raise BackupError("encrypt_failed") from None
 
@@ -371,11 +384,14 @@ def _safe_extract(archive: Path, target: Path) -> int:
     n = 0
     with tarfile.open(archive, "r:gz") as tar:
         for m in tar:
+            batch_timeout()
             p = Path(m.name)
             if p.is_absolute() or ".." in p.parts or not (m.isfile() or m.isdir()):
                 raise BackupError("archive_unsafe")
             n += 1
-        tar.extractall(target, filter="data")
+        for member in tar.getmembers():
+            batch_timeout()
+            tar.extract(member, target, filter="data")
     return n
 
 
@@ -387,6 +403,7 @@ def run_backup(*, shelf_root: str, dest: str, recipient: str, workdir: str, age_
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     if enforce_window and not in_window(now):
         raise BackupError("outside_window")
+    batch_timeout()
     version = check_age(age_bin, expect_age)                    # before anything is read or uploaded
     if not RECIPIENT.match(recipient):
         raise BackupError("recipient_malformed")
@@ -412,7 +429,9 @@ def run_backup(*, shelf_root: str, dest: str, recipient: str, workdir: str, age_
         ensure_space(work, captured_extract_need(plain), usage=usage)
         check.mkdir(mode=0o700)
         _safe_extract(plain, check)
+        batch_timeout()
         verify = portable.verify_shelf(str(check))
+        batch_timeout()
         records = Vault(str(check), ()).coverage()["totals"]["records"]
         if not remove_tree(check):
             raise BackupError("cleanup_failed")
@@ -428,6 +447,16 @@ def run_backup(*, shelf_root: str, dest: str, recipient: str, workdir: str, age_
             "ciphertext": {"name": ARCHIVE, "sha256": sha256_file(cipher), "bytes": cipher.stat().st_size},
             "age": {"version": version, "recipient_fingerprint": fingerprint(recipient)},
         }
+        asset_checked = verify.get("checked") or {}
+        asset_orphans = sum(int(w.get("count", 0)) for w in verify.get("warnings", [])
+                            if w.get("where") == "assets" and w.get("code") == "unreferenced_objects")
+        if "assets" in asset_checked or asset_orphans:
+            manifest["shelf"]["native_assets"] = {
+                "accepted": int(asset_checked.get("assets", 0)),
+                "editions": int(asset_checked.get("asset_editions", 0)),
+                "referenced_objects": int(asset_checked.get("asset_objects", 0)),
+                "unreferenced_objects": asset_orphans,
+            }
         mpath = scratch / MANIFEST
         mpath.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         complete = {"format": FORMAT, "attempt": attempt, "created_utc": manifest["created_utc"], "manifest_sha256": sha256_file(mpath),
@@ -440,12 +469,13 @@ def run_backup(*, shelf_root: str, dest: str, recipient: str, workdir: str, age_
         day = now.astimezone(CHICAGO)
         prefixes = [f"daily/{day:%Y-%m-%d}"] + ([f"monthly/{day:%Y-%m}"] if day.day == 1 else [])
         for prefix in prefixes:
+            batch_timeout()
             folder = f"{prefix}/{attempt}"
             d.put(cipher, f"{folder}/{ARCHIVE}")
             d.put(mpath, f"{folder}/{MANIFEST}")
             d.put(cpath, f"{folder}/{COMPLETE}")                # COMPLETE last: an attempt without it is an orphan and is never restored from
             d.put(ppath, f"{prefix}/{LATEST}", replace=True)    # only now does the day point at this attempt
-        manifest["state"] = "ok" if verify.get("ok") else "warn"
+        manifest["state"] = "ok" if verify.get("ok") and not asset_orphans else "warn"
         manifest["keys"] = [f"{p}/{attempt}" for p in prefixes]
         return manifest
     finally:

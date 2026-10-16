@@ -78,3 +78,19 @@ def test_the_guard_can_be_switched_off_on_staging(load_portal, monkeypatch):
     client.get("/app/cos/ui/confer")
     forwarded.clear()
     assert client.post("/app/cos/ui/send", json=TEXT).status_code == 200 and len(forwarded) == 1
+
+
+def test_managed_voice_always_requires_owner_csrf_even_with_legacy_guard_off(load_portal, monkeypatch):
+    monkeypatch.setenv("MINIMOI_COS_WRITE_GUARD", "off")
+    monkeypatch.setenv("MINIMOI_COS_MANAGED_REALTIME", "1")
+    portal, forwarded = _portal(load_portal, monkeypatch, "https://minimoi.ai")
+    client=portal.owner();client.get('/app/cos/ui/confer')
+    token=forwarded[-1][1]['head_meta']['minimoi-csrf-token'];forwarded.clear()
+    path='/app/cos/api/realtime-voice/managed/session'
+    assert client.post(path,json={},headers={'X-Minimoi-Voice-Write-Verified':'1'}).status_code==403
+    assert forwarded==[]
+    assert client.post(path,json={},headers={'X-CSRF-Token':token}).status_code==200
+    assert forwarded[-1][1]['verified_cos_voice_write'] is True
+    forwarded.clear()
+    assert client.post(path,json={},headers={'X-CSRF-Token':token,'Origin':'https://evil.example'}).status_code==403
+    assert forwarded==[]

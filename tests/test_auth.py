@@ -243,7 +243,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
         "curator": "/static/tour/01-curator-landing-desktop.webp?v=20260802-curatordesktop1",
         "german": "/static/tour/01-german-landing-desktop.webp?v=20260804-germandesktop1",
         "portuguese": "/static/tour/01-portuguese-landing-desktop.webp?v=20260804-portuguesedesktop1",
-        "guild": "/static/tour/01-guild-landing-desktop.webp?v=20260805-guildrefresh1",
+        "guild": "/static/tour/guild-main-desktop.jpg?v=20261014-g8-review1",
         "cos": "/static/tour/01-cos-landing-desktop.webp?v=20260804-cosdesktop1",
     }
     for section_id, expected_src in expected_first_images.items():
@@ -370,9 +370,9 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
     assert [
         img.get("src") for img in soup.select("section#guild .tour-shot img")
     ] == [
-        f"/static/tour/{name}?v=20260805-guildrefresh1"
+        f"/static/tour/{name}?v={'20261014-g8-review1' if name == 'guild-main-desktop.jpg' else '20260805-guildrefresh1'}"
         for name in (
-            "01-guild-landing-desktop.webp",
+            "guild-main-desktop.jpg",
             "02-guild-build-queue-desktop.webp",
             "03-guild-specification-desktop.webp",
             "04-guild-spec-evaluation-desktop.webp",
@@ -400,8 +400,7 @@ def test_public_tour_is_chooser_only_with_privacy_safe_cos(client):
             "/static/tour/portuguese-learning-archive.webp?v=20260730-trim2",
         ],
         "guild": [
-            "/static/tour/01-guild-landing-mobile.webp?v=20260801-guildflow2",
-            "/static/tour/02-guild-landing-partners-mobile.webp?v=20260801-guildflow2",
+            "/static/tour/guild-main-mobile.jpg?v=20261014-g8-review1",
             "/static/tour/03-guild-build-log-mobile.webp?v=20260801-guildflow2",
             "/static/tour/04-guild-spec-mobile.webp?v=20260801-guildflow2",
             "/static/tour/05-guild-roadmap-mobile.webp?v=20260801-guildflow2",
@@ -701,3 +700,21 @@ def test_domain_family_guest_session_is_not_checked_against_guests_json(client):
         resp = client.get("/dashboard", follow_redirects=False)
     mocked.assert_not_called()
     assert resp.status_code == 200
+
+
+def test_anonymous_guild_refresh_stays_static_and_private_routes_stay_locked(client):
+    landing = BeautifulSoup(client.get("/").get_data(as_text=True), "html.parser")
+    guild_card = landing.select_one(".tour-domain-card-guild img")
+    assert guild_card["src"] == "/static/tour/guild-catalog-desktop.jpg?v=20261014-g8-review1"
+    tour = BeautifulSoup(client.get("/tour").get_data(as_text=True), "html.parser")
+    guild = tour.select_one("section#guild")
+    assert len(guild.select(".tour-mobile-shot-link")) == 6
+    assert "two partners" not in guild.get_text(" ", strip=True)
+    for filename in ("guild-main-desktop.jpg", "guild-catalog-desktop.jpg", "guild-main-mobile.jpg"):
+        response = client.get("/static/tour/" + filename)
+        assert response.status_code == 200
+        assert response.mimetype == "image/jpeg"
+    for path in ("/dashboard", "/guild", "/guild-next/", "/app/cos"):
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 302
+        assert "/login" in response.headers["Location"]

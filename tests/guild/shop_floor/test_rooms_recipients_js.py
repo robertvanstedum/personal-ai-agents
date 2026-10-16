@@ -25,8 +25,8 @@ class Element {
 const nodes = new Map();
 const $ = s => { if (!nodes.has(s)) nodes.set(s, new Element('div')); return nodes.get(s); };
 const $$ = s => $('[data-rm-to]').find(s);
-const context = vm.createContext({ $, $$, el: (t,a,v) => new Element(t,a,v), assert, console,
-  window: { setInterval(){}, clearInterval(){}, clearTimeout(){}, sessionStorage: {getItem(){},setItem(){},removeItem(){}} },
+const context = vm.createContext({ $, $$, el: (t,a,v) => new Element(t,a,v), assert, console, URLSearchParams,
+  window: { location: { search: "" }, setInterval(){}, clearInterval(){}, clearTimeout(){}, sessionStorage: {getItem(){},setItem(){},removeItem(){}} },
   document: { addEventListener(){} }, newKey: () => 'test-key' });
 const source = fs.readFileSync(process.argv[1], 'utf8').replace(/^import .*;$/mg,'').replace(/^export /mg,'');
 vm.runInContext(source, context);

@@ -1,4 +1,4 @@
-"""Loopback-only development application. Never mount on the production portal."""
+"""Records application; production requires explicit validated prepared runtime."""
 from __future__ import annotations
 
 import argparse
@@ -20,7 +20,7 @@ import portal_identity
 # Routes the signed-in mini-moi person may reach through the portal (the browser's own routes). The worker and
 # credential-management routes are not on it: an installation or a worker is not a person. Unknown routes fail closed.
 PORTAL_HUMAN_ROUTES = frozenset({
-    "approved_agents_brief","approved_agents_list","approved_agents_change","me","status","rooms","persistent_rooms","create_persistent_room","persistent_room","create_session","session_record","operation",
+    "archive_reconcile","archive_check","archive_preview","archive_session","restore_session","approved_agents_brief","approved_agents_list","approved_agents_change","me","status","rooms","persistent_rooms","create_persistent_room","persistent_room","create_session","session_record","operation",
     "create_room","get_room","events","disclosure","transfer","import_conversation","state","moderator",
     "coordination_inbox","coordination_list","coordination_create","coordination_transition","executive_snapshot",
     "cos_status","cos_request","cos_reconcile","cos_auto","acknowledge_join","principals","principal","portal_principal","membership",
@@ -44,7 +44,17 @@ def configured_hosts(value):
     return hosts
 
 
-def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False, allowed_hosts=None, portal_key=None, installer_key=None):
+def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_preview=False, allowed_hosts=None, portal_key=None, installer_key=None, archive_external_pending=None, runtime_environ=None):
+    import os as _os
+    runtime=dict(_os.environ if runtime_environ is None else runtime_environ)
+    production=runtime.get("RECORDS_PORTAL_ENV","dev")=="production" or runtime.get("MINIMOI_RECORDS_PROFILE")=="production" or runtime.get("MINIMOI_ROLE")=="production"
+    if production:
+        from services.records_runtime import preflight
+        if testing or ui_preview or portal_key is not None or installer_key is not None or allowed_hosts not in (None, {"minimoi-records:18880"}):
+            raise ValueError("production_runtime_overrides_refused")
+        preflight(data_dir,runtime,port=port)
+    elif runtime.get("RECORDS_PORTAL_ENV","dev")!="dev":
+        raise ValueError("records_environment_refused")
     app=Flask(__name__,static_folder="static",static_url_path="/static")
     store=Store(data_dir)
     app.config.update(SECRET_KEY=store.session_key,MAX_CONTENT_LENGTH=12_000_000,
@@ -52,15 +62,17 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
                       SESSION_COOKIE_NAME="minimoi_room_poc",PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
                       TESTING=testing)
     app.extensions["records_store"]=store
+    store.archive.external_pending=archive_external_pending
+    app.extensions["archive"]=store.archive
     from web_sessions import WebSessions
     web_sessions=WebSessions(store.connect,app.config["PERMANENT_SESSION_LIFETIME"])
     app.extensions["web_sessions"]=web_sessions
     import os as _os
     with store.connect() as _db: _db.executescript(portal_identity.SCHEMA)
-    portal_env=_os.environ.get("RECORDS_PORTAL_ENV","dev")
+    portal_env=runtime.get("RECORDS_PORTAL_ENV","dev")
     def current_portal_key():
         # Read at each use, so putting the key file in place (or rotating it) needs no code change; no file means a portal identity is refused.
-        return portal_key() if callable(portal_key) else (portal_key if portal_key is not None else portal_identity.load_key(_os.environ.get("RECORDS_PORTAL_KEY_FILE")))
+        return portal_key() if callable(portal_key) else (portal_key if portal_key is not None else portal_identity.load_key(runtime.get("RECORDS_PORTAL_KEY_FILE")))
     previous_hook=store.platform_access.on_revoke
     def on_revoke(db,principal,credential_id=None):
         if previous_hook: previous_hook(db,principal)
@@ -80,14 +92,14 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
     coordination=Coordination(store)
     app.extensions["coordination"]=coordination
     import os
-    extra_hosts=configured_hosts(os.environ.get("RECORDS_ALLOWED_HOSTS")) if allowed_hosts is None else set(allowed_hosts)
-    allowed_hosts={f"127.0.0.1:{port}",f"localhost:{port}"}|extra_hosts
+    extra_hosts=configured_hosts(runtime.get("RECORDS_ALLOWED_HOSTS")) if allowed_hosts is None else set(allowed_hosts)
+    allowed_hosts=extra_hosts if production else {f"127.0.0.1:{port}",f"localhost:{port}"}|extra_hosts
     if testing: allowed_hosts.add("localhost")
 
     @app.before_request
     def guard():
         if request.host not in allowed_hosts:
-            raise Problem("This test application only serves its loopback origin",403)
+            raise Problem("Records does not serve this host",403)
         origin=request.headers.get("Origin")
         if origin and origin != f"http://{request.host}":
             raise Problem("Cross-origin requests are not allowed",403)
@@ -102,7 +114,9 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
                 raise Problem("Use application/json",415)
             payload=request.get_json(silent=True)
             if not isinstance(payload,dict): raise Problem("Expected a JSON object")
-        if request.path == "/api/login": return
+        if request.path == "/api/login":
+            if production:raise Problem("Production Records has no standalone browser login",403)
+            return
         if request.endpoint in {'agent_install_pending','agent_install_issue','agent_install_ack'}:
             import hmac
             expected=installer_key
@@ -266,7 +280,7 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
 
     @app.get("/api/v1/rooms")
     def rooms():
-        result=store.rooms(actor())
+        result=store.rooms(actor(), request.args.get("view", "active"))
         if g.actor.get("scope")=="portal":
             pass        # the owner sees every room; anyone else only rooms they belong to (store.rooms)
         elif not g.actor["legacy"]:
@@ -280,15 +294,41 @@ def create_app(data_dir, port=18880, testing=False, cos_sessions=None, ui_previe
                 result=[room for room in result if "read" in grants.get(room["id"],[])]
         return jsonify(rooms=result)
 
+    @app.post("/api/v1/rooms/<room>/archive-reconcile")
+    def archive_reconcile(room): return jsonify(store.archive.reconcile(actor(),room,body()))
+
+    @app.get("/api/v1/rooms/<room>/archive-check")
+    def archive_check(room): return jsonify(store.archive.work_snapshot(actor(),room))
+
+    @app.get("/api/v1/rooms/archive-preview")
+    def archive_preview(): return jsonify(store.archive.preview(actor()))
+
+    @app.post("/api/v1/rooms/<room>/archive")
+    def archive_session(room):
+        from archive import VERIFIED_EXTERNAL, portal_proof
+        payload=dict(body());proof=payload.pop('_portal_archive_proof',None)
+        token=None
+        try:
+            if proof is not None:
+                if g.actor.get('scope')!='portal' or actor()!='robert':
+                    raise Problem('Portal archive evidence required',403)
+                token=VERIFIED_EXTERNAL.set(portal_proof(proof,room))
+            return jsonify(store.archive.change(actor(),key(),room,payload))
+        finally:
+            if token is not None:VERIFIED_EXTERNAL.reset(token)
+
+    @app.post("/api/v1/rooms/<room>/restore")
+    def restore_session(room): return jsonify(store.archive.change(actor(),key(),room,body(),restore=True))
+
     # v1 /rooms remains the stable session alias for existing clients/receipts.
     @app.get("/api/v2/rooms")
-    def persistent_rooms(): return jsonify(rooms=store.persistent_rooms(actor()))
+    def persistent_rooms(): return jsonify(rooms=store.persistent_rooms(actor(),request.args.get("view","active")))
 
     @app.post("/api/v2/rooms")
     def create_persistent_room(): return jsonify(store.create_persistent_room(actor(),key(),body())),201
 
     @app.get("/api/v2/rooms/<room>")
-    def persistent_room(room): return jsonify(store.persistent_room(actor(),room))
+    def persistent_room(room): return jsonify(store.persistent_room(actor(),room,request.args.get("view","active")))
 
     @app.post("/api/v2/rooms/<room>/sessions")
     def create_session(room): return jsonify(store.create_session(actor(),key(),room,body())),201
@@ -496,11 +536,14 @@ if __name__=="__main__":
     parser.add_argument("--data-dir",required=True)
     parser.add_argument("--port",type=int,default=18880)
     parser.add_argument("--host",default="127.0.0.1",choices=["127.0.0.1","0.0.0.0"],
-                        help="0.0.0.0 only inside the staging container, on its internal network with no host port")
+                        help="0.0.0.0 only inside the selected private container, with no public host port")
     parser.add_argument("--ui-preview",action="store_true",
                         help="Also serve the simulated-data UI preview at /preview/ (no login, no store reads)")
     args=parser.parse_args()
     if not 1024<=args.port<=65535: parser.error("Use an unprivileged local port")
+    import os as _runtime_os
+    if _runtime_os.environ.get("MINIMOI_ROLE")=="production" or _runtime_os.environ.get("RECORDS_PORTAL_ENV")=="production" or _runtime_os.environ.get("MINIMOI_RECORDS_PROFILE")=="production":
+        parser.error("Use python -m services.records_runtime for prepared production state")
     application=create_app(args.data_dir,args.port,ui_preview=args.ui_preview)
     print(f"LOCAL TEST ONLY: http://127.0.0.1:{args.port}",flush=True)
     if args.ui_preview: print(f"UI PREVIEW (simulated data): http://127.0.0.1:{args.port}/preview/",flush=True)

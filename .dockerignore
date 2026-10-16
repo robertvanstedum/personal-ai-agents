@@ -10,6 +10,7 @@ __pycache__/
 
 # Working / scratch
 _working/
+_working-archive/
 _review_session/
 logs/
 
@@ -39,7 +40,9 @@ docs/german-domain/
 docs/poc/
 docs/portfolio/
 docs/releases/
-docs/decision-records/
+!docs/decision-records/
+docs/decision-records/*
+!docs/decision-records/dr_decision_record_practice_mvp_2026-06-17.md
 docs/design/
 docs/*.docx
 _NewDomains/

@@ -1,4 +1,8 @@
-"""Speaking with Master Craftsman (MC voice, v1): the chained pattern the Chief of Staff's Confer page already uses, on the owner's kept-note path.
+"""Opt-in managed realtime metadata/transport serves the shared controller;
+its authenticated server host is mc_managed_realtime.py. Without that gate,
+the existing chained behavior below remains unchanged.
+
+Speaking with Master Craftsman (MC voice, v1): the chained pattern the Chief of Staff's Confer page already uses, on the owner's kept-note path.
 
 Chained, not a talking model: the browser streams the microphone straight to the speech provider for TRANSCRIPTION only (an ephemeral credential minted here, never the
 account key); the final transcript becomes an ordinary kept note and an ordinary Master Craftsman turn (``POST /notes`` then ``/mc/turns``, in the page); and MC's own kept
@@ -24,6 +28,7 @@ ENV = "MINIMOI_MC_VOICE"
 SPEECH_MAX_CHARS = 3500                                # a longer reply is read in part and the page says so aloud
 _NOTE_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
 _STATIC_OK = ("realtime-confer-controller.js", "adapters/openai-transcription-webrtc-adapter.js")
+_MANAGED_STATIC = ("realtime-voice-controller.js","adapters/openai-webrtc-adapter.js","adapters/xai-websocket-adapter.js")
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "core", "realtime_voice", "static")
 # A hint to the transcriber about the setting. The enforcement that no provider answer exists is the transcription-only session type, not this wording.
 TRANSCRIBE_ONLY_PROMPT = "Transcribe the speaker's words for a conversation with Master Craftsman, the MiniMoi build partner. Keep names and product terms as spoken."
@@ -62,7 +67,7 @@ def capabilities():
         mode, default, listed = _providers()
     except ProviderUnavailableError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 503
-    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status()})
+    return jsonify({"ok": True, "mode": mode, "default_provider": default.provider, "providers": [p.public_dict() for p in listed], "budget": budget.public_status(), "managed_realtime": cfg().get("mc_managed_realtime")})
 
 
 def _budget_refusal(exc):
@@ -166,7 +171,7 @@ def static_file(name):
     """The shared controller and its transport adapter, served from the one shared copy (never a second copy), only while voice is on."""
     if not enabled():
         return _off()
-    if name not in _STATIC_OK:
+    if name not in _STATIC_OK and not (cfg().get("mc_managed_realtime") and name in _MANAGED_STATIC):
         return json_error("not_found", "No such file.", 404)
     return send_from_directory(_STATIC_DIR, name, mimetype="text/javascript")
 

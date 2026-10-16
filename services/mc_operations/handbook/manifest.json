@@ -1,0 +1,21 @@
+{
+  "format": "minimoi-mc-handbook/1",
+  "candidate_version": "0.1.0",
+  "release_path": "v0.1.0",
+  "status": "review_candidate",
+  "active_runtime_version": null,
+  "predecessor": null,
+  "date": "2026-10-15",
+  "author": "Codex",
+  "decision_owner": "Robert",
+  "runtime_activation_included": false,
+  "source_basis": "Existing MC role and working agreement plus owner direction; not a replacement for runtime authority.",
+  "files": {
+    "v0.1.0/ADOPTION.md": "281d1ccbf1703805c7623e95428b6af162271aaac16737cdffcb856bca8dfcc7",
+    "v0.1.0/PROJECT.md": "0f320a17f60f063fce61f4e9e37a986847ec4bcc41bc084a8c4bf35a5af815c5",
+    "v0.1.0/skills/minimoi-engineering/SKILL.md": "de961cff6236f25a08308604c49e5b408d60baa7e639b6d73ce3394ff18e1279",
+    "v0.1.0/skills/minimoi-engineering/references/board-and-services.md": "bbc9b337695b03142f40daa868515738137340b1009ce4965e59e6cfd2490a22",
+    "v0.1.0/skills/minimoi-engineering/references/build-and-deploy.md": "1811c47de77712a5c55504ea476b4383555caccba354e4faf84560b01acbe072",
+    "v0.1.0/skills/minimoi-engineering/references/regression.md": "6f946c2d4e78f64628816f406a3c13654c414da7f68f7da1925833ca151788d6"
+  }
+}

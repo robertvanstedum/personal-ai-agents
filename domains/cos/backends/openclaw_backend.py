@@ -272,8 +272,19 @@ class OpenClawBackend:
 
     def call_backend(self, prompt: str, context: dict, tool_policy: dict) -> str:
         """Send one text turn and return only the final assistant-visible text."""
+        # Completion evidence comes from the connector payload, never answer text.
+        context.pop("completion_evidence", None)
         payload = self._call_backend_payload(prompt, context, tool_policy)
-        return self._reply_text(payload)
+        reply = self._reply_text(payload)
+        choices = payload.get("choices")
+        if (payload.get("object") == "chat.completion" and payload.get("model") == f"openclaw/{self._agent_id}"
+                and isinstance(choices, list) and len(choices) == 1
+                and choices[0].get("finish_reason") == "stop"):
+            message = choices[0].get("message") or {}
+            if (message.get("role") == "assistant" and not message.get("tool_calls")
+                    and not message.get("function_call") and not message.get("refusal")):
+                context["completion_evidence"] = {"state":"complete", "source":"openclaw_connector"}
+        return reply
 
     @staticmethod
     def _reply_text(payload: dict) -> str:

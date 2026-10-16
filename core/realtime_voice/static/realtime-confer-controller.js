@@ -196,7 +196,9 @@ export class ConferVoiceController {
     this._onStateChange("thinking");
     const response = await fetch(this._turnUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json",
+        ...(typeof this._requestHeaders === "function" ? this._requestHeaders() : (this._requestHeaders || {})),
+      },
       body: JSON.stringify({
         text,
         channel: "html_voice",
