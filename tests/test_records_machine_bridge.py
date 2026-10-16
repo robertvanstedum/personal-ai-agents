@@ -56,7 +56,7 @@ def test_redirect_bad_json_type_and_oversize_response_fail_closed(upstream,monke
 
 def test_document_bytes_remain_exact_and_forced_download():
  data=b'%PDF synthetic\x00\xff';c,t,_=setup(transport=Transport(Response(200,data,'application/pdf')));r=send(c,'/api/v1/documents/'+ROOM,'GET');assert r.data==data;assert r.headers['Content-Disposition']=='attachment'
-@pytest.mark.parametrize('body,headers,status',[(b'[]',{},400),(b'invalid',{},400),(b'{}',{'Idempotency-Key':''},400),(b'x'*(B.MAX_BODY+1),{},413),(b'{}',{'Content-Type':'text/plain'},415)])
+@pytest.mark.parametrize('body,headers,status',[(b'[]',{},400),(b'invalid',{},400),(b'{}',{'Idempotency-Key':''},400),(b'x'*(B.MAX_BODY+1),{},413),(b'{}',{'Content-Type':'text/plain'},415)], ids=['json-not-object','invalid-json','missing-idempotency','request-too-large','wrong-content-type'])
 def test_bounded_write_contract(body,headers,status):
  c,t,_=setup();assert send(c,body=body,headers=headers).status_code==status;assert not t.calls
 
