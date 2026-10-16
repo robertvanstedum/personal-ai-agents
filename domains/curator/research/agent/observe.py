@@ -46,10 +46,11 @@ STATE_ROOT = PATHS.state
 
 try:
     import anthropic
-    import keyring
 except ImportError as e:
     print(json.dumps({"ok": False, "error": f"Missing dependency: {e}"}))
     sys.exit(1)
+
+from core.get_secret import get_secret
 
 # ── Paths (same pattern as research.py) ──────────────────────────────────────
 
@@ -276,9 +277,12 @@ def main():
     obs_dir     = PATHS.persisted(cfg.get("observations_dir", "data/observations"))
 
     # ── Auth ──────────────────────────────────────────────────────────────────
-    api_key = keyring.get_password("anthropic", "api_key")
+    try:
+        api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
+    except Exception:
+        _fail("Anthropic API key unavailable")
     if not api_key:
-        _fail("Anthropic API key not found in keyring (service='anthropic', account='api_key')")
+        _fail("Anthropic API key unavailable")
     client = anthropic.Anthropic(api_key=api_key)
 
     # ── Load context ──────────────────────────────────────────────────────────
