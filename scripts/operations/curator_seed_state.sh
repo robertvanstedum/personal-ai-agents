@@ -36,8 +36,20 @@ fail() { echo "seed REFUSED: $*" >&2; exit 1; }
 [[ -f "$MAP" ]] || fail "state map $MAP missing"
 [[ -f "$SNAP/SNAPSHOT" && -f "$SNAP/FILES.sha256" && -f "$SNAP/PATHS" && -d "$SNAP/tree" ]] ||
   fail "$SNAP is not a complete curator_preserve.sh snapshot"
-( cd "$SNAP/tree" && sha256sum -c --quiet ../FILES.sha256 ) ||
-  fail "$SNAP does not match its own manifest"
+[[ ! -L "$SNAP/tree" && ! -L "$SNAP/FILES.sha256" ]] ||
+  fail "snapshot tree or manifest is a symlink"
+
+# sha256sum -c rejects a legitimate zero-file manifest. Such a manifest is
+# valid only for a tree holding directories alone; never ignore unlisted files,
+# symlinks or special entries. Nonempty manifests retain strict checksum checks.
+if [[ -s "$SNAP/FILES.sha256" ]]; then
+  ( cd "$SNAP/tree" && sha256sum -c --quiet ../FILES.sha256 ) ||
+    fail "$SNAP does not match its own manifest"
+else
+  unexpected="$(find "$SNAP/tree" -mindepth 1 ! -type d -print -quit)" ||
+    fail "could not inspect empty snapshot tree"
+  [[ -z "$unexpected" ]] || fail "empty manifest has unlisted snapshot entries"
+fi
 
 # Exact-name lookup in a successful container listing. A Docker or daemon
 # error stops the script: it is never read as "no container" (#305 review).
