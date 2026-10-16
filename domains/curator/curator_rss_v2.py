@@ -3508,8 +3508,9 @@ def main():
     html_content = format_html(top_articles, model=model, run_mode=run_mode,
                                radar_articles=radar_articles or None)
     
-    # Create dated archive (skip in dry run)
-    import os
+    # Create dated archive (skip in dry run). `os` is the module-level import:
+    # a local `import os` here would make `os` local to all of main() and break
+    # the CURATOR_OUTPUT_PATH read above with UnboundLocalError (#305).
     from datetime import datetime
     
     if not dry_run:
