@@ -10,7 +10,7 @@ APP_SOURCE=Path(__file__).resolve().parents[1]/'minimoi_portal/app.py'
 READY='# Canonical fixture\n\n## Definition of Done\n- Pass\n\n## Commit\nCommit fixture\n'
 class LegacyBuildReferences(unittest.TestCase):
  def setUp(self):
-  self.folder=tempfile.TemporaryDirectory(dir='/private/tmp');self.addCleanup(self.folder.cleanup);self.root=Path(self.folder.name);self.items=[];self.unreadable=None
+  self.folder=tempfile.TemporaryDirectory();self.addCleanup(self.folder.cleanup);self.root=Path(self.folder.name).resolve();self.items=[];self.unreadable=None
   self.app=Flask(__name__);self.app.config.update(TESTING=True,SECRET_KEY='synthetic-reader-test')
   self.app.jinja_loader=DictLoader({'guild/spec_detail.html':'{{ filename }}|{{ content|safe }}'})
   self.app.add_url_rule('/login','login',lambda:'login')

@@ -12,7 +12,14 @@ BASELINE = {
     "s3transfer": "0.19.2", "sentry-sdk": "2.71.0", "six": "1.17.0", "soupsieve": "2.10", "typing_extensions": "4.16.0",
     "urllib3": "2.8.0", "werkzeug": "3.1.9",
 }
-ADDED = {"nh3", "markdown-it-py", "mdurl", "pillow", "pypdf"}
+UI_ADDED = {"nh3", "markdown-it-py", "mdurl", "pillow", "pypdf"}
+# Reviewed server-owned MC realtime SDK closure; every existing baseline pin stays fixed.
+MANAGED_REALTIME_ADDED = {
+    "openai": "3.22.0", "websockets": "15.0.1", "sniffio": "1.3.1",
+    "truststore": "0.10.5", "typing-inspection": "0.4.4", "annotated-types": "0.8.0",
+    "anyio": "4.15.1", "pydantic": "2.14.1", "httpx2": "2.13.1", "jiter": "0.17.0",
+    "h11": "0.16.0", "pydantic_core": "2.50.1", "httpcore2": "2.13.1",
+}
 
 
 def _pins():
@@ -31,10 +38,11 @@ def test_every_portal_dependency_is_pinned_exactly():
     assert _pins()
 
 
-def test_the_production_baseline_is_unchanged_and_only_the_ui_packages_are_added():
+def test_production_baseline_unchanged_and_only_reviewed_ui_and_realtime_packages_added():
     pins = _pins()
     assert {name: pins.get(name) for name in BASELINE} == BASELINE
-    assert set(pins) - set(BASELINE) == ADDED
+    assert set(pins) - set(BASELINE) == UI_ADDED | set(MANAGED_REALTIME_ADDED)
+    assert {name: pins.get(name) for name in MANAGED_REALTIME_ADDED} == MANAGED_REALTIME_ADDED
 
 
 def test_the_base_image_is_pinned_by_digest():

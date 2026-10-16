@@ -79,7 +79,7 @@ def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_
     assert "sendContinuationInstruction(this._openingInstruction)" in source
     assert 'this._onInputState("speech_started")' in source
     assert "never surfaced to the UI while active" in source
-    assert "openai-webrtc-adapter.js?v=20260809-ga1" in source
+    assert "openai-webrtc-adapter.js?v=20261015-managed-end1" in source
     assert "xai-websocket-adapter.js?v=20260725-transcript1" in source
 
 

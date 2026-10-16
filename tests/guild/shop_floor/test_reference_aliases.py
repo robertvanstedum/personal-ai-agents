@@ -5,7 +5,7 @@ from minimoi_portal.guild_ui import references
 
 class ReferenceAliases(unittest.TestCase):
  def setUp(self):
-  self.folder=tempfile.TemporaryDirectory(dir='/private/tmp');self.addCleanup(self.folder.cleanup);self.root=Path(self.folder.name)
+  self.folder=tempfile.TemporaryDirectory();self.addCleanup(self.folder.cleanup);self.root=Path(self.folder.name).resolve()
  def write(self,name,text='synthetic'):
   path=self.root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(text);return path
  def test_all_exact_aliases_use_canonical_instead_of_private_copy(self):
