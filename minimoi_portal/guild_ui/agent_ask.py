@@ -25,6 +25,19 @@ from core import agent_requests as ar
 from .security import check_write, json_error
 from .stores import CLAUDE_CODE, CODEX, GUILD_PLATFORM
 
+REPORT_NOTE_MAX = 4000                 # existing guild.floor_messages SQL constraint, not the owner's input limit
+
+def report_note(name: str, request_id: str, text: str) -> str:
+    """Bound only the conversation presentation. The original ledger is never cut."""
+    header = f"**{name}'s report** (agent-authored; not a verification and not an approval)\n\n"
+    if len(header) + len(text) <= REPORT_NOTE_MAX:
+        return header + text
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    notice = (f"**Excerpt only — full report retained in the request ledger; it is not available in full here.**\n\n"
+              f"Request: `{request_id}` · Full report: {len(text):,} characters · SHA-256: `{digest}`\n\n---\n\n")
+    available = max(0, REPORT_NOTE_MAX - len(header) - len(notice))
+    return header + notice + text[:available]
+
 VAR = "MINIMOI_GUILD_AGENT_REQUESTS"
 TITLE_MAX = 80                         # the routing title shown to the owner is cut to this
 TITLE_ACCEPT_MAX = 300                 # a longer first line from MC is still understood; the title is only a label (the task is the owner's own message)
@@ -450,13 +463,13 @@ class AskService:
                 out.append((f"reqnu-{r['request_id']}-{e['event_id']}", f"**{name} needs you:** {e['text']}", AUTHORS[to]))
         res = next((e for e in doc["events"] if e["kind"] == "result"), None)
         if res is not None:
-            out.append((f"reqres-{r['request_id']}", f"**{name}'s report** (agent-authored; not a verification and not an approval)\n\n{res['text']}", AUTHORS[to]))
+            out.append((f"reqres-{r['request_id']}", report_note(name, r["request_id"], res["text"]), AUTHORS[to]))
         return out
 
     def sync(self, conv: dict, floor) -> dict:
         """Keep every new receipt, question and report of this conversation's requests as one note each. Returns the notes (for the page), the
         requests and what is still outstanding. A note that cannot be kept now is retried on the next sync."""
-        notes, requests, outstanding = [], [], 0
+        notes, requests, outstanding, unkept = [], [], 0, 0
         for doc in ar.for_conversation(self.root, conv.get("id", "")):
             r = doc["request"]
             requests.append({"request_id": r["request_id"], "to": r["to"], "stage": doc["stage"], "closed": doc["closed"],
@@ -480,7 +493,10 @@ class AskService:
                     note = None
                 if note:
                     notes.append(note)
-        return {"notes": notes, "requests": requests, "outstanding": outstanding}
+                else:
+                    unkept += 1
+                    logging.getLogger("guild_ui.agent_ask").warning("agent request note could not be kept (%s)", rid)
+        return {"notes": notes, "requests": requests, "outstanding": outstanding, "unkept": unkept}
 
     # ── slice 2: what MC is told on its next turn ──
     def _told_path(self, conversation_id: str) -> str:

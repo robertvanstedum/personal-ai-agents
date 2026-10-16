@@ -40,6 +40,7 @@ export function initAgentRequests({ page, thread, noteLine, follow }) {
   // A recoverable failure is one that can pass by itself: the network, a server restart or error, an answer that could not be read, a throttle. A refusal that will
   // not change by asking again (signed out, not allowed, Private, not knowing the mode) is not retried; Private and unknown mode resume when the mode changes.
   const usable = (b) => !!b && Array.isArray(b.notes) && Number.isFinite(b.outstanding) && b.outstanding >= 0
+    && (b.unkept === undefined || (Number.isInteger(b.unkept) && b.unkept >= 0))
     && b.notes.every((n) => n && typeof n === 'object' && (Number.isInteger(n.id) || (typeof n.id === 'string' && n.id)) && typeof n.text === 'string' && typeof n.created_at === 'string');
   const recoverable = (r) => r.status === 0 || r.status >= 500 || r.status === 408 || r.status === 429 || (r.body && r.body.error === 'unreadable');
   async function sync() {
@@ -65,8 +66,13 @@ export function initAgentRequests({ page, thread, noteLine, follow }) {
           added = true;
         }
         if (added) follow();
-        failures = 0;                                          // only a look that was understood and fully applied starts the count again
-        say('');
+        if (r.body.unkept > 0) {
+          retry = true;
+          say('An agent update is kept in the request ledger but could not yet be added here. Retrying.');
+        } else {
+          failures = 0;                                        // only a fully applied look starts the count again
+          say('');
+        }
       } else if (r.ok || recoverable(r)) {
         retry = true;                                          // a 200 that is not the expected answer (not JSON, wrong shape) is a failed look, not "nothing outstanding"
       }
