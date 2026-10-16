@@ -51,8 +51,9 @@ def test_research_blueprint_registers_on_curator_app(curator_client):
 def test_generate_dive_uses_shared_secret_lookup(monkeypatch):
     script = (
         ROOT
-        / "_NewDomains"
-        / "research-intelligence"
+        / "domains"
+        / "curator"
+        / "research"
         / "scripts"
         / "generate_dive.py"
     )
@@ -151,7 +152,8 @@ def test_inbox_add_creates_missing_feedback_directory(
     curator_client, tmp_path, monkeypatch
 ):
     research_root = tmp_path / "research-intelligence"
-    monkeypatch.setattr(research_routes, "RESEARCH_ROOT", research_root)
+    monkeypatch.setattr(research_routes, "DATA_ROOT", research_root / "data")
+    monkeypatch.setattr(research_routes, "STATE_ROOT", research_root)
 
     response = curator_client.post("/api/research/inbox/add", json={
         "title": "A source worth researching",
@@ -169,6 +171,8 @@ def test_inbox_add_creates_missing_feedback_directory(
 
 
 def test_dive_status_surfaces_logged_failure(curator_client, tmp_path, monkeypatch):
+    from domains.curator.research.paths import ResearchPaths
+    monkeypatch.setattr(research_routes,"PATHS",ResearchPaths(tmp_path/"repo",tmp_path,tmp_path/"state"))
     state_path = tmp_path / "dd_run_state.json"
     log_path = tmp_path / "failed-dive.log"
     output_path = tmp_path / "missing-dive.md"

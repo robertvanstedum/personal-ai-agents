@@ -181,3 +181,9 @@ scripts/.curator_dev_cron_on
 # Guild Build Queue store runtime files (journal and sidecar lock)
 data/guild/queue_journal.jsonl
 data/guild/.build_queue.json.lock
+
+# Private research persistence, separate from canonical application code.
+/data/research-intelligence/
+/domains/curator/research/data/
+/domains/curator/research/state/
+/domains/curator/research/agent/config.json

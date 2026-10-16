@@ -29,16 +29,16 @@ from core.get_secret import get_secret
 
 research_bp = Blueprint('research', __name__)
 
-# Path to the research-intelligence project (relative to repo root; _NewDomains/
-# and interests/ live at repo root, not domain-relative)
+# Application code and private research state have separate permanent roots.
 _REPO_ROOT     = Path(__file__).resolve().parent.parent.parent
-RESEARCH_ROOT  = _REPO_ROOT / '_NewDomains' / 'research-intelligence'
+from domains.curator.research.paths import configured
+PATHS = configured()
+RESEARCH_ROOT = PATHS.code
+DATA_ROOT = PATHS.data
+STATE_ROOT = PATHS.state
 SCANS_DIR      = _REPO_ROOT / 'interests' / '2026' / 'scans'
-DIVES_DIR      = RESEARCH_ROOT / 'data' / 'dives'
+DIVES_DIR      = DATA_ROOT / 'dives'
 
-# Ensure agent/ modules are importable — done once at import time, not per-request
-if str(RESEARCH_ROOT) not in sys.path:
-    sys.path.insert(0, str(RESEARCH_ROOT))
 
 
 # ── HTML pages ────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ def api_research_observe():
             [sys.executable, str(observe_script),
              "--topic", topic, "--command", command],
             capture_output=True, text=True, timeout=120,
-            cwd=str(RESEARCH_ROOT),
+            cwd=str(_REPO_ROOT),
         )
         if result.returncode != 0:
             err = result.stderr.strip() or "observe.py exited non-zero"
@@ -130,7 +130,7 @@ def api_research_observations_list():
     Returns: {ok, observations: [{topic, command, timestamp, filename, generated, cost}]}
     """
     topic_filter = request.args.get('topic', '').strip()
-    obs_dir = RESEARCH_ROOT / 'data' / 'observations'
+    obs_dir = DATA_ROOT / 'observations'
 
     if not obs_dir.exists():
         return jsonify({"ok": True, "observations": []})
@@ -188,7 +188,7 @@ def api_research_observation_detail(filename: str):
     Returns: {ok, filename, topic, command, generated, cost, tokens_in, tokens_out,
               model, content_md}
     """
-    obs_dir = RESEARCH_ROOT / 'data' / 'observations'
+    obs_dir = DATA_ROOT / 'observations'
     # Sanitise filename — no path traversal
     safe = Path(filename).name
     f = obs_dir / safe
@@ -247,7 +247,7 @@ def api_research_observation_detail(filename: str):
 @research_bp.route('/api/research/candidates')
 def api_research_candidates():
     """Return query candidates filtered by ?topic= and ?status= (default: candidate)."""
-    from agent.candidates import load as load_candidates
+    from domains.curator.research.agent.candidates import load as load_candidates
     topic  = request.args.get('topic',  None)
     status = request.args.get('status', 'candidate')
     data   = load_candidates()
@@ -260,7 +260,7 @@ def api_research_candidates():
 @research_bp.route('/api/research/candidates/promote', methods=['POST'])
 def api_research_candidates_promote():
     """Promote a query candidate into config.json session_searches."""
-    from agent.candidates import cmd_promote
+    from domains.curator.research.agent.candidates import cmd_promote
     body = request.get_json() or {}
     id_  = body.get('id', '').strip()
     if not id_:
@@ -272,7 +272,7 @@ def api_research_candidates_promote():
 @research_bp.route('/api/research/candidates/retire', methods=['POST'])
 def api_research_candidates_retire():
     """Retire a query candidate (permanent, kept for audit trail)."""
-    from agent.candidates import cmd_retire
+    from domains.curator.research.agent.candidates import cmd_retire
     body = request.get_json() or {}
     id_  = body.get('id', '').strip()
     if not id_:
@@ -286,7 +286,7 @@ def api_research_candidates_retire():
 @research_bp.route('/api/research/save', methods=['POST'])
 def api_research_save():
     """Save an article signal with optional note. Detects duplicates."""
-    from agent.feedback import record_article_signal, adjust_weights as aw
+    from domains.curator.research.agent.feedback import record_article_signal, adjust_weights as aw
     body       = request.get_json() or {}
     url        = body.get('url', '').strip()
     title      = body.get('title', '').strip()
@@ -328,8 +328,8 @@ def _get_topic_sessions(topic: str) -> list:
     Returns list of session ID strings (stem, no .md extension), unsorted.
     """
     topic_dirs = [
-        RESEARCH_ROOT / 'topics' / topic,
-        RESEARCH_ROOT / 'data' / 'threads' / topic / 'sessions',
+        STATE_ROOT / 'topics' / topic,
+        DATA_ROOT / 'threads' / topic / 'sessions',
     ]
     sessions = set()
     for topic_dir in topic_dirs:
@@ -367,7 +367,7 @@ def _parse_session_log() -> dict:
             ]
         }
     """
-    log_path = RESEARCH_ROOT / 'library' / 'session-log.md'
+    log_path = STATE_ROOT / 'library' / 'session-log.md'
     if not log_path.exists():
         return {"agent_active": False, "budget_cumulative": 0.0, "rows": []}
 
@@ -460,13 +460,13 @@ def api_research_dashboard():
             "agent_active": bool
         }
     """
-    config_path = RESEARCH_ROOT / 'agent' / 'config.json'
+    config_path = PATHS.config
     if not config_path.exists():
         return jsonify({"ok": False, "error": "config.json not found"}), 500
     cfg = json.loads(config_path.read_text())
 
     topics       = list(cfg.get('session_searches', {}).keys())
-    threads_dir  = RESEARCH_ROOT / 'data' / 'threads'
+    threads_dir  = DATA_ROOT / 'threads'
     if threads_dir.exists():
         topics.extend(
             path.name
@@ -479,8 +479,8 @@ def api_research_dashboard():
     budget_warn  = cfg.get('budget', {}).get('total_warn',  18.0)
 
     # Load shared data files once
-    signals_path    = RESEARCH_ROOT / 'data' / 'feedback' / 'article_signals.json'
-    candidates_path = RESEARCH_ROOT / 'data' / 'feedback' / 'query_candidates.json'
+    signals_path    = DATA_ROOT / 'feedback' / 'article_signals.json'
+    candidates_path = DATA_ROOT / 'feedback' / 'query_candidates.json'
 
     article_signals = json.loads(signals_path.read_text())    if signals_path.exists() else []
     all_candidates  = json.loads(candidates_path.read_text()) if candidates_path.exists() else []
@@ -519,7 +519,7 @@ def api_research_dashboard():
             top_find = tf_match.group(1).strip() if tf_match else None
 
         # Thread lifecycle fields
-        from agent.threads import load_thread as _lt
+        from domains.curator.research.agent.threads import load_thread as _lt
         _thread = _lt(topic)
         thread_status       = _thread.status      if _thread else "active"
         thread_expires      = _thread.expires     if _thread else None
@@ -529,7 +529,7 @@ def api_research_dashboard():
         # Compute session count at time of last Dive (for repeatable dive gate)
         sessions_at_last_dive = 0
         if thread_dd_generated and thread_dd_path:
-            _dd_full = RESEARCH_ROOT / thread_dd_path
+            _dd_full = PATHS.persisted(thread_dd_path)
             if _dd_full.exists():
                 _m = _re.search(r'(\d+)\s+sessions?', _dd_full.read_text()[:300])
                 if _m:
@@ -565,7 +565,7 @@ def api_research_dashboard():
 
 # ── API: Run Session ──────────────────────────────────────────────────────────
 
-_RUN_STATE_PATH = RESEARCH_ROOT / 'data' / 'run_state.json'
+_RUN_STATE_PATH = DATA_ROOT / 'run_state.json'
 _RUN_STATE_MAX_AGE_MINUTES = 60
 
 # Module-level reference to the running Popen object (single session only).
@@ -576,13 +576,13 @@ _active_proc: subprocess.Popen | None = None
 
 # ── Deeper Dive generation state (same pattern as run-session) ────────────────
 
-_DD_STATE_PATH = RESEARCH_ROOT / 'data' / 'dd_run_state.json'
+_DD_STATE_PATH = DATA_ROOT / 'dd_run_state.json'
 _DD_STATE_MAX_AGE_MINUTES = 120   # Opus calls can take 2–5 min; generous ceiling
 _dd_proc: subprocess.Popen | None = None
 
 # Article-level Scan generation follows the same non-blocking pattern. The
 # request returns after the job is durable; the browser polls the status route.
-_SCAN_STATE_PATH = RESEARCH_ROOT / 'data' / 'scan_run_state.json'
+_SCAN_STATE_PATH = DATA_ROOT / 'scan_run_state.json'
 _SCAN_STATE_MAX_AGE_MINUTES = 15
 _scan_proc: subprocess.Popen | None = None
 
@@ -624,8 +624,8 @@ def _next_session_name(topic: str) -> str:
     import re as _re2
     max_n = 0
     topic_dirs = [
-        RESEARCH_ROOT / 'topics' / topic,
-        RESEARCH_ROOT / 'data' / 'threads' / topic / 'sessions',
+        STATE_ROOT / 'topics' / topic,
+        DATA_ROOT / 'threads' / topic / 'sessions',
     ]
     for topic_dir in topic_dirs:
         if not topic_dir.exists():
@@ -654,7 +654,7 @@ def api_research_run_session():
         return jsonify({"ok": False, "error": "topic required"}), 400
 
     # Validate topic exists in config
-    config_path = RESEARCH_ROOT / 'agent' / 'config.json'
+    config_path = PATHS.config
     try:
         config = json.loads(config_path.read_text())
     except Exception as e:
@@ -662,7 +662,7 @@ def api_research_run_session():
 
     dynamic_searches = []
     try:
-        from agent.threads import load_thread
+        from domains.curator.research.agent.threads import load_thread
         thread = load_thread(topic)
         dynamic_searches = thread.session_searches if thread else []
     except Exception:
@@ -688,16 +688,16 @@ def api_research_run_session():
     # Launch non-blocking subprocess — research.py can run 1-35 min,
     # far too long to block a Flask worker.
     global _active_proc
-    log_dir = RESEARCH_ROOT / 'data' / 'session_logs'
+    log_dir = DATA_ROOT / 'session_logs'
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f'{session_name}.log'
     try:
         log_file = open(log_path, 'wb')
         proc = subprocess.Popen(
-            [sys.executable, 'agent/research.py',
+            [sys.executable, str(RESEARCH_ROOT / 'agent' / 'research.py'),
              '--topic', topic,
              '--session-name', session_name],
-            cwd=str(RESEARCH_ROOT),
+            cwd=str(_REPO_ROOT),
             stdout=log_file,
             stderr=subprocess.STDOUT,
         )
@@ -760,7 +760,7 @@ def api_research_run_session_status():
         # looks identical to a normal completion from the UI's perspective.
         if _active_proc is not None and _active_proc.poll() not in (None, 0):
             failed = True
-            log_path = RESEARCH_ROOT / 'data' / 'session_logs' / f"{state.get('session_name')}.log"
+            log_path = DATA_ROOT / 'session_logs' / f"{state.get('session_name')}.log"
             if log_path.exists():
                 try:
                     error_excerpt = log_path.read_text(errors='replace').strip()[-500:]
@@ -805,8 +805,9 @@ def _dd_state_active() -> bool:
 
 def _dive_error_excerpt(state: dict) -> str:
     """Return a safe, bounded excerpt from a failed Dive job log."""
-    log_path = Path(state.get('log_path', ''))
-    if log_path.exists():
+    try:log_path = PATHS.persisted(state.get('log_path', ''))
+    except ValueError:log_path = None
+    if log_path is not None and log_path.exists():
         try:
             text = log_path.read_text(errors='replace').strip()
             if text:
@@ -835,8 +836,9 @@ def _scan_state_active() -> bool:
 
 
 def _scan_error_excerpt(state: dict) -> str:
-    log_path = Path(state.get('log_path', ''))
-    if log_path.exists():
+    try:log_path = PATHS.persisted(state.get('log_path', ''))
+    except ValueError:log_path = None
+    if log_path is not None and log_path.exists():
         try:
             text = log_path.read_text(errors='replace').strip()
             if text:
@@ -889,7 +891,7 @@ def api_research_generate_scan():
             "error": f"A Scan is already running for '{state.get('title', 'another article')}'.",
         }), 409
 
-    jobs_dir = RESEARCH_ROOT / 'data' / 'scan_jobs'
+    jobs_dir = DATA_ROOT / 'scan_jobs'
     jobs_dir.mkdir(parents=True, exist_ok=True)
     payload_path = jobs_dir / f'{hash_id}.json'
     log_path = jobs_dir / f'{hash_id}.log'
@@ -985,7 +987,7 @@ def _next_dive_output_path(topic: str) -> Path:
 def _start_dive_job(topic: str, out_path: Path) -> tuple[subprocess.Popen, Path]:
     """Start a Dive and persist its output so failures remain diagnosable."""
     script = RESEARCH_ROOT / 'scripts' / 'generate_dive.py'
-    log_dir = RESEARCH_ROOT / 'data' / 'dive_jobs'
+    log_dir = DATA_ROOT / 'dive_jobs'
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f'{out_path.stem}.log'
     log_file = open(log_path, 'wb')
@@ -994,7 +996,7 @@ def _start_dive_job(topic: str, out_path: Path) -> tuple[subprocess.Popen, Path]
             [sys.executable, str(script),
              '--topic', topic,
              '--output-path', str(out_path)],
-            cwd=str(RESEARCH_ROOT),
+            cwd=str(_REPO_ROOT),
             stdout=log_file,
             stderr=subprocess.STDOUT,
         )
@@ -1208,7 +1210,7 @@ def api_research_dive_confirm_data():
     Return thread metadata for the Deeper Dive confirmation page.
     GET /api/research/dive-confirm-data?topic=strait-of-hormuz
     """
-    from agent.threads import load_thread
+    from domains.curator.research.agent.threads import load_thread
     topic = request.args.get('topic', '').strip()
     if not topic:
         return jsonify({"ok": False, "error": "topic required"}), 400
@@ -1220,7 +1222,7 @@ def api_research_dive_confirm_data():
     # Count sessions
     STATIC_FILES = {"CONTEXT.md", "ORIGIN.md", "STORY_FOR_CLAUDE_AI.md", "README.md"}
     SESSION_RE = _re.compile(r'^[a-z][a-z0-9-]*\.md$')
-    topic_dir = RESEARCH_ROOT / 'topics' / topic
+    topic_dir = STATE_ROOT / 'topics' / topic
     sessions = []
     if topic_dir.exists():
         sessions = [
@@ -1337,14 +1339,16 @@ def api_research_generate_dive_status():
         _dd_proc = None
         topic      = state.get('topic', '')
         out_path   = state.get('output_path', '')
-        output_exists = bool(out_path and Path(out_path).exists())
+        try:resolved_output = PATHS.persisted(out_path)
+        except ValueError:resolved_output = None
+        output_exists = bool(resolved_output is not None and resolved_output.exists())
         if topic and output_exists:
             try:
-                from agent.threads import load_thread, save_thread
+                from domains.curator.research.agent.threads import load_thread, save_thread
                 thread = load_thread(topic)
                 if thread:
                     thread.deeper_dive_generated = True
-                    thread.deeper_dive_path      = str(Path(out_path).relative_to(RESEARCH_ROOT))
+                    thread.deeper_dive_path      = PATHS.saved_label(resolved_output)
                     save_thread(topic, thread)
             except Exception as e:
                 print(f"[dd-status] failed to update thread.json: {e}", file=sys.stderr)
@@ -1387,7 +1391,7 @@ def api_research_scan_to_dive():
     /api/research/generate-dive/status for completion.
     """
     global _dd_proc
-    from agent.threads import cmd_create, load_thread, save_thread
+    from domains.curator.research.agent.threads import cmd_create, load_thread, save_thread
 
     body    = request.get_json() or {}
     hash_id = body.get('hash_id', '').strip()
@@ -1420,12 +1424,12 @@ def api_research_scan_to_dive():
     base_slug = '-'.join(_keep) if _keep else _re.sub(r'[^a-z0-9]+', '-', dd['title'].lower()).strip('-')[:40]
 
     # Ensure unique slug
-    config_path = RESEARCH_ROOT / 'agent' / 'config.json'
+    config_path = PATHS.config
     try:
         config = json.loads(config_path.read_text())
     except Exception:
         config = {}
-    thread_root = RESEARCH_ROOT / 'data' / 'threads'
+    thread_root = DATA_ROOT / 'threads'
     existing_topics = set(config.get('session_searches', {}))
     if thread_root.exists():
         existing_topics.update(
@@ -1453,7 +1457,7 @@ def api_research_scan_to_dive():
         save_thread(topic, thread)
 
     # Web-created sessions live in mounted data, not the container filesystem.
-    topics_dir = RESEARCH_ROOT / 'data' / 'threads' / topic / 'sessions'
+    topics_dir = DATA_ROOT / 'threads' / topic / 'sessions'
     topics_dir.mkdir(parents=True, exist_ok=True)
     session_md   = _build_session_from_scan(dd, hash_id, topic)
     session_path = topics_dir / f'{topic}-001.md'
@@ -1487,7 +1491,7 @@ def api_research_thread_get(topic: str):
     Return thread.json + recent annotations for a topic.
     GET /api/research/thread/gold-geopolitics
     """
-    from agent.threads import load_thread, load_annotations
+    from domains.curator.research.agent.threads import load_thread, load_annotations
     thread = load_thread(topic)
     if not thread:
         return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
@@ -1506,7 +1510,7 @@ def api_research_thread_annotate(topic: str):
     POST /api/research/thread/gold-geopolitics/annotate
     Body: {"type": "direction_shift", "note": "...", "ref_session": null, "ref_article": null}
     """
-    from agent.threads import load_thread, cmd_annotate
+    from domains.curator.research.agent.threads import load_thread, cmd_annotate
     body        = request.get_json() or {}
     ann_type    = body.get("type", "").strip()
     note        = body.get("note", "").strip()
@@ -1536,7 +1540,7 @@ def api_research_thread_create():
     POST /api/research/thread/create
     Body: {"topic": "gold-geopolitics", "motivation": "...", "prior_belief": "..."}
     """
-    from agent.threads import cmd_create
+    from domains.curator.research.agent.threads import cmd_create
     body         = request.get_json() or {}
     topic        = body.get("topic", "").strip()
     motivation   = body.get("motivation", "To be written").strip()
@@ -1566,7 +1570,7 @@ def api_research_spawn_thread():
     """
     import re as _re
     from datetime import date as _date
-    from agent.threads import cmd_create, load_thread, save_thread
+    from domains.curator.research.agent.threads import cmd_create, load_thread, save_thread
 
     body            = request.get_json() or {}
     topic           = body.get("topic", "").strip()
@@ -1581,9 +1585,9 @@ def api_research_spawn_thread():
     if not queries:
         return jsonify({"ok": False, "error": "at least one query required"}), 400
 
-    config_path = RESEARCH_ROOT / 'agent' / 'config.json'
+    config_path = PATHS.config
     config      = json.loads(config_path.read_text())
-    thread_root = RESEARCH_ROOT / 'data' / 'threads'
+    thread_root = DATA_ROOT / 'threads'
 
     if (
         topic in config.get('session_searches', {})
@@ -1622,7 +1626,7 @@ def api_research_thread_retire(topic: str):
     POST /api/research/thread/gold-geopolitics/retire
     Body: {"reason": "..."}
     """
-    from agent.threads import load_thread, cmd_retire
+    from domains.curator.research.agent.threads import load_thread, cmd_retire
     body   = request.get_json() or {}
     reason = body.get("reason", "").strip()
 
@@ -1644,7 +1648,7 @@ def api_research_thread_wrap_up(topic: str):
     POST /api/research/thread/gold-geopolitics/wrap-up
     Body: {"note": "..."}
     """
-    from agent.threads import load_thread, cmd_wrap_up
+    from domains.curator.research.agent.threads import load_thread, cmd_wrap_up
     body   = request.get_json() or {}
     note   = body.get("note", "").strip()
 
@@ -1666,7 +1670,7 @@ def api_research_thread_expire(topic: str):
     POST /api/research/thread/gold-geopolitics/expire
     No body required.
     """
-    from agent.threads import load_thread, save_thread
+    from domains.curator.research.agent.threads import load_thread, save_thread
     thread = load_thread(topic)
     if not thread:
         return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
@@ -1682,7 +1686,7 @@ def api_research_thread_archive(topic: str):
     POST /api/research/thread/gold-geopolitics/archive
     No body required.
     """
-    from agent.threads import load_thread, save_thread
+    from domains.curator.research.agent.threads import load_thread, save_thread
     thread = load_thread(topic)
     if not thread:
         return jsonify({"ok": False, "error": f"No thread found for '{topic}'"}), 404
@@ -1786,7 +1790,7 @@ def api_research_sessions_list():
     topic = request.args.get('topic', '').strip()
     if not topic:
         # Return all topics with session counts if no topic given
-        topics_dir = RESEARCH_ROOT / 'topics'
+        topics_dir = STATE_ROOT / 'topics'
         if not topics_dir.exists():
             return jsonify({"ok": True, "topics": []})
         result = []
@@ -1803,7 +1807,7 @@ def api_research_sessions_list():
                     result.append({"topic": td.name, "count": len(real_sessions)})
         return jsonify({"ok": True, "topics": result})
 
-    topic_dir = RESEARCH_ROOT / 'topics' / topic
+    topic_dir = STATE_ROOT / 'topics' / topic
     if not topic_dir.exists():
         return jsonify({"ok": False, "error": f"topic '{topic}' not found"}), 404
 
@@ -1841,7 +1845,7 @@ def api_research_session_detail(topic: str, session_id: str):
 
     Returns: {ok, topic, session_id, header, findings, sources, threads, agent_notes}
     """
-    topic_dir = RESEARCH_ROOT / 'topics' / topic
+    topic_dir = STATE_ROOT / 'topics' / topic
     if not topic_dir.exists():
         return jsonify({"ok": False, "error": f"topic '{topic}' not found"}), 404
 
@@ -1874,7 +1878,7 @@ def api_research_session_annotate(topic: str, session_id: str):
            "ref_article": "optional source title or url"}
     Stored as a thread annotation with ref_session set automatically.
     """
-    from agent.threads import load_thread, cmd_annotate
+    from domains.curator.research.agent.threads import load_thread, cmd_annotate
     body        = request.get_json() or {}
     ann_type    = body.get("type", "reaction").strip()
     note        = body.get("note", "").strip()
@@ -2678,7 +2682,7 @@ def api_research_inbox_add():
     if not title and not raw:
         return jsonify({"ok": False, "error": "title or raw required"}), 400
 
-    candidates_path = RESEARCH_ROOT / 'data' / 'feedback' / 'query_candidates.json'
+    candidates_path = DATA_ROOT / 'feedback' / 'query_candidates.json'
     candidates_path.parent.mkdir(parents=True, exist_ok=True)
     records = json.loads(candidates_path.read_text()) if candidates_path.exists() else []
 
@@ -2717,7 +2721,7 @@ def api_research_candidates_assign():
     if not topic:
         return jsonify({"ok": False, "error": "topic required"}), 400
 
-    candidates_path = RESEARCH_ROOT / 'data' / 'feedback' / 'query_candidates.json'
+    candidates_path = DATA_ROOT / 'feedback' / 'query_candidates.json'
     if not candidates_path.exists():
         return jsonify({"ok": False, "error": "candidates file not found"}), 404
 
@@ -2807,7 +2811,7 @@ def api_topics_status():
     Return all Topics with state, expiry, and session count.
     Reads data/threads/*/thread.json directly — no config.json dependency.
     """
-    threads_dir = RESEARCH_ROOT / 'data' / 'threads'
+    threads_dir = DATA_ROOT / 'threads'
     topics = []
     if threads_dir.exists():
         import re as _re3
@@ -2832,7 +2836,7 @@ def api_topics_status():
 
             # Count static and web-created durable sessions.
             session_dirs = [
-                RESEARCH_ROOT / 'topics' / slug,
+                STATE_ROOT / 'topics' / slug,
                 topic_dir / 'sessions',
             ]
             sessions_by_name = {}
@@ -2878,7 +2882,7 @@ def api_activate_topic(slug: str):
     Activate a dormant or paused Topic.
     Body (optional): {duration_days: int, note: str}
     """
-    thread_file = RESEARCH_ROOT / 'data' / 'threads' / slug / 'thread.json'
+    thread_file = DATA_ROOT / 'threads' / slug / 'thread.json'
     if not thread_file.exists():
         return jsonify({"ok": False, "error": f"topic '{slug}' not found"}), 404
 
@@ -2923,7 +2927,7 @@ def research_leanings_ui():
     html_path = RESEARCH_ROOT / 'web' / 'leanings.html'
     if not html_path.exists():
         return "leanings.html not found", 404
-    tips_file = RESEARCH_ROOT.parent.parent / 'config' / 'curator' / 'tips.json'
+    tips_file = PATHS.tips
     try:
         tips = json.loads(tips_file.read_text()) if tips_file.exists() else {}
     except Exception:
@@ -2939,7 +2943,7 @@ def research_leanings_ui():
 def api_list_leanings():
     """List all leanings, with badge flag for each."""
     try:
-        from agent.leanings import list_leanings, needs_badge
+        from domains.curator.research.agent.leanings import list_leanings, needs_badge
         leanings = list_leanings()
         for l in leanings:
             l['badge'] = needs_badge(l)
@@ -2956,7 +2960,7 @@ def api_create_leaning():
     if not title:
         return jsonify({"ok": False, "error": "title required"}), 400
     try:
-        from agent.leanings import create_leaning
+        from domains.curator.research.agent.leanings import create_leaning
         leaning = create_leaning(
             title  = title,
             state  = body.get("state", "question"),
@@ -2974,7 +2978,7 @@ def api_create_leaning():
 def api_get_leaning(leaning_id):
     """Get a single leaning by ID."""
     try:
-        from agent.leanings import get_leaning, needs_badge
+        from domains.curator.research.agent.leanings import get_leaning, needs_badge
         leaning = get_leaning(leaning_id)
         if leaning is None:
             return jsonify({"ok": False, "error": "not found"}), 404
@@ -2989,7 +2993,7 @@ def api_update_leaning(leaning_id):
     """Update title, state, notes, or topics. Body: {title?, state?, notes?, topics?}"""
     body = request.get_json() or {}
     try:
-        from agent.leanings import update_leaning
+        from domains.curator.research.agent.leanings import update_leaning
         leaning = update_leaning(leaning_id, **{
             k: v for k, v in body.items()
             if k in ("title", "state", "notes", "topics")
@@ -3007,7 +3011,7 @@ def api_update_leaning(leaning_id):
 def api_delete_leaning(leaning_id):
     """Delete a leaning."""
     try:
-        from agent.leanings import delete_leaning
+        from domains.curator.research.agent.leanings import delete_leaning
         ok = delete_leaning(leaning_id)
         if not ok:
             return jsonify({"ok": False, "error": "not found"}), 404
@@ -3025,7 +3029,7 @@ def api_add_evidence(leaning_id):
     if not title:
         return jsonify({"ok": False, "error": "title required"}), 400
     try:
-        from agent.leanings import add_evidence
+        from domains.curator.research.agent.leanings import add_evidence
         ev = add_evidence(
             leaning_id = leaning_id,
             title      = title,
@@ -3047,7 +3051,7 @@ def api_add_evidence(leaning_id):
 def api_remove_evidence(leaning_id, ev_id):
     """Remove an evidence item from a leaning."""
     try:
-        from agent.leanings import remove_evidence
+        from domains.curator.research.agent.leanings import remove_evidence
         ok = remove_evidence(leaning_id, ev_id)
         if not ok:
             return jsonify({"ok": False, "error": "not found"}), 404
@@ -3064,7 +3068,7 @@ def api_teammate_read(leaning_id):
     Budget-gated: ~$0.01-0.02 per call.
     """
     try:
-        from agent.leanings import get_leaning, build_teammate_prompt, store_teammate_read
+        from domains.curator.research.agent.leanings import get_leaning, build_teammate_prompt, store_teammate_read
         import anthropic as _anthropic
 
         leaning = get_leaning(leaning_id)
@@ -3074,7 +3078,7 @@ def api_teammate_read(leaning_id):
         # Gather brief excerpts from linked thread sessions (free text, no API call)
         thread_summaries = []
         for topic in leaning.get("topics", []):
-            thread_dir = RESEARCH_ROOT / "data" / "threads" / topic
+            thread_dir = DATA_ROOT / "threads" / topic
             if not thread_dir.exists():
                 continue
             sessions = sorted(thread_dir.glob("*.md"))[-3:]  # last 3 sessions

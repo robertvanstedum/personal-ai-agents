@@ -1,0 +1,588 @@
+#!/usr/bin/env python3
+"""
+generate_dive.py — Dive (thread-level analysis)
+Formerly generate_deeper_dive.py — renamed to Dive per v2 naming.
+
+Two-agent analysis for a research thread:
+  Agent 1 (Synthesizer): honest synthesis of what the research found
+  Agent 2 (Challenger):  structured counter-analysis (Devil's Advocacy / Red Team)
+
+Usage:
+  cd <repository-root>
+  python scripts/generate_dive.py --topic strait-of-hormuz
+  python scripts/generate_dive.py --topic strait-of-hormuz --dry-run
+
+Output: data/dives/{topic}-dive-NNN.md
+"""
+
+import argparse
+import json
+import re
+import sys
+from datetime import date
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+from domains.curator.research.paths import configured
+PATHS = configured()
+ROOT = PATHS.code
+DATA_ROOT = PATHS.data
+STATE_ROOT = PATHS.state
+
+
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+
+REPO_ROOT = PATHS.repo
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from core.get_secret import get_secret
+
+TOPICS_DIR   = STATE_ROOT / 'topics'
+THREADS_DIR  = DATA_ROOT / 'threads'
+ANNOTATIONS_DIR = DATA_ROOT / 'annotations' / 'research'
+# The general-comment store remains at its #306 production mount.
+GENERAL_ANNOTATIONS_DIR = PATHS.repo / 'data' / 'annotations' / 'research'
+OUTPUT_DIR   = DATA_ROOT / 'dives'
+READING_ROOM = DATA_ROOT / 'reading_room'
+PROMPTS_DIR  = ROOT / 'prompts' / 'v1'
+
+SYNTHESIZER_PROMPT_FILE = PROMPTS_DIR / 'synthesizer_geopolitics_finance.md'
+CHALLENGER_PROMPT_FILE  = PROMPTS_DIR / 'challenger_geopolitics_finance.md'
+
+DOMAIN = 'Research'
+
+
+# ── Session parsing (inlined from research_routes.py) ─────────────────────────
+
+def _parse_session_header(text: str) -> dict:
+    """Extract the machine-readable header block from a session .md file."""
+    header = {}
+    m = re.search(
+        r'<!-- MACHINE-READABLE HEADER.*?-->(.*?)<!-- END HEADER -->',
+        text, re.DOTALL
+    )
+    if m:
+        for line in m.group(1).strip().splitlines():
+            if ':' in line:
+                k, _, v = line.partition(':')
+                header[k.strip()] = v.strip()
+    return header
+
+
+def _parse_session_sections(text: str) -> dict:
+    """Parse a session .md file into structured sections."""
+    findings, sources, threads, agent_notes, cost_table = [], [], [], '', ''
+
+    # Split on ## headings
+    parts = re.split(r'\n##\s+', '\n' + text)
+    for part in parts[1:]:
+        lines = part.split('\n')
+        heading = lines[0].strip().lower()
+        body = '\n'.join(lines[1:]).strip()
+
+        if 'key finding' in heading:
+            for line in body.splitlines():
+                line = line.strip().lstrip('- •').strip()
+                if line and not line.startswith('#'):
+                    findings.append(line)
+
+        elif 'source' in heading and 'further' not in heading:
+            # Join continuation lines (URL lives on indented line after the [N] line)
+            raw_lines = body.splitlines()
+            joined: list[str] = []
+            for raw in raw_lines:
+                if raw and raw[0] in ' \t' and joined and re.match(r'\[\d+\]', joined[-1]):
+                    joined[-1] = joined[-1].rstrip() + ' ' + raw.strip()
+                else:
+                    joined.append(raw)
+            for line in joined:
+                line = line.strip()
+                # Domain may contain dots (e.g. www.eia.gov) — use lazy (.+?) match
+                m = re.match(r'\[(\d+)\]\s+(.+?)\.\s+"([^"]+)"\.?\s*(https?://\S*)?', line)
+                if m:
+                    sources.append({
+                        'num':    int(m.group(1)),
+                        'domain': m.group(2).strip(),
+                        'title':  m.group(3).strip(),
+                        'url':    (m.group(4) or '').strip(),
+                    })
+
+        elif 'thread' in heading or 'continue' in heading:
+            threads = [l.strip().lstrip('- ').strip() for l in body.splitlines()
+                       if l.strip() and not l.strip().startswith('#')]
+
+        elif 'agent note' in heading or 'note' in heading:
+            agent_notes = body
+
+        elif 'cost' in heading:
+            cost_table = body
+
+    return {
+        'findings':    findings,
+        'sources':     sources,
+        'threads':     threads,
+        'agent_notes': agent_notes,
+        'cost_table':  cost_table,
+    }
+
+
+# ── Data loading ──────────────────────────────────────────────────────────────
+
+def load_thread_data(topic: str) -> dict:
+    """Load all data for a topic thread."""
+    # Motivation from thread.json
+    thread_json = THREADS_DIR / topic / 'thread.json'
+    motivation = ''
+    if thread_json.exists():
+        td = json.loads(thread_json.read_text())
+        motivation = td.get('motivation', '').strip()
+
+    # Sessions
+    topic_dirs = [
+        TOPICS_DIR / topic,
+        THREADS_DIR / topic / 'sessions',
+    ]
+    if not any(path.exists() for path in topic_dirs):
+        print(f"Error: topics/{topic}/ directory not found. Has a session been run for this topic?")
+        sys.exit(1)
+
+    EXCLUDED_STEMS = {'CONTEXT', 'ORIGIN', 'STORY_FOR_CLAUDE_AI'}
+    session_files_by_name = {}
+    for topic_dir in topic_dirs:
+        if not topic_dir.exists():
+            continue
+        for path in topic_dir.glob('*.md'):
+            if (
+                not path.name.startswith('sources-')
+                and path.stem not in EXCLUDED_STEMS
+                and not path.stem.isupper()
+            ):
+                session_files_by_name[path.name] = path
+    session_files = sorted(session_files_by_name.values())
+
+    sessions = []
+    for f in session_files:
+        text = f.read_text()
+        hdr  = _parse_session_header(text)
+        secs = _parse_session_sections(text)
+        sessions.append({
+            'file':     f.name,
+            'header':   hdr,
+            'findings': secs['findings'],
+            'sources':  secs['sources'],
+            'threads':  secs['threads'],
+        })
+
+    # Annotations
+    annotations = []
+    # Only a byte-for-byte identical record (the same comment present in both
+    # folders) is counted once. Records that share a note_id but differ in any
+    # field are all kept; nothing is merged or dropped.
+    seen_records = set()
+    for ann_root in (ANNOTATIONS_DIR, GENERAL_ANNOTATIONS_DIR):
+        ann_dir = ann_root / topic
+        if not ann_dir.exists():
+            continue
+        for jf in sorted(ann_dir.glob('*.json')):
+            try:
+                entries = json.loads(jf.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                key = json.dumps(entry, sort_keys=True, ensure_ascii=False)
+                if key in seen_records:
+                    continue
+                seen_records.add(key)
+                annotations.append(entry)
+    annotations.sort(key=_timestamp_order)
+
+    return {
+        'topic':       topic,
+        'domain':      DOMAIN,
+        'motivation':  motivation,
+        'sessions':    sessions,
+        'annotations': annotations,
+    }
+
+
+# ── Empty session guard ───────────────────────────────────────────────────────
+
+def _timestamp_order(annotation: dict) -> tuple:
+    """Sort key: dated records (ISO strings) by time, then every record whose
+    timestamp is missing, null, empty or not a string, in load order (the sort
+    is stable). Never compares a number with a string, and drops nothing."""
+    ts = annotation.get('timestamp')
+    if isinstance(ts, str) and ts:
+        return (0, ts)
+    return (1, '')
+
+
+
+def _display_date(ts) -> str:
+    if isinstance(ts, str) and ts:
+        return ts[:10]
+    if ts is None or ts == '':
+        return 'undated'
+    return str(ts)
+
+
+
+def guard_has_findings(data: dict) -> None:
+    sessions_with_findings = [s for s in data['sessions'] if s['findings']]
+    if not sessions_with_findings:
+        print(f"Error: topic '{data['topic']}' has no sessions with findings.")
+        print("Run a research session first:")
+        print(f"  python agent/research.py --topic {data['topic']}")
+        sys.exit(1)
+
+
+# ── Prompt assembly ───────────────────────────────────────────────────────────
+
+def _format_session_findings(sessions: list) -> str:
+    """All findings across sessions, labeled by session ID."""
+    parts = []
+    for s in sessions:
+        if not s['findings']:
+            continue
+        session_id = s['header'].get('session', s['file'])
+        parts.append(f"[{session_id}]")
+        for f in s['findings']:
+            # Strip triage artefacts like "(Target 1, Target 2, ...)"
+            clean = re.sub(r'\s*\(Target\s+\d+(?:,\s*Target\s+\d+)*\)\s*', ' ', f).strip()
+            parts.append(f"  - {clean}")
+    return '\n'.join(parts) if parts else '(no findings)'
+
+
+def _format_annotations(annotations: list) -> str:
+    if not annotations:
+        return '(none)'
+    lines = []
+    for a in annotations:
+        note = str(a.get('note') or '').strip()
+        if not note:
+            continue
+        ts   = _display_date(a.get('timestamp'))
+        atype = a.get('type') or 'reaction'
+        ref  = str(a.get('ref_text') or '')
+        if ref:
+            lines.append(f"[{ts}] ({atype}) re: \"{ref[:80]}\" — {note}")
+        else:
+            lines.append(f"[{ts}] ({atype}) {note}")
+    return '\n'.join(lines) if lines else '(none)'
+
+
+def build_synthesizer_user_prompt(data: dict) -> str:
+    findings_text  = _format_session_findings(data['sessions'])
+    annotations_text = _format_annotations(data['annotations'])
+    session_count  = len([s for s in data['sessions'] if s['findings']])
+
+    return f"""Research topic: {data['topic']}
+Domain: {data['domain']}
+Original motivation: {data['motivation'] or '(not recorded)'}
+Sessions with findings: {session_count}
+
+Session findings:
+{findings_text}
+
+User annotations (if any):
+{annotations_text}
+
+Produce:
+1. WHAT THE RESEARCH FOUND — honest synthesis (3-5 paragraphs)
+2. WHERE THE HYPOTHESIS HOLDS — strongest confirming evidence
+3. KEY SOURCES — 3-5 most significant sources and what they establish
+4. WHAT REMAINS UNCERTAIN — gaps, unresolved questions, absence of evidence
+
+Be specific. Cite sources by name. Do not generalize."""
+
+
+def build_challenger_user_prompt(data: dict, synthesizer_output: str) -> str:
+    return f"""Research topic: {data['topic']}
+Domain: {data['domain']}
+Original motivation: {data['motivation'] or '(not recorded)'}
+
+The Synthesizer produced this analysis:
+{synthesizer_output}
+
+Your job:
+1. WHERE IT DOESN'T HOLD — explicit challenge to the original motivation using disconfirming evidence
+2. ALTERNATIVE INTERPRETATIONS — how else could the same evidence be read?
+3. WHAT YOU DIDN'T EXPECT — lateral findings the research surfaced outside the original motivation
+4. REVISED FRAMING — context-sensitive closing:
+   - If motivation was a hypothesis: propose a revised framing
+   - If motivation was curiosity: surface the most interesting questions the research opened
+   - If mixed: do both briefly
+   Frame this as a prompt to the researcher, not a conclusion. The researcher owns the conclusion."""
+
+
+# ── API calls ─────────────────────────────────────────────────────────────────
+
+def get_anthropic_client():
+    """Get the Anthropic client through the repository's shared secret lookup."""
+    try:
+        api_key = get_secret("ANTHROPIC_API_KEY", "anthropic", "api_key")
+    except Exception as exc:
+        print(f"Error: Anthropic API key not found: {exc}")
+        sys.exit(1)
+    from anthropic import Anthropic
+    return Anthropic(api_key=api_key)
+
+
+def run_agent(client, system_prompt: str, user_prompt: str,
+              model: str, temperature: float, label: str) -> tuple[str, float]:
+    """Run one agent call. Returns (output_text, cost_usd)."""
+    print(f"  → Running {label} ({model}, temp={temperature})…", flush=True)
+    response = client.messages.create(
+        model=model,
+        max_tokens=4000,
+        temperature=temperature,
+        system=system_prompt,
+        messages=[{'role': 'user', 'content': user_prompt}],
+    )
+    text = response.content[0].text
+    # Claude Opus 4.5 standard pricing, reviewed 2026-08-17: $5/M in, $25/M out.
+    cost = (response.usage.input_tokens * 0.000005) + (response.usage.output_tokens * 0.000025)
+    print(f"     {label}: {response.usage.input_tokens} in + {response.usage.output_tokens} out tokens — ${cost:.4f}")
+    return text, cost
+
+
+# ── Essay assembly ────────────────────────────────────────────────────────────
+
+def assemble_essay(data: dict, s_out: str, c_out: str, total_cost: float) -> str:
+    topic      = data['topic']
+    motivation = data['motivation'] or '(not recorded)'
+    today      = date.today().isoformat()
+    n_sessions = len([s for s in data['sessions'] if s['findings']])
+
+    # Deduplicated source list across all sessions
+    seen_urls, bib_lines = set(), []
+    for s in data['sessions']:
+        for src in s['sources']:
+            key = src['url'] or src['title']
+            if key and key not in seen_urls:
+                seen_urls.add(key)
+                url_part = f" {src['url']}" if src['url'] else ''
+                bib_lines.append(f"[{len(bib_lines)+1}] {src['domain']}. \"{src['title']}\".{url_part}")
+    bibliography = '\n'.join(bib_lines) if bib_lines else '(no sources recorded)'
+
+    return f"""# DEEPER DIVE: {topic.replace('-', ' ').title()}
+*Generated: {today} · {n_sessions} session{'s' if n_sessions != 1 else ''} · {len(seen_urls)} sources · Est. cost: ${total_cost:.2f}*
+*Original motivation: "{motivation}"*
+*Domain: {data['domain']}*
+
+---
+
+{s_out.strip()}
+
+---
+
+{c_out.strip()}
+
+---
+
+## Bibliography
+{bibliography}
+
+---
+*Synthesizer: claude-opus-4-5 (temp 0.3) · Challenger: claude-opus-4-5 (temp 0.7)*
+*Deeper Dive v1.0 — POC*
+"""
+
+
+# ── Output / stubs ────────────────────────────────────────────────────────────
+
+def next_output_path(topic: str) -> Path:
+    """Return next sequential output path: {topic}-dive-NNN.md (legacy: {topic}-deeper-dive-NNN.md also counted)"""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    existing = list(OUTPUT_DIR.glob(f'{topic}-*.md'))
+    nums = []
+    for f in existing:
+        m = re.search(r'-(?:deeper-dive|dive)-(\d+)\.md$', f.name)
+        if m:
+            nums.append(int(m.group(1)))
+    n = (max(nums) + 1) if nums else 1
+    return OUTPUT_DIR / f'{topic}-dive-{n:03d}.md'
+
+
+def create_reading_room_stub(topic: str) -> None:
+    READING_ROOM.mkdir(parents=True, exist_ok=True)
+    stub_path = READING_ROOM / f'{topic}.json'
+    if stub_path.exists():
+        return  # Don't overwrite existing
+    stub = {
+        'topic':   topic,
+        'created': date.today().isoformat(),
+        'status':  'placeholder',
+        'sources': [],
+        'note':    'Reading Room deferred — see VISION_DEEPER_DIVE_READING_ROOM',
+    }
+    stub_path.write_text(json.dumps(stub, indent=2))
+    print(f"  Reading room stub: {PATHS.saved_label(stub_path)}")
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _first_pass_excerpt(text: str, max_len: int = 500) -> str:
+    """Extract the first substantive prose paragraph from a markdown synthesis.
+    Strips heading markers and bold/italic symbols so the excerpt reads as
+    plain text in the portal's Initial Draft section.
+    """
+    # Strip markdown heading lines (## 1. WHAT THE RESEARCH FOUND, etc.)
+    lines = [l for l in text.splitlines() if not re.match(r'^#{1,6}\s', l)]
+    plain = '\n'.join(lines)
+    # Strip bold/italic markers
+    plain = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', plain)
+    plain = re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', plain)
+    # Find first paragraph with real prose (> 80 chars)
+    for para in re.split(r'\n{2,}', plain):
+        para = para.strip().lstrip('- •').strip()
+        if len(para) > 80:
+            return para[:max_len] + ('…' if len(para) > max_len else '')
+    return plain.strip()[:max_len]
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description='Generate a Dive essay for a research thread')
+    parser.add_argument('--topic',   required=True, help='Topic slug (e.g. strait-of-hormuz)')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='Print prompts and data summary without calling the API')
+    parser.add_argument('--output-path', type=Path, default=None,
+                        help='Override output path (default: auto-numbered in data/dives/)')
+    args = parser.parse_args()
+
+    topic = args.topic
+
+    # Load prompts
+    if not SYNTHESIZER_PROMPT_FILE.exists():
+        print(f"Error: prompt file not found: {SYNTHESIZER_PROMPT_FILE}")
+        sys.exit(1)
+    if not CHALLENGER_PROMPT_FILE.exists():
+        print(f"Error: prompt file not found: {CHALLENGER_PROMPT_FILE}")
+        sys.exit(1)
+    synthesizer_system = SYNTHESIZER_PROMPT_FILE.read_text().strip()
+    challenger_system  = CHALLENGER_PROMPT_FILE.read_text().strip()
+
+    # Load data
+    print(f"Loading thread data for: {topic}")
+    data = load_thread_data(topic)
+    guard_has_findings(data)
+
+    n_sessions   = len([s for s in data['sessions'] if s['findings']])
+    n_annotations = len(data['annotations'])
+    print(f"  {n_sessions} sessions with findings, {n_annotations} annotation(s)")
+    print(f"  Motivation: {data['motivation'][:80]}…" if len(data['motivation']) > 80 else f"  Motivation: {data['motivation']}")
+
+    # Build prompts
+    synthesizer_user = build_synthesizer_user_prompt(data)
+    # challenger_user built after synthesizer runs
+
+    if args.dry_run:
+        print('\n' + '='*60)
+        print('SYNTHESIZER SYSTEM PROMPT:')
+        print(synthesizer_system)
+        print('\nSYNTHESIZER USER PROMPT:')
+        print(synthesizer_user)
+        print('='*60)
+        print('Dry run complete — no API calls made.')
+        return
+
+    # Run agents
+    client = get_anthropic_client()
+    print(f"\nRunning two-agent analysis…")
+
+    s_out, s_cost = run_agent(
+        client,
+        system_prompt=synthesizer_system,
+        user_prompt=synthesizer_user,
+        model='claude-opus-4-5',
+        temperature=0.3,
+        label='Synthesizer',
+    )
+
+    # ── Challenger pass (Grok cross-provider quality review) ──────────────────
+    _ch_result = None
+    try:
+        from domains.guild.services.challenger import ChallengerService as _CS
+        _sources_lines = []
+        for _sess in data['sessions']:
+            for _src in _sess['sources']:
+                _sources_lines.append(f"{_src['domain']}. \"{_src['title']}\"")
+        _related = list(dict.fromkeys(
+            s for _sess in data['sessions'] for s in _sess.get('threads', [])
+        ))
+        _ch_result = _CS().run(
+            domain="curator_deep_dive",
+            feature="deeper_dive",
+            first_pass=s_out,
+            context={
+                "topic_name":      topic,
+                "related_threads": ', '.join(_related)[:200],
+                "sources_summary": '\n'.join(_sources_lines[:20])[:1000],
+            },
+            entity_description=topic,
+        )
+        if _ch_result.enabled and not _ch_result.error:
+            s_out = _ch_result.final
+            print(f"     Challenger: {_ch_result.challenged_count} points · "
+                  f"{_ch_result.accepted_count} accepted · outputs_differ={_ch_result.outputs_differ}")
+        elif _ch_result.error:
+            print(f"     Challenger: error — {_ch_result.error} (using original synthesis)")
+        else:
+            print(f"     Challenger: disabled in config")
+    except ImportError:
+        print(f"     Challenger: ChallengerService not available — skipping")
+    except Exception as _e:
+        print(f"     Challenger: error — {_e} — skipping")
+    # ── end challenger pass ───────────────────────────────────────────────────
+
+    challenger_user = build_challenger_user_prompt(data, s_out)
+    c_out, c_cost = run_agent(
+        client,
+        system_prompt=challenger_system,
+        user_prompt=challenger_user,
+        model='claude-opus-4-5',
+        temperature=0.7,
+        label='Challenger',
+    )
+
+    total_cost = s_cost + c_cost
+
+    # Assemble and write
+    essay = assemble_essay(data, s_out, c_out, total_cost)
+    out_path = args.output_path or next_output_path(topic)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(essay)
+
+    # Write challenger sidecar for portal rendering
+    if _ch_result and _ch_result.enabled and not _ch_result.error:
+        _meta_path = out_path.with_name(out_path.stem + '-challenger.json')
+        _meta_path.write_text(json.dumps({
+            'enabled':          _ch_result.enabled,
+            'show_process':     _ch_result.show_process,
+            'challenged_count': _ch_result.challenged_count,
+            'accepted_count':   _ch_result.accepted_count,
+            'rejected_count':   _ch_result.rejected_count,
+            'outputs_differ':   _ch_result.outputs_differ,
+            'key_change':       _ch_result.key_change,
+            'challenge_points': _ch_result.challenge_points,
+            'exchange_id':      _ch_result.exchange_id,
+            'first_pass_summary': _first_pass_excerpt(_ch_result.first_pass),
+        }, indent=2))
+        print(f"  Challenger sidecar: {PATHS.saved_label(_meta_path)}")
+
+    create_reading_room_stub(topic)
+
+    print(f"\n✓ Deeper Dive written: {PATHS.saved_label(out_path)}")
+    print(f"  Total cost: ${total_cost:.4f} (synthesizer ${s_cost:.4f} + challenger ${c_cost:.4f})")
+
+
+if __name__ == '__main__':
+    main()

@@ -135,6 +135,10 @@ overlay() {    # overlay SOURCE TARGET_REL — rsync that adds and updates, neve
 
 seed_files() {
   [[ -d "$R/.git" || -f "$R/.git" ]] || die "source repository not found: $R"
+  # Owner-selected captured bundle: data/, library/, agent/config.json.
+  # No default source, embedded profile, or empty stub selects data authority.
+  local research_source="${CURATOR_RESEARCH_SEED_DIR:-}"
+  [[ "$research_source" == /* && -d "$research_source/data" && -f "$research_source/agent/config.json" ]] || die "explicit captured research bundle/profile required before seed"
   local sha queue_sha
   sha=$(git -C "$R" rev-parse --verify "$REF^{commit}") || die "unknown ref $REF"
   queue_sha=$(git -C "$R" rev-parse --verify "$QUEUE_REF^{commit}") || die "unknown ref $QUEUE_REF"
@@ -167,13 +171,13 @@ seed_files() {
   copy_file "$R/curator_history.json" data/curator_history.json
   copy_file "$R/curator_costs.json" data/curator_costs.json
   copy_dir "$R/interests" data/interests
-  copy_dir "$R/_NewDomains/research-intelligence/data" data/research-intelligence optional
+  copy_dir "$research_source/data" data/research-intelligence
   # Formerly container-only Curator state, now bind-mounted (#305).
   copy_dir "$R/data/annotations" data/annotations optional
-  copy_dir "$R/_NewDomains/research-intelligence/library" data/research-library optional
+  copy_dir "$research_source/library" data/research-library optional
   copy_dir "$R/curator_cache" data/curator_cache optional
   mkdir -p "$S/data/research-config" "$S/data/curator-config"
-  copy_file "$R/_NewDomains/research-intelligence/agent/config.json" data/research-config/config.json
+  copy_file "$research_source/agent/config.json" data/research-config/config.json
   copy_file "$R/domains/curator/curator_sources.json" data/curator-config/curator_sources.json
 
   # German and Portuguese: tracked base, then the live dev state on top

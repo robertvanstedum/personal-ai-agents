@@ -43,7 +43,7 @@ services:
     volumes:
       - ./data/curator:/app/data/curator
       - ./interests:/app/interests
-      - ./_NewDomains/research-intelligence/data:/app/_NewDomains/research-intelligence/data
+      - ./data/research-intelligence:/app/data/research-intelligence
       - ./curator_costs.json:/app/curator_costs.json
 
   german:

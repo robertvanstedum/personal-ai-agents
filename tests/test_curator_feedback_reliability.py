@@ -123,7 +123,8 @@ def test_generate_scan_api_starts_and_reports_background_job(
         def poll(self):
             return None
 
-    monkeypatch.setattr(research_routes, "RESEARCH_ROOT", research_root)
+    monkeypatch.setattr(research_routes, "DATA_ROOT", research_root / "data")
+    monkeypatch.setattr(research_routes, "STATE_ROOT", research_root)
     monkeypatch.setattr(research_routes, "SCANS_DIR", scans_dir)
     monkeypatch.setattr(research_routes, "_SCAN_STATE_PATH", state_path)
     monkeypatch.setattr(research_routes, "_scan_proc", None)

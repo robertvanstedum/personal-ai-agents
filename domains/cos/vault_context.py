@@ -14,7 +14,9 @@ SYNTHESIS = re.compile(r"\[VAULT_SYNTHESIS\](.*?)\[/VAULT_SYNTHESIS\]", re.S)
 SYNTHESIS_RULE = (
     "When synthesizing the retrieved Vault passages, wrap only that synthesis "
     "in [VAULT_SYNTHESIS]...[/VAULT_SYNTHESIS] and cite a retained file:line "
-    "range for each claim. Keep current tool/web answers and other reasoning "
+    "range for every claim sentence. Copy the retained passage file field exactly, "
+    "including its directory prefix; do not shorten it to a basename. Keep "
+    "each citation in the same sentence as its claim. Keep current tool/web answers and other reasoning "
     "outside this block. These markers are removed before the reply is shown."
 )
 

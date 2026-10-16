@@ -73,10 +73,11 @@ same_content() {
 # exists, research sessions are written there instead of the durable
 # data/threads. A snapshot keeps it as evidence, but recreation would drop the
 # live folder, so a release cannot proceed while it exists (#305 review).
-TOPICS=/app/_NewDomains/research-intelligence/topics
-if grep -F -x -q "copied $TOPICS" "$SNAP/PATHS"; then
-  fail "$TOPICS exists in the running container; its sessions would not stay live after recreation. Preserve it live (a reviewed change) before releasing Curator"
-fi
+for TOPICS in /app/_NewDomains/research-intelligence/topics /app/research-state/topics; do
+  if grep -F -x -q "copied $TOPICS" "$SNAP/PATHS"; then
+    fail "$TOPICS exists in the running container; its sessions would not stay live after recreation. Preserve it live (a reviewed change) before releasing Curator"
+  fi
+done
 
 # What the snapshot itself recorded for a path: copied, absent or mounted.
 # No line at all prints nothing (and must not trip set -e/pipefail).
@@ -123,20 +124,24 @@ while read -r kind old host _target; do
   fi
 done < "$MAP"
 
-for item in "${plan[@]}"; do
-  src="${item%%|*}"
-  dst="${item#*|}"
-  mkdir -p "$(dirname "$dst")"
-  if [[ "$src" == "-" ]]; then
-    mkdir "$dst"
-    continue
-  fi
-  stage="$dst.seeding.$$"
-  rm -rf -- "$stage"
-  cp -a "$src" "$stage"
-  same_content "$src" "$stage" || fail "copy of $src into $stage did not verify"
-  [[ ! -e "$dst" ]] || fail "$dst appeared while seeding; nothing overwritten (staged copy left at $stage)"
-  mv "$stage" "$dst"
-done
+# Bash 3.2 with nounset treats an empty array expansion as unset.
+# A verified empty plan is an idempotent no-op, not a reason to seed anything.
+if (( ${#plan[@]} )); then
+  for item in "${plan[@]}"; do
+    src="${item%%|*}"
+    dst="${item#*|}"
+    mkdir -p "$(dirname "$dst")"
+    if [[ "$src" == "-" ]]; then
+      mkdir "$dst"
+      continue
+    fi
+    stage="$dst.seeding.$$"
+    rm -rf -- "$stage"
+    cp -a "$src" "$stage"
+    same_content "$src" "$stage" || fail "copy of $src into $stage did not verify"
+    [[ ! -e "$dst" ]] || fail "$dst appeared while seeding; nothing overwritten (staged copy left at $stage)"
+    mv "$stage" "$dst"
+  done
+fi
 
 echo "Curator state seeded from $SNAP (${#plan[@]} new, nothing overwritten)"

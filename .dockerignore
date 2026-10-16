@@ -46,13 +46,6 @@ docs/decision-records/*
 docs/design/
 docs/*.docx
 _NewDomains/
-!_NewDomains/research-intelligence/web/
-!_NewDomains/research-intelligence/web/static/
-!_NewDomains/research-intelligence/agent/
-!_NewDomains/research-intelligence/scripts/
-!_NewDomains/research-intelligence/library/
-!_NewDomains/research-intelligence/topics/
-!_NewDomains/research-intelligence/prompts/
 
 # Git
 .git/
@@ -68,3 +61,11 @@ tests/
 
 # OS
 .DS_Store
+
+# Curator application is canonical; private research state never enters images.
+data/research-intelligence/
+domains/curator/research/data/
+domains/curator/research/state/
+domains/curator/research/library/
+domains/curator/research/topics/
+domains/curator/research/agent/config.json

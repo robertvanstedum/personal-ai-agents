@@ -70,10 +70,10 @@ EXPECTED_PROD_MOUNTS = [
     ("curator", "/opt/minimoi/data/curator_history.json", "/app/curator_history.json"),
     ("curator", "/opt/minimoi/data/curator_costs.json", "/app/curator_costs.json"),
     ("curator", "/opt/minimoi/data/interests", "/app/interests"),
-    ("curator", "/opt/minimoi/data/research-intelligence", "/app/_NewDomains/research-intelligence/data"),
+    ("curator", "/opt/minimoi/data/research-intelligence", "/app/data/research-intelligence"),
     ("curator", "/opt/minimoi/data/annotations", "/app/data/annotations"),
-    ("curator", "/opt/minimoi/data/research-library", "/app/_NewDomains/research-intelligence/library"),
-    ("curator", "/opt/minimoi/data/research-config/config.json", "/app/_NewDomains/research-intelligence/agent/config.json"),
+    ("curator", "/opt/minimoi/data/research-library", "/app/research-state/library"),
+    ("curator", "/opt/minimoi/data/research-config/config.json", "/app/research-state/agent/config.json"),
     ("curator", "/opt/minimoi/data/curator-config/curator_sources.json", "/app/domains/curator/curator_sources.json"),
     ("curator", "/opt/minimoi/data/curator_cache", "/app/curator_cache"),
     ("german", "/opt/minimoi/data/german", "/app/domains/german/data"),
@@ -480,13 +480,13 @@ def test_seed_copies_sources_without_changing_them(tmp_path, shell):
         _tool(tool)
     repo = tmp_path / "repo"
     files = {
-        "data/curator/a.json": "{}", "interests/i.md": "x", "_NewDomains/research-intelligence/data/r.json": "r",
+        "data/curator/a.json": "{}", "interests/i.md": "x", "selected-research/data/r.json": "r", "selected-research/agent/config.json": "{}", "selected-research/library/synthetic.md": "# synthetic",
         "domains/german/data/config/c.json": "base", "domains/portuguese/data/personas.json": "p",
         "domains/guild/config/cos_context.json": "{}", "data/guild/build_queue.json": '[{"id": 1}]',
         "docs/specs/s.md": "s", "docs/design/d.md": "d", "minimoi_portal/auth/users.json": "{}",
         "minimoi_portal/auth/guests.json": "{}", "curator_history.json": "[]", "curator_costs.json": "{}",
         "data/cos_memory.md": "m", "agent_logs/log.txt": "l", "curator_archive/old.json": "{}",
-        "_NewDomains/research-intelligence/agent/config.json": "{}", "domains/curator/curator_sources.json": "[]",
+        "domains/curator/curator_sources.json": "[]",
     }
     for rel, content in files.items():
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -505,8 +505,18 @@ def test_seed_copies_sources_without_changing_them(tmp_path, shell):
     root = tmp_path / "staging-root"
     env = {**os.environ, "STAGING_ROOT": str(root), "SEED_SOURCE_REPO": str(repo),
            "SEED_GERMAN_STATE": str(german), "SEED_PORTUGUESE_STATE": str(tmp_path / "absent"),
-           "SEED_COS_MEMORY": str(tmp_path / "absent.md"), "SEED_RECEIPTS": str(tmp_path / "absent.jsonl")}
+           "SEED_COS_MEMORY": str(tmp_path / "absent.md"), "SEED_RECEIPTS": str(tmp_path / "absent.jsonl"),
+           "CURATOR_RESEARCH_SEED_DIR": str(repo / "selected-research")}
     seed = SCRIPTS / "seed.sh"
+    # No implicit source/profile selection, and refusal precedes staging writes.
+    absent_bundle = tmp_path / "absent-profile"
+    (absent_bundle / "data").mkdir(parents=True)
+    for index, source in enumerate(("", str(absent_bundle))):
+        refused_root = tmp_path / f"refused-{index}"
+        refused_env = {**env, "STAGING_ROOT": str(refused_root), "CURATOR_RESEARCH_SEED_DIR": source}
+        refused = subprocess.run([shell, str(seed)], env=refused_env, capture_output=True, text=True)
+        assert refused.returncode != 0 and "explicit captured research bundle/profile required" in refused.stderr
+        assert not (refused_root / "data").exists()
     result = subprocess.run([shell, str(seed)], env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
@@ -515,6 +525,9 @@ def test_seed_copies_sources_without_changing_them(tmp_path, shell):
     assert (root / "data/guild/build_queue.json").read_text() == '[{"id": 1}]'
     assert (root / "data/german/sessions/s1.json").read_text() == "live"
     assert (root / "data/german/config/c.json").read_text() == "base"
+    assert (root / "data/research-intelligence/r.json").read_text() == "r"
+    assert (root / "data/research-config/config.json").read_text() == "{}"
+    assert (root / "data/research-library/synthetic.md").read_text() == "# synthetic"
     for record in ("SEEDED_FROM.txt", "SHA256SUMS.sources", "SHA256SUMS.seed"):
         assert (root / record).stat().st_size > 0, record
     assert oct(root.stat().st_mode & 0o777) == "0o700"

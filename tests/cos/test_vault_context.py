@@ -130,3 +130,35 @@ def test_actual_openclaw_adapter_receives_evidence_as_system_data():
     assert sent[0]["messages"][1] == {"role": "user", "content": "Explain the earlier choice"}
     assert built.block in sent[0]["messages"][0]["content"]
     assert "private-token" not in str(sent)
+
+
+def test_synthesis_copies_full_retained_file_paths_and_cites_every_claim_sentence():
+    from domains.cos.vault_context import SYNTHESIS_RULE
+    renderer = pytest.importorskip("core.memory_ask.context")
+    full_path = "conversations/01M00000000000000000000000.md"
+    hit = {**HIT, "file": full_path, "lines": [10, 12]}
+    built = renderer.build({"keyword": [hit], "meaning": []})
+    result = SimpleNamespace(prompt_block=built.block, built=built, report=built.report)
+    backend = Backend()
+    original = backend.call_backend
+    def answer(*args):
+        original(*args)
+        return (
+            "[VAULT_SYNTHESIS]The earlier owner decision was recorded "
+            f"({full_path}:10-12). "
+            "Another earlier decision was recorded (01M00000000000000000000000.md:10-12). "
+            "This final claim has no citation.[/VAULT_SYNTHESIS]"
+        )
+    backend.call_backend = answer
+    owner_text = "What was the earlier decision?"
+    reply = call_with_vault(backend, owner_text, {}, {},
+                            retrieve=lambda _, **kwargs: result, environ=CONFIG)
+    assert backend.input[0] == owner_text
+    assert SYNTHESIS_RULE in backend.input[1]["system_prompt"]
+    assert "including its directory prefix" in SYNTHESIS_RULE
+    assert "every claim sentence" in SYNTHESIS_RULE
+    assert reply.count("[unsupported:") == 2
+    assert f"({full_path}:10-12)." in reply
+    assert "citation is not a passage this query returned" in reply
+    assert "no file:line citation from this query" in reply
+    assert "[VAULT_SYNTHESIS]" not in reply and "[/VAULT_SYNTHESIS]" not in reply

@@ -23,11 +23,11 @@ dir   -                                                        data/curator_arch
 file  -                                                        data/curator_history.json                 /app/curator_history.json
 file  -                                                        data/curator_costs.json                   /app/curator_costs.json
 dir   -                                                        data/interests                            /app/interests
-dir   -                                                        data/research-intelligence                /app/_NewDomains/research-intelligence/data
+dir   -                                                        data/research-intelligence                /app/data/research-intelligence
 # New binds, seeded once from the deploy-time production snapshot:
 dir   /app/data/annotations                                    data/annotations                          /app/data/annotations
-dir   /app/_NewDomains/research-intelligence/library           data/research-library                     /app/_NewDomains/research-intelligence/library
-file  /app/_NewDomains/research-intelligence/agent/config.json data/research-config/config.json          /app/_NewDomains/research-intelligence/agent/config.json
+dir   /app/_NewDomains/research-intelligence/library           data/research-library                     /app/research-state/library
+file  /app/_NewDomains/research-intelligence/agent/config.json data/research-config/config.json          /app/research-state/agent/config.json
 file  /app/domains/curator/curator_sources.json                data/curator-config/curator_sources.json  /app/domains/curator/curator_sources.json
 appdir /app/curator_cache                                      data/curator_cache                        /app/curator_cache
 # Moved into the existing data/curator mount:

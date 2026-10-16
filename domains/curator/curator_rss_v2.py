@@ -74,6 +74,9 @@ from dotenv import load_dotenv
 import sys
 _BASE_DIR = Path(__file__).parent
 REPO_ROOT = _BASE_DIR.parent.parent  # domains/curator -> domains -> repo root
+sys.path.insert(0,str(REPO_ROOT))
+from domains.curator.research.paths import configured as research_paths
+_RESEARCH_DATA = research_paths().data
 sys.path.insert(0, str(_BASE_DIR))    # sibling imports below (curator_config, curator_utils)
 sys.path.insert(0, str(REPO_ROOT))    # utils.role import below
 
@@ -1674,7 +1677,7 @@ def get_active_topic_tags() -> dict:
          slugs like 'gold-geopolitics' or 'china-rise' are descriptive by design.
     """
     _NOISE = {"not", "and", "or", "the", "a", "an", "of", "in", "for", "to", "vs"}
-    threads_dir = Path("_NewDomains/research-intelligence/data/threads")
+    threads_dir = _RESEARCH_DATA / "threads"
     if not threads_dir.exists():
         return {}
     result = {}

@@ -51,7 +51,7 @@ def test_every_formerly_unmounted_path_is_covered_and_topics_is_not_mounted():
     for old in seeded:
         assert f"  {old}\n" in preserve, old
     targets = [target for *_rest, target in _map_rows()]
-    assert not any("research-intelligence/topics" in target for target in targets)
+    assert not any(target in ("/app/_NewDomains/research-intelligence/topics", "/app/research-state/topics") for target in targets)
 
 
 def test_deploy_preserves_and_seeds_before_up_and_checks_after_health():
@@ -278,11 +278,12 @@ def test_seed_refuses_snapshot_records_that_do_not_match_its_tree(tmp_path):
     assert result.returncode == 1 and "does not account for /app/x_pull_state.json" in result.stderr
 
 
-def test_seed_refuses_while_topics_exists_in_the_running_container(tmp_path):
+@pytest.mark.parametrize("topics", ["/app/_NewDomains/research-intelligence/topics", "/app/research-state/topics"])
+def test_seed_refuses_while_topics_exists_in_the_running_container(tmp_path, topics):
     host = _host(tmp_path)
-    files = {**SEEDED, "/app/_NewDomains/research-intelligence/topics/t/s.md": "session\n"}
+    files = {**SEEDED, topics + "/t/s.md": "session\n"}
     paths = [f"copied {old}" for kind, old, _h, _t in _map_rows() if old != "-"]
-    paths.append("copied /app/_NewDomains/research-intelligence/topics")
+    paths.append("copied " + topics)
     result = _run("curator_seed_state.sh", str(_snapshot(tmp_path, files, paths)), host=host)
     assert result.returncode == 1 and "topics exists in the running container" in result.stderr
     assert not (host / "data/annotations").exists()
@@ -444,3 +445,17 @@ def test_images_never_carry_curator_runtime_state_that_moved_to_host_mounts():
         assert (rel + "/" if kind == "appdir" else rel) in ignored, old
     for name in ("curator_output.txt", "signal_store.jsonl", "x_pull_state.json"):
         assert name in ignored
+
+
+def test_relocated_state_mounts_keep_canonical_host_sources_without_nested_data():
+    service = _curator_service()
+    env = dict(item.split("=", 1) for item in service["environment"])
+    assert env["CURATOR_RESEARCH_STATE_DIR"] == "/app/research-state"
+    targets = {host: target for kind, _old, host, target in _map_rows() if kind in ("dir", "appdir", "file")}
+    assert targets["data/research-intelligence"] == "/app/data/research-intelligence"
+    assert targets["data/research-library"] == "/app/research-state/library"
+    assert targets["data/research-config/config.json"] == "/app/research-state/agent/config.json"
+    assert all(not target.startswith("/app/data/research-intelligence/") for target in targets.values())
+    rows = {host: old for _kind, old, host, _target in _map_rows()}
+    assert rows["data/research-library"] == "/app/_NewDomains/research-intelligence/library"
+    assert rows["data/research-config/config.json"] == "/app/_NewDomains/research-intelligence/agent/config.json"

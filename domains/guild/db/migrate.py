@@ -20,7 +20,9 @@ import psycopg2
 from psycopg2.extras import execute_values
 
 REPO = Path(__file__).parent.parent
-RI   = REPO / "_NewDomains" / "research-intelligence" / "data"
+sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
+from domains.curator.research.paths import configured
+RI = configured().data
 
 DSN = os.environ.get("DATABASE_URL")
 if not DSN:

@@ -21,6 +21,9 @@ import html as _html
 
 BASE_DIR = Path(__file__).parent
 REPO_ROOT = BASE_DIR.parent.parent  # for the Mac-native venv/, not present in Docker
+sys.path.insert(0,str(REPO_ROOT))
+from domains.curator.research.paths import configured as research_paths
+_RESEARCH_DATA = research_paths().data
 
 # Curator user data directory — preferences, history, priorities.
 # Defaults to data/curator/ within the repo so data lives under version control
@@ -190,7 +193,7 @@ def _get_latest_article_count() -> int:
 
 def _get_topics_summary() -> dict:
     """Count topics by status from threads directory. Falls back to all zeros."""
-    threads_dir = REPO_ROOT / '_NewDomains' / 'research-intelligence' / 'data' / 'threads'
+    threads_dir = _RESEARCH_DATA / 'threads'
     result = {'total': 0, 'active': 0, 'dormant': 0}
     try:
         for f in threads_dir.glob('*/thread.json'):
@@ -208,8 +211,7 @@ def _get_topics_summary() -> dict:
 
 def _get_leanings_summary() -> dict:
     """Count leanings by state from leanings.json. Falls back to all zeros."""
-    leanings_path = (REPO_ROOT / '_NewDomains' / 'research-intelligence' /
-                     'data' / 'leanings' / 'leanings.json')
+    leanings_path = (_RESEARCH_DATA / 'leanings' / 'leanings.json')
     result = {'total': 0, 'question': 0, 'leaning': 0, 'hold': 0}
     try:
         raw = json.loads(leanings_path.read_text())
@@ -1133,7 +1135,7 @@ def _archive_scans():
 
 def _archive_dives():
     """Deeper-dive summaries from the dives data directory."""
-    dives_dir = REPO_ROOT / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
+    dives_dir = _RESEARCH_DATA / 'dives'
     dives = []
     try:
         for f in sorted(dives_dir.glob('*.md'), reverse=True):
@@ -1213,7 +1215,7 @@ def _scans_dives_data():
         pass
 
     # ── Dives from data/dives/*.md ────────────────────────────────────────────
-    dives_dir = REPO_ROOT / '_NewDomains' / 'research-intelligence' / 'data' / 'dives'
+    dives_dir = _RESEARCH_DATA / 'dives'
     try:
         raw_dives = []
         for f in dives_dir.glob('*.md'):

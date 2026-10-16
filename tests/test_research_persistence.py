@@ -4,21 +4,22 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RESEARCH_ROOT = ROOT / "_NewDomains" / "research-intelligence"
+RESEARCH_ROOT = ROOT / "domains" / "curator" / "research"
 if str(RESEARCH_ROOT) not in sys.path:
     sys.path.insert(0, str(RESEARCH_ROOT))
 if str(RESEARCH_ROOT / "agent") not in sys.path:
     sys.path.insert(0, str(RESEARCH_ROOT / "agent"))
 
-from agent import research, threads
+from domains.curator.research.agent import research, threads
 from domains.curator import research_routes
 
 
 def _load_generate_dive_module():
     script = (
         ROOT
-        / "_NewDomains"
-        / "research-intelligence"
+        / "domains"
+        / "curator"
+        / "research"
         / "scripts"
         / "generate_dive.py"
     )
@@ -36,7 +37,8 @@ def test_web_created_sessions_are_counted_from_durable_thread_data(
     durable.mkdir(parents=True)
     (durable / "new-topic-001.md").write_text("# Session")
 
-    monkeypatch.setattr(research_routes, "RESEARCH_ROOT", research_root)
+    monkeypatch.setattr(research_routes, "DATA_ROOT", research_root / "data")
+    monkeypatch.setattr(research_routes, "STATE_ROOT", research_root)
 
     assert research_routes._get_topic_sessions("new-topic") == ["new-topic-001"]
     assert research_routes._next_session_name("new-topic") == "new-topic-002"
@@ -56,7 +58,9 @@ def test_research_config_merges_durable_thread_queries(tmp_path, monkeypatch):
         "triage_targets": ["durable target"],
     }))
 
-    monkeypatch.setattr(research, "ROOT", root)
+    from domains.curator.research.paths import configured
+    monkeypatch.setattr(research, "PATHS", configured({"CURATOR_RESEARCH_DATA_DIR":str(root/"data"), "CURATOR_RESEARCH_STATE_DIR":str(root)},repo=root/"repo"))
+    monkeypatch.setattr(research, "DATA_ROOT", root/"data")
     config = research.load_config("new-topic")
 
     assert config["session_searches"]["new-topic"] == ["durable query"]

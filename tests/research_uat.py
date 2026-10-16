@@ -25,20 +25,25 @@ import subprocess
 import json
 import os
 import re
+import sys
+from pathlib import Path
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 REPO_DIR     = os.path.expanduser('~/Projects/personal-ai-agents')
-RI_DIR       = os.path.join(REPO_DIR, '_NewDomains', 'research-intelligence')
+sys.path.insert(0, REPO_DIR)
+from domains.curator.research.paths import configured
+_RESEARCH_PATHS = configured(repo=Path(REPO_DIR))
+RI_DIR = str(_RESEARCH_PATHS.code)
 AGENT_DIR    = os.path.join(RI_DIR, 'agent')
 VENV_PYTHON  = os.path.join(REPO_DIR, 'venv', 'bin', 'python3')
 
 TOPIC        = 'hellscape-taiwan-porcupine'   # change for other topics
 SESSION_BASE = 'uat-100'                      # high name to avoid collisions
 
-THREAD_JSON  = os.path.join(RI_DIR, 'data', 'threads', TOPIC, 'thread.json')
-SEEN_URLS    = os.path.join(RI_DIR, 'data', 'seen_urls', f'{TOPIC}.json')
-SESSION_LOG  = os.path.join(RI_DIR, 'library', 'session-log.md')
+THREAD_JSON  = str(_RESEARCH_PATHS.data/'threads'/TOPIC/'thread.json')
+SEEN_URLS    = str(_RESEARCH_PATHS.data/'seen_urls'/f'{TOPIC}.json')
+SESSION_LOG  = str(_RESEARCH_PATHS.library/'session-log.md')
 BACKLOG_MD   = os.path.join(REPO_DIR, 'docs', 'BACKLOG.md')
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -50,7 +55,7 @@ def run_session(session_name):
         '--topic', TOPIC,
         '--session-name', session_name,
     ]
-    result = subprocess.run(cmd, cwd=RI_DIR, capture_output=True, text=True)
+    result = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, text=True)
     return result.stdout, result.stderr, result.returncode
 
 
