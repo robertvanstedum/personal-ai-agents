@@ -28,6 +28,8 @@ log = logging.getLogger(__name__)
 HEALTH_TIMEOUT_S = 3
 TURN_TIMEOUT_S = 120
 CHANNEL = "api_text"
+# Host-only identity marker. Browser/model strings never select a voice channel.
+MANAGED_VOICE_CHANNEL = object()
 
 
 class ChiefOfStaffBackend(MasterCraftsmanBackend):
@@ -69,7 +71,8 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
         if (req.context or {}).get("mode") == "private":
             return TurnResult("refused", self.kind, failure_class="private_unsupported",
                               message="Private questions are not available through the Chief of Staff.")
-        body = {"text": req.text, "channel": CHANNEL, "conversation_id": self._session(req.conversation_id),
+        channel = "html_voice" if (req.context or {}).get("host_channel") is MANAGED_VOICE_CHANNEL else CHANNEL
+        body = {"text": req.text, "channel": channel, "conversation_id": self._session(req.conversation_id),
                 "request_id": req.note_request_id}
         try:
             response = self._post(f"{self.base_url}/chat", json=body, timeout=TURN_TIMEOUT_S)

@@ -21,7 +21,12 @@ def test_admin_links_three_canonical_drafts_and_retains_workshop(load_portal):
         response = portal.owner().get("/guild-next/guild/docs/read", query_string={
             "ref": "planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/" + name})
         assert response.status_code == 200
-        assert 'Draft' in response.get_data(as_text=True)
+        document = response.get_data(as_text=True)
+        if name == 'MASTER_CRAFTSMAN_PERSONA.md':
+            assert 'Version 1.1' in document
+            assert 'Runtime adoption remains pending' in document
+        else:
+            assert 'Draft' in document
     assert 'data-section="admin"' in html
     assert 'data-section="workshop"' not in html
     assert 'Workshop Log materials' in html

@@ -10,6 +10,7 @@
 // What is and is not known up front: the capabilities call says the shared transport supports this provider, NOT that a key is configured. A missing or refused key shows
 // as a plain failure when the session is started ("Voice could not start"); typing keeps working.
 import { $, announce } from './dom.js';
+import { paintVoiceButton } from './voice_button.js';
 import { live, onChange } from './state.js';
 import { recordMode } from './api.js';
 import { submitVoiceUtterance, panelMode } from './conversation.js';
@@ -26,11 +27,32 @@ export function initMcVoice(page) {
   const status = $('[data-mc-voice-status]');
   if (!button || !status || document.body.dataset.mcVoice !== 'true') return;
   const api = page.urls.api;
+  const exportLink = $('[data-mc-voice-export]');
+  const paintExport = () => {
+    if (!exportLink) return;
+    const allowed = live.known && !live.off && Boolean(page.conversation?.id);
+    exportLink.hidden = !allowed;
+    if (allowed) exportLink.setAttribute('href', `${api}/conversations/${encodeURIComponent(page.conversation.id)}/voice-transcript`);
+    else exportLink.removeAttribute?.('href');
+  };
+  paintExport();
+  onChange(paintExport);
+
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
   let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null;
 
-  const say = (text, { loud = false, error = false } = {}) => { showingError = error; status.textContent = text; status.hidden = !text; if (loud && text) announce(text); };
-  const paint = (on) => { button.setAttribute('aria-pressed', String(on)); button.textContent = on ? 'Stop voice' : ending ? 'Ending voice…' : 'Voice'; button.disabled=restartBlocked||Boolean(ending); };
+  let visualState = 'idle', pressed = false;
+  const draw = () => {
+    if (typeof paintVoiceButton === 'function') {
+      paintVoiceButton(button, {state: ending ? 'ending' : showingError ? 'error' : pressed ? visualState : 'idle', active: pressed});
+    } else {
+      // Older hosts/test nodes without the progressive icon helper keep labels.
+      button.textContent = pressed ? 'Stop voice' : ending ? 'Ending voice…' : 'Voice';
+    }
+  };
+  const setPhase = state => { visualState = state; draw(); };
+  const say = (text, { loud = false, error = false } = {}) => { showingError = error; status.textContent = text; status.hidden = !text; draw(); if (loud && text) announce(text); };
+  const paint = (on) => { pressed=on;button.setAttribute('aria-pressed', String(on));draw();button.disabled=restartBlocked||Boolean(ending); };
   const headers = () => ({ 'Content-Type':'application/json', 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode() });
   const busy = () => Boolean(controller || starting || ending);
 
@@ -85,6 +107,7 @@ export function initMcVoice(page) {
     const mine = ++session;
     endedAttempt=null;
     const current = () => mine === session;
+    setPhase('connecting');
     paint(true);
     if (managed) {await startManaged(mine,current);return;}
     say(`Connecting… Your speech is sent to ${provider} to be turned into text, and Master Craftsman's replies are read aloud by the same service.`);
@@ -118,11 +141,11 @@ export function initMcVoice(page) {
         conversationId: page.conversation ? page.conversation.id : 'owner',
         requestHeaders: headers,
         onStateChange: guarded((state, info) => {
-          if (state === 'listening') { if (!showingError) say('Listening… say your message; I will send it when you pause.'); }   // a problem stays on screen until the next turn
-          else if (state === 'thinking') say('Working on it…');
-          else if (state === 'speaking') say('Speaking…');
-          else if (state === 'reconnecting') say('Reconnecting…');
-          else if (state === 'interrupted') say('Listening…');
+          if (state === 'listening') { setPhase('listening'); if (!showingError) say('Listening… say your message; I will send it when you pause.'); }   // a problem stays on screen until the next turn
+          else if (state === 'thinking') {setPhase('working');say('Working on it…');}
+          else if (state === 'speaking') {setPhase('speaking');say('Speaking…');}
+          else if (state === 'reconnecting') {setPhase('connecting');say('Reconnecting…');}
+          else if (state === 'interrupted') {setPhase('listening');say('Listening…');}
           else if (state === 'stopped' && info && info.reason === 'duration_limit') stop('limit');
         }),
         onProvisionalTranscript: guarded((text) => { if (text) say(`Hearing: ${text}`); }),
@@ -149,7 +172,7 @@ export function initMcVoice(page) {
     let terminal=false,failed=false;
     selector.disabled=true;choice.disabled=true;
     $('[data-mc-voice-transcript]').hidden=true;$('[data-mc-voice-transcript-text]').textContent='';
-    say('Connecting to OpenAI voice. It speaks directly and consults the shared CoS/MC agent when needed.');
+    say('Connecting voice…');
     try {
       const {RealtimeVoiceController}=await import(`${api}/mc/voice/static/realtime-voice-controller.js`);
       if (!current()) return;
@@ -157,7 +180,8 @@ export function initMcVoice(page) {
         requestHeaders:headers,includeTranscriptAfterEnd:keepTranscript,
         onStateChange:state=>{
           if(!current())return;
-          if(state==='active'&&!terminal&&!failed)say('Listening…');
+          if(state==='active'&&!terminal&&!failed){setPhase('listening');say('Listening…');}
+          if(state==='ending'&&!failed)setPhase('ending');
           if(state==='ended'){
             terminal=true;endedAttempt=mine;controller=null;starting=false;paint(false);
             selector.disabled=false;choice.disabled=false;
@@ -166,9 +190,9 @@ export function initMcVoice(page) {
         },
         onInputState:phase=>{
           if(!current()||terminal||failed||showingError)return;
-          const text={consulting:'Consulting the shared agent…',speech_started:'Listening…',
+          const text={consulting:'Working on that…',speaking:'Speaking…',speech_started:'Listening…',
             speech_stopped:'Understanding your speech…',understood:'Preparing a reply…'}[phase];
-          if(text)say(text);
+          if(text){setPhase(phase==='speech_started'?'listening':phase==='speaking'?'speaking':'working');say(text);}
         },
         onWarning:()=>{if(current()&&!terminal&&!failed)say('Voice will stop in about two minutes.',{loud:true});},
         onStop:()=>{if(current())stop('limit');},
@@ -181,12 +205,20 @@ export function initMcVoice(page) {
               ? 'An earlier voice session has not been confirmed ended. Its status needs verification before voice can start. Typing still works.'
               : 'An earlier agent action needs verification before voice can start. Typing still works.';
             say(message,{loud:true,error:true});
+          }else if(error?.reason==='transcript_retention_failed'){
+            say('Voice ended, but part of the conversation could not be saved. The visible transcript may help; saved history is incomplete.',{loud:true,error:true});
           }else if(error?.reason==='termination_uncertain'){
             restartBlocked=true;button.disabled=true;
             say('Voice stopped on this page, but provider termination is unconfirmed. Do not retry yet; typing still works.',{loud:true,error:true});
           }else if(!restartBlocked){
             say('Voice stopped. Any agent action already accepted may still finish; check its record. Typing still works.',{loud:true,error:true});
           }
+        },
+        onTranscriptUpdate:turns=>{
+          if(!current()||live.off||!live.known||page.conversation?.id!==cid||!keepTranscript)return;
+          const box=$('[data-mc-voice-transcript]');
+          $('[data-mc-voice-transcript-text]').textContent=turns.map(t=>`${t.speaker==='user'?'You':'Voice'}: ${t.text}${t.completed?'':' [in progress / partial]'}`).join('\n\n');
+          box.hidden=turns.length===0;
         },
         onFinalize:result=>{
           if (!(current()||transcriptEnding===mine)||live.off||!live.known||page.conversation?.id!==cid||!keepTranscript)return;

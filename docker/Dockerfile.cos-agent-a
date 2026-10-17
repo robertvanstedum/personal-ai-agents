@@ -13,6 +13,7 @@ ENV OPENCLAW_NO_AUTO_UPDATE=1
 COPY --chown=root:root docker/cos-agent-a/openclaw.json /opt/minimoi/cos-agent-a/openclaw.json
 COPY --chown=root:root docker/cos-agent-a/apply-config.sh /opt/minimoi/cos-agent-a/apply-config.sh
 COPY --chown=root:root docker/cos-agent-a/AGENTS.md /opt/minimoi/cos-agent-a/AGENTS.md
+COPY --chown=root:root docker/cos-agent-a/build-mc-soul.mjs /opt/minimoi/cos-agent-a/build-mc-soul.mjs
 COPY --chown=root:root docker/cos-agent-a/build-mc-role.mjs docker/cos-agent-a/mc-role-lock.json /opt/minimoi/cos-agent-a/
 COPY --chown=root:root planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MASTER_CRAFTSMAN_JOB_DESCRIPTION.md /opt/minimoi/cos-agent-a/owner-role/MASTER_CRAFTSMAN_JOB_DESCRIPTION.md
 COPY --chown=root:root planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MASTER_CRAFTSMAN_PERSONA.md /opt/minimoi/cos-agent-a/owner-role/MASTER_CRAFTSMAN_PERSONA.md
@@ -29,6 +30,8 @@ COPY --chown=node:node docker/cos-agent-a/openclaw.json /home/node/.openclaw/ope
 COPY --chown=node:node docker/cos-agent-a/AGENTS.md /home/node/.openclaw/workspace-cos-agent-a/AGENTS.md
 COPY --chown=node:node docker/cos-agent-a/IDENTITY.md /home/node/.openclaw/workspace-cos-agent-a/IDENTITY.md
 COPY --chown=node:node docker/cos-agent-a/SOUL.md /home/node/.openclaw/workspace-cos-agent-a/SOUL.md
+# Compile only the image seed: existing named-volume SOUL/adaptations are never replaced.
+RUN node /opt/minimoi/cos-agent-a/build-mc-soul.mjs /opt/minimoi/cos-agent-a/owner-role/MASTER_CRAFTSMAN_PERSONA.md /opt/minimoi/cos-agent-a/mc-role-lock.json /home/node/.openclaw/workspace-cos-agent-a/SOUL.md
 COPY --chown=node:node docker/cos-agent-a/MEMORY.md /home/node/.openclaw/workspace-cos-agent-a/MEMORY.md
 COPY --chown=node:node docker/cos-agent-a/plugins/cos-bounded-search /opt/minimoi/openclaw-plugins/cos-bounded-search
 

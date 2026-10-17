@@ -23,6 +23,8 @@ if [[ -n "$ACTIVATION_ENV" ]]; then
   done <<< "$ACTIVATION_ENV"
 fi
 
+python3 /opt/minimoi/scripts/release_status.py begin "$IMAGE_TAG" "${SERVICES[@]}"
+
 cd /opt/minimoi
 aws ecr get-login-password --region us-east-1 |
   docker login --username AWS --password-stdin 332704997792.dkr.ecr.us-east-1.amazonaws.com
@@ -268,3 +270,5 @@ runuser -u ec2-user -- /opt/minimoi/scripts/setup_ec2_cron.sh
 
 # Prune only after the selected immutable release is healthy.
 docker image prune -af
+
+python3 /opt/minimoi/scripts/release_status.py finish "$IMAGE_TAG" "${SERVICES[@]}"

@@ -78,6 +78,7 @@ EXPECTED_PROD_MOUNTS = [
     ("curator", "/opt/minimoi/data/curator_cache", "/app/curator_cache"),
     ("german", "/opt/minimoi/data/german", "/app/domains/german/data"),
     ("portal", "/opt/minimoi/data/guild", "/app/runtime/guild"),
+    ("portal", "/opt/minimoi/release-status", "/app/runtime/release"),
     ("portal", "/opt/minimoi/docs/design", "/app/docs/design"),
     ("portal", "/opt/minimoi/docs/specs", "/app/docs/specs"),
     ("portal", "/opt/minimoi/auth/users.json", "/app/minimoi_portal/auth/users.json"),
@@ -144,7 +145,10 @@ def _default_root(value: str) -> str:
     return value.replace(ROOT_VAR, "/opt/minimoi")
 
 
-def _split_volume(volume: str):
+def _split_volume(volume):
+    if isinstance(volume, dict):
+        assert volume["type"] in ("bind", "volume")
+        return _default_root(volume["source"]), volume["target"]
     host, container = _default_root(volume).split(":")[:2]
     return host, container
 
@@ -165,6 +169,11 @@ def test_prod_mounts_and_env_files_are_unchanged_with_root_unset():
         for name, service in services.items() for v in service.get("volumes", [])
     )
     assert mounts == sorted(EXPECTED_PROD_MOUNTS)
+    release = [v for v in services["portal"]["volumes"]
+               if isinstance(v, dict) and v.get("target") == "/app/runtime/release"]
+    assert release == [{"type": "bind", "source": ROOT_VAR + "/release-status",
+                        "target": "/app/runtime/release", "read_only": True,
+                        "bind": {"create_host_path": False}}]
     assert ROOT_VAR + "/data/guild/mc-evidence:/home/node/.openclaw/workspace-cos-agent-a/mc-evidence:ro" in services["cos-agent-a"]["volumes"]
     env_files = {name: _default_root(s["env_file"]) for name, s in services.items() if "env_file" in s}
     assert env_files == EXPECTED_ENV_FILES

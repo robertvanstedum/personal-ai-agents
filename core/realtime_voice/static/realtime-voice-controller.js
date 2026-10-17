@@ -41,7 +41,7 @@ function admissionRefused(error) {
 export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
-    onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall,
+    onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -59,6 +59,7 @@ export class RealtimeVoiceController {
     this._onStop = onStop || (() => {});
     this._onFatalError = onFatalError || (() => {});
     this._onFinalize = onFinalize || (() => {});
+    this._onTranscriptUpdate = onTranscriptUpdate || (() => {});
     this._onUserTurn = onUserTurn || (() => {});
     this._onAssistantTurn = onAssistantTurn || (() => {});
     this._onFunctionCall = onFunctionCall || null;
@@ -273,12 +274,14 @@ export class RealtimeVoiceController {
       this._items.set(evt.item_id, {
         speaker, text: evt.text, completed: evt.completed, firstSeq: this._seq++,
       });
-      return;
+    } else {
+      existing.text = evt.is_delta ? existing.text + evt.text : evt.text;
+      existing.completed = existing.completed || evt.completed;
     }
-    existing.text = evt.is_delta ? existing.text + evt.text : evt.text;
-    existing.completed = existing.completed || evt.completed;
-    // Deliberately never surfaced to the UI while active (Section 10) --
-    // this method only accumulates in memory.
+    // Optional host-owned display only. Never authorizes or persists an action.
+    this._onTranscriptUpdate([...this._items.values()]
+      .sort((a,b) => a.firstSeq-b.firstSeq)
+      .map(t => ({speaker:t.speaker,text:t.text,completed:t.completed})));
   }
 
   _startDurationWatch() {
@@ -321,6 +324,7 @@ export class RealtimeVoiceController {
         });
         const receipt=await response.json();
         if(!response.ok||receipt.termination_confirmed!==true)return this._terminationUncertain();
+        if(receipt.transcript_retention==='failed')this._onFatalError({reason:'transcript_retention_failed',detail:'Voice ended, but some transcript turns could not be saved.'});
         return receipt;
       }catch(_){return this._terminationUncertain();}
       finally{clearTimeout(timer);}

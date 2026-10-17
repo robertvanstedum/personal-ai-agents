@@ -43,4 +43,16 @@ const adapterSource=fs.readFileSync(root+'adapters/openai-webrtc-adapter.js','ut
 const {OpenAIWebRTCAdapter:A}=await import('data:text/javascript;base64,'+Buffer.from(adapterSource).toString('base64'));
 const a=new A();const connecting=a.connect({isCurrent:()=>false,exchangeSdp:()=>{throw Error('stale provider request')}});
 finishMic({getTracks:()=>[{stop:()=>stopCount++}],getAudioTracks:()=>[]});await connecting;assert.equal(stopCount,1);
-console.log('7 synthetic controller/adapter functional scenarios passed');
+// Live transcript callback follows normalized provider events and never dispatches.
+const liveTurns=[];
+const live=new C({managedBootstrap:{sessionUrl:'/voice/session'},onTranscriptUpdate:t=>liveTurns.push(t)});
+await live.startSession({provider:'openai',conversation_id:'c1'});
+lastAdapter.emit('input_transcript',{item_id:'u1',provider_event_id:'e1',text:'Grüß dich',completed:true});
+lastAdapter.emit('output_transcript',{item_id:'a1',provider_event_id:'e2',text:'Guten ',is_delta:true,completed:false});
+lastAdapter.emit('output_transcript',{item_id:'a1',provider_event_id:'e3',text:'Morgen',is_delta:true,completed:true});
+assert.equal(liveTurns.at(-1)[1].text,'Guten Morgen');
+assert.equal(liveTurns[1][1].text,'Guten '); // immutable earlier view
+lastAdapter.emit('output_transcript',{item_id:'a1',provider_event_id:'e3',text:'duplicate',completed:true});
+assert.equal(liveTurns.length,3);
+await live.endSession('user_ended');
+console.log('8 synthetic controller/adapter functional scenarios passed');

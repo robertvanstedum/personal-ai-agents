@@ -300,6 +300,13 @@ function showAnswer(holder, r) {
     announce(body.message || mcSay('Master Craftsman answered'));
     answerArrived();
     agentUi.kick();
+  } else if (r.ok && body.operation?.type === 'board_postit' && body.operation.saved === true && Number.isInteger(body.operation.id) && body.operation.id > 0) {
+    // The Board committed but its separate conversation receipt failed. Show
+    // the real saved outcome without pretending this line survived a reload.
+    lastAnswered = true;
+    holder.replaceWith(platformLine('Board', `${body.message} The Board is saved; this confirmation could not be kept in the conversation.`));
+    announce(body.message);
+    answerArrived();
   } else {
     if (NOT_DISPATCHED.includes(body.error)) { if (turnFiles.length) restoreTray(turnFiles); restoreTopicContext(); }
     const text = body.message || mcSay('Master Craftsman did not answer. Your message is kept.');

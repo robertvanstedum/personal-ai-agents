@@ -366,7 +366,13 @@ class OpenClawBackend:
             "content": self._normalize_relative_date_prompt(prompt),
         })
 
-        return self._post_turn(
-            messages=messages,
-            conversation_id=conversation_id,
-        )
+        from core.realtime_voice.timing import VoiceTiming
+        timing = VoiceTiming(correlation=receipt_id)
+        timing.emit("gateway_request_start")
+        try:
+            result = self._post_turn(messages=messages, conversation_id=conversation_id)
+        except Exception:
+            timing.emit("gateway_request_failed")
+            raise
+        timing.emit("gateway_request_end")
+        return result

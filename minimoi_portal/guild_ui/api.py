@@ -767,6 +767,9 @@ def mc_turn():
     if refusal is not None:
         return refusal
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    board_result = _owner_board_command(found)
+    if board_result is not None:
+        return board_result
     from .jobs_api import job_command
     command = job_command(found)                      # "run this as a job" / "stop": the server decides, no model is asked
     if command is not None:
@@ -775,6 +778,20 @@ def mc_turn():
                                  principal=principal, note=note, note_id=note_id, request_id=request_id,
                                  attachment_ids=attachment_ids)
     return jsonify(answer), status
+
+
+def _owner_board_command(found):
+    from .board_commands import execute
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if attachment_ids or getattr(g, "topic_context", None):
+        return None  # never silently discard selected file/topic context
+    result = execute(note['text'], board=_floor(), conversation=floor,
+                     principal=principal, turn_key=note_id, author=_author())
+    if result is None:
+        return None
+    return jsonify(status='answered', backend_kind='platform', reply_note=result.get('reply_note'),
+                   message=result['reply'], operation=result['operation'],
+                   history_saved=result.get('history_saved', False)), 200
 
 
 PRIVATE_TEXT_MAX = 4000
@@ -877,6 +894,9 @@ def mc_turn_stream():
     if refusal is not None:
         return refusal
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    board_result = _owner_board_command(found)
+    if board_result is not None:
+        return board_result
     from .jobs_api import job_command
     command = job_command(found)                      # spoken job commands are answered here, streaming or not
     if command is not None:
@@ -1271,7 +1291,7 @@ def conversation_retry_release(cid):
 
 
 def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_id,
-                request_id: str | None = None, capture: bool = True, attachment_ids=None) -> tuple[dict, int]:
+                request_id: str | None = None, capture: bool = True, attachment_ids=None, host_channel=None) -> tuple[dict, int]:
     """One Master Craftsman turn for a kept owner note, after the route's
     guards (write guard, turn gate, the note is this owner's): one reply per
     note, MC's state must allow turns, one turn in flight per owner, the note
@@ -1362,9 +1382,13 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         context_text = _with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal)
         if board_plan is not None:
             context_text += "\n\n" + board_plan.contract()
+        turn_context = {"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")}
+        # Explicit trusted host input only; never copy a browser/note channel.
+        from .mc.cos import MANAGED_VOICE_CHANNEL
+        if services.mc.kind == "cos" and host_channel is MANAGED_VOICE_CHANNEL:
+            turn_context["host_channel"] = MANAGED_VOICE_CHANNEL
         req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=context_text,
-                          note_request_id=note_id, correlation_id=turn_id,
-                          context={"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")})
+                          note_request_id=note_id, correlation_id=turn_id, context=turn_context)
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
         _files_recorder(conversations, conv, principal, note_id, files)()
         started = time.monotonic()
@@ -1557,6 +1581,10 @@ def _with_context(text: str, owner_text: str, conv, principal: str) -> str:
     conversation's jobs, plus explicitly referenced Board notes. Board read failure is explicit DATA; it never becomes completion. Never reached by a Private turn."""
     from . import mc_context
     extra = []
+    from . import release_context
+    release = release_context.block(owner_text)
+    if release:
+        extra.append(release)
     from . import feature_environ
     from .. import config as portal_config
     origins = {name: getattr(portal_config, name, None)
@@ -1571,6 +1599,19 @@ def _with_context(text: str, owner_text: str, conv, principal: str) -> str:
                                                origin=cfg().get("base_url", ""), environ=health_env)
         if health:
             extra.append(health)
+    # Explicit history requests get bounded retained sideband evidence, never a claim
+    # of complete native history. Recheck ownership/record mode before the read.
+    from . import mc_voice_transcripts
+    if conv and mc_voice_transcripts.WANTED.search(owner_text or ''):
+        try:
+            fresh = _conversations().get(conv['id'], principal)
+            if (fresh.get('principal') == principal and not fresh.get('archived')
+                    and fresh.get('record_mode', 'on_record') == 'on_record'):
+                block = mc_voice_transcripts.block(owner_text, _conv_floor(fresh), scrub=scrub)
+                if block:
+                    extra.append(block)
+        except Exception:
+            extra.append('[Retained voice notes unavailable; no complete conversation history verified.]')
     try:
         block = mc_context.board_block(owner_text, _floor(), scrub=scrub)
         if block:
@@ -1832,3 +1873,7 @@ RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view
 
 from .rooms_archive_api import RULES as _ROOM_ARCHIVE_RULES
 RULES.extend((rule, endpoint, owner_api(view), methods) for rule, endpoint, view, methods in _ROOM_ARCHIVE_RULES)
+
+# Read-only retained voice export; ownership and scope checked around the read.
+from .mc_voice_export_api import download as voice_transcript_download
+RULES.append(("/conversations/<cid>/voice-transcript", "api_voice_transcript", voice_transcript_download, ["GET"]))

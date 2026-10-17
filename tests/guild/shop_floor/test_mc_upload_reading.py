@@ -23,6 +23,10 @@ from test_mc_turn_capture import mc_dir, mc_lines  # noqa: F401
 from test_mc_turns import API, FakeRuntime, _keep, _openclaw, _turn_on, turned  # noqa: F401
 
 CARD = "5555 5555 5555 4444"
+# A file-body marker that can never occur in generated metadata: random hex ids
+# (request, turn and conversation ids) may contain any digit run, such as "777",
+# but never these letters or this shape.
+FILE_SENTINEL = "Qzx-launch-sentinel-JWK"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────────
@@ -369,12 +373,12 @@ def test_the_report_is_saved_with_the_conversation_without_any_file_text(turned)
     client = turned.owner()
     token = turned.csrf(client)
     cid = _new(client, token)
-    doc = _doc(client, token, cid, "Confidential launch numbers: 777", "numbers.txt")
+    doc = _doc(client, token, cid, f"Confidential launch numbers: {FILE_SENTINEL}", "numbers.txt")
     note = _note(client, token, cid)
     body = _ask(client, token, note["request_id"], cid, [doc]).get_json()
     conv = _the(client, cid)
     assert conv["turn_files"] == {note["request_id"]: body["files"]}
-    assert "777" not in json.dumps(conv) and "Confidential" not in json.dumps(conv)
+    assert FILE_SENTINEL not in json.dumps(conv) and "Confidential" not in json.dumps(conv)
 
 
 def test_a_turn_that_got_no_answer_still_reports_the_files_that_were_in_the_request(turned):
@@ -409,11 +413,30 @@ def test_the_turn_capture_keeps_the_owners_words_only(turned, mc_dir):
     client = turned.owner()
     token = turned.csrf(client)
     cid = _new(client, token)
-    doc = _doc(client, token, cid, "Confidential launch numbers: 777", "numbers.txt")
+    doc = _doc(client, token, cid, f"Confidential launch numbers: {FILE_SENTINEL}", "numbers.txt")
     note = _note(client, token, cid, "Summarise it.")
     assert _ask(client, token, note["request_id"], cid, [doc]).get_json()["history_saved"] is True
     [rec] = mc_lines(mc_dir)
-    assert rec["user_text"] == "Summarise it." and "777" not in json.dumps(rec) and "BEGIN FILE" not in json.dumps(rec)
+    assert rec["user_text"] == "Summarise it." and FILE_SENTINEL not in json.dumps(rec) and "BEGIN FILE" not in json.dumps(rec)
+    assert "Confidential" not in json.dumps(rec)
+
+
+def test_the_file_privacy_check_is_not_fooled_by_digits_in_generated_ids(turned, mc_dir, monkeypatch):
+    # Force every uuid4 id to contain "777": the old whole-record "777" check
+    # failed on such metadata although no file text leaked (main CI, 16 Oct).
+    counter = iter(range(1, 10_000))
+    monkeypatch.setattr(uuid, "uuid4", lambda: uuid.UUID(f"777{next(counter):029x}"))
+    client = turned.owner()
+    token = turned.csrf(client)
+    cid = _new(client, token)
+    doc = _doc(client, token, cid, f"Confidential launch numbers: {FILE_SENTINEL}", "numbers.txt")
+    note = _note(client, token, cid, "Summarise it.")
+    assert _ask(client, token, note["request_id"], cid, [doc]).get_json()["history_saved"] is True
+    [rec] = mc_lines(mc_dir)
+    text = json.dumps(rec)
+    assert "777" in text                                   # the metadata really carries the digits
+    assert FILE_SENTINEL not in text and "Confidential" not in text and "BEGIN FILE" not in text
+    assert rec["user_text"] == "Summarise it."
 
 
 # ── removal ──────────────────────────────────────────────────────────────────────

@@ -104,8 +104,8 @@
     </div>
     <div class="mc-tools">
       {# Voice: this markup exists only while the server has voice switched on; mc_voice.js shows the button once the capabilities call answers. On the record only for now. #}
-      {% if mc_voice_on %}<button type="button" class="btn-quiet mc-voice" data-mc-voice-btn aria-pressed="false" hidden>Voice</button>{% endif %}
-      {% if mc_voice_on %}<span data-mc-managed-settings hidden><label>Voice provider <select data-mc-voice-provider aria-label="Voice provider"><option value="openai">OpenAI</option></select></label><label><input type="checkbox" data-mc-voice-transcript-choice> Show transcript after End</label></span>{% endif %}
+      {% if mc_voice_on %}<button type="button" class="btn-quiet mc-voice" data-mc-voice-btn aria-pressed="false" aria-label="Start voice conversation" data-voice-state="idle" hidden><span class="mc-voice-icon" data-voice-icon="mic" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></span><span class="mc-voice-icon" data-voice-icon="stop" aria-hidden="true" hidden><svg viewBox="0 0 24 24" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></span><span data-voice-label>Voice</span></button>{% endif %}
+      {% if mc_voice_on %}<span data-mc-managed-settings hidden><label>Voice provider <select data-mc-voice-provider aria-label="Voice provider"><option value="openai">OpenAI</option></select></label><label><input type="checkbox" data-mc-voice-transcript-choice> Show live transcript</label> <a data-mc-voice-export hidden>Download saved voice transcript</a></span>{% endif %}
       {% if dictation_on %}<button type="button" class="btn-quiet mc-dictate" data-dictate="#mc-input" aria-pressed="false" hidden>Dictate</button>{% endif %}
       <button type="button" class="btn-quiet" data-mc-record-confirm hidden>Confirm on the record</button>
       <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="{{ 'Go Private' if mc_private else 'Private is not available' }}" title="{{ 'Go Private: ' ~ mc_name ~ ' answers, MiniMoi keeps nothing' if mc_private else 'Private is not available with the ' ~ mc_name ~ ': it keeps its own record' }}"{% if not mc_private %} disabled data-private-off{% endif %}><span aria-hidden="true">🔒</span></button>
@@ -183,4 +183,4 @@
   </li>
 </template>
 
-{% if mc_voice_on %}<details data-mc-voice-transcript hidden><summary>Voice transcript from this session</summary><pre data-mc-voice-transcript-text></pre></details>{% endif %}
+{% if mc_voice_on %}<details data-mc-voice-transcript hidden><summary>Voice transcript from this session · may be partial</summary><pre data-mc-voice-transcript-text></pre></details>{% endif %}

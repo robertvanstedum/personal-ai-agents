@@ -40,7 +40,7 @@ async function rig({endGate=null}={}){
 // Known stages have truthful bounded labels rather than pretending every stage is Listening.
 {
  const r=await rig();await r.click();const c=r.instances[0];
- for(const [phase,text] of [['speech_stopped','Understanding your speech…'],['understood','Preparing a reply…'],['consulting','Consulting the shared agent…']]){c.options.onInputState(phase);assert.equal(r.status(),text)}
+ for(const [phase,text] of [['speech_stopped','Understanding your speech…'],['understood','Preparing a reply…'],['consulting','Working on that…']]){c.options.onInputState(phase);assert.equal(r.status(),text)}
 }
 console.log('4 MC terminal/error/late-event/restart/stage scenarios passed; no network/provider/microphone calls.');
 

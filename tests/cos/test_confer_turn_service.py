@@ -1,4 +1,5 @@
 from uuid import uuid4
+from core.agent_partner import PARTNER_STYLE
 
 import pytest
 
@@ -81,7 +82,7 @@ def test_all_channels_use_one_backend_contract_and_result_shape():
             assert "one to three short, natural sentences" in context["system_prompt"]
             assert "Do not use Markdown headings or bullet lists" in context["system_prompt"]
         else:
-            assert context["system_prompt"] == "system"
+            assert context["system_prompt"] == "system\n\n" + PARTNER_STYLE
         assert context["confer"]["conversation_id"] == "owner"
         assert context["confer"]["input_channel"] in ALLOWED_CHANNELS
         assert context["confer"]["receipt_id"]
@@ -96,7 +97,7 @@ def test_voice_concision_instruction_is_not_added_to_typed_turns():
     service.handle(ConferTurnRequest(text="text", channel="html_text"))
 
     assert "live spoken conversation" in calls[0][1]["system_prompt"]
-    assert calls[1][1]["system_prompt"] == "system"
+    assert calls[1][1]["system_prompt"] == "system\n\n" + PARTNER_STYLE
 
 
 def test_runtime_route_metadata_reports_the_model_that_served_the_turn():

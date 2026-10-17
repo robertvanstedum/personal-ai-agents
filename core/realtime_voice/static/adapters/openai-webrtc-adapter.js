@@ -104,6 +104,9 @@ export class OpenAIWebRTCAdapter {
         }
       );
     } catch (err) {
+      // The managed controller owns the fixed allowlisted admission message.
+      // Do not erase that refusal with a generic transport fatal event first.
+      if (credentials.exchangeSdp && err?.managedAdmissionRefused === true) throw err;
       this._emit("fatal_error", { reason: "network", detail: String(err) });
       return;
     }

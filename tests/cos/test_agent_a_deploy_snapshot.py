@@ -5,6 +5,7 @@ deploy on housekeeping, keeps the pre-upgrade snapshot, and is skipped when
 cos-agent-a is not in the release. No real Docker, AWS or network is used.
 """
 
+import json
 import os
 import shutil
 import stat
@@ -17,7 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/operations/deploy_scoped_release.sh"
 REGISTRY = "332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi"
-TAG = "newsha"
+TAG = "a1b2c3d"
 STAMP = "20260928T120000Z"
 OLD_IMAGE = f"{REGISTRY}/cos-scheduler:agent-a-oldsha"
 NEW_IMAGE = f"{REGISTRY}/cos-scheduler:agent-a-{TAG}"
@@ -27,17 +28,28 @@ echo "docker $*" >> "$STUB_LOG"
 case "$1" in
   login) cat >/dev/null; exit 0 ;;
   inspect)
-    shift; fmt=""; target=""
+    shift; fmt=""; target=""; targets=()
     while [ $# -gt 0 ]; do
       case "$1" in
         --format=*) fmt="${1#--format=}" ;;
         --format) shift; fmt="$1" ;;
-        *) target="$1" ;;
+        *) target="$1"; targets+=("$1") ;;
       esac
       shift
     done
     case "$fmt" in
       "") [ "$STUB_AGENT_EXISTS" = 1 ] && exit 0; exit 1 ;;
+      *"json .Name"*)
+        for target in "${targets[@]}"; do
+          if [ "$target" = minimoi-cos-agent-a ]; then
+            if [ -e "$STUB_STATE/recreated" ]; then image="$STUB_NEW_IMAGE"
+            elif [ "$STUB_AGENT_EXISTS" = 1 ]; then image="$STUB_OLD_IMAGE"
+            else continue; fi
+          elif [ "$target" = minimoi-model-gateway ]; then image="$STUB_REGISTRY/cos-scheduler:model-gateway-$STUB_TAG"
+          elif [ "$target" = minimoi-german ]; then image="$STUB_REGISTRY/mein-deutsch:$STUB_TAG"
+          else image="$STUB_REGISTRY/${target#minimoi-}:$STUB_TAG"; fi
+          printf '{"name":"/%s","image":"%s","image_id":"sha256:%064d","running":true,"health":"healthy"}\n' "$target" "$image" 1
+        done ;;
       *Config.Image*)
         if [ "$target" = minimoi-cos-agent-a ]; then
           if [ -e "$STUB_STATE/recreated" ]; then echo "$STUB_NEW_IMAGE"; else echo "$STUB_OLD_IMAGE"; fi
@@ -87,6 +99,22 @@ def harness(tmp_path):
     (opt / "scripts/production_activation.py").write_text(reader.replace(
         "/etc/minimoi/production-activation.json",
         str(tmp_path / "etc/minimoi/production-activation.json"), 1))
+    # Use the REAL status producer with isolated paths and fixture ownership.
+    # This unprivileged sandbox represents root-owned production files using
+    # its own UID; only the three exact root-identity guards are projected.
+    status = (ROOT / "scripts/operations/release_status.py").read_text()
+    assert status.count("s.st_uid==0") == 2
+    assert status.count("need(os.geteuid()==0)") == 1
+    status = status.replace("/opt/minimoi/release-status", str(opt / "release-status"))
+    status = status.replace("s.st_uid==0", "s.st_uid==os.getuid()")
+    status = status.replace("need(os.geteuid()==0)", "need(os.geteuid()==os.getuid())")
+    # Model trusted /opt ancestry only inside this pytest-owned sandbox.
+    # Linux /tmp is deliberately world-writable and is not a production parent.
+    parent_loop = "for p in (root.parent,*root.parent.parents):"
+    assert status.count(parent_loop) == 1
+    status = status.replace(parent_loop, parent_loop +
+        f"\n        if p == Path({str(tmp_path.parent)!r}):break")
+    (opt / "scripts/release_status.py").write_text(status)
     for name in ("install_lesen_refresh_cron.sh", "setup_ec2_cron.sh"):
         _write_exe(opt / "scripts" / name, "#!/bin/bash\nexit 0\n")
     script = tmp_path / "deploy_scoped_release.sh"
@@ -132,6 +160,11 @@ def harness(tmp_path):
             env=env, capture_output=True, text=True, check=False,
         )
         log = (tmp_path / "calls.log").read_text() if (tmp_path / "calls.log").exists() else ""
+        if result.returncode == 0:
+            observed = json.loads((opt / "release-status/status.json").read_text())
+            assert observed["status"] == "selected_images_observed", result.stderr + result.stdout
+            assert observed["requested_tag"] == TAG
+            assert observed["selected"] == list(services)
         return result, log
 
     run.state = state

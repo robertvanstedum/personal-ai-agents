@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import re
 from typing import Callable
 from uuid import UUID, uuid4
+from core.realtime_voice.timing import VoiceTiming
 
 
 ALLOWED_CHANNELS = frozenset({
@@ -216,7 +217,18 @@ class ConferTurnService:
             )
 
         turn_id = str(uuid4())
-        context = dict(self._build_context())
+        timing = VoiceTiming(correlation=turn_id,parent=request.request_id)
+        timing.emit("context_start")
+        try:
+            context = dict(self._build_context())
+        except Exception:
+            timing.emit("context_failed")
+            raise
+        timing.emit("context_end")
+        # Shared manner is system context, NEVER appended to the canonical owner
+        # command. /new and explicit note parsing above retain exact semantics.
+        from core.agent_partner import PARTNER_STYLE
+        context['system_prompt'] = (context.get('system_prompt', '').rstrip() + '\n\n' + PARTNER_STYLE).strip()
         context["confer"] = {
             "conversation_id": conversation_id,
             "input_channel": request.channel,
@@ -235,7 +247,13 @@ class ConferTurnService:
                 f"{voice_instruction}"
             ).strip()
         tool_policy = {"observation": True, "mutation": False}
-        reply = self._call_backend(text, context, tool_policy)
+        timing.emit("native_start")
+        try:
+            reply = self._call_backend(text, context, tool_policy)
+        except Exception:
+            timing.emit("native_failed")
+            raise
+        timing.emit("native_end")
         if _UNVERIFIED_NOTE_SUCCESS.search(reply):
             # A backend has no note-write authority. Only the deterministic
             # operation path above may return a save receipt or success claim.
@@ -248,7 +266,13 @@ class ConferTurnService:
         backend_label, model_label = self._backend_metadata()
         runtime_route = context.get("runtime_route") or {}
         if self._get_routing_receipt is not None:
-            receipt = self._get_routing_receipt(turn_id) or {}
+            timing.emit("routing_receipt_start")
+            try:
+                receipt = self._get_routing_receipt(turn_id) or {}
+            except Exception:
+                timing.emit("routing_receipt_failed")
+                raise
+            timing.emit("routing_receipt_end")
             if receipt:
                 runtime_route = {
                     "configured_primary": receipt.get("logical_model"),

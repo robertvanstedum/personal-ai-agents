@@ -22,13 +22,19 @@ class Provider:
     def send_result(self,*a,**kw):pass
     def hangup(self,cid):self.closed.append(cid)
 class Notes:
-    def __init__(self):self.rows={}
+    floor="actual-owner-floor"
+    def __init__(self):self.rows={};self.postits={}
     def add_note(self,key,text,author,**kw):
         if key in self.rows:
             old=self.rows[key]
             return WriteResult('kept' if old['text']==text and old['who']==author.id else 'idempotency_mismatch',old,True)
-        value={'request_id':key,'id':key,'text':text,'who':author.id,'author_kind':'owner','context':{}}
+        value={'request_id':key,'id':key,'text':text,'who':author.id,'author_kind':author.kind,'context':{}}
         self.rows[key]=value;return WriteResult('kept',value,False)
+    def add_postit(self,text,author,*,idempotency_key):
+        old=self.postits.get(idempotency_key)
+        row=old or {'id':len(self.postits)+1,'text':text}
+        self.postits[idempotency_key]=row
+        return WriteResult('added',row,old is not None)
 class Conversations:
     def __init__(self):self.archived=False
     def get(self,cid,principal):
@@ -48,7 +54,7 @@ def ready(tmp_path,monkeypatch):
     services=SimpleNamespace(mc=SimpleNamespace(kind='cos'),mc_turns=True)
     config={'owner_guard':owner_guard,'current_user':current_user,'url_prefix':'/guild-next','base_url':'http://localhost','services':services,'feature_environ':env}
     app.extensions['guild']=config
-    monkeypatch.setattr(api,'_conversations',lambda:convs);monkeypatch.setattr(api,'_conv_floor',lambda conv:notes)
+    monkeypatch.setattr(api,'_conversations',lambda:convs);monkeypatch.setattr(api,'_conv_floor',lambda conv:notes);monkeypatch.setattr(api,'_floor',lambda:notes)
     def turn(actual_services,**kw):
         assert not has_request_context() and cfg() is config and feature_environ()==env
         assert actual_services is services and kw['floor'] is notes and kw['principal']=='owner'
@@ -166,7 +172,9 @@ def test_canonical_hook_uses_actual_job_command_once_before_response(ready,monke
     s.observe({'type':'conversation.item.input_audio_transcription.completed','item_id':'spoken-job',
         'transcript':'run this as a job','usage':{'type':'tokens','input_tokens':1,'output_tokens':1,'input_token_details':{'text_tokens':0,'audio_tokens':1}}})
     s.worker.submit(lambda:None).result(timeout=2)
-    assert len(started)==1 and len(r.notes.rows)==1 and not r.calls
+    assert len(started)==1 and len(r.notes.rows)==2 and not r.calls
+    assert sum(n['author_kind']=='owner' for n in r.notes.rows.values())==1
+    assert sum(n['who'].startswith('managed_voice_transcript:') for n in r.notes.rows.values())==1
     assert 'platform_command_receipt' in sent[0]['item']['content'][0]['text']
     s.observe({'type':'conversation.item.input_audio_transcription.completed','item_id':'spoken-job',
         'transcript':'run this as a job','usage':{'type':'tokens','input_tokens':1,'output_tokens':1,'input_token_details':{'text_tokens':0,'audio_tokens':1}}})
@@ -179,3 +187,17 @@ def test_stop_without_active_job_is_ordinary_no_canonical_write(ready):
     assert s.canonical_command_match('stop','c-123456abcdef') is False
     assert s.canonical_command_match('please describe a job','c-123456abcdef') is False
     assert not r.notes.rows and not r.calls
+
+def test_canonical_spoken_board_command_and_tool_replay_make_one_postit(ready):
+    r=ready;s,_=start(r)
+    s.observe({'type':'input_audio_buffer.committed','item_id':'board-spoken-1'})
+    s.observe({'type':'conversation.item.input_audio_transcription.completed','item_id':'board-spoken-1','transcript':'Make a post-it: Retest tomorrow',
+               'usage':{'type':'tokens','input_tokens':1,'output_tokens':1,'input_token_details':{'text_tokens':0,'audio_tokens':1}}})
+    s.worker.submit(lambda:None).result(timeout=2)
+    assert len(r.notes.postits)==1 and not r.calls
+    assert next(iter(r.notes.postits.values()))['text']=='Retest tomorrow'
+    s.observe({'type':'response.created','response':{'id':'board-response'}})
+    usage={'input_tokens':2,'output_tokens':2,'input_token_details':{'text_tokens':1,'audio_tokens':1,'image_tokens':0},'output_token_details':{'text_tokens':1,'audio_tokens':1}}
+    s.observe({'type':'response.done','response':{'id':'board-response','usage':usage,'output':[{'type':'function_call','call_id':'board-call-replay','name':'consult_cos_agent'}]}})
+    s.worker.submit(lambda:None).result(timeout=2)
+    assert len(r.notes.postits)==1 and not r.calls
