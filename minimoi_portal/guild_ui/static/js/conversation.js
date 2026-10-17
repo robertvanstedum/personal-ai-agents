@@ -307,6 +307,18 @@ function showAnswer(holder, r) {
     holder.replaceWith(platformLine('Board', `${body.message} The Board is saved; this confirmation could not be kept in the conversation.`));
     announce(body.message);
     answerArrived();
+  } else if (r.ok && body.operation?.type === 'library_intake' && body.operation.saved === true && ['saved', 'already_saved_attached'].includes(body.operation.receipt?.result)) {
+    // Library committed; a separate conversation-receipt failure cannot undo it.
+    lastAnswered = true;
+    holder.replaceWith(platformLine('Library', `${body.message} The Library item is saved; this confirmation could not be kept in the conversation.`));
+    announce(body.message);
+    answerArrived();
+  } else if (r.ok && body.operation?.type === 'work_register' && body.operation.saved === true && /^MC-[0-9]{4,8}$/.test(body.operation.id)) {
+    // Canonical card committed; the separate chat receipt is not durable.
+    lastAnswered = true;
+    holder.replaceWith(platformLine('Register', `${body.message} The register entry is saved; this confirmation could not be kept in the conversation.`));
+    announce(body.message);
+    answerArrived();
   } else {
     if (NOT_DISPATCHED.includes(body.error)) { if (turnFiles.length) restoreTray(turnFiles); restoreTopicContext(); }
     const text = body.message || mcSay('Master Craftsman did not answer. Your message is kept.');

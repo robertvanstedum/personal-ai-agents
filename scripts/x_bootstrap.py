@@ -19,6 +19,10 @@ import tweepy
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Shared canonical preference transaction, no independent store.
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from domains.curator import preferences_store as preference_store
+
 PREFS_PATH   = Path(os.environ.get("CURATOR_DATA_DIR", str(Path(__file__).parent.parent / "data" / "curator"))) / "curator_preferences.json"
 DRY_RUN      = '--import' not in sys.argv
 
@@ -119,45 +123,46 @@ def main():
     # --- IMPORT ---
     print(f"\nImporting {len(articles)} bookmarks...")
 
-    prefs = json.loads(PREFS_PATH.read_text())
-    lp      = prefs.setdefault('learned_patterns', {})
-    history = prefs.setdefault('feedback_history', {})
+    with preference_store.locked(PREFS_PATH):
+        prefs = preference_store.load(PREFS_PATH)
+        lp      = prefs.setdefault('learned_patterns', {})
+        history = prefs.setdefault('feedback_history', {})
 
-    preferred_sources = lp.setdefault('preferred_sources', {})
+        preferred_sources = lp.setdefault('preferred_sources', {})
 
-    # Collect already-imported X article IDs to avoid duplicates
-    existing_ids = set()
-    for day in history.values():
-        for item in day.get('saved', []):
-            if item.get('article_id', '').startswith('x_'):
-                existing_ids.add(item['article_id'])
+        # Collect already-imported X article IDs to avoid duplicates
+        existing_ids = set()
+        for day in history.values():
+            for item in day.get('saved', []):
+                if item.get('article_id', '').startswith('x_'):
+                    existing_ids.add(item['article_id'])
 
-    # Write to feedback_history under bootstrap key
-    today     = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    day_key   = f"x_bootstrap_{today}"
-    day_entry = history.setdefault(day_key, {'liked': [], 'disliked': [], 'saved': []})
+        # Write to feedback_history under bootstrap key
+        today     = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        day_key   = f"x_bootstrap_{today}"
+        day_entry = history.setdefault(day_key, {'liked': [], 'disliked': [], 'saved': []})
 
-    new_count = 0
-    for art in articles:
-        if art['article_id'] in existing_ids:
-            continue
+        new_count = 0
+        for art in articles:
+            if art['article_id'] in existing_ids:
+                continue
 
-        day_entry['saved'].append({
-            'article_id': art['article_id'],
-            'title':      art['title'],
-            'source':     art['source'],
-        })
+            day_entry['saved'].append({
+                'article_id': art['article_id'],
+                'title':      art['title'],
+                'source':     art['source'],
+            })
 
-        # Each bookmark = +1 to source score (same weight as a Telegram Save)
-        preferred_sources[art['source']] = preferred_sources.get(art['source'], 0) + 1
-        new_count += 1
+            # Each bookmark = +1 to source score (same weight as a Telegram Save)
+            preferred_sources[art['source']] = preferred_sources.get(art['source'], 0) + 1
+            new_count += 1
 
-    # Update metadata
-    lp['preferred_sources'] = preferred_sources
-    lp['sample_size']       = lp.get('sample_size', 0) + new_count
-    lp['last_updated']      = datetime.now(timezone.utc).isoformat()
+        # Update metadata
+        lp['preferred_sources'] = preferred_sources
+        lp['sample_size']       = lp.get('sample_size', 0) + new_count
+        lp['last_updated']      = datetime.now(timezone.utc).isoformat()
 
-    PREFS_PATH.write_text(json.dumps(prefs, indent=2))
+        preference_store.write(PREFS_PATH,prefs)
 
     skipped = len(articles) - new_count
     print(f"Imported {new_count} new signals. ({skipped} already existed, skipped.)")

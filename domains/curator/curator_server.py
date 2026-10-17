@@ -22,6 +22,7 @@ import html as _html
 BASE_DIR = Path(__file__).parent
 REPO_ROOT = BASE_DIR.parent.parent  # for the Mac-native venv/, not present in Docker
 sys.path.insert(0,str(REPO_ROOT))
+from domains.curator import preferences_store as preference_store
 from domains.curator.research.paths import configured as research_paths
 _RESEARCH_DATA = research_paths().data
 
@@ -41,6 +42,11 @@ app = Flask(__name__,
             static_folder=str(BASE_DIR / 'static'),
             static_url_path='/static')
 CORS(app)
+
+# Default-off internal owner intake; its signed scope is separate from public routes.
+from domains.curator.library_intake_http import install_configured as _install_library_intake
+_install_library_intake(app, environ=os.environ,
+    preferences_path=_DATA_DIR / 'curator_preferences.json', history_path=HISTORY_PATH)
 
 
 def _init_sentry():
@@ -798,40 +804,38 @@ def api_priority_feed_save():
         return jsonify({'success': False, 'message': 'Missing url, title, or source'}), 400
 
     prefs_path = _DATA_DIR / 'curator_preferences.json'
-    if prefs_path.exists():
-        prefs = json.loads(prefs_path.read_text())
-    else:
-        prefs = {'version': '1.0', 'feedback_history': {}}
+    with preference_store.locked(prefs_path):
+        prefs = preference_store.load(prefs_path)
 
-    feedback_history = prefs.setdefault('feedback_history', {})
+        feedback_history = prefs.setdefault('feedback_history', {})
 
-    # Idempotency check — scan all dates for matching URL
-    for day_data in feedback_history.values():
-        for entry in day_data.get('saved', []):
-            if entry.get('url') == url:
-                return jsonify({'success': True, 'already_saved': True})
+        # Idempotency check — scan all dates for matching URL
+        for day_data in feedback_history.values():
+            for entry in day_data.get('saved', []):
+                if entry.get('url') == url:
+                    return jsonify({'success': True, 'already_saved': True})
 
-    # Build article_id from priority_id + url hash
-    url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
-    article_id = f'priority-{priority_id}-{url_hash}' if priority_id else f'priority-feed-{url_hash}'
+        # Build article_id from priority_id + url hash
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+        article_id = f'priority-{priority_id}-{url_hash}' if priority_id else f'priority-feed-{url_hash}'
 
-    today = datetime.now().strftime('%Y-%m-%d')
-    day_bucket = feedback_history.setdefault(today, {'liked': [], 'saved': []})
-    day_bucket.setdefault('saved', []).append({
-        'article_id':     article_id,
-        'url':            url,
-        'title':          title,
-        'source':         source,
-        'score':          float(score) if score is not None else None,
-        'category':       'priority_feed',
-        'timestamp':      datetime.now().isoformat(),
-        'your_words':     '',
-        'saved_from':     'priority_feed',
-        'priority_id':    priority_id,
-        'priority_label': priority_label,
-    })
+        today = datetime.now().strftime('%Y-%m-%d')
+        day_bucket = feedback_history.setdefault(today, {'liked': [], 'saved': []})
+        day_bucket.setdefault('saved', []).append({
+            'article_id':     article_id,
+            'url':            url,
+            'title':          title,
+            'source':         source,
+            'score':          float(score) if score is not None else None,
+            'category':       'priority_feed',
+            'timestamp':      datetime.now().isoformat(),
+            'your_words':     '',
+            'saved_from':     'priority_feed',
+            'priority_id':    priority_id,
+            'priority_label': priority_label,
+        })
 
-    prefs_path.write_text(json.dumps(prefs, indent=2))
+        preference_store.write(prefs_path,prefs)
     print(f'🔖 Priority feed save: [{priority_id}] {title[:60]}')
     return jsonify({'success': True, 'already_saved': False})
 
@@ -859,40 +863,38 @@ def api_priority_feed_feedback():
     storage_key = {'like': 'liked', 'dislike': 'disliked', 'save': 'saved'}[action]
 
     prefs_path = _DATA_DIR / 'curator_preferences.json'
-    if prefs_path.exists():
-        prefs = json.loads(prefs_path.read_text())
-    else:
-        prefs = {'version': '1.0', 'feedback_history': {}}
+    with preference_store.locked(prefs_path):
+        prefs = preference_store.load(prefs_path)
 
-    feedback_history = prefs.setdefault('feedback_history', {})
+        feedback_history = prefs.setdefault('feedback_history', {})
 
-    # Idempotency — scan all dates for matching URL in this action's bucket
-    for day_data in feedback_history.values():
-        for entry in day_data.get(storage_key, []):
-            if entry.get('url') == url:
-                return jsonify({'success': True, 'already_saved': True, 'action': action})
+        # Idempotency — scan all dates for matching URL in this action's bucket
+        for day_data in feedback_history.values():
+            for entry in day_data.get(storage_key, []):
+                if entry.get('url') == url:
+                    return jsonify({'success': True, 'already_saved': True, 'action': action})
 
-    # Build entry
-    url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
-    article_id = f'priority-{priority_id}-{url_hash}' if priority_id else f'priority-feed-{url_hash}'
+        # Build entry
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+        article_id = f'priority-{priority_id}-{url_hash}' if priority_id else f'priority-feed-{url_hash}'
 
-    today = datetime.now().strftime('%Y-%m-%d')
-    day_bucket = feedback_history.setdefault(today, {'liked': [], 'saved': []})
-    day_bucket.setdefault(storage_key, []).append({
-        'article_id':     article_id,
-        'url':            url,
-        'title':          title,
-        'source':         source,
-        'score':          float(score) if score is not None else None,
-        'category':       'priority_feed',
-        'timestamp':      datetime.now().isoformat(),
-        'your_words':     '',
-        'saved_from':     'priority_feed',
-        'priority_id':    priority_id,
-        'priority_label': priority_label,
-    })
+        today = datetime.now().strftime('%Y-%m-%d')
+        day_bucket = feedback_history.setdefault(today, {'liked': [], 'saved': []})
+        day_bucket.setdefault(storage_key, []).append({
+            'article_id':     article_id,
+            'url':            url,
+            'title':          title,
+            'source':         source,
+            'score':          float(score) if score is not None else None,
+            'category':       'priority_feed',
+            'timestamp':      datetime.now().isoformat(),
+            'your_words':     '',
+            'saved_from':     'priority_feed',
+            'priority_id':    priority_id,
+            'priority_label': priority_label,
+        })
 
-    prefs_path.write_text(json.dumps(prefs, indent=2))
+        preference_store.write(prefs_path,prefs)
     icons = {'like': '👍', 'dislike': '👎', 'save': '🔖'}
     print(f'{icons[action]} Priority feed {action}: [{priority_id}] {title[:60]}')
     return jsonify({'success': True, 'already_saved': False, 'action': action})

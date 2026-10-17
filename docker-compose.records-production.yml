@@ -1,3 +1,4 @@
+name: minimoi-records-production
 # OPTIONAL, default-off. Never included by the normal nine-service deployment.
 # All referenced production state/key/network/image must already be provisioned
 # and independently verified. No dev state, keys, grants or bootstrap here.

@@ -23,6 +23,7 @@ Usage:
     python enrich_signals.py --full                            # re-enrich all (ignore existing)
 """
 
+import sys
 import argparse
 import json
 import logging
@@ -30,6 +31,10 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Shared canonical preference transaction, no independent store.
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from domains.curator import preferences_store as preference_store
 
 import requests
 import tweepy
@@ -347,32 +352,33 @@ def update_learned_patterns(signals: list):
         log.warning(f'Preferences file not found: {PREFS_FILE}')
         return
 
-    prefs    = json.loads(PREFS_FILE.read_text())
-    patterns = prefs.setdefault('learned_patterns', {})
-    domains  = patterns.setdefault('content_domains', {})
-    types    = patterns.setdefault('source_types', {})
-    topics   = patterns.setdefault('content_topics', {})
+    with preference_store.locked(PREFS_FILE):
+        prefs = preference_store.load(PREFS_FILE)
+        patterns = prefs.setdefault('learned_patterns', {})
+        domains  = patterns.setdefault('content_domains', {})
+        types    = patterns.setdefault('source_types', {})
+        topics   = patterns.setdefault('content_topics', {})
 
-    def bump(bucket: dict, key: str):
-        if not key:
-            return
-        bucket.setdefault(key, {'like': 0, 'save': 0, 'dislike': 0})
-        bucket[key]['save'] += 1
+        def bump(bucket: dict, key: str):
+            if not key:
+                return
+            bucket.setdefault(key, {'like': 0, 'save': 0, 'dislike': 0})
+            bucket[key]['save'] += 1
 
-    for sig in signals:
-        meta = sig.get('metadata', {})
+        for sig in signals:
+            meta = sig.get('metadata', {})
 
-        lc = meta.get('linked_content')
-        if lc and not lc.get('enrichment_failed'):
-            bump(domains, lc.get('domain'))
-            bump(types,   lc.get('source_type'))
+            lc = meta.get('linked_content')
+            if lc and not lc.get('enrichment_failed'):
+                bump(domains, lc.get('domain'))
+                bump(types,   lc.get('source_type'))
 
-        ta = meta.get('text_analysis')
-        if ta:
-            for topic in (ta.get('topics') or []):
-                bump(topics, topic)
+            ta = meta.get('text_analysis')
+            if ta:
+                for topic in (ta.get('topics') or []):
+                    bump(topics, topic)
 
-    PREFS_FILE.write_text(json.dumps(prefs, indent=2))
+        preference_store.write(PREFS_FILE,prefs)
     log.info(f'learned_patterns updated: {len(domains)} domains, {len(types)} source types, {len(topics)} topics')
 
 

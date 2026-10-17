@@ -1,6 +1,9 @@
 # OPTIONAL explicit opt-in, never part of the ordinary nine-service release.
-# Include with docker-compose.prod.yml AND docker-compose.records-production.yml
-# only after reviewed empty state/key custody/access binding + network admission.
+# Main project: --project-name minimoi -f docker-compose.prod.yml -f THIS_FILE.
+# Backend: separate --project-name minimoi-records-production with ONLY
+# docker-compose.records-production.yml --profile records-production.
+# NEVER combine the backend Compose file into the main project.
+# Admission requires reviewed empty state/key custody/access binding + network.
 # Existing network must be Internal=true with exactly the reviewed membership;
 # external:true references it and does not establish that runtime property.
 # This connects the portal only. It provisions no account, grant, state or key.

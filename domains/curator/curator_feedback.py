@@ -32,6 +32,7 @@ load_dotenv()
 # File paths
 REPO_ROOT = Path(__file__).parent.parent.parent  # domains/curator -> domains -> repo root
 sys.path.insert(0,str(REPO_ROOT))
+from domains.curator import preferences_store as preference_store
 from domains.curator.research.paths import configured as research_paths
 _RESEARCH_DATA = research_paths().data
 # Production sets CURATOR_OUTPUT_PATH into the mounted data/curator folder so
@@ -68,29 +69,15 @@ def get_anthropic_api_key():
 
 def load_preferences():
     """Load existing preferences or create new structure"""
-    if PREFERENCES_FILE.exists():
-        with open(PREFERENCES_FILE, 'r') as f:
-            return json.load(f)
-    return {
-        "version": "1.0",
-        "feedback_history": {},
-        "learned_patterns": {
-            "last_updated": None,
-            "sample_size": 0,
-            "preferred_content_types": {},
-            "preferred_themes": {},
-            "preferred_sources": {},
-            "avoid_patterns": {}
-        }
-    }
+    prefs = preference_store.load(PREFERENCES_FILE)
+    prefs.setdefault('learned_patterns', {'last_updated':None,'sample_size':0,'preferred_content_types':{},'preferred_themes':{},'preferred_sources':{},'avoid_patterns':{}})
+    return prefs
 
 def save_preferences(prefs):
-    """Save preferences atomically so a failed write cannot corrupt feedback."""
-    tmp_path = PREFERENCES_FILE.with_suffix('.json.tmp')
-    with open(tmp_path, 'w') as f:
-        json.dump(prefs, f, indent=2)
-    tmp_path.replace(PREFERENCES_FILE)
+    """CAS-protected atomic save; caller holds complete RMW transaction."""
+    preference_store.write(PREFERENCES_FILE,prefs)
     print(f"💾 Preferences saved to {PREFERENCES_FILE}")
+
 
 def parse_curator_output():
     """Parse curator_output.txt to extract article details"""
@@ -1349,7 +1336,7 @@ def record_feedback(
         'extracted_signals': metadata
     }
 
-    with _FEEDBACK_LOCK:
+    with _FEEDBACK_LOCK, preference_store.locked(PREFERENCES_FILE):
         prefs = load_preferences()
         day_feedback = prefs['feedback_history'].setdefault(today, {
             'liked': [],
