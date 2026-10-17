@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import pkgutil
 import re
+import secrets
 from pathlib import Path
 
 import pytest
@@ -110,13 +111,19 @@ def test_no_page_api_or_asset_response_shows_sample_text(staging):
         assert match is None, (url, match.group(0) if match else None)
 
 
-def test_a_queue_item_with_a_prototype_like_id_is_shown_only_because_the_queue_has_it(load_portal):
+def test_a_queue_item_with_a_prototype_like_id_is_shown_only_because_the_queue_has_it(load_portal, monkeypatch):
+    # Digits in generated conversation IDs are not queue items.
+    counter = iter(range(1, 1000))
+    original_token_hex = secrets.token_hex
+    monkeypatch.setattr(secrets, "token_hex", lambda n=32:
+        f"158{next(counter):09x}" if n == 6 else original_token_hex(n))
     portal = load_portal(items=[{"id": 158, "spec_title": "Real item", "status": "in_build"}])
     body = portal.owner().get("/guild-next/guild/build/queue").get_data(as_text=True)
-    assert "#158" in body or "158" in body
+    assert 'data-item-id="158"' in body
     empty = load_portal(items=[])
     body = empty.owner().get("/guild-next/guild/build/queue").get_data(as_text=True)
-    assert "158" not in body
+    assert "158" in body  # the deterministic conversation metadata has these digits
+    assert 'data-item-id="158"' not in body
 
 
 def test_real_floor_says_master_craftsman_is_off_and_filing_is_off(staging):

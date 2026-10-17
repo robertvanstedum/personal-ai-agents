@@ -108,6 +108,12 @@ def harness(tmp_path):
     status = status.replace("/opt/minimoi/release-status", str(opt / "release-status"))
     status = status.replace("s.st_uid==0", "s.st_uid==os.getuid()")
     status = status.replace("need(os.geteuid()==0)", "need(os.geteuid()==os.getuid())")
+    # Model trusted /opt ancestry only inside this pytest-owned sandbox.
+    # Linux /tmp is deliberately world-writable and is not a production parent.
+    parent_loop = "for p in (root.parent,*root.parent.parents):"
+    assert status.count(parent_loop) == 1
+    status = status.replace(parent_loop, parent_loop +
+        f"\n        if p == Path({str(tmp_path.parent)!r}):break")
     (opt / "scripts/release_status.py").write_text(status)
     for name in ("install_lesen_refresh_cron.sh", "setup_ec2_cron.sh"):
         _write_exe(opt / "scripts" / name, "#!/bin/bash\nexit 0\n")
