@@ -25,7 +25,15 @@ NEW_IMAGE = f"{REGISTRY}/cos-scheduler:agent-a-{TAG}"
 
 DOCKER_STUB = r'''#!/bin/bash
 echo "docker $*" >> "$STUB_LOG"
+# The real Records admission pins the local production Docker socket.
+if [ "$1" = --host ]; then
+  [ "$2" = unix:///var/run/docker.sock ] || exit 1
+  shift 2
+fi
 case "$1" in
+  ps)
+    [ "$2" = -a ] && [ "$3" = --format ] && [ "$4" = '{{.Names}}' ] || exit 1
+    printf 'minimoi-portal\n' ;;
   login) cat >/dev/null; exit 0 ;;
   inspect)
     shift; fmt=""; target=""; targets=()
@@ -38,7 +46,12 @@ case "$1" in
       shift
     done
     case "$fmt" in
-      "") [ "$STUB_AGENT_EXISTS" = 1 ] && exit 0; exit 1 ;;
+      "")
+        if [ "$target" = minimoi-portal ]; then
+          # Existing portal is deliberately unwired: absent Records binding
+          # must be admitted by the REAL reader, never a no-op substitute.
+          printf '[{"Name":"/minimoi-portal","Config":{"Env":[]},"Mounts":[],"NetworkSettings":{"Networks":{}}}]\n'
+        else [ "$STUB_AGENT_EXISTS" = 1 ] && exit 0; exit 1; fi ;;
       *"json .Name"*)
         for target in "${targets[@]}"; do
           if [ "$target" = minimoi-cos-agent-a ]; then
@@ -99,6 +112,20 @@ def harness(tmp_path):
     (opt / "scripts/production_activation.py").write_text(reader.replace(
         "/etc/minimoi/production-activation.json",
         str(tmp_path / "etc/minimoi/production-activation.json"), 1))
+    # Exercise the REAL default-off Records reader. Isolate its host binding,
+    # project fixed /opt paths into this sandbox, and model root identity with
+    # this fixture's UID exactly as for the real status producer below.
+    records = (ROOT / "scripts/rooms/deployment.py").read_text()
+    assert records.count("def read(path=PATH, *, trusted_uid=0):") == 1
+    assert records.count("need(os.geteuid()==0)") == 1
+    records = records.replace("/etc/minimoi/records-production.json",
+        str(tmp_path / "etc/minimoi/records-production.json"), 1)
+    records = records.replace("/opt/minimoi", str(opt))
+    records = records.replace("def read(path=PATH, *, trusted_uid=0):",
+        "def read(path=PATH, *, trusted_uid=os.getuid()):")
+    records = records.replace("need(os.geteuid()==0)", "need(os.geteuid()==os.getuid())")
+    (opt / "scripts/rooms").mkdir()
+    (opt / "scripts/rooms/deployment.py").write_text(records)
     # Use the REAL status producer with isolated paths and fixture ownership.
     # This unprivileged sandbox represents root-owned production files using
     # its own UID; only the three exact root-identity guards are projected.

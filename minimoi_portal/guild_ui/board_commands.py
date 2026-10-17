@@ -12,6 +12,46 @@ _COMMAND = re.compile(_PREFIX + r"(?:create|make|add|save|write|put|pin)\s+(?:me
 _GERMAN = re.compile(r"(?:bitte\s+)?(?:erstelle|schreibe|mach|mache)\s+(?:mir\s+)?(?:einen?\s+)?(?:post[- ]?it|notiz\s+(?:auf|an)\s+(?:dem|das)\s+board)\b\s*:?\s*(?P<text>.*)", re.I | re.S)
 
 
+# One explicit text-first directive may sit among conversational questions.
+# Extract only its stated literal payload, never a previous message/referent.
+_TEXT_FIRST_PREFIX = r"(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?"
+_TEXT_FIRST = re.compile(_TEXT_FIRST_PREFIX + r"(?:write|put|pin|add)\s+(?P<text>.+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:post[- ]?it(?:\s+note)?|board)\b\s*[.!?]*", re.I)
+_OUTSIDE_REFUSAL = re.compile(r"\b(?:not|do\s+not|don['’]t|never|cancel|revoke|no\s+need|not\s+now|if|unless|whether|maybe|perhaps|example|hypothetical|suppose|imagine|yesterday|previously|said|says|asked|told|wrote|reported|quoted|document|transcript|translate|summari[sz]e|analy[sz]e)\b", re.I)
+_QUOTED_OR_CODE = re.compile(r'["`“”]|(?<!\w)[\'‘]|[\'’](?!\w)|(?m:^[ \t]*(?:>|\t)|^ {4})')
+
+
+def _text_first_request(text):
+    # Unsupported quoted/code/negative framing is DATA, not authorization.
+    if _QUOTED_OR_CODE.search(text):return None
+    clauses=[value.strip()for value in re.split(r'(?<=[.!?])\s+|[\r\n]+',text)if value.strip()]
+    payloads=[];outside=[]
+    for clause in clauses:
+        match=_TEXT_FIRST.fullmatch(clause)
+        if match:payloads.append(match.group('text').strip())
+        else:
+            other=_COMMAND.fullmatch(clause)or _GERMAN.fullmatch(clause)
+            if other:payloads.append(other.group('text').strip())
+            else:outside.append(clause)
+    if not any(_TEXT_FIRST.fullmatch(clause)for clause in clauses):return None
+    if _OUTSIDE_REFUSAL.search(' '.join(outside)):return None
+    # Two differing explicit requests cannot be collapsed to an inferred one.
+    if len(set(payloads))!=1:return ''
+    payload=payloads[0]
+    # Do not reinterpret unmarked story/document paragraphs as fresh commands.
+    # The observed turn surrounds its explicit write with ordinary questions
+    # and a matching 'Just say ...' confirmation, not arbitrary source prose.
+    for clause in outside:
+        if re.fullmatch(r'(?:how|what|where|when|why|can|could|would|is|are|do|does)\b[^\n]{0,299}\?',clause,re.I):continue
+        if re.fullmatch(r'(?:okay|ok|yes|please|thank you)[.!]*',clause,re.I):continue
+        say=re.fullmatch(r'(?:just\s+)?say\s+(.+)',clause,re.I)
+        if say:
+            normalize=lambda value:' '.join(value.rstrip('.!?').casefold().split())
+            if normalize(say[1])==normalize(payload):continue
+            return ''
+        return None
+    return payload
+
+
 def parse(text):
     """Return literal payload only for a direct unquoted command, else None."""
     if not isinstance(text, str) or len(text) > 2000:
@@ -19,7 +59,7 @@ def parse(text):
     if re.fullmatch(_PREFIX + r'(?:put|pin|save)\s+(?:this|that|it)\s+(?:on|to)\s+(?:the\s+|my\s+)?board[.!?]?', text.strip(), re.I):
         return ''  # no guessed referent: ask for the actual note text
     match = _COMMAND.fullmatch(text.strip()) or _GERMAN.fullmatch(text.strip())
-    return match.group('text').strip() if match else None
+    return match.group('text').strip() if match else _text_first_request(text)
 
 
 def execute(text, *, board, conversation, principal, turn_key, author=None):

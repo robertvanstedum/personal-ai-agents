@@ -39,7 +39,7 @@ export function initMcVoice(page) {
   onChange(paintExport);
 
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
-  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null;
+  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
 
   let visualState = 'idle', pressed = false;
   const draw = () => {
@@ -70,7 +70,7 @@ export function initMcVoice(page) {
   // Ends the attempt in every state: still loading the code, still asking the provider, connected, or working on a turn.
   function stop(reason, { quiet = false } = {}) {
     const privateStop=['private','record_unknown','minimized','pagehide'].includes(reason);
-    if(privateStop){transcriptEnding=null;const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';}
+    if(privateStop){transcriptEpoch++;transcriptCancel?.();transcriptCancel=null;transcriptReveal=null;transcriptPaint=null;transcriptEnding=null;const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';}
     if(ending)return ending;
     endedAttempt=session;
     transcriptEnding=['user_ended','limit'].includes(reason)?session:null;
@@ -81,6 +81,7 @@ export function initMcVoice(page) {
     const finish=()=>{
       if(session!==stoppedSession)return;
       transcriptEnding=null;
+      if(['user_ended','limit'].includes(reason))transcriptReveal?.();
       for(const selector of ['[data-mc-voice-provider]','[data-mc-voice-transcript-choice]']){const node=$(selector);if(node)node.disabled=false;}
       paint(false);
       if(!quiet&&!showingError)say(WORDS[reason]||'Voice ended. Agent work already accepted may still finish.',{loud:Boolean(WORDS[reason])});
@@ -168,16 +169,48 @@ export function initMcVoice(page) {
     const cid=page.conversation?.id;
     if (!cid) {stop('failed',{quiet:true});say('Open a saved conversation before using voice.',{error:true});return;}
     const selector=$('[data-mc-voice-provider]'),choice=$('[data-mc-voice-transcript-choice]');
-    const keepTranscript=Boolean(choice?.checked);
+    transcriptCancel?.();
+    const displayEpoch=++transcriptEpoch;
+    let latestTurns=[],afterEnd=false,savedText='',savedRead=null;
+    const displayAllowed=()=>transcriptEpoch===displayEpoch&&(current()||endedAttempt===mine)&&!live.off&&live.known&&page.conversation?.id===cid;
+    const paintTranscript=()=>{
+      if(!displayAllowed())return;
+      const shown=afterEnd||Boolean(choice?.checked),box=$('[data-mc-voice-transcript]');
+      $('[data-mc-voice-transcript-text]').textContent=afterEnd?(savedText||'Loading saved voice transcript…'):shown?latestTurns.map(t=>`${t.speaker==='user'?'You':'Voice'}: ${t.text}${t.completed?'':' [in progress / partial]'}`).join('\n\n'):'';
+      box.hidden=!shown||(!afterEnd&&latestTurns.length===0);
+    };
+    const revealSaved=()=>{
+      if(!displayAllowed())return;
+      afterEnd=true;paintTranscript();
+      if(savedRead)return savedRead;
+      const aborter=new AbortController();transcriptCancel=()=>aborter.abort();
+      const timeout=setTimeout(()=>aborter.abort(),5000);
+      savedRead=(async()=>{
+        try{
+          const response=await fetch(`${api}/conversations/${encodeURIComponent(cid)}/voice-transcript`,
+            {credentials:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'text/plain'},signal:aborter.signal});
+          if(!response.ok||!/^text\/plain(?:;|$)/i.test(response.headers.get('content-type')||''))throw new Error('saved_transcript_unavailable');
+          // This fixed owner-authorized export is server-bounded to1MiB. Never
+          // paint HTML, error bodies or the browser buffer as a saved receipt.
+          const text=await response.text();
+          if(!text||text.length>1100000)throw new Error('saved_transcript_bound');
+          if(displayAllowed()){savedText=text;paintTranscript();}
+        }catch(_){
+          if(displayAllowed()){savedText='Saved voice transcript is unavailable here. The download link can be checked later; no complete transcript is verified.';paintTranscript();}
+        }finally{clearTimeout(timeout);}
+      })();
+      return savedRead;
+    };
+    transcriptPaint=paintTranscript;transcriptReveal=revealSaved;
     let terminal=false,failed=false;
-    selector.disabled=true;choice.disabled=true;
+    selector.disabled=true;choice.disabled=false;
     $('[data-mc-voice-transcript]').hidden=true;$('[data-mc-voice-transcript-text]').textContent='';
     say('Connecting voice…');
     try {
       const {RealtimeVoiceController}=await import(`${api}/mc/voice/static/realtime-voice-controller.js`);
       if (!current()) return;
       const c=new RealtimeVoiceController({managedBootstrap:{sessionUrl:managed.session_url},openingInstruction:null,
-        requestHeaders:headers,includeTranscriptAfterEnd:keepTranscript,
+        requestHeaders:headers,includeTranscriptAfterEnd:true,
         onStateChange:state=>{
           if(!current())return;
           if(state==='active'&&!terminal&&!failed){setPhase('listening');say('Listening…');}
@@ -185,6 +218,7 @@ export function initMcVoice(page) {
           if(state==='ended'){
             terminal=true;endedAttempt=mine;controller=null;starting=false;paint(false);
             selector.disabled=false;choice.disabled=false;
+            revealSaved();
             if(!showingError)say('Voice ended. Agent work already accepted may still finish.');
           }
         },
@@ -215,16 +249,14 @@ export function initMcVoice(page) {
           }
         },
         onTranscriptUpdate:turns=>{
-          if(!current()||live.off||!live.known||page.conversation?.id!==cid||!keepTranscript)return;
-          const box=$('[data-mc-voice-transcript]');
-          $('[data-mc-voice-transcript-text]').textContent=turns.map(t=>`${t.speaker==='user'?'You':'Voice'}: ${t.text}${t.completed?'':' [in progress / partial]'}`).join('\n\n');
-          box.hidden=turns.length===0;
+          if(!current()||!displayAllowed())return;
+          latestTurns=turns;
+          paintTranscript();
         },
         onFinalize:result=>{
-          if (!(current()||transcriptEnding===mine)||live.off||!live.known||page.conversation?.id!==cid||!keepTranscript)return;
-          const turns=(result.turns||[]).map(t=>`${t.speaker==='user'?'You':'Voice'}: ${t.text}${t.completed?'':' [partial]'}`);
-          $('[data-mc-voice-transcript-text]').textContent=turns.join('\n\n');
-          $('[data-mc-voice-transcript]').hidden=turns.length===0;
+          if (!(current()||transcriptEnding===mine||endedAttempt===mine)||!displayAllowed())return;
+          latestTurns=result.turns||[];
+          paintTranscript();
         }});
       controller={stop:reason=>c.endSession(reason)};
       await c.startSession({provider:selector.value,conversation_id:cid});
@@ -232,9 +264,10 @@ export function initMcVoice(page) {
     finally {if(current())starting=false;if(!busy()){selector.disabled=false;choice.disabled=false;}}
   }
 
+  $('[data-mc-voice-transcript-choice]')?.addEventListener?.('change',()=>transcriptPaint?.());
   button.addEventListener('click', () => { if (busy()) stop('user_ended'); else start(); });
   document.addEventListener('guild:mic-claim', (e) => { if (e.detail?.who !== 'voice' && busy()) stop('user_ended', { quiet: true }); });
-  onChange(() => { if (live.off || !live.known) {if(busy())stop(live.off?'private':'record_unknown');const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';} });
+  onChange(() => { if (live.off || !live.known) {transcriptEpoch++;transcriptCancel?.();transcriptCancel=null;transcriptReveal=null;transcriptPaint=null;if(busy())stop(live.off?'private':'record_unknown');const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';} });
   new MutationObserver(() => { if (busy() && panelMode() === 'pill') stop('minimized'); }).observe(document.body, { attributes: true, attributeFilter: ['data-mc-mode'] });
   window.addEventListener('pagehide', () => { if (busy()) stop('pagehide', { quiet: true }); });
 

@@ -20,8 +20,9 @@ def _pins():
 
 def test_every_cos_dependency_is_pinned_exactly_to_the_measured_production_set():
     pins = _pins()
-    # The measured 51-package baseline plus the reviewed server-sideband extra.
-    assert len(pins) == 52
+    # The measured 51-package baseline plus the reviewed server-sideband and register YAML extras.
+    assert len(pins) == 53
+    assert pins["pyyaml"] == "6.0.3"
     assert pins["websockets"] == "15.0.1"
     # the ten packages a fresh build used to move, held at what production runs
     assert {k: pins[k] for k in ("openai", "pydantic", "pydantic-core", "boto3", "botocore", "cryptography",
