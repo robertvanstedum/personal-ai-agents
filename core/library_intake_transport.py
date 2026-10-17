@@ -27,8 +27,21 @@ def configured(environ):
     if environ.get('MINIMOI_LIBRARY_INTAKE')!='1':return None
     environment=environ.get('MINIMOI_LIBRARY_INTAKE_ENV');owner=environ.get('MINIMOI_LIBRARY_INTAKE_OWNER');secret=environ.get('PORTAL_SECRET_KEY')
     need(environment in ORIGINS and owner=='robert','library_profile_required')
-    need(isinstance(secret,str)and 32<=len(secret)<=4096,'library_shared_secret_required')
-    return Profile(environment,owner,hmac.digest(secret.encode(),PURPOSE,'sha256'))
+    # Curator may hold ONLY the purpose-derived capability, never the portal
+    # master Flask session-signing secret. No new key is generated here.
+    derived=environ.get('MINIMOI_LIBRARY_INTAKE_DERIVED_KEY')
+    master=None
+    if secret is not None:
+        need(isinstance(secret,str)and 32<=len(secret)<=4096,'library_shared_secret_required')
+        master=hmac.digest(secret.encode(),PURPOSE,'sha256')
+    if derived is not None:
+        need(isinstance(derived,str)and re.fullmatch('[a-f0-9]{64}',derived)is not None,'library_derived_key_invalid')
+        key=bytes.fromhex(derived)
+        need(master is None or hmac.compare_digest(key,master),'library_key_sources_disagree')
+    else:
+        need(master is not None,'library_shared_secret_required')
+        key=master
+    return Profile(environment,owner,key)
 
 def operation(owner,conversation,note):
     need(all(valid(v,160)for v in (owner,conversation,note)),'library_source_identity_required')
