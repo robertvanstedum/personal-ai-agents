@@ -268,9 +268,14 @@ def rooms():
 
 
 @owner_page
-def floor():
+def floor(*, embedded=False, domain=None):
     from .conversations import ConversationStoreUnavailable, conversations_of
-    ctx = _context("floor", "Build", "Shop floor")
+    from minimoi_portal.companion import DOMAINS
+    domain_label = next((v for k, v in DOMAINS.items() if k.rsplit("/", 1)[-1] == domain), None) if embedded else None
+    ctx = _context("floor", domain_label or "Build", domain_label or "Shop floor")
+    if embedded:
+        ctx["urls"]["floor"] = url_for(".companion", domain=domain)
+        ctx["page_json"]["urls"]["floor"] = url_for(".companion", domain=domain)
     view = "archived" if request.args.get("view") == "archived" else "active"
     principal = (cfg()["current_user"]() or {}).get("username") or "owner"
     try:
@@ -283,14 +288,30 @@ def floor():
             page_number = next((i // 10 for i, row in enumerate(rows) if row["id"] == current_id), 0)
         page_number = max(0, min(page_number, max(0, (len(rows) - 1) // 10)))
         def history_url(index):
-            return url_for(".floor", view=view, history_page=index, c=(ctx.get("conversation") or {}).get("id"))
+            return url_for(".companion" if embedded else ".floor", **({"domain": domain} if embedded else {}), view=view, history_page=index, c=(ctx.get("conversation") or {}).get("id"))
         conv_list = {"state": "ok", "rows": rows[page_number * 10:(page_number + 1) * 10], "unreadable": store.unreadable,
                      "newer": history_url(page_number - 1) if page_number else None,
                      "older": history_url(page_number + 1) if (page_number + 1) * 10 < len(rows) else None}
     except ConversationStoreUnavailable:
         conv_list = {"state": "unavailable", "rows": [], "unreadable": 0}
     return render_template("guild_floor/floor.html", floor_cfg=ctx["layout"]["floor"], conv_list=conv_list,
-                           conv_view=view, topic_link=_topic_link(ctx, principal), **ctx)
+                           conv_view=view, topic_link=_topic_link(ctx, principal), bare=embedded, embedded=embedded, **ctx)
+
+
+@owner_page
+def companion(domain=None):
+    """Same conversation and access checks, presented inside the portal only."""
+    from flask import make_response, abort
+    from . import _csp
+    from minimoi_portal.companion import DOMAINS
+    if os.environ.get("MINIMOI_MC_EVERYWHERE") != "1":
+        abort(404)
+    if domain is not None and domain not in {k.rsplit("/", 1)[-1] for k in DOMAINS}:
+        abort(404)
+    response = make_response(floor(embedded=True, domain=domain))
+    response.headers['Content-Security-Policy'] = _csp().replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    return response
 
 
 def _topic_link(ctx, principal):

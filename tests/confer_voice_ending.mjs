@@ -11,7 +11,7 @@ for(const confirmed of [true,false]){
  const gate=new Promise(r=>endResolve=r);
  const node=id=>nodes[id]??=(id==='voice-mode'?{value:'realtime',options:[{value:'realtime'},{value:'chained'}]}:
   {disabled:false,value:'',textContent:'',classList:{toggle(){}},setAttribute(){},handlers:{},addEventListener(k,fn){this.handlers[k]=fn;}});
- const sandbox={document:{getElementById:node,querySelector:()=>null},window:{addEventListener(){}},
+ const sandbox={document:{getElementById:node,querySelector:()=>null,addEventListener(){}},window:{addEventListener(){}},
   ConferVoiceController:class{async availableProviders(){return{providers:[{provider:'openai'}]}}async start(){legacyStarts++;}stop(){}},
   RealtimeVoiceController:class{
    constructor(o){opts=o;}

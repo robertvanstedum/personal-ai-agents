@@ -1,0 +1,20 @@
+<link rel="stylesheet" href="{{ url_for('guild_ui_next.asset', filename='tokens.css') }}">
+<link rel="stylesheet" href="/static/companion.css">
+<section id="minimoi-companion" aria-label="Master Craftsman">
+  <button type="button" class="companion-launch" aria-expanded="false" aria-controls="companion-dialog">
+    <img src="/static/guild/guild-mc-portrait.jpg" width="40" height="40" alt=""><span>MC<span class="companion-sr"> — open Master Craftsman</span></span>
+  </button>
+  <p class="companion-open-error" role="status" hidden></p>
+  <dialog id="companion-dialog" aria-labelledby="companion-title">
+    <header class="companion-header">
+      <img src="/static/guild/guild-mc-portrait.jpg" width="32" height="32" alt="">
+      <div><strong id="companion-title">Master Craftsman</strong><span>{{ companion_domain }} · your ongoing conversation</span></div>
+      <a href="/guild-next/guild/build" class="companion-full" aria-label="Open full chat">↗</a>
+      <button type="button" class="companion-close" aria-label="Minimize Master Craftsman">×</button>
+    </header>
+    <p class="companion-loading" role="status">Opening your conversation…</p>
+    <iframe title="Conversation with Master Craftsman" data-src="/guild-next/guild/companion/{{ companion_key }}" allow="microphone 'self'" hidden></iframe>
+    <p class="companion-fallback" hidden>Chat is unavailable here. <a href="/guild-next/guild/build">Open full chat</a> or <button type="button" class="companion-retry">retry</button>.</p>
+  </dialog>
+</section>
+<script defer src="/static/companion.js"></script>

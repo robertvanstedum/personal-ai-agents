@@ -181,6 +181,8 @@ def _make_blueprint(name: str, routes) -> Blueprint:
     bp.register_error_handler(Exception, _api_error)
     page_rules = {
         "floor": [("/guild/build", "floor", pages.floor),
+                  ("/guild/companion", "companion", pages.companion),
+                  ("/guild/companion/<domain>", "companion", pages.companion),
                   # The mount's own root is the Guild home, paired with Curator
                   # (Guild 1.1 slice 1); it used to redirect to the Shop floor.
                   ("/", "home", pages.home), ("/guild", "guild_home", pages.home)],

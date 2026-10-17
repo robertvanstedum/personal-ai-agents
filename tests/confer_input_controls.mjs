@@ -81,7 +81,7 @@ function rig({beforeStart=async()=>{}}={}){
  const gate=deferred(),nodes={};let starts=0;
  const node=id=>nodes[id]??=(id==='voice-mode'?{value:'realtime',options:[{value:'realtime'},{value:'chained'}]}:
    {disabled:false,value:'',classList:{toggle(){}},setAttribute(){},handlers:{},addEventListener(k,fn){this.handlers[k]=fn;}});
- const sandbox={document:{getElementById:node,querySelector:()=>null},window:{addEventListener(){}},
+ const sandbox={document:{getElementById:node,querySelector:()=>null,addEventListener(){}},window:{addEventListener(){}},
    ConferVoiceController:class{availableProviders(){return gate.promise;}stop(){}},
    RealtimeVoiceController:class{async startSession(){starts++;}endSession(){}},
    bindConferDictation:()=>({stop:async()=>{},setAvailable(){}}),conferVoiceAvailability,appendMsg(){},setTimeout,Blob,URL};
