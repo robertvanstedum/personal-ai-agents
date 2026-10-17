@@ -19,6 +19,8 @@ if [[ -n "$ACTIVATION_ENV" ]]; then
   done <<< "$ACTIVATION_ENV"
 fi
 
+python3 /opt/minimoi/scripts/release_status.py begin "$MINIMOI_IMAGE_TAG" portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway
+
 echo "=== Authenticating with ECR ==="
 aws ecr get-login-password --region ${REGION} | \
   docker login --username AWS --password-stdin ${ECR}
@@ -34,3 +36,5 @@ docker image prune -f
 
 echo "=== Container status ==="
 docker-compose -f ${COMPOSE} ps
+
+python3 /opt/minimoi/scripts/release_status.py finish "$MINIMOI_IMAGE_TAG" portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway

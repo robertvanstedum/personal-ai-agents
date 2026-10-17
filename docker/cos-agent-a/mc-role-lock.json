@@ -1,10 +1,10 @@
 {
   "format": "minimoi-owner-role-lock/1",
   "approved_by": "Robert",
-  "approved_on": "2026-10-14",
+  "approved_on": "2026-10-16",
   "sources": {
     "MASTER_CRAFTSMAN_JOB_DESCRIPTION.md": "0a58a629e1dc02e904124a4ae51ab9bdc387df84872724a1b969007a4fb9256c",
-    "MASTER_CRAFTSMAN_PERSONA.md": "83997b2c175296c2c7516787204939e3c90cf7be659086f083071673fd6ddcfd",
+    "MASTER_CRAFTSMAN_PERSONA.md": "f07078f5c913323f1098381faf44d38f77223258e48498ddd0552f53042c4f1b",
     "MASTER_CRAFTSMAN_WORKING_AGREEMENT_2026-10-12.md": "8c3fe02de7ca5cbd43cfd505737dc2241211a7777e82ca57b6ecc1151be99d4e"
   }
 }

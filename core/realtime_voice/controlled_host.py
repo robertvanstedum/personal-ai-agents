@@ -11,7 +11,7 @@ from .controlled_session import ControlledSession, Journal, SessionRefused
 
 
 def create_host_blueprint(*, name, domain, guard, conversation, instructions,
-                          dispatch, provider_factory, environ, budget=None, canonical_command_match=None):
+                          dispatch, provider_factory, environ, budget=None, canonical_command_match=None, on_transcript=None):
     """Register only behind the host's explicit managed-realtime feature gate.
 
     `conversation(principal, requested)` must refuse missing/foreign/archived or
@@ -41,7 +41,7 @@ def create_host_blueprint(*, name, domain, guard, conversation, instructions,
         return ControlledSession(journal=journal, budget=ledger,
             provider=provider_factory(), principal=principal, conversation=canonical,
             allowance_micro=allowance, dispatch=dispatch, domain=domain,
-            canonical_command_match=canonical_command_match)
+            canonical_command_match=canonical_command_match, on_transcript=on_transcript)
 
     return blueprint(name=name, guard=guard, build_session=make_session,journal=journal,surface=domain,
                      build_config=lambda principal: configuration(instructions(principal)))

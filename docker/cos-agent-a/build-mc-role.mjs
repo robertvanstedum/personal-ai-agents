@@ -13,6 +13,14 @@ if (lock.format !== 'minimoi-owner-role-lock/1' || lock.approved_by !== 'Robert'
 const sections = names.map(name => {
   const bytes = fs.readFileSync(path.join(docsPath, name));
   if (bytes.length > 16384 || sha(bytes) !== lock.sources[name]) throw new Error('approved_role_changed');
+  if (name === 'MASTER_CRAFTSMAN_PERSONA.md') {
+    return `### Personality source reference: ${name}\nSHA-256: ${lock.sources[name]}\n` +
+      `Canonical reviewed source: /opt/minimoi/cos-agent-a/owner-role/${name}\n` +
+      `SOUL.md owns standing personality; this AGENTS policy owns operational instructions.\n` +
+      `Personality text is adopted separately into an owned SOUL block, preserving adaptations.\n` +
+      `Defer conflicting earlier personality preferences in these role documents to the actually adopted SOUL persona.\n` +
+      `A source pointer/hash or loaded role is not persona adoption, acknowledgement, access or acceptance.\n`;
+  }
   return `### Canonical source: ${name}\nSHA-256: ${lock.sources[name]}\n\n${bytes.toString('utf8')}`;
 });
 const version = sha(JSON.stringify(lock));

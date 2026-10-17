@@ -1,0 +1,35 @@
+{
+  "format": "minimoi.authored-release-notes/1",
+  "version": "1.2",
+  "capabilities": [
+    {
+      "id": "owner-board-commands",
+      "summary": "Explicit owner Board post-it commands use platform write receipts and replay-safe conversation-scoped identities.",
+      "services": [
+        "portal"
+      ]
+    },
+    {
+      "id": "bilingual-managed-voice",
+      "summary": "Managed Guild MC and CoS voice share concise bilingual Austrian English/German guidance and truthful operation reporting.",
+      "services": [
+        "portal",
+        "cos-scheduler"
+      ]
+    },
+    {
+      "id": "mc-live-transcript",
+      "summary": "Guild MC managed voice offers an optional live partial transcript while keeping Dictate separate.",
+      "services": [
+        "portal"
+      ]
+    },
+    {
+      "id": "release-awareness",
+      "summary": "MC can read timestamped local deployment observations and commit-bound authored release notes when asked.",
+      "services": [
+        "portal"
+      ]
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 """Private draft: controlled Realtime media session, never a second agent backend.
 
 Only a trusted provider sideband feeds observe(). HTTP/browser events must not
-feed it. Transcripts stay in memory; durable journal stores hashes and private
+feed it. Transcripts stay in memory unless a trusted optional host retention callback keeps
+scoped platform notes. The durable control journal stores hashes and private
 bounded tool receipts. Existing VoiceBudget owns the shared atomic daily ledger.
 No reservation or usage estimate is a guaranteed billing cap.
 """
@@ -14,6 +15,7 @@ import re
 import threading
 import time
 import uuid
+from core.realtime_voice.timing import VoiceTiming
 
 MODEL = "gpt-realtime-2.1"
 TOOLS = frozenset({"consult_cos_agent", "save_cos_note"})
@@ -249,11 +251,17 @@ class ControlledSession:
     Native actions already accepted cannot be undone by barge-in/End.
     """
     def __init__(self, *, journal, budget, provider, principal, conversation,
-                 allowance_micro, dispatch, now=time.monotonic, max_seconds=900, domain="cos", canonical_command_match=None):
+                 allowance_micro, dispatch, now=time.monotonic, max_seconds=900, domain="cos", canonical_command_match=None, on_transcript=None):
         if type(max_seconds) is not int or not 1 <= max_seconds <= 900:
             raise SessionRefused("Invalid duration")
         if domain not in {"cos","mc"}:
             raise SessionRefused("Invalid voice domain")
+        if on_transcript is not None and not callable(on_transcript):
+            raise SessionRefused("Transcript retention callback unavailable")
+        self.on_transcript = on_transcript
+        self.transcript_digests = {}
+        self.transcript_responses = {}
+        self.transcript_retention_failed = False
         self.canonical_command_match = canonical_command_match
         self.canonical_started = set()
         self.canonical_committed = set()
@@ -261,6 +269,7 @@ class ControlledSession:
         self.response_queue = []
         self.response_inflight = None
         self.response_active_id = None
+        self.timing = VoiceTiming(clock=now)
         self.domain = domain
         self.journal,self.budget,self.provider = journal,budget,provider
         self.principal,self.conversation,self.dispatch = principal,conversation,dispatch
@@ -283,18 +292,30 @@ class ControlledSession:
         # No guessed fixed-minute speech rate. Allowance is operator-selected
         # and labelled estimate; retain it on any uncertain create/attach.
         self.sid = self.journal.create(self.principal,self.conversation,self.allowance,self.domain)
+        self.timing.bind(self.sid)
         try:
             self.reservation = self.budget.reserve(kind="realtime_controlled_session",domain=self.domain,principal=self.principal,amount_micro=self.allowance)
             self.provider_attempted = True
+            self.timing.emit("provider_create_start")
             answer,call_id = self.provider.create(sdp,config,digest(self.principal))
+            self.timing.emit("provider_create_end")
             self.call_id = identifier(call_id)
             self.journal.provider_identity(self.sid,self.call_id)
+            self.timing.emit("sideband_attach_start")
+            # Optional observational hook; failure must never alter control.
+            try:
+                hook = getattr(self.provider,"set_timing_observer",None)
+                if callable(hook):hook(self.timing.emit)
+            except Exception:
+                pass
             self.provider.attach(call_id,self.observe)
+            self.timing.emit("sideband_attach_end")
             with self.lock:
                 if self.closed:
                     raise SessionRefused("Voice ended while connecting")
                 self.started = self.now()
                 self.journal.state(self.sid,"active")
+                self.timing.emit("session_active")
             return {"session_id":self.sid,"provider":"openai","model":MODEL,"sdp":answer,"budget_label":"reserved allowance, not a bill or guaranteed spend limit"}
         except Exception:
             # A valid Location may exist even if the provider rejects SDP.
@@ -335,9 +356,11 @@ class ControlledSession:
                         self.canonical_committed.add(item)
                     if self.pending_item is not None and (self.canonical_command_match is None or self.pending_item not in self.response_sent):
                         raise SessionRefused("Overlapping response correlation")
+                    self.timing.emit("input_committed", item=item)
                     self.latest_item = self.pending_item = item
                     self.pending_generation = self.generation
                     if self.canonical_command_match is None:
+                        self.timing.emit("response_requested", item=item)
                         self.provider.send({"type":"response.create"})
                     else:
                         self._canonical_ready(item)
@@ -358,10 +381,15 @@ class ControlledSession:
                     item = identifier(event["item_id"])
                     text = event["transcript"]
                     if not isinstance(text,str) or not 0 < len(text.encode()) <= 16000:
+                        if self.on_transcript is not None: self.transcript_retention_failed = True
                         raise SessionRefused("Transcript unavailable")
                     if item in self.texts and self.texts[item] != text:
+                        if self.on_transcript is not None: self.transcript_retention_failed = True
                         raise SessionRefused("Transcript conflict")
+                    self.timing.emit("asr_final", item=item)
                     self.texts[item] = text
+                    if self.on_transcript is not None:
+                        self._retain_transcript("user", item, 0, text, False)
                     self._usage("transcription:"+item,transcription_micro(event["usage"]))
                     if self.canonical_command_match is not None and not self.closed:
                         self._canonical_ready(item)
@@ -372,6 +400,22 @@ class ControlledSession:
                     rid = identifier(response["id"])
                     if rid not in self.responses:
                         raise SessionRefused("Uncorrelated response")
+                    if self.on_transcript is not None:
+                        from .transcripts import assistant_entries
+                        try:
+                            entries = assistant_entries(response)
+                            fingerprint = digest(json.dumps(entries, ensure_ascii=False))
+                            if rid in self.transcript_responses:
+                                if self.transcript_responses[rid] != fingerprint:
+                                    raise SessionRefused("Transcript retention conflict")
+                            else:
+                                interrupted = self.responses[rid][1] != self.generation
+                                for item, index, text, partial in entries:
+                                    self._retain_transcript("assistant", identifier(item), index, text, partial or interrupted)
+                                self.transcript_responses[rid] = fingerprint
+                        except (TypeError, ValueError, VoiceBudgetError):
+                            self.transcript_retention_failed = True
+                            raise SessionRefused("Transcript retention unavailable") from None
                     self._usage("response:"+rid,response_micro(response["usage"]))
                     if self.closed:
                         return
@@ -386,6 +430,27 @@ class ControlledSession:
                     raise SessionRefused("Provider control error")
             except (KeyError,TypeError,ValueError,VoiceBudgetError):
                 self.end("control_uncertain")
+
+    def _retain_transcript(self, role, item, index, text, partial):
+        # Only observe() calls this from a trusted server sideband. Never HTTP/browser input.
+        key = (role, item, index)
+        fingerprint = digest(json.dumps([text, partial], ensure_ascii=False))
+        if key in self.transcript_digests:
+            if self.transcript_digests[key] != fingerprint:
+                self.transcript_retention_failed = True
+                raise SessionRefused("Transcript retention conflict")
+            return
+        if len(self.transcript_digests) >= 512:
+            self.transcript_retention_failed = True
+            raise SessionRefused("Transcript retention limit")
+        try:
+            result = self.on_transcript(self.sid, self.conversation, role, item, index, text, partial)
+            if not isinstance(result, dict) or result.get("saved") is not True:
+                raise SessionRefused("Transcript retention unavailable")
+        except Exception:
+            self.transcript_retention_failed = True
+            raise SessionRefused("Transcript retention unavailable") from None
+        self.transcript_digests[key] = fingerprint
 
     def _canonical_ready(self,item):
         # Optional MC host hook only. No hook preserves existing CoS latency.
@@ -410,11 +475,14 @@ class ControlledSession:
                 self.journal.finish(self.sid,key,"cancelled")
                 return
         try:
+            self.timing.emit("dispatch_start", item=item, operation=operation)
             receipt=self.dispatch("consult_cos_agent",text,self.conversation,operation)
+            self.timing.emit("dispatch_end", item=item, operation=operation)
             if not isinstance(receipt,dict) or not isinstance(receipt.get("reply"),str):
                 raise SessionRefused("Command receipt unavailable")
             state=self.journal.finish(self.sid,key,"completed",receipt)
         except Exception:
+            self.timing.emit("dispatch_failed", item=item, operation=operation)
             state,receipt="uncertain",None
             self.journal.finish(self.sid,key,state)
         with self.lock:
@@ -448,6 +516,7 @@ class ControlledSession:
             item,generation=self.response_queue.pop(0)
             if generation != self.generation or item != self.latest_item:continue
             self.response_inflight=(item,generation)
+            self.timing.emit("response_requested", item=item)
             self.provider.send({"type":"response.create"})
             return
 
@@ -485,11 +554,14 @@ class ControlledSession:
                 self.journal.finish(self.sid,call,"cancelled")
                 return
         try:
+            self.timing.emit("dispatch_start", item=item, operation=operation)
             receipt = self.dispatch(name,text,self.conversation,operation)
+            self.timing.emit("dispatch_end", item=item, operation=operation)
             if not isinstance(receipt,dict) or not isinstance(receipt.get("reply"),str):
                 raise SessionRefused("Agent receipt unavailable")
             state = self.journal.finish(self.sid,call,"completed",receipt)
         except Exception:
+            self.timing.emit("dispatch_failed", item=item, operation=operation)
             state,receipt = "uncertain",None
             self.journal.finish(self.sid,call,state)
         with self.lock:
@@ -507,6 +579,7 @@ class ControlledSession:
         with self.lock:
             if self.closed:
                 return dict(self.end_receipt) if self.end_receipt is not None else {"session_id":self.sid,"termination_confirmed":False,"journal_confirmed":False,"native_actions_cancelled":False,"reason":"recovery_required"}
+            self.timing.emit("end_start")
             self.closed = True
             self.generation += 1
             self.waiting.clear()
@@ -529,6 +602,9 @@ class ControlledSession:
             receipt = {"session_id":self.sid,"reason":safe_reason,"termination_confirmed":confirmed,
                        "journal_confirmed":journal_confirmed,"native_actions_cancelled":False,
                        "provider_attempted":self.provider_attempted}
+            if self.on_transcript is not None:
+                receipt.update(transcript_retention="failed" if self.transcript_retention_failed else "kept_observed_entries",
+                               transcript_entries=len(self.transcript_digests), transcript_may_be_incomplete=True)
             if self.sid:
                 try:
                     receipt = self.journal.record_end(self.sid,receipt,self.call_id)
@@ -536,4 +612,5 @@ class ControlledSession:
                     receipt = dict(receipt,journal_confirmed=False)
             # No rebate on normal End: incomplete provider usage may exist.
             self.end_receipt = receipt
+            self.timing.emit("end_confirmed" if confirmed else "end_unconfirmed")
             return dict(receipt)

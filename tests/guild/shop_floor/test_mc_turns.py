@@ -513,3 +513,24 @@ def test_notes_and_mc_replies_carry_sanitised_html_and_keep_their_markdown(floor
     assert "<script>alert(1)" not in page
     rows = floored.extra["floor"].rows("floor_messages")
     assert any(r_["text"] == reply for r_ in rows)                      # the store holds the original text
+
+
+def test_explicit_board_request_uses_real_store_without_model_and_replay_is_safe(turned):
+    client=turned.owner();token=turned.csrf(client)
+    note=_keep(client,token,'Make a post-it: Retest bilingual voice tomorrow')
+    first=_ask(client,token,note['request_id']);again=_ask(client,token,note['request_id'])
+    assert first.status_code==again.status_code==200
+    a,b=first.get_json(),again.get_json()
+    assert a['operation']['saved'] and a['operation']['id']==b['operation']['id']
+    assert b['operation']['repeated'] and 'Saved Board post-it #' in a['reply_note']['text']
+    assert not turned.extra['runtime'].sent
+    rows=turned.extra['floor'].rows('floor_postits');assert len(rows)==1
+    assert rows[0]['text']=='Retest bilingual voice tomorrow'
+
+
+def test_private_or_missing_csrf_board_request_never_creates(turned):
+    client=turned.owner();token=turned.csrf(client)
+    note=_keep(client,token,'Make a post-it: Should not be created')
+    assert _ask(client,token,note['request_id'],mode='off_record').status_code==409
+    assert client.post(API+'/mc/turns',json={'note_request_id':note['request_id'],'record_mode':'on_record'}).status_code==403
+    assert not turned.extra['floor'].rows('floor_postits')

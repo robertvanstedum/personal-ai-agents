@@ -26,6 +26,20 @@ class OpenAIControlledProvider:
         self.client,self.socket,self.manager = client,None,None
         self.call_id = None
         self.send_lock = threading.Lock()
+        self._timing_observer = None
+        self._first_audio_observed = False
+
+    def set_timing_observer(self, callback):
+        self._timing_observer = callback
+
+    def _observe_first_audio(self):
+        if self._first_audio_observed:return
+        self._first_audio_observed = True
+        try:
+            if self._timing_observer is not None:
+                self._timing_observer("provider_first_audio_observed")
+        except Exception:
+            pass
 
     def create(self,sdp,config,safety_identifier):
         # The unified WebRTC API requires multipart SDP + JSON session fields.
@@ -94,7 +108,9 @@ class OpenAIControlledProvider:
                 for message in self.socket:
                     event = message.model_dump(mode="json")
                     # Raw audio is ignored, never retained/printed.
-                    if event.get("type") not in {"response.audio.delta","response.output_audio.delta"}:
+                    if event.get("type") in {"response.audio.delta","response.output_audio.delta"}:
+                        self._observe_first_audio()
+                    else:
                         observe(event)
                 observe({"type":"error"})
             except Exception:

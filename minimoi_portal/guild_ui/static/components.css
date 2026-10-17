@@ -1397,3 +1397,26 @@ body.gu:not([data-page="floor"]):not([data-page="workshop"]) .mc-panel:is([data-
 @media (max-width: 640px) {
   body.gu:not([data-page="floor"]):not([data-page="workshop"]):is([data-mc-mode="floating"], [data-mc-mode="docked"]) .mc-pill { display: none; }
 }
+
+/* Shared voice presentation: familiar microphone/stop, with a visible label.
+   Uses Guild tokens; Dictate remains a separate control. No animated pulse. */
+.mc-tools .mc-voice { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; max-width: 100%; padding: 8px 12px; border: 1px solid var(--gu-border); border-radius: 999px; background: var(--gu-surface); color: var(--gu-text); flex: 0 0 auto; }
+.mc-tools .mc-voice[hidden], .mc-voice-icon[hidden] { display: none; }
+.mc-voice-icon { display: inline-flex; width: 20px; height: 20px; flex: none; }
+.mc-voice-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mc-voice-icon[data-voice-icon="stop"] svg { fill: currentColor; stroke: none; }
+.mc-tools .mc-voice:is([data-voice-state="listening"], [data-voice-state="speaking"], [data-voice-state="working"]) { color: var(--gu-accent); border-color: var(--gu-accent); }
+.mc-tools .mc-voice:focus-visible { outline: 2px solid var(--gu-accent); outline-offset: 3px; }
+.mc-tools .mc-voice:disabled { cursor: default; opacity: .65; }
+
+/* Keep the full voice composer usable by touch, including docked chat. */
+@media (max-width: 900px) {
+  body.gu .mc-panel[data-mode] .mc-composer .mc-input { min-height: 44px; }
+  body.gu .mc-panel[data-mode] .mc-composer button,
+  body.gu .mc-panel[data-mode] .mc-composer select { min-height: 44px; min-width: 44px; }
+  body.gu .mc-panel[data-mode] [data-mc-managed-settings] { display: flex; flex-wrap: wrap; gap: 4px 8px; min-width: 0; max-width: 100%; }
+  body.gu .mc-panel[data-mode] [data-mc-managed-settings][hidden] { display: none; }
+  body.gu .mc-panel[data-mode] [data-mc-managed-settings] label,
+  body.gu .mc-panel[data-mode] [data-mc-voice-export] { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; }
+  body.gu .mc-panel[data-mode] [data-mc-voice-export][hidden] { display: none; }
+}
