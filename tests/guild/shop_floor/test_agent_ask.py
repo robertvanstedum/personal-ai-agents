@@ -2,6 +2,7 @@
 The task is the owner's own kept message, nothing is claimed as delivered, receipts and reports come back as attributed notes (once each), and with
 the switch off or while Private nothing happens. A scripted chat relay; no model, no network, no agent."""
 from __future__ import annotations
+from minimoi_portal.guild_ui.mc_voice_transcripts import input_context
 
 import json
 import os
@@ -273,14 +274,14 @@ def test_a_turn_with_no_requests_sends_the_owners_words_and_only_the_first_turn_
     assert first.startswith("How is the build?\n\n[Platform reminder from the portal, not from the owner") and "ASK <claude-code|codex|both>" in first
     assert "Status of the requests" not in first and "not read-only" in first
     _plain_turn(asks, cid, "And again?")
-    assert _sent_texts(asks)[-1] == "And again?"                                                      # once per conversation, then exactly the owner's words
+    assert _sent_texts(asks)[-1] == "And again?\n\n" + input_context()                                                      # ASK reminder once; exact owner words plus independent modality metadata
     _plain_turn(asks, None, "A different chat")
     assert _sent_texts(asks)[-1].startswith("A different chat\n\n[Platform reminder")               # a new conversation gets it once too
 
 
 def test_with_the_switch_off_nothing_is_added_even_if_a_ledger_exists(lane_off):
     _plain_turn(lane_off, None, "How is the build?")
-    assert _sent_texts(lane_off) == ["How is the build?"]
+    assert _sent_texts(lane_off) == ["How is the build?\n\n" + input_context()]
 
 
 def test_the_next_turn_carries_receipts_and_the_report_as_bounded_data_after_the_owners_words(asks):
@@ -315,7 +316,7 @@ def test_a_report_is_told_to_mc_once_and_never_again_and_open_requests_are_resta
     _plain_turn(asks, cid, "Finished?")
     assert "Done: nothing missing." in _sent_texts(asks)[-1]
     _plain_turn(asks, cid, "Thanks")
-    assert _sent_texts(asks)[-1] == "Thanks"                                                          # closed and told: nothing more to add
+    assert _sent_texts(asks)[-1] == "Thanks\n\n" + input_context()                                                          # closed report is not repeated; modality metadata remains
 
 
 def test_another_conversations_requests_never_reach_this_turn_and_stay_unspent(asks):
@@ -557,7 +558,7 @@ def test_mc_is_told_about_connection_attention_once_on_its_next_turn_in_that_con
     assert "the connection to Claude Code reported" in sent and "went offline before it answered" in sent and "Written by the platform, not by the agent" in sent
     assert other not in sent and "finished its turn without acknowledging" not in sent                      # another conversation's attention never reaches this turn
     _plain_turn(asks, cid, "And now?")
-    assert "went offline before it answered" not in _sent_texts(asks)[-1]                                  # told once
+    assert "went offline before it answered" not in _sent_texts(asks)[-1]                                  # limits told once; modality metadata remains
 
 
 def test_the_receipt_note_names_the_actual_connected_session(asks):
@@ -622,7 +623,7 @@ def test_a_blocked_connection_manager_is_not_a_listener_and_is_shown_once_by_the
     sent = _sent_texts(asks)[-1]
     assert "reported it is blocked" in sent and "Written by the platform, not by the agent" in sent
     _plain_turn(asks, cid, "And now?")
-    assert "reported it is blocked" not in _sent_texts(asks)[-1]                                           # told once per distinct error
+    assert "reported it is blocked" not in _sent_texts(asks)[-1]                                           # limits told once; modality metadata remains per distinct error
     os.remove(os.path.join(cdir, "status.json"))
     with open(os.path.join(cdir, "status.json"), "w") as fh:
         json.dump({"state": "idle", "error": ""}, fh)
@@ -929,15 +930,15 @@ def test_the_limits_are_put_in_front_of_mc_on_the_first_turn_as_read_only_data_a
     assert "Claude Code session cap: limit $5 (default) · used $1.20 (24%)" in first
     assert "Master Craftsman silence limit: limit 100 s" in first and "You cannot change a limit" in first
     _plain_turn(asks, cid, "And again?")
-    assert _sent_texts(asks)[-1] == "And again?"                                                      # told once
+    assert _sent_texts(asks)[-1] == "And again?\n\n" + input_context()                                                      # limits told once; modality metadata remains
     _write_status(asks, usage={"spent_today_usd": 4.1, "daily_ceiling_usd": 20.0, "process_spent_usd": 1.9, "process_cap_usd": 5.0})   # spending moves: nothing new to say
     _plain_turn(asks, cid, "Still fine?")
-    assert _sent_texts(asks)[-1] == "Still fine?"
+    assert _sent_texts(asks)[-1] == "Still fine?\n\n" + input_context()
     lim.set("claude.daily_ceiling_usd", 30, by="robert", reason="reviews")                              # a limit changed: told again, once
     _plain_turn(asks, cid, "Anything new?")
     assert "limit $30" in _sent_texts(asks)[-1]
     _plain_turn(asks, cid, "ok")
-    assert _sent_texts(asks)[-1] == "ok"
+    assert _sent_texts(asks)[-1] == "ok\n\n" + input_context()
 
 
 def test_a_tripped_limit_is_news_for_mc_and_says_what_stopped_and_that_unknown_is_unknown(asks, monkeypatch, tmp_path):

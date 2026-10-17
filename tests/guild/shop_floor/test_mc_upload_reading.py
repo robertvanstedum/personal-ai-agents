@@ -3,6 +3,7 @@
 Real portal, real OpenClaw adapter, a scripted relay that RECORDS what is sent. Every claim the page makes about which
 files reached the model is checked against that recording. Synthetic content only; no model, no network."""
 from __future__ import annotations
+from minimoi_portal.guild_ui.mc_voice_transcripts import input_context
 
 import io
 import json
@@ -189,7 +190,7 @@ def test_a_message_without_files_is_sent_exactly_as_before(turned):
     _doc(client, token, cid, "kept but not chosen for this message", "idle.txt")          # kept, NOT attached to this turn
     note = _note(client, token, cid, "Hello there.")
     body = _ask(client, token, note["request_id"], cid).get_json()
-    assert _sent(turned) == "Hello there." and "files" not in body
+    assert _sent(turned) == "Hello there.\n\n" + input_context() and "files" not in body
     assert _the(client, cid)["turn_files"] == {}
 
 
@@ -207,7 +208,7 @@ def test_a_long_file_is_cut_and_the_cut_is_stated_to_the_model_and_to_the_owner(
     assert entry["reason"] == "only the first 30,000 of 100,000 characters were sent"
     assert "characters shown: 30,000 of 100,000" in content
     # the cut is stated outside the file's own lines
-    assert content.rstrip().endswith("[File 1 was cut: only the first 30,000 of 100,000 characters were sent.]")
+    assert content.rstrip().endswith("[File 1 was cut: only the first 30,000 of 100,000 characters were sent.]\n\n" + input_context())
     assert "[File 1 was cut" not in text
 
 

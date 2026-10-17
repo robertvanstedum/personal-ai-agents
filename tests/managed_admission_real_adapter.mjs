@@ -46,6 +46,7 @@ async function rig(code) {
     constructor(options) { super(options); instances.push(this); }
   }
   const sandbox = {
+    AbortController, setTimeout, clearTimeout,
     $: node, announce() {}, live: { known: true, off: false }, onChange() {},
     recordMode: () => 'on', submitVoiceUtterance() { throw Error('no native calls'); },
     panelMode: () => 'open', document: { body: { dataset: { mcVoice: 'true' } }, dispatchEvent() {}, addEventListener() {} },

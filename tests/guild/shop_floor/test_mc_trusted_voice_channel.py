@@ -1,4 +1,5 @@
 """Synthetic trusted-host propagation; no provider/native network calls."""
+from minimoi_portal.guild_ui.mc_voice_transcripts import input_context
 from dataclasses import replace
 import pytest
 
@@ -42,7 +43,8 @@ def test_actual_typed_route_ignores_channel_in_browser_body_and_kept_context(flo
     assert response.status_code==200
     assert len(calls['post'])==1
     assert calls['post'][0][1]['channel']=='api_text'
-    assert calls['post'][0][1]['text']=='Typed exact words'
+    assert calls['post'][0][1]['text']=='Typed exact words\n\n'+input_context()
+    assert 'managed voice ASR supplied' not in calls['post'][0][1]['text']
 
 
 def test_actual_turn_boundary_propagates_only_explicit_host_marker(floored,monkeypatch):
@@ -55,7 +57,8 @@ def test_actual_turn_boundary_propagates_only_explicit_host_marker(floored,monke
     response=client.post(f'{API}/mc/turns',json={'note_request_id':note['request_id'],'record_mode':'on_record'},headers=write_headers(token))
     assert response.status_code==200 and response.json['status']=='answered'
     assert calls['post'][0][1]['channel']=='html_voice'
-    assert calls['post'][0][1]['text']=='Actual spoken words'
+    assert calls['post'][0][1]['text']=='Actual spoken words\n\n'+input_context(current_voice=True)
+    assert 'text submitted through chat' not in calls['post'][0][1]['text']
     assert calls['post'][0][1]['request_id']==note['request_id']
 
 

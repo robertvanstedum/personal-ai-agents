@@ -31,7 +31,7 @@ async function rig({rich=true}={}){
  const b=button(rich);nodes['[data-mc-voice-btn]']=b;
  const node=s=>nodes[s]??={textContent:'',hidden:false,disabled:false,checked:false,value:s.includes('provider')?'openai':'',setAttribute(){},addEventListener(){}};
  class Controller{constructor(options){this.options=options;instances.push(this)}async startSession(){await start;this.options.onStateChange('active')}endSession(){this.options.onStateChange('ending');return end.then(()=>this.options.onStateChange('ended'))}}
- const sandbox={$:node,paintVoiceButton,announce(){},live:{known:true,off:false},onChange(){},recordMode:()=> 'on',submitVoiceUtterance(){throw Error('no request')},panelMode:()=> 'open',
+ const sandbox={AbortController,setTimeout,clearTimeout,$:node,paintVoiceButton,announce(){},live:{known:true,off:false},onChange(){},recordMode:()=> 'on',submitVoiceUtterance(){throw Error('no request')},panelMode:()=> 'open',
  document:{body:{dataset:{mcVoice:'true'}},addEventListener(){},dispatchEvent(){}},CustomEvent:class{},MutationObserver:class{observe(){}},window:{addEventListener(){}},
  fetch:async()=>({ok:true,json:async()=>({ok:true,providers:[{provider:'openai'}],managed_realtime:{session_url:'/synthetic'}})}),importControlled:async()=>({RealtimeVoiceController:Controller})};
  vm.createContext(sandbox);vm.runInContext(host,sandbox);sandbox.initMcVoice({urls:{api:'/api'},csrf_token:'synthetic',conversation:{id:'synthetic'}});await flush();

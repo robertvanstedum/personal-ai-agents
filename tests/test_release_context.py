@@ -67,16 +67,27 @@ def test_actual_with_context_preserves_owner_words_and_selective_read(monkeypatc
     parent=types.ModuleType('minimoi_portal');guild=types.ModuleType('minimoi_portal.guild_ui')
     parent.config=types.SimpleNamespace(CURATOR_BACKEND=None,GERMAN_BACKEND=None,PORTUGUESE_BACKEND=None)
     guild.release_context=C;guild.feature_environ=lambda:{}
-    guild.mc_voice_transcripts=types.SimpleNamespace(block=lambda *a,**k:'')
+    guild.mc_registers=types.SimpleNamespace(host_context=lambda *a,**k:'')
+    guild.mc_regression=types.SimpleNamespace(block=lambda *a,**k:'')
+    voice_tree=ast.parse((ROOT/'minimoi_portal/guild_ui/mc_voice_transcripts.py').read_text())
+    voice_fn=next(n for n in voice_tree.body if isinstance(n,ast.FunctionDef)and n.name=='input_context')
+    voice_space={}
+    exec(compile(ast.Module(body=[voice_fn],type_ignores=[]),'actual-input-context','exec'),voice_space)
+    input_context=voice_space['input_context']
+    transcripts=types.ModuleType('minimoi_portal.guild_ui.mc_voice_transcripts')
+    transcripts.block=lambda *a,**k:''
+    transcripts.input_context=input_context
+    guild.mc_voice_transcripts=transcripts
+    monkeypatch.setitem(sys.modules,'minimoi_portal.guild_ui.mc_voice_transcripts',transcripts)
     guild.mc_context=types.SimpleNamespace(board_block=lambda *a,**k:'',github_block=lambda *a,**k:'')
     monkeypatch.setitem(sys.modules,'minimoi_portal',parent);monkeypatch.setitem(sys.modules,'minimoi_portal.guild_ui',guild)
     tree=ast.parse((ROOT/'minimoi_portal/guild_ui/api.py').read_text())
     fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef)and n.name=='_with_context')
     space={'__package__':'minimoi_portal.guild_ui','_floor':lambda:None,'cfg':lambda:{},'scrub':lambda t:t}
     exec(compile(ast.Module(body=[fn],type_ignores=[]),'actual-with-context','exec'),space)
-    assert space['_with_context']('owner + attachment','hello',None,'robert')=='owner + attachment'and not calls
+    assert space['_with_context']('owner + attachment','hello',None,'robert')=='owner + attachment\n\n'+input_context()and not calls
     result=space['_with_context']('exact owner words','What version is deployed?',None,'robert')
-    assert result.startswith('exact owner words\n\n[Recorded deployment observation')and len(calls)==1
+    assert result.startswith('exact owner words\n\n'+input_context()+'\n\n[Recorded deployment observation')and len(calls)==1
 
 def test_wiring_keeps_artifact_readonly_and_begins_before_mutation():
     compose=(ROOT/'docker-compose.prod.yml').read_text()
