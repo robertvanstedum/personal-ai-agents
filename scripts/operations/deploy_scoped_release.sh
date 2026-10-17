@@ -11,7 +11,7 @@ if [[ "$#" -eq 0 ]]; then
 fi
 
 SERVICES=("$@")
-COMPOSE=(docker-compose -f /opt/minimoi/docker-compose.prod.yml)
+COMPOSE=(docker-compose --project-name minimoi -f /opt/minimoi/docker-compose.prod.yml)
 REGISTRY="332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi"
 
 # Host-owned nonsecret activation survives image/Compose updates. Never source/eval it.
@@ -21,6 +21,16 @@ if [[ -n "$ACTIVATION_ENV" ]]; then
   while IFS='=' read -r activation_key activation_value; do
     export "$activation_key=$activation_value"
   done <<< "$ACTIVATION_ENV"
+fi
+
+# Typed optional Rooms binding; missing/invalid active custody refuses BEFORE mutations.
+# Only the compiled fixed portal layer may be added; never source/eval host input.
+RECORDS_ENV="$(python3 /opt/minimoi/scripts/rooms/deployment.py --portal-env)"
+if [[ -n "$RECORDS_ENV" ]]; then
+  while IFS='=' read -r records_key records_value; do
+    export "$records_key=$records_value"
+  done <<< "$RECORDS_ENV"
+  COMPOSE+=(-f /opt/minimoi/docker-compose.records-production-portal.yml)
 fi
 
 python3 /opt/minimoi/scripts/release_status.py begin "$IMAGE_TAG" "${SERVICES[@]}"

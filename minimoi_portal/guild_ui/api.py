@@ -745,6 +745,7 @@ def _mc_prelude():
         g.topic_context = clean_refs(body.get("topic_context"))      # items the owner chose for THIS turn ("Ask Master Craftsman about this")
     except FilesRefused as exc:
         return json_error(exc.code, exc.message, exc.status), None
+    g.mc_kept_owner_scope = (principal, conv['id'], note_id)
     return None, (services, principal, conv, floor, note, note_id, request_id, attachment_ids)
 
 
@@ -767,6 +768,12 @@ def mc_turn():
     if refusal is not None:
         return refusal
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    register_result = _owner_register_command(found)
+    if register_result is not None:
+        return register_result
+    library_result = _owner_library_command(found)
+    if library_result is not None:
+        return library_result
     board_result = _owner_board_command(found)
     if board_result is not None:
         return board_result
@@ -778,6 +785,87 @@ def mc_turn():
                                  principal=principal, note=note, note_id=note_id, request_id=request_id,
                                  attachment_ids=attachment_ids)
     return jsonify(answer), status
+
+
+def _fresh_kept_owner_conversation(conv, principal, note_id=None):
+    """Bind ephemeral privacy attestation after the authenticated kept-note prelude.
+
+    Conversation records intentionally have no persisted record_mode field.
+    Never invent a mode from stored content or a model-provided assertion.
+    """
+    scope = getattr(g, 'mc_kept_owner_scope', None)
+    if (not isinstance(scope, tuple) or len(scope) != 3
+            or scope[:2] != (principal, conv['id'])
+            or (note_id is not None and scope[2] != note_id)
+            or request.headers.get('X-Record-Mode') != 'on_record'):
+        return None
+    try:
+        fresh = _conversations().get(conv['id'], principal)
+    except Exception:
+        return None
+    if not isinstance(fresh, dict) or fresh.get('principal') != principal or fresh.get('archived'):
+        return None
+    return {**fresh, 'record_mode': 'on_record'}
+
+
+def _owner_register_command(found):
+    import hashlib
+    from . import mc_registers, feature_environ
+    from .stores import GUILD_PLATFORM
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if attachment_ids or getattr(g, "topic_context", None):
+        return None
+    if not mc_registers.ADD.fullmatch(note.get('text') or ''):
+        return None
+    fresh = _fresh_kept_owner_conversation(conv, principal, note_id)
+    result = mc_registers.host_command(note['text'], environ=feature_environ(),
+        principal=principal, origin=cfg()['base_url'], conversation=fresh,
+        operation_id='guild-' + hashlib.sha256((principal+'\0'+conv['id']+'\0'+note_id).encode()).hexdigest())
+    if result is None:
+        return None
+    reply = result['reply']
+    try:
+        kept = floor.add_note('register-receipt-' + hashlib.sha256((principal+'\0'+conv['id']+'\0'+note_id).encode()).hexdigest(),
+                              reply, GUILD_PLATFORM, area='Build', page='build')
+        saved = kept.outcome == 'kept'
+        value = kept.value if saved else None
+    except Exception:
+        saved, value = False, None
+    return jsonify(status='answered', backend_kind='platform', reply_note=value,
+                   message=reply, operation=result.get('operation', {'type':'work_register','saved':False}),
+                   history_saved=saved), 200
+
+
+def _owner_library_command(found):
+    """Literal saved-link command after the real owner/kept-note prelude."""
+    import hashlib
+    from . import mc_library, feature_environ
+    from .stores import GUILD_PLATFORM
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if attachment_ids or getattr(g, "topic_context", None):
+        return None
+    try:
+        if mc_library.parse(note.get('text') or '') is None:
+            return None
+    except ValueError:
+        pass  # Recognized malformed save still receives a deterministic refusal.
+    # Re-read privacy/ownership immediately before the signed internal request.
+    fresh = _fresh_kept_owner_conversation(conv, principal, note_id)
+    result = mc_library.host_command(note['text'], environ=feature_environ(),
+        principal=principal, origin=cfg()['base_url'], conversation=fresh, note_id=note_id)
+    if result is None:
+        return None
+    reply = result['reply']
+    key = hashlib.sha256((principal+'\0'+conv['id']+'\0'+note_id).encode()).hexdigest()
+    try:
+        kept = floor.add_note('library-receipt-' + key, reply, GUILD_PLATFORM,
+                              area='Build', page='build')
+        saved = kept.outcome == 'kept'
+        value = kept.value if saved else None
+    except Exception:
+        saved, value = False, None
+    return jsonify(status='answered', backend_kind='platform', reply_note=value,
+                   message=reply, operation=result['operation'], history_saved=saved), 200
 
 
 def _owner_board_command(found):
@@ -894,6 +982,12 @@ def mc_turn_stream():
     if refusal is not None:
         return refusal
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    register_result = _owner_register_command(found)
+    if register_result is not None:
+        return register_result
+    library_result = _owner_library_command(found)
+    if library_result is not None:
+        return library_result
     board_result = _owner_board_command(found)
     if board_result is not None:
         return board_result
@@ -1379,7 +1473,9 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                 board_plan = board_outcomes.prepare(sent_text, _floor(), note_id)
             except Exception:
                 _mc_log().warning("mc turn %s: Board proposal preparation unavailable", turn_id)
-        context_text = _with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal)
+        from .mc.cos import MANAGED_VOICE_CHANNEL
+        context_text = _with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal,
+                                     current_voice=host_channel is MANAGED_VOICE_CHANNEL)
         if board_plan is not None:
             context_text += "\n\n" + board_plan.contract()
         turn_context = {"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")}
@@ -1576,15 +1672,29 @@ def _with_agent(text: str, state) -> str:
     return f"{text}\n\n{state.text}" if state is not None else text
 
 
-def _with_context(text: str, owner_text: str, conv, principal: str) -> str:
+def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False) -> str:
     """Then, as more marked DATA, what a quick question needs in the SAME turn (#298): the GitHub items the owner's words point at, and the true state of this
     conversation's jobs, plus explicitly referenced Board notes. Board read failure is explicit DATA; it never becomes completion. Never reached by a Private turn."""
     from . import mc_context
-    extra = []
+    from .mc_voice_transcripts import input_context
+    extra = [input_context(current_voice=current_voice)]
     from . import release_context
     release = release_context.block(owner_text)
     if release:
         extra.append(release)
+    from . import mc_registers, feature_environ
+    try:
+        fresh_register_conv = _fresh_kept_owner_conversation(conv, principal) if conv and feature_environ().get('MINIMOI_GUILD_REGISTERS') == '1' else None
+        register_context = mc_registers.host_context(owner_text, environ=feature_environ(),
+            principal=principal, origin=cfg()['base_url'], conversation=fresh_register_conv)
+        if register_context:
+            extra.append(register_context)
+    except Exception:
+        pass
+    from . import mc_regression, feature_environ
+    regression_block = mc_regression.block(owner_text, principal, environ=feature_environ())
+    if regression_block:
+        extra.append(regression_block)
     from . import feature_environ
     from .. import config as portal_config
     origins = {name: getattr(portal_config, name, None)
@@ -1599,15 +1709,16 @@ def _with_context(text: str, owner_text: str, conv, principal: str) -> str:
                                                origin=cfg().get("base_url", ""), environ=health_env)
         if health:
             extra.append(health)
-    # Explicit history requests get bounded retained sideband evidence, never a claim
-    # of complete native history. Recheck ownership/record mode before the read.
+    # Recent voice evidence is continuity for ordinary follow-up questions too.
+    # It remains bounded DATA, never complete native history or write authority.
     from . import mc_voice_transcripts
-    if conv and mc_voice_transcripts.WANTED.search(owner_text or ''):
+    if conv:
         try:
             fresh = _conversations().get(conv['id'], principal)
             if (fresh.get('principal') == principal and not fresh.get('archived')
-                    and fresh.get('record_mode', 'on_record') == 'on_record'):
-                block = mc_voice_transcripts.block(owner_text, _conv_floor(fresh), scrub=scrub)
+                    and fresh.get('record_mode', 'on_record') == 'on_record'
+                    and fresh.get('notes_floor') == conv.get('notes_floor')):
+                block = mc_voice_transcripts.block(owner_text, _conv_floor(fresh), scrub=scrub, include_recent=True)
                 if block:
                     extra.append(block)
         except Exception:

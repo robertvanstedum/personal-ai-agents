@@ -12,6 +12,8 @@ BASELINE = {
     "s3transfer": "0.19.2", "sentry-sdk": "2.71.0", "six": "1.17.0", "soupsieve": "2.10", "typing_extensions": "4.16.0",
     "urllib3": "2.8.0", "werkzeug": "3.1.9",
 }
+# Reviewed file-first work-register YAML parser; all older pins stay exact.
+REGISTER_ADDED = {"pyyaml": "6.0.3"}
 UI_ADDED = {"nh3", "markdown-it-py", "mdurl", "pillow", "pypdf"}
 # Reviewed server-owned MC realtime SDK closure; every existing baseline pin stays fixed.
 MANAGED_REALTIME_ADDED = {
@@ -41,8 +43,9 @@ def test_every_portal_dependency_is_pinned_exactly():
 def test_production_baseline_unchanged_and_only_reviewed_ui_and_realtime_packages_added():
     pins = _pins()
     assert {name: pins.get(name) for name in BASELINE} == BASELINE
-    assert set(pins) - set(BASELINE) == UI_ADDED | set(MANAGED_REALTIME_ADDED)
+    assert set(pins) - set(BASELINE) == UI_ADDED | set(MANAGED_REALTIME_ADDED) | set(REGISTER_ADDED)
     assert {name: pins.get(name) for name in MANAGED_REALTIME_ADDED} == MANAGED_REALTIME_ADDED
+    assert {name: pins.get(name) for name in REGISTER_ADDED} == REGISTER_ADDED
 
 
 def test_the_base_image_is_pinned_by_digest():

@@ -61,3 +61,6 @@ jiter==0.17.0
 h11==0.16.0
 pydantic_core==2.50.1
 httpcore2==2.13.1
+
+# Canonical Markdown work-card YAML frontmatter.
+PyYAML==6.0.3

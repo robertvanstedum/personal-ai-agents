@@ -28,13 +28,17 @@ class Notes:
         if key in self.rows:
             old=self.rows[key]
             return WriteResult('kept' if old['text']==text and old['who']==author.id else 'idempotency_mismatch',old,True)
-        value={'request_id':key,'id':key,'text':text,'who':author.id,'author_kind':author.kind,'context':{}}
+        value={'request_id':key,'id':key,'text':text,'who':author.id,'author_kind':author.kind,'context':kw}
         self.rows[key]=value;return WriteResult('kept',value,False)
     def add_postit(self,text,author,*,idempotency_key):
         old=self.postits.get(idempotency_key)
         row=old or {'id':len(self.postits)+1,'text':text}
         self.postits[idempotency_key]=row
         return WriteResult('added',row,old is not None)
+    def get_note(self,key):return self.rows.get(key)
+    def list_notes(self,*,limit):
+        return SimpleNamespace(ok=True,data={'notes':list(self.rows.values())[-limit:],'more':False})
+
 class Conversations:
     def __init__(self):self.archived=False
     def get(self,cid,principal):

@@ -25,6 +25,17 @@ SLACK=16*1024**2
 NAME=re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\Z')
 CHI=ZoneInfo('America/Chicago')
 class Refused(ValueError):pass
+class ReadBudgetExceeded(Refused):pass
+
+class ReadBudget:
+    """Conservative aggregate byte admission, shared across verified run loads."""
+    def __init__(self,max_bytes):
+        if type(max_bytes)is not int or max_bytes<0:raise Refused('invalid_read_budget')
+        self.remaining=max_bytes
+    def charge(self,size):
+        if size>self.remaining:raise ReadBudgetExceeded('run_read_budget_exceeded')
+        self.remaining-=size
+
 
 def encoded(obj):return (json.dumps(obj,sort_keys=True,ensure_ascii=False,allow_nan=False)+'\n').encode()
 def sha(data):return hashlib.sha256(data).hexdigest()
@@ -272,19 +283,26 @@ def compare(first,second):
     return {'warnings':warnings,'first':first['report']['counts'],'second':second['report']['counts'],'human_usefulness':'needs_review','comparable':not warnings}
 
 
-def load_run(root,rid,*,include_details=False):
+def load_run(root,rid,*,include_details=False,max_bytes=None,read_budget=None):
     if not isinstance(rid,str) or not re.fullmatch(r'r-[0-9a-f]{32}',rid):raise Refused('run_id')
+    local_budget=ReadBudget(max_bytes)if max_bytes is not None else None
+    if read_budget is not None and not isinstance(read_budget,ReadBudget):raise Refused('invalid_read_budget')
     fd=private_root(root);child=None
     try:
         child=os.open(rid,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
         st=os.fstat(child)
         if st.st_uid!=os.geteuid() or stat.S_IMODE(st.st_mode)!=0o700:raise Refused('run_not_private')
         def read(name):
-            f=os.open(name,os.O_RDONLY|os.O_NOFOLLOW,dir_fd=child)
+            f=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=child)
             try:
                 st=os.fstat(f)
                 if not stat.S_ISREG(st.st_mode) or st.st_uid!=os.geteuid() or stat.S_IMODE(st.st_mode)!=0o600 or st.st_size>1024*1024:raise Refused('run_file_invalid')
-                data=os.read(f,1024*1024+1)
+                # Include the growth-detection byte before any read. A shared
+                # budget exhaustion must escape rather than look like a bad run.
+                read_size=st.st_size+1
+                for budget in (local_budget,read_budget):
+                    if budget is not None:budget.charge(read_size)
+                data=os.read(f,read_size)
                 if len(data)>1024*1024:raise Refused('run_file_invalid')
                 return data
             finally:os.close(f)
@@ -337,6 +355,7 @@ def load_run(root,rid,*,include_details=False):
         result={'manifest':manifest,'report':report}
         if include_details:result.update(suite=suite,cases=cases)
         return result
+    except ReadBudgetExceeded:raise
     except (OSError,ValueError,KeyError,TypeError,AttributeError):raise Refused('run_incomplete_or_invalid') from None
     finally:
         if child is not None:os.close(child)

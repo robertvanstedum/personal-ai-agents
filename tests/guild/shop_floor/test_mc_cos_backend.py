@@ -1,6 +1,7 @@
 """The Chief of Staff as the Shop floor's conversation partner (mc/cos.py): honest identity, one POST per note, no fallback,
 no Private claim, no documents, no stub."""
 from __future__ import annotations
+from minimoi_portal.guild_ui.mc_voice_transcripts import input_context
 
 import pytest
 import requests
@@ -154,7 +155,7 @@ def test_a_kept_note_is_answered_by_the_chief_of_staff_and_kept_as_hers(floored)
     assert body["reply_note"]["text"] == "Build is on track."
     assert body["reply_note"]["who"] == "chief_of_staff" and body["reply_note"]["author_label"] == "Chief of Staff"
     assert "Master Craftsman" not in body["mc_header"] and body["mc_header"].startswith("Chief of Staff is ready")
-    assert len(calls["post"]) == 1 and calls["post"][0][1]["text"] == "How is the build going?"
+    assert len(calls["post"]) == 1 and calls["post"][0][1]["text"] == "How is the build going?\n\n" + input_context()
     assert [row["author"] for row in db.rows("floor_messages")] == ["robert", "chief_of_staff"]
 
 

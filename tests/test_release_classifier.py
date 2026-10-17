@@ -385,10 +385,10 @@ def test_portal_cannot_silently_start_using_documents_only_agent_tools(tmp_path)
     assert _guild_importers(tmp_path) == []
 
 
-def test_vault_release_ownership_separates_cos_context_from_laptop_ask_and_custody():
+def test_vault_release_ownership_separates_shared_context_and_portal_reports_from_local_ask():
     from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES
     for path in VAULT_COS_FILES:
-        assert classify([path]) == ("domain", ("cos-bot", "cos-scheduler"))
+        assert classify([path]) == ("domain", ("portal", "cos-bot", "cos-scheduler"))
     for path in VAULT_LOCAL_FILES | {"core/memory_shelf/render.py", "core/memory_index/search.py", "core/memory_backup/backup.py"}:
         assert classify([path]) == ("documents", ())
     assert classify(["core/memory_ask/new_consumer.py"])[1] == ALL_SERVICES[:7]
@@ -411,11 +411,18 @@ def test_expected_vault_backend_homes_do_not_waive_unrelated_dependencies(tmp_pa
 
 
 def _vault_runtime_importers(root):
-    """Laptop retrieval/custody cannot silently enter production; CoS can load only its three reviewed context modules."""
-    from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES, VAULT_LOCAL_PREFIXES, LOCAL_TOOL_FILES
+    """Exact report readers may serve portal metadata; local Ask/custody stays laptop-only."""
+    from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES, VAULT_LOCAL_PREFIXES, LOCAL_TOOL_FILES, REGRESSION_REPORT_FILES
     packages = ("core.memory_ask", "core.memory_shelf", "core.memory_index", "core.memory_backup", "core.workshop_journal.vault_export") + tuple(
         path[:-3].replace("/", ".") for path in LOCAL_TOOL_FILES)
-    expected_host = {"domains/cos/vault_context.py": ("core.memory_ask.consumer",)}
+    expected_host = {"domains/cos/vault_context.py": ("core.memory_ask.consumer",),
+                     "minimoi_portal/guild_ui/mc_regression.py": ("core.memory_ask.regression", "core.memory_ask.runner")}
+    report_dependencies = {
+        "core/memory_ask/regression.py": ("core.memory_ask.runner",),
+        "core/memory_ask/runner.py": ("core.memory_ask.consumer", "core.memory_ask.context", "core.memory_ask.citation"),
+        "core/memory_ask/assessment.py": ("core.memory_ask.citation", "core.memory_ask.regression", "core.memory_ask.runner"),
+    }
+    assert set(report_dependencies) == set(REGRESSION_REPORT_FILES)
     found = []
     for path in sorted(root.rglob("*.py")):
         rel = path.relative_to(root).as_posix()
@@ -431,7 +438,8 @@ def _vault_runtime_importers(root):
         # when available, but a bare package dependency is conservatively rejected.
         used = {name for name in names if any(name == module or name.startswith(module + ".") for module in packages)}
         used = {name for name in used if not any(other.startswith(name + ".") for other in used)}
-        allowed = tuple("core.memory_ask." + Path(file).stem for file in VAULT_COS_FILES) if rel in VAULT_COS_FILES else (() if rel not in expected_host else expected_host[rel])
+        allowed = (tuple("core.memory_ask." + Path(file).stem for file in VAULT_COS_FILES) if rel in VAULT_COS_FILES
+                   else report_dependencies.get(rel, expected_host.get(rel, ())))
         if any(not any(name == module or name.startswith(module + ".") for module in allowed) for name in used):
             found.append(rel)
     return found
@@ -472,7 +480,7 @@ def test_only_reviewed_laptop_entrypoints_are_release_only():
         assert classify([path]) == ("documents", ())
         assert classify([path.removesuffix(".py") + "_extra.py"]) == ("full", ALL_SERVICES)
     for path in ("core/memory_ask/assessment.py", "core/memory_ask/regression.py", "core/memory_ask/runner.py"):
-        assert classify([path]) == ("documents", ())
+        assert classify([path]) == ("domain", ("portal",))
         assert classify([path.removesuffix(".py") + "_extra.py"])[1] == ALL_SERVICES[:7]
 
 
@@ -508,3 +516,42 @@ def test_precise_laptop_backend_imports_refuse_new_dependencies(tmp_path):
     nested.parent.mkdir(parents=True)
     nested.write_text(sources["scripts/mc/morning.py"])
     assert _backend_importers(tmp_path) == ["scripts/mc/nested/morning.py"]
+
+
+def test_exact_regression_report_family_and_host_imports_keep_local_ask_denied(tmp_path):
+    from scripts.ci.classify_release import REGRESSION_REPORT_FILES, VAULT_LOCAL_FILES
+    assert REGRESSION_REPORT_FILES == {"core/memory_ask/regression.py", "core/memory_ask/runner.py", "core/memory_ask/assessment.py"}
+    assert not(REGRESSION_REPORT_FILES & VAULT_LOCAL_FILES)
+    for rel in REGRESSION_REPORT_FILES:
+        assert classify([rel]) == ("domain", ("portal",))
+        assert classify([rel.removesuffix(".py")+"_extra.py"])[1] == ALL_SERVICES[:7]
+    host=tmp_path/"minimoi_portal/guild_ui/mc_regression.py"
+    host.parent.mkdir(parents=True)
+    original="from core.memory_ask import regression, runner\n"
+    host.write_text(original)
+    assert _vault_runtime_importers(tmp_path) == []
+    for module in ("service", "querylog"):
+        host.write_text(original+"from core.memory_ask import "+module+"\n")
+        assert _vault_runtime_importers(tmp_path) == ["minimoi_portal/guild_ui/mc_regression.py"]
+    host.write_text(original+"from core.memory_index import search\n")
+    assert _vault_runtime_importers(tmp_path) == ["minimoi_portal/guild_ui/mc_regression.py"]
+    host.write_text(original)
+    sibling=host.with_name("other_report.py");sibling.write_text(original)
+    assert _vault_runtime_importers(tmp_path) == ["minimoi_portal/guild_ui/other_report.py"]
+
+
+def test_report_reader_dependencies_are_exact_without_ask_querylog_or_index(tmp_path):
+    sources={
+        "core/memory_ask/regression.py":"from core.memory_ask import runner\n",
+        "core/memory_ask/runner.py":"from core.memory_ask import consumer, context, citation\n",
+        "core/memory_ask/assessment.py":"from core.memory_ask import citation, regression, runner\n",
+    }
+    for rel,source in sources.items():
+        target=tmp_path/rel;target.parent.mkdir(parents=True,exist_ok=True);target.write_text(source)
+    assert _vault_runtime_importers(tmp_path) == []
+    for rel,source in sources.items():
+        target=tmp_path/rel
+        for forbidden in ("from core.memory_ask import service\n", "from core.memory_ask import querylog\n", "from core.memory_index import search\n"):
+            target.write_text(source+forbidden)
+            assert _vault_runtime_importers(tmp_path) == [rel]
+            target.write_text(source)

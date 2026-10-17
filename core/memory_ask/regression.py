@@ -26,7 +26,8 @@ def evidence_signature(case):
         return None
 
 
-def history(root, *, suite_id=None):
+def history(root, *, suite_id=None, max_bytes=None):
+    budget = runner.ReadBudget(max_bytes) if max_bytes is not None else None
     fd = runner.private_root(root)
     try:
         names = []
@@ -42,7 +43,9 @@ def history(root, *, suite_id=None):
     rows = []
     for rid in names:
         try:
-            run = runner.load_run(root, rid)
+            run = runner.load_run(root, rid, read_budget=budget)
+        except runner.ReadBudgetExceeded:
+            raise
         except runner.Refused:
             rows.append({'run_id': rid, 'state': 'incomplete_or_invalid'})
             continue

@@ -4,7 +4,7 @@ CoS/MC backend. No model args become owner text/approval, no fabricated request.
 """
 from __future__ import annotations
 import threading
-from flask import abort,current_app,jsonify
+from flask import abort,current_app,jsonify,g
 from . import cfg,owner_api,_worker_config
 from .security import check_write,check_stop
 from core.realtime_voice.controlled_host import create_host_blueprint
@@ -55,7 +55,27 @@ def install(app,mount,*,environ,budget=None,provider_factory=None):
         captured={'app':app,'config':config,'principal':principal,'conversation':conv,'conversations':store,
                   'floor':api._conv_floor(conv),'board':api._floor(),'services':config['services'],'author':api._author()}
         with lock:bindings[requested]=captured
+        g.mc_voice_startup_binding = captured
         return requested
+
+    def voice_instructions(principal):
+        from . import api
+        from .mc_voice_transcripts import startup_context
+        bound = getattr(g, 'mc_voice_startup_binding', None)
+        if bound is None or bound['principal'] != principal:
+            raise SessionRefused('Voice conversation unavailable')
+        def scope():
+            from .conversations import ConversationNotFound, ConversationStoreUnavailable
+            try:
+                fresh = bound['conversations'].get(bound['conversation']['id'], principal)
+            except (ConversationNotFound, ConversationStoreUnavailable):
+                raise SessionRefused('Voice conversation unavailable') from None
+            if (fresh.get('principal') != principal or fresh.get('archived')
+                    or fresh.get('record_mode') == 'off_record'
+                    or fresh.get('notes_floor') != bound['conversation'].get('notes_floor')):
+                raise SessionRefused('Voice conversation unavailable')
+        return INSTRUCTIONS + '\n\n' + startup_context(bound['floor'], principal,
+            scope_check=scope, scrub=api.scrub)
 
     def dispatch(name,text,cid,operation_id):
         from . import api
@@ -77,6 +97,20 @@ def install(app,mount,*,environ,budget=None,provider_factory=None):
             kept=bound['floor'].add_note(operation_id,clean,bound['author'],page='voice')
             if kept.outcome!='kept' or not kept.value:raise SessionRefused('Spoken note not kept')
             note=kept.value
+            from .mc_voice_transcripts import copy_to_chat
+            def copy_scope():
+                current = bound['conversations'].get(cid, bound['principal'])
+                if (current.get('principal') != bound['principal'] or current.get('archived')
+                        or current.get('record_mode') == 'off_record'
+                        or current.get('notes_floor') != bound['conversation'].get('notes_floor')):
+                    raise SessionRefused('Conversation unavailable')
+            copied = None
+            from .mc_voice_transcripts import chat_copy_requested
+            if chat_copy_requested(text):
+                copied = copy_to_chat(text, bound['floor'], operation_id,
+                    session_id=bound.get('transcript_sid'), scope_check=copy_scope, scrub=api.scrub)
+            if copied is not None:
+                return {**copied, 'note_request_id': operation_id}
             if name=='save_cos_note':
                 return {'reply':'Your spoken note is kept in this Guild conversation.','note_request_id':operation_id,'operation':{'type':'guild_note','saved':True,'repeated':bool(kept.repeated)}}
             from .jobs_api import job_command
@@ -101,14 +135,19 @@ def install(app,mount,*,environ,budget=None,provider_factory=None):
             bound = bindings.get(cid)
         if bound is None:
             raise SessionRefused('Voice transcript scope unavailable')
-        return retain(bound, cid, sid, role, item, index, text, partial)
+        result = retain(bound, cid, sid, role, item, index, text, partial)
+        # Canonical ASR retention precedes dispatch, so the copy is bound to
+        # this actual voice session, never a previous session's last phrase.
+        with lock:
+            bound['transcript_sid'] = sid
+        return result
 
     def canonical_command_match(text,cid):
         from .jobs import interpret,ACTIVE
         from .board_commands import parse as board_text
         command=interpret(text)
-        from .mc_voice_transcripts import WANTED as transcript_wanted
-        if board_text(text) is not None or transcript_wanted.search(text):return True
+        from .mc_voice_transcripts import WANTED as transcript_wanted, chat_copy_requested
+        if board_text(text) is not None or transcript_wanted.search(text) or chat_copy_requested(text):return True
         if command is None:return False
         with lock:bound=bindings.get(cid)
         if bound is None:raise SessionRefused('Conversation unavailable')
@@ -130,7 +169,7 @@ def install(app,mount,*,environ,budget=None,provider_factory=None):
         return principal
 
     bpname=mount+'_managed_realtime'
-    bp=create_host_blueprint(name=bpname,domain='mc',guard=guard,conversation=conversation,instructions=lambda _:INSTRUCTIONS,
+    bp=create_host_blueprint(name=bpname,domain='mc',guard=guard,conversation=conversation,instructions=voice_instructions,
         dispatch=dispatch,provider_factory=provider_factory,environ=environ,budget=ledger,
         canonical_command_match=canonical_command_match, on_transcript=retain_transcript)
     # owner_api uses the existing real mount config for every new route.

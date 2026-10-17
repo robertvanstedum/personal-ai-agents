@@ -36,6 +36,10 @@ import time
 import tweepy
 from collections import Counter, defaultdict
 from pathlib import Path
+
+# Shared canonical preference transaction, no independent store.
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from domains.curator import preferences_store as preference_store
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # repo root, for x_auth and domains.curator imports below
@@ -305,16 +309,17 @@ def update_preferences(domain_label: str, domain_scores: Counter):
 
     Scores are additive across runs.
     """
-    prefs       = json.loads(PREFS_PATH.read_text())
-    lp          = prefs.setdefault('learned_patterns', {})
-    all_signals = lp.setdefault('domain_signals', {})
-    existing    = all_signals.setdefault(domain_label, {})
+    with preference_store.locked(PREFS_PATH):
+        prefs = preference_store.load(PREFS_PATH)
+        lp          = prefs.setdefault('learned_patterns', {})
+        all_signals = lp.setdefault('domain_signals', {})
+        existing    = all_signals.setdefault(domain_label, {})
 
-    for domain, score in domain_scores.items():
-        existing[domain] = existing.get(domain, 0) + score
+        for domain, score in domain_scores.items():
+            existing[domain] = existing.get(domain, 0) + score
 
-    lp['domain_signals'] = all_signals
-    PREFS_PATH.write_text(json.dumps(prefs, indent=2))
+        lp['domain_signals'] = all_signals
+        preference_store.write(PREFS_PATH,prefs)
     print(f"  ✅ domain_signals['{domain_label}'] updated ({len(domain_scores)} domains)")
 
 
