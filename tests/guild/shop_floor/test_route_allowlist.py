@@ -105,6 +105,8 @@ EXPECTED = {
     "/guild-next/api/v1/mc/private",
     # Conversations (Guild 1.1 slice 2): owner only, CSRF-checked writes, no model calls.
     "/guild-next/api/v1/conversations",
+    # Authenticated retained-voice export; not a write or model reconstruction.
+    "/guild-next/api/v1/conversations/<cid>/voice-transcript",
     "/guild-next/api/v1/workshop",
     "/guild-next/api/v1/conversations/<cid>/rename",
     "/guild-next/api/v1/conversations/<cid>/pin",

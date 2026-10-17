@@ -70,7 +70,7 @@ def test_memo_provider_preference_only_renders_when_choice_exists(german_client)
     assert "approved single-provider fallback" in source
 
 
-def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_client):
+def test_shared_controller_starts_with_persona_and_optional_live_transcript(german_client):
     resp = german_client.get("/static/realtime-voice/realtime-voice-controller.js")
     source = resp.get_data(as_text=True)
 
@@ -78,7 +78,8 @@ def test_shared_controller_starts_with_persona_and_hides_live_transcript(german_
     assert "Do not give directions" in source
     assert "sendContinuationInstruction(this._openingInstruction)" in source
     assert 'this._onInputState("speech_started")' in source
-    assert "never surfaced to the UI while active" in source
+    assert "this._onTranscriptUpdate = onTranscriptUpdate || (() => {});" in source
+    assert "this._onTranscriptUpdate([...this._items.values()]" in source
     assert "openai-webrtc-adapter.js?v=20261015-managed-end1" in source
     assert "xai-websocket-adapter.js?v=20260725-transcript1" in source
 

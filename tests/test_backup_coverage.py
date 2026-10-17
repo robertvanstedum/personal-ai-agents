@@ -40,11 +40,15 @@ def _compose_data_bind_sources():
     sources = set()
     for name, service in services.items():
         for volume in service.get("volumes") or []:
-            if not volume.startswith(HOST_DATA):
+            if isinstance(volume, dict):
+                if volume["type"] != "bind":
+                    continue
+                source = volume["source"]
+            else:
+                # The ${...} default holds a ':', so split after its closing brace.
+                source = volume[: volume.index(":", volume.index("}"))] if volume.startswith(HOST_DATA) else volume
+            if not source.startswith(HOST_DATA):
                 continue
-            # The ${...} default holds a ':', so the source ends at the first
-            # ':' after the closing brace.
-            source = volume[: volume.index(":", volume.index("}"))]
             sources.add((name, source.removeprefix(HOST_DATA)))
     return sources
 
@@ -78,3 +82,14 @@ def test_s3_copies_preservation_snapshots_and_never_deletes():
     sync = [l for l in S3.splitlines() if "curator-preserve/" in l and "aws s3 sync" in l]
     assert len(sync) == 1
     assert '--exclude "*.partial/*"' in sync[0]
+
+
+def test_data_coverage_reads_long_bind_syntax_too(tmp_path, monkeypatch):
+    fixture = tmp_path / "compose.yml"
+    fixture.write_text(yaml.safe_dump({"services": {"example": {"volumes": [
+        {"type": "bind", "source": HOST_DATA + "annotations", "target": "/app/annotations"},
+        {"type": "volume", "source": "named-state", "target": "/state"},
+        HOST_DATA + "guild:/app/guild:ro",
+    ]}}}))
+    monkeypatch.setattr(__import__(__name__, fromlist=["COMPOSE"]), "COMPOSE", fixture)
+    assert _compose_data_bind_sources() == {("example", "annotations"), ("example", "guild")}
