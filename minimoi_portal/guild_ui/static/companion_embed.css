@@ -1,0 +1,20 @@
+/* The existing chat, sized to the companion viewport. No second composer. */
+body.gu[data-mc-embed] { display:flex!important; flex-direction:column; height:100dvh; min-height:0; padding:0!important; overflow:hidden; }
+body.gu[data-mc-embed] .gu-layout { display:flex!important; flex:1; min-height:0; padding:0; gap:0; }
+body.gu[data-mc-embed] .gu-main { display:none; }
+body.gu[data-mc-embed] .mc-panel[data-mode="inpage"] { flex:1; min-width:0; min-height:0; height:100%; border:0; }
+body.gu[data-mc-embed] .mc-banner-art { display:none; }
+body.gu[data-mc-embed] .mc-hero { min-height:0; }
+body.gu[data-mc-embed] .mc-thread { flex:1; min-height:0; overflow-y:auto; }
+body.gu[data-mc-embed] .mc-dock-bottom { position:static!important; flex:none; max-height:55%; overflow-y:auto; }
+body.gu[data-mc-embed] .floor-history { position:absolute; z-index:80; top:0; bottom:0; left:0; width:min(280px, 90vw); }
+body.gu[data-mc-embed]:not([data-history="open"]) .floor-history { display:none; }
+
+body.gu[data-mc-embed] [data-rail-toggle] { display:none; }
+
+body.gu[data-mc-embed] .floor-strip { display:none; }
+body.gu[data-mc-embed] .mc-hero { display:flex; align-items:center; gap:10px; padding:8px 12px; }
+body.gu[data-mc-embed] .hero-text { flex:1; min-width:0; }
+body.gu[data-mc-embed] .hero-name { font-family:var(--gu-font-body); font-size:var(--gu-size-lg); margin:0; }
+body.gu[data-mc-embed] .fb-title { display:block; font-size:inherit; }
+body.gu[data-mc-embed] .hero-sub { margin:4px 0 0; font-size:var(--gu-size-sm); }

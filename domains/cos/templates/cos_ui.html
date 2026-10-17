@@ -444,6 +444,14 @@ button.addEventListener('click',async()=>{
     else await controller.start('openai');}
   catch(error){active=false;transcript.textContent=`Voice could not start: ${error.message}. Typing still works.`;}
 });
+document.addEventListener('minimoi:companion-opening', event => {
+  if (typeof event.detail?.waitUntil !== 'function') return;
+  event.detail.waitUntil((async () => {
+    await dictation.stop('companion_opened');
+    await stopVoice('companion_opened');
+    if (voiceRestartBlocked) throw new Error('Earlier voice termination needs verification.');
+  })());
+});
 window.addEventListener('pagehide',()=>{dictation.stop('pagehide');controller.stop('pagehide');realtime.endSession('pagehide');});
 void refreshLegacyAvailability();
 </script>

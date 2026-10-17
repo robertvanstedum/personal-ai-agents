@@ -154,6 +154,9 @@ from minimoi_portal.workspaces import (           # noqa: E402
 # hand-maintained duplicate, so nav fixes apply everywhere at once.
 app.jinja_env.globals['portal_nav_html'] = _proxy._portal_nav_html
 
+from minimoi_portal.companion import install as _install_companion
+_install_companion(app, lambda: _current_user(), os.environ)
+
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
