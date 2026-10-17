@@ -17,6 +17,9 @@ EXPECTED = {
     "/guild-next/guild/operate/<view>",
     "/guild-next/",
     "/guild-next/guild",
+    # Owner-only companion routes reuse the existing conversation.
+    "/guild-next/guild/companion",
+    "/guild-next/guild/companion/<domain>",
     "/guild-next/guild/build",
     "/guild-next/guild/build/bench",
     # Planning Studio and Prototype Lab: truthful entry points (Guild 1.1 dev, slice 1).
