@@ -185,7 +185,9 @@ VAULT_LOCAL_FILES = frozenset({"core/memory_ask/agents_cli.py", "core/memory_ask
 # ownership tests fail if a
 # second production consumer appears. Unknown core/scripts paths stay broad.
 GUILD_BACKEND_PREFIXES = ("core/agent_requests/",)
-GUILD_BACKEND_FILES = frozenset({"core/limits.py"})
+# GitHub awareness: the observation module and its one-shot CLI run only in the
+# portal image (it copies the repository); nothing else imports them.
+GUILD_BACKEND_FILES = frozenset({"core/limits.py", "core/github_awareness.py", "scripts/mc/github_awareness.py"})
 GUILD_LOCAL_TOOLS = frozenset({"scripts/agent_connection.py", "scripts/agent_requests.py"})
 
 

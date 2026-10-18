@@ -808,6 +808,28 @@ def _fresh_kept_owner_conversation(conv, principal, note_id=None):
     return {**fresh, 'record_mode': 'on_record'}
 
 
+def _fresh_context_conversation(conv, principal, current_voice):
+    """The kept owner conversation for default MC context, on typed AND managed-voice turns.
+
+    Typed turns carry the request's kept-owner attestation (_fresh_kept_owner_conversation).
+    A managed-voice turn runs in a worker with no request; it is admitted only through the
+    server-held MANAGED_VOICE_CHANNEL binding, which authenticated the owner when the session
+    started. So re-read the conversation and apply the same scope checks the retained voice
+    notes use. Anything else returns None (no context).
+    """
+    if not current_voice:
+        return _fresh_kept_owner_conversation(conv, principal)
+    try:
+        fresh = _conversations().get(conv['id'], principal)
+    except Exception:
+        return None
+    if (not isinstance(fresh, dict) or fresh.get('principal') != principal or fresh.get('archived')
+            or fresh.get('record_mode', 'on_record') != 'on_record'
+            or fresh.get('notes_floor') != conv.get('notes_floor')):
+        return None
+    return {**fresh, 'record_mode': 'on_record'}
+
+
 def _owner_register_command(found):
     import hashlib
     from . import mc_registers, feature_environ
@@ -1684,11 +1706,21 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
         extra.append(release)
     from . import mc_registers, feature_environ
     try:
-        fresh_register_conv = _fresh_kept_owner_conversation(conv, principal) if conv and feature_environ().get('MINIMOI_GUILD_REGISTERS') == '1' else None
+        fresh_register_conv = _fresh_context_conversation(conv, principal, current_voice) if conv and feature_environ().get('MINIMOI_GUILD_REGISTERS') == '1' else None
         register_context = mc_registers.host_context(owner_text, environ=feature_environ(),
             principal=principal, origin=cfg()['base_url'], conversation=fresh_register_conv)
         if register_context:
             extra.append(register_context)
+    except Exception:
+        pass
+    # Off by default; imported only when switched on, and never able to fail the turn.
+    try:
+        if conv and feature_environ().get('MINIMOI_MC_GITHUB_AWARENESS') == '1':
+            from . import github_awareness
+            awareness = github_awareness.block(principal, _fresh_context_conversation(conv, principal, current_voice),
+                                               environ=feature_environ(), scrub=scrub)
+            if awareness:
+                extra.append(awareness)
     except Exception:
         pass
     from . import mc_regression, feature_environ
