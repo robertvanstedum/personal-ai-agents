@@ -197,6 +197,7 @@ BACKEND_IMPORT_EXPECTED = {
     "core/memory_shelf/cli.py": ("core.vault_t1.reader",),
     "core/memory_shelf/watchers.py": ("core.jobs.batch_window",),
     "scripts/mc/morning.py": ("core.jobs.registry", "core.jobs.schedule", "core.jobs.status"),
+    "scripts/mc/github_awareness.py": ("core.jobs.registry", "core.jobs.status"),
     "scripts/rooms/archive.py": ("core.jobs.registry", "core.jobs.schedule", "core.jobs.status"),
     "core/memory_shelf/render.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_shelf/report.py": ("core.jobs",),
