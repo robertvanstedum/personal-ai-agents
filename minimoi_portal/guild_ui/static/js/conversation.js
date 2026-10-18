@@ -828,6 +828,30 @@ function closePrivateExplain() {
   if (why) why.setAttribute('aria-expanded', 'false');
 }
 
+// The small "..." options menu (18 Oct). Escape or a click elsewhere closes it, like the other menus; its Escape stops here, so it
+// never reaches the panel's Escape (which minimizes the panel, and minimizing ends voice). While Dictate is listening the menu stays
+// open, even against its own summary, so Stop dictation can always be reached. Other pressed controls (the Private lock) do not hold it.
+function wireOptionsMenu(options, doc) {
+  if (!options) return;
+  const summary = options.querySelector('summary');
+  const dictating = () => Boolean(options.querySelector('[data-dictate][aria-pressed="true"]'));
+  options.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !options.open) return;
+    e.stopPropagation(); e.preventDefault();
+    if (!dictating()) options.open = false;
+    if (summary) summary.focus();
+  });
+  if (summary) summary.addEventListener('click', (e) => {
+    if (options.open && dictating()) e.preventDefault();      // the native toggle would hide Stop dictation
+  });
+  options.addEventListener('toggle', () => {
+    if (!options.open && dictating()) options.open = true;    // any other route that closes it while listening
+  });
+  doc.addEventListener('click', (e) => {
+    if (options.open && !options.contains(e.target) && !dictating()) options.open = false;
+  });
+}
+
 export function initConversation(p) {
   page = p;
   panel = $('[data-mc-panel]'); thread = $('[data-mc-thread]'); pill = $('[data-mc-pill]');
@@ -884,6 +908,7 @@ export function initConversation(p) {
   }
   const exit = $('[data-private-exit]');
   if (exit) exit.addEventListener('click', () => $('[data-mc-record]').click());
+  wireOptionsMenu($('[data-mc-options]'), document);
   const typeBtn = $('[data-mc-type]');
   if (typeBtn) typeBtn.addEventListener('click', () => {
     document.body.dataset.typing = 'true';

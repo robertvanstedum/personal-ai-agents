@@ -56,6 +56,28 @@ export function initMcVoice(page) {
   const headers = () => ({ 'Content-Type':'application/json', 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode() });
   const busy = () => Boolean(controller || starting || ending);
 
+  // The Voice choice offers what this host can actually run (the capabilities answer) and plainly marks the rest unavailable;
+  // nothing is substituted silently, and the choice never changes an active session (owner, 18 Oct).
+  const PROVIDER_KEY = 'minimoi.voice.provider';
+  function offerProviders(body) {
+    const select = $('[data-mc-voice-provider]');
+    if (!select || !select.options) return;
+    const usable = new Set((body.providers || []).map(p => p && p.provider));
+    if (managed && managed.provider) usable.add(managed.provider);
+    const options = Array.from(select.options);
+    for (const option of options) {
+      const name = option.dataset.name || option.textContent.split(' · ')[0];
+      option.dataset.name = name;
+      option.disabled = !usable.has(option.value);
+      option.textContent = option.disabled ? `${name} · not available yet` : name;
+    }
+    let saved = null;
+    try { saved = window.localStorage.getItem(PROVIDER_KEY); } catch (e) { /* the choice simply is not remembered */ }
+    const pick = options.find(o => o.value === saved && !o.disabled) || options.find(o => !o.disabled);
+    if (pick) select.value = pick.value;
+    else select.disabled = true;                // nothing this host can run: no choice to make, and none faked
+  }
+
   async function available() {
     try {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
@@ -63,6 +85,7 @@ export function initMcVoice(page) {
       if (!r.ok || !body.ok || !(body.providers || []).length) return null;
       managed=body.managed_realtime || null;
       if (managed) $('[data-mc-managed-settings]').hidden=false;
+      offerProviders(body);
       return body.providers[0].label || body.providers[0].provider || 'the speech provider';
     } catch (e) { return null; }
   }
@@ -271,6 +294,9 @@ export function initMcVoice(page) {
     finally {if(current())starting=false;if(!busy()){selector.disabled=false;choice.disabled=false;}}
   }
 
+  $('[data-mc-voice-provider]')?.addEventListener?.('change', (event) => {
+    try { window.localStorage.setItem(PROVIDER_KEY, event.target.value); } catch (e) { /* not remembered */ }
+  });
   $('[data-mc-voice-transcript-choice]')?.addEventListener?.('change',()=>{
     if($('[data-mc-voice-transcript-choice]').checked)$('[data-mc-voice-transcript]').open=true;
     transcriptPaint?.();
