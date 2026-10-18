@@ -35,7 +35,8 @@ services:
       records-production:
         aliases: [minimoi-records]
     read_only: true
-    tmpfs: [/tmp:size=16m,mode=1777]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
     mem_limit: 384m
     memswap_limit: 384m
     cpus: 0.5
