@@ -341,7 +341,9 @@ def test_a_secret_in_the_reply_is_scrubbed_before_it_is_kept_and_the_line_says_s
     body = _ask(client, token, _keep(client, token, "q")["request_id"]).get_json()
     assert body["history_saved"] is True
     [rec] = mc_lines(mc_dir)
-    assert FAKE_KEY not in json.dumps(rec) and "4111" not in json.dumps(rec) and rec["sanitized"] is True
+    # Random turn/request identifiers can legitimately contain these four digits.
+    assert FAKE_KEY not in json.dumps(rec) and "4111 1111 1111 1111" not in json.dumps(rec)
+    assert "4111" not in rec["reply"] and "4111" not in rec["user_text"] and rec["sanitized"] is True
 
 
 def test_the_text_fields_are_capped(tmp_path, mc_dir):
