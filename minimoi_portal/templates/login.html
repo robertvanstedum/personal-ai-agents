@@ -26,7 +26,7 @@
       <div class="login-error">{{ error }}</div>
     {% endif %}
 
-    <form method="POST" action="/login{% if request.args.get('next') %}?next={{ request.args.get('next') }}{% endif %}">
+    <form method="POST" action="{{ url_for('login', next=login_next) if login_next else '/login' }}">
       <div class="form-group">
         <label for="username">Username or email</label>
         <input type="text" id="username" name="username"
