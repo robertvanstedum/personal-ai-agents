@@ -30,8 +30,17 @@ def test_the_ask_button_is_on_every_page_but_chat_and_hold_to_talk_never(staging
 
 def test_phone_css_never_hides_the_composer():
     css = (PACKAGE / "static" / "components.css").read_text()
-    phone = css[css.index("@media (max-width: 640px)"):]
-    phone = phone[:phone.index("\n}\n")]
+    # Inspect every phone block: component-specific rules may precede the layout rules.
+    blocks = []
+    for match in re.finditer(r"@media \(max-width: 640px\)\s*\{", css):
+        start, depth, end = match.end(), 1, match.end()
+        while depth and end < len(css):
+            depth += (css[end] == "{") - (css[end] == "}")
+            end += 1
+        assert depth == 0, "unclosed phone media block"
+        blocks.append(css[start:end - 1])
+    assert blocks, "phone media rules missing"
+    phone = "\n".join(blocks)
     assert ".mc-composer { display: none; }" not in phone
     assert ".mc-composer { display: flex; }" in phone
     assert ".mc-phone-bar { display: flex;" in phone
