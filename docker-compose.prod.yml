@@ -107,10 +107,20 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/curator:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-curator
     restart: unless-stopped
-    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
+    env_file:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/.env
+      # Default reuses the existing env file, so inactive installs need no new file.
+      # Activation selects a Curator-only root0600 file containing only the derived key.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/${MINIMOI_CURATOR_INTAKE_ENV_FILE:-.env}
     environment:
       - FLASK_ENV=production
       - PORT=8766
+      # Library intake receiver (MC "save this to library:"). Off unless MINIMOI_LIBRARY_INTAKE_PRODUCTION=1 on the host.
+      # Curator holds only the purpose-derived key, from its own root-only file; the shared portal secret is blanked here.
+      - MINIMOI_LIBRARY_INTAKE=${MINIMOI_LIBRARY_INTAKE_PRODUCTION:-0}
+      - MINIMOI_LIBRARY_INTAKE_ENV=production
+      - MINIMOI_LIBRARY_INTAKE_OWNER=robert
+      - PORTAL_SECRET_KEY=
       # Event log and X pull cursor live in the mounted data/curator folder
       # (#305). The cursor is saved by rename, so it needs a folder mount.
       - CURATOR_SIGNAL_STORE_PATH=/app/data/curator/signal_store.jsonl
@@ -213,6 +223,10 @@ services:
       # Dev liveness stays off; production requires its separate explicit opt-in.
       - MINIMOI_MC_DOMAIN_HEALTH=0
       - MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION=${MINIMOI_MC_DOMAIN_HEALTH_PRODUCTION:-0}
+      # Library intake sender (MC "save this to library:"); signs with a key derived from its own PORTAL_SECRET_KEY.
+      - MINIMOI_LIBRARY_INTAKE=${MINIMOI_LIBRARY_INTAKE_PRODUCTION:-0}
+      - MINIMOI_LIBRARY_INTAKE_ENV=production
+      - MINIMOI_LIBRARY_INTAKE_OWNER=robert
       # IoT Connect reference demo runs as its own Compose project
       # (docker-compose.iotconnect.prod.yml, project "iotconnect"); the portal
       # reaches it over the shared edge network created below.

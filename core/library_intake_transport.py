@@ -25,7 +25,7 @@ class Profile:
 
 def configured(environ):
     if environ.get('MINIMOI_LIBRARY_INTAKE')!='1':return None
-    environment=environ.get('MINIMOI_LIBRARY_INTAKE_ENV');owner=environ.get('MINIMOI_LIBRARY_INTAKE_OWNER');secret=environ.get('PORTAL_SECRET_KEY')
+    environment=environ.get('MINIMOI_LIBRARY_INTAKE_ENV');owner=environ.get('MINIMOI_LIBRARY_INTAKE_OWNER');secret=environ.get('PORTAL_SECRET_KEY') or None   # a service-scoped blank (Curator) is absent, never a short secret
     need(environment in ORIGINS and owner=='robert','library_profile_required')
     # Curator may hold ONLY the purpose-derived capability, never the portal
     # master Flask session-signing secret. No new key is generated here.

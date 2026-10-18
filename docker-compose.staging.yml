@@ -89,6 +89,8 @@ services:
     pull_policy: never
     environment:
       - MINIMOI_ROLE=standby
+      # Production intake activation never enables the staging receiver/sender.
+      - MINIMOI_LIBRARY_INTAKE=0
 
   german:
     image: minimoi-staging/mein-deutsch:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
@@ -107,6 +109,8 @@ services:
     pull_policy: never
     environment:
       - MINIMOI_ROLE=standby
+      # Production intake activation never enables the staging receiver/sender.
+      - MINIMOI_LIBRARY_INTAKE=0
       - BASE_URL=https://dev.minimoi.ai
       - CURATOR_BACKEND=http://curator:8766
       - GERMAN_BACKEND=http://german:8767
