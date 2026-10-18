@@ -204,7 +204,8 @@ def test_every_prod_host_path_is_parameterized_one_way_only():
     code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
     forms = set(re.findall(r"\$\{MINIMOI_ROOT[^}]*\}", code))
     assert forms == {ROOT_VAR}
-    assert code.count(ROOT_VAR) == len(EXPECTED_ENV_FILES) + sum(
+    # Curator has one additional, explicitly checked capability env_file.
+    assert code.count(ROOT_VAR) == len(EXPECTED_ENV_FILES) + 1 + sum(
         1 for _s, host, _c in EXPECTED_PROD_MOUNTS if host.startswith("/opt/minimoi"))
 
 
