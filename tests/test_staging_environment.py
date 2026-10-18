@@ -177,7 +177,18 @@ def test_prod_mounts_and_env_files_are_unchanged_with_root_unset():
                         "target": "/app/runtime/release", "read_only": True,
                         "bind": {"create_host_path": False}}]
     assert ROOT_VAR + "/data/guild/mc-evidence:/home/node/.openclaw/workspace-cos-agent-a/mc-evidence:ro" in services["cos-agent-a"]["volumes"]
-    env_files = {name: _default_root(s["env_file"]) for name, s in services.items() if "env_file" in s}
+    env_files = {}
+    for name, service in services.items():
+        if "env_file" not in service:
+            continue
+        files = service["env_file"]
+        if name == "curator":
+            # The second file defaults to the same .env; only activation selects
+            # the Curator-only capability file. Keep every other service pinned.
+            assert files == [ROOT_VAR + "/.env",
+                             ROOT_VAR + "/${MINIMOI_CURATOR_INTAKE_ENV_FILE:-.env}"]
+            files = files[0]
+        env_files[name] = _default_root(files)
     assert env_files == EXPECTED_ENV_FILES
 
 

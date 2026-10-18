@@ -39,3 +39,15 @@ def test_missing_sources_and_weak_present_master_refuse():
 
 def test_default_off_does_not_parse_or_use_credential_sources():
     assert protocol.configured({'MINIMOI_LIBRARY_INTAKE_DERIVED_KEY':'bad','PORTAL_SECRET_KEY':'bad'})is None
+
+
+def test_blank_curator_master_uses_derived_key_and_authenticates_portal():
+    portal = protocol.configured({**BASE, 'PORTAL_SECRET_KEY': MASTER})
+    curator = protocol.configured({**BASE, 'PORTAL_SECRET_KEY': '', 'MINIMOI_LIBRARY_INTAKE_DERIVED_KEY': DERIVED})
+    value = protocol.payload(portal, 'conversation', 'note', 'https://example.com/article', 'Saved reason')
+    raw = protocol.packed(value)
+    signed = protocol.headers(portal, raw, now=100, nonce='b' * 32)
+    assert protocol.verify(curator, raw, signed, now=100)[0] == value
+    with pytest.raises(ValueError, match='shared_secret_required'):
+        protocol.configured({**BASE, 'PORTAL_SECRET_KEY': ''})
+    assert protocol.configured({'MINIMOI_LIBRARY_INTAKE': '0', 'PORTAL_SECRET_KEY': ''}) is None
