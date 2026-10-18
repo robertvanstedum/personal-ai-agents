@@ -9,6 +9,8 @@
     "claude-code": {"kind": "claude-code", "root": "~/.claude/projects", "never_copy": []},
     "codex": {"kind": "codex", "root": "~/.codex/sessions", "never_copy": []},
     "rooms": {"kind": "rooms", "root": "<records data dir>/transcripts", "source_instance_id": "<the store's transcript_origin id>",
-              "owner_ids": ["<the owner's participant id in Records>"], "never_copy": []}
+              "owner_ids": ["<the owner's participant id in Records>"], "never_copy": []},
+    "minimoi-mc": {"kind": "mc", "root": "<MC conversation export folder (scripts/vault/export_mc_conversations.py --out)>",
+                   "never_copy": []}
   }
 }

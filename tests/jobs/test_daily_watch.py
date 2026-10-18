@@ -40,7 +40,8 @@ class Fakes:
     """One place to script approvals, watches and the sender, and to see what was called."""
 
     def __init__(self, approvals=None, outputs=None, send_result="sent"):
-        self.approvals = {"claude-code": "approved", "codex": "approved", "rooms": "not_configured", **(approvals or {})}
+        self.approvals = {"claude-code": "approved", "codex": "approved", "rooms": "not_configured",
+                          "minimoi-mc": "not_configured", **(approvals or {})}
         self.outputs = outputs or {}
         self.watched, self.sent, self.send_result = [], [], send_result
         self.reports, self.report_out = [], (0, "report\tr1\toverall=current\nreport\tpublished={}\n")
@@ -127,6 +128,12 @@ def test_the_inbox_is_never_run_and_only_the_two_sources_are_asked(tmp_path):
     (watch_line("codex", "disk_low", {}), "disk_low"),
     (watch_line("codex", "ok", {"captured": 1, "unstable": 2}), "ok_unstable"),
     (watch_line("codex", "ok", {"failed": 1}), "ok_failed_files"),
+    # the watcher now says "warn" when files failed (17 Oct): same per-cause code, still a warning, never an alert
+    (watch_line("codex", "warn", {"failed": 4, "source_over_ceiling": 4}), "ok_failed_files"),
+    (watch_line("codex", "warn", {"unstable": 1}), "ok_unstable"),
+    (watch_line("codex", "warn", {"captured": 1, "disk_low": 1}), "disk_low"),
+    (watch_line("codex", "ok", {"captured": 1, "disk_low": 1}), "disk_low"),
+    (watch_line("codex", "warn", {}), "warn"),
     (watch_line("codex", "ok", {"captured": 1, "possible_gap": 3}), "ok_possible_gap"),
     (watch_line("codex", "ok", {"unknown_kind": 1}), "ok_unknown_kind"),
     (watch_line("codex", "ok", {"possible_gap": 1, "unknown_kind": 2}), "ok_possible_gap"),
@@ -323,6 +330,12 @@ def test_a_configured_and_approved_rooms_source_runs_with_the_others(tmp_path):
     f = Fakes(approvals={"rooms": "approved"}, outputs={"rooms": (0, watch_line("rooms", "ok", {"captured": 2, "excluded": 1, "other_participant": 1}))})
     code, doc, *_ = go(tmp_path, f)
     assert doc["state"] == "ok" and doc["results"]["rooms"] == "ok" and f.watched == ["claude-code", "codex", "rooms"]
+
+
+def test_a_configured_and_approved_mc_source_runs_after_the_others(tmp_path):
+    f = Fakes(approvals={"minimoi-mc": "approved"}, outputs={"minimoi-mc": (0, watch_line("minimoi-mc", "ok", {"captured": 4}))})
+    doc = go(tmp_path, f)[1]
+    assert doc["state"] == "ok" and doc["results"]["minimoi-mc"] == "ok" and f.watched == ["claude-code", "codex", "minimoi-mc"]
 
 
 def test_a_configured_rooms_source_that_is_not_approved_warns_and_is_never_run(tmp_path):

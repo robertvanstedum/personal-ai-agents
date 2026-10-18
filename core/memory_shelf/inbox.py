@@ -17,6 +17,13 @@ Accepts, at the top level of the folder:
   any other sender is refused, ``unknown_sender``; one with nothing to say is skipped, ``empty``); its two
   account files are excluded (``account_metadata``, never opened); asset files, projects, tasks and
   media_posts are held (``unsupported_kind``, counted; the zip is kept whole under ``_processed/``);
+* a **ChatGPT (OpenAI) data export**: a zip (any name) with ``conversations.json`` or the split
+  ``conversations-NNN.json`` files, recognised by its first conversation's ``mapping`` (claude.ai has
+  ``uuid`` + ``chat_messages``). Speakers from ``author.role`` over a closed set (``user``, ``assistant``;
+  ``system`` and ``tool`` are pointers; any other role refuses that conversation, ``unknown_sender``). The main
+  line is the visible branch (``current_node`` to the root), every other branch is kept. ``user.json``, ``ads.json`` and
+  ``user_settings.json`` are excluded (``account_metadata``), ``export_manifest.json`` is ignored, attachment
+  files and everything else are held (``unsupported_kind``; the zip is kept whole under ``_processed/``);
 * a **pasted transcript** (``.txt``/``.md``): turn boundaries are found by speaker
   labels (heuristic identity). Text before the first label is kept as an
   unattributed ``system`` turn, never dropped. A marker in a paste never designates:
@@ -222,7 +229,8 @@ def parse_conversation(conv: dict) -> Item:
     def add(idx: int, branch_no: int) -> None:
         msg = msgs[idx]
         basis = f"sender:{msg['sender']}" + (f",branch:{branch_no}" if branch_no else "")
-        parsed.add(EXPORT_SENDERS[msg["sender"]], _message_text(msg, parsed, idx + 1), idx + 1, basis)
+        parsed.add(EXPORT_SENDERS[msg["sender"]], _message_text(msg, parsed, idx + 1), idx + 1, basis,
+                   sessions.with_time(None, sessions.turn_time(msg.get("created_at"))))
     render_tree(parsed, main, segments, add)
     # the hash covers the conversation's content, not export-run metadata such as updated_at
     core = {k: conv.get(k) for k in ("uuid", "name", "created_at", "chat_messages")}
@@ -674,7 +682,7 @@ def parse_grok_conversation(conv: dict) -> Item:
     raw = _canonical(core)
     created = bundles.utc(head.get("create_time"))
     parsed = Parsed("grok", "Grok", source_id=cid, started=head.get("create_time") if isinstance(head.get("create_time"), str) else None,
-                    identity="source")
+                    identity="source", normalizer=sessions.NORMALIZER_VERSION["grok"])   # 2: each response's create_time
     sha, size, key = hashlib.sha256(raw).hexdigest(), len(raw), f"grok:{cid}"
     if any(grok_speaker(r.get("sender")) is None for r in responses):
         return Item(parsed, sha, size, key, title, created, member=cid, skip=codes.UNKNOWN_SENDER, skip_outcome=codes.REFUSED)
@@ -689,7 +697,8 @@ def parse_grok_conversation(conv: dict) -> Item:
             parsed.skip("message_not_text", idx + 1)
             message = ""
         basis = f"sender:{str(r.get('sender')).strip().lower()}" + (f",branch:{branch_no}" if branch_no else "")
-        parsed.add(grok_speaker(r.get("sender")), message or "", idx + 1, basis)
+        parsed.add(grok_speaker(r.get("sender")), message or "", idx + 1, basis,
+                   sessions.with_time(None, sessions.turn_time(r.get("create_time"))))
     render_tree(parsed, main, segments, add)
     return Item(parsed, sha, size, key, title, created, member=cid, skip=None if parsed.turns else codes.EMPTY)
 
@@ -764,9 +773,416 @@ def grok_stats(path: Path) -> dict:
             "excluded": {codes.ACCOUNT_METADATA: layout["account_files"]} if layout["account_files"] else {}}
 
 
+
+
+# ── ChatGPT (OpenAI) data export ──────────────────────────────────────────────
+#
+# A zip (any name) holding ``conversations.json`` (or the split ``conversations-NNN.json`` files of a larger
+# export) next to ``chat.html``, ``user.json``, ``export_manifest.json``, ``message_feedback.json`` and the
+# attachment files (``file-*``, ``*.dat``). Recognised by its first conversation's own shape: a ChatGPT
+# conversation carries a ``mapping`` (node id -> {parent, message}); a claude.ai one carries ``uuid`` and
+# ``chat_messages`` and never a mapping. The account files are excluded (``account_metadata``) and the
+# manifest is ignored (``export_manifest``), both never opened; attachment files and every other member are
+# held (``unsupported_kind``: counted, the zip is kept whole under ``_processed/``).
+
+CHATGPT_MEMBER = re.compile(r"^conversations(?:-(\d+))?\.json$")
+CHATGPT_ACCOUNT_FILES = frozenset({"user.json", "user_settings.json", "ads.json"})
+CHATGPT_MANIFEST = "export_manifest.json"
+CHATGPT_ROLES = {"user": HUMAN, "assistant": ASSISTANT}
+CHATGPT_NON_DIALOGUE_ROLES = frozenset({"system", "tool"})        # a known role that is never a turn: a pointer
+_CHATGPT_ASSET = re.compile(r"^(file[-_].+|.+\.dat)$", re.IGNORECASE)
+_CHATGPT_ASSET_DIRS = ("dalle-generations", "user-")
+_CHATGPT_TOOL_CONTENT = frozenset({"execution_output", "tether_browsing_display", "tether_quote", "sonic_webpage",
+                                   "system_error", "computer_output"})
+_CHATGPT_INJECTED_CONTENT = frozenset({"user_editable_context", "model_editable_context"})
+_CHATGPT_AV_PARTS = frozenset({"audio_asset_pointer", "real_time_user_audio_video_asset_pointer", "video_container_asset_pointer"})
+# Only these keys of a non-text part go into the conversation hash: an asset's expiry and render metadata change on
+# every export run, and a re-export must not become a spurious edition.
+_CHATGPT_STABLE_PART_KEYS = ("content_type", "asset_pointer", "text", "size_bytes", "width", "height", "direction")
+
+
+def _chatgpt_members(zf: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+    """The conversation members of a ChatGPT zip: ``conversations.json`` first, then the split files in number order."""
+    found = []
+    for info in zf.infolist():
+        if not _safe_member(info) or info.filename.count("/") > 1:
+            continue
+        m = CHATGPT_MEMBER.match(_basename(info.filename))
+        if m:
+            found.append((m.group(1) is not None, int(m.group(1) or 0), info.filename, info))
+    return [entry[3] for entry in sorted(found, key=lambda e: e[:3])]
+
+
+def stream_chatgpt(path: Path, *, limit: int | None = None, capped=None):
+    """Yield the raw conversations of a ChatGPT export (a zip, or a bare ``conversations.json``), one at a time.
+
+    ``limit`` bounds the **total** uncompressed bytes read across every conversation member (declared sizes are
+    checked first, the bytes actually read are counted too: a zip header can lie). ``capped`` is the text reader
+    (``_Capped`` by default; the fidelity replay passes its own)."""
+    capped = capped or _Capped
+    limit = MAX_EXPORT_BYTES if limit is None else limit
+    try:
+        if path.name.endswith(".zip"):
+            with zipfile.ZipFile(path) as zf:
+                infos = _chatgpt_members(zf)
+                if not infos:
+                    raise Refusal(codes.UNKNOWN_SCHEMA)
+                if sum(i.file_size for i in infos) > limit:
+                    raise Refusal(codes.TOO_LARGE)
+                remaining = limit
+                for info in infos:
+                    with zf.open(info) as handle:
+                        reader = capped(handle, remaining)
+                        yield from _stream(reader)
+                        remaining -= reader.total
+        else:
+            if path.stat().st_size > limit:
+                raise Refusal(codes.TOO_LARGE)
+            with open(path, "rb") as handle:
+                yield from _stream(capped(handle, limit))
+    except zipfile.BadZipFile:
+        raise Refusal(codes.UNPARSEABLE) from None
+
+
+def looks_like_chatgpt(conv: object) -> bool:
+    """The format's own marker: a ``mapping`` and none of claude.ai's keys. Shape is judged later, never here."""
+    return isinstance(conv, dict) and "mapping" in conv and "chat_messages" not in conv and "uuid" not in conv
+
+
+def is_chatgpt_export(path: Path) -> bool:
+    """True when the first conversation of the file's conversation member(s) is a ChatGPT conversation.
+
+    Reads at most the first conversation (bounded by the export limit); an unreadable or empty file is not ChatGPT
+    (it then takes the claude.ai path, which refuses it with its own code). Only the first member is opened, so an
+    export too large to import is still recognised, and then refused visibly as ``too_large``."""
+    try:
+        if path.name.endswith(".zip"):
+            with zipfile.ZipFile(path) as zf:
+                infos = _chatgpt_members(zf)
+                if not infos:
+                    return False
+                with zf.open(infos[0]) as handle:
+                    for conv in _stream(_Capped(handle, MAX_EXPORT_BYTES)):
+                        return looks_like_chatgpt(conv)
+        else:
+            with open(path, "rb") as handle:
+                for conv in _stream(_Capped(handle, MAX_EXPORT_BYTES)):
+                    return looks_like_chatgpt(conv)
+    except (Refusal, OSError, ValueError, UnicodeDecodeError, zipfile.BadZipFile):
+        return False
+    return False
+
+
+def _chatgpt_id(conv: dict) -> str | None:
+    for key in ("id", "conversation_id"):
+        if isinstance(conv.get(key), str) and conv[key]:
+            return conv[key]
+    return None
+
+
+def check_chatgpt_conversation(conv: object) -> dict:
+    """The shape every conversation must have (an id, a mapping of nodes, each message typed); one bad shape refuses
+    the whole file (never guessed)."""
+    if not (isinstance(conv, dict) and _chatgpt_id(conv) and isinstance(conv.get("mapping"), dict)):
+        raise Refusal(codes.UNKNOWN_SCHEMA)
+    if conv.get("current_node") is not None and not isinstance(conv["current_node"], str):
+        raise Refusal(codes.UNKNOWN_SCHEMA)
+    for node in conv["mapping"].values():
+        if not isinstance(node, dict) or (node.get("parent") is not None and not isinstance(node["parent"], str)):
+            raise Refusal(codes.UNKNOWN_SCHEMA)
+        msg = node.get("message")
+        if msg is None:
+            continue
+        if not (isinstance(msg, dict) and isinstance(msg.get("author"), dict) and isinstance(msg["author"].get("role"), str)
+                and isinstance(msg.get("content"), dict) and isinstance(msg["content"].get("content_type"), str)
+                and (msg["content"].get("parts") is None or isinstance(msg["content"]["parts"], list))
+                and (msg.get("metadata") is None or isinstance(msg["metadata"], dict))):
+            raise Refusal(codes.UNKNOWN_SCHEMA)
+    return conv
+
+
+def _epoch_iso(value: object) -> str | None:
+    """A unix time (float seconds) as ``YYYY-MM-DDTHH:MM:SSZ`` (UTC); None when it is not one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        return datetime.fromtimestamp(float(value), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def chatgpt_speaker(role: object) -> str | None:
+    return CHATGPT_ROLES.get(role) if isinstance(role, str) else None
+
+
+def _chatgpt_nodes(conv: dict) -> tuple[list[str], list[dict | None], list[dict], int | None]:
+    """(node ids, messages, tree nodes for ``branches.plan``, index of ``current_node`` if it is in the mapping)."""
+    ids = list(conv["mapping"])
+    msgs = [conv["mapping"][k].get("message") for k in ids]
+    nodes = [{"uuid": k, "parent_message_uuid": conv["mapping"][k].get("parent"),
+              "created_at": (m or {}).get("create_time")} for k, m in zip(ids, msgs)]
+    current = conv.get("current_node")
+    leaf = ids.index(current) if isinstance(current, str) and current in conv["mapping"] else None
+    return ids, msgs, nodes, leaf
+
+
+def _chatgpt_asset(part: dict) -> str:
+    size = part.get("size_bytes")
+    size_text = f"{int(size)} bytes" if isinstance(size, (int, float)) and not isinstance(size, bool) else "size unknown"
+    return f"{_cap(part.get('asset_pointer') or 'no pointer', 80)} ({size_text})"
+
+
+def _chatgpt_text(msg: dict, parsed: Parsed, line: int) -> str:
+    """One user or assistant message's words. Text parts and voice transcriptions are kept verbatim; images, audio and
+    video assets, attachments, reasoning, tool traffic and injected context become one-line pointers (never content)."""
+    content = msg["content"]
+    ctype = content["content_type"]
+    pieces: list[str] = []
+    if ctype in ("text", "multimodal_text"):
+        for part in content.get("parts") or []:
+            if isinstance(part, str):
+                if part.strip():
+                    pieces.append(part)
+            elif isinstance(part, dict) and part.get("content_type") == "audio_transcription" and isinstance(part.get("text"), str):
+                parsed.manifest["audio_transcriptions"] += 1
+                if part["text"].strip():
+                    pieces.append(part["text"])                          # what was said aloud is dialogue
+            elif isinstance(part, dict) and part.get("content_type") == "image_asset_pointer":
+                parsed.manifest["images"] += 1
+                parsed.skip("image", line, _chatgpt_asset(part))
+            elif isinstance(part, dict) and part.get("content_type") in _CHATGPT_AV_PARTS:
+                parsed.manifest["audio_video"] += 1
+                inner = part.get("audio_asset_pointer") if isinstance(part.get("audio_asset_pointer"), dict) else part
+                parsed.skip("file_attachment", line, f"{part['content_type']}: {_chatgpt_asset(inner)}")
+            else:
+                kind = part.get("content_type") if isinstance(part, dict) else type(part).__name__
+                parsed.skip(f"content:{_cap(kind or 'unknown')}", line)
+    elif ctype in ("thoughts", "reasoning_recap"):
+        parsed.skip("thinking", line, ctype)
+    elif ctype == "code":
+        parsed.skip("tool_use:code", line)
+    elif ctype in _CHATGPT_TOOL_CONTENT:
+        parsed.skip(f"tool_result:{ctype}", line)
+    elif ctype in _CHATGPT_INJECTED_CONTENT:
+        parsed.skip(f"injected:{ctype}", line)
+    else:
+        parsed.skip(f"content:{_cap(ctype)}", line)
+    meta = msg.get("metadata") or {}
+    attachments = meta.get("attachments")
+    for att in attachments if isinstance(attachments, list) else ([attachments] if attachments else []):
+        parsed.manifest["attachments"] += 1
+        att = att if isinstance(att, dict) else {}
+        name = att.get("name") if isinstance(att.get("name"), str) and att["name"] else "unnamed"
+        mime = att.get("mime_type") if isinstance(att.get("mime_type"), str) and att["mime_type"] else "unknown type"
+        size = att.get("size")
+        size_text = f"{int(size)} bytes" if isinstance(size, (int, float)) and not isinstance(size, bool) else "size unknown"
+        parsed.skip("attachment_no_text", line, f"{name} ({mime}, {size_text})")     # the file itself is never read
+    if meta.get("search_result_groups"):
+        parsed.skip("web_search_results", line, f"{_count(meta['search_result_groups'])} results")
+    return "\n\n".join(pieces)
+
+
+def _chatgpt_core(conv: dict, cid: str) -> dict:
+    """What the conversation hash covers: the words and the tree, not export-run metadata (expiring asset links,
+    flags, model routing details), so an unchanged conversation in a later export stays ``unchanged``."""
+    def part(p):
+        return {k: p.get(k) for k in _CHATGPT_STABLE_PART_KEYS if k in p} if isinstance(p, dict) else p
+    mapping = {}
+    for nid, node in conv["mapping"].items():
+        msg = node.get("message")
+        entry = {"parent": node.get("parent")}
+        if isinstance(msg, dict):
+            content, meta = msg["content"], msg.get("metadata") or {}
+            atts = meta.get("attachments") if isinstance(meta.get("attachments"), list) else []
+            entry["message"] = {
+                "role": msg["author"].get("role"), "name": msg["author"].get("name"), "recipient": msg.get("recipient"),
+                "create_time": msg.get("create_time"), "content_type": content.get("content_type"),
+                "parts": [part(p) for p in content.get("parts") or []],
+                "other": {k: v for k, v in content.items() if k not in ("content_type", "parts")},
+                "hidden": bool(meta.get("is_visually_hidden_from_conversation") or meta.get("is_user_system_message")),
+                "attachments": [{k: a.get(k) for k in ("id", "name", "size", "mime_type")} if isinstance(a, dict) else a for a in atts]}
+        mapping[nid] = entry
+    return {"id": cid, "title": conv.get("title"), "create_time": conv.get("create_time"),
+            "current_node": conv.get("current_node"), "mapping": mapping}
+
+
+def parse_chatgpt_conversation(conv: dict) -> Item:
+    """One ChatGPT conversation to turns. The main line is the visible branch (``current_node`` up to the root);
+    when ``current_node`` is missing or does not resolve, the newest-created leaf decides (``branches.py``). Every
+    other message is kept as a branch, as for claude.ai and Grok. User and assistant messages become turns; system,
+    tool, hidden and empty messages are counted pointers. A conversation with a role outside the closed set is refused
+    (``unknown_sender``), one with nothing to say is skipped (``empty``): both as items that say so, never silently."""
+    cid = _chatgpt_id(conv)
+    ids, msgs, nodes, leaf = _chatgpt_nodes(conv)
+    raw = _canonical(_chatgpt_core(conv, cid))
+    started = _epoch_iso(conv.get("create_time"))
+    title = conv.get("title") if isinstance(conv.get("title"), str) and conv["title"].strip() else "chatgpt conversation"
+    parsed = Parsed("chatgpt", "ChatGPT", source_id=cid, started=started, identity="source",
+                    normalizer=sessions.NORMALIZER_VERSION["chatgpt"])
+    sha, size, key = hashlib.sha256(raw).hexdigest(), len(raw), f"chatgpt:{cid}"
+    created = bundles.utc(started)
+    roles = {m["author"]["role"] for m in msgs if isinstance(m, dict)}
+    if any(chatgpt_speaker(r) is None and r not in CHATGPT_NON_DIALOGUE_ROLES for r in roles):
+        return Item(parsed, sha, size, key, title, created, member=cid, skip=codes.UNKNOWN_SENDER, skip_outcome=codes.REFUSED)
+    parsed.manifest.update({"attachments": 0, "images": 0, "audio_video": 0, "audio_transcriptions": 0, "structural_nodes": 0})
+    if _epoch_iso(conv.get("update_time")):
+        parsed.manifest["source_updated"] = _epoch_iso(conv.get("update_time"))
+    if isinstance(conv.get("default_model_slug"), str) and conv["default_model_slug"]:
+        parsed.manifest["source_model"] = _cap(conv["default_model_slug"], 60)
+    main, segments = branches.plan(nodes, prefer_leaf=leaf)
+
+    def add(idx: int, branch_no: int) -> None:
+        msg, line = msgs[idx], idx + 1
+        if msg is None:
+            parsed.manifest["structural_nodes"] += 1                    # the export's empty root: not a message
+            return
+        role, meta = msg["author"]["role"], msg.get("metadata") or {}
+        at = sessions.with_time(None, sessions.turn_time(msg.get("create_time")))
+        if role == "system":
+            parsed.skip("injected:system", line)
+            return
+        if role == "tool":
+            parsed.skip(f"tool_result:{_cap(msg['author'].get('name') or msg['content']['content_type'])}", line)
+            return
+        if meta.get("is_visually_hidden_from_conversation") or meta.get("is_user_system_message"):
+            parsed.skip("injected:hidden", line)
+            return
+        recipient = msg.get("recipient")
+        if isinstance(recipient, str) and recipient not in ("", "all"):
+            kept = _chatgpt_authored_document(msg, recipient) if role == "assistant" else None
+            if kept is None:
+                parsed.skip(f"tool_use:{_cap(recipient)}", line)
+                return
+            basis = f"role:{role},doc:{_cap(recipient)}" + (f",branch:{branch_no}" if branch_no else "")
+            parsed.add(CHATGPT_ROLES[role], kept, line, basis, at)
+            return
+        before = sum(parsed.omitted.values())
+        text = _chatgpt_text(msg, parsed, line)
+        if not text.strip() and sum(parsed.omitted.values()) == before:
+            parsed.skip("empty:message", line)
+        basis = f"role:{role}" + (f",branch:{branch_no}" if branch_no else "")
+        parsed.add(CHATGPT_ROLES[role], text, line, basis, at)
+    render_tree(parsed, main, segments, add)
+    return Item(parsed, sha, size, key, title, created, member=cid, skip=None if parsed.turns else codes.EMPTY)
+
+
+def _chatgpt_raw_text(msg: dict) -> str:
+    content = msg.get("content") or {}
+    if isinstance(content.get("text"), str):
+        return content["text"]
+    parts = content.get("parts") or []
+    return "\n".join(p for p in parts if isinstance(p, str))
+
+
+def _chatgpt_authored_document(msg: dict, recipient: str) -> str | None:
+    """Text the assistant authored for a tool that IS the answer: a canvas document it wrote or edited
+    (``canmore.create_textdoc`` / ``canmore.update_textdoc``) or a memory it saved (``bio``). Kept as a labelled
+    assistant turn; any other tool call stays a counted pointer. None when nothing usable is there."""
+    raw = _chatgpt_raw_text(msg).strip()
+    if not raw:
+        return None
+    if recipient == "bio":
+        return f"[Saved memory]\n{raw}"
+    if not recipient.startswith("canmore."):
+        return None
+    try:
+        doc = json.loads(raw)
+    except ValueError:
+        return f"[Canvas document]\n{raw}"
+    if not isinstance(doc, dict):
+        return None
+    name = doc.get("name") if isinstance(doc.get("name"), str) else ""
+    label = f"[Canvas document{': ' + name[:120] if name else ''}]"
+    if isinstance(doc.get("content"), str) and doc["content"].strip():
+        return f"{label}\n{doc['content']}"
+    updates = [u.get("replacement") for u in doc.get("updates") or [] if isinstance(u, dict) and isinstance(u.get("replacement"), str)]
+    if updates:
+        return f"[Canvas edit{': ' + name[:120] if name else ''}]\n" + "\n\n".join(updates)
+    return None
+
+
+def chatgpt_layout(path: Path) -> dict:
+    """Counts of a ChatGPT zip's non-conversation members, from its directory only (no member is opened)."""
+    assets = account = manifest = other = 0
+    if not path.name.endswith(".zip"):
+        return {"assets": 0, "account_files": 0, "manifests": 0, "other_members": 0}
+    with zipfile.ZipFile(path) as zf:
+        convs = {i.filename for i in _chatgpt_members(zf)}
+        for info in zf.infolist():
+            if not _safe_member(info) or info.filename in convs:
+                continue
+            base, parts = _basename(info.filename), info.filename.split("/")
+            if base in CHATGPT_ACCOUNT_FILES:
+                account += 1
+            elif base == CHATGPT_MANIFEST:
+                manifest += 1
+            elif _CHATGPT_ASSET.match(base) or any(p.startswith(_CHATGPT_ASSET_DIRS) for p in parts[:-1]):
+                assets += 1
+            else:
+                other += 1
+    return {"assets": assets, "account_files": account, "manifests": manifest, "other_members": other}
+
+
+def _chatgpt_parts(layout: dict) -> dict:
+    excluded = {k: v for k, v in ((codes.ACCOUNT_METADATA, layout["account_files"]), (codes.EXPORT_MANIFEST, layout["manifests"])) if v}
+    held = {k: v for k, v in (("assets", layout["assets"]), ("other_members", layout["other_members"])) if v}
+    return {"excluded": excluded, "held": held}
+
+
+def validate_chatgpt(path: Path) -> tuple[int, dict]:
+    """Judge a ChatGPT export whole before taking anything: ``(conversation count, parts)`` or ``Refusal``."""
+    count = 0
+    for conv in stream_chatgpt(path):
+        check_chatgpt_conversation(conv)
+        count += 1
+    if not count:
+        raise Refusal(codes.NO_TURNS)
+    return count, _chatgpt_parts(chatgpt_layout(path))
+
+
+def _chatgpt_items(path: Path, only: str | None):
+    for conv in stream_chatgpt(path):
+        if only is not None and not (isinstance(conv, dict) and _chatgpt_id(conv) == only):
+            continue
+        yield parse_chatgpt_conversation(check_chatgpt_conversation(conv))
+
+
+def chatgpt_stats(path: Path) -> dict:
+    """Counts and a date range for a ChatGPT export. Never a title, model name or any text."""
+    convs = msgs = branched = empty = unknown = atts = kept = omitted = 0
+    first = last = None
+    for conv in stream_chatgpt(path):
+        check_chatgpt_conversation(conv)
+        convs += 1
+        _ids, messages, nodes, leaf = _chatgpt_nodes(conv)
+        msgs += sum(1 for m in messages if isinstance(m, dict))
+        if branches.plan(nodes, prefer_leaf=leaf)[1]:
+            branched += 1
+        item = parse_chatgpt_conversation(conv)
+        if item.skip == codes.UNKNOWN_SENDER:
+            unknown += 1
+        elif item.skip:
+            empty += 1
+        atts += item.parsed.manifest.get("attachments", 0)
+        kept += len(item.parsed.turns)
+        omitted += sum(item.parsed.omitted.values())
+        day = (_epoch_iso(conv.get("create_time")) or "")[:10] or None
+        if day:
+            first, last = min(first or day, day), max(last or day, day)
+    if not convs:
+        raise Refusal(codes.NO_TURNS)
+    parts = _chatgpt_parts(chatgpt_layout(path))
+    return {"conversations": convs, "messages": msgs, "turns_kept": kept, "items_omitted": omitted,
+            "created_first": first, "created_last": last, "conversations_with_branches": branched,
+            "empty_conversations": empty, "unknown_sender_conversations": unknown, "attachments": atts,
+            "held": parts["held"], "excluded": parts["excluded"]}
+
+
 def classify(name: str, path: Path | None = None) -> tuple[str, str | None]:
     """``(kind, category)`` from the file name; for a zip with an unlisted name, ``path`` lets the zip's own
-    directory (never a member's content) tell a Grok export from the older claude.ai single zip."""
+    directory (never a member's content) tell a Grok export from the older claude.ai single zip. A zip (or a bare
+    ``conversations.json``) whose first conversation has ChatGPT's own shape (``looks_like_chatgpt``) is a ChatGPT
+    export; that one conversation is the only content read to route a file."""
     lower = name.lower()
     if name.endswith(".canary.json"):
         return "canary", None
@@ -776,8 +1192,12 @@ def classify(name: str, path: Path | None = None) -> tuple[str, str | None]:
     if lower.endswith(".zip"):
         if path is not None and is_grok_zip(path):
             return "grok-export", None
+        if path is not None and is_chatgpt_export(path):
+            return "chatgpt-export", None
         return "claude-ai-export", "conversations"              # the older single zip
     if name == "conversations.json":
+        if path is not None and is_chatgpt_export(path):
+            return "chatgpt-export", None
         return "claude-ai-export", "conversations"
     if lower.endswith(".json") and "manifest" in lower:
         return "export-manifest", None
@@ -800,6 +1220,11 @@ def load_items(path: Path, fallback: datetime, only: str | None = None):
             count, parts = validate_grok(path)
             return ItemStream(_grok_items(path, None), parts)
         return ItemStream(_grok_items(path, only))
+    if kind == "chatgpt-export":
+        if only is None:
+            count, parts = validate_chatgpt(path)
+            return ItemStream(_chatgpt_items(path, None), parts)
+        return ItemStream(_chatgpt_items(path, only))
     if kind == "claude-ai-export":
         if only is None:
             validate_export(path)
@@ -918,7 +1343,7 @@ def decide(entry: Entry, never_copy: tuple[str, ...]) -> tuple[str, str | None]:
         return "excluded", codes.ACCOUNT_METADATA
     if entry.kind == "claude-ai-export" and entry.category in HELD_CATEGORIES:
         return "held", codes.UNSUPPORTED_KIND
-    if entry.kind in ("claude-ai-export", "grok-export", "paste"):
+    if entry.kind in ("claude-ai-export", "grok-export", "chatgpt-export", "paste"):
         return "would_import", None
     return "would_refuse", codes.UNSUPPORTED_TYPE
 
@@ -957,6 +1382,9 @@ def export_stats(path: Path) -> dict:
             "conversations_with_branches": branched, "attachments": atts, "attachment_bytes": att_bytes}
 
 
+EXPORT_STATS = {"claude-ai-export": export_stats, "grok-export": grok_stats, "chatgpt-export": chatgpt_stats}
+
+
 def build_listing(inbox_root: str | Path, never_copy: tuple[str, ...] = (), now: datetime | None = None) -> dict:
     """Per-file metadata only: name, size, sha256, kind, category, decision, and export counts."""
     entries = scan(inbox_root, never_copy)
@@ -968,9 +1396,9 @@ def build_listing(inbox_root: str | Path, never_copy: tuple[str, ...] = (), now:
                "decision": decision}
         if reason:
             row["reason"] = reason
-        if decision == "would_import" and e.kind in ("claude-ai-export", "grok-export"):
+        if decision == "would_import" and e.kind in EXPORT_STATS:
             try:
-                row["export"] = (grok_stats if e.kind == "grok-export" else export_stats)(e.path)
+                row["export"] = EXPORT_STATS[e.kind](e.path)
                 counts["conversations"] += row["export"]["conversations"]
                 counts["messages"] += row["export"]["messages"]
             except Refusal as exc:

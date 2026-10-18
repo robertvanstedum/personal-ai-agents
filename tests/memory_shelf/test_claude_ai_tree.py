@@ -209,7 +209,7 @@ def test_attachment_text_is_a_reference_not_dialogue_and_the_owners_own_words_st
     assert "[omitted: attachment_no_text, source line 1: scan.png]" in body
     assert "[omitted: file, source line 1: photo.jpg]" in body and "[omitted: file, source line 1]" in body
     assert meta["normalized"]["attachments"] == 2 and meta["normalized"]["attachment_chars_excluded"] == len(atts[0]["extracted_content"])
-    assert meta["normalized"]["normalizer"] == 2
+    assert meta["normalized"]["normalizer"] == 3
 
 
 def test_a_message_with_only_an_attachment_makes_no_dialogue_turn_but_keeps_the_reference(tmp_path):

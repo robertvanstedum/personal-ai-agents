@@ -588,7 +588,7 @@ def test_an_export_or_ingest_failure_never_raises_and_the_next_pass_finishes_the
         return real(*a, **k)
     monkeypatch.setattr(record, "write", flaky)
     out = run(shelf, source)
-    assert out["status"] == "ok" and out["counts"] == {codes.FAILED: 1}
+    assert out["status"] == "warn" and out["counts"] == {codes.FAILED: 1}
     assert run(shelf, source)["counts"] == {codes.CAPTURED: 1}
     assert len(main_files(shelf)) == 1 and ledger.report(shelf)["ok"] is True
 
@@ -600,7 +600,7 @@ def test_a_parser_crash_is_a_fixed_code_not_an_exception(world, monkeypatch):
     approved(shelf, source)
     monkeypatch.setattr(rooms, "_parse", lambda *a, **k: 1 / 0)
     out = run(shelf, source)
-    assert out["status"] == "ok" and out["counts"].get(codes.FAILED) == 1 and "ZeroDivision" not in json.dumps(out)
+    assert out["status"] == "warn" and out["counts"].get(codes.FAILED) == 1 and "ZeroDivision" not in json.dumps(out)
 
 
 CHILD = textwrap.dedent("""

@@ -26,11 +26,23 @@ UNAVAILABLE = (
 )
 
 
+def in_scope(context, environ) -> bool:
+    """``MINIMOI_VAULT_ASK_CONVERSATIONS`` (comma list of conversation-id prefixes) limits which conversations may ask the
+    Vault. Production sets ``guild-``: only the Guild's MC conversations (which refuse Private turns before they reach
+    this backend), never Telegram or other CoS channels (owner decision, 17 Oct 2026). Unset: every conversation."""
+    prefixes = [p.strip() for p in environ.get("MINIMOI_VAULT_ASK_CONVERSATIONS", "").split(",") if p.strip()]
+    if not prefixes:
+        return True
+    confer = context.get("confer") if isinstance(context.get("confer"), dict) else {}
+    conversation = confer.get("conversation_id")
+    return isinstance(conversation, str) and any(conversation.startswith(p) for p in prefixes)
+
+
 def call_with_vault(backend, prompt, context, tool_policy, *, retrieve=None, environ=None):
     environ = os.environ if environ is None else environ
     configured = any(environ.get(k) for k in ("MINIMOI_VAULT_ASK_URL", "MINIMOI_VAULT_ASK_TOKEN"))
-    # Private turns must not reach a service that logs retrieval queries.
-    if not configured or context.get("record_mode") == "off_record":
+    # Private turns must not reach a service that logs retrieval queries; out-of-scope conversations never ask.
+    if not configured or context.get("record_mode") == "off_record" or not in_scope(context, environ):
         return backend.call_backend(prompt, context, tool_policy)
 
     built = None

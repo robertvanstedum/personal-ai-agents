@@ -5,13 +5,13 @@ const source=fs.readFileSync(process.argv[2]||new URL('../minimoi_portal/guild_u
  .replace(/^import .*;$/gm,'').replace('export function initMcVoice','function initMcVoice')
  .replace('await import(`${api}/mc/voice/static/realtime-voice-controller.js`)','await importControlled()');
 const flush=()=>new Promise(r=>setImmediate(r));
-async function rig({endGate=null,savedGate=null,delayedFinalize=false,savedFailure=false}={}){
+async function rig({endGate=null,savedGate=null,delayedFinalize=false,savedFailure=false,stall=null}={}){
  const nodes={},instances=[],events={},windowEvents={},changes=[],savedRequests=[];
- const node=s=>nodes[s]??={textContent:'',value:s.includes('provider')?'openai':'',disabled:false,hidden:false,checked:false,attrs:{},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,f){this[k]=f}};
+ const node=s=>nodes[s]??={textContent:'',value:s.includes('provider')?'openai':'',disabled:false,hidden:false,open:false,checked:false,attrs:{},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,f){this[k]=f}};
  const document={body:{dataset:{mcVoice:'true'}},dispatchEvent(){},addEventListener(k,f){events[k]=f}};
  class Controller{constructor(options){this.options=options;instances.push(this)}async startSession(){this.options.onStateChange('active')}endSession(){if(!delayedFinalize)this.options.onFinalize({turns:this.finalTurns||[]});if(endGate)return endGate.then(()=>this.options.onStateChange('ended'));this.options.onStateChange('ended')}}
  const sandbox={$:node,announce(){},live:{known:true,off:false},onChange(fn){changes.push(fn)},recordMode:()=> 'on',submitVoiceUtterance(){throw Error('no submit')},panelMode:()=> 'open',
- document,AbortController,setTimeout,clearTimeout,CustomEvent:class{},MutationObserver:class{observe(){}},window:{addEventListener(k,f){windowEvents[k]=f}},fetch:async(url,options)=>{if(url.endsWith('/voice-transcript')){savedRequests.push({url,options});if(savedGate)await savedGate;return {ok:!savedFailure,headers:{get:()=> 'text/plain; charset=utf-8'},text:async()=>`Saved same-conversation voice transcript ${savedRequests.length}.`}}return {ok:true,json:async()=>({ok:true,providers:[{provider:'openai'}],managed_realtime:{session_url:'/fake'}})}},importControlled:async()=>({RealtimeVoiceController:Controller})};
+ document,AbortController,setTimeout:stall?fn=>{stall.deadline=fn;return 1}:setTimeout,clearTimeout:stall?()=>{}:clearTimeout,CustomEvent:class{},MutationObserver:class{observe(){}},window:{addEventListener(k,f){windowEvents[k]=f}},fetch:async(url,options)=>{if(url.endsWith('/voice-transcript')){savedRequests.push({url,options});if(stall?.kind==='fetch')await new Promise(r=>stall.release=r);if(savedGate)await savedGate;return {ok:!savedFailure,headers:{get:()=> 'text/plain; charset=utf-8'},text:async()=>{if(stall?.kind==='body')await new Promise(r=>stall.release=r);return `Saved same-conversation voice transcript ${savedRequests.length}.`}}}return {ok:true,json:async()=>({ok:true,providers:[{provider:'openai'}],managed_realtime:{session_url:'/fake'}})}},importControlled:async()=>({RealtimeVoiceController:Controller})};
  vm.createContext(sandbox);vm.runInContext(source,sandbox);const page={urls:{api:'/api'},csrf_token:'synthetic',conversation:{id:'synthetic-conversation'}};sandbox.initMcVoice(page);await flush();
  return {nodes,instances,node,savedRequests,live:sandbox.live,page,changes,async click(){node('[data-mc-voice-btn]').click();await flush()},status:()=>node('[data-mc-voice-status]').textContent};
 }
@@ -24,6 +24,7 @@ async function rig({endGate=null,savedGate=null,delayedFinalize=false,savedFailu
  assert.equal(r.node('[data-mc-voice-transcript]').hidden,true);
  assert.equal(r.savedRequests.length,0);c.options.onInputState('speaking');assert.equal(r.status(),'Speaking…');
  choice.checked=true;choice.change();
+ assert.equal(r.node('[data-mc-voice-transcript]').open,true);
  assert.match(r.node('[data-mc-voice-transcript-text]').textContent,/You: Synthetic first utterance/);
  assert.equal(r.node('[data-mc-voice-transcript]').hidden,false);
  assert.equal(r.instances.length,1);
@@ -45,6 +46,7 @@ async function rig({endGate=null,savedGate=null,delayedFinalize=false,savedFailu
  await r.click();const choice=r.node('[data-mc-voice-transcript-choice]');assert.equal(choice.checked,false);
  assert.match(r.node('[data-mc-voice-transcript-text]').textContent,/Saved same-conversation voice transcript/);
  assert.equal(r.node('[data-mc-voice-transcript]').hidden,false);
+ assert.equal(r.node('[data-mc-voice-transcript]').open,true);
  choice.change();assert.equal(r.node('[data-mc-voice-transcript]').hidden,false);
  assert.equal(r.savedRequests.length,1);assert.equal(r.savedRequests[0].options.method,undefined);
 }
@@ -115,3 +117,21 @@ async function rig({endGate=null,savedGate=null,delayedFinalize=false,savedFailu
 }
 console.log('9 live-only-toggle/saved-after-End/delayed-finalize/privacy/stale/persistent-conversation scenarios passed; synthetic controller/GET only.');
 
+
+for(const kind of ['fetch','body']){
+ const stall={kind},r=await rig({stall});await r.click();await r.click();
+ assert.match(r.node('[data-mc-voice-transcript-text]').textContent,/Loading saved/);
+ stall.deadline();await flush();
+ assert.match(r.node('[data-mc-voice-transcript-text]').textContent,/unavailable/);
+ assert.equal(r.savedRequests[0].options.signal.aborted,true);
+ stall.release();await flush();
+ assert.match(r.node('[data-mc-voice-transcript-text]').textContent,/unavailable/);
+}
+// Ordinary incoming updates respect the owner's manual disclosure collapse.
+{
+ const r=await rig();await r.click();const choice=r.node('[data-mc-voice-transcript-choice]');
+ choice.checked=true;choice.change();r.node('[data-mc-voice-transcript]').open=false;
+ r.instances[0].options.onTranscriptUpdate([{speaker:'user',text:'Still collapsed',completed:true}]);
+ assert.equal(r.node('[data-mc-voice-transcript]').open,false);
+}
+console.log('3 saved-read deadline/late-result/manual-collapse scenarios passed.');

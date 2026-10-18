@@ -31,6 +31,10 @@ if [ "$1" = --host ]; then
   shift 2
 fi
 case "$1" in
+  container)
+    # Real docker: inspecting a missing container fails. The Vault container exists only when a test says so.
+    [ "$2" = inspect ] && [ "$3" = minimoi-vault-ask ] && [ "${STUB_VAULT_EXISTS:-0}" != 1 ] && exit 1
+    exit 0 ;;
   ps)
     [ "$2" = -a ] && [ "$3" = --format ] && [ "$4" = '{{.Names}}' ] || exit 1
     printf 'minimoi-portal\n' ;;

@@ -38,13 +38,29 @@ def test_prepare_has_complete_pin_candidates_and_preserves_old_jobs(tmp_path, mo
         assert result['runtime_file_hashes']['scripts/vault/' + script]
     assert result['runtime_file_hashes']['utils/credential_scrub.py']
     shelf = json.loads((pin / 'config/memory_shelf.json').read_text())
+    # no mc_pull_identity in the profile: nothing feeds the watch folder, so no minimoi-mc source (memory-watch is not turned yellow
+    # every night by it, review LOW-MEDIUM-1) and no mc-pull agent; the manifest says so
     assert shelf['never_copy'] == [] and set(shelf['sources']) == {'claude-code','codex'}
     assert 'rooms' not in shelf['sources']
+    assert result['runtime_file_hashes']['scripts/vault/vault_mc_pull.py'] and (pin / 'core/memory_sync/mc_pull.py').exists()
+    assert not (out / 'candidate-plists' / (R.LABELS['mc_pull'] + '.plist')).exists()
+    assert any('no mc_pull_identity' in line and 'minimoi-mc source not configured' in line for line in result['limitations'])
+    assert not any('approve-source' in line for line in result['limitations'])
+    assert 'sync' in R.LABELS                       # the vault-sync agent is pinned like the other Vault jobs
     for job in R.LABELS:
+        if job == 'mc_pull':
+            continue
         doc = plistlib.loads((out / 'candidate-plists' / (R.LABELS[job] + '.plist')).read_bytes())
         assert doc['WorkingDirectory'] == str(pin)
         if job == 'ask':
             assert doc['KeepAlive'] and doc['ProgramArguments'][doc['ProgramArguments'].index('--host') + 1] == '127.0.0.1'
+        elif job == 'sync':                          # vault-sync: every 2 h and at load, from the pin, never the checkout
+            assert R.LABELS['sync'] == 'com.vanstedum.minimoi-vault-sync'
+            assert doc['StartInterval'] == 7200 and doc['RunAtLoad'] is True and 'StartCalendarInterval' not in doc
+            assert doc['ProgramArguments'][1:] == [str(pin / 'scripts/vault/vault_sync.py'), 'run', '--execute']
+            assert doc['EnvironmentVariables']['PYTHONPATH'] == str(pin)
+            assert doc['EnvironmentVariables']['MOI_VAULT_PUBLISH_DEST'] == cfg['backup_dest']
+            assert result['runtime_file_hashes']['core/memory_sync/sync.py'] and (pin / 'core/memory_sync/batch.py').exists()
         else:
             h,m = R.TIMES[job]; assert doc['StartCalendarInterval'] == {'Hour': h, 'Minute': m}
     with pytest.raises(ValueError, match='output_exists'):
@@ -52,6 +68,41 @@ def test_prepare_has_complete_pin_candidates_and_preserves_old_jobs(tmp_path, mo
     # Permit pytest to remove only its synthetic prepared pin afterward.
     for directory in [pin] + [p for p in pin.rglob('*') if p.is_dir()]:
         directory.chmod(0o700)
+
+
+def test_an_mc_pull_identity_pins_the_mc_pull_agent(tmp_path, monkeypatch):
+    cfg = config(tmp_path)
+    cfg['mc_pull_identity'] = 'keychain:minimoi-vault-identity/age'
+    p = tmp_path / 'profile.json'; p.write_text(json.dumps(cfg)); cfg = R.profile(p)
+    monkeypatch.setattr(R, 'dependency_receipt', lambda py: {'python': 'test', 'packages': {}})
+    out = tmp_path / 'prepared'
+    result = R.prepare(REPO, cfg, out)
+    pin = Path(result['runtime'])
+    doc = plistlib.loads((out / 'candidate-plists' / 'com.vanstedum.minimoi-vault-mc-pull.plist').read_bytes())
+    assert doc['Label'] == R.LABELS['mc_pull'] == 'com.vanstedum.minimoi-vault-mc-pull'
+    assert doc['StartInterval'] == 7200 and doc['RunAtLoad'] is True and 'StartCalendarInterval' not in doc
+    assert doc['ProgramArguments'][1:] == [str(pin / 'scripts/vault/vault_mc_pull.py'), 'run', '--execute',
+                                           '--identity', 'keychain:minimoi-vault-identity/age']
+    assert doc['WorkingDirectory'] == str(pin) and doc['EnvironmentVariables']['MOI_CONFIG'] == str(pin / 'config/memory_shelf.json')
+    assert not any('IDENTITY' in k for k in doc['EnvironmentVariables'])     # the spec travels as an argument, never a variable
+    assert (pin / 'scripts/vault/vault_mc_pull.py').exists()
+    assert not any('no mc_pull_identity' in line for line in result['limitations'])
+    # the production MC pull's watch folder is the minimoi-mc source root; capture waits for the owner's approval, and until then the
+    # nightly memory-watch shows it yellow, which the manifest states
+    shelf = json.loads((pin / 'config/memory_shelf.json').read_text())
+    assert set(shelf['sources']) == {'claude-code', 'codex', 'minimoi-mc'}
+    assert shelf['sources']['minimoi-mc'] == {'kind': 'mc', 'root': str(Path.home() / 'minimoi-staging/mc-export'), 'never_copy': []}
+    assert any('memory-watch shows minimoi-mc yellow' in line and '`moi approve-source minimoi-mc`' in line
+               for line in result['limitations'])
+    for directory in [pin] + [p for p in pin.rglob('*') if p.is_dir()]:
+        directory.chmod(0o700)
+
+
+@pytest.mark.parametrize('bad', ['AGE-SECRET-KEY-1' + 'Q' * 58, 'file:relative/key', 'file:~/key', 'vault:x', 'keychain:', 'cmd: x',
+                                 'file:/k\nAGE', 'file:/age-secret-key-1x'])
+def test_mc_pull_identity_must_be_a_spec_never_key_text(tmp_path, bad):
+    p = tmp_path / 'profile.json'; doc = config(tmp_path); doc['mc_pull_identity'] = bad; p.write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match='invalid_mc_pull_identity'): R.profile(p)
 
 
 def test_profile_refuses_secret_or_unknown_fields_and_placeholder(tmp_path):

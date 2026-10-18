@@ -44,7 +44,7 @@ from core.memory_shelf.sessions import DEFAULT_NORMALIZER
 
 RECORD_KINDS = ("sessions-raw", "sessions", "notes", "turns", "snapshots", "briefs")
 SESSION_DIR = "sessions-raw"
-MANUAL_PROVIDERS = frozenset({"paste", "claude-ai", "grok"})        # B7: manual submissions (inbox)
+MANUAL_PROVIDERS = frozenset({"paste", "claude-ai", "grok", "chatgpt"})        # B7: manual submissions (inbox)
 # Only a paste can be an early edition of another record (B7): two exported or
 # watched records carry their own source ids, so overlap between them is never
 # the same conversation (people reuse opening prompts). Flags need a paste side.
@@ -102,12 +102,14 @@ def edition_source_hash(path: Path) -> str | None:
 
 
 def _same_turns(old_body: str, new_body: str) -> bool:
-    """True only when both bodies read back and hold the same turns. A body that does not read back is never
-    "the same": the safe answer is a new edition (the old one stays), never a failed ingest."""
+    """True only when both bodies read back and hold the same turns at the same times. A body that does not read back
+    is never "the same": the safe answer is a new edition (the old one stays), never a failed ingest. Turn times count
+    (17 Oct 2026): a parser that starts keeping each turn's own time must give an unchanged source a new edition."""
     try:
-        return render.ordered_turns(render.parse_body(old_body)) == render.ordered_turns(render.parse_body(new_body))
+        old, new = render.parse_body(old_body), render.parse_body(new_body)
     except record.InvalidRecord:
         return False
+    return render.ordered_turns(old) == render.ordered_turns(new) and render.turn_times(old) == render.turn_times(new)
 
 
 class Shelf:

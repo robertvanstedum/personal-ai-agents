@@ -3,6 +3,21 @@
 
 prepare --config PROFILE --out NEW_DIRECTORY
 run-job --config PROFILE --job capture|index|backup|watchdog (operator activation only)
+
+The Vault incremental sync's Mac job (``vault-sync``, 17 Oct 2026) is pinned here too: its candidate plist runs
+``<pin>/scripts/vault/vault_sync.py run --execute`` every 2 h (``StartInterval`` 7200) and at load (``RunAtLoad``: launchd runs a
+missed interval once on wake). It is not a ``run-job`` (that runner admits only the 00:00-06:00 window and holds the batch lock for a
+heavy job); the sync takes the shared lock itself without waiting and bounds its own daytime work.
+
+The production MC pull (``vault-mc-pull``, 17 Oct 2026) is pinned the same way, with ``scripts/vault/vault_mc_pull.py run --execute
+--identity <spec>`` every 2 h and at load. It is the one Vault job that reads the PRIVATE identity, so its plist exists only when the profile
+names one: the optional key ``mc_pull_identity`` holds a SPEC (``file:`` | ``keychain:`` | ``ssm:`` | ``cmd:``), validated here and never
+key text; without it no mc-pull plist is written and the MANIFEST limitations say so. The shared environment still carries no identity
+variable. With ``mc_pull_identity`` (and only then: nothing else feeds the folder) the pinned shelf config gains the ``minimoi-mc``
+source (kind ``mc``, rooted at ``~/minimoi-staging/mc-export``, the pull's watch folder). It still captures nothing until the owner
+approves it (``moi approve-source minimoi-mc``), and until then the nightly memory-watch shows ``minimoi-mc`` yellow (``not_approved``);
+the MANIFEST limitations say so. Without the key the source is not configured, so memory-watch is not turned yellow every night by a
+source that nothing feeds.
 """
 from __future__ import annotations
 import argparse
@@ -19,24 +34,39 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-ROOTS = ('core/memory_shelf', 'core/memory_index', 'core/memory_ask', 'core/memory_backup', 'core/vault_t1', 'core/jobs')
+ROOTS = ('core/memory_shelf', 'core/memory_index', 'core/memory_ask', 'core/memory_backup', 'core/memory_sync', 'core/vault_t1', 'core/jobs')
 FILES = ('core/__init__.py', 'core/agent_turns/__init__.py', 'core/agent_turns/writer.py',
          'utils/__init__.py', 'utils/credential_scrub.py', 'utils/payment_scrub.py',
          'scripts/moi', 'scripts/jobs/watchdog.py', 'scripts/vault/backup.py',
          'scripts/vault/runtime_install.py', 'scripts/vault/query_suite.py',
-         'scripts/vault/assets.py', 'requirements-vault.txt')
+         'scripts/vault/assets.py', 'scripts/vault/vault_sync.py', 'scripts/vault/vault_mc_pull.py', 'requirements-vault.txt')
 LABELS = {'capture': 'com.vanstedum.minimoi-memory-watch', 'index': 'com.vanstedum.minimoi-memory-index',
           'backup': 'com.vanstedum.minimoi-vault-backup', 'watchdog': 'com.vanstedum.minimoi-jobs-watchdog',
-          'ask': 'com.vanstedum.minimoi-vault-ask'}
+          'ask': 'com.vanstedum.minimoi-vault-ask', 'sync': 'com.vanstedum.minimoi-vault-sync',
+          'mc_pull': 'com.vanstedum.minimoi-vault-mc-pull'}
+SYNC_INTERVAL_S = 7200
+MC_WATCH = 'minimoi-staging/mc-export'          # under the home folder; == core/memory_sync/mc_pull.py DEFAULT_WATCH
+INTERVAL_JOBS = ('sync', 'mc_pull')
 TIMES = {'capture': (0, 15), 'index': (2, 30), 'backup': (4, 30), 'watchdog': (9, 0)}
 KEYS = {'python', 'shelf_root', 'inbox_root', 'jobs_root', 'logs_root', 'ask_registry',
         'age_bin', 'age_version', 'backup_dest', 'public_recipient', 'launch_agents'}
+OPTIONAL_KEYS = {'mc_pull_identity'}
+IDENTITY_SPEC = re.compile(r'(file|keychain|ssm|cmd):\S[^\r\n]{0,500}')
+
+
+def identity_spec_ok(spec):
+    """Where the private identity is, never the key itself (== core/memory_sync/mc_pull.py identity_spec_ok, kept stdlib-only here)."""
+    if not isinstance(spec, str) or not IDENTITY_SPEC.fullmatch(spec) or 'AGE-SECRET-KEY' in spec.upper():
+        return False
+    return not spec.startswith('file:') or Path(spec[5:]).is_absolute()     # launchd expands no ~; fetch_identity reads the path as given
 
 
 def profile(path):
     doc = json.loads(Path(path).read_text())
-    if not isinstance(doc, dict) or set(doc) != KEYS or not all(isinstance(v, str) and v for v in doc.values()):
+    if not isinstance(doc, dict) or set(doc) - OPTIONAL_KEYS != KEYS or not all(isinstance(v, str) and v for v in doc.values()):
         raise ValueError('invalid_profile')
+    if 'mc_pull_identity' in doc and not identity_spec_ok(doc['mc_pull_identity']):
+        raise ValueError('invalid_mc_pull_identity')
     for k in KEYS - {'age_version', 'backup_dest', 'public_recipient'}:
         doc[k] = str(Path(doc[k]).expanduser())
         if not Path(doc[k]).is_absolute():
@@ -58,6 +88,10 @@ def commands(pin, cfg, job):
     if job == 'ask':
         return [py, '-m', 'core.memory_ask.service', '--host', '127.0.0.1', '--port', '8771',
                 '--shelf-root', cfg['shelf_root'], '--registry', cfg['ask_registry']]
+    if job == 'sync':
+        return [py, str(pin / 'scripts/vault/vault_sync.py'), 'run', '--execute']
+    if job == 'mc_pull':
+        return [py, str(pin / 'scripts/vault/vault_mc_pull.py'), 'run', '--execute', '--identity', cfg['mc_pull_identity']]
     paths = {'capture': 'scripts/memory/daily_watch.py', 'index': 'scripts/memory/index_job.py',
              'watchdog': 'scripts/jobs/watchdog.py', 'backup': 'scripts/vault/backup.py'}
     result = [py, str(pin / paths[job])]
@@ -72,7 +106,7 @@ def environment(pin, cfg):
             'MINIMOI_JOBS_REGISTRY': str(pin / 'config/scheduled_jobs.json'),
             'MOI_SHELF_ROOT': cfg['shelf_root'], 'MOI_VAULT_BACKUP_DEST': cfg['backup_dest'],
             'VAULT_BACKUP_AGE_RECIPIENT': cfg['public_recipient'], 'MOI_AGE_BIN': cfg['age_bin'],
-            'MOI_AGE_VERSION': cfg['age_version'], 'MOI_RESERVE_GIB': '5',
+            'MOI_AGE_VERSION': cfg['age_version'], 'MOI_RESERVE_GIB': '5', 'MOI_VAULT_PUBLISH_DEST': cfg['backup_dest'],
             'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'}
 
 
@@ -113,10 +147,12 @@ def prepare(repo, cfg, out):
         dst.chmod(0o500 if src.name == 'moi' else 0o400)
     config = pin / 'config'
     config.mkdir(mode=0o700)
+    sources = {'claude-code': {'kind': 'claude-code', 'root': str(Path.home() / '.claude/projects'), 'never_copy': []},
+               'codex': {'kind': 'codex', 'root': str(Path.home() / '.codex/sessions'), 'never_copy': []}}
+    if 'mc_pull_identity' in cfg:                           # only the mc pull feeds this folder: no pull, no source (no nightly yellow)
+        sources['minimoi-mc'] = {'kind': 'mc', 'root': str(Path.home() / MC_WATCH), 'never_copy': []}
     shelf = {'schema_version': 1, 'shelf_root': cfg['shelf_root'], 'inbox_root': cfg['inbox_root'],
-             'repo_root': str(pin), 'headroom': {'min_free_bytes': 5 << 30}, 'never_copy': [],
-             'sources': {'claude-code': {'kind': 'claude-code', 'root': str(Path.home() / '.claude/projects'), 'never_copy': []},
-                         'codex': {'kind': 'codex', 'root': str(Path.home() / '.codex/sessions'), 'never_copy': []}}}
+             'repo_root': str(pin), 'headroom': {'min_free_bytes': 5 << 30}, 'never_copy': [], 'sources': sources}
     (config / 'memory_shelf.json').write_text(json.dumps(shelf, indent=2) + '\n')
     (config / 'runtime.json').write_text(json.dumps(cfg, indent=2) + '\n')
     registry = json.loads(registry_bytes)
@@ -136,6 +172,8 @@ def prepare(repo, cfg, out):
     candidates.mkdir(mode=0o700); previous.mkdir(mode=0o700)
     originals = {}
     for job, label in LABELS.items():
+        if job == 'mc_pull' and 'mc_pull_identity' not in cfg:
+            continue                                        # no identity spec in the profile: no mc-pull agent at all
         old = Path(cfg['launch_agents']) / (label + '.plist')
         originals[label] = old.is_file()
         if old.is_symlink():
@@ -143,7 +181,7 @@ def prepare(repo, cfg, out):
         if old.is_file():
             shutil.copyfile(old, previous / old.name)
             (previous / old.name).chmod(0o600)
-        args = commands(pin, cfg, job) if job == 'ask' else [cfg['python'], str(pin / 'scripts/vault/runtime_install.py'),
+        args = commands(pin, cfg, job) if job in ('ask',) + INTERVAL_JOBS else [cfg['python'], str(pin / 'scripts/vault/runtime_install.py'),
                     'run-job', '--config', str(config / 'runtime.json'), '--job', job]
         doc = {'Label': label, 'ProgramArguments': args, 'WorkingDirectory': str(pin),
                'EnvironmentVariables': environment(pin, cfg),
@@ -151,6 +189,8 @@ def prepare(repo, cfg, out):
                'StandardErrorPath': str(Path(cfg['logs_root']) / (label + '.log'))}
         if job == 'ask':
             doc.update({'RunAtLoad': True, 'KeepAlive': True, 'ThrottleInterval': 15})
+        elif job in INTERVAL_JOBS:
+            doc.update({'RunAtLoad': True, 'StartInterval': SYNC_INTERVAL_S})
         else:
             h, minute = TIMES[job]; doc.update({'RunAtLoad': False, 'StartCalendarInterval': {'Hour': h, 'Minute': minute}})
         (candidates / (label + '.plist')).write_bytes(plistlib.dumps(doc))
@@ -162,7 +202,13 @@ def prepare(repo, cfg, out):
                                 'busy batch skips that scheduled run; no automatic retry',
                                 'Rooms source absent pending verified mapping', 'consumer retrieval curated only',
                                 'existing shared venv is not immutable; retain dependency receipt',
-                                'source approvals, Ask grants/tokens and installed jobs unchanged']}
+                                'source approvals, Ask grants/tokens and installed jobs unchanged',
+                                *(['vault-mc-pull reads the private identity named by mc_pull_identity (a spec, not the key)',
+                                   'minimoi-mc source configured; it captures nothing until approved, and memory-watch shows minimoi-mc '
+                                   'yellow (not_approved) until `moi approve-source minimoi-mc`']
+                                  if 'mc_pull_identity' in cfg else
+                                  ['vault-mc-pull plist not written and minimoi-mc source not configured: the profile has no '
+                                   'mc_pull_identity'])]}
     (out / 'MANIFEST.json').write_text(json.dumps(manifest, indent=2) + '\n')
     for p in config.iterdir():
         p.chmod(0o400)

@@ -316,13 +316,21 @@ export class RealtimeVoiceController {
     if(this._managedEndRequests.has(sessionId))return this._managedEndRequests.get(sessionId);
     const pending=(async()=>{
       const abort=new AbortController();
-      const timer=setTimeout(()=>abort.abort(),15000);
+      let timer;
       try {
-        const response=await fetch(`${this._managedBootstrap.sessionUrl}/${encodeURIComponent(sessionId)}/end`,{
-          method:"POST",credentials:"same-origin",keepalive:true,signal:abort.signal,
-          headers:{"Content-Type":"application/json",...this._requestHeaders()},body:"{}",
-        });
-        const receipt=await response.json();
+        // Cancellation alone does not bound a stalled browser fetch/body read.
+        // Keep late network completion side-effect free: only the winning
+        // receipt may update UI state or report transcript retention.
+        const request=(async()=>{
+          const response=await fetch(`${this._managedBootstrap.sessionUrl}/${encodeURIComponent(sessionId)}/end`,{
+            method:"POST",credentials:"same-origin",keepalive:true,signal:abort.signal,
+            headers:{"Content-Type":"application/json",...this._requestHeaders()},body:"{}",
+          });
+          return {response,receipt:await response.json()};
+        })();
+        const {response,receipt}=await Promise.race([request,new Promise((_,reject)=>{
+          timer=setTimeout(()=>{abort.abort();reject(new Error("end timeout"));},15000);
+        })]);
         if(!response.ok||receipt.termination_confirmed!==true)return this._terminationUncertain();
         if(receipt.transcript_retention==='failed')this._onFatalError({reason:'transcript_retention_failed',detail:'Voice ended, but some transcript turns could not be saved.'});
         return receipt;

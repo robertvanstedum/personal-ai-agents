@@ -49,12 +49,12 @@ def test_peer_is_coordination_with_who_it_came_from_and_never_the_owner():
     p = cc(cc_user("please review", {"kind": "peer", "from": "other-session", "senderTaskId": "t-1", "body": "x"}))
     (turn,) = p.turns
     assert turn.speaker == "coordination" and turn.basis == "origin:peer"
-    assert turn.attrs == {"origin": "peer", "from": "other-session", "senderTaskId": "t-1"}
+    assert turn.attrs == {"origin": "peer", "from": "other-session", "senderTaskId": "t-1", "ts": "2026-10-04T10:00:00Z"}
 
 
 def test_task_notification_is_system():
     p = cc(cc_user("task done", {"kind": "task-notification", "producer": "bg"}))
-    assert [(t.speaker, t.attrs) for t in p.turns] == [("system", {"origin": "task-notification"})]
+    assert [(t.speaker, t.attrs) for t in p.turns] == [("system", {"origin": "task-notification", "ts": "2026-10-04T10:00:00Z"})]
 
 
 @pytest.mark.parametrize("origin", [{"kind": "mystery"}, {"kind": "Human"}, {"nokind": 1}, "human", ["human"], 7])
@@ -393,11 +393,11 @@ def test_agent_created_chat_reprocess_adds_owner_dialogue_without_rewriting_hist
     original = editions.list_editions(path.parent)[0].path.read_bytes()
     assert render.dialogue_turns(render.parse_body(body_before)) == []
     assert sessions._codex_session_class is current_classifier
-    assert sessions.NORMALIZER_VERSION["codex"] == 4
+    assert sessions.NORMALIZER_VERSION["codex"] == 5                    # 5: turn times (17 Oct 2026)
     assert watchers.run_source(shelf, cfg, now=NOW)["counts"] == {codes.EDITION_ADDED: 1}
     path, (meta_after, body_after) = load(shelf)
     assert meta_after["id"] == meta_before["id"]
-    assert meta_after["events"][-1]["note"] == "normalizer:3->4"
+    assert meta_after["events"][-1]["note"] == "normalizer:3->5"
     assert [t.text for t in render.dialogue_turns(render.parse_body(body_after))] == ["Owner correction", "Corrected result"]
     assert editions.list_editions(path.parent)[0].path.read_bytes() == original
     assert watchers.run_source(shelf, cfg, now=NOW)["counts"] == {"skipped_unchanged": 1}
@@ -414,5 +414,5 @@ def test_unchanged_ordinary_dialogue_version_upgrade_does_not_duplicate_editions
     watchers.run_source(shelf, cfg, now=NOW)
     path, (meta_after, _) = load(shelf)
     assert [e.path.read_bytes() for e in editions.list_editions(path.parent)] == old_editions
-    assert meta_after['normalized']['normalizer'] == 4
+    assert meta_after['normalized']['normalizer'] == 5
     assert watchers.run_source(shelf, cfg, now=NOW)['counts'] == {'skipped_unchanged': 1}

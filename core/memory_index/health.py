@@ -54,10 +54,11 @@ def orphans(con, shelf_root: Path, listed: dict[str, str]) -> dict[str, int]:
             f"SELECT COUNT(*) FROM chunks WHERE record_id IN ({marks})", gone).fetchone()[0]
     out["chunks_without_record_row"] = con.execute(
         "SELECT COUNT(*) FROM chunks WHERE record_id NOT IN (SELECT record_id FROM records)").fetchone()[0]
-    out["chunks_without_vector"] = con.execute(
-        "SELECT COUNT(*) FROM chunks WHERE id NOT IN (SELECT id FROM vec)").fetchone()[0]
-    out["vectors_without_chunk"] = con.execute(
-        "SELECT COUNT(*) FROM vec WHERE id NOT IN (SELECT id FROM chunks)").fetchone()[0]
+    if not store.is_keyword_only(con):                # a keyword-only index has no vector table to compare
+        out["chunks_without_vector"] = con.execute(
+            "SELECT COUNT(*) FROM chunks WHERE id NOT IN (SELECT id FROM vec)").fetchone()[0]
+        out["vectors_without_chunk"] = con.execute(
+            "SELECT COUNT(*) FROM vec WHERE id NOT IN (SELECT id FROM chunks)").fetchone()[0]
     out["keyword_rows_without_chunk"] = con.execute(
         "SELECT COUNT(*) FROM fts_docsize WHERE id NOT IN (SELECT id FROM chunks)").fetchone()[0]
     return {k: v for k, v in sorted(out.items()) if v}

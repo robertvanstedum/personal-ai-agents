@@ -314,6 +314,12 @@ services:
       - COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}
       - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
       - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
+      - MINIMOI_VAULT_ASK_URL=${MINIMOI_VAULT_ASK_URL:-}
+      - MINIMOI_VAULT_ASK_TOKEN=${MINIMOI_VAULT_ASK_TOKEN:-}
+      - MINIMOI_VAULT_ASK_INTERNAL_HOSTS=vault-ask
+      - MINIMOI_VAULT_ASK_INCLUDE_RAW=${MINIMOI_VAULT_ASK_INCLUDE_RAW:-0}
+      # Only the Guild's MC conversations ask the Vault: never Telegram or other CoS channels.
+      - MINIMOI_VAULT_ASK_CONVERSATIONS=guild-
     volumes:
       # Same owner limit registry as the portal, including next-day limits.
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/limits:/app/runtime/guild/limits:ro
@@ -323,9 +329,61 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "127.0.0.1:8769:8769"
+    # Vault retrieval for MC/CoS turns (owner decisions 17 Oct 2026). Off until the Vault
+    # is activated: empty URL/token = the hook is disabled. INCLUDE_RAW asks for the full
+    # Vault on on-record turns; the Ask service grant still decides.
+    networks:
+      - default
+      - vault-internal
     depends_on:
       - postgres
       - cos-agent-a
+
+  # Production Vault: keyword search over the Mac-published snapshot (scripts/vault/
+  # production_refresh.py installs /opt/minimoi/vault/current). Behind the `vault` profile,
+  # so ordinary releases never create it until activation sets COMPOSE_PROFILES=vault.
+  # Same portal image (the repository copy); no sqlite-vec, so meaning search reports
+  # vector_unavailable. Reachable only on the internal network, never published.
+  vault-ask:
+    profiles: [vault]
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-vault-ask
+    restart: unless-stopped
+    command: [python, -m, core.memory_ask.service, --host, 0.0.0.0, --port, "8771",
+              --shelf-root, /vault/current/shelf, --index, /vault/current/index/memory.sqlite,
+              --registry, /vault/memory-ask/agents.json, --log, /vault-log/ask-log.jsonl]
+    environment:
+      - MINIMOI_ROLE=production
+      - PYTHONDONTWRITEBYTECODE=1
+      - MOI_OLLAMA_URL=http://127.0.0.1:9         # no embedder in production: refuse fast, never reach out
+    volumes:
+      - type: bind
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/vault
+        target: /vault
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind                                  # outside the read-only /vault tree
+        source: ${MINIMOI_ROOT:-/opt/minimoi}/vault-log
+        target: /vault-log
+        bind:
+          create_host_path: false
+    networks:
+      - vault-internal
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    mem_limit: 512m
+    cpus: 0.5
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      # Healthy only when the service answers AND a release, its index and the grant registry are in place
+      # (an Ask without them would 503 every request).
+      test: [CMD, python, -c, "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:8771/v1/health', timeout=3); assert all(os.path.isfile(p) for p in ('/vault/current/index/memory.sqlite','/vault/current/shelf/_ledger/source_index.json','/vault/memory-ask/agents.json'))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres-data:
@@ -339,3 +397,6 @@ networks:
   # first runs (first-release sequencing: mini-moi main deploy → IoT Connect tag).
   iotconnect-edge:
     name: iotconnect-edge
+  # Only cos-scheduler and vault-ask: no route out, no other service.
+  vault-internal:
+    internal: true

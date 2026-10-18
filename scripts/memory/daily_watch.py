@@ -46,12 +46,12 @@ from core.jobs import alert, registry, schedule, status, batch_window  # noqa: E
 
 JOB_ID = "memory-watch"
 SOURCES = ("claude-code", "codex")              # the approved-memory sources; the inbox is deliberately absent
-OPTIONAL_SOURCES = ("rooms",)                   # Rooms export bundles: run only when configured (then it follows the same approval gate)
+OPTIONAL_SOURCES = ("rooms", "minimoi-mc")      # Rooms bundles, MC conversation exports: run only when configured (same approval gate)
 DEFAULT_JOBS_ROOT = "~/minimoi-staging/data/jobs"
 WATCH_TIMEOUT_S = 3600
 OK, WARN, FAILED = "ok", "warn", "failed"
 WARN_CODES = frozenset({"outside_window", "ok_outside_window","not_approved", "stale", "not_configured", "disk_low", "ok_unstable", "ok_failed_files",
-                        "ok_possible_gap", "ok_unknown_kind", "ok_refused_files", "ok_unknown_participant", "unreadable",
+                        "ok_possible_gap", "ok_unknown_kind", "ok_refused_files", "ok_unknown_participant", "unreadable", "warn",
                         "report_failed", "report_unparseable", "report_timeout"})
 EXIT = {OK: 0, WARN: 0, FAILED: 1}
 EXIT_BROKEN = 2
@@ -116,7 +116,9 @@ def code_for_watch(returncode: int, stdout: str) -> str:
     if len(parts) != 4:
         return "unparseable"
     word = parts[2]
-    if word == "ok":
+    # ``warn``: the pass finished but some files failed, were unstable or hit disk-low (the watcher no longer says ``ok``
+    # then). It is read exactly like ``ok`` so the same per-cause warning code is reported; never an alert.
+    if word in ("ok", "warn"):
         try:
             counts = json.loads(parts[3])
         except ValueError:
@@ -130,6 +132,9 @@ def code_for_watch(returncode: int, stdout: str) -> str:
             return "ok_failed_files"
         if isinstance(unstable, int) and unstable > 0:
             return "ok_unstable"
+        low = counts.get("disk_low", 0)
+        if isinstance(low, int) and low > 0:
+            return "disk_low"
         # The coverage check (amendment §10): files whose capture took fewer messages than the file shows, or a
         # format the reader has not seen. Counts are files flagged now, so the warning stays until it is cleared.
         # Rooms: a meeting whose participants could not be identified, or a bundle refused as corrupt, is a warning
@@ -144,7 +149,7 @@ def code_for_watch(returncode: int, stdout: str) -> str:
             return "ok_possible_gap"
         if isinstance(unknown, int) and unknown > 0:
             return "ok_unknown_kind"
-        return "ok"
+        return "ok" if word == "ok" else "warn"
     if word in ("outside_window", "batch_deadline_invalid"):
         return word
     if word == "disk_low":

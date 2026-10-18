@@ -181,18 +181,25 @@ export function initMcVoice(page) {
     };
     const revealSaved=()=>{
       if(!displayAllowed())return;
-      afterEnd=true;paintTranscript();
+      afterEnd=true;$('[data-mc-voice-transcript]').open=true;paintTranscript();
       if(savedRead)return savedRead;
       const aborter=new AbortController();transcriptCancel=()=>aborter.abort();
-      const timeout=setTimeout(()=>aborter.abort(),5000);
+      let timeout;
       savedRead=(async()=>{
         try{
-          const response=await fetch(`${api}/conversations/${encodeURIComponent(cid)}/voice-transcript`,
-            {credentials:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'text/plain'},signal:aborter.signal});
-          if(!response.ok||!/^text\/plain(?:;|$)/i.test(response.headers.get('content-type')||''))throw new Error('saved_transcript_unavailable');
+          const request=(async()=>{
+            const response=await fetch(`${api}/conversations/${encodeURIComponent(cid)}/voice-transcript`,
+              {credentials:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'text/plain'},signal:aborter.signal});
+            if(!response.ok||!/^text\/plain(?:;|$)/i.test(response.headers.get('content-type')||''))throw new Error('saved_transcript_unavailable');
+            return response.text();
+          })();
+          // Bound both network and body reads even when cancellation stalls.
+          // A late response cannot paint after the timeout has won.
+          const text=await Promise.race([request,new Promise((_,reject)=>{
+            timeout=setTimeout(()=>{aborter.abort();reject(new Error('saved_transcript_timeout'));},5000);
+          })]);
           // This fixed owner-authorized export is server-bounded to1MiB. Never
           // paint HTML, error bodies or the browser buffer as a saved receipt.
-          const text=await response.text();
           if(!text||text.length>1100000)throw new Error('saved_transcript_bound');
           if(displayAllowed()){savedText=text;paintTranscript();}
         }catch(_){
@@ -264,7 +271,10 @@ export function initMcVoice(page) {
     finally {if(current())starting=false;if(!busy()){selector.disabled=false;choice.disabled=false;}}
   }
 
-  $('[data-mc-voice-transcript-choice]')?.addEventListener?.('change',()=>transcriptPaint?.());
+  $('[data-mc-voice-transcript-choice]')?.addEventListener?.('change',()=>{
+    if($('[data-mc-voice-transcript-choice]').checked)$('[data-mc-voice-transcript]').open=true;
+    transcriptPaint?.();
+  });
   button.addEventListener('click', () => { if (busy()) stop('user_ended'); else start(); });
   document.addEventListener('guild:mic-claim', (e) => { if (e.detail?.who !== 'voice' && busy()) stop('user_ended', { quiet: true }); });
   onChange(() => { if (live.off || !live.known) {transcriptEpoch++;transcriptCancel?.();transcriptCancel=null;transcriptReveal=null;transcriptPaint=null;if(busy())stop(live.off?'private':'record_unknown');const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';} });

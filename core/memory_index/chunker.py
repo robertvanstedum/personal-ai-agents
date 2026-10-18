@@ -20,7 +20,7 @@ import hashlib
 from dataclasses import dataclass
 
 from core.memory_index import policy
-from core.memory_shelf import record, render
+from core.memory_shelf import record, render, sessions
 
 CHUNKER_VERSION = 1
 CAP_BYTES = 1500
@@ -47,6 +47,7 @@ class Chunk:
     text_hash: str
     overlap_lines: int        # lines repeated from the previous chunk of the same turn
     turn_kind: str | None = None  # verified turn-frame provenance; never inferred from its words
+    at: str | None = None         # the turn's own time (frame ``ts``, normalized to UTC), when the source had one
 
     def chunk_id(self, record_id: str, edition_hash: str) -> str:
         return f"{record_id}@{edition_hash[:12]}#{self.ordinal}"
@@ -126,7 +127,8 @@ def chunk_record(data: bytes) -> tuple[dict, list[Chunk]]:
             if not piece.strip():
                 continue
             chunks.append(Chunk(len(chunks) + 1, turn.ordinal, turn.speaker, line_at + first, line_at + last,
-                                piece.decode("utf-8"), text_hash(piece), overlap, (turn.attrs or {}).get("kind")))
+                                piece.decode("utf-8"), text_hash(piece), overlap, (turn.attrs or {}).get("kind"),
+                                sessions.turn_time((turn.attrs or {}).get(sessions.TURN_TIME))))
     return meta, chunks
 
 

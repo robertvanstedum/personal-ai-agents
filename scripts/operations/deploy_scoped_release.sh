@@ -199,6 +199,14 @@ if [[ " ${SERVICES[*]} " == *" curator "* ]]; then
   preserve_curator_state
 fi
 "${COMPOSE[@]}" up -d --no-deps --remove-orphans "${SERVICES[@]}"
+# The production Vault Ask service runs the portal image (compose profile `vault`). Once
+# activated (its container exists), a portal release recreates it on the same tag. Before
+# activation nothing is named here: naming an inactive-profile service would start it.
+VAULT_RECREATED=0
+if [[ " ${SERVICES[*]} " == *" portal "* ]] && docker container inspect minimoi-vault-ask >/dev/null 2>&1; then
+  "${COMPOSE[@]}" --profile vault up -d --no-deps vault-ask
+  VAULT_RECREATED=1
+fi
 # Agent A and Curator have been recreated (or were never stopped); nothing to restart now.
 AGENT_A_STOPPED=0
 CURATOR_STOPPED=0
@@ -273,6 +281,16 @@ done
 
 if [[ " ${SERVICES[*]} " == *" curator "* ]]; then
   "$OPS_SCRIPTS/check_curator_mounts.sh"
+fi
+
+# A recreated Vault is checked like any selected service, before the prune: the portal tag, running, and its own
+# health check (which also requires the release, index and grant registry). A broken Vault stops the release.
+if [[ "$VAULT_RECREATED" == "1" ]]; then
+  actual=$(docker inspect --format='{{.Config.Image}}' minimoi-vault-ask)
+  [[ "$actual" == "$(expected_image portal)" ]] || { echo "minimoi-vault-ask uses $actual; expected $(expected_image portal)"; exit 1; }
+  [[ "$(docker inspect --format='{{.State.Running}}' minimoi-vault-ask)" == "true" ]] || { echo "minimoi-vault-ask is not running"; exit 1; }
+  wait_for_container_health minimoi-vault-ask 24
+  echo "vault-ask: recreated on $actual and healthy"
 fi
 
 /opt/minimoi/scripts/install_lesen_refresh_cron.sh

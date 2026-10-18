@@ -55,8 +55,7 @@ def _is_release_only(path: str) -> bool:
         or path.startswith(DORMANT_PREFIXES)
         or path.startswith(LOCAL_TOOL_PREFIXES)
         or path in LOCAL_TOOL_FILES
-        or path.startswith(VAULT_LOCAL_PREFIXES)
-        or path in VAULT_LOCAL_FILES
+        or ((path.startswith(VAULT_LOCAL_PREFIXES) or path in VAULT_LOCAL_FILES) and path not in VAULT_SERVER_FILES)
         or path in GUILD_LOCAL_TOOLS
         or path.startswith("services/agent_installer/")
     )
@@ -121,7 +120,53 @@ SHARED_SCRUB_FILES = frozenset({"utils/credential_scrub.py", "utils/payment_scru
 # Unknown neighbouring paths retain the conservative fallback; import guards
 # fail if a production service starts depending on a laptop-only module.
 VAULT_COS_FILES = frozenset({"core/memory_ask/consumer.py", "core/memory_ask/context.py", "core/memory_ask/citation.py"})
-VAULT_LOCAL_PREFIXES = ("core/memory_shelf/", "core/memory_index/", "core/memory_backup/")
+# The production Vault Ask service (vault-ask, behind the compose `vault` profile) runs the portal image, so every module
+# it imports (measured 17 Oct 2026: import core.memory_ask.service with sqlite_vec absent) must rebuild and redeploy the
+# portal; deploy_scoped_release.sh then recreates vault-ask beside it when that container exists.
+VAULT_SERVER_FILES = frozenset({
+    "core/memory_ask/__init__.py",
+    "core/memory_ask/ask.py",
+    "core/memory_ask/citation.py",
+    "core/memory_ask/identity.py",
+    "core/memory_ask/querylog.py",
+    "core/memory_ask/service.py",
+    "core/memory_ask/tool.py",
+    "core/memory_index/__init__.py",
+    "core/memory_index/adjacent.py",
+    "core/memory_index/chunker.py",
+    "core/memory_index/cli.py",
+    "core/memory_index/embedder.py",
+    "core/memory_index/health.py",
+    "core/memory_index/indexer.py",
+    "core/memory_index/policy.py",
+    "core/memory_index/resolver.py",
+    "core/memory_index/search.py",
+    "core/memory_index/store.py",
+    "core/memory_shelf/__init__.py",
+    "core/memory_shelf/bundle.py",
+    "core/memory_shelf/codes.py",
+    "core/memory_shelf/editions.py",
+    "core/memory_shelf/events.py",
+    "core/memory_shelf/fsio.py",
+    "core/memory_shelf/ledger.py",
+    "core/memory_shelf/record.py",
+    "core/memory_shelf/render.py",
+    "core/memory_shelf/review.py",
+    "core/memory_shelf/sessions.py",
+    "core/memory_shelf/shelf.py",
+    "core/memory_shelf/ulid.py",
+    "core/memory_shelf/weight.py",
+})
+VAULT_LOCAL_PREFIXES = ("core/memory_shelf/", "core/memory_index/", "core/memory_backup/", "core/memory_sync/")
+# The Vault incremental sync (17 Oct 2026): the Mac runs vault-sync, the EC2 HOST runs vault-apply from the root-only tools bundle,
+# and vault-apply's index step runs INSIDE the portal image (``docker run <portal image> /app/scripts/vault/vault_apply.py index-step``,
+# because the host SQLite may not write the index's FTS5 table). So these must rebuild the portal image the index step executes;
+# no service imports them.
+VAULT_SYNC_PREFIXES = ("core/memory_sync/",)
+# The production MC capture path (17 Oct 2026): the EC2 host's vault-mc-export runs the MC exporter INSIDE the portal container
+# (``docker exec minimoi-portal python3 /app/scripts/vault/export_mc_conversations.py --stdout-tar``), so a change to the exporter must
+# rebuild and redeploy the portal image it runs from. (vault_mc_export.py itself runs on the host from the tools bundle: no image.)
+VAULT_SYNC_IMAGE_FILES = frozenset({"scripts/vault/vault_apply.py", "scripts/vault/export_mc_conversations.py"})
 # The portal metadata view loads regression -> runner -> existing remote
 # consumer/context/citation. Assessment is the coupled report-family reader;
 # it currently depends on that pair, rather than being imported by the host.
@@ -160,6 +205,9 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
         if (path.startswith(prefix) and not relative.startswith(("tests/", "docs/"))
                 and not relative.endswith((".md", ".pdf"))):
             return "full", ALL_SERVICES
+        if path in VAULT_SYNC_IMAGE_FILES or path.startswith(VAULT_SYNC_PREFIXES):
+            services.add("portal")                                   # vault-apply's index step and the MC exporter run in the portal image
+            continue
         if _is_release_only(path):
             continue
         if path.startswith("domains/german/"):
@@ -196,6 +244,8 @@ def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
             services.add("portal")
         elif path in VAULT_COS_FILES:
             services.update(("portal", "cos-bot", "cos-scheduler"))
+        elif path in VAULT_SERVER_FILES:
+            services.add("portal")                                   # vault-ask shares the portal image
         elif path.startswith(WORKSHOP_BACKEND_PREFIXES) or path == "config/scheduled_jobs.json":
             services.add("portal")
         elif path == "core/limits.py":

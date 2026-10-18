@@ -219,6 +219,12 @@ def ordered_turns(turns) -> list[tuple[int, str, str]]:
     return [(t.ordinal, f"{t.speaker}:{t.who}" if t.who else t.speaker, sha256_text(t.text)) for t in turns]
 
 
+def turn_times(turns) -> list[str | None]:
+    """Each turn's own time (frame ``ts``), in order. Not part of ``ordered_turns`` (fidelity compares what was said and by
+    whom), but a re-read that adds or changes turn times is a different reading of the source (``shelf._same_turns``)."""
+    return [(t.attrs or {}).get("ts") for t in turns]
+
+
 def edition_bytes(parsed: Parsed, source_sha256: str, source_size: int, redacted_turns: int) -> bytes:
     head = {"format": FORMAT, "provider": parsed.provider, "source_id": parsed.source_id,
             "source_sha256": source_sha256, "source_bytes": source_size, "redacted_turns": redacted_turns,
@@ -261,4 +267,4 @@ def to_shelf(parsed: Parsed, source_sha256: str, source_size: int, *, created: s
     return meta, render_body(clean), edition_bytes(clean, source_sha256, source_size, redacted)
 
 
-__all__ = ["render_body", "parse_body", "parse_blocks", "dialogue_turns", "ordered_turns", "edition_bytes", "to_shelf", "hash_file", "scrub_parsed"]
+__all__ = ["render_body", "parse_body", "parse_blocks", "dialogue_turns", "ordered_turns", "turn_times", "edition_bytes", "to_shelf", "hash_file", "scrub_parsed"]

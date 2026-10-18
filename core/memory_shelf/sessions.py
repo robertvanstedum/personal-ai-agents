@@ -21,18 +21,88 @@ bookkeeping lines) is **counted by kind and pointed at by source line number**;
 it stays in the source file. A line that cannot be parsed is counted as
 ``malformed`` and flagged, never skipped silently. Files are read line by line
 (sessions reach hundreds of MB), keeping only turn text.
+
+**Retained-text budget (17 Oct 2026).** A caller can bound the turn text a parse keeps with ``retained_budget(limit)``:
+every ``Parsed`` built inside it charges each kept text as it is added (``Parsed.add``), and the Codex parser also charges
+the message text it holds between its read and its reconcile (per role and text, the larger of items and copies: what
+reconcile will keep). Going over the budget raises ``RetainedTooLarge`` (code ``normalized_too_large``) at once, so a
+huge file of small dialogue lines stops being read instead of exhausting memory first. Outside the context there is no
+budget (fidelity replay, imports).
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import re
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Iterable
 
+NORMALIZED_TOO_LARGE = "normalized_too_large"
+_RETAINED_BUDGET: contextvars.ContextVar = contextvars.ContextVar("moi_retained_budget", default=None)
+
+
+class RetainedTooLarge(ValueError):
+    """The turn text kept by one parse went over the caller's budget. Carries the fixed code only, never text."""
+
+    code = NORMALIZED_TOO_LARGE
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
+
+
+@contextmanager
+def retained_budget(limit: int | None):
+    """Every ``Parsed`` created inside this block stops (``RetainedTooLarge``) once its kept text exceeds ``limit``
+    bytes (UTF-8). ``None`` means no budget."""
+    token = _RETAINED_BUDGET.set(limit)
+    try:
+        yield
+    finally:
+        _RETAINED_BUDGET.reset(token)
+
 HUMAN, ASSISTANT, SYSTEM, COORDINATION = "human", "assistant", "system", "coordination"
 MARK = "@mark"
+TURN_TIME = "ts"                            # the frame attribute that carries a turn's own time (render.FRAME_KEYS)
+_EARLIEST, _LATEST = 1990, 2100             # a "time" outside these years is not one this reader trusts
+
+
+def turn_time(value) -> str | None:
+    """A source's own time for a turn as ``YYYY-MM-DDTHH:MM:SSZ`` (UTC), or None when it is not a time this reader knows.
+
+    An ISO 8601 string (``Z``, an offset, or none, read as UTC; a date alone is its midnight), unix seconds (int or float,
+    as ChatGPT writes them), or MongoDB extended JSON as Grok exports write each response's time: ``{"$date": {"$numberLong":
+    "<unix milliseconds>"}}`` (canonical), ``{"$date": "<ISO 8601>"}`` (relaxed) or ``{"$date": <unix milliseconds>}``
+    (legacy). A bare number is always seconds (milliseconds only inside ``$date``). Anything else, including a bool, is None:
+    never a guess."""
+    if isinstance(value, dict) and set(value) == {"$date"}:
+        inner = value["$date"]
+        if isinstance(inner, dict) and set(inner) == {"$numberLong"} and isinstance(inner["$numberLong"], str) \
+                and re.fullmatch(r"-?\d{1,16}", inner["$numberLong"]):
+            return turn_time(int(inner["$numberLong"]) / 1000)
+        if isinstance(inner, int) and not isinstance(inner, bool):      # legacy extended JSON: milliseconds as a number
+            return turn_time(inner / 1000)
+        return turn_time(inner) if isinstance(inner, str) else None
+    try:
+        if isinstance(value, str) and value.strip():
+            when = datetime.fromisoformat(value.strip().replace("Z", "+00:00").replace("z", "+00:00"))
+            when = when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            when = datetime.fromtimestamp(float(value), tz=timezone.utc)
+        else:
+            return None
+        when = when.astimezone(timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return None
+    return when.strftime("%Y-%m-%dT%H:%M:%SZ") if _EARLIEST <= when.year < _LATEST else None
+
+
+def with_time(attrs: dict | None, at: str | None) -> dict | None:
+    """``attrs`` plus the turn's time when there is one; unchanged (None stays None) when there is not."""
+    return {**(attrs or {}), TURN_TIME: at} if at else attrs
 
 # Bump a parser's version when a change to it can change the turn sequence of an unchanged source file.
 # The watcher re-reads such files and, when the turns differ, adds an edition (note ``normalizer:<old>-><new>``).
@@ -46,13 +116,24 @@ MARK = "@mark"
 # Codex 4 separates an agent-created owner chat from an actual subagent. Only a structural UserMessage
 # with client_id proves client dialogue in that chat; its same-task replies can be recalled. Unproven prompts
 # and replies stay coordination/subagent evidence. Version 3 remains safe for retrieval (it over-excludes).
-NORMALIZER_VERSION = {"claude-code": 2, "codex": 4, "rooms": 1, "claude-ai": 2, "grok": 1, "paste": 1}
+# minimoi-mc 1: Master Craftsman conversation exports (core/memory_shelf/mc.py), watcher kind "mc".
+# Turn times (17 Oct 2026): every turn whose source line or message carries its own time keeps it as the frame attribute
+# ``ts`` (``YYYY-MM-DDTHH:MM:SSZ``, ``turn_time``), the convention Rooms already uses: Claude Code 3 and Codex 5 (the JSONL
+# line's ``timestamp``), Claude.ai 3 (message ``created_at``), Grok 2 and ChatGPT 2 (``create_time``), minimoi-mc 2 (the note's
+# ``created_at``, now normalized; version 1 kept it only when it was already a token). The text and speakers are unchanged, so
+# the shelf compares turn times too when deciding whether a re-read differs (``render.turn_times``): an unchanged source read
+# by the new parser gets a new edition with times, and older editions stay. Rooms and pastes are unchanged (Rooms already
+# carries ``ts``; a paste has no times). The retrieval minimum below is NOT raised: an edition without turn times has no
+# misattribution, it is only dated by its start, and holding it would drop every record whose source is gone (Claude Code
+# prunes old session files) from retrieval for good.
+NORMALIZER_VERSION = {"claude-code": 3, "codex": 5, "rooms": 1, "claude-ai": 3, "grok": 2, "chatgpt": 2, "paste": 1, "minimoi-mc": 2}
 DEFAULT_NORMALIZER = 1                      # a record or state entry written before versions existed
 # The lowest normalizer version whose current editions are fit for retrieval (read by core/memory_index/policy.py). A record
 # below it is held (awaiting_reprocess) and never indexed, so legacy misattributed text cannot reach retrieval. Owned here:
 # bump it when a parser change makes older editions unfit (Claude Code 2: human origin; Codex 3: approval traffic and
 # handoffs typed; Claude.ai 2: attachment text out of the dialogue). An unknown provider is not in the table: held.
-RETRIEVAL_MIN_NORMALIZER = {"claude-code": 2, "codex": 3, "claude-ai": 2, "grok": 1, "paste": 1, "rooms": 1, "canary": 1}
+RETRIEVAL_MIN_NORMALIZER = {"claude-code": 2, "codex": 3, "claude-ai": 2, "grok": 1, "chatgpt": 1, "paste": 1, "rooms": 1, "canary": 1,
+                            "minimoi-mc": 1}
 
 
 @dataclass(frozen=True)
@@ -93,9 +174,22 @@ class Parsed:
     session_class: str = "dialogue"                   # dialogue | approval_review | subagent | agent_created_thread
     normalizer: int = DEFAULT_NORMALIZER              # which parser version produced the turns
     coverage: dict = field(default_factory=dict)      # the coverage check's counts (coverage.py); counts only
+    # The retained-text budget in force when this parse began (``retained_budget``) and what it has charged so far.
+    budget: int | None = field(default=None, init=False, repr=False, compare=False)
+    retained: int = field(default=0, init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        self.budget = _RETAINED_BUDGET.get()
+
+    def charge(self, nbytes: int) -> None:
+        """Count ``nbytes`` of kept text against the budget; over it, stop the parse with ``RetainedTooLarge``."""
+        self.retained += nbytes
+        if self.budget is not None and self.retained > self.budget:
+            raise RetainedTooLarge()
 
     def add(self, speaker: str, text: str, line: int, basis: str, attrs: dict | None = None) -> None:
         if text.strip():
+            self.charge(len(text.encode("utf-8")))
             self.turns.append(Turn(len(self.turns) + 1, speaker, text, line, basis, attrs))
 
     def skip(self, kind: str, line: int, detail: str | None = None) -> None:
@@ -170,11 +264,12 @@ def parse_claude_code(lines: Iterable[bytes | str]) -> Parsed:
             continue
         content = (row.get("message") or {}).get("content")
         parts = [{"type": "text", "text": content}] if isinstance(content, str) else (content or [])
+        at = turn_time(row.get("timestamp"))
         if kind == "assistant":
             for part in parts:
                 ptype = part.get("type") if isinstance(part, dict) else None
                 if ptype == "text":
-                    out.add(ASSISTANT, part.get("text", ""), number, "role:assistant")
+                    out.add(ASSISTANT, part.get("text", ""), number, "role:assistant", with_time(None, at))
                 elif ptype == "tool_use":
                     out.skip(f"tool_use:{str(part.get('name', '?'))[:40]}", number)
                 else:
@@ -183,6 +278,7 @@ def parse_claude_code(lines: Iterable[bytes | str]) -> Parsed:
         origin_doc = row.get("origin")
         origin = origin_doc.get("kind") if isinstance(origin_doc, dict) else None
         speaker, why, attrs = _claude_code_origin(origin, origin_doc, row, out)
+        attrs = with_time(attrs, at)
         for part in parts:
             ptype = part.get("type") if isinstance(part, dict) else None
             if ptype == "text":
@@ -232,6 +328,7 @@ class _Msg:
     matched: bool = False
     digest: str | None = None
     client_origin: bool = False                  # structural UserMessage.client_id; never inferred from prose
+    at: str | None = None                        # the line's own time (``turn_time``)
 
 
 def _codex_message(line: int, source: str, role: str, phase, window: int, parts) -> _Msg:
@@ -273,6 +370,17 @@ def parse_codex(lines: Iterable[bytes | str]) -> Parsed:
     out = Parsed("codex", "Codex", normalizer=NORMALIZER_VERSION["codex"])
     events: list[tuple] = []                     # (line, "skip", kind) | (line, "msg", _Msg), in file order
     window = 0
+    held_items, held_copies = Counter(), Counter()   # (role, digest) -> messages held until reconcile, per representation
+
+    def hold(message: _Msg) -> None:
+        """Charge a held message's text when reconcile will keep it: per (role, text), the larger representation."""
+        if not message.digest:
+            return
+        key = (message.role, message.digest)
+        before = max(held_items[key], held_copies[key])
+        (held_items if message.source == "item" else held_copies)[key] += 1
+        if max(held_items[key], held_copies[key]) > before:
+            out.charge(len(message.text.encode("utf-8")))
     for number, raw in enumerate(lines, 1):
         out.lines = number
         if not raw.strip():
@@ -294,7 +402,9 @@ def parse_codex(lines: Iterable[bytes | str]) -> Parsed:
             continue
         sub = payload.get("type")
         if kind == "response_item" and sub == "agent_message":
-            events.append((number, "handoff", payload, row.get("timestamp")))
+            handoff = _handoff_fields(payload)
+            out.charge(sum(len(p["text"].encode("utf-8")) for p in handoff["content"] if "text" in p))
+            events.append((number, "handoff", handoff, row.get("timestamp")))
             continue
         if kind == "event_msg" and sub == "item_completed":
             item = payload.get("item") or {}
@@ -302,7 +412,9 @@ def parse_codex(lines: Iterable[bytes | str]) -> Parsed:
             if itype in ("UserMessage", "AgentMessage"):
                 role = "user" if itype == "UserMessage" else "assistant"
                 message = _codex_message(number, "item", role, item.get("phase"), window, item.get("content"))
+                message.at = turn_time(row.get("timestamp"))
                 message.client_origin = role == "user" and isinstance(item.get("client_id"), str) and bool(item["client_id"].strip())
+                hold(message)
                 events.append((number, "msg", message))
             else:
                 events.append((number, "skip", f"item:{itype}"))
@@ -312,8 +424,10 @@ def parse_codex(lines: Iterable[bytes | str]) -> Parsed:
         if kind == "response_item" and sub == "message":
             role = payload.get("role")
             if role in ("user", "assistant"):
-                events.append((number, "msg", _codex_message(number, "copy", role, payload.get("phase"), window,
-                                                             payload.get("content"))))
+                message = _codex_message(number, "copy", role, payload.get("phase"), window, payload.get("content"))
+                message.at = turn_time(row.get("timestamp"))
+                hold(message)
+                events.append((number, "msg", message))
             else:
                 events.append((number, "skip", f"injected:{str(role)[:20]}"))       # developer-role instructions
             continue
@@ -329,6 +443,7 @@ def parse_codex(lines: Iterable[bytes | str]) -> Parsed:
             client_starts[message.window] = min(client_starts.get(message.window, message.line), message.line)
     kept_digests = {m.digest for m in messages if m.digest and (m.source == "item" or not m.matched)}
     copies_matched = copies_added = 0
+    out.retained = 0                             # from here the budget counts the turns actually added
     for number, what, value, *rest in [(e[0], e[1], e[2], *e[3:]) for e in events]:
         if what == "skip":
             out.skip(value, number)
@@ -352,7 +467,7 @@ def parse_codex(lines: Iterable[bytes | str]) -> Parsed:
                 speaker, basis, attrs = _codex_session_role(out.session_class, speaker, basis, msg.role,
                                                            client_origin=msg.client_origin,
                                                            owner_window=msg.line > client_starts.get(msg.window, out.lines + 1))
-            out.add(speaker, msg.text, number, basis, attrs)
+            out.add(speaker, msg.text, number, basis, with_time(attrs, msg.at))
             copies_added += msg.source == "copy"
     for key, value in (("copies_matched", copies_matched), ("copies_added", copies_added)):
         if value:
@@ -397,6 +512,20 @@ def _frame_token(value) -> str | None:
     """A machine-safe token from a source's own identifier (a path-like agent id): unsafe characters become ``_``."""
     token = _SAFE_KEY.sub("_", str(value)).strip("_.-")[:60]
     return token or None
+
+
+def _handoff_fields(payload: dict) -> dict:
+    """What ``_codex_handoff`` reads from an ``agent_message`` payload, and nothing else: text parts, a marker for each
+    ``encrypted_content`` part (its bytes are never held), sender and recipient. Held until reconcile instead of the
+    whole payload, so the budget charges what is really kept."""
+    content = []
+    for part in payload.get("content") or []:
+        ptype = str(part.get("type", "")).lower() if isinstance(part, dict) else ""
+        if ptype in _TEXT_PARTS and isinstance(part.get("text"), str) and part["text"].strip():
+            content.append({"type": ptype, "text": part["text"]})
+        elif ptype == "encrypted_content":
+            content.append({"type": ptype})
+    return {"content": content, "author": payload.get("author"), "recipient": payload.get("recipient")}
 
 
 def _codex_handoff(out: "Parsed", number: int, payload: dict, stamp, kept_digests: set) -> None:
@@ -496,4 +625,5 @@ def designation(parsed: Parsed) -> dict | None:
 
 
 __all__ = ["Turn", "Parsed", "parse_claude_code", "parse_codex", "designation", "HUMAN", "ASSISTANT", "SYSTEM",
-           "NORMALIZER_VERSION", "RETRIEVAL_MIN_NORMALIZER", "DEFAULT_NORMALIZER", "CODEX_INJECTED_TAGS", "leading_tag"]
+           "retained_budget", "RetainedTooLarge", "NORMALIZER_VERSION", "RETRIEVAL_MIN_NORMALIZER", "DEFAULT_NORMALIZER", "CODEX_INJECTED_TAGS", "leading_tag",
+           "turn_time", "with_time", "TURN_TIME"]

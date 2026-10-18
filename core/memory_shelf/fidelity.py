@@ -100,6 +100,7 @@ def edition_turns(folder: Path, number: int) -> list[tuple[int, str, str]] | Non
 
 SOURCE_TOO_LARGE = "source_too_large"
 REPLAY_LIMIT_INVALID = "source_replay_limit_invalid"
+NORMALIZED_TOO_LARGE = "normalized_too_large"            # the replay went over the retained-text budget: held, not parsed whole
 
 
 class ReplayHeld(RuntimeError):
@@ -115,6 +116,17 @@ def _limit():
     if value <= 0 or value > watchers.DEFAULT_MAX_SOURCE_BYTES:
         raise ReplayHeld(REPLAY_LIMIT_INVALID)
     return value
+
+
+def _source_file_limit():
+    """Session-file replay reads as a stream, like the watcher, so it uses the watcher's sanity ceiling. An explicit
+    ``MOI_CAPTURE_MAX_SOURCE_BYTES`` still caps replay (and is validated) exactly as before."""
+    ceiling, line_limit = watchers.source_ceiling(), watchers.max_line_bytes()
+    if ceiling is None or line_limit is None:
+        raise ReplayHeld(REPLAY_LIMIT_INVALID)
+    if os.environ.get("MOI_CAPTURE_MAX_SOURCE_BYTES") is not None:
+        return _limit()
+    return ceiling
 
 
 def _bounded_hash(path, limit):
@@ -160,6 +172,18 @@ def _inbox_selected(path, fallback, members, limit):
             raise inbox.Refusal(inbox.codes.TOO_LARGE)
         item = inbox.parse_canary(raw) if kind == "canary" else inbox.parse_paste(raw, name=path.name, fallback=fallback)
         return {None: item}
+    if kind == "chatgpt-export":
+        result = {}
+        try:
+            for conv in inbox.stream_chatgpt(path, limit=limit, capped=_ReplayCapped):
+                member = inbox._chatgpt_id(conv) if isinstance(conv, dict) else None
+                if isinstance(member, str) and member in members and member not in result:
+                    result[member] = inbox.parse_chatgpt_conversation(inbox.check_chatgpt_conversation(conv))
+        except inbox.Refusal as exc:
+            if exc.code == inbox.codes.TOO_LARGE:
+                raise ReplayHeld(SOURCE_TOO_LARGE) from None
+            raise
+        return result
     if kind not in ("claude-ai-export", "grok-export"):
         raise ValueError("unsupported_source")
     result = {}
@@ -218,15 +242,31 @@ def load_source(cfg: Config, meta: dict, *, expected_hash=None, cache=None, memb
     try:
         limit = _limit()
         if ret.get("kind") == "source-file":
+            limit = _source_file_limit()
             source = cfg.sources.get(ret.get("source"))
             path = source and Path(source.root) / ret["rel"]
+            if path and not path.is_file() and not watchers.is_compressed(path):
+                archived = path.with_name(path.name + watchers.COMPRESSED_SUFFIX)
+                path = archived if archived.is_file() else path      # Codex compressed the session after capture
             if not path or not path.is_file():
                 return None, SOURCE_MISSING
-            sha, before = _bounded_hash(path, limit)
+            if watchers.is_compressed(path):
+                before = path.stat()
+                if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
+                    raise ReplayHeld(SOURCE_TOO_LARGE)
+                sha, _ = watchers.hash_source(path, limit)          # sha256 of the uncompressed session, as captured
+            else:
+                sha, before = _bounded_hash(path, limit)
             if expected_hash is not None and sha != expected_hash:
                 return None, SOURCE_CHANGED
-            with path.open("rb") as handle:
-                parsed = watchers.PARSERS[source.kind](watchers._bounded_lines(handle, limit))
+            # The replay keeps the capture's retained-text budget (MOI_CAPTURE_MAX_NORMALIZED_BYTES): a huge source of
+            # small dialogue lines is held while parsing, never parsed into memory whole (Codex r2 review).
+            try:
+                with watchers.open_source(path) as handle, sessions.retained_budget(watchers.max_normalized_bytes()):
+                    parsed = watchers.PARSERS[source.kind](watchers.stream_lines(handle, limit, watchers.max_line_bytes(),
+                                                                                 code=SOURCE_TOO_LARGE))
+            except sessions.RetainedTooLarge:
+                raise ReplayHeld(NORMALIZED_TOO_LARGE) from None
         elif ret.get("kind") == "rooms-bundle":
             source = cfg.sources.get(ret.get("source"))
             path = source and Path(source.root) / ret["rel"]

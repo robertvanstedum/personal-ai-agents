@@ -186,8 +186,13 @@ BACKEND_IMPORT_EXPECTED = {
     "core/memory_ask/context.py": ("utils.credential_scrub", "utils.payment_scrub"),
     "core/memory_ask/querylog.py": ("core.agent_turns.writer",),
     "core/memory_backup/backup.py": ("core.vault_t1.reader", "core.vault_t1.portable", "core.jobs.batch_window"),
+    "core/memory_backup/production.py": ("core.vault_t1.reader", "core.vault_t1.portable"),
     "core/memory_index/embedder.py": ("core.jobs.batch_window",),
     "core/memory_index/indexer.py": ("core.jobs.batch_window",),
+    "core/memory_sync/versions.py": ("core.vault_t1.reader",),
+    "core/memory_sync/sync.py": ("core.jobs", "core.vault_t1.reader"),
+    "core/memory_sync/apply.py": ("core.jobs", "core.vault_t1.portable", "core.vault_t1.reader"),
+    "core/memory_sync/mc_pull.py": ("core.jobs",),
     "core/memory_shelf/approvals.py": ("core.vault_t1.reader",),
     "core/memory_shelf/cli.py": ("core.vault_t1.reader",),
     "core/memory_shelf/watchers.py": ("core.jobs.batch_window",),
@@ -386,11 +391,15 @@ def test_portal_cannot_silently_start_using_documents_only_agent_tools(tmp_path)
 
 
 def test_vault_release_ownership_separates_shared_context_and_portal_reports_from_local_ask():
-    from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES
+    from scripts.ci.classify_release import VAULT_COS_FILES, VAULT_LOCAL_FILES, VAULT_SERVER_FILES
     for path in VAULT_COS_FILES:
         assert classify([path]) == ("domain", ("portal", "cos-bot", "cos-scheduler"))
-    for path in VAULT_LOCAL_FILES | {"core/memory_shelf/render.py", "core/memory_index/search.py", "core/memory_backup/backup.py"}:
+    for path in (VAULT_LOCAL_FILES - VAULT_SERVER_FILES) | {"core/memory_shelf/inbox.py", "core/memory_shelf/watchers.py",
+                                                            "core/memory_backup/backup.py", "core/memory_backup/production.py"}:
         assert classify([path]) == ("documents", ())
+    # The production Vault Ask service runs the portal image: its modules redeploy the portal (17 Oct 2026).
+    for path in VAULT_SERVER_FILES - VAULT_COS_FILES:
+        assert classify([path]) == ("domain", ("portal",)), path
     assert classify(["core/memory_ask/new_consumer.py"])[1] == ALL_SERVICES[:7]
     assert classify(["core/memory_ask/context.py.bak"])[1] == ALL_SERVICES[:7]
     assert classify(["scripts/unclassified_vault_tool.py"]) == ("full", ALL_SERVICES)
@@ -555,3 +564,18 @@ def test_report_reader_dependencies_are_exact_without_ask_querylog_or_index(tmp_
             target.write_text(source+forbidden)
             assert _vault_runtime_importers(tmp_path) == [rel]
             target.write_text(source)
+
+
+def test_the_vault_sync_rebuilds_the_portal_image_its_index_step_runs_in():
+    from scripts.ci.classify_release import classify
+    for path in ("core/memory_sync/apply.py", "core/memory_sync/versions.py", "scripts/vault/vault_apply.py"):
+        assert classify([path])[1] == ("portal",), path
+    assert classify(["scripts/vault/vault_sync.py"])[1] == ()                    # the Mac job: no service image
+
+
+def test_the_mc_exporter_rebuilds_the_portal_image_vault_mc_export_runs_it_in():
+    from scripts.ci.classify_release import classify
+    assert classify(["scripts/vault/export_mc_conversations.py"]) == ("domain", ("portal",))   # docker exec minimoi-portal ... --stdout-tar
+    assert classify(["scripts/vault/vault_mc_export.py"])[1] == ()               # the EC2 host job, from the tools bundle: no image
+    for path in ("core/memory_sync/mc_batch.py", "core/memory_sync/mc_export.py"):
+        assert classify([path])[1] == ("portal",), path

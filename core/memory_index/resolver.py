@@ -149,7 +149,9 @@ def resolve(shelf_root: Path, row: dict, caller: policy.Caller, source: str,
     return {
         "chunk_id": row["chunk_id"], "record_id": row["record_id"], "file": row["rel"],
         "lines": [own.start_line, own.end_line], "turn": own.turn, "speaker": own.speaker,
-        "date": str(meta.get("created", ""))[:10], "chair": meta.get("chair"), "tier": policy.effective_tier(meta),
+        # The turn's own date when its source had one (from the chunk just re-read, never the index), else the start.
+        "date": (own.at or str(meta.get("created", "")))[:10], "started": str(meta.get("created", ""))[:10],
+        "chair": meta.get("chair"), "tier": policy.effective_tier(meta),
         "provenance": provenance, "passage": piece.decode("utf-8", errors="replace"),
         "turn_kind": own.turn_kind, "attribution": attribution,
         "decision_status": decision["weight"],
