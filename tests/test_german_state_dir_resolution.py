@@ -109,7 +109,9 @@ def test_watch_transcripts_config_and_state_paths_split_correctly(isolated_state
 
 
 def test_telegram_bot_state_paths_follow_state_dir_not_checkout(isolated_state_dir):
-    from core.telegram import telegram_bot
+    # The fixture removes sys.modules entries; the package may still cache
+    # the prior module after earlier Curator tests. Import by qualified name.
+    telegram_bot = importlib.import_module("core.telegram.telegram_bot")
     importlib.reload(telegram_bot)
     assert telegram_bot.GERMAN_STATE_DIR == isolated_state_dir
     assert telegram_bot.GERMAN_DIR != isolated_state_dir
