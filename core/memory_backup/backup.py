@@ -178,8 +178,14 @@ def fetch_identity(spec: str, *, run=subprocess.run) -> str:
             service, _, account = rest.partition("/")
             text = run(["security", "find-generic-password", "-s", service, "-a", account, "-w"], capture_output=True, text=True, timeout=30, check=True).stdout
         elif kind == "ssm":
-            text = run(["aws", "ssm", "get-parameter", "--name", rest, "--with-decryption", "--query", "Parameter.Value", "--output", "text"],
-                       capture_output=True, text=True, timeout=60, check=True).stdout
+            cmd = ["aws", "ssm", "get-parameter", "--name", rest, "--with-decryption", "--query", "Parameter.Value", "--output", "text"]
+            pin = pinned_aws()
+            if pin:                  # from a pinned runtime the parameter is read as its own principal, never the default chain
+                proof = Dest("s3://identity-parameter", run=run, aws=pin)
+                proof.caller()
+                text = run(cmd, capture_output=True, text=True, timeout=60, check=True, env=proof._env).stdout
+            else:
+                text = run(cmd, capture_output=True, text=True, timeout=60, check=True).stdout
         elif kind == "cmd":
             text = run(rest.split(), capture_output=True, text=True, timeout=60, check=True).stdout
         else:
@@ -194,15 +200,109 @@ def fetch_identity(spec: str, *, run=subprocess.run) -> str:
 
 
 # ── destination adapters ──
+# ── The Mac jobs' own AWS principal (18 Oct 2026) ─────────────────────────────
+# A pinned runtime prepared with ``aws_profile`` (scripts/vault/runtime_install.py) carries ``config/aws_config``: one profile whose
+# keys come from the login Keychain through ``credential_process`` (scripts/vault/aws_keychain_credentials.py). Every ``aws`` command
+# such a runtime runs gets an isolated environment (that config file only, no shared credentials file, no ambient keys, no instance
+# metadata) and first proves, with ``sts get-caller-identity``, that it is exactly the configured principal. So a scheduled or manual
+# run from the pin can never fall back to other credentials (the deploy user) without failing. A checkout (dev, tests) and the EC2
+# tools bundle have no ``config/aws_config`` and keep the default credential chain (the EC2 instance role).
+
+AWS_AMBIENT = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN", "AWS_PROFILE",
+               "AWS_DEFAULT_PROFILE", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_ROLE_ARN", "AWS_ROLE_SESSION_NAME",
+               "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+               "AWS_CONTAINER_AUTHORIZATION_TOKEN", "AWS_CREDENTIAL_EXPIRATION", "AWS_EC2_METADATA_DISABLED")
+AWS_PROFILE_KEYS = ("aws_profile", "aws_principal_arn", "aws_keychain_service")      # == scripts/vault/runtime_install.py AWS_KEYS
+AWS_PROFILE_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
+AWS_PRINCIPAL = re.compile(r"arn:aws:iam::[0-9]{12}:user/[A-Za-z0-9+=,.@_/-]{1,128}")   # an IAM user with long-term keys only
+# What an aws command may inherit: nothing that can steer the CLI (endpoints, data paths, Python paths, profiles, keys).
+AWS_ENV_KEEP = ("PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TZ")
+# Read by the CLI from the home folder whatever AWS_CONFIG_FILE says: an alias can replace a command, a model can redirect it.
+AWS_HOME_OVERRIDES = (".aws/cli/alias", ".aws/models")
+_PIN = object()
+
+
+def pinned_aws(root: Path | None = None) -> dict | None:
+    """The AWS principal of the pinned runtime this code was loaded from, or None (a checkout or the EC2 bundle).
+
+    Fail closed (``aws_pin_invalid``) whenever the pin is half configured: ``config/runtime.json`` declares AWS settings but
+    ``config/aws_config`` is missing, or ``config/aws_config`` exists without valid ``aws_profile``/``aws_principal_arn``, or the
+    pinned ``runtime.json`` is unreadable. Only a runtime that declares no AWS settings at all keeps the default credential chain."""
+    root = Path(__file__).resolve().parents[2] if root is None else Path(root)
+    conf, runtime = root / "config" / "aws_config", root / "config" / "runtime.json"
+    doc = None
+    if runtime.exists():
+        try:
+            doc = json.loads(runtime.read_text())
+        except (OSError, ValueError):
+            raise BackupError("aws_pin_invalid") from None
+        if not isinstance(doc, dict):
+            raise BackupError("aws_pin_invalid")
+    declared = bool(doc) and any(k in doc for k in AWS_PROFILE_KEYS)
+    if not conf.exists():
+        if declared:
+            raise BackupError("aws_pin_invalid")          # the principal was configured; its profile file is gone
+        return None
+    if not declared:
+        raise BackupError("aws_pin_invalid")
+    profile, arn = doc.get("aws_profile"), doc.get("aws_principal_arn")
+    if not (isinstance(profile, str) and AWS_PROFILE_NAME.fullmatch(profile) and isinstance(arn, str) and AWS_PRINCIPAL.fullmatch(arn)):
+        raise BackupError("aws_pin_invalid")
+    return {"profile": profile, "principal_arn": arn, "config_file": str(conf)}
+
+
+def aws_env(pin: dict, base=None) -> dict:
+    """The environment for every ``aws`` command of a pinned principal: an allowlist, then only its own profile."""
+    env = {k: v for k, v in (os.environ if base is None else base).items() if k in AWS_ENV_KEEP and k not in AWS_AMBIENT}
+    env.update({"AWS_CONFIG_FILE": pin["config_file"], "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
+                "AWS_PROFILE": pin["profile"], "AWS_EC2_METADATA_DISABLED": "true"})
+    return env
+
+
 class Dest:
-    def __init__(self, url: str, *, aws_bin: str = "aws", run=subprocess.run):
+    def __init__(self, url: str, *, aws_bin: str = "aws", run=subprocess.run, aws=_PIN):
         self.url, self.aws, self.run = url.rstrip("/"), aws_bin, run
+        self.pin = pinned_aws() if aws is _PIN else aws
+        self._env = aws_env(self.pin) if self.pin else None
+        self._verified = False
         if url.startswith("file://"):
             self.kind, self.base = "file", Path(url[len("file://"):])
         elif url.startswith("s3://"):
             self.kind, self.base = "s3", None
         else:
             raise BackupError("destination_unknown")
+
+    def caller(self) -> str:
+        """The caller's ARN, which must be the pinned principal (``aws_principal_mismatch``); checked once per destination.
+
+        Refused first (``aws_cli_override_present``) when the home folder holds an AWS CLI alias file or service models: the CLI
+        reads those whatever its config file says, and either could fake this very check or redirect the commands after it."""
+        home = Path((self._env or os.environ).get("HOME") or os.path.expanduser("~"))
+        if any((home / rel).exists() for rel in AWS_HOME_OVERRIDES):
+            raise BackupError("aws_cli_override_present")
+        try:
+            done = self.run([self.aws, "sts", "get-caller-identity", "--output", "json"], capture_output=True, text=True,
+                            timeout=60, env=self._env)
+        except (OSError, subprocess.SubprocessError):
+            raise BackupError("aws_identity_unavailable") from None
+        try:
+            arn = json.loads(done.stdout or "{}")["Arn"] if done.returncode == 0 else None
+        except (ValueError, KeyError, TypeError):
+            arn = None
+        if not isinstance(arn, str):
+            raise BackupError("aws_identity_unavailable")
+        if arn != self.pin["principal_arn"]:
+            raise BackupError("aws_principal_mismatch")
+        self._verified = True
+        return arn
+
+    def _s3(self, cmd, **kw):
+        """Run one ``aws`` command: as the pinned principal (isolated, identity proven first), or as today when nothing is pinned."""
+        if not self.pin:
+            return self.run(cmd, **kw)
+        if not self._verified:
+            self.caller()
+        return self.run(cmd, env=self._env, **kw)
 
     def put(self, local: Path, key: str, *, replace: bool = False) -> None:
         """Write one object. ``replace=False`` (every attempt object) is a real conditional create: the local file is published with an exclusive hard link (it either becomes
@@ -235,7 +335,7 @@ class Dest:
             return
         if replace:
             try:
-                self.run([self.aws, "s3", "cp", str(local), f"{self.url}/{key}", "--sse", "AES256", "--only-show-errors"], check=True, capture_output=True, timeout=batch_timeout())
+                self._s3([self.aws, "s3", "cp", str(local), f"{self.url}/{key}", "--sse", "AES256", "--only-show-errors"], check=True, capture_output=True, timeout=batch_timeout())
             except (OSError, subprocess.SubprocessError):
                 raise BackupError("upload_failed") from None
             return
@@ -244,7 +344,7 @@ class Dest:
         bucket, _, prefix = self.url[len("s3://"):].partition("/")
         full_key = f"{prefix}/{key}" if prefix else key
         try:
-            done = self.run([self.aws, "s3api", "put-object", "--bucket", bucket, "--key", full_key, "--body", str(local), "--if-none-match", "*",
+            done = self._s3([self.aws, "s3api", "put-object", "--bucket", bucket, "--key", full_key, "--body", str(local), "--if-none-match", "*",
                              "--server-side-encryption", "AES256"], capture_output=True, text=True, timeout=batch_timeout())
         except (OSError, subprocess.SubprocessError):
             raise BackupError("upload_failed") from None
@@ -260,7 +360,7 @@ class Dest:
                 raise BackupError("download_failed") from None
             return
         try:
-            self.run([self.aws, "s3", "cp", f"{self.url}/{key}", str(local), "--only-show-errors"], check=True, capture_output=True, timeout=3600)
+            self._s3([self.aws, "s3", "cp", f"{self.url}/{key}", str(local), "--only-show-errors"], check=True, capture_output=True, timeout=3600)
         except (OSError, subprocess.SubprocessError):
             raise BackupError("download_failed") from None
 
@@ -279,7 +379,7 @@ class Dest:
             return True
         bucket, full_key = self._bucket_key(key)
         try:
-            done = self.run([self.aws, "s3api", "get-object", "--bucket", bucket, "--key", full_key, str(local)],
+            done = self._s3([self.aws, "s3api", "get-object", "--bucket", bucket, "--key", full_key, str(local)],
                             capture_output=True, text=True, timeout=600)
         except (OSError, subprocess.SubprocessError):
             raise BackupError("download_failed") from None
@@ -306,7 +406,7 @@ class Dest:
         bucket, full_prefix = self._bucket_key(prefix.rstrip("/") + "/")
         root = full_prefix[: len(full_prefix) - len(prefix.rstrip("/") + "/")]
         try:
-            done = self.run([self.aws, "s3api", "list-objects-v2", "--bucket", bucket, "--prefix", full_prefix, "--output", "json"],
+            done = self._s3([self.aws, "s3api", "list-objects-v2", "--bucket", bucket, "--prefix", full_prefix, "--output", "json"],
                             capture_output=True, text=True, timeout=600)
         except (OSError, subprocess.SubprocessError):
             raise BackupError("list_failed") from None

@@ -28,6 +28,7 @@ import os
 from pathlib import Path
 import plistlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -39,7 +40,9 @@ FILES = ('core/__init__.py', 'core/agent_turns/__init__.py', 'core/agent_turns/w
          'utils/__init__.py', 'utils/credential_scrub.py', 'utils/payment_scrub.py',
          'scripts/moi', 'scripts/jobs/watchdog.py', 'scripts/vault/backup.py',
          'scripts/vault/runtime_install.py', 'scripts/vault/query_suite.py',
-         'scripts/vault/assets.py', 'scripts/vault/vault_sync.py', 'scripts/vault/vault_mc_pull.py', 'requirements-vault.txt')
+         'scripts/vault/assets.py', 'scripts/vault/vault_sync.py', 'scripts/vault/vault_mc_pull.py',
+         'scripts/vault/aws_keychain_credentials.py', 'scripts/vault/check_s3_access.py', 'scripts/vault/publish_production.py',
+         'requirements-vault.txt')
 LABELS = {'capture': 'com.vanstedum.minimoi-memory-watch', 'index': 'com.vanstedum.minimoi-memory-index',
           'backup': 'com.vanstedum.minimoi-vault-backup', 'watchdog': 'com.vanstedum.minimoi-jobs-watchdog',
           'ask': 'com.vanstedum.minimoi-vault-ask', 'sync': 'com.vanstedum.minimoi-vault-sync',
@@ -50,8 +53,15 @@ INTERVAL_JOBS = ('sync', 'mc_pull')
 TIMES = {'capture': (0, 15), 'index': (2, 30), 'backup': (4, 30), 'watchdog': (9, 0)}
 KEYS = {'python', 'shelf_root', 'inbox_root', 'jobs_root', 'logs_root', 'ask_registry',
         'age_bin', 'age_version', 'backup_dest', 'public_recipient', 'launch_agents'}
-OPTIONAL_KEYS = {'mc_pull_identity'}
+OPTIONAL_KEYS = {'mc_pull_identity', 'aws_profile', 'aws_principal_arn', 'aws_keychain_service'}
 IDENTITY_SPEC = re.compile(r'(file|keychain|ssm|cmd):\S[^\r\n]{0,500}')
+# The Mac Vault jobs' own AWS principal (18 Oct 2026): all three or none. Names only, never keys: the keys stay in the Keychain.
+AWS_KEYS = ('aws_profile', 'aws_principal_arn', 'aws_keychain_service')
+AWS_FORMATS = {'aws_profile': re.compile(r'[A-Za-z0-9_-]{1,64}'),
+               'aws_principal_arn': re.compile(r'arn:aws:iam::[0-9]{12}:user/[A-Za-z0-9+=,.@_/-]{1,128}'),     # an IAM user only
+               'aws_keychain_service': re.compile(r'[A-Za-z0-9._-]{1,128}')}
+ACCESS_KEY_LIKE = re.compile(r'(AKIA|ASIA)[A-Z0-9]{16}')
+AWS_REGION = 'us-east-1'
 
 
 def identity_spec_ok(spec):
@@ -67,6 +77,12 @@ def profile(path):
         raise ValueError('invalid_profile')
     if 'mc_pull_identity' in doc and not identity_spec_ok(doc['mc_pull_identity']):
         raise ValueError('invalid_mc_pull_identity')
+    present = [k for k in AWS_KEYS if k in doc]
+    if present and len(present) != len(AWS_KEYS):
+        raise ValueError('aws_settings_incomplete')
+    for k in present:
+        if not AWS_FORMATS[k].fullmatch(doc[k]) or ACCESS_KEY_LIKE.search(doc[k]):
+            raise ValueError('invalid_aws_settings')
     for k in KEYS - {'age_version', 'backup_dest', 'public_recipient'}:
         doc[k] = str(Path(doc[k]).expanduser())
         if not Path(doc[k]).is_absolute():
@@ -155,6 +171,12 @@ def prepare(repo, cfg, out):
              'repo_root': str(pin), 'headroom': {'min_free_bytes': 5 << 30}, 'never_copy': [], 'sources': sources}
     (config / 'memory_shelf.json').write_text(json.dumps(shelf, indent=2) + '\n')
     (config / 'runtime.json').write_text(json.dumps(cfg, indent=2) + '\n')
+    if 'aws_profile' in cfg:                                # the Vault jobs' own principal: a profile, never a key
+        helper = pin / 'scripts/vault/aws_keychain_credentials.py'
+        (config / 'aws_config').write_text(
+            f"[profile {cfg['aws_profile']}]\nregion = {AWS_REGION}\n"
+            f"credential_process = {shlex.quote(cfg['python'])} -I -B {shlex.quote(str(helper))} "
+            f"--service {shlex.quote(cfg['aws_keychain_service'])}\n")
     registry = json.loads(registry_bytes)
     for job in ('capture', 'index', 'backup', 'watchdog'):
         job_id = {'capture': 'memory-watch', 'index': 'memory-index', 'backup': 'vault-backup', 'watchdog': 'jobs-watchdog'}[job]
@@ -203,6 +225,10 @@ def prepare(repo, cfg, out):
                                 'Rooms source absent pending verified mapping', 'consumer retrieval curated only',
                                 'existing shared venv is not immutable; retain dependency receipt',
                                 'source approvals, Ask grants/tokens and installed jobs unchanged',
+                                (f"S3 as {cfg['aws_principal_arn']} only: profile {cfg['aws_profile']}, keys from Keychain service "
+                                 f"{cfg['aws_keychain_service']} via credential_process; any other caller identity is refused"
+                                 if 'aws_profile' in cfg else
+                                 'S3 uses the default AWS credential chain: the profile has no aws_profile'),
                                 *(['vault-mc-pull reads the private identity named by mc_pull_identity (a spec, not the key)',
                                    'minimoi-mc source configured; it captures nothing until approved, and memory-watch shows minimoi-mc '
                                    'yellow (not_approved) until `moi approve-source minimoi-mc`']

@@ -15,6 +15,9 @@ Settings (flag, else environment, else default):
   --jobs-root    MINIMOI_JOBS_ROOT              ~/minimoi-staging/data/jobs
   --workdir      MOI_VAULT_PUBLISH_WORK         ~/minimoi-staging/.vault-publish-work   (plaintext scratch, 0700, wiped; outside
                                                 data/, which staging mounts into containers)
+  --workdir-volume-uuid  MOI_VAULT_PUBLISH_WORK_VOLUME_UUID   REQUIRED when --workdir is under /Volumes: the exact external
+                                                volume UUID; the run refuses unless that volume is mounted there and writable
+                                                (seed scratch on the owner-approved Files and Photos volume, 17 Oct 2026)
 
 It runs only inside the standing batch window (00:00-06:00 America/Chicago) unless --allow-outside-window, and takes the shared
 <jobs-root>/vault-batch.lock unless --no-batch-lock (pass that when a runner such as runtime_install.py run-job already holds it).
@@ -26,7 +29,9 @@ import argparse
 import fcntl
 import json
 import os
+import plistlib
 import secrets
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,7 +64,72 @@ def settings(a) -> dict:
         "age_bin": os.path.expanduser(env(a.age_bin, "MOI_AGE_BIN", "~/minimoi-staging/tools/age-v1.3.2/age")),
         "expect_age": env(a.expect_age, "MOI_AGE_VERSION", "v1.3.2"), "jobs_root": jobs,
         "workdir": os.path.expanduser(env(a.workdir, "MOI_VAULT_PUBLISH_WORK", "~/minimoi-staging/.vault-publish-work")),
+        "workdir_volume_uuid": (env(getattr(a, "workdir_volume_uuid", None), "MOI_VAULT_PUBLISH_WORK_VOLUME_UUID") or "").strip(),
     }
+
+
+VOLUMES = Path("/Volumes")
+
+
+def _diskutil_info(volume: Path) -> dict:
+    out = subprocess.run(["/usr/sbin/diskutil", "info", "-plist", str(volume)], capture_output=True, check=True, timeout=15).stdout
+    return plistlib.loads(out)
+
+
+def _internal_devices() -> set:
+    """The Mac's own disks: the system volume and the volume holding the home folder (the Data volume)."""
+    return {Path("/").stat().st_dev, Path.home().stat().st_dev}
+
+
+def check_workdir_volume(workdir: str, uuid: str, *, volumes: Path | None = None, info=None, internal_devs=None) -> str | None:
+    """A workdir on an external volume holds plaintext scratch: it is used only on the exact, mounted, writable volume
+    the owner selected (the same rule as the approved backup wrapper). Returns a refusal code, or None when it is safe.
+    Nothing is created here, and nothing under /Volumes is ever created before this check passes.
+
+    Decided on what the path really is, not on its spelling (review, 18 Oct): no ``..``; no symlink anywhere on the way except
+    the system's own top-level links (/tmp, /var, /etc); /Volumes matched without regard to letter case or repeated slashes;
+    and the folder that already exists deepest on the way must sit on that volume's own device. A path outside /Volumes that
+    still lands on another device is refused rather than taken for internal."""
+    volumes = Path(volumes or VOLUMES)
+    raw = Path(workdir)
+    if not raw.is_absolute() or ".." in raw.parts:
+        return "workdir_unsafe"
+    path = Path(raw.anchor)
+    for depth, part in enumerate(raw.parts[1:], start=1):
+        path = path / part
+        if (depth > 1 and path.is_symlink()) or (path.exists() and not path.is_dir()):
+            return "workdir_unsafe"
+    text, root = "/" + str(raw).lstrip("/"), "/" + str(volumes).strip("/")
+    internal = _internal_devices() if internal_devs is None else set(internal_devs)
+    anchor = raw
+    while not anchor.exists() and anchor != anchor.parent:
+        anchor = anchor.parent
+    try:
+        anchor_dev = anchor.stat().st_dev
+    except OSError:
+        return "workdir_unsafe"
+    if not text.casefold().startswith(root.casefold() + "/"):
+        if anchor_dev not in internal:
+            return "workdir_volume_unavailable" if uuid else "workdir_volume_uuid_required"
+        return None if not uuid else "workdir_volume_uuid_but_not_external"   # an internal workdir: nothing to bind
+    rel = Path(text[len(root) + 1:])
+    if len(rel.parts) < 2:
+        return "workdir_not_inside_a_volume"
+    if not uuid:
+        return "workdir_volume_uuid_required"
+    volume = volumes / rel.parts[0]
+    try:
+        if volume.is_symlink() or not volume.is_dir():
+            return "workdir_volume_unavailable"
+        volume_dev = volume.stat().st_dev
+        if volume_dev in internal or anchor_dev != volume_dev:
+            return "workdir_volume_unavailable"
+        doc = (info or _diskutil_info)(volume)
+    except (OSError, subprocess.SubprocessError, plistlib.InvalidFileException, ValueError):
+        return "workdir_volume_unavailable"
+    if doc.get("VolumeUUID") != uuid or doc.get("MountPoint") != str(volume) or not doc.get("WritableVolume"):
+        return "workdir_volume_unavailable"
+    return None
 
 
 def refuse(code: str) -> int:
@@ -91,7 +161,8 @@ def cmd_plan(a) -> int:
             "recipient_valid": bool(backup.RECIPIENT.match(s["recipient"])), "inside_window_now": backup.in_window(now),
             "window": "00:00-06:00 America/Chicago", "age_bin": s["age_bin"], "expect_age": s["expect_age"],
             "shelf_root_exists": Path(s["shelf_root"]).is_dir(), "index_exists": index.is_file(),
-            "index_bytes": index.stat().st_size if index.is_file() else None, "workdir": s["workdir"], "reserve_bytes": backup.reserve_bytes()}
+            "index_bytes": index.stat().st_size if index.is_file() else None, "workdir": s["workdir"], "reserve_bytes": backup.reserve_bytes(),
+            "workdir_volume_check": check_workdir_volume(s["workdir"], s["workdir_volume_uuid"]) or "ok"}
     if plan["shelf_root_exists"] and plan["index_exists"]:
         fp = backup.footprint(s["shelf_root"])
         plan["shelf_files"], plan["shelf_bytes"] = fp["files"], fp["bytes"]
@@ -211,6 +282,9 @@ def cmd_run(a) -> int:
         return refuse("destination_required")
     if not s["recipient"]:
         return refuse("recipient_required")
+    problem = check_workdir_volume(s["workdir"], s["workdir_volume_uuid"])
+    if problem:                                            # before any read or write of the workdir
+        return refuse(problem)
     if a.no_batch_lock:
         return _publish(a, s)
     status.ensure_root(s["jobs_root"])
@@ -227,7 +301,8 @@ def cmd_run(a) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    for flag in ("--shelf", "--index", "--dest", "--recipient", "--recipient-file", "--age-bin", "--expect-age", "--jobs-root", "--workdir", "--registry"):
+    for flag in ("--shelf", "--index", "--dest", "--recipient", "--recipient-file", "--age-bin", "--expect-age", "--jobs-root", "--workdir",
+                 "--workdir-volume-uuid", "--registry"):
         ap.add_argument(flag)
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("plan")
