@@ -4,6 +4,7 @@ from functools import wraps
 from pathlib import Path
 from unittest.mock import patch
 from flask import Flask,jsonify,redirect,render_template,request,session,url_for
+from urllib.parse import quote
 from jinja2 import DictLoader
 from minimoi_portal.guild_ui import references
 APP_SOURCE=Path(__file__).resolve().parents[1]/'minimoi_portal/app.py'
@@ -14,10 +15,10 @@ class LegacyBuildReferences(unittest.TestCase):
   self.app=Flask(__name__);self.app.config.update(TESTING=True,SECRET_KEY='synthetic-reader-test')
   self.app.jinja_loader=DictLoader({'guild/spec_detail.html':'{{ filename }}|{{ content|safe }}'})
   self.app.add_url_rule('/login','login',lambda:'login')
-  names={'_current_user','_require_owner','guild_build_spec','guild_build_spec_raw','guild_build_check'}
+  names={'_login_next','_current_user','_require_owner','guild_build_spec','guild_build_spec_raw','guild_build_check'}
   tree=ast.parse(APP_SOURCE.read_text());nodes=[node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name in names]
   assert len(nodes)==len(names)
-  namespace={'app':self.app,'__file__':str(self.root/'minimoi_portal/app.py'),'session':session,'request':request,'redirect':redirect,'url_for':url_for,'wraps':wraps,'render_template':render_template,'jsonify':jsonify,'_read_build_queue':lambda:(self.items,self.unreadable)}
+  namespace={'quote':quote,'app':self.app,'__file__':str(self.root/'minimoi_portal/app.py'),'session':session,'request':request,'redirect':redirect,'url_for':url_for,'wraps':wraps,'render_template':render_template,'jsonify':jsonify,'_read_build_queue':lambda:(self.items,self.unreadable)}
   exec(compile(ast.Module(body=nodes,type_ignores=[]),str(APP_SOURCE),'exec'),namespace)
   self.client=self.app.test_client()
   with self.client.session_transaction() as value:value['user']={'username':'owner-fixture','tier':'owner'}
