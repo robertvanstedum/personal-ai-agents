@@ -15,7 +15,7 @@ from pathlib import Path
 
 from core.memory_shelf.fsio import DEFAULT_MIN_FREE_BYTES
 
-SOURCE_KINDS = ("claude-code", "codex", "rooms")
+SOURCE_KINDS = ("claude-code", "codex", "rooms", "mc")
 DEFAULT_CONFIG = Path("config/memory_shelf.json")
 
 

@@ -8,6 +8,13 @@ Every record is its own transaction, so an interrupted run leaves a consistent i
 
 ``rebuild`` is the recovery story: wipe nothing in place; build a complete new file next to the old one from the
 shelf alone (no vector is carried over), then swap it in atomically. A failed rebuild leaves the old index as it was.
+``rebuild(reuse_vectors=True)`` (``moi rebuild --reuse-vectors``) is for a schema change, not for recovery: everything
+is still rebuilt from the shelf, but a chunk whose exact text the old index already embedded for the same record takes
+that vector instead of being embedded again, exactly as ``update`` does. Only when the old index was made with the pinned
+embedder (same digest and dimensions) and the same chunker; otherwise nothing is reused and every chunk is embedded.
+
+Both also have a **keyword-only** mode (``keyword_only=True``, production): the same chunker and policy, no embedder (pass
+``None``), no vector table; chunk rows record embedder ``none``. It writes only an index made keyword-only, and never a vector one.
 
 Both run under the index lock (one writer), check headroom first (``disk_low``: skip, never delete to make room;
 a rebuild needs room for a second copy), and check the embedder pin before embedding anything. Neither writes to
@@ -25,7 +32,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable
 
-import sqlite_vec
+try:
+    import sqlite_vec
+except ImportError:                         # building an index needs it; reading one for keyword search does not
+    sqlite_vec = None
 
 from core.jobs import batch_window
 from core.memory_index import chunker, policy, store
@@ -103,26 +113,34 @@ def check_compatible(con, ident: Identity | None) -> str | None:
     return None
 
 
+KEYWORD_ONLY_EMBEDDER = ("none", "0")      # (name, version) on chunk rows written without vectors
+
+
 class _Run:
-    def __init__(self, con, shelf_root: Path, embedder: Embedder, ident: Identity, now: Callable[[], datetime]):
+    def __init__(self, con, shelf_root: Path, embedder: Embedder | None, ident: Identity | None, now: Callable[[], datetime],
+                 keyword_only: bool = False, donor=None):
         self.con, self.root, self.embedder, self.ident, self.now = con, shelf_root, embedder, ident, now
+        self.keyword_only = keyword_only
+        self.donor = donor              # a previous index whose vectors may be reused (``rebuild(reuse_vectors=True)``)
         self.counts: Counter = Counter()
         self.held: Counter = Counter()
 
     def _upsert(self, rid: str, rel: str, st: os.stat_result, sha: str | None, meta: dict | None, state: str,
-                reason: str | None, n: int) -> None:
+                reason: str | None, n: int, activity: tuple[str | None, str | None, int] = (None, None, 0)) -> None:
         m = meta or {}
         self.con.execute(
             "INSERT OR REPLACE INTO records(record_id, rel, edition, edition_hash, file_size, file_mtime_ns, file_sha256,"
-            " provider, chair, kind, tier, scope, canary, created, normalizer, state, reason, chunks, indexed_at)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " provider, chair, kind, tier, scope, canary, created, normalizer, state, reason, chunks, indexed_at,"
+            " first_activity, last_activity, timed_turns)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (rid, rel, m.get("edition"), m.get("edition_hash"), st.st_size, st.st_mtime_ns, sha,
              policy.provider_of(m) if m else None, m.get("chair"), m.get("kind"),
              policy.effective_tier(m) if m else None, m.get("scope"), int(policy.is_canary(m)) if m else 0,
-             m.get("created"), (m.get("normalized") or {}).get("normalizer"), state, reason, n, _utc(self.now())))
+             m.get("created"), (m.get("normalized") or {}).get("normalizer"), state, reason, n, _utc(self.now()),
+             *activity))
 
     def _hold(self, rid, rel, st, sha, meta, reason) -> None:
-        store.delete_record_chunks(self.con, rid)
+        store.delete_record_chunks(self.con, rid, vectors=not self.keyword_only)
         self._upsert(rid, rel, st, sha, meta, "held", reason, 0)
         self.held[reason] += 1
 
@@ -178,33 +196,43 @@ class _Run:
             self._hold(rid, rel, st, sha, meta, reason)
             self.con.commit()
             return
-        reuse = store.old_vectors(self.con, rid)
-        todo = [c for c in chunks if c.text_hash not in reuse]
-        fresh = self.embedder.embed_documents([c.text for c in todo], chunker.EMBED_MAX_CHARS) if todo else []
-        vectors = {c.text_hash: sqlite_vec.serialize_float32(v) for c, v in zip(todo, fresh)}
-        self.counts["embedded_chunks"] += len(todo)
-        self.counts["reused_vectors"] += len(chunks) - len(todo)
-        store.delete_record_chunks(self.con, rid)
+        if self.keyword_only:
+            reuse, vectors = {}, {}
+            embedder_name, embedder_version = KEYWORD_ONLY_EMBEDDER
+        else:
+            reuse = store.old_vectors(self.con, rid) or (store.old_vectors(self.donor, rid) if self.donor is not None else {})
+            todo = [c for c in chunks if c.text_hash not in reuse]
+            fresh = self.embedder.embed_documents([c.text for c in todo], chunker.EMBED_MAX_CHARS) if todo else []
+            vectors = {c.text_hash: sqlite_vec.serialize_float32(v) for c, v in zip(todo, fresh)}
+            self.counts["embedded_chunks"] += len(todo)
+            self.counts["reused_vectors"] += len(chunks) - len(todo)
+            embedder_name, embedder_version = self.ident.name, self.ident.version
+        store.delete_record_chunks(self.con, rid, vectors=not self.keyword_only)
         tier, canary, edition_hash = policy.effective_tier(meta), int(policy.is_canary(meta)), meta["edition_hash"]
-        for c in chunks:
+        times = [c.at or meta.get("created") for c in chunks]
+        known = [t for t in times if t]
+        activity = (min(known) if known else meta.get("created"), max(known) if known else meta.get("created"),
+                    len({c.turn for c in chunks if c.at}))
+        for c, created in zip(chunks, times):
             cur = self.con.execute(
                 "INSERT INTO chunks(chunk_id, record_id, edition_hash, ordinal, turn, speaker, rel, start_line, end_line,"
                 " text_hash, embedder, embedder_version, tier, scope, canary, created, truncated)"
                 " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (c.chunk_id(rid, edition_hash), rid, edition_hash, c.ordinal, c.turn, c.speaker, rel, c.start_line,
-                 c.end_line, c.text_hash, self.ident.name, self.ident.version, tier, meta["scope"], canary,
-                 meta.get("created"), int(len(c.text) > chunker.EMBED_MAX_CHARS)))
+                 c.end_line, c.text_hash, embedder_name, embedder_version, tier, meta["scope"], canary,
+                 created, int(len(c.text) > chunker.EMBED_MAX_CHARS)))
             self.con.execute("INSERT INTO fts(rowid, text) VALUES(?, ?)", (cur.lastrowid, c.text))
-            self.con.execute("INSERT INTO vec(id, embedding, tier, canary) VALUES(?, ?, ?, ?)",
-                             (cur.lastrowid, reuse.get(c.text_hash) or vectors[c.text_hash], tier, canary))
-        self._upsert(rid, rel, st, sha, meta, "indexed", None, len(chunks))
+            if not self.keyword_only:
+                self.con.execute("INSERT INTO vec(id, embedding, tier, canary) VALUES(?, ?, ?, ?)",
+                                 (cur.lastrowid, reuse.get(c.text_hash) or vectors[c.text_hash], tier, canary))
+        self._upsert(rid, rel, st, sha, meta, "indexed", None, len(chunks), activity)
         self.con.commit()
         self.counts["reindexed" if row else "indexed"] += 1
 
     def drop_missing(self, present: set[str]) -> None:
         for (rid,) in self.con.execute("SELECT record_id FROM records").fetchall():
             if rid not in present:
-                store.delete_record_chunks(self.con, rid)
+                store.delete_record_chunks(self.con, rid, vectors=not self.keyword_only)
                 self.con.execute("DELETE FROM records WHERE record_id=?", (rid,))
                 self.counts["removed"] += 1
         self.con.commit()
@@ -215,10 +243,10 @@ class _Run:
                 "chunks_total": total, "seconds": round(time.monotonic() - started, 2)}
 
 
-def _sync(con, shelf_root: Path, embedder: Embedder, ident: Identity, now, only: Iterable[str] | None,
-          limit: int | None) -> dict:
+def _sync(con, shelf_root: Path, embedder: Embedder | None, ident: Identity | None, now, only: Iterable[str] | None,
+          limit: int | None, keyword_only: bool = False, donor=None) -> dict:
     started = time.monotonic()
-    run = _Run(con, shelf_root, embedder, ident, now)
+    run = _Run(con, shelf_root, embedder, ident, now, keyword_only, donor)
     entries = shelf_entries(shelf_root)
     if only is not None:
         wanted = set(only)
@@ -236,7 +264,8 @@ def _sync(con, shelf_root: Path, embedder: Embedder, ident: Identity, now, only:
         con.commit()
         return run.result(EMBEDDER_UNAVAILABLE, started)
     finally:
-        embedder.release()
+        if embedder is not None:
+            embedder.release()
     try:
         batch_window.remaining()
     except batch_window.BatchDeadline as exc:
@@ -258,39 +287,74 @@ def _pin(embedder: Embedder) -> tuple[Identity | None, str | None]:
         return None, EMBEDDER_UNAVAILABLE
 
 
-def update(shelf_root: str | Path, embedder: Embedder, *, index_path: str | Path | None = None,
+def _keyword_meta(con, now) -> None:
+    store.set_meta(con, embedder=KEYWORD_ONLY_EMBEDDER[0], policy_version=policy.POLICY_VERSION,
+                   chunker_version=chunker.CHUNKER_VERSION, built_at=_utc(now()))
+
+
+def update(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str | Path | None = None,
            min_free_bytes: int | None = fsio.DEFAULT_MIN_FREE_BYTES, now: Callable[[], datetime] | None = None,
-           only: Iterable[str] | None = None, limit: int | None = None) -> dict:
-    """Bring the index up to date with the shelf (creating it if missing). Returns counts and a result code."""
+           only: Iterable[str] | None = None, limit: int | None = None, keyword_only: bool = False) -> dict:
+    """Bring the index up to date with the shelf (creating it if missing). Returns counts and a result code.
+    ``keyword_only``: no embedder (``None``), no vectors; the index must be (or is created) keyword-only."""
     shelf_root = Path(shelf_root)
     index_path = Path(index_path) if index_path else default_index_path(shelf_root)
     now = now or (lambda: datetime.now(timezone.utc))
     if fsio.check_headroom(shelf_root, min_free_bytes, None):
         return {"code": DISK_LOW}
-    ident, code = _pin(embedder)
-    if code:
-        return {"code": code}
+    ident = None
+    if not keyword_only:
+        ident, code = _pin(embedder)
+        if code:
+            return {"code": code}
     try:
         with index_lock(index_path):
-            con = store.connect(index_path, create=True)
+            try:
+                con = store.connect(index_path, create=True, keyword_only=keyword_only)
+            except store.IndexIncompatible:
+                return {"code": INCOMPATIBLE}
             try:
                 code = check_compatible(con, ident)
                 if code:
                     return {"code": code}
-                if "embedder_digest" not in store.get_meta(con):
+                meta = store.get_meta(con)
+                if keyword_only and "built_at" not in meta:
+                    _keyword_meta(con, now)
+                elif not keyword_only and "embedder_digest" not in meta:
                     store.set_meta(con, embedder=ident.name, embedder_digest=ident.digest, dims=ident.dims,
                                    policy_version=policy.POLICY_VERSION, chunker_version=chunker.CHUNKER_VERSION,
                                    built_at=_utc(now()))
-                return _sync(con, shelf_root, embedder, ident, now, only, limit)
+                return _sync(con, shelf_root, embedder, ident, now, only, limit, keyword_only)
             finally:
                 con.close()
     except IndexBusy:
         return {"code": BUSY}
 
 
-def rebuild(shelf_root: str | Path, embedder: Embedder, *, index_path: str | Path | None = None,
-            min_free_bytes: int | None = fsio.DEFAULT_MIN_FREE_BYTES, now: Callable[[], datetime] | None = None) -> dict:
-    """Build a complete new index from the shelf alone and swap it in. The old file stays until the swap."""
+def _donor(index_path: Path, ident: Identity):
+    """The old index, read-only, when its vectors may be reused by this embedder and chunker; else None."""
+    if not index_path.is_file():
+        return None
+    try:
+        con = store.connect(index_path, readonly=True)
+    except Exception:                                   # noqa: BLE001 - an unreadable old index is simply not a donor
+        return None
+    try:
+        meta = store.get_meta(con)
+        if (meta.get("embedder_digest") == ident.digest and meta.get("dims") == str(ident.dims)
+                and meta.get("chunker_version") == str(chunker.CHUNKER_VERSION)):
+            return con
+    except Exception:                                   # noqa: BLE001
+        pass
+    con.close()
+    return None
+
+
+def rebuild(shelf_root: str | Path, embedder: Embedder | None, *, index_path: str | Path | None = None,
+            min_free_bytes: int | None = fsio.DEFAULT_MIN_FREE_BYTES, now: Callable[[], datetime] | None = None,
+            keyword_only: bool = False, reuse_vectors: bool = False) -> dict:
+    """Build a complete new index from the shelf alone and swap it in. The old file stays until the swap. With
+    ``reuse_vectors`` (a vector index only) the old index lends the vectors of unchanged chunk text (see the module note)."""
     shelf_root = Path(shelf_root)
     index_path = Path(index_path) if index_path else default_index_path(shelf_root)
     now = now or (lambda: datetime.now(timezone.utc))
@@ -298,23 +362,35 @@ def rebuild(shelf_root: str | Path, embedder: Embedder, *, index_path: str | Pat
     floor = (min_free_bytes or 0) + current            # room for a second copy beside the old one
     if fsio.check_headroom(shelf_root, floor if min_free_bytes is not None else None, None):
         return {"code": DISK_LOW}
-    ident, code = _pin(embedder)
-    if code:
-        return {"code": code}
+    ident = None
+    if not keyword_only:
+        ident, code = _pin(embedder)
+        if code:
+            return {"code": code}
     try:
         with index_lock(index_path):
             tmp = index_path.parent / f".{index_path.name}.rebuild-{os.getpid()}"
             tmp.unlink(missing_ok=True)
-            con = store.connect(tmp, create=True)
+            con = store.connect(tmp, create=True, keyword_only=keyword_only)
+            donor = None
             try:
-                store.set_meta(con, embedder=ident.name, embedder_digest=ident.digest, dims=ident.dims,
-                               policy_version=policy.POLICY_VERSION, chunker_version=chunker.CHUNKER_VERSION,
-                               built_at=_utc(now()))
-                result = _sync(con, shelf_root, embedder, ident, now, None, None)
+                if keyword_only:
+                    _keyword_meta(con, now)
+                else:
+                    donor = _donor(index_path, ident) if reuse_vectors else None
+                    store.set_meta(con, embedder=ident.name, embedder_digest=ident.digest, dims=ident.dims,
+                                   policy_version=policy.POLICY_VERSION, chunker_version=chunker.CHUNKER_VERSION,
+                                   built_at=_utc(now()))
+                result = _sync(con, shelf_root, embedder, ident, now, None, None, keyword_only, donor)
+                if reuse_vectors and not keyword_only:
+                    result["vectors_from_old_index"] = donor is not None
             except BaseException:
                 con.close()
                 tmp.unlink(missing_ok=True)
                 raise
+            finally:
+                if donor is not None:
+                    donor.close()
             con.close()
             if result["code"] != OK:
                 tmp.unlink(missing_ok=True)                  # the old index stays as it was

@@ -173,12 +173,13 @@ def start_run(jobs_root, job, run_id: str, now: datetime) -> dict:
 
 
 def finish_run(jobs_root, job, running: dict, *, state: str, now: datetime, exit_code: int, summary: str,
-               results: dict, next_due_by: datetime | None, alert: str | None = None) -> dict:
-    """Write the final file for the run ``running`` started."""
+               results: dict, next_due_by: datetime | None, alert: str | None = None, success: bool | None = None) -> dict:
+    """Write the final file for the run ``running`` started. ``success=False`` keeps the previous ``last_success_at`` even for a
+    completed run: a job whose success means more than finishing (``vault-sync``: the backlog reached 0) says so."""
     if state not in ("ok", "warn", "failed"):
         raise StatusError("state")
     last = parse_time(running.get("last_success_at"))
-    if state in COMPLETED:
+    if state in COMPLETED and success is not False:
         last = now
     doc = build(job_id=job.id, host=job.host, run_id=running["run_id"], state=state,
                 started_at=parse_time(running["started_at"]), finished_at=now, exit_code=exit_code, summary=summary,

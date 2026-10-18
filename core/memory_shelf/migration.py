@@ -68,7 +68,8 @@ def preview(shelf, cfg: Config, *, only: str | None = None) -> dict:
                                                  "source_changed": 0, "unreadable": 0, "not_retained": 0,
                                                  "would_add_edition": 0, "unchanged_after": 0, "transitions": Counter(),
                                                  "roles_before": Counter(), "roles_after": Counter(),
-                                                 "omitted_added": Counter(), "classes_after": Counter()})
+                                                 "omitted_added": Counter(), "classes_after": Counter(),
+                                                 "turn_times_after": 0})
     for entry in shelf.list_records():
         main = shelf.main_path(entry)
         try:
@@ -104,14 +105,16 @@ def preview(shelf, cfg: Config, *, only: str | None = None) -> dict:
         for kind, n in clean.omitted.items():
             if kind not in (meta.get("normalized", {}).get("omitted") or {}):
                 row["omitted_added"][kind] += n
-        changed = render.ordered_turns(stored) != render.ordered_turns(clean.turns)
+        changed = (render.ordered_turns(stored) != render.ordered_turns(clean.turns)
+                   or render.turn_times(stored) != render.turn_times(clean.turns))
         row["would_add_edition" if changed else "unchanged_after"] += 1
+        row["turn_times_after"] += sum(1 for at in render.turn_times(clean.turns) if at)
     return {"read_only": True, "providers": {p: {k: (dict(sorted(v.items())) if isinstance(v, Counter) else v)
                                                   for k, v in row.items()} for p, row in sorted(per.items())}}
 
 
 def reprocess_inbox(shelf, cfg: Config, *, now: datetime | None = None) -> dict:
-    """Re-read inbox records (claude.ai, Grok, pastes) whose parser version is older than the current one, from the file each
+    """Re-read inbox records (claude.ai, Grok, ChatGPT, pastes) whose parser version is older than the current one, from the file each
     keeps as its source, and add a new edition where the turns differ. Never deletes or rewrites an edition. The caller must
     have the owner's typed confirmation (the CLI asks); counts only."""
     from core.memory_shelf import inbox as inbox_mod
@@ -119,7 +122,7 @@ def reprocess_inbox(shelf, cfg: Config, *, now: datetime | None = None) -> dict:
     counts: Counter = Counter()
     for entry in list(shelf.list_records()):
         provider = entry.get("provider")
-        if provider not in ("claude-ai", "grok"):
+        if provider not in ("claude-ai", "grok", "chatgpt"):
             continue
         main = shelf.main_path(entry)
         try:

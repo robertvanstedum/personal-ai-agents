@@ -1,6 +1,9 @@
 """``moi rebuild`` and ``moi index ...``: the index's owner commands (v0.5 C5; amendment M3).
 
-    moi rebuild [--no-fidelity]        build a new index from the shelf alone, swap it in, then the F2 full sweep
+    moi rebuild [--no-fidelity] [--reuse-vectors]
+                                       build a new index from the shelf alone, swap it in, then the F2 full sweep;
+                                       --reuse-vectors (after a schema change) keeps the old index's vectors for
+                                       unchanged chunk text instead of embedding it again
     moi index update                   embed-on-file: index new and changed records, drop deleted ones
     moi index status                   freshness light, held/pending counts, orphans, model pin (read-only)
     moi index check                    status, exit 1 unless the light is ok (orphans and pin are failures)
@@ -68,6 +71,7 @@ def main(argv: Sequence[str] | None = None, *, embedder: Embedder | None = None,
     sub = parser.add_subparsers(dest="cmd", required=True)
     rb = sub.add_parser("rebuild", parents=[common])
     rb.add_argument("--no-fidelity", action="store_true")
+    rb.add_argument("--reuse-vectors", action="store_true")      # a schema change: keep the vectors of unchanged chunk text
     ix = sub.add_parser("index")
     isub = ix.add_subparsers(dest="action", required=True)
     isub.add_parser("update", parents=[common])
@@ -87,7 +91,7 @@ def main(argv: Sequence[str] | None = None, *, embedder: Embedder | None = None,
     emb = embedder or _embedder()
 
     if args.cmd == "rebuild":
-        result = indexer.rebuild(root, emb, index_path=index_path)
+        result = indexer.rebuild(root, emb, index_path=index_path, reuse_vectors=args.reuse_vectors)
         if result.get("code") == indexer.OK and not args.no_fidelity:
             result["fidelity"] = health.fidelity_sweep(root)
         _print(result, out)

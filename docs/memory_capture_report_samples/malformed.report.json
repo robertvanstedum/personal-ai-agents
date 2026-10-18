@@ -115,7 +115,7 @@
    "mode": "scheduled",
    "quality": {
     "classification": {
-     "current_parser_version": 2,
+     "current_parser_version": 3,
      "findings": [],
      "records_on_older_parser": 0
     },
@@ -202,7 +202,7 @@
    "mode": "scheduled",
    "quality": {
     "classification": {
-     "current_parser_version": 4,
+     "current_parser_version": 5,
      "findings": [],
      "records_on_older_parser": 0
     },
@@ -270,8 +270,8 @@
  },
  "versions": {
   "parsers": {
-   "claude-code": 2,
-   "codex": 4
+   "claude-code": 3,
+   "codex": 5
   },
   "policy": "capture-policy.2026-10-04.1",
   "report_schema": 1

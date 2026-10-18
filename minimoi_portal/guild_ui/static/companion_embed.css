@@ -18,3 +18,6 @@ body.gu[data-mc-embed] .hero-text { flex:1; min-width:0; }
 body.gu[data-mc-embed] .hero-name { font-family:var(--gu-font-body); font-size:var(--gu-size-lg); margin:0; }
 body.gu[data-mc-embed] .fb-title { display:block; font-size:inherit; }
 body.gu[data-mc-embed] .hero-sub { margin:4px 0 0; font-size:var(--gu-size-sm); }
+
+/* Keep optional transcript inside the scrollable dock, not outside the clipped frame. */
+body.gu[data-mc-embed] [data-mc-voice-transcript-text] { max-height:20dvh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; }

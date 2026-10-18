@@ -124,6 +124,7 @@ def main(argv=None) -> int:
     ap.add_argument("--shelf-root")
     ap.add_argument("--index")
     ap.add_argument("--registry")
+    ap.add_argument("--log", help="the Ask query log file (default: beside the index); production keeps the index read-only")
     args = ap.parse_args(argv)
     if args.shelf_root:
         root = Path(args.shelf_root).expanduser()
@@ -131,7 +132,8 @@ def main(argv=None) -> int:
         from core.memory_shelf import config
         root = config.load().shelf_root
     registry_file = Path(args.registry).expanduser() if args.registry else identity.registry_path(root)
-    app = create_app(registry_path=registry_file, shelf_root=root, index_path=Path(args.index).expanduser() if args.index else None)
+    app = create_app(registry_path=registry_file, shelf_root=root, index_path=Path(args.index).expanduser() if args.index else None,
+                     log_path=Path(args.log).expanduser() if args.log else None)
     app.run(host=args.host, port=args.port, threaded=False, use_reloader=False)
     return 0
 

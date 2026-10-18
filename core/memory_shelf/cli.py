@@ -4,9 +4,9 @@
     moi approve <id> [--under <m>]   the ONLY path to approval events
     moi approve-source <source>      switch a source on after its dry run
     moi designate <id> [<id> ...]    designate records as curated (one typed "yes"); short or full ids
-    moi list [<source>] [--canary]   your records for one source (claude-ai | grok | claude-code | codex | paste); titles shown,
+    moi list [<source>] [--canary]   your records for one source (claude-ai | grok | chatgpt | claude-code | codex | paste | minimoi-mc); titles shown,
                                      so it runs only at a real terminal
-    moi dry-run <source>             write the dry-run listing (claude-code | codex | inbox | backfill-guild | backfill-curator)
+    moi dry-run <source>             write the dry-run listing (claude-code | codex | minimoi-mc | inbox | backfill-guild | backfill-curator)
     moi watch <source>               one watcher pass (dry run only until approved)
     moi watch codex --id UUID --bounded-codex --max-source-bytes N
                                      explicit bounded targeted refresh; never changes whole-source freshness
@@ -19,7 +19,7 @@
                                      the counts-only capture report: read-only unless asked (--fidelity records a sample result,
                                      --publish writes the report and matrix files atomically); never captures anything
     moi migrate-preview [source]     read-only, counts only: what the current parser rules would change in each provider's records
-    moi reprocess inbox              re-read claude.ai / Grok records from their kept export files with the current rules (one typed "yes");
+    moi reprocess inbox              re-read claude.ai / Grok / ChatGPT records from their kept export files with the current rules (one typed "yes");
                                      a new edition where the turns differ, old editions untouched
     moi doctor                       read-only: does each record's main file agree with its own editions? counts and short ids
     moi repair                       rebuild the body of records `doctor` finds unreadable, from their current edition (one typed "yes")
@@ -122,7 +122,7 @@ def cmd_review(cfg, shelf, out) -> int:
     return OK
 
 
-LIST_SOURCES = ("claude-ai", "grok", "claude-code", "codex", "paste")
+LIST_SOURCES = ("claude-ai", "grok", "chatgpt", "claude-code", "codex", "paste", "minimoi-mc")
 
 
 def cmd_list(shelf, out, source: str | None, canary_flag: bool) -> int:

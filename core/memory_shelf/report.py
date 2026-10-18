@@ -39,9 +39,9 @@ STALE_REPORT_AFTER_S = 2 * EXPECTED_EVERY_S           # a consumer treats a repo
 FIDELITY_STALE_AFTER_S = 14 * 86400
 CLOCK_SKEW = timedelta(minutes=5)         # a timestamp further ahead than this is not evidence (a clock or file error)
 ROLES = ("human", "assistant", "system", "coordination")
-MANUAL_PROVIDERS = frozenset({"claude-ai", "grok", "paste"})
+MANUAL_PROVIDERS = frozenset({"claude-ai", "grok", "chatgpt", "paste"})
 LABELS = {"claude-code": "Claude Code", "codex": "Codex", "rooms": "Rooms", "claude-ai": "Claude.ai export",
-          "grok": "Grok export", "paste": "Pastes"}
+          "grok": "Grok export", "chatgpt": "ChatGPT export", "paste": "Pastes", "minimoi-mc": "Master Craftsman"}
 STATES = ("current", "watch", "off", "unknown")
 _SAFE = re.compile(r"^[A-Za-z0-9_:.+\- ]{0,100}$")
 _TOKEN = re.compile(r"[^A-Za-z0-9_:.+-]")
@@ -401,7 +401,7 @@ def _job_block(jobs_root, now: datetime) -> dict:
 
 def _changed_sources(shelf, cfg: Config, name: str, scfg) -> dict:
     """How many kept sources changed since capture, or are gone: ``stat`` only (size and mtime), never opened."""
-    if scfg is None or scfg.kind not in ("claude-code", "codex"):
+    if scfg is None or scfg.kind not in ("claude-code", "codex", "mc"):
         return {"changed": 0, "missing": 0, "checked": 0, "basis": "not_applicable"}
     state = fsio.read_json(Path(shelf.status_dir) / "watch-state" / f"{name}.json")
     files = (state or {}).get("files") if isinstance(state, dict) else None

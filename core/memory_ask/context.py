@@ -34,7 +34,7 @@ PREFACE = (
 ERRORS = {"bad_arguments", "empty_query", "bad_k", "bad_date", "invalid_json", "unauthorized",
           "tier_not_permitted", "too_large", "unsupported_media_type", "rate_limited", "registry_unavailable",
           "index_missing", "index_incompatible", "pin_mismatch", "bad_caller", "unavailable"}
-HIT_TEXT = ("chunk_id", "record_id", "speaker", "date", "chair", "tier", "provenance", "turn_kind", "attribution", "label", "basis",
+HIT_TEXT = ("chunk_id", "record_id", "speaker", "date", "started", "chair", "tier", "provenance", "turn_kind", "attribution", "label", "basis",
             "decision_status", "decision_authority", "decision_gap")
 
 
@@ -153,6 +153,33 @@ def build(result: dict, *, max_chars=MAX_CHARS, max_bytes=MAX_BYTES, allowed_tie
                 item = status.get(field)
                 if isinstance(item, str) and re.fullmatch(r"[a-z_]{1,60}", item):
                     body["retrieval_status"][field] = item
+        overview = result.get("overview")                    # a dated question with no topic: the period's conversations
+        if (isinstance(overview, dict) and type(overview.get("records_in_window")) is int
+                and isinstance(overview.get("by_provider"), dict)):
+            counts = {k: v for k, v in overview["by_provider"].items()
+                      if isinstance(k, str) and re.fullmatch(r"[a-z0-9-]{1,32}", k) and type(v) is int and v >= 0}
+            continued, start_only = overview.get("continued_from_before"), overview.get("dated_by_start_only")
+            if type(continued) is int and type(start_only) is int:      # an index with turn times (schema 2)
+                body["period_overview"] = {
+                    "conversations_active_in_period": max(0, overview["records_in_window"]),
+                    "continued_from_before_period": max(0, continued),
+                    "dated_by_start_only": max(0, start_only),
+                    "by_source": dict(sorted(counts.items())[:12]),
+                    "note": ("Counts of conversations with a turn in the period, including ones begun earlier and "
+                             "continued in it (continued_from_before_period). Each passage is that conversation's first "
+                             "owner turn inside the period (else its first turn there), spread across sources; a "
+                             "passage's date is its turn's date and started is the conversation's start. Turn times come "
+                             "from each source; a "
+                             "conversation whose source gave no per-turn times is dated by its start alone "
+                             "(dated_by_start_only), so such a conversation is counted only in the period it began."),
+                }
+            else:                                                        # an overview made from start dates only
+                body["period_overview"] = {
+                    "conversations_started_in_period": max(0, overview["records_in_window"]),
+                    "by_source": dict(sorted(counts.items())[:12]),
+                    "note": ("Counts of conversations started in the period; the passages are each one's opening, spread "
+                             "across sources. Conversations begun earlier and continued in the period are not included."),
+                }
         candidates = []
         for group in ("keyword", "meaning"):
             values = result[group]

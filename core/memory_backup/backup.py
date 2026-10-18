@@ -264,6 +264,61 @@ class Dest:
         except (OSError, subprocess.SubprocessError):
             raise BackupError("download_failed") from None
 
+    def _bucket_key(self, key: str) -> tuple[str, str]:
+        bucket, _, prefix = self.url[len("s3://"):].partition("/")
+        return bucket, (f"{prefix}/{key}" if prefix else key)
+
+    def get_optional(self, key: str, local: Path) -> bool:
+        """Like ``get``, but an object that does not exist is ``False`` (not an error). Any other failure is ``download_failed``, so a
+        network fault is never read as "no acknowledgement yet"."""
+        if self.kind == "file":
+            src = self.base / key
+            if not src.exists():
+                return False
+            self.get(key, local)
+            return True
+        bucket, full_key = self._bucket_key(key)
+        try:
+            done = self.run([self.aws, "s3api", "get-object", "--bucket", bucket, "--key", full_key, str(local)],
+                            capture_output=True, text=True, timeout=600)
+        except (OSError, subprocess.SubprocessError):
+            raise BackupError("download_failed") from None
+        if done.returncode == 0:
+            return True
+        text = (done.stderr or "") + (done.stdout or "")
+        if "NoSuchKey" in text or "Not Found" in text or "(404)" in text:
+            return False
+        raise BackupError("download_failed")
+
+    def list_keys(self, prefix: str) -> list[str]:
+        """Every object key under ``prefix`` (relative to the destination), sorted. ``list_failed`` on any error."""
+        if self.kind == "file":
+            base = self.base / prefix
+            if not base.exists():
+                return []
+            out = []
+            for dirpath, _dirs, files in os.walk(base, followlinks=False):
+                for name in files:
+                    if name.startswith(".") and ".tmp-" in name:          # an in-flight local write, not an object
+                        continue
+                    out.append((Path(dirpath) / name).relative_to(self.base).as_posix())
+            return sorted(out)
+        bucket, full_prefix = self._bucket_key(prefix.rstrip("/") + "/")
+        root = full_prefix[: len(full_prefix) - len(prefix.rstrip("/") + "/")]
+        try:
+            done = self.run([self.aws, "s3api", "list-objects-v2", "--bucket", bucket, "--prefix", full_prefix, "--output", "json"],
+                            capture_output=True, text=True, timeout=600)
+        except (OSError, subprocess.SubprocessError):
+            raise BackupError("list_failed") from None
+        if done.returncode != 0:
+            raise BackupError("list_failed")
+        try:
+            doc = json.loads(done.stdout or "{}") or {}
+            keys = [str(o["Key"]) for o in doc.get("Contents") or []]
+        except (ValueError, KeyError, TypeError, AttributeError):
+            raise BackupError("list_failed") from None
+        return sorted(k[len(root):] for k in keys if k.startswith(root))
+
 
 # ── the archive ──
 def footprint(shelf_root: str) -> dict:
@@ -361,14 +416,24 @@ def encrypt(age_bin: str, recipient: str, src: Path, dst: Path) -> None:
         raise BackupError("encrypt_failed") from None
 
 
+_raw_write = os.write                                    # the one low-level write for the identity file; tests inject short writes
+
+
 def decrypt(age_bin: str, identity_text: str, src: Path, dst: Path, workdir: Path) -> None:
     """Decrypt with the private identity, which exists only as a 0600 file for this one call and is overwritten and removed after; a failure to remove it is reported."""
     fd, name = tempfile.mkstemp(prefix=".id-", dir=workdir)
     problem = None
     try:
-        os.fchmod(fd, 0o600)
-        os.write(fd, identity_text.encode())
-        os.close(fd)
+        try:
+            os.fchmod(fd, 0o600)
+            view = memoryview(identity_text.encode())
+            while view:                                  # os.write may write less than asked; never a truncated key
+                written = _raw_write(fd, view)
+                if not written or written < 0:
+                    raise BackupError("key_write_failed")
+                view = view[written:]
+        finally:
+            os.close(fd)
         try:
             subprocess.run([age_bin, "-d", "-i", name, "-o", str(dst), str(src)], check=True, capture_output=True, timeout=3600)
         except (OSError, subprocess.SubprocessError):

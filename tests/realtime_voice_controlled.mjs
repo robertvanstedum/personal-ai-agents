@@ -56,3 +56,27 @@ lastAdapter.emit('output_transcript',{item_id:'a1',provider_event_id:'e3',text:'
 assert.equal(liveTurns.length,3);
 await live.endSession('user_ended');
 console.log('8 synthetic controller/adapter functional scenarios passed');
+
+// End must settle even if fetch/body consumption ignores AbortSignal (e.g. a
+// stalled browser transport). Abort requests cancellation, not a receipt.
+for (const stalled of ['fetch', 'body']) {
+  const normalFetch=globalThis.fetch, normalSetTimeout=globalThis.setTimeout, normalClearTimeout=globalThis.clearTimeout;
+  const states=[],errors=[]; let deadline,completeLate;
+  const c=new C({managedBootstrap:{sessionUrl:'/voice/session'},onStateChange:s=>states.push(s),onFatalError:e=>errors.push(e.reason)});
+  await c.startSession({provider:'openai',conversation_id:'bounded-end'});
+  globalThis.fetch=()=>stalled==='fetch'?new Promise(resolve=>completeLate=resolve):Promise.resolve({ok:true,json:()=>new Promise(resolve=>completeLate=resolve)});
+  globalThis.setTimeout=(fn,ms)=>{assert.equal(ms,15000);deadline=fn;return 'end-deadline';};
+  globalThis.clearTimeout=id=>{if(id!=='end-deadline')normalClearTimeout(id);};
+  const ending=c.endSession('user_ended');
+  await new Promise(r=>setImmediate(r));
+  deadline();
+  await new Promise(r=>setImmediate(r));
+  assert.equal(states.at(-1),'ended',`${stalled}: End must not wait forever for aborted transport`);
+  assert.deepEqual(errors,['termination_uncertain']);
+  assert.equal((await ending).termination_confirmed,false);
+  completeLate(stalled==='fetch'?{ok:true,json:async()=>({termination_confirmed:true})}:{termination_confirmed:true});
+  await new Promise(r=>setImmediate(r));
+  assert.deepEqual(errors,['termination_uncertain']);
+  globalThis.fetch=normalFetch;globalThis.setTimeout=normalSetTimeout;globalThis.clearTimeout=normalClearTimeout;
+}
+console.log('2 bounded managed-End stalled transport/body scenarios passed.');

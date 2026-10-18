@@ -203,6 +203,13 @@ services:
       - ${MINIMOI_ROOT}/data/usage:/app/data/usage:ro
       - ${MINIMOI_ROOT}/data/usage/cos-scheduler:/app/data/usage/cos-scheduler
 
+  # Reuse the local portal image; retain production's opt-in vault profile.
+  vault-ask:
+    image: minimoi-staging/portal:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    environment:
+      - MINIMOI_ROLE=standby
+
 volumes:
   postgres-data:
     external: true

@@ -190,7 +190,7 @@ def test_reprocessing_the_inbox_adds_an_edition_without_the_extracted_text_and_k
     first = [e.path.read_bytes() for e in editions.list_editions(main.parent)]
     assert migration.reprocess_inbox(shelf, cfg, now=NOW) == {codes.EDITION_ADDED: 1}
     meta_, body = record.load(record.read(main))
-    assert "DOCUMENT-BODY" not in body and "my question" in body and meta_["normalized"]["normalizer"] == 2
+    assert "DOCUMENT-BODY" not in body and "my question" in body and meta_["normalized"]["normalizer"] == 3
     kept = [e.path.read_bytes() for e in editions.list_editions(main.parent)]
     assert kept[0] == first[0] and len(kept) == 2 and b"DOCUMENT-BODY" in kept[0] and b"DOCUMENT-BODY" not in kept[1]
     assert migration.reprocess_inbox(shelf, cfg, now=NOW) == {"already_current": 1}

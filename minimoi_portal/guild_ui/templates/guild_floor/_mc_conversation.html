@@ -87,6 +87,7 @@
   <div class="mc-dock-bottom" data-mc-dock-bottom>
   {# What blocks chat, one short line right above the composer: MC down, the cost level at act or stop, or a failed answer. #}
   <p class="mc-blocker" data-mc-blocker role="status"{% if not state.blockers %} hidden{% endif %}>{% for b in state.blockers %}<span data-blocker="{{ b.kind }}">{{ b.text }}</span>{% endfor %}</p>
+  {% if mc_voice_on %}<details data-mc-voice-transcript hidden><summary>Voice transcript from this session · may be partial</summary><pre data-mc-voice-transcript-text></pre></details>{% endif %}
   <form class="mc-composer" data-mc-composer>
     {% if page_id == 'floor' %}
     <div class="mc-tray" data-mc-tray aria-label="Files to attach" hidden></div>
@@ -182,5 +183,3 @@
     <ul data-slot="detail"></ul>
   </li>
 </template>
-
-{% if mc_voice_on %}<details data-mc-voice-transcript hidden><summary>Voice transcript from this session · may be partial</summary><pre data-mc-voice-transcript-text></pre></details>{% endif %}

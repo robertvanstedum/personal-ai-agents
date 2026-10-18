@@ -162,3 +162,27 @@ def test_synthesis_copies_full_retained_file_paths_and_cites_every_claim_sentenc
     assert "citation is not a passage this query returned" in reply
     assert "no file:line citation from this query" in reply
     assert "[VAULT_SYNTHESIS]" not in reply and "[/VAULT_SYNTHESIS]" not in reply
+
+
+# ── conversation scope (review finding, 17 Oct): production asks only for Guild MC conversations ──
+
+@pytest.mark.parametrize("conversation,asked", [("guild-0123abcd", True), ("owner", False), ("telegram-42", False), (None, False)])
+def test_production_scope_limits_the_vault_to_guild_mc_conversations(conversation, asked):
+    from domains.cos import vault_context as V
+    env = {"MINIMOI_VAULT_ASK_URL": "http://vault-ask:8771", "MINIMOI_VAULT_ASK_TOKEN": "t", "MINIMOI_VAULT_ASK_CONVERSATIONS": "guild-"}
+    calls = []
+
+    class Backend:
+        def call_backend(self, prompt, context, tool_policy):
+            return "reply"
+    def retrieve(prompt, **kw):
+        calls.append(prompt)
+        raise RuntimeError("stop after the call is recorded")
+    context = {"system_prompt": "s", "confer": {"conversation_id": conversation}} if conversation else {"system_prompt": "s"}
+    V.call_with_vault(Backend(), "what did we do in May", context, {}, retrieve=retrieve, environ=env)
+    assert bool(calls) is asked
+
+
+def test_unset_scope_keeps_every_conversation_as_before():
+    from domains.cos import vault_context as V
+    assert V.in_scope({"confer": {"conversation_id": "owner"}}, {}) is True

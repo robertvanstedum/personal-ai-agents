@@ -43,7 +43,7 @@ def test_admitted_lines_are_byte_identical_with_exact_normalizer_and_coverage():
     raw=jl(rows); checked=list(caps.checked_codex_lines(iter(raw),LIMITS,SID));assert checked==raw
     a=coverage.parse_with_coverage('codex',iter(raw),watchers.PARSERS)
     b=coverage.parse_with_coverage('codex',iter(checked),watchers.PARSERS)
-    assert a==b and a.normalizer==4
+    assert a==b and a.normalizer==5
     assert [t.text for t in render.dialogue_turns(b.turns)]==['owner correction','reply']
     assert render.edition_bytes(a,'a'*64,123,0)==render.edition_bytes(b,'a'*64,123,0)
 
@@ -125,11 +125,13 @@ def test_approval_and_exclusions_still_apply(tmp_path):
     assert selected(shelf,cfg)['status']=='not_approved' and shelf.list_records()==[]
 
 
-def test_large_global_raise_requires_exact_bounded_codex_opt_in(tmp_path):
+def test_raised_ceiling_no_longer_needs_bounded_codex_opt_in_but_limits_still_need_selection(tmp_path):
+    # Size stopped being a memory guard on 17 Oct (streaming capture); CodexLimits remain a selected-refresh tool only.
     shelf,cfg,source,other=fixture(tmp_path)
-    for kw in [{},{'source_ids':[SID]},{'codex_limits':LIMITS}]:
-        assert watchers.run_source(shelf,cfg,max_source_bytes=watchers.DEFAULT_MAX_SOURCE_BYTES+1,**kw)['status']=='bounded_codex_selection_required'
+    assert watchers.run_source(shelf,cfg,max_source_bytes=watchers.DEFAULT_MAX_SOURCE_BYTES+1,codex_limits=LIMITS)['status']=='bounded_codex_selection_required'
     assert shelf.list_records()==[]
+    assert watchers.run_source(shelf,cfg,max_source_bytes=watchers.DEFAULT_MAX_SOURCE_BYTES+1)['status']=='ok'
+    assert len(shelf.list_records())==2
 
 
 def test_budget_hold_preserves_existing_record_state_and_retries(tmp_path):
