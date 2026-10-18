@@ -249,6 +249,32 @@ body.gu[data-mc-mode="floating"] .mc-pill, body.gu[data-mc-mode="docked"] .mc-pi
 .mc-tools .btn-quiet { font-size: var(--gu-size-xs); padding: 2px 8px; }
 .mc-voice-label, .mc-hints { font-size: var(--gu-size-xs); color: var(--gu-text-muted); width: 100%; }
 .mc-voice-label { font-style: italic; }
+/* Compact controls (owner, 18 Oct): Voice sits with Send; occasional settings under one small "•••" menu with few words. */
+/* Only the message box gives way: Send, Voice and Attach keep their size and one-line labels (body wraps 'anywhere'). */
+.mc-row .mc-voice, .mc-row [data-mc-send], .mc-row .mc-attach { flex: 0 0 auto; }
+.mc-row [data-mc-send], .mc-row .mc-voice { white-space: nowrap; overflow-wrap: normal; }
+.mc-row .mc-input { min-width: 0; }
+.mc-options { position: relative; display: inline-block; }
+.mc-options > summary { list-style: none; cursor: pointer; display: inline-grid; place-items: center; min-width: 30px; min-height: 28px;
+  padding: 0 6px; border-radius: var(--gu-radius); color: var(--gu-text-muted); font-size: var(--gu-size-xs); letter-spacing: .08em; }
+.mc-options > summary::-webkit-details-marker { display: none; }
+.mc-options > summary:focus-visible { outline: 2px solid var(--gu-accent); outline-offset: 2px; }
+.mc-options[open] > summary { color: var(--gu-text); }
+.mc-options-body { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 4px; padding: 6px 8px;
+  border: 1px solid var(--gu-border); border-radius: var(--gu-radius); background: var(--gu-surface); font-size: var(--gu-size-xs); }
+.mc-options-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.mc-options-group[hidden], .mc-options-body .mc-dictate[hidden] { display: none; }
+.mc-options-body label { display: inline-flex; align-items: center; gap: 6px; }
+.mc-options-body select { font: inherit; max-width: 100%; }
+.mc-options-body .mc-lock { gap: 4px; grid-auto-flow: column; }
+.mc-lock-text { font-size: var(--gu-size-xs); }
+@media (max-width: 640px) {
+  .mc-options > summary { min-width: var(--gu-target-phone); min-height: var(--gu-target-phone); }
+  .mc-options-body :is(button, select, label, a) { min-height: var(--gu-target-phone); }
+  /* On a phone Voice is its icon; the button's accessible name still states every voice state (voice_button.js). */
+  .mc-composer .mc-row .mc-voice { padding: 8px; }
+  .mc-row .mc-voice [data-voice-label] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 .mc-record-on[aria-pressed="true"] { background: var(--gu-mark-unknown-bg); }
 .mc-phone-bar { display: none; }
 .mc-offline { font-style: italic; color: var(--gu-unknown-ink); }
@@ -1400,14 +1426,14 @@ body.gu:not([data-page="floor"]):not([data-page="workshop"]) .mc-panel:is([data-
 
 /* Shared voice presentation: familiar microphone/stop, with a visible label.
    Uses Guild tokens; Dictate remains a separate control. No animated pulse. */
-.mc-tools .mc-voice { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; max-width: 100%; padding: 8px 12px; border: 1px solid var(--gu-border); border-radius: 999px; background: var(--gu-surface); color: var(--gu-text); flex: 0 0 auto; }
-.mc-tools .mc-voice[hidden], .mc-voice-icon[hidden] { display: none; }
+.mc-composer .mc-voice { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; max-width: 100%; padding: 8px 12px; border: 1px solid var(--gu-border); border-radius: 999px; background: var(--gu-surface); color: var(--gu-text); flex: 0 0 auto; }
+.mc-composer .mc-voice[hidden], .mc-voice-icon[hidden] { display: none; }
 .mc-voice-icon { display: inline-flex; width: 20px; height: 20px; flex: none; }
 .mc-voice-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .mc-voice-icon[data-voice-icon="stop"] svg { fill: currentColor; stroke: none; }
-.mc-tools .mc-voice:is([data-voice-state="listening"], [data-voice-state="speaking"], [data-voice-state="working"]) { color: var(--gu-accent); border-color: var(--gu-accent); }
-.mc-tools .mc-voice:focus-visible { outline: 2px solid var(--gu-accent); outline-offset: 3px; }
-.mc-tools .mc-voice:disabled { cursor: default; opacity: .65; }
+.mc-composer .mc-voice:is([data-voice-state="listening"], [data-voice-state="speaking"], [data-voice-state="working"]) { color: var(--gu-accent); border-color: var(--gu-accent); }
+.mc-composer .mc-voice:focus-visible { outline: 2px solid var(--gu-accent); outline-offset: 3px; }
+.mc-composer .mc-voice:disabled { cursor: default; opacity: .65; }
 
 /* Keep the full voice composer usable by touch, including docked chat. */
 @media (max-width: 900px) {

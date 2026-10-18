@@ -102,14 +102,22 @@
       <label class="visually-hidden" for="mc-input">Type a note</label>
       <textarea id="mc-input" class="mc-input" data-mc-input rows="1" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" placeholder="Ask…"></textarea>
       <button type="submit" class="btn" data-mc-send aria-describedby="mc-notes-line">Send</button>
+      {# Voice: present only while the server has voice switched on; mc_voice.js shows it once the capabilities call answers. With
+         message, attachment and Send it is one of the visible controls (owner, 18 Oct). On the record only for now. #}
+      {% if mc_voice_on %}<button type="button" class="btn-quiet mc-voice" data-mc-voice-btn aria-pressed="false" aria-label="Start voice conversation" data-voice-state="idle" hidden><span class="mc-voice-icon" data-voice-icon="mic" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></span><span class="mc-voice-icon" data-voice-icon="stop" aria-hidden="true" hidden><svg viewBox="0 0 24 24" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></span><span data-voice-label>Voice</span></button>{% endif %}
     </div>
     <div class="mc-tools">
-      {# Voice: this markup exists only while the server has voice switched on; mc_voice.js shows the button once the capabilities call answers. On the record only for now. #}
-      {% if mc_voice_on %}<button type="button" class="btn-quiet mc-voice" data-mc-voice-btn aria-pressed="false" aria-label="Start voice conversation" data-voice-state="idle" hidden><span class="mc-voice-icon" data-voice-icon="mic" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></span><span class="mc-voice-icon" data-voice-icon="stop" aria-hidden="true" hidden><svg viewBox="0 0 24 24" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></span><span data-voice-label>Voice</span></button>{% endif %}
-      {% if mc_voice_on %}<span data-mc-managed-settings hidden><label>Voice provider <select data-mc-voice-provider aria-label="Voice provider"><option value="openai">OpenAI</option></select></label><label><input type="checkbox" data-mc-voice-transcript-choice> Show live transcript</label> <a data-mc-voice-export hidden>Download saved voice transcript</a></span>{% endif %}
-      {% if dictation_on %}<button type="button" class="btn-quiet mc-dictate" data-dictate="#mc-input" aria-pressed="false" hidden>Dictate</button>{% endif %}
+      {# Occasional settings live under one small menu with few words (owner, 18 Oct). A record confirmation and the Private chip
+         are states, not settings, so they stay in view. #}
+      <details class="mc-options" data-mc-options>
+        <summary class="mc-options-sum" aria-label="Conversation options" title="Options"><span aria-hidden="true">•••</span></summary>
+        <div class="mc-options-body">
+          {% if dictation_on %}<button type="button" class="btn-quiet mc-dictate" data-dictate="#mc-input" aria-pressed="false" hidden>Dictate</button>{% endif %}
+          {% if mc_voice_on %}<span class="mc-options-group" data-mc-managed-settings hidden><label>Voice <select data-mc-voice-provider aria-label="Voice provider"><option value="openai">OpenAI</option><option value="xai" disabled>Grok (xAI) · not available yet</option></select></label><label><input type="checkbox" data-mc-voice-transcript-choice> Transcript</label> <a data-mc-voice-export hidden>Download transcript</a></span>{% endif %}
+          <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="{{ 'Go Private' if mc_private else 'Private is not available' }}" title="{{ 'Go Private: ' ~ mc_name ~ ' answers, MiniMoi keeps nothing' if mc_private else 'Private is not available with the ' ~ mc_name ~ ': it keeps its own record' }}"{% if not mc_private %} disabled data-private-off{% endif %}><span aria-hidden="true">🔒</span><span class="mc-lock-text" aria-hidden="true">Private</span></button>
+        </div>
+      </details>
       <button type="button" class="btn-quiet" data-mc-record-confirm hidden>Confirm on the record</button>
-      <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="{{ 'Go Private' if mc_private else 'Private is not available' }}" title="{{ 'Go Private: ' ~ mc_name ~ ' answers, MiniMoi keeps nothing' if mc_private else 'Private is not available with the ' ~ mc_name ~ ': it keeps its own record' }}"{% if not mc_private %} disabled data-private-off{% endif %}><span aria-hidden="true">🔒</span></button>
       <span class="mc-private-chip" data-private-chip hidden>Private · not kept by MiniMoi
         <button type="button" class="mc-private-why" data-private-why aria-expanded="false" aria-controls="mc-private-explain">What’s this?</button>
         <button type="button" class="mc-private-exit" data-private-exit>Exit</button></span>
