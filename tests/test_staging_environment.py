@@ -87,6 +87,8 @@ EXPECTED_PROD_MOUNTS = [
     ("portuguese", "/opt/minimoi/data/portuguese", "/app/domains/portuguese/data"),
     ("postgres", "postgres-data", "/var/lib/postgresql"),
     ("system-bot", "/opt/minimoi/data/german", "/app/domains/german/data"),
+    ("vault-ask", "/opt/minimoi/vault", "/vault"),
+    ("vault-ask", "/opt/minimoi/vault-log", "/vault-log"),
 ]
 EXPECTED_ENV_FILES = {
     name: "/opt/minimoi/.env"
@@ -99,7 +101,7 @@ IMAGE_MAP = {
     "cos-scheduler": ("cos-scheduler", ""), "cos-agent-a": ("cos-scheduler", "agent-a-"),
     "model-gateway": ("cos-scheduler", "model-gateway-"),
 }
-PYTHON_SERVICES = ("curator", "german", "portuguese", "portal", "system-bot", "cos-bot", "cos-scheduler")
+PYTHON_SERVICES = ("curator", "german", "portuguese", "portal", "system-bot", "cos-bot", "cos-scheduler", "vault-ask")
 
 
 def _load(path):
@@ -297,6 +299,10 @@ def test_staging_override_uses_local_images_never_pulled():
     staging = _load(STAGING)["services"]
     assert set(staging) == set(prod)
     assert staging["postgres"] == {"pull_policy": "never"}
+    assert staging["vault-ask"]["image"] == staging["portal"]["image"]
+    assert staging["vault-ask"]["pull_policy"] == "never"
+    assert prod["vault-ask"]["profiles"] == ["vault"]
+    assert "profiles" not in staging["vault-ask"]
     for name, (repository, prefix) in IMAGE_MAP.items():
         service = staging[name]
         assert service["pull_policy"] == "never", name
