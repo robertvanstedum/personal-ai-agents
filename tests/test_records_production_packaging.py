@@ -57,3 +57,8 @@ def test_exact_health_command_passes_production_host_guard(tmp_path,monkeypatch)
  assert command[:3]==['CMD','python','-c']
  exec(compile(command[3],'<exact-compose-health>','exec'),{})
  assert calls==[200]
+
+
+def test_tmpfs_is_one_absolute_mount_with_both_options():
+ config=yaml.safe_load((ROOT/'docker-compose.records-production.yml').read_text())
+ assert config['services']['minimoi-records']['tmpfs']==['/tmp:size=16m,mode=1777']
