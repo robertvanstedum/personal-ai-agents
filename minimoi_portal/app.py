@@ -16,6 +16,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit
 
 import requests as _requests
 
@@ -164,12 +165,46 @@ def _current_user() -> dict | None:
     return session.get("user")
 
 
+_RETURN_MAX = 2048
+
+
+def _safe_return_path(value) -> str | None:
+    """Where sign-in may send the browser back to: a path on this portal, or None.
+
+    Only a local path qualifies: one leading "/", no scheme or host, printable
+    ASCII only. Browsers drop tabs and newlines and read "\\" as "/", so
+    "/\\t/x" or "/\\x" would reach another host; an encoded "//" or "\\" at
+    the start is refused for the same reason.
+    """
+    if not isinstance(value, str) or not value or len(value) > _RETURN_MAX:
+        return None
+    if any(not 0x21 <= ord(ch) <= 0x7E for ch in value) or "\\" in value:
+        return None
+    if not value.startswith("/") or value.startswith("//"):
+        return None
+    parts = urlsplit(value)
+    if parts.scheme or parts.netloc:
+        return None
+    path = unquote(parts.path)
+    if path.startswith("//") or "\\" in path:
+        return None
+    return value
+
+
+def _login_next() -> str:
+    """The current page, path and query, as a return target for sign-in."""
+    path = quote(request.path, safe="/!$&'()*+,;=:@-._~")
+    # Keep the query exactly as sent; any byte a browser should have encoded is percent-encoded here.
+    query = "".join(chr(b) if 0x21 <= b <= 0x7E else f"%{b:02X}" for b in request.query_string)
+    return f"{path}?{query}" if query else path
+
+
 def _require_login(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         user = _current_user()
         if not user:
-            return redirect(url_for("login", next=request.path))
+            return redirect(url_for("login", next=_login_next()))
         # revoke_guest() only removed the credential — a session issued
         # before revocation stayed valid until it naturally expired, since
         # the session cookie is a client-side snapshot never re-checked
@@ -184,7 +219,7 @@ def _require_login(f):
         if (user.get("tier") == "guest" and username.startswith("guest_")
                 and not _auth.is_guest_active(username)):
             session.clear()
-            return redirect(url_for("login", next=request.path))
+            return redirect(url_for("login", next=_login_next()))
         # Enforce forced password change on every authenticated request
         if request.endpoint != "account_password":
             if _auth.check_must_change_password(user["username"]):
@@ -198,10 +233,10 @@ def _require_owner(f):
     def decorated(*args, **kwargs):
         user = _current_user()
         if not user:
-            return redirect(url_for("login", next=request.path))
+            return redirect(url_for("login", next=_login_next()))
         if user.get("tier") != "owner":
             # Logged in but wrong tier — send to login so they can switch accounts
-            return redirect(url_for("login", next=request.path, notice="owner_required"))
+            return redirect(url_for("login", next=_login_next(), notice="owner_required"))
         return f(*args, **kwargs)
     return decorated
 
@@ -214,7 +249,7 @@ def requires_domain(domain: str):
         def decorated(*args, **kwargs):
             user = _current_user()
             if not user:
-                return redirect(url_for("login", next=request.path))
+                return redirect(url_for("login", next=_login_next()))
             if user.get("tier") == "owner":
                 return f(*args, **kwargs)
             auth_id = user.get("auth_id")
@@ -343,10 +378,11 @@ def login():
                     )
             if _auth.check_must_change_password(user["username"]):
                 return redirect(url_for("account_password", forced=1))
-            next_url = request.args.get("next") or url_for("dashboard")
+            next_url = _safe_return_path(request.args.get("next")) or url_for("dashboard")
             return redirect(next_url)
 
-    return render_template("login.html", error=error)
+    return render_template("login.html", error=error,
+                           login_next=_safe_return_path(request.args.get("next")))
 
 
 @app.route("/forgot-password", methods=["GET", "POST"])
