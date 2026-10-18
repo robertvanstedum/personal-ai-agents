@@ -125,13 +125,35 @@ def get_chat_id():
 
 # ─── Sending ──────────────────────────────────────────────────────────────────
 
+def _message_payload(chat_id, text, parse_mode="HTML"):
+    return {"chat_id": chat_id, "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True}
+
+
+def _article_payload(chat_id, num, title, url, source, category, score):
+    message = (
+        f"<b>#{num}</b> • {category.upper()} • {source}\n\n"
+        f"<b>{title}</b>\n\n"
+        f"<a href='{url}'>🔗 Read article</a>\n\n"
+        f"Score: {score}"
+    )
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "👍 Like", "callback_data": f"like:{num}"},
+            {"text": "👎 Dislike", "callback_data": f"dislike:{num}"},
+            {"text": "🔖 Save", "callback_data": f"save:{num}"},
+        ]]
+    }
+    return {"chat_id": chat_id, "text": message.strip(), "parse_mode": "HTML",
+            "reply_markup": keyboard, "disable_web_page_preview": True}
+
+
 def send_message(token, chat_id, text, parse_mode="HTML", retries=3):
     """Simple fire-and-forget message send with retry on timeout"""
     for attempt in range(1, retries + 1):
         try:
             requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True},
+                json=_message_payload(chat_id, text, parse_mode),
                 timeout=30
             )
             return
@@ -143,32 +165,11 @@ def send_message(token, chat_id, text, parse_mode="HTML", retries=3):
 
 def send_article(token, chat_id, num, title, url, source, category, score):
     """Send one article with interactive buttons"""
-    message = (
-        f"<b>#{num}</b> • {category.upper()} • {source}\n\n"
-        f"<b>{title}</b>\n\n"
-        f"<a href='{url}'>🔗 Read article</a>\n\n"
-        f"Score: {score}"
-    )
-    
-    keyboard = {
-        "inline_keyboard": [[
-            {"text": "👍 Like", "callback_data": f"like:{num}"},
-            {"text": "👎 Dislike", "callback_data": f"dislike:{num}"},
-            {"text": "🔖 Save", "callback_data": f"save:{num}"},
-        ]]
-    }
-    
     for attempt in range(1, 4):
         try:
             requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": message.strip(),
-                    "parse_mode": "HTML",
-                    "reply_markup": keyboard,
-                    "disable_web_page_preview": True,
-                },
+                json=_article_payload(chat_id, num, title, url, source, category, score),
                 timeout=30
             )
             return
@@ -177,6 +178,13 @@ def send_article(token, chat_id, num, title, url, source, category, score):
             if attempt == 3:
                 print(f"❌ send_article failed after all retries: #{num} {title[:40]}")
                 raise
+
+def _briefing_header(today_str):
+    return f"🧠 <b>Your Morning Briefing</b> — {today_str}\n\nTop curated articles:"
+
+
+BRIEFING_FOOTER = "✅ Briefing complete. Tap buttons to give feedback."
+
 
 def send_briefing(token, chat_id):
     """Read curator_output.txt and send top articles"""
@@ -189,7 +197,7 @@ def send_briefing(token, chat_id):
     
     from datetime import datetime
     today_str = datetime.now().strftime("%A, %B %d, %Y")
-    send_message(token, chat_id, f"🧠 <b>Your Morning Briefing</b> — {today_str}\n\nTop curated articles:")
+    send_message(token, chat_id, _briefing_header(today_str))
     
     # Parse curator_output.txt
     # Adjust this parsing to match your actual file format
@@ -198,7 +206,7 @@ def send_briefing(token, chat_id):
     for a in articles[:10]:
         send_article(token, chat_id, a['num'], a['title'], a['url'], a['source'], a['category'], a['score'])
     
-    send_message(token, chat_id, "✅ Briefing complete. Tap buttons to give feedback.")
+    send_message(token, chat_id, BRIEFING_FOOTER)
     print(f"✅ Sent {len(articles[:10])} articles to Telegram")
 
 def parse_curator_output(path):
@@ -604,17 +612,192 @@ def handle_voice_message(message, token):
 
 # ─── Entry points ─────────────────────────────────────────────────────────────
 
+# ─── Scheduled delivery with a durable per-day ledger (#305) ──────────────────
+#
+# One record per UTC day in data/curator/telegram_delivery/<date>.json. States:
+#   started       written (and fsynced) BEFORE the first message is sent
+#   acknowledged  every message accepted by Telegram (HTTP 200, ok: true)
+#   not_sent      definitely nothing delivered: missing config or briefing, an empty
+#                 briefing, or an explicit Telegram rejection of the FIRST message
+#   partial       some messages accepted, then one explicitly rejected
+#   uncertain     a request whose outcome is unknown (timeout, connection error, an
+#                 unreadable reply) or a failed final ledger write after the sends
+# started, partial and uncertain are HOLD states: nothing resends automatically;
+# an operator inspects and records a decision with core/telegram/delivery_hold.py
+# (a "resolved" record: delivered or skipped ends the day, resend allows one more). The record holds no token, chat id or message text.
+# One delivery per day at a time: a nonblocking exclusive flock on <date>.lock is
+# held from reading the ledger through the last send and the final record. The
+# lock file is never removed. The delivery directory and its parent are fsynced
+# before any request, so a crash cannot lose the ledger's directory after a send.
+# Exit codes: 0 acknowledged, 1 not_sent (safe to retry), 3 hold, 4 busy.
+DELIVERY_DIR = Path(os.environ.get("CURATOR_DELIVERY_DIR") or _REPO_ROOT / "data" / "curator" / "telegram_delivery")
+HOLD_STATES = ("started", "partial", "uncertain")
+
+
+class _Rejected(Exception):
+    """Telegram answered and refused this message."""
+    def __init__(self, status):
+        super().__init__(status)
+        self.status = status
+
+
+class _Ambiguous(Exception):
+    """The request may or may not have been delivered."""
+
+
+def _strict_post(token, payload):
+    """Post once. No retry: after a timeout the message may already be delivered."""
+    try:
+        # No redirects: a 3xx is not Telegram's answer, so it must stay ambiguous.
+        response = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload, timeout=30,
+                                 allow_redirects=False)
+    except requests.exceptions.RequestException as exc:
+        raise _Ambiguous(type(exc).__name__) from None
+    status = getattr(response, "status_code", None)
+    try:
+        body = response.json()
+    except ValueError:
+        raise _Ambiguous("unreadable_reply") from None
+    if status == 200 and isinstance(body, dict) and body.get("ok") is True:
+        return
+    # Only an explicit 4xx refusal is definite. A 5xx may follow acceptance, so it
+    # is ambiguous like a timeout.
+    if isinstance(status, int) and 400 <= status < 500 and isinstance(body, dict) and body.get("ok") is False:
+        raise _Rejected(status)
+    if isinstance(status, int) and 500 <= status < 600:
+        raise _Ambiguous(f"http_{status}")
+    raise _Ambiguous("unexpected_reply")
+
+
+def _fsync_dir(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _durable_delivery_dir():
+    """Create DELIVERY_DIR if needed, then fsync it and its parent."""
+    DELIVERY_DIR.mkdir(parents=True, exist_ok=True)
+    _fsync_dir(DELIVERY_DIR)
+    _fsync_dir(DELIVERY_DIR.parent)
+
+
+def _write_ledger(path, record):
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with open(tmp, "x") as f:
+        json.dump(record, f, indent=2, sort_keys=True)
+        f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+    _fsync_dir(path.parent)
+
+
+def deliver_briefing(token, chat_id, *, today=None, now=None):
+    """Strict scheduled delivery. Returns the exit code (0, 1, 3 or 4)."""
+    from datetime import datetime, timezone
+    import fcntl
+    today = today or datetime.now(timezone.utc).date().isoformat()
+    try:
+        _durable_delivery_dir()
+        lock = os.open(DELIVERY_DIR / f"{today}.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as exc:
+        print(f"❌ Delivery directory not durable ({type(exc).__name__}); nothing sent")
+        return 1
+    try:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print(f"⏳ Another delivery for {today} is in progress; nothing sent")
+            return 4
+        return _deliver_locked(token, chat_id, today=today, now=now)
+    finally:
+        os.close(lock)  # releases the flock; the lock file itself stays
+
+
+def _deliver_locked(token, chat_id, *, today, now=None):
+    from datetime import datetime, timezone
+    import hashlib
+    now = now or (lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    ledger = DELIVERY_DIR / f"{today}.json"
+    record = {"date": today, "format": "curator-telegram-delivery/1"}
+
+    def finish(state, code, **fields):
+        record.update(state=state, finished_at=now(), **fields)
+        try:
+            _write_ledger(ledger, record)
+        except OSError as exc:
+            # Before any send, nothing was delivered (1). After sends began, the
+            # ledger still says "started", so the day stays on hold (3).
+            sent_began = record.get("started_at") is not None
+            print(f"❌ Delivery ledger not written ({type(exc).__name__}); "
+                  + ("treat as uncertain" if sent_began else "nothing was sent"))
+            return 3 if sent_began else 1
+        return code
+
+    # The shared rules decide: only an exactly valid record for today counts.
+    from core.telegram.delivery_ledger import read_record
+    prior_state, prior = read_record(ledger, today)
+    if prior_state == "acknowledged":
+        print("✅ Briefing already acknowledged today; nothing sent")
+        return 0
+    # An operator's decision on a held day (core/telegram/delivery_hold.py):
+    # delivered or skipped ends the day; resend allows one more delivery.
+    if prior_state == "resolved" and prior["disposition"] != "resend":
+        print(f"✅ Delivery for {today} was resolved by an operator ({prior['disposition']}); nothing sent")
+        return 0
+    if prior_state is not None and prior_state not in ("not_sent", "resolved"):
+        print(f"⛔ Delivery for {today} is on hold ({prior_state}); nothing sent. Inspect {ledger}")
+        return 3
+    if prior_state in ("not_sent", "resolved"):
+        record["previous_attempts"] = prior.get("previous_attempts", 0) + 1
+
+    if not token or not chat_id:
+        return finish("not_sent", 1, reason="missing_config", accepted=0)
+    output_file = Path(os.environ.get('CURATOR_OUTPUT_PATH') or BASE_DIR / 'curator_output.txt')
+    if not output_file.is_file():
+        return finish("not_sent", 1, reason="missing_briefing", accepted=0)
+    articles = parse_curator_output(output_file)
+    if not articles:
+        return finish("not_sent", 1, reason="empty_briefing", accepted=0)
+
+    payloads = [_message_payload(chat_id, _briefing_header(datetime.now().strftime("%A, %B %d, %Y")))]
+    payloads += [_article_payload(chat_id, a['num'], a['title'], a['url'], a['source'], a['category'], a['score'])
+                 for a in articles[:10]]
+    payloads.append(_message_payload(chat_id, BRIEFING_FOOTER))
+    record.update(state="started", started_at=now(), planned=len(payloads),
+                  briefing_sha256=hashlib.sha256(output_file.read_bytes()).hexdigest())
+    try:
+        _write_ledger(ledger, record)
+    except OSError as exc:
+        print(f"❌ Delivery ledger could not record the start ({type(exc).__name__}); nothing sent")
+        return 1
+
+    accepted = 0
+    for payload in payloads:
+        try:
+            _strict_post(token, payload)
+        except _Rejected as exc:
+            if accepted == 0:
+                return finish("not_sent", 1, reason="rejected", http_status=exc.status, accepted=0)
+            return finish("partial", 3, reason="rejected", http_status=exc.status, accepted=accepted)
+        except _Ambiguous as exc:
+            return finish("uncertain", 3, reason=str(exc), accepted=accepted)
+        accepted += 1
+    code = finish("acknowledged", 0, accepted=accepted)
+    if code == 0:
+        print(f"✅ Sent {accepted} messages ({len(articles[:10])} articles) to Telegram")
+    return code
+
+
 def run_send_mode():
-    """Called by cron/launchd: just send the briefing and exit"""
+    """Called by cron/launchd: deliver the briefing strictly, exit 0 / 1 / 3."""
     from utils.telegram import get_system_token
     token = get_system_token()
     chat_id = get_chat_id()
-
-    if not token or not chat_id:
-        print("❌ Missing polling token or TELEGRAM_CHAT_ID")
-        return
-
-    send_briefing(token, chat_id)
+    sys.exit(deliver_briefing(token, chat_id))
 
 # ─── German domain text handlers ─────────────────────────────────────────────
 
