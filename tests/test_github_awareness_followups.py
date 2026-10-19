@@ -314,3 +314,14 @@ def test_every_documented_command_runs_the_cli_by_absolute_path():
     text = CLI_PATH.read_text()
     assert 'python3 /app/scripts/mc/github_awareness.py' in text
     assert 'sys.path.insert(0, str(Path(__file__).resolve().parents[2]))' in text
+
+
+def test_cli_and_context_share_dedicated_persistent_volume():
+    import yaml
+    from scripts.mc import github_awareness as cli
+    config = yaml.safe_load((ROOT / 'docker-compose.prod.yml').read_text())
+    assert cli.ROOT == H.ROOT == '/app/runtime/mc-observations/github-awareness'
+    mount = 'mc-observations:/app/runtime/mc-observations'
+    assert mount in config['services']['portal']['volumes']
+    assert 'mc-observations' in config['volumes']
+    assert all(mount not in s.get('volumes', []) for n, s in config['services'].items() if n != 'portal')

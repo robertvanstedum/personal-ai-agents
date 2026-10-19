@@ -215,6 +215,9 @@ services:
       - MINIMOI_ROLE=standby
 
 volumes:
+  # Regenerable public cache only; unlike original state, Compose may create it.
+  mc-observations:
+    name: minimoi-staging-mc-observations
   postgres-data:
     external: true
     name: minimoi-staging-postgres-data

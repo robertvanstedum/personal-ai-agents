@@ -49,6 +49,7 @@ REQUIRED_VARS = {
 # Maintained production mount contract, including the owner-approved shared
 # CoS/MC project access (13 October 2026): (service, host, container).
 EXPECTED_PROD_MOUNTS = [
+    ("portal", "mc-observations", "/app/runtime/mc-observations"),
     ("cos-agent-a", "cos-agent-a-state", "/home/node/.openclaw"),
     ("cos-agent-a", "cos-agent-a-auth", "/home/node/.config/openclaw"),
     ("cos-agent-a", "/opt/minimoi/data", "/minimoi/data"),
@@ -294,7 +295,12 @@ def test_docker_renders_staging_under_the_staging_root_only():
             if mount["type"] == "bind":
                 assert mount["source"].startswith((root + "/", "/var/run/docker.sock")), (name, mount)
             else:
-                assert rendered["volumes"][mount["source"]]["external"] is True
+                volume = rendered["volumes"][mount["source"]]
+                if mount["source"] == "mc-observations":
+                    assert name == "portal" and volume["name"] == "minimoi-staging-mc-observations"
+                    assert not volume.get("external", False)
+                else:
+                    assert volume["external"] is True
         for env_file in service.get("env_file", []):
             assert env_file["path"] == f"{root}/.env"
         for port in service.get("ports", []):
@@ -369,7 +375,10 @@ def test_staging_volumes_are_external_and_staging_named():
     data = _load(STAGING)
     assert set(data["volumes"]) == set(_load(PROD)["volumes"])
     for key, volume in data["volumes"].items():
-        assert volume == {"external": True, "name": f"minimoi-staging-{key}"}
+        if key == "mc-observations":
+            assert volume == {"name": "minimoi-staging-mc-observations"}
+        else:
+            assert volume == {"external": True, "name": f"minimoi-staging-{key}"}
     assert data["networks"] == {
         "iotconnect-edge": {"name": "minimoi-staging-iotconnect-edge"},
         # Master Craftsman's internal network (MC spec v0.9 §3; tests/test_staging_mc_stage_a.py).
