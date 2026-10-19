@@ -103,6 +103,23 @@
       "status_file": "vault-mc-export.json",
       "owner": "robert",
       "runbook": "core/memory_sync/mc_export.py"
+    },
+    {
+      "id": "mc-github-awareness",
+      "name": "MC GitHub awareness (rotating public observations)",
+      "host": "ec2",
+      "schedule": {
+        "text": "every 5 min (cron; rotating streams)",
+        "kind": "interval",
+        "every_s": 300
+      },
+      "expected_every_s": 300,
+      "missed_after_s": 1800,
+      "stuck_after_s": 600,
+      "grace_s": 300,
+      "status_file": "mc-github-awareness.json",
+      "owner": "robert",
+      "runbook": "scripts/mc/github_awareness.py"
     }
   ]
 }
