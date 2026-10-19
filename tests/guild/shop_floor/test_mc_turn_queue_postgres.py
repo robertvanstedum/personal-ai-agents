@@ -53,7 +53,8 @@ def owner():
 
 
 def ledger(**kw):
-    return TurnLedger(lambda: URL, worker="test", **kw)
+    kw.setdefault("worker", "test")
+    return TurnLedger(lambda: URL, **kw)
 
 
 def _ids(note):
@@ -128,6 +129,10 @@ def test_the_queued_answer_says_paused_on_a_real_store(owner):
                                note_request_id="note-held-0001", request_id="req-held-0001")
     assert body["status"] == "queued" and body["position"] == 1
     assert body["paused"] is True and body["pause"] == {"ledger_id": clear["ledger_id"], "reason": "failed"}
+    again = ledger_gate.enqueue(services, env, principal=owner, conversation_id="c-1",
+                                note_request_id="note-held-0001", request_id="req-held-0001")     # exact replay
+    assert again["ledger_id"] == body["ledger_id"] and again["position"] == 1
+    assert again["paused"] is True and again["pause"] == body["pause"]
 
 
 def test_exact_replay_returns_the_same_waiting_entry_and_a_mismatch_is_refused(owner):
@@ -135,6 +140,7 @@ def test_exact_replay_returns_the_same_waiting_entry_and_a_mismatch_is_refused(o
     q = enqueue(led, owner, note="note-replay-0001")
     again = enqueue(led, owner, note="note-replay-0001")
     assert again.result == "queued" and again.entry["id"] == q.entry["id"] and again.position == 1
+    assert again.barrier is None
     with pytest.raises(ValueError, match="request_mismatch"):
         enqueue(led, owner, conv="c-other", note="note-replay-0001")
     # the same ids through the immediate path never dispatch it
