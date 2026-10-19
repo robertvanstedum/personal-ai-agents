@@ -314,7 +314,9 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-cos-scheduler
     restart: unless-stopped
-    env_file: ${MINIMOI_ROOT:-/opt/minimoi}/.env
+    env_file:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/.env
+      - ${MINIMOI_ROOT:-/opt/minimoi}/${MINIMOI_VAULT_READER_ENV_FILE:-.env}
     environment:
       - MINIMOI_ROLE=production
       - MINIMOI_VOICE_BUDGET=1
@@ -331,7 +333,6 @@ services:
       - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
       - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
       - MINIMOI_VAULT_ASK_URL=${MINIMOI_VAULT_ASK_URL:-}
-      - MINIMOI_VAULT_ASK_TOKEN=${MINIMOI_VAULT_ASK_TOKEN:-}
       - MINIMOI_VAULT_ASK_INTERNAL_HOSTS=vault-ask
       - MINIMOI_VAULT_ASK_INCLUDE_RAW=${MINIMOI_VAULT_ASK_INCLUDE_RAW:-0}
       # Only the Guild's MC conversations ask the Vault: never Telegram or other CoS channels.

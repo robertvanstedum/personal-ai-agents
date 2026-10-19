@@ -197,6 +197,8 @@ services:
     pull_policy: never
     environment:
       - MINIMOI_ROLE=standby
+      - MINIMOI_VAULT_ASK_TOKEN=
+      - MINIMOI_VAULT_ASK_URL=
       # The usage store (usage-record U2): direct calls (Tavily, the Grok backend),
       # written only to this writer's own folder (usage_record.own_folder): the
       # shared monthly file is the non-root gateway's alone.

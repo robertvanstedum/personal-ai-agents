@@ -183,6 +183,10 @@ def test_prod_mounts_and_env_files_are_unchanged_with_root_unset():
         if "env_file" not in service:
             continue
         files = service["env_file"]
+        if name == "cos-scheduler":
+            assert files == [ROOT_VAR + "/.env",
+                             ROOT_VAR + "/${MINIMOI_VAULT_READER_ENV_FILE:-.env}"]
+            files = files[0]
         if name == "curator":
             # The second file defaults to the same .env; only activation selects
             # the Curator-only capability file. Keep every other service pinned.
@@ -205,8 +209,8 @@ def test_every_prod_host_path_is_parameterized_one_way_only():
     code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
     forms = set(re.findall(r"\$\{MINIMOI_ROOT[^}]*\}", code))
     assert forms == {ROOT_VAR}
-    # Curator has one additional, explicitly checked capability env_file.
-    assert code.count(ROOT_VAR) == len(EXPECTED_ENV_FILES) + 1 + sum(
+    # Curator and MC each have an explicitly checked capability env_file.
+    assert code.count(ROOT_VAR) == len(EXPECTED_ENV_FILES) + 2 + sum(
         1 for _s, host, _c in EXPECTED_PROD_MOUNTS if host.startswith("/opt/minimoi"))
 
 
