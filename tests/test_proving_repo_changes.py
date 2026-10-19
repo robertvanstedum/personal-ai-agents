@@ -48,8 +48,8 @@ def test_lists_the_exact_changes_of_a_pinned_commit():
     out = RepositoryTools(ROOT, {"x3": "17899de1"}).changes("x3")
     assert out == {"revision": COMMIT, "subject": "Bound workflow-run polling pages to fit response limit",
                    "parents": [{"commit": PARENT, "labels": []}], "compared_with": PARENT, "total_files": 2,
-                   "files": [{"status": "modified", "path": "core/github_awareness.py", "readable": True},
-                             {"status": "modified", "path": "tests/test_github_awareness_followups.py", "readable": True}],
+                   "files": [{"status": "modified", "path": "core/github_awareness.py", "path_allowlisted": True},
+                             {"status": "modified", "path": "tests/test_github_awareness_followups.py", "path_allowlisted": True}],
                    "truncated": False}
 
 
@@ -73,7 +73,7 @@ def test_no_file_contents_in_the_answer():
 
 # ── statuses, readability and bounds, in throwaway repositories ───────────────
 
-def test_added_modified_deleted_renamed_and_unreadable_paths(repo):
+def test_added_modified_deleted_renamed_and_disallowed_paths(repo):
     write(repo, "core/a.py"); write(repo, "core/b.py"); write(repo, "core/gone.py", "y = 2\n" * 20)
     write(repo, "core/old_name.py", "z = 3\n" * 20)
     base = commit(repo, "base")
@@ -87,12 +87,12 @@ def test_added_modified_deleted_renamed_and_unreadable_paths(repo):
     head = commit(repo, "change everything")
     out = RepositoryTools(repo, {"h": head, "b": base}).changes("h")
     files = {f["path"]: f for f in out["files"]}
-    assert files["core/a.py"] == {"status": "modified", "path": "core/a.py", "readable": True}
+    assert files["core/a.py"] == {"status": "modified", "path": "core/a.py", "path_allowlisted": True}
     assert files["core/new.py"]["status"] == "added"
-    assert files["core/gone.py"] == {"status": "deleted", "path": "core/gone.py", "readable": True}
-    assert files["core/new_name.py"] == {"status": "renamed", "path": "core/new_name.py", "from": "core/old_name.py", "readable": True}
-    assert files["data/private.json"]["readable"] is False and files["tests/a b.py"]["readable"] is False
-    assert files["docs/notes.md"]["readable"] is False
+    assert files["core/gone.py"] == {"status": "deleted", "path": "core/gone.py", "path_allowlisted": True}
+    assert files["core/new_name.py"] == {"status": "renamed", "path": "core/new_name.py", "from": "core/old_name.py", "path_allowlisted": True}
+    assert files["data/private.json"]["path_allowlisted"] is False and files["tests/a b.py"]["path_allowlisted"] is False
+    assert files["docs/notes.md"]["path_allowlisted"] is False
     assert out["parents"] == [{"commit": base, "labels": ["b"]}] and out["total_files"] == 7
 
 
@@ -101,7 +101,7 @@ def test_root_commit_compares_with_the_empty_tree(repo):
     root = commit(repo, "root")
     out = RepositoryTools(repo, {"r": root}).changes("r")
     assert out["parents"] == [] and out["compared_with"] == "empty_tree"
-    assert out["files"] == [{"status": "added", "path": "core/a.py", "readable": True}]
+    assert out["files"] == [{"status": "added", "path": "core/a.py", "path_allowlisted": True}]
 
 
 def test_merge_commit_compares_with_its_first_parent_only(repo):
@@ -139,13 +139,13 @@ def test_long_subject_is_capped_and_body_is_not_returned(repo):
     assert out["subject"] == "S" * MAX_SUBJECT and "BODY-SHOULD-NOT-APPEAR" not in json.dumps(out)
 
 
-def test_newline_in_a_path_is_kept_exact_and_unreadable(repo):
+def test_newline_in_a_path_is_kept_exact_and_not_allowlisted(repo):
     write(repo, "core/a.py")
     commit(repo, "root")
     write(repo, "core/odd\nname.py")
     head = commit(repo, "odd")
     (entry,) = RepositoryTools(repo, {"h": head}).changes("h")["files"]
-    assert entry == {"status": "added", "path": "core/odd\nname.py", "readable": False}
+    assert entry == {"status": "added", "path": "core/odd\nname.py", "path_allowlisted": False}
 
 
 # ── read_file keeps its exact refusals after the allowlist moved into a helper ─
@@ -193,3 +193,35 @@ def test_plugin_declares_exactly_the_four_tools():
     assert declared == registered == ["mc_repo_read", "mc_repo_diff", "mc_run_tests", "mc_repo_changes"]
     source = (plugin / "index.mjs").read_text()
     assert "['mc_repo_changes'" in source and "{revision:str},['revision']" in source
+
+
+# ── path_allowlisted is path policy, not a promise that the read succeeds ─────
+
+def test_deleted_file_is_allowlisted_and_read_at_the_parent_label(repo):
+    write(repo, "core/gone.py", "kept = True\n")
+    base = commit(repo, "base")
+    (repo / "core/gone.py").unlink()
+    head = commit(repo, "delete")
+    tools = RepositoryTools(repo, {"h": head, "h-parent": base})
+    (entry,) = tools.changes("h")["files"]
+    assert entry == {"status": "deleted", "path": "core/gone.py", "path_allowlisted": True}
+    with pytest.raises(ToolRefused, match="regular_source_blob_required"):
+        tools.read_file("h", "core/gone.py")
+    assert tools.read_file("h-parent", "core/gone.py")["lines"] == ["kept = True"]
+
+
+def test_symlink_blob_is_allowlisted_by_path_but_refused_by_read(repo):
+    write(repo, "core/real.py")
+    commit(repo, "base")
+    (repo / "core/link.py").symlink_to("real.py")
+    head = commit(repo, "link")
+    tools = RepositoryTools(repo, {"h": head})
+    (entry,) = tools.changes("h")["files"]
+    assert entry == {"status": "added", "path": "core/link.py", "path_allowlisted": True}
+    with pytest.raises(ToolRefused, match="regular_source_blob_required"):
+        tools.read_file("h", "core/link.py")
+
+
+def test_plugin_describes_path_allowlisted_truthfully():
+    source = (ROOT / "docker/cos-agent-a/plugins/mc-proving-tools/index.mjs").read_text()
+    assert "path_allowlisted" in source and "whether mc_repo_read can open it" not in source
