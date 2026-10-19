@@ -123,7 +123,12 @@ def test_compose_vault_service_is_profile_gated_internal_and_read_only():
     on_network = [n for n, s in spec["services"].items() if "vault-internal" in (s.get("networks") or [])]
     assert sorted(on_network) == ["cos-scheduler", "vault-ask"]
     env = spec["services"]["cos-scheduler"]["environment"]
-    assert "MINIMOI_VAULT_ASK_URL=${MINIMOI_VAULT_ASK_URL:-}" in env and "MINIMOI_VAULT_ASK_TOKEN=${MINIMOI_VAULT_ASK_TOKEN:-}" in env
+    assert "MINIMOI_VAULT_ASK_URL=${MINIMOI_VAULT_ASK_URL:-}" in env
+    assert not any(e.startswith("MINIMOI_VAULT_ASK_TOKEN=") for e in env)
+    assert spec["services"]["cos-scheduler"]["env_file"] == [
+        "${MINIMOI_ROOT:-/opt/minimoi}/.env",
+        "${MINIMOI_ROOT:-/opt/minimoi}/${MINIMOI_VAULT_READER_ENV_FILE:-.env}",
+    ]
     assert "MINIMOI_VAULT_ASK_INCLUDE_RAW=${MINIMOI_VAULT_ASK_INCLUDE_RAW:-0}" in env
     assert "MINIMOI_VAULT_ASK_CONVERSATIONS=guild-" in env
 
