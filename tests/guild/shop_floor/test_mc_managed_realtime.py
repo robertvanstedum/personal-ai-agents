@@ -224,7 +224,7 @@ def test_canonical_spoken_board_command_and_tool_replay_make_one_postit(ready):
 
 
 def test_canonical_spoken_reminder_is_set_once_before_any_response(ready):
-    r=ready;cos=CosOperations();r.config['services'].mc.operation=cos.operation
+    r=ready;r.env['MINIMOI_MC_OWNER_REMINDERS']='1';cos=CosOperations();r.config['services'].mc.operation=cos.operation
     s,_=start(r)
     s.observe({'type':'input_audio_buffer.committed','item_id':'remind-spoken-1'})
     s.observe({'type':'conversation.item.input_audio_transcription.completed','item_id':'remind-spoken-1','transcript':'Remind me in 20 minutes to check the oven',
@@ -243,7 +243,7 @@ def test_canonical_spoken_reminder_is_set_once_before_any_response(ready):
 
 
 def test_spoken_reminder_without_a_time_is_answered_by_the_platform_not_the_model(ready):
-    r=ready;cos=CosOperations();r.config['services'].mc.operation=cos.operation
+    r=ready;r.env['MINIMOI_MC_OWNER_REMINDERS']='1';cos=CosOperations();r.config['services'].mc.operation=cos.operation
     s,_=start(r)
     with ThreadPoolExecutor(max_workers=1) as worker:
         out=worker.submit(s.dispatch,'consult_cos_agent','remind me to call mom','c-123456abcdef','op-remind-1').result()
@@ -252,7 +252,7 @@ def test_spoken_reminder_without_a_time_is_answered_by_the_platform_not_the_mode
 
 
 def test_distinct_spoken_items_keep_distinct_operation_ids(ready):
-    r=ready; cos=CosOperations(); r.config['services'].mc.operation=cos.operation
+    r=ready; r.env['MINIMOI_MC_OWNER_REMINDERS']='1'; cos=CosOperations(); r.config['services'].mc.operation=cos.operation
     session,_=start(r)
     for operation in ('utterance-a', 'utterance-b'):
         session.dispatch('consult_cos_agent','remind me in 20 minutes to stretch','c-123456abcdef',operation)

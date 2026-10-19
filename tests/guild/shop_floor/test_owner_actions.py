@@ -25,6 +25,13 @@ NOW = datetime(2026, 10, 19, 3, 30, tzinfo=timezone.utc)
 API = "/guild-next/api/v1"
 
 
+@pytest.fixture(autouse=True)
+def _reminders_on(monkeypatch):
+    """This module tests reminders themselves, so they are switched on here. They are off by default
+    (MINIMOI_MC_OWNER_REMINDERS); test_owner_reminders_guard.py covers off."""
+    monkeypatch.setattr(oa, 'reminders_enabled', lambda: True)
+
+
 def z(text):
     return datetime.fromisoformat(text.replace('Z', '+00:00'))
 
