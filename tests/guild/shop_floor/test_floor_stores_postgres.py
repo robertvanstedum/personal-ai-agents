@@ -1,7 +1,7 @@
 """The floor store on a real Postgres, for the end-to-end tester (skipped
 unless GUILD_FLOOR_TEST_DATABASE_URL is set).
 
-Use a disposable test database with the current forward migrations 001–005
+Use a disposable test database with the current forward migrations 001–006
 applied in order. The current store uses Board metadata and size columns too;
 001 alone is no longer sufficient. Any staging use still requires Robert's
 approved setup. For example, from inside a test portal container:
@@ -119,3 +119,22 @@ def test_scrubbed_text_never_meets_the_length_check(store):
     assert len(text) > POSTIT_MAX                    # the case the API refuses before the store
     kept = store.add_postit(text[:POSTIT_MAX], ROBERT, idempotency_key=uuid.uuid4().hex)
     assert kept.outcome == "added"
+
+
+def test_long_agent_reply_survives_reload_and_idempotent_retry(store):
+    """Requires migration 006: a normal review must not disappear after model completion."""
+    text = "Review evidence: Grüße.\n" * 240
+    assert 4000 < len(text) < 16000
+    request_id = uuid.uuid4().hex
+    kept = store.add_note(request_id, text, MASTER_CRAFTSMAN)
+    assert kept.outcome == "kept" and kept.value["text"] == text
+    again = store.add_note(request_id, text, MASTER_CRAFTSMAN)
+    assert again.outcome == "kept" and again.value["id"] == kept.value["id"]
+    assert again.value["text"] == text
+    from minimoi_portal.guild_ui.stores import FloorStoreUnavailable, GUILD_PLATFORM
+    with pytest.raises(FloorStoreUnavailable):
+        store.add_note(uuid.uuid4().hex, text, ROBERT)
+    with pytest.raises(FloorStoreUnavailable):
+        store.add_note(uuid.uuid4().hex, "x" * 16001, MASTER_CRAFTSMAN)
+    with pytest.raises(FloorStoreUnavailable):
+        store.add_note(uuid.uuid4().hex, "x" * 4001, GUILD_PLATFORM)
