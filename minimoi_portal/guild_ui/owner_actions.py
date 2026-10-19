@@ -22,6 +22,11 @@ HORIZON = timedelta(days=366)
 WITH_CONTEXT = ('Send a note or reminder on its own, without attached files or topic context. '
                 'Nothing was saved or scheduled.')
 UNAVAILABLE = 'Notes and reminders need the Chief of Staff platform, which is not connected here. Nothing was saved or scheduled.'
+# Reminders are delivered by Telegram to the owner's phone. Off unless this mount switches them on, so no test or
+# Dev portal can send one by default. Off means: recognised, refused, and nothing sent to the Chief of Staff.
+REMINDERS_FLAG = 'MINIMOI_MC_OWNER_REMINDERS'
+REMINDERS_OFF = ('Reminders are not switched on here, so nothing was scheduled. '
+                 'Nothing was sent to the Chief of Staff.')
 
 _PREFIX = r'(?:(?:okay|ok|hey|hi)\s*,?\s+)?(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?'
 _COUNT = r'(?:\d{1,4}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty[- ]five|half\s+an)'
@@ -241,15 +246,29 @@ def _verified(kind, receipt, operation_id, action):
     return None
 
 
+def reminders_enabled() -> bool:
+    """This mount's switch (feature_environ: the request's mount, or the voice worker's bound config). No
+    bound configuration, or any doubt, is off."""
+    try:
+        from . import feature_enabled
+        return feature_enabled(REMINDERS_FLAG)
+    except Exception:
+        return False
+
+
 def execute(text, *, cos, conversation, principal, turn_key, now=None):
     """Only the caller's authenticated, kept owner turn may enter. Returns None for ordinary chat.
 
     A real Chief of Staff receipt is mandatory for success. The same turn retried
     reuses one operation id, so CoS returns "already saved" instead of a second copy.
+    The typed and the spoken path both come here, so the reminders switch is checked once, for both.
     """
     first = parse(text, now)
     if first is None:
         return None
+    if first.kind == 'reminder' and not reminders_enabled():
+        # Not an outcome to pause on: nothing was attempted. No operation id, no Chief of Staff call, no model.
+        return {'reply': REMINDERS_OFF, 'operation': {'type': 'reminder_set', 'saved': False, 'reason': 'reminders_off'}}
     # Same redaction as other kept owner text before it leaves for another store.
     from utils.credential_scrub import scrub as credentials
     from .payment_scrub import scrub as payments
