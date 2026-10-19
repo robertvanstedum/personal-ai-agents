@@ -1446,3 +1446,7 @@ body.gu:not([data-page="floor"]):not([data-page="workshop"]) .mc-panel:is([data-
   body.gu .mc-panel[data-mode] [data-mc-voice-export] { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; }
   body.gu .mc-panel[data-mode] [data-mc-voice-export][hidden] { display: none; }
 }
+
+/* Shared compact microphone control on desktop and mobile. */
+.mc-composer .mc-voice [data-voice-label] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.mc-composer .mc-voice { width: 44px; height: 44px; padding: 8px; }

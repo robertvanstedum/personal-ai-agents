@@ -33,7 +33,7 @@ def test_room_list_is_ten_at_a_time_and_keeps_selected_room_visible(browser, ser
         page.click('[data-rm-list-close]')
     expect(page.locator('[data-room-art-select]')).to_have_count(0)
     expect(page.locator('[data-room-art-image]')).to_be_visible()
-    if not page.locator('[data-rm-about]').is_visible():
+    if not page.locator('[data-rm-details]').is_visible():
         page.click('[data-rm-panel-toggle]')
     expect(page.locator('[data-rm-details]')).to_be_visible()
     expect(page.locator('[data-rm-manage]')).to_be_visible()

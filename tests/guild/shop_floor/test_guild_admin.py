@@ -1,4 +1,4 @@
-"""Owner-only Build Admin: visible drafts, retained Workshop, no adoption claim."""
+"""Owner-only Guild Admin: visible drafts, retained Workshop, no adoption claim."""
 from floor_helpers import load_portal  # noqa: F401
 
 
@@ -27,7 +27,9 @@ def test_admin_links_three_canonical_drafts_and_retains_workshop(load_portal):
             assert 'Runtime adoption remains pending' in document
         else:
             assert 'Draft' in document
-    assert 'data-section="admin"' in html
+    assert '<h1 id="admin-title" class="page-title">Guild Admin</h1>' in html
+    assert 'href="/guild-next/guild/admin" aria-current="true">Admin</a>' in html
+    assert 'guild-subnav guild-sections' not in html
     assert 'data-section="workshop"' not in html
     assert 'Workshop Log materials' in html
     assert portal.owner().get('/guild-next/guild/workshop').status_code in (200,302)

@@ -580,7 +580,7 @@ def admin():
                       "href": url_for(".document", ref=reference)})
     return render_template("guild_floor/admin.html", role_documents=roles,
                            agents_href=url_for(".operate_view", view="agents"),
-                           **_context("admin", "Build", "Build Admin", page_open=True))
+                           **_context("admin", "Admin", "Guild Admin", page_open=True))
 
 
 @owner_page

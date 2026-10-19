@@ -15,7 +15,7 @@ import { answerFailed, answerArrived } from './floorlayout.js';
 const mcName = () => document.body.dataset.mcName || 'Master Craftsman';
 const mcSay = (text) => String(text).split('Master Craftsman').join(mcName());
 import { applyConversation } from './conversations.js';
-import { takeTray, restoreTray, trayBusy } from './attachments.js';
+import { takeTray, restoreTray, trayBusy, trayCount } from './attachments.js';
 import { initJobs } from './jobs.js';
 import { initAgentRequests } from './agent_requests.js';
 
@@ -716,8 +716,12 @@ function clearLength(input) {
 async function sendNote(input, send) {
   const originalDraft = input.value;
   const originalDraftKey = draftKey();
-  const text = input.value.trim();
-  if (!text) return;
+  // A neutral attachment label preserves the existing kept-note contract without inventing an instruction.
+  const text = input.value.trim() || (!live.off && trayCount() ? 'Attached files.' : '');
+  if (!text) {
+    if (trayBusy()) refuse('A file is still being read. Wait for it to finish, then send.');
+    return;
+  }
   if (checkLength(input)) return;
   if (live.off && document.body.dataset.mcPrivate === 'false') { refuse(`Private is not available with the ${mcName()}: it keeps its own record. Nothing was sent. Your draft is kept.`); return; }
   if (live.off) {       // Private: sent, answered, never kept

@@ -240,7 +240,7 @@ async function loadRoom(id) {
 
 async function loadAll({keepCurrent=false}={}) {
   const generation=++listGeneration, selectedView=archiveView;
-  if (cfg.state !== 'on') { $('[data-rm-off]').hidden = false; $('[data-rm-send]').disabled = true; return; }
+  if (cfg.state !== 'on') { $('[data-rm-new]').disabled = true; $('[data-rm-off]').hidden = false; $('[data-rm-send]').disabled = true; return; }
   if (cfg.access === 'no_access') { showBlocked('no_access'); renderList(); return; }       // the same live check the bridge makes; nothing is sent
   const r = await records(`/v1/rooms?view=${selectedView}`);
   if (generation !== listGeneration) return;
@@ -942,6 +942,7 @@ async function prove(button) {
 
 // ── New conversation and Continue conversation ──────────────────────────────
 async function openNew() {
+  if (cfg.state !== 'on' || cfg.access === 'no_access' || signedOut) { status('Room creation is unavailable on this portal.'); return; }
   await loadCards();
   const box = $('[data-rm-new-cards]');
   box.replaceChildren(...cards.filter((c) => c.connected).map((c) => {
@@ -957,13 +958,14 @@ async function openNew() {
 }
 
 async function createNew() {
+  if (cfg.state !== 'on' || cfg.access === 'no_access' || signedOut) { $('[data-rm-new-status]').textContent = 'Room creation is unavailable on this portal. Your draft is kept.'; return; }
   const title = $('[data-rm-new-title]').value.trim();
   const purpose = $('[data-rm-new-purpose]').value.trim();
   const out = $('[data-rm-new-status]');
   if (!title || !purpose) { out.textContent = 'A title and a purpose are needed: both go on the record.'; return; }
   const name = `new:${title}:${purpose}`;
   const r = await records('/v1/rooms', { method: 'POST', body: { title, purpose, mode: 'meeting', recording_acknowledged: true }, key: keyFor(name) });
-  if (r.status !== 201 && r.status !== 200) { out.textContent = `Not started: ${r.body.error || 'Rooms answered with an error'}.`; return; }
+  if (r.status !== 201 && r.status !== 200) { out.textContent = `Not started: ${r.body.message || r.body.error || 'Rooms could not create the conversation. Your draft is kept'}.`; return; }
   const id = r.body.result.id;
   for (const box of $$('[data-rm-new-card]')) {
     if (!box.checked) continue;
