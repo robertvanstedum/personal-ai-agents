@@ -39,6 +39,14 @@ def test_history_picker_keeps_board_and_panel_mode_with_ten_recent_chats(browser
     ctx.close()
 
 
+def _go_private(page):
+    """Private sits in the conversation options menu (4a7e4cfc). Open it the way the owner does, then press the lock.
+    The lock and everything it guards are unchanged; only the route to it is the real one."""
+    if not page.locator("[data-mc-options]").evaluate("el => el.open"):
+        page.click("[data-mc-options] summary")
+    page.click("[data-mc-record]")
+
+
 def test_drafts_follow_their_conversation_and_never_persist_private_text(browser, server, floor):
     ctx, page = _context(browser, server, 1440, 900)
     base = server['url'] + '/guild-next/guild/board'
@@ -55,14 +63,14 @@ def test_drafts_follow_their_conversation_and_never_persist_private_text(browser
     page.locator('[data-conv-picker] summary').click()
     page.locator(f'[data-conv-pick="{first}"]').click()
     expect(box).to_have_value('On-record draft for one')
-    page.click('[data-mc-record]')
+    _go_private(page)
     box.fill('PRIVATE DRAFT MUST NOT BE STORED')
     for store in ('sessionStorage', 'localStorage'):
         assert 'PRIVATE DRAFT' not in page.evaluate(f'JSON.stringify({store})')
     page.reload()
     expect(page.locator('[data-mc-record]')).to_have_attribute('aria-pressed', 'true')
     expect(box).to_have_value('')
-    page.click('[data-mc-record]')
+    _go_private(page)
     expect(box).to_have_value('On-record draft for one')
     page.click('[data-mc-send]')
     expect(box).to_have_value('')
