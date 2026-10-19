@@ -1,4 +1,4 @@
-"""Operator-owned file queue for three dev-only tools; never exposes Docker socket.
+"""Operator-owned file queue for four dev-only tools; never exposes Docker socket.
 
 Run only against the dedicated agent queue, not a shared or user-controlled folder.
 A claimed request is never replayed. Restart requires operator reconciliation.
@@ -16,6 +16,7 @@ METHODS={
  'mc_repo_read':('read_file',{'revision','path','start','count'},{'revision','path'}),
  'mc_repo_diff':('diff',{'before','after','path'},{'before','after','path'}),
  'mc_run_tests':('run_suite',{'suite'},{'suite'}),
+ 'mc_repo_changes':('changes',{'revision'},{'revision'}),
 }
 
 def dispatch(tools, request):

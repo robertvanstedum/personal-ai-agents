@@ -15,6 +15,19 @@ from uuid import uuid4
 
 class ToolRefused(ValueError):pass
 
+MAX_CHANGES=200        # changed paths listed per commit
+MAX_SUBJECT=200        # characters of the commit subject
+
+def check_source_path(path):
+ """The read allowlist: shared by reads, diffs and the readable flag on listed changes."""
+ if not isinstance(path,str) or not re.fullmatch(r'[A-Za-z0-9_./-]+',path):raise ToolRefused('invalid_path')
+ parts=PurePosixPath(path).parts
+ if not parts or path.startswith('/') or '..' in parts or parts[0] not in ('core','minimoi_portal','domains','tests','services','scripts','docker'):
+  raise ToolRefused('path_not_allowlisted')
+ if any(p.startswith('.') or p in ('data','auth','secrets','node_modules') for p in parts):raise ToolRefused('private_or_generated_path')
+ if PurePosixPath(path).suffix not in ('.py','.js','.mjs','.ts','.json','.md','.sh'):
+  raise ToolRefused('source_text_only')
+
 SUITES={
  'board_commands': 'tests/guild/shop_floor/test_owner_board_commands.py',
  'board_multisentence': 'tests/guild/shop_floor/test_owner_board_multisentence.py',
@@ -38,13 +51,7 @@ class RepositoryTools:
 
  def read_file(self, revision, path, start=1, count=120):
   if revision not in self.revisions:raise ToolRefused('revision_not_allowlisted')
-  if not isinstance(path,str) or not re.fullmatch(r'[A-Za-z0-9_./-]+',path):raise ToolRefused('invalid_path')
-  parts=PurePosixPath(path).parts
-  if not parts or path.startswith('/') or '..' in parts or parts[0] not in ('core','minimoi_portal','domains','tests','services','scripts','docker'):
-   raise ToolRefused('path_not_allowlisted')
-  if any(p.startswith('.') or p in ('data','auth','secrets','node_modules') for p in parts):raise ToolRefused('private_or_generated_path')
-  if PurePosixPath(path).suffix not in ('.py','.js','.mjs','.ts','.json','.md','.sh'):
-   raise ToolRefused('source_text_only')
+  check_source_path(path)
   if type(start)!=int or type(count)!=int or start<1 or not 1<=count<=200:raise ToolRefused('invalid_line_window')
   sha=self.revisions[revision]; obj=sha+':'+path
   entry=self._git('ls-tree',sha,'--',path).decode().split()
@@ -69,6 +76,36 @@ class RepositoryTools:
           'before_sha256':left['sha256'],'after_sha256':right['sha256'],
           'diff':raw[:64000].decode('utf-8','replace'),'truncated':len(raw)>64000,
           'diff_sha256':hashlib.sha256(raw).hexdigest()}
+
+ def changes(self, revision):
+  """What one pinned commit changed against its first parent: subject, parents, and each changed
+  path with its status. Paths and status only; never file contents, other refs or a command."""
+  if not isinstance(revision,str) or revision not in self.revisions:raise ToolRefused('revision_not_allowlisted')
+  sha=self.revisions[revision]
+  head=self._git('show','-s','--no-show-signature','--format=%H%x00%P%x00%s',sha).decode('utf-8','replace').rstrip('\n').split('\x00')
+  if len(head)!=3 or head[0]!=sha:raise ToolRefused('repository_object_unavailable')
+  parents=head[1].split()
+  # First parent, or the empty tree for a root commit; rename detection, NUL-separated paths.
+  base=parents[0] if parents else '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+  raw=self._git('diff-tree','-r','-z','-M','--name-status','--no-ext-diff','--no-textconv',base,sha).split(b'\x00')
+  labels={}
+  for label,full in self.revisions.items():labels.setdefault(full,[]).append(label)
+  files=[];i=0
+  while i<len(raw) and raw[i]:
+   status=raw[i].decode('ascii','replace');kind=status[:1]
+   if kind in ('R','C'):
+    old,new=raw[i+1].decode('utf-8','replace'),raw[i+2].decode('utf-8','replace');i+=3
+   else:
+    old,new=None,raw[i+1].decode('utf-8','replace');i+=2
+   entry={'status':{'A':'added','M':'modified','D':'deleted','R':'renamed','C':'copied','T':'type_changed'}.get(kind,'other'),'path':new}
+   if old is not None:entry['from']=old
+   try:check_source_path(new);entry['readable']=True
+   except ToolRefused:entry['readable']=False
+   files.append(entry)
+  return {'revision':sha,'subject':head[2][:MAX_SUBJECT],
+          'parents':[{'commit':p,'labels':sorted(labels.get(p,[]))} for p in parents],
+          'compared_with':parents[0] if parents else 'empty_tree',
+          'total_files':len(files),'files':files[:MAX_CHANGES],'truncated':len(files)>MAX_CHANGES}
 
  def verify_snapshot(self):
   manifest=self.snapshot_manifest

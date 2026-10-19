@@ -6,7 +6,7 @@ SHA256. ``FixtureTools`` wraps ``RepositoryTools``:
 
 - ``read_file`` on a fixture revision label returns the same shape as a Git read (revision, path,
   blob, sha256, start, total_lines, lines), with ``fixture: True``;
-- everything else, and every ``diff`` and ``run_suite``, goes to the wrapped tools unchanged.
+- everything else, and every ``diff``, ``run_suite`` and ``changes``, goes to the wrapped tools unchanged.
 
 No new tool, no caller-chosen file: a fixture is reachable only by its exact pinned labels. Each
 read opens the file again without following symlinks and checks size, hash and UTF-8, so a file
@@ -77,6 +77,11 @@ class FixtureTools:
 
     def run_suite(self, suite):
         return self.tools.run_suite(suite)
+
+    def changes(self, revision):
+        if revision in self.fixtures:
+            raise ToolRefused("fixture_has_no_changes")
+        return self.tools.changes(revision)
 
 
 def _open_no_symlinks(file):
