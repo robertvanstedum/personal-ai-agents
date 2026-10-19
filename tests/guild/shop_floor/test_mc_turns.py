@@ -534,3 +534,21 @@ def test_private_or_missing_csrf_board_request_never_creates(turned):
     assert _ask(client,token,note['request_id'],mode='off_record').status_code==409
     assert client.post(API+'/mc/turns',json={'note_request_id':note['request_id'],'record_mode':'on_record'}).status_code==403
     assert not turned.extra['floor'].rows('floor_postits')
+
+
+def test_a_cos_answer_returns_its_backend_turn_id_for_cost_settlement(floored):
+    from minimoi_portal.guild_ui.mc.cos import ChiefOfStaffBackend
+    tid = "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b"
+
+    class Reply:
+        status_code = 200
+        def json(self):
+            return {"reply": "Item 12 is in build.", "turn_id": tid}
+
+    backend = ChiefOfStaffBackend("http://cos-scheduler:8769", http_post=lambda *a, **k: Reply(),
+                                  http_get=lambda *a, **k: Resp(200, '{"ready":true}'))
+    _turn_on(floored, backend)
+    client = floored.owner(); token = floored.csrf(client)
+    note = _keep(client, token, "How is the build going?")
+    body = _ask(client, token, note["request_id"]).get_json()
+    assert body["status"] == "answered" and body["backend_turn_id"] == tid
