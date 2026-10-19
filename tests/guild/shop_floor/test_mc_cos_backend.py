@@ -248,3 +248,28 @@ def test_the_workshop_log_has_no_ask_about_this_because_it_has_no_composer():
 def test_completion_marker_is_explicit_connector_evidence(completion,expected):
     backend,_=_backend(post=Resp(200,{"reply":"Report", "completion":completion}))
     assert backend.turn(REQ).trace == expected
+
+
+# ── the CoS turn id (= gateway routing-receipt id) is carried for exact cost settlement ──
+
+TID = "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b"
+
+
+@pytest.mark.parametrize("completion,finish", [({"state": "complete", "source": "openclaw_connector"}, "stop"), (None, None)])
+def test_a_valid_cos_turn_id_is_carried_in_the_trace(completion, finish):
+    payload = {"reply": "ok", "turn_id": TID.upper()}
+    if completion:
+        payload["completion"] = completion
+    backend, _ = _backend(post=Resp(200, payload))
+    result = backend.turn(REQ)
+    assert result.status == "answered" and result.trace["cos_turn_id"] == TID
+    assert result.trace.get("finish_reason") == finish
+
+
+@pytest.mark.parametrize("bad", [None, "", "not-a-uuid", 42, "1234"])
+def test_a_missing_or_invalid_cos_turn_id_is_never_guessed(bad):
+    payload = {"reply": "ok"}
+    if bad is not None:
+        payload["turn_id"] = bad
+    backend, _ = _backend(post=Resp(200, payload))
+    assert backend.turn(REQ).trace is None

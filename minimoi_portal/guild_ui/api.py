@@ -1579,6 +1579,9 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             services.mc_health.invalidate()
     answer = {"turn_id": turn_id, "status": result.status, "backend_kind": result.backend_kind,
               "failure_class": result.failure_class, "reply_note": None, "observed_at": now_iso()}
+    if (result.trace or {}).get("cos_turn_id"):
+        # The backend's own turn id (CoS: the gateway routing-receipt id), for exact cost settlement.
+        answer["backend_turn_id"] = result.trace["cos_turn_id"]
     if files is not None and files.report:
         answer["files"] = _files_view(files)
     if job_started is not None:
