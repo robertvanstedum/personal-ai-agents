@@ -25,6 +25,7 @@ const tools=[
  ['mc_repo_read','Read an allowlisted source file at a frozen revision; returns source hash and numbered window.',{revision:str,path:str,start:{type:'integer',minimum:1},count:{type:'integer',minimum:1,maximum:200}},['revision','path']],
  ['mc_repo_diff','Compare one allowlisted source file between frozen revisions.',{before:str,after:str,path:str},['before','after','path']],
  ['mc_run_tests','Run one fixed Board test suite in an isolated no-network test container.',{suite:{type:'string',enum:['board_commands','board_multisentence']}},['suite']],
+ ['mc_repo_changes','List what a pinned commit changed: its subject, its parent commits (with any allowlisted labels, for mc_repo_diff), and each changed file path with its status and whether mc_repo_read can open it. Paths and status only, no file contents.',{revision:str},['revision']],
 ];
 export default definePluginEntry({id:'mc-proving-tools',name:'MC proving tools',register(api){
  for(const [name,description,properties,required] of tools)api.registerTool({name,label:name,description,parameters:{type:'object',properties,required,additionalProperties:false},execute:async(_id,args)=>call(name,args)});
