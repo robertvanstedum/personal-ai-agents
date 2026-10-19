@@ -16,6 +16,27 @@ MAX_BODY=400000
 MODEL='minimoi-cos-agent'
 UPSTREAM_MODEL='minimoi-mc-agent'  # Same Haiku model, no gateway fallback chain.
 
+POLICY_FILE=Path('/state/expected-policy.txt')
+POLICY_MARKER='# Isolated dev reviewer: active proving policy'
+
+def policy_evidence(messages):
+    """Content-free evidence of the operator-pinned policy in the actual provider request."""
+    try:
+        expected=POLICY_FILE.read_text(encoding='utf-8')
+        if not expected or len(expected)>40000:raise ValueError('invalid_policy_size')
+    except (OSError,UnicodeError,ValueError):
+        return {'policy_expected':False}
+    def content(message):
+        value=message.get('content','')
+        if isinstance(value,str):return value
+        if isinstance(value,list):
+            return '\n'.join(x['text'] for x in value if isinstance(x,dict) and isinstance(x.get('text'),str))
+        return ''
+    system='\n'.join(content(m) for m in messages if isinstance(m,dict) and m.get('role') in ('system','developer'))
+    return {'policy_expected':True,'policy_sha256':hashlib.sha256(expected.encode()).hexdigest(),
+            'policy_in_system':expected.strip() in system,
+            'policy_marker_in_system':POLICY_MARKER in system}
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):return None
 
@@ -75,7 +96,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body['max_tokens']=min(int(body.get('max_tokens',1024)),int(completion_limit),1024)
             if body['max_tokens']<1:raise ValueError('invalid_token_limit')
             admitted_call=admit()
-            print(json.dumps({"event":"admitted","body_bytes":n,"daily_call":admitted_call}),flush=True)
+            print(json.dumps({"event":"admitted","body_bytes":n,"daily_call":admitted_call,**policy_evidence(body["messages"])}),flush=True)
         except (ValueError,TypeError,sqlite3.Error) as exc:
             known={'request_size','fixed_model_required','unsupported_parameter','messages_required','invalid_token_limit','operator_has_not_armed_run','run_time_limit','daily_call_limit'}
             print(json.dumps({'event':'refused','reason':str(exc) if str(exc) in known else type(exc).__name__}),flush=True)
