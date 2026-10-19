@@ -22,6 +22,10 @@ _GERMAN = re.compile(r"(?:bitte\s+)?(?:erstelle|schreibe|mach|mache)\s+(?:mir\s+
 # One explicit text-first directive may sit among conversational questions.
 # Extract only its stated literal payload, never a previous message/referent.
 _TEXT_FIRST = re.compile(_PREFIX + r"(?:write|put|pin|add)\s+(?P<text>.+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:post[- ]?it(?:\s+note)?|board)\b" + _TAIL, re.I | re.S)
+# "Put these three on the Board as one post-it: a; b; c" / "Put the following on the Board: a, b":
+# a pointer that announces the words, then the words after a colon or dash.
+_POINTED = re.compile(_PREFIX + r"(?:write|put|pin|add)\s+(?P<pointer>[^:\n–—]+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:board|post[- ]?it(?:\s+note)?)(?:\s+as\s+(?:one|a\s+single|a)\s+(?:post[- ]?it(?:\s+note)?|card|note))?(?:\s*(?::|\s[-–—])\s*(?P<text>.+?))?" + _TAIL, re.I | re.S)
+_ANNOUNCING = re.compile(r"(?:all\s+)?(?:these|those|them|this|it|the\s+following|the\s+list|my\s+list|the\s+items?|the\s+points?)(?:\s+(?:\d+|two|three|four|five|six|seven|eight|nine|ten))?(?:\s+(?:items|things|points|tasks|notes|bullets|lines|ones|reminders))?", re.I)
 _OUTSIDE_REFUSAL = re.compile(r"\b(?:not|do\s+not|don['’]t|never|cancel|revoke|no\s+need|not\s+now|if|unless|whether|maybe|perhaps|example|hypothetical|suppose|imagine|yesterday|previously|said|says|asked|told|wrote|reported|quoted|document|transcript|translate|summari[sz]e|analy[sz]e)\b", re.I)
 # Code, block quotes and indented blocks are material to read, never a request.
 _CODE_OR_BLOCK = re.compile(r'`|(?m:^[ \t]*(?:>|\t)|^ {4})')
@@ -150,6 +154,18 @@ def parse(text):
         if _CODE_OR_BLOCK.search(_mask_quotes(text)):
             return None
         found = _payload(match)
+        if found is None:
+            return None
+        return found[0] if found[1] else _literal(found[0])
+    pointed = _POINTED.fullmatch(stripped)
+    announced = bool(pointed) and _ANNOUNCING.fullmatch(pointed.group('pointer').strip()) is not None
+    if pointed and (pointed.group('text') is not None
+                    or (announced and re.search(r'\bas\s+(?:one|a\s+single|a)\s', stripped, re.I))):
+        if _CODE_OR_BLOCK.search(_mask_quotes(text)):
+            return None
+        if not announced or pointed.group('text') is None:
+            return ''  # no words after the pointer, or two different payloads: ask once
+        found = _payload(pointed)
         if found is None:
             return None
         return found[0] if found[1] else _literal(found[0])
