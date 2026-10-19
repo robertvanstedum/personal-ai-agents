@@ -321,9 +321,12 @@ class TurnLedger:
         with self._tx(principal) as cur:
             released = self._release_abandoned(cur, principal)
             self._expire_waiting(cur, principal)
+            cur.execute("SELECT principal, ledger_id, reason, created_at FROM guild.mc_turn_barrier WHERE principal = %s",
+                        (principal,))
+            barrier = _barrier(cur.fetchone())          # the answer says whether the queue is held, replay or not
             known = self._existing(cur, principal, conversation_id, note_request_id, turn_request_id, "typed", files, refs)
             if known is not None:
-                known.released = released
+                known.released, known.barrier = released, barrier
                 return known
             cur.execute("SELECT count(*) FROM guild.mc_turn_ledger WHERE principal = %s AND state = 'queued'", (principal,))
             if int(cur.fetchone()[0]) >= QUEUE_MAX:
@@ -333,9 +336,6 @@ class TurnLedger:
                         "VALUES (%s, %s, %s, %s, 'typed', %s::jsonb, %s::jsonb, 'queued', now()) RETURNING " + _COLS,
                         (principal, conversation_id, note_request_id, turn_request_id, json.dumps(files), json.dumps(refs)))
             entry = _entry(cur.fetchone())
-            cur.execute("SELECT principal, ledger_id, reason, created_at FROM guild.mc_turn_barrier WHERE principal = %s",
-                        (principal,))
-            barrier = _barrier(cur.fetchone())          # read before _position runs its own query on this cursor
             return Admission("queued", entry=entry, position=self._position(cur, principal, entry["id"]),
                              barrier=barrier, released=released)
 
