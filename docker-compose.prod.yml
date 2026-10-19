@@ -337,10 +337,14 @@ services:
       - MINIMOI_VAULT_ASK_INCLUDE_RAW=${MINIMOI_VAULT_ASK_INCLUDE_RAW:-0}
       # Only the Guild's MC conversations ask the Vault: never Telegram or other CoS channels.
       - MINIMOI_VAULT_ASK_CONVERSATIONS=guild-
+      - COS_REMINDERS_DIR=/app/data/cos_reminders
     volumes:
       # Same owner limit registry as the portal, including next-day limits.
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/limits:/app/runtime/guild/limits:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md
+      # Explicit reminders (reminders.json + reminders.lock): a directory, so atomic replace works.
+      # Beside cos_memory.md, outside data/: cos-agent-a mounts data/ read-write and must not edit receipts.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_reminders:/app/data/cos_reminders
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
       - /var/run/docker.sock:/var/run/docker.sock

@@ -777,6 +777,9 @@ def mc_turn():
     board_result = _owner_board_command(found)
     if board_result is not None:
         return board_result
+    action_result = _owner_action_command(found)
+    if action_result is not None:
+        return action_result
     from .jobs_api import job_command
     command = job_command(found)                      # "run this as a job" / "stop": the server decides, no model is asked
     if command is not None:
@@ -904,6 +907,33 @@ def _owner_board_command(found):
                    history_saved=result.get('history_saved', False)), 200
 
 
+def _owner_action_command(found):
+    """Owner notes and reminders from the kept owner text, before any model (owner_actions).
+
+    Never falls through to the model with attached files or topic context: that
+    text would reach CoS with context appended, so it is refused instead."""
+    from datetime import datetime
+    from . import owner_actions
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    text = note.get('text') or ''
+    try:
+        kept_at = datetime.fromisoformat(str(note.get('created_at')).replace('Z', '+00:00'))
+    except ValueError:
+        kept_at = None                       # resolve against now; a retry may then be refused, never doubled
+    action = owner_actions.parse(text, kept_at)
+    if action is None:
+        return None
+    op_type = 'cos_note' if action.kind == 'note' else 'reminder_set'
+    if attachment_ids or getattr(g, "topic_context", None):
+        return jsonify(status='answered', backend_kind='platform', reply_note=None, message=owner_actions.WITH_CONTEXT,
+                       operation={'type': op_type, 'saved': False}, history_saved=False), 200
+    result = owner_actions.execute(text, cos=services.mc, conversation=floor, principal=principal,
+                                   turn_key=note_id, now=kept_at)
+    return jsonify(status='answered', backend_kind='platform', reply_note=result.get('reply_note'),
+                   message=result['reply'], operation=result['operation'],
+                   history_saved=result.get('history_saved', False)), 200
+
+
 PRIVATE_TEXT_MAX = 4000
 _PRIVATE_SESSION = re.compile(r"[A-Za-z0-9_-]{16,64}")
 PRIVATE_NO_JOB = ("That needs a background job or a request to another agent, and neither is available in Private. "
@@ -1013,6 +1043,9 @@ def mc_turn_stream():
     board_result = _owner_board_command(found)
     if board_result is not None:
         return board_result
+    action_result = _owner_action_command(found)
+    if action_result is not None:
+        return action_result
     from .jobs_api import job_command
     command = job_command(found)                      # spoken job commands are answered here, streaming or not
     if command is not None:

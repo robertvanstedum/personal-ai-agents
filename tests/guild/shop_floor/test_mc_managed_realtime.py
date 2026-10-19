@@ -44,6 +44,18 @@ class Conversations:
     def get(self,cid,principal):
         if cid!='c-123456abcdef' or principal!='owner':raise ConversationNotFound()
         return {'id':cid,'principal':principal,'archived':self.archived,'notes_floor':'actual-owner-floor'}
+class CosOperations:
+    """The Chief of Staff's Confer operations, deduplicated by request id like the real ones."""
+    def __init__(self):self.calls=[];self.seen=set()
+    def operation(self,text,*,conversation_id,request_id):
+        self.calls.append((text,conversation_id,request_id))
+        status='deduplicated' if request_id in self.seen else 'saved';self.seen.add(request_id)
+        if text.startswith('/note '):
+            return {'state':'ok','operation':{'type':'note_save','status':status,'operation_id':request_id,'storage':'cos_platform_memory'}}
+        due=text.split()[1]
+        return {'state':'ok','operation':{'type':'reminder_set','status':status,'operation_id':request_id,'storage':'cos_reminders',
+                'delivery':'telegram','due_utc':due,'reminder_id':'rem-0123456789ab'}}
+
 @pytest.fixture
 def ready(tmp_path,monkeypatch):
     app=Flask('managed-synthetic');app.secret_key='test-only-session-key'
@@ -99,10 +111,14 @@ def test_actual_captured_worker_no_request_and_exact_idempotent_note(ready):
     assert a['reply']=='Synthetic native reply'
     assert r.calls[0]['note']['text']=='Exact owner spoken words' and r.calls[0]['note_id']=='operation-123' and r.calls[0]['request_id']=='operation-123'
     assert len(r.notes.rows)==1
+    cos=CosOperations();r.config['services'].mc.operation=cos.operation
     with ThreadPoolExecutor(max_workers=1) as worker:
         worker.submit(s.dispatch,'save_cos_note','Save a note: exact owner note','c-123456abcdef','note-operation-123').result()
         repeated=worker.submit(s.dispatch,'save_cos_note','Save a note: exact owner note','c-123456abcdef','note-operation-123').result()
-    assert repeated['operation']['repeated'] and len(r.notes.rows)==2
+    # A spoken note is a real Chief of Staff note with its receipt, not only a kept conversation turn.
+    assert [c[0] for c in cos.calls]==['/note exact owner note']*2 and len({c[2] for c in cos.calls})==1
+    assert repeated['operation']=={'type':'cos_note','saved':True,'operation_id':cos.calls[0][2],'repeated':True}
+    assert repeated['reply']=='Saved to Chief of Staff notes: exact owner note' and len(r.notes.rows)==2
 
 def test_nonliteral_note_refused_before_write(ready):
     r=ready;s,_=start(r)
@@ -205,3 +221,49 @@ def test_canonical_spoken_board_command_and_tool_replay_make_one_postit(ready):
     s.observe({'type':'response.done','response':{'id':'board-response','usage':usage,'output':[{'type':'function_call','call_id':'board-call-replay','name':'consult_cos_agent'}]}})
     s.worker.submit(lambda:None).result(timeout=2)
     assert len(r.notes.postits)==1 and not r.calls
+
+
+def test_canonical_spoken_reminder_is_set_once_before_any_response(ready):
+    r=ready;cos=CosOperations();r.config['services'].mc.operation=cos.operation
+    s,_=start(r)
+    s.observe({'type':'input_audio_buffer.committed','item_id':'remind-spoken-1'})
+    s.observe({'type':'conversation.item.input_audio_transcription.completed','item_id':'remind-spoken-1','transcript':'Remind me in 20 minutes to check the oven',
+               'usage':{'type':'tokens','input_tokens':1,'output_tokens':1,'input_token_details':{'text_tokens':0,'audio_tokens':1}}})
+    s.worker.submit(lambda:None).result(timeout=2)
+    assert len(cos.calls)==1 and cos.calls[0][0].startswith('/remind ') and cos.calls[0][0].endswith('Z check the oven')
+    assert not r.calls and not r.notes.postits                  # no model consult, no Board write
+    receipt=[n for n in r.notes.rows.values() if n['who']=='guild_platform']
+    assert len(receipt)==1 and receipt[0]['text'].startswith('Reminder set for ') and 'rem-0123456789ab' in receipt[0]['text']
+    # The model's later tool call for the same spoken words reaches CoS as the same operation, never a second reminder.
+    s.observe({'type':'response.created','response':{'id':'remind-response'}})
+    usage={'input_tokens':2,'output_tokens':2,'input_token_details':{'text_tokens':1,'audio_tokens':1,'image_tokens':0},'output_token_details':{'text_tokens':1,'audio_tokens':1}}
+    s.observe({'type':'response.done','response':{'id':'remind-response','usage':usage,'output':[{'type':'function_call','call_id':'remind-call-replay','name':'consult_cos_agent'}]}})
+    s.worker.submit(lambda:None).result(timeout=2)
+    assert len({c[2] for c in cos.calls})==1 and not r.calls
+
+
+def test_spoken_reminder_without_a_time_is_answered_by_the_platform_not_the_model(ready):
+    r=ready;cos=CosOperations();r.config['services'].mc.operation=cos.operation
+    s,_=start(r)
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        out=worker.submit(s.dispatch,'consult_cos_agent','remind me to call mom','c-123456abcdef','op-remind-1').result()
+    assert 'When should I remind you?' in out['reply'] and out['operation']=={'type':'reminder_set','saved':False}
+    assert not cos.calls and not r.calls
+
+
+def test_distinct_spoken_items_keep_distinct_operation_ids(ready):
+    r=ready; cos=CosOperations(); r.config['services'].mc.operation=cos.operation
+    session,_=start(r)
+    for operation in ('utterance-a', 'utterance-b'):
+        session.dispatch('consult_cos_agent','remind me in 20 minutes to stretch','c-123456abcdef',operation)
+    assert len(cos.calls)==2 and len({c[2] for c in cos.calls})==2
+
+
+def test_moved_voice_conversation_cannot_save_action(ready, monkeypatch):
+    r=ready; cos=CosOperations(); r.config['services'].mc.operation=cos.operation
+    session,_=start(r)
+    original=r.convs.get
+    monkeypatch.setattr(r.convs,'get',lambda cid,p:{**original(cid,p),'notes_floor':'different-floor'})
+    with pytest.raises(SessionRefused):
+        session.dispatch('consult_cos_agent','remind me in 20 minutes to stretch','c-123456abcdef','utterance-a')
+    assert not cos.calls

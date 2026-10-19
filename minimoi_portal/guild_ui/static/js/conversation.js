@@ -313,6 +313,11 @@ function showAnswer(holder, r) {
     holder.replaceWith(platformLine('Library', `${body.message} The Library item is saved; this confirmation could not be kept in the conversation.`));
     announce(body.message);
     answerArrived();
+  } else if (r.ok && ['cos_note', 'reminder_set'].includes(body.operation?.type) && body.operation.saved === true) {
+    lastAnswered = true;
+    holder.replaceWith(platformLine(body.operation.type === 'cos_note' ? 'Notes' : 'Reminders', `${body.message} This confirmation could not be kept in the conversation.`));
+    announce(body.message);
+    answerArrived();
   } else if (r.ok && body.operation?.type === 'work_register' && body.operation.saved === true && /^MC-[0-9]{4,8}$/.test(body.operation.id)) {
     // Canonical card committed; the separate chat receipt is not durable.
     lastAnswered = true;
