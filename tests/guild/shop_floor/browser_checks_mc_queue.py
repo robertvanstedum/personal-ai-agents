@@ -381,7 +381,9 @@ def test_off_the_record_or_unknown_sends_nothing_and_does_not_spin(browser, serv
     go(page, f"{server['url']}{BUILD}")
     expect(page.locator("[data-mc-queue-bar]")).to_contain_text("1 message waiting")
     if state == "private":
-        page.evaluate("() => document.querySelector('[data-mc-record]').click()")              # go Private
+        # While messages are recorded the lock cannot be chosen; this is a tab that was already in Private.
+        page.evaluate("async () => { const s = await import(document.querySelector('link[href*=\"/js/state.js\"]').href);"
+                      " s.setOff(true); }")
         expect(page.locator("body")).to_have_attribute("data-off-record", "true")
     else:
         page.evaluate("async () => { const s = await import(document.querySelector('link[href*=\"/js/state.js\"]').href);"
@@ -393,11 +395,35 @@ def test_off_the_record_or_unknown_sends_nothing_and_does_not_spin(browser, serv
     assert [u for u in writes if "/dispatch" in u] == []                  # nothing was sent from this tab
     assert len(reads) <= 3                                                # and it did not spin
     if state == "private":
-        page.evaluate("() => document.querySelector('[data-mc-record]').click()")              # back on the record
+        page.click("[data-private-exit]")                                                         # back on the record
     else:
         page.evaluate("async () => { const s = await import(document.querySelector('link[href*=\"/js/state.js\"]').href);"
                       " s.live.known = true; s.changed(); }")
     assert _wait(lambda: any("/dispatch" in u for u in writes), page=page)   # it carries on
+    ctx.close()
+
+
+def test_private_is_shown_off_while_messages_are_recorded_and_exit_still_works(browser, server, queued):
+    ctx, page = _context(browser, server, 390, 900)
+    go(page, f"{server['url']}{BUILD}")
+    page.click("[data-mc-options] summary")
+    lock = page.locator("[data-mc-record]")
+    expect(lock).to_be_disabled()
+    expect(lock).to_have_attribute("title", "Private is off here: every message is recorded before it is sent")
+    expect(page.locator("body")).to_have_attribute("data-mc-private", "false")
+    # A tab that was already in Private when it became unavailable: sending is refused with the reason, and Exit returns.
+    page.evaluate("async () => { const s = await import(document.querySelector('link[href*=\"/js/state.js\"]').href);"
+                  " s.setOff(true); }")
+    expect(page.locator("[data-private-chip]")).to_be_visible()
+    page.fill("#mc-input", "Should not go anywhere")
+    page.click("[data-mc-send]")
+    expect(page.locator("[data-mc-refusal]")).to_contain_text("Private is off here: every message is recorded before it is sent. Nothing was sent.")
+    assert queued["ledger"].rows == [] and _chat_posts(queued["runtime"]) == []
+    page.click("[data-private-exit]")
+    expect(page.locator("body")).to_have_attribute("data-off-record", "false")
+    # As everywhere: what was typed in Private is not carried back on the record (browser_checks_chat_history).
+    expect(page.locator("#mc-input")).not_to_have_value("Should not go anywhere")
+    assert queued["ledger"].rows == [] and _chat_posts(queued["runtime"]) == []
     ctx.close()
 
 
