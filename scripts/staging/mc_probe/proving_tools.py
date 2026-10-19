@@ -19,7 +19,7 @@ MAX_CHANGES=200        # changed paths listed per commit
 MAX_SUBJECT=200        # characters of the commit subject
 
 def check_source_path(path):
- """The read allowlist: shared by reads, diffs and the readable flag on listed changes."""
+ """The read allowlist: shared by reads, diffs and the path_allowlisted flag on listed changes."""
  if not isinstance(path,str) or not re.fullmatch(r'[A-Za-z0-9_./-]+',path):raise ToolRefused('invalid_path')
  parts=PurePosixPath(path).parts
  if not parts or path.startswith('/') or '..' in parts or parts[0] not in ('core','minimoi_portal','domains','tests','services','scripts','docker'):
@@ -79,7 +79,8 @@ class RepositoryTools:
 
  def changes(self, revision):
   """What one pinned commit changed against its first parent: subject, parents, and each changed
-  path with its status. Paths and status only; never file contents, other refs or a command."""
+  path with its status and whether the path is on the read allowlist. Paths and status only; never
+  file contents, other refs or a command."""
   if not isinstance(revision,str) or revision not in self.revisions:raise ToolRefused('revision_not_allowlisted')
   sha=self.revisions[revision]
   head=self._git('show','-s','--no-show-signature','--format=%H%x00%P%x00%s',sha).decode('utf-8','replace').rstrip('\n').split('\x00')
@@ -99,8 +100,10 @@ class RepositoryTools:
     old,new=None,raw[i+1].decode('utf-8','replace');i+=2
    entry={'status':{'A':'added','M':'modified','D':'deleted','R':'renamed','C':'copied','T':'type_changed'}.get(kind,'other'),'path':new}
    if old is not None:entry['from']=old
-   try:check_source_path(new);entry['readable']=True
-   except ToolRefused:entry['readable']=False
+   # Path policy only: a deleted file is read at the parent's label, and a symlink or oversized
+   # or non-UTF-8 blob can still be refused by mc_repo_read.
+   try:check_source_path(new);entry['path_allowlisted']=True
+   except ToolRefused:entry['path_allowlisted']=False
    files.append(entry)
   return {'revision':sha,'subject':head[2][:MAX_SUBJECT],
           'parents':[{'commit':p,'labels':sorted(labels.get(p,[]))} for p in parents],
