@@ -301,8 +301,12 @@ services:
       - COS_AGENT_RUNTIME_AGENT_ID=${COS_AGENT_RUNTIME_AGENT_ID:-cos-agent-a}
       - COS_AGENT_TIMEZONE=${COS_AGENT_TIMEZONE:-America/Chicago}
       - COS_MODEL_GATEWAY_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
+      - COS_REMINDERS_DIR=/app/data/cos_reminders
     volumes:
       - ${MINIMOI_ROOT:-/opt/minimoi}/cos_memory.md:/app/data/cos_memory.md
+      # Telegram /remind writes the same reminder store as cos-scheduler; delivery claims each
+      # reminder under the store lock, so two delivery loops never send one twice.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos_reminders:/app/data/cos_reminders
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
     depends_on:

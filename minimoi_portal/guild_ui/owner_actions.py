@@ -23,7 +23,7 @@ WITH_CONTEXT = ('Send a note or reminder on its own, without attached files or t
                 'Nothing was saved or scheduled.')
 UNAVAILABLE = 'Notes and reminders need the Chief of Staff platform, which is not connected here. Nothing was saved or scheduled.'
 
-_PREFIX = r'(?:(?:okay|ok)\s*,?\s+)?(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?'
+_PREFIX = r'(?:(?:okay|ok|hey|hi)\s*,?\s+)?(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?'
 _COUNT = r'(?:\d{1,4}|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty[- ]five|half\s+an)'
 _W_IN = r'in\s+' + _COUNT + r'\s+(?:minutes?|mins?|hours?|hrs?)'
 _W_CLOCK = r'(?:noon|midnight|\d{1,2}(?:[:.]\d{2})?\s*(?:a\.?\s?m\.?|p\.?\s?m\.?)?)'
@@ -53,25 +53,35 @@ class Action:
     refusal: str | None = None      # a recognized command that cannot be done as asked
 
 
-def _clock(spec, day_given, part):
-    """(hour, minute, ambiguous) from a spoken clock; ambiguous means 'no am/pm and no day'."""
+def _clock(spec, dated, part):
+    """(hour, minute, ambiguous, next_day) from a spoken clock.
+
+    ambiguous: no am/pm and no other day, so both am and pm are tried and the
+    earliest future one wins ("today at 7" at 10:00 is 19:00). next_day: a
+    late-night clock ("tonight at 12", "tonight at 1") falls after midnight."""
     spec = spec.casefold().strip()
-    if spec == 'noon':return 12, 0, False
-    if spec == 'midnight':return 0, 0, False
+    late = part in ('evening', 'night', 'tonight')
+    if spec == 'noon':return 12, 0, False, False
+    if spec == 'midnight':return 0, 0, False, late
     match = re.fullmatch(r'(\d{1,2})(?:[:.](\d{2}))?\s*(?:(a)\.?\s?m\.?|(p)\.?\s?m\.?)?', spec)
     if match is None:raise ValueError
     hour, minute = int(match[1]), int(match[2] or 0)
     if minute > 59 or hour > 23:raise ValueError
     if match[3] or match[4]:
         if not 1 <= hour <= 12:raise ValueError
-        return (hour % 12) + (12 if match[4] else 0), minute, False
+        hour = (hour % 12) + (12 if match[4] else 0)
+        return hour, minute, False, late and hour < 6
     if hour >= 13 or hour == 0 or spec.startswith('0'):
-        return hour, minute, False
-    if part is not None:
-        return (hour + 12 if part != 'morning' and hour < 12 else hour), minute, False
-    if day_given:
-        return (hour + 12 if 1 <= hour <= 6 else hour), minute, False
-    return hour, minute, True
+        return hour, minute, False, late and hour < 6
+    if late:
+        if hour == 12:return 0, minute, False, True
+        if hour <= 5:return hour, minute, False, True
+        return hour + 12, minute, False, False
+    if part == 'morning':return hour, minute, False, False
+    if part == 'afternoon':return (hour + 12 if hour < 12 else hour), minute, False, False
+    if dated:
+        return (hour + 12 if 1 <= hour <= 6 else hour), minute, False, False
+    return hour, minute, True, False
 
 
 def resolve(when, now):
@@ -105,17 +115,23 @@ def resolve(when, now):
         date = local_now.date() + timedelta(days=(index - local_now.weekday()) % 7)
     if clock is None:
         if part is None:raise ValueError('Say what time, for example "tomorrow at 9 am".')
-        hour, minute, ambiguous = _PART[part], 0, False
+        hour, minute, ambiguous, next_day = _PART[part], 0, False, False
     else:
-        try:hour, minute, ambiguous = _clock(clock[1], bool(day), part)
+        dated = bool(day) and not day.startswith(('today', 'this', 'tonight'))
+        try:hour, minute, ambiguous, next_day = _clock(clock[1], dated, part)
         except ValueError:raise ValueError('That time is not one I can read. Say it like "5:30 pm".') from None
+    if next_day:
+        date = date + timedelta(days=1)
     def at(d, h):
         candidate = datetime(d.year, d.month, d.day, h, minute, tzinfo=CHICAGO)
         if candidate.astimezone(timezone.utc).astimezone(CHICAGO).replace(tzinfo=None) != candidate.replace(tzinfo=None):
             raise ValueError('That local time does not exist because the clocks change. Choose another time.')
         return candidate
-    candidates = [at(date, hour)] + ([at(date, hour + 12)] if ambiguous and hour < 12 else [])
-    future = [c for c in candidates if c > local_now]
+    def options(d):
+        if ambiguous and hour == 12:              # "at 12" late in the day is the coming midnight
+            return [at(d, 12), at(d + timedelta(days=1), 0)]
+        return [at(d, hour)] + ([at(d, hour + 12)] if ambiguous and hour < 12 else [])
+    future = [c for c in options(date) if c > local_now]
     if not future:
         if day and not day.startswith(('on ',)) and day.split()[0] in ('today', 'tonight', 'this'):
             raise ValueError('That time today has already passed.')
@@ -123,7 +139,7 @@ def resolve(when, now):
             date = date + timedelta(days=7)
         else:
             date = date + timedelta(days=1)
-        future = [at(date, hour)] + ([at(date, hour + 12)] if ambiguous and hour < 12 else [])
+        future = options(date)
     due = min(future).astimezone(timezone.utc)
     if due - now > HORIZON:raise ValueError('Reminders can be set up to a year ahead.')
     return due
@@ -166,12 +182,18 @@ def parse(text, now=None):
         when = groups.get('when') or groups.get('when2')
         trailing = groups.get('when2') if pattern is _SET else (groups.get('when') if pattern is _REMIND else None)
         words = match['text']
+        if pattern is _SET and groups.get('when') and groups.get('when2'):
+            words = words + ' ' + groups['when2']    # "for 9 am to call Anna at noon": the second time is content
+        if pattern is _REMIND_WHEN_FIRST and not _timed(when):
+            tail = re.search(rf'\s*,?\s+(at\s+{_W_CLOCK}){_END}$', words, re.I)
+            if tail:                               # "remind me tomorrow to call Anna at 5"
+                when, words = when + ' ' + tail[1], words[:tail.start()]
         if trailing and match['link'].casefold() in ('that', 'about'):
             words = words + ' ' + trailing  # "remind me that the meeting is at 3 pm": the time is also the content
         if match['link'].casefold() in ('that', 'about') and not _timed(when):
             continue                        # "remind me about the plan / that we agreed on Tuesday" asks to recall
         if not when:
-            return Action('reminder', refusal='When should I remind you? Say for example "remind me at 5 pm to call Anna". Nothing was scheduled.')
+            return Action('reminder', refusal='Say the whole reminder with its time in one go, for example "remind me at 5 pm to call Anna". Nothing was scheduled.')
         try:
             due = resolve(when, now)
         except ValueError as exc:
@@ -181,11 +203,12 @@ def parse(text, now=None):
 
 
 def _timed(when):
-    """A WHEN that names a time ("at …", "in …", a part of the day), not only a day."""
+    """A WHEN with a clock or a delay ("at …", "in …"). A day or part of the day alone is not:
+    "remind me about what we decided this morning" asks to recall."""
     if not when:
         return False
     value = ' '.join(when.casefold().split())
-    return value.startswith('in ') or ' at ' in ' ' + value or bool(re.search(r'\b(?:morning|afternoon|evening|night|tonight)\b', value))
+    return value.startswith('in ') or ' at ' in ' ' + value
 
 
 def _reminder(words, due, now):
