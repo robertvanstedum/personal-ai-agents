@@ -63,17 +63,31 @@ class RepositoryTools:
   return {'revision':sha,'path':path,'blob':entry[2],'sha256':hashlib.sha256(raw).hexdigest(),
           'start':start,'total_lines':len(lines),'lines':lines[start-1:start-1+count]}
 
+ def _diff_side(self, revision, path):
+  """(revision sha, sha256 or None, text) for one side of a diff. A path with no entry at that
+  revision is an empty side (the file was added or deleted); any entry there must pass every
+  read_file check (regular blob, size, UTF-8), so a symlink, folder or oversized file is refused."""
+  if not isinstance(revision,str) or revision not in self.revisions:raise ToolRefused('revision_not_allowlisted')
+  check_source_path(path)
+  sha=self.revisions[revision]
+  if not self._git('ls-tree',sha,'--',path).strip():
+   return sha,None,''
+  side=self.read_file(revision,path,1,1)
+  return sha,side['sha256'],self._git('cat-file','blob',sha+':'+path).decode('utf-8')
+
  def diff(self, before, after, path):
-  """Compare one allowed source path at two frozen revisions, with bounded output."""
-  left=self.read_file(before,path,1,1);right=self.read_file(after,path,1,1)
-  a=self._git('cat-file','blob',left['revision']+':'+path)
-  b=self._git('cat-file','blob',right['revision']+':'+path)
-  # Reuse read_file's regular-blob, path, UTF-8 and size checks above.
-  result=''.join(difflib.unified_diff(a.decode().splitlines(True),b.decode().splitlines(True),
-                fromfile=left['revision']+'/'+path,tofile=right['revision']+'/'+path))
+  """Compare one allowed source path at two frozen revisions, with bounded output. A side where
+  the path does not exist is empty, so an added or deleted file diffs in full."""
+  left_sha,left_hash,a=self._diff_side(before,path)
+  right_sha,right_hash,b=self._diff_side(after,path)
+  if left_hash is None and right_hash is None:raise ToolRefused('path_absent_at_both_revisions')
+  status='added' if left_hash is None else 'deleted' if right_hash is None else 'modified'
+  result=''.join(difflib.unified_diff(a.splitlines(True),b.splitlines(True),
+                fromfile='/dev/null' if left_hash is None else left_sha+'/'+path,
+                tofile='/dev/null' if right_hash is None else right_sha+'/'+path))
   raw=result.encode()
-  return {'before':left['revision'],'after':right['revision'],'path':path,
-          'before_sha256':left['sha256'],'after_sha256':right['sha256'],
+  return {'before':left_sha,'after':right_sha,'path':path,'status':status,
+          'before_sha256':left_hash,'after_sha256':right_hash,
           'diff':raw[:64000].decode('utf-8','replace'),'truncated':len(raw)>64000,
           'diff_sha256':hashlib.sha256(raw).hexdigest()}
 

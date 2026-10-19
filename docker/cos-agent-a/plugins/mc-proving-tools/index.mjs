@@ -23,7 +23,7 @@ async function call(method, args) {
 const str={type:'string',maxLength:240};
 const tools=[
  ['mc_repo_read','Read an allowlisted source file at a frozen revision; returns source hash and numbered window.',{revision:str,path:str,start:{type:'integer',minimum:1},count:{type:'integer',minimum:1,maximum:200}},['revision','path']],
- ['mc_repo_diff','Compare one allowlisted source file between frozen revisions.',{before:str,after:str,path:str},['before','after','path']],
+ ['mc_repo_diff','Compare one allowlisted source file between frozen revisions. If the file does not exist at one of them, that side is empty, so an added or deleted file shows in full (status added, deleted or modified).',{before:str,after:str,path:str},['before','after','path']],
  ['mc_run_tests','Run one fixed Board test suite in an isolated no-network test container.',{suite:{type:'string',enum:['board_commands','board_multisentence']}},['suite']],
  ['mc_repo_changes','List what a pinned commit changed: its subject, its parent commits (with any allowlisted labels, for mc_repo_diff), and each changed file path with its status and whether that path is on the read allowlist (path_allowlisted; a deleted file is read at the parent label). Paths and status only, no file contents.',{revision:str},['revision']],
 ];
