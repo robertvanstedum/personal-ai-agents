@@ -399,6 +399,7 @@ def test_reminder_without_a_time_is_a_safe_clarification(turned):
     cos = _cos(turned, {"state": "ok"})
     ledger = FakeLedger()
     _ledger_on(turned, ledger)
+    turned.app.extensions["guild_ui_next"]["feature_environ"]["MINIMOI_MC_OWNER_REMINDERS"] = "1"   # reminders are off by default
     client, token = owner(turned)
     r = _ask(client, token, _keep(client, token, "Remind me to stretch")["request_id"])
     assert r.get_json()["backend_kind"] == "platform" and cos.calls == []
