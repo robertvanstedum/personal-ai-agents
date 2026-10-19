@@ -13,6 +13,7 @@ REPO='robertvanstedum/personal-ai-agents'
 PREFIX='/repos/'+REPO
 MAX_FILE=2<<20
 PAGE=100
+RUNS_PAGE=25  # Workflow runs embed repository metadata; 100 rows exceed the 1 MiB response cap.
 PAGES=3
 MAX_ITEMS=128
 MAX_REQUESTS=40
@@ -136,15 +137,16 @@ def poll(doc,client,*,now,request_limit=3):
    # older pages only repeat history: read the newest page and call it complete.
    # A busy repository otherwise spends the whole budget and never succeeds.
    rolling=previous['coverage']=='rolling_window'
+   page_size=RUNS_PAGE if name=='runs' else PAGE
    since=stamp(previous['cursor'])-timedelta(minutes=2)
    for page in range(1,PAGES+1):
-    data=get(path,{**params,'page':page,'per_page':PAGE})
+    data=get(path,{**params,'page':page,'per_page':page_size})
     if name=='runs':need(type(data)is dict,'invalid_response');data=data.get('workflow_runs')
-    need(type(data)is list and len(data)<=PAGE,'invalid_response')
+    need(type(data)is list and len(data)<=page_size,'invalid_response')
     page_items=[project(name,row,now)for row in data];found.extend(page_items)
     if rolling:
      # A full newest page entirely after the last success may have skipped items.
-     if(len(data)==PAGE and previous['last_success']is not None
+     if(len(data)==page_size and previous['last_success']is not None
         and min(i['updated_at']for i in page_items)>previous['last_success']):out['gap']='possible_poll_gap'
     if name=='deployments':
      # Exact numeric IDs only; never follow provider-returned URL with a token.
@@ -156,7 +158,7 @@ def poll(doc,client,*,now,request_limit=3):
       need(type(statuses)is list,'invalid_response');need(len(statuses)<100,'truncated')
       for status in statuses:
        child=dict(status);child['id']='deployment-'+str(row['id'])+'-status-'+str(status['id']);child['html_url']=row.get('html_url')or 'https://github.com/'+REPO+'/deployments';child['body']=status.get('description','');child['environment']=row.get('environment','');found.append(project(name,child,now))
-    if rolling or len(data)<PAGE:complete=True;break
+    if rolling or len(data)<page_size:complete=True;break
    merged={item['identity']:item for item in previous['items']}
    for item in found:merged[item['identity']]=item
    ordered=sorted(merged.values(),key=lambda item:(item['updated_at'],item['identity']),reverse=True)

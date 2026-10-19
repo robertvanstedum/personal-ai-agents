@@ -44,7 +44,7 @@ class Client:
 
 def busy(path, params):
     """This repository today: >300 events and >600 workflow runs, every page full."""
-    full = [row(n) for n in range(1, 101)]
+    full = [row(n) for n in range(1, params['per_page'] + 1)]
     if path.endswith('/actions/runs'):
         return 200, {'workflow_runs': full}, {}
     if path.endswith('/events'):
@@ -69,7 +69,7 @@ def test_busy_rolling_stream_reads_one_page_and_succeeds(stream):
     out = C.poll(only(stream), client, now=NOW)
     r = out['streams'][stream]
     assert len(client.calls) == 1 and client.calls[0][1]['page'] == 1
-    assert r['health'] == 'ok' and r['last_success'] == C.iso(NOW) and len(r['items']) == 100
+    assert r['health'] == 'ok' and r['last_success'] == C.iso(NOW) and len(r['items']) == (25 if stream == 'runs' else 100)
 
 
 def test_all_streams_reach_a_success_within_the_anonymous_budget_on_a_busy_repo():
@@ -325,3 +325,13 @@ def test_cli_and_context_share_dedicated_persistent_volume():
     assert mount in config['services']['portal']['volumes']
     assert 'mc-observations' in config['volumes']
     assert all(mount not in s.get('volumes', []) for n, s in config['services'].items() if n != 'portal')
+
+
+def test_runs_full_smaller_page_preserves_gap_warning():
+    doc = only('runs')
+    doc['streams']['runs']['last_success'] = C.iso(NOW - timedelta(minutes=10))
+    client = Client(busy)
+    out = C.poll(doc, client, now=NOW)
+    assert client.calls[0][1]['per_page'] == 25
+    assert out['streams']['runs']['gap'] == 'possible_poll_gap'
+    assert out['streams']['runs']['health'] == 'ok'
