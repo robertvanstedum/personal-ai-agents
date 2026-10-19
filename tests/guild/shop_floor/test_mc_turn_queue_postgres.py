@@ -109,7 +109,25 @@ def test_enqueue_reports_a_pause_and_still_records(owner):
     first = admit(led, owner)
     led.finish(first.claim, "unknown", {"reason": "timeout"})
     q = enqueue(led, owner)
-    assert q.result == "queued" and q.barrier["ledger_id"] == first.entry["id"]
+    assert q.result == "queued" and q.position == 1 and q.barrier["ledger_id"] == first.entry["id"]
+    assert q.barrier["reason"] == "unknown"
+
+
+def test_the_queued_answer_says_paused_on_a_real_store(owner):
+    from types import SimpleNamespace
+    from minimoi_portal.guild_ui.mc import ledger_gate
+    led = ledger()
+    services = SimpleNamespace(turn_ledger=led)
+    env = {ledger_gate.FLAG: "1"}
+    clear = ledger_gate.enqueue(services, env, principal=owner, conversation_id="c-1",
+                                note_request_id="note-clear-0001", request_id="req-clear-0001")
+    assert clear["paused"] is False and clear["pause"] is None and clear["position"] == 1
+    first = led.claim_queued(owner, clear["ledger_id"])
+    led.finish(first.claim, "failed", {"failure_class": "upstream"})
+    body = ledger_gate.enqueue(services, env, principal=owner, conversation_id="c-1",
+                               note_request_id="note-held-0001", request_id="req-held-0001")
+    assert body["status"] == "queued" and body["position"] == 1
+    assert body["paused"] is True and body["pause"] == {"ledger_id": clear["ledger_id"], "reason": "failed"}
 
 
 def test_exact_replay_returns_the_same_waiting_entry_and_a_mismatch_is_refused(owner):

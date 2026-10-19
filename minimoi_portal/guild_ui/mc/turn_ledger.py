@@ -335,8 +335,9 @@ class TurnLedger:
             entry = _entry(cur.fetchone())
             cur.execute("SELECT principal, ledger_id, reason, created_at FROM guild.mc_turn_barrier WHERE principal = %s",
                         (principal,))
+            barrier = _barrier(cur.fetchone())          # read before _position runs its own query on this cursor
             return Admission("queued", entry=entry, position=self._position(cur, principal, entry["id"]),
-                             barrier=_barrier(cur.fetchone()), released=released)
+                             barrier=barrier, released=released)
 
     def claim_queued(self, principal: str, ledger_id: int) -> Admission:
         """Claim the owner's next waiting turn, only if it is this one and nothing is running or paused."""
