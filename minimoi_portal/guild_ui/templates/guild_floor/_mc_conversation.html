@@ -3,7 +3,7 @@
 {# Shared full-page and contextual chat. Private uses its separate non-persistent
    path; attachment delivery reports the actual per-file state. #}
 {% macro note_row(n) -%}
-<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}">
+<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}"{% if n.request_id %} data-note-request="{{ n.request_id }}"{% endif %}>
   <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span><span class="msg-extra">{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</span></p>
   {%- if n.html %}
   <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
@@ -86,6 +86,8 @@
   <p class="mc-refusal" data-mc-refusal role="status" hidden></p>
   <div class="mc-dock-bottom" data-mc-dock-bottom>
   {# What blocks chat, one short line right above the composer: MC down, the cost level at act or stop, or a failed answer. #}
+  {# Waiting messages (issue #346): how many wait, a pause and its Continue. Shown only while the turn ledger is on (mc_queue.js). #}
+  <div class="mc-queue-bar" data-mc-queue-bar role="status" hidden><span data-mc-queue-text></span> <button type="button" class="btn-mini" data-mc-queue-continue hidden>Continue</button></div>
   <p class="mc-blocker" data-mc-blocker role="status"{% if not state.blockers %} hidden{% endif %}>{% for b in state.blockers %}<span data-blocker="{{ b.kind }}">{{ b.text }}</span>{% endfor %}</p>
   {% if mc_voice_on %}<details data-mc-voice-transcript hidden><summary>Voice transcript from this session · may be partial</summary><pre data-mc-voice-transcript-text></pre></details>{% endif %}
   <form class="mc-composer" data-mc-composer>
