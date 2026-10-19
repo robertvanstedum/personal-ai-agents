@@ -828,12 +828,19 @@ def mc_turn():
     refusal, found = _mc_prelude()
     if refusal is not None:
         return refusal
-    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if _queue_requested():
+        return _queue_turn(found)
     from .mc.ledger_gate import Refusal
     try:
         turn = _ledger_turn(found)           # None when the turn ledger is off: everything below is unchanged
     except Refusal as refused:
         return jsonify(refused.body), refused.status
+    return _answer_turn(found, turn)
+
+
+def _answer_turn(found, turn):
+    """/mc/turns after its guards and ledger claim (also a dispatched waiting turn, P2)."""
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     phase = "before"
     try:
         phase = "platform"
@@ -1104,12 +1111,19 @@ def mc_turn_stream():
     refusal, found = _mc_prelude()
     if refusal is not None:
         return refusal
-    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if _queue_requested():
+        return _queue_turn(found)
     from .mc.ledger_gate import Refusal
     try:
         turn = _ledger_turn(found)           # None when the turn ledger is off: everything below is unchanged
     except Refusal as refused:
         return jsonify(refused.body), refused.status
+    return _stream_turn(found, turn)
+
+
+def _stream_turn(found, turn):
+    """/mc/turns/stream after its guards and ledger claim (also a dispatched waiting turn, P2)."""
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     phase = "before"
     try:
         phase = "platform"
@@ -1266,6 +1280,145 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     return "stream", run, browser_events(run, render=render_markdown.__wrapped__)
 
 
+# ── waiting turns (issue #346 P2) ─────────────────────────────────────────────
+# A typed turn sent with ``queue: true`` is recorded as waiting (202) and sent later, strictly in
+# the owner's order, by POST /mc/turns/queue/<id>/dispatch. Each waiting entry keeps the ids it
+# was sent with: conversation, note, request id, file ids and topic items. Nothing else: the
+# note's text is read again from the store at dispatch, and every id is checked again then.
+
+def _queue_requested() -> bool:
+    body = request.get_json(silent=True)
+    return isinstance(body, dict) and body.get("queue") is True
+
+
+def _topic_refs_now():
+    return [{"topic_id": r["topic_id"], "item_id": r["item_id"], "rev": r.get("rev")}
+            for r in (getattr(g, "topic_context", None) or [])]
+
+
+def _check_bindings(conv, principal, attachment_ids):
+    """The chosen files must be in this conversation and the topic items the owner's, at the
+    revision chosen: the same check a turn makes before it is sent, with no copy made. A JSON
+    refusal, or None."""
+    from .turn_files import FilesRefused
+    try:
+        _turn_files(_conversations(), conv, principal, attachment_ids)       # no turn id: validates, stages nothing
+    except FilesRefused as exc:
+        return json_error(exc.code, exc.message, exc.status)
+    return None
+
+
+def _queue_turn(found):
+    """Record this kept note as waiting. Nothing is sent here, by any path."""
+    from . import feature_environ
+    from .mc import ledger_gate
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if not request_id:
+        return json_error("invalid", "A waiting message needs a request_id. Nothing was queued.", 422)
+    refusal = _check_bindings(conv, principal, attachment_ids)
+    if refusal is not None:
+        return refusal                          # nothing recorded
+    try:
+        body = ledger_gate.enqueue(services, feature_environ(), principal=principal, conversation_id=conv["id"],
+                                   note_request_id=note_id, request_id=request_id,
+                                   attachment_ids=attachment_ids, topic_refs=_topic_refs_now())
+    except ledger_gate.Refusal as refused:
+        return jsonify(refused.body), refused.status
+    return jsonify(body), 202
+
+
+def _queued_found(services, principal, entry):
+    """The turn as it was queued, checked again now: (refusal, None) or (None, found).
+    ledger_gate.transient says whether a refusal may pass later."""
+    conv, refusal = _conversation(entry["conversation_id"])
+    if refusal is not None:
+        return refusal, None
+    floor = _conv_floor(conv)
+    note_id = entry["note_request_id"]
+    try:
+        note = floor.get_note(note_id)
+    except FloorStoreUnavailable as exc:
+        return json_error("unavailable", MC_WORDS["notes_down"], 503,
+                          reason="not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"), None
+    if note is None:
+        return json_error("not_found", MC_WORDS["no_note"], 404), None
+    if note.get("author_kind") != "owner" or note.get("who") != principal:
+        return json_error("not_allowed", MC_WORDS["not_yours"], 403), None
+    from .turn_files import FilesRefused, clean_ids
+    from .topic_context import clean_refs
+    try:
+        attachment_ids = clean_ids(list(entry.get("attachment_ids") or []))
+        g.topic_context = clean_refs(list(entry.get("topic_refs") or []))      # the items chosen when it was queued
+    except FilesRefused as exc:
+        return json_error(exc.code, exc.message, exc.status), None
+    refusal = _check_bindings(conv, principal, attachment_ids)
+    if refusal is not None:
+        return refusal, None
+    g.mc_kept_owner_scope = (principal, conv["id"], note_id)
+    return None, (services, principal, conv, floor, note, note_id, entry["turn_request_id"], attachment_ids)
+
+
+@owner_api
+def mc_turn_queue_dispatch(ledger_id):
+    """Send the owner's next waiting turn. Only the head of the queue, only when nothing is running
+    and there is no pause. The answer is exactly /mc/turns's (``stream: false``) or
+    /mc/turns/stream's (``stream: true``). If the turn no longer checks out (its note, conversation,
+    files or topic items), it is recorded failed, which pauses: nothing later is sent until
+    Continue. If it cannot be sent right now (MC or a store unavailable), it stays first in line.
+    The same rule holds for every refusal before dispatch further on (ledger_gate.transient)."""
+    from . import feature_environ
+    from .mc import ledger_gate
+    if request.content_length is not None and request.content_length > MAX_BODY:
+        return _too_large()
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    services = cfg()["services"]
+    if not services.mc_turns:
+        state = floor_state.mc_view(services, notes_ok=True)["state"]
+        return json_error("mc_turns_off", MC_WORDS["off"], 409, mc_state=state)
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or set(body) - {"stream"} or type(body.get("stream", False)) is not bool:
+        return json_error("invalid", "Dispatch takes only {stream: true|false}. Nothing was sent.", 422)
+    principal = _principal()
+    try:
+        turn = ledger_gate.claim_queued(services, feature_environ(), principal=principal, ledger_id=ledger_id)
+    except ledger_gate.Refusal as refused:
+        return jsonify(refused.body), refused.status
+    try:
+        refusal, found = _queued_found(services, principal, turn.entry)
+    except BaseException:
+        turn.finish_not_sent()                # nothing was sent: back to the head of the queue
+        raise
+    if refusal is not None:
+        turn.finish_not_sent(_json_body(refusal))   # transient: stays first in line; otherwise failed, which pauses
+        return refusal
+    return _stream_turn(found, turn) if body.get("stream") else _answer_turn(found, turn)
+
+
+@owner_api
+def mc_turn_queue_cancel(ledger_id):
+    """Cancel a waiting turn. One that was already sent, or has ended, cannot be cancelled."""
+    from . import feature_environ
+    from .mc import ledger_gate
+    from .mc.turn_ledger import LedgerUnavailable
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    if not ledger_gate.enabled(feature_environ()):
+        return json_error("ledger_off", "The turn ledger is not switched on here.", 404)
+    try:
+        out = cfg()["services"].turn_ledger.cancel(_principal(), ledger_id)
+    except LedgerUnavailable:
+        return json_error("ledger_unavailable", "The turn ledger cannot be written right now. Nothing changed.", 503)
+    except ValueError:
+        return json_error("invalid", "Name the waiting message's ledger_id. Nothing changed.", 422)
+    if out["result"] != "cancelled":
+        return json_error("not_queued", "That message is not waiting (it was sent, or has ended). Nothing changed.",
+                          409, state=out.get("state"))
+    return jsonify(out)
+
+
 @owner_api
 def mc_turn_ledger_view():
     """The owner's turn ledger (issue #346): the running entry, any pause and recent entries.
@@ -1282,7 +1435,10 @@ def mc_turn_ledger_view():
         return json_error("ledger_unavailable", "The turn ledger cannot be read right now.", 503)
     keep = ("id", "conversation_id", "note_request_id", "state", "created_at", "updated_at", "outcome")
     entry = lambda e: {k: e.get(k) for k in keep} if e else None
+    waiting = lambda e, i: {**entry(e), "request_id": e.get("turn_request_id"), "queued_at": e.get("queued_at"),
+                            "position": i + 1}
     return jsonify(running=entry(view["running"]), pause=view["pause"],
+                   queued=[waiting(e, i) for i, e in enumerate(view.get("queued") or [])],
                    recent=[entry(e) for e in view["recent"]])
 
 
@@ -2130,6 +2286,8 @@ RULES = [
     ("/mc/turns/stream", "api_mc_turn_stream", mc_turn_stream, ["POST"]),
     ("/mc/turns/ledger", "api_mc_turn_ledger", mc_turn_ledger_view, ["GET"]),
     ("/mc/turns/continue", "api_mc_turn_continue", mc_turn_continue, ["POST"]),
+    ("/mc/turns/queue/<int:ledger_id>/dispatch", "api_mc_turn_queue_dispatch", mc_turn_queue_dispatch, ["POST"]),
+    ("/mc/turns/queue/<int:ledger_id>/cancel", "api_mc_turn_queue_cancel", mc_turn_queue_cancel, ["POST"]),
     ("/mc/turns/<turn_id>/stop", "api_mc_turn_stop", mc_turn_stop, ["POST"]),
     ("/conversations", "api_conversations", conversations_list, ["GET"]),
     ("/workshop", "api_workshop", workshop_view_api, ["GET"]),
