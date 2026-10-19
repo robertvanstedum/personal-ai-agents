@@ -1,0 +1,1 @@
+{"id":"mc-proving-tools","name":"MC proving tools","activation":{"onStartup":true},"contracts":{"tools":["mc_repo_read","mc_repo_diff","mc_run_tests"]},"configSchema":{"type":"object","additionalProperties":false,"properties":{}}}
