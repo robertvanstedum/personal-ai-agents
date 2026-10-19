@@ -1672,6 +1672,14 @@ def _start_cos():
     except Exception as e:
         print(f"   ⚠️  Backend init failed: {e} — chat will fail")
 
+    # Isolated dev proving uses the real chat route without periodic work.
+    from domains.cos.runtime_policy import background_jobs_enabled
+    if not background_jobs_enabled(os.environ):
+        with _state_lock:
+            _state["state"] = "running"
+        print("   Background work: disabled for isolated dev chat\n")
+        return
+
     # 3. Start Telegram polling thread (skipped when cos-bot container handles polling)
     if os.environ.get("DISABLE_TELEGRAM_POLL"):
         print("   Telegram poll: disabled (DISABLE_TELEGRAM_POLL set — cos-bot handles polling)")
