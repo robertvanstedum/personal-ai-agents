@@ -10,12 +10,17 @@ time-window attribution can't prove exclusive gateway use.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 import math
+from pathlib import Path
 import re
 
 CONTRACT = 2
 MC_AUTHOR = "master_craftsman"          # stores.MASTER_CRAFTSMAN: author of MC-proposed Board outcomes
 TEST_PRINCIPAL = re.compile(r"mc-proving-[a-z0-9-]+")   # the proving driver's isolated test identities only
+# The portal's model backends (minimoi_portal/guild_ui/mc: cos, openclaw, grok). A stub answer is not
+# MC's, and anything absent or unknown is an error, never an MC turn.
+MC_BACKEND_KINDS = frozenset({"cos", "openclaw", "grok"})
 CLOCK_SLACK = timedelta(minutes=10)     # stores stamp after the reply returns; deliveries come later
 # The operator runs this against the dev database with the run's post-it ids and passes the rows in.
 POSTIT_QUERY = ("SELECT id, text, author, author_kind, created_at, binned_at FROM guild.floor_postits "
@@ -39,6 +44,32 @@ def _iso(value):
 
 def _window(start, end):
     return _ts(start), _ts(end) + CLOCK_SLACK
+
+
+def exchanges_from_journal(journal_dir):
+    """Exchanges from the proving driver's journal, in send order.
+
+    The driver writes ``<key>-intent.json`` for the owner note and ``<key>-turn-intent.json`` before
+    each MC turn, then ``<key>-turn-response.json`` or ``<key>-turn-failure.json``. A turn with no
+    response is unresolved: it becomes an exchange with no response (an error), never a success."""
+    d, out = Path(journal_dir), []
+    for intent in sorted(d.glob("*-turn-intent.json")):
+        key = intent.name[: -len("-turn-intent.json")]
+        turn = json.loads(intent.read_text())
+        payload = json.loads((d / f"{key}-intent.json").read_text())["payload"]
+        status, body, answered = None, None, None
+        for suffix in ("response", "failure"):
+            path = d / f"{key}-turn-{suffix}.json"
+            if path.exists():
+                record = json.loads(path.read_text())
+                status, answered = record.get("status"), record.get("at_utc")
+                body = record.get("body") if isinstance(record.get("body"), dict) else {
+                    "error": record.get("error_class") or "uncertain"}
+                break
+        out.append({"owner_text": payload["text"], "conversation_id": payload["conversation_id"],
+                    "note_id": payload["idempotency_key"], "sent_utc": turn["at_utc"], "answered_utc": answered,
+                    "status_code": status, "response": body})
+    return sorted(out, key=lambda e: _ts(e["sent_utc"]))
 
 
 def turns_from_exchanges(exchanges, principal):
@@ -68,6 +99,10 @@ def turns_from_exchanges(exchanges, principal):
                 op["expected_author"] = principal
             turns.append({"role": "platform", "backend_kind": "platform", "conversation_id": conv, "text": text,
                           "operation": op, "at_utc": _iso(ex["answered_utc"])})
+        elif resp.get("backend_kind") not in MC_BACKEND_KINDS:
+            errors.append(f"{ex.get('note_id')}: answered by backend {resp.get('backend_kind')!r}, not an MC backend")
+            turns.append({"role": "platform", "backend_kind": "unrecognized_backend", "conversation_id": conv,
+                          "text": "", "operation": None, "at_utc": _iso(ex["answered_utc"])})
         else:
             outcome = resp.get("board_outcome") or {}
             op = ({"type": "board_postit", "saved": True, "id": outcome.get("postit_id"), "via": "board_outcome",
