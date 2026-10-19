@@ -164,6 +164,14 @@ def test_stop_while_the_provider_connection_is_pending_closes_everything(browser
     ctx.close()
 
 
+def _go_private(page):
+    """Private sits in the conversation options menu (4a7e4cfc). Open it the way the owner does, then press the lock.
+    The lock and everything it guards are unchanged; only the route to it is the real one."""
+    if not page.locator("[data-mc-options]").evaluate("el => el.open"):
+        page.click("[data-mc-options] summary")
+    page.click("[data-mc-record]")
+
+
 def test_going_private_during_a_pending_start_cancels_it_too(browser, server, floor, monkeypatch):
     ctx, page, errors, caps, boot, calls = _setup(browser, server, monkeypatch, hold_boot=True)
     page.click("[data-mc-voice-btn]")
@@ -171,7 +179,7 @@ def test_going_private_during_a_pending_start_cancels_it_too(browser, server, fl
         if boot.count:
             break
         page.wait_for_timeout(50)
-    page.click("[data-mc-record]")                                    # Private
+    _go_private(page)                                                 # Private
     boot.release(json=CRED)
     page.wait_for_timeout(600)
     assert _mic(page)["gum"] == 0
