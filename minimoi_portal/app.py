@@ -3011,7 +3011,12 @@ _vault_bridge.install_if_dev(app, base_url=_cfg.BASE_URL, environ=os.environ)
 
 @app.route("/health")
 def health():
-    return {"status": "ok", "service": "portal"}
+    from minimoi_portal.proving_marker import marker
+    result = {"status": "ok", "service": "portal"}
+    proving = marker(_cfg.BASE_URL, os.environ)
+    if proving is not None:
+        result["proving"] = proving
+    return result
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
