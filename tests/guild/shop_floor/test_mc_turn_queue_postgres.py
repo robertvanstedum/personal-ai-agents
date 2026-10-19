@@ -81,7 +81,7 @@ def states(owner):
 def test_waiting_turns_are_recorded_in_order_and_nothing_is_claimed(owner):
     led = ledger()
     a = enqueue(led, owner, attachment_ids=["d-0123456789abcdef"],
-                topic_refs=[{"topic_id": "t-0123456789abcdef", "item_id": "i-0123456789abcdef", "rev": None}])
+                topic_refs=[{"topic_id": "t-0123456789ab", "item_id": "i-0123456789ab", "rev": None}])
     b = enqueue(led, owner, conv="c-2")
     assert (a.result, a.position, b.result, b.position) == ("queued", 1, "queued", 2)
     assert a.claim is None and a.entry["queued_at"] and a.entry["claim_generation"] == 0
