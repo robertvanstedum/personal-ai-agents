@@ -24,3 +24,13 @@ def test_missing_or_oversize_policy_does_not_log_content(tmp_path,monkeypatch):
     assert guard.policy_evidence([])=={'policy_expected':False}
     p.write_text('secret'*10000)
     assert guard.policy_evidence([])=={'policy_expected':False}
+
+
+def test_whitespace_normalization_and_active_prefix_are_distinct(tmp_path,monkeypatch):
+    policy=guard.POLICY_MARKER+'\nAnswer briefly.\n---\nHandbook text.'
+    p=tmp_path/'policy';p.write_text(policy);monkeypatch.setattr(guard,'POLICY_FILE',p)
+    e=guard.policy_evidence([{'role':'system','content':policy.replace('\n','\r\n')}])
+    assert not e['policy_in_system'] and e['policy_normalized_in_system']
+    assert e['policy_prefix_normalized_in_system']
+    e=guard.policy_evidence([{'role':'system','content':policy.split('\n---\n')[0]+'\n[truncated]'}])
+    assert e['policy_prefix_in_system'] and not e['policy_normalized_in_system']

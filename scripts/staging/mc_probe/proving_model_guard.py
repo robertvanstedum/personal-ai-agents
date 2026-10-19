@@ -33,7 +33,12 @@ def policy_evidence(messages):
             return '\n'.join(x['text'] for x in value if isinstance(x,dict) and isinstance(x.get('text'),str))
         return ''
     system='\n'.join(content(m) for m in messages if isinstance(m,dict) and m.get('role') in ('system','developer'))
-    return {'policy_expected':True,'policy_sha256':hashlib.sha256(expected.encode()).hexdigest(),
+    normalized=' '.join(system.split())
+    prefix=expected.split('\n---\n',1)[0].strip()
+    return {'policy_expected':True,'expected_policy_sha256':hashlib.sha256(expected.encode()).hexdigest(),
+            'policy_normalized_in_system':' '.join(expected.split()) in normalized,
+            'policy_prefix_in_system':prefix in system,
+            'policy_prefix_normalized_in_system':' '.join(prefix.split()) in normalized,
             'policy_in_system':expected.strip() in system,
             'policy_marker_in_system':POLICY_MARKER in system}
 
@@ -95,8 +100,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             completion_limit=body.pop('max_completion_tokens',1024)
             body['max_tokens']=min(int(body.get('max_tokens',1024)),int(completion_limit),1024)
             if body['max_tokens']<1:raise ValueError('invalid_token_limit')
+            evidence=policy_evidence(body['messages'])
             admitted_call=admit()
-            print(json.dumps({"event":"admitted","body_bytes":n,"daily_call":admitted_call,**policy_evidence(body["messages"])}),flush=True)
+            print(json.dumps({"event":"admitted","body_bytes":n,"daily_call":admitted_call,**evidence}),flush=True)
         except (ValueError,TypeError,sqlite3.Error) as exc:
             known={'request_size','fixed_model_required','unsupported_parameter','messages_required','invalid_token_limit','operator_has_not_armed_run','run_time_limit','daily_call_limit'}
             print(json.dumps({'event':'refused','reason':str(exc) if str(exc) in known else type(exc).__name__}),flush=True)
