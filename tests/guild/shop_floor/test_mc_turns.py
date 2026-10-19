@@ -279,9 +279,9 @@ def test_the_page_tells_the_front_end_whether_turns_are_on(turned):
     assert "holder.replaceWith(failureLine(" in js and "waiting.stopTicking()" in js
     assert 'id="tpl-mc-waiting"' in page and "Waiting for a response…" in page
     assert 'data-slot="elapsed" aria-hidden="true"' in page                 # seconds are never read out
-    # The note is shown first; keep submission locked until the turn finishes.
-    assert js.index("appendNote(body.note)") < js.index("askMasterCraftsman(body.note, files)")
-    assert "await askMasterCraftsman(body.note, files)" in js
+    # The note is shown before immediate dispatch; queued turns use their own captured context.
+    assert js.index("appendNote(body.note)") < js.index("askMasterCraftsman(body.note, files, undefined, ctx, target)")
+    assert "await askMasterCraftsman(body.note, files, undefined, ctx, target)" in js
 
 
 # ── The turn trace: "Done in Ns" under a live reply, file first ─────────────
