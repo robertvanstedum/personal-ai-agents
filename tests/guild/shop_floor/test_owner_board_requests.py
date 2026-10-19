@@ -173,3 +173,69 @@ def test_same_turn_retry_with_different_words_is_refused():
 def test_scrubbed_payment_data_never_reaches_the_board():
     out, board = run('put "card 4242 4242 4242 4242" on the board')
     assert out["operation"]["saved"] and "4242" not in next(iter(board.rows.values()))["text"]
+
+
+# ── a quotation is one payload: its sentences and lines are the owner's words ─
+
+@pytest.mark.parametrize("text,payload", [
+    ('put "Call Anna. Buy milk" on the board', "Call Anna. Buy milk"),
+    ('put "Call Anna\nBuy milk" on the board', "Call Anna\nBuy milk"),
+    ('put "- Call Anna\n- Buy milk\n- Book flights" on the board', "- Call Anna\n- Buy milk\n- Book flights"),
+    ('put "Today:\n    - Call Anna\n    - Buy milk" on the board', "Today:\n    - Call Anna\n    - Buy milk"),
+    ('Could you please write "Call Anna! Buy milk?" on a post-it?', "Call Anna! Buy milk?"),
+    ('make a post-it: "Call Anna.\nBuy milk."', "Call Anna.\nBuy milk."),
+    ("put ‘Robert’s plan. Then lunch’ on the board", "Robert’s plan. Then lunch"),
+])
+def test_quoted_sentences_and_bullets_stay_one_note(text, payload):
+    assert parse(text) == payload
+
+
+def test_quoted_bullets_save_exactly_once():
+    text = 'put "- Call Anna\n- Buy milk" on the board'
+    first, board = run(text)
+    again, _ = run(text, board=board)
+    assert first["operation"]["saved"] and again["operation"]["repeated"] and len(board.rows) == 1
+    assert next(iter(board.rows.values()))["text"] == "- Call Anna\n- Buy milk"
+
+
+# ── sentence punctuation after the closing quotation mark ─────────────────────
+
+@pytest.mark.parametrize("text", [
+    'make a post-it: "buy milk".',
+    'make a post-it: "buy milk"!',
+    "make a post-it: 'buy milk'.",
+    "make a post-it: “buy milk”.",
+    'Please make a post-it: "buy milk"...',
+])
+def test_punctuation_after_the_closing_quote_is_not_saved(text):
+    assert parse(text) == "buy milk"
+
+
+# ── quotation marks that frame the command, or several, still never write ────
+
+@pytest.mark.parametrize("text", [
+    '"put Call Anna. Buy milk on the board"',
+    '"Put buy milk on the board." That is what I wrote yesterday.',
+    'He said: "Call Anna. Put buy milk on the board."',
+    'The note says "put buy milk\non the board"',
+    'Don\'t put "Call Anna. Buy milk" on the board.',
+    'If it helps, put "Call Anna\nBuy milk" on the board.',
+    '> put "buy milk" on the board',
+])
+def test_quoted_or_framed_commands_never_write(text):
+    assert parse(text) is None
+    out, board = run(text)
+    assert out is None and not board.rows
+
+
+def test_two_quoted_requests_on_separate_lines_still_ask():
+    out, board = run('put "Call Anna" on the board\nput "Buy milk" on the board')
+    assert out["operation"]["saved"] is False and out["operation"]["reason"] == "needs_text" and not board.rows
+
+
+@pytest.mark.parametrize("text,payload", [
+    ('put "unclosed note on the board', ""),                  # opening mark with no close: ask
+    ('put "v2" plan notes on the board', '"v2" plan notes'),  # partly quoted words stay literal
+])
+def test_unclosed_or_partial_quotes(text, payload):
+    assert parse(text) == payload

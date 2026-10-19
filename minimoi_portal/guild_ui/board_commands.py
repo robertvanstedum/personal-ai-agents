@@ -21,13 +21,18 @@ _GERMAN = re.compile(r"(?:bitte\s+)?(?:erstelle|schreibe|mach|mache)\s+(?:mir\s+
 
 # One explicit text-first directive may sit among conversational questions.
 # Extract only its stated literal payload, never a previous message/referent.
-_TEXT_FIRST = re.compile(_PREFIX + r"(?:write|put|pin|add)\s+(?P<text>.+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:post[- ]?it(?:\s+note)?|board)\b" + _TAIL, re.I)
+_TEXT_FIRST = re.compile(_PREFIX + r"(?:write|put|pin|add)\s+(?P<text>.+?)\s+(?:on|onto|to)\s+(?:a\s+|the\s+|my\s+)?(?:post[- ]?it(?:\s+note)?|board)\b" + _TAIL, re.I | re.S)
 _OUTSIDE_REFUSAL = re.compile(r"\b(?:not|do\s+not|don['’]t|never|cancel|revoke|no\s+need|not\s+now|if|unless|whether|maybe|perhaps|example|hypothetical|suppose|imagine|yesterday|previously|said|says|asked|told|wrote|reported|quoted|document|transcript|translate|summari[sz]e|analy[sz]e)\b", re.I)
 # Code, block quotes and indented blocks are material to read, never a request.
 _CODE_OR_BLOCK = re.compile(r'`|(?m:^[ \t]*(?:>|\t)|^ {4})')
 # A quotation mark, but not an apostrophe inside or at the end of a word (don't, James').
 _QUOTE = re.compile(r'["“”‘]|(?<!\w)[\'’]|[\'’](?![\w\s.,!?;:]|$)')
 _QUOTE_PAIRS = {'"': '"', '“': '”', "'": "'", '‘': '’', '’': '’'}
+# A balanced quotation: its inside is the owner's words, so sentence ends, line breaks, code
+# marks and indentation inside it are content, never request structure.
+# A single quotation mark followed by a letter is an apostrophe (Robert’s, don't), not its end.
+_QUOTED_SPAN = re.compile(r'"[^"]*"|“[^”]*”|‘(?:[^’]|’(?=\w))*’(?!\w)|(?<!\w)\'(?:[^\']|\'(?=\w))*\'(?!\w)', re.S)
+_WRAPPED = re.compile(r'(["“‘’\'])(.*)(["”’\'])\s*[.!?]*', re.S)
 
 # A payload that only points at something ("this", "your last answer", "the summary above")
 # or names a generic thing ("a reminder") is not the note's text. Ask for the words instead
@@ -44,17 +49,49 @@ _REFERENT = re.compile(r"""(?:
 _GENERIC = re.compile(r"(?:(?:a|an|another|some|one|new|a\s+new)\s+)?(?:reminder|note|post[- ]?it|task|to-?do|item|card|entry|message|thing)s?|something|anything", re.I)
 
 
+def _mask_quotes(text):
+    """``text`` with the inside of each balanced quotation blanked out, at the same length."""
+    chars = list(text)
+    for span in _QUOTED_SPAN.finditer(text):
+        chars[span.start() + 1:span.end() - 1] = 'x' * (span.end() - span.start() - 2)
+    return ''.join(chars)
+
+
+def _clauses(text):
+    """Sentences and lines of a message, never split inside a quotation."""
+    masked, parts, start = _mask_quotes(text), [], 0
+    for sep in re.finditer(r'(?<=[.!?])\s+|[\r\n]+', masked):
+        parts.append(text[start:sep.start()])
+        start = sep.end()
+    parts.append(text[start:])
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _unquote(text):
+    """(words, True) when one quotation wraps the whole payload (sentence punctuation may follow
+    the closing mark); otherwise (text, False)."""
+    wrapped = _WRAPPED.fullmatch(text)
+    if not wrapped or _QUOTE_PAIRS.get(wrapped[1]) != wrapped[3] or not wrapped[2].strip():
+        return text, False
+    inner = wrapped[2]
+    if wrapped[1] in "'‘’" and re.search(r"(?<!\w)['’]|['’](?!\w)", inner):
+        return text, False          # 'a' and 'b': two quotations, not one
+    if wrapped[1] not in "'‘’" and (wrapped[3] in inner or wrapped[1] in inner):
+        return text, False          # "a" and "b"
+    return inner.strip(), True
+
+
 def _payload(match):
-    """The stated words of one command clause, or None when quotation marks frame the command
-    itself (reported or quoted speech is data). Quotes around the payload are removed."""
+    """(words, quoted) for one command clause, or None when quotation marks frame the command
+    itself (reported or quoted speech is data). Quotes around the payload are removed; an
+    opening quotation mark with no closing mark anywhere asks for the words."""
     start, end = match.span('text')
     if _QUOTE.search(match.string[:start] + match.string[end:]):
         return None
-    text = match.group('text').strip()
-    close = _QUOTE_PAIRS.get(text[:1])
-    if close and len(text) > 2 and text.endswith(close):
-        return text[1:-1].strip()
-    return text
+    words, quoted = _unquote(match.group('text').strip())
+    if not quoted and words[:1] in ('"', '“', '‘') and _QUOTE_PAIRS[words[0]] not in words[1:]:
+        return '', True
+    return words, quoted
 
 
 def _literal(payload):
@@ -67,21 +104,16 @@ def _literal(payload):
     return payload
 
 
-def _quoted(match):
-    text = match.group('text').strip()
-    return bool(text) and _QUOTE_PAIRS.get(text[:1]) is not None and len(text) > 2 and text.endswith(_QUOTE_PAIRS[text[:1]])
-
-
 def _text_first_request(text):
     # Code or block-quoted material, and negative or reported framing, is DATA, not authorization.
-    if _CODE_OR_BLOCK.search(text):return None
-    clauses=[value.strip()for value in re.split(r'(?<=[.!?])\s+|[\r\n]+',text)if value.strip()]
+    if _CODE_OR_BLOCK.search(_mask_quotes(text)):return None
+    clauses=_clauses(text)
     payloads=[];outside=[];literal=[]
     for clause in clauses:
         match=_TEXT_FIRST.fullmatch(clause)or _COMMAND.fullmatch(clause)or _GERMAN.fullmatch(clause)
-        payload=_payload(match)if match else None
-        if payload is None:outside.append(clause)
-        else:payloads.append(payload);literal.append(_quoted(match))
+        found=_payload(match)if match else None
+        if found is None:outside.append(clause)
+        else:payloads.append(found[0]);literal.append(found[1])
     if not any(_TEXT_FIRST.fullmatch(clause)and _payload(_TEXT_FIRST.fullmatch(clause))is not None for clause in clauses):return None
     if _OUTSIDE_REFUSAL.search(' '.join(outside)):return None
     # Two differing explicit requests cannot be collapsed to an inferred one.
@@ -115,12 +147,12 @@ def parse(text):
         return ''  # no guessed referent: ask for the actual note text
     match = _COMMAND.fullmatch(stripped) or _GERMAN.fullmatch(stripped)
     if match:
-        if _CODE_OR_BLOCK.search(text):
+        if _CODE_OR_BLOCK.search(_mask_quotes(text)):
             return None
-        payload = _payload(match)
-        if payload is None:
+        found = _payload(match)
+        if found is None:
             return None
-        return payload if _quoted(match) else _literal(payload)
+        return found[0] if found[1] else _literal(found[0])
     return _text_first_request(text)
 
 
