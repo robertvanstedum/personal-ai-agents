@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from core.github_awareness import Admission, due, initialize, sync_admitted, health, rebind, PublicClient, REPO
 
-ROOT = '/app/runtime/guild/github-awareness'
+ROOT = '/app/runtime/mc-observations/github-awareness'
 JOB_ID = 'mc-github-awareness'
 INTERVAL_S = 300
 

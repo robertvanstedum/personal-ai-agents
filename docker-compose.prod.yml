@@ -245,6 +245,8 @@ services:
       # /app/data/guild, so the image's data/guild/experiment_projection.json
       # stays visible (C17). cos-bot and cos-scheduler never read the queue.
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild:/app/runtime/guild
+      # Regenerable public observations; operator provisions this private parent.
+      - mc-observations:/app/runtime/mc-observations
       - ${MINIMOI_ROOT:-/opt/minimoi}/docs/design:/app/docs/design
       - ${MINIMOI_ROOT:-/opt/minimoi}/docs/specs:/app/docs/specs
       - ${MINIMOI_ROOT:-/opt/minimoi}/auth/users.json:/app/minimoi_portal/auth/users.json
@@ -400,6 +402,7 @@ services:
       retries: 3
 
 volumes:
+  mc-observations:
   postgres-data:
   cos-agent-a-state:
   cos-agent-a-auth:
