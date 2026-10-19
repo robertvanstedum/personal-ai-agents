@@ -814,7 +814,7 @@ async function sendNote(input, send) {
     return;
   }
   if (checkLength(input)) return;
-  if (live.off && document.body.dataset.mcPrivate === 'false') { refuse(`Private is not available with the ${mcName()}: it keeps its own record. Nothing was sent. Your draft is kept.`); return; }
+  if (live.off && document.body.dataset.mcPrivate === 'false') { refuse(`${privateOffWhy()}. Nothing was sent. Your draft is kept.`); return; }
   if (live.off) {       // Private: sent, answered, never kept
     if (document.body.dataset.mcTurns !== 'true') { refuse(mcSay('Master Craftsman is not switched on here, so nothing was sent. Your draft is kept.')); return; }
     await askPrivate(text, input);
@@ -885,6 +885,13 @@ export function refuse(text) {
   announce(text);
 }
 
+// Why Private cannot be chosen here: the server's own reason (the partner keeps its own record, or every message is
+// recorded before it is sent), never a guess made on the page.
+function privateOffWhy() {
+  const btn = $('[data-mc-record]');
+  return (btn && btn.dataset.privateOffWhy) || `Private is not available with the ${mcName()}: it keeps its own record`;
+}
+
 function renderRecord() {
   const draftBox = $('[data-mc-input]');
   $('[data-mc-send]').disabled = sendingNote && !live.off;
@@ -892,7 +899,7 @@ function renderRecord() {
   btn.setAttribute('aria-pressed', String(live.off));
   if (document.body.dataset.mcPrivate === 'false' || btn.hasAttribute('data-private-off')) {
     btn.setAttribute('aria-label', 'Private is not available');
-    btn.title = `Private is not available with the ${mcName()}: it keeps its own record`;
+    btn.title = privateOffWhy();
   } else {
     btn.setAttribute('aria-label', live.off ? 'Exit Private' : 'Go Private');
     btn.title = live.off ? 'Exit Private: go back on the record' : mcSay('Go Private: Master Craftsman answers, MiniMoi keeps nothing');
@@ -993,7 +1000,7 @@ export function initConversation(p) {
       addPlatform('Guild platform', 'On the record in this tab');
     });
   }
-  $('[data-mc-record]').addEventListener('click', () => {
+  const toggleRecord = () => {
     const wasOff = live.off;
     setOff(!live.off);
     if (wasOff) {
@@ -1001,7 +1008,8 @@ export function initConversation(p) {
       for (const n of $$('[data-off-record-line]')) n.remove();
       addPlatform('Guild platform', 'Back on the record · nothing from the off-the-record stretch was kept');
     }
-  });
+  };
+  $('[data-mc-record]').addEventListener('click', toggleRecord);
   // Private: a compact chip with the explanation on demand and an easy exit.
   const why = $('[data-private-why]');
   const box = $('[data-private-explain]');
@@ -1012,7 +1020,9 @@ export function initConversation(p) {
     });
   }
   const exit = $('[data-private-exit]');
-  if (exit) exit.addEventListener('click', () => $('[data-mc-record]').click());
+  // Exit always works, even where the lock cannot be chosen (a tab still in Private when Private became unavailable):
+  // it only ever goes back on the record, by the owner's own click, never by itself.
+  if (exit) exit.addEventListener('click', () => { if (live.off) toggleRecord(); });
   wireOptionsMenu($('[data-mc-options]'), document);
   const typeBtn = $('[data-mc-type]');
   if (typeBtn) typeBtn.addEventListener('click', () => {
