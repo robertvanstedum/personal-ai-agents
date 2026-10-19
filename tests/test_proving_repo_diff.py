@@ -135,14 +135,19 @@ def test_large_added_file_diff_is_bounded(repo):
     assert out["truncated"] is True and len(out["diff"].encode()) <= 64000 and out["status"] == "added"
 
 
-# ── the real commit that exposed the gap, and the fixture wrapper ─────────────
+# ── the nested-test-file regression and the fixture wrapper ─────────────
 
-def test_x4_commit_added_test_file_now_diffs():
-    parent = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "cdc34c75^"], capture_output=True, text=True,
-                            check=True).stdout.strip()
-    tools = RepositoryTools(ROOT, {"c": "cdc34c75", "c-parent": parent})
-    out = tools.diff("c-parent", "c", "tests/guild/shop_floor/test_owner_board_multisentence.py")
+def test_added_nested_test_file_diffs_without_historical_checkout(repo):
+    parent = commit(repo, "before parser test")
+    path = "tests/guild/shop_floor/test_owner_board_multisentence.py"
+    target = repo / path
+    target.parent.mkdir(parents=True)
+    target.write_text("def test_polite_board_request():\n    assert True\n")
+    head = commit(repo, "add parser test")
+    tools = RepositoryTools(repo, {"c": head, "c-parent": parent})
+    out = tools.diff("c-parent", "c", path)
     assert out["status"] == "added" and out["before_sha256"] is None and out["diff"].startswith("--- /dev/null")
+    assert "+def test_polite_board_request():" in out["diff"]
 
 
 def test_fixture_wrapper_still_refuses_fixture_diffs_and_delegates_others(repo, tmp_path):

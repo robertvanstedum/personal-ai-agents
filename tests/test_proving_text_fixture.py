@@ -1,9 +1,10 @@
 """Frozen text fixtures for mc_repo_read (scripts/staging/mc_probe/proving_text_fixture.py). Synthetic
-text only; no exam material. Git reads use the real RepositoryTools at a commit in this repository."""
+text only; no exam material. Git reads use real RepositoryTools against a synthetic local Git commit."""
 import hashlib
 import os
 from pathlib import Path
 import sys
+import subprocess
 
 import pytest
 
@@ -12,7 +13,6 @@ sys.path.insert(0, str(ROOT / "scripts/staging/mc_probe"))
 from proving_text_fixture import MAX_BYTES, FixtureTools  # noqa: E402
 from proving_tools import RepositoryTools, ToolRefused  # noqa: E402
 
-BASELINE = "b884af11"
 TEXT = "# Frozen plan (synthetic)\n\nStep one.\nStep two.\nÜnïcödé line.\n"
 
 
@@ -21,8 +21,19 @@ def sha(raw):
 
 
 @pytest.fixture(scope="module")
-def repo():
-    return RepositoryTools(ROOT, {"baseline": BASELINE})
+def repo(tmp_path_factory):
+    source = tmp_path_factory.mktemp("fixture-git")
+    path = source / "minimoi_portal/guild_ui/board_commands.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("def parse(text):\n    return None\n")
+    def git(*args):
+        return subprocess.run(["git", "-C", str(source), "-c", "user.name=t", "-c",
+                               "user.email=t@example.invalid", "-c", "commit.gpgsign=false", *args],
+                              check=True, capture_output=True, text=True).stdout.strip()
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "synthetic baseline")
+    return RepositoryTools(source, {"baseline": git("rev-parse", "HEAD")})
 
 
 @pytest.fixture

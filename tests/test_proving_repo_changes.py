@@ -1,5 +1,5 @@
 """mc_repo_changes (RepositoryTools.changes): a pinned commit's subject, parents and changed paths with
-status, nothing else. Real Git: commits in this repository, plus throwaway repositories built here."""
+status, nothing else. Real Git in small throwaway repositories; no checkout history required."""
 import json
 from pathlib import Path
 import re
@@ -13,8 +13,6 @@ sys.path.insert(0, str(ROOT / "scripts/staging/mc_probe"))
 from proving_text_fixture import FixtureTools  # noqa: E402
 from proving_tool_queue import serve  # noqa: E402
 from proving_tools import MAX_CHANGES, MAX_SUBJECT, RepositoryTools, ToolRefused  # noqa: E402
-
-COMMIT, PARENT = "17899de1fe7b5d38d1975a749f502044e9d71798", "87941f68ec3910766b2714ae6a534e42622b86d6"
 
 
 def git(repo, *args):
@@ -42,32 +40,49 @@ def write(repo, path, text="x = 1\n"):
     f.write_text(text)
 
 
-# ── a real commit in this repository ──────────────────────────────────────────
+@pytest.fixture
+def pinned_change(repo):
+    write(repo, "core/github_awareness.py", "RUNS_PAGE = 100\n")
+    write(repo, "tests/test_github_awareness_followups.py", "def test_page(): assert 100\n")
+    parent = commit(repo, "baseline")
+    write(repo, "core/github_awareness.py", "RUNS_PAGE = 25\n")
+    write(repo, "tests/test_github_awareness_followups.py", "def test_page(): assert 25\n")
+    head = commit(repo, "Bound workflow-run polling pages to fit response limit")
+    return repo, head, parent
 
-def test_lists_the_exact_changes_of_a_pinned_commit():
-    out = RepositoryTools(ROOT, {"x3": "17899de1"}).changes("x3")
-    assert out == {"revision": COMMIT, "subject": "Bound workflow-run polling pages to fit response limit",
-                   "parents": [{"commit": PARENT, "labels": []}], "compared_with": PARENT, "total_files": 2,
+
+# ── a pinned real Git commit ──────────────────────────────────────────
+
+def test_lists_the_exact_changes_of_a_pinned_commit(pinned_change):
+    source, head, parent = pinned_change
+    out = RepositoryTools(source, {"x3": head[:8]}).changes("x3")
+    assert out == {"revision": head, "subject": "Bound workflow-run polling pages to fit response limit",
+                   "parents": [{"commit": parent, "labels": []}], "compared_with": parent, "total_files": 2,
                    "files": [{"status": "modified", "path": "core/github_awareness.py", "path_allowlisted": True},
                              {"status": "modified", "path": "tests/test_github_awareness_followups.py", "path_allowlisted": True}],
                    "truncated": False}
 
 
-def test_parent_labels_tell_mc_which_diff_it_may_ask_for():
-    tools = RepositoryTools(ROOT, {"x3": "17899de1", "x3-parent": PARENT[:8]})
-    assert tools.changes("x3")["parents"] == [{"commit": PARENT, "labels": ["x3-parent"]}]
+def test_parent_labels_tell_mc_which_diff_it_may_ask_for(pinned_change):
+    source, head, parent = pinned_change
+    tools = RepositoryTools(source, {"x3": head[:8], "x3-parent": parent[:8]})
+    assert tools.changes("x3")["parents"] == [{"commit": parent, "labels": ["x3-parent"]}]
+    with pytest.raises(ToolRefused, match="revision_not_allowlisted"):
+        tools.changes(head)  # Even the pinned hash is not a caller-facing label.
     # ...and that diff works with exactly those labels.
     assert tools.diff("x3-parent", "x3", "tests/test_github_awareness_followups.py")["diff"]
 
 
 @pytest.mark.parametrize("revision", ["17899de1", "17899de1^", "HEAD", "main", "--all", "x3 ", None, 7, ["x3"]])
-def test_only_allowlisted_labels(revision):
+def test_only_allowlisted_labels(revision, pinned_change):
+    source, head, parent = pinned_change
     with pytest.raises(ToolRefused, match="revision_not_allowlisted"):
-        RepositoryTools(ROOT, {"x3": "17899de1"}).changes(revision)
+        RepositoryTools(source, {"x3": head[:8]}).changes(revision)
 
 
-def test_no_file_contents_in_the_answer():
-    out = json.dumps(RepositoryTools(ROOT, {"x3": "17899de1"}).changes("x3"))
+def test_no_file_contents_in_the_answer(pinned_change):
+    source, head, parent = pinned_change
+    out = json.dumps(RepositoryTools(source, {"x3": head[:8]}).changes("x3"))
     assert "RUNS_PAGE" not in out and "per_page" not in out and "def " not in out
 
 
@@ -155,31 +170,34 @@ def test_newline_in_a_path_is_kept_exact_and_not_allowlisted(repo):
                                         ("minimoi_portal/auth/users.json", "private_or_generated_path"),
                                         (".git/config", "path_not_allowlisted"), ("core/x;echo.py", "invalid_path"),
                                         ("core/image.png", "source_text_only"), (None, "invalid_path")])
-def test_read_refusals_unchanged(path, error):
+def test_read_refusals_unchanged(path, error, pinned_change):
+    source, head, parent = pinned_change
     with pytest.raises(ToolRefused, match=f"^{error}$"):
-        RepositoryTools(ROOT, {"baseline": "b884af11"}).read_file("baseline", path)
+        RepositoryTools(source, {"baseline": parent[:8]}).read_file("baseline", path)
 
 
 # ── through the queue, the fixture wrapper and the plugin ─────────────────────
 
-def test_through_the_real_queue(tmp_path):
+def test_through_the_real_queue(tmp_path, pinned_change):
+    source, head, parent = pinned_change
     q = tmp_path / "q"
     q.mkdir()
     ids = ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002"]
     (q / f"{ids[0]}.request").write_text(json.dumps({"id": ids[0], "method": "mc_repo_changes", "args": {"revision": "x3"}}))
     (q / f"{ids[1]}.request").write_text(json.dumps({"id": ids[1], "method": "mc_repo_changes",
                                                      "args": {"revision": "x3", "path": "core"}}))
-    serve(RepositoryTools(ROOT, {"x3": "17899de1"}), q, max_requests=2, max_seconds=3)
+    serve(RepositoryTools(source, {"x3": head[:8]}), q, max_requests=2, max_seconds=3)
     first, second = (json.loads((q / f"{i}.response").read_text()) for i in ids)
     assert first["ok"] and first["result"]["total_files"] == 2
     assert second == {"ok": False, "error": "invalid_arguments"}
 
 
-def test_fixture_wrapper_delegates_and_refuses_fixture_labels(tmp_path):
+def test_fixture_wrapper_delegates_and_refuses_fixture_labels(tmp_path, pinned_change):
+    source, head, parent = pinned_change
     import hashlib
     doc = tmp_path / "plan.md"
     doc.write_text("plan\n")
-    tools = FixtureTools(RepositoryTools(ROOT, {"x3": "17899de1"}),
+    tools = FixtureTools(RepositoryTools(source, {"x3": head[:8]}),
                          {"exam-x1": {"plan.md": {"file": str(doc), "sha256": hashlib.sha256(doc.read_bytes()).hexdigest()}}})
     assert tools.changes("x3")["total_files"] == 2
     with pytest.raises(ToolRefused, match="fixture_has_no_changes"):
