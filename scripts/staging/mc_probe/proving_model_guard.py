@@ -66,14 +66,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(n))
             if not isinstance(body,dict) or body.get('model')!=MODEL:raise ValueError('fixed_model_required')
             # Upstream destinations, API keys and background work cannot be selected by the caller.
-            allowed={'model','messages','tools','tool_choice','temperature','top_p','stop','max_tokens','stream','stream_options','user','parallel_tool_calls'}
-            if set(body)-allowed:raise ValueError('unsupported_parameter')
+            allowed={'model','messages','tools','tool_choice','temperature','top_p','stop','max_tokens','max_completion_tokens','stream','stream_options','user','parallel_tool_calls'}
+            if set(body)-allowed:
+                print(json.dumps({'event':'unsupported_parameters','names':sorted(set(body)-allowed)}),flush=True)
+                raise ValueError('unsupported_parameter')
             if not isinstance(body.get('messages'),list):raise ValueError('messages_required')
-            body['max_tokens']=min(int(body.get('max_tokens',1024)),1024)
+            completion_limit=body.pop('max_completion_tokens',1024)
+            body['max_tokens']=min(int(body.get('max_tokens',1024)),int(completion_limit),1024)
             if body['max_tokens']<1:raise ValueError('invalid_token_limit')
             admitted_call=admit()
             print(json.dumps({"event":"admitted","body_bytes":n,"daily_call":admitted_call}),flush=True)
-        except (ValueError,TypeError,sqlite3.Error):return self.answer(429,{'error':'proving_admission_refused'})
+        except (ValueError,TypeError,sqlite3.Error) as exc:
+            known={'request_size','fixed_model_required','unsupported_parameter','messages_required','invalid_token_limit','operator_has_not_armed_run','run_time_limit','daily_call_limit'}
+            print(json.dumps({'event':'refused','reason':str(exc) if str(exc) in known else type(exc).__name__}),flush=True)
+            return self.answer(429,{'error':'proving_admission_refused'})
         headers_sent=False
         try:
             body.pop('user',None)
