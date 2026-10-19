@@ -87,11 +87,27 @@ def _sentences(line: str) -> list[str]:
     return spans
 
 
+# Quoted text is drafted or reported content, never the assistant's own claim.
+_QUOTED = re.compile(r'"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|(?<!\w)\'[^\'\n]*\'(?!\w)')
+# A negation governs a claim only inside the same clause, before it.
+_CLAUSE_BREAK = re.compile(r"[,;:–—]|\bbut\b|\bhowever\b", re.IGNORECASE)
+
+
+def _negated_before(text: str, start: int) -> bool:
+    prefix = text[:start]
+    breaks = list(_CLAUSE_BREAK.finditer(prefix))
+    clause = prefix[breaks[-1].end():] if breaks else prefix
+    return bool(_NEGATED.search(clause))
+
+
 def unsupported(sentence: str) -> bool:
-    """True when one sentence claims a kept note/reminder or promises a later action."""
-    if _LATER.search(sentence):
-        return True
-    return bool(_DONE.search(sentence)) and not _NEGATED.search(sentence)
+    """True when one sentence claims a kept note/reminder or promises a later action.
+
+    Text in quotes is ignored, and a claim counts unless a negation earlier in its own clause
+    governs it: "I cannot promise that I will remind you" is a limitation, while "I saved a note so
+    you will not forget" is still a claim (the negation is after it, in another clause)."""
+    text = _QUOTED.sub(" ", sentence)
+    return any(not _negated_before(text, m.start()) for pattern in (_LATER, _DONE) for m in pattern.finditer(text))
 
 
 def enforce(reply: str) -> tuple[str, int]:

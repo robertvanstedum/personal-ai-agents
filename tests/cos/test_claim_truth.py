@@ -60,3 +60,27 @@ def test_lists_keep_their_lines():
 def test_one_notice_however_many_claims():
     out, removed = enforce("Noted. I'll remind you at 5. Reminder set.")
     assert removed == 3 and out == NOTICE and out.count("No note or reminder") == 1
+
+
+# ── Codex review of PR #342: negation must govern the claim; quoted text is not a claim ──
+
+@pytest.mark.parametrize("claim", [
+    "I saved a note so you will not forget.",          # the negation is after the claim, in another clause
+    "Your note is saved, no problem.",
+    "I can't send email, but I'll remind you at 5.",    # the limitation is in its own clause
+    "Noted, I'll remind you at 5.",
+])
+def test_a_later_or_unrelated_negation_does_not_excuse_a_claim(claim):
+    assert unsupported(claim) and enforce(claim) == (NOTICE, 1)
+
+
+@pytest.mark.parametrize("ordinary", [
+    'Here is a draft: "I will remind you tomorrow."',     # quoted, drafted content
+    "She wrote “Reminder set for 5.”",
+    "I cannot promise that I will remind you tomorrow.",  # a negation governing the promise
+    "I won't remind you, sorry.",
+    "No reminder is set yet.",
+    "I haven't set a reminder; say 'remind me at 5 pm to …'.",
+])
+def test_drafts_and_governed_limitations_are_left_alone(ordinary):
+    assert not unsupported(ordinary) and enforce(ordinary) == (ordinary, 0)
