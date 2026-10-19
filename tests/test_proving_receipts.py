@@ -200,3 +200,48 @@ def test_record_is_contract_two_and_passes_the_grader_when_available():
     journey = next(j for j in json.loads((loop / "journeys_v1.json").read_text())["journeys"] if j["id"] == "J1b")
     out = grade.grade_run(journey, record, None)
     assert out["grade"] == "functional_pass_pending_review" and out["unproven"] == [], out
+
+
+# ── exchanges from the proving driver's journal ───────────────────────────────────
+
+def _journal(tmp_path, key, *, text="Create a post-it saying x", conv="c-9", sent="2026-10-19T17:00:05+00:00", outcome=None):
+    def put(name, value):
+        (tmp_path / f"{name}.json").write_text(json.dumps(value))
+    put(f"{key}-intent", {"at_utc": "2026-10-19T17:00:04+00:00", "resource": "/notes",
+                          "payload": {"idempotency_key": key, "conversation_id": conv, "text": text}})
+    put(f"{key}-turn-intent", {"at_utc": sent, "resource": "/mc/turns", "payload": {"note_request_id": key}})
+    if outcome:
+        put(f"{key}-turn-{outcome[0]}", outcome[1])
+
+
+def test_journal_turns_become_exchanges_in_send_order(tmp_path):
+    _journal(tmp_path, "proving-b", sent="2026-10-19T17:01:00+00:00",
+             outcome=("response", {"status": 200, "at_utc": "2026-10-19T17:01:09+00:00", "body": mc("hi")}))
+    _journal(tmp_path, "proving-a", outcome=("failure", {"status": 409, "at_utc": "2026-10-19T17:00:06+00:00",
+                                                         "body": {"error": "busy"}, "uncertain": True}))
+    _journal(tmp_path, "proving-c", sent="2026-10-19T17:02:00+00:00",
+             outcome=("failure", {"at_utc": "2026-10-19T17:02:30+00:00", "uncertain": True, "error_class": "TimeoutError"}))
+    _journal(tmp_path, "proving-d", sent="2026-10-19T17:03:00+00:00")                       # unresolved
+    out = pr.exchanges_from_journal(tmp_path)
+    assert [e["note_id"] for e in out] == ["proving-a", "proving-b", "proving-c", "proving-d"]
+    assert out[1]["status_code"] == 200 and out[1]["response"]["reply_note"]["text"] == "hi"
+    assert out[2]["response"] == {"error": "TimeoutError"} and out[3]["response"] is None
+    turns, errors = pr.turns_from_exchanges(out, P)
+    assert [t["role"] for t in turns][1::2] == ["platform", "mc", "platform", "platform"]
+    assert errors == ["proving-a: 409 busy", "proving-c: None TimeoutError", "proving-d: None no_response"]
+
+
+@pytest.mark.parametrize("kind", [None, "", "stub", "off", "mystery", "COS"])
+def test_answers_from_absent_unknown_or_stub_backends_are_errors_never_mc(kind):
+    body = {"status": "answered", "reply_note": {"text": "I've done it."}}
+    if kind is not None:
+        body["backend_kind"] = kind
+    turns, errors = pr.turns_from_exchanges([ex("hello", body)], P)
+    assert [t["role"] for t in turns] == ["owner", "platform"] and turns[1]["backend_kind"] == "unrecognized_backend"
+    assert turns[1]["text"] == "" and errors == [f"n-1: answered by backend {kind!r}, not an MC backend"]
+
+
+@pytest.mark.parametrize("kind", sorted(pr.MC_BACKEND_KINDS))
+def test_established_mc_backends_are_mc_turns(kind):
+    turns, errors = pr.turns_from_exchanges([ex("hello", {"status": "answered", "backend_kind": kind, "reply_note": {"text": "hi"}})], P)
+    assert turns[1]["role"] == "mc" and turns[1]["backend_kind"] == kind and errors == []
