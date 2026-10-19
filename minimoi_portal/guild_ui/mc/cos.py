@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import threading
+import uuid
 
 import requests
 
@@ -31,6 +32,14 @@ OPERATION_TIMEOUT_S = 20      # deterministic platform write, no model in the pa
 CHANNEL = "api_text"
 # Host-only identity marker. Browser/model strings never select a voice channel.
 MANAGED_VOICE_CHANNEL = object()
+
+
+def _uuid_or_none(value):
+    """A canonical UUID string, or None for anything else (never a guess)."""
+    try:
+        return str(uuid.UUID(str(value))) if isinstance(value, str) and value.strip() else None
+    except ValueError:
+        return None
 
 
 class ChiefOfStaffBackend(MasterCraftsmanBackend):
@@ -88,8 +97,13 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
             payload = None
         if status == 200 and isinstance(payload, dict) and str(payload.get("reply") or "").strip():
             completion = payload.get("completion")
-            trace = {"finish_reason":"stop"} if completion == {"state":"complete", "source":"openclaw_connector"} else None
-            return TurnResult("answered", self.kind, text=str(payload["reply"]), trace=trace)
+            trace = {"finish_reason":"stop"} if completion == {"state":"complete", "source":"openclaw_connector"} else {}
+            # CoS's own turn id is the gateway routing-receipt id for this turn's model calls,
+            # so cost can be settled against exact receipts rather than a time window.
+            cos_turn_id = _uuid_or_none(payload.get("turn_id"))
+            if cos_turn_id:
+                trace["cos_turn_id"] = cos_turn_id
+            return TurnResult("answered", self.kind, text=str(payload["reply"]), trace=trace or None)
         if status == 200:
             return TurnResult("error", self.kind, failure_class="malformed_answer")
         if status in (502, 503, 504):
