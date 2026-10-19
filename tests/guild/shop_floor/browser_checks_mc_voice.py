@@ -122,13 +122,21 @@ def test_no_voice_button_when_the_provider_does_not_answer(browser, server, floo
     ctx.close()
 
 
+def _go_private(page):
+    """Private sits in the conversation options menu (4a7e4cfc). Open it the way the owner does, then press the lock.
+    The lock and everything it guards are unchanged; only the route to it is the real one."""
+    if not page.locator("[data-mc-options]").evaluate("el => el.open"):
+        page.click("[data-mc-options] summary")
+    page.click("[data-mc-record]")
+
+
 def test_going_private_ends_the_session_and_voice_cannot_start_in_private(browser, server, floor, monkeypatch):
     services, saved, sent = _mc(server)
     try:
         ctx, page, errors, bodies = _open(browser, server, monkeypatch)
         _start(page)
         expect(page.locator("[data-mc-voice-btn]")).to_have_attribute("aria-pressed", "true")
-        page.click("[data-mc-record]")                                         # go Private
+        _go_private(page)                                                      # go Private
         expect(page.locator("[data-mc-voice-btn]")).to_have_attribute("aria-pressed", "false")
         expect(page.locator("[data-mc-voice-status]")).to_contain_text("not built for Private yet")
         assert page.evaluate("window.__voice._active") is False
