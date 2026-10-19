@@ -303,6 +303,7 @@ staging_compose() {
   mode=$(mc_mode)
   turns=$(mc_turns)
   # Ignore any production-only intake filename inherited from the shell.
+  MINIMOI_VAULT_READER_ENV_FILE=.env \
   MINIMOI_CURATOR_INTAKE_ENV_FILE=.env \
   MINIMOI_ROOT="$STAGING_ROOT" MINIMOI_GUILD_MC="$mode" MINIMOI_GUILD_MC_TURNS="$turns" docker compose \
     -p "$STAGING_PROJECT" \

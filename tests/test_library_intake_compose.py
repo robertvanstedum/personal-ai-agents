@@ -11,7 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def render(tmp_path, *, staging=False, enabled=False):
+def render(tmp_path, *, staging=False, enabled=False, reader=False):
     docker = shutil.which('docker')
     if not docker:
         pytest.skip('Docker Compose CLI not installed')
@@ -30,6 +30,10 @@ def render(tmp_path, *, staging=False, enabled=False):
         env['MINIMOI_CURATOR_INTAKE_ENV_FILE'] = 'curator-library-intake.env'
         (tmp_path / 'curator-library-intake.env').write_text(
             'MINIMOI_LIBRARY_INTAKE_DERIVED_KEY=' + 'a' * 64 + '\n')
+    if reader:
+        env['MINIMOI_VAULT_ASK_URL'] = 'http://vault-ask:8771'
+        env['MINIMOI_VAULT_READER_ENV_FILE'] = 'vault-reader.env'
+        (tmp_path / 'vault-reader.env').write_text('MINIMOI_VAULT_ASK_TOKEN=synthetic-reader-token\n')
     args = [docker, 'compose', '-p', 'intake-contract-test', '--env-file',
             str(tmp_path / '.env'), '-f', str(prod)]
     if staging:
@@ -37,6 +41,8 @@ def render(tmp_path, *, staging=False, enabled=False):
         lib = (ROOT / 'scripts/staging/lib.sh').read_text()
         assert 'MINIMOI_CURATOR_INTAKE_ENV_FILE=.env \\\n' in lib
         env['MINIMOI_CURATOR_INTAKE_ENV_FILE'] = '.env'
+        assert 'MINIMOI_VAULT_READER_ENV_FILE=.env' in lib
+        env['MINIMOI_VAULT_READER_ENV_FILE'] = '.env'
         args += ['-f', str(dev)]
     result = subprocess.run(args + ['config', '--format', 'json'], env=env,
                             capture_output=True, text=True, timeout=30)
@@ -69,3 +75,19 @@ def test_staging_stays_off_with_production_activation_in_environment(tmp_path):
         env = services[service]['environment']
         assert env['MINIMOI_LIBRARY_INTAKE'] == '0'
         assert 'MINIMOI_LIBRARY_INTAKE_DERIVED_KEY' not in env
+
+
+def test_reader_secret_only_reaches_mc_consumer(tmp_path):
+    services = render(tmp_path, reader=True)
+    for name, service in services.items():
+        token = service.get('environment', {}).get('MINIMOI_VAULT_ASK_TOKEN')
+        assert bool(token) == (name == 'cos-scheduler')
+        if token:
+            assert token == 'synthetic-reader-token'
+
+
+def test_staging_excludes_production_reader_file(tmp_path):
+    services = render(tmp_path, staging=True, reader=True)
+    for service in services.values():
+        assert not service.get('environment', {}).get('MINIMOI_VAULT_ASK_TOKEN')
+    assert not services['cos-scheduler']['environment']['MINIMOI_VAULT_ASK_URL']
