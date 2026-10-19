@@ -4,7 +4,8 @@ HTML typing, HTML voice, Telegram text, Telegram voice, and internal API calls
 all arrive here as text. The service owns channel normalization and the stable
 turn result shape; the configured CoS backend still owns reasoning and memory-
 worthiness judgment through the existing ``call_backend`` contract. Explicit
-note commands are deterministic platform operations and never reach a model.
+note and reminder commands are deterministic platform operations and never
+reach a model.
 """
 
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ import re
 from typing import Callable
 from uuid import UUID, uuid4
 from core.realtime_voice.timing import VoiceTiming
+from domains.cos.reminders import MAX_TEXT_CHARS as MAX_REMINDER_TEXT_CHARS
+from domains.cos.reminders import ReminderRefused
 
 
 ALLOWED_CHANNELS = frozenset({
@@ -29,6 +32,36 @@ _SAVE_NOTE_PREFIX = re.compile(
     re.IGNORECASE,
 )
 _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
+# Natural spoken and typed forms. Each is start-anchored and needs an explicit
+# separator ("that", "saying", a colon or a dash) before the note text, so
+# "make a note of that" or "can you make a note?" stay ordinary chat.
+_NATURAL_NOTE_PREFIX = re.compile(
+    r"^(?:(?:okay|ok)\s*,?\s+)?"
+    r"(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?"
+    r"(?:"
+    r"(?:make|take|save|write|add|create|jot\s+down)\s+(?:me\s+)?(?:a\s+)?"
+    r"note\s*(?::|-(?=\s|$)|[–—]|that\b|saying\b)"
+    r"|note\s+to\s+self\b\s*(?::|[-–—]|,)?"
+    r")",
+    re.IGNORECASE,
+)
+_SLASH_REMIND_PREFIX = re.compile(r"^/remind(?:\s+|$)", re.IGNORECASE)
+_REMINDER_DUE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z")
+_REMINDER_DUE_MESSAGE = (
+    "Reminder time must be a UTC time such as 2026-10-19T14:00Z, "
+    "followed by the reminder text."
+)
+_REMINDER_REFUSALS = {
+    "reminder_due_past": "Reminder time must be in the future and within a year.",
+    "reminder_due_too_far": "Reminder time must be in the future and within a year.",
+    "reminder_text_empty": "Reminder text must not be empty.",
+    "reminder_text_too_long": (
+        f"Reminder text must be {MAX_REMINDER_TEXT_CHARS} characters or fewer."
+    ),
+    "reminder_limit_reached": (
+        "Too many reminders are waiting; no new reminder was saved."
+    ),
+}
 _UNVERIFIED_NOTE_SUCCESS = re.compile(
     r"(?:^\s*noted\b|"
     r"\b(?:platform\s+)?note\s+(?:successfully\s+)?"
@@ -40,6 +73,32 @@ _UNVERIFIED_NOTE_SUCCESS = re.compile(
     r"(?:your|the|that)\s+note\s+(?:is|was|has been)\s+"
     r"(?:successfully\s+)?(?:saved|recorded|stored)\b"
     r"))",
+    re.IGNORECASE,
+)
+# Claims a backend must not make without a platform receipt. They match
+# anywhere in the reply, but only as first-person or sentence-opening claims:
+# reported speech ("as noted in the log", "you noted that") and ordinary uses
+# ("a reminder that the build is green") stay untouched.
+_UNVERIFIED_NOTE_CLAIM = re.compile(
+    r"(?:"
+    r"\b(?:i|we)(?:['’]ve|\s+have)\s+(?:just\s+|also\s+)?noted\b|"
+    r"(?:^|[.!?,;:–—-])\s*noted(?:\s+that\b|\s*(?:[.!,;:–—-]|$))|"
+    r"(?:\b(?:i|we)(?:['’]ve|\s+have)?\s+(?:just\s+|also\s+)?|(?:^|[.!?,;:–—-])\s*)"
+    r"made\s+a\s+note\b|"
+    r"\b(?:i|we)(?:['’]ll|\s+will)\s+(?:make\s+a\s+note|note)\b|"
+    r"\b(?:i|we)(?:['’]ve|\s+have)\s+(?:just\s+|also\s+)?saved\s+(?:that|this|it)\b"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
+)
+_UNVERIFIED_REMINDER_CLAIM = re.compile(
+    r"(?:"
+    r"\breminders?(?:['’]s|\s+is|\s+has\s+been)?\s+set\b|"
+    r"\b(?:i|we)(?:['’]ve|\s+have)?\s+(?:just\s+|also\s+)?set\s+(?:up\s+)?"
+    r"(?:a|the|your|that|this)\s+reminder\b|"
+    r"\b(?:i|we)(?:['’]ll|\s+will)\s+(?:make\s+sure\s+to\s+|be\s+sure\s+to\s+)?"
+    r"(?:remind|ping)\s+you\b|"
+    r"\bset\s+a\s+reminder\s+for\s+you\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -104,12 +163,17 @@ class ConferTurnResult:
 
 
 def parse_explicit_note(text: str) -> str | None:
-    """Return normalized note text, or ``None`` for an ordinary chat turn."""
+    """Return normalized note text, or ``None`` for an ordinary chat turn.
+
+    This is the one note grammar shared by COS, the MC portal and the voice
+    tool gate: ``/note …``, ``Save a note: …`` and the natural forms such as
+    ``Make a note that …`` or ``Note to self: …``.
+    """
     slash_match = _SLASH_NOTE_PREFIX.match(text)
     if slash_match is not None:
         note_text = text[slash_match.end():]
     else:
-        match = _SAVE_NOTE_PREFIX.match(text)
+        match = _SAVE_NOTE_PREFIX.match(text) or _NATURAL_NOTE_PREFIX.match(text)
         if match is None:
             return None
         note_text = text[match.end():]
@@ -123,6 +187,37 @@ def parse_explicit_note(text: str) -> str | None:
             f"Note text must be {MAX_EXPLICIT_NOTE_CHARS} characters or fewer."
         )
     return note_text
+
+
+def parse_explicit_reminder(text: str) -> tuple[datetime, str] | None:
+    """Return ``(due, text)`` for a ``/remind`` command, or ``None`` otherwise.
+
+    The canonical form is ``/remind <DUE> <TEXT>`` with ``<DUE>`` in UTC as
+    ``YYYY-MM-DDTHH:MMZ`` or ``YYYY-MM-DDTHH:MM:SSZ``. The reminder store owns
+    the time bounds; this parser owns only the command shape.
+    """
+    match = _SLASH_REMIND_PREFIX.match(text)
+    if match is None:
+        return None
+    parts = text[match.end():].split(None, 1)
+    due_text = parts[0] if parts else ""
+    if _REMINDER_DUE.fullmatch(due_text) is None:
+        raise InvalidConferTurn(_REMINDER_DUE_MESSAGE)
+    due_format = "%Y-%m-%dT%H:%M:%SZ" if due_text.count(":") == 2 else "%Y-%m-%dT%H:%MZ"
+    try:
+        due = datetime.strptime(due_text, due_format).replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise InvalidConferTurn(_REMINDER_DUE_MESSAGE) from None
+
+    # Store a single inert text line, like explicit notes.
+    reminder_text = " ".join(parts[1].split()) if len(parts) > 1 else ""
+    if not reminder_text:
+        raise InvalidConferTurn("Reminder text must not be empty.")
+    if len(reminder_text) > MAX_REMINDER_TEXT_CHARS:
+        raise InvalidConferTurn(
+            f"Reminder text must be {MAX_REMINDER_TEXT_CHARS} characters or fewer."
+        )
+    return due, reminder_text
 
 
 def normalize_request_id(request_id: str | None) -> str:
@@ -148,6 +243,7 @@ class ConferTurnService:
         save_note: Callable[[str, str], dict] | None = None,
         reset_conversation: Callable[[str], bool] | None = None,
         get_routing_receipt: Callable[[str], dict | None] | None = None,
+        save_reminder: Callable[[datetime, str, str], dict] | None = None,
     ) -> None:
         self._call_backend = call_backend
         self._build_context = build_context
@@ -156,6 +252,7 @@ class ConferTurnService:
         self._save_note = save_note
         self._reset_conversation = reset_conversation
         self._get_routing_receipt = get_routing_receipt
+        self._save_reminder = save_reminder
 
     def handle(self, request: ConferTurnRequest) -> ConferTurnResult:
         text = request.text.strip()
@@ -216,6 +313,51 @@ class ConferTurnService:
                 },
             )
 
+        reminder = parse_explicit_reminder(text)
+        if reminder is not None:
+            if self._save_reminder is None:
+                raise ConferOperationFailed("COS reminders are unavailable.")
+            due, reminder_text = reminder
+            operation_id = normalize_request_id(request.request_id)
+            try:
+                outcome = self._save_reminder(due, reminder_text, operation_id)
+            except ReminderRefused as exc:
+                message = _REMINDER_REFUSALS.get(exc.code)
+                if message is None:
+                    raise ConferOperationFailed("COS reminder was not saved.") from exc
+                raise InvalidConferTurn(message) from exc
+            # The receipt is built only from the stored record.
+            record = outcome.get("reminder") or {}
+            if not outcome.get("saved") or not record.get("id") or not record.get("due_utc"):
+                raise ConferOperationFailed("COS reminder was not saved.")
+            deduplicated = bool(outcome.get("deduplicated"))
+            self._increment_chat()
+            status_word = "already saved" if deduplicated else "saved"
+            saved_text = record.get("text") or reminder_text
+            ending = "" if saved_text.endswith((".", "!", "?")) else "."
+            return ConferTurnResult(
+                turn_id=str(uuid4()),
+                conversation_id=conversation_id,
+                channel=request.channel,
+                user_text=text,
+                reply=(
+                    f"Reminder {status_word} for {record['due_utc']}: "
+                    f"{saved_text}{ending} Delivery: Telegram."
+                ),
+                backend_label="COS Platform",
+                model_label="",
+                created_at=datetime.now(timezone.utc).isoformat(),
+                operation={
+                    "type": "reminder_set",
+                    "status": "deduplicated" if deduplicated else "saved",
+                    "operation_id": operation_id,
+                    "reminder_id": record["id"],
+                    "due_utc": record["due_utc"],
+                    "storage": "cos_reminders",
+                    "delivery": "telegram",
+                },
+            )
+
         turn_id = str(uuid4())
         timing = VoiceTiming(correlation=turn_id,parent=request.request_id)
         timing.emit("context_start")
@@ -254,13 +396,23 @@ class ConferTurnService:
             timing.emit("native_failed")
             raise
         timing.emit("native_end")
-        if _UNVERIFIED_NOTE_SUCCESS.search(reply):
+        reminder_claim = _UNVERIFIED_REMINDER_CLAIM.search(reply) is not None
+        if _UNVERIFIED_NOTE_SUCCESS.search(reply) and not reminder_claim:
             # A backend has no note-write authority. Only the deterministic
             # operation path above may return a save receipt or success claim.
             reply = (
                 "No note was saved because this turn did not match a platform "
                 "note command. Say ‘Save a note: …’ or ‘Save this note: …’ "
                 "with the note text."
+            )
+        elif reminder_claim or _UNVERIFIED_NOTE_CLAIM.search(reply):
+            # Nor does it have reminder-write authority: a reminder exists only
+            # with a receipt from the deterministic /remind path above.
+            reply = (
+                "No note or reminder was saved because this turn did not match "
+                "a platform command. For a note, say ‘/note …’ or ‘Make a note "
+                "that …’. For a reminder, say ‘Remind me at 5 pm to …’ in Master "
+                "Craftsman, or ‘/remind YYYY-MM-DDTHH:MMZ …’ with the time in UTC."
             )
         self._increment_chat()
         backend_label, model_label = self._backend_metadata()

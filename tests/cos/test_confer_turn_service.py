@@ -1,8 +1,10 @@
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from core.agent_partner import PARTNER_STYLE
 
 import pytest
 
+from domains.cos import reminders
 from domains.cos.confer_service import (
     ALLOWED_CHANNELS,
     MAX_EXPLICIT_NOTE_CHARS,
@@ -10,6 +12,8 @@ from domains.cos.confer_service import (
     ConferTurnRequest,
     ConferTurnService,
     InvalidConferTurn,
+    parse_explicit_note,
+    parse_explicit_reminder,
 )
 
 
@@ -20,6 +24,8 @@ def _service(
     note_outcome=None,
     resets=None,
     reset_outcome=True,
+    reminder_writes=None,
+    reminder_outcome=None,
 ):
     def call_backend(prompt, context, tool_policy):
         calls.append((prompt, context, tool_policy))
@@ -37,6 +43,22 @@ def _service(
         resets.append(conversation_id)
         return reset_outcome
 
+    def save_reminder(due, text, operation_id):
+        if reminder_writes is None:
+            raise AssertionError("unexpected reminder write")
+        reminder_writes.append((due, text, operation_id))
+        if isinstance(reminder_outcome, Exception):
+            raise reminder_outcome
+        return reminder_outcome or {
+            "saved": True,
+            "deduplicated": False,
+            "reminder": {
+                "id": "rem-0123456789ab",
+                "due_utc": reminders.format_utc(due),
+                "text": text,
+            },
+        }
+
     return ConferTurnService(
         call_backend=call_backend,
         build_context=lambda: {
@@ -47,6 +69,7 @@ def _service(
         backend_metadata=lambda: ("Grok (direct API)", "grok-test"),
         save_note=save_note,
         reset_conversation=reset_conversation,
+        save_reminder=save_reminder,
     )
 
 
@@ -395,3 +418,395 @@ def test_failed_session_reset_cannot_return_success_receipt():
 
     with pytest.raises(ConferOperationFailed, match="was not reset"):
         service.handle(ConferTurnRequest(text="/new", channel="api_text"))
+
+
+# ── Natural note grammar (shared by COS, the MC portal and the voice gate) ────
+
+@pytest.mark.parametrize(
+    ("command", "expected_note"),
+    [
+        ("/note Buy café tickets", "Buy café tickets"),
+        ("/NOTE\tKeep the tab form", "Keep the tab form"),
+        ("Save a note: Review the COS diff", "Review the COS diff"),
+        ("save   a note :   Keep   whitespace tidy", "Keep whitespace tidy"),
+        ("Okay, save this note: The Bears won today.", "The Bears won today."),
+        ("Please save this note: Natural spoken command", "Natural spoken command"),
+        ("OK please save a note: Keep this too", "Keep this too"),
+    ],
+)
+def test_existing_note_forms_parse_unchanged(command, expected_note):
+    assert parse_explicit_note(command) == expected_note
+
+
+@pytest.mark.parametrize(
+    ("command", "expected_note"),
+    [
+        ("Make a note that the gate code is 4411", "the gate code is 4411"),
+        ("take a note: buy milk", "buy milk"),
+        ("Could you please write a note saying call Anna back", "call Anna back"),
+        ("make me a note - dentist Tuesday", "dentist Tuesday"),
+        ("save a note that X", "X"),
+        ("Note to self: renew passport", "renew passport"),
+        ("note to self, renew passport", "renew passport"),
+        ("Okay, can you jot down a note — pick up the dry cleaning", "pick up the dry cleaning"),
+        ("Would you add a note: the build\nis   green", "the build is green"),
+        ("please create a note saying pay the gas bill", "pay the gas bill"),
+    ],
+)
+def test_natural_note_forms_parse(command, expected_note):
+    assert parse_explicit_note(command) == expected_note
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "noted",
+        "Note: the build is green",
+        "make a note of that",
+        "can you make a note?",
+        "I made a note that the build failed",
+        "please make a note on the board: buy milk",
+        "make a post-it: buy milk",
+        "remind me to buy milk at 5pm",
+        "what notes do I have?",
+        "make a note-taking app for me",
+        "note to selfish people: no",
+    ],
+)
+def test_ordinary_chat_is_not_a_note_command(text):
+    assert parse_explicit_note(text) is None
+
+
+@pytest.mark.parametrize("command", ["make a note that", "Note to self:", "take a note:   "])
+def test_natural_note_without_text_is_refused(command):
+    with pytest.raises(InvalidConferTurn, match="must not be empty"):
+        parse_explicit_note(command)
+
+
+@pytest.mark.parametrize(
+    ("command", "expected_note"),
+    [
+        ("Make a note that the gate code is 4411", "the gate code is 4411"),
+        ("Note to self: renew passport", "renew passport"),
+    ],
+)
+def test_natural_note_is_platform_operation_and_bypasses_model(command, expected_note):
+    calls = []
+    increments = []
+    note_writes = []
+    request_id = str(uuid4())
+    service = _service(calls, increments, note_writes)
+
+    result = service.handle(ConferTurnRequest(
+        text=command,
+        channel="html_voice",
+        request_id=request_id,
+    ))
+
+    assert calls == []
+    assert increments == [True]
+    assert note_writes == [(expected_note, request_id)]
+    assert result.reply == "Note saved in COS platform memory."
+    assert result.backend_label == "COS Platform"
+    assert result.operation == {
+        "type": "note_save",
+        "status": "saved",
+        "operation_id": request_id,
+        "storage": "cos_platform_memory",
+    }
+
+
+# ── Explicit reminders ────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            "/remind 2026-10-19T14:00Z call the plumber",
+            (datetime(2026, 10, 19, 14, 0, tzinfo=timezone.utc), "call the plumber"),
+        ),
+        (
+            "/REMIND 2026-10-19T14:00:30Z   call\n  the   plumber",
+            (datetime(2026, 10, 19, 14, 0, 30, tzinfo=timezone.utc), "call the plumber"),
+        ),
+        (
+            "/remind\t2026-12-31T23:59Z New Year's Eve.",
+            (datetime(2026, 12, 31, 23, 59, tzinfo=timezone.utc), "New Year's Eve."),
+        ),
+    ],
+)
+def test_explicit_reminder_parses_canonical_command(command, expected):
+    assert parse_explicit_reminder(command) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["remind me to call the plumber", "/reminder 2026-10-19T14:00Z x", "/note x", "hello"],
+)
+def test_non_reminder_text_is_not_a_reminder_command(text):
+    assert parse_explicit_reminder(text) is None
+
+
+@pytest.mark.parametrize(
+    ("command", "message"),
+    [
+        ("/remind", "UTC time"),
+        ("/remind tomorrow call the plumber", "UTC time"),
+        ("/remind 2026-10-19 14:00 call", "UTC time"),
+        ("/remind 2026-10-19T14:00 call", "UTC time"),
+        ("/remind 2026-10-19T14:00+01:00 call", "UTC time"),
+        ("/remind 2026-13-40T25:00Z call", "UTC time"),
+        ("/remind 2026-10-19T14:00Zcall", "UTC time"),
+        ("/remind 2026-10-19T14:00Z", "must not be empty"),
+        ("/remind 2026-10-19T14:00Z   ", "must not be empty"),
+        ("/remind 2026-10-19T14:00Z " + "x" * 501, "500 characters or fewer"),
+    ],
+)
+def test_malformed_reminder_never_calls_backend_or_writer(command, message):
+    calls = []
+    reminder_writes = []
+    service = _service(calls, [], reminder_writes=reminder_writes)
+
+    with pytest.raises(InvalidConferTurn, match=message):
+        service.handle(ConferTurnRequest(text=command, channel="html_text"))
+
+    assert calls == []
+    assert reminder_writes == []
+
+
+def test_explicit_reminder_is_platform_operation_with_durable_receipt():
+    calls = []
+    increments = []
+    reminder_writes = []
+    request_id = str(uuid4())
+    service = _service(calls, increments, reminder_writes=reminder_writes)
+
+    result = service.handle(ConferTurnRequest(
+        text="/remind 2026-10-19T14:00Z call the plumber",
+        channel="api_text",
+        request_id=request_id,
+    ))
+
+    assert calls == []
+    assert increments == [True]
+    assert reminder_writes == [(
+        datetime(2026, 10, 19, 14, 0, tzinfo=timezone.utc),
+        "call the plumber",
+        request_id,
+    )]
+    assert result.reply == (
+        "Reminder saved for 2026-10-19T14:00:00Z: call the plumber. Delivery: Telegram."
+    )
+    assert result.backend_label == "COS Platform"
+    assert result.model_label == ""
+    assert result.operation == {
+        "type": "reminder_set",
+        "status": "saved",
+        "operation_id": request_id,
+        "reminder_id": "rem-0123456789ab",
+        "due_utc": "2026-10-19T14:00:00Z",
+        "storage": "cos_reminders",
+        "delivery": "telegram",
+    }
+    assert result.public_dict()["operation"] == result.operation
+
+
+def test_reminder_retry_returns_deduplicated_receipt():
+    reminder_writes = []
+    service = _service(
+        [],
+        [],
+        reminder_writes=reminder_writes,
+        reminder_outcome={
+            "saved": True,
+            "deduplicated": True,
+            "reminder": {"id": "rem-aaaaaaaaaaaa", "due_utc": "2026-10-19T14:00:00Z", "text": "call the plumber"},
+        },
+    )
+
+    result = service.handle(ConferTurnRequest(
+        text="/remind 2026-10-19T14:00Z call the plumber",
+        channel="html_text",
+        request_id=str(uuid4()),
+    ))
+
+    assert result.reply == (
+        "Reminder already saved for 2026-10-19T14:00:00Z: call the plumber. Delivery: Telegram."
+    )
+    assert result.operation["status"] == "deduplicated"
+    assert result.operation["reminder_id"] == "rem-aaaaaaaaaaaa"
+
+
+def test_reminder_without_platform_saver_is_unavailable():
+    calls = []
+    service = ConferTurnService(
+        call_backend=lambda *args: calls.append(args) or "model reply",
+        build_context=lambda: {},
+        increment_chat=lambda: None,
+        backend_metadata=lambda: ("COS Agent A", "test-model"),
+    )
+
+    with pytest.raises(ConferOperationFailed, match="COS reminders are unavailable."):
+        service.handle(ConferTurnRequest(
+            text="/remind 2026-10-19T14:00Z call the plumber",
+            channel="html_text",
+        ))
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("code", "error", "message"),
+    [
+        ("reminder_due_past", InvalidConferTurn, "in the future and within a year"),
+        ("reminder_due_too_far", InvalidConferTurn, "in the future and within a year"),
+        ("reminder_limit_reached", InvalidConferTurn, "Too many reminders"),
+        ("reminder_idempotency_conflict", ConferOperationFailed, "was not saved"),
+        ("reminder_due_naive", ConferOperationFailed, "was not saved"),
+    ],
+)
+def test_store_refusals_map_to_honest_errors(code, error, message):
+    increments = []
+    service = _service(
+        [],
+        increments,
+        reminder_writes=[],
+        reminder_outcome=reminders.ReminderRefused(code),
+    )
+
+    with pytest.raises(error, match=message):
+        service.handle(ConferTurnRequest(
+            text="/remind 2026-10-19T14:00Z call the plumber",
+            channel="html_text",
+        ))
+    assert increments == []
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        {"saved": False, "deduplicated": False},
+        {"saved": True, "deduplicated": False},
+        {"saved": True, "deduplicated": False, "reminder": {"id": "rem-0123456789ab"}},
+    ],
+    ids=["not-saved", "no-record", "no-due"],
+)
+def test_reminder_without_stored_record_cannot_return_success(outcome):
+    service = _service([], [], reminder_writes=[], reminder_outcome=outcome)
+
+    with pytest.raises(ConferOperationFailed, match="COS reminder was not saved."):
+        service.handle(ConferTurnRequest(
+            text="/remind 2026-10-19T14:00Z call the plumber",
+            channel="api_text",
+        ))
+
+
+def test_invalid_request_id_fails_before_reminder_write():
+    reminder_writes = []
+    service = _service([], [], reminder_writes=reminder_writes)
+
+    with pytest.raises(InvalidConferTurn, match="valid UUID"):
+        service.handle(ConferTurnRequest(
+            text="/remind 2026-10-19T14:00Z call the plumber",
+            channel="html_text",
+            request_id="not-a-uuid",
+        ))
+    assert reminder_writes == []
+
+
+def test_reminder_round_trip_through_the_real_store(tmp_path):
+    root = tmp_path / "reminders"
+    service = ConferTurnService(
+        call_backend=lambda *_: pytest.fail("model was called"),
+        build_context=lambda: {},
+        increment_chat=lambda: None,
+        backend_metadata=lambda: ("COS Agent A", "test-model"),
+        save_reminder=lambda due, text, operation_id: reminders.add(
+            due, text, operation_id, root=root,
+        ),
+    )
+    due = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%MZ")
+    request = ConferTurnRequest(
+        text=f"/remind {due} call the plumber",
+        channel="api_text",
+        request_id=str(uuid4()),
+    )
+
+    first = service.handle(request)
+    retry = service.handle(request)
+    past = ConferTurnRequest(text="/remind 2020-01-01T00:00Z too late", channel="api_text")
+
+    assert first.operation["status"] == "saved"
+    assert retry.operation["status"] == "deduplicated"
+    assert retry.operation["reminder_id"] == first.operation["reminder_id"]
+    with pytest.raises(InvalidConferTurn, match="in the future and within a year"):
+        service.handle(past)
+    stored = reminders._read(root)["reminders"]
+    assert [record["id"] for record in stored] == [first.operation["reminder_id"]]
+    assert stored[0]["state"] == "pending"
+
+
+# ── No success claims without a platform receipt ──────────────────────────────
+
+@pytest.mark.parametrize(
+    "false_claim",
+    [
+        "I've noted that you prefer mornings.",
+        "Sure — I have noted the gate code.",
+        "Okay — noted that the deploy is Tuesday.",
+        "Got it, noted.",
+        "I've made a note of it.",
+        "Made a note: dentist Tuesday.",
+        "I'll make a note of that for later.",
+        "I'll note it down.",
+        "Done. I’ve saved that for you.",
+        "Reminder set for 9am tomorrow.",
+        "Okay, the reminder is set.",
+        "I've set a reminder for Monday.",
+        "I have set a reminder to call Anna.",
+        "Sure thing, I'll remind you at five.",
+        "I will remind you tomorrow morning.",
+        "I'll ping you when it's time.",
+        "Happy to help. I can set a reminder for you at 5pm.",
+        "Noted. I'll remind you at 5.",
+    ],
+)
+def test_backend_cannot_claim_unverified_note_or_reminder(false_claim):
+    service = ConferTurnService(
+        call_backend=lambda *_: false_claim,
+        build_context=lambda: {},
+        increment_chat=lambda: None,
+        backend_metadata=lambda: ("COS Agent A", "test-model"),
+    )
+
+    result = service.handle(ConferTurnRequest(
+        text="Remind me to call Anna at five.",
+        channel="html_text",
+    ))
+
+    assert result.operation is None
+    assert result.reply.startswith("No note or reminder was saved")
+    assert "/note" in result.reply and "/remind" in result.reply
+
+
+@pytest.mark.parametrize(
+    "ordinary_reply",
+    [
+        "As noted in the log, the deploy finished at 09:12.",
+        "Just a reminder that the build is green.",
+        "You noted that the deploy failed yesterday.",
+        "It should be noted that the cache is cold.",
+        "Your reminder settings are unchanged.",
+        "I'll notify the Guild when the review lands.",
+    ],
+)
+def test_ordinary_replies_mentioning_notes_or_reminders_are_untouched(ordinary_reply):
+    service = ConferTurnService(
+        call_backend=lambda *_: ordinary_reply,
+        build_context=lambda: {},
+        increment_chat=lambda: None,
+        backend_metadata=lambda: ("COS Agent A", "test-model"),
+    )
+
+    result = service.handle(ConferTurnRequest(text="status?", channel="html_text"))
+
+    assert result.reply == ordinary_reply

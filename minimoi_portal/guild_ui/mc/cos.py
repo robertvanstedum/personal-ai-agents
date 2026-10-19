@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 
 HEALTH_TIMEOUT_S = 3
 TURN_TIMEOUT_S = 120
+OPERATION_TIMEOUT_S = 20      # deterministic platform write, no model in the path
 CHANNEL = "api_text"
 # Host-only identity marker. Browser/model strings never select a voice channel.
 MANAGED_VOICE_CHANNEL = object()
@@ -94,3 +95,29 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
         if status in (502, 503, 504):
             return TurnResult("unavailable", self.kind, failure_class="not_ready")
         return TurnResult("error", self.kind, failure_class="runtime_error")
+
+    def operation(self, text: str, *, conversation_id: str, request_id: str) -> dict:
+        """One canonical platform command (``/note …``, ``/remind …``) on the same /chat route, returning
+        CoS's own ``operation`` receipt instead of dropping it like a chat answer. The text is the owner's
+        command only, never context-enriched. One POST; an unknown outcome is ``uncertain``, never re-sent."""
+        body = {"text": text, "channel": CHANNEL, "conversation_id": self._session(conversation_id),
+                "request_id": request_id}
+        try:
+            response = self._post(f"{self.base_url}/chat", json=body, timeout=OPERATION_TIMEOUT_S)
+        except requests.Timeout:
+            return {"state": "uncertain"}
+        except Exception:
+            return {"state": "unavailable"}
+        status = getattr(response, "status_code", 0)
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+        reply = str(payload.get("reply") or "").strip()[:300] if isinstance(payload, dict) else ""
+        if status == 200 and isinstance(payload, dict) and isinstance(payload.get("operation"), dict):
+            return {"state": "ok", "reply": reply, "operation": payload["operation"]}
+        if status == 400 and reply:
+            return {"state": "refused", "reply": reply}     # CoS's own platform sentence, e.g. a time bound
+        if status in (502, 503, 504):
+            return {"state": "unavailable"}
+        return {"state": "failed"}

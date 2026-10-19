@@ -93,3 +93,16 @@ def test_data_coverage_reads_long_bind_syntax_too(tmp_path, monkeypatch):
     ]}}}))
     monkeypatch.setattr(__import__(__name__, fromlist=["COMPOSE"]), "COMPOSE", fixture)
     assert _compose_data_bind_sources() == {("example", "annotations"), ("example", "guild")}
+
+
+def test_cos_platform_notes_and_reminders_outside_data_are_backed_up():
+    """Notes (cos_memory.md) and reminders live beside data/, not in it, so the
+    agent that mounts data/ read-write cannot edit their receipts; the daily
+    backup must therefore name them explicitly."""
+    for src in ('"/opt/minimoi/cos_memory.md"', '"/opt/minimoi/cos_reminders/"'):
+        assert re.search(r"^rsync_path " + re.escape(src), LOCAL, re.M), src
+    services = yaml.safe_load(COMPOSE.read_text())["services"]
+    scheduler = " ".join(str(v) for v in services["cos-scheduler"].get("volumes") or [])
+    agent = " ".join(str(v) for v in services["cos-agent-a"].get("volumes") or [])
+    assert "/cos_reminders:/app/data/cos_reminders" in scheduler and "/cos_memory.md:" in scheduler
+    assert "cos_reminders" not in agent and "cos_memory.md" not in agent

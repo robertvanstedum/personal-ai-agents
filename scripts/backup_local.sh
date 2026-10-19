@@ -82,6 +82,10 @@ rsync_path "${DATA_DIR}/research_dives/"         "research_dives/"
 rsync_path "${DATA_DIR}/german/"                 "german/"
 rsync_path "${DATA_DIR}/portuguese/"             "portuguese/"
 rsync_path "${AUTH_DIR}/"                        "auth/"
+# CoS platform notes and explicit reminders: outside data/ so cos-agent-a (which
+# mounts data/ read-write) cannot edit them, so they are named here explicitly.
+rsync_path "/opt/minimoi/cos_memory.md"         "cos_memory.md"
+rsync_path "/opt/minimoi/cos_reminders/"        "cos_reminders/"
 
 log "=== Local backup complete: ${LOCAL_BACKUP} ==="
 

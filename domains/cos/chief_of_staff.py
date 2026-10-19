@@ -51,6 +51,7 @@ from domains.cos.confer_service import (
     InvalidConferTurn,
 )
 from domains.cos.cost_checkpoint import run_cost_checkpoint
+from domains.cos import reminders
 from domains.cos.spoken_reply_store import SpokenReplyStore
 from domains.cos.routing_receipts import RoutingReceiptStore
 from services.model_gateway.cost_reporting import checkpoint_from_files
@@ -170,6 +171,17 @@ def _save_explicit_note(note_text: str, operation_id: str) -> dict:
         entry_type="note",
         operation_id=operation_id,
     )
+
+
+def _save_reminder(due: datetime, text: str, operation_id: str) -> dict:
+    """Persist an explicit reminder; Loop R delivers it when due."""
+    try:
+        return reminders.add(due, text, operation_id)
+    except reminders.ReminderRefused:
+        raise
+    except Exception as e:
+        _log_file("reminder_write_error", type(e).__name__)
+        return {"saved": False, "deduplicated": False}
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 
@@ -797,6 +809,7 @@ def _process_confer_turn(
         save_note=_save_explicit_note,
         reset_conversation=_reset_backend_conversation,
         get_routing_receipt=receipt_resolver,
+        save_reminder=_save_reminder,
     )
     return service.handle(ConferTurnRequest(
         text=text,
@@ -861,6 +874,7 @@ _loop_state: dict[str, dict] = {
     "loop_g": {"name": "guest_nudge_check",      "last_run": None, "last_result": None, "error": None},
     "loop_h": {"name": "ec2_health_check",       "last_run": None, "last_result": None, "error": None},
     "loop_i": {"name": "model_gateway_cost_check", "last_run": None, "last_result": None, "error": None},
+    "loop_r": {"name": "reminder_delivery",      "last_run": None, "last_result": None, "error": None},
 }
 _loop_lock = threading.Lock()
 
@@ -897,6 +911,23 @@ def _send_cost_checkpoint_alert(message: str) -> None:
     _tg_send(token, chat_id, message)
 
 
+def _deliver_due_reminders() -> dict:
+    """Loop R — send due explicit reminders and record each Telegram receipt."""
+    # Look before touching credentials: most minutes have nothing due.
+    if not reminders.has_work():
+        return {"idle": True}
+    from utils.telegram import get_cos_token, get_chat_id
+
+    token = get_cos_token()
+    chat_id = get_chat_id()
+    if not token or not chat_id:
+        # Leave every record as it is; the next run tries again.
+        return {"credentials_unavailable": True}
+    return reminders.deliver_due(
+        send=lambda text: _tg_send_receipt(token, chat_id, text),
+    )
+
+
 def _run_model_gateway_cost_checkpoint() -> dict:
     """Loop I — summarize model spend and warn without changing routing/budgets."""
     from utils.role import is_production
@@ -925,6 +956,62 @@ def _tg_send(token: str, chat_id: str, text: str):
         )
     except Exception as e:
         _log_file("tg_send_error", str(e))
+
+
+def _tg_send_receipt(token: str, chat_id: str, text: str) -> dict:
+    """Send one plain-text Telegram message and return its delivery receipt.
+
+    Unlike _tg_send, nothing is swallowed: a definite refusal raises
+    DeliveryFailed (safe to retry), and anything that may have reached Telegram
+    raises DeliveryUncertain (never resent). Errors carry fixed codes only, so
+    the token-bearing URL never reaches a log or a stored record.
+    """
+    from urllib3.exceptions import NewConnectionError
+
+    failure = None
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": text,
+                "disable_web_page_preview": True,
+            },
+            timeout=15,
+            allow_redirects=False,
+        )
+    except requests.ConnectTimeout:
+        # No connection was made, so nothing was sent.
+        failure = reminders.DeliveryFailed("telegram_connect_timeout")
+    except requests.Timeout:
+        failure = reminders.DeliveryUncertain("telegram_timeout")
+    except requests.ConnectionError as e:
+        reason = getattr(e.args[0], "reason", None) if e.args else None
+        if isinstance(reason, NewConnectionError):
+            failure = reminders.DeliveryFailed("telegram_unreachable")
+        else:
+            # The connection broke after the request may have been sent.
+            failure = reminders.DeliveryUncertain("telegram_connection_lost")
+    except requests.RequestException:
+        failure = reminders.DeliveryUncertain("telegram_request_error")
+    if failure is not None:
+        raise failure
+
+    try:
+        body = response.json()
+    except ValueError:
+        raise reminders.DeliveryUncertain("telegram_unreadable_response") from None
+    if 400 <= response.status_code < 500 and isinstance(body, dict) and body.get("ok") is False:
+        raise reminders.DeliveryFailed(f"telegram_http_{response.status_code}")
+    if response.status_code != 200:
+        raise reminders.DeliveryUncertain(f"telegram_http_{response.status_code}")
+    if not isinstance(body, dict) or body.get("ok") is not True:
+        raise reminders.DeliveryUncertain("telegram_not_ok")
+    result = body.get("result")
+    message_id = result.get("message_id") if isinstance(result, dict) else None
+    if not isinstance(message_id, int) or isinstance(message_id, bool):
+        raise reminders.DeliveryUncertain("telegram_missing_message_id")
+    return {"ok": True, "message_id": message_id}
 
 
 def _handle_tg_text(text: str, token: str, chat_id: str):
@@ -1633,6 +1720,13 @@ def _start_cos():
         lambda: _run_loop("loop_i", _run_model_gateway_cost_checkpoint),
         "cron", hour=7, minute=45, id="loop_i", misfire_grace_time=600
     )
+    # Loop R — explicit reminder due check every minute. One run at a time;
+    # the reminder file's sending mark keeps any overlap from sending twice.
+    scheduler.add_job(
+        lambda: _run_loop("loop_r", _deliver_due_reminders),
+        "interval", minutes=1, id="loop_r", misfire_grace_time=60,
+        max_instances=1, coalesce=True
+    )
 
     if loops_ok:
         # Loop A — career focus scout: DISABLED 2026-09-01.
@@ -1658,9 +1752,9 @@ def _start_cos():
             lambda: _run_loop("loop_d", run_novelty_watch),
             "cron", day="1,15", hour=8, id="loop_d", misfire_grace_time=600
         )
-        print("   Scheduler: loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅ — loop_a disabled (career search deprecated)")
+        print("   Scheduler: loop_b(Sun 9h) loop_c(Sun 10h) loop_d(1st+15th 8h) loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) loop_r(1min reminders) ✅ — loop_a disabled (career search deprecated)")
     else:
-        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) ✅ — loop_b/c/d disabled (import error), loop_a disabled (career search deprecated)")
+        print("   Scheduler: loop_f(daily 7:30) loop_g(hourly) loop_h(30min) loop_i(daily 7:45) loop_r(1min reminders) ✅ — loop_b/c/d disabled (import error), loop_a disabled (career search deprecated)")
 
     scheduler.start()
 
