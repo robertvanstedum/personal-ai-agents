@@ -175,6 +175,9 @@ class StreamContext:
     on_dispatch: Callable[[], None] = lambda: None   # called once, right before the request is sent
     on_answered: Callable[[], None] = lambda: None   # called once, only when the turn ended answered and its reply was kept (never for a failure, timeout or cancel)
     job_hook: object = None              # jobs.JobHook: lets the reply PROPOSE a job (None: a reply is kept exactly as written)
+    # The turn ledger's end (mc/ledger_gate.Turn.finish_stream): called exactly once, when the
+    # backend work has ended (or never started), never when the browser merely goes away.
+    on_end: Callable | None = None
 
 
 class StreamRun:
@@ -208,8 +211,18 @@ class StreamRun:
         if not self.started:
             self.started = True
             DISPATCHED.forget(self.ctx.request_id)
+            self._notify_end("not_started", None, False)
             self.ctx.release()
             self.done.set()
+
+    def _notify_end(self, status, failure_class, dispatched):
+        on_end, self.ctx.on_end = self.ctx.on_end, None       # once
+        if on_end is None:
+            return
+        try:
+            on_end(status, failure_class, getattr(self.ctx.backend, "kind", None), dispatched, self.stop_acknowledged)
+        except Exception:
+            _log.exception("mc turn %s: the ledger end could not be recorded", self.ctx.turn_id)
 
     def stop(self) -> bool:
         """The owner's Stop: end MiniMoi's side now, and ask the runtime to abort. True only when the relay
@@ -343,6 +356,9 @@ class StreamRun:
             try:
                 self._finish(started, final_at, parts, usage, failure, answered, reply_note)
             finally:
+                # The ledger's claim ends only here, when the backend work has ended.
+                end = getattr(self, "_end_info", None) or ("error", "upstream", True)
+                self._notify_end(*end)
                 RUNS.remove(ctx.turn_id)
                 ctx.release()
                 self.done.set()
@@ -394,6 +410,7 @@ class StreamRun:
         # the run may have been paid and gets its trace (#275 review, finding 6).
         dispatched = failure is None or (failure.cls != "not_ready" and (
             failure.http_status is None or failure.http_status in RELAY_AFTER_DISPATCH))
+        self._end_info = (status, cls, dispatched)
         if kind in REAL_KINDS and dispatched:
             ok = status == "answered"
             self._record_usage(turn_id=ctx.turn_id, status="ok" if ok else "error",
