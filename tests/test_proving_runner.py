@@ -165,8 +165,8 @@ def test_refused_turn_stops_without_retry(env):
     assert portal.calls.count(API + "/mc/turns") == 1
 
 
-@pytest.mark.parametrize("answer", [mc(), {"status": "job", "job": {"id": "j-1"}, "message": "Started"},
-                                    {"status": "answered", "backend_kind": "openclaw", "reply_note": {"text": "x"}}])
+@pytest.mark.parametrize("answer", [mc(), {"status": "answered", "backend_kind": "openclaw", "reply_note": {"text": "x"}},
+                                    {"status": "answered", "backend_kind": "grok", "reply_note": {"text": "x"}}])
 def test_only_a_platform_answer_is_released(env, answer):
     client, budget = env
     run, _ = runner(client, budget, [answer], estimate="25")
@@ -262,3 +262,55 @@ def test_runner_record_passes_the_grader_when_available(env):
     journey = next(j for j in json.loads((loop / "journeys_v1.json").read_text())["journeys"] if j["id"] == "J1b")
     out = grade.grade_run(journey, record, None)
     assert out["grade"] == "functional_pass_pending_review" and out["unproven"] == [], out
+
+
+@pytest.mark.parametrize("answer", [{"status": "not_kept", "backend_kind": "cos", "reply_note": None},
+                                    {"status": "error", "failure_class": "backend_error", "reply_note": None},
+                                    {"status": "unavailable", "backend_kind": None, "reply_note": None},
+                                    {"status": "job", "job": {"id": "j-1"}, "message": "Started"},
+                                    {"backend_kind": "cos", "reply_note": {"text": "no status"}}])
+def test_http_200_that_is_not_an_answer_stops_before_the_next_text(env, answer):
+    client, budget = env
+    run, portal = runner(client, budget, [answer, mc()])
+    summary = run.run(["one", "two"])
+    assert summary["stop_reason"] == f"not_answered:{answer.get('status')}"
+    assert len(summary["turns"]) == 1 and summary["turns"][0]["settlement"]["source"] == "estimate_held"
+    # The second text was never sent: one note, one turn, one turn intent.
+    assert portal.calls.count(API + "/notes") == 1 and portal.calls.count(API + "/mc/turns") == 1
+    assert len(list(client.journal.path.glob("*-turn-intent.json"))) == 1
+    with pytest.raises(BudgetRefused):                      # the $2 estimate stays charged
+        budget.reserve("probe-over-01", "23.01")
+    record = r.run_record(client, summary, META, {})
+    assert f"run stopped: not_answered:{answer.get('status')}" in record["errors"]
+
+
+@pytest.mark.parametrize("kind", ["stub", None, "mystery"])
+def test_stub_or_unknown_backend_stops_and_keeps_the_reservation(env, kind):
+    client, budget = env
+    answer = {"status": "answered", "backend_kind": kind, "reply_note": {"text": "scripted"}}
+    run, portal = runner(client, budget, [answer, mc()])
+    summary = run.run(["one", "two"])
+    assert summary["stop_reason"] == f"unrecognized_backend:{kind}"
+    assert portal.calls.count(API + "/notes") == 1 and portal.calls.count(API + "/mc/turns") == 1
+    with pytest.raises(BudgetRefused):
+        budget.reserve("probe-over-01", "23.01")
+
+
+def test_unsaved_platform_operation_is_a_failed_capability_never_a_success(env):
+    client, budget = env
+    refusal = platform("I can't save that post-it: it is empty.", {"type": "board_postit", "saved": False})
+    run, _ = runner(client, budget, [refusal, mc()])
+    summary = run.run(["Create an empty post-it", "Review this spec"])
+    assert summary["stop_reason"] == "completed"
+    first = summary["turns"][0]
+    assert first["capability_failed"] is True and first["settlement"]["usd"] == 0.0   # no model was asked
+    record = r.run_record(client, summary, META, {"postit_rows": [], "gateway_receipts": []})
+    assert record["run"]["capability_failures"] == [first["request_id"]]
+    assert record["receipts"]["board_rows"] == []
+
+
+def test_platform_answer_without_a_saved_flag_is_not_a_failure(env):
+    client, budget = env
+    run, _ = runner(client, budget, [platform("Library: 3 results", {"type": "library_search"})])
+    summary = run.run(["Search the library for receipts"])
+    assert summary["turns"][0]["capability_failed"] is False and summary["stop_reason"] == "completed"

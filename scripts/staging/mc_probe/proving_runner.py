@@ -9,7 +9,11 @@ server-reported dev marker) and opens the Budget ledger (proving_budget). This r
 - reserves a conservative estimate for every MC turn before it is sent, and releases it to
   zero only when the journaled answer is the portal's own (status 'answered', backend_kind
   'platform'); every other outcome stays charged on the day it was admitted;
-- stops at the first refusal, error or uncertain outcome, and never retries;
+- stops at the first refusal, error or uncertain outcome, and never retries. An HTTP 200
+  that is not an answer (status not_kept, error, unavailable, job, ...) or an answer from a
+  stub or unknown backend also stops the run, with its reservation kept;
+- records a platform operation reported as not saved (operation.saved false) as a failed
+  capability: an honest deterministic refusal, never a success;
 - turns the journal into a contract-v2 run record with the receipt collector.
 
 No model, Docker or store access of its own: the stores are read by the operator into
@@ -28,6 +32,7 @@ from uuid import uuid4
 from proving_budget import BudgetRefused, micro
 from proving_driver import Refused
 import proving_receipts
+from proving_receipts import MC_BACKEND_KINDS
 
 REQUEST_TIMEOUT_S = 180            # proving_driver's per-request timeout
 MAX_TURNS = 50
@@ -112,7 +117,11 @@ class Runner:
                 try:
                     if fresh:
                         conversation = self.client.conversation()
-                    summary['turns'].append(self._turn(conversation, text))
+                    turn = self._turn(conversation, text)
+                    summary['turns'].append(turn)
+                    if turn['stop']:
+                        summary['stop_reason'] = turn['stop']
+                        break
                 except (Refused, BudgetRefused, RunRefused) as exc:
                     summary['stop_reason'] = f'refused:{exc}'
                     break
@@ -131,12 +140,18 @@ class Runner:
                                                      'conversation_id': conversation}, key + '-turn')
         finally:
             self._pending = None
-        turn = {'request_id': key, 'conversation_id': conversation, 'status': answer.get('status'),
-                'backend_kind': answer.get('backend_kind'), 'backend_turn_id': answer.get('backend_turn_id')}
-        if answer.get('status') == 'answered' and answer.get('backend_kind') == 'platform':
+        status, kind = answer.get('status'), answer.get('backend_kind')
+        turn = {'request_id': key, 'conversation_id': conversation, 'status': status, 'backend_kind': kind,
+                'backend_turn_id': answer.get('backend_turn_id'), 'stop': None, 'capability_failed': False,
+                'settlement': {'usd': None, 'source': 'estimate_held', 'receipt_ids': []}}
+        if status != 'answered':
+            turn['stop'] = f'not_answered:{status}'
+        elif kind == 'platform':
             turn['settlement'] = self.budget.settle_platform(key, answer)
-        else:
-            turn['settlement'] = {'usd': None, 'source': 'estimate_held', 'receipt_ids': []}
+            operation = answer.get('operation')
+            turn['capability_failed'] = isinstance(operation, dict) and operation.get('saved') is False
+        elif kind not in MC_BACKEND_KINDS:
+            turn['stop'] = f'unrecognized_backend:{kind}'
         return turn
 
 
@@ -162,7 +177,8 @@ def run_record(client, summary, meta, snapshots):
             'spend_admission': spend_admission(client)}
     exchanges = proving_receipts.exchanges_from_journal(client.journal.path)
     record = proving_receipts.build_run_record(meta, exchanges, snapshots)
-    record['run'] = {'stop_reason': summary['stop_reason'], 'limits': summary['limits'], 'turns': summary['turns']}
+    record['run'] = {'stop_reason': summary['stop_reason'], 'limits': summary['limits'], 'turns': summary['turns'],
+                     'capability_failures': [t['request_id'] for t in summary['turns'] if t.get('capability_failed')]}
     if summary['stop_reason'] != 'completed':
         record['errors'].append(f"run stopped: {summary['stop_reason']}")
     return record
