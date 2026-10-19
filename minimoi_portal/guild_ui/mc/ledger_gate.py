@@ -29,12 +29,22 @@ _log = logging.getLogger("guild_ui.mc.ledger")
 _CODE = re.compile(r"[a-z][a-z0-9_]{0,39}")
 _ID = re.compile(r"[A-Za-z0-9_.:-]{1,80}")
 _KINDS = ("cos", "openclaw", "grok", "platform", "stub")
+# Refusals before dispatch that may pass if tried again (a store, MC or a switch is not ready now).
+# A waiting turn refused for one of these stays first in line; any other refusal (a note, file or
+# topic item gone or not the owner's, too large, unsupported) is failed and pauses the queue.
+TRANSIENT = ("unavailable", "busy", "mc_unavailable", "mc_turns_off", "stream_off", "stream_unsupported",
+             "ledger_unavailable")
 
 PAUSED_WORDS = ("Your earlier message's outcome is unknown: it may have run, or may still be running. "
                 "Nothing new was sent. Continue when you are ready.")
 FAILED_PAUSE_WORDS = "Your earlier message failed after it was sent. Nothing new was sent. Continue when you are ready."
 LEDGER_DOWN_WORDS = "Turns cannot be recorded right now, so nothing was sent. Your note is kept."
 BUSY_WORDS = "Master Craftsman is still answering your previous note. Nothing new was sent."
+QUEUE_PENDING_WORDS = "You have messages waiting to be sent; this one goes after them. Nothing was sent."
+QUEUE_FULL_WORDS = "Five messages are already waiting. Your note is kept; nothing more was queued."
+QUEUE_OFF_WORDS = "Waiting messages are not switched on here. Your note is kept; nothing was queued."
+NOT_NEXT_WORDS = "An earlier waiting message goes first. Nothing was sent."
+GONE_WORDS = "That message is no longer waiting (sent, cancelled or expired). Nothing was sent."
 
 
 def enabled(environ) -> bool:
@@ -47,6 +57,18 @@ def _code(value):
 
 def _ident(value):
     return value if isinstance(value, str) and _ID.fullmatch(value) else None
+
+
+def transient(body) -> bool:
+    """Whether a pre-dispatch refusal may pass later. No body (the browser left before the worker
+    started) is transient; an unreadable body is not."""
+    if body is None:
+        return True
+    if not isinstance(body, dict):
+        return False
+    if body.get("error") == "mc_unavailable" and body.get("reason") == "request_too_large":
+        return False
+    return body.get("error") in TRANSIENT
 
 
 def outcome_of(body) -> dict:
@@ -125,11 +147,33 @@ class Turn:
         finally:
             self._hold.__exit__(None, None, None)
 
+    def _not_sent(self, outcome, body=None):
+        """Nothing was sent. A turn that waited in the queue (P2) must not be dropped while later
+        messages run: refused for a reason that may pass (``transient``), it goes back to the head
+        of the queue; refused for good, it is failed, which pauses. Any other turn ends not_sent
+        (no pause)."""
+        if self.entry.get("queued_at") and not self.finished and not transient(body):
+            reason = _code(body.get("error")) if isinstance(body, dict) else None
+            self._end("failed", {"failure_class": "dispatch_refused", "reason": reason or "invalid"})
+            return
+        if self.entry.get("queued_at") and not self.finished:
+            self.finished = True
+            try:
+                if not self.ledger.requeue(self.claim):
+                    _log.warning("mc ledger %s: requeue found the claim gone", self.claim.ledger_id)
+            except (LedgerUnavailable, ValueError):
+                _log.exception("mc ledger %s: requeue could not be recorded; the lease will expire to unknown",
+                               self.claim.ledger_id)
+            finally:
+                self._hold.__exit__(None, None, None)
+            return
+        self._end("not_sent", outcome)
+
     def finish_not_sent(self, body=None):
         """Only for a proven pre-dispatch refusal: no model request and no platform action started."""
         if self.started:
             raise RuntimeError("work started: not_sent is not true")
-        self._end("not_sent", outcome_of(body))
+        self._not_sent(outcome_of(body), body)
 
     def finish_platform(self, body):
         """A platform action answered; its own receipt says what is proven. A downstream outcome
@@ -153,7 +197,7 @@ class Turn:
             if isinstance(body, dict) and body.get("status") == "answered":
                 self._end("answered", {**outcome_of(body), "reason": "existing_reply"})   # answered from the store
             else:
-                self._end("not_sent", outcome_of(body))
+                self._not_sent(outcome_of(body), body)
             return
         status = body.get("status") if isinstance(body, dict) else None
         if http_status == 200 and status == "answered" and isinstance(body.get("reply_note"), dict):
@@ -169,7 +213,7 @@ class Turn:
                    "backend_kind": backend_kind if backend_kind in _KINDS else None}
         outcome = {k: v for k, v in outcome.items() if v is not None}
         if not dispatched and not self.started:
-            self._end("not_sent", outcome)
+            self._not_sent(outcome)
         elif status == "answered":
             self._end("answered", outcome)
         elif status == "stopped" and stop_acknowledged is True:
@@ -183,14 +227,34 @@ class Turn:
         self._end("unknown", {"reason": reason})
 
 
-def gate(services, environ, *, principal, conversation_id, note_request_id, request_id, kind="typed",
-         attachment_ids=None, topic_refs=None):
-    """None when the ledger is off. Otherwise a claimed Turn, or Refusal (nothing recorded or sent)."""
+
+def _ledger(services, environ):
     if not enabled(environ):
         return None
     ledger = getattr(services, "turn_ledger", None)
     if ledger is None:
         raise Refusal("ledger_unavailable", LEDGER_DOWN_WORDS, 503)
+    return ledger
+
+
+def _paused(admission):
+    barrier = admission.barrier or {}
+    words = PAUSED_WORDS if barrier.get("reason") == "unknown" else FAILED_PAUSE_WORDS
+    return Refusal("paused", words, 409, ledger_id=barrier.get("ledger_id"), pause_reason=barrier.get("reason"))
+
+
+def _invalid(exc):
+    if "request_mismatch" in str(exc):
+        return Refusal("request_mismatch", "These ids were already used for a different message. Nothing was sent.", 409)
+    return Refusal("invalid", "This message could not be recorded. Nothing was sent.", 422)
+
+
+def gate(services, environ, *, principal, conversation_id, note_request_id, request_id, kind="typed",
+         attachment_ids=None, topic_refs=None):
+    """None when the ledger is off. Otherwise a claimed Turn, or Refusal (nothing recorded or sent)."""
+    ledger = _ledger(services, environ)
+    if ledger is None:
+        return None
     turn_request_id = request_id or ("note-" + note_request_id)
     try:
         admission = ledger.admit(principal=principal, conversation_id=conversation_id,
@@ -199,22 +263,77 @@ def gate(services, environ, *, principal, conversation_id, note_request_id, requ
     except LedgerUnavailable:
         raise Refusal("ledger_unavailable", LEDGER_DOWN_WORDS, 503) from None
     except ValueError as exc:
-        if "request_mismatch" in str(exc):
-            raise Refusal("request_mismatch", "These ids were already used for a different message. "
-                          "Nothing was sent.", 409) from None
-        raise Refusal("invalid", "This message could not be recorded. Nothing was sent.", 422) from None
+        raise _invalid(exc) from None
     if admission.result == "claimed":
         return Turn(ledger, admission)
     if admission.result == "busy":
         raise Refusal("busy", BUSY_WORDS, 409)
     if admission.result == "paused":
-        barrier = admission.barrier or {}
-        words = PAUSED_WORDS if barrier.get("reason") == "unknown" else FAILED_PAUSE_WORDS
-        raise Refusal("paused", words, 409, ledger_id=barrier.get("ledger_id"), pause_reason=barrier.get("reason"))
+        raise _paused(admission)
+    if admission.result == "queue_pending":
+        raise Refusal("queue_pending", QUEUE_PENDING_WORDS, 409)
     entry = admission.entry or {}
+    if admission.result == "queued":                    # this very turn is already waiting: never sent from here
+        raise Refusal("already_queued", "This note is already waiting to be sent. Nothing was sent.", 409,
+                      ledger_id=entry.get("id"), position=admission.position)
     if admission.result == "running":
         raise Refusal("already_dispatched", "This note was already sent; it is still running. Nothing was sent again.",
                       409, ledger_id=entry.get("id"), state="running")
     # done: never dispatched again; the earlier content-free outcome only.
     raise Refusal("already_done", "This note was already handled; nothing was sent again.", 200,
                   ledger_id=entry.get("id"), state=entry.get("state"), outcome=entry.get("outcome") or {})
+
+
+# ── the queue (issue #346 P2) ────────────────────────────────────────────────
+def enqueue(services, environ, *, principal, conversation_id, note_request_id, request_id,
+            attachment_ids=None, topic_refs=None) -> dict:
+    """Record a typed turn as waiting. Returns the 202 body; raises Refusal (nothing recorded).
+    Waiting is a ledger feature: with the ledger off it is refused, never silently sent."""
+    ledger = _ledger(services, environ)
+    if ledger is None:
+        raise Refusal("queue_off", QUEUE_OFF_WORDS, 409)
+    try:
+        admission = ledger.enqueue(principal=principal, conversation_id=conversation_id,
+                                   note_request_id=note_request_id, turn_request_id=request_id,
+                                   attachment_ids=list(attachment_ids or []), topic_refs=list(topic_refs or []))
+    except LedgerUnavailable:
+        raise Refusal("ledger_unavailable", LEDGER_DOWN_WORDS, 503) from None
+    except ValueError as exc:
+        raise _invalid(exc) from None
+    if admission.result == "queue_full":
+        raise Refusal("queue_full", QUEUE_FULL_WORDS, 409)
+    entry = admission.entry or {}
+    if admission.result == "queued":
+        barrier = admission.barrier or None
+        return {"status": "queued", "ledger_id": entry.get("id"), "position": admission.position,
+                "request_id": entry.get("turn_request_id"), "note_request_id": entry.get("note_request_id"),
+                "paused": barrier is not None,
+                "pause": {"ledger_id": barrier.get("ledger_id"), "reason": barrier.get("reason")} if barrier else None}
+    if admission.result == "running":
+        raise Refusal("already_dispatched", "This note was already sent; it is still running. Nothing was sent again.",
+                      409, ledger_id=entry.get("id"), state="running")
+    raise Refusal("already_done", "This note was already handled; nothing was sent again.", 200,
+                  ledger_id=entry.get("id"), state=entry.get("state"), outcome=entry.get("outcome") or {})
+
+
+def claim_queued(services, environ, *, principal, ledger_id):
+    """Claim the owner's next waiting turn for dispatch: a Turn, or Refusal (nothing sent)."""
+    ledger = _ledger(services, environ)
+    if ledger is None:
+        raise Refusal("queue_off", QUEUE_OFF_WORDS, 409)
+    try:
+        admission = ledger.claim_queued(principal, ledger_id)
+    except LedgerUnavailable:
+        raise Refusal("ledger_unavailable", LEDGER_DOWN_WORDS, 503) from None
+    except ValueError:
+        raise Refusal("invalid", "Name the waiting message's ledger_id. Nothing was sent.", 422) from None
+    if admission.result == "claimed":
+        return Turn(ledger, admission)
+    if admission.result == "paused":
+        raise _paused(admission)
+    if admission.result == "busy":
+        raise Refusal("busy", BUSY_WORDS, 409)
+    entry = admission.entry or {}
+    if admission.result == "not_next":
+        raise Refusal("not_next", NOT_NEXT_WORDS, 409, ledger_id=ledger_id, position=admission.position)
+    raise Refusal("not_queued", GONE_WORDS, 409, ledger_id=ledger_id, state=entry.get("state"))
