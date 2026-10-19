@@ -33,6 +33,8 @@ from ..topic_context import REFS_MAX
 from ..turn_files import DOC_ID_RE, IDS_MAX
 
 LEASE_S = 120                     # a claim without a heartbeat for this long is abandoned
+QUEUE_MAX = 5                     # waiting turns per owner (issue #346 P2)
+QUEUE_TTL_S = 24 * 3600           # a waiting turn not sent within this is expired (never sent)
 HEARTBEAT_S = 30
 TERMINAL = ("answered", "failed", "unknown", "not_sent", "cancelled", "expired")
 FINISH_STATES = ("answered", "failed", "unknown", "not_sent")
@@ -53,7 +55,9 @@ class Claim:
 @dataclass
 class Admission:
     """What admit() decided. Only result == "claimed" may dispatch."""
-    result: str                               # claimed | busy | paused | running | done
+    result: str                               # claimed | busy | paused | running | done | queued |
+                                              # queue_pending | queue_full | not_next | gone
+    position: int | None = None               # for a queued entry: 1 is next
     entry: dict | None = None                 # the owner's relevant entry (content-free)
     claim: Claim | None = None
     barrier: dict | None = None
@@ -217,34 +221,73 @@ class TurnLedger:
         return released
 
     # ── admission ─────────────────────────────────────────────────────────────
-    def admit(self, *, principal: str, conversation_id: str, note_request_id: str, turn_request_id: str,
-              kind: str = "typed", attachment_ids: list | None = None, topic_refs: list | None = None) -> Admission:
-        """Record and claim this turn before dispatch, or say why not. A refusal records nothing."""
+    @staticmethod
+    def _validate(principal, conversation_id, note_request_id, turn_request_id, kind, attachment_ids, topic_refs):
         for name, value in (("principal", principal), ("conversation_id", conversation_id),
                             ("note_request_id", note_request_id), ("turn_request_id", turn_request_id)):
             if not isinstance(value, str) or not value or len(value) > 200:
                 raise ValueError(f"{name} is required")
         if kind not in KINDS:
             raise ValueError("unknown turn kind")
-        files = _clean_files(attachment_ids)
-        refs = _clean_refs(topic_refs)
+        return _clean_files(attachment_ids), _clean_refs(topic_refs)
+
+    @staticmethod
+    def _expire_waiting(cur, principal: str) -> int:
+        """A waiting turn not sent within QUEUE_TTL_S of being queued is expired (reason queue_expired).
+        The waiting turns queued after it are then cancelled (reason earlier_expired): a later
+        message must never run without the earlier one it followed, and they did not themselves
+        wait that long. Neither was sent; neither sets a pause."""
+        cur.execute("UPDATE guild.mc_turn_ledger SET state = 'expired', updated_at = now(), "
+                    "outcome = COALESCE(outcome, '{}'::jsonb) || '{\"reason\": \"queue_expired\"}'::jsonb "
+                    "WHERE principal = %s AND state = 'queued' AND queued_at < now() - make_interval(secs => %s) "
+                    "RETURNING id", (principal, QUEUE_TTL_S))
+        expired = [r[0] for r in cur.fetchall()]
+        if not expired:
+            return 0
+        cur.execute("UPDATE guild.mc_turn_ledger SET state = 'cancelled', updated_at = now(), "
+                    "outcome = COALESCE(outcome, '{}'::jsonb) || '{\"reason\": \"earlier_expired\"}'::jsonb "
+                    "WHERE principal = %s AND state = 'queued' AND id > %s", (principal, min(expired)))
+        return len(expired) + (cur.rowcount or 0)
+
+    @staticmethod
+    def _position(cur, principal: str, ledger_id: int) -> int:
+        cur.execute("SELECT count(*) FROM guild.mc_turn_ledger WHERE principal = %s AND state = 'queued' AND id <= %s",
+                    (principal, ledger_id))
+        return int(cur.fetchone()[0])
+
+    def _existing(self, cur, principal, conversation_id, note_request_id, turn_request_id, kind, files, refs):
+        """An entry already using these ids: its admission (never a new dispatch), or None."""
+        cur.execute("SELECT " + _COLS + " FROM guild.mc_turn_ledger WHERE note_request_id = %s OR turn_request_id = %s "
+                    "ORDER BY id LIMIT 1", (note_request_id, turn_request_id))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        earlier = _entry(row)
+        same = (earlier["principal"] == principal and earlier["conversation_id"] == conversation_id
+                and earlier["note_request_id"] == note_request_id and earlier["turn_request_id"] == turn_request_id
+                and earlier["kind"] == kind and earlier["attachment_ids"] == files and earlier["topic_refs"] == refs)
+        if not same:
+            # Never answer with an unrelated earlier outcome, and never dispatch it again.
+            raise ValueError("request_mismatch: these ids were already used for a different turn")
+        if earlier["state"] == "queued":
+            return Admission("queued", entry=earlier, position=self._position(cur, principal, earlier["id"]))
+        return Admission("running" if earlier["state"] == "claimed" else "done", entry=earlier)
+
+    def admit(self, *, principal: str, conversation_id: str, note_request_id: str, turn_request_id: str,
+              kind: str = "typed", attachment_ids: list | None = None, topic_refs: list | None = None) -> Admission:
+        """Record and claim this turn before dispatch, or say why not. A refusal records nothing.
+        While the owner has waiting turns, a new immediate turn is refused (queue_pending): it
+        would jump the queue."""
+        files, refs = self._validate(principal, conversation_id, note_request_id, turn_request_id, kind,
+                                     attachment_ids, topic_refs)
         token = secrets.token_hex(16)
         with self._tx(principal) as cur:
             released = self._release_abandoned(cur, principal)
-            # The same note or request seen before: never dispatched again.
-            cur.execute("SELECT " + _COLS + " FROM guild.mc_turn_ledger WHERE note_request_id = %s OR turn_request_id = %s "
-                        "ORDER BY id LIMIT 1", (note_request_id, turn_request_id))
-            row = cur.fetchone()
-            if row is not None:
-                earlier = _entry(row)
-                same = (earlier["principal"] == principal and earlier["conversation_id"] == conversation_id
-                        and earlier["note_request_id"] == note_request_id and earlier["turn_request_id"] == turn_request_id
-                        and earlier["kind"] == kind and earlier["attachment_ids"] == files and earlier["topic_refs"] == refs)
-                if not same:
-                    # Never answer with an unrelated earlier outcome, and never dispatch it again.
-                    raise ValueError("request_mismatch: these ids were already used for a different turn")
-                return Admission("running" if earlier["state"] in ("claimed", "queued") else "done",
-                                 entry=earlier, released=released)
+            self._expire_waiting(cur, principal)
+            known = self._existing(cur, principal, conversation_id, note_request_id, turn_request_id, kind, files, refs)
+            if known is not None:
+                known.released = released
+                return known
             cur.execute("SELECT principal, ledger_id, reason, created_at FROM guild.mc_turn_barrier WHERE principal = %s",
                         (principal,))
             barrier = _barrier(cur.fetchone())
@@ -255,6 +298,9 @@ class TurnLedger:
             active = cur.fetchone()
             if active is not None:
                 return Admission("busy", entry=_entry(active), released=released)
+            cur.execute("SELECT count(*) FROM guild.mc_turn_ledger WHERE principal = %s AND state = 'queued'", (principal,))
+            if int(cur.fetchone()[0]) > 0:
+                return Admission("queue_pending", released=released)
             cur.execute("INSERT INTO guild.mc_turn_ledger (principal, conversation_id, note_request_id, turn_request_id, "
                         "kind, attachment_ids, topic_refs, state, claim_token, claim_generation, claimed_by, lease_until) "
                         "VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, 'claimed', %s, 1, %s, "
@@ -264,6 +310,97 @@ class TurnLedger:
             entry = _entry(cur.fetchone())
             return Admission("claimed", entry=entry, claim=Claim(entry["id"], token, entry["claim_generation"]),
                              released=released)
+
+    # ── the queue (P2): waiting turns, sent strictly in order ─────────────────
+    def enqueue(self, *, principal: str, conversation_id: str, note_request_id: str, turn_request_id: str,
+                attachment_ids: list | None = None, topic_refs: list | None = None) -> Admission:
+        """Record a typed turn as waiting (state queued). Owner-wide FIFO; at most QUEUE_MAX waiting.
+        Nothing is dispatched here. An exact replay returns the same entry; a mismatch is refused."""
+        files, refs = self._validate(principal, conversation_id, note_request_id, turn_request_id, "typed",
+                                     attachment_ids, topic_refs)
+        with self._tx(principal) as cur:
+            released = self._release_abandoned(cur, principal)
+            self._expire_waiting(cur, principal)
+            known = self._existing(cur, principal, conversation_id, note_request_id, turn_request_id, "typed", files, refs)
+            if known is not None:
+                known.released = released
+                return known
+            cur.execute("SELECT count(*) FROM guild.mc_turn_ledger WHERE principal = %s AND state = 'queued'", (principal,))
+            if int(cur.fetchone()[0]) >= QUEUE_MAX:
+                return Admission("queue_full", released=released)
+            cur.execute("INSERT INTO guild.mc_turn_ledger (principal, conversation_id, note_request_id, turn_request_id, "
+                        "kind, attachment_ids, topic_refs, state, queued_at) "
+                        "VALUES (%s, %s, %s, %s, 'typed', %s::jsonb, %s::jsonb, 'queued', now()) RETURNING " + _COLS,
+                        (principal, conversation_id, note_request_id, turn_request_id, json.dumps(files), json.dumps(refs)))
+            entry = _entry(cur.fetchone())
+            cur.execute("SELECT principal, ledger_id, reason, created_at FROM guild.mc_turn_barrier WHERE principal = %s",
+                        (principal,))
+            return Admission("queued", entry=entry, position=self._position(cur, principal, entry["id"]),
+                             barrier=_barrier(cur.fetchone()), released=released)
+
+    def claim_queued(self, principal: str, ledger_id: int) -> Admission:
+        """Claim the owner's next waiting turn, only if it is this one and nothing is running or paused."""
+        if type(ledger_id) is not int or ledger_id <= 0:
+            raise ValueError("ledger_id is required")
+        token = secrets.token_hex(16)
+        with self._tx(principal) as cur:
+            released = self._release_abandoned(cur, principal)
+            self._expire_waiting(cur, principal)
+            cur.execute("SELECT principal, ledger_id, reason, created_at FROM guild.mc_turn_barrier WHERE principal = %s",
+                        (principal,))
+            barrier = _barrier(cur.fetchone())
+            if barrier is not None:
+                return Admission("paused", barrier=barrier, released=released)
+            cur.execute("SELECT " + _COLS + " FROM guild.mc_turn_ledger WHERE principal = %s AND state = 'claimed'",
+                        (principal,))
+            active = cur.fetchone()
+            if active is not None:
+                return Admission("busy", entry=_entry(active), released=released)
+            cur.execute("SELECT " + _COLS + " FROM guild.mc_turn_ledger WHERE id = %s AND principal = %s", (ledger_id, principal))
+            row = cur.fetchone()
+            if row is None or _entry(row)["state"] != "queued":
+                return Admission("gone", entry=_entry(row) if row else None, released=released)
+            cur.execute("SELECT min(id) FROM guild.mc_turn_ledger WHERE principal = %s AND state = 'queued'", (principal,))
+            if int(cur.fetchone()[0]) != ledger_id:
+                return Admission("not_next", entry=_entry(row), position=self._position(cur, principal, ledger_id),
+                                 released=released)
+            cur.execute("UPDATE guild.mc_turn_ledger SET state = 'claimed', claim_token = %s, "
+                        "claim_generation = claim_generation + 1, claimed_by = %s, "
+                        "lease_until = now() + make_interval(secs => %s), updated_at = now() "
+                        "WHERE id = %s AND state = 'queued' RETURNING " + _COLS,
+                        (token, self.worker, self.lease_s, ledger_id))
+            entry = _entry(cur.fetchone())
+            return Admission("claimed", entry=entry, claim=Claim(entry["id"], token, entry["claim_generation"]),
+                             released=released)
+
+    def requeue(self, claim: Claim) -> bool:
+        """A turn claimed FROM the queue was refused before anything was sent (MC unavailable, a
+        transient store error): put it back at the head of the queue, same id and place, so no later
+        message overtakes it. Only the current claim can; anything else returns False."""
+        with self._tx() as cur:
+            cur.execute("SELECT principal FROM guild.mc_turn_ledger WHERE id = %s", (claim.ledger_id,))
+            row = cur.fetchone()
+            if row is None:
+                return False
+        with self._tx(row[0]) as cur:
+            cur.execute("UPDATE guild.mc_turn_ledger SET state = 'queued', claim_token = NULL, lease_until = NULL, "
+                        "updated_at = now() WHERE id = %s AND state = 'claimed' AND claim_token = %s "
+                        "AND claim_generation = %s AND queued_at IS NOT NULL RETURNING id",
+                        (claim.ledger_id, claim.token, claim.generation))
+            return cur.fetchone() is not None
+
+    def cancel(self, principal: str, ledger_id: int) -> dict:
+        """Cancel a waiting turn. Anything already claimed, finished or unknown cannot be cancelled."""
+        if type(ledger_id) is not int or ledger_id <= 0:
+            raise ValueError("ledger_id is required")
+        with self._tx(principal) as cur:
+            cur.execute("UPDATE guild.mc_turn_ledger SET state = 'cancelled', updated_at = now() "
+                        "WHERE id = %s AND principal = %s AND state = 'queued' RETURNING id", (ledger_id, principal))
+            if cur.fetchone() is not None:
+                return {"result": "cancelled", "ledger_id": ledger_id}
+            cur.execute("SELECT state FROM guild.mc_turn_ledger WHERE id = %s AND principal = %s", (ledger_id, principal))
+            row = cur.fetchone()
+        return {"result": "not_queued", "ledger_id": ledger_id, "state": row[0] if row else None}
 
     # ── while running ─────────────────────────────────────────────────────────
     def heartbeat(self, claim: Claim) -> bool:
@@ -325,17 +462,24 @@ class TurnLedger:
 
     # ── owner view and Continue ───────────────────────────────────────────────
     def status(self, principal: str, *, recent: int = 10) -> dict:
-        """The owner's running entry, pause and most recent entries (content-free)."""
+        """The owner's running entry, pause, waiting entries in order and most recent entries (content-free)."""
         with self._tx(principal) as cur:
             released = self._release_abandoned(cur, principal)
+            self._expire_waiting(cur, principal)
+            cur.execute("SELECT " + _COLS + " FROM guild.mc_turn_ledger WHERE principal = %s AND state = 'queued' "
+                        "ORDER BY id", (principal,))
+            waiting = [_entry(r) for r in cur.fetchall()]
+            cur.execute("SELECT " + _COLS + " FROM guild.mc_turn_ledger WHERE principal = %s AND state = 'claimed'",
+                        (principal,))
+            running = cur.fetchone()
             cur.execute("SELECT principal, ledger_id, reason, created_at FROM guild.mc_turn_barrier WHERE principal = %s",
                         (principal,))
             barrier = _barrier(cur.fetchone())
             cur.execute("SELECT " + _COLS + " FROM guild.mc_turn_ledger WHERE principal = %s ORDER BY id DESC LIMIT %s",
                         (principal, max(1, min(int(recent), 50))))
             entries = [_entry(r) for r in cur.fetchall()]
-        return {"running": next((e for e in entries if e["state"] == "claimed"), None), "pause": barrier,
-                "recent": entries, "released": released}
+        return {"running": _entry(running) if running else None, "pause": barrier,
+                "queued": waiting, "recent": entries, "released": released}
 
     def continue_after(self, principal: str, ledger_id: int) -> dict:
         """Lift the owner's pause, only when it names this entry. The earlier work's outcome stays
