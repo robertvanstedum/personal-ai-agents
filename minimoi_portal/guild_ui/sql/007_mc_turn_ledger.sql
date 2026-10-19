@@ -33,8 +33,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS mc_turn_ledger_one_claim_per_owner
 CREATE INDEX IF NOT EXISTS mc_turn_ledger_owner_order
     ON guild.mc_turn_ledger (principal, state, id);
 
--- A persisted pause: after an unknown outcome (and after a failed queued turn) nothing more
--- is dispatched for the owner until an authenticated Continue names this entry.
+-- A persisted pause: after any dispatched turn that failed or whose outcome is unknown, nothing
+-- more is dispatched for the owner until an authenticated Continue names this entry. A turn
+-- refused before dispatch (not_sent) sets no pause.
 CREATE TABLE IF NOT EXISTS guild.mc_turn_barrier (
     principal   text PRIMARY KEY,
     ledger_id   bigint NOT NULL REFERENCES guild.mc_turn_ledger (id),

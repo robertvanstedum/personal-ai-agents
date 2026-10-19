@@ -103,7 +103,7 @@ _OUTCOME = {
     "status": _WORD, "failure_class": _WORD, "reason": _WORD,
     "reply_note_id": int, "http_status": int, "history_saved": bool,
 }
-_OPERATION = {"type": _WORD, "saved": bool, "id": int, "repeated": bool, "reason": _WORD}
+_OPERATION = {"type": _WORD, "saved": bool, "id": int, "repeated": bool, "reason": _WORD, "state": _WORD}
 
 
 def _check(spec, key, value):

@@ -46,6 +46,9 @@ class Services:
     # bind mount on staging. A missing folder makes uploads "unavailable";
     # it never fails the mount.
     media_dir: str | None = None
+    # The durable MC turn ledger (issue #346; mc/turn_ledger.py). Used only when the mount's
+    # MINIMOI_MC_TURN_LEDGER is "1" (mc/ledger_gate.py); otherwise never touched.
+    turn_ledger: object = None
 
     def __post_init__(self):
         if self.mc_health is None or self.mc_health.backend is not self.mc:
@@ -89,4 +92,14 @@ def build_services(*, queue_path: str | None, operations_status_url: str | None 
         mc_turns=bool(mc_turns),
         mc_stream=bool(mc_stream),
         media_dir=media_dir or os.environ.get("MINIMOI_MEDIA_DIR") or "/app/runtime/media",
+        turn_ledger=_turn_ledger(database_url, db_connect),
     )
+
+
+def _turn_ledger(database_url, db_connect):
+    """The ledger shares the floor's database; its worker name is diagnostics only (never authority)."""
+    import secrets
+    import socket
+    from .mc.turn_ledger import TurnLedger
+    worker = f"{socket.gethostname()[:40]}/{os.getpid()}/{secrets.token_hex(4)}"
+    return TurnLedger(database_url, connect=db_connect, worker=worker)

@@ -705,6 +705,67 @@ def _mc_release(principal) -> None:
         _MC_INFLIGHT.discard(principal)
 
 
+def _ledger_turn(found, kind="typed"):
+    """The claimed ledger turn for this request, None when the ledger is off, or ledger_gate.Refusal."""
+    from . import feature_environ
+    from .mc import ledger_gate
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    refs = [{"topic_id": r["topic_id"], "item_id": r["item_id"], "rev": r.get("rev")}
+            for r in (getattr(g, "topic_context", None) or [])]
+    return ledger_gate.gate(services, feature_environ(), principal=principal, conversation_id=conv["id"],
+                            note_request_id=note_id, request_id=request_id, kind=kind,
+                            attachment_ids=attachment_ids, topic_refs=refs)
+
+
+def _ledger_required(ledger_turn):
+    """With the ledger on, no model turn may start without a claim (routes, voice and probes alike)."""
+    from . import feature_environ
+    from .mc import ledger_gate
+    if ledger_turn is None and ledger_gate.enabled(feature_environ()):
+        return {"error": "ledger_required", "message": "Turns must be recorded first while the turn ledger is on. "
+                "Nothing was sent."}
+    return None
+
+
+def _dispatch_marker(ledger_turn, recorder):
+    def on_dispatch():
+        if ledger_turn is not None:
+            ledger_turn.mark_started()
+        recorder()
+    return on_dispatch
+
+
+def _platform_command(found):
+    """The owner's deterministic commands, in their existing order; None for an ordinary message."""
+    for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command):
+        result = command(found)
+        if result is not None:
+            return result
+    from .jobs_api import job_command
+    return job_command(found)                         # "run this as a job" / "stop": the server decides, no model is asked
+
+
+def _json_body(result):
+    """The JSON body of a view result (a Response, or a (Response, status) tuple)."""
+    response = result[0] if isinstance(result, tuple) else result
+    try:
+        body = response.get_json(silent=True)
+    except Exception:
+        body = None
+    return body if isinstance(body, dict) else {}
+
+
+def _ledger_abort(turn, phase):
+    """An exception escaped a claimed turn: unknown once a platform action or model call may have
+    started, not_sent only when neither had."""
+    if turn is None or turn.finished:
+        return
+    if phase == "platform" or turn.started:
+        turn.finish_unknown("exception")
+    else:
+        turn.finish_not_sent()
+
+
 def _mc_prelude():
     """The guards both turn endpoints share. Returns (refusal, None) or
     (None, (services, principal, conv, floor, note, note_id, request_id, attachment_ids))."""
@@ -768,26 +829,29 @@ def mc_turn():
     if refusal is not None:
         return refusal
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
-    register_result = _owner_register_command(found)
-    if register_result is not None:
-        return register_result
-    library_result = _owner_library_command(found)
-    if library_result is not None:
-        return library_result
-    board_result = _owner_board_command(found)
-    if board_result is not None:
-        return board_result
-    action_result = _owner_action_command(found)
-    if action_result is not None:
-        return action_result
-    from .jobs_api import job_command
-    command = job_command(found)                      # "run this as a job" / "stop": the server decides, no model is asked
-    if command is not None:
-        return command
-    answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
-                                 principal=principal, note=note, note_id=note_id, request_id=request_id,
-                                 attachment_ids=attachment_ids)
-    return jsonify(answer), status
+    from .mc.ledger_gate import Refusal
+    try:
+        turn = _ledger_turn(found)           # None when the turn ledger is off: everything below is unchanged
+    except Refusal as refused:
+        return jsonify(refused.body), refused.status
+    phase = "before"
+    try:
+        phase = "platform"
+        result = _platform_command(found)
+        if result is not None:
+            if turn is not None:
+                turn.finish_platform(_json_body(result))
+            return result
+        phase = "model"
+        answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
+                                     principal=principal, note=note, note_id=note_id, request_id=request_id,
+                                     attachment_ids=attachment_ids, ledger_turn=turn)
+        if turn is not None:
+            turn.finish_model(answer, status)
+        return jsonify(answer), status
+    except BaseException:
+        _ledger_abort(turn, phase)
+        raise
 
 
 def _fresh_kept_owner_conversation(conv, principal, note_id=None):
@@ -889,8 +953,9 @@ def _owner_library_command(found):
         value = kept.value if saved else None
     except Exception:
         saved, value = False, None
+    operation = dict(result['operation'])     # its state says whether an unconfirmed filing had been sent
     return jsonify(status='answered', backend_kind='platform', reply_note=value,
-                   message=reply, operation=result['operation'], history_saved=saved), 200
+                   message=reply, operation=operation, history_saved=saved), 200
 
 
 def _owner_board_command(found):
@@ -979,6 +1044,12 @@ def mc_private():
         return json_error("mc_unavailable", f"{shown['header']}. Nothing was sent to Master Craftsman.", 503,
                           mc_state=shown["state"], reason=shown["reason"])
     principal = _principal()
+    from . import feature_environ
+    from .mc import ledger_gate
+    if ledger_gate.enabled(feature_environ()):
+        # Private keeps nothing, so it cannot join the durable exclusion without retaining metadata.
+        return json_error("private_unavailable", "Private is off while the turn ledger is on. Nothing was sent.", 409,
+                          mc_state=shown["state"])
     if not _mc_acquire(principal):
         return json_error("busy", MC_WORDS["busy"], 409, mc_state=shown["state"])
     turn_id = uuid.uuid4().hex
@@ -1034,34 +1105,43 @@ def mc_turn_stream():
     if refusal is not None:
         return refusal
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
-    register_result = _owner_register_command(found)
-    if register_result is not None:
-        return register_result
-    library_result = _owner_library_command(found)
-    if library_result is not None:
-        return library_result
-    board_result = _owner_board_command(found)
-    if board_result is not None:
-        return board_result
-    action_result = _owner_action_command(found)
-    if action_result is not None:
-        return action_result
-    from .jobs_api import job_command
-    command = job_command(found)                      # spoken job commands are answered here, streaming or not
-    if command is not None:
-        return command
-    if not getattr(services, "mc_stream", False):
-        return json_error("stream_off", "Streaming is not switched on on this portal. Nothing was sent.", 409)
-    if not getattr(services.mc, "supports_streaming", False):
-        return json_error("stream_unsupported", "This Master Craftsman backend does not stream. Nothing was sent.", 409)
-    if not request_id:
-        return json_error("invalid", "A streamed turn needs a request_id. Nothing was sent to Master Craftsman.", 422)
-    opened = open_mc_stream(services, conversations=_conversations(), floor=floor, conv=conv, principal=principal,
-                            note=note, note_id=note_id, request_id=request_id, attachment_ids=attachment_ids)
-    if opened[0] == "refused":
-        _, body, status = opened
-        return jsonify(body), status
-    _, run, body = opened
+    from .mc.ledger_gate import Refusal
+    try:
+        turn = _ledger_turn(found)           # None when the turn ledger is off: everything below is unchanged
+    except Refusal as refused:
+        return jsonify(refused.body), refused.status
+    phase = "before"
+    try:
+        phase = "platform"
+        result = _platform_command(found)                 # spoken job commands are answered here, streaming or not
+        if result is not None:
+            if turn is not None:
+                turn.finish_platform(_json_body(result))
+            return result
+        phase = "before"
+        pre = None
+        if not getattr(services, "mc_stream", False):
+            pre = json_error("stream_off", "Streaming is not switched on on this portal. Nothing was sent.", 409)
+        elif not getattr(services.mc, "supports_streaming", False):
+            pre = json_error("stream_unsupported", "This Master Craftsman backend does not stream. Nothing was sent.", 409)
+        elif not request_id:
+            pre = json_error("invalid", "A streamed turn needs a request_id. Nothing was sent to Master Craftsman.", 422)
+        if pre is not None:
+            if turn is not None:
+                turn.finish_not_sent(_json_body(pre))
+            return pre
+        opened = open_mc_stream(services, conversations=_conversations(), floor=floor, conv=conv, principal=principal,
+                                note=note, note_id=note_id, request_id=request_id, attachment_ids=attachment_ids,
+                                ledger_turn=turn)
+        if opened[0] == "refused":
+            _, body, status = opened
+            if turn is not None:
+                turn.finish_model(body, status)          # nothing was dispatched: not_sent, or answered from the record
+            return jsonify(body), status
+    except BaseException:
+        _ledger_abort(turn, phase)
+        raise
+    _, run, body = opened                                 # from here the run's end (on_end) finishes the ledger turn
     response = current_app.response_class(body, mimetype="application/x-ndjson")
     response.headers["Content-Type"] = "application/x-ndjson; charset=utf-8"
     response.headers["X-Accel-Buffering"] = "no"
@@ -1070,7 +1150,7 @@ def mc_turn_stream():
 
 
 def open_mc_stream(services, *, conversations, floor, conv, principal, note, note_id, request_id, observe=None,
-                   capture: bool = True, attachment_ids=None):
+                   capture: bool = True, attachment_ids=None, ledger_turn=None):
     """Everything /mc/turns/stream does after its request guards, with no
     request context: an existing reply answered from the record; an earlier
     dispatch of the same ``request_id`` (``already_dispatched``); Master
@@ -1092,6 +1172,9 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     from .mc.stream_usage import portal_folder as portal_usage_folder
     from .mc.streaming import DISPATCHED, StreamContext, StreamRun, browser_events
 
+    refused = _ledger_required(ledger_turn)
+    if refused is not None:
+        return "refused", refused, 409
     reply_key = _reply_key(note_id)
     try:
         existing = floor.get_note(reply_key)
@@ -1175,11 +1258,57 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         header=lambda: floor_state.mc_view(services, notes_ok=True),
         touch=lambda: _touch_in(conversations, conv, principal), annotate=annotate,
         usage_folder=portal_usage_folder(), cancel=cancel, files=_files_view(files),
-        on_dispatch=_files_recorder(conversations, conv, principal, note_id, files),
+        on_dispatch=_dispatch_marker(ledger_turn, _files_recorder(conversations, conv, principal, note_id, files)),
+        on_end=ledger_turn.finish_stream if ledger_turn is not None else None,
         on_answered=agent_state.mark if agent_state is not None else (lambda: None),
         capture=(capturer(turn_id=turn_id, conversation_id=conv.get("id"), note=note, note_id=note_id,
                           user_text=sent_text, backend_kind=getattr(services.mc, "kind", None)) if capture else None)))
     return "stream", run, browser_events(run, render=render_markdown.__wrapped__)
+
+
+@owner_api
+def mc_turn_ledger_view():
+    """The owner's turn ledger (issue #346): the running entry, any pause and recent entries.
+    Content-free: ids, states and allowlisted outcomes only. 404 while the ledger is off."""
+    from . import feature_environ
+    from .mc import ledger_gate
+    from .mc.turn_ledger import LedgerUnavailable
+    if not ledger_gate.enabled(feature_environ()):
+        return json_error("ledger_off", "The turn ledger is not switched on here.", 404)
+    services = cfg()["services"]
+    try:
+        view = services.turn_ledger.status(_principal())
+    except LedgerUnavailable:
+        return json_error("ledger_unavailable", "The turn ledger cannot be read right now.", 503)
+    keep = ("id", "conversation_id", "note_request_id", "state", "created_at", "updated_at", "outcome")
+    entry = lambda e: {k: e.get(k) for k in keep} if e else None
+    return jsonify(running=entry(view["running"]), pause=view["pause"],
+                   recent=[entry(e) for e in view["recent"]])
+
+
+@owner_api
+def mc_turn_continue():
+    """Lift the owner's pause after an unknown or failed turn, only for the entry it names. The
+    earlier work's outcome stays unknown: it may have run, or may still be running."""
+    from . import feature_environ
+    from .mc import ledger_gate
+    from .mc.turn_ledger import LedgerUnavailable
+    refusal = check_write(cfg()["base_url"])
+    if refusal is not None:
+        return refusal
+    if not ledger_gate.enabled(feature_environ()):
+        return json_error("ledger_off", "The turn ledger is not switched on here.", 404)
+    body = request.get_json(silent=True)
+    ledger_id = body.get("ledger_id") if isinstance(body, dict) else None
+    if type(ledger_id) is not int or ledger_id <= 0 or set(body) - {"ledger_id"}:
+        return json_error("invalid", "Continue needs the paused entry's ledger_id. Nothing changed.", 422)
+    try:
+        out = cfg()["services"].turn_ledger.continue_after(_principal(), ledger_id)
+    except LedgerUnavailable:
+        return json_error("ledger_unavailable", "The turn ledger cannot be written right now. Nothing changed.", 503)
+    if out["result"] != "continued":
+        return json_error("not_paused", "There is no pause for that entry. Nothing changed.", 409)
+    return jsonify(out)
 
 
 @owner_api
@@ -1440,7 +1569,8 @@ def conversation_retry_release(cid):
 
 
 def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_id,
-                request_id: str | None = None, capture: bool = True, attachment_ids=None, host_channel=None) -> tuple[dict, int]:
+                request_id: str | None = None, capture: bool = True, attachment_ids=None, host_channel=None,
+                ledger_turn=None) -> tuple[dict, int]:
     """One Master Craftsman turn for a kept owner note, after the route's
     guards (write guard, turn gate, the note is this owner's): one reply per
     note, MC's state must allow turns, one turn in flight per owner, the note
@@ -1457,6 +1587,9 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
 
     from .mc import NotAnAnswer, TurnRequest, keep_reply
 
+    refused = _ledger_required(ledger_turn)
+    if refused is not None:
+        return refused, 409
     # One reply per note (#251 review F1): a note that already has a kept
     # reply is answered from the store, and Master Craftsman is not called
     # again (from stage C every call is paid).
@@ -1543,6 +1676,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
         _files_recorder(conversations, conv, principal, note_id, files)()
         started = time.monotonic()
+        if ledger_turn is not None:
+            ledger_turn.mark_started()                  # from here the outcome can only be answered, failed or unknown
         result = services.mc.turn(req)
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None
@@ -1993,6 +2128,8 @@ RULES = [
     ("/mc/turns", "api_mc_turn", mc_turn, ["POST"]),
     ("/mc/private", "api_mc_private", mc_private, ["POST"]),
     ("/mc/turns/stream", "api_mc_turn_stream", mc_turn_stream, ["POST"]),
+    ("/mc/turns/ledger", "api_mc_turn_ledger", mc_turn_ledger_view, ["GET"]),
+    ("/mc/turns/continue", "api_mc_turn_continue", mc_turn_continue, ["POST"]),
     ("/mc/turns/<turn_id>/stop", "api_mc_turn_stop", mc_turn_stop, ["POST"]),
     ("/conversations", "api_conversations", conversations_list, ["GET"]),
     ("/workshop", "api_workshop", workshop_view_api, ["GET"]),
