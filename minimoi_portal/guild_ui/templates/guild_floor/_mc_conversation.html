@@ -1,5 +1,9 @@
 {% set mc_name = (state.mc.name if state is defined and state.mc and state.mc.name else 'Master Craftsman') %}
-{% set mc_private = not (state is defined and state.mc and state.mc.private is false) %}
+{# Private is unavailable when the partner keeps its own record (Chief of Staff), or while every message is recorded
+   before it is sent (the turn ledger, issue #346): each with its own reason, and the lock cannot be selected. #}
+{% set private_off = 'backend' if (state is defined and state.mc and state.mc.private is false) else ('recorded' if (page_json is defined and page_json.mc_queue) else '') %}
+{% set mc_private = not private_off %}
+{% set private_off_why = ('Private is not available with the ' ~ mc_name ~ ': it keeps its own record') if private_off == 'backend' else 'Private is off here: every message is recorded before it is sent' %}
 {# Shared full-page and contextual chat. Private uses its separate non-persistent
    path; attachment delivery reports the actual per-file state. #}
 {% macro note_row(n) -%}
@@ -116,7 +120,7 @@
         <div class="mc-options-body">
           {% if dictation_on %}<button type="button" class="btn-quiet mc-dictate" data-dictate="#mc-input" aria-pressed="false" hidden>Dictate</button>{% endif %}
           {% if mc_voice_on %}<span class="mc-options-group" data-mc-managed-settings hidden><label data-mc-provider-control>Voice <select data-mc-voice-provider aria-label="Voice provider"><option value="openai">OpenAI</option><option value="xai" disabled>Grok (xAI) · not available yet</option></select></label><label><input type="checkbox" data-mc-voice-transcript-choice> Transcript</label> <a data-mc-voice-export hidden>Download transcript</a></span>{% endif %}
-          <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="{{ 'Go Private' if mc_private else 'Private is not available' }}" title="{{ 'Go Private: ' ~ mc_name ~ ' answers, MiniMoi keeps nothing' if mc_private else 'Private is not available with the ' ~ mc_name ~ ': it keeps its own record' }}"{% if not mc_private %} disabled data-private-off{% endif %}><span aria-hidden="true">🔒</span><span class="mc-lock-text" aria-hidden="true">Private</span></button>
+          <button type="button" class="mc-lock" data-mc-record aria-pressed="false" aria-label="{{ 'Go Private' if mc_private else 'Private is not available' }}" title="{{ 'Go Private: ' ~ mc_name ~ ' answers, MiniMoi keeps nothing' if mc_private else private_off_why }}"{% if not mc_private %} disabled data-private-off="{{ private_off }}" data-private-off-why="{{ private_off_why }}"{% endif %}><span aria-hidden="true">🔒</span><span class="mc-lock-text" aria-hidden="true">Private</span></button>
         </div>
       </details>
       <button type="button" class="btn-quiet" data-mc-record-confirm hidden>Confirm on the record</button>
