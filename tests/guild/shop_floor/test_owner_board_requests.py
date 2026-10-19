@@ -239,3 +239,58 @@ def test_two_quoted_requests_on_separate_lines_still_ask():
 ])
 def test_unclosed_or_partial_quotes(text, payload):
     assert parse(text) == payload
+
+
+# ── "put these … on the Board (as one post-it): <the words>" (journey J1) ─────
+
+@pytest.mark.parametrize("text,payload", [
+    ("Put these three on the Board as one post-it: buy milk; call the plumber; renew passport",
+     "buy milk; call the plumber; renew passport"),
+    ("Put the following on the Board: buy milk, eggs", "buy milk, eggs"),
+    ("Could you please put these 3 items on the board as one post-it: a; b; c?", "a; b; c"),
+    ("Add these to the board as a single post-it - milk, eggs", "milk, eggs"),
+    ('Put these on the board as one post-it: "Call Anna. Buy milk."', "Call Anna. Buy milk."),
+    ("Put these on the board as one post-it:\n- Call Anna\n- Buy milk", "- Call Anna\n- Buy milk"),
+    ("Write these two on a post-it: call Anna; book flights", "call Anna; book flights"),
+])
+def test_announced_list_is_saved_as_one_note(text, payload):
+    assert parse(text) == payload
+
+
+def test_journey_j1_saves_one_note_with_all_three_items_once():
+    text = "Put these three on the Board as one post-it: buy milk; call the plumber; renew passport"
+    first, board = run(text)
+    again, _ = run(text, board=board)
+    assert first["operation"]["saved"] and again["operation"]["repeated"] and len(board.rows) == 1
+    saved = next(iter(board.rows.values()))["text"]
+    assert all(item in saved for item in ("buy milk", "call the plumber", "renew passport"))
+
+
+@pytest.mark.parametrize("text", [
+    "Put these three on the Board as one post-it",                       # announced, but no words
+    "Put these on the board as one post-it: your last answer",           # the words only point
+    "Put milk on the board as one post-it: eggs",                        # two different payloads
+])
+def test_announced_list_without_clear_words_asks(text):
+    assert parse(text) == ""
+    out, board = run(text)
+    assert out["operation"]["reason"] == "needs_text" and not board.rows
+
+
+@pytest.mark.parametrize("text", [
+    'He said "put these on the board as one post-it: a; b"',
+    "Don't put these on the board as one post-it: a; b",
+    "If you can, put these on the board as one post-it: a; b",
+    "Should I put these on the board as one post-it: a; b?",
+    "> Put these on the board as one post-it: a; b",
+])
+def test_announced_list_in_reported_negative_or_quoted_framing_never_writes(text):
+    assert parse(text) is None
+    out, board = run(text)
+    assert out is None and not board.rows
+
+
+def test_plain_requests_are_not_taken_by_the_list_form():
+    assert parse("put buy milk on the board") == "buy milk"
+    assert parse("put reminder: call the bank on the board") == "reminder: call the bank"
+    assert parse("Put that on the Board.") == ""
