@@ -25,3 +25,33 @@ def test_file_only_turn_reaches_backend_without_invented_instruction(browser, se
     page.click("[data-mc-send]")
     assert len(streaming_mc["runtime"].posts) == len(posts)
     ctx.close()
+
+
+def test_popup_options_keep_provider_comparison_on_full_chat(browser, server, streaming_mc, monkeypatch):
+    from test_mc_voice import _on
+    _on(monkeypatch)
+    monkeypatch.setenv('MINIMOI_MC_EVERYWHERE', '1')
+    ctx, page = _context(browser, server, 1440, 900)
+    for width in (320, 390, 768, 900, 1440):
+        page.set_viewport_size({'width': width, 'height': 800})
+        go(page, f"{server['url']}/guild-next/guild/companion/german")
+        # Simulate capabilities arrival; no microphone/provider connection is made.
+        page.evaluate("""() => {
+          document.querySelector('[data-mc-options]').open = true;
+          document.querySelector('[data-mc-managed-settings]').hidden = false;
+          document.querySelector('[data-mc-voice-btn]').hidden = false;
+          const lock = document.querySelector('[data-mc-record]');
+          lock.dataset.privateOff = ''; lock.disabled = true;
+        }""")
+        expect(page.locator('[data-mc-provider-control]')).not_to_be_visible()
+        expect(page.locator('[data-mc-record]')).not_to_be_visible()
+        expect(page.locator('[data-mc-voice-transcript-choice]')).to_be_visible()
+        box = page.locator('[data-mc-voice-btn]').bounding_box()
+        assert 44 <= box['width'] <= 48 and box['height'] >= 44
+    go(page, f"{server['url']}/guild-next/guild/build")
+    page.evaluate("""() => {
+      document.querySelector('[data-mc-options]').open = true;
+      document.querySelector('[data-mc-managed-settings]').hidden = false;
+    }""")
+    expect(page.locator('[data-mc-voice-provider]')).to_be_visible()
+    ctx.close()
