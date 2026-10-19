@@ -194,6 +194,10 @@ class Turn:
     def finish_model(self, body, http_status):
         """The non-streaming model turn's answer, after mark_started() was called at dispatch."""
         if not self.started:
+            op = body.get('operation') if isinstance(body, dict) else None
+            if isinstance(op, dict) and op.get('type') == 'artifact_bundle' and op.get('state') in UNCONFIRMED:
+                self._end('unknown', outcome_of(body))
+                return
             if isinstance(body, dict) and body.get("status") == "answered":
                 self._end("answered", {**outcome_of(body), "reason": "existing_reply"})   # answered from the store
             else:
@@ -201,7 +205,10 @@ class Turn:
             return
         status = body.get("status") if isinstance(body, dict) else None
         if http_status == 200 and status == "answered" and isinstance(body.get("reply_note"), dict):
-            self._end("answered", outcome_of(body))
+            op = body.get('operation') or {}
+            state = op.get('state') if isinstance(op, dict) else None
+            terminal = 'unknown' if state in UNCONFIRMED else 'failed' if state in DOWNSTREAM_FAILED else 'answered'
+            self._end(terminal, outcome_of(body))
         elif status == "timeout_uncertain":
             self._end("unknown", outcome_of(body))
         else:

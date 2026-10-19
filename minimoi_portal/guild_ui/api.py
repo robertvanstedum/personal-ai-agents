@@ -838,6 +838,11 @@ def mc_turn():
     return _answer_turn(found, turn)
 
 
+def _delivery_requested(note):
+    from . import feature_environ, mc_deliveries
+    return feature_environ().get(mc_deliveries.FLAG) == "1" and mc_deliveries.requested(note.get("text"))
+
+
 def _answer_turn(found, turn):
     """/mc/turns after its guards and ledger claim (also a dispatched waiting turn, P2)."""
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
@@ -1124,6 +1129,8 @@ def mc_turn_stream():
 def _stream_turn(found, turn):
     """/mc/turns/stream after its guards and ledger claim (also a dispatched waiting turn, P2)."""
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if _delivery_requested(note):
+        return _answer_turn(found, turn)  # buffered platform-verified delivery; no unverified partial output
     phase = "before"
     try:
         phase = "platform"
@@ -1756,10 +1763,40 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     except FloorStoreUnavailable as exc:
         return {"error": "unavailable", "message": MC_WORDS["notes_down"],
                 "reason": "not_configured" if isinstance(exc, FloorStoreNotConfigured) else "unavailable"}, 503
+    delivery = _delivery_requested(note) and host_channel is None
+    delivery_operation = None
+    if delivery:
+        from . import mc_deliveries
+        from .conversations import ConversationNotFound
+        if not conversations.dir:
+            return {"error":"unavailable", "message":"File delivery storage is unavailable. Nothing was generated or stored."},503
+        try:
+            meta, _bytes = mc_deliveries.store(conversations).existing(principal, conv['id'], note_id)
+        except mc_deliveries.DeliveryExpired:
+            return {"error":"delivery_expired", "message":"This file package has expired. To create another package, send a new request."},410
+        except mc_deliveries.DeliveryMissing:
+            meta = None
+        except mc_deliveries.DeliveryUnavailable:
+            return {"status":"timeout_uncertain", "failure_class":"delivery_unconfirmed",
+                    "operation":{"type":"artifact_bundle","saved":False,"state":"uncertain"},
+                    "message":"The previous file delivery cannot be verified. No new package was created. Have its stored result checked before sending a new request."}, 200
+        if meta is not None:
+            # Existing verified bytes win even if the previous response was lost. Never generate twice.
+            ready = mc_deliveries.ready(meta, cfg()['base_url'].rstrip('/') + cfg()['url_prefix'])
+            if existing is None:
+                kept = floor.add_note(reply_key, ready, GUILD_PLATFORM)
+                if getattr(kept,'outcome',None) != 'kept':
+                    return {"status":"timeout_uncertain", "failure_class":"delivery_unconfirmed",
+                            "operation":{"type":"artifact_bundle","saved":False,"state":"uncertain"},
+                            "message":"The package is stored but its reply could not be kept. Check before retrying."},200
+                existing=kept.value
+            answer=_repeated_answer(services,existing)
+            answer['operation']=mc_deliveries.receipt(meta)
+            return answer,200
     if existing is not None:
         answer = _repeated_answer(services, existing)
         from . import feature_environ
-        if services.mc.kind == "cos" and feature_environ().get("MINIMOI_MC_BOARD_OUTCOMES") == "1":
+        if not delivery and services.mc.kind == "cos" and feature_environ().get("MINIMOI_MC_BOARD_OUTCOMES") == "1":
             from .mc_context import board_ids
             # Read historical receipts only: a retry never consumes a late
             # proposal or performs a write after an interrupted turn.
@@ -1812,7 +1849,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         from .mc import board_outcomes
         from . import feature_environ
         board_plan, board_proposal = None, None
-        if services.mc.kind == "cos" and feature_environ().get("MINIMOI_MC_BOARD_OUTCOMES") == "1":
+        if not delivery and services.mc.kind == "cos" and feature_environ().get("MINIMOI_MC_BOARD_OUTCOMES") == "1":
             try:
                 board_plan = board_outcomes.prepare(sent_text, _floor(), note_id)
             except Exception:
@@ -1822,6 +1859,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                                      current_voice=host_channel is MANAGED_VOICE_CHANNEL)
         if board_plan is not None:
             context_text += "\n\n" + board_plan.contract()
+        if delivery:
+            context_text += "\n\n" + mc_deliveries.CONTRACT
         turn_context = {"about": ctx.get("area"), "item_ref": ctx.get("item_ref"), "page": ctx.get("page")}
         # Explicit trusted host input only; never copy a browser/note channel.
         from .mc.cos import MANAGED_VOICE_CHANNEL
@@ -1837,6 +1876,27 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         result = services.mc.turn(req)
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None
+        if delivery and result.status == "answered":
+            from .mc import TurnResult
+            try:
+                if (result.trace or {}).get('finish_reason') != 'stop':
+                    raise mc_deliveries.BundleRefused('incomplete_response')
+                # Recheck the owner/conversation after generation, before writing any delivery.
+                fresh = conversations.get(conv['id'], principal)
+                if fresh.get('archived') or fresh.get('notes_floor') != conv.get('notes_floor'):
+                    raise mc_deliveries.BundleRefused('conversation_changed')
+                text, delivery_operation = mc_deliveries.deliver(conversations, principal, conv['id'], note_id,
+                    result.text, scrub=scrub, base_url=cfg()['base_url'].rstrip('/') + cfg()['url_prefix'])
+            except mc_deliveries.DeliveryFull:
+                text = "The file delivery limit has been reached: 10 packages per conversation or 50 MiB overall. Expired packages still count. No new download was created."
+                delivery_operation = {'type':'artifact_bundle','saved':False,'state':'refused'}
+            except (mc_deliveries.BundleRefused, mc_deliveries.DeliveryMissing, ConversationNotFound):
+                text = "The requested file package could not be validated, or its conversation is no longer available. No new download was created."
+                delivery_operation = {'type':'artifact_bundle','saved':False,'state':'refused'}
+            except Exception:
+                text = "The file package could not be confirmed. Have its stored result checked before sending a new request."
+                delivery_operation = {'type':'artifact_bundle','saved':False,'state':'uncertain'}
+            result = TurnResult('answered', result.backend_kind, text=text, usage=result.usage, trace=result.trace)
         if board_plan is not None and result.status == "answered":
             from .mc import TurnResult
             try:
@@ -1851,7 +1911,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             if agent_state is not None and (result.trace or {}).get("finish_reason", "stop") == "stop":
                 agent_state.mark()                              # a complete ("stop") answer: MC has seen the status. A failure, timeout, cancel or cut-off reply consumes nothing
             from .jobs_api import make_hook
-            hook = make_hook(services, conv, principal, note, note_id, attachment_ids) if board_plan is None else None
+            hook = make_hook(services, conv, principal, note, note_id, attachment_ids) if board_plan is None and not delivery else None
             try:
                 decision = hook.decide(result.text, clean=True) if hook is not None else None
             except Exception:
@@ -1873,14 +1933,20 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
     if (result.trace or {}).get("cos_turn_id"):
         # The backend's own turn id (CoS: the gateway routing-receipt id), for exact cost settlement.
         answer["backend_turn_id"] = result.trace["cos_turn_id"]
+    if delivery_operation is not None:
+        answer['operation'] = delivery_operation
     if files is not None and files.report:
         answer["files"] = _files_view(files)
     if job_started is not None:
         answer["job"] = job_started
     if result.status == "answered":
         try:
-            kept = keep_reply(floor, result, request_id=reply_key, area=ctx.get("area"),
-                              item_ref=ctx.get("item_ref"), page=ctx.get("page"))
+            # The model packet is deliberately not kept as conversational prose. The verified
+            # receipt is authored by the platform; model backend/usage remain on the turn for cost attribution.
+            kept = (floor.add_note(reply_key, result.text, GUILD_PLATFORM, area=ctx.get("area"),
+                                   item_ref=ctx.get("item_ref"), page=ctx.get("page")) if delivery else
+                    keep_reply(floor, result, request_id=reply_key, area=ctx.get("area"),
+                               item_ref=ctx.get("item_ref"), page=ctx.get("page")))
             outcome = getattr(kept, "outcome", None)
         except (FloorStoreUnavailable, NotAnAnswer):
             kept, outcome = None, "store_failed"
@@ -2194,6 +2260,31 @@ def conversation_document_upload(cid):
 
 
 @owner_api
+def conversation_delivery_download(cid, delivery_id):
+    from . import mc_deliveries
+    from .conversations import ConversationNotFound, ConversationStoreUnavailable
+    principal = _principal()
+    try:
+        conv = _conversations().get(cid, principal)
+        if conv.get('archived'):
+            raise mc_deliveries.DeliveryMissing()
+        meta, data = mc_deliveries.store(_conversations()).get(principal, cid, delivery_id)
+        fresh = _conversations().get(cid, principal)
+        if fresh.get('archived') or fresh.get('notes_floor') != conv.get('notes_floor'):
+            raise mc_deliveries.DeliveryMissing()
+    except (mc_deliveries.DeliveryMissing, ConversationNotFound):
+        return json_error('not_found', 'This delivery is unavailable.', 404)
+    except (mc_deliveries.DeliveryUnavailable, ConversationStoreUnavailable):
+        return json_error('unavailable', 'This delivery cannot be verified.', 503)
+    response = current_app.response_class(data, mimetype='application/zip')
+    response.headers['Content-Disposition'] = 'attachment; filename="mc-files-' + meta['id'] + '.zip"'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Content-Security-Policy'] = "default-src 'none'; sandbox"
+    return response
+
+
+@owner_api
 def conversation_document_original(cid, doc_id):
     """The owner's own original file, as a download. Owner and conversation are checked; the id is resolved on the
     server, never taken as a path; the answer is always an attachment with a generic type and nosniff, so an HTML or
@@ -2289,6 +2380,7 @@ RULES = [
     ("/mc/turns/queue/<int:ledger_id>/dispatch", "api_mc_turn_queue_dispatch", mc_turn_queue_dispatch, ["POST"]),
     ("/mc/turns/queue/<int:ledger_id>/cancel", "api_mc_turn_queue_cancel", mc_turn_queue_cancel, ["POST"]),
     ("/mc/turns/<turn_id>/stop", "api_mc_turn_stop", mc_turn_stop, ["POST"]),
+    ("/conversations/<cid>/deliveries/<delivery_id>", "api_conversation_delivery_download", conversation_delivery_download, ["GET"]),
     ("/conversations", "api_conversations", conversations_list, ["GET"]),
     ("/workshop", "api_workshop", workshop_view_api, ["GET"]),
     ("/conversations", "api_conversation_create", conversation_create, ["POST"]),
