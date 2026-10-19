@@ -338,6 +338,8 @@ def deliver_due(
             try:
                 action = _classify(record, current)
                 attempts = int(record.get("attempts") or 0)
+                # Read the sort key here too: one malformed record is skipped, never fatal to the run.
+                due_key = format_utc(parse_utc(record["due_utc"])) if action == "send" else None
             except (KeyError, TypeError, ValueError, AttributeError):
                 summary["invalid"] += 1
                 continue
@@ -349,7 +351,7 @@ def deliver_due(
                 summary["stale_sending"] += 1
                 changed = True
             elif action == "send":
-                candidates.append((record["due_utc"], attempts, record))
+                candidates.append((due_key, attempts, record))
         candidates.sort(key=lambda item: item[0])
         for _, attempts, record in candidates:
             if len(batch) >= MAX_SENDS_PER_RUN:

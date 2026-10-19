@@ -106,3 +106,5 @@ def test_cos_platform_notes_and_reminders_outside_data_are_backed_up():
     agent = " ".join(str(v) for v in services["cos-agent-a"].get("volumes") or [])
     assert "/cos_reminders:/app/data/cos_reminders" in scheduler and "/cos_memory.md:" in scheduler
     assert "cos_reminders" not in agent and "cos_memory.md" not in agent
+    bot = " ".join(str(v) for v in services["cos-bot"].get("volumes") or [])
+    assert "/cos_reminders:/app/data/cos_reminders" in bot          # Telegram /remind, same store

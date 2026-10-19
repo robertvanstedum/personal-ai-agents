@@ -14,6 +14,7 @@ import re
 from typing import Callable
 from uuid import UUID, uuid4
 from core.realtime_voice.timing import VoiceTiming
+from domains.cos.claim_truth import enforce as enforce_claim_truth
 from domains.cos.reminders import MAX_TEXT_CHARS as MAX_REMINDER_TEXT_CHARS
 from domains.cos.reminders import ReminderRefused
 
@@ -33,15 +34,17 @@ _SAVE_NOTE_PREFIX = re.compile(
 )
 _SLASH_NOTE_PREFIX = re.compile(r"^/note(?:\s+|$)", re.IGNORECASE)
 # Natural spoken and typed forms. Each is start-anchored and needs an explicit
-# separator ("that", "saying", a colon or a dash) before the note text, so
-# "make a note of that" or "can you make a note?" stay ordinary chat.
+# separator ("that ", "saying ", a colon or a dash) before the note text, so
+# "make a note of that" or "can you make a note?" stay ordinary chat. "Write"
+# and "create" a note are drafting requests ("write a note saying thank you to
+# the team"), not something to keep, so they go to the model.
 _NATURAL_NOTE_PREFIX = re.compile(
     r"^(?:(?:okay|ok)\s*,?\s+)?"
     r"(?:please\s+|(?:can|could|would)\s+you\s+(?:please\s+)?)?"
     r"(?:"
-    r"(?:make|take|save|write|add|create|jot\s+down)\s+(?:me\s+)?(?:a\s+)?"
-    r"note\s*(?::|-(?=\s|$)|[–—]|that\b|saying\b)"
-    r"|note\s+to\s+self\b\s*(?::|[-–—]|,)?"
+    r"(?:make|take|save|add|jot\s+down)\s+(?:me\s+)?(?:a\s+)?"
+    r"note\s*(?::|-(?=\s|$)|[–—]|that(?=\s|$)|saying(?=\s|$))"
+    r"|note\s+to\s+self\s*(?::|[-–—]|,)"
     r")",
     re.IGNORECASE,
 )
@@ -62,47 +65,6 @@ _REMINDER_REFUSALS = {
         "Too many reminders are waiting; no new reminder was saved."
     ),
 }
-_UNVERIFIED_NOTE_SUCCESS = re.compile(
-    r"(?:^\s*noted\b|"
-    r"\b(?:platform\s+)?note\s+(?:successfully\s+)?"
-    r"(?:saved|recorded|stored)\b|"
-    r"^\s*(?:"
-    r"note\s+(?:successfully\s+)?(?:saved|recorded|stored)\b|"
-    r"(?:i|we)(?:'ve| have)\s+(?:successfully\s+)?"
-    r"(?:saved|recorded|stored)\s+(?:the|your|that)\s+note\b|"
-    r"(?:your|the|that)\s+note\s+(?:is|was|has been)\s+"
-    r"(?:successfully\s+)?(?:saved|recorded|stored)\b"
-    r"))",
-    re.IGNORECASE,
-)
-# Claims a backend must not make without a platform receipt. They match
-# anywhere in the reply, but only as first-person or sentence-opening claims:
-# reported speech ("as noted in the log", "you noted that") and ordinary uses
-# ("a reminder that the build is green") stay untouched.
-_UNVERIFIED_NOTE_CLAIM = re.compile(
-    r"(?:"
-    r"\b(?:i|we)(?:['’]ve|\s+have)\s+(?:just\s+|also\s+)?noted\b|"
-    r"(?:^|[.!?,;:–—-])\s*noted(?:\s+that\b|\s*(?:[.!,;:–—-]|$))|"
-    r"(?:\b(?:i|we)(?:['’]ve|\s+have)?\s+(?:just\s+|also\s+)?|(?:^|[.!?,;:–—-])\s*)"
-    r"made\s+a\s+note\b|"
-    r"\b(?:i|we)(?:['’]ll|\s+will)\s+(?:make\s+a\s+note|note)\b|"
-    r"\b(?:i|we)(?:['’]ve|\s+have)\s+(?:just\s+|also\s+)?saved\s+(?:that|this|it)\b"
-    r")",
-    re.IGNORECASE | re.MULTILINE,
-)
-_UNVERIFIED_REMINDER_CLAIM = re.compile(
-    r"(?:"
-    r"\breminders?(?:['’]s|\s+is|\s+has\s+been)?\s+set\b|"
-    r"\b(?:i|we)(?:['’]ve|\s+have)?\s+(?:just\s+|also\s+)?set\s+(?:up\s+)?"
-    r"(?:a|the|your|that|this)\s+reminder\b|"
-    r"\b(?:i|we)(?:['’]ll|\s+will)\s+(?:make\s+sure\s+to\s+|be\s+sure\s+to\s+)?"
-    r"(?:remind|ping)\s+you\b|"
-    r"\bset\s+a\s+reminder\s+for\s+you\b"
-    r")",
-    re.IGNORECASE,
-)
-
-
 class InvalidConferTurn(ValueError):
     """Raised when a caller supplies an empty turn or unknown channel."""
 
@@ -396,24 +358,10 @@ class ConferTurnService:
             timing.emit("native_failed")
             raise
         timing.emit("native_end")
-        reminder_claim = _UNVERIFIED_REMINDER_CLAIM.search(reply) is not None
-        if _UNVERIFIED_NOTE_SUCCESS.search(reply) and not reminder_claim:
-            # A backend has no note-write authority. Only the deterministic
-            # operation path above may return a save receipt or success claim.
-            reply = (
-                "No note was saved because this turn did not match a platform "
-                "note command. Say ‘Save a note: …’ or ‘Save this note: …’ "
-                "with the note text."
-            )
-        elif reminder_claim or _UNVERIFIED_NOTE_CLAIM.search(reply):
-            # Nor does it have reminder-write authority: a reminder exists only
-            # with a receipt from the deterministic /remind path above.
-            reply = (
-                "No note or reminder was saved because this turn did not match "
-                "a platform command. For a note, say ‘/note …’ or ‘Make a note "
-                "that …’. For a reminder, say ‘Remind me at 5 pm to …’ in Master "
-                "Craftsman, or ‘/remind YYYY-MM-DDTHH:MMZ …’ with the time in UTC."
-            )
+        # A model reply has no write or scheduling authority: only the deterministic
+        # operations above keep notes or set reminders, with their own receipts. Any
+        # sentence claiming one, or promising a later action, is removed (claim_truth).
+        reply, _ = enforce_claim_truth(reply)
         self._increment_chat()
         backend_label, model_label = self._backend_metadata()
         runtime_route = context.get("runtime_route") or {}

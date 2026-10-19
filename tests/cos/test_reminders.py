@@ -389,6 +389,25 @@ def test_one_malformed_record_does_not_stop_the_others(root):
     assert _records(root)[0] == {"id": "rem-000000000000", "state": "pending"}
 
 
+@pytest.mark.parametrize("bad", [
+    {"id": "rem-00000000000a", "state": "failed", "attempts": 1, "last_attempt_utc": "2026-10-19T13:00:00Z"},
+    {"id": "rem-00000000000b", "state": "failed", "attempts": 1, "last_attempt_utc": "2026-10-19T13:00:00Z", "due_utc": 7},
+])
+def test_a_retryable_record_without_a_readable_due_time_is_skipped_not_fatal(root, bad):
+    # A failed record is classified by its last attempt, so its due time used to be read
+    # outside the guard: one bad record raised every minute and stopped all delivery.
+    _add(root, text="good one")
+    document = _document(root)
+    document["reminders"].insert(0, bad)
+    (root / R.STORE_FILE).write_text(json.dumps(document))
+    send = FakeSender()
+
+    summary = R.deliver_due(send, now=DUE, root=root)
+
+    assert summary["invalid"] == 1 and summary["delivered"] == 1
+    assert send.sent == ["Reminder: good one"]
+
+
 def test_replay_cannot_confirm_until_directory_sync_recovers(root, monkeypatch):
     operation = str(uuid4())
     real = R.os.fsync
