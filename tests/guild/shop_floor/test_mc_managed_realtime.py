@@ -247,7 +247,7 @@ def test_spoken_reminder_without_a_time_is_answered_by_the_platform_not_the_mode
     s,_=start(r)
     with ThreadPoolExecutor(max_workers=1) as worker:
         out=worker.submit(s.dispatch,'consult_cos_agent','remind me to call mom','c-123456abcdef','op-remind-1').result()
-    assert 'When should I remind you?' in out['reply'] and out['operation']=={'type':'reminder_set','saved':False}
+    assert 'Say the whole reminder with its time' in out['reply'] and out['operation']=={'type':'reminder_set','saved':False}
     assert not cos.calls and not r.calls
 
 

@@ -151,11 +151,19 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# /note and /remind are CoS platform commands (deterministic note and reminder
+# operations with receipts), so they reach CoS as written. Any other command is
+# not chat and never reaches CoS or the model.
+PLATFORM_COMMANDS = ("note", "remind")
+_BOT_SUFFIX = re.compile(r"^/(note|remind)@\w+", re.IGNORECASE)
+
+
 @_owner_only
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
     if not text:
         return
+    text = _BOT_SUFFIX.sub(lambda m: "/" + m.group(1).lower(), text)
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
@@ -227,6 +235,7 @@ def build_application(token: str, owner_id: int) -> Application:
     app.add_handler(TypeHandler(Update, _gate), group=-1)
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler(list(PLATFORM_COMMANDS), handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     return app

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from telegram.ext import CommandHandler
 from telegram.ext import ApplicationHandlerStop, TypeHandler
 
 from core.telegram import telegram_cos_bot as bot
@@ -306,3 +307,33 @@ def test_polling_asks_telegram_for_plain_messages_only(monkeypatch):
 
 def test_http_client_logs_never_carry_the_token():
     assert logging.getLogger("httpx").level >= logging.WARNING             # set explicitly, not inherited from a test runner
+
+
+# ── /note and /remind reach the CoS platform operations (19 Oct) ─────────────
+
+@pytest.mark.parametrize("text,sent", [
+    ("/note buy milk", "/note buy milk"),
+    ("/remind 2026-10-20T14:00Z call Anna", "/remind 2026-10-20T14:00Z call Anna"),
+    ("/note@rvsopenbot buy milk", "/note buy milk"),
+])
+def test_owner_note_and_remind_commands_reach_cos_as_written(chat_calls, text, sent):
+    update = _update(text=text)
+    run(bot.handle_message(update, _context()))
+    assert chat_calls == [(sent, "telegram_text")]
+
+
+def test_stranger_note_command_never_reaches_cos(chat_calls):
+    update = _update(user_id=STRANGER, text="/note buy milk")
+    run(bot.handle_message(update, _context()))
+    assert chat_calls == []
+    update._message.reply_text.assert_not_called()
+
+
+def test_only_note_and_remind_commands_are_routed_to_cos():
+    app = bot.build_application("123:TEST", OWNER)
+    routed = set()
+    for group in app.handlers.values():
+        for handler in group:
+            if isinstance(handler, CommandHandler) and handler.callback is bot.handle_message:
+                routed |= set(handler.commands)
+    assert routed == {"note", "remind"}

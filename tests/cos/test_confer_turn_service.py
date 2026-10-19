@@ -5,6 +5,7 @@ from core.agent_partner import PARTNER_STYLE
 import pytest
 
 from domains.cos import reminders
+from domains.cos.claim_truth import NOTICE
 from domains.cos.confer_service import (
     ALLOWED_CHANNELS,
     MAX_EXPLICIT_NOTE_CHARS,
@@ -356,8 +357,7 @@ def test_backend_cannot_claim_unverified_note_success(false_claim):
     ))
 
     assert result.operation is None
-    assert result.reply.startswith("No note was saved")
-    assert "Save a note:" in result.reply
+    assert result.reply == NOTICE          # every sentence was an unsupported claim
 
 
 def test_failed_platform_write_cannot_return_success_receipt():
@@ -443,14 +443,12 @@ def test_existing_note_forms_parse_unchanged(command, expected_note):
     [
         ("Make a note that the gate code is 4411", "the gate code is 4411"),
         ("take a note: buy milk", "buy milk"),
-        ("Could you please write a note saying call Anna back", "call Anna back"),
         ("make me a note - dentist Tuesday", "dentist Tuesday"),
         ("save a note that X", "X"),
         ("Note to self: renew passport", "renew passport"),
         ("note to self, renew passport", "renew passport"),
         ("Okay, can you jot down a note — pick up the dry cleaning", "pick up the dry cleaning"),
         ("Would you add a note: the build\nis   green", "the build is green"),
-        ("please create a note saying pay the gas bill", "pay the gas bill"),
     ],
 )
 def test_natural_note_forms_parse(command, expected_note):
@@ -750,8 +748,6 @@ def test_reminder_round_trip_through_the_real_store(tmp_path):
 @pytest.mark.parametrize(
     "false_claim",
     [
-        "I've noted that you prefer mornings.",
-        "Sure — I have noted the gate code.",
         "Okay — noted that the deploy is Tuesday.",
         "Got it, noted.",
         "I've made a note of it.",
@@ -766,7 +762,6 @@ def test_reminder_round_trip_through_the_real_store(tmp_path):
         "Sure thing, I'll remind you at five.",
         "I will remind you tomorrow morning.",
         "I'll ping you when it's time.",
-        "Happy to help. I can set a reminder for you at 5pm.",
         "Noted. I'll remind you at 5.",
     ],
 )
@@ -784,7 +779,7 @@ def test_backend_cannot_claim_unverified_note_or_reminder(false_claim):
     ))
 
     assert result.operation is None
-    assert result.reply.startswith("No note or reminder was saved")
+    assert result.reply.endswith(NOTICE) and false_claim not in result.reply
     assert "/note" in result.reply and "/remind" in result.reply
 
 
@@ -810,3 +805,60 @@ def test_ordinary_replies_mentioning_notes_or_reminders_are_untouched(ordinary_r
     result = service.handle(ConferTurnRequest(text="status?", channel="html_text"))
 
     assert result.reply == ordinary_reply
+
+
+# ── 19 Oct hotfix 2: drafting is not a note; receipt truth does not depend on the request ──
+
+@pytest.mark.parametrize("drafting", [
+    "Could you please write a note saying call Anna back",
+    "please create a note saying pay the gas bill",
+    "Write a note saying thank you to the team for the release",
+    "Can you write a note that I can send to Anna about the delay?",
+    "Create a note that summarizes today's meeting",
+    "make a note that's easy to read for the board",
+    "Note to self is a great app name",
+])
+def test_drafting_and_lookalikes_are_not_note_commands(drafting):
+    assert parse_explicit_note(drafting) is None
+
+
+def _reply_for(owner, reply):
+    service = ConferTurnService(
+        call_backend=lambda *_: reply,
+        build_context=lambda: {},
+        increment_chat=lambda: None,
+        backend_metadata=lambda: ("COS Agent A", "test-model"),
+    )
+    return service.handle(ConferTurnRequest(text=owner, channel="html_text")).reply
+
+
+@pytest.mark.parametrize("owner", [
+    "Please nudge me tomorrow at 9 to call Anna",                   # wording no grammar knows
+    "status?",                                                      # asked for nothing
+    "What's the weather?\n\n[Retained voice notes: remind me at 5 to call Anna]",   # context-induced
+    "[Draft]\n\nplease handle the plumber",                         # owner's own bracketed paragraph
+])
+@pytest.mark.parametrize("promise", ["I'll nudge you at 9.", "I'll remind you at 5.", "You'll get a reminder then."])
+def test_a_later_action_promise_is_removed_whatever_the_owner_wrote(owner, promise):
+    out = _reply_for(owner, f"It's sunny. {promise}")
+    assert out == "It's sunny.\n\n" + NOTICE
+
+
+@pytest.mark.parametrize("owner,reply", [
+    ("Remind me what we decided about tomorrow", "We decided to ship on Monday; the review is tomorrow at 9."),
+    ("What reminders do I have?", "You have no reminders set right now."),
+    ("remind me what we decided", "As I've noted before, we keep the old plist."),
+    ("Did the release ship?", "Yes, it shipped in PR 323. I'll note that the backup cron on EC2 still needs the new script copied by hand."),
+    ("How does key rotation work?", "I'll remind you that the API key rotates monthly."),
+    ("Status?", "We have noted three issues in the log."),
+    ("Write a note to Anna about the delay", "I've written a short note for you: Dear Anna, the release moves to Friday."),
+    ("make a note that's easy to read", "Here is a short version: ship Monday, review Tuesday."),
+])
+def test_history_negatives_and_remarks_are_never_changed(owner, reply):
+    assert _reply_for(owner, reply) == reply
+
+
+def test_only_the_claim_sentences_go_and_paragraphs_stay():
+    reply = "Yes, it shipped in PR 323. I've set a reminder for 9 tomorrow.\n\n- The cron still needs the script."
+    assert _reply_for("status?", reply) == (
+        "Yes, it shipped in PR 323.\n\n- The cron still needs the script.\n\n" + NOTICE)
