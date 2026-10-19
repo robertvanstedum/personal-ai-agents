@@ -195,11 +195,16 @@ def test_a_late_transcript_after_stop_paints_nothing(browser, server, floor, mon
     page.evaluate(f"window.__mic.dc.fire('message', {{data: {json.dumps(delta)}}})")
     expect(page.locator("[data-mc-voice-status]")).to_contain_text("Hearing: hello there")
     page.click("[data-mc-voice-btn]")
-    expect(page.locator("[data-mc-voice-status]")).to_be_hidden()
+    status = page.locator("[data-mc-voice-status]")
+    # Since 021f0ee8 Stop leaves one honest line ("Voice ended. Agent work already accepted may still finish.") instead
+    # of an empty status. What this check guards is unchanged: nothing heard after Stop is ever painted.
+    expect(status).to_have_text("Voice ended. Agent work already accepted may still finish.")
     late = json.dumps({"type": "conversation.item.input_audio_transcription.delta", "item_id": "i2", "delta": "too late"})
     page.evaluate(f"window.__mic.dc.fire('message', {{data: {json.dumps(late)}}})")
     page.wait_for_timeout(300)
-    expect(page.locator("[data-mc-voice-status]")).to_be_hidden()
+    expect(status).to_have_text("Voice ended. Agent work already accepted may still finish.")
+    expect(status).not_to_contain_text("Hearing")
+    expect(status).not_to_contain_text("too late")
     assert not errors, errors
     ctx.close()
 
