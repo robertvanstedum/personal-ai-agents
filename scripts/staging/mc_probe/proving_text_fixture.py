@@ -10,8 +10,10 @@ SHA256. ``FixtureTools`` wraps ``RepositoryTools``:
 
 No new tool, no caller-chosen file: a fixture is reachable only by its exact pinned labels. Each
 read opens the file again without following symlinks and checks size, hash and UTF-8, so a file
-changed after pinning is refused, never served.
+changed after pinning is refused, never served. The path is walked one component at a time from
+"/" with O_NOFOLLOW, so a parent folder swapped for a symlink after pinning is refused too.
 """
+import errno
 import hashlib
 import os
 from pathlib import Path
@@ -77,11 +79,28 @@ class FixtureTools:
         return self.tools.run_suite(suite)
 
 
-def _load(file, sha):
-    """Open without following a symlink; a regular, small, UTF-8 file whose hash is the pinned one."""
+def _open_no_symlinks(file):
+    """Open an absolute path one component at a time, never following a symlink anywhere on it."""
+    parts = [part for part in file.split("/") if part]
+    directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
-        fd = os.open(file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)   # a FIFO must not block
-    except OSError:
+        for part in parts[:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        return os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)  # a FIFO must not block
+    finally:
+        os.close(directory)
+
+
+def _load(file, sha):
+    """A regular, small, UTF-8 file whose hash is the pinned one, reached without any symlink."""
+    try:
+        fd = _open_no_symlinks(file)
+    except OSError as exc:
+        # O_NOFOLLOW on a symlink: ELOOP for the last component; ENOTDIR (or ELOOP) for a folder.
+        if exc.errno in (errno.ELOOP, errno.ENOTDIR, errno.EMLINK):
+            raise ToolRefused("fixture_path_must_not_traverse_symlinks") from None
         raise ToolRefused("fixture_unavailable") from None
     if not stat.S_ISREG(os.fstat(fd).st_mode):        # before fdopen, which refuses a directory itself
         os.close(fd)

@@ -183,8 +183,60 @@ def test_replaced_by_symlink_after_pinning_is_refused_on_read(repo, plan, tmp_pa
     copy.write_bytes(plan.read_bytes())
     plan.unlink()
     plan.symlink_to(copy)                     # same bytes, but now a symlink
+    with pytest.raises(ToolRefused, match="fixture_path_must_not_traverse_symlinks"):
+        tools.read_file("exam-x1", "X1_PLAN_FROZEN.md")
+
+
+def test_parent_folder_replaced_by_symlink_after_pinning_is_refused_on_read(repo, tmp_path):
+    """Same content behind a swapped parent folder: the hash would still match, the walk must not follow."""
+    pinned_dir = tmp_path / "pinned"
+    pinned_dir.mkdir()
+    plan = pinned_dir / "plan.md"
+    plan.write_bytes(TEXT.encode())
+    tools = FixtureTools(repo, pin(plan))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "plan.md").write_bytes(TEXT.encode())          # identical bytes
+    pinned_dir.rename(tmp_path / "moved")
+    pinned_dir.symlink_to(elsewhere, target_is_directory=True)
+    with pytest.raises(ToolRefused, match="fixture_path_must_not_traverse_symlinks"):
+        tools.read_file("exam-x1", "X1_PLAN_FROZEN.md")
+
+
+def test_grandparent_folder_replaced_by_symlink_after_pinning_is_refused_on_read(repo, tmp_path):
+    (tmp_path / "a" / "b").mkdir(parents=True)
+    plan = tmp_path / "a" / "b" / "plan.md"
+    plan.write_bytes(TEXT.encode())
+    tools = FixtureTools(repo, pin(plan))
+    (tmp_path / "other" / "b").mkdir(parents=True)
+    (tmp_path / "other" / "b" / "plan.md").write_bytes(TEXT.encode())
+    (tmp_path / "a").rename(tmp_path / "a-moved")
+    (tmp_path / "a").symlink_to(tmp_path / "other", target_is_directory=True)
+    with pytest.raises(ToolRefused, match="fixture_path_must_not_traverse_symlinks"):
+        tools.read_file("exam-x1", "X1_PLAN_FROZEN.md")
+
+
+def test_parent_folder_removed_after_pinning_is_unavailable(repo, tmp_path):
+    (tmp_path / "d").mkdir()
+    plan = tmp_path / "d" / "plan.md"
+    plan.write_bytes(TEXT.encode())
+    tools = FixtureTools(repo, pin(plan))
+    plan.unlink()
+    (tmp_path / "d").rmdir()
     with pytest.raises(ToolRefused, match="fixture_unavailable"):
         tools.read_file("exam-x1", "X1_PLAN_FROZEN.md")
+
+
+def test_walk_leaks_no_descriptors(repo, plan):
+    tools = FixtureTools(repo, pin(plan))
+    before = len(os.listdir("/dev/fd"))
+    for _ in range(50):
+        tools.read_file("exam-x1", "X1_PLAN_FROZEN.md")
+    plan.write_text("changed\n")
+    for _ in range(50):
+        with pytest.raises(ToolRefused):
+            tools.read_file("exam-x1", "X1_PLAN_FROZEN.md")
+    assert len(os.listdir("/dev/fd")) == before
 
 
 def test_works_behind_the_tool_queue(repo, plan, tmp_path):
