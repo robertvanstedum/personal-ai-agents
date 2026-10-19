@@ -289,6 +289,7 @@ def test_two_tabs_send_each_waiting_message_once(browser, server, queued):
     _say(one, "First question")
     assert _wait(lambda: len(_chat_posts(runtime)) == 1)
     _say(one, "Second question")
+    expect(one.locator("[data-queued-chip]")).to_have_count(1)         # recorded as waiting before the second tab looks
     go(two, two.url)                                                   # the second tab sees it waiting
     expect(two.locator("[data-queued-chip]")).to_have_count(1)
     runtime.gate.set()
