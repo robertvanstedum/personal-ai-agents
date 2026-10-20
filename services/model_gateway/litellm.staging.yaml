@@ -9,8 +9,9 @@
 # cos-scheduler) cannot tell the difference. Only concrete models differ:
 #
 #   minimoi-cos-agent            prod xai/grok-4.3 (reasoning low)
-#                                staging anthropic/claude-haiku-4-5-20251001
-#                                (Robert's Sep 26 2026 dev choice: low-cost Claude)
+#                                staging anthropic/claude-sonnet-5-5
+#                                (Robert, Oct 19 2026: Haiku was a temporary dev
+#                                cost choice; "make it Sonnet 5.5 or Opus or similar")
 #   minimoi-cos-agent-xai-fast   same as prod and the dev gateway on main
 #   minimoi-cos-web-search       same as prod and the dev gateway on main
 #   minimoi-cos-agent-anthropic  same as prod and the dev gateway on main
@@ -19,7 +20,7 @@
 # out, as in production: staging mirrors production's route set, plus one
 # staging-only route (MC spec v0.9 stage C):
 #
-#   minimoi-mc-agent             Master Craftsman: anthropic/claude-haiku-4-5-20251001
+#   minimoi-mc-agent             Master Craftsman: anthropic/claude-sonnet-5-5 (Oct 19 2026)
 #                                on MC's OWN provider key (MC_ANTHROPIC_API_KEY,
 #                                never empty: docker-compose.staging.yml gives
 #                                it a placeholder Anthropic refuses), no
@@ -38,12 +39,12 @@
 model_list:
   - model_name: minimoi-cos-agent
     litellm_params:
-      model: anthropic/claude-haiku-4-5-20251001
+      model: anthropic/claude-sonnet-5-5
       api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
       timeout: 120
     model_info:
-      id: cos-anthropic-haiku-primary
-      base_model: anthropic/claude-haiku-4-5-20251001
+      id: cos-anthropic-sonnet55-primary
+      base_model: anthropic/claude-sonnet-5-5
       mode: chat
       supports_function_calling: true
       fallback_position: 0
@@ -87,12 +88,12 @@ model_list:
 
   - model_name: minimoi-mc-agent
     litellm_params:
-      model: anthropic/claude-haiku-4-5-20251001
+      model: anthropic/claude-sonnet-5-5
       api_key: os.environ/MC_ANTHROPIC_API_KEY
       timeout: 120
     model_info:
-      id: mc-anthropic-haiku
-      base_model: anthropic/claude-haiku-4-5-20251001
+      id: mc-anthropic-sonnet55
+      base_model: anthropic/claude-sonnet-5-5
       mode: chat
       supports_function_calling: true
 
