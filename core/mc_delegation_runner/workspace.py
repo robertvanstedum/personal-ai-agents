@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-_TASK = re.compile(r"^[0-9a-f-]{36}$")
+_TASK = re.compile(r"^[0-9a-f-]{36}-g[1-9][0-9]{0,8}$")    # <request uuid>-g<generation>
 ENV_ALLOW = ("PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "USER", "SHELL")
 # Credential names that must never reach a delegate, even if present in the runner's environment.
 ENV_DENY_PATTERNS = (r"^GH_", r"^GITHUB_", r"^AWS_", r"^MINIMOI_", r"_API_KEY$", r"_TOKEN$",
@@ -45,12 +45,14 @@ def child_env(extra: dict | None = None) -> dict:
     return env
 
 
-def prepare(root: Path, mirror: Path, request_id: str, ref: str) -> Path:
-    if not _TASK.match(request_id):
+def prepare(root: Path, mirror: Path, task_name: str, ref: str) -> Path:
+    """``task_name`` is ``<request id>-g<generation>``: a reclaimed task under a new generation
+    never shares a workspace with an earlier attempt."""
+    if not _TASK.match(task_name):
         raise WorkspaceError("task_id_invalid")
     root = Path(root)
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    task_dir = root / request_id
+    task_dir = root / task_name
     if task_dir.exists():
         raise WorkspaceError("workspace_exists")      # never reuse a workspace
     _git(["clone", "--quiet", "--no-checkout", "--no-hardlinks", str(mirror), str(task_dir)])

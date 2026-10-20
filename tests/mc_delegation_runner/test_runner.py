@@ -75,7 +75,7 @@ def cfg(tmp_path, mirror_path, **over):
     base = dict(runner_id="mac-1", actors=("codex", "claude-code"), scopes=("research", "build"),
                 repositories={"personal-ai-agents": mirror_path}, workspace_root=tmp_path / "ws",
                 artifact_root=tmp_path / "artifacts", max_cost_usd=5.0, lease_renew_s=0.0, tick_s=0.01,
-                kill_grace_s=1.0)
+                kill_grace_s=1.0, cost_enforced_actors=("codex", "claude-code"))
     base.update(over)
     return runner.RunnerConfig(**base)
 
@@ -106,7 +106,7 @@ def test_envelope_refuses_authority_fields_and_loose_refs(mirror):
 
 def test_workspace_has_no_remote_and_exact_ref(tmp_path, mirror):
     path, ref = mirror
-    rid = str(uuid.uuid4())
+    rid = str(uuid.uuid4()) + "-g1"
     task = workspace.prepare(tmp_path / "ws", path, rid, ref)
     assert git(task, "remote") == ""
     assert git(task, "rev-parse", "HEAD") == ref
@@ -198,12 +198,15 @@ def test_runner_without_capability_refuses(tmp_path, mirror):
     assert out["code"] == "runner_not_capable"
 
 
-def test_result_is_retried_with_stable_event_id(tmp_path, mirror, monkeypatch):
+def test_result_survives_dispatcher_outage_and_is_resent_later(tmp_path, mirror, monkeypatch):
     path, ref = mirror
     fake_cli(monkeypatch, "print('ok')")
-    d = FakeDispatcher([env_doc(ref)], fail_results=2)
+    d = FakeDispatcher([env_doc(ref)], fail_results=99)
     out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
-    assert out["delivered"] and len(d.results) == 1
+    assert out["state"] == "completed" and out["delivered"] is False and d.results == []
+    d.fail_results = 0
+    out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)       # next poll: resend first
+    assert out == {"state": "idle"} and len(d.results) == 1 and d.results[0]["status"] == "completed"
 
 
 def test_idle_when_nothing_to_claim(tmp_path, mirror):
@@ -219,3 +222,77 @@ def test_command_vectors_are_sandboxed_and_shell_free(tmp_path):
     assert "Bash(git push:*)" in cl and "--permission-mode" in cl
     with pytest.raises(ValueError):
         commands.argv("other", "build", "x", tmp_path)
+
+
+
+# ── Codex review D-F1 / D-F2 / D-F3 ─────────────────────────────────────────
+import os
+import signal
+
+
+def _alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+@pytest.mark.parametrize("method", ["progress", "cancel_requested", "renew"])
+def test_child_is_stopped_when_dispatcher_calls_fail(tmp_path, mirror, monkeypatch, method):
+    path, ref = mirror
+    fake_cli(monkeypatch, "import os,time; open('pid','w').write(str(os.getpid())); time.sleep(30)")
+    d = FakeDispatcher([env_doc(ref)])
+    def boom(*a, **k):
+        import time as _t
+        _t.sleep(0.2)
+        raise ConnectionError("dispatcher unreachable")
+    monkeypatch.setattr(d, method, boom)
+    out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+    assert out["state"] == "control_lost" and out["delivered"] is False and d.results == []
+    pid_file = next((tmp_path / "ws").glob("*/pid"), None)
+    if pid_file:
+        assert not _alive(int(pid_file.read_text()))
+
+
+def test_reclaim_after_crash_reports_recorded_result_without_rerun(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "open('README.md','a').write('x\\n')")
+    doc = env_doc(ref)
+    d = FakeDispatcher([doc], fail_results=99)
+    first = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+    assert first["state"] == "completed" and not first["delivered"]
+    fake_cli(monkeypatch, "raise SystemExit(1)")                          # would fail if rerun
+    d2 = FakeDispatcher([dict(doc)])
+    d2.fail_results = 0
+    # simulate the result never reaching even the resend: remove the acknowledged flag path order
+    out = runner.run_once(d2, cfg(tmp_path, path), now=lambda: NOW)
+    assert d2.results and d2.results[0]["status"] == "completed"
+
+
+def test_new_generation_gets_its_own_workspace_and_artifacts(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "print('ok')")
+    doc = env_doc(ref)
+    runner.run_once(FakeDispatcher([doc]), cfg(tmp_path, path), now=lambda: NOW)
+    runner.run_once(FakeDispatcher([dict(doc, generation=2)]), cfg(tmp_path, path), now=lambda: NOW)
+    names = sorted(p.name for p in (tmp_path / "ws").iterdir())
+    assert names[0].endswith("-g1") and names[1].endswith("-g2")
+    assert len(list((tmp_path / "artifacts").glob("*.result.json"))) == 2
+
+
+def test_output_bound_is_enforced_while_running(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "import sys,time\nwhile True:\n    sys.stdout.write('x'*10000); sys.stdout.flush(); time.sleep(0.01)")
+    out = runner.run_once(FakeDispatcher([env_doc(ref)]), cfg(tmp_path, path, max_output_bytes=50_000),
+                          now=lambda: NOW)
+    assert out["state"] == "output_limit"
+    output = next(a for a in out["artifacts"] if a["kind"] == "output")
+    assert output["bytes"] <= 50_000
+
+
+def test_unenforceable_cost_cap_is_refused(tmp_path, mirror):
+    path, ref = mirror
+    d = FakeDispatcher([env_doc(ref)])
+    out = runner.run_once(d, cfg(tmp_path, path, cost_enforced_actors=()), now=lambda: NOW)
+    assert out["state"] == "refused" and d.results[0]["detail"]["code"] == "cost_limit_unenforceable"
