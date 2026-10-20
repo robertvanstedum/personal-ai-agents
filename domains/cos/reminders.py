@@ -494,12 +494,14 @@ def edit(
     due: datetime | None = None,
     text: str | None = None,
     expected_due_utc: str | None = None,
+    expected_text: str | None = None,
     now: datetime | None = None,
     root: str | os.PathLike | None = None,
 ) -> dict:
     """Change a pending reminder's due time and/or text, with the same limits
-    as ``add``. ``expected_due_utc`` (optional) guards against editing a
-    reminder that changed since the caller read it. Returns the updated record.
+    as ``add``. ``expected_due_utc`` and ``expected_text`` (optional; pass both
+    for a full guard) refuse the edit if the reminder changed since the caller
+    read it. Returns the updated record.
     Anything not ``pending`` is refused: a failed or sending reminder may
     already be on its way."""
     if due is None and text is None:
@@ -533,6 +535,8 @@ def edit(
         if record.get("state") not in EDITABLE_STATES:
             raise ReminderRefused("reminder_not_editable")
         if expected_due_utc is not None and record.get("due_utc") != expected_due_utc:
+            raise ReminderRefused("reminder_changed")
+        if expected_text is not None and record.get("text") != expected_text:
             raise ReminderRefused("reminder_changed")
         if new_due is not None:
             record["due_utc"] = new_due

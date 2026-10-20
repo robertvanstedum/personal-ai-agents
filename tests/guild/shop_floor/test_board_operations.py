@@ -76,6 +76,23 @@ def test_bin_unknown_and_bad_ids(tmp_path):
     assert ops.bin_postit(store, 0, operation_id="op-bin-00012").status == "refused"
 
 
+def test_non_integral_ids_never_reach_the_store(tmp_path):
+    """Codex review B-F1: 1.9 must not silently bin note 1."""
+    db, store = _store(tmp_path)
+    pid = ops.add(store, "keep me", operation_id=OP).postit["id"]
+    calls = []
+    real_bin, real_restore = store.bin_postit, store.restore_postit
+    store.bin_postit = lambda *a, **k: calls.append("bin") or real_bin(*a, **k)
+    store.restore_postit = lambda *a, **k: calls.append("restore") or real_restore(*a, **k)
+    bad = [pid + 0.9, float(pid), float("nan"), float("inf"), -1, 2**63, "1.0", " 1", "+1", "01", None, [pid]]
+    for i, value in enumerate(bad):
+        assert ops.bin_postit(store, value, operation_id=f"op-bad-bin-{i:04d}").code == "postit_id_invalid"
+        assert ops.restore_postit(store, value, operation_id=f"op-bad-rst-{i:04d}").code == "postit_id_invalid"
+    assert calls == []
+    assert ops.list_board(store)["postits"][0]["id"] == pid      # still active, untouched
+    assert ops.bin_postit(store, str(pid), operation_id="op-bin-string").status == "done"
+
+
 def test_unreachable_store_is_unknown_and_listing_says_unavailable():
     down = DownFloor()
     assert ops.add(down, "note", operation_id=OP).status == "unknown"

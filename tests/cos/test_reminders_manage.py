@@ -121,3 +121,11 @@ def test_edited_reminder_is_sent_at_its_new_time(tmp_path):
     assert sent == []
     r.deliver_due(send, now=NOW + timedelta(hours=2, minutes=1), root=tmp_path)
     assert sent == ["Reminder: call the dentist"]
+
+
+def test_edit_full_guard_detects_text_change(tmp_path):
+    rec = _add(tmp_path, 30)
+    r.edit(rec["id"], text="changed elsewhere", now=NOW, root=tmp_path)
+    with pytest.raises(r.ReminderRefused):
+        r.edit(rec["id"], text="mine", expected_due_utc=rec["due_utc"], expected_text=rec["text"],
+               now=NOW, root=tmp_path)
