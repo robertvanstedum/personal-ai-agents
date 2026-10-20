@@ -94,14 +94,15 @@ def test_approve_pending_writes_guest_before_removing_pending(auth_dir, monkeypa
 
     def crash_on_pending(filename, data):
         calls.append(filename)
-        if filename == "pending.json":
+        if filename == "pending.json" and calls.count("pending.json") == 2:
             raise OSError("simulated crash between writes")
         real_write(filename, data)
 
     monkeypatch.setattr(auth, "_write_json", crash_on_pending)
     with pytest.raises(OSError):
         auth.approve_pending(entry["token"])
-    assert calls == ["guests.json", "pending.json"]
+    # progress marker, then guest, then (crashing) pending removal
+    assert calls == ["pending.json", "guests.json", "pending.json"]
     monkeypatch.setattr(auth, "_write_json", real_write)
     # The registration survives and a retry completes without duplicating the guest.
     assert [p["token"] for p in auth.load_pending()] == [entry["token"]]
