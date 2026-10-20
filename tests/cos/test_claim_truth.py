@@ -84,3 +84,28 @@ def test_a_later_or_unrelated_negation_does_not_excuse_a_claim(claim):
 ])
 def test_drafts_and_governed_limitations_are_left_alone(ordinary):
     assert not unsupported(ordinary) and enforce(ordinary) == (ordinary, 0)
+
+
+@pytest.mark.parametrize('reply',[
+ 'The brief has been written to `/tmp/brief.md` and is ready for download.',
+ 'Your download package is ready.',
+ 'I exported it to /tmp/brief.md.',
+])
+def test_file_claims_need_delivery_receipt(reply):
+ from domains.cos.claim_truth import enforce_file_claims,FILE_NOTICE
+ guarded,count=enforce_file_claims(reply)
+ assert count and guarded.endswith(FILE_NOTICE)
+
+@pytest.mark.parametrize('reply',[
+ 'No file is ready for download.', 'I have not written it to /tmp/brief.md.',
+ 'Here is the brief inline.', 'You can save this text yourself.',
+])
+def test_file_limitations_unchanged(reply):
+ from domains.cos.claim_truth import enforce_file_claims
+ assert enforce_file_claims(reply)==(reply,0)
+
+
+def test_technical_file_location_is_not_a_delivery_claim():
+ from domains.cos.claim_truth import enforce_file_claims
+ reply='Logs are written to /opt/minimoi/agent_logs.'
+ assert enforce_file_claims(reply)==(reply,0)

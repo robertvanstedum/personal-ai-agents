@@ -8,10 +8,8 @@
 # general_settings as litellm.prod.yaml, so callers (Agent A, cos-bot,
 # cos-scheduler) cannot tell the difference. Only concrete models differ:
 #
-#   minimoi-cos-agent            prod xai/grok-4.3 (reasoning low)
-#                                staging anthropic/claude-opus-5-5
-#                                (Robert, Oct 19 2026: Haiku was a temporary dev
-#                                cost choice; Sonnet 5.5 first, then "move to Opus 5.5 next")
+#   minimoi-cos-agent            xai/grok-4.3, reasoning low, matching production
+#                                (Robert D27: model-agnostic readiness; Oct 19 tests)
 #   minimoi-cos-agent-xai-fast   same as prod and the dev gateway on main
 #   minimoi-cos-web-search       same as prod and the dev gateway on main
 #   minimoi-cos-agent-anthropic  same as prod and the dev gateway on main
@@ -20,12 +18,9 @@
 # out, as in production: staging mirrors production's route set, plus one
 # staging-only route (MC spec v0.9 stage C):
 #
-#   minimoi-mc-agent             Master Craftsman: anthropic/claude-opus-5-5 (Oct 19 2026)
-#                                on MC's OWN provider key (MC_ANTHROPIC_API_KEY,
-#                                never empty: docker-compose.staging.yml gives
-#                                it a placeholder Anthropic refuses), no
-#                                fallback. Only MC's capped virtual key may call
-#                                it (scripts/staging/mc.sh key).
+#   minimoi-mc-agent             Master Craftsman: xai/grok-4.3, reasoning low
+#                                Uses GATEWAY_XAI_API_KEY; MC's capped virtual key
+#                                remains the admission boundary. No fallback.
 #
 # Provider keys use gateway-only names (GATEWAY_ANTHROPIC_API_KEY,
 # GATEWAY_XAI_API_KEY), and the gateway's ANTHROPIC_API_KEY / XAI_API_KEY are
@@ -39,12 +34,13 @@
 model_list:
   - model_name: minimoi-cos-agent
     litellm_params:
-      model: anthropic/claude-opus-5-5
-      api_key: os.environ/GATEWAY_ANTHROPIC_API_KEY
+      model: xai/grok-4.3
+      api_key: os.environ/GATEWAY_XAI_API_KEY
       timeout: 120
+      reasoning_effort: low
     model_info:
-      id: cos-anthropic-opus55-primary
-      base_model: anthropic/claude-opus-5-5
+      id: cos-xai-grok43-primary
+      base_model: xai/grok-4.3
       mode: chat
       supports_function_calling: true
       fallback_position: 0
@@ -88,12 +84,13 @@ model_list:
 
   - model_name: minimoi-mc-agent
     litellm_params:
-      model: anthropic/claude-opus-5-5
-      api_key: os.environ/MC_ANTHROPIC_API_KEY
+      model: xai/grok-4.3
+      api_key: os.environ/GATEWAY_XAI_API_KEY
       timeout: 120
+      reasoning_effort: low
     model_info:
-      id: mc-anthropic-opus55
-      base_model: anthropic/claude-opus-5-5
+      id: mc-xai-grok43
+      base_model: xai/grok-4.3
       mode: chat
       supports_function_calling: true
 

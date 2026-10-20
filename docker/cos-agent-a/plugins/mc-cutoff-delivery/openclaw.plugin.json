@@ -1,0 +1,18 @@
+{
+  "id": "mc-cutoff-delivery",
+  "name": "MiniMoi cutoff delivery",
+  "categories": [
+    "models"
+  ],
+  "activation": {
+    "onStartup": true
+  },
+  "providers": [
+    "minimoi-gateway"
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

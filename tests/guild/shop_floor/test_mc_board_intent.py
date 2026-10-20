@@ -42,7 +42,9 @@ def test_direct_portal_turn_receives_contract_and_keeps_clean_gate(floored,finis
    return TurnResult('answered','cos',text=proposal(row),trace={'finish_reason':finish})
  _turn_on(floored,Backend());floored.app.extensions['guild_ui_next']['feature_environ']['MINIMOI_MC_BOARD_OUTCOMES']='1'
  client=floored.owner();token=floored.csrf(client);note=_keep(client,token,PROMPT.replace('#14',f"#{row['id']}"));response=_ask(client,token,note['request_id']);body=response.get_json()
- assert response.status_code==200 and body['reply_note']['text']=='Three backends could not be resolved.'
+ assert response.status_code==200
+ assert body['reply_note']['text']=='Three backends could not be resolved.'
+ if finish=='length':assert body['finish_reason']=='length'
  assert body['board_outcome']['state']==('saved'if finish=='stop'else'not_saved')
  assert len(floor.board().data['active'])==(2 if finish=='stop'else 1)
 from floor_helpers import load_portal

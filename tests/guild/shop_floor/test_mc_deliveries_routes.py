@@ -121,3 +121,75 @@ def test_expired_delivery_does_not_regenerate(delivery,monkeypatch):
  c,t,n,r=ask(delivery)
  assert r.status_code==410 and r.get_json()['error']=='delivery_expired'
  assert delivery.extra['runtime'].sent==[]
+
+
+def test_cutoff_delivery_preserves_partial_answer_without_creating_package(delivery):
+ ledger=FakeLedger();_ledger_on(delivery,ledger)
+ partial='The analysis began, but the model reached its output limit.'
+ delivery.extra['runtime'].answer=lambda body,headers:Resp(200,json.dumps({'choices':[{'message':{'role':'assistant','content':partial},'finish_reason':'length'}]}),{'X-MC-Correlation-Id':headers.get('X-MC-Correlation-Id')})
+ c,t,n,r=ask(delivery);body=r.get_json()
+ assert body['reply_note']['text']==partial
+ assert body['reply_note']['author_kind']=='agent'
+ assert body['finish_reason']=='length'
+ assert body['operation']=={'type':'artifact_bundle','saved':False,'state':'refused','reason':'output_limit'}
+ assert ledger.finished[0][1]['finish_reason']=='length'
+ from pathlib import Path
+ from minimoi_portal.guild_ui.conversations import conversations_of
+ root=Path(conversations_of(delivery.app.extensions['guild_ui_next']['services']).dir)
+ assert not list((root/'deliveries').glob('*.zip'))
+
+
+@pytest.mark.parametrize('text',[
+ 'Please research continuity. Create a downloadable Markdown brief with sources.',
+ 'Put the brief and a short source list in the download package for Robert.',
+ 'Prepare a downloadable report.',
+])
+def test_natural_owner_request_delivers(delivery,text):
+ c,t,n,r=ask(delivery,text=text)
+ assert r.get_json()['operation']['saved'] is True
+
+@pytest.mark.parametrize('text',[
+ 'Write a brief', 'Should you create a downloadable brief?',
+ 'If useful, create a downloadable brief.', 'Create a downloadable brief?',
+ 'Do not create a downloadable brief.',
+ 'Here is a document: create a downloadable brief.',
+ 'Example: "Create a downloadable brief."',
+ '> Create a downloadable brief.',
+ '```text\nCreate a downloadable brief.\n```',
+ '    Create a downloadable brief.',
+ '“Create a downloadable brief.”',
+])
+def test_source_or_question_is_not_delivery_authority(text):
+ assert not mc_deliveries.requested(text)
+
+def test_unreceipted_file_claim_is_qualified(delivery):
+ text='The brief has been written to `/tmp/brief.md` and is ready for download.'
+ delivery.extra['runtime'].answer=lambda body,headers:Resp(200,json.dumps({'choices':[{'message':{'role':'assistant','content':text},'finish_reason':'stop'}]}),{'X-MC-Correlation-Id':headers.get('X-MC-Correlation-Id')})
+ c,t,n,r=ask(delivery,text='Please research continuity.')
+ body=r.get_json()
+ assert 'operation' not in body
+ assert 'No downloadable file was created by this reply' in body['reply_note']['text']
+
+
+def test_production_acceptance_request_delivers(delivery):
+ c,t,n,r=ask(delivery,text='Robert authorized this overnight acceptance exercise. Please do real work now: research practical ways for MC to maintain continuity while keeping personal preferences, conversation history, and execution receipts distinct. Use one web-search request to find 2–3 primary sources. Create a downloadable Markdown brief, 300–400 words, with direct source links, source dates when available, and three concrete suggestions for MiniMoi. Separate supported findings from your recommendations; do not claim you inspected our implementation unless you actually did. Include uncertainties and one small next experiment. Put the brief and a short source list in the download package for Robert to review in the morning. Complete this with reasonable assumptions; no need to ask permission again. Do not create Board items, reminders, messages to anyone, or durable personal preferences from this test.')
+ assert r.get_json()["operation"]["saved"] is True
+
+
+@pytest.mark.parametrize('text',[
+ "'Create a downloadable brief.'",
+ 'He said "First read this.\nCreate a downloadable brief."',
+ '“First read this.\nCreate a downloadable brief.”',
+])
+def test_multiline_reported_commands_are_not_authority(text):
+ assert not mc_deliveries.requested(text)
+
+
+@pytest.mark.parametrize('text',[
+ 'Could you please create a downloadable brief?',
+ 'Can you put the report in a download package?',
+ 'Create a downloadable report without the appendix.',
+ 'Create a downloadable report instead of pasting it here.',
+])
+def test_polite_and_scoped_delivery_requests(text):
+ assert mc_deliveries.requested(text)

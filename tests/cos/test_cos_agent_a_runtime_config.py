@@ -116,6 +116,7 @@ def test_search_is_bounded_and_does_not_receive_provider_credentials():
     plugin_entry = config["plugins"]["entries"]["cos-bounded-search"]
     agent = _agent(config)
 
+    assert config["tools"]["toolSearch"] is False
     assert search == {
         "enabled": True,
         "provider": "minimoi",
@@ -125,7 +126,8 @@ def test_search_is_bounded_and_does_not_receive_provider_credentials():
     }
     assert plugin_entry["enabled"] is True
     assert config["plugins"]["load"]["paths"] == [
-        "/opt/minimoi/openclaw-plugins/cos-bounded-search"
+        "/opt/minimoi/openclaw-plugins/cos-bounded-search",
+        "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery",
     ]
     assert agent["tools"]["profile"] == "full"
     assert not agent["tools"].get("deny")

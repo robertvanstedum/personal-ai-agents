@@ -24,6 +24,14 @@ _DEFAULT_RUNTIME_URL = "http://cos-agent-a:18789/v1"
 _DEFAULT_AGENT_ID = "cos-agent-a"
 _CONNECT_TIMEOUT_SECONDS = 5
 _TURN_TIMEOUT_SECONDS = 120
+_EMPTY_OUTPUT_NOTICE = (
+    "[MiniMoi platform notice: The model reached its output limit before producing an answer. "
+    "Earlier tool actions may still have occurred; no automatic retry was made.]"
+)
+_NATIVE_TRUNCATION_NOTICE = (
+    "⚠️ Reply truncated at the model's output token limit. "
+    "The text above is partial — ask to continue it."
+)
 # Request-body cap for one turn. OpenClaw 2026.7.1 enforced this in the gateway
 # (chatCompletions.maxBodyBytes); 2026.9.x retired that setting and only has a
 # fixed 20 MB built-in limit, so the adapter enforces the old 256 KB cap itself,
@@ -275,15 +283,38 @@ class OpenClawBackend:
         # Completion evidence comes from the connector payload, never answer text.
         context.pop("completion_evidence", None)
         payload = self._call_backend_payload(prompt, context, tool_policy)
-        reply = self._reply_text(payload)
-        choices = payload.get("choices")
-        if (payload.get("object") == "chat.completion" and payload.get("model") == f"openclaw/{self._agent_id}"
-                and isinstance(choices, list) and len(choices) == 1
-                and choices[0].get("finish_reason") == "stop"):
-            message = choices[0].get("message") or {}
-            if (message.get("role") == "assistant" and not message.get("tool_calls")
-                    and not message.get("function_call") and not message.get("refusal")):
-                context["completion_evidence"] = {"state":"complete", "source":"openclaw_connector"}
+        choices = payload.get("choices") if isinstance(payload, dict) else None
+        choice = choices[0] if isinstance(choices, list) and len(choices) == 1 else None
+        message = choice.get("message") if isinstance(choice, dict) else None
+        trusted = (
+            isinstance(payload, dict)
+            and payload.get("object") == "chat.completion"
+            and payload.get("model") == f"openclaw/{self._agent_id}"
+            and isinstance(message, dict)
+            and message.get("role") == "assistant"
+            and not message.get("tool_calls")
+            and not message.get("function_call")
+            and not message.get("refusal")
+        )
+        finish = choice.get("finish_reason") if trusted else None
+        content = message.get("content") if trusted else None
+        if finish == "length" and (content is None or isinstance(content, str) and not content.strip()):
+            reply = _EMPTY_OUTPUT_NOTICE
+        else:
+            reply = self._reply_text(payload)
+        # OpenClaw adds its partial-text warning even when our only text is a
+        # platform notice. Remove that exact duplicate only on trusted length;
+        # real partial answers retain the native warning and all original text.
+        if (finish == "length" and reply.startswith(_EMPTY_OUTPUT_NOTICE)
+                and reply[len(_EMPTY_OUTPUT_NOTICE):].strip() == _NATIVE_TRUNCATION_NOTICE):
+            reply = _EMPTY_OUTPUT_NOTICE
+        # Never mark a malformed or invisible normal completion as complete.
+        if finish == "stop":
+            context["completion_evidence"] = {"state": "complete", "source": "openclaw_connector"}
+        elif finish == "length":
+            context["completion_evidence"] = {
+                "state": "cut_off", "reason": "output_limit", "source": "openclaw_connector",
+            }
         return reply
 
     @staticmethod

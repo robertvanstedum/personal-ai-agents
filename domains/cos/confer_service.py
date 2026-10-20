@@ -97,6 +97,7 @@ class ConferTurnResult:
     fallback_position: int | None = None
     fallback_reason: str | None = None
     completion_verified: bool = False
+    output_limit_reached: bool = False
 
     def public_dict(self) -> dict:
         """Return response metadata without echoing the user's full input."""
@@ -109,7 +110,9 @@ class ConferTurnResult:
             "model_label": self.model_label,
             "created_at": self.created_at,
         }
-        if self.completion_verified:
+        if self.output_limit_reached:
+            payload["completion"] = {"state":"cut_off", "reason":"output_limit", "source":"openclaw_connector"}
+        elif self.completion_verified:
             payload["completion"] = {"state":"complete", "source":"openclaw_connector"}
         if self.operation is not None:
             payload["operation"] = self.operation
@@ -333,6 +336,13 @@ class ConferTurnService:
         # command. /new and explicit note parsing above retain exact semantics.
         from core.agent_partner import PARTNER_STYLE
         context['system_prompt'] = (context.get('system_prompt', '').rstrip() + '\n\n' + PARTNER_STYLE).strip()
+        context['system_prompt'] += (
+            "\n\nFiles written in your own workspace are not available to Robert. "
+            "Provide requested content in your reply. For an explicit platform delivery contract, "
+            "return the document data exactly as requested; only a platform receipt confirms download. "
+            "Never claim research or cite a source you have not actually retrieved in this task. "
+            "When web tools are unavailable or fail, say so and distinguish background knowledge."
+        )
         context["confer"] = {
             "conversation_id": conversation_id,
             "input_channel": request.channel,
@@ -397,4 +407,5 @@ class ConferTurnService:
             fallback_position=runtime_route.get("fallback_position"),
             fallback_reason=runtime_route.get("fallback_reason"),
             completion_verified=context.get("completion_evidence") == {"state":"complete", "source":"openclaw_connector"},
+            output_limit_reached=context.get("completion_evidence") == {"state":"cut_off", "reason":"output_limit", "source":"openclaw_connector"},
         )
