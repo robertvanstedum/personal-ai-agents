@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from .learning_view import learning_line
+
 MAX_LINES = 20
 SEVERITY = {"failed": 0, "unknown": 1, "degraded": 2, "healthy": 3, "not_applicable": 4}
 
@@ -59,8 +61,9 @@ def _detail(obs) -> str:
 
 
 def render_brief(observations, watches, *, local_date: date, environment: str,
-                 details_link: str | None = None, learning_counts: dict | None = None,
-                 review_needed: list | None = None) -> str:
+                 details_link: str | None = None, learning=None, destination: str = "site",
+                 labels_permitted: bool = False, review_needed: list | None = None) -> str:
+    """``learning`` is a ``learning_view.LearningView`` (None: learning visibility not configured)."""
     by_id = {w.id: w for w in watches}
     obs = sorted(observations, key=lambda o: (SEVERITY.get(o.state, 9), _label(by_id, o)))
     checked = [o for o in obs if o.state in ("healthy", "degraded", "failed")]
@@ -71,7 +74,7 @@ def render_brief(observations, watches, *, local_date: date, environment: str,
     env = {"prod": "production", "dev": "dev"}.get(environment, environment)
 
     head = f"MC operations brief, {env}, {local_date.isoformat()}."
-    learning = _learning_line(learning_counts)
+    learning = learning_line(learning, destination=destination, labels_permitted=labels_permitted)
     review = ("Watch review due (review-by date passed): " + ", ".join(review_needed) + "."
               if review_needed else None)
 
@@ -110,19 +113,3 @@ def render_brief(observations, watches, *, local_date: date, environment: str,
         lines.append(f"Details: {details_link}")
     return "\n".join(lines)
 
-
-def _learning_line(counts: dict | None) -> str | None:
-    """P-G7: shown only when something is pending; counts only, never statement text."""
-    if not counts:
-        return None
-    pending = counts.get("suggestions_pending") or 0
-    adopted = counts.get("practices_adopted_this_week") or 0
-    repeats = counts.get("repeated_corrections") or 0
-    parts = []
-    if pending:
-        parts.append(f"{pending} learning suggestion{'s' if pending != 1 else ''} pending")
-    if adopted:
-        parts.append(f"{adopted} practice{'s' if adopted != 1 else ''} adopted this week")
-    if repeats:
-        parts.append(f"{repeats} repeated correction{'s' if repeats != 1 else ''}")
-    return ("Learning: " + " · ".join(parts) + ".") if parts else None

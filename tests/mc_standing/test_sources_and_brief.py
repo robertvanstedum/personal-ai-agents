@@ -241,17 +241,6 @@ def test_long_brief_is_capped_keeping_most_severe_first():
     assert lines[-1].startswith("... ")
 
 
-def test_learning_line_only_when_nonzero():
-    ws = [make_watch()]
-    quiet = render.render_brief([_obs(ws[0], "healthy", "job_ok")], ws, local_date=date(2026, 10, 21),
-                                environment="prod", learning_counts={"suggestions_pending": 0})
-    assert "Learning" not in quiet
-    busy = render.render_brief([_obs(ws[0], "healthy", "job_ok")], ws, local_date=date(2026, 10, 21),
-                               environment="prod", learning_counts={"suggestions_pending": 2,
-                                                                    "repeated_corrections": 1})
-    assert "Learning: 2 learning suggestions pending · 1 repeated correction." in busy
-
-
 # ── Codex review S-F3: non-finite and out-of-range telemetry ────────────────
 
 @pytest.mark.parametrize("body", [

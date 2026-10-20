@@ -21,11 +21,11 @@ import fcntl
 import hashlib
 import os
 import uuid
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from time import monotonic
 from zoneinfo import ZoneInfo
 
-from . import findings
+from . import findings, learning_view
 from .observe import Observation, unknown
 from .render import render_brief
 from .sources import observe
@@ -58,11 +58,15 @@ def _observation_from(doc: dict) -> Observation:
 
 def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: datetime, source_root,
               ingress, destination_binding: str, kill=lambda: False, paused=lambda: False,
-              details_link: str | None = None, learning_counts=None, deps: dict | None = None,
-              clock=None) -> dict:
+              details_link: str | None = None, learning_source=None, learning_principal: str | None = None,
+              deps: dict | None = None, clock=None) -> dict:
     """``now`` fixes the cycle's date and the observation timestamps; ``clock`` (default: the
     fixed ``now``) is read again immediately before every send and between stages, so a cycle that
-    starts at 08:59 cannot deliver after 09:00. Production passes ``clock=lambda: datetime.now(UTC)``."""
+    starts at 08:59 cannot deliver after 09:00. Production passes ``clock=lambda: datetime.now(UTC)``.
+
+    ``learning_source`` (P-G7, optional) returns the harness's learning count snapshot; it is read
+    once when the brief is first rendered, and any fault there only makes the learning line say
+    "unavailable"."""
     deps = deps or {}
     clock = clock or (lambda: now)
     local = now.astimezone(ZONE)
@@ -74,8 +78,8 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
         except BlockingIOError:
             return {"cycle_key": key, "state": "skipped", "reason": "overlap"}
         return _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root,
-                           ingress, destination_binding, kill, paused, details_link, learning_counts, deps,
-                           clock)
+                           ingress, destination_binding, kill, paused, details_link, (learning_source, learning_principal),
+                           deps, clock)
     finally:
         os.close(lock_fd)
 
@@ -91,6 +95,16 @@ def _send_window_open(record: dict, local) -> bool:
     return local.date().isoformat() == record["local_date"] and local.time() < CATCH_UP_UNTIL
 
 
+def _learning_view(learning, environment, clock):
+    source, principal = learning
+    if source is None:
+        return None
+    if not principal:
+        return learning_view.LearningView("unavailable", "principal_not_configured")
+    return learning_view.read_view(source, principal=principal, environment=environment,
+                                   now=clock().astimezone(timezone.utc))
+
+
 def _cycle_observations(spool, key) -> list[Observation]:
     prefix = f"{key}."
     return [_observation_from(spool.read("observations", n)) for n in spool.names("observations")
@@ -98,7 +112,7 @@ def _cycle_observations(spool, key) -> list[Observation]:
 
 
 def _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root, ingress,
-                destination, kill, paused, details_link, learning_counts, deps, clock):
+                destination, kill, paused, details_link, learning, deps, clock):
     record = spool.read("cycles", key) or {"cycle_key": key, "policy_id": policy_id,
                                            "local_date": local.date().isoformat(),
                                            "watchlist_sha256": watchlist.sha256, "state": "scheduled",
@@ -154,12 +168,14 @@ def _run_locked(spool, watchlist, policy_id, environment, now, local, key, sourc
     if payload is None:
         today = date.fromisoformat(record["local_date"])
         overdue = [w.label for w in watchlist.watches if w.review_by < today]
+        view = _learning_view(learning, environment, clock)
         text = render_brief(observations, watchlist.watches, local_date=today, environment=environment,
-                            details_link=details_link, learning_counts=learning_counts,
-                            review_needed=overdue)
+                            details_link=details_link, learning=view, review_needed=overdue)
         if record.get("delayed"):
             text = text.replace(".\n", " (delayed).\n", 1)
         payload = {"cycle_key": key, "text": text, "sha256": hashlib.sha256(text.encode()).hexdigest()}
+        if view is not None:
+            payload["learning"] = view.record()       # snapshot id, as_of, coverage, counts
         spool.put_immutable("delivery", payload_name, payload)
     if spool.read("outbox", f"{key}.site") is None:
         refs = [{"id": o.observation_id, "digest": hashlib.sha256(repr(o.to_dict()).encode()).hexdigest()}
