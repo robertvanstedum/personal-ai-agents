@@ -312,16 +312,18 @@ def test_crash_at_each_artifact_write_resumes(tmp_path, monkeypatch, fail_on):
     assert res["state"] == "delivered"
 
 
-def test_watchlist_change_mid_cycle_is_recorded_not_conflicting(tmp_path):
+def test_watchlist_change_after_outbox_still_delivers_the_frozen_brief(tmp_path):
     _status(tmp_path / "src")
     spool = Spool(tmp_path / "state")
-    _, res = run(tmp_path, FakeIngress("defer"), spool=spool)
+    _, res = run(tmp_path, FakeIngress("defer"), spool=spool)        # outbox already written
     wl = _watchlist()
     changed = registry.Watchlist(wl.watches, "f" * 64)
+    ing = FakeIngress()
     res = runner.run_cycle(spool=spool, watchlist=changed, policy_id="p0", environment="prod", now=NOW,
-                           source_root=tmp_path / "src", ingress=FakeIngress(),
+                           source_root=tmp_path / "src", ingress=ing,
                            destination_binding="owner:mc-operations")
     assert res["state"] == "delivered"
+    assert ing.posts[0]["policy_hash"] == wl.sha256                  # the policy actually used
 
 
 def test_watch_for_another_environment_is_not_read(tmp_path):
@@ -358,3 +360,58 @@ def test_review_by_passed_is_named_in_the_brief(tmp_path):
     text = spool.read("delivery", f"{res['cycle_key']}.brief")["text"]
     assert "Watch review due (review-by date passed): Local backup." in text
     assert "Nothing needs you" not in text
+
+
+# ── Codex review S-F4 / S-F5 ────────────────────────────────────────────────
+
+def test_cutoff_is_checked_at_send_time_not_start_time(tmp_path):
+    _status(tmp_path / "src")
+    start = NOW + timedelta(hours=3, minutes=19, seconds=59)          # 08:59:59 local
+    at_send = NOW + timedelta(hours=3, minutes=21)                       # 09:01 by the time of sending
+    ing = FakeIngress()
+    spool = Spool(tmp_path / "state")
+    res = runner.run_cycle(spool=spool, watchlist=_watchlist(), policy_id="p0", environment="prod",
+                           now=start, source_root=tmp_path / "src", ingress=ing,
+                           destination_binding="owner:mc-operations", clock=lambda: at_send)
+    assert res["state"] == "held" and res["reason"] == "send_window_closed" and ing.posts == []
+
+
+def test_cutoff_during_reconciliation_holds_instead_of_reposting(tmp_path):
+    _status(tmp_path / "src")
+    ing = FakeIngress("uncertain_lost")
+    spool, res = run(tmp_path, ing)
+    ing.mode = "accept"
+    late = NOW + timedelta(hours=3, minutes=25)
+    res = runner.run_cycle(spool=spool, watchlist=_watchlist(), policy_id="p0", environment="prod",
+                           now=NOW, source_root=tmp_path / "src", ingress=ing,
+                           destination_binding="owner:mc-operations", clock=lambda: late)
+    assert res["state"] == "held" and len(ing.posts) == 1
+
+
+def test_pause_between_sources_and_before_render(tmp_path):
+    _status(tmp_path / "src")
+    calls = {"n": 0}
+
+    def pause_second_check():
+        calls["n"] += 1
+        return calls["n"] >= 2          # entry check passes, the per-source check pauses
+    ing = FakeIngress()
+    spool, res = run(tmp_path, ing, paused=pause_second_check)
+    assert res["reason"] == "paused_during_collection" and ing.posts == []
+
+
+def test_watchlist_change_mid_collection_is_held_not_mixed(tmp_path):
+    _status(tmp_path / "src")
+    spool = Spool(tmp_path / "state")
+    calls = {"n": 0}
+
+    def pause_mid():
+        calls["n"] += 1
+        return calls["n"] == 2
+    run(tmp_path, FakeIngress(), spool=spool, paused=pause_mid)       # stops mid-collection
+    wl = _watchlist()
+    changed = registry.Watchlist(wl.watches, "e" * 64)
+    ing = FakeIngress()
+    res = runner.run_cycle(spool=spool, watchlist=changed, policy_id="p0", environment="prod", now=NOW,
+                           source_root=tmp_path / "src", ingress=ing, destination_binding="owner:mc-operations")
+    assert res["state"] == "held" and res["reason"] == "policy_changed_mid_cycle" and ing.posts == []

@@ -77,7 +77,8 @@ def main(argv=None) -> int:
         spool=spool, watchlist=wl, policy_id=args.policy_id, environment=args.environment,
         now=datetime.now(timezone.utc), source_root=args.source_root,
         ingress=IngressClient(args.ingress_url, lambda: token), destination_binding=args.destination,
-        kill=control.killed, paused=control.paused, details_link=args.details_link, deps=deps)
+        kill=control.killed, paused=control.paused, details_link=args.details_link, deps=deps,
+        clock=lambda: datetime.now(timezone.utc))
     print(json.dumps({k: result.get(k) for k in ("cycle_key", "state", "reason")}))
     return 0 if result.get("state") in ("delivered", "paused", "skipped") or result.get("reason") == "already_final" \
         else 3

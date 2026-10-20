@@ -58,8 +58,13 @@ def _observation_from(doc: dict) -> Observation:
 
 def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: datetime, source_root,
               ingress, destination_binding: str, kill=lambda: False, paused=lambda: False,
-              details_link: str | None = None, learning_counts=None, deps: dict | None = None) -> dict:
+              details_link: str | None = None, learning_counts=None, deps: dict | None = None,
+              clock=None) -> dict:
+    """``now`` fixes the cycle's date and the observation timestamps; ``clock`` (default: the
+    fixed ``now``) is read again immediately before every send and between stages, so a cycle that
+    starts at 08:59 cannot deliver after 09:00. Production passes ``clock=lambda: datetime.now(UTC)``."""
     deps = deps or {}
+    clock = clock or (lambda: now)
     local = now.astimezone(ZONE)
     key = cycle_key(environment, local.date(), policy_id)
     lock_fd = os.open(spool.root / ".cycle.lock", os.O_RDWR | os.O_CREAT, 0o600)
@@ -69,7 +74,8 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
         except BlockingIOError:
             return {"cycle_key": key, "state": "skipped", "reason": "overlap"}
         return _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root,
-                           ingress, destination_binding, kill, paused, details_link, learning_counts, deps)
+                           ingress, destination_binding, kill, paused, details_link, learning_counts, deps,
+                           clock)
     finally:
         os.close(lock_fd)
 
@@ -92,7 +98,7 @@ def _cycle_observations(spool, key) -> list[Observation]:
 
 
 def _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root, ingress,
-                destination, kill, paused, details_link, learning_counts, deps):
+                destination, kill, paused, details_link, learning_counts, deps, clock):
     record = spool.read("cycles", key) or {"cycle_key": key, "policy_id": policy_id,
                                            "local_date": local.date().isoformat(),
                                            "watchlist_sha256": watchlist.sha256, "state": "scheduled",
@@ -100,7 +106,7 @@ def _run_locked(spool, watchlist, policy_id, environment, now, local, key, sourc
     if record["state"] in ("delivered", "missed", "failed", "held"):
         return {"cycle_key": key, "state": record["state"], "reason": "already_final"}
     if record["state"] in ("delivery_pending", "delivery_unknown"):
-        return _deliver(spool, record, ingress, kill, paused, local)
+        return _deliver(spool, record, ingress, kill, paused, clock)
     if kill():
         return _save(spool, key, record, state="failed", reason="killed_before_start")
     if paused():
@@ -111,8 +117,10 @@ def _run_locked(spool, watchlist, policy_id, environment, now, local, key, sourc
         _save(spool, key, record, state="collecting", started_at=now.isoformat(),
               delayed=local.time() > time(6, 0))
     if watchlist.sha256 and watchlist.sha256 != record.get("watchlist_sha256"):
-        # The revision actually used is recorded; collection continues under the current reviewed list.
-        _save(spool, key, record, watchlist_changed_to=watchlist.sha256)
+        # Never mix policies in one brief: a cycle started under one approved watchlist is not
+        # finished under another. Hold it for explicit disposition; tomorrow uses the new list.
+        return _save(spool, key, record, state="held", reason="policy_changed_mid_cycle",
+                     watchlist_changed_to=watchlist.sha256)
 
     if record["state"] == "collecting":
         started = monotonic()
@@ -122,6 +130,8 @@ def _run_locked(spool, watchlist, policy_id, environment, now, local, key, sourc
             if stored is None:
                 if kill():
                     return _save(spool, key, record, state="failed", reason="killed_during_collection")
+                if paused():
+                    return {"cycle_key": key, "state": "paused", "reason": "paused_during_collection"}
                 if monotonic() - started > CYCLE_BUDGET_S:
                     obs = unknown(key, watch, "cycle_deadline", now)
                 else:
@@ -134,6 +144,8 @@ def _run_locked(spool, watchlist, policy_id, environment, now, local, key, sourc
 
     # Every later stage resumes from what is already durable; nothing written before is rebuilt
     # with new timestamps, so a restart between any two steps converges on the same artifacts.
+    if paused():
+        return {"cycle_key": key, "state": "paused", "reason": "paused_before_render"}
     observations = _cycle_observations(spool, key)
     if not record.get("rendered_at"):
         _save(spool, key, record, rendered_at=now.isoformat())
@@ -159,10 +171,10 @@ def _run_locked(spool, watchlist, policy_id, environment, now, local, key, sourc
                  "payload_digest": payload["sha256"], "destination_binding": destination}
         spool.put_immutable("outbox", f"{key}.site", event)
     _save(spool, key, record, state="delivery_pending")
-    return _deliver(spool, record, ingress, kill, paused, local)
+    return _deliver(spool, record, ingress, kill, paused, clock)
 
 
-def _deliver(spool, record, ingress, kill, paused, local):
+def _deliver(spool, record, ingress, kill, paused, clock):
     """Read-back may always confirm an earlier send; a (re)send needs: not killed, not paused,
     the cycle's own local date and before the catch-up cutoff. Past the cutoff an unsent brief is
     held for operator disposition, never sent late."""
@@ -184,7 +196,7 @@ def _deliver(spool, record, ingress, kill, paused, local):
         return {"cycle_key": key, "state": record["state"], "reason": "killed_before_delivery"}
     if paused():
         return {"cycle_key": key, "state": record["state"], "reason": "paused_before_delivery"}
-    if not _send_window_open(record, local):
+    if not _send_window_open(record, clock().astimezone(ZONE)):      # the time of sending, not of starting
         return _save(spool, key, record, state="held", reason="send_window_closed")
     try:
         ack = ingress.post(event)
