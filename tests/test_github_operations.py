@@ -207,7 +207,7 @@ def test_marker_on_a_later_page_is_found(gh):
     api, fake = gh
     p = api.prepare_comment(7, "deep note", operation_id=OP)
     fake.comments[7] = [{"body": f"c{i}", "html_url": f"u{i}", "user": {"login": "x"}} for i in range(150)]
-    fake.comments[7].append({"body": p.body, "html_url": "u-ours", "user": {"login": self.login}})
+    fake.comments[7].append({"body": p.body, "html_url": "u-ours", "user": {"login": "minimoi-bot"}})
     out = api.execute(p, p.digest)
     assert out.status == "already_applied" and out.url == "u-ours"
 
