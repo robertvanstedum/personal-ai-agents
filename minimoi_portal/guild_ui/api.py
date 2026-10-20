@@ -1900,16 +1900,20 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                 text = "The file package could not be confirmed. Have its stored result checked before sending a new request."
                 delivery_operation = {'type':'artifact_bundle','saved':False,'state':'uncertain'}
             result = TurnResult('answered', result.backend_kind, text=text, usage=result.usage, trace=result.trace)
-        if board_plan is not None and result.status == "answered" and (result.trace or {}).get("finish_reason") != "length":
+        if board_plan is not None and result.status == "answered":
             from .mc import TurnResult
             try:
                 board_proposal = board_outcomes.parse(board_plan, result.text)
                 if board_proposal is not None:
                     result = TurnResult("answered", result.backend_kind, text=board_proposal["answer"], usage=result.usage, trace=result.trace)
             except (ValueError, TypeError):
-                result = TurnResult("answered", result.backend_kind,
-                                    text="The proposed Board outcome could not be validated. Nothing was saved on the Board.",
-                                    usage=result.usage, trace=result.trace)
+                # A cut-off packet may contain useful partial text: preserve it for display.
+                # A complete packet can be parsed above for readability, but clean=False
+                # still prevents any Board write below.
+                if (result.trace or {}).get("finish_reason") != "length":
+                    result = TurnResult("answered", result.backend_kind,
+                                        text="The proposed Board outcome could not be validated. Nothing was saved on the Board.",
+                                        usage=result.usage, trace=result.trace)
         if result.status == "answered":
             if agent_state is not None and (result.trace or {}).get("finish_reason", "stop") == "stop":
                 agent_state.mark()                              # a complete ("stop") answer: MC has seen the status. A failure, timeout, cancel or cut-off reply consumes nothing
@@ -1944,6 +1948,11 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         answer["files"] = _files_view(files)
     if job_started is not None:
         answer["job"] = job_started
+    if result.status == "answered" and not (delivery_operation or {}).get("saved"):
+        from domains.cos.claim_truth import enforce_file_claims
+        from .mc import TurnResult
+        guarded, _ = enforce_file_claims(result.text)
+        result = TurnResult("answered", result.backend_kind, text=guarded, usage=result.usage, trace=result.trace)
     if result.status == "answered":
         try:
             # The model packet is deliberately not kept as conversational prose. The verified

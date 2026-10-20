@@ -75,7 +75,7 @@ def test_duplicate_json_keys_refused(board):
     with pytest.raises(ValueError):O.parse(plan,proposal(row).replace('"action":', '"action":"delete","action":'))
 
 
-@pytest.mark.parametrize("completion", ["stop", None, "length", "none"])
+@pytest.mark.parametrize("completion", ["stop", None, "length", "none", "partial"])
 @pytest.mark.parametrize("fenced", [False, True])
 def test_real_portal_turn_keeps_answer_then_records_mc_outcome(floored,monkeypatch,completion,fenced):
     services=floored.app.extensions["guild_ui_next"]["services"]
@@ -86,7 +86,7 @@ def test_real_portal_turn_keeps_answer_then_records_mc_outcome(floored,monkeypat
         def health(self):return Health("ready",reachable=True)
         def turn(self,req,cancel=None):
             assert "report_board_outcome" in req.text and "Check the dev domains" in req.text
-            return TurnResult("answered","cos",text=("```json\n" + proposal(row) + "\n```") if fenced else proposal(row), trace={"finish_reason":completion} if completion is not None else None)
+            return TurnResult("answered","cos",text='{"action":' if completion=="partial" else (("```json\n" + proposal(row) + "\n```") if fenced else proposal(row)), trace={"finish_reason":"length" if completion=="partial" else completion} if completion is not None else None)
     _turn_on(floored,Backend())
     floored.app.extensions["guild_ui_next"]["feature_environ"]["MINIMOI_MC_BOARD_OUTCOMES"]="1"
     client=floored.owner();token=floored.csrf(client)
@@ -94,7 +94,8 @@ def test_real_portal_turn_keeps_answer_then_records_mc_outcome(floored,monkeypat
     response=_ask(client,token,note["request_id"])
     body=response.get_json()
     assert response.status_code==200 and body["status"]=="answered",body
-    assert body["reply_note"]["text"]=="Three backends could not be resolved."
+    assert body["reply_note"]["text"]==('{"action":' if completion=="partial" else "Three backends could not be resolved.")
+    if completion in ("length","partial"):assert body["finish_reason"] == "length"
     if completion != "stop":
         assert body["board_outcome"]["state"] == "not_saved"
         assert len(floor.board().data["active"]) == 1

@@ -336,6 +336,13 @@ class ConferTurnService:
         # command. /new and explicit note parsing above retain exact semantics.
         from core.agent_partner import PARTNER_STYLE
         context['system_prompt'] = (context.get('system_prompt', '').rstrip() + '\n\n' + PARTNER_STYLE).strip()
+        context['system_prompt'] += (
+            "\n\nFiles written in your own workspace are not available to Robert. "
+            "Provide requested content in your reply. For an explicit platform delivery contract, "
+            "return the document data exactly as requested; only a platform receipt confirms download. "
+            "Never claim research or cite a source you have not actually retrieved in this task. "
+            "When web tools are unavailable or fail, say so and distinguish background knowledge."
+        )
         context["confer"] = {
             "conversation_id": conversation_id,
             "input_channel": request.channel,

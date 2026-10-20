@@ -130,3 +130,26 @@ def enforce(reply: str) -> tuple[str, int]:
         return reply, 0
     body = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
     return (f"{body}\n\n{NOTICE}" if body else NOTICE), removed
+
+
+FILE_NOTICE = (
+    "No downloadable file was created by this reply: a download exists only with a platform "
+    "delivery receipt and download link. Files in the agent workspace are not available here."
+)
+_FILE_CLAIM = re.compile(
+    r"\b(?:ready|available)\s+(?:for|to)\s+download\b|"
+    r"\bdownload\s+(?:link|package)\s+(?:is\s+)?(?:ready|attached)\b|"
+    r"\b(?:I(?:[’']ve| have)?|(?:has|have) been|was|is(?: now)?)\s+(?:saved|written|exported|created)\b[^.!?\n]{0,160}\b(?:to|in|at)\s+(?:a\s+)?(?:file\b|[`\"']?(?:/|[A-Z]:\\))",
+    re.IGNORECASE,
+)
+
+def enforce_file_claims(reply: str) -> tuple[str, int]:
+    """Qualify unsupported download claims only after platform delivery processing.
+
+    Do not erase useful inline content or alter document packets. A real delivery receipt
+    bypasses this guard at the caller; a model-written path alone is never such a receipt.
+    """
+    claims = sum(not _negated_before(line, m.start())
+                 for line in reply.splitlines() if not line.lstrip().startswith('>')
+                 for m in _FILE_CLAIM.finditer(line))
+    return (reply.rstrip() + "\n\n" + FILE_NOTICE, claims) if claims else (reply, 0)

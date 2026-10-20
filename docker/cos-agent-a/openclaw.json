@@ -95,7 +95,8 @@
     "profile": "full",
     "exec": {
       "mode": "full"
-    }
+    },
+    "toolSearch": false
   },
   "agents": {
     "defaults": {
