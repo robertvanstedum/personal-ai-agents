@@ -230,3 +230,131 @@ def test_failing_source_opens_a_finding_and_shows_in_brief(tmp_path):
     text = spool.read("delivery", f"{res['cycle_key']}.brief")["text"]
     assert "Local backup: failed" in text and "proposed:" in text
     assert [spool.read("findings", n)["event"] for n in spool.names("findings")] == ["opened"]
+
+
+# ── Codex review S-F1 / S-F2 and gaps (20 Oct) ──────────────────────────────
+
+def test_resumed_pending_delivery_honours_pause(tmp_path):
+    _status(tmp_path / "src")
+    ing = FakeIngress("defer")
+    spool, res = run(tmp_path, ing)
+    assert res["state"] == "delivery_pending" and len(ing.posts) == 1
+    ing.mode = "accept"
+    _, res = run(tmp_path, ing, spool=spool, paused=lambda: True)
+    assert res["reason"] == "paused_before_delivery" and len(ing.posts) == 1
+
+
+def test_resumed_pending_delivery_is_held_after_cutoff(tmp_path):
+    _status(tmp_path / "src")
+    ing = FakeIngress("defer")
+    spool, res = run(tmp_path, ing)
+    ing.mode = "accept"
+    _, res = run(tmp_path, ing, spool=spool, now=NOW + timedelta(hours=4))   # 09:40 local
+    assert res["state"] == "held" and res["reason"] == "send_window_closed" and len(ing.posts) == 1
+    _, res = run(tmp_path, ing, spool=spool, now=NOW + timedelta(days=1))    # next day: its own brief
+    old = [e for e in ing.posts if e["cycle_key"] == "prod.2026-10-21.p0.morning"]
+    assert len(old) == 1                                                      # yesterday's never resent
+    assert spool.read("cycles", "prod.2026-10-21.p0.morning")["state"] == "held"
+
+
+def test_resumed_unknown_may_confirm_but_not_resend_after_cutoff(tmp_path):
+    _status(tmp_path / "src")
+    ing = FakeIngress("uncertain_lost")
+    spool, res = run(tmp_path, ing)
+    ing.mode = "accept"
+    _, res = run(tmp_path, ing, spool=spool, now=NOW + timedelta(hours=4))
+    assert res["state"] == "held" and len(ing.posts) == 1
+    # but a send that actually committed is still recognised by read-back after the cutoff
+    ing2 = FakeIngress("uncertain_commit")
+    spool2, res = run(tmp_path / "b", ing2)
+    _status(tmp_path / "b" / "src")
+    _, res = run(tmp_path / "b", ing2, spool=spool2, now=NOW + timedelta(hours=4))
+    assert res["state"] == "delivered" and len(ing2.posts) == 1
+
+
+def test_crash_between_outbox_and_stage_update_resumes(tmp_path, monkeypatch):
+    _status(tmp_path / "src")
+    spool = Spool(tmp_path / "state")
+    real = spool.put_state
+
+    def crash_on_pending(kind, name, doc):
+        if doc.get("state") == "delivery_pending":
+            raise OSError("crash after outbox write")
+        real(kind, name, doc)
+
+    monkeypatch.setattr(spool, "put_state", crash_on_pending)
+    with pytest.raises(OSError):
+        run(tmp_path, FakeIngress(), spool=spool)
+    monkeypatch.setattr(spool, "put_state", real)
+    outbox_before = spool.read("outbox", "prod.2026-10-21.p0.morning.site")
+    ing = FakeIngress()
+    _, res = run(tmp_path, ing, spool=spool, now=NOW + timedelta(minutes=6))
+    assert res["state"] == "delivered"
+    assert ing.posts[0] == outbox_before        # original timestamps and digests preserved
+
+
+@pytest.mark.parametrize("fail_on", ["delivery", "outbox"])
+def test_crash_at_each_artifact_write_resumes(tmp_path, monkeypatch, fail_on):
+    _status(tmp_path / "src")
+    spool = Spool(tmp_path / "state")
+    real = spool.put_immutable
+
+    def crash(kind, name, doc):
+        if kind == fail_on:
+            raise OSError(f"crash writing {kind}")
+        return real(kind, name, doc)
+
+    monkeypatch.setattr(spool, "put_immutable", crash)
+    with pytest.raises(OSError):
+        run(tmp_path, FakeIngress(), spool=spool)
+    monkeypatch.setattr(spool, "put_immutable", real)
+    _, res = run(tmp_path, FakeIngress(), spool=spool, now=NOW + timedelta(minutes=6))
+    assert res["state"] == "delivered"
+
+
+def test_watchlist_change_mid_cycle_is_recorded_not_conflicting(tmp_path):
+    _status(tmp_path / "src")
+    spool = Spool(tmp_path / "state")
+    _, res = run(tmp_path, FakeIngress("defer"), spool=spool)
+    wl = _watchlist()
+    changed = registry.Watchlist(wl.watches, "f" * 64)
+    res = runner.run_cycle(spool=spool, watchlist=changed, policy_id="p0", environment="prod", now=NOW,
+                           source_root=tmp_path / "src", ingress=FakeIngress(),
+                           destination_binding="owner:mc-operations")
+    assert res["state"] == "delivered"
+
+
+def test_watch_for_another_environment_is_not_read(tmp_path):
+    _status(tmp_path / "src")
+    spool = Spool(tmp_path / "state")
+    res = runner.run_cycle(spool=spool, watchlist=_watchlist(), policy_id="p0", environment="dev", now=NOW,
+                           source_root=tmp_path / "src", ingress=FakeIngress(),
+                           destination_binding="owner:mc-operations")
+    obs = spool.read("observations", "dev.2026-10-21.p0.morning.backup-local")
+    assert obs["reason"] == "watch_environment_mismatch" and obs["state"] == "unknown"
+
+
+def test_finding_on_another_host_is_not_recovered_here(tmp_path):
+    s = Spool(tmp_path / "state")
+    c1, c2 = "prod.2026-10-21.p0.morning", "prod.2026-10-22.p0.morning"
+    findings.record(s, Observation(c1, "backup-local", 1, "prod", "mac", "failed", "job_failed",
+                                   "complete", "2026-10-21T10:40:00Z"))
+    ev = findings.record(s, Observation(c2, "backup-local", 1, "prod", "ec2", "healthy", "job_ok",
+                                        "complete", "2026-10-22T10:40:00Z"))
+    assert ev == []
+
+
+def test_review_by_passed_is_named_in_the_brief(tmp_path):
+    _status(tmp_path / "src")
+    doc = json.loads(json.dumps({"schema": registry.SCHEMA, "watches": [dict(
+        _watchlist().watches[0].__dict__, review_by="2026-10-01", expected_run_rule=_watchlist().watches[0].expected_run_rule)]}, default=str))
+    for k in ("review_by",):
+        doc["watches"][0][k] = "2026-10-01"
+    wl = registry.parse(doc)
+    spool = Spool(tmp_path / "state")
+    res = runner.run_cycle(spool=spool, watchlist=wl, policy_id="p0", environment="prod", now=NOW,
+                           source_root=tmp_path / "src", ingress=FakeIngress(),
+                           destination_binding="owner:mc-operations")
+    text = spool.read("delivery", f"{res['cycle_key']}.brief")["text"]
+    assert "Watch review due (review-by date passed): Local backup." in text
+    assert "Nothing needs you" not in text

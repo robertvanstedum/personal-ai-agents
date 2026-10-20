@@ -32,12 +32,18 @@ def _event_id(key: str, cycle_key: str, kind: str) -> str:
     return hashlib.sha256(json.dumps([key, cycle_key, kind]).encode()).hexdigest()[:32]
 
 
-def _open_keys_for_watch(spool: Spool, watch_id: str) -> dict:
-    """Latest event per finding key for this watch (only keys whose stream is still open)."""
+def _scope(obs) -> tuple:
+    return (obs.environment, obs.host, obs.watch_id)
+
+
+def _open_keys_for_watch(spool: Spool, obs) -> dict:
+    """Latest event per finding key for this environment/host/watch (open streams only). A
+    finding on another host or environment is never continued or recovered by this one."""
     latest = {}
+    scope = _scope(obs)
     for name in spool.names("findings"):
         ev = spool.read("findings", name)
-        if not ev or ev.get("watch_id") != watch_id:
+        if not ev or (ev.get("environment"), ev.get("host"), ev.get("watch_id")) != scope:
             continue
         key = ev["finding_key"]
         if key not in latest or (ev["occurred_at"], ev["seq"]) > (latest[key]["occurred_at"], latest[key]["seq"]):
@@ -49,15 +55,16 @@ def record(spool: Spool, obs, seq: int = 0) -> list[dict]:
     """Derive this cycle's finding events from one observation and store them (idempotent per
     cycle: rerunning the same cycle writes nothing new)."""
     already = [ev for ev in (spool.read("findings", n) for n in spool.names("findings"))
-               if ev and ev.get("watch_id") == obs.watch_id and ev.get("cycle_key") == obs.cycle_key]
+               if ev and (ev.get("environment"), ev.get("host"), ev.get("watch_id")) == _scope(obs)
+               and ev.get("cycle_key") == obs.cycle_key]
     if already:
         return already
-    open_streams = _open_keys_for_watch(spool, obs.watch_id)
+    open_streams = _open_keys_for_watch(spool, obs)
     events = []
 
     def emit(key, kind, severity):
         ev = {"schema": SCHEMA, "event_id": _event_id(key, obs.cycle_key, kind), "finding_key": key,
-              "watch_id": obs.watch_id, "cycle_key": obs.cycle_key, "event": kind, "severity": severity,
+              "environment": obs.environment, "host": obs.host, "watch_id": obs.watch_id, "cycle_key": obs.cycle_key, "event": kind, "severity": severity,
               "reason": obs.reason, "observation_id": obs.observation_id, "occurred_at": obs.collected_at,
               "seq": seq, "proposed_next_step_code": obs.reason}
         spool.put_immutable("findings", ev["event_id"], ev)

@@ -250,3 +250,43 @@ def test_learning_line_only_when_nonzero():
                                environment="prod", learning_counts={"suggestions_pending": 2,
                                                                     "repeated_corrections": 1})
     assert "Learning: 2 learning suggestions pending · 1 repeated correction." in busy
+
+
+# ── Codex review S-F3: non-finite and out-of-range telemetry ────────────────
+
+@pytest.mark.parametrize("body", [
+    '{"schema":"mc-host-snapshot/1","sampled_at":"%s","filesystems":[{"mount":"/","total_bytes":100,"avail_bytes":NaN}],"mem_total_bytes":100,"mem_available_bytes":NaN}',
+    '{"schema":"mc-host-snapshot/1","sampled_at":"%s","filesystems":[{"mount":"/","total_bytes":Infinity,"avail_bytes":1}],"mem_total_bytes":100,"mem_available_bytes":5}',
+    '{"schema":"mc-host-snapshot/1","sampled_at":"%s","filesystems":[{"mount":"/","total_bytes":1e999,"avail_bytes":1}],"mem_total_bytes":100,"mem_available_bytes":5}',
+    '{"schema":"mc-host-snapshot/1","sampled_at":"%s","filesystems":[{"mount":"/","total_bytes":100,"avail_bytes":200}],"mem_total_bytes":100,"mem_available_bytes":5}',
+    '{"schema":"mc-host-snapshot/1","sampled_at":"%s","filesystems":[{"mount":"/","total_bytes":0,"avail_bytes":0}],"mem_total_bytes":100,"mem_available_bytes":5}',
+    '{"schema":"mc-host-snapshot/1","sampled_at":"%s","filesystems":[{"mount":"/","total_bytes":true,"avail_bytes":1}],"mem_total_bytes":100,"mem_available_bytes":5}',
+    '{"schema":"mc-host-snapshot/1","sampled_at":"%s","filesystems":[{"mount":"/","total_bytes":"100","avail_bytes":1}],"mem_total_bytes":100,"mem_available_bytes":5}',
+    '{"schema":"mc-host-snapshot/1","sampled_at":"%s","filesystems":[],"mem_total_bytes":100,"mem_available_bytes":5}',
+])
+def test_bad_host_numbers_are_unknown_never_healthy(tmp_path, body):
+    write(tmp_path, "health/host.json", body % NOW.isoformat())
+    o = sources.observe(CYCLE, host_watch({"disk_used_pct_degraded": 80, "mem_used_pct_degraded": 85}),
+                        NOW, tmp_path)
+    assert o.state == "unknown" and o.reason == "source_malformed"
+
+
+def test_observation_refuses_non_finite_measurements():
+    with pytest.raises(ObservationError):
+        Observation(CYCLE, "w", 1, "prod", "ec2", "failed", "ok", "complete", "x",
+                    measurements={"disk_used_pct": float("nan")})
+
+
+def test_registry_refuses_non_finite_rules(tmp_path):
+    path = tmp_path / "w.json"
+    path.write_text(json.dumps({"schema": registry.SCHEMA, "watches": [watch_doc()]})
+                    .replace('"timeout_s": 3', '"timeout_s": NaN'))
+    with pytest.raises(registry.RegistryError):
+        registry.load(path)
+
+
+def test_slow_guest_source_times_out_as_unknown():
+    import time as _t
+    o = sources.observe(CYCLE, guest_watch(), NOW, None,
+                        guest_summary_fn=lambda: _t.sleep(5) or {"coverage": "complete", "stores": {}})
+    assert o.reason == "source_timeout"

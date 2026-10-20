@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -30,6 +31,8 @@ def utc(moment: datetime) -> str:
 
 
 def _scalar(value) -> bool:
+    if isinstance(value, float) and not math.isfinite(value):
+        return False
     return value is None or isinstance(value, (bool, int, float)) or (
         isinstance(value, str) and len(value) <= 64 and bool(_CODE.match(value)))
 
@@ -72,7 +75,7 @@ class Observation:
         return hashlib.sha256(basis.encode()).hexdigest()[:32]
 
     def to_dict(self) -> dict:
-        doc = asdict(self)
+        doc = asdict(self)  # measurements are finite by construction (see _scalar)
         doc["schema"] = SCHEMA
         doc["observation_id"] = self.observation_id
         doc["evidence"] = [list(e) for e in self.evidence]

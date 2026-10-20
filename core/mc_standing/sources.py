@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import stat
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -73,14 +75,29 @@ def read_source(root: Path, watch) -> tuple[bytes, str]:
     return data, hashlib.sha256(data).hexdigest()
 
 
+def _no_constants(_value):
+    raise ValueError("non-finite constant")
+
+
 def _json(data: bytes) -> dict:
+    """Strict JSON: NaN/Infinity are refused, and exponent overflow (1e999 → inf) is caught by
+    _finite at each numeric use."""
     try:
-        doc = json.loads(data)
-    except ValueError:
+        doc = json.loads(data, parse_constant=_no_constants)
+    except (ValueError, RecursionError):
         raise SourceUnavailable("source_malformed") from None
     if not isinstance(doc, dict):
         raise SourceUnavailable("source_malformed")
     return doc
+
+
+def _finite(value, *, minimum: float | None = None) -> float:
+    """A real, finite number (bools are not numbers here), optionally at least ``minimum``."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise SourceUnavailable("source_malformed")
+    if minimum is not None and value < minimum:
+        raise SourceUnavailable("source_malformed")
+    return float(value)
 
 
 def _fresh(sampled: datetime | None, watch, now: datetime) -> str | None:
@@ -153,11 +170,24 @@ def host_snapshot(cycle, watch, now, root, **_):
     stale = _fresh(sampled, watch, now)
     if stale:
         return unknown(cycle, watch, stale, now, coverage="partial")
+    def used_pct(total, avail):
+        total = _finite(total, minimum=1)
+        avail = _finite(avail, minimum=0)
+        if avail > total:
+            raise SourceUnavailable("source_malformed")
+        return 100.0 * (1 - avail / total)
+
     try:
-        disk = max(100.0 * (1 - f["avail_bytes"] / f["total_bytes"]) for f in doc["filesystems"])
-        mem = 100.0 * (1 - doc["mem_available_bytes"] / doc["mem_total_bytes"])
-    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        filesystems = doc["filesystems"]
+        if not isinstance(filesystems, list) or not filesystems or len(filesystems) > 32:
+            raise SourceUnavailable("source_malformed")
+        disk = max(used_pct(f["total_bytes"], f["avail_bytes"]) for f in filesystems)
+        mem = used_pct(doc["mem_total_bytes"], doc["mem_available_bytes"])
+    except (KeyError, TypeError):
         raise SourceUnavailable("source_malformed") from None
+    for key in ("disk_used_pct_degraded", "mem_used_pct_degraded", "critical_pct"):
+        if key in rules and not (isinstance(rules[key], (int, float)) and math.isfinite(rules[key])):
+            return unknown(cycle, watch, "threshold_invalid", now)
     critical = rules.get("critical_pct", 95)
     if disk >= critical or mem >= critical:
         state, reason = "failed", "headroom_critical"
@@ -210,10 +240,22 @@ def guest_summary(cycle, watch, now, root=None, *, guest_summary_fn=None, **_):
     unless the oldest request passes ``severity_rules.pending_age_degraded_h``."""
     if guest_summary_fn is None:
         return unknown(cycle, watch, "source_not_configured", now)
-    try:
-        summary = guest_summary_fn()
-    except Exception:
+    box = {}
+
+    def call():
+        try:
+            box["value"] = guest_summary_fn()
+        except Exception:
+            box["error"] = True
+
+    worker = threading.Thread(target=call, daemon=True)
+    worker.start()
+    worker.join(watch.timeout_s)
+    if worker.is_alive():
+        return unknown(cycle, watch, "source_timeout", now)
+    if "error" in box or "value" not in box:
         return unknown(cycle, watch, "source_unreadable", now)
+    summary = box["value"]
     stores = summary.get("stores", {}) if isinstance(summary, dict) else {}
     counts = {k: v.get("count") for k, v in stores.items() if isinstance(v, dict)}
     oldest = [parse_time(v.get("oldest")) for v in stores.values() if isinstance(v, dict)]
@@ -237,10 +279,14 @@ ADAPTERS = {
 }
 
 
-def observe(cycle_key: str, watch, now: datetime, root: Path, **deps) -> Observation:
-    """One watch → one observation. Every failure becomes an explicit unknown with its reason."""
+def observe(cycle_key: str, watch, now: datetime, root: Path, *, environment: str | None = None,
+            **deps) -> Observation:
+    """One watch → one observation. Every failure becomes an explicit unknown with its reason.
+    A watch configured for another environment than the running worker is never read."""
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
+    if environment is not None and watch.environment != environment:
+        return unknown(cycle_key, watch, "watch_environment_mismatch", now)
     try:
         return ADAPTERS[watch.adapter_id](cycle_key, watch, now, root, **deps)
     except SourceUnavailable as exc:

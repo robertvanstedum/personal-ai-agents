@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -71,7 +72,8 @@ def _binding(value: object, where: str) -> str:
 
 def _number(raw, key, where, *, minimum=1, cast=int):
     value = raw.get(key)
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < minimum:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) \
+            or value < minimum:
         raise RegistryError(f"{where}: {key} invalid")
     return cast(value)
 
@@ -81,7 +83,8 @@ def _rules(raw: object, where: str, allowed: set | None) -> dict:
         return {}
     if not isinstance(raw, dict) or (allowed is not None and not set(raw) <= allowed):
         raise RegistryError(f"{where}: rules invalid")
-    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 for v in raw.values()):
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0
+               for v in raw.values()):
         raise RegistryError(f"{where}: rule values must be non-negative numbers")
     return dict(raw)
 
@@ -137,7 +140,7 @@ def parse(doc: object, *, raw_bytes: bytes = b"") -> Watchlist:
 def load(path: str | Path) -> Watchlist:
     raw = Path(path).read_bytes()
     try:
-        doc = json.loads(raw)
+        doc = json.loads(raw, parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))
     except ValueError:
         raise RegistryError("watchlist: not JSON") from None
     return parse(doc, raw_bytes=raw)

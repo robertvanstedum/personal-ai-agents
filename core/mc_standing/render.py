@@ -59,7 +59,8 @@ def _detail(obs) -> str:
 
 
 def render_brief(observations, watches, *, local_date: date, environment: str,
-                 details_link: str | None = None, learning_counts: dict | None = None) -> str:
+                 details_link: str | None = None, learning_counts: dict | None = None,
+                 review_needed: list | None = None) -> str:
     by_id = {w.id: w for w in watches}
     obs = sorted(observations, key=lambda o: (SEVERITY.get(o.state, 9), _label(by_id, o)))
     checked = [o for o in obs if o.state in ("healthy", "degraded", "failed")]
@@ -71,11 +72,13 @@ def render_brief(observations, watches, *, local_date: date, environment: str,
 
     head = f"MC operations brief, {env}, {local_date.isoformat()}."
     learning = _learning_line(learning_counts)
+    review = ("Watch review due (review-by date passed): " + ", ".join(review_needed) + "."
+              if review_needed else None)
 
     if not attention and not unknowns and not missing_required:
-        lines = [head, f"All {len(checked)} checks healthy and current. Nothing needs you."]
-        if learning:
-            lines.append(learning)
+        lines = [head, f"All {len(checked)} checks healthy and current."
+                       + ("" if review else " Nothing needs you.")]
+        lines += [x for x in (review, learning) if x]
         return "\n".join(lines)
 
     lines = [head]
@@ -97,8 +100,7 @@ def render_brief(observations, watches, *, local_date: date, environment: str,
         lines.append("Healthy: " + ", ".join(_label(by_id, o) for o in healthy) + ".")
     lines.append("MC took no actions; the steps above are proposals." if attention or unknowns
                  else "No action needed.")
-    if learning:
-        lines.append(learning)
+    lines += [x for x in (review, learning) if x]
 
     if len(lines) > MAX_LINES:
         kept = lines[:MAX_LINES - 1]
