@@ -31,7 +31,7 @@ class GrantPostgresTests(PostgresFixture, unittest.TestCase):
         self.intent = EffectIntent(str(uuid4()), self.request, grant_id=self.grant.grant_id)
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute('TRUNCATE guild.mc_action_grant_consumptions,guild.mc_action_grants,'
-                        'guild.mc_action_events,guild.mc_action_receipts')
+                        'guild.mc_action_events,guild.mc_action_receipts CASCADE')
 
     def issue(self, grant=None, store=None):
         with self.connect() as conn:

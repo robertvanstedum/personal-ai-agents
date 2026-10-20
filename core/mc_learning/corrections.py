@@ -2,7 +2,7 @@
 
 Inputs come from the verified statement journal and separate attributed Shelf
 annotation records. The owner-control adapter must verify an annotation's exact
-payload digest against its completed owner-action receipt on EVERY projection.
+payload digest and writer sequence against its completed owner-action receipt on EVERY projection.
 This module cannot issue that receipt, adopt a lesson, or grant a capability.
 No topic-string matching or model assertion confirms a repeated correction.
 Missing capture evidence remains unknown; fewer captures never imply success.
@@ -172,7 +172,7 @@ def project_corrections(*, context, rows, annotations, start, end, now, coverage
             proposals.append(dict(annotation_id=p['annotation_id'],statement_id=p['statement_id'],
                 kind=p['kind'],topic=p['topic'],repeat_of=proposed_links,standing='proposed'))
             continue
-        if verify_owner_annotation(context,p,annotation.digest) is not True:
+        if verify_owner_annotation(context,p,annotation.digest,annotation.sequence) is not True:
             warnings.append('annotation_owner_receipt_unverified')
             continue
         effective[p['statement_id']] = {k:p[k] for k in (

@@ -46,7 +46,7 @@ class CorrectionTests(unittest.TestCase):
         defaults = dict(context=self.context,rows=self.rows,annotations=self.annotations,
             start=self.start,end=self.end,now=self.now,coverage=self.coverage,
             can_read_statement=lambda _,p:p['statement_id'] not in self.denied,
-            verify_owner_annotation=lambda _,p,digest:(p['owner_receipt_id'],digest) in self.receipts)
+            verify_owner_annotation=lambda _,p,digest,sequence:(p['owner_receipt_id'],digest) in self.receipts)
         return project_corrections(**(defaults|kwargs))
 
     def test_same_topic_is_not_a_repeat_and_no_audit_is_unknown(self):

@@ -72,7 +72,7 @@ class AnnotationShelfTests(unittest.TestCase):
         return project_corrections(context=self.context,rows=self.store.journal.snapshot(),
             annotations=self.snapshot().annotations,start=start,end=end,now=NOW,
             coverage=CaptureCoverage(start,end),can_read_statement=lambda *_:True,
-            verify_owner_annotation=lambda _,p,d:(p['owner_receipt_id'],d) in self.receipts)
+            verify_owner_annotation=lambda _,p,d,sequence:(p['owner_receipt_id'],d) in self.receipts)
 
     def test_shelf_record_preserves_source_and_only_completed_exact_receipt_changes_ledger(self):
         raw_before = self.store.journal.snapshot()
