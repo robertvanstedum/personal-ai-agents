@@ -70,6 +70,9 @@ def main(argv=None) -> int:
                    help="also send the counts-only Telegram copy (off unless given; a token alone never enables it)")
     p.add_argument("--telegram-token-file", type=Path)
     p.add_argument("--telegram-chat-file", type=Path, help="the owner-approved destination chat binding")
+    p.add_argument("--max-wall-ms", type=int, help="approved resource envelope (P-07); excess makes the job warn")
+    p.add_argument("--max-cpu-ms", type=int)
+    p.add_argument("--max-rss-kb", type=int)
     p.add_argument("--jobs-root", type=Path, help="write the scheduled-jobs status file here")
     p.add_argument("--job-id", default="mc-standing-brief")
     p.add_argument("--jobs-registry", type=Path, help="default: config/scheduled_jobs.json")
@@ -137,9 +140,12 @@ def _cycle(args) -> tuple[int, dict]:
         spool=spool, watchlist=wl, policy_id=args.policy_id, environment=args.environment,
         now=datetime.now(timezone.utc), source_root=args.source_root,
         ingress=IngressClient(args.ingress_url, lambda: token), destination_binding=args.destination,
-        kill=control.killed, paused=control.paused, details_link=args.details_link, telegram=telegram, deps=deps,
+        kill=control.killed, paused=control.paused, details_link=args.details_link, telegram=telegram,
+        envelope={k: v for k, v in (("max_wall_ms", args.max_wall_ms), ("max_cpu_ms", args.max_cpu_ms),
+                                    ("max_rss_kb", args.max_rss_kb)) if v is not None} or None, deps=deps,
         clock=lambda: datetime.now(timezone.utc))
-    out = {k: result.get(k) for k in ("cycle_key", "state", "reason", "channels") if k in result}
+    out = {k: result.get(k) for k in ("cycle_key", "state", "reason", "channels", "resources",
+                                      "envelope_exceeded") if k in result}
     return _emit(out, 0 if result.get("state") in ("delivered", "paused", "skipped")
                  or result.get("reason") == "already_final" else 3)
 
@@ -162,6 +168,10 @@ def _job_outcome(out: dict) -> tuple[str, str, dict]:
         results["telegram"] = telegram
         if job_state == "ok" and telegram != "acknowledged":
             job_state, summary = "warn", "brief delivered; telegram copy " + telegram.replace("_", " ")
+    if out.get("envelope_exceeded"):
+        results["resources"] = "over_envelope"
+        if job_state == "ok":
+            job_state, summary = "warn", "brief delivered; resource envelope exceeded"
     return job_state, summary, results
 
 

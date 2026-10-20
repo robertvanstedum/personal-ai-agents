@@ -20,6 +20,8 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import os
+import resource
+import sys
 import uuid
 from datetime import date, datetime, time, timezone
 from time import monotonic
@@ -59,7 +61,7 @@ def _observation_from(doc: dict) -> Observation:
 def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: datetime, source_root,
               ingress, destination_binding: str, kill=lambda: False, paused=lambda: False,
               details_link: str | None = None, learning_source=None, learning_principal: str | None = None,
-              telegram=None, deps: dict | None = None, clock=None) -> dict:
+              telegram=None, envelope: dict | None = None, deps: dict | None = None, clock=None) -> dict:
     """``now`` fixes the cycle's date and the observation timestamps; ``clock`` (default: the
     fixed ``now``) is read again immediately before every send and between stages, so a cycle that
     starts at 08:59 cannot deliver after 09:00. Production passes ``clock=lambda: datetime.now(UTC)``.
@@ -70,7 +72,12 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
 
     ``telegram`` (optional, explicitly enabled): ``{"sender", "destination_id"}``. The counts-only
     copy goes out at most once per cycle, only after the site brief is verified delivered; the
-    result then names each channel (``channels: {site, telegram}``)."""
+    result then names each channel (``channels: {site, telegram}``).
+
+    Every invocation records its resource use on the cycle record (``resources``: wall and CPU
+    milliseconds, peak RSS; the last ten invocations) as non-interference evidence (P-07). With an
+    ``envelope`` (``max_wall_ms``, ``max_cpu_ms``, ``max_rss_kb``) any excess is named in the result
+    (``envelope_exceeded``); it never changes what was delivered."""
     deps = deps or {}
     clock = clock or (lambda: now)
     local = now.astimezone(ZONE)
@@ -85,6 +92,7 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
         # owner's control document (at its checkpoints); the idle ack path stays out.
         spool.put_state("cycles", "worker-status", {"state": "running", "cycle_key": key,
                                                     "since": clock().isoformat()})
+        started, usage0 = monotonic(), resource.getrusage(resource.RUSAGE_SELF)
         try:
             result = _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root,
                                  ingress, destination_binding, kill, paused, details_link,
@@ -93,7 +101,7 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
             if telegram is not None:
                 result = _telegram_copy(spool, key, environment, details_link, telegram, kill, paused,
                                         clock, result)
-            return result
+            return _record_resources(spool, key, result, started, usage0, envelope, clock)
         finally:
             try:   # informational; the lock (not this file) guards acknowledgement, so never mask the result
                 spool.put_state("cycles", "worker-status", {"state": "idle", "cycle_key": key,
@@ -102,6 +110,33 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
                 pass
     finally:
         os.close(lock_fd)
+
+
+def _rss_kb(usage) -> int:
+    # ru_maxrss is bytes on macOS and kilobytes on Linux.
+    return int(usage.ru_maxrss / 1024) if sys.platform == "darwin" else int(usage.ru_maxrss)
+
+
+def _record_resources(spool, key, result, started, usage0, envelope, clock):
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    measured = {"at": clock().isoformat(), "state": result.get("state"),
+                "wall_ms": int((monotonic() - started) * 1000),
+                "cpu_ms": int(((usage.ru_utime - usage0.ru_utime) + (usage.ru_stime - usage0.ru_stime)) * 1000),
+                "max_rss_kb": _rss_kb(usage)}
+    try:   # evidence only: never let measurement change the outcome
+        record = spool.read("cycles", key)
+        if record is not None:
+            record["resources"] = (record.get("resources") or [])[-9:] + [measured]
+            spool.put_state("cycles", key, record)
+    except (OSError, ValueError):
+        pass
+    result = dict(result, resources=measured)
+    if envelope:
+        limits = {"max_wall_ms": "wall_ms", "max_cpu_ms": "cpu_ms", "max_rss_kb": "max_rss_kb"}
+        over = sorted(k for k, m in limits.items() if k in envelope and measured[m] > envelope[k])
+        if over:
+            result["envelope_exceeded"] = over
+    return result
 
 
 def _telegram_copy(spool, key, environment, details_link, telegram, kill, paused, clock, result):

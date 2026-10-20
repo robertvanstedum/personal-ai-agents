@@ -51,3 +51,8 @@ def test_outcome_mapping_is_fixed_phrases_only():
                           started_at=jobs_status.parse_time("2026-10-21T10:40:00Z"),
                           finished_at=jobs_status.parse_time("2026-10-21T10:41:00Z"), exit_code=0,
                           summary=summary, results=results)      # raises if any phrase breaks the contract
+
+
+def test_envelope_excess_makes_an_ok_run_warn():
+    assert run_cycle._job_outcome({"state": "delivered", "envelope_exceeded": ["max_wall_ms"]}) == \
+        ("warn", "brief delivered; resource envelope exceeded", {"brief": "delivered", "resources": "over_envelope"})
