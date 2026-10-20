@@ -68,14 +68,25 @@ class FakeDispatcher:
             raise ConnectionError("dispatcher down")
         self.results.append({"request_id": request_id, "event_id": event_id, "status": status,
                              "artifacts": artifacts, "detail": detail})
-        return {"state": "accepted"}
+        return {"state": "accepted", "event_id": event_id}
+
+
+class Enforcer:
+    """Test double for a budget-binding adapter: records the cap it was asked to bind."""
+
+    def __init__(self):
+        self.caps = []
+
+    def apply(self, argv, env, cap_usd):
+        self.caps.append(cap_usd)
+        return argv, dict(env, FAKE_COST_CAP_USD=str(cap_usd))
 
 
 def cfg(tmp_path, mirror_path, **over):
     base = dict(runner_id="mac-1", actors=("codex", "claude-code"), scopes=("research", "build"),
                 repositories={"personal-ai-agents": mirror_path}, workspace_root=tmp_path / "ws",
                 artifact_root=tmp_path / "artifacts", max_cost_usd=5.0, lease_renew_s=0.0, tick_s=0.01,
-                kill_grace_s=1.0, cost_enforced_actors=("codex", "claude-code"))
+                kill_grace_s=1.0, cost_enforcers={"codex": Enforcer(), "claude-code": Enforcer()})
     base.update(over)
     return runner.RunnerConfig(**base)
 
@@ -294,5 +305,140 @@ def test_output_bound_is_enforced_while_running(tmp_path, mirror, monkeypatch):
 def test_unenforceable_cost_cap_is_refused(tmp_path, mirror):
     path, ref = mirror
     d = FakeDispatcher([env_doc(ref)])
-    out = runner.run_once(d, cfg(tmp_path, path, cost_enforced_actors=()), now=lambda: NOW)
+    out = runner.run_once(d, cfg(tmp_path, path, cost_enforcers={}), now=lambda: NOW)
     assert out["state"] == "refused" and d.results[0]["detail"]["code"] == "cost_limit_unenforceable"
+
+
+# ── Codex second repair review of 3817b1af ──────────────────────────────────
+import json
+
+
+def test_immediate_large_burst_is_bounded_and_reported(tmp_path, mirror, monkeypatch):
+    """A child that writes far past the bound and exits before any poll: log stays bounded and
+    the task is output_limit, not completed."""
+    path, ref = mirror
+    fake_cli(monkeypatch, "import sys; sys.stdout.write('x' * 3_000_000)")
+    out = runner.run_once(FakeDispatcher([env_doc(ref)]), cfg(tmp_path, path, max_output_bytes=50_000,
+                                                               tick_s=5.0), now=lambda: NOW)
+    assert out["state"] == "output_limit"
+    log = next((tmp_path / "artifacts").glob("*.log"))
+    assert log.stat().st_size <= 50_000
+
+
+def test_descendants_are_stopped_after_the_parent_exits(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "import subprocess,sys\n"
+                          "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'],"
+                          " stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                          "open('child.pid','w').write(str(p.pid))")
+    out = runner.run_once(FakeDispatcher([env_doc(ref)]), cfg(tmp_path, path), now=lambda: NOW)
+    assert out["state"] == "completed"
+    pid = int(next((tmp_path / "ws").glob("*/child.pid")).read_text())
+    assert not _alive(pid)
+
+
+@pytest.mark.parametrize("ack", [None, {}, {"state": "refused"}, {"state": "accepted"},
+                                 {"state": "accepted", "event_id": "someone-else"}])
+def test_result_needs_a_matching_acknowledgement(tmp_path, mirror, monkeypatch, ack):
+    path, ref = mirror
+    fake_cli(monkeypatch, "print('ok')")
+    d = FakeDispatcher([env_doc(ref)])
+    real = d.result
+    monkeypatch.setattr(d, "result", lambda *a, **k: (real(*a, **k), ack)[1])
+    out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+    assert out["delivered"] is False
+    record = json.loads(next((tmp_path / "artifacts").glob("*.result.json")).read_text())
+    assert record["acknowledged"] is False                 # stays pending, resent on the next run
+    monkeypatch.setattr(d, "result", real)
+    assert runner.resend_pending(d, cfg(tmp_path, path)) == 1
+
+
+def _crash_at(monkeypatch, target):
+    class Crash(BaseException):
+        pass
+
+    real = runner._write_json
+
+    def write(path, doc):
+        real(path, doc)
+        if path.name.endswith(".stage.json") and doc["stage"] == target:
+            raise Crash()
+    monkeypatch.setattr(runner, "_write_json", write)
+    return Crash
+
+
+def test_crash_after_child_exited_keeps_its_real_outcome(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "open('README.md','a').write('kept\\n'); print('done')")
+    doc = env_doc(ref)
+    Crash = _crash_at(monkeypatch, "exited")
+    with pytest.raises(Crash):
+        runner.run_once(FakeDispatcher([doc]), cfg(tmp_path, path), now=lambda: NOW)
+    monkeypatch.undo()
+    fake_cli(monkeypatch, "raise SystemExit(3)")            # would fail if it were rerun
+    d = FakeDispatcher([dict(doc)])
+    out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+    assert out["state"] == "completed" and out["resumed"] and d.results[0]["status"] == "completed"
+    patch = next(a for a in d.results[0]["artifacts"] if a["kind"] == "patch")
+    assert b"+kept" in (tmp_path / "artifacts" / patch["ref"]).read_bytes()
+
+
+def test_crash_after_artifacts_reports_them_without_recollecting(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "print('done')")
+    doc = env_doc(ref)
+    Crash = _crash_at(monkeypatch, "artifacts")
+    with pytest.raises(Crash):
+        runner.run_once(FakeDispatcher([doc]), cfg(tmp_path, path), now=lambda: NOW)
+    monkeypatch.undo()
+    d = FakeDispatcher([dict(doc)])
+    out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+    assert out["state"] == "completed" and d.results[0]["artifacts"][0]["kind"] == "output"
+
+
+def test_crash_while_child_running_is_interrupted_and_orphans_are_stopped(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "import os,time; open('pid','w').write(str(os.getpid())); time.sleep(60)")
+    doc = env_doc(ref)
+
+    class Crash(BaseException):
+        pass
+
+    d = FakeDispatcher([doc])
+
+    def crash(*a, **k):
+        import time as _t
+        _t.sleep(0.3)                                       # let the child record its pid
+        raise Crash()
+    monkeypatch.setattr(d, "progress", crash)
+    monkeypatch.setattr(runner, "_kill_group", lambda *a, **k: None)   # the crashed runner never cleaned up
+    with pytest.raises(Crash):
+        runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+    monkeypatch.undo()
+    pid = int(next((tmp_path / "ws").glob("*/pid")).read_text())
+    assert _alive(pid)
+    d2 = FakeDispatcher([dict(doc)])
+    out = runner.run_once(d2, cfg(tmp_path, path), now=lambda: NOW)
+    assert out["state"] == "interrupted" and d2.results[0]["detail"]["code"] == "child_outcome_unknown"
+    assert not _alive(pid)
+
+
+def test_workspace_prepared_but_never_started_is_rebuilt_not_failed(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "print('ok')")
+    doc = env_doc(ref)
+    workspace.prepare(tmp_path / "ws", path, f"{doc['request_id']}-g1", ref)
+    out = runner.run_once(FakeDispatcher([doc]), cfg(tmp_path, path), now=lambda: NOW)
+    assert out["state"] == "completed"
+
+
+def test_cost_cap_is_bound_by_the_adapter_and_a_flag_alone_is_not_enough(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "import os; print(os.environ['FAKE_COST_CAP_USD'])")
+    enforcer = Enforcer()
+    c = cfg(tmp_path, path, cost_enforcers={"codex": enforcer})
+    out = runner.run_once(FakeDispatcher([env_doc(ref, cost_cap_usd=1.5)]), c, now=lambda: NOW)
+    assert out["state"] == "completed" and enforcer.caps == [1.5]
+    d = FakeDispatcher([env_doc(ref)])
+    out = runner.run_once(d, cfg(tmp_path / "b", path, cost_enforcers={"codex": True}), now=lambda: NOW)
+    assert d.results[0]["detail"]["code"] == "cost_limit_unenforceable"
