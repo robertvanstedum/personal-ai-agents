@@ -8,6 +8,7 @@ must bind a runtime run before tools; execution must recheck current authority.
 
 from dataclasses import dataclass, field
 from datetime import datetime
+import unicodedata
 
 
 class ActionContractError(ValueError):
@@ -19,7 +20,7 @@ def _identifier(value: object) -> bool:
         type(value) is str
         and 0 < len(value) <= 256
         and value == value.strip()
-        and not any(ord(c) < 32 or ord(c) == 127 for c in value)
+        and not any(unicodedata.category(c) in {'Cc', 'Cf', 'Cs'} for c in value)
     )
 
 

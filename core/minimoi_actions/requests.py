@@ -56,6 +56,18 @@ class ToolRequest:
     operation_version: int
     _arguments_json: bytes = field(repr=False)
 
+    def __post_init__(self) -> None:
+        # Direct construction must enforce the same invariants as transport
+        # parsing. Canonicalize here so digest identity never depends on which
+        # trusted caller constructed the value.
+        if (type(self.operation) is not str or len(self.operation) > 128
+                or not _OPERATION.fullmatch(self.operation)):
+            raise ActionContractError('request_operation_invalid')
+        if type(self.operation_version) is not int or self.operation_version < 1:
+            raise ActionContractError('request_version_invalid')
+        encoded = _canonical_arguments(self._arguments_json)
+        object.__setattr__(self, '_arguments_json', encoded)
+
     @property
     def arguments(self) -> dict:
         """A fresh copy: callers cannot mutate a validated request in place."""
@@ -65,6 +77,29 @@ class ToolRequest:
     def arguments_sha256(self) -> str:
         """Argument digest only, not an operation/approval/idempotency key."""
         return hashlib.sha256(self._arguments_json).hexdigest()
+
+
+def _canonical_arguments(raw: bytes) -> bytes:
+    if type(raw) is not bytes:
+        raise ActionContractError('request_bytes_required')
+    if len(raw) > MAX_REQUEST_BYTES:
+        raise ActionContractError('request_too_large')
+    try:
+        args = json.loads(raw.decode('utf-8'), object_pairs_hook=_object,
+                          parse_constant=_constant)
+        if type(args) is not dict:
+            raise ActionContractError('request_arguments_invalid')
+        # Arguments occur one level below the transport envelope.
+        _bounded_tree(args, 1)
+        encoded = json.dumps(args, sort_keys=True, ensure_ascii=False,
+                             separators=(',', ':'), allow_nan=False).encode('utf-8')
+        if len(encoded) > MAX_REQUEST_BYTES:
+            raise ActionContractError('request_too_large')
+        return encoded
+    except ActionContractError:
+        raise
+    except (ValueError, UnicodeError, RecursionError):
+        raise ActionContractError('request_json_invalid') from None
 
 
 def parse_tool_request(raw: bytes) -> ToolRequest:

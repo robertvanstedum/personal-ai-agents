@@ -6,7 +6,7 @@ import json
 import unittest
 
 from core.minimoi_actions import ActionContext, ActionContractError, parse_tool_request
-from core.minimoi_actions.requests import MAX_REQUEST_BYTES
+from core.minimoi_actions.requests import MAX_REQUEST_BYTES, ToolRequest
 
 
 NOW = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
@@ -47,6 +47,8 @@ class ContextTests(unittest.TestCase):
                        dict(generation=True), dict(generation=0),
                        dict(generation=-1), dict(generation=1.0),
                        dict(principal_id=''), dict(actor_id='bad\nactor'),
+                       dict(actor_id='bad\u202eactor'), dict(actor_id='bad\u200bactor'),
+                       dict(actor_id='bad\u0085actor'), dict(actor_id='bad\ud800actor'),
                        dict(work_id=''), dict(dispatch_id='x' * 257)]:
             with self.subTest(values=values), self.assertRaises(ActionContractError):
                 context(**values)
@@ -72,6 +74,20 @@ class ContextTests(unittest.TestCase):
 
 
 class RequestTests(unittest.TestCase):
+    def test_direct_constructor_cannot_bypass_transport_invariants(self):
+        for operation, version, args in [
+            ('shell', 1, b'{}'), ('notes.create', True, b'{}'),
+            ('notes.create', 1, b'[]'), ('notes.create', 1, b'{"a":1,"a":2}'),
+            ('notes.create', 1, b'{"n":1e999}'), ('notes.create', 1, b'\xff'),
+            ('notes.create', 1, b' ' * (MAX_REQUEST_BYTES + 1)),
+            ('notes.create', 1, b'{"x":' + b'[' * 40 + b'0' + b']' * 40 + b'}'),
+        ]:
+            with self.subTest(operation=operation, version=version), self.assertRaises(ActionContractError):
+                ToolRequest(operation, version, args)
+        direct = ToolRequest('notes.create', 1, b'{ "b":2, "a":1 }')
+        parsed = parse_tool_request(request({'a': 1, 'b': 2}, operation='notes.create'))
+        self.assertEqual(direct.arguments_sha256, parsed.arguments_sha256)
+
     def test_parse_and_deep_copy(self):
         parsed = parse_tool_request(request({'ids': ['test-target']}))
         self.assertEqual(parsed.operation, 'guest_requests.reject')
