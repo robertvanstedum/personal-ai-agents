@@ -95,8 +95,11 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
                                         clock, result)
             return result
         finally:
-            spool.put_state("cycles", "worker-status", {"state": "idle", "cycle_key": key,
-                                                        "since": clock().isoformat()})
+            try:   # informational; the lock (not this file) guards acknowledgement, so never mask the result
+                spool.put_state("cycles", "worker-status", {"state": "idle", "cycle_key": key,
+                                                            "since": clock().isoformat()})
+            except OSError:
+                pass
     finally:
         os.close(lock_fd)
 
