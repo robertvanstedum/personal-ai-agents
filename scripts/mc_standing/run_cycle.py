@@ -16,6 +16,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import stat
 import sys
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ from core.mc_standing import registry, runner  # noqa: E402
 from core.mc_standing.control import Control  # noqa: E402
 from core.mc_standing.ingress_client import IngressClient  # noqa: E402
 from core.mc_standing.spool import Spool  # noqa: E402
+from core.mc_standing.telegram_copy import TelegramBotSender  # noqa: E402
 
 
 def _token(path: Path) -> str:
@@ -36,6 +38,16 @@ def _token(path: Path) -> str:
     value = path.read_text().strip()
     if not 32 <= len(value) <= 256:
         raise SystemExit("token file content invalid")
+    return value
+
+
+def _chat_binding(path: Path) -> str:
+    info = os.stat(path)
+    if stat.S_IMODE(info.st_mode) & 0o077:
+        raise SystemExit("chat binding file must not be readable by group or others")
+    value = path.read_text().strip()
+    if not re.fullmatch(r"-?[0-9]{1,20}", value):
+        raise SystemExit("chat binding content invalid")
     return value
 
 
@@ -53,6 +65,10 @@ def main(argv=None) -> int:
     p.add_argument("--disable-file", required=True, type=Path)
     p.add_argument("--details-link")
     p.add_argument("--dev-fixture", action="store_true")
+    p.add_argument("--telegram-copy", action="store_true",
+                   help="also send the counts-only Telegram copy (off unless given; a token alone never enables it)")
+    p.add_argument("--telegram-token-file", type=Path)
+    p.add_argument("--telegram-chat-file", type=Path, help="the owner-approved destination chat binding")
     p.add_argument("--ack-control-only", action="store_true",
                    help="read the owner control document, record the worker acknowledgement, exit")
     args = p.parse_args(argv)
@@ -98,13 +114,21 @@ def main(argv=None) -> int:
         from minimoi_portal import guest_requests
         dsn = Path(dsn_file).read_text().strip()
         deps["guest_summary_fn"] = lambda: guest_requests.pending_summary(guest_requests.PostgresStore(dsn))
+    telegram = None
+    if args.telegram_copy:
+        if not (args.telegram_token_file and args.telegram_chat_file):
+            print(json.dumps({"state": "config_error", "reason": "telegram_copy_needs_token_and_chat_binding"}))
+            return 2
+        tg_token = _token(args.telegram_token_file)
+        chat = _chat_binding(args.telegram_chat_file)
+        telegram = {"sender": TelegramBotSender(lambda: tg_token), "destination_id": chat}
     result = runner.run_cycle(
         spool=spool, watchlist=wl, policy_id=args.policy_id, environment=args.environment,
         now=datetime.now(timezone.utc), source_root=args.source_root,
         ingress=IngressClient(args.ingress_url, lambda: token), destination_binding=args.destination,
-        kill=control.killed, paused=control.paused, details_link=args.details_link, deps=deps,
+        kill=control.killed, paused=control.paused, details_link=args.details_link, telegram=telegram, deps=deps,
         clock=lambda: datetime.now(timezone.utc))
-    print(json.dumps({k: result.get(k) for k in ("cycle_key", "state", "reason")}))
+    print(json.dumps({k: result.get(k) for k in ("cycle_key", "state", "reason", "channels") if k in result}))
     return 0 if result.get("state") in ("delivered", "paused", "skipped") or result.get("reason") == "already_final" \
         else 3
 

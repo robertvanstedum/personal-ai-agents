@@ -25,7 +25,7 @@ from datetime import date, datetime, time, timezone
 from time import monotonic
 from zoneinfo import ZoneInfo
 
-from . import findings, learning_view
+from . import findings, learning_view, telegram_copy
 from .observe import Observation, unknown
 from .render import render_brief
 from .sources import observe
@@ -59,14 +59,18 @@ def _observation_from(doc: dict) -> Observation:
 def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: datetime, source_root,
               ingress, destination_binding: str, kill=lambda: False, paused=lambda: False,
               details_link: str | None = None, learning_source=None, learning_principal: str | None = None,
-              deps: dict | None = None, clock=None) -> dict:
+              telegram=None, deps: dict | None = None, clock=None) -> dict:
     """``now`` fixes the cycle's date and the observation timestamps; ``clock`` (default: the
     fixed ``now``) is read again immediately before every send and between stages, so a cycle that
     starts at 08:59 cannot deliver after 09:00. Production passes ``clock=lambda: datetime.now(UTC)``.
 
     ``learning_source`` (P-G7, optional) returns the harness's learning count snapshot; it is read
     once when the brief is first rendered, and any fault there only makes the learning line say
-    "unavailable"."""
+    "unavailable".
+
+    ``telegram`` (optional, explicitly enabled): ``{"sender", "destination_id"}``. The counts-only
+    copy goes out at most once per cycle, only after the site brief is verified delivered; the
+    result then names each channel (``channels: {site, telegram}``)."""
     deps = deps or {}
     clock = clock or (lambda: now)
     local = now.astimezone(ZONE)
@@ -82,15 +86,38 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
         spool.put_state("cycles", "worker-status", {"state": "running", "cycle_key": key,
                                                     "since": clock().isoformat()})
         try:
-            return _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root,
-                               ingress, destination_binding, kill, paused, details_link,
-                               (learning_source, learning_principal),
-                               deps, clock)
+            result = _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root,
+                                 ingress, destination_binding, kill, paused, details_link,
+                                 (learning_source, learning_principal),
+                                 deps, clock)
+            if telegram is not None:
+                result = _telegram_copy(spool, key, environment, details_link, telegram, kill, paused,
+                                        clock, result)
+            return result
         finally:
             spool.put_state("cycles", "worker-status", {"state": "idle", "cycle_key": key,
                                                         "since": clock().isoformat()})
     finally:
         os.close(lock_fd)
+
+
+def _telegram_copy(spool, key, environment, details_link, telegram, kill, paused, clock, result):
+    record = spool.read("cycles", key) or {}
+    site = record.get("state")
+    if site != "delivered":
+        return dict(result, channels={"site": site, "telegram": "waiting_for_site"})
+    payload = spool.read("delivery", f"{key}.brief") or {}
+    text = telegram_copy.compose(_cycle_observations(spool, key), environment=environment,
+                                 local_date=record["local_date"], learning=payload.get("learning"),
+                                 details_link=details_link)
+    try:
+        out = telegram_copy.deliver(spool=spool, cycle_key=key, text=text, sender=telegram["sender"],
+                                    destination_id=telegram["destination_id"], kill=kill, paused=paused,
+                                    send_allowed=lambda: _send_window_open(record, clock().astimezone(ZONE)))
+    except Exception:
+        out = {"telegram": "error", "reason": "copy_failed_locally"}       # never affects the site brief
+    return dict(result, channels={"site": "delivered", "telegram": out["telegram"]},
+                telegram_reason=out.get("reason"))
 
 
 def _save(spool, key, record, **changes):

@@ -117,3 +117,22 @@ def test_running_cycle_marks_itself_in_flight_and_acknowledges_at_its_checkpoint
     assert res["state"] == "paused" and seen and set(seen) == {"running"}
     assert spool.read("cycles", "control-ack")["applied_version"] == 9
     assert spool.read("cycles", "worker-status")["state"] == "idle"
+
+
+def test_telegram_copy_needs_both_token_and_chat_binding(tmp_path, capsys):
+    a = args(tmp_path, **{"--environment": "dev"}) + ["--dev-fixture", "--telegram-copy"]
+    assert run_cycle.main(a) == 2
+    assert json.loads(capsys.readouterr().out)["reason"] == "telegram_copy_needs_token_and_chat_binding"
+
+
+def test_telegram_chat_binding_must_be_private_and_numeric(tmp_path):
+    chat = tmp_path / "chat"
+    chat.write_text("12345")
+    os.chmod(chat, 0o644)
+    with pytest.raises(SystemExit):
+        run_cycle._chat_binding(chat)
+    os.chmod(chat, 0o600)
+    assert run_cycle._chat_binding(chat) == "12345"
+    chat.write_text("@someone")
+    with pytest.raises(SystemExit):
+        run_cycle._chat_binding(chat)
