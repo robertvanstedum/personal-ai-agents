@@ -8,8 +8,6 @@ Never use an application database. No fake cursor substitutes for these checks.
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-import os
-from pathlib import Path
 import threading
 import unittest
 
@@ -17,40 +15,12 @@ from core.minimoi_actions.context import ActionContext, ActionContractError
 from core.minimoi_actions.bindings import RuntimeIdentity, RuntimeCall
 from core.minimoi_actions.binding_store import BindingStore, RegistryUnavailable
 
-DSN = os.environ.get('MC_BINDING_TEST_DSN')
+from postgres_fixture_support import DSN, PostgresFixture
 
 
 @unittest.skipUnless(DSN, 'isolated local MC_BINDING_TEST_DSN required')
-class PostgresBindingTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        import psycopg2
-        from psycopg2.extensions import parse_dsn
-        params = parse_dsn(DSN)
-        host = params.get('host', '')
-        if (not params.get('dbname', '').startswith('mc12_test_')
-                or not (host in {'', 'localhost', '127.0.0.1', '::1'} or host.startswith('/'))):
-            raise RuntimeError('an isolated local mc12_test_* database is required')
-        cls.connect = staticmethod(lambda: psycopg2.connect(
-            DSN, connect_timeout=3,
-            options='-c statement_timeout=4000 -c lock_timeout=3000'))
-        cls.guard = cls.connect()
-        with cls.guard.cursor() as cur:
-            cur.execute("SELECT current_database(), pg_try_advisory_lock(731241902)")
-            name, locked = cur.fetchone()
-            if not name.startswith('mc12_test_') or not locked:
-                cls.guard.close()
-                raise RuntimeError('test database unavailable or already in use')
-            cur.execute('CREATE SCHEMA IF NOT EXISTS guild')
-        cls.guard.commit()
-        migration = Path(__file__).resolve().parents[2] / 'core/minimoi_actions/sql/001_runtime_bindings.sql'
-        with cls.guard.cursor() as cur:
-            cur.execute(migration.read_text())
-        cls.guard.commit()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.guard.close()
+class PostgresBindingTests(PostgresFixture, unittest.TestCase):
+    migrations = ('core/minimoi_actions/sql/001_runtime_bindings.sql',)
 
     def setUp(self):
         with self.guard.cursor() as cur:

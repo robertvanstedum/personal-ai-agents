@@ -421,9 +421,16 @@ class FloorStores(BoardMixin):
         return self._move(postit_id, by, idempotency_key, to_bin=False)
 
     def add_note(self, request_id: str, text: str, author: Author, *, area: str | None = None,
-                 item_ref: int | None = None, page: str | None = None) -> WriteResult:
+                 item_ref: int | None = None, page: str | None = None,
+                 transaction=None) -> WriteResult:
         """Keep one on-record note. The request id is its idempotency key: a
-        repeated id keeps it once, and a different text under it is refused."""
+        repeated id keeps it once, and a different text under it is refused.
+
+        Internal service operations may lend a transaction so a service receipt
+        and the note commit together. The caller owns commit/rollback/close;
+        authentication, floor binding and text scrubbing remain caller duties.
+        Existing UI callers keep the default self-contained transaction.
+        """
         now = utc_now()
 
         def work(q):
@@ -442,6 +449,17 @@ class FloorStores(BoardMixin):
             if note["text"] != text or note["who"] != author.id:
                 return WriteResult("idempotency_mismatch", None, True)
             return WriteResult("kept", note, True)
+        if transaction is not None:
+            if getattr(transaction, 'autocommit', False) is True:
+                raise FloorStoreUnavailable('note requires a transaction')
+            def borrowed_query(sql, params=()):
+                cur = transaction.cursor()
+                try:
+                    cur.execute(self._sql(sql), tuple(params))
+                    return cur.fetchall() if cur.description else []
+                finally:
+                    cur.close()
+            return work(borrowed_query)
         return self._run(work, write=True)
 
     def set_continue(self, principal: str, *, kind: str, ref: str, label: str, idempotency_key: str) -> WriteResult:
