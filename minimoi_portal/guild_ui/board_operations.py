@@ -43,6 +43,24 @@ def _key(operation_id: str) -> str:
     return _KEY_PREFIX + operation_id
 
 
+MAX_POSTIT_ID = 2**63 - 1
+
+
+def _postit_id(value) -> int | None:
+    """An actual positive integer, or a canonical decimal string of one. Floats (1.9 must never
+    become note 1), booleans, signs, spaces and out-of-range values are refused before the store
+    is touched."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        number = value
+    elif isinstance(value, str) and re.fullmatch(r"[1-9][0-9]{0,18}", value):
+        number = int(value)
+    else:
+        return None
+    return number if 1 <= number <= MAX_POSTIT_ID else None
+
+
 def _state(postit: dict | None) -> dict:
     if not postit:
         return {}
@@ -93,11 +111,11 @@ def add(stores, text: str, *, operation_id: str, label: str | None = None,
 def _move(stores, postit_id, operation_id, *, to_bin: bool, author: Author) -> BoardOutcome:
     try:
         key = _key(operation_id)
-        pid = int(postit_id)
-    except (TypeError, ValueError):
-        return BoardOutcome("refused", "arguments_invalid")
-    if isinstance(postit_id, bool) or pid < 1:
-        return BoardOutcome("refused", "arguments_invalid")
+    except ValueError:
+        return BoardOutcome("refused", "operation_id_invalid")
+    pid = _postit_id(postit_id)
+    if pid is None:
+        return BoardOutcome("refused", "postit_id_invalid")
     try:
         method = stores.bin_postit if to_bin else stores.restore_postit
         result = method(pid, author, idempotency_key=key)
