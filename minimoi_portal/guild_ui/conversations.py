@@ -221,11 +221,11 @@ class ConversationStore:
         rows.sort(key=lambda c: not c.get("pinned"))
         return rows
 
-    def get(self, cid: str, principal: str) -> dict:
+    def get(self, cid: str, principal: str, *, migrate_legacy: bool = True) -> dict:
         if not isinstance(cid, str) or not ID_RE.fullmatch(cid):
             raise ConversationNotFound(cid)
         with self._lock():
-            if cid == LEGACY_ID:
+            if cid == LEGACY_ID and migrate_legacy:
                 self._migrate(principal)
             conv = self._read(cid, principal)
         if conv is None or conv.get("principal") != principal:

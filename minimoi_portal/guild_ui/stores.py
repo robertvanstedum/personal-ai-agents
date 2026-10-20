@@ -300,6 +300,27 @@ class FloorStores(BoardMixin):
             return _note(rows[0]) if rows else None
         return self._run(work, write=False)
 
+    def get_owner_note(self, request_id: str, principal: str, *, max_bytes: int = 256*1024) -> dict | None:
+        """One bounded, kept owner note; authorization predicates precede text.
+
+        Used by source-faithful learning capture. The caller must first bind this
+        floor to the authenticated conversation and approve capture. A foreign,
+        assistant, off-record or oversized row never returns its text. No change
+        to the note, no reply requirement, and no fallback to a wider query.
+        """
+        if (type(request_id) is not str or not 0 < len(request_id) <= 256
+                or type(principal) is not str or not 0 < len(principal) <= 256
+                or type(max_bytes) is not int or not 1 <= max_bytes <= 256*1024):
+            raise FloorStoreUnavailable('owner_note_request_invalid')
+        def work(q):
+            rows = q(f"SELECT {_NOTE_COLS} FROM guild.floor_messages "
+                     "WHERE floor = %s AND request_id = %s AND author = %s "
+                     "AND author_kind = 'owner' AND record_mode = 'on_record' "
+                     "AND OCTET_LENGTH(text) <= %s",
+                     [self.floor,request_id,principal,max_bytes])
+            return _note(rows[0]) if rows else None
+        return self._run(work,write=False)
+
     def list_postits(self) -> SourceResult:
         return self._read(lambda q: {"postits": self._active(q), "bin_total": self._count(q, binned=True)})
 
