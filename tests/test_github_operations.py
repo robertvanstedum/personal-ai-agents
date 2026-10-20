@@ -13,8 +13,9 @@ class FakeGitHub:
                            "html_url": "https://github.com/x/7", "body": "b", "comments": 0}}
         self.comments = {7: []}
         self.calls = []
-        self.fail_post = None      # "timeout_after_commit" | "timeout_before_commit"
+        self.fail_post = None      # "timeout_after_commit" | "timeout_before_commit" | "502_after_commit"
         self.tokens = []
+        self.page_fail = None
 
     def __call__(self, method, url, headers, params, body):
         self.calls.append((method, url))
@@ -27,12 +28,20 @@ class FakeGitHub:
             return 200, {"total_count": len(items), "incomplete_results": False, "items": items}
         if method == "GET" and path.endswith("/comments"):
             n = int(path.split("/")[-2])
-            return (200, list(reversed(self.comments[n]))) if n in self.comments else (404, {})
+            if n not in self.comments:
+                return 404, {}
+            page, per = params.get("page", 1), params.get("per_page", 100)
+            if self.page_fail == page:
+                return 502, {}
+            return 200, self.comments[n][(page - 1) * per: page * per]
         if method == "GET" and path.startswith(f"/repos/{REPO}/issues/"):
             n = int(path.rsplit("/", 1)[1])
             return (200, self.issues[n]) if n in self.issues else (404, {})
         if method == "GET" and path == f"/repos/{REPO}/issues":
-            return 200, sorted(self.issues.values(), key=lambda i: -i["number"])
+            page, per = params.get("page", 1), params.get("per_page", 100)
+            mine = [i for i in sorted(self.issues.values(), key=lambda i: -i["number"])
+                    if (i.get("user") or {}).get("login") == params.get("creator")]
+            return 200, mine[(page - 1) * per: page * per]
         if method == "POST":
             if self.fail_post == "timeout_before_commit":
                 raise TimeoutError()
@@ -40,18 +49,23 @@ class FakeGitHub:
                 n = int(path.split("/")[-2])
                 if n not in self.comments:
                     return 404, {}
-                c = {"body": body["body"], "html_url": f"https://github.com/x/{n}#c{len(self.comments[n])}"}
+                c = {"body": body["body"], "html_url": f"https://github.com/x/{n}#c{len(self.comments[n])}",
+                     "user": {"login": "minimoi-bot"}}
                 self.comments[n].append(c)
                 result = (201, c)
             else:
                 n = max(self.issues) + 1
                 self.issues[n] = {"number": n, "title": body["title"], "body": body["body"], "state": "open",
-                                  "html_url": f"https://github.com/x/{n}", "comments": 0}
+                                  "html_url": f"https://github.com/x/{n}", "comments": 0,
+                                  "user": {"login": "minimoi-bot"}}
                 self.comments[n] = []
                 result = (201, self.issues[n])
             if self.fail_post == "timeout_after_commit":
                 self.fail_post = None
                 raise TimeoutError()
+            if self.fail_post == "502_after_commit":
+                self.fail_post = None
+                return 502, {}
             return result
         raise AssertionError((method, path))
 
@@ -59,7 +73,7 @@ class FakeGitHub:
 @pytest.fixture
 def gh():
     fake = FakeGitHub()
-    return GitHubIssues(REPO, fake, lambda: "test-token"), fake
+    return GitHubIssues(REPO, fake, lambda: "test-token", publisher_login="minimoi-bot"), fake
 
 
 def test_search_is_scoped_bounded_and_excludes_prs(gh):
@@ -94,7 +108,7 @@ def test_uncertain_send_that_committed_is_found_by_marker(gh):
     fake.fail_post = "timeout_after_commit"
     p = api.prepare_create("Prototype Lab: banner crop", "Three observations.", operation_id=OP)
     out = api.execute(p, p.digest)
-    assert out.status == "already_applied" and out.code == "marker_found_after_uncertain_send"
+    assert out.status == "already_applied" and out.code == "found_after_uncertain_send"
     assert len([i for i in fake.issues.values() if OP in i["body"]]) == 1
 
 
@@ -138,7 +152,9 @@ def test_input_validation(gh):
     with pytest.raises(GitHubOpError):
         api.prepare_create("", "x", operation_id=OP)
     with pytest.raises(ValueError):
-        GitHubIssues("not a repo", lambda *a: (200, {}), lambda: "t")
+        GitHubIssues("not a repo", lambda *a: (200, {}), lambda: "t", publisher_login="minimoi-bot")
+    with pytest.raises(ValueError):
+        GitHubIssues(REPO, lambda *a: (200, {}), lambda: "t", publisher_login="bad login!")
 
 
 def test_token_is_never_in_outcomes(gh):
@@ -146,3 +162,67 @@ def test_token_is_never_in_outcomes(gh):
     p = api.prepare_comment(7, "x", operation_id=OP)
     out = api.execute(p, p.digest)
     assert "test-token" not in repr(out) and "test-token" not in repr(p)
+
+
+# ── Codex review G-F1 / G-F2 ────────────────────────────────────────────────
+import dataclasses
+
+
+def test_tampered_findings_flag_is_ignored_and_content_rescreened(gh):
+    api, fake = gh
+    p = api.prepare_comment(7, "see /Users/vanstedum/secret.md", operation_id=OP)
+    forged = dataclasses.replace(p, findings=())
+    out = api.execute(forged, forged.digest)
+    assert out.status == "refused" and out.code.startswith("unsafe_content") and fake.comments[7] == []
+
+
+def test_tampered_body_or_marker_is_refused(gh):
+    api, _ = gh
+    p = api.prepare_comment(7, "fine text", operation_id=OP)
+    for change in ({"body": "fine text"}, {"kind": "close"}, {"repository": "other/repo"},
+                   {"operation_id": "op-other-000001"}):
+        q = dataclasses.replace(p, **change)
+        assert api.execute(q, q.digest).status == "refused"
+
+
+def test_same_operation_id_with_new_content_is_a_conflict_not_already_applied(gh):
+    api, fake = gh
+    first = api.prepare_comment(7, "version one", operation_id=OP)
+    assert api.execute(first, first.digest).status == "done"
+    second = api.prepare_comment(7, "version two", operation_id=OP)
+    out = api.execute(second, second.digest)
+    assert out.status == "refused" and out.code == "operation_id_used_for_different_content"
+    assert len(fake.comments[7]) == 1
+
+
+def test_marker_quoted_by_someone_else_is_not_ours(gh):
+    api, fake = gh
+    p = api.prepare_comment(7, "real note", operation_id=OP)
+    fake.comments[7].append({"body": "quoting " + p.body, "html_url": "u", "user": {"login": "random-user"}})
+    assert api.execute(p, p.digest).status == "done"
+
+
+def test_marker_on_a_later_page_is_found(gh):
+    api, fake = gh
+    p = api.prepare_comment(7, "deep note", operation_id=OP)
+    fake.comments[7] = [{"body": f"c{i}", "html_url": f"u{i}", "user": {"login": "x"}} for i in range(150)]
+    fake.comments[7].append({"body": p.body, "html_url": "u-ours", "user": {"login": "minimoi-bot"}})
+    out = api.execute(p, p.digest)
+    assert out.status == "already_applied" and out.url == "u-ours"
+
+
+def test_incomplete_reconciliation_does_not_post(gh):
+    api, fake = gh
+    p = api.prepare_comment(7, "note", operation_id=OP)
+    fake.comments[7] = [{"body": f"c{i}", "html_url": f"u{i}", "user": {"login": "x"}} for i in range(150)]
+    fake.page_fail = 2
+    out = api.execute(p, p.digest)
+    assert out.status == "unknown" and not any(c[0] == "POST" for c in fake.calls)
+
+
+def test_5xx_after_acceptance_reconciles_instead_of_refusing(gh):
+    api, fake = gh
+    fake.fail_post = "502_after_commit"
+    p = api.prepare_comment(7, "accepted despite 502", operation_id=OP)
+    out = api.execute(p, p.digest)
+    assert out.status == "already_applied" and len(fake.comments[7]) == 1
