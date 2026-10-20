@@ -94,18 +94,30 @@ class Admission:
         self.settled.append((rid, usage))
 
 
+def ack(event_id, state):
+    return {"schema": "mc-standing-ack/1", "event_id": event_id, "state": state, "record_id": None,
+            "work_id": None, "code": ""}
+
+
 class Ingress:
     def __init__(self, mode="accept"):
         self.mode, self.store, self.posts = mode, {}, []
 
     def post(self, event):
         self.posts.append(event)
+        eid = event["event_id"]
         if self.mode == "uncertain":
             raise IngressUncertain()
         if self.mode == "none":
             return None
-        self.store[event["event_id"]] = {"state": "accepted"}
-        return {"state": "accepted"}
+        if self.mode == "deferred":
+            return ack(eid, "deferred")
+        if self.mode == "wrong_event":
+            return ack("00000000-0000-0000-0000-000000000000", "accepted")
+        if self.mode == "legacy":               # a bare state without schema or event id
+            return {"state": "accepted"}
+        self.store[eid] = ack(eid, "accepted")
+        return ack(eid, "accepted")
 
     def get(self, event_id):
         return self.store.get(event_id)
@@ -159,6 +171,7 @@ def test_happy_path_walks_every_phase_and_advances_watermark(tmp_path):
     assert [r["id"] for r in ev["source_refs"]] == ["stmt-1", "stmt-2", "stmt-3"]
     assert [x[2] for x in claims.log] == ["reserved", "calling", "extracted", claims.log[-1][2]]
     assert claims.log[-1][0] == "complete" and adm.settled == [("res-1", {"usd": 0.02})]
+    assert out["settlement"] == "settled" and state(spool)["unsettled"] == []
     assert state(spool)["cursor"] == 3 and state(spool)["current"] is None
     _, out = run(tmp_path, elig, spool=spool, claims=claims, ingress=ing)
     assert out["state"] == "nothing_new" and elig.cursors[-1] == 3
@@ -317,10 +330,82 @@ def test_uncertain_delivery_resumes_with_same_event_ids_and_no_second_call(tmp_p
     assert len({e["event_id"] for e in ing.posts}) == 1
 
 
-def test_a_missing_or_malformed_ack_is_not_acknowledgement(tmp_path):
-    spool, out = run(tmp_path, setup(), ingress=Ingress("none"))
-    assert out["state"] == "failed" and out["code"] == "ack_invalid"
-    assert state(spool).get("cursor") is None
+@pytest.mark.parametrize("mode", ["none", "wrong_event", "legacy"])
+def test_a_missing_or_foreign_ack_is_not_acknowledgement(tmp_path, mode):
+    claims = Claims()
+    spool, out = run(tmp_path, setup(), ingress=Ingress(mode), claims=claims)
+    assert out["state"] == "delivery_unknown" and out["code"] == "ack_invalid"
+    assert state(spool).get("cursor") is None and state(spool)["current"]["phase"] == "extracted"
+    assert not any(x[0] == "complete" for x in claims.log)
+
+
+def test_deferred_stays_pending_and_completes_only_on_a_committed_ack(tmp_path):
+    """Codex L-F1: a deferred ack advanced the cursor and completed the claim."""
+    ing, claims, ext = Ingress("deferred"), Claims(), lesson()
+    spool, out = run(tmp_path, setup(), ingress=ing, claims=claims, extractor=ext)
+    assert out["state"] == "delivery_pending" and state(spool).get("cursor") is None
+    assert not any(x[0] == "complete" for x in claims.log)
+    ing.mode = "accept"
+    _, out = run(tmp_path, setup(), spool=spool, ingress=ing, claims=claims, extractor=ext)
+    assert out["state"] == "delivered" and state(spool)["cursor"] == 3 and ext.calls == 1
+
+
+def test_settlement_outage_keeps_a_durable_queue_and_retries(tmp_path):
+    """Codex L-F2: a swallowed settlement error used to lose the reservation pointer."""
+    class FlakyAdmission(Admission):
+        def __init__(self):
+            super().__init__()
+            self.down = True
+
+        def settle(self, rid, usage):
+            if self.down:
+                raise ConnectionError("gateway down")
+            super().settle(rid, usage)
+    adm, claims = FlakyAdmission(), Claims()
+    spool, out = run(tmp_path, setup(), admission=adm, claims=claims)
+    assert out["state"] == "delivered" and out["settlement"] == "pending"
+    assert state(spool)["unsettled"] == [{"reservation_id": "res-1", "result_ref": out_ref(spool)}]
+    adm.down = False
+    _, out = run(tmp_path, setup(), spool=spool, admission=adm, claims=claims)
+    assert out["state"] == "nothing_new" and state(spool)["unsettled"] == []
+    assert adm.settled == [("res-1", {"usd": 0.02})]
+
+
+def out_ref(spool):
+    return [n for n in spool.names("delivery") if n.startswith("learning-result.")][0]
+
+
+def test_crash_during_event_preparation_replays_identical_events(tmp_path):
+    """Codex L-F3: occurred_at/policy/environment must be frozen before the first outbox write."""
+    ext = Extractor([{"kind": "lesson_proposal", "payload": {"a": 1}}, {"kind": "challenge", "payload": {"b": 2}}])
+    claims = Claims()
+    real_put = Spool.put_immutable
+    count = {"n": 0}
+
+    class Crash(BaseException):
+        pass
+
+    def crash_on_second_event(self, kind, name, doc):
+        written = real_put(self, kind, name, doc)
+        if kind == "outbox":
+            count["n"] += 1
+            if count["n"] == 1:
+                raise Crash()
+        return written
+    Spool.put_immutable = crash_on_second_event
+    try:
+        with pytest.raises(Crash):
+            run(tmp_path, setup(), extractor=ext, claims=claims)
+    finally:
+        Spool.put_immutable = real_put
+    spool = Spool(tmp_path / "state")
+    ing = Ingress()
+    out = c.run_consolidation(spool=spool, eligibility=setup(), claims=claims, extractor=ext,
+                              admission=Admission(), ingress=ing, principal="robert", environment="prod",
+                              policy_hash="b" * 64, versions=VERSIONS, now_iso="2026-10-22T09:40:00Z",
+                              enabled=True)
+    assert out["state"] == "delivered" and ext.calls == 1
+    assert {e["occurred_at"] for e in ing.posts} == {NOW} and {e["policy_hash"] for e in ing.posts} == {"a" * 64}
 
 
 def test_closeout_contention(tmp_path):

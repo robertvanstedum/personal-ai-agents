@@ -120,7 +120,7 @@ def _run(tmp_path, server, **kw):
 def test_end_to_end_through_the_adapter(tmp_path):
     server, ing, claims = Server(n=3, revoked={"stmt-2"}), Ingress(), Claims()
     spool, out = _run(tmp_path, server, ingress=ing, claims=claims)
-    assert out == {"state": "delivered", "events": 1, "revoked": 1}
+    assert out == {"state": "delivered", "events": 1, "revoked": 1, "settlement": "settled"}
     assert [r["id"] for r in ing.posts[0]["source_refs"]] == ["stmt-1", "stmt-3"]
     _, out = _run(tmp_path, server, spool=spool, claims=claims, ingress=ing)
     assert out["state"] == "nothing_new" and "cursor=3" in server.requests[-1][0]

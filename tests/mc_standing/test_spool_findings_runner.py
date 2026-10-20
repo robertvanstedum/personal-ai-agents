@@ -2,6 +2,7 @@
 import fcntl
 import json
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -37,24 +38,32 @@ def _status(root, state="ok", success_hours_ago=8, now=NOW):
                                 "alert": None}))
 
 
+def _ack(event_id, state):
+    return {"schema": "mc-standing-ack/1", "event_id": event_id, "state": state, "record_id": "evt-1",
+            "work_id": None, "code": ""}
+
+
 class FakeIngress:
     def __init__(self, mode="accept"):
         self.mode, self.posts, self.store = mode, [], {}
 
     def post(self, event):
         self.posts.append(event)
+        eid = event["event_id"]
         if self.mode == "uncertain_commit":          # committed, then the connection dropped
-            self.store[event["event_id"]] = {"state": "accepted"}
+            self.store[eid] = _ack(eid, "accepted")
             raise runner.IngressUncertain()
         if self.mode == "uncertain_lost":             # never reached the server
             raise runner.IngressUncertain()
         if self.mode == "defer":
-            return {"state": "deferred"}
+            return _ack(eid, "deferred")
         if self.mode == "refuse":
             return {"state": "refused", "code": "destination_unbound"}
-        state = "already_applied" if event["event_id"] in self.store else "accepted"
-        self.store[event["event_id"]] = {"state": "accepted"}
-        return {"state": state, "record_id": "evt-1"}
+        if self.mode == "wrong_event":
+            return _ack(str(uuid.uuid4()), "accepted")
+        state = "already_applied" if eid in self.store else "accepted"
+        self.store[eid] = _ack(eid, "accepted")
+        return _ack(eid, state)
 
     def get(self, event_id):
         return self.store.get(event_id)
@@ -415,3 +424,10 @@ def test_watchlist_change_mid_collection_is_held_not_mixed(tmp_path):
     res = runner.run_cycle(spool=spool, watchlist=changed, policy_id="p0", environment="prod", now=NOW,
                            source_root=tmp_path / "src", ingress=ing, destination_binding="owner:mc-operations")
     assert res["state"] == "held" and res["reason"] == "policy_changed_mid_cycle" and ing.posts == []
+
+
+def test_an_ack_for_another_event_is_never_delivery(tmp_path):
+    """P-F2 at the runner: only an exact ack of this event completes the brief."""
+    _status(tmp_path / "src")
+    spool, res = run(tmp_path, FakeIngress(mode="wrong_event"))
+    assert res["state"] == "delivery_unknown" and res["reason"] == "ack_invalid"

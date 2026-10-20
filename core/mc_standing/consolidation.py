@@ -51,6 +51,8 @@ import hashlib
 import json
 import uuid
 
+from . import ack as ack_mod
+
 SCHEMA = "mc-learning-event/1"
 KINDS = ("lesson_proposal", "evidence_link", "challenge", "retire_proposal")   # reflection_note: post-1.2
 MAX_SOURCES = 10
@@ -129,6 +131,8 @@ def run_consolidation(*, spool, eligibility, claims, extractor, admission, ingre
         return {"state": "disabled"}
     state = _state(spool)
     cur = state.get("current")
+    if state.get("unsettled") and not cur:
+        _settle_queue(spool, state, admission)
 
     # 1. Resume whatever an earlier run left, by its durable phase.
     if cur:
@@ -231,7 +235,8 @@ def run_consolidation(*, spool, eligibility, claims, extractor, admission, ingre
     if kill() or paused():
         _drop_current(spool, state, claims, admission, "paused")
         return {"state": "paused"}
-    state["current"]["phase"] = "calling"
+    # Freeze the delivery envelope before the call: a replay rebuilds byte-identical events.
+    state["current"].update(phase="calling", occurred_at=now_iso, policy_hash=policy_hash, environment=environment)
     _save(spool, state)
     claims.advance(claim["claim_id"], "calling")
     try:
@@ -263,7 +268,10 @@ def _prepare_and_deliver(spool, state, claims, admission, ingress, environment, 
     """From the immutable result: payloads and outbox events (deterministic), then delivery."""
     cur = state["current"]
     result = spool.read("delivery", _result_name(cur["key"]))
-    occurred_at = cur.setdefault("occurred_at", now_iso)
+    # The frozen envelope wins over this run's arguments (L-F3); only a pre-freeze record falls back.
+    occurred_at = cur.get("occurred_at") or now_iso
+    policy_hash = cur.get("policy_hash") or policy_hash
+    environment = cur.get("environment") or environment
     events = []
     for i, prop in enumerate(result["proposals"]):
         digest = hashlib.sha256(prop["payload"].encode()).hexdigest()
@@ -276,23 +284,37 @@ def _prepare_and_deliver(spool, state, claims, admission, ingress, environment, 
         spool.put_immutable("outbox", event["event_id"], event)
         events.append(event["event_id"])
     cur.update(phase="extracted", result_ref=_result_name(cur["key"]), events=events,
-               acked=cur.get("acked", []), settled=cur.get("settled", False))
+               acked=cur.get("acked", []))
     _save(spool, state)
     claims.advance(cur["claim_id"], "extracted", result_ref=cur["result_ref"])
     return _deliver(spool, state, ingress, claims, admission, kill, paused)
 
 
+def _settle_queue(spool, state, admission):
+    """Budget reconciliation outlives delivery (L-F2): every unsettled reservation stays queued,
+    durably, until the gateway confirms settlement."""
+    remaining = []
+    for item in state.get("unsettled") or []:
+        result = spool.read("delivery", item["result_ref"]) or {}
+        try:
+            admission.settle(item["reservation_id"], result.get("usage"))
+        except Exception:
+            remaining.append(item)
+    if remaining != (state.get("unsettled") or []):
+        state["unsettled"] = remaining
+        _save(spool, state)
+    return remaining
+
+
 def _deliver(spool, state, ingress, claims, admission, kill, paused) -> dict:
     from .runner import IngressUncertain
     cur = state["current"]
-    if not cur.get("settled"):
-        result = spool.read("delivery", cur["result_ref"])
-        try:
-            admission.settle(cur["reservation_id"], result.get("usage"))
-            cur["settled"] = True
-            _save(spool, state)
-        except Exception:
-            pass                                   # retried on the next run; the reservation stays held
+    if not cur.get("queued_for_settlement"):
+        state.setdefault("unsettled", []).append({"reservation_id": cur["reservation_id"],
+                                                  "result_ref": cur["result_ref"]})
+        cur["queued_for_settlement"] = True
+        _save(spool, state)
+    _settle_queue(spool, state, admission)
     for event_id in cur["events"]:
         if event_id in cur["acked"]:
             continue
@@ -305,18 +327,24 @@ def _deliver(spool, state, ingress, claims, admission, kill, paused) -> dict:
             return {"state": "delivery_unknown", "event_id": event_id}
         except Exception:
             return {"state": "delivery_pending", "event_id": event_id}
-        if isinstance(ack, dict) and ack.get("state") in ("accepted", "already_applied", "deferred"):
+        if ack_mod.committed(ack, event_id):
             cur["acked"].append(event_id)
             _save(spool, state)
-        else:
-            return {"state": "failed", "event_id": event_id,
-                    "code": ack.get("code") if isinstance(ack, dict) else "ack_invalid"}
+            continue
+        valid = ack_mod.check(ack, event_id)
+        if valid is not None and valid["state"] == "deferred":
+            return {"state": "delivery_pending", "event_id": event_id}      # stays pending (L-F1)
+        if isinstance(ack, dict) and ack.get("state") == "refused":
+            return {"state": "failed", "event_id": event_id, "code": ack.get("code")}
+        return {"state": "delivery_unknown", "event_id": event_id, "code": "ack_invalid"}
     # Every event acknowledged: complete the shared claim and advance the watermark.
     claims.complete(cur["claim_id"], result_ref=cur["result_ref"])
     state["cursor"] = cur["advance_to"]
     state["current"] = None
     _save(spool, state)
-    return {"state": "delivered", "events": len(cur["events"]), "revoked": len(cur.get("revoked", []))}
+    unsettled = len(state.get("unsettled") or [])
+    return {"state": "delivered", "events": len(cur["events"]), "revoked": len(cur.get("revoked", [])),
+            "settlement": "pending" if unsettled else "settled"}
 
 
 def clear_held(*, spool, claims, operator: str, disposition: str) -> dict:

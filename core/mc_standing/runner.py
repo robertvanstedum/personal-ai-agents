@@ -27,7 +27,7 @@ from datetime import date, datetime, time, timezone
 from time import monotonic
 from zoneinfo import ZoneInfo
 
-from . import findings, learning_view, telegram_copy
+from . import ack as ack_mod, findings, learning_view, telegram_copy
 from .observe import Observation, unknown
 from .render import render_brief
 from .sources import observe
@@ -277,10 +277,10 @@ def _deliver(spool, record, ingress, kill, paused, clock):
             ack = ingress.get(event["event_id"])
         except Exception:
             return {"cycle_key": key, "state": "delivery_unknown", "reason": "readback_unavailable"}
-        if ack and ack.get("state") in ("accepted", "already_applied"):
+        if ack_mod.committed(ack, event["event_id"]):
             return _save(spool, key, record, state="delivered", ack=ack)
-        if ack:   # a response we can't treat as delivered; keep the hold, never resend blindly
-            return _save(spool, key, record, state="delivery_unknown", ack=ack)
+        if ack is not None:   # a response we can't treat as delivered; keep the hold, never resend blindly
+            return _save(spool, key, record, state="delivery_unknown", reason="readback_not_committed")
         # verifiably absent: the same idempotent event may be posted again, if sending is allowed
     if kill():
         return {"cycle_key": key, "state": record["state"], "reason": "killed_before_delivery"}
@@ -294,9 +294,12 @@ def _deliver(spool, record, ingress, kill, paused, clock):
         return _save(spool, key, record, state="delivery_unknown", reason="send_unconfirmed")
     except Exception:
         return _save(spool, key, record, state="delivery_pending", reason="send_failed_before_commit")
-    state = ack.get("state")
-    if state in ("accepted", "already_applied"):
+    if ack_mod.committed(ack, event["event_id"]):
         return _save(spool, key, record, state="delivered", ack=ack)
-    if state == "deferred":
+    valid = ack_mod.check(ack, event["event_id"])
+    if valid is not None and valid["state"] == "deferred":
         return _save(spool, key, record, state="delivery_pending", ack=ack)
-    return _save(spool, key, record, state="failed", reason="ingress_refused", ack=ack)
+    if isinstance(ack, dict) and ack.get("state") == "refused":
+        return _save(spool, key, record, state="failed", reason="ingress_refused", ack=ack)
+    # Not an acknowledgement of this event: it may still have committed, so reconcile, never resend blindly.
+    return _save(spool, key, record, state="delivery_unknown", reason="ack_invalid")
