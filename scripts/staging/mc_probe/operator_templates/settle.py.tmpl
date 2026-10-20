@@ -1,0 +1,18 @@
+import pathlib,json,sys,decimal,datetime,sqlite3
+r=pathlib.Path(@@STATE_ROOT@@);tag='@@RUN_TAG@@';s=json.loads((r/(tag+'_SUMMARY.json')).read_text());rows=[]
+a=datetime.datetime.fromisoformat(s['started_utc']);b=datetime.datetime.fromisoformat(s['finished_utc'])
+for line in pathlib.Path(@@USAGE_FILE@@).read_text().splitlines():
+ x=json.loads(line)
+ if x.get('key_ref')==@@KEY_REF@@ and a<=datetime.datetime.fromisoformat(x['occurred_at'])<=b:rows.append(x)
+c=sqlite3.connect('file:'+str(r/'guard-state/model-admission.sqlite')+'?mode=ro',uri=True)
+admitted=[x for x in c.execute('SELECT id,at FROM calls') if a<=datetime.datetime.fromisoformat(x[1])<=b];c.close()
+assert len(s['turns'])==1,'single_turn_required'
+assert rows and len(rows)==len(admitted) and all(x['status']=='ok' for x in rows),'receipt coverage uncertain; keep reservation'
+assert all(x.get('model')==@@EXPECTED_MODEL@@ for x in rows),'unexpected_model_keep_reservation'
+cost=sum((decimal.Decimal(str(x['cost_usd'])) for x in rows),decimal.Decimal(0))
+e={'request_id':s['turns'][0]['request_id'],'source':'gateway price-table usage records','cost_usd':str(cost),'model_calls':len(rows),'guard_admission_ids':[x[0] for x in admitted],'correlation_basis':'Exclusive dedicated key, sole turn window, equal guard and backend counts; native correlation remains null.','records':rows}
+(r/(tag+'_GATEWAY_USAGE.json')).write_text(json.dumps(e,indent=2))
+sys.path.insert(0,str(pathlib.Path(@@REPO_ROOT@@)/'scripts/staging/mc_probe'))
+from proving_budget import Budget
+print(Budget(r/'budget-v2.sqlite').settle(e['request_id'],str(cost),[x['record_id'] for x in rows]))
+print('Calls:',len(rows),'Cost:',cost)
