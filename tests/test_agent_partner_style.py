@@ -15,5 +15,6 @@ def test_style_is_system_context_and_never_mutates_commands_or_saved_notes():
     assert resets==['exact-session'] and not calls
     service.handle(ConferTurnRequest(text='Exact owner request',channel='api_text'))
     assert calls[0][0]=='Exact owner request'
-    assert calls[0][1]['system_prompt']=='Host authority\n\n'+PARTNER_STYLE
+    assert calls[0][1]['system_prompt'].startswith('Host authority\n\n'+PARTNER_STYLE+'\n\n')
+    assert 'only a platform receipt confirms download' in calls[0][1]['system_prompt']
     assert PARTNER_STYLE in configuration('Host authority')['instructions']
