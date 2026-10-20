@@ -15,8 +15,9 @@ these functions; they do not reimplement the rules.
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from . import auth
 
@@ -51,6 +52,9 @@ class Outcome:
     status: str
     ref: str
     verified_state: dict = field(default_factory=dict)
+    # A one-time temporary password for the approval email, returned to the caller once and
+    # never stored or logged. Excluded from repr so it cannot leak into logs or receipts.
+    delivery_secret: str | None = field(default=None, repr=False, compare=False)
 
 
 class PostgresStore:
@@ -90,6 +94,27 @@ class PostgresStore:
             return (dict(changed) if changed else None), (dict(row) if row else None)
         finally:
             conn.close()
+
+
+def _grant_if_requested(self, request_id: int) -> tuple[dict | None, dict | None]:
+    conn = self._connect()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE guild.guest_requests SET status='granted', actioned_at=NOW()"
+                    " WHERE id=%s AND status='requested' RETURNING id",
+                    (request_id,),
+                )
+                changed = cur.fetchone()
+                cur.execute(_SELECT_GUILD + " WHERE id=%s", (request_id,))
+                row = cur.fetchone()
+        return (dict(changed) if changed else None), (dict(row) if row else None)
+    finally:
+        conn.close()
+
+
+PostgresStore.grant_if_requested = _grant_if_requested
 
 
 def _iso(value) -> str | None:
@@ -286,3 +311,125 @@ def reject(ref: str, db=None) -> Outcome:
             return Outcome("unknown", ref, {"store": PENDING_FILE, "error": "readback_mismatch"})
         return Outcome("done", ref, {"store": PENDING_FILE, "status": "removed", "nudge_eligible": False})
     return Outcome("invalid_ref", ref)
+
+
+# ── Grant: a resumable cross-store state machine ────────────────────────────
+#
+# A grant touches the account file (create the guest), then Postgres (status granted), and is
+# followed by notifications the caller sends. It is recorded as an intent in the auth store,
+# under the same lock as account writes, and moves:
+#     provisioning → account_created → granted
+# A crash at any point resumes from the intent: an account is never created twice, the request
+# is never marked granted unless the account really exists, and a lost temporary password is
+# replaced (with must-change) rather than guessed. An existing guest with the same email is a
+# conflict: the owner extends or revokes that account instead of having it silently replaced.
+
+INTENTS_FILE = "guest_grant_intents.json"
+MAX_GRANT_DAYS = 30
+
+
+def _intents() -> dict:
+    return auth._load_json(INTENTS_FILE, strict=True).setdefault("intents", {})
+
+
+def _save_intent(ref: str, intent: dict):
+    data = auth._load_json(INTENTS_FILE, strict=True)
+    data.setdefault("intents", {})[ref] = intent
+    auth._write_json(INTENTS_FILE, data)
+
+
+def grant(ref: str, *, duration_days: int = 7, db=None, now: datetime | None = None,
+          password_factory=lambda: secrets.token_urlsafe(9)) -> Outcome:
+    """Grant one open website request (``guild:<id>``) after the owner approved this exact
+    effect. Returns done / already_applied / conflict / not_found / unknown / invalid_ref.
+
+    The whole grant runs under the account-store lock (a rare owner action), so concurrent or
+    repeated calls serialize: exactly one creates the account and returns the one temporary
+    password; the others see the finished intent and return already_applied."""
+    with auth._auth_lock():
+        return _grant_locked(ref, duration_days, db, now, password_factory)
+
+
+def _grant_locked(ref, duration_days, db, now, password_factory) -> Outcome:
+    store, _, key = ref.partition(":")
+    if store != GUILD or not key.isdigit():
+        return Outcome("invalid_ref", ref)
+    if isinstance(duration_days, bool) or not isinstance(duration_days, int) \
+            or not 1 <= duration_days <= MAX_GRANT_DAYS:
+        return Outcome("conflict", ref, {"error": "duration_invalid"})
+    now = now or datetime.now(timezone.utc)
+    try:
+        request = get(ref, db)
+    except StoreUnavailable:
+        return Outcome("unknown", ref, {"store": GUILD, "error": "unavailable"})
+    if request is None:
+        return Outcome("not_found", ref)
+    secret = None
+    try:
+        with auth._auth_lock():
+            intent = _intents().get(ref)
+            if request.status != "requested" and not (intent and intent.get("state") == "account_created"):
+                if request.status == "granted" and intent and intent.get("state") == "granted":
+                    return Outcome("already_applied", ref, _grant_state(request, intent))
+                return Outcome("conflict", ref, {"store": GUILD, "status": request.status})
+            if intent is None:
+                existing = [g for g in auth.load_guests()
+                            if g.get("email", "").lower() == request.email.lower() and request.email]
+                if existing:
+                    return Outcome("conflict", ref, {"store": GUILD, "status": request.status,
+                                                     "error": "guest_email_exists",
+                                                     "existing_username": existing[0]["username"]})
+                intent = {"state": "provisioning", "email": request.email, "name": request.name,
+                          "started_at": now.isoformat(),
+                          "expires_at": (now + timedelta(days=duration_days)).isoformat()}
+                _save_intent(ref, intent)
+            if intent["state"] == "provisioning":
+                adopted = next((g for g in auth.load_guests()
+                                if g.get("email", "").lower() == intent["email"].lower()
+                                and g.get("created_at", "") >= intent["started_at"]), None)
+                if adopted:           # crashed after creating the account: adopt it, reset its password
+                    secret = password_factory()
+                    auth.reset_guest_password(adopted["username"], secret)
+                    username = adopted["username"]
+                else:
+                    secret = password_factory()
+                    guest = auth.create_guest(intent["name"] or intent["email"], intent["expires_at"], secret,
+                                              email=intent["email"], on_email_conflict="refuse")
+                    username = guest["username"]
+                auth.set_must_change_password(username)
+                intent.update(state="account_created", username=username)
+                _save_intent(ref, intent)
+    except auth.GuestEmailConflict:
+        return Outcome("conflict", ref, {"store": GUILD, "error": "guest_email_exists"})
+    except (auth.AuthStoreError, OSError):
+        return Outcome("unknown", ref, {"store": "auth", "error": "account_store_unavailable"})
+
+    # The account exists; now the request status, verified by read-back.
+    try:
+        changed, row = _db(db).grant_if_requested(int(key))
+    except Exception:
+        return Outcome("unknown", ref, {"store": GUILD, "error": "write_unconfirmed",
+                                        "account": "created"}, delivery_secret=secret)
+    if row is None or row["status"] != "granted":
+        return Outcome("unknown", ref, {"store": GUILD, "status": row and row["status"],
+                                        "account": "created"}, delivery_secret=secret)
+    with auth._auth_lock():
+        intent["state"] = "granted"
+        _save_intent(ref, intent)
+    state = _grant_state(_from_guild(row), intent)
+    if secret is None:
+        # Resumed after the account step already returned its password: issue a fresh one so the
+        # approval email never goes out without a usable credential.
+        secret = password_factory()
+        auth.reset_guest_password(intent["username"], secret)
+        auth.set_must_change_password(intent["username"])
+    return Outcome("done", ref, state, delivery_secret=secret)
+
+
+def _grant_state(request: GuestRequest, intent: dict) -> dict:
+    username = intent.get("username")
+    return {"store": GUILD, "status": request.status, "username": username,
+            "account_active": bool(username) and auth.is_guest_active(username),
+            "must_change_password": bool(username) and auth.check_must_change_password(username),
+            "expires_at": intent.get("expires_at"), "nudge_eligible": request.status == "requested",
+            "notifications_pending": ["approval_email", "owner_notice"]}

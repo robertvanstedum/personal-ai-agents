@@ -69,3 +69,23 @@ def test_resolution_and_verified_nudge_exclusion(db):
     assert out.status == "done" and out.verified_state["nudge_eligible"] is False
     nudgeable = db.query("SELECT id FROM guild.guest_requests WHERE status='requested' ORDER BY id")
     assert [r["id"] for r in nudgeable] == [3]
+
+
+def test_concurrent_grants_create_one_account_and_one_password(db):
+    from minimoi_portal import auth, guest_requests as gr
+    barrier = threading.Barrier(8)
+    secrets_seen = []
+
+    def go(i):
+        barrier.wait()
+        out = gr.grant("guild:3", db=db, password_factory=lambda: f"Temp-{i}-xyz")
+        if out.delivery_secret:
+            secrets_seen.append(out.delivery_secret)
+        return out.status
+
+    with ThreadPoolExecutor(8) as pool:
+        results = list(pool.map(go, range(8)))
+    assert results.count("done") == 1 and results.count("already_applied") == 7
+    assert len(secrets_seen) == 1 and len(auth.load_guests()) == 1
+    assert gr.get("guild:3", db).status == "granted"
+    assert auth.authenticate("o@x.test", secrets_seen[0])[0] is not None

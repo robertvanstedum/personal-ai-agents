@@ -28,6 +28,16 @@ class FakeGuildDB:
                           key=lambda r: r["requested_at"])
         raise AssertionError(sql)
 
+    def grant_if_requested(self, request_id):
+        if getattr(self, "fail_grant", False):
+            raise RuntimeError("connection lost")
+        row = self.rows.get(request_id)
+        changed = None
+        if row and row["status"] == "requested":
+            row["status"] = "granted"
+            changed = {"id": request_id}
+        return changed, (dict(row) if row else None)
+
     def reject_if_requested(self, request_id):
         row = self.rows.get(request_id)
         changed = None
@@ -251,3 +261,84 @@ def test_db_write_exception_is_unknown(auth_dir):
         def reject_if_requested(self, request_id):
             raise RuntimeError("connection lost after send")
     assert gr.reject("guild:1", Boom([_row(1, "X")])).status == "unknown"
+
+
+# ── grant state machine ─────────────────────────────────────────────────────
+
+def _grant_row(i=10, name="New Guest", email="new@x.test", status="requested"):
+    row = _row(i, name, status=status)
+    row["email"] = email
+    return row
+
+
+def test_grant_creates_account_marks_granted_and_returns_secret_once(auth_dir):
+    db = FakeGuildDB([_grant_row()])
+    out = gr.grant("guild:10", duration_days=7, db=db, password_factory=lambda: "Temp-Pass-1")
+    assert out.status == "done"
+    assert out.verified_state["status"] == "granted" and out.verified_state["account_active"]
+    assert out.verified_state["must_change_password"] is True          # persisted this time
+    assert out.delivery_secret == "Temp-Pass-1" and "Temp-Pass-1" not in repr(out)
+    user = out.verified_state["username"]
+    ok, _ = auth.authenticate("new@x.test", "Temp-Pass-1")
+    assert ok and ok["username"] == user
+    assert "Temp-Pass-1" not in (auth_dir / gr.INTENTS_FILE).read_text()
+    again = gr.grant("guild:10", db=db)
+    assert again.status == "already_applied" and again.delivery_secret is None
+    assert len(auth.load_guests()) == 1
+
+
+def test_existing_guest_email_is_a_conflict_not_a_replacement(auth_dir):
+    keep = auth.create_guest("Old", "2099-01-01T00:00:00+00:00", "pw", email="new@x.test")
+    db = FakeGuildDB([_grant_row()])
+    out = gr.grant("guild:10", db=db)
+    assert out.status == "conflict" and out.verified_state["error"] == "guest_email_exists"
+    assert [g["username"] for g in auth.load_guests()] == [keep["username"]]
+    assert db.rows[10]["status"] == "requested"
+
+
+def test_db_failure_after_account_is_unknown_and_resumes_without_second_account(auth_dir):
+    db = FakeGuildDB([_grant_row()])
+    db.fail_grant = True
+    first = gr.grant("guild:10", db=db, password_factory=lambda: "P1-aaaaaa")
+    assert first.status == "unknown" and first.verified_state["account"] == "created"
+    assert db.rows[10]["status"] == "requested"
+    db.fail_grant = False
+    second = gr.grant("guild:10", db=db, password_factory=lambda: "P2-bbbbbb")
+    assert second.status == "done" and len(auth.load_guests()) == 1
+    # the resumed grant issues a fresh usable credential for the approval email
+    assert auth.authenticate("new@x.test", "P2-bbbbbb")[0] is not None
+    assert auth.check_must_change_password(second.verified_state["username"])
+
+
+def test_crash_after_account_before_intent_update_adopts_the_account(auth_dir, monkeypatch):
+    db = FakeGuildDB([_grant_row()])
+    real = gr._save_intent
+    calls = {"n": 0}
+
+    def crash_second_save(ref, intent):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("crash after create_guest")
+        real(ref, intent)
+
+    monkeypatch.setattr(gr, "_save_intent", crash_second_save)
+    assert gr.grant("guild:10", db=db).status == "unknown"
+    monkeypatch.setattr(gr, "_save_intent", real)
+    out = gr.grant("guild:10", db=db, password_factory=lambda: "P3-cccccc")
+    assert out.status == "done" and len(auth.load_guests()) == 1
+    assert auth.authenticate("new@x.test", "P3-cccccc")[0] is not None
+
+
+def test_grant_never_flips_a_rejected_request_and_validates_input(auth_dir):
+    db = FakeGuildDB([_grant_row(status="rejected")])
+    assert gr.grant("guild:10", db=db).status == "conflict"
+    assert auth.load_guests() == []
+    assert gr.grant("guild:10", duration_days=90, db=db).status == "conflict"
+    assert gr.grant("pending:abc", db=db).status == "invalid_ref"
+    assert gr.grant("guild:404", db=FakeGuildDB([])).status == "not_found"
+
+
+def test_unreadable_account_store_is_unknown(auth_dir):
+    (auth_dir / "guests.json").write_text("{broken")
+    out = gr.grant("guild:10", db=FakeGuildDB([_grant_row()]))
+    assert out.status == "unknown" and out.verified_state["store"] == "auth"
