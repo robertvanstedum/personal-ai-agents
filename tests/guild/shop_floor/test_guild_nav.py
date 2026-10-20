@@ -1,4 +1,4 @@
-"""Build navigation has five owner-approved tabs: Chat, Board, Build Log, Admin and Rooms.
+"""Build navigation has four owner-approved tabs: Chat, Board, Build Log and Rooms. Admin is Guild-level.
 Workshop remains available through Admin and its retained route, outside the main tabs."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from floor_helpers import load_portal, staging  # noqa: F401  (pytest fixtures)
 
 DOCS = "https://github.com/robertvanstedum/personal-ai-agents/tree/main/docs"
 DAILY = [("chat", "Chat", "/guild-next/guild/build"), ("board", "Board", "/guild-next/guild/board"),
-         ("build-log", "Build Log", "/guild-next/guild/build/log"), ("admin", "Admin", "/guild-next/guild/admin"),
+         ("build-log", "Build Log", "/guild-next/guild/build/log"),
          ("rooms", "Rooms", "/guild-next/guild/rooms")]
 MORE = [("workshop", "Workshop", "/guild-next/guild/workshop"), ("media", "Media library", "/guild-next/guild/media"),
         ("home", "Guild home", "/guild-next/"),
@@ -20,7 +20,7 @@ PAGES = {"/guild-next/": None, "/guild-next/guild/build": "chat", "/guild-next/g
          "/guild-next/guild/build/postits": "board", "/guild-next/guild/board": "board",
          "/guild-next/guild/media": None, "/guild-next/guild/build/queue": "build-log",
          "/guild-next/guild/build/log": "build-log", "/guild-next/guild/rooms": "rooms",
-         "/guild-next/guild/workshop": None, "/guild-next/guild/admin": "admin"}
+         "/guild-next/guild/workshop": None}
 
 
 def _nav(page):
@@ -29,7 +29,7 @@ def _nav(page):
 
 
 @pytest.mark.parametrize("path", sorted(PAGES))
-def test_every_build_page_has_five_tabs_and_no_more_menu(staging, path):
+def test_every_build_page_has_four_tabs_and_no_more_menu(staging, path):
     r = staging.owner().get(path)
     assert r.status_code == 200, (path, r.status_code)
     nav = _nav(r.get_data(as_text=True))

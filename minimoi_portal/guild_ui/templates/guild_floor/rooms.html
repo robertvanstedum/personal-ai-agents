@@ -16,7 +16,7 @@
   <aside class="rm-list" data-rm-list-pane aria-labelledby="rm-list-h">
     <div class="rm-list-head">
       <h2 class="rm-list-h" id="rm-list-h">Rooms</h2>
-      <button type="button" class="rm-btn" data-rm-new>＋ New conversation</button>
+      <button type="button" class="rm-btn" data-rm-new{% if rooms_cfg.state != 'on' or rooms_cfg.access == 'no_access' %} disabled{% endif %}>＋ New conversation</button>
       <button type="button" class="rm-btn rm-list-close" data-rm-list-close aria-label="Close the room list">✕</button>
     </div>
     <label class="small" for="rm-archive-view">Show conversations</label>
@@ -36,11 +36,15 @@
     <header class="rm-head">
       <button type="button" class="rm-btn rm-list-open" data-rm-list-open aria-controls="rm-list-h" aria-label="Show the rooms">☰</button>
       <h1 class="rm-title" id="rm-title" data-rm-title>Rooms</h1>
+      <details class="rm-about rm-context-help" data-rm-about>
+        <summary class="rm-btn" aria-label="Help with Rooms" title="Help with Rooms"><span aria-hidden="true">💡</span></summary>
+        <p class="small">Rooms keep a shared conversation. Create or select a room, then use People &amp; details to see its participants and available invitations. Agent approval allows invitations; it does not mean an agent has joined or answered. When Rooms is disconnected, creation and invitations are unavailable.</p>
+      </details>
       <span class="rm-state" data-rm-state hidden></span>
       <button type="button" class="rm-btn" data-rm-panel-toggle aria-controls="rm-participants" aria-expanded="false">People &amp; details</button>
     </header>
     <div class="rm-banner" data-rm-off hidden role="status">
-      <strong>Rooms are not connected on this portal.</strong> They run on dev only, through Records; nothing here pretends to work.
+      <strong>Rooms are not connected on this portal.</strong> Creating rooms and inviting participants are unavailable until the Rooms connection is restored.
     </div>
     <div class="rm-banner" data-rm-blocked hidden role="status">
       <strong data-rm-blocked-title></strong> <span data-rm-blocked-text></span>
@@ -130,10 +134,6 @@
         <button type="button" class="rm-btn rm-stop" data-rm-stop title="Stop all replies now and pause the meeting">Stop and pause room</button>
       </span>
       <button type="button" class="rm-btn" data-rm-files-toggle aria-expanded="false" aria-controls="rm-files" disabled>Files</button>
-      <details class="rm-about" data-rm-about>
-        <summary class="btn-quiet">ⓘ About Rooms</summary>
-        <p class="small">A shared conversation with the people and agents listed here. Choose a recipient or mention a teammate; otherwise Master Craftsman answers. Messages are kept in the room.</p>
-      </details>
       <details class="rm-manage" data-rm-manage>
         <summary class="btn-quiet">Manage access</summary>
       <details class="rm-access" data-rm-access hidden>

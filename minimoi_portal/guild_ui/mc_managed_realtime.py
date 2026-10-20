@@ -88,18 +88,50 @@ def install(app,mount,*,environ,budget=None,provider_factory=None):
         if (fresh.get('principal')!=bound['principal'] or fresh.get('archived') or fresh.get('record_mode')=='off_record'
                 or fresh.get('notes_floor')!=bound['conversation'].get('notes_floor')):raise SessionRefused('Conversation unavailable')
         with bound['app'].app_context(),_worker_config(bound['app'],bound['config']):
+            # The turn ledger (issue #346): one claim covers every action below. Off: turn is None.
+            from . import feature_environ
+            from .mc import ledger_gate
+            try:
+                turn=ledger_gate.gate(bound['services'],feature_environ(),principal=bound['principal'],conversation_id=cid,
+                                      note_request_id=operation_id,request_id=operation_id,kind='voice')
+            except ledger_gate.Refusal as refused:
+                raise SessionRefused(refused.body.get('message') or 'Spoken turn unavailable') from None
+            phase=['before']
+            try:
+                result=_voice_dispatch(bound,name,text,cid,operation_id,fresh,turn,phase)
+            except BaseException:
+                api._ledger_abort(turn,phase[0])
+                raise
+            return result
+
+    def _voice_dispatch(bound,name,text,cid,operation_id,fresh,turn,phase):
+        from . import api
+        from .stores import NOTE_MAX
+        if True:
+            phase[0]='platform'
             from .board_commands import execute as board_command
             board_result=board_command(text,board=bound['board'],conversation=bound['floor'],principal=bound['principal'],turn_key=operation_id,author=bound['author'])
-            if board_result is not None:return board_result
+            if board_result is not None:
+                if turn is not None:turn.finish_platform(board_result)
+                return board_result
             # The trusted journal supplies one id per utterance/effect, including tool replays.
             from .owner_actions import execute as owner_action
             action=owner_action(text,cos=bound['services'].mc,conversation=bound['floor'],principal=bound['principal'],turn_key=operation_id)
-            if action is not None:return action
-            if name=='save_cos_note':raise SessionRefused('Explicit owner note command required')
+            if action is not None:
+                if turn is not None:turn.finish_platform(action)
+                return action
+            phase[0]='before'                     # neither command matched: nothing was done
+            if name=='save_cos_note':
+                if turn is not None:turn.finish_not_sent({'error':'not_a_command'})
+                raise SessionRefused('Explicit owner note command required')
             clean,bad=api._clean_text(text,NOTE_MAX,'spoken note')
-            if bad is not None:raise SessionRefused('Spoken note refused')
+            if bad is not None:
+                if turn is not None:turn.finish_not_sent({'error':'invalid'})
+                raise SessionRefused('Spoken note refused')
             kept=bound['floor'].add_note(operation_id,clean,bound['author'],page='voice')
-            if kept.outcome!='kept' or not kept.value:raise SessionRefused('Spoken note not kept')
+            if kept.outcome!='kept' or not kept.value:
+                if turn is not None:turn.finish_not_sent({'error':'not_kept'})
+                raise SessionRefused('Spoken note not kept')
             note=kept.value
             from .mc_voice_transcripts import copy_to_chat
             def copy_scope():
@@ -111,22 +143,30 @@ def install(app,mount,*,environ,budget=None,provider_factory=None):
             copied = None
             from .mc_voice_transcripts import chat_copy_requested
             if chat_copy_requested(text):
+                phase[0]='platform'
                 copied = copy_to_chat(text, bound['floor'], operation_id,
                     session_id=bound.get('transcript_sid'), scope_check=copy_scope, scrub=api.scrub)
+                phase[0]='before'
             if copied is not None:
+                if turn is not None:turn.finish_platform({'status':'answered','backend_kind':'platform'})
                 return {**copied, 'note_request_id': operation_id}
             from .jobs_api import job_command
             found=(bound['services'],bound['principal'],fresh,bound['floor'],note,operation_id,operation_id,[])
+            phase[0]='platform'
             command=job_command(found)
+            phase[0]='before'
             if command is not None:
                 response,status=command if isinstance(command,tuple) else (command,command.status_code)
                 body=response.get_json()
+                if turn is not None:turn.finish_platform(body if isinstance(body,dict) else {})
                 if status!=200:raise SessionRefused('Job command refused')
                 return {'reply':body.get('message') or 'Job command processed.','job_command':body.get('job_command'),'job':body.get('job'),'note_request_id':operation_id}
             from .mc.cos import MANAGED_VOICE_CHANNEL
+            phase[0]='model'
             body,status=api.run_mc_turn(bound['services'],conversations=bound['conversations'],floor=bound['floor'],conv=fresh,
                 principal=bound['principal'],note=note,note_id=operation_id,request_id=operation_id,attachment_ids=[],
-                host_channel=MANAGED_VOICE_CHANNEL)
+                host_channel=MANAGED_VOICE_CHANNEL,ledger_turn=turn)
+            if turn is not None:turn.finish_model(body,status)
             reply=body.get('reply_note') if isinstance(body,dict) else None
             if status!=200 or not isinstance(body,dict) or body.get('status')!='answered' or not isinstance(reply,dict) or not isinstance(reply.get('text'),str):raise SessionRefused('Agent outcome unavailable; do not claim completion')
             return {'reply':reply['text'],'note_request_id':operation_id,'reply_note_id':reply.get('request_id'),'history_saved':body.get('history_saved')}

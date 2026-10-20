@@ -1,0 +1,28 @@
+import pathlib,sys,json,os,time
+os.umask(0o077)
+repo=pathlib.Path(@@REPO_ROOT@@)
+sys.path.insert(0,str(repo/'scripts/staging/mc_probe'))
+from proving_driver import GuildClient,Journal
+from proving_budget import Budget
+from proving_runner import Runner,Limits
+root=pathlib.Path(@@STATE_ROOT@@)
+assert not (root/'@@RUN_TAG@@_SUMMARY.json').exists() and not (root/'journal-@@RUN_ID@@').exists(),'prior_attempt_requires_reconciliation'
+identity=json.loads((root/'test-identity.json').read_text());snapshot=json.loads((root/'snapshot.json').read_text())
+client=GuildClient('http://127.0.0.1:15001',identity['username'],Journal(root/'journal-@@RUN_ID@@'),lambda:None,instance_id=snapshot['instance_id'])
+client.login(identity['password'])
+brief=pathlib.Path(@@BRIEF@@).read_text()
+assert not (root/'guard-state/armed.json').exists()
+import fcntl
+fd=os.open(root/'tool-queue/.worker.lock',os.O_RDWR)
+try:
+ try: fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+ except BlockingIOError: pass
+ else: raise RuntimeError('tool_worker_not_running')
+finally: os.close(fd)
+assert not list((root/'tool-queue').glob('*.request')) and not list((root/'tool-queue').glob('*.claimed'))
+(root/'guard-state/armed.json').write_text(json.dumps({'expires_epoch':time.time()+600}))
+try:
+ result=Runner(client,Budget(root/'budget-v2.sqlite'),Limits(1,600,@@WINDOW_USD@@)).run([brief])
+ (root/'@@RUN_TAG@@_SUMMARY.json').write_text(json.dumps(result,indent=2));print(json.dumps(result,indent=2))
+finally:
+ (root/'guard-state/armed.json').unlink(missing_ok=True)

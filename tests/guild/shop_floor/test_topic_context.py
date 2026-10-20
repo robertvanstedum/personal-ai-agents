@@ -133,8 +133,9 @@ def turned(floored):
 
 def _topic_item(client, token, text="Put away keeps the card."):
     h = write_headers(token)
-    tid = client.post(f"{API}/topics/create", json={"idempotency_key": "tc-key-0001", "title": "Guild chat"}, headers=h).get_json()["topic"]["id"]
-    iid = client.post(f"{API}/topics/{tid}/items", json={"idempotency_key": "ti-key-0001", "kind": "document", "title": "Spec", "text": text}, headers=h).get_json()["item"]["id"]
+    # Each test owns a fresh store; do not replay another test's process-cached request.
+    tid = client.post(f"{API}/topics/create", json=keyed(title="Guild chat"), headers=h).get_json()["topic"]["id"]
+    iid = client.post(f"{API}/topics/{tid}/items", json=keyed(kind="document", title="Spec", text=text), headers=h).get_json()["item"]["id"]
     return tid, iid
 
 
@@ -144,7 +145,7 @@ def test_a_turn_carries_the_chosen_item_as_data_and_reports_it(turned):
     note = _keep(client, token, "What does this say about archive?")
     r = client.post(f"{API}/mc/turns", json={"note_request_id": note["request_id"], "record_mode": "on_record", "topic_context": [{"topic_id": tid, "item_id": iid}]}, headers=write_headers(token))
     body = r.get_json()
-    assert r.status_code == 200 and body["status"] == "answered"
+    assert r.status_code == 200 and body["status"] == "answered", body
     sent = turned.extra["runtime"].sent[0]["body"]["messages"][0]["content"]
     assert sent.startswith("What does this say about archive?") and "BEGIN ITEM 1" in sent and "Put away keeps the card." in sent
     assert body["files"] == [{"id": iid, "name": "Spec (revision A)", "kind": "topic_item", "status": "read", "chars_sent": 24, "chars_total": 24}]

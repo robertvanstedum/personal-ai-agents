@@ -15,7 +15,8 @@ const extOf = (name) => { const i = (name || '').lastIndexOf('.'); return i < 0 
 
 // The tray's ready files, for the composer's send: take() hands them to the message being sent and empties the tray;
 // restore() puts them back if the message was not kept, so a failed send loses nothing.
-const tray = { take: () => [], restore: () => {} };
+const tray = { take: () => [], restore: () => {}, count: () => 0 };
+export const trayCount = () => tray.count();
 export const takeTray = () => tray.take();
 export const restoreTray = (files) => tray.restore(files);
 // True while a file is still being read or uploaded: the composer waits for it (or for it to be dismissed) rather than
@@ -147,6 +148,7 @@ export function initAttachments(page) {
   }
 
   // A message takes the ready files with it; a message that was not kept gives them back.
+  tray.count = () => ready.size;
   tray.take = () => {
     const files = Array.from(ready.values());
     for (const li of Array.from(trayEl.querySelectorAll('[data-state="ok"]'))) li.remove();

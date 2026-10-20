@@ -242,6 +242,9 @@ def _name_the_partner(bp, services):
             return response
         changed = False
         for key in _PARTNER_WORDING_KEYS:
+            # Platform action receipts can quote the owner's exact saved text.
+            if key == "message" and data.get("backend_kind") == "platform":
+                continue
             if isinstance(data.get(key), str) and "Master Craftsman" in data[key]:
                 data[key] = data[key].replace("Master Craftsman", name)
                 changed = True

@@ -156,6 +156,7 @@ def _context(page_id: str, area: str, context_item: str, *, conversation_id=None
         "conversation": public(conversation) if conversation else None, "conv_notice": conv_notice,
         "jobs": {"enabled": bool(c.get("jobs"))},
         "agent_requests": _agent_requests_state(c, conversation),
+        "mc_queue": _mc_queue_on(c),
     }
     page.update(extra.pop("page_extra", {}))
     page_open = extra.pop("page_open", False)
@@ -165,6 +166,14 @@ def _context(page_id: str, area: str, context_item: str, *, conversation_id=None
                 filing_off=FILING_OFF, invite_off=INVITE_OFF, rules_label=RULES_LABEL,
                 hhmm=hhmm, age=age, badge=badge, statuses=STATUSES, conversation=conversation,
                 conv_notice=conv_notice, mc_voice_on=_mc_voice_on(), dictation_on=_dictation_on(), **extra)
+
+
+def _mc_queue_on(c) -> bool:
+    """Waiting messages (issue #346 P3): only where the turn ledger is on and has a store, which is also where
+    a pause and its Continue exist. Off, the page sends exactly as before."""
+    from . import feature_environ
+    from .mc import ledger_gate
+    return ledger_gate.enabled(feature_environ()) and getattr(c["services"], "turn_ledger", None) is not None
 
 
 def _mc_voice_on() -> bool:
@@ -580,7 +589,7 @@ def admin():
                       "href": url_for(".document", ref=reference)})
     return render_template("guild_floor/admin.html", role_documents=roles,
                            agents_href=url_for(".operate_view", view="agents"),
-                           **_context("admin", "Build", "Build Admin", page_open=True))
+                           **_context("admin", "Admin", "Guild Admin", page_open=True))
 
 
 @owner_page

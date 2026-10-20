@@ -15,9 +15,10 @@ import { answerFailed, answerArrived } from './floorlayout.js';
 const mcName = () => document.body.dataset.mcName || 'Master Craftsman';
 const mcSay = (text) => String(text).split('Master Craftsman').join(mcName());
 import { applyConversation } from './conversations.js';
-import { takeTray, restoreTray, trayBusy } from './attachments.js';
+import { takeTray, restoreTray, trayBusy, trayCount } from './attachments.js';
 import { initJobs } from './jobs.js';
 import { initAgentRequests } from './agent_requests.js';
+import { initQueue } from './mc_queue.js';
 
 let page, panel, thread, pill;
 const inPage = () => document.body.dataset.page === 'floor';
@@ -42,17 +43,39 @@ function forgetSentDraft(key, text) {
 
 // The Workshop page chooses topic items for ONE message ("Ask Master Craftsman about this"): ids only, owner-checked on the server,
 // sent with that message and then forgotten here. Nothing is added unless the page put it in window.guildTopicContext.
-let turnCtx = [];            // the items chosen for the turn now going out
-function topicContext() {
-  return turnCtx.length ? { topic_context: turnCtx.map((c) => ({ topic_id: c.topic_id, item_id: c.item_id, rev: c.rev || undefined })) } : {};
-}
 function takeTopicContext() {      // the chosen items go with THIS message and are forgotten by the page
-  const ctx = Array.isArray(window.guildTopicContext) ? window.guildTopicContext : [];
-  turnCtx = ctx.slice();
+  const ctx = Array.isArray(window.guildTopicContext) ? window.guildTopicContext.slice() : [];
   if (ctx.length) { window.guildTopicContext = []; document.dispatchEvent(new CustomEvent('guild:topic-context-sent')); }
+  return ctx;
 }
-function restoreTopicContext() {   // the server refused before sending anything: give the choice back
-  if (turnCtx.length) { window.guildTopicContext = turnCtx.slice(); turnCtx = []; document.dispatchEvent(new CustomEvent('guild:topic-context-restored')); }
+function restoreTopicContext(ctx) {   // the server refused before sending anything: give the choice back (after anything chosen since)
+  if (!ctx.length) return;
+  const now = Array.isArray(window.guildTopicContext) ? window.guildTopicContext : [];
+  const key = (c) => `${c.topic_id}/${c.item_id}`;
+  window.guildTopicContext = [...now, ...ctx.filter((c) => !now.some((n) => key(n) === key(c)))];
+  document.dispatchEvent(new CustomEvent('guild:topic-context-restored'));
+}
+
+// One message's turn, fixed when it is sent (issue #346 P3): its note, request id, files, topic items and conversation.
+// Nothing about a turn is read from page state again, so a later message (typed while this one waits or runs) can never
+// lend it its files, items or conversation, or take its answer.
+// The target is read at Send, before anything is awaited (sendTarget); the note and request id are added once the note is kept.
+function sendTarget() {
+  return Object.freeze({ conversationId: page.conversation ? page.conversation.id : undefined, chatScope: page.chat_scope });
+}
+function snapshot(note, files, ctx, target) {
+  const at = target || sendTarget();
+  return Object.freeze({ note, requestId: newKey(), files: Object.freeze((files || []).slice()), ctx: Object.freeze((ctx || []).slice()),
+    conversationId: at.conversationId, chatScope: at.chatScope });
+}
+function turnBody(t) {
+  return { note_request_id: t.note.request_id, record_mode: recordMode(), request_id: t.requestId, chat_scope: t.chatScope,
+    conversation_id: t.conversationId, ...(t.files.length ? { attachment_ids: t.files.map((f) => f.id) } : {}),
+    ...(t.ctx.length ? { topic_context: t.ctx.map((c) => ({ topic_id: c.topic_id, item_id: c.item_id, rev: c.rev || undefined })) } : {}) };
+}
+function giveBack(t) {             // nothing was recorded or sent: the files and items return for the next message
+  if (t.files.length) restoreTray(t.files.slice());
+  restoreTopicContext(t.ctx.slice());
 }
 
 function applyMode() {
@@ -200,6 +223,7 @@ export function setBriefing(briefing) {
 function noteLine(note) {
   const li = clone('tpl-note');
   li.dataset.note = note.id;
+  if (note.request_id) li.dataset.noteRequest = note.request_id;
   setSlot(li, 'label', note.author_label);
   setSlot(li, 'when', localTime(note.created_at));
   const ctx = note.context || {};
@@ -289,49 +313,58 @@ function applyHeader(body) {
   if (body.mc_state) document.body.dataset.mcState = body.mc_state;
 }
 
-// Shows a finished (non-streamed, or repeated) answer in place of `holder`.
-function showAnswer(holder, r) {
+// Shows a finished (non-streamed, or repeated) answer in place of `holder`. Returns {answered, error} for this turn only.
+function showAnswer(holder, r, t) {
   const body = r.body || {};
   applyHeader(body);
+  const kept = () => ({ answered: true, error: null });
   if (r.ok && body.status === 'answered' && body.reply_note) {
-    lastAnswered = true;
     if ($(`[data-note="${body.reply_note.id}"]`)) holder.remove();
     else holder.replaceWith(noteLine(body.reply_note));
     announce(body.message || mcSay('Master Craftsman answered'));
     answerArrived();
     agentUi.kick();
+    follow();
+    return kept();
   } else if (r.ok && body.operation?.type === 'board_postit' && body.operation.saved === true && Number.isInteger(body.operation.id) && body.operation.id > 0) {
     // The Board committed but its separate conversation receipt failed. Show
     // the real saved outcome without pretending this line survived a reload.
-    lastAnswered = true;
     holder.replaceWith(platformLine('Board', `${body.message} The Board is saved; this confirmation could not be kept in the conversation.`));
     announce(body.message);
     answerArrived();
+    follow();
+    return kept();
   } else if (r.ok && body.operation?.type === 'library_intake' && body.operation.saved === true && ['saved', 'already_saved_attached'].includes(body.operation.receipt?.result)) {
     // Library committed; a separate conversation-receipt failure cannot undo it.
-    lastAnswered = true;
     holder.replaceWith(platformLine('Library', `${body.message} The Library item is saved; this confirmation could not be kept in the conversation.`));
     announce(body.message);
     answerArrived();
+    follow();
+    return kept();
   } else if (r.ok && ['cos_note', 'reminder_set'].includes(body.operation?.type) && body.operation.saved === true) {
-    lastAnswered = true;
     holder.replaceWith(platformLine(body.operation.type === 'cos_note' ? 'Notes' : 'Reminders', `${body.message} This confirmation could not be kept in the conversation.`));
     announce(body.message);
     answerArrived();
+    follow();
+    return kept();
   } else if (r.ok && body.operation?.type === 'work_register' && body.operation.saved === true && /^MC-[0-9]{4,8}$/.test(body.operation.id)) {
     // Canonical card committed; the separate chat receipt is not durable.
-    lastAnswered = true;
     holder.replaceWith(platformLine('Register', `${body.message} The register entry is saved; this confirmation could not be kept in the conversation.`));
     announce(body.message);
     answerArrived();
-  } else {
-    if (NOT_DISPATCHED.includes(body.error)) { if (turnFiles.length) restoreTray(turnFiles); restoreTopicContext(); }
-    const text = body.message || mcSay('Master Craftsman did not answer. Your message is kept.');
-    holder.replaceWith(failureLine(text));
-    announce(text);
-    answerFailed(body.mc_header || mcSay('Master Craftsman did not answer'));
+    follow();
+    return kept();
   }
+  // Another tab is sending it, or a pause holds it: nothing to say here (the line above the composer shows a pause and its Continue).
+  if (t.queued && ['busy', 'not_next', 'not_queued', 'paused'].includes(body.error)) { holder.remove(); return { answered: false, error: body.error }; }
+  // A waiting message refused at its turn stays on the server (first in line, or failed with a pause): its files are not handed back.
+  if (!t.queued && NOT_DISPATCHED.includes(body.error)) giveBack(t);
+  const text = body.message || mcSay('Master Craftsman did not answer. Your message is kept.');
+  holder.replaceWith(failureLine(text));
+  announce(text);
+  answerFailed(body.mc_header || mcSay('Master Craftsman did not answer'));
   follow();
+  return { answered: false, error: body.error || (r.status === 0 ? 'network' : null) };
 }
 
 // Which files went into the request for a note, exactly as the server reports them (it computes this from the text it
@@ -370,41 +403,65 @@ function clearFailureLines() { for (const n of thread.querySelectorAll('[data-tu
 // been dispatched, and nothing is replayed automatically.
 const NOT_DISPATCHED = ['not_found', 'invalid', 'too_many', 'too_large', 'busy', 'mc_unavailable', 'mc_turns_off', 'unavailable',
   'jobs_off', 'queue_full', 'not_connected', 'not_a_conversation', 'no_original', 'too_big', 'quota', 'bad_ids', 'exists'];
-let turnFiles = [];
 let jobsUi = { accepted() {}, refresh() {} };
 let agentUi = { kick() {} };
 
 // One turn per kept note: streamed when the server says so (data-mc-stream,
 // computed from the switch and the backend), else the non-streaming path.
 // One request id per turn, so the server can refuse any second dispatch.
-function askMasterCraftsman(note, files, opts) {
-  turnFiles = files || [];
+// Resolves to {answered, error} for this turn (the voice path speaks a reply only when one was kept). `ctx` and `target`
+// were taken at Send; a spoken message carries no chosen topic items and no tray (those stay for the next typed message).
+function askMasterCraftsman(note, files, opts, ctx, target) {
   clearFailureLines();
-  if (live.off || document.body.dataset.mcTurns !== 'true') { restoreTray(turnFiles); return undefined; }   // no turn: nothing was sent, the files stay in the tray
-  if (opts && opts.voice) turnCtx = [];           // a spoken message carries no chosen topic items and no tray: those stay for the next typed message
-  else takeTopicContext();
-  const requestId = newKey();
-  return document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(note, requestId)
-    : turnMasterCraftsman(note, requestId);
+  if (live.off || document.body.dataset.mcTurns !== 'true') { restoreTray(files || []); restoreTopicContext(ctx || []); return Promise.resolve({ answered: false, error: 'mc_turns_off' }); }   // no turn: nothing was sent, the files stay in the tray
+  const t = snapshot(note, files, opts && opts.voice ? [] : ctx, target);
+  return document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(t) : turnMasterCraftsman(t);
 }
 
-const fileIds = () => turnFiles.map((f) => f.id);
-let lastAnswered = false;     // set when a turn's answer was kept and shown; read by the voice path to know there is a reply to read aloud
+// A waiting message's turn (mc_queue.js): only the server's ids are needed; the server sends exactly what was queued.
+// This tab's own snapshot, when it has one, is used for showing the files it reported; it is never sent again.
+const queuedHere = new Map();      // request id -> this tab's snapshot of a message it queued
+function dispatchQueued(entry, here) {
+  const own = queuedHere.get(entry.request_id);
+  const t = Object.freeze({ note: own ? own.note : { id: null, request_id: entry.note_request_id }, requestId: entry.request_id,
+    files: own ? own.files : Object.freeze([]), ctx: own ? own.ctx : Object.freeze([]), conversationId: entry.conversation_id,
+    chatScope: own ? own.chatScope : page.chat_scope, queued: entry.id });
+  const row = thread.querySelector(`[data-note-request="${CSS.escape(entry.note_request_id)}"]`);
+  if (row && !t.note.id) t.note.id = Number(row.dataset.note);
+  const chip = row && row.querySelector('[data-queued-chip]');
+  if (chip) chip.remove();                     // it is going out now; the answer (or what happened) appears below
+  const path = `/mc/turns/queue/${entry.id}/dispatch`;
+  if (entry.conversation_id !== here) return dispatchElsewhere(path);
+  const done = document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(t, { path, body: { stream: true } })
+    : turnMasterCraftsman(t, null, { path, body: { stream: false } });
+  return done.finally(() => queuedHere.delete(entry.request_id));
+}
 
-async function turnMasterCraftsman(note, requestId, holder) {
+// The head belongs to another conversation: send it (the queue is one line for the whole owner) and say only where its answer is kept.
+async function dispatchElsewhere(path) {
+  const r = await apiPost(path, { stream: false });
+  const body = r.body || {};
+  if (r.ok && body.status === 'answered') {
+    addPlatform('Guild platform', 'A waiting message from another conversation was sent and answered; its answer is kept in that conversation.');
+    return { answered: true, error: null };
+  }
+  if (body.error && !['busy', 'not_next', 'not_queued'].includes(body.error)) addPlatform('Guild platform', body.message || 'A waiting message from another conversation was not answered.');
+  return { answered: false, error: body.error || (r.status === 0 ? 'network' : null) };
+}
+
+async function turnMasterCraftsman(t, holder, via) {
   const waiting = holder || waitingLine();
   let r;
   try {
-    r = await apiPost('/mc/turns', { note_request_id: note.request_id, record_mode: recordMode(), request_id: requestId,
-      chat_scope: page.chat_scope, conversation_id: page.conversation ? page.conversation.id : undefined,
-      ...(turnFiles.length ? { attachment_ids: fileIds() } : {}), ...topicContext() });
+    r = await apiPost(via ? via.path : '/mc/turns', via ? via.body : turnBody(t));
   } finally {
     if (waiting.stopTicking) waiting.stopTicking();
   }
-  if (r && r.body && r.body.job_command) { waiting.remove(); jobsUi.accepted(r.body); return; }     // a spoken job command: the server answered it
-  if (r && r.body && r.body.files) showFiles(note.id, r.body.files);
-  showAnswer(waiting, r);
+  if (r && r.body && r.body.job_command) { waiting.remove(); jobsUi.accepted(r.body); return { answered: true, error: null }; }     // a spoken job command: the server answered it
+  if (r && r.body && r.body.files && t.note.id) showFiles(t.note.id, r.body.files);
+  const out = showAnswer(waiting, r, t);
   if (r && r.body && r.body.job) jobsUi.accepted({ job: r.body.job });
+  return out;
 }
 
 // ── Streaming (streaming spec v0.2 §3 and §6, v0.3 §2 and §5) ──
@@ -438,17 +495,16 @@ function endLine(li, state) {
   if (controls) controls.remove();
 }
 
-async function streamMasterCraftsman(note, requestId) {
+async function streamMasterCraftsman(t, via) {
+  const note = t.note;
   const li = streamLine();
   const controller = new AbortController();
   const onHide = () => controller.abort();          // harmless: the server finishes and keeps the answer
   window.addEventListener('pagehide', onHide);
-  const body = { note_request_id: note.request_id, record_mode: recordMode(), request_id: requestId,
-    chat_scope: page.chat_scope, conversation_id: page.conversation ? page.conversation.id : undefined,
-    ...(turnFiles.length ? { attachment_ids: fileIds() } : {}), ...topicContext() };
   let res;
+  let answered = false;
   try {
-    res = await apiStream('/mc/turns/stream', body, controller.signal);
+    res = await apiStream(via ? via.path : '/mc/turns/stream', via ? via.body : turnBody(t), controller.signal);
   } catch (e) {
     window.removeEventListener('pagehide', onHide);
     endLine(li, 'unknown');
@@ -457,30 +513,29 @@ async function streamMasterCraftsman(note, requestId) {
     announce(text);
     answerFailed(mcSay('Master Craftsman: unknown'));
     follow();
-    return;
+    return { answered: false, error: 'network' };
   }
   if (res.refused) {
     window.removeEventListener('pagehide', onHide);
     li.remove();
-    return;
+    return { answered: false, error: 'not_listening' };
   }
   const type = res.headers.get('Content-Type') || '';
   if (!type.includes('application/x-ndjson')) {
     window.removeEventListener('pagehide', onHide);
     let data = {};
     try { data = await res.json(); } catch (e) { data = {}; }
-    if (data.job_command) { li.stopTicking(); li.remove(); jobsUi.accepted(data); return; }
+    if (data.job_command) { li.stopTicking(); li.remove(); jobsUi.accepted(data); return { answered: true, error: null }; }
     // Only an explicit, server-declared pre-dispatch refusal falls back to the
     // non-streaming path; nothing was sent, so this is not a second dispatch.
+    // (A waiting message refused this way is first in line again; the same dispatch is asked for without streaming.)
     if (res.status === 404 || res.status === 405 || ['stream_off', 'stream_unsupported'].includes(data.error)) {
       li.stopTicking();
       li.remove();
-      await turnMasterCraftsman(note, requestId);
-      return;
+      return turnMasterCraftsman(t, null, via ? { path: via.path, body: { stream: false } } : undefined);
     }
     li.stopTicking();
-    showAnswer(li, { ok: res.ok, status: res.status, body: data });
-    return;
+    return showAnswer(li, { ok: res.ok, status: res.status, body: data }, t);
   }
   const rendered = slot(li, 'rendered');
   const tail = slot(li, 'tail');
@@ -519,7 +574,7 @@ async function streamMasterCraftsman(note, requestId) {
     } else if (ev.t === 'done') {
       ended = true;
       li.stopTicking();
-      if (ev.reply_note) lastAnswered = true;
+      if (ev.reply_note) answered = true;
       applyHeader(ev);
       if (ev.reply_note && !$(`[data-note="${ev.reply_note.id}"]`)) {
         const done = noteLine(ev.reply_note);
@@ -578,7 +633,9 @@ async function streamMasterCraftsman(note, requestId) {
     announce(text);
     answerFailed(mcSay('Master Craftsman: connection ended'));
     follow();
+    return { answered: false, error: 'network' };
   }
+  return { answered, error: null };
 }
 
 
@@ -645,6 +702,7 @@ async function askPrivate(text, input) {
 }
 
 let sendingNote = false;
+let queue = null;     // waiting messages (mc_queue.js), only while the turn ledger is on
 let noteKey = null;   // one key per composed note; a new one when the text changes
 
 // The History picker hides the thread while it is open, so a send closes it and the answer is seen arriving.
@@ -680,9 +738,8 @@ export async function submitVoiceUtterance(text, requestId) {
     if (!$(`[data-note="${body.note.id}"]`)) appendNote(body.note);
     applyConversation(body.conversation);
     announce(body.message);
-    lastAnswered = false;
-    await askMasterCraftsman(body.note, [], { voice: true });
-    return lastAnswered ? { ok: true, note_request_id: body.note.request_id } : say('no_answer', 'Master Craftsman did not answer. Your message is kept.');
+    const out = await askMasterCraftsman(body.note, [], { voice: true });
+    return out.answered ? { ok: true, note_request_id: body.note.request_id } : say('no_answer', 'Master Craftsman did not answer. Your message is kept.');
   } finally {
     sendingNote = false;
     if (send) send.disabled = false;
@@ -713,13 +770,51 @@ function clearLength(input) {
   if (r) { r.hidden = true; r.textContent = ''; }
 }
 
+// With the turn ledger on, a kept message is queued, not sent here: Send is free again as soon as the server has recorded it,
+// and mc_queue.js sends waiting messages one at a time, in order. Only the note save and this record are one at a time per tab.
+// An answer that does not say what happened (the connection dropped, a gateway error page): the server may have recorded it.
+const UNCLEAR = (r) => r.status === 0 || ['network', 'unreadable'].includes((r.body || {}).error) || (r.status >= 500 && !(r.body || {}).error);
+async function queueTurn(note, files, ctx, target) {
+  clearFailureLines();
+  const t = snapshot(note, files, ctx, target);
+  queuedHere.set(t.requestId, t);
+  const body = { ...turnBody(t), queue: true };
+  let r = await apiPost('/mc/turns', body);
+  // Unclear: ask again with the SAME ids. The server answers an exact repeat with the same waiting entry (or what became
+  // of it), so this can never put the message in line twice; nothing is said to be "not sent" until the server says so.
+  for (const wait of [1000, 3000, 9000]) {
+    if (!UNCLEAR(r)) break;
+    await new Promise((ok) => { window.setTimeout(ok, wait); });
+    r = await apiPost('/mc/turns', body);
+  }
+  if (r.status === 202 && r.body && r.body.status === 'queued') { queue.queued(r.body); return; }
+  const answer = r.body || {};
+  if (UNCLEAR(r)) {                             // still unknown: keep its files with it, and let the ledger view settle it
+    thread.append(failureLine('It is not confirmed whether this message was put in line or sent. It is kept; '
+      + 'if it is waiting, it shows as waiting, and if it was answered, the answer is kept.'));
+    announce('Not confirmed.');
+    queue.pump();
+    follow();
+    return;
+  }
+  queuedHere.delete(t.requestId);
+  if (!['already_done', 'already_dispatched', 'already_queued'].includes(answer.error)) giveBack(t);     // refused: nothing was recorded, so files and items come back
+  thread.append(failureLine(answer.message || 'This message could not be put in line. It is kept; nothing was sent.'));
+  announce(answer.message || 'Not queued.');
+  follow();
+}
+
 async function sendNote(input, send) {
   const originalDraft = input.value;
   const originalDraftKey = draftKey();
-  const text = input.value.trim();
-  if (!text) return;
+  // A neutral attachment label preserves the existing kept-note contract without inventing an instruction.
+  const text = input.value.trim() || (!live.off && trayCount() ? 'Attached files.' : '');
+  if (!text) {
+    if (trayBusy()) refuse('A file is still being read. Wait for it to finish, then send.');
+    return;
+  }
   if (checkLength(input)) return;
-  if (live.off && document.body.dataset.mcPrivate === 'false') { refuse(`Private is not available with the ${mcName()}: it keeps its own record. Nothing was sent. Your draft is kept.`); return; }
+  if (live.off && document.body.dataset.mcPrivate === 'false') { refuse(`${privateOffWhy()}. Nothing was sent. Your draft is kept.`); return; }
   if (live.off) {       // Private: sent, answered, never kept
     if (document.body.dataset.mcTurns !== 'true') { refuse(mcSay('Master Craftsman is not switched on here, so nothing was sent. Your draft is kept.')); return; }
     await askPrivate(text, input);
@@ -745,10 +840,13 @@ async function sendNote(input, send) {
   closeHistory();
   sendingNote = true;
   send.disabled = true;
+  // Everything this message carries is fixed now, before anything is awaited: what is chosen while it saves is for the next one.
+  const target = sendTarget();
   const files = takeTray();         // the ready files go with THIS message; a message that is not kept gives them back
+  const ctx = takeTopicContext();
   try {
   const r = await apiPost('/notes', {
-    request_id: noteKey, text, record_mode: recordMode(), chat_scope: page.chat_scope, conversation_id: page.conversation ? page.conversation.id : undefined,
+    request_id: noteKey, text, record_mode: recordMode(), chat_scope: target.chatScope, conversation_id: target.conversationId,
     context: { area: document.body.dataset.area || null, item_ref: page.item_id || null, page: page.page },
   });
   const body = r.body || {};
@@ -766,10 +864,12 @@ async function sendNote(input, send) {
     const r2 = $('[data-mc-refusal]');
     if (!live.off) { r2.hidden = true; r2.textContent = ''; }
     announce(body.message);
-    if (body.repeated) restoreTray(files);
-    else await askMasterCraftsman(body.note, files);
+    if (body.repeated) { restoreTray(files); restoreTopicContext(ctx); }
+    else if (queue && document.body.dataset.mcTurns === 'true') await queueTurn(body.note, files, ctx, target);
+    else await askMasterCraftsman(body.note, files, undefined, ctx, target);
   } else {
     restoreTray(files);
+    restoreTopicContext(ctx);
     refuse(body.message || 'Not saved — notes unavailable');
   }
   } finally {
@@ -785,6 +885,13 @@ export function refuse(text) {
   announce(text);
 }
 
+// Why Private cannot be chosen here: the server's own reason (the partner keeps its own record, or every message is
+// recorded before it is sent), never a guess made on the page.
+function privateOffWhy() {
+  const btn = $('[data-mc-record]');
+  return (btn && btn.dataset.privateOffWhy) || `Private is not available with the ${mcName()}: it keeps its own record`;
+}
+
 function renderRecord() {
   const draftBox = $('[data-mc-input]');
   $('[data-mc-send]').disabled = sendingNote && !live.off;
@@ -792,7 +899,7 @@ function renderRecord() {
   btn.setAttribute('aria-pressed', String(live.off));
   if (document.body.dataset.mcPrivate === 'false' || btn.hasAttribute('data-private-off')) {
     btn.setAttribute('aria-label', 'Private is not available');
-    btn.title = `Private is not available with the ${mcName()}: it keeps its own record`;
+    btn.title = privateOffWhy();
   } else {
     btn.setAttribute('aria-label', live.off ? 'Exit Private' : 'Go Private');
     btn.title = live.off ? 'Exit Private: go back on the record' : mcSay('Go Private: Master Craftsman answers, MiniMoi keeps nothing');
@@ -893,7 +1000,7 @@ export function initConversation(p) {
       addPlatform('Guild platform', 'On the record in this tab');
     });
   }
-  $('[data-mc-record]').addEventListener('click', () => {
+  const toggleRecord = () => {
     const wasOff = live.off;
     setOff(!live.off);
     if (wasOff) {
@@ -901,7 +1008,8 @@ export function initConversation(p) {
       for (const n of $$('[data-off-record-line]')) n.remove();
       addPlatform('Guild platform', 'Back on the record · nothing from the off-the-record stretch was kept');
     }
-  });
+  };
+  $('[data-mc-record]').addEventListener('click', toggleRecord);
   // Private: a compact chip with the explanation on demand and an easy exit.
   const why = $('[data-private-why]');
   const box = $('[data-private-explain]');
@@ -912,7 +1020,9 @@ export function initConversation(p) {
     });
   }
   const exit = $('[data-private-exit]');
-  if (exit) exit.addEventListener('click', () => $('[data-mc-record]').click());
+  // Exit always works, even where the lock cannot be chosen (a tab still in Private when Private became unavailable):
+  // it only ever goes back on the record, by the owner's own click, never by itself.
+  if (exit) exit.addEventListener('click', () => { if (live.off) toggleRecord(); });
   wireOptionsMenu($('[data-mc-options]'), document);
   const typeBtn = $('[data-mc-type]');
   if (typeBtn) typeBtn.addEventListener('click', () => {
@@ -941,5 +1051,6 @@ export function initConversation(p) {
   renderRecord();
   follow();
   jobsUi = initJobs({ page, thread, noteLine, follow });
+  if (page.mc_queue) queue = initQueue({ page, thread, dispatch: dispatchQueued, follow });
   agentUi = initAgentRequests({ page, thread, noteLine, follow });
 }

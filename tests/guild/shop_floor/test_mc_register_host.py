@@ -86,7 +86,7 @@ def test_saved_register_receipt_failure_uses_truthful_actual_js_path():
  node=shutil.which('node')
  if not node:pytest.skip('Node is required for actual response handler check')
  source=(Path(__file__).resolve().parents[3]/'minimoi_portal/guild_ui/static/js/conversation.js').read_text()
- handler=source[source.index('function showAnswer(holder, r) {'):source.index('// Which files went into the request')]
- script="let lastAnswered=false,arrivals=0,failures=0,shown='';const applyHeader=()=>{},platformLine=(who,text)=>({who,text}),announce=()=>{},answerArrived=()=>arrivals++,answerFailed=()=>failures++,follow=()=>{};const holder={replaceWith:x=>shown=x.text};\n"+handler+"\nshowAnswer(holder,{ok:true,body:{status:'answered',reply_note:null,message:'Registered MC-0001',operation:{type:'work_register',saved:true,id:'MC-0001'}}});if(!lastAnswered||arrivals!==1||failures!==0||!shown.includes('could not be kept'))throw Error('untruthful saved state');"
+ handler=source[source.index('function showAnswer(holder, r, t) {'):source.index('// Which files went into the request')]
+ script="let arrivals=0,failures=0,shown='';const applyHeader=()=>{},platformLine=(who,text)=>({who,text}),announce=()=>{},answerArrived=()=>arrivals++,answerFailed=()=>failures++,follow=()=>{};const holder={replaceWith:x=>shown=x.text};\n"+handler+"\nconst outcome=showAnswer(holder,{ok:true,body:{status:'answered',reply_note:null,message:'Registered MC-0001',operation:{type:'work_register',saved:true,id:'MC-0001'}}},{queued:false});if(!outcome.answered||outcome.error!==null||arrivals!==1||failures!==0||!shown.includes('could not be kept'))throw Error('untruthful saved state');"
  result=subprocess.run([node,'-e',script],capture_output=True,timeout=5)
  assert result.returncode==0,result.stderr

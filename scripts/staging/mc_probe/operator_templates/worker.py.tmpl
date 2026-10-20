@@ -1,0 +1,12 @@
+import pathlib,sys,json,subprocess
+repo=pathlib.Path(@@REPO_ROOT@@)
+sys.path.insert(0,str(repo/'scripts/staging/mc_probe'))
+from proving_tools import RepositoryTools
+from proving_text_fixture import FixtureTools
+from proving_tool_queue import serve
+root=pathlib.Path(@@STATE_ROOT@@)
+revisions=@@REVISIONS@@
+tools=RepositoryTools(repo,revisions,snapshot=pathlib.Path(@@SOURCE_SNAPSHOT@@),image=@@TEST_IMAGE@@,snapshot_manifest=json.loads(pathlib.Path(@@SOURCE_MANIFEST@@).read_text()))
+fixtures=@@FIXTURES@@
+if fixtures:tools=FixtureTools(tools,fixtures)
+serve(tools,root/'tool-queue',max_requests=50,max_seconds=900)

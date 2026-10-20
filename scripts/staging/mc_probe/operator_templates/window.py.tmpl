@@ -1,0 +1,132 @@
+import pathlib,subprocess,json,time,os,sys,datetime,sqlite3,shutil,re,fcntl,hashlib
+import yaml
+os.umask(0o077)
+r=pathlib.Path(@@STATE_ROOT@@)
+pkg=pathlib.Path(__file__).resolve().parent
+python=@@PYTHON@@
+def run(a,**kw):return subprocess.check_output(a,text=True,timeout=kw.pop('timeout',30),**kw).strip()
+def inspect(n):return json.loads(run(['docker','inspect',n]))[0]
+def swap():return float(re.search(r'used = ([0-9.]+)M',run(['sysctl','vm.swapusage'])).group(1))
+def gate():
+ assert shutil.disk_usage('/').free>=8*1024**3,'disk_below_8GiB'
+ assert int(run(['sysctl','-n','kern.memorystatus_vm_pressure_level']))<=2,'pressure_critical'
+def health(container,url):
+ for _ in range(45):
+  x=subprocess.run(['docker','exec',container,'python','-c',f'import urllib.request; assert urllib.request.urlopen({url!r},timeout=3).status==200'],capture_output=True,timeout=8)
+  if x.returncode==0:return
+  time.sleep(1)
+ raise RuntimeError('health_unavailable:'+container)
+def idle():
+ probe="import os,psycopg2; c=psycopg2.connect(os.environ['DATABASE_URL']); q=c.cursor(); q.execute(\"select count(*) from guild.mc_turn_ledger where state='claimed'\"); assert q.fetchone()[0]==0; print('idle')"
+ assert run(['docker','exec','minimoi-portal','python','-c',probe])=='idle'
+ voice=pathlib.Path(@@VOICE_PROBE@@)
+ v=json.loads(run(['docker','exec','-i','minimoi-portal','python','-B','-'],input=voice.read_text()))
+ assert v['unresolved_tool_calls']==0 and not any(x in v['session_states'] for x in ('connecting','active','ending')),'voice_busy'
+manifest=json.loads((pkg/'MANIFEST.json').read_text())
+assert set(manifest['scripts'])=={'guard.py','runner.py','worker.py','settle.py','window.py'}
+for name,expected_hash in manifest['scripts'].items():
+ assert hashlib.sha256((pkg/name).read_bytes()).hexdigest()==expected_hash,'operator_changed_after_review'
+assert hashlib.sha256((r/'model-guard.py').read_bytes()).hexdigest()==manifest['original_guard_sha256'],'original_guard_changed'
+lock=open(r/'.opus-window.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+from zoneinfo import ZoneInfo
+local_now=datetime.datetime.now(ZoneInfo('America/Chicago'))
+assert local_now.date().isoformat()==@@DAY@@ and (local_now.hour,local_now.minute)<(23,30),'review_day_or_late_start'
+gate();idle()
+assert not (r/'guard-state/armed.json').exists()
+assert not (r/'journal-@@RUN_ID@@').exists() and not (r/'@@RUN_TAG@@_SUMMARY.json').exists()
+assert not list((r/'tool-queue').glob('*.request')) and not list((r/'tool-queue').glob('*.claimed'))
+assert not inspect('minimoi-proving-agent')['State']['Running']
+assert json.loads((pathlib.Path(@@MODEL_RECEIPT@@)).read_text())['verified']
+cfg=yaml.safe_load(run(['docker','exec','minimoi-model-gateway','cat','/app/config.yaml']))
+for route in ('minimoi-cos-agent','minimoi-mc-agent'):
+ assert next(x for x in cfg['model_list'] if x['model_name']==route)['litellm_params']['model']=='@@MODEL_NAME@@'
+with sqlite3.connect('file:'+str(r/'budget-v2.sqlite')+'?mode=ro',uri=True) as c:
+ assert c.execute('select count(*) from stop_flags').fetchone()[0]==0
+ assert c.execute("select coalesce(sum(charged),0) from reservations where day='@@DAY_TEXT@@' OR state='reserved'").fetchone()[0]==@@BASE_MICRO@@
+with sqlite3.connect('file:'+str(r/'guard-state/model-admission.sqlite')+'?mode=rw',uri=True) as c:
+ assert c.execute('select count(*),coalesce(max(id),0) from calls').fetchone()==(@@BASE_CALLS@@,@@BASE_CALLS@@)
+ c.execute('CREATE TABLE IF NOT EXISTS bounds_@@RUN_SQL@@(call_id INTEGER PRIMARY KEY,micro INTEGER NOT NULL CHECK(micro>0))')
+ assert c.execute('select count(*) from bounds_@@RUN_SQL@@').fetchone()[0]==0
+main=inspect('minimoi-cos-agent-a');assert main['State']['Running']
+support=['minimoi-proving-db','minimoi-proving-cos','minimoi-proving-model-guard','minimoi-portal-proving']
+original={n:inspect(n) for n in support}
+oldguard=(r/'model-guard.py').read_bytes();worker=None;tunnel=None;paused=False
+record={'started_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'dev_agent_id':main['Id'],'production_changed':False,'model':'@@MODEL_NAME@@'}
+(r/'@@RUN_TAG@@_WINDOW.json').write_text(json.dumps(record,indent=2))
+try:
+ idle();paused=True
+ run(['docker','stop','--timeout','60','minimoi-cos-agent-a'],timeout=75)
+ prior=swap();stable=0
+ for i in range(9):
+  time.sleep(10);gate();current=swap();stable=stable+1 if current<=prior else 0;prior=current
+  print('Resource settling',i+1,'swap_MiB',current,'stable',stable,flush=True)
+  if stable>=2:break
+ else:raise RuntimeError('heavy_start_swap_worsening')
+ (r/'model-guard.py').write_bytes((pkg/'guard.py').read_bytes())
+ for n in support:
+  if not original[n]['State']['Running']:run(['docker','start',n])
+  elif n=='minimoi-proving-model-guard':run(['docker','restart',n])
+ health('minimoi-portal-proving','http://127.0.0.1:5001/health')
+ # Recreate the previous loopback-only Colima transport after a host restart.
+ ip=inspect('minimoi-portal-proving')['NetworkSettings']['Networks']['minimoi-proving-isolated']['IPAddress']
+ import ipaddress,urllib.request
+ assert ipaddress.ip_address(ip).is_private
+ tunnel=subprocess.Popen(['ssh','-F',str(pathlib.Path.home()/'.colima/_lima/colima/ssh.config'),'-o','ControlMaster=no','-o','ControlPath=none','-o','ExitOnForwardFailure=yes','-N','-L',f'127.0.0.1:15001:{ip}:5001','lima-colima'],stdout=subprocess.DEVNULL,stderr=open(r/'@@RUN_TAG@@_TUNNEL.log','x'))
+ expected=json.loads((r/'snapshot.json').read_text())['instance_id']
+ opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+ for _ in range(30):
+  assert tunnel.poll() is None,'tunnel_exited'
+  try:
+   with opener.open('http://127.0.0.1:15001/health',timeout=2) as response: local=json.load(response)
+   assert local.get('proving')=={'environment':'dev','instance_id':expected},'wrong_isolated_portal'
+   break
+  except OSError:time.sleep(.2)
+ else:raise RuntimeError('local_proving_transport_unavailable')
+ print('Local isolated portal transport and instance marker verified.',flush=True)
+
+ probe="import os,psycopg2; c=psycopg2.connect(os.environ['DATABASE_URL']); q=c.cursor(); q.execute(\"select count(*) from guild.mc_turn_ledger where state='claimed'\"); assert q.fetchone()[0]==0; q.execute('select count(*) from guild.mc_turn_barrier'); assert q.fetchone()[0]==0"
+ run(['docker','exec','minimoi-portal-proving','python','-c',probe])
+ worker=subprocess.Popen([python,str(pkg/'worker.py')],stdout=open(r/'@@RUN_TAG@@_WORKER.log','x'),stderr=subprocess.STDOUT)
+ for _ in range(30):
+  assert worker.poll() is None,'worker_exited'
+  fd=os.open(r/'tool-queue/.worker.lock',os.O_RDWR|os.O_CREAT,0o600)
+  try:
+   try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+   except BlockingIOError:break
+  finally:os.close(fd)
+  time.sleep(.1)
+ else:raise RuntimeError('worker_lock_not_held')
+ gate();run(['docker','start','minimoi-proving-agent'])
+ health('minimoi-proving-cos','http://minimoi-proving-agent:18789/healthz')
+ print('Worker verified, Opus agent healthy; starting new normal-chat X4 comparison.',flush=True)
+ subprocess.run([python,str(pkg/'runner.py')],check=True,timeout=620)
+finally:
+ (r/'guard-state/armed.json').unlink(missing_ok=True)
+ errors=[]
+ def cleanup(label,fn):
+  try:fn()
+  except Exception as e:errors.append(label+':'+type(e).__name__)
+ cleanup('stop isolated',lambda:run(['docker','stop','--timeout','60','minimoi-proving-agent'],timeout=75))
+ if worker is not None:
+  worker.terminate()
+  cleanup('worker exit',lambda:worker.wait(timeout=10))
+ if tunnel is not None:
+  tunnel.terminate()
+  cleanup('tunnel exit',lambda:tunnel.wait(timeout=10))
+ cleanup('guard restore',lambda:(r/'model-guard.py').write_bytes(oldguard))
+ for n in reversed(support):
+  if not original[n]['State']['Running']:cleanup('restore '+n,lambda n=n:run(['docker','stop','--timeout','20',n]))
+  elif n=='minimoi-proving-model-guard':cleanup('restore guard runtime',lambda:run(['docker','restart',n]))
+ def restore_main():
+  assert inspect('minimoi-cos-agent-a')['Id']==main['Id']
+  run(['docker','start','minimoi-cos-agent-a'])
+  for _ in range(60):
+   x=subprocess.run(['docker','exec','minimoi-cos-agent-a','node','-e','fetch("http://127.0.0.1:18789/healthz").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'],capture_output=True,timeout=8)
+   if x.returncode==0:return
+   time.sleep(1)
+  raise RuntimeError('normal_dev_health_unverified')
+ if paused:cleanup('regular dev restore',restore_main)
+ record.update({'finished_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'cleanup_errors':errors,'restored_healthy':not errors,'pending_tools':len(list((r/'tool-queue').glob('*.request')))+len(list((r/'tool-queue').glob('*.claimed')))})
+ (r/'@@RUN_TAG@@_WINDOW.json').write_text(json.dumps(record,indent=2))
+ print(json.dumps(record),flush=True)
+ if errors:raise RuntimeError('cleanup_requires_attention')

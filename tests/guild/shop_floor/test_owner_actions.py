@@ -25,6 +25,13 @@ NOW = datetime(2026, 10, 19, 3, 30, tzinfo=timezone.utc)
 API = "/guild-next/api/v1"
 
 
+@pytest.fixture(autouse=True)
+def _reminders_on(monkeypatch):
+    """This module tests reminders themselves, so they are switched on here. They are off by default
+    (MINIMOI_MC_OWNER_REMINDERS); test_owner_reminders_guard.py covers off."""
+    monkeypatch.setattr(oa, 'reminders_enabled', lambda: True)
+
+
 def z(text):
     return datetime.fromisoformat(text.replace('Z', '+00:00'))
 
@@ -35,7 +42,7 @@ def z(text):
     ('/note buy milk', 'buy milk'),
     ('Save a note: the gate code is 4411', 'the gate code is 4411'),
     ('Make a note that the gate code is 4411', 'the gate code is 4411'),
-    ('Could you please write a note saying call Anna back', 'call Anna back'),
+    ('take a note: call Anna back', 'call Anna back'),
     ('Note to self: renew passport', 'renew passport'),
 ])
 def test_note_commands_use_the_cos_grammar(text, payload):
@@ -45,6 +52,7 @@ def test_note_commands_use_the_cos_grammar(text, payload):
 
 @pytest.mark.parametrize('text,due,words', [
     ('Remind me at 9am to call the plumber', '2026-10-19T14:00Z', 'call the plumber'),
+    ('Hey, remind me at 9am to call the plumber', '2026-10-19T14:00Z', 'call the plumber'),
     ('remind me to call the plumber at 9', '2026-10-19T14:00Z', 'call the plumber'),        # 9 and 21 passed: next is 9 am
     ('remind me to take the bins out tonight at 11', '2026-10-19T04:00Z', 'take the bins out'),
     ('Remind me in 20 minutes to check the oven', '2026-10-19T03:50Z', 'check the oven'),
@@ -70,7 +78,7 @@ def test_reminder_after_the_dst_change_uses_standard_time():
 
 
 @pytest.mark.parametrize('text,words', [
-    ('remind me to call mom', 'When should I remind you?'),
+    ('remind me to call mom', 'Say the whole reminder with its time'),
     ('remind me tomorrow to call the bank', 'Say what time'),
     ('remind me at 25:00 to stretch', 'not one I can read'),
     ('remind me in 0 minutes to stretch', 'between one minute and seven days'),
@@ -337,7 +345,7 @@ def test_reminder_without_a_time_asks_and_sends_nothing(cos_portal):
     note = _keep(client, token, 'remind me to call mom')
     body = _ask(client, token, note['request_id']).get_json()
     assert not cos_portal.extra['route'].sent and body['operation'] == {'type': 'reminder_set', 'saved': False}
-    assert 'When should I remind you?' in body['message'] and body['reply_note'] is None
+    assert 'Say the whole reminder with its time' in body['message'] and body['reply_note'] is None
 
 
 def test_ordinary_chat_still_reaches_the_model(cos_portal):
@@ -358,3 +366,46 @@ def test_relative_delay_preserves_elapsed_seconds():
 def test_nonexistent_dst_clock_time_is_refused():
     action = oa.parse('remind me tomorrow at 2:30 am to stretch', z('2027-03-13T18:00:00Z'))
     assert action.refusal and 'does not exist' in action.refusal
+
+
+# ── 19 Oct hotfix: late-night clocks, today's am/pm, recall with a part of the day, day-first + time ──
+
+from zoneinfo import ZoneInfo as _Zone
+
+_CHI = _Zone('America/Chicago')
+
+
+def _mon(hour):
+    return datetime(2026, 10, 19, hour, 0, tzinfo=_CHI).astimezone(timezone.utc)      # Mon 19 Oct
+
+
+@pytest.mark.parametrize('text,hour,local,words', [
+    ('remind me tonight at 12 to lock up', 10, '2026-10-20 00:00', 'lock up'),
+    ('remind me tonight at 12 to lock up', 21, '2026-10-20 00:00', 'lock up'),
+    ('remind me tonight at 12:30 to lock up', 21, '2026-10-20 00:30', 'lock up'),
+    ('remind me tonight at 1 to check the door', 21, '2026-10-20 01:00', 'check the door'),
+    ('remind me tonight at midnight to lock up', 21, '2026-10-20 00:00', 'lock up'),
+    ('remind me tomorrow night at 12 to lock up', 10, '2026-10-21 00:00', 'lock up'),
+    ('remind me tonight at 11 to take the bins out', 10, '2026-10-19 23:00', 'take the bins out'),
+    ('remind me today at 7 to call', 10, '2026-10-19 19:00', 'call'),
+    ('remind me today at 8:30 to call', 14, '2026-10-19 20:30', 'call'),
+    ('remind me at 12 to lock up', 21, '2026-10-20 00:00', 'lock up'),
+    ('remind me at 12:30 to eat', 10, '2026-10-19 12:30', 'eat'),
+    ('remind me tomorrow to call Anna at 5', 10, '2026-10-20 17:00', 'call Anna'),
+    ('remind me on Friday to submit the report at 10 am', 10, '2026-10-23 10:00', 'submit the report'),
+    ('Set a reminder for tomorrow at 9 am to call Anna at noon', 10, '2026-10-20 09:00', 'call Anna at noon'),
+])
+def test_hotfix_times(text, hour, local, words):
+    action = oa.parse(text, _mon(hour))
+    assert action.refusal is None, action.refusal
+    assert action.due.astimezone(_CHI).strftime('%Y-%m-%d %H:%M') == local and action.text == words
+
+
+@pytest.mark.parametrize('text,hour', [
+    ('Remind me about what we decided this morning', 15),
+    ('Remind me about what we decided this morning', 7),
+    ('Can you remind me about the plan for this afternoon?', 10),
+    ("remind me about what's on tonight", 10),
+])
+def test_recall_with_only_a_part_of_the_day_stays_chat(text, hour):
+    assert oa.parse(text, _mon(hour)) is None

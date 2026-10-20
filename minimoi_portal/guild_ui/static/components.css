@@ -634,6 +634,14 @@ body.gu[data-off-record="true"] .mc-hero { filter: grayscale(1); }
 body.gu[data-off-record="true"] .sel-bar, body.gu[data-record-known="false"] .sel-bar { display: none; }
 .mc-blocker { margin: 0 0 var(--gu-s2); padding: 4px 10px; font-size: var(--gu-size-sm); color: var(--gu-mark-blocker-ink); background: var(--gu-mark-blocker-bg); border-radius: var(--gu-radius); display: flex; flex-direction: column; gap: 2px; }
 .mc-blocker[hidden] { display: none; }
+/* Waiting messages (issue #346): one quiet line above the composer, and a small chip under each waiting message. */
+.mc-queue-bar { margin: 0 0 var(--gu-s2); padding: 4px 10px; font-size: var(--gu-size-sm); color: var(--gu-mark-unknown-ink); background: var(--gu-mark-unknown-bg); border-radius: var(--gu-radius); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.mc-queue-bar[data-state="paused"] { color: var(--gu-mark-blocker-ink); background: var(--gu-mark-blocker-bg); }
+.mc-queue-bar[hidden] { display: none; }
+.mc-queue-bar .btn-mini, .mc-queued .btn-mini { color: inherit; border-color: currentColor; }
+.mc-queued { margin: 4px 0 0; color: var(--gu-text-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.mc-queued[data-not-sent] { font-style: italic; }
+@media (max-width: 640px) { .mc-queue-bar .btn-mini, .mc-queued .btn-mini { min-height: var(--gu-target-phone); min-width: 64px; } }
 .mc-current { position: relative; margin: 0 var(--gu-s3); color: var(--gu-text-muted); }
 .mc-history { position: static; }
 .mc-history[open] { flex-basis: 100%; }
@@ -1446,3 +1454,15 @@ body.gu:not([data-page="floor"]):not([data-page="workshop"]) .mc-panel:is([data-
   body.gu .mc-panel[data-mode] [data-mc-voice-export] { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; }
   body.gu .mc-panel[data-mode] [data-mc-voice-export][hidden] { display: none; }
 }
+
+/* Shared compact microphone control on desktop and mobile. */
+.mc-composer .mc-voice [data-voice-label] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.mc-composer .mc-voice { width: 44px; height: 44px; padding: 8px; }
+
+/* Contextual MC is a compact companion. Keep provider comparison on the full
+   Guild chat (and domain voice screens), and omit unavailable privacy actions.
+   Retain the controls in DOM so saved provider and record-state logic still work. */
+body.gu[data-mc-embed] [data-mc-provider-control],
+body.gu .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-provider-control],
+body.gu[data-mc-embed] [data-mc-record][data-private-off],
+body.gu .mc-panel:is([data-mode="floating"], [data-mode="docked"]) [data-mc-record][data-private-off] { display: none !important; }

@@ -27,11 +27,12 @@ def _routes():
     return {m["model_name"]: m for m in _load(GATEWAY_STAGING)["model_list"]}
 
 
-def test_mc_route_is_haiku_on_mcs_own_key_with_no_fallback():
+def test_mc_route_is_opus_5_5_on_mcs_own_key_with_no_fallback():
     mc = _routes()["minimoi-mc-agent"]
-    assert mc["litellm_params"]["model"] == "anthropic/claude-haiku-4-5-20251001"
+    assert mc["litellm_params"]["model"] == "anthropic/claude-opus-5-5"
+    assert mc["model_info"]["base_model"] == "anthropic/claude-opus-5-5"
     assert mc["litellm_params"]["api_key"] == "os.environ/MC_ANTHROPIC_API_KEY"
-    assert mc["model_info"]["id"] == "mc-anthropic-haiku" and "fallback_position" not in mc["model_info"]
+    assert mc["model_info"]["id"] == "mc-anthropic-opus55" and "fallback_position" not in mc["model_info"]
     assert "minimoi-mc-agent" not in str(_load(GATEWAY_STAGING)["router_settings"])
     assert "minimoi-mc-agent" not in GATEWAY_PROD.read_text()
 

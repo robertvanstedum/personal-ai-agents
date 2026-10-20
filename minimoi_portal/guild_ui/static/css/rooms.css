@@ -25,7 +25,7 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
 .rm-people { display: inline-flex; flex: none; }
 .rm-av { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--gu-surface); margin-left: -6px; font: 700 11px var(--gu-font-body); background: var(--gu-nav-bg); color: var(--gu-on-dark); }
 .rm-av[data-kind="agent"] { background: var(--gu-accent); }
-.rm-btn { font: inherit; font-size: var(--gu-size-sm); min-height: 32px; padding: 3px 12px; border-radius: var(--gu-radius-pill); border: 1px solid var(--gu-border-strong); background: var(--gu-surface); color: var(--gu-text); cursor: pointer; white-space: nowrap; flex: none; }
+.rm-btn { font: inherit; font-size: var(--gu-size-sm); min-height: 44px; padding: 6px 10px; border-radius: var(--gu-radius); border: 1px solid var(--gu-border-strong); background: var(--gu-surface); color: var(--gu-text); cursor: pointer; white-space: nowrap; flex: none; }
 .rm-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .rm-more { position: relative; flex: none; }
 .rm-more > summary { list-style: none; }
@@ -214,3 +214,12 @@ body.gu[data-page="rooms"] .mc-pill, body.gu[data-page="rooms"] .mc-phone-bar { 
 @media (max-width: 760px) { .rm .rm-art.area-hero { grid-template-rows: 96px; } .rm .rm-art.area-hero:has(.area-hero-art-wide) { grid-template-columns: minmax(0, 1fr) 42%; } .rm .rm-art.area-hero .area-hero-art.area-hero-art-wide { height: 96px; } }
 .rm .rm-art.area-hero .area-hero-text p.area-hero-title { font: 600 28px/1.15 var(--gu-font-display); margin: 0 0 2px; color: var(--gu-paper-ink, #2b2113); }
 @media (max-width: 760px) { .rm .rm-art.area-hero .area-hero-text p.area-hero-title { font-size: 24px; } }
+
+/* Match Guild controls and provide contextual help at the page header. */
+.rm { font-family: var(--gu-font-body); }
+.rm-head { position: relative; }
+.rm-context-help { position: static; margin: 0; flex: none; }
+.rm-context-help > summary { list-style: none; width: 44px; justify-content: center; }
+.rm-context-help > summary::-webkit-details-marker { display: none; }
+.rm-context-help > p { position: absolute; right: 8px; top: 100%; z-index: 50; width: min(300px, calc(100vw - 32px)); padding: var(--gu-s3); background: var(--gu-surface); border: 1px solid var(--gu-border); border-radius: var(--gu-radius); box-shadow: var(--gu-shadow-float); }
+.rm-manage > summary { margin-top: var(--gu-s2); }

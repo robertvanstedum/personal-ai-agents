@@ -59,6 +59,7 @@ EXPECTED_PROD_MOUNTS = [
     ("cos-agent-a", "/opt/minimoi/scripts", "/minimoi/scripts"),
     ("cos-agent-a", "/opt/minimoi/agent_logs", "/minimoi/agent_logs"),
     ("cos-bot", "/opt/minimoi/cos_memory.md", "/app/data/cos_memory.md"),
+    ("cos-bot", "/opt/minimoi/cos_reminders", "/app/data/cos_reminders"),
     ("cos-bot", "/opt/minimoi/data/model_gateway_receipts.jsonl", "/app/data/model_gateway_receipts.jsonl"),
     ("cos-bot", "/opt/minimoi/data/guild/cos_context.json", "/app/domains/guild/config/cos_context.json"),
     ("cos-scheduler", "/opt/minimoi/data/guild/limits", "/app/runtime/guild/limits"),
@@ -460,14 +461,15 @@ def test_staging_gateway_keeps_production_names_and_settings():
     assert staged == {k: v for k, v in prod["litellm_settings"].items() if k != "callbacks"}
 
 
-def test_staging_cos_agent_route_is_haiku_and_the_rest_follow_the_dev_gateway():
+def test_staging_cos_agent_route_is_opus_5_5_and_the_rest_follow_the_dev_gateway():
     staging, prod, dev = _routes(GATEWAY_STAGING), _routes(GATEWAY_PROD), _routes(GATEWAY_DEV)
     agent = staging["minimoi-cos-agent"]
-    haiku = "anthropic/claude-haiku-4-5-20251001"
-    assert agent["litellm_params"]["model"] == haiku
+    opus = "anthropic/claude-opus-5-5"                # Robert, 19 Oct 2026: Haiku was temporary; Sonnet 5.5, then Opus 5.5
+    assert agent["litellm_params"]["model"] == opus
     # Gateway-only provider key names on staging (the pass-through gap; MC stage C).
     assert agent["litellm_params"]["api_key"] == "os.environ/GATEWAY_ANTHROPIC_API_KEY"
-    assert agent["model_info"]["base_model"] == haiku
+    assert agent["model_info"]["base_model"] == opus
+    assert agent["model_info"]["id"] == "cos-anthropic-opus55-primary"
     assert set(agent["model_info"]) == set(prod["minimoi-cos-agent"]["model_info"])
     assert agent["model_info"]["fallback_position"] == 0
     renamed = {"os.environ/GATEWAY_ANTHROPIC_API_KEY": "os.environ/ANTHROPIC_API_KEY",

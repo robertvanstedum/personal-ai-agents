@@ -101,9 +101,9 @@ def test_saved_library_chat_receipt_failure_uses_actual_js_fallback(hook):
     root=Path(api.__file__).parent;raw=(root/'static/js/conversation.js').read_text()
     start=raw.index('function showAnswer(');function=raw[start:raw.index('\n}',start)+2]
     script='''const fs=require('fs'),vm=require('vm'),assert=require('assert');const input=JSON.parse(fs.readFileSync(0,'utf8'));let shown=null,arrived=0;
-const c={lastAnswered:false,applyHeader(){},platformLine:(who,text)=>({who,text}),announce(){},answerArrived(){arrived++},follow(){},failureLine(){throw Error('must not present a committed Library save as failure')},answerFailed(){throw Error('must not fail successful Library save')}};
-vm.createContext(c);vm.runInContext(input.function,c);c.showAnswer({replaceWith(v){shown=v}},{ok:true,body:input.response});
-assert.equal(c.lastAnswered,true);assert.equal(arrived,1);assert.equal(shown.who,'Library');assert(shown.text.includes('item is saved'));assert(shown.text.includes('could not be kept in the conversation'));
+const c={applyHeader(){},platformLine:(who,text)=>({who,text}),announce(){},answerArrived(){arrived++},follow(){},failureLine(){throw Error('must not present a committed Library save as failure')},answerFailed(){throw Error('must not fail successful Library save')}};
+vm.createContext(c);vm.runInContext(input.function,c);const outcome=c.showAnswer({replaceWith(v){shown=v}},{ok:true,body:input.response},{queued:false});
+assert.equal(outcome.answered,true);assert.equal(outcome.error,null);assert.equal(arrived,1);assert.equal(shown.who,'Library');assert(shown.text.includes('item is saved'));assert(shown.text.includes('could not be kept in the conversation'));
 '''
     result=subprocess.run([node,'-e',script],input=json.dumps({'function':function,'response':response}),text=True,capture_output=True,timeout=10)
     assert result.returncode==0,result.stderr
