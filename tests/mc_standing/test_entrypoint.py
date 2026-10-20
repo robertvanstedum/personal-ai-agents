@@ -56,3 +56,14 @@ def test_dev_fixture_run_without_control_is_paused_fail_safe(tmp_path, capsys):
     # but with no control document the cycle is paused first, and nothing is sent.
     assert run_cycle.main(a) == 0
     assert json.loads(capsys.readouterr().out)["state"] == "paused"
+
+
+def test_ack_control_only_records_the_applied_version_and_sends_nothing(tmp_path, capsys):
+    (tmp_path / "control.json").write_text(json.dumps({"schema": "mc-standing-control/1", "version": 5,
+                                                       "state": "paused", "request_id": None,
+                                                       "updated_at": "2026-10-20T19:00:00+00:00"}))
+    assert run_cycle.main(args(tmp_path) + ["--ack-control-only"]) == 0
+    assert json.loads(capsys.readouterr().out)["applied_state"] == "paused"
+    from core.mc_standing.spool import Spool
+    ack = Spool(tmp_path / "state").read("cycles", "control-ack")
+    assert ack["applied_version"] == 5 and ack["applied_state"] == "paused" and ack["reason"] is None

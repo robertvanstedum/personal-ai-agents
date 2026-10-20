@@ -52,7 +52,17 @@ def main(argv=None) -> int:
     p.add_argument("--disable-file", required=True, type=Path)
     p.add_argument("--details-link")
     p.add_argument("--dev-fixture", action="store_true")
+    p.add_argument("--ack-control-only", action="store_true",
+                   help="read the owner control document, record the worker acknowledgement, exit")
     args = p.parse_args(argv)
+    if args.ack_control_only:
+        # Cheap and frequent (e.g. every minute): makes the owner's pause/resume show as applied
+        # promptly, since the worker itself only runs at 05:40. Reads and sends nothing else.
+        control = Control(args.control_file, args.disable_file, Spool(args.state_root))
+        paused = control.paused()
+        print(json.dumps({"state": "ack", "applied_state": "paused" if paused else "enabled",
+                          "killed": control.killed()}))
+        return 0
     try:
         wl = registry.load(args.watchlist)
     except (OSError, registry.RegistryError) as exc:
