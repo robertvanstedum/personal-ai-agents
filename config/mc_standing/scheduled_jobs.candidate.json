@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "_about": "CANDIDATE entries for config/scheduled_jobs.json, merged at activation (standing v0.3.1 §8a: every new job registers). Kept apart until then so the watchdog never alarms on jobs that are not switched on. Validated by core/jobs/registry.py in tests/mc_standing/test_job_registration.py. At merge, set active_from to the first scheduled run.",
+  "jobs": [
+    {
+      "id": "mc-standing-brief",
+      "name": "MC morning operations brief",
+      "host": "ec2",
+      "schedule": {"text": "daily 05:40 Chicago", "kind": "daily", "at": "05:40", "tz": "America/Chicago"},
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 1800,
+      "grace_s": 12600,
+      "status_file": "mc-standing-brief.json",
+      "owner": "robert",
+      "runbook": "scripts/mc_standing/run_cycle.py"
+    },
+    {
+      "id": "mc-learning-consolidation",
+      "name": "MC nightly learning consolidation (proposals only)",
+      "host": "ec2",
+      "schedule": {"text": "daily 04:40 Chicago, default off", "kind": "daily", "at": "04:40", "tz": "America/Chicago"},
+      "expected_every_s": 86400,
+      "missed_after_s": 180000,
+      "stuck_after_s": 900,
+      "grace_s": 7200,
+      "status_file": "mc-learning-consolidation.json",
+      "owner": "robert",
+      "runbook": "core/mc_standing/consolidation.py"
+    }
+  ]
+}

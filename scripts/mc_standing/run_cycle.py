@@ -24,6 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from core.jobs import registry as jobs_registry, status as jobs_status  # noqa: E402
 from core.mc_standing import registry, runner  # noqa: E402
 from core.mc_standing.control import Control  # noqa: E402
 from core.mc_standing.ingress_client import IngressClient  # noqa: E402
@@ -69,6 +70,9 @@ def main(argv=None) -> int:
                    help="also send the counts-only Telegram copy (off unless given; a token alone never enables it)")
     p.add_argument("--telegram-token-file", type=Path)
     p.add_argument("--telegram-chat-file", type=Path, help="the owner-approved destination chat binding")
+    p.add_argument("--jobs-root", type=Path, help="write the scheduled-jobs status file here")
+    p.add_argument("--job-id", default="mc-standing-brief")
+    p.add_argument("--jobs-registry", type=Path, help="default: config/scheduled_jobs.json")
     p.add_argument("--ack-control-only", action="store_true",
                    help="read the owner control document, record the worker acknowledgement, exit")
     args = p.parse_args(argv)
@@ -94,17 +98,25 @@ def main(argv=None) -> int:
             return 0
         finally:
             os.close(lock_fd)
+    if args.jobs_root:
+        return _with_job_status(args)
+    return _cycle(args)[0]
+
+
+def _emit(doc: dict, code: int) -> tuple[int, dict]:
+    print(json.dumps(doc))
+    return code, doc
+
+
+def _cycle(args) -> tuple[int, dict]:
     try:
         wl = registry.load(args.watchlist)
     except (OSError, registry.RegistryError) as exc:
-        print(json.dumps({"state": "config_error", "reason": str(exc)[:120]}))
-        return 2
+        return _emit({"state": "config_error", "reason": str(exc)[:120]}, 2)
     if any(w.approval_ref.startswith("candidate") for w in wl.watches) and not args.dev_fixture:
-        print(json.dumps({"state": "config_error", "reason": "watchlist_not_approved"}))
-        return 2
+        return _emit({"state": "config_error", "reason": "watchlist_not_approved"}, 2)
     if args.dev_fixture and args.environment != "dev":
-        print(json.dumps({"state": "config_error", "reason": "dev_fixture_only_in_dev"}))
-        return 2
+        return _emit({"state": "config_error", "reason": "dev_fixture_only_in_dev"}, 2)
     token = _token(args.token_file)
     spool = Spool(args.state_root)
     control = Control(args.control_file, args.disable_file, spool)
@@ -117,8 +129,7 @@ def main(argv=None) -> int:
     telegram = None
     if args.telegram_copy:
         if not (args.telegram_token_file and args.telegram_chat_file):
-            print(json.dumps({"state": "config_error", "reason": "telegram_copy_needs_token_and_chat_binding"}))
-            return 2
+            return _emit({"state": "config_error", "reason": "telegram_copy_needs_token_and_chat_binding"}, 2)
         tg_token = _token(args.telegram_token_file)
         chat = _chat_binding(args.telegram_chat_file)
         telegram = {"sender": TelegramBotSender(lambda: tg_token), "destination_id": chat}
@@ -128,10 +139,53 @@ def main(argv=None) -> int:
         ingress=IngressClient(args.ingress_url, lambda: token), destination_binding=args.destination,
         kill=control.killed, paused=control.paused, details_link=args.details_link, telegram=telegram, deps=deps,
         clock=lambda: datetime.now(timezone.utc))
-    print(json.dumps({k: result.get(k) for k in ("cycle_key", "state", "reason", "channels") if k in result}))
-    return 0 if result.get("state") in ("delivered", "paused", "skipped") or result.get("reason") == "already_final" \
-        else 3
+    out = {k: result.get(k) for k in ("cycle_key", "state", "reason", "channels") if k in result}
+    return _emit(out, 0 if result.get("state") in ("delivered", "paused", "skipped")
+                 or result.get("reason") == "already_final" else 3)
 
+
+
+# The scheduled-jobs status contract (core/jobs/status.py): a "running" file at start and an
+# ok/warn/failed file at the end, with fixed phrases and codes only (never brief content).
+_OUTCOME = {"delivered": ("ok", "brief delivered"), "paused": ("warn", "paused by owner"),
+            "skipped": ("warn", "overlapping run skipped"), "delivery_pending": ("warn", "brief delivery pending"),
+            "delivery_unknown": ("warn", "brief delivery unconfirmed"), "held": ("failed", "brief held for operator"),
+            "missed": ("failed", "brief missed")}
+
+
+def _job_outcome(out: dict) -> tuple[str, str, dict]:
+    state = out.get("state") or "error"
+    job_state, summary = _OUTCOME.get(state, ("failed", "brief cycle failed"))
+    results = {"brief": state if re.fullmatch(r"[a-z0-9][a-z0-9_]{0,39}", state) else "error"}
+    telegram = (out.get("channels") or {}).get("telegram")
+    if telegram:
+        results["telegram"] = telegram
+        if job_state == "ok" and telegram != "acknowledged":
+            job_state, summary = "warn", "brief delivered; telegram copy " + telegram.replace("_", " ")
+    return job_state, summary, results
+
+
+def _with_job_status(args) -> int:
+    try:
+        jobs = jobs_registry.load(args.jobs_registry) if args.jobs_registry else jobs_registry.load()
+    except jobs_registry.RegistryError:
+        return _emit({"state": "config_error", "reason": "jobs_registry_unreadable"}, 2)[0]
+    job = jobs.get(args.job_id)
+    if job is None:
+        return _emit({"state": "config_error", "reason": "job_not_registered"}, 2)[0]
+    started = datetime.now(timezone.utc)
+    running = jobs_status.start_run(args.jobs_root, job, started.strftime("%Y%m%dT%H%M%SZ"), started)
+    try:
+        code, out = _cycle(args)
+    except BaseException:
+        jobs_status.finish_run(args.jobs_root, job, running, state="failed", now=datetime.now(timezone.utc),
+                               exit_code=1, summary="brief cycle crashed", results={"brief": "crashed"},
+                               next_due_by=None)
+        raise
+    state, summary, results = _job_outcome(out)
+    jobs_status.finish_run(args.jobs_root, job, running, state=state, now=datetime.now(timezone.utc),
+                           exit_code=code, summary=summary, results=results, next_due_by=None)
+    return code
 
 if __name__ == "__main__":
     raise SystemExit(main())
