@@ -14,6 +14,7 @@
   "base_micro": 0,
   "window_micro": 0,
   "max_new_calls": 20,
+  "max_output_tokens": 0,
   "input_rate": 0,
   "output_rate": 0,
   "expected_model": "anthropic/replace-with-reviewed-model",

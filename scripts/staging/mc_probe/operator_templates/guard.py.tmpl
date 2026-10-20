@@ -15,6 +15,7 @@ BASE_DAY=@@DAY@@
 BASE_CALLS=@@BASE_CALLS@@
 BASE_MICRO=@@BASE_MICRO@@  # Prior actual charges and unresolved reservations remain counted.
 WINDOW_MICRO=@@WINDOW_MICRO@@
+MAX_OUTPUT_TOKENS=@@MAX_OUTPUT_TOKENS@@
 MAX_SECONDS=900
 MAX_BODY=400000
 MODEL='minimoi-cos-agent'
@@ -61,8 +62,8 @@ def admit(body_bytes):
     day=datetime.datetime.now(ZoneInfo('America/Chicago')).date().isoformat()
     if day != BASE_DAY: raise ValueError('review_new_day_required')
     # Pessimistic one token per serialized byte, highest cache-write rate, plus
-    # 2048 formatting tokens and 1024 output tokens. Estimates are not invoices.
-    bound_micro=(body_bytes+2048)*@@INPUT_RATE@@ + 1024*@@OUTPUT_RATE@@
+    # 2048 formatting tokens and the reviewed output cap. Estimates are not invoices.
+    bound_micro=(body_bytes+2048)*@@INPUT_RATE@@ + MAX_OUTPUT_TOKENS*@@OUTPUT_RATE@@
     with LOCK:
         try:
             armed=json.loads(Path('/state/armed.json').read_text())
@@ -85,6 +86,11 @@ def admit(body_bytes):
                 db.execute('INSERT INTO bounds_@@RUN_SQL@@(call_id,micro) VALUES (?,?)',(cur.lastrowid,bound_micro))
         finally: db.close()
     return count+1
+
+def clamp_output(body):
+    completion_limit=body.pop('max_completion_tokens',MAX_OUTPUT_TOKENS)
+    body['max_tokens']=min(int(body.get('max_tokens',MAX_OUTPUT_TOKENS)),int(completion_limit),MAX_OUTPUT_TOKENS)
+    if body['max_tokens']<1:raise ValueError('invalid_token_limit')
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def setup(self):
@@ -110,9 +116,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 print(json.dumps({'event':'unsupported_parameters','names':sorted(set(body)-allowed)}),flush=True)
                 raise ValueError('unsupported_parameter')
             if not isinstance(body.get('messages'),list):raise ValueError('messages_required')
-            completion_limit=body.pop('max_completion_tokens',1024)
-            body['max_tokens']=min(int(body.get('max_tokens',1024)),int(completion_limit),1024)
-            if body['max_tokens']<1:raise ValueError('invalid_token_limit')
+            clamp_output(body)
             evidence=policy_evidence(body['messages'])
             admitted_call=admit(max(n,len(json.dumps(body).encode())))
             print(json.dumps({"event":"admitted","body_bytes":n,"daily_call":admitted_call,**evidence}),flush=True)

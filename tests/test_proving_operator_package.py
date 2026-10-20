@@ -20,7 +20,7 @@ def config(tmp_path):
     c = {k: str(tmp_path / k) for k in renderer.PATH_KEYS}
     c.update(day=datetime.now(ZoneInfo('America/Chicago')).date().isoformat(), run_id='sample-review-1',
              base_calls=2, base_micro=6_000_000, window_micro=10_000_000,
-             max_new_calls=20, input_rate=8, output_rate=20,
+             max_new_calls=20, input_rate=8, output_rate=20, max_output_tokens=1024,
              expected_model='anthropic/example-reviewed-model', key_ref='test-key-reference',
              original_guard_sha256='c' * 64,
              test_image='sha256:' + 'a' * 64, revisions={'sample': 'b' * 40}, fixtures={})
@@ -43,6 +43,7 @@ def test_render_is_private_compilable_and_does_not_execute(tmp_path, config):
 
 @pytest.mark.parametrize('change', [
     {'window_micro': 20_000_000}, {'window_micro': 0}, {'input_rate': 0},
+    {'max_output_tokens': 0}, {'max_output_tokens': 4097}, {'max_output_tokens': True},
     {'base_calls': True}, {'run_id': "x');__import__('os')"},
     {'day': 'tomorrow'}, {'revisions': {'main': 'main'}},
     {'upstream_key': 'must-not-be-in-config'}, {'brief': '/private/sealed/key.md'},
@@ -67,7 +68,9 @@ def test_path_literal_cannot_inject_code(tmp_path, config):
     compile((dest / 'runner.py').read_text(), 'runner', 'exec')
 
 
-def test_guard_retains_history_and_refuses_uncounted_calls(tmp_path, config):
+@pytest.mark.parametrize("cap,admissions", [(1024, 11), (4096, 11)])
+def test_guard_retains_history_and_refuses_uncounted_calls(tmp_path, config, cap, admissions):
+    config["max_output_tokens"] = cap
     dest = tmp_path / 'generated'
     renderer.render(config, dest)
     state = tmp_path / 'state'
@@ -84,9 +87,9 @@ def test_guard_retains_history_and_refuses_uncounted_calls(tmp_path, config):
     with pytest.raises(ValueError, match='not_armed'):
         env['admit'](100000)
     (state / 'armed.json').write_text(json.dumps({'expires_epoch': time.time() + 600}))
-    for _ in range(11):
+    for _ in range(admissions):
         env['admit'](100000)
-    assert db.execute('SELECT SUM(micro) FROM bounds_sample_review_1').fetchone()[0] == 9205504
+    assert db.execute('SELECT SUM(micro) FROM bounds_sample_review_1').fetchone()[0] == admissions * ((100000 + 2048) * 8 + cap * 20)
     with pytest.raises(ValueError, match='mixed_price_budget_limit'):
         env['admit'](100000)
     assert db.execute('SELECT COUNT(*) FROM calls').fetchone()[0] == 13
@@ -107,6 +110,7 @@ def test_guard_retains_history_and_refuses_uncounted_calls(tmp_path, config):
 
 def test_resource_abort_restores_dev_without_starting_model(tmp_path, config, monkeypatch):
     import hashlib
+    import os
     import subprocess
     import shutil
     import types
@@ -163,8 +167,13 @@ def test_resource_abort_restores_dev_without_starting_model(tmp_path, config, mo
         def now(cls, tz=None):
             return cls.fromisoformat(config['day'] + 'T10:00:00').replace(tzinfo=tz)
     monkeypatch.setattr(dt, 'datetime', Morning)
-    with pytest.raises(AssertionError, match='pressure_critical'):
-        exec(compile((dest / 'window.py').read_text(), 'window', 'exec'), {'__file__': str(dest / 'window.py')})
+    previous_umask = os.umask(0o077)
+    os.umask(previous_umask)
+    try:
+        with pytest.raises(AssertionError, match='pressure_critical'):
+            exec(compile((dest / 'window.py').read_text(), 'window', 'exec'), {'__file__': str(dest / 'window.py')})
+    finally:
+        os.umask(previous_umask)
     record = json.loads((state / 'SAMPLE_REVIEW_1_WINDOW.json').read_text())
     assert record['restored_healthy'] is True and record['cleanup_errors'] == []
     assert ['docker', 'start', 'minimoi-cos-agent-a'] in calls
@@ -173,3 +182,19 @@ def test_resource_abort_restores_dev_without_starting_model(tmp_path, config, mo
     assert not (state / 'guard-state/armed.json').exists()
     with sqlite3.connect(state / 'guard-state/model-admission.sqlite') as db:
         assert db.execute('SELECT COUNT(*) FROM calls').fetchone()[0] == 0
+
+
+def test_guard_output_cap_defaults_clamps_and_preserves_lower_requests(tmp_path, config):
+    config['max_output_tokens'] = 4096
+    dest = tmp_path / 'generated'
+    renderer.render(config, dest)
+    env = {'__name__': 'guard_test'}
+    exec(compile((dest / 'guard.py').read_text(), 'guard', 'exec'), env)
+    for body, expected in [({}, 4096), ({'max_tokens': 9000}, 4096),
+                           ({'max_completion_tokens': 9000}, 4096),
+                           ({'max_tokens': 1024}, 1024),
+                           ({'max_tokens': 3000, 'max_completion_tokens': 2000}, 2000)]:
+        env['clamp_output'](body)
+        assert body == {'max_tokens': expected}
+    with pytest.raises(ValueError, match='invalid_token_limit'):
+        env['clamp_output']({'max_tokens': 0})

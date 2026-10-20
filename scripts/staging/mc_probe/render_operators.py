@@ -16,7 +16,7 @@ import re
 PATH_KEYS = ('state_root', 'repo_root', 'python', 'brief', 'voice_probe', 'model_receipt',
              'usage_file', 'source_snapshot', 'source_manifest')
 NUMBER_KEYS = ('base_calls', 'base_micro', 'window_micro', 'max_new_calls',
-               'input_rate', 'output_rate')
+               'input_rate', 'output_rate', 'max_output_tokens')
 OTHER_KEYS = ('day', 'run_id', 'expected_model', 'key_ref', 'test_image', 'revisions', 'fixtures', 'original_guard_sha256')
 
 
@@ -34,6 +34,8 @@ def validate(config):
             raise ValueError('nonnegative_integer_required:' + key)
     if not 0 < config['window_micro'] <= 25_000_000 - config['base_micro']:
         raise ValueError('daily_cap_exceeded')
+    if not 1 <= config['max_output_tokens'] <= 4096:
+        raise ValueError('reviewed_output_cap_required_1_to_4096')
     if not 1 <= config['max_new_calls'] <= 100:
         raise ValueError('bounded_call_count_required')
     if not 1 <= config['input_rate'] <= 1000 or not 1 <= config['output_rate'] <= 1000:

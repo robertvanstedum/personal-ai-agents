@@ -63,6 +63,9 @@ inventing a new voice-state authority.
    cost plus every unresolved reservation (older reservations remain conservatively
    counted). Supply integer micro-USD/token prices from the live gateway, including
    the highest applicable cache-write rate. Example: $8/M = 8 micro-USD/token.
+   Supply reviewed `max_output_tokens` (1–4,096); it sets both the request ceiling
+   and output admission estimate. Independently verify the isolated OpenClaw model
+   `maxTokens` matches this cap; a lower caller limit is preserved by the guard.
    `window_micro + base_micro` must not exceed 25,000,000. The identical window
    amount is reserved by the normal-chat runner. Do not release unknown costs.
 2. Render, without running the generated code:
@@ -87,7 +90,7 @@ inventing a new voice-state authority.
    config, verifies the exact portal instance at `127.0.0.1:15001`, then starts and
    verifies the bounded worker **before** starting the agent or arming. No host-port
    publishing or credential changes are needed. The guard admits at most the reviewed
-   call count, 400 KB/request, 1,024 output tokens, and the reviewed spend allowance.
+   call count, 400 KB/request, the configured output-token cap, and the reviewed spend allowance.
 6. In `finally`, it disarms, stops the isolated agent/worker/tunnel, restores the old
    guard, restores support container states, restarts the same regular dev agent,
    verifies its health, and records cleanup failures and pending tools. Inspect the
