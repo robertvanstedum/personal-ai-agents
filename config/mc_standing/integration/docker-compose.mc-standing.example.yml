@@ -1,0 +1,76 @@
+# INTEGRATION PATCH (example, not wired into any deploy script) — standing v0.3.1 §§3, 9, 11.
+# Owner of compose/deploy: Codex. Claude Code proposes; Codex adapts, reviews and deploys.
+# Include only at approved activation, the same opt-in way as docker-compose.staging-jobs.yml.
+#
+# One long-running worker with its own scheduler (scripts/mc_standing/schedule_loop.py):
+# acknowledges owner control every minute when idle, runs the brief 05:40–09:00 America/Chicago.
+# Needs the IANA tz database in the image (python slim images: pip install tzdata).
+
+services:
+  mc-standing:
+    image: ${MC_STANDING_IMAGE:?image with the repo code at /app and Python deps; Codex decides}
+    container_name: minimoi-mc-standing
+    restart: unless-stopped
+    working_dir: /app
+    command:
+      - python3
+      - scripts/mc_standing/schedule_loop.py
+      - --
+      - --watchlist
+      - /app/config/mc_standing/watchlist.json          # the APPROVED watchlist, not the candidate
+      - --state-root
+      - /state
+      - --source-root
+      - /sources
+      - --environment
+      - prod
+      - --policy-id
+      - ${MC_STANDING_POLICY_ID:?approved policy id}
+      - --destination
+      - ${MC_STANDING_DESTINATION:?owner-approved MC Operations conversation binding}
+      - --ingress-url
+      - http://cos-scheduler:8769/internal/mc/v1/standing/events
+      - --token-file
+      - /run/secrets/mc_standing_ingress_token
+      - --control-file
+      - /control/mc-standing-control.json
+      - --disable-file
+      - /control/DISABLED
+      - --details-link
+      - https://minimoi.ai/app/guild/mc-operations
+      - --jobs-root
+      - /jobs
+      - --max-wall-ms
+      - "60000"
+      - --max-rss-kb
+      - "262144"
+      # Optional Telegram copy: add only after Robert enables it (a token alone never does):
+      # - --telegram-copy
+      # - --telegram-token-file
+      # - /run/secrets/mc_standing_telegram_token
+      # - --telegram-chat-file
+      # - /run/secrets/mc_standing_telegram_chat
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-standing/state:/state            # rw, 0700, backed up (runbook)
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-standing/sources:/sources:ro     # sanitized status/snapshot files only
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-standing/control:/control:ro     # written by the owner control endpoint
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/jobs:/jobs                          # scheduled-jobs status contract
+    secrets:
+      - mc_standing_ingress_token
+    environment:
+      - TZ=America/Chicago
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 384m
+    cpus: 0.25
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # No database credential, no model key, no Docker socket, no host network.
+
+secrets:
+  mc_standing_ingress_token:
+    file: ${MINIMOI_ROOT:-/opt/minimoi}/secrets/mc_standing_ingress_token     # 0600, 32–256 chars
