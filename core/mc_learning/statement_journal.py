@@ -157,7 +157,7 @@ class StatementJournal:
         try:
             # Existing approved root only; never invent a second memory root.
             fds.append(fs.open_root(str(self.root)))
-            for name in ('turns', 'owner-statements', self.partition):
+            for name in ('turns', '.owner-statements', self.partition):
                 parent = fds[-1]
                 fds.append(fs.open_subdir(parent, name, create=write))
                 if write:
@@ -300,7 +300,7 @@ class StatementJournal:
             raise Corrupt('statement_day_identity_invalid') from None
         selected = [r for r in rows if _date(r['payload']['captured_at']).astimezone(self.zone).date().isoformat() == day]
         meta = dict(identity, kind='owner-statements', chair='MC',
-            source=f'turns/owner-statements/{self.partition}/{day}.jsonl',
+            source=f'turns/.owner-statements/{self.partition}/{day}.jsonl',
             source_hash=_hash(raw), scope=self.scope, tier='raw', tags=['owner-statements'], events=[],
             statement_count=len(selected), through_commit_sequence=max((r['sequence'] for r in selected), default=0))
         record.check(meta)

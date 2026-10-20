@@ -54,7 +54,7 @@ class StatementJournalTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.journal = self.new_journal()
-        self.folder = self.root/'turns'/'owner-statements'/self.journal.partition
+        self.folder = self.root/'turns'/'.owner-statements'/self.journal.partition
 
     def new_journal(self, **kwargs):
         return StatementJournal(self.root,principal_id='owner',environment='dev',scope_id='robert',
