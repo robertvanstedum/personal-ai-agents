@@ -1,0 +1,10 @@
+{
+  "name": "mc-cutoff-delivery",
+  "version": "0.1.0",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.mjs"
+    ]
+  }
+}

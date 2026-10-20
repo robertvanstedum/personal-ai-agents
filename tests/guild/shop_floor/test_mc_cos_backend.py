@@ -273,3 +273,10 @@ def test_a_missing_or_invalid_cos_turn_id_is_never_guessed(bad):
         payload["turn_id"] = bad
     backend, _ = _backend(post=Resp(200, payload))
     assert backend.turn(REQ).trace is None
+
+
+@pytest.mark.parametrize("source,reason,expected",[("openclaw_connector","output_limit","length"),("model","output_limit",None),("openclaw_connector","timeout",None)])
+def test_cutoff_receipt_only_accepts_exact_connector_evidence(source,reason,expected):
+    backend,_=_backend(post=Resp(200,{"reply":"Partial analysis", "completion":{"state":"cut_off","reason":reason,"source":source}}))
+    result=backend.turn(TurnRequest("conversation", "Check", "note", correlation_id="correlation"))
+    assert (result.trace or {}).get("finish_reason")==expected

@@ -87,6 +87,8 @@ def outcome_of(body) -> dict:
             out[key] = body[key]
     if _code(body.get("error")):
         out["reason"] = body["error"]
+    if body.get("finish_reason") == "length":
+        out["finish_reason"] = "length"
     note = body.get("reply_note")
     if isinstance(note, dict) and type(note.get("id")) is int:
         out["reply_note_id"] = note["id"]

@@ -1876,7 +1876,10 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         result = services.mc.turn(req)
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None
-        if delivery and result.status == "answered":
+        if delivery and result.status == "answered" and (result.trace or {}).get("finish_reason") == "length":
+            # Preserve the incomplete answer as model text, but never create a package from it.
+            delivery_operation = {'type':'artifact_bundle','saved':False,'state':'refused','reason':'output_limit'}
+        elif delivery and result.status == "answered":
             from .mc import TurnResult
             try:
                 if (result.trace or {}).get('finish_reason') != 'stop':
@@ -1897,7 +1900,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                 text = "The file package could not be confirmed. Have its stored result checked before sending a new request."
                 delivery_operation = {'type':'artifact_bundle','saved':False,'state':'uncertain'}
             result = TurnResult('answered', result.backend_kind, text=text, usage=result.usage, trace=result.trace)
-        if board_plan is not None and result.status == "answered":
+        if board_plan is not None and result.status == "answered" and (result.trace or {}).get("finish_reason") != "length":
             from .mc import TurnResult
             try:
                 board_proposal = board_outcomes.parse(board_plan, result.text)
@@ -1913,7 +1916,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             from .jobs_api import make_hook
             hook = make_hook(services, conv, principal, note, note_id, attachment_ids) if board_plan is None and not delivery else None
             try:
-                decision = hook.decide(result.text, clean=True) if hook is not None else None
+                decision = hook.decide(result.text, clean=(result.trace or {}).get("finish_reason", "stop") == "stop") if hook is not None else None
             except Exception:
                 _mc_log().exception("mc turn %s: the job proposal could not be handled", turn_id)
                 decision = None
@@ -1930,6 +1933,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             services.mc_health.invalidate()
     answer = {"turn_id": turn_id, "status": result.status, "backend_kind": result.backend_kind,
               "failure_class": result.failure_class, "reply_note": None, "observed_at": now_iso()}
+    if (result.trace or {}).get("finish_reason") == "length":
+        answer["finish_reason"] = "length"
     if (result.trace or {}).get("cos_turn_id"):
         # The backend's own turn id (CoS: the gateway routing-receipt id), for exact cost settlement.
         answer["backend_turn_id"] = result.trace["cos_turn_id"]
@@ -1944,7 +1949,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             # The model packet is deliberately not kept as conversational prose. The verified
             # receipt is authored by the platform; model backend/usage remain on the turn for cost attribution.
             kept = (floor.add_note(reply_key, result.text, GUILD_PLATFORM, area=ctx.get("area"),
-                                   item_ref=ctx.get("item_ref"), page=ctx.get("page")) if delivery else
+                                   item_ref=ctx.get("item_ref"), page=ctx.get("page")) if delivery and (result.trace or {}).get("finish_reason") != "length" else
                     keep_reply(floor, result, request_id=reply_key, area=ctx.get("area"),
                                item_ref=ctx.get("item_ref"), page=ctx.get("page")))
             outcome = getattr(kept, "outcome", None)

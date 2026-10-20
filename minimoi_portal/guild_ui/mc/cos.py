@@ -98,6 +98,8 @@ class ChiefOfStaffBackend(MasterCraftsmanBackend):
         if status == 200 and isinstance(payload, dict) and str(payload.get("reply") or "").strip():
             completion = payload.get("completion")
             trace = {"finish_reason":"stop"} if completion == {"state":"complete", "source":"openclaw_connector"} else {}
+            if completion == {"state":"cut_off", "reason":"output_limit", "source":"openclaw_connector"}:
+                trace = {"finish_reason":"length"}
             # CoS's own turn id is the gateway routing-receipt id for this turn's model calls,
             # so cost can be settled against exact receipts rather than a time window.
             cos_turn_id = _uuid_or_none(payload.get("turn_id"))

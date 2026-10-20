@@ -121,3 +121,19 @@ def test_expired_delivery_does_not_regenerate(delivery,monkeypatch):
  c,t,n,r=ask(delivery)
  assert r.status_code==410 and r.get_json()['error']=='delivery_expired'
  assert delivery.extra['runtime'].sent==[]
+
+
+def test_cutoff_delivery_preserves_partial_answer_without_creating_package(delivery):
+ ledger=FakeLedger();_ledger_on(delivery,ledger)
+ partial='The analysis began, but the model reached its output limit.'
+ delivery.extra['runtime'].answer=lambda body,headers:Resp(200,json.dumps({'choices':[{'message':{'role':'assistant','content':partial},'finish_reason':'length'}]}),{'X-MC-Correlation-Id':headers.get('X-MC-Correlation-Id')})
+ c,t,n,r=ask(delivery);body=r.get_json()
+ assert body['reply_note']['text']==partial
+ assert body['reply_note']['author_kind']=='agent'
+ assert body['finish_reason']=='length'
+ assert body['operation']=={'type':'artifact_bundle','saved':False,'state':'refused','reason':'output_limit'}
+ assert ledger.finished[0][1]['finish_reason']=='length'
+ from pathlib import Path
+ from minimoi_portal.guild_ui.conversations import conversations_of
+ root=Path(conversations_of(delivery.app.extensions['guild_ui_next']['services']).dir)
+ assert not list((root/'deliveries').glob('*.zip'))

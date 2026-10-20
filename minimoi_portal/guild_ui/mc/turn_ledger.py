@@ -105,6 +105,7 @@ _OUTCOME = {
     "turn_id": _ID, "backend_turn_id": _ID, "request_id": _ID,
     "backend_kind": re.compile(r"(?:cos|openclaw|grok|platform|stub)"),
     "status": _WORD, "failure_class": _WORD, "reason": _WORD,
+    "finish_reason": re.compile(r"length"),
     "reply_note_id": int, "http_status": int, "history_saved": bool,
 }
 _OPERATION = {"type": _WORD, "saved": bool, "id": int, "repeated": bool, "reason": _WORD, "state": _WORD}

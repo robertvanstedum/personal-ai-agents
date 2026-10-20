@@ -52,7 +52,8 @@
   "plugins": {
     "load": {
       "paths": [
-        "/opt/minimoi/openclaw-plugins/cos-bounded-search"
+        "/opt/minimoi/openclaw-plugins/cos-bounded-search",
+        "/opt/minimoi/openclaw-plugins/mc-cutoff-delivery"
       ]
     },
     "entries": {
@@ -65,6 +66,9 @@
             "enabled": false
           }
         }
+      },
+      "mc-cutoff-delivery": {
+        "enabled": true
       }
     }
   },
