@@ -23,7 +23,7 @@ class ReceiptPostgresTests(PostgresFixture, unittest.TestCase):
         self.intent = EffectIntent(str(uuid4()), ToolRequest('guest.reject', 1, b'{"id":"synthetic"}'),
                                    grant_id='grant', reservation_ids=(str(uuid4()),))
         with self.connect() as conn, conn.cursor() as cur:
-            cur.execute('TRUNCATE guild.mc_action_events,guild.mc_action_receipts')
+            cur.execute('TRUNCATE guild.mc_action_events,guild.mc_action_receipts CASCADE')
             cur.execute('CREATE TABLE IF NOT EXISTS guild.mc_receipt_fixture (id text PRIMARY KEY)')
             cur.execute('TRUNCATE guild.mc_receipt_fixture')
 
