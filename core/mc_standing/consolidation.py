@@ -149,7 +149,10 @@ def run_consolidation(*, spool, eligibility, claims, extractor, admission, ingre
         return {"state": "paused"}
 
     # 2. Select: a contiguous, commit-ordered prefix within the source and token bounds.
-    snap = eligibility.eligible(state.get("cursor"), MAX_SOURCES)
+    try:
+        snap = eligibility.eligible(state.get("cursor"), MAX_SOURCES)
+    except Exception:
+        return {"state": "deferred", "reason": "eligibility_unavailable"}   # before any claim: nothing held
     sources = list(snap.get("sources", []))[:MAX_SOURCES]
     if not sources:
         return {"state": "nothing_new", "coverage": snap.get("coverage")}
@@ -171,6 +174,8 @@ def run_consolidation(*, spool, eligibility, claims, extractor, admission, ingre
             revoked.append({"id": src["id"], "edition": src["edition"], "reason_code": "revoked"})
             taken.append(src)
             continue
+        except Exception:
+            return {"state": "deferred", "reason": "source_read_unavailable"}  # before any claim
         if text is None:
             revoked.append({"id": src["id"], "edition": src["edition"], "reason_code": "missing"})
             taken.append(src)
