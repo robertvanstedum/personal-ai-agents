@@ -106,6 +106,8 @@ def load_manifest(path, *, mode: str) -> dict:
         raise EvalRefused("held_out_count_not_12")
     if mode == "dry_run" and not all(c.synthetic for c in active):
         raise EvalRefused("dry_run_requires_synthetic_cases")
+    if mode == "live" and any(c.fixture_ref.startswith("pending:") for c in active):
+        raise EvalRefused("fixtures_pending")
     if mode == "live":
         for name, digest in sorted(doc.get("file_sha256", {}).items()):
             if _sha256_file(path.parent / name) != digest:

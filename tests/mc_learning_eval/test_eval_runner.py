@@ -239,3 +239,10 @@ def test_runner_source_holds_no_sealed_case_ids_or_text():
     import inspect
     src = inspect.getsource(ev)
     assert not any(f"C{i:02d}" in src for i in range(1, 13)) and "F01" not in src
+
+
+def test_live_mode_refuses_placeholder_fixtures(tmp_path):
+    doc = manifest_doc()
+    doc["cases"][0]["fixture_ref"] = "pending:S01"
+    with pytest.raises(ev.EvalRefused, match="fixtures_pending"):
+        ev.load_manifest(write_manifest(tmp_path, doc), mode="live")
