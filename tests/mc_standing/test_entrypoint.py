@@ -67,3 +67,53 @@ def test_ack_control_only_records_the_applied_version_and_sends_nothing(tmp_path
     from core.mc_standing.spool import Spool
     ack = Spool(tmp_path / "state").read("cycles", "control-ack")
     assert ack["applied_version"] == 5 and ack["applied_state"] == "paused" and ack["reason"] is None
+
+
+def _control(tmp_path, state="paused", version=6):
+    (tmp_path / "control.json").write_text(json.dumps({"schema": "mc-standing-control/1", "version": version,
+                                                       "state": state, "request_id": None,
+                                                       "updated_at": "2026-10-20T19:00:00+00:00"}))
+
+
+def test_ack_only_never_acknowledges_for_an_active_worker(tmp_path, capsys):
+    """Codex on b5af0b2f: while a cycle holds the lock, the scheduler must not report the pause
+    as applied; the running cycle acknowledges at its own checkpoint."""
+    import fcntl
+    from core.mc_standing.spool import Spool
+    spool = Spool(tmp_path / "state")
+    _control(tmp_path)
+    fd = os.open(spool.root / ".cycle.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)                       # an active cycle in another process
+    try:
+        assert run_cycle.main(args(tmp_path) + ["--ack-control-only"]) == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out == {"state": "worker_active", "in_flight": True,
+                       "note": "the running cycle acknowledges at its next checkpoint"}
+        assert spool.read("cycles", "control-ack") is None
+    finally:
+        os.close(fd)
+    assert run_cycle.main(args(tmp_path) + ["--ack-control-only"]) == 0     # idle now
+    assert json.loads(capsys.readouterr().out)["in_flight"] is False
+    assert spool.read("cycles", "control-ack")["applied_version"] == 6
+
+
+def test_running_cycle_marks_itself_in_flight_and_acknowledges_at_its_checkpoint(tmp_path):
+    from core.mc_standing import runner
+    from core.mc_standing.control import Control
+    from core.mc_standing.spool import Spool
+    from tests.mc_standing.test_spool_findings_runner import NOW, FakeIngress, _status, _watchlist
+    spool = Spool(tmp_path / "state")
+    _status(tmp_path / "src")
+    _control(tmp_path, state="paused", version=9)
+    control = Control(tmp_path / "control.json", tmp_path / "DISABLED", spool)
+    seen = []
+
+    def paused():
+        seen.append(spool.read("cycles", "worker-status")["state"])
+        return control.paused()
+    res = runner.run_cycle(spool=spool, watchlist=_watchlist(), policy_id="p0", environment="prod", now=NOW,
+                           source_root=tmp_path / "src", ingress=FakeIngress(),
+                           destination_binding="owner:mc-operations", kill=control.killed, paused=paused)
+    assert res["state"] == "paused" and seen and set(seen) == {"running"}
+    assert spool.read("cycles", "control-ack")["applied_version"] == 9
+    assert spool.read("cycles", "worker-status")["state"] == "idle"

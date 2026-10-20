@@ -13,6 +13,7 @@ ended failed, held or with delivery still pending/unknown (the next run reconcil
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import stat
@@ -58,11 +59,25 @@ def main(argv=None) -> int:
     if args.ack_control_only:
         # Cheap and frequent (e.g. every minute): makes the owner's pause/resume show as applied
         # promptly, since the worker itself only runs at 05:40. Reads and sends nothing else.
-        control = Control(args.control_file, args.disable_file, Spool(args.state_root))
-        paused = control.paused()
-        print(json.dumps({"state": "ack", "applied_state": "paused" if paused else "enabled",
-                          "killed": control.killed()}))
-        return 0
+        # It acknowledges only for an idle worker: it must hold the cycle lock (non-blocking). An
+        # active cycle holds the lock and acknowledges at its own next checkpoint, so a pause is
+        # never reported applied while work is still in flight.
+        spool = Spool(args.state_root)
+        lock_fd = os.open(spool.root / ".cycle.lock", os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                print(json.dumps({"state": "worker_active", "in_flight": True,
+                                  "note": "the running cycle acknowledges at its next checkpoint"}))
+                return 0
+            control = Control(args.control_file, args.disable_file, spool)
+            paused = control.paused()
+            print(json.dumps({"state": "ack", "in_flight": False,
+                              "applied_state": "paused" if paused else "enabled", "killed": control.killed()}))
+            return 0
+        finally:
+            os.close(lock_fd)
     try:
         wl = registry.load(args.watchlist)
     except (OSError, registry.RegistryError) as exc:

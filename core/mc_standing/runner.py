@@ -77,9 +77,18 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return {"cycle_key": key, "state": "skipped", "reason": "overlap"}
-        return _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root,
-                           ingress, destination_binding, kill, paused, details_link, (learning_source, learning_principal),
-                           deps, clock)
+        # Explicit in-flight status: while this is "running", only this worker acknowledges the
+        # owner's control document (at its checkpoints); the idle ack path stays out.
+        spool.put_state("cycles", "worker-status", {"state": "running", "cycle_key": key,
+                                                    "since": clock().isoformat()})
+        try:
+            return _run_locked(spool, watchlist, policy_id, environment, now, local, key, source_root,
+                               ingress, destination_binding, kill, paused, details_link,
+                               (learning_source, learning_principal),
+                               deps, clock)
+        finally:
+            spool.put_state("cycles", "worker-status", {"state": "idle", "cycle_key": key,
+                                                        "since": clock().isoformat()})
     finally:
         os.close(lock_fd)
 
