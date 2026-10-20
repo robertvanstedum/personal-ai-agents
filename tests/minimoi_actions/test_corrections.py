@@ -32,7 +32,7 @@ class CorrectionTests(unittest.TestCase):
     def annotate(self, target, *, approved=False, kind='correction', repeats=(), confirmed=(),topic='relabelled'):
         source = next(r['payload'] for r in self.rows if r['payload']['statement_id']==target)
         data = dict(schema='mc-statement-annotation/1',annotation_id=new_ulid(),statement_id=target,
-            span_key=source['span_key'],principal_id='owner',environment='dev',scope_id=source['scope_id'],
+            span_key=source['span_key'],base_revision='0'*64,principal_id='owner',environment='dev',scope_id=source['scope_id'],
             kind=kind,topic=topic,repeat_of=list(repeats),confirmed_repeat_of=list(confirmed),
             actor_id='owner' if approved else 'mc',recorded_at=(self.now-timedelta(minutes=1)).isoformat(),
             owner_receipt_id=str(uuid4()) if approved else None)

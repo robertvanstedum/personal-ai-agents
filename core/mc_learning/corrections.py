@@ -20,7 +20,7 @@ from .statement_journal import _encode, _decode, _hash, _date, _scope, validate_
 
 _ULID = re.compile(r'[0-9A-HJKMNP-TV-Z]{26}')
 _FIELDS = frozenset('schema annotation_id statement_id span_key principal_id environment scope_id '
-    'kind topic repeat_of confirmed_repeat_of actor_id recorded_at owner_receipt_id'.split())
+    'kind topic repeat_of confirmed_repeat_of actor_id recorded_at owner_receipt_id base_revision'.split())
 
 
 @dataclass(frozen=True, repr=False)
@@ -38,6 +38,7 @@ class Annotation:
                     or type(p['annotation_id']) is not str or not _ULID.fullmatch(p['annotation_id'])
                     or not _uuid(p['statement_id']) or type(p['span_key']) is not str
                     or not re.fullmatch('[0-9a-f]{64}',p['span_key']) or not _scope(p['scope_id'])
+                    or type(p['base_revision']) is not str or not re.fullmatch('[0-9a-f]{64}',p['base_revision'])
                     or not _identifier(p['principal_id']) or p['environment'] not in ('dev','prod')
                     or p['kind'] not in ('direction','correction','decision')
                     or type(p['topic']) is not str or len(p['topic']) > 160
