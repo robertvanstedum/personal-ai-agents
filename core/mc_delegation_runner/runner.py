@@ -35,6 +35,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -86,6 +87,27 @@ def _task_name(request_id: str, generation: int) -> str:
     return f"{request_id}-g{generation}"
 
 
+# The child starts behind a barrier (R-F1): it waits for one "G" byte on stdin, sent only after
+# its process group and identity are durably recorded. If the runner dies first, the child reads
+# EOF and exits without starting the agent. After "G" it swaps stdin for /dev/null and execs.
+_BARRIER = ("import os,sys\n"
+            "if os.read(0, 1) != b'G':\n"
+            "    os._exit(97)\n"
+            "fd = os.open(os.devnull, os.O_RDONLY); os.dup2(fd, 0); os.close(fd)\n"
+            "os.execvp(sys.argv[1], sys.argv[1:])\n")
+
+
+def _identity(pid: int) -> str | None:
+    """Process group and start time of ``pid`` (R-F2), or None if it is gone."""
+    try:
+        out = subprocess.run(["ps", "-o", "pgid=,lstart=", "-p", str(pid)], capture_output=True, text=True,
+                             timeout=5, env={"PATH": "/bin:/usr/bin", "LC_ALL": "C"})
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    text = " ".join(out.stdout.split())
+    return text or None
+
+
 def _group_alive(pgid: int) -> bool:
     try:
         os.killpg(pgid, 0)
@@ -125,6 +147,11 @@ def _write_atomic(path: Path, data: bytes):
         os.fsync(fh.fileno())
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)
+    dfd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dfd)                    # the rename itself is durable
+    finally:
+        os.close(dfd)
 
 
 def _write_json(path: Path, doc: dict):
@@ -198,6 +225,8 @@ class _BoundedCapture:
 
     def __init__(self, pipe, log_path: Path, limit: int):
         self.pipe, self.limit, self.written, self.exceeded = pipe, limit, 0, threading.Event()
+        self.error: str | None = None
+        self.completed = False
         self.log = open(log_path, "xb")
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
@@ -215,12 +244,20 @@ class _BoundedCapture:
                     self.written += min(room, len(chunk))
                 if len(chunk) > room:
                     self.exceeded.set()
-        except OSError:
-            pass
+        except OSError as exc:
+            self.error = f"capture_read_{type(exc).__name__}"
         finally:
-            self.log.flush()
-            os.fsync(self.log.fileno())
-            self.log.close()
+            try:
+                self.log.flush()
+                os.fsync(self.log.fileno())
+                self.log.close()
+                self.completed = self.error is None
+            except OSError as exc:
+                self.error = self.error or f"capture_write_{type(exc).__name__}"
+
+    @property
+    def ok(self) -> bool:
+        return self.completed and not self.thread.is_alive()
 
     def finish(self, timeout: float):
         self.thread.join(timeout)
@@ -245,10 +282,20 @@ def _collect(cfg, env, task, task_dir, status, exit_code) -> list:
 def _resume(dispatcher, cfg, env, task, stage) -> dict:
     """A reclaim after a crash: finish from the last durable stage, never rerun the work."""
     task_dir = Path(cfg.workspace_root) / task
+    if stage["stage"] == "preparing":
+        # The child was never let past the barrier (no "started" stage): nothing ran. Rebuild.
+        if task_dir.exists():
+            workspace.remove(task_dir, Path(cfg.workspace_root))
+        _stage_path(cfg, task).unlink()
+        return None
     if stage["stage"] == "started":
-        pgid = stage.get("pgid")
+        pgid, identity = stage.get("pgid"), stage.get("identity")
         if isinstance(pgid, int) and pgid > 1 and _group_alive(pgid):
-            _kill_group(pgid, cfg.kill_grace_s)          # orphaned from the crashed runner
+            if identity and _identity(pgid) == identity:
+                _kill_group(pgid, cfg.kill_grace_s)      # verified: our orphan from the crashed runner
+            else:                                        # PID reuse or a lost leader: never signal blindly
+                return _finish(dispatcher, cfg, env, "interrupted", [],
+                               {"code": "process_identity_unverified", "base_ref": env.ref}, resumed=True)
         artifacts = _collect(cfg, env, task, task_dir, "interrupted", None)
         return _finish(dispatcher, cfg, env, "interrupted", artifacts,
                        {"code": "child_outcome_unknown", "base_ref": env.ref}, resumed=True)
@@ -292,7 +339,14 @@ def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> di
     task = _task_name(env.request_id, env.generation)
     stage = _read_stage(cfg, task)
     if stage is not None:
-        return _resume(dispatcher, cfg, env, task, stage)
+        resumed = _resume(dispatcher, cfg, env, task, stage)
+        if resumed is not None:
+            return resumed
+    elif (Path(cfg.workspace_root) / task).exists():
+        # A workspace with no stage at all was not made by this runner's protocol: never assume
+        # nothing ran, never delete it. Report and keep it for inspection (R-F3).
+        return _finish(dispatcher, cfg, env, "interrupted", [],
+                       {"code": "workspace_without_stage", "base_ref": env.ref}, resumed=True)
 
     if env.actor not in cfg.actors or env.scope not in cfg.scopes:
         return _finish(dispatcher, cfg, env, "refused", [], {"code": "runner_not_capable"})
@@ -301,9 +355,7 @@ def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> di
         return _finish(dispatcher, cfg, env, "refused", [], {"code": "cost_limit_unenforceable"})
 
     dispatcher.heartbeat(cfg.runner_id, state="busy", capabilities=cfg.caps())
-    task_root = Path(cfg.workspace_root)
-    if (task_root / task).exists():     # prepared by a runner that crashed before spawning: nothing ran
-        workspace.remove(task_root / task, task_root)
+    _write_json(_stage_path(cfg, task), {"stage": "preparing"})      # durable before the workspace exists
     try:
         task_dir = workspace.prepare(cfg.workspace_root, Path(cfg.repositories[env.repository]), task, env.ref)
     except workspace.WorkspaceError as exc:
@@ -320,11 +372,16 @@ def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> di
     proc, capture = None, None
     status, outcome_local = None, None
     try:
-        _write_json(_stage_path(cfg, task), {"stage": "started", "pgid": None})
-        proc = subprocess.Popen(argv, cwd=task_dir, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, env=child_env, start_new_session=True)
-        _write_json(_stage_path(cfg, task), {"stage": "started", "pgid": proc.pid})
+        proc = subprocess.Popen([sys.executable, "-c", _BARRIER, *argv], cwd=task_dir, stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=child_env,
+                                start_new_session=True)
         capture = _BoundedCapture(proc.stdout, log_path, cfg.max_output_bytes)
+        identity = _identity(proc.pid)
+        if identity is None:
+            raise RuntimeError("child_identity_unavailable")
+        _write_json(_stage_path(cfg, task), {"stage": "started", "pgid": proc.pid, "identity": identity})
+        proc.stdin.write(b"G")                           # only now may the agent start
+        proc.stdin.close()
         dispatcher.progress(env.request_id, env.generation, phase="executing")
         last_renew = time.monotonic()
         while proc.poll() is None:
@@ -361,6 +418,12 @@ def run_once(dispatcher, cfg: RunnerConfig, *, now=_now, sleep=time.sleep) -> di
         return {"state": outcome_local, "request_id": env.request_id, "delivered": False}
     if capture.exceeded.is_set():
         status = "output_limit"         # a burst written just before exiting still counts
+    if not capture.ok:
+        # Missing or unfinished evidence: an exit code of 0 cannot stand in for it (R-F4).
+        _write_json(_stage_path(cfg, task), {"stage": "exited", "status": "failed", "exit_code": proc.returncode})
+        return _finish(dispatcher, cfg, env, "failed", [],
+                       {"code": capture.error or "capture_incomplete", "exit_code": proc.returncode,
+                        "base_ref": env.ref}, workspace_dir=task_dir)
     if status is None:
         status = "completed" if proc.returncode == 0 else "failed"
     _write_json(_stage_path(cfg, task), {"stage": "exited", "status": status, "exit_code": proc.returncode})

@@ -423,13 +423,30 @@ def test_crash_while_child_running_is_interrupted_and_orphans_are_stopped(tmp_pa
     assert not _alive(pid)
 
 
-def test_workspace_prepared_but_never_started_is_rebuilt_not_failed(tmp_path, mirror, monkeypatch):
+def test_workspace_prepared_but_never_started_is_rebuilt(tmp_path, mirror, monkeypatch):
+    """A durable 'preparing' stage without 'started' means the child never passed the barrier."""
     path, ref = mirror
     fake_cli(monkeypatch, "print('ok')")
     doc = env_doc(ref)
-    workspace.prepare(tmp_path / "ws", path, f"{doc['request_id']}-g1", ref)
+    task = f"{doc['request_id']}-g1"
+    workspace.prepare(tmp_path / "ws", path, task, ref)
+    (tmp_path / "artifacts").mkdir(mode=0o700)
+    runner._write_json(tmp_path / "artifacts" / f"{task}.stage.json", {"stage": "preparing"})
     out = runner.run_once(FakeDispatcher([doc]), cfg(tmp_path, path), now=lambda: NOW)
     assert out["state"] == "completed"
+
+
+def test_workspace_without_any_stage_is_kept_and_reported_never_rerun(tmp_path, mirror, monkeypatch):
+    """Codex R-F3: missing metadata is not proof that nothing ran."""
+    path, ref = mirror
+    fake_cli(monkeypatch, "open('ran','w').write('1')")
+    doc = env_doc(ref)
+    task_dir = workspace.prepare(tmp_path / "ws", path, f"{doc['request_id']}-g1", ref)
+    (task_dir / "someone-elses-work.txt").write_text("keep me")
+    d = FakeDispatcher([doc])
+    out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+    assert out["state"] == "interrupted" and d.results[0]["detail"]["code"] == "workspace_without_stage"
+    assert (task_dir / "someone-elses-work.txt").exists() and not (task_dir / "ran").exists()
 
 
 def test_cost_cap_is_bound_by_the_adapter_and_a_flag_alone_is_not_enough(tmp_path, mirror, monkeypatch):
@@ -442,3 +459,102 @@ def test_cost_cap_is_bound_by_the_adapter_and_a_flag_alone_is_not_enough(tmp_pat
     d = FakeDispatcher([env_doc(ref)])
     out = runner.run_once(d, cfg(tmp_path / "b", path, cost_enforcers={"codex": True}), now=lambda: NOW)
     assert d.results[0]["detail"]["code"] == "cost_limit_unenforceable"
+
+
+# ── Codex R-F1..R-F4 ────────────────────────────────────────────────────────
+
+def test_child_never_starts_before_its_ownership_is_durable(tmp_path, mirror, monkeypatch):
+    """R-F1: a crash between spawn and the 'started' stage leaves no agent running."""
+    path, ref = mirror
+    fake_cli(monkeypatch, "open('agent_ran','w').write('1')")
+
+    class Crash(BaseException):
+        pass
+    real = runner._write_json
+
+    def crash_on_started(p, doc):
+        if doc.get("stage") == "started" and doc.get("pgid"):   # the write that follows the spawn
+            raise Crash()
+        real(p, doc)
+    monkeypatch.setattr(runner, "_write_json", crash_on_started)
+    monkeypatch.setattr(runner, "_kill_group", lambda *a, **k: None)   # a real crash runs no cleanup
+    with pytest.raises(Crash):
+        runner.run_once(FakeDispatcher([env_doc(ref)]), cfg(tmp_path, path), now=lambda: NOW)
+    import time as _t
+    _t.sleep(1.0)
+    assert not list((tmp_path / "ws").glob("*/agent_ran"))
+
+
+def test_recovery_never_signals_a_group_whose_identity_does_not_match(tmp_path, mirror, monkeypatch):
+    """R-F2: a saved pgid that now belongs to someone else is held, not killed."""
+    path, ref = mirror
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True)
+    try:
+        doc = env_doc(ref)
+        task = f"{doc['request_id']}-g1"
+        (tmp_path / "artifacts").mkdir(mode=0o700)
+        runner._write_json(tmp_path / "artifacts" / f"{task}.stage.json",
+                           {"stage": "started", "pgid": other.pid, "identity": "999 Thu Jan  1 00:00:00 1970"})
+        d = FakeDispatcher([doc])
+        out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+        assert out["state"] == "interrupted" and d.results[0]["detail"]["code"] == "process_identity_unverified"
+        assert other.poll() is None                                     # untouched
+    finally:
+        other.kill()
+        other.wait()
+
+
+def test_recovery_stops_a_verified_orphan(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    orphan = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True)
+    try:
+        doc = env_doc(ref)
+        task = f"{doc['request_id']}-g1"
+        (tmp_path / "artifacts").mkdir(mode=0o700)
+        runner._write_json(tmp_path / "artifacts" / f"{task}.stage.json",
+                           {"stage": "started", "pgid": orphan.pid, "identity": runner._identity(orphan.pid)})
+        d = FakeDispatcher([doc])
+        out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+        assert out["state"] == "interrupted" and d.results[0]["detail"]["code"] == "child_outcome_unknown"
+        orphan.wait(timeout=10)
+    finally:
+        if orphan.poll() is None:
+            orphan.kill()
+            orphan.wait()
+
+
+def test_capture_failure_is_a_failure_even_with_exit_zero(tmp_path, mirror, monkeypatch):
+    """R-F4: a broken output pipe returned 'completed' with empty evidence."""
+    path, ref = mirror
+    fake_cli(monkeypatch, "print('ok')")
+
+    class BadPipe:
+        def __init__(self, pipe):
+            self.pipe = pipe
+
+        def fileno(self):
+            return 10_000_000                                            # EBADF on read
+
+        def close(self):
+            self.pipe.close()
+    real_init = runner._BoundedCapture.__init__
+
+    def broken_init(self, pipe, log_path, limit):
+        real_init(self, BadPipe(pipe), log_path, limit)
+    monkeypatch.setattr(runner._BoundedCapture, "__init__", broken_init)
+    d = FakeDispatcher([env_doc(ref)])
+    out = runner.run_once(d, cfg(tmp_path, path), now=lambda: NOW)
+    assert out["state"] == "failed" and d.results[0]["detail"]["code"].startswith("capture_read_")
+
+
+def test_stage_writes_fsync_the_directory(tmp_path, monkeypatch):
+    synced = []
+    real = os.fsync
+
+    def spy(fd):
+        synced.append(os.fstat(fd).st_mode)
+        return real(fd)
+    monkeypatch.setattr(os, "fsync", spy)
+    runner._write_atomic(tmp_path / "x.json", b"{}")
+    import stat as _s
+    assert any(_s.S_ISDIR(m) for m in synced)
