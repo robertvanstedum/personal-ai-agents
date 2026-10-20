@@ -342,3 +342,103 @@ def test_unreadable_account_store_is_unknown(auth_dir):
     (auth_dir / "guests.json").write_text("{broken")
     out = gr.grant("guild:10", db=FakeGuildDB([_grant_row()]))
     assert out.status == "unknown" and out.verified_state["store"] == "auth"
+
+
+# ── Codex review of CC-8 94199980 ───────────────────────────────────────────
+
+def test_interrupted_grant_never_takes_over_an_account_it_did_not_create(auth_dir, monkeypatch):
+    """Intent saved, crash before the account: another path then creates a guest with the same
+    email. The resumed grant must conflict and leave that account and its password alone."""
+    db = FakeGuildDB([_grant_row()])
+
+    def crash_create(*a, **k):
+        raise OSError("crash before the account was written")
+    monkeypatch.setattr(auth, "create_guest", crash_create)
+    assert gr.grant("guild:10", db=db).status == "unknown"
+    monkeypatch.undo()
+    monkeypatch.setattr(auth, "AUTH_DIR", auth_dir)
+    other = auth.create_guest("Other path", "2099-01-01T00:00:00+00:00", "their-own-pw", email="new@x.test")
+    out = gr.grant("guild:10", db=db, password_factory=lambda: "would-take-over")
+    assert out.status == "conflict" and out.verified_state["error"] == "guest_email_exists"
+    assert auth.authenticate("new@x.test", "their-own-pw")[0]["username"] == other["username"]
+    assert db.rows[10]["status"] == "requested"
+
+
+def test_created_account_carries_the_intent_id_and_is_adopted_only_by_it(auth_dir, monkeypatch):
+    db = FakeGuildDB([_grant_row()])
+    real = gr._save_intent
+    calls = {"n": 0}
+
+    def crash_second_save(ref, intent):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("crash after create_guest")
+        real(ref, intent)
+    monkeypatch.setattr(gr, "_save_intent", crash_second_save)
+    gr.grant("guild:10", db=db)
+    monkeypatch.setattr(gr, "_save_intent", real)
+    intent_id = gr._intents()["guild:10"]["intent_id"]
+    assert auth.load_guests()[0]["grant_intent_id"] == intent_id
+    out = gr.grant("guild:10", db=db, password_factory=lambda: "P4-dddddd")
+    assert out.status == "done" and out.verified_state["credential_generation"] == 1   # first was never returned
+
+
+def test_uncertain_results_carry_no_password_and_no_notifications(auth_dir):
+    db = FakeGuildDB([_grant_row()])
+    db.fail_grant = True
+    out = gr.grant("guild:10", db=db, password_factory=lambda: "never-sent")
+    assert out.status == "unknown" and out.delivery_secret is None
+    assert not out.verified_state.get("notifications_pending")
+
+
+def test_done_requires_active_account_with_must_change(auth_dir, monkeypatch):
+    db = FakeGuildDB([_grant_row()])
+    monkeypatch.setattr(auth, "is_guest_active", lambda username: False)
+    out = gr.grant("guild:10", db=db)
+    assert out.status == "unknown" and out.verified_state["error"] == "account_state_unverified"
+    assert out.delivery_secret is None and out.verified_state["notifications_pending"] == []
+
+
+def test_crash_after_db_granted_resumes_to_done_with_a_fresh_password(auth_dir, monkeypatch):
+    db = FakeGuildDB([_grant_row()])
+    real = gr._save_intent
+
+    def crash_on_granted(ref, intent):
+        if intent["state"] == "granted":
+            raise OSError("crash after the request was marked granted")
+        real(ref, intent)
+    monkeypatch.setattr(gr, "_save_intent", crash_on_granted)
+    first = gr.grant("guild:10", db=db, password_factory=lambda: "lost-1")
+    assert first.status == "unknown" and first.delivery_secret is None
+    assert db.rows[10]["status"] == "granted"
+    monkeypatch.setattr(gr, "_save_intent", real)
+    out = gr.grant("guild:10", db=db, password_factory=lambda: "P5-eeeeee")
+    assert out.status == "done" and out.delivery_secret == "P5-eeeeee"
+    assert auth.authenticate("new@x.test", "P5-eeeeee")[0] is not None
+    assert auth.authenticate("new@x.test", "lost-1")[0] is None
+
+
+def test_credential_delivery_boundary(auth_dir):
+    db = FakeGuildDB([_grant_row()])
+    out = gr.grant("guild:10", db=db, password_factory=lambda: "first-pw")
+    gen = out.verified_state["credential_generation"]
+    assert out.verified_state["delivery"] == "pending"
+    # The caller lost the password before preparing its email: explicit reissue.
+    again = gr.reissue_credential("guild:10", password_factory=lambda: "second-pw")
+    assert again.status == "done" and again.delivery_secret == "second-pw"
+    assert again.verified_state["credential_generation"] == gen + 1
+    assert auth.authenticate("new@x.test", "first-pw")[0] is None
+    assert auth.check_must_change_password(again.verified_state["username"])
+    stale = gr.confirm_delivery("guild:10", gen)
+    assert stale.status == "conflict" and stale.verified_state["error"] == "credential_superseded"
+    assert gr.confirm_delivery("guild:10", gen + 1).status == "done"
+    assert gr.confirm_delivery("guild:10", gen + 1).status == "already_applied"
+    assert gr.reissue_credential("guild:10").verified_state["error"] == "delivery_already_confirmed"
+    replay = gr.grant("guild:10", db=db)
+    assert replay.status == "already_applied" and replay.delivery_secret is None
+    assert replay.verified_state["delivery"] == "confirmed"
+
+
+def test_confirm_and_reissue_need_a_granted_intent(auth_dir):
+    assert gr.confirm_delivery("guild:10", 1).verified_state["error"] == "not_granted"
+    assert gr.reissue_credential("guild:10").verified_state["error"] == "not_granted"

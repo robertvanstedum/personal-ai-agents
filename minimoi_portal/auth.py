@@ -147,13 +147,16 @@ def authenticate(username: str, password: str) -> tuple:
 
 
 def create_guest(display_name: str, expires_at_iso: str, password: str,
-                 email: str = "", on_email_conflict: str = "replace") -> dict:
+                 email: str = "", on_email_conflict: str = "replace",
+                 grant_intent_id: str | None = None) -> dict:
     """
     Create an active guest credential. Returns the guest dict.
     expires_at_iso: ISO 8601 string e.g. '2026-06-15T00:00:00Z'
     on_email_conflict: "replace" (legacy default) removes any guest with the
     same email first; "refuse" raises GuestEmailConflict instead, so a repeat
     grant cannot silently replace someone's username and password.
+    grant_intent_id: the guest-grant intent that created this account, recorded on it so a
+    resumed grant adopts only the account it created itself.
     """
     if on_email_conflict not in ("replace", "refuse"):
         raise ValueError("on_email_conflict must be 'replace' or 'refuse'")
@@ -179,6 +182,8 @@ def create_guest(display_name: str, expires_at_iso: str, password: str,
             "expires_at":    expires_at_iso,
             "created_at":    datetime.now(timezone.utc).isoformat(),
         }
+        if grant_intent_id:
+            guest["grant_intent_id"] = grant_intent_id
         data["guests"].append(guest)
         _write_json("guests.json", data)
     return guest
