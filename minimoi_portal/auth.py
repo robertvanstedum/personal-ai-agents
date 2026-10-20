@@ -148,7 +148,7 @@ def authenticate(username: str, password: str) -> tuple:
 
 def create_guest(display_name: str, expires_at_iso: str, password: str,
                  email: str = "", on_email_conflict: str = "replace",
-                 grant_intent_id: str | None = None) -> dict:
+                 grant_intent_id: str | None = None, credential_generation: int | None = None) -> dict:
     """
     Create an active guest credential. Returns the guest dict.
     expires_at_iso: ISO 8601 string e.g. '2026-06-15T00:00:00Z'
@@ -184,6 +184,9 @@ def create_guest(display_name: str, expires_at_iso: str, password: str,
         }
         if grant_intent_id:
             guest["grant_intent_id"] = grant_intent_id
+        if credential_generation is not None:
+            guest["credential_generation"] = credential_generation
+            guest["must_change_password"] = True
         data["guests"].append(guest)
         _write_json("guests.json", data)
     return guest
@@ -392,6 +395,30 @@ def reset_guest_password(username: str, new_password: str) -> bool:
         if found:
             _write_json("guests.json", data)
     return found
+
+
+def set_guest_credential(username: str, new_password: str, *, grant_intent_id: str, generation: int) -> bool:
+    """Replace a granted guest's temporary password in one write: hash, must-change and the
+    credential generation together, only on the account that grant intent created. False when no
+    such account exists (or it belongs to another intent)."""
+    with _auth_lock():
+        data = _load_json("guests.json", strict=True)
+        for guest in data.get("guests", []):
+            if guest["username"] == username:
+                if guest.get("grant_intent_id") != grant_intent_id:
+                    return False
+                guest["password_hash"] = generate_password_hash(new_password)
+                guest["must_change_password"] = True
+                guest["credential_generation"] = generation
+                _write_json("guests.json", data)
+                return True
+    return False
+
+
+def guest_entry(username: str) -> dict | None:
+    """The stored guest record (strict read), or None."""
+    data = _load_json("guests.json", strict=True)
+    return next((dict(g) for g in data.get("guests", []) if g.get("username") == username), None)
 
 
 def set_must_change_password(username: str) -> None:

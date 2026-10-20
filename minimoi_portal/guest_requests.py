@@ -361,13 +361,48 @@ def grant(ref: str, *, duration_days: int = 7, db=None, now: datetime | None = N
         return _grant_locked(ref, duration_days, db, now, password_factory)
 
 
-def _issue(intent: dict, password_factory) -> str:
-    """A fresh temporary password on the intent's own account (must-change), next generation."""
+class OwnershipLost(Exception):
+    """The intent's account is gone or no longer carries this intent's ID."""
+
+
+def _owned_account(intent: dict) -> dict:
+    entry = auth.guest_entry(intent["username"])
+    if entry is None or entry.get("grant_intent_id") != intent["intent_id"]:
+        raise OwnershipLost()
+    return entry
+
+
+def _reconcile_issuing(ref: str, intent: dict) -> dict:
+    """Finish or roll back an issuance a crash interrupted (G-F3). The account says which
+    generation it carries; the intent is brought in line. A password issued that way was never
+    returned, so it can only be superseded by a later reissue, never confirmed."""
+    pending = intent.get("issuing")
+    if not pending or not intent.get("username"):
+        return intent
+    entry = _owned_account(intent)
+    if entry.get("credential_generation") == pending:
+        intent["credential_generation"] = pending
+        intent["credential_returned"] = False
+    intent.pop("issuing", None)
+    _save_intent(ref, intent)
+    return intent
+
+
+def _issue(ref: str, intent: dict, password_factory) -> str:
+    """A fresh temporary password on the intent's own account (must-change), next generation.
+    The transition is durable before the account changes, and the account records the generation."""
+    _owned_account(intent)
+    generation = intent.get("credential_generation", 0) + 1
+    intent["issuing"] = generation
+    _save_intent(ref, intent)
     secret = password_factory()
-    if not auth.reset_guest_password(intent["username"], secret):
-        raise auth.AuthStoreError("account_missing")
-    auth.set_must_change_password(intent["username"])
-    intent["credential_generation"] = intent.get("credential_generation", 0) + 1
+    if not auth.set_guest_credential(intent["username"], secret, grant_intent_id=intent["intent_id"],
+                                     generation=generation):
+        raise OwnershipLost()
+    intent["credential_generation"] = generation
+    intent["credential_returned"] = True
+    intent.pop("issuing", None)
+    _save_intent(ref, intent)
     return secret
 
 
@@ -388,6 +423,8 @@ def _grant_locked(ref, duration_days, db, now, password_factory) -> Outcome:
     secret = None
     try:
         intent = _intents().get(ref)
+        if intent:
+            intent = _reconcile_issuing(ref, intent)
         if request.status != "requested" and not (intent and intent.get("state") == "account_created"):
             if request.status == "granted" and intent and intent.get("state") == "granted":
                 return Outcome("already_applied", ref, _grant_state(request, intent))
@@ -410,7 +447,8 @@ def _grant_locked(ref, duration_days, db, now, password_factory) -> Outcome:
             owned = [g for g in same_email if g.get("grant_intent_id") == intent["intent_id"]]
             if owned:             # crashed after creating our own account: adopt exactly that one
                 intent["username"] = owned[0]["username"]
-                secret = _issue(intent, password_factory)
+                intent["credential_generation"] = owned[0].get("credential_generation", 0)
+                secret = _issue(ref, intent, password_factory)
             elif same_email:      # someone else's account appeared meanwhile: never take it over
                 return Outcome("conflict", ref, {"store": GUILD, "error": "guest_email_exists",
                                                  "existing_username": same_email[0]["username"]})
@@ -418,14 +456,16 @@ def _grant_locked(ref, duration_days, db, now, password_factory) -> Outcome:
                 secret = password_factory()
                 guest = auth.create_guest(intent["name"] or intent["email"], intent["expires_at"], secret,
                                           email=intent["email"], on_email_conflict="refuse",
-                                          grant_intent_id=intent["intent_id"])
+                                          grant_intent_id=intent["intent_id"], credential_generation=1)
                 intent["username"] = guest["username"]
-                auth.set_must_change_password(guest["username"])
                 intent["credential_generation"] = 1
+                intent["credential_returned"] = True
             intent["state"] = "account_created"
             _save_intent(ref, intent)
     except auth.GuestEmailConflict:
         return Outcome("conflict", ref, {"store": GUILD, "error": "guest_email_exists"})
+    except OwnershipLost:
+        return Outcome("conflict", ref, {"store": "auth", "error": "account_not_owned_by_this_grant"})
     except (auth.AuthStoreError, OSError):
         return Outcome("unknown", ref, {"store": "auth", "error": "account_store_unavailable"})
 
@@ -440,9 +480,11 @@ def _grant_locked(ref, duration_days, db, now, password_factory) -> Outcome:
     try:
         if secret is None:
             # Resumed after an earlier call created the account but returned no usable password.
-            secret = _issue(intent, password_factory)
+            secret = _issue(ref, intent, password_factory)
         intent["state"] = "granted"
         _save_intent(ref, intent)
+    except OwnershipLost:
+        return Outcome("conflict", ref, {"store": "auth", "error": "account_not_owned_by_this_grant"})
     except (auth.AuthStoreError, OSError):
         return Outcome("unknown", ref, {"store": "auth", "error": "account_store_unavailable",
                                         "status": "granted"})
@@ -473,9 +515,19 @@ def confirm_delivery(ref: str, credential_generation: int) -> Outcome:
             return Outcome("unknown", ref, {"store": "auth", "error": "account_store_unavailable"})
         if not intent or intent.get("state") != "granted":
             return Outcome("conflict", ref, {"error": "not_granted"})
-        if credential_generation != intent.get("credential_generation"):
-            return Outcome("conflict", ref, {"error": "credential_superseded",
-                                             "credential_generation": intent.get("credential_generation")})
+        try:
+            intent = _reconcile_issuing(ref, intent)
+            account = _owned_account(intent)
+        except OwnershipLost:
+            return Outcome("conflict", ref, {"error": "account_not_owned_by_this_grant"})
+        except (auth.AuthStoreError, OSError):
+            return Outcome("unknown", ref, {"store": "auth", "error": "account_store_unavailable"})
+        current = intent.get("credential_generation")
+        if credential_generation != current or account.get("credential_generation") != current:
+            return Outcome("conflict", ref, {"error": "credential_superseded", "credential_generation": current})
+        if not intent.get("credential_returned", True):
+            # The account's password was issued by an interrupted call and never handed out.
+            return Outcome("conflict", ref, {"error": "credential_never_returned", "credential_generation": current})
         if intent.get("delivery") == "confirmed":
             return Outcome("already_applied", ref, {"delivery": "confirmed"})
         intent["delivery"] = "confirmed"
@@ -490,10 +542,12 @@ def reissue_credential(ref: str, *, password_factory=lambda: secrets.token_urlsa
             intent = _intents().get(ref)
             if not intent or intent.get("state") != "granted":
                 return Outcome("conflict", ref, {"error": "not_granted"})
+            intent = _reconcile_issuing(ref, intent)
             if intent.get("delivery") == "confirmed":
                 return Outcome("conflict", ref, {"error": "delivery_already_confirmed"})
-            secret = _issue(intent, password_factory)
-            _save_intent(ref, intent)
+            secret = _issue(ref, intent, password_factory)
+        except OwnershipLost:
+            return Outcome("conflict", ref, {"error": "account_not_owned_by_this_grant"})
         except (auth.AuthStoreError, OSError):
             return Outcome("unknown", ref, {"store": "auth", "error": "account_store_unavailable"})
         username = intent["username"]

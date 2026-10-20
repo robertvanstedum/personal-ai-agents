@@ -380,7 +380,7 @@ def test_created_account_carries_the_intent_id_and_is_adopted_only_by_it(auth_di
     intent_id = gr._intents()["guild:10"]["intent_id"]
     assert auth.load_guests()[0]["grant_intent_id"] == intent_id
     out = gr.grant("guild:10", db=db, password_factory=lambda: "P4-dddddd")
-    assert out.status == "done" and out.verified_state["credential_generation"] == 1   # first was never returned
+    assert out.status == "done" and out.verified_state["credential_generation"] == 2   # generation 1 was never returned
 
 
 def test_uncertain_results_carry_no_password_and_no_notifications(auth_dir):
@@ -442,3 +442,93 @@ def test_credential_delivery_boundary(auth_dir):
 def test_confirm_and_reissue_need_a_granted_intent(auth_dir):
     assert gr.confirm_delivery("guild:10", 1).verified_state["error"] == "not_granted"
     assert gr.reissue_credential("guild:10").verified_state["error"] == "not_granted"
+
+
+# ── Codex G-F3: credential issuance is durable before the account changes ───
+
+def _granted(db):
+    out = gr.grant("guild:10", db=db, password_factory=lambda: "first-pw")
+    assert out.status == "done"
+    return out
+
+
+def test_reissue_interrupted_after_the_account_changed_cannot_confirm_the_old_generation(auth_dir, monkeypatch):
+    """Codex's reproduction: reissue changes the password, the final intent save fails, and
+    confirm_delivery(ref, 1) used to return done for a password that no longer works."""
+    db = FakeGuildDB([_grant_row()])
+    _granted(db)
+    real = gr._save_intent
+
+    def fail_final(ref, intent):
+        if "issuing" not in intent and intent.get("credential_generation") == 2:
+            raise OSError("crash after the account changed")
+        real(ref, intent)
+    monkeypatch.setattr(gr, "_save_intent", fail_final)
+    assert gr.reissue_credential("guild:10", password_factory=lambda: "second-pw").status == "unknown"
+    monkeypatch.setattr(gr, "_save_intent", real)
+    assert auth.authenticate("new@x.test", "first-pw")[0] is None          # the account did change
+    stale = gr.confirm_delivery("guild:10", 1)
+    assert stale.status == "conflict" and stale.verified_state["error"] == "credential_superseded"
+    lost = gr.confirm_delivery("guild:10", 2)                                # issued, never returned
+    assert lost.status == "conflict" and lost.verified_state["error"] == "credential_never_returned"
+    fresh = gr.reissue_credential("guild:10", password_factory=lambda: "third-pw")
+    assert fresh.status == "done" and fresh.verified_state["credential_generation"] == 3
+    assert gr.confirm_delivery("guild:10", 3).status == "done"
+
+
+def test_reissue_interrupted_before_the_account_changed_rolls_back(auth_dir, monkeypatch):
+    db = FakeGuildDB([_grant_row()])
+    _granted(db)
+    monkeypatch.setattr(auth, "set_guest_credential", lambda *a, **k: (_ for _ in ()).throw(OSError("disk")))
+    assert gr.reissue_credential("guild:10", password_factory=lambda: "never").status == "unknown"
+    monkeypatch.undo()
+    monkeypatch.setattr(auth, "AUTH_DIR", auth_dir)
+    assert auth.authenticate("new@x.test", "first-pw")[0] is not None       # unchanged
+    assert gr.confirm_delivery("guild:10", 1).status == "done"               # generation 1 still current
+    assert "issuing" not in gr._intents()["guild:10"]
+
+
+def test_confirm_needs_the_account_to_carry_the_same_generation(auth_dir):
+    db = FakeGuildDB([_grant_row()])
+    out = _granted(db)
+    data = auth._load_json("guests.json", strict=True)
+    data["guests"][0]["credential_generation"] = 7                           # changed outside this flow
+    auth._write_json("guests.json", data)
+    res = gr.confirm_delivery("guild:10", out.verified_state["credential_generation"])
+    assert res.status == "conflict" and res.verified_state["error"] == "credential_superseded"
+
+
+def test_reissue_and_confirm_recheck_ownership(auth_dir):
+    db = FakeGuildDB([_grant_row()])
+    out = _granted(db)
+    data = auth._load_json("guests.json", strict=True)
+    data["guests"][0]["grant_intent_id"] = "someone-else"
+    auth._write_json("guests.json", data)
+    assert gr.reissue_credential("guild:10").verified_state["error"] == "account_not_owned_by_this_grant"
+    assert gr.confirm_delivery("guild:10", 1).verified_state["error"] == "account_not_owned_by_this_grant"
+    assert auth.authenticate("new@x.test", "first-pw")[0] is not None       # never touched
+
+
+def test_each_issuance_boundary_converges(auth_dir, monkeypatch):
+    """Fault the intent save at each point of a reissue; afterwards the intent and the account
+    always agree, and only a returned generation can be confirmed."""
+    for n in (1, 2):
+        sub = auth_dir / f"b{n}"
+        sub.mkdir()
+        monkeypatch.setattr(auth, "AUTH_DIR", sub)
+        db = FakeGuildDB([_grant_row()])
+        _granted(db)
+        real = gr._save_intent
+        calls = {"k": 0}
+
+        def faulty(ref, intent, n=n, real=real, calls=calls):
+            calls["k"] += 1
+            if calls["k"] == n:
+                raise OSError("crash")
+            real(ref, intent)
+        monkeypatch.setattr(gr, "_save_intent", faulty)
+        gr.reissue_credential("guild:10", password_factory=lambda: f"pw-{n}")
+        monkeypatch.setattr(gr, "_save_intent", real)
+        intent = gr._reconcile_issuing("guild:10", gr._intents()["guild:10"])
+        account = auth.guest_entry(intent["username"])
+        assert account["credential_generation"] == intent["credential_generation"], n
