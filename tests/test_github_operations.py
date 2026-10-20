@@ -16,6 +16,7 @@ class FakeGitHub:
         self.fail_post = None      # "timeout_after_commit" | "timeout_before_commit" | "502_after_commit"
         self.tokens = []
         self.page_fail = None
+        self.login = "minimoi-bot"
 
     def __call__(self, method, url, headers, params, body):
         self.calls.append((method, url))
@@ -50,14 +51,14 @@ class FakeGitHub:
                 if n not in self.comments:
                     return 404, {}
                 c = {"body": body["body"], "html_url": f"https://github.com/x/{n}#c{len(self.comments[n])}",
-                     "user": {"login": "minimoi-bot"}}
+                     "user": {"login": self.login}}
                 self.comments[n].append(c)
                 result = (201, c)
             else:
                 n = max(self.issues) + 1
                 self.issues[n] = {"number": n, "title": body["title"], "body": body["body"], "state": "open",
                                   "html_url": f"https://github.com/x/{n}", "comments": 0,
-                                  "user": {"login": "minimoi-bot"}}
+                                  "user": {"login": self.login}}
                 self.comments[n] = []
                 result = (201, self.issues[n])
             if self.fail_post == "timeout_after_commit":
@@ -206,7 +207,7 @@ def test_marker_on_a_later_page_is_found(gh):
     api, fake = gh
     p = api.prepare_comment(7, "deep note", operation_id=OP)
     fake.comments[7] = [{"body": f"c{i}", "html_url": f"u{i}", "user": {"login": "x"}} for i in range(150)]
-    fake.comments[7].append({"body": p.body, "html_url": "u-ours", "user": {"login": "minimoi-bot"}})
+    fake.comments[7].append({"body": p.body, "html_url": "u-ours", "user": {"login": self.login}})
     out = api.execute(p, p.digest)
     assert out.status == "already_applied" and out.url == "u-ours"
 
@@ -226,3 +227,16 @@ def test_5xx_after_acceptance_reconciles_instead_of_refusing(gh):
     p = api.prepare_comment(7, "accepted despite 502", operation_id=OP)
     out = api.execute(p, p.digest)
     assert out.status == "already_applied" and len(fake.comments[7]) == 1
+
+
+def test_app_bot_publisher_is_reconciled_under_its_exact_login():
+    """An app identity posts as ``name[bot]``; the creator filter must use that exact login, or the
+    earlier issue is filtered out and absence is falsely inferred (Codex G-F2 follow-up)."""
+    fake = FakeGitHub()
+    fake.login = "minimoi-app[bot]"
+    api = GitHubIssues(REPO, fake, lambda: "test-token", publisher_login="minimoi-app[bot]")
+    fake.fail_post = "timeout_after_commit"
+    p = api.prepare_create("Banner crops", "The banner crops the head.", operation_id=OP)
+    out = api.execute(p, p.digest)
+    assert out.status == "already_applied" and out.code == "found_after_uncertain_send"
+    assert len([i for i in fake.issues.values() if OP in i["body"]]) == 1

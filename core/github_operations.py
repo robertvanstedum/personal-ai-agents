@@ -249,7 +249,7 @@ class GitHubIssues:
             params = {"per_page": PAGE}
         else:
             path = f"/repos/{self.repository}/issues"
-            params = {"state": "all", "creator": self.publisher.replace("[bot]", ""), "per_page": PAGE,
+            params = {"state": "all", "creator": self.publisher, "per_page": PAGE,
                       "sort": "created", "direction": "desc"}
         for page in range(1, MAX_RECONCILE_PAGES + 1):
             try:
