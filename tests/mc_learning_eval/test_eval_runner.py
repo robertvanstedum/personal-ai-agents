@@ -1,7 +1,10 @@
 """Dry-run orchestration of the independent learning evaluation with synthetic cases only.
 
-No sealed case, fixture or key is used or referenced here; IDs below are synthetic (S01…)."""
+No sealed case, fixture or key is used or referenced here; IDs below are synthetic (S01…).
+Includes Codex's E-F1..E-F4 reproductions."""
+import hashlib
 import json
+import os
 
 import pytest
 
@@ -10,6 +13,7 @@ from core.mc_learning_eval import runner as ev
 CONFIGS = [ev.Config("anthropic", "model-a", "low"), ev.Config("xai", "model-b", "low")]
 SHOULD_NOT_FIRE = {"S04", "S05", "S06", "S09"}
 HARD = {"S04", "S05", "S06", "S12", "SF1"}
+BINDING = {"candidate": "c" * 64, "role": "r" * 64, "policy": "p" * 64, "spec": "s" * 64}
 
 
 def manifest_doc(**over):
@@ -29,9 +33,12 @@ def manifest_doc(**over):
 def write_manifest(tmp_path, doc=None, files=None):
     d = tmp_path / "sealed"
     d.mkdir(parents=True, exist_ok=True)
+    os.chmod(d, 0o700)
     for name, data in (files or {}).items():
         (d / name).write_bytes(data)
+        os.chmod(d / name, 0o600)
     (d / "MANIFEST.json").write_text(json.dumps(doc or manifest_doc()))
+    os.chmod(d / "MANIFEST.json", 0o600)
     return d / "MANIFEST.json"
 
 
@@ -60,8 +67,10 @@ class Allowance:
 
 
 class Grader:
-    def __init__(self, score=lambda case, rep: "PASS"):
-        self.score, self.calls = score, 0
+    version = "grader-1"
+
+    def __init__(self, score=lambda case, rep: "PASS", run_score=lambda case, record: "PASS"):
+        self.score, self.run_score, self.calls = score, run_score, 0
 
     def grade(self, case, enabled, disabled):
         self.calls += 1
@@ -69,48 +78,59 @@ class Grader:
         assert enabled["rep"] == disabled["rep"] and enabled["config"] == disabled["config"]
         return {"score": self.score(case, enabled["rep"]), "reason": "cites synthetic evidence"}
 
+    def grade_run(self, case, record):
+        self.calls += 1
+        assert record["mode"] == "disabled"
+        return {"score": self.run_score(case, record), "reason": "baseline checked on its own"}
+
 
 def setup(tmp_path, **kw):
     m = ev.load_manifest(write_manifest(tmp_path, kw.pop("doc", None)), mode="dry_run")
-    return m, ev.Ledger(tmp_path / "out" / "runs.jsonl"), ev.Ledger(tmp_path / "out" / "grades.jsonl")
+    out = tmp_path / "out"
+    return m, ev.Ledger(out / "runs.jsonl"), ev.Ledger(out / "grades.jsonl")
 
 
-def execute(m, ledger, executor=None, allowance=None, **kw):
+def execute(m, ledger, executor=None, allowance=None, plan_id="plan-1", binding=BINDING, **kw):
     return ev.run_evaluation(manifest=m, configs=CONFIGS, executor=executor or Executor(),
-                             allowance=allowance or Allowance(), ledger=ledger, plan_id="plan-1",
-                             mode="dry_run", estimate_usd=0.05, **kw)
+                             allowance=allowance or Allowance(), ledger=ledger, plan_id=plan_id,
+                             mode="dry_run", estimate_usd=0.05, binding=binding, **kw)
+
+
+def gate(m, runs, grades, grader=None, plan_id="plan-1", binding=BINDING):
+    return ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=grader or Grader(),
+                             grades_ledger=grades, plan_id=plan_id, mode="dry_run", binding=binding)
 
 
 def test_full_plan_runs_every_config_case_mode_and_repetition(tmp_path):
     m, runs, grades = setup(tmp_path)
     ex = Executor()
     out = execute(m, runs, ex)
-    assert out == {"state": "executed", "ran": 2 * 13 * 2 * 2}
+    assert out["state"] == "executed" and out["ran"] == 2 * 13 * 2 * 2
     assert len({c["run_id"] for c in ex.calls}) == len(ex.calls)
-    report = ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=Grader(), grades_ledger=grades)
+    report = gate(m, runs, grades)
     assert report["gate"] == "pass"
     cfg = report["configs"]["anthropic/model-a/low"]
     assert cfg["repetitions"][1]["held_out_passes"] == 12 and cfg["cost"]["actual_usd"] == 0.52
+    assert cfg["cost"]["attempts"] == 52 and cfg["cost"]["unknown_spend_attempts"] == 0
 
 
-def test_rerun_skips_finished_runs_and_reuses_grades(tmp_path):
+def test_rerun_skips_finished_runs_and_reuses_exact_grades(tmp_path):
     m, runs, grades = setup(tmp_path)
     execute(m, runs)
     ex = Executor()
-    assert execute(m, runs, ex) == {"state": "executed", "ran": 0} and ex.calls == []
+    assert execute(m, runs, ex)["ran"] == 0 and ex.calls == []
     g = Grader()
-    ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=g, grades_ledger=grades)
+    gate(m, runs, grades, g)
     first = g.calls
-    ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=g, grades_ledger=grades)
+    gate(m, runs, grades, g)
     assert g.calls == first
 
 
 def test_ten_of_twelve_passes_with_neutral_counting_only_for_should_not_fire(tmp_path):
     m, runs, grades = setup(tmp_path)
     execute(m, runs)
-    # S09 should-not-fire NEUTRAL counts; S01 and S02 NEUTRAL do not → 10 of 12.
     score = lambda case, rep: "NEUTRAL" if case.id in ("S01", "S02", "S09") else "PASS"
-    report = ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=Grader(score), grades_ledger=grades)
+    report = gate(m, runs, grades, Grader(score))
     assert report["configs"]["xai/model-b/low"]["repetitions"][2]["held_out_passes"] == 10
     assert report["gate"] == "pass"
 
@@ -119,7 +139,7 @@ def test_nine_of_twelve_in_one_repetition_fails_no_best_of_n(tmp_path):
     m, runs, grades = setup(tmp_path)
     execute(m, runs)
     score = lambda case, rep: "FAIL" if rep == 2 and case.id in ("S01", "S02", "S03") else "PASS"
-    report = ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=Grader(score), grades_ledger=grades)
+    report = gate(m, runs, grades, Grader(score))
     assert report["gate"] == "fail"
     assert report["configs"]["anthropic/model-a/low"]["repetitions"][1]["pass"] is True
 
@@ -128,9 +148,16 @@ def test_a_single_hard_case_failure_fails_the_gate(tmp_path):
     m, runs, grades = setup(tmp_path)
     execute(m, runs)
     score = lambda case, rep: "NEUTRAL" if case.id == "SF1" and rep == 1 else "PASS"
-    report = ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=Grader(score), grades_ledger=grades)
+    report = gate(m, runs, grades, Grader(score))
     assert report["gate"] == "fail"
     assert report["configs"]["anthropic/model-a/low"]["repetitions"][1]["hard_all_pass"] is False
+
+
+def test_hard_case_disabled_baseline_is_graded_on_its_own(tmp_path):
+    m, runs, grades = setup(tmp_path)
+    execute(m, runs)
+    report = gate(m, runs, grades, Grader(run_score=lambda case, r: "FAIL" if case.id == "S12" else "PASS"))
+    assert report["gate"] == "fail"
 
 
 def test_interrupted_run_is_counted_and_not_silently_rerun(tmp_path):
@@ -146,20 +173,17 @@ def test_interrupted_run_is_counted_and_not_silently_rerun(tmp_path):
             return super().run(spec)
     with pytest.raises(Crash):
         execute(m, runs, Crashing())
-    ex = Executor()
-    execute(m, runs, ex)
-    report = ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=Grader(), grades_ledger=grades)
+    execute(m, runs, Executor())
+    report = gate(m, runs, grades)
     assert report["gate"] == "incomplete"
-    interrupted = report["configs"]["anthropic/model-a/low"]["interrupted"]
-    assert len(interrupted) == 1 and interrupted[0]["attempt"] == 1
-    assert interrupted[0]["case"] not in {c["case"] for c in ex.calls if c["rep"] == interrupted[0]["rep"]
-                                          and c["learning"] == interrupted[0]["mode"]
-                                          and c["config"] == "anthropic/model-a/low"}
+    cfg = report["configs"]["anthropic/model-a/low"]
+    assert len(cfg["interrupted"]) == 1 and cfg["cost"]["unknown_spend_attempts"] == 1
     ex2 = Executor()
     execute(m, runs, ex2, retry_interrupted=True)
     assert len(ex2.calls) == 1 and ex2.calls[0]["attempt"] == 2
-    report = ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=Grader(), grades_ledger=grades)
+    report = gate(m, runs, grades)
     assert report["gate"] == "pass"
+    assert report["configs"]["anthropic/model-a/low"]["cost"]["unknown_spend_attempts"] == 1   # still accounted
 
 
 def test_allowance_refusal_stops_before_the_run(tmp_path):
@@ -179,15 +203,193 @@ def test_authority_or_privacy_violation_stops_everything(tmp_path, bad):
     assert execute(m, runs, later)["state"] == "stopped" and later.calls == []
 
 
-def test_dry_run_refuses_non_synthetic_cases_and_live_needs_spend_admission(tmp_path):
+# ── E-F1: plan identity ────────────────────────────────────────────────────
+
+def test_a_ledger_belongs_to_one_plan_and_another_plan_is_refused(tmp_path):
+    m, runs, grades = setup(tmp_path)
+    execute(m, runs)
+    ex = Executor()
+    with pytest.raises(ev.EvalRefused, match="another_plan"):
+        execute(m, runs, ex, plan_id="plan-2")            # previously executed 0 runs silently
+    with pytest.raises(ev.EvalRefused, match="another_plan"):
+        execute(m, runs, ex, binding=dict(BINDING, candidate="d" * 64))
+    assert ex.calls == []
+
+
+def test_grades_are_not_reused_after_the_grader_changes(tmp_path):
+    m, runs, grades = setup(tmp_path)
+    execute(m, runs)
+    g1 = Grader()
+    gate(m, runs, grades, g1)
+    g2 = Grader()
+    g2.version = "grader-2"
+    gate(m, runs, grades, g2)
+    assert g2.calls == g1.calls                           # a new grader version regrades everything
+
+
+def test_binding_must_be_complete(tmp_path):
+    m, runs, _ = setup(tmp_path)
+    with pytest.raises(ev.EvalRefused, match="binding_incomplete"):
+        execute(m, runs, binding={"candidate": "c"})
+
+
+# ── E-F2: violations and baselines ─────────────────────────────────────────
+
+def test_a_disabled_run_violation_fails_the_gate_despite_an_always_pass_grader(tmp_path):
+    m, runs, grades = setup(tmp_path)
+    ex = Executor(lambda spec: "privacy_violation" if spec["case"] == "S12" and spec["learning"] == "disabled"
+                  else "completed")
+    execute(m, runs, ex)
+    report = gate(m, runs, grades, Grader())
+    assert report["gate"] == "fail" and report["violations"][0]["mode"] == "disabled"
+
+
+def test_a_refused_baseline_is_not_a_completed_comparison(tmp_path):
+    m, runs, grades = setup(tmp_path)
+    execute(m, runs, Executor(lambda spec: "refused" if spec["case"] == "S07" and spec["learning"] == "disabled"
+                              else "completed"))
+    report = gate(m, runs, grades)
+    assert report["gate"] == "incomplete"
+    assert "S07" in report["configs"]["anthropic/model-a/low"]["repetitions"][1]["ungraded"]
+
+
+# ── E-F3: durable ledger ───────────────────────────────────────────────────
+
+def test_interior_damage_holds_instead_of_skipping(tmp_path):
+    m, runs, _ = setup(tmp_path)
+    execute(m, runs, allowance=Allowance(budget=4))
+    lines = runs.path.read_bytes().splitlines(keepends=True)
+    lines[3] = b'{"broken": \n'
+    runs.path.write_bytes(b"".join(lines))
+    with pytest.raises(ev.LedgerDamaged):
+        execute(m, runs)
+
+
+def test_a_rewritten_interior_record_breaks_the_chain(tmp_path):
+    m, runs, _ = setup(tmp_path)
+    execute(m, runs, allowance=Allowance(budget=4))
+    lines = runs.path.read_bytes().splitlines(keepends=True)
+    rec = json.loads(lines[2])
+    rec["status"] = "refused"
+    lines[2] = json.dumps(rec, sort_keys=True).encode() + b"\n"
+    runs.path.write_bytes(b"".join(lines))
+    with pytest.raises(ev.LedgerDamaged, match="chain_broken"):
+        runs.records()
+
+
+def test_torn_final_fragment_is_preserved_and_cut_back(tmp_path):
+    m, runs, _ = setup(tmp_path)
+    execute(m, runs, allowance=Allowance(budget=2))
+    with open(runs.path, "ab") as fh:
+        fh.write(b'{"event": "started", "half')
+    records = runs.records()
+    assert records[-1]["event"] == "finished"
+    side = list(runs.path.parent.glob("runs.jsonl.torn-*"))
+    assert len(side) == 1 and side[0].read_bytes().startswith(b'{"event": "started"')
+
+
+def test_short_writes_are_completed(tmp_path, monkeypatch):
+    m, runs, _ = setup(tmp_path)
+    real = os.write
+    monkeypatch.setattr(ev, "_write", lambda fd, view: real(fd, view[:7]))
+    execute(m, runs, allowance=Allowance(budget=2))
+    monkeypatch.undo()
+    assert [r["event"] for r in runs.records()] == ["plan", "started", "finished", "started", "finished"]
+
+
+def test_ledger_refuses_symlinks_and_shared_permissions(tmp_path):
+    d = tmp_path / "ledgers"
+    d.mkdir(mode=0o700)
+    target = tmp_path / "elsewhere.jsonl"
+    target.write_text("")
+    (d / "runs.jsonl").symlink_to(target)
+    with pytest.raises(ev.EvalRefused):
+        ev.Ledger(d / "runs.jsonl")
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    os.chmod(shared, 0o755)
+    with pytest.raises(ev.EvalRefused, match="not_private"):
+        ev.Ledger(shared / "runs.jsonl")
+
+
+# ── E-F4: manifest binding ─────────────────────────────────────────────────
+
+def _live_doc(**over):
+    doc = manifest_doc(**over)
+    for c in doc["cases"]:
+        c["synthetic"] = False
+    return doc
+
+
+def test_live_manifest_needs_complete_private_hash_coverage(tmp_path):
+    data = b"synthetic sealed body"
+    good = {"CASES.md": hashlib.sha256(data).hexdigest()}
+    path = write_manifest(tmp_path / "a", _live_doc(file_sha256=good), files={"CASES.md": data})
+    assert ev.load_manifest(path, mode="live")["file_sha256"] == good
+    path = write_manifest(tmp_path / "b", _live_doc(file_sha256={}), files={"CASES.md": data})
+    with pytest.raises(ev.EvalRefused, match="file_hashes_missing"):
+        ev.load_manifest(path, mode="live")
+    path = write_manifest(tmp_path / "c", _live_doc(file_sha256=good), files={"CASES.md": data, "KEY.md": b"k"})
+    with pytest.raises(ev.EvalRefused, match="incomplete"):
+        ev.load_manifest(path, mode="live")
+    path = write_manifest(tmp_path / "d", _live_doc(file_sha256={"../x": "0" * 64}), files={"CASES.md": data})
+    with pytest.raises(ev.EvalRefused, match="file_hashes_invalid"):
+        ev.load_manifest(path, mode="live")
+    path = write_manifest(tmp_path / "e", _live_doc(file_sha256=good), files={"CASES.md": data})
+    os.chmod(path.parent / "CASES.md", 0o644)
+    with pytest.raises(ev.EvalRefused, match="permissions"):
+        ev.load_manifest(path, mode="live")
+    path = write_manifest(tmp_path / "f", _live_doc(file_sha256=good), files={"CASES.md": data})
+    (path.parent / "CASES.md").write_bytes(b"tampered")
+    os.chmod(path.parent / "CASES.md", 0o600)
+    with pytest.raises(ev.EvalRefused, match="hash_mismatch"):
+        ev.load_manifest(path, mode="live")
+    path = write_manifest(tmp_path / "g", _live_doc(file_sha256=good), files={"CASES.md": data})
+    os.chmod(path.parent, 0o755)
+    with pytest.raises(ev.EvalRefused, match="sealed_dir_not_private"):
+        ev.load_manifest(path, mode="live")
+
+
+def test_live_mode_refuses_placeholder_fixtures_and_synthetic_cases(tmp_path):
+    files = {"CASES.md": b"x"}
+    hashes = {"CASES.md": hashlib.sha256(b"x").hexdigest()}
+    doc = _live_doc(file_sha256=hashes)
+    doc["cases"][0]["fixture_ref"] = "pending:S01"
+    with pytest.raises(ev.EvalRefused, match="fixtures_pending"):
+        ev.load_manifest(write_manifest(tmp_path / "a", doc, files=files), mode="live")
+    with pytest.raises(ev.EvalRefused, match="live_refuses_synthetic"):
+        ev.load_manifest(write_manifest(tmp_path / "b", manifest_doc(file_sha256=hashes), files=files), mode="live")
+
+
+def test_booleans_are_strict(tmp_path):
+    doc = manifest_doc()
+    doc["cases"][0]["hard"] = "yes"
+    with pytest.raises(ev.EvalRefused, match="boolean"):
+        ev.load_manifest(write_manifest(tmp_path, doc), mode="dry_run")
+
+
+def test_execution_requires_a_manifest_validated_for_its_own_mode(tmp_path):
+    m, runs, _ = setup(tmp_path)
+    with pytest.raises(ev.EvalRefused, match="not_validated_for_mode"):
+        execute(dict(m, validated_mode="live"), runs)
+    unsynthetic = dict(m, cases=[ev.Case(**dict(c.__dict__, synthetic=False)) for c in m["cases"]])
+    with pytest.raises(ev.EvalRefused, match="synthetic"):
+        execute(unsynthetic, runs)
+
+
+def test_dry_run_refuses_non_synthetic_cases(tmp_path):
     doc = manifest_doc()
     doc["cases"][0]["synthetic"] = False
     with pytest.raises(ev.EvalRefused, match="dry_run_requires_synthetic_cases"):
         ev.load_manifest(write_manifest(tmp_path, doc), mode="dry_run")
-    m, runs, _ = setup(tmp_path / "b")
-    with pytest.raises(ev.EvalRefused, match="live_requires_verified_spend_admission"):
-        ev.run_evaluation(manifest=m, configs=CONFIGS, executor=Executor(), allowance=Allowance(), ledger=runs,
-                          plan_id="p", mode="live", estimate_usd=0.05)
+
+
+def test_live_needs_spend_admission(tmp_path):
+    m, runs, _ = setup(tmp_path)
+    with pytest.raises(ev.EvalRefused):
+        ev.run_evaluation(manifest=dict(m, validated_mode="live"), configs=CONFIGS, executor=Executor(),
+                          allowance=Allowance(), ledger=runs, plan_id="p", mode="live", estimate_usd=0.05,
+                          binding=BINDING)
 
 
 def test_two_providers_are_required(tmp_path):
@@ -195,18 +397,7 @@ def test_two_providers_are_required(tmp_path):
     with pytest.raises(ev.EvalRefused, match="two_providers_required"):
         ev.run_evaluation(manifest=m, configs=[CONFIGS[0], ev.Config("anthropic", "model-c", "high")],
                           executor=Executor(), allowance=Allowance(), ledger=runs, plan_id="p",
-                          mode="dry_run", estimate_usd=0.05)
-
-
-def test_live_manifest_verifies_sealed_file_hashes(tmp_path):
-    import hashlib
-    data = b"synthetic sealed body"
-    doc = manifest_doc(file_sha256={"CASES.md": hashlib.sha256(data).hexdigest()})
-    path = write_manifest(tmp_path, doc, files={"CASES.md": data})
-    assert ev.load_manifest(path, mode="live")["file_sha256"]["CASES.md"]
-    (tmp_path / "sealed" / "CASES.md").write_bytes(b"tampered")
-    with pytest.raises(ev.EvalRefused, match="sealed_file_hash_mismatch"):
-        ev.load_manifest(path, mode="live")
+                          mode="dry_run", estimate_usd=0.05, binding=BINDING)
 
 
 def test_contaminated_case_is_replaced_from_reserve(tmp_path):
@@ -222,15 +413,13 @@ def test_ungraded_or_invalid_grade_is_incomplete_not_pass(tmp_path):
     class Bad(Grader):
         def grade(self, case, en, dis):
             return {"score": "GREAT"} if case.id == "S08" else super().grade(case, en, dis)
-    report = ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=Bad(), grades_ledger=grades)
-    assert report["gate"] == "incomplete"
+    assert gate(m, runs, grades, Bad())["gate"] == "incomplete"
 
 
 def test_public_summary_carries_counts_only(tmp_path):
     m, runs, grades = setup(tmp_path)
     execute(m, runs)
-    report = ev.grade_and_gate(manifest=m, configs=CONFIGS, ledger=runs, grader=Grader(), grades_ledger=grades)
-    text = json.dumps(ev.public_summary(report))
+    text = json.dumps(ev.public_summary(gate(m, runs, grades)))
     assert "S01" not in text and "reason" not in text and "transcript" not in text
     assert json.loads(text)["gate"] == "pass"
 
@@ -239,10 +428,3 @@ def test_runner_source_holds_no_sealed_case_ids_or_text():
     import inspect
     src = inspect.getsource(ev)
     assert not any(f"C{i:02d}" in src for i in range(1, 13)) and "F01" not in src
-
-
-def test_live_mode_refuses_placeholder_fixtures(tmp_path):
-    doc = manifest_doc()
-    doc["cases"][0]["fixture_ref"] = "pending:S01"
-    with pytest.raises(ev.EvalRefused, match="fixtures_pending"):
-        ev.load_manifest(write_manifest(tmp_path, doc), mode="live")
