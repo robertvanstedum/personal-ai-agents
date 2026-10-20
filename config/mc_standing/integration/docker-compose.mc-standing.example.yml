@@ -29,7 +29,7 @@ services:
       - --destination
       - ${MC_STANDING_DESTINATION:?owner-approved MC Operations conversation binding}
       - --ingress-url
-      - http://cos-scheduler:8769/internal/mc/v1/standing/events
+      - http://cos-scheduler:8769                          # client appends /internal/mc/v1/standing/events
       - --token-file
       - /run/secrets/mc_standing_ingress_token
       - --control-file
