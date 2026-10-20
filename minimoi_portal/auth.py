@@ -222,9 +222,11 @@ def approve_pending(token: str) -> dict | None:
     If the same email already exists in guests, the old entry is replaced.
     Returns the new guest dict or None if token not found.
 
-    The guest is written before the pending entry is removed, under one lock,
-    so a crash between the two writes leaves a retryable pending entry rather
-    than losing the registration.
+    Progress is recorded first: the pending entry is marked ``approving`` (with
+    a stable start time), then the guest is written, then the entry is removed,
+    all under one lock. A crash at any point leaves a retryable entry, a retry
+    keeps the same expiry, and pending_reject() can tell that the account may
+    already exist instead of reporting a clean rejection.
     """
     from datetime import timedelta
 
@@ -236,8 +238,14 @@ def approve_pending(token: str) -> dict | None:
         if not entry:
             return None
 
-        # 7-day trial window from approval
-        expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        started = entry.get("approving", {}).get("started_at")
+        if not started:
+            started = datetime.now(timezone.utc).isoformat()
+            entry["approving"] = {"started_at": started}
+            _write_json("pending.json", data)
+
+        # 7-day trial window from the (stable) start of this approval
+        expires_at = (datetime.fromisoformat(started) + timedelta(days=7)).isoformat()
 
         guests_data = _load_json("guests.json", strict=True)
         if "guests" not in guests_data:
@@ -269,17 +277,36 @@ def approve_pending(token: str) -> dict | None:
     return guest
 
 
-def reject_pending(token: str) -> bool:
-    """Remove a pending registration. Returns True if found."""
+def load_pending_strict() -> list:
+    """Pending registrations for domain decisions: an unreadable file raises
+    AuthStoreError instead of looking like an empty list (login keeps using
+    the forgiving load_pending)."""
+    return _load_json("pending.json", strict=True).get("pending", [])
+
+
+def pending_reject(token: str) -> str:
+    """Reject one pending registration. Returns "rejected", "not_found", or
+    "provisioned" when an approval already created (or may have created) the
+    account: the entry is then left in place, because rejecting it would not
+    remove the active guest and revocation is a different action."""
     with _auth_lock():
         data = _load_json("pending.json", strict=True)
         pending_list = data.get("pending", [])
-        new_list = [p for p in pending_list if p["token"] != token]
-        if len(new_list) == len(pending_list):
-            return False
-        data["pending"] = new_list
+        entry = next((p for p in pending_list if p["token"] == token), None)
+        if entry is None:
+            return "not_found"
+        guests = _load_json("guests.json", strict=True).get("guests", [])
+        if any(g["username"] == entry["username"] for g in guests):
+            return "provisioned"
+        data["pending"] = [p for p in pending_list if p["token"] != token]
         _write_json("pending.json", data)
-    return True
+    return "rejected"
+
+
+def reject_pending(token: str) -> bool:
+    """Remove a pending registration. Returns True only if it was rejected;
+    False when not found or when the account was already provisioned."""
+    return pending_reject(token) == "rejected"
 
 
 def revoke_guest(username: str) -> bool:

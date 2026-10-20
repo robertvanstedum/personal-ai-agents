@@ -45,7 +45,9 @@ class Outcome:
     """``done`` = this call changed the request and the read-back confirms it.
     ``already_applied`` = it was already in the target state (safe repeat).
     ``conflict`` = it is in another terminal state (e.g. granted); nothing changed.
-    ``not_found`` / ``invalid_ref`` = no such request; nothing changed."""
+    ``not_found`` / ``invalid_ref`` = no such request; nothing changed.
+    ``unknown`` = a store could not be read or the write was not confirmed;
+    reconcile by reading back before any retry."""
     status: str
     ref: str
     verified_state: dict = field(default_factory=dict)
@@ -112,61 +114,128 @@ def _from_pending(entry: dict) -> GuestRequest:
     )
 
 
-def list_requests(db=None, status: str = "requested") -> list[GuestRequest]:
-    """Requests in ``status`` from both stores, oldest first. The file store
-    only holds open registrations, so it contributes only to ``requested``."""
-    db = db or PostgresStore()
-    rows = db.query(_SELECT_GUILD + " WHERE status=%s ORDER BY requested_at", (status,))
-    found = [_from_guild(r) for r in rows]
+class StoreUnavailable(RuntimeError):
+    """A request store could not be read. Callers must treat coverage as
+    incomplete: no name-resolved effect and no not-found verdict may rest on it."""
+
+    def __init__(self, store: str):
+        super().__init__(f"{store} store unavailable")
+        self.store = store
+
+
+@dataclass(frozen=True)
+class Resolution:
+    """Exact matches plus the coverage they were found with. Only a
+    ``complete`` resolution with exactly one match may target an effect."""
+    matches: tuple
+    complete: bool
+    unavailable: tuple = ()
+
+    @property
+    def unique(self) -> GuestRequest | None:
+        return self.matches[0] if self.complete and len(self.matches) == 1 else None
+
+
+def _db(db):
+    if db is not None:
+        return db
+    try:
+        return PostgresStore()
+    except Exception:
+        raise StoreUnavailable(GUILD) from None
+
+
+def _guild_rows(db, sql: str, params=()) -> list[dict]:
+    try:
+        return _db(db).query(sql, params)
+    except StoreUnavailable:
+        raise
+    except Exception:
+        raise StoreUnavailable(GUILD) from None
+
+
+def _pending_entries() -> list[dict]:
+    try:
+        entries = auth.load_pending_strict()
+    except (auth.AuthStoreError, OSError):
+        raise StoreUnavailable(PENDING_FILE) from None
+    if not isinstance(entries, list) or not all(isinstance(e, dict) and "token" in e for e in entries):
+        raise StoreUnavailable(PENDING_FILE)
+    return entries
+
+
+def _collect(db, status: str) -> tuple[list[GuestRequest], tuple]:
+    found, unavailable = [], []
+    try:
+        rows = _guild_rows(db, _SELECT_GUILD + " WHERE status=%s ORDER BY requested_at", (status,))
+        found += [_from_guild(r) for r in rows]
+    except StoreUnavailable as exc:
+        unavailable.append(exc.store)
     if status == "requested":
-        found += [_from_pending(p) for p in auth.load_pending()]
-    return sorted(found, key=lambda r: r.requested_at or "")
+        try:
+            found += [_from_pending(p) for p in _pending_entries()]
+        except StoreUnavailable as exc:
+            unavailable.append(exc.store)
+    return sorted(found, key=lambda r: r.requested_at or ""), tuple(unavailable)
+
+
+def list_requests(db=None, status: str = "requested", allow_partial: bool = False) -> list[GuestRequest]:
+    """Requests in ``status`` from both stores, oldest first. The file store
+    only holds open registrations, so it contributes only to ``requested``.
+    Raises StoreUnavailable if a store cannot be read, unless ``allow_partial``."""
+    found, unavailable = _collect(db, status)
+    if unavailable and not allow_partial:
+        raise StoreUnavailable(unavailable[0])
+    return found
 
 
 def pending_summary(db=None) -> dict:
     """Read-only counts for the standing brief. Unlike the CoS nudge query this
     never writes, and an unreachable store is reported, not counted as zero."""
-    db = db or PostgresStore()
     summary = {"coverage": "complete", "stores": {}}
     try:
-        rows = db.query(
-            "SELECT count(*) AS n, min(requested_at) AS oldest"
-            " FROM guild.guest_requests WHERE status='requested'"
+        rows = _guild_rows(
+            db, "SELECT count(*) AS n, min(requested_at) AS oldest"
+                " FROM guild.guest_requests WHERE status='requested'"
         )
         row = rows[0] if rows else {"n": 0, "oldest": None}
         summary["stores"][GUILD] = {"count": int(row["n"]), "oldest": _iso(row["oldest"])}
-    except Exception:
+    except StoreUnavailable:
         summary["stores"][GUILD] = {"count": None, "oldest": None, "error": "unavailable"}
         summary["coverage"] = "partial"
     try:
-        pending = auth._load_json("pending.json", strict=True).get("pending", [])
+        pending = _pending_entries()
         oldest = min((p.get("requested_at") or "" for p in pending), default=None) or None
         summary["stores"][PENDING_FILE] = {"count": len(pending), "oldest": oldest}
-    except auth.AuthStoreError:
+    except StoreUnavailable:
         summary["stores"][PENDING_FILE] = {"count": None, "oldest": None, "error": "unreadable"}
         summary["coverage"] = "partial"
     return summary
 
 
-def resolve(identifier: str, db=None) -> list[GuestRequest]:
-    """Open requests matching a name or email exactly (case-insensitive).
-    Returns every match; the caller asks for clarification when there is not
-    exactly one. Never guesses with partial matches."""
+def resolve(identifier: str, db=None) -> Resolution:
+    """Open requests matching a name or email exactly (case-insensitive),
+    across both stores. Every match is returned; the caller clarifies when
+    there is not exactly one. An unreadable store makes the resolution
+    incomplete, so an apparent single match is never treated as unique."""
     wanted = identifier.strip().lower()
     if not wanted:
-        return []
-    return [r for r in list_requests(db)
-            if r.name.strip().lower() == wanted or r.email.strip().lower() == wanted]
+        return Resolution((), True)
+    found, unavailable = _collect(db, "requested")
+    matches = tuple(r for r in found
+                    if r.name.strip().lower() == wanted or r.email.strip().lower() == wanted)
+    return Resolution(matches, not unavailable, unavailable)
 
 
 def get(ref: str, db=None) -> GuestRequest | None:
+    """The request, or None when verifiably absent. Raises StoreUnavailable
+    when its store cannot be read (absence is then unknown)."""
     store, _, key = ref.partition(":")
     if store == GUILD and key.isdigit():
-        db = db or PostgresStore()
-        rows = db.query(_SELECT_GUILD + " WHERE id=%s", (int(key),))
+        rows = _guild_rows(db, _SELECT_GUILD + " WHERE id=%s", (int(key),))
         return _from_guild(rows[0]) if rows else None
     if store == PENDING_FILE and key:
-        entry = next((p for p in auth.load_pending() if p.get("token") == key), None)
+        entry = next((p for p in _pending_entries() if p.get("token") == key), None)
         return _from_pending(entry) if entry else None
     return None
 
@@ -174,14 +243,21 @@ def get(ref: str, db=None) -> GuestRequest | None:
 def reject(ref: str, db=None) -> Outcome:
     """Reject one open request by store-qualified reference and verify it.
 
-    Only a ``requested`` row changes; a granted request is never flipped to
-    rejected (revoking an account is a different action). The verified state
-    records that the request is no longer eligible for pending nudges, which
-    select ``status='requested'`` only."""
+    Only a ``requested`` request changes. A granted request, or a registration
+    whose approval already created the account, is a ``conflict``: rejecting
+    it would not remove access, and revoking an account is a different action.
+    ``unknown`` means the store could not be read before or after the write,
+    so the effect is unverified and must not be retried blindly. The verified
+    state records whether the request is still eligible for pending nudges,
+    which select ``status='requested'`` only."""
     store, _, key = ref.partition(":")
     if store == GUILD and key.isdigit():
-        db = db or PostgresStore()
-        changed, row = db.reject_if_requested(int(key))
+        try:
+            changed, row = _db(db).reject_if_requested(int(key))
+        except StoreUnavailable:
+            return Outcome("unknown", ref, {"store": GUILD, "error": "unavailable"})
+        except Exception:
+            return Outcome("unknown", ref, {"store": GUILD, "error": "write_unconfirmed"})
         if row is None:
             return Outcome("not_found", ref)
         state = {"store": GUILD, "status": row["status"],
@@ -193,10 +269,20 @@ def reject(ref: str, db=None) -> Outcome:
             return Outcome("already_applied", ref, state)
         return Outcome("conflict", ref, state)
     if store == PENDING_FILE and key:
-        removed = auth.reject_pending(key)
-        still_there = any(p.get("token") == key for p in auth.load_pending())
+        try:
+            result = auth.pending_reject(key)
+        except (auth.AuthStoreError, OSError):
+            return Outcome("unknown", ref, {"store": PENDING_FILE, "error": "unreadable"})
+        if result == "provisioned":
+            return Outcome("conflict", ref, {"store": PENDING_FILE, "status": "provisioned",
+                                             "account_active": True})
+        if result == "not_found":
+            return Outcome("not_found", ref)
+        try:
+            still_there = any(p.get("token") == key for p in _pending_entries())
+        except StoreUnavailable:
+            return Outcome("unknown", ref, {"store": PENDING_FILE, "error": "readback_unavailable"})
         if still_there:
-            return Outcome("conflict", ref, {"store": PENDING_FILE, "status": "requested"})
-        state = {"store": PENDING_FILE, "status": "removed", "nudge_eligible": False}
-        return Outcome("done" if removed else "not_found", ref, state if removed else {})
+            return Outcome("unknown", ref, {"store": PENDING_FILE, "error": "readback_mismatch"})
+        return Outcome("done", ref, {"store": PENDING_FILE, "status": "removed", "nudge_eligible": False})
     return Outcome("invalid_ref", ref)

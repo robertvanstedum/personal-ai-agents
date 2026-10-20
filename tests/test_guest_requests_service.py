@@ -61,10 +61,13 @@ def test_lists_both_stores_with_qualified_refs(auth_dir):
 
 def test_resolve_is_exact_and_returns_all_matches(auth_dir):
     db = FakeGuildDB([_row(1, "Robert Test"), _row(2, "robert test", day=3), _row(3, "Robert")])
-    assert {r.ref for r in gr.resolve("Robert Test", db)} == {"guild:1", "guild:2"}
-    assert [r.ref for r in gr.resolve("robert3@x.test", db)] == ["guild:3"]
-    assert gr.resolve("Rob", db) == []
-    assert gr.resolve("  ", db) == []
+    both = gr.resolve("Robert Test", db)
+    assert {r.ref for r in both.matches} == {"guild:1", "guild:2"}
+    assert both.complete and both.unique is None
+    one = gr.resolve("robert3@x.test", db)
+    assert one.unique.ref == "guild:3"
+    assert gr.resolve("Rob", db).matches == ()
+    assert gr.resolve("  ", db).matches == ()
 
 
 def test_reject_verifies_and_excludes_from_nudges(auth_dir):
@@ -125,3 +128,126 @@ def test_get_by_ref(auth_dir):
     assert gr.get("guild:6", db) is None
     entry = auth.create_pending("Reg", "reg@x.test", "pw")
     assert gr.get(f"pending:{entry['token']}", db).email == "reg@x.test"
+
+
+# ── Codex review findings F1 and F2 (20 Oct) ─────────────────────────────────
+
+def test_interrupted_approval_then_reject_is_conflict_not_success(auth_dir, monkeypatch):
+    entry = auth.create_pending("Half Approved", "half@x.test", "pw")
+    real_write = auth._write_json
+    writes = []
+
+    def crash_on_final_pending_write(filename, data):
+        writes.append(filename)
+        if filename == "pending.json" and writes.count("pending.json") == 2:
+            raise OSError("crash after the guest was written")
+        real_write(filename, data)
+
+    monkeypatch.setattr(auth, "_write_json", crash_on_final_pending_write)
+    with pytest.raises(OSError):
+        auth.approve_pending(entry["token"])
+    monkeypatch.setattr(auth, "_write_json", real_write)
+    assert writes == ["pending.json", "guests.json", "pending.json"]
+    assert auth.is_guest_active(entry["username"])
+
+    out = gr.reject(f"pending:{entry['token']}", FakeGuildDB([]))
+    assert out.status == "conflict"
+    assert out.verified_state["status"] == "provisioned"
+    # Rejecting did not silently revoke, and the registration is still there to finish.
+    assert auth.is_guest_active(entry["username"])
+    assert [p["token"] for p in auth.load_pending()] == [entry["token"]]
+
+
+def test_approval_retry_keeps_the_same_expiry(auth_dir, monkeypatch):
+    entry = auth.create_pending("Retry", "retry@x.test", "pw")
+    real_write = auth._write_json
+    calls = {"n": 0}
+
+    def crash_once_after_guest(filename, data):
+        calls["n"] += 1
+        if filename == "pending.json" and calls["n"] == 3:
+            raise OSError("crash")
+        real_write(filename, data)
+
+    monkeypatch.setattr(auth, "_write_json", crash_once_after_guest)
+    with pytest.raises(OSError):
+        auth.approve_pending(entry["token"])
+    first_expiry = next(g for g in auth.load_guests() if g["username"] == entry["username"])["expires_at"]
+    monkeypatch.setattr(auth, "_write_json", real_write)
+    guest = auth.approve_pending(entry["token"])
+    assert guest["expires_at"] == first_expiry
+    assert [g["username"] for g in auth.load_guests()] == [entry["username"]]
+    assert auth.load_pending() == []
+
+
+def test_marker_without_guest_can_still_be_rejected(auth_dir, monkeypatch):
+    entry = auth.create_pending("Early Crash", "early@x.test", "pw")
+    real_write = auth._write_json
+
+    def crash_on_guest_write(filename, data):
+        if filename == "guests.json":
+            raise OSError("crash before the guest was written")
+        real_write(filename, data)
+
+    monkeypatch.setattr(auth, "_write_json", crash_on_guest_write)
+    with pytest.raises(OSError):
+        auth.approve_pending(entry["token"])
+    monkeypatch.setattr(auth, "_write_json", real_write)
+    assert not auth.is_guest_active(entry["username"])
+    assert gr.reject(f"pending:{entry['token']}", FakeGuildDB([])).status == "done"
+
+
+def test_unreadable_pending_store_makes_resolution_incomplete(auth_dir):
+    (auth_dir / "pending.json").write_text("{not json")
+    db = FakeGuildDB([_row(1, "Test Person")])
+    res = gr.resolve("Test Person", db)
+    assert [r.ref for r in res.matches] == ["guild:1"]
+    assert res.complete is False
+    assert res.unavailable == ("pending",)
+    assert res.unique is None
+    with pytest.raises(gr.StoreUnavailable):
+        gr.list_requests(db)
+    assert len(gr.list_requests(db, allow_partial=True)) == 1
+
+
+def test_unavailable_db_makes_resolution_incomplete(auth_dir):
+    auth.create_pending("Test Person", "tp@x.test", "pw")
+    db = FakeGuildDB([])
+    db.fail = True
+    res = gr.resolve("Test Person", db)
+    assert len(res.matches) == 1 and not res.complete and res.unavailable == ("guild",)
+
+
+def test_duplicate_name_across_stores_needs_clarification(auth_dir):
+    auth.create_pending("Same Name", "reg@x.test", "pw")
+    res = gr.resolve("same name", FakeGuildDB([_row(4, "Same Name")]))
+    assert res.complete and len(res.matches) == 2 and res.unique is None
+
+
+def test_get_and_reject_on_unreadable_file_are_unknown_not_absent(auth_dir):
+    entry = auth.create_pending("Reg", "reg@x.test", "pw")
+    (auth_dir / "pending.json").write_text("{broken")
+    with pytest.raises(gr.StoreUnavailable):
+        gr.get(f"pending:{entry['token']}", FakeGuildDB([]))
+    assert gr.reject(f"pending:{entry['token']}", FakeGuildDB([])).status == "unknown"
+
+
+def test_wrong_shaped_pending_file_is_unavailable(auth_dir):
+    (auth_dir / "pending.json").write_text('{"pending": [{"no_token": 1}]}')
+    with pytest.raises(gr.StoreUnavailable):
+        gr.list_requests(FakeGuildDB([]))
+
+
+def test_summary_without_database_config_is_partial(auth_dir, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    s = gr.pending_summary()
+    assert s["coverage"] == "partial"
+    assert s["stores"]["guild"]["error"] == "unavailable"
+    assert s["stores"]["pending"]["count"] == 0
+
+
+def test_db_write_exception_is_unknown(auth_dir):
+    class Boom(FakeGuildDB):
+        def reject_if_requested(self, request_id):
+            raise RuntimeError("connection lost after send")
+    assert gr.reject("guild:1", Boom([_row(1, "X")])).status == "unknown"
