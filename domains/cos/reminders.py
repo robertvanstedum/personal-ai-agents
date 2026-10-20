@@ -411,3 +411,133 @@ def deliver_due(
             summary[outcome["state"]] += 1
         _write(directory, document)
     return summary
+
+
+# ── Owner management: list, edit, cancel (MC 1.2 domain operations) ──────────
+#
+# These are the domain rules both the website and MC's action adapter call.
+# They never touch a reminder that may be going out right now: a ``sending``
+# record is refused (the send runs outside the lock, so a cancel or edit could
+# not stop it), and ``uncertain`` stays as it is.
+
+EDITABLE_STATES = frozenset({"pending"})
+CANCELLABLE_STATES = frozenset({"pending", "failed"})
+
+
+def list_reminders(
+    *,
+    states: frozenset[str] | set[str] | None = None,
+    root: str | os.PathLike | None = None,
+) -> list[dict]:
+    """Copies of the stored reminders, soonest due first, optionally filtered by state.
+
+    Read-only. An unreadable store raises ``ReminderStoreError`` rather than
+    looking like "no reminders"; individual malformed records are skipped."""
+    directory = store_dir(root)
+    if not (directory / STORE_FILE).exists():
+        return []
+    found = []
+    for record in _read(directory)["reminders"]:
+        try:
+            due_key = format_utc(parse_utc(record["due_utc"]))
+            state = record["state"]
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
+        if states is None or state in states:
+            found.append((due_key, dict(record)))
+    return [record for _, record in sorted(found, key=lambda item: item[0])]
+
+
+def _find(document: dict, reminder_id: str) -> dict | None:
+    return next((r for r in document["reminders"] if r.get("id") == reminder_id), None)
+
+
+def cancel(
+    reminder_id: str,
+    *,
+    now: datetime | None = None,
+    root: str | os.PathLike | None = None,
+) -> dict:
+    """Cancel one reminder. Returns ``{"outcome", "reminder"}`` where outcome is
+    ``cancelled`` | ``already_cancelled`` | ``already_delivered`` |
+    ``in_flight`` (being sent now; not changed) | ``uncertain`` (may have been
+    sent; not changed) | ``not_found``. The record is kept, marked cancelled."""
+    if not isinstance(reminder_id, str) or not reminder_id.strip():
+        raise ReminderRefused("reminder_id_missing")
+    current = _now(now)
+    directory = store_dir(root)
+    if not (directory / STORE_FILE).exists():
+        return {"outcome": "not_found", "reminder": None}
+    with _locked(directory):
+        document = _read(directory)
+        record = _find(document, reminder_id)
+        if record is None:
+            return {"outcome": "not_found", "reminder": None}
+        state = record.get("state")
+        if state == "cancelled":
+            return {"outcome": "already_cancelled", "reminder": dict(record)}
+        if state == "delivered":
+            return {"outcome": "already_delivered", "reminder": dict(record)}
+        if state == "sending":
+            return {"outcome": "in_flight", "reminder": dict(record)}
+        if state not in CANCELLABLE_STATES:
+            return {"outcome": "uncertain", "reminder": dict(record)}
+        record["state"] = "cancelled"
+        record["cancelled_utc"] = format_utc(current)
+        _write(directory, document)
+        return {"outcome": "cancelled", "reminder": dict(record)}
+
+
+def edit(
+    reminder_id: str,
+    *,
+    due: datetime | None = None,
+    text: str | None = None,
+    expected_due_utc: str | None = None,
+    now: datetime | None = None,
+    root: str | os.PathLike | None = None,
+) -> dict:
+    """Change a pending reminder's due time and/or text, with the same limits
+    as ``add``. ``expected_due_utc`` (optional) guards against editing a
+    reminder that changed since the caller read it. Returns the updated record.
+    Anything not ``pending`` is refused: a failed or sending reminder may
+    already be on its way."""
+    if due is None and text is None:
+        raise ReminderRefused("reminder_edit_empty")
+    current = _now(now)
+    new_text = None
+    if text is not None:
+        new_text = " ".join(str(text).split())
+        if not new_text:
+            raise ReminderRefused("reminder_text_empty")
+        if len(new_text) > MAX_TEXT_CHARS:
+            raise ReminderRefused("reminder_text_too_long")
+    new_due = None
+    if due is not None:
+        if not isinstance(due, datetime) or due.tzinfo is None or due.utcoffset() is None:
+            raise ReminderRefused("reminder_due_naive")
+        new_due = format_utc(due)
+        due_at = parse_utc(new_due)
+        if due_at < current - PAST_TOLERANCE:
+            raise ReminderRefused("reminder_due_past")
+        if due_at > current + MAX_LEAD_TIME:
+            raise ReminderRefused("reminder_due_too_far")
+    directory = store_dir(root)
+    if not (directory / STORE_FILE).exists():
+        raise ReminderRefused("reminder_not_found")
+    with _locked(directory):
+        document = _read(directory)
+        record = _find(document, reminder_id)
+        if record is None:
+            raise ReminderRefused("reminder_not_found")
+        if record.get("state") not in EDITABLE_STATES:
+            raise ReminderRefused("reminder_not_editable")
+        if expected_due_utc is not None and record.get("due_utc") != expected_due_utc:
+            raise ReminderRefused("reminder_changed")
+        if new_due is not None:
+            record["due_utc"] = new_due
+        if new_text is not None:
+            record["text"] = new_text
+        record["edited_utc"] = format_utc(current)
+        _write(directory, document)
+        return dict(record)
