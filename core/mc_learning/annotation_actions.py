@@ -19,7 +19,7 @@ back any exception and preserve its retry pointer. No application DB is chosen.
 from uuid import uuid4
 
 from core.minimoi_actions.context import ActionContext, ActionContractError
-from core.minimoi_actions.grants import GrantStore
+from core.minimoi_actions.grants import GrantStore, GrantExecution
 from core.minimoi_actions.receipts import EffectIntent, EffectLease, ReceiptStore, _cursor, _uuid
 from core.workshop_journal.errors import InvalidInput
 from .annotation_shelf import AnnotationShelf
@@ -126,8 +126,9 @@ class AnnotationActions:
         self.grants.recheck_execution(conn,context,intent,current_policy_version=current_policy_version)
         with _cursor(conn) as cur:
             saved,_,clock = self._load(cur,context,intent.operation_id,intent=intent)
-        lease = self.receipts.claim(conn,context.principal_id,context.environment,intent.operation_id,worker_id)
-        self.receipts.dispatch(conn,lease)
+        authority = GrantExecution(self.grants,context,intent,current_policy_version)
+        lease = self.receipts.claim(conn,context.principal_id,context.environment,intent.operation_id,worker_id,authority=authority)
+        self.receipts.dispatch(conn,lease,authority=authority)
         with _cursor(conn) as cur:
             cur.execute('''UPDATE guild.mc_owner_annotation_intents SET dispatch_transaction=%s
                 WHERE principal_id=%s AND environment=%s AND operation_id=%s''',
@@ -157,7 +158,8 @@ class AnnotationActions:
             return current['payload'] == payload and current['payload_digest'] == digest
         annotation = self.shelf.publish(_encode(saved['payload']),context=context,now=now,
             can_read_statement=can_read_statement,authorize_owner_annotation=authorize)
-        return self._finish(conn,lease,saved,annotation)
+        return self._finish(conn,lease,saved,annotation,
+            authority=GrantExecution(self.grants,context,intent,current_policy_version))
 
     def reconcile(self, conn, context, lease, *, can_read_statement):
         if (type(context) is not ActionContext or type(lease) is not EffectLease or lease.mode != 'reconcile'
@@ -174,7 +176,7 @@ class AnnotationActions:
             raise ActionContractError('annotation_publication_unverified')
         return self._finish(conn,lease,saved,annotation)
 
-    def _finish(self, conn, lease, saved, annotation):
+    def _finish(self, conn, lease, saved, annotation, *, authority=None):
         if annotation.data != saved['payload'] or annotation.digest != saved['payload_digest']:
             raise ActionContractError('annotation_readback_mismatch')
         with _cursor(conn) as cur:
@@ -182,7 +184,7 @@ class AnnotationActions:
                 SET verified_sequence=%s,verified_payload_hash=%s
                 WHERE principal_id=%s AND environment=%s AND operation_id=%s''',
                 (annotation.sequence,_hash(annotation.encoded),lease.principal_id,lease.environment,lease.operation_id))
-        self.receipts.finish(conn,lease,'verified',evidence_refs=(str(saved['evidence_id']),))
+        self.receipts.finish(conn,lease,'verified',evidence_refs=(str(saved['evidence_id']),),authority=authority)
         return self.receipts.read(conn,lease.principal_id,lease.environment,lease.operation_id)
 
     def verify_completed(self, conn, context, payload, digest, sequence):

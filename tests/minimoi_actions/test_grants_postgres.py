@@ -6,7 +6,7 @@ import unittest
 from uuid import uuid4
 
 from core.minimoi_actions.context import ActionContext, ActionContractError
-from core.minimoi_actions.grants import CapabilityRule, GrantDefinition, GrantStore
+from core.minimoi_actions.grants import CapabilityRule, GrantDefinition, GrantStore, GrantExecution
 from core.minimoi_actions.receipts import EffectIntent, ReceiptStore
 from core.minimoi_actions.requests import ToolRequest
 from postgres_fixture_support import DSN, PostgresFixture
@@ -155,10 +155,11 @@ class GrantPostgresTests(PostgresFixture, unittest.TestCase):
         self.prepare()
         receipts = ReceiptStore()
         with self.connect() as conn:
-            lease = receipts.claim(conn, 'owner', 'dev', self.intent.operation_id, 'worker')
+            lease = receipts.claim(conn, 'owner', 'dev', self.intent.operation_id, 'worker',
+                authority=GrantExecution(self.store,self.context,self.intent,'policy'))
         with self.connect() as conn:
             self.store.recheck_execution(conn, self.context, self.intent, current_policy_version='policy')
-            receipts.dispatch(conn, lease)
+            receipts.dispatch(conn,lease,authority=GrantExecution(self.store,self.context,self.intent,'policy'))
         with self.connect() as conn:
             receipts.finish(conn, lease, 'unknown')
         self.assertEqual(self.consumed(), 1)

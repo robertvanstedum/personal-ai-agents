@@ -1,8 +1,8 @@
 """Durable effect identity and fenced receipts (harness §§3.4,5).
 
 Internal transaction API only: no route, tool, grant compiler or implicit grant.
-The caller authenticates scope and rechecks current grants/policy/target/budget
-before claiming/dispatching. A lease is concurrency control, never authority.
+Execution transitions require a typed GrantExecution check inside the transition.
+The caller still authenticates scope/target/budget. A lease is never authority.
 All methods borrow a non-autocommit psycopg connection; never commit here.
 
 Same-DB domain operations and verification use the SAME borrowed transaction,
@@ -142,7 +142,30 @@ class ReceiptStore:
             row, _ = self._row(cur, _scope(principal, environment, operation_id))
             return self._public(row)
 
+    @staticmethod
+    def _authorize(conn, scope, authority):
+        # Lazy import avoids the receipt/grant definition cycle. This is a
+        # trusted service object, never a model argument or an approval boolean.
+        from .grants import GrantExecution
+        if type(authority) is not GrantExecution:
+            raise ActionContractError('receipt_execution_authority_required')
+        authority.check(conn, scope)
+
     def prepare(self, conn, context: ActionContext, intent: EffectIntent):
+        # A caller may catch a refused preparation and commit other work. Keep
+        # this operation atomic even then, including expiry while lock-waiting.
+        with _cursor(conn) as cur:
+            cur.execute('SAVEPOINT mc_receipt_prepare')
+            try:
+                result = self._prepare(conn,context,intent)
+            except Exception:
+                cur.execute('ROLLBACK TO SAVEPOINT mc_receipt_prepare')
+                cur.execute('RELEASE SAVEPOINT mc_receipt_prepare')
+                raise
+            cur.execute('RELEASE SAVEPOINT mc_receipt_prepare')
+            return result
+
+    def _prepare(self, conn, context: ActionContext, intent: EffectIntent):
         if type(context) is not ActionContext or type(intent) is not EffectIntent:
             raise ActionContractError('receipt_intent_invalid')
         scope = _scope(context.principal_id, context.environment, intent.operation_id)
@@ -169,13 +192,17 @@ class ReceiptStore:
             row, _ = self._row(cur, scope)
             return self._public(row)
 
-    def claim(self, conn, principal, environment, operation_id, worker_id, *, mode='execute', seconds=30):
+    def claim(self, conn, principal, environment, operation_id, worker_id, *, mode='execute', seconds=30, authority=None):
         scope = _scope(principal, environment, operation_id)
         if (not _identifier(worker_id) or mode not in ('execute', 'reconcile')
                 or type(seconds) is not int or not 1 <= seconds <= 30):
             raise ActionContractError('receipt_claim_invalid')
+        if mode == 'execute':
+            self._authorize(conn,scope,authority)  # grant before receipt lock
         with _cursor(conn) as cur:
             row, now = self._row(cur, scope)
+            if mode == 'execute':
+                self._authorize(conn,scope,authority)  # expiry after any receipt lock wait
             if row['state'] in ('verified', 'failed', 'cancelled'):
                 raise ActionContractError('receipt_terminal')
             if row['lease_until'] is not None and row['lease_until'] > now:
@@ -210,16 +237,28 @@ class ReceiptStore:
             raise ActionContractError('receipt_lease_stale')
         return scope, row
 
-    def dispatch(self, conn, lease):
+    def dispatch(self, conn, lease, *, authority=None):
+        if type(lease) is not EffectLease:
+            raise ActionContractError('receipt_lease_invalid')
+        if lease.mode != 'execute':
+            raise ActionContractError('receipt_dispatch_refused')
+        self._authorize(conn,(lease.principal_id,lease.environment,lease.operation_id),authority)
         with _cursor(conn) as cur:
             scope, row = self._leased(cur, lease)
+            self._authorize(conn,scope,authority)
             if lease.mode != 'execute' or row['state'] != 'prepared' or row['cancel_requested']:
                 raise ActionContractError('receipt_dispatch_refused')
+            # Do not start an effect at the edge of the claim's deadline.
+            # A sender must also enforce its bounded timeout/fencing at the
+            # external boundary; a receipt alone cannot fence a remote service.
+            cur.execute('SELECT clock_timestamp() AS now')
+            if (row['lease_until']-cur.fetchone()['now']).total_seconds() < 5:
+                raise ActionContractError('receipt_dispatch_window_insufficient')
             cur.execute('''UPDATE guild.mc_action_receipts SET state='dispatched'
                 WHERE principal_id=%s AND environment=%s AND operation_id=%s''', scope)
             self._event(cur, scope, 'dispatched')
 
-    def finish(self, conn, lease, state, *, evidence_refs=()):
+    def finish(self, conn, lease, state, *, evidence_refs=(), authority=None):
         """Verified/failed requires committed evidence IDs from a trusted verifier.
 
         For local writes dispatch, domain change, readback and finish are in one
@@ -233,8 +272,14 @@ class ReceiptStore:
                 or len(set(evidence_refs)) != len(evidence_refs)
                 or (state != 'unknown' and not evidence_refs)):
             raise ActionContractError('receipt_result_invalid')
+        if type(lease) is not EffectLease:
+            raise ActionContractError('receipt_lease_invalid')
+        if lease.mode == 'execute' and state != 'unknown':
+            self._authorize(conn,(lease.principal_id,lease.environment,lease.operation_id),authority)
         with _cursor(conn) as cur:
             scope, row = self._leased(cur, lease)
+            if lease.mode == 'execute' and state != 'unknown':
+                self._authorize(conn,scope,authority)
             if row['state'] not in ('dispatched', 'unknown'):
                 raise ActionContractError('receipt_result_transition_invalid')
             cur.execute('''UPDATE guild.mc_action_receipts SET state=%s,evidence_refs=%s::jsonb,

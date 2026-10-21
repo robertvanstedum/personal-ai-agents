@@ -11,7 +11,8 @@ Borrow the binding transaction: binding/session -> grant -> receipt lock order.
 prepare_effect consumes cardinality and prepares its receipt atomically. At the
 actual dispatch boundary recheck_execution rechecks revocation/current policy,
 scope, effect identity and expiry; it leaves its grant row lock held until commit.
-Call ReceiptStore.dispatch and the local domain operation in that transaction.
+Receipt execution transitions require GrantExecution and repeat that check.
+Run the local domain operation in that transaction.
 For an external send commit dispatch first, then reconcile all uncertainty.
 
 These grants cover ZERO-SPEND product actions only. Paid capabilities and their
@@ -117,6 +118,28 @@ def _decode(value):
         return GrantDefinition(**value)
     except (ValueError, KeyError, TypeError):
         raise ActionContractError('grant_record_invalid') from None
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class GrantExecution:
+    """Trusted dispatch inputs, revalidated by every receipt transition.
+
+    Not an authority cache: each check reads current durable grant state and
+    holds its lock. Current policy is supplied by the trusted request adapter.
+    Scope and intent are bound before acquiring the receipt lock.
+    """
+    store: 'GrantStore'
+    context: ActionContext
+    intent: EffectIntent
+    current_policy_version: str
+
+    def check(self, conn, scope):
+        if (type(self.store) is not GrantStore or type(self.context) is not ActionContext
+                or type(self.intent) is not EffectIntent
+                or scope != (self.context.principal_id,self.context.environment,self.intent.operation_id)):
+            raise ActionContractError('receipt_execution_scope_mismatch')
+        self.store.recheck_execution(conn,self.context,self.intent,
+            current_policy_version=self.current_policy_version)
 
 
 class GrantStore:
