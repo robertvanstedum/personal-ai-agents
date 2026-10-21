@@ -1,0 +1,170 @@
+# Claude re-review scenarios against Codex v0.3 evidence rules (rules.yaml). Each test asserts
+# the CURRENT behaviour of the v0.3 rules, so a pass here demonstrates the finding.
+rule_files: [rules.yaml]
+evaluation_interval: 1m
+tests:
+# CR3-S1: bridge stops -> JobNeverRan (major) fires for a job that has run before, alongside the critical emitter alert.
+- name: S1-bridge-down-fires-never-ran
+  interval: 1m
+  input_series:
+  - series: minimoi_emitter_expected{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge"}
+    values: 1x40
+  - series: minimoi_job_expected{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 1x40
+  - series: minimoi_job_first_due_timestamp_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 0x40
+  - series: minimoi_telemetry_heartbeat_timestamp_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge"}
+    values: 0+60x5 stale
+  - series: minimoi_job_status_readable{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 1x5 stale
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: JobNeverRan
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: minimoi-observability-bridge, job_id: daily, severity: major, minimoi_alert_key: "job:daily:never-ran"}
+      exp_annotations:
+        summary: Job daily has no readable first run after its due time
+        runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-missed.md
+# CR3-S2: a job that has run many times whose status file becomes corrupt (readable=0) is reported as never-ran.
+- name: S2-corrupt-status-reported-never-ran
+  interval: 1m
+  input_series:
+  - series: minimoi_job_first_due_timestamp_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 0x20
+  - series: minimoi_job_status_readable{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 1x2 0x18
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: JobNeverRan
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: minimoi-observability-bridge, job_id: daily, severity: major, minimoi_alert_key: "job:daily:never-ran"}
+      exp_annotations:
+        summary: Job daily has no readable first run after its due time
+        runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-missed.md
+# CR3-S3: drop counter created lazily at first drop (OTel cumulative counter) -> increase()==0 -> TelemetryDropping never fires.
+- name: S3-first-drops-in-new-process-missed
+  interval: 1m
+  input_series:
+  - series: minimoi_telemetry_dropped_total{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",signal="metrics",reason="queue_full"}
+    values: _x3 40x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: TelemetryDropping
+    exp_alerts: []
+# CR3-S4: job not yet due (first_due in the future) with no status file -> JobStatusUnreadable warning after 30m.
+- name: S4-not-yet-due-job-reported-unreadable
+  interval: 1m
+  input_series:
+  - series: minimoi_job_expected{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="weekly"}
+    values: 1x40
+  - series: minimoi_job_first_due_timestamp_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="weekly"}
+    values: 999999x40
+  - series: minimoi_job_status_readable{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="weekly"}
+    values: 0x40
+  alert_rule_test:
+  - eval_time: 35m
+    alertname: JobStatusUnreadable
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: minimoi-observability-bridge, job_id: weekly, severity: warning, minimoi_alert_key: "job:weekly:unreadable"}
+      exp_annotations:
+        summary: Job weekly status unavailable; health is unknown
+        runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-status-unreadable.md
+# CR3-S5: first-ever run fails -> JobFailed AND JobNoSuccess both fire (two major notifications, distinct keys, no inhibition).
+- name: S5-first-run-failure-double-notifies
+  interval: 1m
+  input_series:
+  - series: minimoi_job_failed{environment="dev",host="mac-dev",service_name="b",job_id="daily"}
+    values: 1x10
+  - series: minimoi_job_running{environment="dev",host="mac-dev",service_name="b",job_id="daily"}
+    values: 0x10
+  - series: minimoi_job_has_success{environment="dev",host="mac-dev",service_name="b",job_id="daily"}
+    values: 0x10
+  - series: minimoi_job_status_readable{environment="dev",host="mac-dev",service_name="b",job_id="daily"}
+    values: 1x10
+  - series: minimoi_source_readable{environment="dev",host="mac-dev",service_name="b",source_id="jobs"}
+    values: 1x10
+  - series: minimoi_source_timestamp_seconds{environment="dev",host="mac-dev",service_name="b",source_id="jobs"}
+    values: 0+60x10
+  - series: minimoi_source_max_age_seconds{environment="dev",host="mac-dev",service_name="b",source_id="jobs"}
+    values: 180x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: JobFailed
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: b, job_id: daily, severity: major, minimoi_alert_key: "job:daily:failed"}
+      exp_annotations: {summary: Job daily last run failed, runbook_url: "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-failed.md"}
+  - eval_time: 5m
+    alertname: JobNoSuccess
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: b, job_id: daily, severity: major, minimoi_alert_key: "job:daily:no-success"}
+      exp_annotations: {summary: Job daily finished without any known successful run, runbook_url: "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-failed.md"}
+# CR3-S6: `up` without environment/host target labels never matches the expectation -> permanent false MonitorTargetUnavailable.
+- name: S6-up-without-identity-labels
+  interval: 1m
+  input_series:
+  - series: minimoi_monitor_target_expected{environment="dev",host="mac-dev",service_name="minimoi-observability",job="otel-collector",instance="otel-collector:8889"}
+    values: 1x10
+  - series: up{job="otel-collector",instance="otel-collector:8889"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MonitorTargetUnavailable
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: minimoi-observability, job: otel-collector, instance: "otel-collector:8889", severity: critical, minimoi_alert_key: "self:target:otel-collector:otel-collector:8889"}
+      exp_annotations: {summary: Monitoring target otel-collector is unavailable, runbook_url: "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/collector.md"}
+# CR3-S7 (positive): missing max-age recording fails closed -> SourceUnavailable.
+- name: S7-missing-max-age-fails-closed
+  interval: 1m
+  input_series:
+  - series: minimoi_source_expected{environment="dev",host="mac-dev",service_name="b",source_id="host"}
+    values: 1x10
+  - series: minimoi_source_readable{environment="dev",host="mac-dev",service_name="b",source_id="host"}
+    values: 1x10
+  - series: minimoi_source_timestamp_seconds{environment="dev",host="mac-dev",service_name="b",source_id="host"}
+    values: 0+60x10
+  alert_rule_test:
+  - eval_time: 7m
+    alertname: SourceUnavailable
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: b, source_id: host, severity: warning, minimoi_alert_key: "source:host"}
+      exp_annotations: {summary: Source host is unavailable or stale; health is unknown, runbook_url: "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/source-unavailable.md"}
+# CR3-S8 (positive): stale-but-valid host snapshot (original sampled_at retained) suppresses DiskCritical and raises SourceUnavailable.
+- name: S8-stale-host-snapshot-gates-disk
+  interval: 1m
+  input_series:
+  - series: minimoi_source_expected{environment="dev",host="mac-dev",service_name="b",source_id="host"}
+    values: 1x90
+  - series: minimoi_source_readable{environment="dev",host="mac-dev",service_name="b",source_id="host"}
+    values: 1x90
+  - series: minimoi_source_timestamp_seconds{environment="dev",host="mac-dev",service_name="b",source_id="host"}
+    values: 0x90
+  - series: minimoi_source_max_age_seconds{environment="dev",host="mac-dev",service_name="b",source_id="host"}
+    values: 3600x90
+  - series: minimoi_host_filesystem_used_ratio{environment="dev",host="mac-dev",service_name="b",mountpoint="root"}
+    values: 0.97x90
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: DiskCritical
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: b, mountpoint: root, severity: critical, minimoi_alert_key: "host:disk:root"}
+      exp_annotations: {summary: "Disk root at 97%", runbook_url: "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/disk.md"}
+  - eval_time: 75m
+    alertname: DiskCritical
+    exp_alerts: []
+  - eval_time: 75m
+    alertname: SourceUnavailable
+    exp_alerts:
+    - exp_labels: {environment: dev, host: mac-dev, service_name: b, source_id: host, severity: warning, minimoi_alert_key: "source:host"}
+      exp_annotations: {summary: Source host is unavailable or stale; health is unknown, runbook_url: "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/source-unavailable.md"}
+# CR3-S9: ScrapeLimitHit's key names the Prometheus self-scrape job, not the offending target.
+- name: S9-scrape-limit-key-is-self-job
+  interval: 1m
+  input_series:
+  - series: prometheus_target_scrapes_exceeded_sample_limit_total{job="prometheus",instance="localhost:9090"}
+    values: 0 0 1 1 1 1
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: ScrapeLimitHit
+    exp_alerts:
+    - exp_labels: {job: prometheus, instance: "localhost:9090", severity: warning, minimoi_alert_key: "self:cardinality:prometheus"}
+      exp_annotations: {summary: A recent sample limit breach failed an entire scrape, runbook_url: "https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/cardinality.md"}
