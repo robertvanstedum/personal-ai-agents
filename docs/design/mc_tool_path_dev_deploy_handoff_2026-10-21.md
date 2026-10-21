@@ -28,23 +28,25 @@ Each call is bound to Robert's **live turn-ledger claim**, never to identity the
 | P2-4 public-text gaps | `59182654` | ASCII-only after NFKC; spaced or dotted letters rejoined; guest logins checked; "robert" no longer exempt | `test_p2_4_…` |
 | P2-5 unverified gateway change; P1-2 follow-up | `265943a0` | `register()` never throws; the plugin offers no tools unless the run is `workspaceOnly` and the token is outside the workspace; the probe gains three phases | plugin tests; probe phases 2–4 |
 | P2-6 change control | `6c9f4a93` | on prod, a guest reject or invite only as a pre-approved standard change, logged on its ticket; the data-repair ticket is a draft RFC with the §4 fields | `test_p2_6_…` (3) |
+| Re-review R-1 (GitHub text remembered across turns), R-2 (forged cards) | see `git log` (after `c8b950f7`) | once MC reads GitHub in a conversation, every later proposal there needs the code (`mc_tool_conversation_taint`, never expires; a new conversation starts clean); every card says it was made while answering Robert's last message, and when the runtime is not isolated it says MiniMoi can't yet prove the card came from MC and to reply "no P-XXXX" | `test_r1_…`, `test_r2_…` |
 | P3-1, P3-3, P3-4 | `d5dad889` | loopback bind outside a container; research to Claude Code only; an invite never rewrites a guest's own request | `test_p3_3_…`, `test_p3_4_…` |
 
 ## Evidence
 
 | Check | Result |
 |---|---|
-| `tests/mc_tools/run_postgres.sh <pgbin>` (real PostgreSQL 16.2, under `heavy_job.py`) | **56 OK**, no skips (41 before the review) |
+| `tests/mc_tools/run_postgres.sh <pgbin>` (real PostgreSQL 16.2, under `heavy_job.py`) | **58 OK**, no skips (41 before the review) |
+| The re-review's reproductions (`repro_mc_tools_rereview_postgres.py`) against the fix | R1 now fails as it should (`needs_code`, nothing posted); T1, T2, T4/T5 and T6 still hold |
 | The reviewer's 6 reproductions, run once against the fixed code | T2, T3 and T6 now fail as they should (nothing posted or approved). T4 and T5 error on the changed `has_pending`/`parse` signatures; their behaviour is covered by `test_p2_2_…` and `test_p2_3_…`. T1 still lists and proposes, but leaks nothing, and its proposal needs a named yes. |
 | `node --test tests/mc_tools/test_minimoi_tools_plugin.mjs` | **10 pass** |
 | **Real runtime**, `node tests/mc_tools/openclaw_native_tool_probe.mjs` (installed OpenClaw 2026.9.4, isolated gateways, fake provider, Node 24.18, under `heavy_job.py`) | **4 phases pass.** (1) mc-chat is offered exactly the nine tools; the plugin sends `agent:mc-chat:openai-user:guild-mc:<32 hex>`, `mc-chat` and the bearer; `main` is offered none. (2) With Robert's nine real plugins enabled by name (no credentials), mc-chat's other tools are still only `read`, `ls`, `dir_list`. (3) With the token missing, the gateway starts and both agents answer; no MiniMoi tool; one log line. (4) Under OpenClaw's default file policy, no MiniMoi tool. Limit: in phase 2 the other plugins ran without their credentials, so a channel plugin that registers tools only once configured was not exercised. |
-| Guild regression (`tests/guild tests/guild_ui tests/mc_lessons tests/mc_tools tests/mc_domain_actions tests/mc_delegation_runner`, under `heavy_job.py`) | **3,104 passed, 127 skipped**, 0 failed, on the merged `bd29344e` tree (the skips are real-database tests, run separately: tool suite 56 OK, guest and delegation suite 40 OK) |
+| Guild regression (`tests/guild tests/guild_ui tests/mc_lessons tests/mc_tools tests/mc_domain_actions tests/mc_delegation_runner`, under `heavy_job.py`) | **3,104 passed, 129 skipped**, 0 failed, on the merged `bd29344e` tree with the re-review fixes (the skips are real-database tests, run separately: tool suite 58 OK, guest and delegation suite 40 OK) |
 
 ## Deploy steps (dev only)
 
 ### 1. Database (additive)
 
-Apply `core/mc_tools/sql/001_tool_turns.sql` to the dev guild database as `minimoi`. It needs `mc_turn_ledger` (007) and the receipt and grant tables (004, 005), all already on dev. It adds `mc_tool_turns`, `mc_tool_proposals` and `mc_tool_evidence`. The file changed in review (new proposal columns and kinds); nothing was applied anywhere before.
+Apply `core/mc_tools/sql/001_tool_turns.sql` to the dev guild database as `minimoi`. It needs `mc_turn_ledger` (007) and the receipt and grant tables (004, 005), all already on dev. It adds `mc_tool_turns`, `mc_tool_proposals`, `mc_tool_conversation_taint` and `mc_tool_evidence`. The file changed in review (new proposal columns and kinds); nothing was applied anywhere before.
 
 ### 2. Executor credential (never printed)
 

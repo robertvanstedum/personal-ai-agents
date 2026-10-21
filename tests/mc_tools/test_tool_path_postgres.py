@@ -60,6 +60,7 @@ class Base(PostgresFixture):
     def setUp(self):
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute("""TRUNCATE guild.mc_tool_turns, guild.mc_tool_proposals, guild.mc_tool_evidence,
+                guild.mc_tool_conversation_taint,
                 guild.mc_guest_proposals, guild.mc_guest_action_evidence, guild.mc_action_grant_consumptions,
                 guild.mc_action_grants, guild.mc_action_events, guild.mc_action_receipts,
                 guild.mc_turn_barrier, guild.mc_turn_ledger CASCADE""")

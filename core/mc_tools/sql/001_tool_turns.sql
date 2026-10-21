@@ -45,6 +45,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS mc_tool_proposals_code
 CREATE INDEX IF NOT EXISTS mc_tool_proposals_pending
     ON guild.mc_tool_proposals (principal_id, environment, conversation_id, created_at DESC);
 
+-- Conversations in which MC has read text anyone can write (GitHub). MC's session keeps that text in its context, so
+-- from then on every proposal in the conversation needs Robert to name its code (re-review R-1). It never expires.
+CREATE TABLE IF NOT EXISTS guild.mc_tool_conversation_taint (
+    principal_id     text NOT NULL,
+    environment      text NOT NULL CHECK (environment IN ('dev', 'prod')),
+    conversation_id  text NOT NULL,
+    first_read_at    timestamptz NOT NULL DEFAULT clock_timestamp(),
+    last_read_at     timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (principal_id, environment, conversation_id)
+);
+
 -- Verified evidence for tool effects; receipts reference evidence_id only.
 CREATE TABLE IF NOT EXISTS guild.mc_tool_evidence (
     evidence_id   uuid PRIMARY KEY,

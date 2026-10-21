@@ -51,6 +51,18 @@ REFUSED_WORDS = {
 }
 
 
+def _provenance_warning(code, *, isolated, tainted):
+    """What Robert should know about where a card came from (re-review R-2). The platform cannot tell a forged call
+    from MC's while the runtime is not isolated, so it says so on every card rather than pretending."""
+    if not isolated:
+        return (f"\n\nCheck before approving: MiniMoi cannot yet prove this came from Master Craftsman. If it is not "
+                f"what you asked for, reply “no {code}” and tell Claude Code.")
+    if tainted:
+        return ("\n\nMaster Craftsman has read public GitHub text in this conversation, which anyone can write, so "
+                "approve only by the code and only if it is what you asked for.")
+    return ""
+
+
 def _standard_change_words(sc):
     return f"\n\nStandard change {sc['id']} (ticket #{sc['ticket']}); this use is logged there." if sc else ""
 
@@ -182,9 +194,14 @@ class ToolService:
             return refused("tool_arguments_invalid")
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
-            with _cursor(conn) as cur:                # anyone can write on GitHub: this turn's proposals need a code
+            with _cursor(conn) as cur:                # anyone can write on GitHub: proposals need a code from now on
                 cur.execute("""UPDATE guild.mc_tool_turns SET untrusted_read=true WHERE ledger_id=%s
                     AND claim_generation=%s""", (b.ledger_id, b.generation))
+                # MC's session remembers what it read, so the taint sticks to the conversation (re-review R-1).
+                cur.execute("""INSERT INTO guild.mc_tool_conversation_taint (principal_id, environment, conversation_id)
+                    VALUES (%s,%s,%s) ON CONFLICT (principal_id, environment, conversation_id)
+                    DO UPDATE SET last_read_at = clock_timestamp()""",
+                    (self.principal, self.environment, b.conversation_id))
         state, message, data = (self.github.issue(args["number"]) if "number" in args
                                 else self.github.search(args["query"]))
         return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
@@ -303,6 +320,10 @@ class ToolService:
             cur.execute("""SELECT untrusted_read FROM guild.mc_tool_turns WHERE ledger_id=%s AND claim_generation=%s""",
                         (b.ledger_id, b.generation))
             untrusted = bool(cur.fetchone()["untrusted_read"]) or not self.isolated_runtime
+            cur.execute("""SELECT 1 FROM guild.mc_tool_conversation_taint WHERE principal_id=%s AND environment=%s
+                AND conversation_id=%s""", (self.principal, self.environment, b.conversation_id))
+            tainted = cur.fetchone() is not None
+            untrusted = untrusted or tainted
         effect = effects.begin_turn_effect(conn, b, req, worker=self.worker)
         proposal_id, operation_id = str(uuid4()), str(uuid4())
         with _cursor(conn) as cur:
@@ -330,8 +351,9 @@ class ToolService:
         receipt = effect.finish(conn, kind + "_proposal", {"proposal_id": proposal_id, "code": code}, verified=True)
         conn.commit()
         how = (f"Reply “yes {code}” to approve" if untrusted else f"Reply “yes” as your next message (or “yes {code}”)")
-        card = (f"Proposal {code} from Master Craftsman, waiting for you:\n\n{words}\n\n{how}, or “no”. Nothing "
-                f"happens until you do; it lapses after {PROPOSAL_MINUTES} minutes.")
+        card = (f"Proposal {code}, made while answering your last message, waiting for you:\n\n{words}\n\n{how}, or "
+                f"“no”. Nothing happens until you do; it lapses after {PROPOSAL_MINUTES} minutes."
+                + _provenance_warning(code, isolated=self.isolated_runtime, tainted=tainted))
         if not self.show(b.conversation_id, f"mc-tool-proposal-{proposal_id}", card):
             with _cursor(conn) as cur:
                 cur.execute("UPDATE guild.mc_tool_proposals SET state='cancelled' WHERE proposal_id=%s", (proposal_id,))

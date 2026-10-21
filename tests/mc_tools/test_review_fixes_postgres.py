@@ -178,6 +178,35 @@ class ReviewFixes(Base, unittest.TestCase):
         self.assertEqual(tuple(self.one("SELECT name, status, reason FROM guild.guest_requests WHERE id=1")),
                          ("Ana Souza", "rejected", "their own words"))
 
+    def test_r1_github_text_read_in_an_earlier_turn_still_needs_the_code(self):
+        self.call("minimoi_github_issues", {"number": 69})                 # turn N: MC reads public text
+        self.next_turn("note-n1")                                          # turn N+1: no read, but the session remembers it
+        r = self.call("minimoi_issue_comment", {"number": 69, "summary": "Steered by last turn's public comment.", "refs": []})
+        code = r["data"]["code"]
+        posted = []
+        p = self.props(comment_issue=lambda n, b: posted.append(n) or ("created", 1))
+        self.assertEqual(self.say(p, "yes", "note-yes")["operation"]["state"], "needs_code")
+        self.assertEqual(posted, [])
+        self.assertIn(f"yes {code}", self.shown[-1][2])
+        self.assertIn("public GitHub text in this conversation", self.shown[-1][2])
+        # Sticky for the conversation, later turns too; a fresh conversation starts clean.
+        self.next_turn("note-n3")
+        self.call("minimoi_lesson_propose", {"text": "Lead with the answer, then the detail."})
+        self.assertEqual(self.say(self.props(lessons=self.ledger), "yes", "note-n4")["operation"]["state"], "needs_code")
+        self.assertEqual(self.say(p, f"yes {code}", "note-named")["operation"]["state"], "nothing_pending")  # superseded
+
+    def test_r2_cards_say_when_the_platform_cannot_prove_the_proposal_came_from_mc(self):
+        self.service.isolated_runtime = False
+        r = self.call("minimoi_issue_comment", {"number": 69, "summary": "Forged text that Robert did not ask for.", "refs": []})
+        card = self.shown[-1][2]
+        self.assertIn("MiniMoi cannot yet prove this came from Master Craftsman", card)
+        self.assertIn(f"no {r['data']['code']}", card)
+        self.service.isolated_runtime = True                                # isolated and untainted: no warning
+        self.next_turn("note-2")
+        self.call("minimoi_issue_comment", {"number": 70, "summary": "A normal proposal in an isolated runtime.", "refs": []})
+        self.assertNotIn("cannot yet prove", self.shown[-1][2])
+        self.assertNotIn("public GitHub text", self.shown[-1][2])
+
 
 if __name__ == "__main__":
     unittest.main()
