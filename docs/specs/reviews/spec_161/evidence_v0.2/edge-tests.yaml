@@ -1,0 +1,46 @@
+evaluation_interval: 1m
+tests:
+- input_series:
+  - series: minimoi_telemetry_heartbeat_timestamp_seconds{service_name="minimoi-curator"}
+    values: 0 60 120 180 240 300 stale _x25
+  interval: 1m
+  promql_expr_test:
+  - eval_time: 25m
+    exp_samples: []
+    expr: (time() - max by (service_name) (minimoi_telemetry_heartbeat_timestamp_seconds))
+      > 900
+- input_series:
+  - series: minimoi_job_running{job_id="fresh-run"}
+    values: 1x5
+  - series: minimoi_job_last_finish_timestamp_seconds{job_id="fresh-run"}
+    values: '0x5'
+  - series: minimoi_job_stuck_after_seconds{job_id="fresh-run"}
+    values: 120x5
+  interval: 1m
+  promql_expr_test:
+  - eval_time: 3m
+    exp_samples:
+    - labels: minimoi_job_running{job_id="fresh-run"}
+      value: 1
+    expr: minimoi_job_running == 1 and (time() - minimoi_job_last_finish_timestamp_seconds)
+      > minimoi_job_stuck_after_seconds
+- input_series:
+  - series: otelcol_exporter_send_failed_metric_points_total
+    values: 0+60x20
+  interval: 1m
+  promql_expr_test:
+  - eval_time: 20m
+    exp_samples: []
+    expr: sum(rate(otelcol_exporter_send_failed_metric_points_total[10m])) + sum(rate(otelcol_exporter_send_failed_log_records_total[10m]))
+      > 0
+- input_series:
+  - series: minimoi_telemetry_heartbeat_timestamp_seconds{service_name="same",host_name="failed"}
+    values: '0x30'
+  - series: minimoi_telemetry_heartbeat_timestamp_seconds{service_name="same",host_name="alive"}
+    values: 0+60x30
+  interval: 1m
+  promql_expr_test:
+  - eval_time: 25m
+    exp_samples: []
+    expr: (time() - max by (service_name) (minimoi_telemetry_heartbeat_timestamp_seconds))
+      > 900
