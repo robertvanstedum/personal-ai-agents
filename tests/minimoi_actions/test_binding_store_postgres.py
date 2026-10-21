@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import threading
+import time
 import unittest
 
 from core.minimoi_actions.context import ActionContext, ActionContractError
@@ -20,7 +21,8 @@ from postgres_fixture_support import DSN, PostgresFixture
 
 @unittest.skipUnless(DSN, 'isolated local MC_BINDING_TEST_DSN required')
 class PostgresBindingTests(PostgresFixture, unittest.TestCase):
-    migrations = ('core/minimoi_actions/sql/001_runtime_bindings.sql',)
+    migrations = ('core/minimoi_actions/sql/001_runtime_bindings.sql',
+                  'core/minimoi_actions/sql/007_runtime_execution_start.sql')
 
     def setUp(self):
         with self.guard.cursor() as cur:
@@ -36,7 +38,89 @@ class PostgresBindingTests(PostgresFixture, unittest.TestCase):
     def register(self):
         registration = self.store.admit(self.context, self.identity, 'session')
         self.store.bind(registration.context_reference, self.call)
+        self.store.start(registration.context_reference, self.call)
         return registration.context_reference
+
+    def test_start_requires_bound_context_and_is_durable_single_use(self):
+        reference = self.store.admit(self.context, self.identity, 'session').context_reference
+        with self.assertRaisesRegex(ActionContractError, 'binding_not_registered'):
+            self.store.start(reference, self.call)
+        self.store.bind(reference, self.call)
+        with self.assertRaisesRegex(ActionContractError, 'binding_not_started'):
+            with self.store.locked_context(reference, self.call):
+                self.fail('unstarted invocation executed')
+        self.store.start(reference, self.call)
+        with self.assertRaisesRegex(ActionContractError, 'binding_already_started'):
+            BindingStore(self.connect).start(reference, self.call)
+        # Retrying registration must not erase the already-consumed claim.
+        self.store.bind(reference, self.call)
+        with self.assertRaisesRegex(ActionContractError, 'binding_already_started'):
+            self.store.start(reference, self.call)
+
+    def test_two_starters_have_exactly_one_durable_winner(self):
+        reference = self.store.admit(self.context, self.identity, 'session').context_reference
+        self.store.bind(reference, self.call)
+        barrier = threading.Barrier(2)
+        def attempt(_):
+            barrier.wait(timeout=3)
+            try:
+                BindingStore(self.connect).start(reference, self.call)
+                return 'started'
+            except ActionContractError as exc:
+                return str(exc)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(attempt, (1, 2)))
+        self.assertCountEqual(outcomes, ['started', 'binding_already_started'])
+
+    def test_start_transaction_rollback_leaves_no_claim(self):
+        from contextlib import contextmanager
+        class FailBeforeCommit(BindingStore):
+            @contextmanager
+            def _transaction(self):
+                with super()._transaction() as conn:
+                    yield conn
+                    raise RuntimeError('synthetic_before_commit')
+        reference = self.store.admit(self.context, self.identity, 'session').context_reference
+        self.store.bind(reference, self.call)
+        with self.assertRaisesRegex(RuntimeError, 'synthetic_before_commit'):
+            FailBeforeCommit(self.connect).start(reference, self.call)
+        self.store.start(reference, self.call)
+        with self.store.locked_context(reference, self.call) as (_, context):
+            self.assertEqual(context, self.context)
+
+    def test_start_rechecks_expiry_after_waiting_for_session_lock(self):
+        context = replace(self.context, expires_at=datetime.now(timezone.utc)+timedelta(seconds=1))
+        reference = self.store.admit(context, self.identity, 'session').context_reference
+        self.store.bind(reference, self.call)
+        entering = threading.Event()
+        def attempt():
+            entering.set()
+            self.store.start(reference, self.call)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with self.connect() as conn, conn.cursor() as cur:
+                cur.execute("SELECT generation FROM guild.mc_runtime_sessions FOR UPDATE")
+                pending = pool.submit(attempt)
+                self.assertTrue(entering.wait(timeout=1))
+                time.sleep(0.1)
+                self.assertFalse(pending.done(), 'start must wait for session lock')
+                # Let the admitted expiry pass while holding the session lock.
+                time.sleep(max(0, (context.expires_at-datetime.now(timezone.utc)).total_seconds())+0.05)
+            with self.assertRaisesRegex(ActionContractError, 'binding_expired'):
+                pending.result(timeout=3)
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute('SELECT started_at FROM guild.mc_runtime_bindings WHERE dispatch_id=%s',
+                        (context.dispatch_id,))
+            self.assertIsNone(cur.fetchone()[0])
+
+    def test_revocation_and_boot_change_prevent_start(self):
+        reference = self.store.admit(self.context, self.identity, 'session').context_reference
+        self.store.bind(reference, self.call)
+        with self.assertRaisesRegex(ActionContractError, 'binding_call_mismatch'):
+            self.store.start(reference, replace(self.call,
+                identity=replace(self.identity, instance_id='new-boot')))
+        self.store.end(self.identity, 'session', 'dispatch', 1, cancelled=True)
+        with self.assertRaisesRegex(ActionContractError, 'binding_inactive'):
+            self.store.start(reference, self.call)
 
     def test_registration_and_terminal_state_survive_store_recreation(self):
         reference = self.register()
@@ -66,7 +150,7 @@ class PostgresBindingTests(PostgresFixture, unittest.TestCase):
         old = self.register()
         second = replace(self.context, dispatch_id='dispatch-2', turn_id='turn-2', generation=2)
         self.store.admit(second, self.identity, 'session')
-        for method in (self.store.bind,):
+        for method in (self.store.bind, self.store.start):
             with self.assertRaisesRegex(ActionContractError, '^binding_superseded$'):
                 method(old, self.call)
         with self.assertRaisesRegex(ActionContractError, '^binding_superseded$'):

@@ -24,13 +24,13 @@ from core.workshop_journal.errors import (CommitUnknown, Corrupt, IdConflict,
 NOW = datetime(2026,10,20,12,tzinfo=timezone.utc)
 
 
-def prepared(*, turn='turn-one', now=NOW, statement_id=None, kind='direction', text='Gates 🙂\r\nnot dates.\n'):
+def prepared(*, turn='turn-one', now=NOW, occurred_at=NOW-timedelta(minutes=1), statement_id=None, kind='direction', text='Gates 🙂\r\nnot dates.\n'):
     raw = text.encode()
     digest = hashlib.sha256(raw).hexdigest()
     context = ActionContext('owner','mc','dev','conversation','current-turn','dispatch',1,
         now+timedelta(minutes=1),'policy','role','recorded','budget')
     source = SourceDescriptor('owner','dev','conversation',turn,'native-source-id','robert',
-        'owner','owner',digest,NOW-timedelta(minutes=1),True,True,'on_record')
+        'owner','owner',digest,occurred_at,True,True,'on_record')
     return prepare_statement(context=context,proposal=StatementRequest(json.dumps(dict(
         turn_id=turn,source_edition_hash=digest,start=0,end=len(text),kind=kind,
         topic='discipline',repeat_of=[])).encode()),statement_id=statement_id or str(uuid4()),

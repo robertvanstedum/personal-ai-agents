@@ -1,6 +1,6 @@
 """Dedicated, default-disabled trusted runtime listener, never a portal blueprint.
 
-The binder and executor have DISTINCT environment/instance-bound credentials.
+The binder, run initiator and executor have DISTINCT environment/instance-bound credentials.
 Only the trusted dispatch adapter may register a run, before model/tool dispatch.
 Tool calls cannot opportunistically bind themselves. Identity comes from the
 server credential map; metadata headers do not select owner/actor/environment.
@@ -29,6 +29,7 @@ from core.minimoi_actions.context import ActionContractError
 from core.minimoi_actions.receipts import _uuid
 from core.minimoi_actions.requests import parse_tool_request, _object, _constant, _bounded_tree
 
+START_PATH = '/internal/mc/v1/runtime/start'
 BIND_PATH = '/internal/mc/v1/runtime/bind'
 ACTION_PATH = '/internal/mc/v1/actions'
 _BIND_FIELDS = {'schema', 'context_reference', 'session_key', 'run_id', 'dispatch_id', 'generation'}
@@ -44,12 +45,13 @@ class RuntimePolicy:
     bind_token_sha256: str
     execute_token_sha256: str
     capabilities: frozenset[tuple[str, int]]
+    start_token_sha256: str
 
     def __post_init__(self):
         if (type(self.identity) is not RuntimeIdentity
                 or not all(type(x) is str and re.fullmatch('[0-9a-f]{64}', x)
-                           for x in (self.bind_token_sha256, self.execute_token_sha256))
-                or self.bind_token_sha256 == self.execute_token_sha256
+                           for x in (self.bind_token_sha256, self.execute_token_sha256, self.start_token_sha256))
+                or len({self.bind_token_sha256, self.execute_token_sha256, self.start_token_sha256}) != 3
                 or type(self.capabilities) is not frozenset
                 or len(self.capabilities) > 100):
             raise ValueError('runtime_listener_policy_invalid')
@@ -88,7 +90,7 @@ def create_app(*, environment, policies, bindings, execute, enabled=False):
             or type(policies) is not tuple or not policies or not callable(execute)
             or not all(type(p) is RuntimePolicy and p.identity.environment == environment for p in policies)):
         raise ValueError('runtime_listener_config_invalid')
-    digests = [x for p in policies for x in (p.bind_token_sha256, p.execute_token_sha256)]
+    digests = [x for p in policies for x in (p.bind_token_sha256, p.execute_token_sha256, p.start_token_sha256)]
     if len(set(digests)) != len(digests):
         raise ValueError('runtime_listener_credential_collision')
     app = Flask(__name__)
@@ -101,7 +103,8 @@ def create_app(*, environment, policies, bindings, execute, enabled=False):
         if not header.startswith('Bearer ') or not 32 <= len(header[7:]) <= 256:
             return None, (jsonify(error='runtime_unauthorized'), 401)
         digest = hashlib.sha256(header[7:].encode('utf-8')).hexdigest()
-        field = 'bind_token_sha256' if role == 'bind' else 'execute_token_sha256'
+        field = {'bind': 'bind_token_sha256', 'execute': 'execute_token_sha256',
+                 'start': 'start_token_sha256'}[role]
         policy = next((p for p in policies if secrets.compare_digest(getattr(p, field), digest)), None)
         if policy is None:
             return None, (jsonify(error='runtime_unauthorized'), 401)
@@ -138,6 +141,34 @@ def create_app(*, environment, policies, bindings, execute, enabled=False):
             return jsonify(error='binding_refused'), 400
         except Exception:
             return jsonify(error='binding_unavailable'), 503
+
+    @app.post(START_PATH)
+    def start():
+        # Only the trusted run initiator has this credential. In particular the
+        # model-facing executor can neither bind nor consume a fresh dispatch.
+        policy, failure = authenticate('start')
+        if failure:
+            return failure
+        if request.mimetype != 'application/json':
+            return jsonify(error='json_required'), 415
+        try:
+            raw = request.get_data(cache=False)
+            if len(raw) > 4096:
+                return jsonify(error='binding_metadata_invalid'), 400
+            body = json.loads(raw.decode('utf-8'), object_pairs_hook=_object, parse_constant=_constant)
+            if type(body) is not dict or set(body) != _BIND_FIELDS or body['schema'] != 'mc-runtime-start/1':
+                return jsonify(error='binding_metadata_invalid'), 400
+            call = RuntimeCall(policy.identity, body['session_key'], body['run_id'], body['dispatch_id'], body['generation'])
+            bindings.start(body['context_reference'], call)
+            return jsonify(schema='mc-runtime-start-ack/1', status='started'), 200
+        except RequestEntityTooLarge:
+            raise
+        except (ActionContractError, ValueError, TypeError, UnicodeError, RecursionError):
+            return jsonify(error='runtime_start_refused'), 409
+        except Exception:
+            # The durable claim may have committed. Never convert this into
+            # permission to start inference or automatically resend the request.
+            return jsonify(error='runtime_start_unconfirmed'), 503
 
     @app.post(ACTION_PATH)
     def action():

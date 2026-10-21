@@ -34,7 +34,7 @@ class AnnotationActionPostgresTests(PostgresFixture,unittest.TestCase):
         self.root = Path(self.temp.name)
         self.now = datetime.now(timezone.utc)
         self.journal = StatementJournal(self.root,principal_id='owner',environment='dev',scope_id='robert',min_free_bytes=0)
-        self.source = prepared(now=self.now-timedelta(minutes=1),kind='direction')
+        self.source = prepared(now=self.now-timedelta(minutes=1),occurred_at=self.now-timedelta(minutes=2),kind='direction')
         self.journal.append(self.source)
         self.shelf = AnnotationShelf(Shelf(self.root,min_free_bytes=0),self.journal)
         self.grants = GrantStore({CAPABILITY:CapabilityRule(1,True,True)})

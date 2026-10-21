@@ -1,6 +1,6 @@
 """Postgres registry for the trusted binding rules; not exposed as a model tool.
 
-Apply sql/001_runtime_bindings.sql explicitly. The admission adapter supplies a
+Apply sql/001_runtime_bindings.sql and sql/007_runtime_execution_start.sql explicitly. The admission adapter supplies a
 monotonically increasing generation per runtime session (NOT the old turn
 ledger's per-claim counter). The unique constraints and session row lock enforce
 this across workers. Instances/references come from authenticated server code;
@@ -168,6 +168,24 @@ class BindingStore:
                 updated_at=clock_timestamp() WHERE dispatch_id=%s''',
                 (bound.run_id, bound.context.dispatch_id))
 
+    def start(self, reference: str, call: RuntimeCall) -> None:
+        """Consume a registered dispatch once, before starting inference.
+
+        A lost acknowledgement is uncertain, not permission to retry. This
+        durable claim is deliberately non-idempotent: reusing a run ID must not
+        launch another agent loop, even after a process restart. A new owner
+        turn requires a newly admitted generation. No tool endpoint calls this.
+        """
+        with self._transaction() as conn, conn.cursor() as cur:
+            binding, live = self._locked(cur, reference, call)
+            context = check_bound_call(binding, call, **live)
+            cur.execute('''UPDATE guild.mc_runtime_bindings
+                SET started_at=clock_timestamp(),updated_at=clock_timestamp()
+                WHERE dispatch_id=%s AND started_at IS NULL RETURNING dispatch_id''',
+                (context.dispatch_id,))
+            if cur.fetchone() is None:
+                raise ActionContractError('binding_already_started')
+
     @contextmanager
     def locked_context(self, reference: str, call: RuntimeCall):
         """Hold binding and session locks while preparing an authorized effect.
@@ -180,6 +198,10 @@ class BindingStore:
         with self._transaction() as conn, conn.cursor() as cur:
             binding, live = self._locked(cur, reference, call)
             context = check_bound_call(binding, call, **live)
+            cur.execute('SELECT started_at FROM guild.mc_runtime_bindings WHERE dispatch_id=%s',
+                        (context.dispatch_id,))
+            if cur.fetchone()[0] is None:
+                raise ActionContractError('binding_not_started')
             yield conn, context
 
     def end(self, identity: RuntimeIdentity, session_key: str, dispatch_id: str,

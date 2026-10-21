@@ -8,7 +8,7 @@ from uuid import uuid4
 from core.minimoi_actions.binding_store import BindingStore
 from core.minimoi_actions.bindings import RuntimeIdentity
 from core.minimoi_actions.context import ActionContext
-from services.minimoi_actions.runtime_listener import ACTION_PATH, BIND_PATH, RuntimePolicy, create_app
+from services.minimoi_actions.runtime_listener import ACTION_PATH, BIND_PATH, START_PATH, RuntimePolicy, create_app
 from postgres_fixture_support import DSN, PostgresFixture
 
 
@@ -18,13 +18,15 @@ def digest(value):
 
 @unittest.skipUnless(DSN, 'requires disposable MC_BINDING_TEST_DSN')
 class ListenerTests(PostgresFixture, unittest.TestCase):
-    migrations = ('core/minimoi_actions/sql/001_runtime_bindings.sql',)
+    migrations = ('core/minimoi_actions/sql/001_runtime_bindings.sql',
+                  'core/minimoi_actions/sql/007_runtime_execution_start.sql')
 
     def setUp(self):
         self.identity = RuntimeIdentity('fixture-runtime', 'boot-one', 'mc', 'dev')
+        self.start_token = 'synthetic-starter-'+'s'*32
         self.bind_token, self.tool_token = 'synthetic-binder-'+'b'*32, 'synthetic-executor-'+'e'*32
         self.policy = RuntimePolicy(self.identity, digest(self.bind_token), digest(self.tool_token),
-                                    frozenset({('fixture.observe', 1)}))
+                                    frozenset({('fixture.observe', 1)}), digest(self.start_token))
         self.bindings = BindingStore(self.connect)
         self.result_mode = 'valid'
         with self.connect() as conn, conn.cursor() as cur:
@@ -71,6 +73,15 @@ class ListenerTests(PostgresFixture, unittest.TestCase):
         return (client or self.client).post(BIND_PATH, json=metadata or self.metadata,
                  headers={'Authorization':'Bearer '+(token or self.bind_token)})
 
+    def start(self, metadata=None, token=None, client=None):
+        return (client or self.client).post(START_PATH,
+                 json=(metadata or self.metadata) | {'schema': 'mc-runtime-start/1'},
+                 headers={'Authorization': 'Bearer '+(token or self.start_token)})
+
+    def ready(self, metadata=None):
+        self.assertEqual(self.bind(metadata).status_code, 200)
+        self.assertEqual(self.start(metadata).status_code, 200)
+
     def action(self, metadata=None, body=None, token=None, client=None):
         return (client or self.client).post(ACTION_PATH, json=self.request if body is None else body,
                                            headers=self.headers(metadata, token))
@@ -79,6 +90,43 @@ class ListenerTests(PostgresFixture, unittest.TestCase):
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute('SELECT count(*) FROM guild.mc_listener_fixture')
             return cur.fetchone()[0]
+
+    def test_start_credential_is_separate_and_replay_is_not_an_ack(self):
+        self.assertEqual(self.start().status_code, 409)
+        self.assertEqual(self.bind().status_code, 200)
+        for token in (self.bind_token, self.tool_token):
+            self.assertEqual(self.start(token=token).status_code, 401)
+        self.assertEqual(self.bind(token=self.start_token).status_code, 401)
+        self.assertEqual(self.action(token=self.start_token).status_code, 401)
+        self.assertEqual(self.start().json, {'schema': 'mc-runtime-start-ack/1', 'status': 'started'})
+        self.assertEqual(self.start().status_code, 409)
+        self.assertEqual(self.count(), 0)
+
+    def test_lost_start_ack_does_not_make_replay_safe(self):
+        self.assertEqual(self.bind().status_code, 200)
+        original = self.bindings.start
+        def lost_ack(reference, call):
+            original(reference, call)
+            raise RuntimeError('synthetic_after_commit')
+        self.bindings.start = lost_ack
+        try:
+            reply = self.start()
+            self.assertEqual(reply.status_code, 503)
+            self.assertEqual(reply.json, {'error': 'runtime_start_unconfirmed'})
+        finally:
+            self.bindings.start = original
+        self.assertEqual(self.start().status_code, 409)
+        self.assertEqual(self.count(), 0)
+
+    def test_start_refuses_forged_metadata_and_colliding_credentials(self):
+        self.assertEqual(self.bind().status_code, 200)
+        for metadata in (self.metadata | {'run_id': 'other'}, self.metadata | {'generation': 2},
+                         self.metadata | {'context_reference': 'Z'*43}, self.metadata | {'owner': True}):
+            self.assertIn(self.start(metadata).status_code, (400, 409))
+        for token in (self.policy.bind_token_sha256, self.policy.execute_token_sha256):
+            with self.assertRaisesRegex(ValueError, 'runtime_listener_policy_invalid'):
+                replace(self.policy, start_token_sha256=token)
+        self.assertEqual(self.start().status_code, 200)
 
     def test_disabled_and_distinct_credentials_and_no_owner_cookie_bypass(self):
         self.assertEqual(self.action(client=self.app(enabled=False).test_client()).status_code, 503)
@@ -94,6 +142,8 @@ class ListenerTests(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.count(), 0)
         self.assertEqual(self.bind().status_code, 200)
         self.assertEqual(self.bind().status_code, 200)
+        self.assertEqual(self.action().status_code, 400)
+        self.assertEqual(self.start().status_code, 200)
         result = self.action()
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json['verified_state'], {'turn':'turn-A'})
@@ -102,7 +152,7 @@ class ListenerTests(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.count(), 1)
 
     def test_model_fields_cannot_override_context_or_select_another_capability(self):
-        self.bind()
+        self.ready()
         for key in ('context_reference', 'principal_id', 'run_id', 'grant_ids', 'approved'):
             self.assertEqual(self.action(body=self.request | {key:'forged'}).status_code, 400)
         self.assertEqual(self.action(body=self.request | {'operation':'shell.execute'}).status_code, 403)
@@ -110,11 +160,12 @@ class ListenerTests(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.count(), 0)
 
     def test_overlapping_sessions_stay_separate_and_old_generation_is_fenced(self):
-        self.bind()
+        self.ready()
         b = replace(self.context, conversation_id='conversation-B', turn_id='turn-B', dispatch_id='dispatch-B')
         ref_b = self.bindings.admit(b, self.identity, 'session-B').context_reference
         meta_b = dict(self.metadata, context_reference=ref_b, session_key='session-B', run_id='run-B', dispatch_id='dispatch-B')
         self.assertEqual(self.bind(meta_b).status_code, 200)
+        self.assertEqual(self.start(meta_b).status_code, 200)
         self.assertEqual(self.action().json['verified_state']['turn'], 'turn-A')
         self.assertEqual(self.action(meta_b).json['verified_state']['turn'], 'turn-B')
         self.assertEqual(self.action(dict(self.metadata, context_reference=ref_b)).status_code, 400)
@@ -124,11 +175,12 @@ class ListenerTests(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.action().status_code, 400)
         self.assertEqual(self.bind().status_code, 400)
         self.assertEqual(self.bind(new_meta).status_code, 200)
+        self.assertEqual(self.start(new_meta).status_code, 200)
         self.assertEqual(self.action(new_meta).json['verified_state']['turn'], 'turn-next-A')
         self.assertEqual(self.action(meta_b).status_code, 200)
 
     def test_cancel_and_runtime_restart_refuse_retained_callbacks(self):
-        self.bind()
+        self.ready()
         restarted = replace(self.policy, identity=replace(self.identity, instance_id='boot-two'),
                             bind_token_sha256=digest('new-bind-'+'b'*32), execute_token_sha256=digest('new-tool-'+'e'*32))
         client = self.app(policies=(restarted,)).test_client()
@@ -140,7 +192,7 @@ class ListenerTests(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.count(), 0)
 
     def test_malformed_output_or_exception_rolls_back_local_effect_and_redacts_error(self):
-        self.bind()
+        self.ready()
         for mode in ('oversize', 'invalid', 'exception'):
             self.result_mode = mode
             result = self.action()
@@ -150,7 +202,7 @@ class ListenerTests(PostgresFixture, unittest.TestCase):
             self.assertEqual(self.count(), 0)
 
     def test_size_duplicates_and_forged_binding_metadata_are_refused(self):
-        self.bind()
+        self.ready()
         for metadata in (dict(self.metadata, generation=True), dict(self.metadata, run_id='different'),
                          dict(self.metadata, principal_id='other'), dict(self.metadata, context_reference='x'*43)):
             self.assertEqual(self.bind(metadata).status_code, 400)
