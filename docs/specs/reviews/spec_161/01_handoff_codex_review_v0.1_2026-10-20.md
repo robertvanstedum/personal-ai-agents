@@ -9,7 +9,7 @@
 - **Commit:** `1cce1865751514554a266d82889fab358b6f2cb1`
 - **File SHA-256:** `f17c3d57854da6dedf826c736339c2ce8421046063e624ac2931a3df5dc85c9d`
 - **Issue:** https://github.com/robertvanstedum/personal-ai-agents/issues/364
-- **Status:** draft v0.1. It authorizes no build.
+- **Status:** draft **v0.2 (installation-ready)**; it authorizes no build. Review v0.2 (v0.1 is in history at `1cce1865`).
 
 ## Why this spec exists
 
