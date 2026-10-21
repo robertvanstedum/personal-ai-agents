@@ -1018,6 +1018,15 @@ def _owner_action_command(found):
 _EFFECT_MARKER = re.compile(r"^\s*(?:JOB:|ASK\s|MEETING\b|BOARD\b|DELIVER)", re.I)   # never acted on in a voiced turn
 _UNTRUSTED_CHARS = re.compile(r"[\[\]<>`{}\r\n\t]+")
 VOICED_VAR = "MINIMOI_MC_VOICED_OUTCOMES"
+# Found by driving MC as Robert on dev (21 Oct, MC_GAP_REGISTER G2, G17, G18). Interim home: the role/AGENTS policy.
+MC_OPERATING_RULES = (
+    "[MiniMoi operating rules for this answer]\n"
+    "- Never say a setting, schedule, preference, ticket or any change was made unless MiniMoi reports a verified "
+    "outcome for it in this turn. For a preference or standing instruction, offer to keep it as a lesson: "
+    "the owner says 'Remember: <it>' and confirms.\n"
+    "- Say what you could and could not see. Never call something quiet, idle, unchanged or absent only because "
+    "it is not visible to you.\n"
+    "- If context is missing, give your best general answer first, then ask one short question.")
 
 
 class PlatformOutcome:
@@ -1048,11 +1057,13 @@ class PlatformOutcome:
     def context(self) -> str:
         op = self.result["operation"]
         verdict = self.verdict()
-        rule = {"DONE": "Say it is done, exactly as stated, and nothing more.",
-                "WAITING FOR THE OWNER": "Say nothing has happened yet; ask the owner to reply Confirm or Cancel. "
-                                         "Do not say it is kept, done or in effect.",
-                "NOTHING WAS DONE": "Say plainly that nothing was done or kept, and why, as stated. Never say it "
-                                    "succeeded."}[verdict]
+        rule = {"DONE": "Tell the owner what was done, using the details below (if they hold a list, give the "
+                        "list); claim nothing beyond them.",
+                "WAITING FOR THE OWNER": "Restate exactly what is proposed, from the details below, say nothing has "
+                                         "happened yet, and ask the owner to reply Confirm or Cancel. Do not say it "
+                                         "is kept, done or in effect.",
+                "NOTHING WAS DONE": "Say plainly that nothing was done or kept, and why, from the details below. "
+                                    "Never say it succeeded."}[verdict]
         # The details may hold text typed by outside people (a guest's name or email): flattened, stripped of
         # markup, capped, and labelled as data, outside the trusted header (review P2-2).
         details = _UNTRUSTED_CHARS.sub(" ", self.result["reply"])[:700]
@@ -2326,6 +2337,9 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
                 extra.append(awareness)
     except Exception:
         pass
+    from . import feature_environ as _fe
+    if _fe().get("MINIMOI_MC_OPERATING_RULES") == "1":
+        extra.append(MC_OPERATING_RULES)
     from flask import has_app_context
     outcome = getattr(g, "mc_platform_outcome", None) if has_app_context() else None   # probes/workers have none
     if outcome is not None:

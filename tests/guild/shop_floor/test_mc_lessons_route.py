@@ -75,3 +75,13 @@ def test_a_damaged_ledger_is_reported_as_unknown_and_mc_is_told_lessons_are_unav
     say(lessons, "Status?")
     sent = last_sent(lessons)
     assert "unavailable" in sent and "Bury" not in sent
+
+
+def test_operating_rules_reach_mc_only_when_switched_on(lessons, monkeypatch):
+    say(lessons, "What changed today?")
+    assert "operating rules" not in last_sent(lessons)
+    ext = lessons.app.extensions["guild_ui_next"]
+    monkeypatch.setitem(ext, "feature_environ", {**ext["feature_environ"], "MINIMOI_MC_OPERATING_RULES": "1"})
+    say(lessons, "Make 12 to 6 the batch window.")
+    sent = last_sent(lessons)
+    assert "operating rules" in sent and "offer to keep it as a lesson" in sent
