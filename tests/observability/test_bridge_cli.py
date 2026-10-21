@@ -179,3 +179,20 @@ def test_cli_always_exits_zero_and_writes_the_local_copy(tmp_path, monkeypatch, 
     obs._reset_for_tests()
     assert cli.main(["no-such-command"]) == 0
     obs._reset_for_tests()
+
+
+def test_a_fifo_snapshot_never_hangs_the_bridge(tmp_path):
+    """Claude re-review of spec 161 v0.3 (O1 conformance): the bridge reader could block on a FIFO."""
+    import threading
+    root = tmp_path / "jobs"
+    (root / "health").mkdir(parents=True)
+    os.mkfifo(root / "health" / "host.json")
+    out = {}
+
+    def call():
+        out["got"], _ = run(tmp_path, root, registry(tmp_path, []))
+    t = threading.Thread(target=call, daemon=True)
+    t.start()
+    t.join(5)
+    assert not t.is_alive(), "bridge blocked on a FIFO"
+    assert g(out["got"], "minimoi_bridge_source_readable", source="host_snapshot") == 0

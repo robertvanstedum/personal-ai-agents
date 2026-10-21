@@ -39,7 +39,8 @@ class SourceUnreadable(Exception):
 
 def _read_json(path: Path) -> dict:
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        # O_NONBLOCK: a FIFO or device at a snapshot path is refused below instead of hanging.
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
         raise SourceUnreadable() from None
     try:
