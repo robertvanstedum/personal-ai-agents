@@ -137,3 +137,47 @@ Both run as `vanstedum`, the owner of the 0600 `executor.token`, so either could
 6. Confusable, spaced and generic-word names (P2-4).
 7. The live-plugin tool list, and gateway behaviour on a bad token file (P2-5).
 8. Prod refusal of consequential kinds without a standard-change ID (P2-6).
+
+---
+
+## Delta: re-review of the fixes (21 Oct, evening)
+
+**Re-reviewed:** `claude/mc-tool-path-86de08` at `c8b950f7` (fixes `6c1ebffd..d5dad889`). I read the two P1 fixes in full (`fd383b7e`, `d09e820d`, with `265943a0`). I re-ran my reproductions, adapted to the new signatures, against the fixed code on real PostgreSQL: `repro/repro_mc_tools_rereview_postgres.py`, all 5 tests pass. The suite's `test_portal_wiring` didn't import in my partial export (I left out `domains/`); the author's full run covers it.
+
+### Verdict
+
+**Cleared for dev under option B**, on these conditions:
+- every approval needs the proposal's code, so `MINIMOI_MC_TOOLS_RUNTIME_ISOLATED` stays **unset**;
+- the turn ledger stays on;
+- invites stay off unless Robert says otherwise.
+
+It is **not cleared** for setting `RUNTIME_ISOLATED=1`, or for production, until R-1 below is fixed and option A (the separate gateway user) is in place.
+
+### Each finding
+
+| Finding | Status | Evidence |
+|---|---|---|
+| **P1-1** uninformed yes | **Closed.** The platform posts each proposal verbatim with a code; MC is told only that it was shown; one proposal per turn; a plain yes counts only as the very next message, and never after a GitHub read in that turn. | T2: a later plain "ok" gives `needs_code`, nothing posted. The author's `test_p1_1_*`. |
+| **P1-2** forgeable binding | **Fails safe; not closable in code** (agreed). No guest name or email reaches the model or any caller. In default mode every proposal needs its code, so a forged proposal can't be approved by a plain "ok". Forged *reads* (host, issues, refs) and forged *cards* remain until option A. | T1: the forged list leaks no personal data; the forged proposal followed by the next "ok" gives `needs_code`, nothing posted. |
+| **P2-1** retried yes | **Closed.** | The author's `test_p2_1`. |
+| **P2-2** 30-minute word capture | **Closed.** Only a live proposal, or the same retried note, claims yes/ok/no. | T4: `has_pending` is False for a later note. |
+| **P2-3** lesson and tool collision | **Closed.** One proposal register. | The author's `test_p2_3` (my T5 no longer fits the new interface). |
+| **P2-4** public-text filter | **Closed** for my cases. | T6: "Robert" (a guest's name), Cyrillic "Аna" and "B r u n o" are all refused. |
+| **P2-5** live plugins and a bad token | **Closed per the author's probe** (live plugin names, missing token, default fs policy; `register()` never throws). Not re-run by me. | The author's 4-phase probe. |
+| **P2-6** ITIL on prod | **Closed for data and access.** Production refuses guest reject and invite unless a pre-approved standard-change runbook is configured; the data-repair ticket is a draft RFC. | Code reading. |
+
+### The author's disagreements
+
+1. **A named yes after a GitHub read, instead of inferring intent (P1-1):** agreed. It is deterministic and testable; inferring intent is not.
+2. **P1-2 can't close in code without a per-run binding:** agreed. Option B fails safe. Option A is Robert's decision (a separate OS user for the `mc-chat` gateway).
+3. **A filtered free-text summary is kept (P2-4):** acceptable, because Robert now sees the exact text verbatim before approving it, and the filter passed my cases.
+4. **Lessons and research aren't treated as production changes (P2-6):** agreed. A lesson changes guidance, not production state, and research is read-only in a throwaway checkout. Data and access changes are the ones the standard governs.
+
+### New findings
+
+- **R-1 (P2), reproduced:** the "read GitHub" taint is per turn, but MC's session remembers the text.
+  - **What goes wrong:** in turn N MC reads an issue; in turn N+1 MC proposes, unmarked; Robert's plain next-message "yes" approves it.
+  - **Evidence:** reproduced in isolated mode (`verified`, comment posted).
+  - **Why it doesn't block dev:** harmless in default mode, where every approval needs the code.
+  - **Fix before isolation is ever declared:** make the taint conversation-scoped, or always require the code for public-posting and access kinds.
+- **R-2 (P3):** a forged proposal still shows up as a real "Proposal P-XXXX from Master Craftsman" card. It can't be approved without the code. Label each card with the turn that triggered it; option A removes this.
