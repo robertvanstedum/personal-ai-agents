@@ -5,7 +5,7 @@
 
 **Design:** `docs/design/mc_tool_path_design_2026-10-21.md`. Copy both files into `planning-studio/initiatives/INIT-2026-0007-interaction-vision/mc-onboarding/handoffs/` (this worktree session may not write the shared checkout).
 **Review:** `mc_tool_path_review.md` (commit `344d0a0c`). Every P1 and P2 is fixed below; the P3s are fixed or done.
-**Branch:** `claude/mc-tool-path-86de08`, now on top of the `claude/dev-journeys-20261021` tip (`7d124112`, merged as `dcd899d1`).
+**Branch:** `claude/mc-tool-path-86de08`, on top of the `claude/dev-journeys-20261021` tip `bd29344e` (which is also `claude/dev-journeys-review-fixes`), merged again after the review fixes and re-tested.
 
 ## What it does
 
@@ -38,7 +38,7 @@ Each call is bound to Robert's **live turn-ledger claim**, never to identity the
 | The reviewer's 6 reproductions, run once against the fixed code | T2, T3 and T6 now fail as they should (nothing posted or approved). T4 and T5 error on the changed `has_pending`/`parse` signatures; their behaviour is covered by `test_p2_2_…` and `test_p2_3_…`. T1 still lists and proposes, but leaks nothing, and its proposal needs a named yes. |
 | `node --test tests/mc_tools/test_minimoi_tools_plugin.mjs` | **10 pass** |
 | **Real runtime**, `node tests/mc_tools/openclaw_native_tool_probe.mjs` (installed OpenClaw 2026.9.4, isolated gateways, fake provider, Node 24.18, under `heavy_job.py`) | **4 phases pass.** (1) mc-chat is offered exactly the nine tools; the plugin sends `agent:mc-chat:openai-user:guild-mc:<32 hex>`, `mc-chat` and the bearer; `main` is offered none. (2) With Robert's nine real plugins enabled by name (no credentials), mc-chat's other tools are still only `read`, `ls`, `dir_list`. (3) With the token missing, the gateway starts and both agents answer; no MiniMoi tool; one log line. (4) Under OpenClaw's default file policy, no MiniMoi tool. Limit: in phase 2 the other plugins ran without their credentials, so a channel plugin that registers tools only once configured was not exercised. |
-| Guild regression (`tests/guild tests/guild_ui tests/mc_lessons tests/mc_tools tests/mc_domain_actions tests/mc_delegation_runner`, under `heavy_job.py`) | **3,103 passed, 125 skipped**, 0 failed (the skips are real-database tests, run separately above) |
+| Guild regression (`tests/guild tests/guild_ui tests/mc_lessons tests/mc_tools tests/mc_domain_actions tests/mc_delegation_runner`, under `heavy_job.py`) | **3,104 passed, 127 skipped**, 0 failed, on the merged `bd29344e` tree (the skips are real-database tests, run separately: tool suite 56 OK, guest and delegation suite 40 OK) |
 
 ## Deploy steps (dev only)
 
