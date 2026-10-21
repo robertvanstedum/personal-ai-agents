@@ -38,6 +38,11 @@ The roles are durable even as which agent fills them changes:
   non-trivial build.
 - **One agent active on the repo at a time** — not simultaneous editing.
 - **Working cycle:** spec → approve → build → confirm → ship.
+- **Production change control (ITIL-based).** Every production change, data
+  repairs included, needs a ticket and an approved change record. Emergencies
+  are declared before acting and documented within 24 hours. Everyone, Robert
+  included, follows it, and agents push back on "just do it now". See
+  `planning-studio/governance/CHANGE_CONTROL_STANDARD_ITIL_v0.1_2026-10-21.md`.
 
 ## Protected files
 
