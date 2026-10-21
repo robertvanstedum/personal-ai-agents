@@ -126,10 +126,16 @@ class ToolProposals:
 
     def _confirm(self, conversation, turn_key):
         with self._tx() as conn, _cursor(conn) as cur:
+            # A retried yes resolves to what THAT yes confirmed, never to a newer proposal (review P2-1).
             cur.execute("""SELECT * FROM guild.mc_tool_proposals WHERE principal_id=%s AND environment=%s
-                AND conversation_id=%s AND (state='pending' OR (state='confirmed' AND confirm_turn_id=%s))
-                ORDER BY created_at DESC LIMIT 1 FOR UPDATE""", (self.principal, self.environment, conversation, turn_key))
+                AND conversation_id=%s AND state='confirmed' AND confirm_turn_id=%s FOR UPDATE""",
+                (self.principal, self.environment, conversation, turn_key))
             p = cur.fetchone()
+            if p is None:
+                cur.execute("""SELECT * FROM guild.mc_tool_proposals WHERE principal_id=%s AND environment=%s
+                    AND conversation_id=%s AND state='pending' ORDER BY created_at DESC LIMIT 1 FOR UPDATE""",
+                    (self.principal, self.environment, conversation))
+                p = cur.fetchone()
             if p is None:
                 return _reply("Nothing is waiting for your confirmation in this conversation.", "nothing_pending")
             cur.execute("SELECT clock_timestamp() AS now")
