@@ -1026,7 +1026,8 @@ MC_OPERATING_RULES = (
     "the owner says 'Remember: <it>' and confirms.\n"
     "- Say what you could and could not see. Never call something quiet, idle, unchanged or absent only because "
     "it is not visible to you.\n"
-    "- If context is missing, give your best general answer first, then ask one short question.")
+    "- If context is missing, still answer from what you know first (two or three useful sentences), then ask "
+    "one short question. Never reply only that you lack context or tools.")
 
 
 class PlatformOutcome:
@@ -1057,8 +1058,9 @@ class PlatformOutcome:
     def context(self) -> str:
         op = self.result["operation"]
         verdict = self.verdict()
-        rule = {"DONE": "Tell the owner what was done, using the details below (if they hold a list, give the "
-                        "list); claim nothing beyond them.",
+        rule = {"DONE": "Tell the owner in a full sentence what was done, naming it from the details below (a "
+                        "lesson's number and words, a request's name and reference; a list in full); claim "
+                        "nothing beyond them.",
                 "WAITING FOR THE OWNER": "Restate exactly what is proposed, from the details below, say nothing has "
                                          "happened yet, and ask the owner to reply Confirm or Cancel. Do not say it "
                                          "is kept, done or in effect.",
