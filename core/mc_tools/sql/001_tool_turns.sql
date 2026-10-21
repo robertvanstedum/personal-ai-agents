@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS guild.mc_tool_turns (
 );
 CREATE INDEX IF NOT EXISTS mc_tool_turns_runtime_user ON guild.mc_tool_turns (runtime_user, principal);
 
--- MC's proposals that wait for the owner's yes in the same conversation (guest rejects, issue comments,
--- data-repair tickets, delegation, invites). Lessons keep their own ledger.
+-- MC's proposals that wait for the owner's yes in the same conversation: the one register for lessons, guest
+-- rejects, issue comments, data-repair tickets, delegation and invites.
 CREATE TABLE IF NOT EXISTS guild.mc_tool_proposals (
     proposal_id      uuid PRIMARY KEY,
     principal_id     text NOT NULL,
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS guild.mc_tool_proposals (
     code             text NOT NULL CHECK (code ~ '^P-[A-Z0-9]{4}$'),   -- what Robert names to approve it
     shown_text       text NOT NULL,                 -- exactly what the platform showed Robert
     untrusted_input  boolean NOT NULL DEFAULT false,-- proposed after reading GitHub: only a named yes approves
-    kind             text NOT NULL CHECK (kind IN ('guest_reject', 'issue_comment', 'data_repair',
+    kind             text NOT NULL CHECK (kind IN ('lesson', 'guest_reject', 'issue_comment', 'data_repair',
                                          'delegate_research', 'access_invite')),
     payload          jsonb NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
     operation_id     uuid NOT NULL UNIQUE,          -- the effect's id, fixed at proposal

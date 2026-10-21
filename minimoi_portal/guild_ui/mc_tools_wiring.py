@@ -246,7 +246,7 @@ def invite_runner(send_email, notify, *, db=None):
     return invite
 
 
-def proposals(environ, *, start_research, delivery):
+def proposals(environ, *, start_research, delivery, lessons=None):
     """The ToolProposals handler for this mount, or None when tools are off."""
     cfg = settings(environ)
     if cfg is None:
@@ -256,4 +256,4 @@ def proposals(environ, *, start_research, delivery):
     return ToolProposals(_connect(cfg["dsn"]), principal=cfg["principal"], environment=cfg["environment"],
                          start_research=start_research if cfg["delegation"] else None, invite=invite,
                          file_issue=issue_filer(cfg), comment_issue=issue_commenter(cfg),
-                         guest_rejects=cfg["guest_rejects"])
+                         guest_rejects=cfg["guest_rejects"], lessons=lessons)

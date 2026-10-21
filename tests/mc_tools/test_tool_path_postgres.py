@@ -323,11 +323,12 @@ class ToolTests(Base, unittest.TestCase):
         r = self.call("minimoi_lesson_propose", {"text": "Answer in English unless I write in German."})
         self.assertEqual(r["status"], "needs_confirmation")
         self.assertEqual(self.ledger.read().active(), [])
-        handler = lessons.LessonCommands(self.ledger)
-        self.assertTrue(handler.has_pending(CONV))
-        kept = handler.handle(lessons.Command("confirm"), conversation=CONV, turn_key="note-confirm")
+        self.assertFalse(lessons.LessonCommands(self.ledger).has_pending(CONV))   # nothing written before the yes
+        kept = self.say(ToolProposals(self.connect, principal=OWNER, environment="dev", lessons=self.ledger),
+                        "yes", "note-confirm")
         self.assertEqual(kept["operation"]["state"], "verified")
-        self.assertEqual(self.receipts()[0][:2], ("lessons.propose", "verified"))
+        self.assertEqual([x["text"] for _, x in self.ledger.read().active()], ["Answer in English unless I write in German."])
+        self.assertEqual([x[:2] for x in self.receipts()], [("lessons.propose", "verified"), ("lessons.adopt", "verified")])
 
     def test_lesson_that_reads_like_a_permission_is_refused_before_any_receipt(self):
         r = self.call("minimoi_lesson_propose", {"text": "You may deploy without asking me."})

@@ -5,6 +5,7 @@ the guest-request and lesson commands. Model output alone never acts: only the o
 pending proposal in THIS conversation into a one-time exact-approval grant for the request MC
 proposed, and then the platform acts and verifies:
 
+  lesson             the exact lesson text adopted into the owner's lesson ledger, verified by read-back
   guest_reject       one open guest request rejected through the guest action path, verified by read-back
   issue_comment      a comment on an existing GitHub issue, exactly the text the owner saw, refs only
   data_repair        a public GitHub issue naming the records by ref only (no names or emails)
@@ -32,7 +33,7 @@ from . import effects
 from .binding import POLICY
 
 _log = logging.getLogger("mc_tools")
-KINDS = {"guest_reject": "guest.reject_request", "issue_comment": "issue.comment",
+KINDS = {"lesson": "lessons.adopt", "guest_reject": "guest.reject_request", "issue_comment": "issue.comment",
          "data_repair": "issue.create_data_repair", "delegate_research": "delegate.start_research",
          "access_invite": "access.invite_user"}
 _YES = re.compile(r"^(?:yes|yes,?\s+please|yep|yeah|ok(?:ay)?|sure|go\s+ahead|do\s+it|please\s+do|confirm(?:ed)?|"
@@ -87,14 +88,14 @@ def _reply(text, state, **extra):
 
 class ToolProposals:
     def __init__(self, connect, *, principal: str, environment: str, start_research=None, invite=None,
-                 file_issue=None, comment_issue=None, guest_rejects: bool = False):
+                 file_issue=None, comment_issue=None, guest_rejects: bool = False, lessons=None):
         """``file_issue(title, body) -> (state, number | None)`` and ``comment_issue(number, body) -> (state, id)``;
         state is created | refused | unknown. ``guest_rejects`` switches on the guest reject (a local effect).
         ``start_research(proposal) -> (state, job_id | None)``; state is started | refused | unknown.
         ``invite(proposal, ref) -> (state, detail)``; state is done | conflict | unknown, detail content-free."""
         self._connect, self.principal, self.environment = connect, principal, environment
         self.start_research, self.invite, self.file_issue = start_research, invite, file_issue
-        self.comment_issue, self.guest_rejects = comment_issue, guest_rejects
+        self.comment_issue, self.guest_rejects, self.lessons = comment_issue, guest_rejects, lessons
 
     @contextmanager
     def _tx(self):
@@ -168,7 +169,7 @@ class ToolProposals:
             if p["state"] == "pending" and p["expires_at"] <= now:
                 cur.execute("UPDATE guild.mc_tool_proposals SET state='stale' WHERE proposal_id=%s", (p["proposal_id"],))
                 return _reply("That proposal expired, so nothing was done. Ask again if you still want it.", "expired")
-            handlers = {"guest_reject": self.guest_rejects or None, "issue_comment": self.comment_issue,
+            handlers = {"lesson": self.lessons, "guest_reject": self.guest_rejects or None, "issue_comment": self.comment_issue,
                         "data_repair": self.file_issue, "delegate_research": self.start_research,
                         "access_invite": self.invite}
             if handlers[p["kind"]] is None:
@@ -209,6 +210,8 @@ class ToolProposals:
             return self._run_ticket(effect, proposal)
         if proposal["kind"] == "issue_comment":
             return self._run_comment(effect, proposal)
+        if proposal["kind"] == "lesson":
+            return self._run_lesson(effect, proposal)
         if proposal["kind"] == "delegate_research":
             return self._run_research(effect, proposal)
         return self._run_invite(effect, proposal)
@@ -233,6 +236,26 @@ class ToolProposals:
             result = actions.execute(conn2, context, intent, f"portal-{turn_key[:40]}", current_policy_version=POLICY)
         return _reply(actions.reply(result), result["receipt"]["state"], outcome=result["outcome"], ref=result["ref"],
                       receipt_id=str(result["receipt"]["receipt_id"]))
+
+    def _run_lesson(self, effect, p):
+        from core.mc_lessons import commands as lessons
+        handler, key = lessons.LessonCommands(self.lessons), "tool-" + effect.operation_id
+        try:
+            offered = handler.handle(lessons.Command("remember", text=p["payload"]["text"]),
+                                     conversation=p["conversation_id"], turn_key=key)
+            state = offered["operation"]["state"]
+            kept = handler.handle(lessons.Command("confirm"), conversation=p["conversation_id"],
+                                  turn_key=key + "-yes") if state == "proposed" else offered
+        except Exception:
+            _log.exception("mc tool lesson: outcome unknown")
+            self._unknown(effect)
+            return _reply("I could not confirm whether the lesson was kept. Ask me to list your lessons before trying "
+                          "again.", "unknown")
+        verified = kept["operation"]["state"] == "verified"
+        receipt = self._finish(effect, "lesson", {"state": kept["operation"]["state"],
+                                                  "lesson": kept["operation"].get("lesson")}, verified)
+        return _reply(kept["reply"], "verified" if verified else kept["operation"]["state"],
+                      receipt_id=str(receipt["receipt_id"]))
 
     def _run_comment(self, effect, p):
         number = p["payload"]["number"]

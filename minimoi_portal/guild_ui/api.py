@@ -1238,7 +1238,7 @@ def _owner_tool_proposal_command(found):
         return None
     kind, code = parsed
     handler = proposals(environ, start_research=lambda p: _start_proposed_research(found, p),
-                        delivery=current_app.extensions.get("mc_invite_delivery"))
+                        delivery=current_app.extensions.get("mc_invite_delivery"), lessons=_lesson_ledger(principal))
     try:
         if not handler.has_pending(conv["id"], note_id):
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers

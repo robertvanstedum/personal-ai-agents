@@ -91,6 +91,26 @@ class ReviewFixes(Base, unittest.TestCase):
         self.assertEqual(posted, [])
         self.assertIn(f"yes {code}", self.shown[-1][2])        # only a deliberate, named yes could approve it
 
+    def test_p2_3_one_register_a_yes_for_a_lesson_adopts_the_lesson_and_nothing_else(self):
+        from core.mc_lessons import commands as lessons
+        posted = []
+        self.call("minimoi_issue_comment", {"number": 69, "summary": "An earlier offer Robert moved past.", "refs": []})
+        self.assertEqual(self.call("minimoi_lesson_propose", {"text": "Lead with the answer, then the detail."})["code"],
+                         "one_proposal_per_turn")                                   # same turn: refused
+        self.next_turn("note-2")
+        self.assertEqual(self.call("minimoi_lesson_propose", {"text": "Lead with the answer, then the detail."})["status"],
+                         "needs_confirmation")                                      # supersedes the comment
+        p = self.props(comment_issue=lambda n, b: posted.append(n) or ("created", 1), lessons=self.ledger)
+        done = self.say(p, "yes", "note-yes")
+        self.assertEqual(done["operation"]["state"], "verified")
+        self.assertEqual(posted, [])
+        self.assertEqual([x["text"] for _, x in self.ledger.read().active()], ["Lead with the answer, then the detail."])
+        # A lesson the owner-command phrase left waiting is withdrawn by a new tool proposal: never two kinds pending.
+        lessons.LessonCommands(self.ledger).handle(lessons.Command("remember", text="Use metric units."),
+                                                   conversation=CONV, turn_key="note-phrase")
+        self.call("minimoi_issue_comment", {"number": 70, "summary": "A newer offer from the tool path.", "refs": []})
+        self.assertFalse(lessons.LessonCommands(self.ledger).has_pending(CONV))
+
 
 if __name__ == "__main__":
     unittest.main()

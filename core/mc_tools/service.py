@@ -216,31 +216,36 @@ class ToolService:
                                                effects.request("issue.propose_data_repair", payload), words)
 
     def _lesson_propose(self, args, session_key, agent_id, observation):
+        """A lesson waits in the one proposal register like every other offer, and Robert's yes adopts it (review
+        P2-3). Nothing is written to the lesson ledger until then."""
         from core.mc_lessons import commands as lessons
+        from core.mc_lessons.ledger import text_sha
         if self.lessons is None:
             return refused("tool_unavailable")
         text, reason = lessons.clean(args["text"])
         if reason:
             return result("refused", reason, lessons.REFUSALS[reason])
-        req = effects.request("lessons.propose", {"text": text})
-        with self._tx() as conn:                       # the dispatched receipt commits before the file ledger is written
-            b = self._bind(conn, session_key, agent_id)
-            effect = effects.begin_turn_effect(conn, b, req, worker=self.worker)
-        try:
-            answer = lessons.LessonCommands(self.lessons).handle(lessons.Command("remember", text=text),
-                                                                 conversation=b.conversation_id,
-                                                                 turn_key="tool-" + effect.operation_id)
-        except Exception:
-            _log.exception("mc tool lesson proposal: outcome unknown")
-            with self._tx() as conn:
-                effect.unknown(conn)
-            return result("unknown", "lesson_unconfirmed", "I could not confirm whether that lesson offer was recorded. "
-                          "Ask Robert to say 'What lessons do you have?' before trying again.")
-        state = answer["operation"]["state"]
+        for no, lesson in self.lessons.read().active():
+            if lesson["sha256"] == text_sha(text):
+                return result("done", "already_adopted", f"That is already lesson L{no}. Nothing new was proposed.")
+        words = (f"Keep this as a standing lesson, word for word?\n\n“{text}”\n\nIt shapes how MC works and answers; it "
+                 "can't approve anything or change what MC is allowed to do.")
         with self._tx() as conn:
-            effect.finish(conn, "lesson_proposal", {"state": state}, verified=state == "proposed")
-        status = "needs_confirmation" if state == "proposed" else "refused" if state == "refused" else "done"
-        return result(status, state, answer["reply"])
+            b = self._bind(conn, session_key, agent_id)
+            return self._pending_tool_proposal(conn, b, "lesson", {"text": text},
+                                               effects.request("lessons.propose", {"text": text}), words)
+
+    def _supersede_other_families(self, conn, conversation_id, turn_key):
+        """Never two kinds of proposal waiting in one conversation: a new tool proposal withdraws a guest or lesson
+        proposal the owner-command phrases left pending there (review P2-3)."""
+        with _cursor(conn) as cur:
+            cur.execute("""UPDATE guild.mc_guest_proposals SET state='cancelled' WHERE principal_id=%s AND environment=%s
+                AND conversation_id=%s AND state='pending'""", (self.principal, self.environment, conversation_id))
+        if self.lessons is not None:
+            from core.mc_lessons import commands as lessons
+            handler = lessons.LessonCommands(self.lessons)
+            if handler.has_pending(conversation_id):
+                handler.handle(lessons.Command("cancel"), conversation=conversation_id, turn_key=turn_key)
 
     def _pending_tool_proposal(self, conn, b, kind, payload, req, words):
         """Record one proposal under the turn grant and have the PLATFORM show it to Robert verbatim, with its code
@@ -263,6 +268,8 @@ class ToolService:
         with _cursor(conn) as cur:
             cur.execute("""UPDATE guild.mc_tool_proposals SET state='cancelled' WHERE principal_id=%s AND environment=%s
                 AND conversation_id=%s AND state='pending'""", (self.principal, self.environment, b.conversation_id))
+        self._supersede_other_families(conn, b.conversation_id, f"tool-supersede-{proposal_id}")
+        with _cursor(conn) as cur:
             for _ in range(5):
                 code = "P-" + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(4))
                 cur.execute("SAVEPOINT tool_code")
