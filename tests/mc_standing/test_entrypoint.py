@@ -153,3 +153,18 @@ def test_approved_watchlist_is_accepted_for_production(tmp_path, capsys):
     a = args(tmp_path, **{"--watchlist": str(REPO / "config/mc_standing/watchlist.json")})
     assert run_cycle.main(a) == 0                          # no control document: paused fail-safe
     assert json.loads(capsys.readouterr().out)["state"] == "paused"
+
+
+def test_telemetry_is_off_unless_enabled(monkeypatch):
+    monkeypatch.delenv("MINIMOI_TELEMETRY_ENABLED", raising=False)
+    assert run_cycle._telemetry() is None
+    monkeypatch.setenv("MINIMOI_TELEMETRY_ENABLED", "1")
+    import builtins
+    real = builtins.__import__
+
+    def no_library(name, *a, **k):
+        if name == "core.observability":
+            raise ImportError("library not on this branch")
+        return real(name, *a, **k)
+    monkeypatch.setattr(builtins, "__import__", no_library)
+    assert run_cycle._telemetry() is None              # missing library never fails the cycle

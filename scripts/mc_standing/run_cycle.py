@@ -42,6 +42,18 @@ def _token(path: Path) -> str:
     return value
 
 
+def _telemetry():
+    """Spec 161 adopter: only when MINIMOI_TELEMETRY_ENABLED=1 and the shared library is present.
+    Off (or unavailable) means no telemetry, never a failed cycle."""
+    if os.environ.get("MINIMOI_TELEMETRY_ENABLED") != "1":
+        return None
+    try:
+        from core.observability import configure
+        return configure(service_name="minimoi-standing-checks")
+    except Exception:
+        return None
+
+
 def _chat_binding(path: Path) -> str:
     info = os.stat(path)
     if stat.S_IMODE(info.st_mode) & 0o077:
@@ -142,7 +154,8 @@ def _cycle(args) -> tuple[int, dict]:
         ingress=IngressClient(args.ingress_url, lambda: token), destination_binding=args.destination,
         kill=control.killed, paused=control.paused, details_link=args.details_link, telegram=telegram,
         envelope={k: v for k, v in (("max_wall_ms", args.max_wall_ms), ("max_cpu_ms", args.max_cpu_ms),
-                                    ("max_rss_kb", args.max_rss_kb)) if v is not None} or None, deps=deps,
+                                    ("max_rss_kb", args.max_rss_kb)) if v is not None} or None,
+        telemetry=_telemetry(), deps=deps,
         clock=lambda: datetime.now(timezone.utc))
     out = {k: result.get(k) for k in ("cycle_key", "state", "reason", "channels", "resources",
                                       "envelope_exceeded") if k in result}

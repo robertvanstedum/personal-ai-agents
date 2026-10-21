@@ -61,7 +61,8 @@ def _observation_from(doc: dict) -> Observation:
 def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: datetime, source_root,
               ingress, destination_binding: str, kill=lambda: False, paused=lambda: False,
               details_link: str | None = None, learning_source=None, learning_principal: str | None = None,
-              telegram=None, envelope: dict | None = None, deps: dict | None = None, clock=None) -> dict:
+              telegram=None, envelope: dict | None = None, telemetry=None, deps: dict | None = None,
+              clock=None) -> dict:
     """``now`` fixes the cycle's date and the observation timestamps; ``clock`` (default: the
     fixed ``now``) is read again immediately before every send and between stages, so a cycle that
     starts at 08:59 cannot deliver after 09:00. Production passes ``clock=lambda: datetime.now(UTC)``.
@@ -101,6 +102,8 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
             if telegram is not None:
                 result = _telegram_copy(spool, key, environment, details_link, telegram, kill, paused,
                                         clock, result)
+            if telemetry is not None:
+                _emit_telemetry(telemetry, spool, key, clock)
             return _record_resources(spool, key, result, started, usage0, envelope, clock)
         finally:
             try:   # informational; the lock (not this file) guards acknowledgement, so never mask the result
@@ -110,6 +113,32 @@ def run_cycle(*, spool, watchlist, policy_id: str, environment: str, now: dateti
                 pass
     finally:
         os.close(lock_fd)
+
+
+# An observation is "source unreadable" when its adapter could not read a fresh, valid source:
+# every such reason code starts with source_ or sample_ (core/mc_standing/sources.py).
+_UNREADABLE_PREFIXES = ("source_", "sample_")
+
+
+def _emit_telemetry(telemetry, spool, key, clock):
+    """Facts only (spec 161 §5.2). Any failure is swallowed: monitoring never alters the brief."""
+    try:
+        now_s = clock().timestamp()
+        for obs in _cycle_observations(spool, key):
+            readable = 0 if obs.state == "unknown" and obs.reason.startswith(_UNREADABLE_PREFIXES) else 1
+            try:
+                telemetry.gauge("minimoi_check_source_readable", readable, check_id=obs.watch_id)
+                telemetry.gauge("minimoi_check_last_run_timestamp_seconds", now_s, check_id=obs.watch_id)
+                m = obs.measurements or {}
+                if obs.watch_id == "guests" and obs.state != "unknown":
+                    if isinstance(m.get("pending_total"), int):
+                        telemetry.gauge("minimoi_guest_requests_pending", m["pending_total"])
+                    if isinstance(m.get("oldest_age_h"), (int, float)):
+                        telemetry.gauge("minimoi_guest_requests_oldest_age_seconds", float(m["oldest_age_h"]) * 3600)
+            except Exception:
+                continue
+    except Exception:
+        pass
 
 
 def _rss_kb(usage) -> int:
