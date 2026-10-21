@@ -128,8 +128,8 @@ class GuestActions:
             if before is None:
                 outcome = "missing"
             elif before["status"] == "requested" and target_version(before) == intent.expected_target_version:
-                cur.execute("UPDATE guild.guest_requests SET status='rejected', actioned_at=clock_timestamp() "
-                            "WHERE id=%s AND status='requested'", (request_id,))
+                from minimoi_portal.guest_requests import reject_guild_in      # the application operation
+                reject_guild_in(cur, request_id)
                 outcome = "rejected"
             elif before["status"] == "rejected":
                 outcome = "already_rejected"
