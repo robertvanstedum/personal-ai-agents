@@ -8,8 +8,13 @@ from .mc_delivery_store import DeliveryStore, DeliveryMissing, DeliveryExpired, 
 FLAG='MINIMOI_MC_DELIVERIES'
 # Deliberately explicit. Quoted documents, retrieval questions and vague assent are not commands.
 _POLITE=re.compile(r"^(?:can|could|would)\s+you\s+(?:please\s+)?",re.I)
-_REQUEST=re.compile(r'^(?:please\s+)?(?:create|prepare|make|generate|build)\s+(?:me\s+)?(?:a\s+|the\s+|these\s+)?(?:downloadable\s+(?:(?:text|markdown)\s+)?(?:files?|bundle|package|brief|report|document|notes\s+export)|transfer\s+package)\b',re.I)
+_REQUEST=re.compile(r'^(?:please\s+)?(?:create|prepare|make|generate|build|deliver|send|give|export|save|provide)\s+(?:me\s+)?(?:a\s+|the\s+|these\s+)?(?:downloadable\s+(?:(?:text|markdown)\s+)?(?:files?|bundle|package|brief|report|document|notes\s+export)|transfer\s+package)\b',re.I)
 _PACKAGE=re.compile(r'^(?:please\s+)?put\s+(?:the|this|my)\s+(?:brief|report|document|files?|notes)(?:\s+[^.!?\n]{0,100})?\s+in\s+(?:a|the)\s+download(?:able)?\s+package\b',re.I)
+# R93: owners also say "deliver/send/give/export/save ... as/in a download(able) package/file/ZIP".
+# Still an explicit owner imperative at the start of an owner sentence; never model output.
+_AS_DOWNLOAD=re.compile(r'^(?:please\s+)?(?:deliver|send|give|export|save|provide|package|put)\s+(?:me\s+|us\s+)?'
+                        r'(?:it|them|this|that|these|the|my|our|a|an)\b[^.!?\n]{0,120}?\s+(?:as|in|into)\s+(?:a\s+|the\s+|one\s+)?'
+                        r'(?:downloadable\s+(?:(?:text|markdown|zip)\s+)?(?:files?|package|bundle|zip|archive)|download(?:able)?(?:\s+(?:files?|package|bundle|link))?|zip(?:\s+(?:file|package|archive))?)\b',re.I)
 _QUOTES=re.compile(r'''"[^"]*"|“[^”]*”|‘[^’]*’|(?<!\w)'[^']*'(?!\w)|`[^`]*`''')
 
 
@@ -42,9 +47,33 @@ def requested(text):
  for sentence in _owner_sentences(text):
   polite=bool(_POLITE.match(sentence))
   command=_POLITE.sub('',sentence)
-  if (polite or not sentence.endswith('?')) and (_REQUEST.match(command) or _PACKAGE.match(command)):
+  if (polite or not sentence.endswith('?')) and (_REQUEST.match(command) or _PACKAGE.match(command)
+                                                 or _AS_DOWNLOAD.match(command)):
    return True
  return False
+
+def stray_packet(text):
+ """R93: a file packet in an answer that was NOT a recognised delivery request is shown as
+ readable content with a hint, never as raw JSON and never as a download (nothing is stored)."""
+ if not isinstance(text,str):return None
+ import json
+ try:
+  doc=json.loads(packet(text))
+ except ValueError:
+  return None
+ files=doc.get('files') if isinstance(doc,dict) else None
+ if not isinstance(files,list) or not files or len(files)>12:return None
+ parts=[]
+ for f in files:
+  if not isinstance(f,dict) or not isinstance(f.get('name'),str) or not isinstance(f.get('content'),str):return None
+  name=re.sub(r'([\\`*_{}\[\]()#+.!<>-])',r'\\\1',f['name'][:120])
+  body=f['content'][:65536]
+  fence='~~~~' if '```' in body else '```'
+  parts.append('**'+name+'**\n\n'+fence+'\n'+body+'\n'+fence)
+ hint=('No download was created: this message did not ask for one. To get these as a downloadable package, '
+       'ask for example: "Create a downloadable file with this report."')
+ return hint+'\n\n'+'\n\n'.join(parts)
+
 
 def store(conversations):
  if not conversations.dir:raise DeliveryUnavailable('delivery_storage_unavailable')
