@@ -38,7 +38,39 @@ def build_manager(services, *, environ=None, clock=None, relay=None) -> JobManag
         if conv and not conv.get("unfiled"):
             conversations.touch(conv["id"], principal)
     kwargs = {"clock": clock} if clock is not None else {}
+    relay = _with_delegation(relay, environ if environ is not None else os.environ)
     return JobManager(folder, relay, conversations=conversations, floor_for=floor_for, scrub=scrub, touch=touch, **kwargs)
+
+
+def _with_delegation(relay, environ):
+    """When MINIMOI_MC_DELEGATION=1 (with the owner principal, environment and DATABASE_URL), jobs that name a delegate
+    go to the delegation dispatcher; every other job is unchanged."""
+    if str(environ.get("MINIMOI_MC_DELEGATION", "")).strip() != "1":
+        return relay
+    principal, env_name, dsn = (environ.get("MINIMOI_MC_DELEGATION_PRINCIPAL"), environ.get("MINIMOI_MC_DELEGATION_ENV"),
+                                environ.get("DATABASE_URL"))
+    if not principal or env_name not in ("dev", "prod") or not dsn:
+        log.warning("guild jobs: delegation requested but not configured; delegation stays off")
+        return relay
+    import psycopg2
+    from core.mc_delegation_dispatcher.relay import DelegationRelay, RoutingRelay
+    from core.mc_delegation_dispatcher.store import DispatcherStore
+    store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=principal, environment=env_name)
+    return RoutingRelay(relay, DelegationRelay(store, ref_for=_main_head))
+
+
+def _main_head(repository):
+    """The exact commit a delegate starts from: the public repository's main head."""
+    import re as _re
+    import requests
+    if repository != "personal-ai-agents":
+        raise ValueError("repository_unknown")
+    resp = requests.get("https://api.github.com/repos/robertvanstedum/personal-ai-agents/commits/main",
+                        headers={"Accept": "application/vnd.github.sha"}, timeout=(5, 10))
+    sha = resp.text.strip() if resp.status_code == 200 else ""
+    if not _re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise ValueError("ref_unavailable")
+    return sha
 
 
 def attach_jobs(app, blueprint_name: str, services, environ=None) -> JobManager | None:

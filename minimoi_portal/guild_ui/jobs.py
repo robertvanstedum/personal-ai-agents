@@ -340,7 +340,8 @@ class JobManager:
         self.wake = threading.Event()
 
     # ── starting ──
-    def start(self, conv: dict, principal: str, note: dict, note_id: str, doc_ids=None, title: str | None = None):
+    def start(self, conv: dict, principal: str, note: dict, note_id: str, doc_ids=None, title: str | None = None,
+              agent: str = AGENT):
         """(job, refusal). A refusal is (code, plain message) and means nothing was created and nothing was sent."""
         cid = conv.get("id", "")
         if not CONV_RE.fullmatch(str(cid)):
@@ -364,7 +365,7 @@ class JobManager:
             files = [{"doc_id": f["doc_id"], "name": f["name"], "bytes": f["bytes"], "sha256": f["sha256"], "path": f["path"]}
                      for f in manifest["files"]]
         now = self.clock()
-        job = {"id": jid, "conversation_id": cid, "principal": principal, "note_id": note_id, "state": "queued",
+        job = {"id": jid, "conversation_id": cid, "principal": principal, "note_id": note_id, "state": "queued", "agent": agent,
                "title": (title or default_title(note.get("text", ""))), "task_sha256": hashlib.sha256((note.get("text") or "").encode()).hexdigest(),
                "created_at": now, "t_queued": now, "updated_at": now, "files": files, "inbox": bool(files), "attempts": 0,
                "deadline_s": self.limits.deadline_s, "stop_requested_at": None, "stop_outcome": None, "tools": [], "tools_truncated": False,
@@ -436,7 +437,7 @@ class JobManager:
         if note is None:                                    # the note really is gone, or is not the owner's: this job cannot run
             self.store.mutate(cid, jid, lambda j: self._end(j, "not_started", "note_missing"))
             return None
-        spec = {"job_id": jid, "agent": AGENT, "task": self.scrub(note["text"]), "deadline_s": claimed["deadline_s"],
+        spec = {"job_id": jid, "agent": claimed.get("agent", AGENT), "task": self.scrub(note["text"]), "deadline_s": claimed["deadline_s"],
                 "inbox": ({"job_id": jid, "files": [{"name": f["path"], "sha256": f["sha256"]} for f in claimed["files"]]} if claimed["files"] else None)}
         outcome, detail = self.relay.start(spec)
         t = self.clock()

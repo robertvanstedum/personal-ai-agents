@@ -50,6 +50,16 @@ def job_command(found):
         return None
     from .jobs import ACTIVE, interpret
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    delegate = delegation_command(note.get("text", ""))
+    if delegate is not None:
+        if attachment_ids:
+            return start_refusal("files_not_supported", "Delegated work cannot take attached files yet. Nothing was started.")
+        job, refusal = mgr.start(conv, principal, note, note_id, None, title=delegate["title"], agent=delegate["agent"])
+        if refusal is not None:
+            return start_refusal(*refusal)
+        mgr.wake.set()
+        return jsonify({"job_command": "delegate", "status": "job", "job": mgr.view(job),
+                        "message": delegate["announce"]}), 200
     command = interpret(note.get("text", ""))
     if command is None:
         return None
@@ -66,6 +76,31 @@ def job_command(found):
         return start_refusal(*refusal)
     mgr.wake.set()
     return jsonify({"job_command": "run_job", "status": "job", "job": mgr.view(job), "message": ANNOUNCE}), 200
+
+
+_DELEGATE = re.compile(r"^(?:please\s+)?ask\s+(?P<who>claude\s+code|codex)\s+to\s+(?:research|look\s+into|investigate|find\s+out)\s*:?\s+(?P<what>\S.{4,1900})$",
+                       re.I | re.S)
+DELEGATION_VAR = "MINIMOI_MC_DELEGATION"
+
+
+def delegation_command(text):
+    """'Ask Claude Code to research: <question>' (also look into / investigate / find out). Read-only research in a
+    fresh checkout; the result comes back as this job's result note. Off unless MINIMOI_MC_DELEGATION=1."""
+    from . import feature_environ
+    if feature_environ().get(DELEGATION_VAR) != "1" or not isinstance(text, str):
+        return None
+    t = text.strip()
+    if any(c in t for c in ('"', "“", "”", "`")) or t.startswith(">"):
+        return None
+    m = _DELEGATE.match(t)
+    if m is None:
+        return None
+    agent = "claude-code" if m.group("who").lower().startswith("claude") else "codex"
+    who = "Claude Code" if agent == "claude-code" else "Codex"
+    what = m.group("what").strip()
+    return {"agent": agent, "title": f"{who}: {what[:60]}",
+            "announce": (f"I've asked {who} to research this in a fresh, read-only copy of the repository. "
+                         "It runs in the background on the Mac; I'll post its answer here when it's done. Say stop to cancel.")}
 
 
 class Decision:
