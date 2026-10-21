@@ -166,7 +166,7 @@ class DispatcherStore:
                         **({} if same else {"code": "different_result_already_recorded"})}
             # Refusals may arrive without a claim (an envelope the runner rejected). Anything else needs the
             # current generation; a stale worker never completes someone else's claim.
-            if row["generation"] != generation and status != "refused":
+            if row["generation"] != generation and (status != "refused" or row["state"] not in ("queued", "claimed")):
                 return {"state": "refused", "event_id": event_id, "code": "stale_generation"}
             if row["cancel_requested"] and status == "completed":
                 status = "cancelled"                       # Stop was pressed: the result is kept, not claimed as done

@@ -54,6 +54,9 @@ def job_command(found):
     if delegate is not None:
         if attachment_ids:
             return start_refusal("files_not_supported", "Delegated work cannot take attached files yet. Nothing was started.")
+        if delegate["agent"] != "claude-code":
+            return start_refusal("delegate_unavailable", "Codex can't take delegated work yet: there is no way to cap "
+                                 "its cost. Nothing was started. Ask Claude Code instead.")
         job, refusal = mgr.start(conv, principal, note, note_id, None, title=delegate["title"], agent=delegate["agent"])
         if refusal is not None:
             return start_refusal(*refusal)

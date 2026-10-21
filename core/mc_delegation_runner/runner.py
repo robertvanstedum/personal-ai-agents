@@ -227,7 +227,7 @@ class _BoundedCapture:
         self.pipe, self.limit, self.written, self.exceeded = pipe, limit, 0, threading.Event()
         self.error: str | None = None
         self.completed = False
-        self.log = open(log_path, "xb")
+        self.log = os.fdopen(os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb")   # private: it holds the full output
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 

@@ -281,6 +281,23 @@ def test_reclaim_after_crash_reports_recorded_result_without_rerun(tmp_path, mir
     assert d2.results and d2.results[0]["status"] == "completed"
 
 
+def test_the_output_log_is_private(tmp_path, mirror, monkeypatch):
+    path, ref = mirror
+    fake_cli(monkeypatch, "print('ok')")
+    runner.run_once(FakeDispatcher([env_doc(ref)]), cfg(tmp_path, path), now=lambda: NOW)
+    (log,) = (tmp_path / "artifacts").glob("*.log")
+    assert log.stat().st_mode & 0o077 == 0
+
+
+def test_an_error_envelope_reads_as_a_sentence_and_its_cost_is_recorded():
+    from core.mc_delegation_runner.dispatcher_adapter import cost_usd, readable
+    raw = json.dumps({"type": "result", "subtype": "error_max_budget_usd", "is_error": True,
+                      "total_cost_usd": 2.0034, "session_id": "s"}).encode()
+    assert readable(raw) == "Claude Code stopped at its cost cap before finishing."
+    assert cost_usd(raw) == 2.0034
+    assert cost_usd(b"plain text") is None
+
+
 def test_new_generation_gets_its_own_workspace_and_artifacts(tmp_path, mirror, monkeypatch):
     path, ref = mirror
     fake_cli(monkeypatch, "print('ok')")

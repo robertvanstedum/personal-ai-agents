@@ -91,6 +91,15 @@ class DelegationTests(PostgresFixture, unittest.TestCase):
         self.assertEqual((st["state"], st["error_class"]), ("failed", "interrupted"))
         self.assertIn("did not complete", st["result_text"])
 
+    def test_a_refusal_never_overwrites_a_job_stopped_before_pickup(self):
+        self.start()
+        self.assertEqual(self.relay.stop("j-0123456789abcdef"), "confirmed")
+        row = self.store.by_job("j-0123456789abcdef")
+        ack = self.store.result(str(row["request_id"]), 7, event_id=str(uuid4()), status="refused", artifacts=[],
+                                detail={"code": "late"})
+        self.assertEqual(ack["code"], "stale_generation")
+        self.assertEqual(self.store.by_job("j-0123456789abcdef")["state"], "cancelled")
+
     def test_a_finished_job_leaves_no_workspace_behind(self):
         self.fake_cli("print('done')")
         self.start()

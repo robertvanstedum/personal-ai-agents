@@ -77,12 +77,21 @@ def test_ask_claude_code_starts_a_delegated_job_without_a_model_and_its_answer_c
 def test_stop_reaches_the_delegate(delegating):
     client, token, cid, mgr, runtime = _rig(delegating)
     fake = delegating.extra["delegation"]
-    _ask(client, token, _keep(client, token, "Ask Codex to look into: the flaky ledger test", conversation_id=cid),
+    _ask(client, token, _keep(client, token, "Ask Claude Code to look into: the flaky ledger test", conversation_id=cid),
          conversation_id=cid)
     mgr.tick()
     body = _ask(client, token, _keep(client, token, "stop", conversation_id=cid), conversation_id=cid).get_json()
     assert body["job_command"] == "stop" and body["job"]["state"] == "stopped"
     assert [j["state"] for j in fake.jobs.values()] == ["stopped"] and runtime.jobs.stops == []
+
+
+def test_codex_is_refused_up_front_until_its_cost_can_be_capped(delegating):
+    client, token, cid, mgr, runtime = _rig(delegating)
+    r = _ask(client, token, _keep(client, token, "Ask Codex to look into: the flaky ledger test", conversation_id=cid),
+             conversation_id=cid)
+    body = r.get_json()
+    assert body.get("error") == "delegate_unavailable" and "Nothing was started" in body["message"]
+    assert delegating.extra["delegation"].jobs == {}
 
 
 @pytest.mark.parametrize("text", ['Ask Claude Code to research: "quoted"', "Tell Claude Code to research: x y z w",
