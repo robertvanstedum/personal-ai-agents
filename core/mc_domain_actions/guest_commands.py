@@ -33,6 +33,13 @@ PROPOSAL_MINUTES = 10
 _GUARDS = ('"', "“", "”", "`", ">")
 _REJECT = re.compile(r"^(?:please\s+)?(?:reject|decline|deny)\s+(?:the\s+)?(?:guest\s+)?(?:access\s+)?request\s+"
                      r"(?:from|by|for|of)\s+(?P<who>[^!?\n]{2,80}?)\s*[.!]?$", re.I)
+# The owner's own words, inside a longer message: "Guten Morgen. … Just reject the guest requests we have."
+_NATURAL = re.compile(r"^(?:(?:just|please|so|and|then|ok(?:ay)?|now|can\s+you|could\s+you|would\s+you|kindly)[,\s]+)*"
+                      r"(?:reject|decline|deny)\s+(?:the\s+|all\s+(?:the\s+|of\s+the\s+)?|our\s+|any\s+|that\s+|this\s+)?"
+                      r"(?:open\s+|pending\s+|new\s+)?guest\s+(?:access\s+)?requests?"
+                      r"(?:\s+(?:from|by|for|of)\s+(?P<who>[^!?\n]{2,80}?))?"
+                      r"(?:\s+(?:we\s+have|that\s+are\s+(?:open|pending)|(?:for|with)\s+me|(?:right\s+)?now|please))*\s*$", re.I)
+_SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 _CONFIRM = re.compile(r"^(?:yes[,.!]?\s+)?(?:confirm(?:ed)?|approve(?:d)?)(?:\s+(?:it|that|the\s+reject(?:ion)?))?\s*[.!]?$", re.I)
 _CANCEL = re.compile(r"^(?:no[,.!]?\s+)?(?:cancel|don['’]t|do\s+not)(?:\s+(?:it|that|the\s+reject(?:ion)?))?\s*[.!]?$", re.I)
 
@@ -47,8 +54,21 @@ def parse(text) -> Command | None:
     if not isinstance(text, str):
         return None
     t = text.strip()
-    if not t or len(t) > 200 or "\n" in t or any(c in t for c in _GUARDS):
+    if not t or len(t) > 600 or any(c in t for c in _GUARDS):
         return None
+    if len(t) <= 200 and "\n" not in t:
+        exact = _parse_exact(t)
+        if exact is not None:
+            return exact
+    for sentence in _SENTENCE.split(t):                 # an instruction inside a longer message
+        n = _NATURAL.match(sentence.strip().rstrip(".!?").strip())
+        if n:
+            who = (n.group("who") or "").strip().rstrip(".").strip()
+            return Command("reject", who if len(who) >= 2 else None)
+    return None
+
+
+def _parse_exact(t):
     m = _REJECT.match(t)
     if m:
         who = m.group("who").strip().rstrip(".").strip()
@@ -112,7 +132,21 @@ class GuestCommands:
     def _reject(self, who, conversation, turn_key, now):
         context = _context(self.principal, self.environment, conversation, turn_key, now)
         with self.connect() as conn:
-            matches = self.actions.find(conn, context, who)
+            if who is None:                                  # "reject the guest requests": the open ones
+                matches = self.actions.open_requests(conn, context)
+                if not matches:
+                    return {"reply": "There are no open guest requests right now. Nothing was changed.",
+                            "operation": {"type": "guest_action", "state": "no_match"}}
+                if len(matches) > 1:
+                    rows = "\n".join(f"- {m['name'] or '(no name)'} <{m['email']}>, requested {_date(m['requested_at'])}"
+                                     for m in matches[:10])
+                    more = f"\n…and {len(matches) - 10} more." if len(matches) > 10 else ""
+                    return {"reply": f"There are {len(matches)} open guest requests:\n{rows}{more}\n"
+                                     "I reject one at a time, each confirmed by you. Which first? "
+                                     "Say for example: Reject the guest request from <name>.",
+                            "operation": {"type": "guest_action", "state": "clarify", "matches": len(matches)}}
+            else:
+                matches = self.actions.find(conn, context, who)
             if not matches:
                 open_count = len(self.actions.open_requests(conn, context))
                 return {"reply": f"No open guest request matches “{who}”. There are {open_count} open request(s).",
