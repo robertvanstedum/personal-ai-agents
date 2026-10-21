@@ -9,7 +9,7 @@
 **Not ready for production. Dev is OK to keep running with the journeys, but not with the guest-action, voiced-outcome or delegation flags exposed to anyone but Robert.**
 
 - One P1: a retried Confirm turn can reject a *different* guest that Robert never confirmed.
-- Nine P2s, seven of them reproduced or confirmed in code:
+- Nine P2s; all but one (the read scope) reproduced or confirmed from code or the live script:
   - the voiced turn re-opens model-output effects (JOB/ASK/MEETING/delivery) inside a platform turn;
   - a guest's own text reaches MC's trusted block;
   - two Confirm/Cancel collisions;
