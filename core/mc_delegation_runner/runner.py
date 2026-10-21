@@ -444,6 +444,14 @@ def _finish(dispatcher, cfg, env, status, artifacts, detail, workspace_dir=None,
         out["code"] = detail.get("code")
     if workspace_dir is not None:
         out["workspace"] = str(workspace_dir)
+        # The result and its artifacts are persisted: a finished checkout (~0.5 GB) goes, except an interrupted one,
+        # which is kept for inspection.
+        if status != "interrupted":
+            try:
+                workspace.remove(workspace_dir, Path(cfg.workspace_root))
+                out["workspace_removed"] = True
+            except Exception:
+                out["workspace_removed"] = False
     if resumed:
         out["resumed"] = True
     return out

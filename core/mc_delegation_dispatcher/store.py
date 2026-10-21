@@ -62,6 +62,16 @@ class DispatcherStore:
             cur.execute("SELECT *, clock_timestamp() AS now FROM guild.mc_delegations WHERE job_id=%s", (job_id,))
             return cur.fetchone()
 
+    def reap_lapsed(self, job_id) -> bool:
+        """A claim whose runner stopped renewing for a full extra lease is ended as interrupted (runner_lost), so
+        the job and its Stop never hang on a dead runner. A late result for the same generation still records."""
+        with self._tx() as cur:
+            cur.execute("""UPDATE guild.mc_delegations SET state='interrupted', finished_at=clock_timestamp(),
+                result_detail='{"code": "runner_lost"}'::jsonb, lease_until=NULL
+                WHERE job_id=%s AND state IN ('claimed','running') AND result_event_id IS NULL
+                  AND lease_until < clock_timestamp() - %s * interval '1 second'""", (job_id, LEASE_SECONDS))
+            return cur.rowcount == 1
+
     def stop(self, job_id) -> str:
         """'confirmed' (never started), 'requested' (the runner stops at its next check), 'not_running', 'not_found'."""
         with self._tx() as cur:

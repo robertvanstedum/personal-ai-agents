@@ -285,10 +285,11 @@ def test_new_generation_gets_its_own_workspace_and_artifacts(tmp_path, mirror, m
     path, ref = mirror
     fake_cli(monkeypatch, "print('ok')")
     doc = env_doc(ref)
-    runner.run_once(FakeDispatcher([doc]), cfg(tmp_path, path), now=lambda: NOW)
-    runner.run_once(FakeDispatcher([dict(doc, generation=2)]), cfg(tmp_path, path), now=lambda: NOW)
-    names = sorted(p.name for p in (tmp_path / "ws").iterdir())
-    assert names[0].endswith("-g1") and names[1].endswith("-g2")
+    first = runner.run_once(FakeDispatcher([doc]), cfg(tmp_path, path), now=lambda: NOW)
+    second = runner.run_once(FakeDispatcher([dict(doc, generation=2)]), cfg(tmp_path, path), now=lambda: NOW)
+    assert first["workspace"].endswith("-g1") and second["workspace"].endswith("-g2")
+    assert first["workspace_removed"] and second["workspace_removed"]      # finished checkouts don't pile up
+    assert list((tmp_path / "ws").iterdir()) == []
     assert len(list((tmp_path / "artifacts").glob("*.result.json"))) == 2
 
 
@@ -330,10 +331,10 @@ def test_descendants_are_stopped_after_the_parent_exits(tmp_path, mirror, monkey
     fake_cli(monkeypatch, "import subprocess,sys\n"
                           "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'],"
                           " stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
-                          "open('child.pid','w').write(str(p.pid))")
+                          f"open({str(tmp_path / 'child.pid')!r},'w').write(str(p.pid))")
     out = runner.run_once(FakeDispatcher([env_doc(ref)]), cfg(tmp_path, path), now=lambda: NOW)
     assert out["state"] == "completed"
-    pid = int(next((tmp_path / "ws").glob("*/child.pid")).read_text())
+    pid = int((tmp_path / "child.pid").read_text())
     assert not _alive(pid)
 
 
