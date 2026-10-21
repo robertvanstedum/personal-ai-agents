@@ -28,9 +28,9 @@ def guests(turned, monkeypatch):
     FakeCommands.calls, FakeCommands.pending = [], False
     monkeypatch.setattr(gc, "GuestCommands", FakeCommands)
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
-    env = turned.app.extensions["guild_ui_next"].setdefault("feature_environ", {})
-    env["MINIMOI_MC_GUEST_ACTIONS"] = "1"
-    env["MINIMOI_MC_GUEST_ACTIONS_ENV"] = "dev"
+    ext = turned.app.extensions["guild_ui_next"]                       # a copy, restored after the test
+    monkeypatch.setitem(ext, "feature_environ", {**(ext.get("feature_environ") or {}),
+                                                 "MINIMOI_MC_GUEST_ACTIONS": "1", "MINIMOI_MC_GUEST_ACTIONS_ENV": "dev"})
     return turned
 
 

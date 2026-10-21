@@ -46,8 +46,9 @@ class FakeDelegation:
 
 
 @pytest.fixture
-def delegating(jobbed):
-    jobbed.app.extensions["guild_ui_next"].setdefault("feature_environ", {})["MINIMOI_MC_DELEGATION"] = "1"
+def delegating(jobbed, monkeypatch):
+    ext = jobbed.app.extensions["guild_ui_next"]                       # a copy, restored after the test
+    monkeypatch.setitem(ext, "feature_environ", {**(ext.get("feature_environ") or {}), "MINIMOI_MC_DELEGATION": "1"})
     mgr = jobbed.extra["manager"]
     fake = FakeDelegation()
     mgr.relay = RoutingRelay(mgr.relay, fake)

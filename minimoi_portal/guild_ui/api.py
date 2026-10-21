@@ -738,7 +738,7 @@ def _dispatch_marker(ledger_turn, recorder):
 def _platform_command(found):
     """The owner's deterministic commands, in their existing order; None for an ordinary message."""
     for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command,
-                    _owner_guest_command):
+                    _owner_guest_command, _owner_lesson_command):
         result = command(found)
         if result is not None:
             return result
@@ -1010,6 +1010,50 @@ def _owner_action_command(found):
     return jsonify(status='answered', backend_kind='platform', reply_note=result.get('reply_note'),
                    message=result['reply'], operation=result['operation'],
                    history_saved=result.get('history_saved', False)), 200
+
+
+def _lesson_ledger(principal):
+    """The owner's lesson ledger when MINIMOI_MC_LESSONS=1 with MINIMOI_MC_LESSONS_ENV=dev|prod and an absolute
+    MINIMOI_MC_LESSONS_DIR; otherwise None (lessons off)."""
+    from . import feature_environ
+    env = feature_environ()
+    if env.get("MINIMOI_MC_LESSONS") != "1" or env.get("MINIMOI_MC_LESSONS_ENV") not in ("dev", "prod"):
+        return None
+    root = env.get("MINIMOI_MC_LESSONS_DIR") or ""
+    if not os.path.isabs(root):
+        return None
+    from core.mc_lessons.ledger import LessonLedger
+    return LessonLedger(root, principal=principal, environment=env["MINIMOI_MC_LESSONS_ENV"])
+
+
+def _owner_lesson_command(found):
+    """Owner lessons by command (core/mc_lessons/commands.py): Remember: … → Confirm/Cancel, Forget lesson <n>,
+    What lessons do you have? Answered by the platform; a lesson shapes answers and never grants authority."""
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    from core.mc_lessons import commands as lessons
+    command = lessons.parse(note.get("text"))
+    if command is None or attachment_ids or getattr(g, "topic_context", None):
+        return None
+    ledger = _lesson_ledger(principal)
+    if ledger is None:
+        return None
+    handler = lessons.LessonCommands(ledger)
+    try:
+        if command.kind in ("confirm", "cancel") and not handler.has_pending(conv["id"]):
+            return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        result = handler.handle(command, conversation=conv["id"], turn_key=note_id)
+    except Exception:
+        _mc_log().exception("lesson command could not be completed")
+        result = {"reply": "I could not complete that lesson command, and I cannot confirm what was kept. "
+                           "Ask me to list your lessons before trying again.",
+                  "operation": {"type": "lesson", "state": "unknown"}}
+    try:
+        kept = floor.add_note("lesson-" + note_id + "-reply", result["reply"], GUILD_PLATFORM, area="Lessons", page="mc")
+        reply_note = kept.value if kept.outcome == "kept" else None
+    except FloorStoreUnavailable:
+        reply_note = None
+    return jsonify(status="answered", backend_kind="platform", reply_note=reply_note, message=result["reply"],
+                   operation=result["operation"], history_saved=reply_note is not None), 200
 
 
 def _owner_guest_command(found):
@@ -2167,6 +2211,16 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
                                                environ=feature_environ(), scrub=scrub)
             if awareness:
                 extra.append(awareness)
+    except Exception:
+        pass
+    # Owner-adopted lessons: standing guidance for how MC answers, never authority (core/mc_lessons).
+    try:
+        ledger = _lesson_ledger(principal)
+        if ledger is not None:
+            from core.mc_lessons.commands import block as lessons_block
+            lessons = lessons_block(ledger)
+            if lessons:
+                extra.append(lessons)
     except Exception:
         pass
     from . import mc_regression, feature_environ
