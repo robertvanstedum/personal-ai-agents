@@ -128,6 +128,10 @@ data/cos_reminders/
 # Private planning docs (live in rvs-openclaw-agent)
 ROADMAP_X_INTEGRATION.md
 
+# Planning Studio is its own private repo (robertvanstedum/minimoi-planning), nested at this
+# path. Never commit it here; tests/test_public_repo_guard.py enforces this in CI.
+/planning-studio/
+
 # Raw unblurred screenshots (use docs/screenshots/ for blurred versions)
 Screenshot*.jpg
 Screenshot*.png
