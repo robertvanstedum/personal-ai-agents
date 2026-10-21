@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {mkdtempSync, writeFileSync, chmodSync, realpathSync, symlinkSync, linkSync, rmSync, mkdirSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import plugin, {toolFactory} from '../../docker/cos-agent-a/plugins/mc-actions/index.mjs';
 
 const token = 'synthetic-executor-'+'e'.repeat(32);
@@ -60,9 +63,9 @@ test('model cannot add authority fields, arbitrary operation, oversized or non-J
 test('revoked invocation and pre-aborted signal prevent sending',async()=>{
   let calls=0;const make=factory(async()=>{calls++;return response();});
   const ctx=context();ctx.assertInvocationCurrent=()=>{throw Error('revoked');};
-  await assert.rejects(make.create(ctx).execute('a',args),/unconfirmed/);
+  await assert.rejects(make.create(ctx).execute('a',args),/not sent/);
   const controller=new AbortController();controller.abort();
-  await assert.rejects(make.create(context()).execute('b',args,controller.signal),/unconfirmed/);
+  await assert.rejects(make.create(context()).execute('b',args,controller.signal),/not sent/);
   assert.equal(calls,0);
 });
 
@@ -96,8 +99,51 @@ test('streaming oversized response is cancelled at the byte limit',async()=>{
 });
 
 test('endpoint is operator fixed and credential or redirect URL tricks are refused',()=>{
-  for(const url of ['file:///internal/mc/v1/actions','https://user:pass@example.test/internal/mc/v1/actions',
+  for(const url of ['http://mc-actions.invalid/internal/mc/v1/actions','http://127.0.0.1/internal/mc/v1/actions','file:///internal/mc/v1/actions','https://user:pass@example.test/internal/mc/v1/actions',
       endpoint+'?url=elsewhere',endpoint+'#fragment','https://example.test/other']) {
     assert.throws(()=>toolFactory({endpoint:url,token,operations:['fixture.observe']}));
   }
+});
+
+
+test('only exact pre-execution listener refusals are definite; other HTTP errors stay unknown',async()=>{
+  for (const [status,code] of [[401,'runtime_unauthorized'],[403,'capability_unavailable'],
+      [413,'runtime_request_too_large'],[415,'json_required']]) {
+    let calls=0;
+    const tool=factory(async()=>{calls++;return new Response(JSON.stringify({error:code}),
+      {status,headers:{'content-type':'application/json'}});}).create(context());
+    await assert.rejects(tool.execute('x',args),/refused before execution/);
+    assert.equal(calls,1);
+  }
+  for (const [status,body] of [[403,{error:'proxy'}],[403,{error:'capability_unavailable',extra:true}],
+      [400,{error:'action_refused'}],[503,{error:'action_outcome_unconfirmed'}]]) {
+    const tool=factory(async()=>new Response(JSON.stringify(body),
+      {status,headers:{'content-type':'application/json'}})).create(context());
+    await assert.rejects(tool.execute('x',args),/unconfirmed/);
+  }
+});
+
+test('credential bootstrap refuses symlink ancestors, shared files and hardlinks',()=>{
+  const dir=mkdtempSync(join(realpathSync(tmpdir()),'mc-credential-fixture-'));
+  const file=join(dir,'token');
+  const config={enabled:true,endpoint,operations:['fixture.observe']};
+  function register(path) { let added=false;
+    plugin.register({pluginConfig:{...config,executeTokenFile:path},registerTool(){added=true;}});
+    return added;
+  }
+  try {
+    writeFileSync(file,token,{mode:0o600});
+    assert.equal(register(file),true);
+    const realGetuid=process.getuid;
+    try { process.getuid=()=>realGetuid()+1;
+      assert.throws(()=>register(file),/credential unavailable/);
+    } finally { process.getuid=realGetuid; }
+    chmodSync(file,0o644);assert.throws(()=>register(file),/credential unavailable/);
+    chmodSync(file,0o600);
+    symlinkSync(file,join(dir,'link'));assert.throws(()=>register(join(dir,'link')),/credential unavailable/);
+    mkdirSync(join(dir,'real'));writeFileSync(join(dir,'real','token'),token,{mode:0o600});
+    symlinkSync(join(dir,'real'),join(dir,'alias'));
+    assert.throws(()=>register(join(dir,'alias','token')),/credential unavailable/);
+    linkSync(file,join(dir,'hard'));assert.throws(()=>register(file),/credential unavailable/);
+  } finally { rmSync(dir,{recursive:true,force:true}); }
 });
