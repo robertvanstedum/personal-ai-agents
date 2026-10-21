@@ -193,3 +193,49 @@ def test_multiline_reported_commands_are_not_authority(text):
 ])
 def test_polite_and_scoped_delivery_requests(text):
  assert mc_deliveries.requested(text)
+
+
+# ── R93: "Deliver ... in a downloadable package" was not recognised; raw packet JSON was shown ──
+@pytest.mark.parametrize('text',[
+ 'Deliver the research brief in a downloadable package.',
+ 'Please send me the report as a downloadable file.',
+ 'Export my notes as a ZIP.',
+ 'Give me this as a download.',
+ 'Save the summary into a downloadable markdown file.',
+ 'Could you deliver it as a download?',
+ 'Deliver a downloadable report with sources.',
+])
+def test_r93_owner_delivery_phrasings_are_recognised(text):
+ assert mc_deliveries.requested(text)
+
+
+@pytest.mark.parametrize('text',[
+ 'Deliver the brief.', 'Do not deliver it as a download.', 'What does deliver as a download mean?',
+ 'Example: "Deliver the brief as a download."', '> Send me the report as a downloadable file.',
+ 'Should you export it as a ZIP?', 'Here is a document: deliver it as a download.',
+])
+def test_r93_new_phrasings_keep_every_refusal(text):
+ assert not mc_deliveries.requested(text)
+
+
+def test_r93_the_exact_acceptance_phrase_now_delivers_a_real_download(delivery):
+ c,t,n,r=ask(delivery,text='Deliver the research brief in a downloadable package.')
+ body=r.get_json()
+ assert body['operation']['saved'] is True and '[Download the ZIP package]' in body['reply_note']['text']
+
+
+def test_r93_a_stray_packet_is_shown_readably_never_as_raw_json(delivery):
+ c,t,n,r=ask(delivery,text='What does this document describe?')
+ body=r.get_json();text=body['reply_note']['text']
+ assert 'operation' not in body and not text.lstrip().startswith('{')
+ assert 'No download was created' in text and 'brief\\.md' in text and 'A small working document.' in text
+
+
+def test_r93_stray_packet_render_is_strict():
+ assert mc_deliveries.stray_packet('a normal answer') is None
+ assert mc_deliveries.stray_packet('{"files": "x"}') is None
+ assert mc_deliveries.stray_packet('{"files": [{"name": 1, "content": "x"}]}') is None
+ many=json.dumps({'files':[{'name':f'{i}.md','content':'x'} for i in range(13)]})
+ assert mc_deliveries.stray_packet(many) is None
+ fenced=mc_deliveries.stray_packet(json.dumps({'files':[{'name':'a.md','content':'```code```'}]}))
+ assert '~~~~' in fenced
