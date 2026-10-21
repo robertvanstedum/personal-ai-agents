@@ -89,6 +89,29 @@ def _date(value) -> str:
     return value[:10] if isinstance(value, str) else str(value)[:10]
 
 
+def propose(conn, principal, environment, conversation, turn_key, match) -> str:
+    """Record the exact reject of one open request (``match`` from GuestActions.open_requests) as this
+    conversation's pending proposal, in the caller's transaction. Only the owner's Confirm acts on it."""
+    proposal_id, operation_id = str(uuid4()), str(uuid4())
+    with _cursor(conn) as cur:
+        # One pending proposal per conversation: a new one replaces the old.
+        cur.execute("""UPDATE guild.mc_guest_proposals SET state='cancelled'
+            WHERE principal_id=%s AND environment=%s AND conversation_id=%s AND state='pending'""",
+            (principal, environment, conversation))
+        cur.execute("""INSERT INTO guild.mc_guest_proposals (proposal_id, principal_id, environment,
+            conversation_id, owner_turn_id, ref, target_version, operation_id, expires_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s, clock_timestamp() + %s * interval '1 minute')""",
+            (proposal_id, principal, environment, conversation, turn_key, match["ref"],
+             match["target_version"], operation_id, PROPOSAL_MINUTES))
+    return proposal_id
+
+
+def proposal_words(m) -> str:
+    return (f"Reject the guest request from {m['name'] or m['email']} <{m['email']}>, "
+            f"requested {_date(m['requested_at'])} for {m['domain']}? "
+            f"Reply Confirm within {PROPOSAL_MINUTES} minutes, or Cancel.")
+
+
 class GuestCommands:
     def __init__(self, connect, *, principal: str, environment: str):
         """``connect()`` returns a new psycopg2 connection to the guild database."""
@@ -159,21 +182,8 @@ class GuestCommands:
                                  "Which one? Say for example: Reject the guest request from <email>.",
                         "operation": {"type": "guest_action", "state": "clarify", "matches": len(matches)}}
             m = matches[0]
-            proposal_id, operation_id = str(uuid4()), str(uuid4())
-            with _cursor(conn) as cur:
-                # One pending proposal per conversation: a new one replaces the old.
-                cur.execute("""UPDATE guild.mc_guest_proposals SET state='cancelled'
-                    WHERE principal_id=%s AND environment=%s AND conversation_id=%s AND state='pending'""",
-                    (self.principal, self.environment, conversation))
-                cur.execute("""INSERT INTO guild.mc_guest_proposals (proposal_id, principal_id, environment,
-                    conversation_id, owner_turn_id, ref, target_version, operation_id, expires_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s, clock_timestamp() + %s * interval '1 minute')""",
-                    (proposal_id, self.principal, self.environment, conversation, turn_key, m["ref"],
-                     m["target_version"], operation_id, PROPOSAL_MINUTES))
-        return {"reply": f"Reject the guest request from {m['name'] or m['email']} <{m['email']}>, "
-                         f"requested {_date(m['requested_at'])} for {m['domain']}? "
-                         f"Reply Confirm within {PROPOSAL_MINUTES} minutes, or Cancel.",
-                "operation": {"type": "guest_action", "state": "proposed", "ref": m["ref"]}}
+            propose(conn, self.principal, self.environment, conversation, turn_key, m)
+        return {"reply": proposal_words(m), "operation": {"type": "guest_action", "state": "proposed", "ref": m["ref"]}}
 
     # ── approve and act ────────────────────────────────────────────────────
     def _confirm(self, conversation, turn_key, now):

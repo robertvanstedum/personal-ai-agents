@@ -727,18 +727,32 @@ def _ledger_required(ledger_turn):
     return None
 
 
-def _dispatch_marker(ledger_turn, recorder):
+def _dispatch_marker(ledger_turn, recorder, bind_tools=lambda: None):
     def on_dispatch():
         if ledger_turn is not None:
             ledger_turn.mark_started()
         recorder()
+        bind_tools()                                  # before the request is sent: tools see this turn's binding
     return on_dispatch
+
+
+def _tool_binder(services, ledger_turn, conv, principal, note_id):
+    """Records this owner turn's tool binding at dispatch (mc_tools_wiring.binder); a no-op while MC's tools are off."""
+    from . import feature_environ
+    from .conversations import session_conversation_id
+    from .mc_tools_wiring import binder
+    try:
+        environ = feature_environ()
+    except RuntimeError:                              # an operator probe with no mount: no tools
+        return lambda: None
+    return binder(services, ledger_turn, environ=environ, principal=principal, conversation_id=conv["id"],
+                  note_id=note_id, session_conversation_id=session_conversation_id(conv, principal))
 
 
 def _platform_command(found):
     """The owner's deterministic commands, in their existing order; None for an ordinary message."""
     for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command,
-                    _owner_guest_command, _owner_lesson_command):
+                    _owner_guest_command, _owner_lesson_command, _owner_tool_proposal_command):
         result = command(found)
         if result is not None:
             return result
@@ -1145,6 +1159,54 @@ def _owner_guest_command(found):
     return _platform_outcome(floor, "guest-action-" + note_id + "-reply", result, area="Guests")
 
 
+def _owner_tool_proposal_command(found):
+    """Confirm / Cancel for what MC proposed through its tools (core/mc_tools/proposals.py): delegated research and
+    Meu Português invites. Only while such a proposal waits in this conversation; otherwise the model answers."""
+    from . import feature_environ
+    from .mc_tools_wiring import proposals, settings
+    environ = feature_environ()
+    cfg = settings(environ)
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    if cfg is None or principal != cfg["principal"] or attachment_ids or getattr(g, "topic_context", None):
+        return None
+    from core.mc_domain_actions import guest_commands
+    command = guest_commands.parse(note.get("text"))
+    if command is None or command.kind not in ("confirm", "cancel"):
+        return None
+    handler = proposals(environ, start_research=lambda p: _start_proposed_research(found, p),
+                        delivery=current_app.extensions.get("mc_invite_delivery"))
+    try:
+        if not handler.has_pending(conv["id"]):
+            return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        result = handler.handle(command.kind, conversation=conv["id"], turn_key=note_id)
+    except Exception:
+        _mc_log().exception("tool proposal command could not be completed")
+        result = {"reply": "I could not complete that, and I cannot confirm its outcome. Do not repeat it yet; "
+                           "I will check it.", "operation": {"type": "mc_tool_proposal", "state": "unknown"}}
+    return _platform_outcome(floor, "mc-tool-" + note_id + "-reply", result, area="Guild")
+
+
+def _start_proposed_research(found, proposal):
+    """Start the research MC proposed and the owner confirmed. The brief is the owner's own kept note from the
+    proposing turn, exactly as for "Ask Claude Code to research: …"; MC's title only names the job."""
+    from .jobs_api import manager
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    mgr = manager()
+    if mgr is None or proposal["conversation_id"] != conv["id"]:
+        return "refused", None
+    asked = floor.get_note(proposal["owner_turn_id"])
+    if asked is None or asked.get("author_kind") != "owner" or asked.get("who") != principal:
+        return "refused", None
+    agent, title = proposal["payload"]["agent"], proposal["payload"]["title"]
+    who = "Claude Code" if agent == "claude-code" else "Codex"
+    job, refusal = mgr.start(conv, principal, asked, proposal["owner_turn_id"], None, title=f"{who}: {title}"[:80],
+                             agent=agent)
+    if refusal is not None:
+        return "refused", None
+    mgr.wake.set()
+    return "started", job["id"]
+
+
 PRIVATE_TEXT_MAX = 4000
 _PRIVATE_SESSION = re.compile(r"[A-Za-z0-9_-]{16,64}")
 PRIVATE_NO_JOB = ("That needs a background job or a request to another agent, and neither is available in Private. "
@@ -1416,7 +1478,8 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
         header=lambda: floor_state.mc_view(services, notes_ok=True),
         touch=lambda: _touch_in(conversations, conv, principal), annotate=annotate,
         usage_folder=portal_usage_folder(), cancel=cancel, files=_files_view(files),
-        on_dispatch=_dispatch_marker(ledger_turn, _files_recorder(conversations, conv, principal, note_id, files)),
+        on_dispatch=_dispatch_marker(ledger_turn, _files_recorder(conversations, conv, principal, note_id, files),
+                                     _tool_binder(services, ledger_turn, conv, principal, note_id)),
         on_end=ledger_turn.finish_stream if ledger_turn is not None else None,
         on_answered=agent_state.mark if agent_state is not None else (lambda: None),
         capture=(capturer(turn_id=turn_id, conversation_id=conv.get("id"), note=note, note_id=note_id,
@@ -2010,6 +2073,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         started = time.monotonic()
         if ledger_turn is not None:
             ledger_turn.mark_started()                  # from here the outcome can only be answered, failed or unknown
+        _tool_binder(services, ledger_turn, conv, principal, note_id)()
         result = services.mc.turn(req)
         duration_ms = int((time.monotonic() - started) * 1000)
         job_started = None

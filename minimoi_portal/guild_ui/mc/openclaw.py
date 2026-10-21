@@ -178,6 +178,11 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
     def _user(self, conversation_id: str) -> str:
         return USER_PREFIX + hashlib.sha256(conversation_id.encode("utf-8")).hexdigest()[:32]
 
+    def session_user(self, conversation_id: str) -> str:
+        """The ``user`` a turn in this conversation is sent with; OpenClaw derives the session key
+        from it, and MC's tool path binds tool calls through it (core/mc_tools/binding.py)."""
+        return self._user(conversation_id)
+
     def turn(self, req, cancel=None) -> TurnResult:
         result = self._turn(req, cancel)
         self.settle(result)

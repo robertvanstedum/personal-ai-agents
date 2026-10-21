@@ -1183,6 +1183,11 @@ Robert
     return _send_email(to_email, "You're in — mini-moi access approved", body)
 
 
+# MC's invite tool delivers a Confirmed invite's one-time password exactly as the Operate grant path does
+# (guild_ui/mc_tools_wiring.py): the approval email, and the owner's Telegram notice.
+app.extensions["mc_invite_delivery"] = (_send_approval_email, _notify_telegram_approved)
+
+
 def _send_login_link_email(email: str, name: str, token: str) -> bool:
     """Send one-time login link via AWS SES. Returns True on success."""
     from utils.role import is_production

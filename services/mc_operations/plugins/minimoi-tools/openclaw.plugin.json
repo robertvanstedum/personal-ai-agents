@@ -1,0 +1,55 @@
+{
+ "id": "minimoi-tools",
+ "name": "MiniMoi tools",
+ "description": "MC's MiniMoi tools, bound to Robert's live turn by MiniMoi (docs/design/mc_tool_path_design_2026-10-21.md).",
+ "contracts": {
+  "tools": [
+   "minimoi_host_health",
+   "minimoi_guest_requests",
+   "minimoi_guest_request_reject",
+   "minimoi_lesson_propose",
+   "minimoi_delegate_research",
+   "minimoi_access_invite"
+  ]
+ },
+ "configSchema": {
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+   "enabled": {
+    "type": "boolean",
+    "default": false
+   },
+   "endpoint": {
+    "type": "string"
+   },
+   "tokenFile": {
+    "type": "string"
+   },
+   "agents": {
+    "type": "array",
+    "maxItems": 4,
+    "items": {
+     "type": "string"
+    }
+   },
+   "tools": {
+    "type": "array",
+    "maxItems": 20,
+    "items": {
+     "type": "string"
+    }
+   },
+   "diskPaths": {
+    "type": "array",
+    "maxItems": 4,
+    "items": {
+     "type": "string"
+    }
+   },
+   "docker": {
+    "type": "string"
+   }
+  }
+ }
+}
