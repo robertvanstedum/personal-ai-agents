@@ -9,14 +9,15 @@
 **Not ready for production. Dev is OK to keep running with the journeys, but not with the guest-action, voiced-outcome or delegation flags exposed to anyone but Robert.**
 
 - One P1: a retried Confirm turn can reject a *different* guest that Robert never confirmed.
-- Eight P2s, six of them reproduced:
+- Nine P2s, seven of them reproduced or confirmed in code:
   - the voiced turn re-opens model-output effects (JOB/ASK/MEETING/delivery) inside a platform turn;
   - a guest's own text reaches MC's trusted block;
   - two Confirm/Cancel collisions;
   - a lesson ledger that silently loses trailing events;
   - a dispatcher with no lease-expiry recovery;
   - the delegate's read scope (not reproduced);
-  - the runner's database role.
+  - the runner's database role;
+  - finished workspaces never removed (about 545 MB each).
 
 The authority core holds:
 - C06 receipts and C07 exact grants are used correctly;
@@ -246,6 +247,25 @@ Also:
 **Fix:**
 - A dedicated role with `SELECT, UPDATE` on `guild.mc_delegations` and `INSERT, UPDATE` on `guild.mc_delegation_runners` only. Production still needs the HTTP transport the handoff already names.
 - Run the runner from a pinned checkout.
+
+### P2-9: The runner never removes a finished workspace, so each delegation leaves about 545 MB on a nearly full Mac
+- `core/mc_delegation_runner/runner.py:435-449` (`_finish` only *reports* `workspace`);
+- `core/mc_delegation_runner/cli.py:79-90` (the loop never cleans up);
+- `workspace.remove` is called only on the crash-resume path (`runner.py:288`).
+
+**What goes wrong.** Every research job clones a full checkout into `--workspace-root` and leaves it there after the job ends, whatever its result. The coordinating session measured about 545 MB per checkout. The Mac had 7.7–10 GiB free during this review, and `heavy_job.py` refuses all heavy work below 8 GiB. So:
+- 2–3 delegations are enough to block the test suites and builds;
+- about 15 delegations would fill the disk.
+
+This review's own PostgreSQL run was blocked by the gate once; the coordinating session freed 1.1 GB by deleting finished delegation checkouts by hand.
+
+**Reproduced:** confirmed by reading the code: no removal after a normal finish. The size figure is from the coordinating session's measurement.
+
+**Fix:**
+- After the result is persisted locally, remove the workspace for terminal states. Keep the `.output`/`.result.json` artifacts; `_collect` already took the patch for build scope.
+- Keep only `interrupted` and `workspace_without_stage` workspaces for inspection, under a count or age cap.
+- Add a free-space check before `workspace.prepare`, so a job is refused (`disk_low`) instead of filling the disk.
+- Test that a completed job leaves no workspace.
 
 ---
 
