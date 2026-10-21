@@ -21,10 +21,20 @@ class GrammarTests(unittest.TestCase):
         for t in ("Cancel", "No, cancel", "Don't", "do not"):
             self.assertEqual(gc.parse(t), gc.Command("cancel"), t)
 
+    def test_natural_owner_wording_inside_a_longer_message(self):
+        robert = ("Guten Morgen.  I have a guest request but can't accept or reject it.  Can you do if for me?  "
+                  "Just reject the guest requests we have.")
+        self.assertEqual(gc.parse(robert), gc.Command("reject", None))
+        for t in ("Reject the guest request", "Please reject all the guest requests.", "Could you decline the pending guest request?",
+                  "Morning!\nReject the open guest requests now"):
+            self.assertEqual(gc.parse(t), gc.Command("reject", None), t)
+        self.assertEqual(gc.parse("Hi. Can you reject the guest request from Bruno Costa please."),
+                         gc.Command("reject", "Bruno Costa"))
+
     def test_not_commands(self):
         for t in ('He said "Reject the guest request from Bruno"', "> Reject the guest request from Bruno",
-                  "Should I reject the guest request from Bruno?", "Reject the guest request",
-                  "Confirm that Bruno asked for access", "Reject the guest request from Bruno\nand Ana",
+                  "Should I reject the guest request from Bruno?", "I can't accept or reject it.",
+                  "Confirm that Bruno asked for access",
                   "Can you tell me about guest requests?", "", None, "x" * 300):
             self.assertIsNone(gc.parse(t), t)
 
@@ -74,6 +84,21 @@ class FlowTests(PostgresFixture, unittest.TestCase):
         self.assertEqual(r["operation"]["state"], "proposed")
         self.assertEqual(self.say("Confirm", "t4")["operation"]["outcome"], "rejected")
         self.assertEqual(self.status("ana@example.test"), "requested")
+
+    def test_without_a_name_several_open_requests_are_listed_and_nothing_is_proposed(self):
+        r = self.say("Just reject the guest requests we have.", "t1")
+        self.assertEqual(r["operation"]["state"], "clarify")
+        self.assertIn("Bruno Costa", r["reply"])
+        self.assertFalse(self.cmds.has_pending("conv-1"))
+
+    def test_without_a_name_the_only_open_request_is_proposed_then_confirmed(self):
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE guild.guest_requests SET status='granted' WHERE email LIKE 'ana%'")
+        r = self.say("Guten Morgen. Just reject the guest requests we have.", "t1")
+        self.assertEqual(r["operation"]["state"], "proposed")
+        self.assertEqual(self.say("Confirm", "t2")["operation"]["state"], "verified")
+        self.assertEqual(self.status("bruno@example.test"), "rejected")
+        self.assertEqual(self.say("Reject the guest requests", "t3")["operation"]["state"], "no_match")
 
     def test_no_match_says_so(self):
         r = self.say("Reject the guest request from Zed", "t1")
