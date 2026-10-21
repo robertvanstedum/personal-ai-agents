@@ -166,6 +166,14 @@ class OutputAndConfigTests(unittest.TestCase):
         self.assertTrue(readable(env.replace(b"false", b"true")).startswith("Claude Code reported an error"))
         self.assertEqual(readable(b"plain answer\n"), "plain answer")
         self.assertEqual(readable(b'{"other": 1}'), '{"other": 1}')
+        self.assertEqual(readable(env.replace(b'"References.py reads them."', b'""')),
+                         "Claude Code finished but returned no answer text.")
+
+    def test_research_is_read_only_and_never_waits_for_a_plan_approval(self):
+        argv = commands.argv("claude-code", "research", "brief", Path("/tmp/x"))
+        self.assertNotIn("plan", argv)
+        self.assertEqual(argv[argv.index("--permission-mode") + 1], "dontAsk")
+        self.assertEqual(argv[argv.index("--tools") + 1], "Read,Grep,Glob")
 
     def test_the_dsn_can_come_from_the_environment_once_and_is_then_removed(self):
         import os

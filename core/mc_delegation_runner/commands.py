@@ -4,7 +4,7 @@ These match the installed CLIs on the Mac runner (claude 2.1.x, codex-cli 0.145.
 2026, and are an activation gate, not a claim: authentication, terms, sandbox behaviour,
 cancellation and one real round trip must be verified before the runner is enabled.
 
-research  read-only: the agent may read the checkout and answer; it may not edit files.
+research  read-only: Read/Grep/Glob only, answered as text; no edits, shell or network.
 build     workspace-write: edits only inside the fresh checkout; no network for Codex's sandbox;
           git push and GitHub CLI calls are disallowed for Claude Code.
 """
@@ -25,7 +25,11 @@ def argv(actor: str, scope: str, brief: str, task_dir: Path) -> list[str]:
         sandbox = "read-only" if scope == "research" else "workspace-write"
         return ["codex", "exec", "--sandbox", sandbox, "--cd", str(task_dir), "--skip-git-repo-check", prompt]
     if actor == "claude-code":
-        mode = "plan" if scope == "research" else "acceptEdits"
-        return ["claude", "-p", prompt, "--output-format", "json", "--permission-mode", mode,
+        if scope == "research":
+            # Read-only tools only, and nothing to approve: plan mode would end in a plan-approval call that
+            # print mode denies, returning an empty answer (seen on dev, 21 Oct).
+            return ["claude", "-p", prompt, "--output-format", "json", "--permission-mode", "dontAsk",
+                    "--tools", "Read,Grep,Glob", "--allowedTools", "Read", "Grep", "Glob"]
+        return ["claude", "-p", prompt, "--output-format", "json", "--permission-mode", "acceptEdits",
                 "--disallowedTools", "Bash(git push:*)", "Bash(gh:*)", "WebFetch"]
     raise ValueError("actor_unsupported")
