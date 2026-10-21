@@ -79,6 +79,25 @@ class DelegationTests(PostgresFixture, unittest.TestCase):
         self.assertEqual((outcome, st["state"]), ("ok", "completed"))
         self.assertIn("The README says hello.", st["result_text"])
 
+    def test_a_dead_runner_ends_the_job_interrupted_instead_of_running_forever(self):
+        self.start()
+        caps = {"cost_enforced_actors": ["claude-code"], "scopes": ["research"], "repositories": ["personal-ai-agents"]}
+        env = self.store.claim("mac-1", caps)
+        self.store.progress(env["request_id"], env["generation"], "executing")
+        self.assertEqual(self.relay.status("j-0123456789abcdef")[1]["state"], "running")     # within its lease
+        with self.connect() as conn, conn.cursor() as cur:                                     # the runner died
+            cur.execute("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '300 seconds'")
+        outcome, st = self.relay.status("j-0123456789abcdef")
+        self.assertEqual((st["state"], st["error_class"]), ("failed", "interrupted"))
+        self.assertIn("did not complete", st["result_text"])
+
+    def test_a_finished_job_leaves_no_workspace_behind(self):
+        self.fake_cli("print('done')")
+        self.start()
+        out = runner.run_once(StoreDispatcher(self.store, self.cfg.artifact_root), self.cfg)
+        self.assertEqual((out["state"], out.get("workspace_removed")), ("completed", True))
+        self.assertEqual(list(Path(self.cfg.workspace_root).iterdir()), [])
+
     def test_the_claimed_envelope_passes_the_runners_own_validation(self):
         self.start()
         doc = self.store.claim("mac-1", self.cfg.caps())

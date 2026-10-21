@@ -125,6 +125,9 @@ class LessonCommands:
         if len(st.active()) >= MAX_ACTIVE:
             return _reply(f"I already keep {MAX_ACTIVE} lessons. Forget one first (Forget lesson <n>). Nothing was kept.",
                           "declined", reason="full")
+        # A new offer replaces any older one here: a later Confirm can never adopt an offer Robert moved past.
+        for old in [p for p in st.proposals.values() if p["conversation"] == conversation and p["decision"] is None]:
+            append({"type": "decided", "proposal_id": old["proposal_id"], "outcome": "superseded"})
         expires = self.clock() + timedelta(minutes=PROPOSAL_MINUTES)
         append({"type": "proposed", "proposal_id": str(uuid.uuid4()), "text": text, "conversation": conversation,
                 "turn_key": turn_key, "expires_at": _iso(expires)})

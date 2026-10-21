@@ -48,6 +48,12 @@ class DelegationRelay:
             return "unreachable", None
         if row is None:
             return "not_found", None
+        if row["state"] in ("claimed", "running"):
+            try:
+                if self.store.reap_lapsed(job_id):     # the runner died mid-job: say so instead of "running" forever
+                    row = self.store.by_job(job_id)
+            except Exception:
+                pass
         state = _MAP[row["state"]]
         error = None
         if row["state"] == "queued" and row["deadline"] <= row["now"]:

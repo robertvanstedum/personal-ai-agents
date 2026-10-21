@@ -34,6 +34,14 @@ class LessonTests(unittest.TestCase):
         self.n += 1
         return self.cmds.handle(C.parse(text), conversation=conv, turn_key=key or f"t{self.n}")
 
+    def test_a_new_offer_replaces_the_older_one_so_a_second_confirm_adopts_nothing(self):
+        self.say("Remember: lead with the answer.")
+        self.say("Remember: lead with the answer, then the detail.")
+        self.assertEqual(self.say("Confirm")["operation"], {"type": "lesson", "state": "verified", "lesson": 1})
+        self.assertFalse(self.cmds.has_pending("c1"))
+        self.assertEqual(self.say("Confirm")["operation"]["state"], "nothing_pending")
+        self.assertEqual([l["text"] for _, l in self.ledger.read().active()], ["lead with the answer, then the detail."])
+
     def adopt(self, text="Answer in short paragraphs, no bullet lists.", conv="c1"):
         self.assertEqual(self.say("Remember: " + text, conv)["operation"]["state"], "proposed")
         return self.say("Confirm", conv)
