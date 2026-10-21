@@ -32,12 +32,17 @@ The narrowest proven mechanism uses two things MiniMoi already trusts, and adds 
 
 **Closing is free.** When the turn finishes, fails, is stopped or its lease lapses, the ledger entry leaves `claimed`. Every later call (a late callback, a retained tool closure, a run in another session) finds no live binding and is refused before any adapter runs. No separate close step can be forgotten.
 
-**What an attacker would need.** To act, a caller needs the executor credential *and* a run in the exact session that owns a live owner claim, during that claim. The model can do neither: it cannot choose the session key or the agent, and it cannot extend a claim.
+**What the binding does and does not prove (review P1-2, 21 Oct).** The model cannot choose the session key or the agent, and it cannot extend a claim, so model output alone never acts. But the listener authenticates only the executor credential: the session key and agent arrive as headers, and the session key can be derived from a conversation id. **Any process that can read the credential can therefore call as Robert's live turn while one is claimed.** On dev today that includes every agent of Robert's OpenClaw gateway that can run commands (`mc-agent` and `main` run as the same OS user that owns the file). A per-turn secret would close this, but nothing can carry one to the plugin until OpenClaw accepts `toolBindings` from MiniMoi's backend (N1, RC9-F1).
 
-### Residual risks, stated plainly
+### What limits it now
 
-- **Same-session runs during a live claim.** Any run in that session while the owner's turn is claimed is treated as that turn. Only the relay starts runs in `mc-chat` sessions, it holds one turn in flight, and `mc-chat` denies `sessions`, `subagents` and messaging tools. This is weaker than a per-run binding (Codex's `BindingStore` + `toolBindings`), which remains the target once N1/RC9-F1 are solved; the service is written so that swap changes only binding resolution.
-- **The executor credential lives on the runtime host.** It is a file readable only by the runtime user, and the service keeps only its SHA-256. Anyone who can read it and start an `mc-chat` run is already the owner's own operator.
+- **Nothing personal reaches a caller.** The guest list returns refs, app and date; the platform shows Robert who a request is from only when MC proposes acting on it.
+- **A forged call can only offer, visibly.** Every proposal is shown by the platform, word for word, with its code (§4). Unless the operator states `MINIMOI_MC_TOOLS_RUNTIME_ISOLATED=1`, every proposal needs Robert to name its code, so a forged one can never ride on his next plain "ok".
+- **The real boundary is deployment.** Run `mc-chat`, the plugin and its credential in a gateway under its own OS user, with no command-running agent, and the issues-write token out of any directory such an agent can read. Only then set `MINIMOI_MC_TOOLS_RUNTIME_ISOLATED=1`. Until then the tools stay useful, but the credential is not a security boundary.
+
+### Other residual risks
+
+- **Same-session runs during a live claim.** Any run in that session while the owner's turn is claimed is treated as that turn. Only the relay starts runs in `mc-chat` sessions, it holds one turn in flight, and `mc-chat` denies `sessions`, `subagents` and messaging tools. A per-run binding (Codex's `BindingStore` + `toolBindings`) remains the target; the service is written so that swap changes only binding resolution.
 - **Plain HTTP on loopback.** The plugin refuses any endpoint that is not `https:` or exactly `http://127.0.0.1:<port>`. The listener is a separate port, published only to Mac loopback, and is not behind the Cloudflare tunnel (which routes only `localhost:5001`).
 
 ## 4. Authority: references and reasons only, effects through C06/C07

@@ -16,7 +16,7 @@
       "name": "minimoi_guest_requests",
       "capability": "guest.list",
       "label": "Open guest requests",
-      "description": "The open guest access requests (name, email, app, date and ref). Read-only. To reject one, use minimoi_guest_request_reject with its ref.",
+      "description": "The open guest access requests: ref, app and date (names stay private). Read-only. To reject one, use minimoi_guest_request_reject with its ref; MiniMoi shows Robert who it is.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,

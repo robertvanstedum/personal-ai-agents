@@ -70,7 +70,8 @@ class Base(PostgresFixture):
         self.ledger = LessonLedger(Path(self.tmp.name), principal=OWNER, environment="dev")
         self.service = ToolService(self.connect, principal=OWNER, environment="dev", lessons=self.ledger,
                                    delegation=True, invites=True, tickets=True, comments=True, guest_rejects=True,
-                                   github=FakeGitHub(), show=self.show, guests_lookup=lambda email: None)
+                                   github=FakeGitHub(), show=self.show, isolated_runtime=True,
+                                   guests_lookup=lambda email: None)
         self.shown, self.turns = [], {NOTE}
         self.ledger_id = self.claim(NOTE)
         self.bind(self.ledger_id, NOTE)

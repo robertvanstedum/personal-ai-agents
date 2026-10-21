@@ -38,6 +38,8 @@ def settings(environ) -> dict | None:
             "comments": environ.get("MINIMOI_MC_TOOLS_COMMENTS") == "1",
             "github_read": environ.get("MINIMOI_MC_TOOLS_GITHUB", "1") != "0",
             "guest_rejects": environ.get("MINIMOI_MC_GUEST_ACTIONS") == "1",
+            # Operator statement, not a check: mc-chat's gateway runs alone under its own OS user (deploy handoff §4).
+            "isolated_runtime": environ.get("MINIMOI_MC_TOOLS_RUNTIME_ISOLATED") == "1",
             "issues_token_file": environ.get("MINIMOI_MC_ISSUES_TOKEN_FILE") or "",
             "repo": environ.get("MINIMOI_GITHUB_REPO") or "",
             "delegation": environ.get("MINIMOI_MC_DELEGATION") == "1"}
@@ -190,6 +192,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        invites=cfg["invites"] if invites is None else invites,
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
                        guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), show=show,
+                       isolated_runtime=cfg["isolated_runtime"],
                        guests_lookup=_guests_lookup)
 
 

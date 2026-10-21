@@ -1,9 +1,12 @@
 """Regression tests for the 21 Oct review of the MC tool path (mc_tool_path_review.md), built from its
 reproductions on real PostgreSQL. Run with tests/mc_tools/run_postgres.sh <pgbin>."""
+import hashlib
+import secrets
 import unittest
 
 from test_tool_path_postgres import Base, CONV, DSN, OWNER  # noqa: F401
 from core.mc_tools.proposals import ToolProposals, parse  # noqa: F401
+from services.mc_tools.listener import create_app
 
 
 @unittest.skipUnless(DSN, "requires disposable MC_BINDING_TEST_DSN")
@@ -68,6 +71,25 @@ class ReviewFixes(Base, unittest.TestCase):
         r = self.call("minimoi_issue_comment", {"number": 71, "summary": "This one could not be displayed.", "refs": []})
         self.assertEqual(r["code"], "proposal_not_shown")
         self.assertEqual(self.one("SELECT count(*) FROM guild.mc_tool_proposals WHERE state='pending'")[0], 0)
+
+    def test_p1_2_a_forged_caller_sees_no_personal_data_and_cannot_ride_on_a_plain_ok(self):
+        self.service.isolated_runtime = False                  # the gateway's OS user also runs exec-capable agents
+        token = secrets.token_urlsafe(32)
+        client = create_app(self.service, token_sha256=hashlib.sha256(token.encode()).hexdigest()).test_client()
+        forged = "agent:mc-chat:openai-user:guild-mc:" + hashlib.sha256(f"guild:{OWNER}:{CONV}".encode()).hexdigest()[:32]
+        headers = {"Authorization": "Bearer " + token, "X-MC-Session": forged, "X-MC-Agent": "mc-chat"}
+        listed = client.post("/internal/mc/v1/tools/minimoi_guest_requests", json={"arguments": {}}, headers=headers).get_json()
+        self.assertEqual(listed["status"], "done")
+        for private in ("Ana", "Bruno", "example.test", "@"):
+            self.assertNotIn(private, listed["message"] + str(listed["data"]))
+        proposed = client.post("/internal/mc/v1/tools/minimoi_issue_comment", headers=headers, json={
+            "arguments": {"number": 69, "summary": "Spam text approved by nobody, posted as MiniMoi.", "refs": []}}).get_json()
+        code = proposed["data"]["code"]
+        posted = []
+        p = self.props(comment_issue=lambda n, b: posted.append(n) or ("created", 1))
+        self.assertEqual(self.say(p, "ok", "note-next")["operation"]["state"], "needs_code")    # his next plain "ok"
+        self.assertEqual(posted, [])
+        self.assertIn(f"yes {code}", self.shown[-1][2])        # only a deliberate, named yes could approve it
 
 
 if __name__ == "__main__":

@@ -58,7 +58,7 @@ class ToolService:
     def __init__(self, connect, *, principal: str, environment: str, allowed_agents=("mc-chat",),
                  lessons=None, delegation: bool = False, invites: bool = False, tickets: bool = False,
                  comments: bool = False, guest_rejects: bool = False, github=None, show=None,
-                 worker: str = "mc-tools", guests_lookup=None):
+                 isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -71,6 +71,10 @@ class ToolService:
         self.github = github                          # core.mc_tools.github.GitHubIssues, or None: GitHub reads off
         # show(conversation_id, note_key, text) -> bool: the platform posts a proposal verbatim in the conversation.
         self.show = show
+        # The operator states that the MC runtime runs alone under its own OS user, so only the plugin can hold the
+        # executor credential. Until then any process of the gateway's user could forge calls, so every proposal
+        # needs Robert to name its code: a forged one can never ride on his next plain "ok" (review P1-2).
+        self.isolated_runtime = bool(isolated_runtime)
         self.worker, self.guests_lookup = worker[:80], guests_lookup
 
     @contextmanager
@@ -115,13 +119,14 @@ class ToolService:
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
             rows = self._guest_actions().open_requests(conn, b.context(), limit=50)
-        items = [{"ref": r["ref"], "name": r["name"], "email": r["email"], "app": r["domain"],
-                  "requested": r["requested_at"][:10]} for r in rows]
+        # Refs, app and date only: no guest's name or email reaches the model or any caller of this listener
+        # (review P1-2). The platform shows who it is to Robert when MC proposes acting on one.
+        items = [{"ref": r["ref"], "app": r["domain"], "requested": r["requested_at"][:10]} for r in rows]
         if not items:
             return result("done", "none_open", "There are no open guest requests.", {"requests": []})
-        lines = [f"- {i['name'] or '(no name)'} <{i['email']}> for {i['app']}, requested {i['requested']} (ref {i['ref']})"
-                 for i in items]
-        return result("done", "listed", f"{len(items)} open guest request(s):\n" + "\n".join(lines), {"requests": items})
+        lines = [f"- {i['ref']}: {i['app']}, requested {i['requested']}" for i in items]
+        return result("done", "listed", f"{len(items)} open guest request(s) (names stay private; MiniMoi shows Robert "
+                      "who it is when you propose acting on one):\n" + "\n".join(lines), {"requests": items})
 
     # ── proposals (turn grant, C06 receipt) ─────────────────────────────────
     def _guest_request_reject(self, args, session_key, agent_id, observation):
@@ -252,7 +257,7 @@ class ToolService:
                               "more was proposed; tell Robert about the next one after he answers this one.")
             cur.execute("""SELECT untrusted_read FROM guild.mc_tool_turns WHERE ledger_id=%s AND claim_generation=%s""",
                         (b.ledger_id, b.generation))
-            untrusted = bool(cur.fetchone()["untrusted_read"])
+            untrusted = bool(cur.fetchone()["untrusted_read"]) or not self.isolated_runtime
         effect = effects.begin_turn_effect(conn, b, req, worker=self.worker)
         proposal_id, operation_id = str(uuid4()), str(uuid4())
         with _cursor(conn) as cur:
