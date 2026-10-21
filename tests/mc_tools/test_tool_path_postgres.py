@@ -359,21 +359,21 @@ class ToolTests(Base, unittest.TestCase):
         self.assertEqual(grant[1], 1)
 
     def test_cancel_and_expiry_do_nothing(self):
-        self.call("minimoi_delegate_research", {"agent": "codex", "title": "Look at the relay"})
+        self.call("minimoi_delegate_research", {"agent": "claude-code", "title": "Look at the relay"})
         started = []
         proposals = ToolProposals(self.connect, principal=OWNER, environment="dev",
                                   start_research=lambda p: started.append(p) or ("started", "job-1"))
         self.assertEqual(self.say(proposals, "no", "n2")["operation"]["state"], "cancelled")
         self.assertEqual(self.say(proposals, "yes", "n3")["operation"]["state"],
                          "nothing_pending")
-        self.call("minimoi_delegate_research", {"agent": "codex", "title": "Look at the relay"})
+        self.call("minimoi_delegate_research", {"agent": "claude-code", "title": "Look at the relay"})
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute("UPDATE guild.mc_tool_proposals SET expires_at = now() - interval '1 second' WHERE state='pending'")
         self.assertEqual(self.say(proposals, "yes", "n4")["operation"]["state"], "expired")
         self.assertEqual(started, [])
 
     def test_unknown_start_is_recorded_unknown_and_not_retried(self):
-        self.call("minimoi_delegate_research", {"agent": "codex", "title": "Look at the relay"})
+        self.call("minimoi_delegate_research", {"agent": "claude-code", "title": "Look at the relay"})
 
         def boom(p):
             raise RuntimeError("relay down")

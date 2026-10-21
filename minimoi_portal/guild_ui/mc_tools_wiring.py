@@ -232,9 +232,12 @@ def attach(app, blueprint_name, services):
     invites = cfg["invites"] and app.extensions.get("mc_invite_delivery") is not None
     service = build_service(cfg, lessons_root=environ.get("MINIMOI_MC_LESSONS_DIR"), lessons_env=lessons_env,
                             invites=invites, show=proposal_shower(services, cfg["principal"]))
-    thread = serve(create_app(service, token_sha256=cfg["token_sha256"]), host="0.0.0.0", port=cfg["port"])
+    # In the portal container the port is published to the host's loopback only; a portal run directly on a host must
+    # not listen on the LAN, so outside a container the default is loopback (review P3-1).
+    host = environ.get("MINIMOI_MC_TOOLS_BIND") or ("0.0.0.0" if os.path.exists("/.dockerenv") else "127.0.0.1")
+    thread = serve(create_app(service, token_sha256=cfg["token_sha256"]), host=host, port=cfg["port"])
     app.extensions["mc_tools_listener"] = thread
-    _log.info("mc tools: listener on port %s (agents %s)", cfg["port"], ",".join(cfg["agents"]))
+    _log.info("mc tools: listener on %s:%s (agents %s)", host, cfg["port"], ",".join(cfg["agents"]))
     return thread
 
 

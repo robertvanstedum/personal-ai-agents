@@ -164,6 +164,20 @@ class ReviewFixes(Base, unittest.TestCase):
                       "**Rollback:**", "**Test evidence:**", "**Review:**", "**Approval:**", "**Outcome:**"):
             self.assertIn(field, body)
 
+    def test_p3_3_only_actors_with_a_budget_enforcer_are_offered(self):
+        r = self.call("minimoi_delegate_research", {"agent": "codex", "title": "Look at the relay"})
+        self.assertEqual(r["status"], "refused")
+
+    def test_p3_4_an_invite_never_rewrites_a_guests_rejected_request(self):
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE guild.guest_requests SET status='rejected', reason='their own words' WHERE id=1")
+        self.call("minimoi_access_invite", {"name": "Someone Else", "email": "ana@example.test", "days": 7})
+        p = self.props(invite=lambda prop, ref: ("done", {"username": "guest_x"}, None))
+        done = self.say(p, "yes", "note-yes")
+        self.assertEqual(done["operation"]["state"], "failed")
+        self.assertEqual(tuple(self.one("SELECT name, status, reason FROM guild.guest_requests WHERE id=1")),
+                         ("Ana Souza", "rejected", "their own words"))
+
 
 if __name__ == "__main__":
     unittest.main()

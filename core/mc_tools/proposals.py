@@ -352,8 +352,8 @@ class ToolProposals:
                       receipt_id=str(receipt["receipt_id"]))
 
     def _guest_request(self, p):
-        """The owner's own invite as a guest request (domain = the app), returned as its ref.
-        A rejected request with the same email is reopened; an open one is reused; any other state refuses."""
+        """The owner's own invite as a guest request (domain = the app), returned as its ref. An open request with the
+        same email is reused; any other state (rejected, granted) refuses, leaving the guest's record as it is."""
         pay = p["payload"]
         with self._tx() as conn, _cursor(conn) as cur:
             cur.execute("SELECT id, status FROM guild.guest_requests WHERE lower(email)=%s FOR UPDATE", (pay["email"],))
@@ -362,11 +362,8 @@ class ToolProposals:
                 cur.execute("""INSERT INTO guild.guest_requests (name, email, reason, domain, status)
                     VALUES (%s,%s,%s,%s,'requested') RETURNING id""", (pay["name"], pay["email"], INVITE_REASON, pay["app"]))
                 return f"guild:{cur.fetchone()['id']}", None
-            if row["status"] == "rejected":
-                cur.execute("""UPDATE guild.guest_requests SET name=%s, reason=%s, domain=%s, status='requested',
-                    requested_at=clock_timestamp(), actioned_at=NULL WHERE id=%s""",
-                    (pay["name"], INVITE_REASON, pay["app"], row["id"]))
-                return f"guild:{row['id']}", None
+            # Never rewrite a guest's own earlier request, even a rejected one (review P3-4): that is the guest's
+            # record. Robert decides on it separately.
             if row["status"] == "requested":
                 return f"guild:{row['id']}", None
             return None, row["status"]
