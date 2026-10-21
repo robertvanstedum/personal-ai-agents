@@ -106,6 +106,15 @@ class FlowTests(PostgresFixture, unittest.TestCase):
         self.assertFalse(self.cmds.has_pending("conv-1", "t3"))        # e.g. confirming a lesson next
         self.assertTrue(self.cmds.has_pending("conv-1", "t2"))         # the same turn retried
 
+    def test_a_retried_confirm_never_approves_a_newer_proposal(self):          # review P1-1
+        self.say("Reject the guest request from Bruno", "t1")
+        self.say("Confirm", "t2")
+        self.say("Reject the guest request from ana@example.test", "t3")
+        again = self.say("Confirm", "t2")                                     # the lost response is retried
+        self.assertTrue(again["operation"].get("repeated"))
+        self.assertEqual(self.status("ana@example.test"), "requested")
+        self.assertTrue(self.cmds.has_pending("conv-1", "t4"))                 # Ana still waits for her own Confirm
+
     def test_no_match_says_so(self):
         r = self.say("Reject the guest request from Zed", "t1")
         self.assertEqual(r["operation"]["state"], "no_match")
