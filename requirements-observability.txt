@@ -1,0 +1,5 @@
+# Observability (spec 161). Pinned; a component adds this file to its image only when it
+# adopts core/observability, so existing images are not rebuilt by the platform's arrival.
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-http==1.45.1
+PyYAML>=6.0

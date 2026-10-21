@@ -21,6 +21,6 @@ jobs:
       with: {python-version: '3.12'}
     - name: Rule hygiene and library tests
       run: |
-        pip install -q pyyaml pytest "opentelemetry-sdk==1.45.1" "opentelemetry-exporter-otlp-proto-http==1.45.1"
+        pip install -q pytest -r requirements-observability.txt
         python scripts/observability/check_rules_meta.py
         python -m pytest -q tests/observability
