@@ -2,6 +2,7 @@
 bounded output text returned with each result so the owner sees what the delegate produced."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 OUTPUT_MAX = 64 * 1024
@@ -33,8 +34,23 @@ class StoreDispatcher:
                 path = self.artifact_root / a["ref"]
                 try:
                     if path.is_file() and not path.is_symlink():
-                        text = path.read_bytes()[:OUTPUT_MAX].decode("utf-8", errors="replace")
+                        text = readable(path.read_bytes())
                 except OSError:
                     text = None
         return self.store.result(request_id, generation, event_id=event_id, status=status, artifacts=artifacts,
                                  detail=detail, output_text=text)
+
+
+def readable(raw: bytes) -> str:
+    """The answer the owner reads. Claude Code's ``--output-format json`` wraps it in a result envelope; the raw
+    artifact keeps the envelope, the owner sees its ``result`` text. Anything else is returned as written."""
+    text = raw.decode("utf-8", errors="replace").strip()
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        doc = None
+    if isinstance(doc, dict) and doc.get("type") == "result" and isinstance(doc.get("result"), str):
+        text = doc["result"]
+        if doc.get("is_error"):
+            text = "Claude Code reported an error: " + text
+    return text.encode("utf-8")[:OUTPUT_MAX].decode("utf-8", errors="ignore")

@@ -4,7 +4,8 @@
         --principal robert --environment dev --mirror personal-ai-agents=~/minimoi-runtime/runner/mirrors/personal-ai-agents.git \\
         --workspace-root ~/minimoi-runtime/runner/work --artifact-root ~/minimoi-runtime/runner/artifacts [--once]
 
-* The DSN comes from a private file (0600), never the command line or environment of the child.
+* The DSN comes from a private file (0600) or, with ``--dsn-env NAME``, from this process's environment (read once,
+  then removed); never from the command line, and never passed to the child (its environment is an allowlist).
 * Before each claim the mirror is fetched, so the dispatcher's exact commit is present.
 * Actors: only those with a real budget adapter (Claude Code today). Scopes: research.
 * Each pass is one ``run_once``; a failed pass is logged by type and the loop continues.
@@ -32,6 +33,13 @@ def _dsn(path: Path) -> str:
     return path.read_text().strip()
 
 
+def _dsn_from_env(name: str) -> str:
+    value = os.environ.pop(name, "").strip()
+    if not value:
+        raise SystemExit(f"{name} is not set")
+    return value
+
+
 def _fetch(mirror: Path):
     subprocess.run(["git", "--git-dir", str(mirror), "fetch", "--quiet", "origin", "+refs/heads/*:refs/heads/*"],
                    check=False, timeout=120, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
@@ -40,7 +48,9 @@ def _fetch(mirror: Path):
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="mc-delegation-runner")
-    p.add_argument("--dsn-file", required=True, type=Path)
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--dsn-file", type=Path)
+    src.add_argument("--dsn-env", metavar="NAME")
     p.add_argument("--principal", required=True)
     p.add_argument("--environment", required=True, choices=("dev", "prod"))
     p.add_argument("--mirror", action="append", required=True, help="name=path to a bare mirror")
@@ -57,7 +67,7 @@ def main(argv=None) -> int:
         mirrors[name] = Path(path).expanduser()
     import psycopg2
     from core.mc_delegation_dispatcher.store import DispatcherStore
-    dsn = _dsn(args.dsn_file.expanduser())
+    dsn = _dsn(args.dsn_file.expanduser()) if args.dsn_file else _dsn_from_env(args.dsn_env)
     store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=args.principal,
                             environment=args.environment)
     cfg = runner.RunnerConfig(runner_id=args.runner_id, actors=tuple(ENFORCERS), scopes=("research",),
