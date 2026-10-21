@@ -1,0 +1,59 @@
+# MiniMoi telemetry vocabulary (spec 161 §5.5). The single registry of what may be emitted.
+# The library (core/observability) and CI both validate against it. Adding a metric, label
+# or value is a reviewed change here; anything not listed is refused (dev/test) or dropped
+# and counted (prod). Values are closed sets or tight patterns: never free text.
+schema: minimoi-telemetry-vocabulary/1
+schema_version: 1
+
+services:
+  - minimoi-portal
+  - minimoi-curator
+  - minimoi-german
+  - minimoi-portuguese
+  - minimoi-cos-scheduler
+  - minimoi-model-gateway
+  - minimoi-standing-checks
+  - minimoi-observability-bridge
+  - minimoi-mac-jobs
+
+labels:
+  job_id:     {pattern: '^[a-z0-9][a-z0-9-]{0,47}$'}
+  service:    {values: [portal, curator, german, portuguese, cos-scheduler, cos-agent-a, cos-bot, system-bot,
+                        model-gateway, postgres, nginx, records, vault-ask, guild]}
+  mountpoint: {pattern: '^/[A-Za-z0-9/_.-]{0,63}$'}
+  check_id:   {pattern: '^[a-z0-9][a-z0-9-]{0,39}$'}
+  signal:     {values: [metrics, logs, traces]}
+  source:     {values: [job_registry, health_snapshot, host_snapshot, release_status]}
+
+metrics:
+  minimoi_job_last_success_timestamp_seconds: {type: gauge, unit: s, labels: [job_id]}
+  minimoi_job_last_finish_timestamp_seconds:  {type: gauge, unit: s, labels: [job_id]}
+  minimoi_job_last_exit_code:                 {type: gauge, unit: '1', labels: [job_id]}
+  minimoi_job_running:                        {type: gauge, unit: '1', labels: [job_id]}
+  minimoi_job_status_readable:                {type: gauge, unit: '1', labels: [job_id]}
+  minimoi_job_expected_interval_seconds:      {type: gauge, unit: s, labels: [job_id]}
+  minimoi_job_missed_after_seconds:           {type: gauge, unit: s, labels: [job_id]}
+  minimoi_job_stuck_after_seconds:            {type: gauge, unit: s, labels: [job_id]}
+  minimoi_service_up:                         {type: gauge, unit: '1', labels: [service]}
+  minimoi_host_filesystem_used_ratio:         {type: gauge, unit: '1', labels: [mountpoint]}
+  minimoi_host_memory_used_ratio:             {type: gauge, unit: '1', labels: []}
+  minimoi_deploy_last_timestamp_seconds:      {type: gauge, unit: s, labels: []}
+  minimoi_deploy_last_outcome:                {type: gauge, unit: '1', labels: []}
+  minimoi_guest_requests_pending:             {type: gauge, unit: '1', labels: []}
+  minimoi_guest_requests_oldest_age_seconds:  {type: gauge, unit: s, labels: []}
+  minimoi_check_source_readable:              {type: gauge, unit: '1', labels: [check_id]}
+  minimoi_check_last_run_timestamp_seconds:   {type: gauge, unit: s, labels: [check_id]}
+  minimoi_bridge_source_readable:             {type: gauge, unit: '1', labels: [source]}
+  minimoi_telemetry_heartbeat_timestamp_seconds: {type: gauge, unit: s, labels: []}
+  minimoi_telemetry_dropped_total:            {type: counter, unit: '1', labels: [signal]}
+
+components: [jobs, services, host, deploy, guests, standing, telemetry]
+
+events:
+  # event.name -> allowed summary codes
+  minimoi.job.failed:            [exit_nonzero]
+  minimoi.source.unreadable:     [source_unreadable]
+  minimoi.deploy.failed:         [deploy_failed]
+  minimoi.component.restarted:   [component_restarted]
+
+alert_key: {pattern: '^[a-z]+:[a-z0-9][a-z0-9:/_.-]{0,95}$'}
