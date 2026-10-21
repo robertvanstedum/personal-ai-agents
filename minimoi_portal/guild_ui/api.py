@@ -2031,6 +2031,12 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         answer["files"] = _files_view(files)
     if job_started is not None:
         answer["job"] = job_started
+    if result.status == "answered" and not delivery and board_plan is None:
+        from . import mc_deliveries as _deliveries
+        readable = _deliveries.stray_packet(result.text)        # R93: never show a raw file packet
+        if readable is not None:
+            from .mc import TurnResult
+            result = TurnResult("answered", result.backend_kind, text=readable, usage=result.usage, trace=result.trace)
     if result.status == "answered" and not (delivery_operation or {}).get("saved"):
         from domains.cos.claim_truth import enforce_file_claims
         from .mc import TurnResult
