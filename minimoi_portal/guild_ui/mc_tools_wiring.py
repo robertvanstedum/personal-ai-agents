@@ -162,6 +162,12 @@ def github_reader(cfg, *, http_get=None):
     return GitHubIssues(http_get or requests.get, repo=_repo(cfg))
 
 
+def _guest_people():
+    """Display names and emails of every guest login, expired too: names that must never appear in public text."""
+    from minimoi_portal import auth
+    return [f"{g.get('display_name') or ''} {g.get('email') or ''}" for g in auth.list_guests()]
+
+
 def proposal_shower(services, principal):
     """``show(conversation_id, note_key, text) -> bool``: the platform keeps a proposal, word for word, as its own note
     in that conversation, so Robert approves what the platform showed, not MC's retelling (review P1-1)."""
@@ -192,7 +198,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        invites=cfg["invites"] if invites is None else invites,
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
                        guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), show=show,
-                       isolated_runtime=cfg["isolated_runtime"],
+                       isolated_runtime=cfg["isolated_runtime"], people=_guest_people,
                        guests_lookup=_guests_lookup)
 
 

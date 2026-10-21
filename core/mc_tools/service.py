@@ -29,9 +29,12 @@ STATUSES = ("done", "needs_confirmation", "needs_clarification", "refused", "unk
 PROPOSAL_MINUTES = 10
 INVITE_APP = "portuguese"
 INVITE_APP_NAME = "Meu Português"
-# Words that appear in placeholder names ("Test Guest") and in any workaround text; never treated as a person's name.
+# Placeholder words ("Test Guest", "info@…") that any workaround text uses; never treated as a person's name. Real
+# first names are never exempt (review P2-4).
 _GENERIC_WORDS = {"test", "guest", "guests", "user", "users", "admin", "request", "requests", "info", "contact", "hello",
-                  "mail", "the", "and", "for", "example", "demo", "new", "minimoi", "robert"}
+                  "mail", "the", "and", "for", "example", "demo", "new", "minimoi"}
+# Letters spaced or dotted apart ("B r u n o", "B.r.u.n.o") are read back as one word before matching.
+_SPACED = re.compile(r"(?<![A-Za-z])(?:[A-Za-z][\s.\-_'*]+){2,}[A-Za-z](?![A-Za-z])")
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Robert types it back
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 REFUSED_WORDS = {
@@ -58,7 +61,7 @@ class ToolService:
     def __init__(self, connect, *, principal: str, environment: str, allowed_agents=("mc-chat",),
                  lessons=None, delegation: bool = False, invites: bool = False, tickets: bool = False,
                  comments: bool = False, guest_rejects: bool = False, github=None, show=None,
-                 isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None):
+                 isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -75,6 +78,7 @@ class ToolService:
         # executor credential. Until then any process of the gateway's user could forge calls, so every proposal
         # needs Robert to name its code: a forged one can never ride on his next plain "ok" (review P1-2).
         self.isolated_runtime = bool(isolated_runtime)
+        self.people = people                          # people() -> names/emails of guest logins, for public-text checks
         self.worker, self.guests_lookup = worker[:80], guests_lookup
 
     @contextmanager
@@ -160,19 +164,28 @@ class ToolService:
         return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
 
     def _public_text_refusal(self, conn, text):
-        """The reason this text must not go to the public repository, or None: no email address, and no name of
-        anyone who asked for guest access (records are named by ref only)."""
-        if "@" in text:
+        """The reason this text must not go to the public repository, or None (review P2-4):
+        - plain ASCII only after NFKC, so no look-alike letters (Cyrillic "А" in "Ana") slip past;
+        - no email address;
+        - no name or email name of anyone who asked for guest access or holds a guest login, matched as a word, also
+          when its letters are spaced apart. Records are named by ref only. Robert also sees the exact text (P1-1)."""
+        import unicodedata
+        folded = unicodedata.normalize("NFKC", text)
+        if any(not (" " <= c <= "~") for c in folded):
+            return "non_ascii_in_public_text"
+        if "@" in folded:
             return "email_in_public_text"
         with _cursor(conn) as cur:
             cur.execute("SELECT name, email FROM guild.guest_requests")
-            rows = cur.fetchall()
-        lowered = text.lower()
-        for row in rows:
-            for word in re.findall(r"[^\W\d_]{3,}", f"{row['name'] or ''} {(row['email'] or '').split('@')[0]}"):
-                if word.lower() in _GENERIC_WORDS:
+            people = [f"{r['name'] or ''} {(r['email'] or '').split('@')[0]}" for r in cur.fetchall()]
+        people += list(self.people() if self.people else [])
+        lowered = folded.lower()
+        candidates = lowered + " " + " ".join(re.sub(r"[^a-z]", "", m.group(0)) for m in _SPACED.finditer(lowered))
+        for person in people:
+            for word in re.findall(r"[^\W\d_]{3,}", unicodedata.normalize("NFKC", person).lower()):
+                if word in _GENERIC_WORDS:
                     continue
-                if re.search(r"(?<!\w)" + re.escape(word.lower()) + r"(?!\w)", lowered):
+                if re.search(r"(?<![a-z])" + re.escape(word) + r"s?(?![a-z])", candidates):    # also "Bruno's" spaced out
                     return "name_in_public_text"
         return None
 
@@ -186,8 +199,9 @@ class ToolService:
             b = self._bind(conn, session_key, agent_id)
             reason = self._public_text_refusal(conn, args["summary"])
             if reason:
-                return result("refused", reason, "That text names a person or an email address, and the repository is "
-                              "public. Nothing was proposed; say it with refs (guild:N) only.")
+                return result("refused", reason, "That text names a person, an email address or uses non-ASCII letters, "
+                              "and the repository is public. Nothing was proposed; say it in plain English with refs "
+                              "(guild:N) only.")
             preview = comment_text(payload, "<operation id>")
             words = f"Add this comment to issue #{args['number']}? It is public.\n\n{preview}"
             return self._pending_tool_proposal(conn, b, "issue_comment", payload,

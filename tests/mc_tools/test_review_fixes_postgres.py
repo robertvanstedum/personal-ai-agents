@@ -111,6 +111,24 @@ class ReviewFixes(Base, unittest.TestCase):
         self.call("minimoi_issue_comment", {"number": 70, "summary": "A newer offer from the tool path.", "refs": []})
         self.assertFalse(lessons.LessonCommands(self.ledger).has_pending(CONV))
 
+    def test_p2_4_public_text_filter_catches_generic_first_names_lookalikes_spacing_and_guest_logins(self):
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("INSERT INTO guild.guest_requests (name,email) VALUES ('Robert Ng','rng@example.test')")
+        self.service.people = lambda: ["Sofia Lima sofia.lima@example.test"]           # a guest login, not a request
+        for turn, summary in enumerate(("Rejected Robert's request on the backend for now.",   # 'robert' not exempt
+                                        "Rejected Аna's request on the backend today.",         # Cyrillic А
+                                        "Rejected B r u n o's request on the backend today.",
+                                        "Rejected B.r.u.n.o on the backend today.",
+                                        "Extended Sofia's login by a week on the backend.",     # guest account
+                                        "Ｂｒｕｎｏ was rejected on the backend.")):             # full-width letters
+            self.next_turn(f"note-p24-{turn}")
+            r = self.call("minimoi_issue_comment", {"number": 69, "summary": summary, "refs": ["guild:1"]})
+            self.assertEqual(r["status"], "refused", summary)
+        self.next_turn("note-p24-ok")
+        ok = self.call("minimoi_issue_comment", {"number": 69, "summary": "Rejected a test guest request on the "
+                                                 "backend; the approval path is still missing.", "refs": ["guild:1"]})
+        self.assertEqual(ok["status"], "needs_confirmation")
+
 
 if __name__ == "__main__":
     unittest.main()
