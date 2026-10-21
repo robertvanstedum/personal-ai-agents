@@ -1,0 +1,143 @@
+{
+  "schema": "mc-standing-watchlist/1",
+  "watches": [
+    {
+      "environment": "prod",
+      "host_scope": "ec2",
+      "timeout_s": 3,
+      "approved_by": "Robert",
+      "approval_ref": "owner-approval-2026-10-20-watchlist-v1",
+      "review_by": "2027-01-31",
+      "id": "backup-local",
+      "version": 1,
+      "label": "Local backup (EC2)",
+      "adapter_id": "job_status",
+      "source_binding": "jobs/backup-local.json",
+      "stale_after_s": 90000,
+      "max_read_bytes": 8192,
+      "required_for_coverage": true,
+      "expected_run_rule": {
+        "expected_every_s": 86400,
+        "grace_s": 3600,
+        "missed_after_s": 172800,
+        "stuck_after_s": 7200
+      }
+    },
+    {
+      "environment": "prod",
+      "host_scope": "ec2",
+      "timeout_s": 3,
+      "approved_by": "Robert",
+      "approval_ref": "owner-approval-2026-10-20-watchlist-v1",
+      "review_by": "2027-01-31",
+      "id": "backup-s3",
+      "version": 1,
+      "label": "Off-host backup and database dump (S3)",
+      "adapter_id": "job_status",
+      "source_binding": "jobs/backup-s3.json",
+      "stale_after_s": 90000,
+      "max_read_bytes": 8192,
+      "required_for_coverage": true,
+      "expected_run_rule": {
+        "expected_every_s": 86400,
+        "grace_s": 3600,
+        "missed_after_s": 172800,
+        "stuck_after_s": 7200
+      }
+    },
+    {
+      "environment": "prod",
+      "host_scope": "ec2",
+      "timeout_s": 3,
+      "approved_by": "Robert",
+      "approval_ref": "owner-approval-2026-10-20-watchlist-v1",
+      "review_by": "2027-01-31",
+      "id": "backup-dropbox",
+      "version": 1,
+      "label": "Weekly Dropbox copy",
+      "adapter_id": "job_status",
+      "source_binding": "jobs/backup-dropbox.json",
+      "stale_after_s": 608400,
+      "max_read_bytes": 8192,
+      "required_for_coverage": true,
+      "expected_run_rule": {
+        "expected_every_s": 604800,
+        "grace_s": 3600,
+        "missed_after_s": 1209600,
+        "stuck_after_s": 7200
+      }
+    },
+    {
+      "environment": "prod",
+      "host_scope": "ec2",
+      "timeout_s": 3,
+      "approved_by": "Robert",
+      "approval_ref": "owner-approval-2026-10-20-watchlist-v1",
+      "review_by": "2027-01-31",
+      "id": "services",
+      "version": 1,
+      "label": "Services",
+      "adapter_id": "health_snapshot",
+      "source_binding": "jobs/health/services.json",
+      "stale_after_s": 3600,
+      "max_read_bytes": 16384,
+      "required_for_coverage": true
+    },
+    {
+      "environment": "prod",
+      "host_scope": "ec2",
+      "timeout_s": 3,
+      "approved_by": "Robert",
+      "approval_ref": "owner-approval-2026-10-20-watchlist-v1",
+      "review_by": "2027-01-31",
+      "id": "headroom",
+      "version": 1,
+      "label": "Disk and memory",
+      "adapter_id": "host_snapshot",
+      "source_binding": "jobs/health/host.json",
+      "stale_after_s": 3600,
+      "max_read_bytes": 8192,
+      "required_for_coverage": true,
+      "severity_rules": {
+        "disk_used_pct_degraded": 80,
+        "mem_used_pct_degraded": 85,
+        "critical_pct": 95
+      }
+    },
+    {
+      "environment": "prod",
+      "host_scope": "ec2",
+      "timeout_s": 3,
+      "approved_by": "Robert",
+      "approval_ref": "owner-approval-2026-10-20-watchlist-v1",
+      "review_by": "2027-01-31",
+      "id": "deploy",
+      "version": 1,
+      "label": "Last deployment",
+      "adapter_id": "release_status",
+      "source_binding": "release-status/status.json",
+      "stale_after_s": 3600,
+      "max_read_bytes": 16384,
+      "required_for_coverage": true
+    },
+    {
+      "environment": "prod",
+      "host_scope": "ec2",
+      "timeout_s": 3,
+      "approved_by": "Robert",
+      "approval_ref": "owner-approval-2026-10-20-watchlist-v1",
+      "review_by": "2027-01-31",
+      "id": "guests",
+      "version": 1,
+      "label": "Guest access requests",
+      "adapter_id": "guest_summary",
+      "source_binding": "guest-summary",
+      "stale_after_s": 3600,
+      "max_read_bytes": 1024,
+      "required_for_coverage": false,
+      "severity_rules": {
+        "pending_age_degraded_h": 48
+      }
+    }
+  ]
+}

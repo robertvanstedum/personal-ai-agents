@@ -136,3 +136,20 @@ def test_telegram_chat_binding_must_be_private_and_numeric(tmp_path):
     chat.write_text("@someone")
     with pytest.raises(SystemExit):
         run_cycle._chat_binding(chat)
+
+
+def test_approved_watchlist_matches_the_candidate_except_approval():
+    """Robert approved the candidate as is (20 Oct 2026): only the approval fields differ."""
+    import json as _json
+    cand = _json.loads((REPO / "config/mc_standing/watchlist.candidate.json").read_text())
+    appr = _json.loads((REPO / "config/mc_standing/watchlist.json").read_text())
+    strip = lambda d: [{k: v for k, v in w.items() if k not in ("approved_by", "approval_ref")} for w in d["watches"]]
+    assert strip(cand) == strip(appr)
+    wl = registry.load(REPO / "config/mc_standing/watchlist.json")
+    assert all(w.approved_by == "Robert" and not w.approval_ref.startswith("candidate") for w in wl.watches)
+
+
+def test_approved_watchlist_is_accepted_for_production(tmp_path, capsys):
+    a = args(tmp_path, **{"--watchlist": str(REPO / "config/mc_standing/watchlist.json")})
+    assert run_cycle.main(a) == 0                          # no control document: paused fail-safe
+    assert json.loads(capsys.readouterr().out)["state"] == "paused"
