@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, writeFileSync, chmodSync, realpathSync, symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {toolFactory, checkArguments, endpointUrl, tokenFromFile, observeHost} from '../../services/mc_operations/plugins/minimoi-tools/index.mjs';
+import plugin, {toolFactory, checkArguments, endpointUrl, tokenFromFile, observeHost} from '../../services/mc_operations/plugins/minimoi-tools/index.mjs';
 
 const TOKEN = 'k'.repeat(40);
 const SESSION = 'agent:mc-chat:openai-user:guild-mc:' + 'a'.repeat(32);
@@ -14,9 +14,12 @@ const json = (status, body, type = 'application/json') => new Response(JSON.stri
 function setup(reply = () => json(200, {status: 'done', code: 'listed', message: 'ok', data: {}}), extra = {}) {
   const sent = [];
   const fetchImpl = async (url, init) => { sent.push({url, init}); return reply(url, init); };
-  const create = toolFactory({endpoint: 'http://127.0.0.1:5011/internal/mc/v1/tools', token: TOKEN, agents: ['mc-chat'],
-    tools: ['minimoi_guest_requests', 'minimoi_data_repair_ticket', 'minimoi_host_health'], diskPaths: ['/'], fetchImpl, ...extra});
-  return {create, sent};
+  const make = toolFactory({endpoint: 'http://127.0.0.1:5011/internal/mc/v1/tools', token: TOKEN, tokenFile: '/secure/mc/token',
+    agents: ['mc-chat'], tools: ['minimoi_guest_requests', 'minimoi_data_repair_ticket', 'minimoi_host_health'],
+    diskPaths: ['/'], fetchImpl, ...extra});
+  // A workspace-only run whose credential lies outside the workspace, as deployment requires.
+  const create = ctx => make(ctx && {fsPolicy: {workspaceOnly: true}, workspaceDir: '/ws/mc-chat', ...ctx});
+  return {create, sent, make};
 }
 const tool = (tools, name) => tools.find(t => t.name === name);
 
@@ -121,4 +124,28 @@ test('the credential file must be private, regular and not a link', () => {
   symlinkSync(file, join(dir, 'link'));
   assert.throws(() => tokenFromFile(join(dir, 'link')), /credential unavailable/);
   assert.throws(() => tokenFromFile('relative/token'), /credential unavailable/);
+});
+
+test('a missing credential registers nothing and never throws into the gateway', () => {
+  const registered = [], warned = [];
+  const api = {pluginConfig: {enabled: true, endpoint: 'http://127.0.0.1:5011/internal/mc/v1/tools', tokenFile: '/nonexistent/token'},
+               registerTool: (...a) => registered.push(a), logger: {warn: m => warned.push(m)}};
+  assert.doesNotThrow(() => plugin.register(api));
+  assert.equal(registered.length, 0);
+  assert.match(warned[0], /not registered/);
+  assert.ok(!warned[0].includes('/nonexistent'));
+  assert.doesNotThrow(() => plugin.register({...api, pluginConfig: {...api.pluginConfig, endpoint: 'http://10.0.0.1/x'}}));
+});
+
+test('no tools when the agent could read the credential with its own file tools', () => {
+  const {make} = setup();
+  const base = {agentId: 'mc-chat', sessionKey: SESSION};
+  assert.equal(make({...base}), null);                                                     // default: not workspace-only
+  assert.equal(make({...base, fsPolicy: {workspaceOnly: false}, workspaceDir: '/ws/mc-chat'}), null);
+  assert.equal(make({...base, fsPolicy: {workspaceOnly: true}, workspaceDir: '/secure'}), null);   // token inside it
+  assert.equal(make({...base, fsPolicy: {workspaceOnly: true}}), null);                     // workspace unknown
+  assert.ok(make({...base, fsPolicy: {workspaceOnly: true}, workspaceDir: '/ws/mc-chat'}));
+  const devOptOut = toolFactory({endpoint: 'http://127.0.0.1:5011/internal/mc/v1/tools', token: TOKEN, tokenFile: '/x/token',
+    agents: ['mc-chat'], tools: ['minimoi_host_health'], allowTokenReadableByAgent: true});
+  assert.ok(devOptOut({...base}));
 });

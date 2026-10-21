@@ -123,7 +123,8 @@ async function boundedJson(response) {
   finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
 
-export function toolFactory({endpoint, token, agents, tools, diskPaths, docker, fetchImpl = fetch}) {
+export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPaths, docker, fetchImpl = fetch,
+                             allowTokenReadableByAgent = false}) {
   // Trusted operator configuration, never tool parameters.
   const url = endpointUrl(endpoint);
   if (!/^[A-Za-z0-9_-]{32,256}$/.test(token) || !Array.isArray(agents) || !agents.length
@@ -139,6 +140,13 @@ export function toolFactory({endpoint, token, agents, tools, diskPaths, docker, 
     const sessionKey = ctx?.sessionKey, agentId = ctx?.agentId;
     if (typeof sessionKey !== 'string' || !sessionKey || sessionKey.length > 200
         || typeof agentId !== 'string' || !allowedAgents.includes(agentId)) return null;
+    // The agent's own file tools must not be able to read the credential (review P1-2): OpenClaw's default is
+    // tools.fs.workspaceOnly=false. Offer no tools unless this run is workspace-only and the credential lies
+    // outside the workspace, or the operator explicitly accepted the risk for dev.
+    if (!allowTokenReadableByAgent) {
+      const ws = typeof ctx.workspaceDir === 'string' ? ctx.workspaceDir.replace(/\/+$/, '') + '/' : null;
+      if (ctx.fsPolicy?.workspaceOnly !== true || !ws || typeof tokenFile !== 'string' || tokenFile.startsWith(ws)) return null;
+    }
 
     return enabled.map(spec => ({
       name: spec.name, label: spec.label, description: spec.description, parameters: spec.parameters,
@@ -185,9 +193,17 @@ export function toolFactory({endpoint, token, agents, tools, diskPaths, docker, 
 export default {id: 'minimoi-tools', name: 'MiniMoi tools', register(api) {
   const config = api.pluginConfig || {};
   if (config.enabled !== true) return;
-  const tools = config.tools || CATALOGUE.tools.map(t => t.name);
-  const factory = toolFactory({endpoint: config.endpoint, token: tokenFromFile(config.tokenFile),
-                               agents: config.agents || ['mc-chat'], tools, diskPaths: config.diskPaths,
-                               docker: config.docker});
+  // A missing or unsafe credential, or bad configuration, must never take the gateway down with it (Robert's
+  // Telegram and WhatsApp run there): log one line without details and register nothing (review P2-5).
+  let factory, tools;
+  try {
+    tools = config.tools || CATALOGUE.tools.map(t => t.name);
+    factory = toolFactory({endpoint: config.endpoint, token: tokenFromFile(config.tokenFile), tokenFile: config.tokenFile,
+                           agents: config.agents || ['mc-chat'], tools, diskPaths: config.diskPaths,
+                           docker: config.docker, allowTokenReadableByAgent: config.allowTokenReadableByAgent === true});
+  } catch {
+    (api.logger?.warn ?? console.warn).call(api.logger ?? console, 'minimoi-tools: not registered (credential or configuration unavailable)');
+    return;
+  }
   api.registerTool(factory, {names: tools});
 }};

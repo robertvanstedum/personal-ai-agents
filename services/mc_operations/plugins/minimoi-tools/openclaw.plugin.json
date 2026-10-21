@@ -52,6 +52,10 @@
    },
    "docker": {
     "type": "string"
+   },
+   "allowTokenReadableByAgent": {
+    "type": "boolean",
+    "default": false
    }
   }
  }
