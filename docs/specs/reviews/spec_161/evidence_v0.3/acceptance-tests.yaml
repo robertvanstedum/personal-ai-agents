@@ -1,0 +1,95 @@
+rule_files:
+- rules.yaml
+evaluation_interval: 1m
+tests:
+- name: missing-emitter-fire-recover
+  interval: 1m
+  input_series:
+  - series: minimoi_emitter_expected{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge"}
+    values: 1x30
+  - series: minimoi_telemetry_heartbeat_timestamp_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge"}
+    values: 0+60x5 stale _x14 1260+60x9
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: TelemetryEmitterMissingOrStale
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: TelemetryEmitterMissingOrStale
+    exp_alerts:
+    - exp_labels:
+        environment: dev
+        host: mac-dev
+        service_name: minimoi-observability-bridge
+        severity: critical
+        minimoi_alert_key: self:emitter
+      exp_annotations:
+        summary: Telemetry missing or stale for minimoi-observability-bridge on mac-dev
+        runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/heartbeat.md
+  - eval_time: 23m
+    alertname: TelemetryEmitterMissingOrStale
+    exp_alerts: []
+- name: fresh-running-job-not-stuck
+  interval: 1m
+  input_series:
+  - series: minimoi_job_running{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 1x6
+  - series: minimoi_job_last_start_timestamp_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 170x6
+  - series: minimoi_job_stuck_after_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 120x6
+  - series: minimoi_job_status_readable{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 1x6
+  - series: minimoi_source_current{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",source_id="jobs"}
+    values: 1x6
+  promql_expr_test:
+  - expr: ((minimoi_job_running == 1) and on (environment,host,service_name,job_id) ((time() - minimoi_job_last_start_timestamp_seconds) > on
+      (environment,host,service_name,job_id) minimoi_job_stuck_after_seconds)) and on (environment,host,service_name,job_id) (minimoi_job_status_readable
+      == 1) and on (environment,host,service_name) (minimoi_source_current{source_id="jobs"} == 1)
+    eval_time: 3m
+    exp_samples: []
+- name: long-running-job-stuck
+  interval: 1m
+  input_series:
+  - series: minimoi_job_running{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 1x6
+  - series: minimoi_job_last_start_timestamp_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: '0x6'
+  - series: minimoi_job_stuck_after_seconds{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 120x6
+  - series: minimoi_job_status_readable{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+    values: 1x6
+  - series: minimoi_source_current{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",source_id="jobs"}
+    values: 1x6
+  promql_expr_test:
+  - expr: ((minimoi_job_running == 1) and on (environment,host,service_name,job_id) ((time() - minimoi_job_last_start_timestamp_seconds) > on
+      (environment,host,service_name,job_id) minimoi_job_stuck_after_seconds)) and on (environment,host,service_name,job_id) (minimoi_job_status_readable
+      == 1) and on (environment,host,service_name) (minimoi_source_current{source_id="jobs"} == 1)
+    eval_time: 3m
+    exp_samples:
+    - labels: minimoi_job_running{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge",job_id="daily"}
+      value: 1
+- name: one-export-family-still-alerts
+  interval: 1m
+  input_series:
+  - series: otelcol_exporter_send_failed_metric_points_total{environment="dev",host="mac-dev",job="otel-collector-self",instance="otel-collector:8888"}
+    values: 0+60x20
+  promql_expr_test:
+  - expr: sum by (environment,host,job,instance) (rate({__name__=~"otelcol_exporter_send_failed_(metric_points|log_records)_total"}[10m])) > 0
+    eval_time: 20m
+    exp_samples:
+    - labels: '{environment="dev",host="mac-dev",job="otel-collector-self",instance="otel-collector:8888"}'
+      value: 1
+- name: healthy-other-host-does-not-mask
+  interval: 1m
+  input_series:
+  - series: minimoi_emitter_expected{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge"}
+    values: 1x30
+  - series: minimoi_telemetry_heartbeat_timestamp_seconds{environment="dev",host="other",service_name="minimoi-observability-bridge"}
+    values: 0+60x30
+  promql_expr_test:
+  - expr: (minimoi_emitter_expected == 1) unless on (environment,host,service_name) ((minimoi_telemetry_heartbeat_timestamp_seconds >= time()
+      - 180) and (minimoi_telemetry_heartbeat_timestamp_seconds <= time() + 60))
+    eval_time: 25m
+    exp_samples:
+    - labels: minimoi_emitter_expected{environment="dev",host="mac-dev",service_name="minimoi-observability-bridge"}
+      value: 1

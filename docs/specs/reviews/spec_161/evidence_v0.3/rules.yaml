@@ -1,0 +1,242 @@
+groups:
+- name: minimoi-coverage
+  rules:
+  - record: minimoi_source_current
+    expr: max by (environment,host,service_name,source_id) ((minimoi_source_readable == 1) and on (environment,host,service_name,source_id) ((time() - minimoi_source_timestamp_seconds)
+      <= on (environment,host,service_name,source_id) minimoi_source_max_age_seconds) and on (environment,host,service_name,source_id) (minimoi_source_timestamp_seconds
+      <= time() + 60))
+- name: minimoi-o1
+  rules:
+  - alert: TelemetryEmitterMissingOrStale
+    expr: (minimoi_emitter_expected == 1) unless on (environment,host,service_name) ((minimoi_telemetry_heartbeat_timestamp_seconds >= time() - 180) and
+      (minimoi_telemetry_heartbeat_timestamp_seconds <= time() + 60))
+    labels:
+      severity: critical
+      minimoi_alert_key: self:emitter
+    annotations:
+      summary: Telemetry missing or stale for {{ $labels.service_name }} on {{ $labels.host }}
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/heartbeat.md
+    for: 5m
+  - alert: MonitorTargetUnavailable
+    expr: (minimoi_monitor_target_expected == 1) unless on (environment,host,job,instance) (up == 1)
+    labels:
+      severity: critical
+      minimoi_alert_key: self:target:{{ $labels.job }}:{{ $labels.instance }}
+    annotations:
+      summary: Monitoring target {{ $labels.job }} is unavailable
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/collector.md
+    for: 2m
+  - alert: SourceUnavailable
+    expr: (minimoi_source_expected == 1) unless on (environment,host,service_name,source_id) (minimoi_source_current == 1)
+    labels:
+      severity: warning
+      minimoi_alert_key: source:{{ $labels.source_id }}
+    annotations:
+      summary: Source {{ $labels.source_id }} is unavailable or stale; health is unknown
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/source-unavailable.md
+    for: 5m
+  - alert: JobMissed
+    expr: ((time() - minimoi_job_last_success_timestamp_seconds) > on (environment,host,service_name,job_id) minimoi_job_missed_after_seconds) and on (environment,host,service_name,job_id)
+      (minimoi_job_status_readable == 1) and on (environment,host,service_name) (minimoi_source_current{source_id="jobs"} == 1)
+    labels:
+      severity: critical
+      minimoi_alert_key: job:{{ $labels.job_id }}:missed
+    annotations:
+      summary: Job {{ $labels.job_id }} has not succeeded within its missed-after window
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-missed.md
+    for: 10m
+  - alert: JobLate
+    expr: (((time() - minimoi_job_last_success_timestamp_seconds) > on (environment,host,service_name,job_id) minimoi_job_overdue_after_seconds) and on
+      (environment,host,service_name,job_id) ((time() - minimoi_job_last_success_timestamp_seconds) <= on (environment,host,service_name,job_id) minimoi_job_missed_after_seconds))
+      and on (environment,host,service_name,job_id) (minimoi_job_status_readable == 1) and on (environment,host,service_name) (minimoi_source_current{source_id="jobs"}
+      == 1)
+    labels:
+      severity: warning
+      minimoi_alert_key: job:{{ $labels.job_id }}:late
+    annotations:
+      summary: Job {{ $labels.job_id }} is overdue
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-missed.md
+    for: 10m
+  - alert: JobStuck
+    expr: ((minimoi_job_running == 1) and on (environment,host,service_name,job_id) ((time() - minimoi_job_last_start_timestamp_seconds) > on (environment,host,service_name,job_id)
+      minimoi_job_stuck_after_seconds)) and on (environment,host,service_name,job_id) (minimoi_job_status_readable == 1) and on (environment,host,service_name)
+      (minimoi_source_current{source_id="jobs"} == 1)
+    labels:
+      severity: major
+      minimoi_alert_key: job:{{ $labels.job_id }}:stuck
+    annotations:
+      summary: Job {{ $labels.job_id }} has been running too long
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-stuck.md
+    for: 5m
+  - alert: JobFailed
+    expr: (minimoi_job_failed == 1) and on (environment,host,service_name,job_id) (minimoi_job_status_readable == 1) and on (environment,host,service_name)
+      (minimoi_source_current{source_id="jobs"} == 1)
+    labels:
+      severity: major
+      minimoi_alert_key: job:{{ $labels.job_id }}:failed
+    annotations:
+      summary: Job {{ $labels.job_id }} last run failed
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-failed.md
+    for: 1m
+  - alert: JobNoSuccess
+    expr: ((minimoi_job_running == 0) and on (environment,host,service_name,job_id) (minimoi_job_has_success == 0)) and on (environment,host,service_name,job_id)
+      (minimoi_job_status_readable == 1) and on (environment,host,service_name) (minimoi_source_current{source_id="jobs"} == 1)
+    labels:
+      severity: major
+      minimoi_alert_key: job:{{ $labels.job_id }}:no-success
+    annotations:
+      summary: Job {{ $labels.job_id }} finished without any known successful run
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-failed.md
+    for: 1m
+  - alert: JobNeverRan
+    expr: (minimoi_job_first_due_timestamp_seconds < time()) unless on (environment,host,service_name,job_id) (minimoi_job_status_readable == 1)
+    labels:
+      severity: major
+      minimoi_alert_key: job:{{ $labels.job_id }}:never-ran
+    annotations:
+      summary: Job {{ $labels.job_id }} has no readable first run after its due time
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-missed.md
+    for: 10m
+  - alert: JobStatusUnreadable
+    expr: (minimoi_job_expected == 1) unless on (environment,host,service_name,job_id) (minimoi_job_status_readable == 1)
+    labels:
+      severity: warning
+      minimoi_alert_key: job:{{ $labels.job_id }}:unreadable
+    annotations:
+      summary: Job {{ $labels.job_id }} status unavailable; health is unknown
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/job-status-unreadable.md
+    for: 30m
+  - alert: ServiceDown
+    expr: (minimoi_service_up == 0) and on (environment,host,service_name) (minimoi_source_current{source_id="services"} == 1)
+    labels:
+      severity: critical
+      minimoi_alert_key: service:{{ $labels.service }}:down
+    annotations:
+      summary: Service {{ $labels.service }} is down
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/service-down.md
+    for: 5m
+  - alert: ServiceObservationMissing
+    expr: (minimoi_service_expected == 1) unless on (environment,host,service_name,service) minimoi_service_up
+    labels:
+      severity: warning
+      minimoi_alert_key: service:{{ $labels.service }}:missing
+    annotations:
+      summary: Service {{ $labels.service }} has no observation
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/source-unavailable.md
+    for: 5m
+  - alert: DiskCritical
+    expr: (minimoi_host_filesystem_used_ratio >= 0.95) and on (environment,host,service_name) (minimoi_source_current{source_id="host"} == 1)
+    labels:
+      severity: critical
+      minimoi_alert_key: host:disk:{{ $labels.mountpoint }}
+    annotations:
+      summary: Disk {{ $labels.mountpoint }} at {{ $value | humanizePercentage }}
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/disk.md
+    for: 10m
+  - alert: DiskHigh
+    expr: (minimoi_host_filesystem_used_ratio >= 0.8) and on (environment,host,service_name) (minimoi_source_current{source_id="host"} == 1)
+    labels:
+      severity: warning
+      minimoi_alert_key: host:disk:{{ $labels.mountpoint }}
+    annotations:
+      summary: Disk {{ $labels.mountpoint }} at {{ $value | humanizePercentage }}
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/disk.md
+    for: 30m
+  - alert: MemoryCritical
+    expr: (minimoi_host_memory_used_ratio >= 0.95) and on (environment,host,service_name) (minimoi_source_current{source_id="host"} == 1)
+    labels:
+      severity: critical
+      minimoi_alert_key: host:memory
+    annotations:
+      summary: Memory at {{ $value | humanizePercentage }}
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/memory.md
+    for: 10m
+  - alert: MemoryHigh
+    expr: (minimoi_host_memory_used_ratio >= 0.85) and on (environment,host,service_name) (minimoi_source_current{source_id="host"} == 1)
+    labels:
+      severity: warning
+      minimoi_alert_key: host:memory
+    annotations:
+      summary: Memory at {{ $value | humanizePercentage }}
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/memory.md
+    for: 30m
+  - alert: DeployFailed
+    expr: (minimoi_deploy_last_outcome == 1) and on (environment,host,service_name) (minimoi_source_current{source_id="release"} == 1)
+    labels:
+      severity: major
+      minimoi_alert_key: deploy:last
+    annotations:
+      summary: The last deployment failed verification
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/deploy-failed.md
+    for: 5m
+  - alert: DeployNotFinished
+    expr: (((minimoi_deploy_last_outcome == 2) or (minimoi_deploy_last_outcome == 3)) and ((time() - minimoi_deploy_last_timestamp_seconds) > 3600)) and
+      on (environment,host,service_name) (minimoi_source_current{source_id="release"} == 1)
+    labels:
+      severity: warning
+      minimoi_alert_key: deploy:not-finished
+    annotations:
+      summary: Deployment remains in progress or unverified beyond its configured window
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/deploy-failed.md
+    for: 5m
+  - alert: GuestRequestWaiting
+    expr: (minimoi_guest_requests_oldest_age_seconds > 172800) and on (environment,host,service_name) (minimoi_source_current{source_id="guests"} == 1)
+    labels:
+      severity: warning
+      minimoi_alert_key: guests:waiting
+    annotations:
+      summary: A guest request has waited over 48 hours; see authorized guest summary
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/guest-waiting.md
+    for: 1h
+  - alert: CheckSourceUnreadable
+    expr: (minimoi_check_source_readable == 0) and on (environment,host,service_name) (minimoi_source_current{source_id="standing"} == 1)
+    labels:
+      severity: warning
+      minimoi_alert_key: check:{{ $labels.check_id }}:unreadable
+    annotations:
+      summary: Check {{ $labels.check_id }} cannot read its source
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/check-unreadable.md
+    for: 30m
+  - alert: CheckObservationMissing
+    expr: (minimoi_check_expected == 1) unless on (environment,host,service_name,check_id) ((minimoi_check_last_run_timestamp_seconds >= time() - 3600)
+      and (minimoi_check_last_run_timestamp_seconds <= time() + 60))
+    labels:
+      severity: warning
+      minimoi_alert_key: check:{{ $labels.check_id }}:missing
+    annotations:
+      summary: Check {{ $labels.check_id }} has no current observation
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/check-unreadable.md
+    for: 5m
+  - alert: TelemetryDropping
+    expr: increase(minimoi_telemetry_dropped_total[15m]) > 0
+    labels:
+      severity: warning
+      minimoi_alert_key: self:dropping:{{ $labels.signal }}:{{ $labels.reason }}
+    annotations:
+      summary: Telemetry is being dropped
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/telemetry-dropping.md
+  - alert: CollectorExportFailing
+    expr: sum by (environment,host,job,instance) (rate({__name__=~"otelcol_exporter_send_failed_(metric_points|log_records)_total"}[10m])) > 0
+    labels:
+      severity: major
+      minimoi_alert_key: self:collector-export
+    annotations:
+      summary: Collector cannot export telemetry
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/collector.md
+    for: 10m
+  - alert: ScrapeLimitHit
+    expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total[10m]) > 0
+    labels:
+      severity: warning
+      minimoi_alert_key: self:cardinality:{{ $labels.job }}
+    annotations:
+      summary: A recent sample limit breach failed an entire scrape
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/cardinality.md
+  - alert: Watchdog
+    expr: vector(1)
+    labels:
+      severity: none
+      minimoi_alert_key: self:watchdog
+    annotations:
+      summary: Always firing; absence means alert pipeline unavailable
+      runbook_url: https://github.com/robertvanstedum/personal-ai-agents/blob/main/docs/runbooks/watchdog.md
