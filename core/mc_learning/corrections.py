@@ -7,6 +7,7 @@ This module cannot issue that receipt, adopt a lesson, or grant a capability.
 No topic-string matching or model assertion confirms a repeated correction.
 Missing capture evidence remains unknown; fewer captures never imply success.
 """
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -192,29 +193,26 @@ def project_corrections(*, context, rows, annotations, start, end, now, coverage
                 continue
             valid.append(target_id)
         graph[sid] = valid
-    # Iterative search bounds both depth and work; a cycle or excessive ancestry
-    # is withheld instead of converting uncertain links into measured progress.
-    traversed = 0
-    for sid in graph:
-        stack = [(t,1) for t in graph[sid]]
-        visited, invalid = set(), False
-        while stack:
-            traversed += 1
-            if traversed > 2000000:
-                raise InvalidInput('correction_graph_work_limit')
-            target, depth = stack.pop()
-            if target == sid or depth > 64 or len(visited) > 4096:
-                invalid = True
-                break
-            if target in visited:
-                continue
-            visited.add(target)
-            stack.extend((t,depth+1) for t in graph[target])
-        if invalid:
+    # Remove acyclic leaves once, propagating to their dependants. Remaining
+    # nodes either participate in a cycle or depend on one. This is O(V+E),
+    # with no ancestry cutoff: repeated corrections must not disappear merely
+    # because the relationship has a long history or many proposed edges.
+    outstanding = {sid:len(links) for sid,links in graph.items()}
+    dependants = {sid:[] for sid in graph}
+    for sid,links in graph.items():
+        for target in links:
+            dependants[target].append(sid)
+    ready = deque(sid for sid,count in outstanding.items() if count == 0)
+    while ready:
+        target = ready.popleft()
+        for sid in dependants[target]:
+            outstanding[sid] -= 1
+            if outstanding[sid] == 0:
+                ready.append(sid)
+    for sid,count in outstanding.items():
+        if count:
             warnings.append('repeat_cycle_or_limit')
-            # Keep the original graph during all searches; remove after scan.
-            labels = effective[sid]
-            labels['invalid_graph'] = True
+            effective[sid]['invalid_graph'] = True
     entries, confirmed, provisional = [], 0, 0
     for sid,p in sources.items():
         labels = effective[sid]

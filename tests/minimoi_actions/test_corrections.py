@@ -123,6 +123,37 @@ class CorrectionTests(unittest.TestCase):
         self.assertEqual(view['confirmed_repeats'],0)
         self.assertIn('repeat_cycle_or_limit',view['warning_codes'])
 
+    def test_long_confirmed_history_is_not_truncated(self):
+        previous = self.add()
+        for _ in range(100):
+            target = self.add(repeats=[previous])
+            self.annotate(target,approved=True,repeats=[previous],confirmed=[previous])
+            previous = target
+        view = self.project()
+        self.assertEqual(view['confirmed_repeats'],100)
+        self.assertEqual(view['confirmed_repeat_fraction'],100/101)
+        self.assertEqual(view['warning_codes'],[])
+
+    def test_dense_proposed_history_has_no_repeated_graph_walk(self):
+        history = []
+        for _ in range(1500):
+            history.append(self.add(repeats=history[-8:]))
+        view = self.project()
+        self.assertEqual(view['provisional_repeats'],1499)
+        self.assertEqual(view['confirmed_repeats'],0)
+        self.assertEqual(view['warning_codes'],[])
+
+    def test_cycle_dependants_are_held_without_poisoning_unrelated_history(self):
+        one = self.add(); two = self.add(); three = self.add(repeats=[one])
+        self.annotate(one,approved=True,repeats=[two],confirmed=[two])
+        self.annotate(two,approved=True,repeats=[one],confirmed=[one])
+        independent = self.add(); self.add(repeats=[independent])
+        view = self.project()
+        self.assertEqual(view['confirmed_repeats'],0)
+        self.assertEqual(view['provisional_repeats'],1)
+        entry = next(e for e in view['entries'] if e['statement_id'] == three)
+        self.assertEqual(entry['provisional_repeat_of'],[])
+
     def test_relabelled_target_invalidates_confirmation_and_is_not_silently_replaced(self):
         one = self.add(); two = self.add(day=2,repeats=[one])
         self.annotate(two,approved=True,repeats=[one],confirmed=[one])

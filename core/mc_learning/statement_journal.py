@@ -316,6 +316,7 @@ class StatementJournal:
             with self._locked(write=True) as folder:
                 rows, days = self._scan(folder, repair=True)
                 intent_name = f'.intent-{payload["span_key"]}.json'
+                new_intent = False
                 try:
                     original = validate_payload(self._read(folder, intent_name, MAX_ENTRY))
                     self._check_partition(original)
@@ -328,9 +329,7 @@ class StatementJournal:
                 except Missing:
                     if any(r['payload']['span_key'] == payload['span_key'] for r in rows):
                         raise Corrupt('statement_intent_missing') from None
-                    # UUID reuse across different spans must not alias a receipt.
-                    fs.publish_new(folder, f'.id-{payload["statement_id"]}', payload['span_key'].encode())
-                    fs.publish_new(folder, intent_name, _encode(payload))
+                    new_intent = True
                 existing = next((r for r in rows if r['payload']['span_key'] == payload['span_key']), None)
                 if existing and existing['payload'] != payload:
                     raise Corrupt('statement_intent_mismatch')
@@ -338,6 +337,19 @@ class StatementJournal:
                 if not existing:
                     if any(r['payload']['statement_id'] == payload['statement_id'] for r in rows):
                         raise IdConflict('statement_id_conflict')
+                    row = dict(schema='mc-statement-journal/1', sequence=len(rows)+1,
+                        previous_hash=rows[-1]['entry_hash'] if rows else ZERO, payload=payload)
+                    row['entry_hash'] = _hash(_encode(row))
+                    line = _encode(row)+b'\n'
+                    if (len(days.get(day,b''))+len(line) > MAX_DAY
+                            or sum(map(len,days.values()))+len(line) > MAX_TOTAL):
+                        raise InvalidInput('statement_storage_limit')
+                    # Refused spans must not reserve IDs or consume disk. Check
+                    # capacity before publishing any intent/identity. Existing
+                    # uncertain intents remain retryable with their original ID.
+                    if new_intent:
+                        fs.publish_new(folder, f'.id-{payload["statement_id"]}', payload['span_key'].encode())
+                        fs.publish_new(folder, intent_name, _encode(payload))
                     identity_name = f'{day}.identity.json'
                     try:
                         self._read(folder, identity_name, 2048)
@@ -347,13 +359,6 @@ class StatementJournal:
                         stamp = _date(payload['captured_at']).astimezone(timezone.utc)
                         fs.publish_new(folder, identity_name, _encode(dict(
                             id=ulid.new_ulid(int(stamp.timestamp()*1000)), created=stamp.isoformat().replace('+00:00','Z'))))
-                    row = dict(schema='mc-statement-journal/1', sequence=len(rows)+1,
-                        previous_hash=rows[-1]['entry_hash'] if rows else ZERO, payload=payload)
-                    row['entry_hash'] = _hash(_encode(row))
-                    line = _encode(row)+b'\n'
-                    if (len(days.get(day,b''))+len(line) > MAX_DAY
-                            or sum(map(len,days.values()))+len(line) > MAX_TOTAL):
-                        raise InvalidInput('statement_storage_limit')
                     self._headroom()
                     name = f'{day}.jsonl'
                     fd = fs.open_file(folder, name, os.O_WRONLY | os.O_CREAT | os.O_APPEND)

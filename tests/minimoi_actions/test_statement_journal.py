@@ -277,6 +277,20 @@ class StatementJournalTests(unittest.TestCase):
         with self.assertRaises(UnsafeRoot):
             self.journal.snapshot()
 
+    def test_refused_capacity_does_not_reserve_ids_or_accumulate_sidecars(self):
+        self.journal.append(prepared())
+        before = {p.name:p.read_bytes() for p in self.folder.iterdir()}
+        refused = [prepared(turn=f'refused-{i}') for i in range(50)]
+        with patch('core.mc_learning.statement_journal.MAX_TOTAL',len(self.day_path().read_bytes())):
+            for item in refused:
+                with self.assertRaisesRegex(InvalidInput,'statement_storage_limit'):
+                    self.journal.append(item)
+        self.assertEqual(before,{p.name:p.read_bytes() for p in self.folder.iterdir()})
+        # Capacity restored: refusal did not bind this span to a rejected ID.
+        fresh = prepared(turn='refused-0')
+        result = self.journal.append(fresh)
+        self.assertEqual(result.statement_id,fresh.data['statement_id'])
+
     def test_direct_payload_cannot_change_scope_quote_hash_privacy_or_add_approval(self):
         data = prepared().data
         for changes in ({'approved':True},{'privacy_mode':'private'},{'quote':'forged'},
