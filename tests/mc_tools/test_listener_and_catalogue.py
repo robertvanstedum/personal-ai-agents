@@ -92,6 +92,13 @@ class CatalogueTests(unittest.TestCase):
             v("minimoi_delegate_research", {"agent": "claude", "title": "abc"})
         with self.assertRaises(catalogue.ArgumentsRefused):
             v("host_health", {})
+        self.assertEqual(v("minimoi_data_repair_ticket", {"refs": ["guild:3", "guild:5"], "change": "reject"})["refs"],
+                         ["guild:3", "guild:5"])
+        for args in ({"refs": ["guild:3", "guild:3"], "change": "reject"}, {"refs": [], "change": "reject"},
+                     {"refs": ["guild:%d" % i for i in range(1, 22)], "change": "reject"},
+                     {"refs": [3], "change": "reject"}, {"refs": ["ana@x.test"], "change": "reject"}):
+            with self.assertRaises(catalogue.ArgumentsRefused, msg=args):
+                v("minimoi_data_repair_ticket", args)
 
     def test_session_key_parsing(self):
         user = "guild-mc:" + "0" * 32

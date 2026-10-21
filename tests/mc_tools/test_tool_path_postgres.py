@@ -13,11 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "minimoi_actions"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mc_domain_actions"))
 from postgres_fixture_support import DSN, PostgresFixture  # noqa: E402
 
-from core.mc_domain_actions import guest_commands as gc  # noqa: E402
 from core.mc_lessons import commands as lessons  # noqa: E402
 from core.mc_lessons.ledger import LessonLedger  # noqa: E402
 from core.mc_tools import binding  # noqa: E402
-from core.mc_tools.proposals import ToolProposals  # noqa: E402
+from core.mc_tools.proposals import ToolProposals, parse  # noqa: E402
 from core.mc_tools.service import ToolService  # noqa: E402
 from test_guest_actions_postgres import GUESTS_DDL  # noqa: E402
 
@@ -57,7 +56,7 @@ class Base(PostgresFixture):
         self.tmp = TemporaryDirectory()
         self.ledger = LessonLedger(Path(self.tmp.name), principal=OWNER, environment="dev")
         self.service = ToolService(self.connect, principal=OWNER, environment="dev", lessons=self.ledger,
-                                   delegation=True, invites=True, guests_lookup=lambda email: None)
+                                   delegation=True, invites=True, tickets=True, guests_lookup=lambda email: None)
         self.ledger_id = self.claim(NOTE)
         self.bind(self.ledger_id, NOTE)
 
@@ -153,13 +152,16 @@ class BindingTests(Base, unittest.TestCase):
 @unittest.skipUnless(DSN, "requires disposable MC_BINDING_TEST_DSN")
 class ToolTests(Base, unittest.TestCase):
     def test_arguments_carry_no_authority(self):
-        for args in ({"ref": "guild:1", "principal": "robert"}, {"ref": "guild:1", "approved": True},
-                     {"ref": "1"}, {"ref": "guild:1 "}, {}, {"ref": ["guild:1"]}):
-            r = self.call("minimoi_guest_request_reject", args)
+        for args in ({"refs": ["guild:1"], "change": "reject", "principal": "robert"},
+                     {"refs": ["guild:1"], "change": "reject", "approved": True}, {"refs": ["1"], "change": "reject"},
+                     {"refs": ["guild:1 "], "change": "reject"}, {}, {"refs": "guild:1", "change": "reject"},
+                     {"refs": ["Ana Souza"], "change": "reject"}, {"refs": ["guild:1"], "change": "drop table"}):
+            r = self.call("minimoi_data_repair_ticket", args)
             self.assertEqual(r["status"], "refused", args)
         self.assertEqual(self.call("minimoi_nope")["code"], "tool_unknown")
+        self.assertEqual(self.call("minimoi_guest_request_reject", {"ref": "guild:1"})["code"], "tool_unknown")
         self.assertEqual(self.receipts(), [])
-        self.assertIsNone(self.one("SELECT 1 FROM guild.mc_guest_proposals"))
+        self.assertIsNone(self.one("SELECT 1 FROM guild.mc_tool_proposals"))
 
     def test_host_health_reports_the_measured_host_only(self):
         r = self.call("minimoi_host_health", observation=HOST)
@@ -173,34 +175,57 @@ class ToolTests(Base, unittest.TestCase):
         self.finish_turn(self.ledger_id)
         self.assertEqual(self.call("minimoi_host_health", observation=HOST)["code"], "tool_turn_not_live")
 
-    def test_guest_list_then_reject_waits_for_the_owners_confirm(self):
+    def test_guest_list_then_a_ticket_only_after_the_owners_yes(self):
         listed = self.call("minimoi_guest_requests")
-        refs = {i["email"]: i["ref"] for i in listed["data"]["requests"]}
-        r = self.call("minimoi_guest_request_reject", {"ref": refs["bruno@example.test"]})
+        self.assertEqual(listed["code"], "listed")
+        refs = [i["ref"] for i in listed["data"]["requests"]]
+        r = self.call("minimoi_data_repair_ticket", {"refs": list(reversed(refs)), "change": "reject"})
         self.assertEqual((r["status"], r["code"]), ("needs_confirmation", "proposed"))
-        self.assertIn("Reply Confirm", r["message"])
-        self.assertEqual(self.one("SELECT status FROM guild.guest_requests WHERE email='bruno@example.test'")[0],
-                         "requested")                                                 # nothing before Confirm
-        self.assertEqual(self.receipts(), [("guest.propose_reject", "verified", f"ledger:{self.ledger_id}:1")])
-        self.assertEqual(self.one("SELECT owner_turn_id, state FROM guild.mc_guest_proposals"), (NOTE, "pending"))
-        # Robert's next turn: "Confirm", answered by the platform's existing guest command.
-        done = gc.GuestCommands(self.connect, principal=OWNER, environment="dev").handle(
-            gc.Command("confirm"), conversation=CONV, turn_key="note-confirm")
-        self.assertEqual((done["operation"]["state"], done["operation"]["outcome"]), ("verified", "rejected"))
-        self.assertEqual(self.one("SELECT status FROM guild.guest_requests WHERE email='bruno@example.test'")[0],
-                         "rejected")
+        self.assertIn("guild:1 and guild:2", r["message"])
+        filed = []
+        proposals = ToolProposals(self.connect, principal=OWNER, environment="dev",
+                                  file_issue=lambda title, body: filed.append((title, body)) or ("created", 123))
+        self.assertEqual(filed, [])                                                   # nothing before the yes
+        self.assertEqual(parse("yes"), "confirm")
+        done = proposals.handle(parse("Yes."), conversation=CONV, turn_key="note-yes")
+        self.assertEqual((done["operation"]["state"], done["operation"]["issue"]), ("verified", 123))
+        self.assertTrue(done["reply"].startswith("Ticket 123 created"))
+        (title, body), = filed
+        self.assertIn("guild:1, guild:2", title)
+        for private in ("Ana", "Bruno", "example.test", "@"):                     # the repository is public
+            self.assertNotIn(private, title + body)
+        self.assertEqual([x[:2] for x in self.receipts()],
+                         [("issue.propose_data_repair", "verified"), ("issue.create_data_repair", "verified")])
+        self.assertEqual(self.one("SELECT status FROM guild.guest_requests WHERE id=1")[0], "requested")
+        again = proposals.handle("confirm", conversation=CONV, turn_key="note-yes")    # the same yes retried
+        self.assertTrue(again["operation"].get("repeated"))
+        self.assertEqual(len(filed), 1)
 
-    def test_reject_of_a_request_that_is_not_open_changes_nothing(self):
-        r = self.call("minimoi_guest_request_reject", {"ref": "guild:999"})
-        self.assertEqual((r["status"], r["code"]), ("refused", "no_open_request"))
+    def test_ticket_for_an_unknown_ref_or_a_refused_filing(self):
+        r = self.call("minimoi_data_repair_ticket", {"refs": ["guild:999"], "change": "reject"})
+        self.assertEqual((r["status"], r["code"]), ("refused", "unknown_ref"))
         self.assertEqual(self.receipts(), [])
+        self.call("minimoi_data_repair_ticket", {"refs": ["guild:2"], "change": "grant"})
+        done = ToolProposals(self.connect, principal=OWNER, environment="dev",
+                             file_issue=lambda t, b: ("refused", None)).handle("confirm", conversation=CONV, turn_key="n2")
+        self.assertEqual(done["operation"]["state"], "failed")
+        self.assertEqual(self.receipts()[-1][:2], ("issue.create_data_repair", "failed"))
+
+    def test_no_from_the_owner_files_nothing(self):
+        self.call("minimoi_data_repair_ticket", {"refs": ["guild:2"], "change": "reject"})
+        filed = []
+        proposals = ToolProposals(self.connect, principal=OWNER, environment="dev",
+                                  file_issue=lambda t, b: filed.append(t) or ("created", 1))
+        self.assertEqual(proposals.handle(parse("No thanks"), conversation=CONV, turn_key="n2")["operation"]["state"],
+                         "cancelled")
+        self.assertEqual(filed, [])
 
     def test_a_turn_grant_covers_exactly_one_proposal(self):
-        self.call("minimoi_guest_request_reject", {"ref": "guild:1"})
-        self.call("minimoi_guest_request_reject", {"ref": "guild:2"})
+        self.call("minimoi_data_repair_ticket", {"refs": ["guild:1"], "change": "reject"})
+        self.call("minimoi_data_repair_ticket", {"refs": ["guild:2"], "change": "reject"})
         grants = self.one("SELECT count(*), sum(consumed_operations), max(max_operations) FROM guild.mc_action_grants")
         self.assertEqual(tuple(grants), (2, 2, 1))
-        self.assertEqual(self.one("SELECT count(*) FROM guild.mc_guest_proposals WHERE state='pending'")[0], 1)
+        self.assertEqual(self.one("SELECT count(*) FROM guild.mc_tool_proposals WHERE state='pending'")[0], 1)
 
     def test_lesson_proposal_is_kept_only_after_confirm(self):
         r = self.call("minimoi_lesson_propose", {"text": "Answer in English unless I write in German."})

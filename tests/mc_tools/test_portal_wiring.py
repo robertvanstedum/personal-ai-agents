@@ -56,5 +56,50 @@ class WiringTests(unittest.TestCase):
             self.binder()()                                         # logs, returns; tools stay refused
 
 
+class IssueFilerTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.token = os.path.join(self.dir.name, "issues.token")
+        with open(self.token, "w") as f:
+            f.write("ghp_" + "x" * 36 + "\n")
+        os.chmod(self.token, 0o600)
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://unused"}):
+            self.cfg = w.settings(dict(ON, MINIMOI_MC_TOOLS_TICKETS="1", MINIMOI_MC_ISSUES_TOKEN_FILE=self.token,
+                                       MINIMOI_GITHUB_REPO="robertvanstedum/personal-ai-agents"))
+
+    def filer(self, status, body=None, raises=False):
+        sent = []
+
+        def post(url, **kw):
+            sent.append((url, kw))
+            if raises:
+                raise TimeoutError()
+            return SimpleNamespace(status_code=status, json=lambda: body or {})
+        return w.issue_filer(self.cfg, http_post=post), sent
+
+    def test_created_refused_unknown(self):
+        file_issue, sent = self.filer(201, {"number": 123})
+        self.assertEqual(file_issue("t", "b"), ("created", 123))
+        url, kw = sent[0]
+        self.assertEqual(url, "https://api.github.com/repos/robertvanstedum/personal-ai-agents/issues")
+        self.assertEqual(kw["json"], {"title": "t", "body": "b"})
+        self.assertFalse(kw["allow_redirects"])
+        self.assertEqual(self.filer(422)[0]("t", "b"), ("refused", None))
+        self.assertEqual(self.filer(500)[0]("t", "b"), ("unknown", None))
+        self.assertEqual(self.filer(201, {"number": "123"})[0]("t", "b"), ("unknown", None))
+        self.assertEqual(self.filer(0, raises=True)[0]("t", "b"), ("unknown", None))
+
+    def test_off_without_a_private_token_file(self):
+        os.chmod(self.token, 0o644)
+        self.assertIsNone(w.issue_filer(self.cfg))
+        os.chmod(self.token, 0o600)
+        link = self.token + ".link"
+        os.symlink(self.token, link)
+        self.assertIsNone(w.issue_filer(dict(self.cfg, issues_token_file=link)))
+        self.assertIsNone(w.issue_filer(dict(self.cfg, tickets=False)))
+
+
 if __name__ == "__main__":
     unittest.main()

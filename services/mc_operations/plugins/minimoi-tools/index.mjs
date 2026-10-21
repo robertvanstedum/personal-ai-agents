@@ -56,17 +56,22 @@ export function checkArguments(schema, args) {
   const props = schema.properties;
   const keys = Object.keys(args);
   if (keys.some(k => !Object.hasOwn(props, k)) || (schema.required || []).some(k => !Object.hasOwn(args, k))) return false;
-  for (const k of keys) {
-    const spec = props[k], v = args[k];
-    if (spec.type === 'string') {
-      if (!okText(v) || v.length < (spec.minLength ?? 0) || v.length > (spec.maxLength ?? 1000)) return false;
-      if (spec.enum && !spec.enum.includes(v)) return false;
-      if (spec.pattern && !new RegExp(spec.pattern).test(v)) return false;
-    } else if (spec.type === 'integer') {
-      if (!Number.isSafeInteger(v) || v < spec.minimum || v > spec.maximum) return false;
-    } else return false;
+  return keys.every(k => checkValue(props[k], args[k]));
+}
+
+function checkValue(spec, v) {
+  if (spec.type === 'string') {
+    if (!okText(v) || v.length < (spec.minLength ?? 0) || v.length > (spec.maxLength ?? 1000)) return false;
+    if (spec.enum && !spec.enum.includes(v)) return false;
+    return !spec.pattern || new RegExp(spec.pattern).test(v);
   }
-  return true;
+  if (spec.type === 'integer') return Number.isSafeInteger(v) && v >= spec.minimum && v <= spec.maximum;
+  if (spec.type === 'array') {
+    if (!Array.isArray(v) || v.length < spec.minItems || v.length > spec.maxItems) return false;
+    if (spec.uniqueItems && new Set(v.map(x => JSON.stringify(x))).size !== v.length) return false;
+    return v.every(item => checkValue(spec.items, item));
+  }
+  return false;
 }
 
 function dockerContainers(docker) {

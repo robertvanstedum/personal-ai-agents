@@ -116,7 +116,7 @@ try {
   results.tool_calls = toolCalls.map(c => ({url: c.url, session: c.session, agent: c.agent, body: c.body,
                                            bearer_matches: c.auth === `Bearer ${executor}`}));
   assert.equal(r1.status, 200, JSON.stringify(a1));
-  assert.deepEqual(results.offered_to_mc_chat.sort(), ['minimoi_access_invite', 'minimoi_delegate_research', 'minimoi_guest_request_reject',
+  assert.deepEqual(results.offered_to_mc_chat.sort(), ['minimoi_access_invite', 'minimoi_data_repair_ticket', 'minimoi_delegate_research',
                                                       'minimoi_guest_requests', 'minimoi_host_health', 'minimoi_lesson_propose']);
   assert.equal(toolCalls.length, 1);
   assert.equal(toolCalls[0].url, '/internal/mc/v1/tools/minimoi_guest_requests');

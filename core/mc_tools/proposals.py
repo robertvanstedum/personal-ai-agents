@@ -1,9 +1,11 @@
-"""The owner's Confirm / Cancel for MC's delegation and invite proposals (design §4).
+"""The owner's yes / no for MC's proposals: data-repair tickets, delegated research, invites (design §4).
 
 The platform answers these from the owner's own kept note before any model is asked, exactly like
-the guest-request and lesson commands. Confirm turns the pending proposal in THIS conversation into a
-one-time exact-approval grant for the request MC proposed, then acts and verifies:
+the guest-request and lesson commands. Model output alone never acts: only the owner's yes turns the
+pending proposal in THIS conversation into a one-time exact-approval grant for the request MC
+proposed, and then the platform acts and verifies:
 
+  data_repair        a public GitHub issue naming the records by ref only (no names or emails)
   delegate_research  the job starts from the owner's own note of the proposing turn (never model text)
   access_invite      a Meu Português guest request is recorded and granted through guest_requests.grant;
                      the temporary password goes only to the invitee's approval email (and, if that
@@ -16,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from contextlib import contextmanager
 from datetime import timedelta
 from uuid import UUID
@@ -27,7 +30,33 @@ from . import effects
 from .binding import POLICY
 
 _log = logging.getLogger("mc_tools")
-KINDS = {"delegate_research": "delegate.start_research", "access_invite": "access.invite_user"}
+KINDS = {"data_repair": "issue.create_data_repair", "delegate_research": "delegate.start_research",
+         "access_invite": "access.invite_user"}
+_YES = re.compile(r"^(?:yes|yes,?\s+please|yep|yeah|ok(?:ay)?|sure|go\s+ahead|do\s+it|please\s+do|confirm(?:ed)?|"
+                  r"approve(?:d)?)(?:[,.!]?\s+(?:please|thanks|thank\s+you|do\s+it|go\s+ahead))?\s*[.!]?$", re.I)
+_NO = re.compile(r"^(?:no|nope|no,?\s+thanks|cancel|don['’]t|do\s+not|never\s*mind)\s*[.!]?$", re.I)
+
+
+def parse(text):
+    """'confirm' for the owner's plain yes, 'cancel' for a plain no, else None. Only the whole short message
+    counts, and the caller claims it only while a proposal waits in this conversation."""
+    if not isinstance(text, str) or len(text) > 60:
+        return None
+    t = text.strip()
+    return "confirm" if _YES.match(t) else "cancel" if _NO.match(t) else None
+
+
+def issue_text(payload, operation_id):
+    """The public ticket: refs, change and environment only. Names and emails stay in the database."""
+    refs, change, env = payload["refs"], payload["change"], payload["environment"]
+    ids = ", ".join(r.split(":")[1] for r in refs)
+    title = f"Data repair ({env}): {change} guest request(s) {', '.join(refs)}"[:200]
+    body = (f"Robert asked Master Craftsman for this in the Guild conversation and confirmed it; MiniMoi's screens "
+            f"could not make the change.\n\n- Environment: {env}\n- Records: `guild.guest_requests` id(s) {ids} "
+            f"(refs {', '.join(refs)})\n- Requested change: {change}\n- Operation: {operation_id} "
+            f"(receipt in `guild.mc_action_receipts`)\n\nNames and emails are left out on purpose because this "
+            "repository is public: read them from the database.")
+    return title, body
 INVITE_REASON = "Invited by Robert through Master Craftsman"
 
 
@@ -36,11 +65,13 @@ def _reply(text, state, **extra):
 
 
 class ToolProposals:
-    def __init__(self, connect, *, principal: str, environment: str, start_research=None, invite=None):
-        """``start_research(proposal) -> (state, job_id | None)``; state is started | refused | unknown.
+    def __init__(self, connect, *, principal: str, environment: str, start_research=None, invite=None,
+                 file_issue=None):
+        """``file_issue(title, body) -> (state, number | None)``; state is created | refused | unknown.
+        ``start_research(proposal) -> (state, job_id | None)``; state is started | refused | unknown.
         ``invite(proposal, ref) -> (state, detail)``; state is done | conflict | unknown, detail content-free."""
         self._connect, self.principal, self.environment = connect, principal, environment
-        self.start_research, self.invite = start_research, invite
+        self.start_research, self.invite, self.file_issue = start_research, invite, file_issue
 
     @contextmanager
     def _tx(self):
@@ -92,7 +123,9 @@ class ToolProposals:
             if p["state"] == "pending" and p["expires_at"] <= now:
                 cur.execute("UPDATE guild.mc_tool_proposals SET state='stale' WHERE proposal_id=%s", (p["proposal_id"],))
                 return _reply("That proposal expired, so nothing was done. Ask again if you still want it.", "expired")
-            if (self.start_research if p["kind"] == "delegate_research" else self.invite) is None:
+            handlers = {"data_repair": self.file_issue, "delegate_research": self.start_research,
+                        "access_invite": self.invite}
+            if handlers[p["kind"]] is None:
                 cur.execute("UPDATE guild.mc_tool_proposals SET state='stale' WHERE proposal_id=%s", (p["proposal_id"],))
                 return _reply("That is not switched on here, so nothing was done.", "refused", code="kind_off")
             req = effects.request(KINDS[p["kind"]], p["payload"])
@@ -118,6 +151,8 @@ class ToolProposals:
             effect = effects.dispatch_exact(conn, context, intent, worker=f"portal-{turn_key[:40]}")
             proposal = dict(p)
         # The approval, the prepared receipt and its dispatch are committed; now act outside this transaction.
+        if proposal["kind"] == "data_repair":
+            return self._run_ticket(effect, proposal)
         if proposal["kind"] == "delegate_research":
             return self._run_research(effect, proposal)
         return self._run_invite(effect, proposal)
@@ -132,6 +167,24 @@ class ToolProposals:
                 effect.unknown(conn)
         except Exception:
             _log.exception("mc tool receipt %s: could not record unknown", effect.operation_id)
+
+    def _run_ticket(self, effect, p):
+        title, body = issue_text(p["payload"], effect.operation_id)
+        try:
+            state, number = self.file_issue(title, body)
+        except Exception:
+            _log.exception("mc tool data repair: filing outcome unknown")
+            state, number = "unknown", None
+        if state == "unknown":
+            self._unknown(effect)
+            return _reply("I sent the data-repair ticket but cannot confirm it was created. Do not ask again yet; "
+                          "check the repository's issues first.", "unknown")
+        receipt = self._finish(effect, "data_repair", {"state": state, "issue": number}, state == "created")
+        if state != "created":
+            return _reply("The data-repair ticket could not be created, so nothing was filed.", "failed",
+                          receipt_id=str(receipt["receipt_id"]))
+        return _reply(f"Ticket {number} created: a data-repair request for {', '.join(p['payload']['refs'])} "
+                      f"({p['payload']['change']}).", "verified", issue=number, receipt_id=str(receipt["receipt_id"]))
 
     def _run_research(self, effect, p):
         who = {"claude-code": "Claude Code", "codex": "Codex"}[p["payload"]["agent"]]

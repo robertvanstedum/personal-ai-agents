@@ -38,6 +38,12 @@ def _check(spec: dict, value) -> None:
             raise ArgumentsRefused("tool_argument_invalid")
         if "pattern" in spec and not re.search(spec["pattern"], value):
             raise ArgumentsRefused("tool_argument_invalid")
+    elif kind == "array":
+        if (type(value) is not list or not spec["minItems"] <= len(value) <= spec["maxItems"]
+                or (spec.get("uniqueItems") and len(set(map(repr, value))) != len(value))):
+            raise ArgumentsRefused("tool_argument_invalid")
+        for item in value:
+            _check(spec["items"], item)
     elif kind == "integer":
         if type(value) is not int or not spec["minimum"] <= value <= spec["maximum"]:
             raise ArgumentsRefused("tool_argument_invalid")

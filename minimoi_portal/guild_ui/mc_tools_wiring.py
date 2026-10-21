@@ -5,7 +5,10 @@ executor credential's SHA-256 (MINIMOI_MC_TOOLS_TOKEN_SHA256) and DATABASE_URL, 
 Three pieces:
 * ``binder``: at dispatch of a ledger-claimed owner turn, record the per-turn tool binding;
 * ``attach``: start the internal tool listener on its own port (MINIMOI_MC_TOOLS_PORT, default 5011);
-* ``proposals``: the owner's Confirm / Cancel for MC's delegation and invite proposals.
+* ``proposals``: the owner's yes / no for MC's proposals (data-repair tickets, delegation, invites).
+
+Data-repair tickets need MINIMOI_MC_TOOLS_TICKETS=1 and MINIMOI_MC_ISSUES_TOKEN_FILE: a private file holding a
+GitHub token that can only create issues in MINIMOI_GITHUB_REPO. Without it MC is told tickets are off.
 """
 from __future__ import annotations
 
@@ -29,6 +32,9 @@ def settings(environ) -> dict | None:
             "token_sha256": (environ.get("MINIMOI_MC_TOOLS_TOKEN_SHA256") or "").strip().lower(),
             "port": int(environ.get("MINIMOI_MC_TOOLS_PORT") or 5011),
             "invites": environ.get("MINIMOI_MC_TOOLS_INVITES") == "1",
+            "tickets": environ.get("MINIMOI_MC_TOOLS_TICKETS") == "1",
+            "issues_token_file": environ.get("MINIMOI_MC_ISSUES_TOKEN_FILE") or "",
+            "repo": environ.get("MINIMOI_GITHUB_REPO") or "",
             "delegation": environ.get("MINIMOI_MC_DELEGATION") == "1"}
 
 
@@ -74,6 +80,57 @@ def _guests_lookup(email):
     return None
 
 
+def _private_token(path):
+    """The token from an owner-only regular file (no symlink), or None. Never logged."""
+    import stat
+    try:
+        if not path or not os.path.isabs(path):
+            return None
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o077 or st.st_size > 512:
+                return None
+            token = os.read(fd, 512).decode("ascii").strip()
+        finally:
+            os.close(fd)
+        return token if 20 <= len(token) <= 255 and token.isprintable() and " " not in token else None
+    except (OSError, UnicodeError):
+        return None
+
+
+def issue_filer(cfg, *, http_post=None):
+    """``file_issue(title, body) -> (state, number)`` for data-repair tickets, or None while tickets are off.
+    A 201 with an issue number is ``created``; an answer GitHub gives before creating anything (401/403/404/410/422)
+    is ``refused``; anything else, including a timeout, is ``unknown`` and is never retried."""
+    if not cfg["tickets"] or _private_token(cfg["issues_token_file"]) is None:
+        return None
+    from .mc_context import API, repo as default_repo
+    target = default_repo({"MINIMOI_GITHUB_REPO": cfg["repo"]} if cfg["repo"] else {})
+
+    def file_issue(title, body):
+        import requests
+        token = _private_token(cfg["issues_token_file"])
+        if token is None:
+            return "refused", None
+        post = http_post or requests.post
+        try:
+            r = post(f"{API}/repos/{target}/issues", json={"title": title, "body": body}, timeout=(5, 15),
+                     allow_redirects=False, headers={"Authorization": f"Bearer {token}",
+                                                     "Accept": "application/vnd.github+json",
+                                                     "X-GitHub-Api-Version": "2022-11-28"})
+        except Exception:
+            return "unknown", None
+        if r.status_code in (401, 403, 404, 410, 422):
+            return "refused", None
+        try:
+            number = r.json().get("number") if r.status_code == 201 else None
+        except ValueError:
+            number = None
+        return ("created", number) if type(number) is int else ("unknown", None)
+    return file_issue
+
+
 def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None):
     from core.mc_tools.service import ToolService
     lessons = None
@@ -82,7 +139,8 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None):
         lessons = LessonLedger(lessons_root, principal=cfg["principal"], environment=lessons_env)
     return ToolService(_connect(cfg["dsn"]), principal=cfg["principal"], environment=cfg["environment"],
                        allowed_agents=cfg["agents"], lessons=lessons, delegation=cfg["delegation"],
-                       invites=cfg["invites"] if invites is None else invites, guests_lookup=_guests_lookup)
+                       invites=cfg["invites"] if invites is None else invites,
+                       tickets=issue_filer(cfg) is not None, guests_lookup=_guests_lookup)
 
 
 def attach(app, blueprint_name, services):
@@ -143,4 +201,5 @@ def proposals(environ, *, start_research, delivery):
     from core.mc_tools.proposals import ToolProposals
     invite = invite_runner(*delivery) if cfg["invites"] and delivery else None
     return ToolProposals(_connect(cfg["dsn"]), principal=cfg["principal"], environment=cfg["environment"],
-                         start_research=start_research if cfg["delegation"] else None, invite=invite)
+                         start_research=start_research if cfg["delegation"] else None, invite=invite,
+                         file_issue=issue_filer(cfg))

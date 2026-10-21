@@ -48,8 +48,8 @@ def refused(code) -> dict:
 
 class ToolService:
     def __init__(self, connect, *, principal: str, environment: str, allowed_agents=("mc-chat",),
-                 lessons=None, delegation: bool = False, invites: bool = False, worker: str = "mc-tools",
-                 guests_lookup=None):
+                 lessons=None, delegation: bool = False, invites: bool = False, tickets: bool = False,
+                 worker: str = "mc-tools", guests_lookup=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -58,6 +58,7 @@ class ToolService:
         self._connect, self.principal, self.environment = connect, principal, environment
         self.allowed_agents = frozenset(allowed_agents)
         self.lessons, self.delegation, self.invites = lessons, bool(delegation), bool(invites)
+        self.tickets = bool(tickets)
         self.worker, self.guests_lookup = worker[:80], guests_lookup
 
     @contextmanager
@@ -111,22 +112,28 @@ class ToolService:
         return result("done", "listed", f"{len(items)} open guest request(s):\n" + "\n".join(lines), {"requests": items})
 
     # ── proposals (turn grant, C06 receipt) ─────────────────────────────────
-    def _guest_request_reject(self, args, session_key, agent_id, observation):
-        from core.mc_domain_actions import guest_commands
+    def _data_repair_ticket(self, args, session_key, agent_id, observation):
+        """Propose a public data-repair ticket naming guest requests by ref only (no names or emails)."""
+        if not self.tickets:
+            return refused("tool_unavailable")
+        refs = sorted(args["refs"], key=lambda r: int(r.split(":")[1]))
+        ids = [int(r.split(":")[1]) for r in refs]
+        payload = {"refs": refs, "change": args["change"], "environment": self.environment}
+        listed = " and ".join(refs) if len(refs) < 3 else ", ".join(refs[:-1]) + " and " + refs[-1]
+        words = (f"Open a data-repair ticket asking Claude Code or Codex to {args['change']} guest request(s) {listed}? "
+                 "It names them by ref only, because the ticket is public. Reply yes within "
+                 f"{PROPOSAL_MINUTES} minutes, or no.")
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
-            match = next((r for r in self._guest_actions().open_requests(conn, b.context(), limit=200)
-                          if r["ref"] == args["ref"]), None)
-            if match is None:
-                return result("refused", "no_open_request", f"There is no open guest request {args['ref']}. "
-                              "Nothing was changed; list the open requests again.")
-            effect = effects.begin_turn_effect(conn, b, effects.request("guest.propose_reject", args), worker=self.worker)
-            proposal_id = guest_commands.propose(conn, self.principal, self.environment, b.conversation_id,
-                                                 b.note_request_id, match)
-            receipt = effect.finish(conn, "guest_reject_proposal", {"proposal_id": proposal_id, "ref": match["ref"]},
-                                    verified=True)
-        return result("needs_confirmation", "proposed", guest_commands.proposal_words(match),
-                      {"ref": match["ref"], "receipt_id": str(receipt["receipt_id"])})
+            with _cursor(conn) as cur:
+                cur.execute("SELECT id FROM guild.guest_requests WHERE id = ANY(%s)", (ids,))
+                found = {row["id"] for row in cur.fetchall()}
+            missing = [r for r, i in zip(refs, ids) if i not in found]
+            if missing:
+                return result("refused", "unknown_ref", f"There is no guest request {', '.join(missing)}. Nothing was "
+                              "proposed; list the guest requests again.")
+            return self._pending_tool_proposal(conn, b, "data_repair", payload,
+                                               effects.request("issue.propose_data_repair", payload), words)
 
     def _lesson_propose(self, args, session_key, agent_id, observation):
         from core.mc_lessons import commands as lessons
@@ -156,7 +163,7 @@ class ToolService:
         return result(status, state, answer["reply"])
 
     def _pending_tool_proposal(self, conn, b, kind, payload, req, words):
-        """Record a delegation or invite proposal under the turn grant; the owner's Confirm acts on it."""
+        """Record a proposal under the turn grant; only the owner's own yes in a later turn acts on it."""
         import json
         from uuid import uuid4
         effect = effects.begin_turn_effect(conn, b, req, worker=self.worker)
@@ -177,8 +184,8 @@ class ToolService:
             return refused("tool_unavailable")
         who = AGENT_NAMES[args["agent"]]
         words = (f"Ask {who} to research your message (“{args['title']}”), read-only in a fresh copy of the "
-                 f"repository, cost cap 2 USD? Your own message is the brief. Reply Confirm within "
-                 f"{PROPOSAL_MINUTES} minutes, or Cancel.")
+                 f"repository, cost cap 2 USD? Your own message is the brief. Reply yes within "
+                 f"{PROPOSAL_MINUTES} minutes, or no.")
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
             return self._pending_tool_proposal(conn, b, "delegate_research", args,
@@ -196,7 +203,7 @@ class ToolService:
         payload = {"name": args["name"], "email": email, "app": INVITE_APP, "days": args["days"]}
         words = (f"Give {args['name']} <{email}> a guest login to {INVITE_APP_NAME} for {args['days']} days? "
                  "They get an email with a temporary password to change at first sign-in. "
-                 f"Reply Confirm within {PROPOSAL_MINUTES} minutes, or Cancel.")
+                 f"Reply yes within {PROPOSAL_MINUTES} minutes, or no.")
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
             return self._pending_tool_proposal(conn, b, "access_invite", payload,

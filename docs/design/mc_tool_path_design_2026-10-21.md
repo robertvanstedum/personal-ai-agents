@@ -46,13 +46,15 @@ The narrowest proven mechanism uses two things MiniMoi already trusts, and adds 
 |---|---|---|---|
 | `minimoi_host_health` | `host.health` (read) | nothing | none; the plugin measures the runtime host |
 | `minimoi_guest_requests` | `guest.list` (read) | nothing | none |
-| `minimoi_guest_request_reject` | `guest.propose_reject` → `guest.reject_request` | `ref` from the list, a short reason | proposal; reject only after the owner's **Confirm** |
+| `minimoi_data_repair_ticket` | `issue.propose_data_repair` → `issue.create_data_repair` | guest-request refs (`guild:N`) and a change (reject, grant, remove) | proposal; a public GitHub issue naming refs only, opened only after the owner's **yes** |
 | `minimoi_lesson_propose` | `lessons.propose` | the lesson text | proposal; adoption only after **Confirm** |
 | `minimoi_delegate_research` | `delegate.propose_research` → `delegate.start_research` | agent, a short title | proposal; the job's brief is the owner's own kept note, never model text |
 | `minimoi_access_invite` | `access.propose_invite` → `access.invite_user` | name, email, days; app fixed to Meu Português | proposal; account only after **Confirm** |
 
 - **Proposals** are effects too, so each one runs through C06 receipts under a **turn grant** that the tool service issues for exactly that request (one operation, owner turn id = the ledger turn, expiry ≤ the claim's lease). It is zero-spend and needs no exact approval: the owner's live turn authorizes MC to *ask*.
-- **Consequential effects** need a C07 **exact-approval grant**, issued only by the platform's owner-command path when the owner types Confirm in the same conversation (the existing guest and lesson flows, extended to delegation and invites). The model has no confirm tool. A proposal lasts 10 minutes and binds its exact request.
+- **Consequential effects** need a C07 **exact-approval grant**, issued only by the platform's owner-command path when the owner replies yes (or Confirm) in the same conversation: the existing lesson flow, and a new one for tickets, delegation and invites. The model has no confirm tool. A proposal lasts 10 minutes and binds its exact request.
+- **Guest requests (Robert, 21 Oct):** MC does not reject them. It lists them, points Robert to Operate, and when the screens cannot do it, offers a data-repair ticket. The ticket names records by ref only, because the repository is public.
+- **Voiced outcomes do not get tools.** When MC voices a platform outcome (the reply to Robert's yes), no binding is recorded, so it can only speak (review P2-1; this composes with the parent's `run_mc_turn(..., voice_only=True)`).
 - **Delegation spend.** C07 refuses paid capabilities. `delegate.start_research` authorizes *queueing* a capped request; spend admission stays with the runner, which refuses any actor without a budget-binding adapter and enforces the job's cap (`--max-budget-usd`, $2). This is flagged for Codex's review.
 - **Secrets never reach the model.** An invite's temporary password goes only to the invitee's approval email (and, as on the existing Operate grant path, the owner's Telegram notice if email fails). Tool results are bounded JSON with a plain sentence for MC to voice.
 

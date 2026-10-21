@@ -15,7 +15,7 @@ function setup(reply = () => json(200, {status: 'done', code: 'listed', message:
   const sent = [];
   const fetchImpl = async (url, init) => { sent.push({url, init}); return reply(url, init); };
   const create = toolFactory({endpoint: 'http://127.0.0.1:5011/internal/mc/v1/tools', token: TOKEN, agents: ['mc-chat'],
-    tools: ['minimoi_guest_requests', 'minimoi_guest_request_reject', 'minimoi_host_health'], diskPaths: ['/'], fetchImpl, ...extra});
+    tools: ['minimoi_guest_requests', 'minimoi_data_repair_ticket', 'minimoi_host_health'], diskPaths: ['/'], fetchImpl, ...extra});
   return {create, sent};
 }
 const tool = (tools, name) => tools.find(t => t.name === name);
@@ -27,26 +27,26 @@ test('no tools outside an allowed agent with a host session key', () => {
   assert.equal(create({agentId: 'mc-chat', sessionKey: ''}), null);
   assert.equal(create(undefined), null);
   assert.deepEqual(create({agentId: 'mc-chat', sessionKey: SESSION}).map(t => t.name),
-                   ['minimoi_host_health', 'minimoi_guest_requests', 'minimoi_guest_request_reject']);
+                   ['minimoi_host_health', 'minimoi_guest_requests', 'minimoi_data_repair_ticket']);
 });
 
 test('identity comes from the host context, never from arguments', async () => {
   const {create, sent} = setup();
-  const reject = tool(create({agentId: 'mc-chat', sessionKey: SESSION}), 'minimoi_guest_request_reject');
+  const reject = tool(create({agentId: 'mc-chat', sessionKey: SESSION}), 'minimoi_data_repair_ticket');
   for (const args of [{ref: 'guild:1', sessionKey: 'agent:mc-chat:x'}, {ref: 'guild:1', principal: 'robert'},
                       {ref: 'guild:01'}, {ref: 'guild:1​'}, {}, null, ['guild:1']]) {
     const r = await reject.execute('c1', args);
     assert.equal(r.details.status, 'refused', JSON.stringify(args));
   }
   assert.equal(sent.length, 0);
-  await reject.execute('c2', {ref: 'guild:7'});
+  await reject.execute('c2', {refs: ['guild:7', 'guild:9'], change: 'reject'});
   assert.equal(sent.length, 1);
   const {url, init} = sent[0];
-  assert.equal(url, 'http://127.0.0.1:5011/internal/mc/v1/tools/minimoi_guest_request_reject');
+  assert.equal(url, 'http://127.0.0.1:5011/internal/mc/v1/tools/minimoi_data_repair_ticket');
   assert.equal(init.headers['X-MC-Session'], SESSION);
   assert.equal(init.headers['X-MC-Agent'], 'mc-chat');
   assert.equal(init.redirect, 'error');
-  assert.deepEqual(JSON.parse(init.body), {arguments: {ref: 'guild:7'}});
+  assert.deepEqual(JSON.parse(init.body), {arguments: {refs: ['guild:7', 'guild:9'], change: 'reject'}});
 });
 
 test('results: only the exact envelope is believed; anything else is unknown', async () => {

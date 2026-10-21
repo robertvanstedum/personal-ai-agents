@@ -17,15 +17,15 @@ CREATE TABLE IF NOT EXISTS guild.mc_tool_turns (
 );
 CREATE INDEX IF NOT EXISTS mc_tool_turns_runtime_user ON guild.mc_tool_turns (runtime_user, principal);
 
--- MC's proposals that wait for the owner's Confirm in the same conversation (delegation, invites).
--- Guest rejects keep using guild.mc_guest_proposals; lessons keep their own ledger.
+-- MC's proposals that wait for the owner's yes in the same conversation (data-repair tickets, delegation,
+-- invites). Lessons keep their own ledger.
 CREATE TABLE IF NOT EXISTS guild.mc_tool_proposals (
     proposal_id      uuid PRIMARY KEY,
     principal_id     text NOT NULL,
     environment      text NOT NULL CHECK (environment IN ('dev', 'prod')),
     conversation_id  text NOT NULL,
     owner_turn_id    text NOT NULL,                 -- the owner's kept note whose turn MC proposed in
-    kind             text NOT NULL CHECK (kind IN ('delegate_research', 'access_invite')),
+    kind             text NOT NULL CHECK (kind IN ('data_repair', 'delegate_research', 'access_invite')),
     payload          jsonb NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
     operation_id     uuid NOT NULL UNIQUE,          -- the effect's id, fixed at proposal
     state            text NOT NULL DEFAULT 'pending'

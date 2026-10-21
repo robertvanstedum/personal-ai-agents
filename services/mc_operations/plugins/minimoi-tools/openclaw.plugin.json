@@ -6,7 +6,7 @@
   "tools": [
    "minimoi_host_health",
    "minimoi_guest_requests",
-   "minimoi_guest_request_reject",
+   "minimoi_data_repair_ticket",
    "minimoi_lesson_propose",
    "minimoi_delegate_research",
    "minimoi_access_invite"

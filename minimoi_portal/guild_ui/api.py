@@ -745,6 +745,9 @@ def _tool_binder(services, ledger_turn, conv, principal, note_id):
         environ = feature_environ()
     except RuntimeError:                              # an operator probe with no mount: no tools
         return lambda: None
+    from flask import has_request_context
+    if has_request_context() and getattr(g, "mc_platform_outcome", None) is not None:
+        return lambda: None                           # a voiced platform outcome only speaks (review P2-1): no tools
     return binder(services, ledger_turn, environ=environ, principal=principal, conversation_id=conv["id"],
                   note_id=note_id, session_conversation_id=session_conversation_id(conv, principal))
 
@@ -1187,8 +1190,9 @@ def _owner_guest_command(found):
 
 
 def _owner_tool_proposal_command(found):
-    """Confirm / Cancel for what MC proposed through its tools (core/mc_tools/proposals.py): delegated research and
-    Meu Português invites. Only while such a proposal waits in this conversation; otherwise the model answers."""
+    """The owner's yes / no for what MC proposed through its tools (core/mc_tools/proposals.py): data-repair tickets,
+    delegated research, Meu Português invites. Only while such a proposal waits in this conversation; otherwise the
+    model answers. Model output never reaches here: only the owner's own kept note does."""
     from . import feature_environ
     from .mc_tools_wiring import proposals, settings
     environ = feature_environ()
@@ -1196,16 +1200,16 @@ def _owner_tool_proposal_command(found):
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     if cfg is None or principal != cfg["principal"] or attachment_ids or getattr(g, "topic_context", None):
         return None
-    from core.mc_domain_actions import guest_commands
-    command = guest_commands.parse(note.get("text"))
-    if command is None or command.kind not in ("confirm", "cancel"):
+    from core.mc_tools.proposals import parse
+    kind = parse(note.get("text"))
+    if kind is None:
         return None
     handler = proposals(environ, start_research=lambda p: _start_proposed_research(found, p),
                         delivery=current_app.extensions.get("mc_invite_delivery"))
     try:
         if not handler.has_pending(conv["id"]):
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
-        result = handler.handle(command.kind, conversation=conv["id"], turn_key=note_id)
+        result = handler.handle(kind, conversation=conv["id"], turn_key=note_id)
     except Exception:
         _mc_log().exception("tool proposal command could not be completed")
         result = {"reply": "I could not complete that, and I cannot confirm its outcome. Do not repeat it yet; "

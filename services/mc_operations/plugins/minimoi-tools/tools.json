@@ -6,49 +6,137 @@
       "capability": "host.health",
       "label": "MiniMoi host health",
       "description": "Disk space, memory and running containers on the machine MiniMoi runs on, measured now. Read-only. Use it when Robert asks about disk, memory, containers or how the system is doing.",
-      "parameters": {"type": "object", "additionalProperties": false, "properties": {}}
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
     },
     {
       "name": "minimoi_guest_requests",
       "capability": "guest.list",
       "label": "Open guest requests",
-      "description": "The open guest access requests (name, email, app, date and ref). Read-only. Call it before proposing to reject one.",
-      "parameters": {"type": "object", "additionalProperties": false, "properties": {}}
+      "description": "The open guest access requests (name, email, app, date and ref). Read-only: you cannot accept or reject them. Tell Robert where to act (Operate, guest requests); if he cannot there, offer a data-repair ticket.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
     },
     {
-      "name": "minimoi_guest_request_reject",
-      "capability": "guest.propose_reject",
-      "label": "Propose rejecting a guest request",
-      "description": "Propose rejecting ONE open guest request, by its ref from minimoi_guest_requests. Nothing changes until Robert replies Confirm in this conversation; tell him so. For several requests, propose them one at a time.",
-      "parameters": {"type": "object", "additionalProperties": false, "required": ["ref"],
-        "properties": {"ref": {"type": "string", "pattern": "^guild:[1-9][0-9]{0,9}$", "maxLength": 16}}}
+      "name": "minimoi_data_repair_ticket",
+      "capability": "issue.propose_data_repair",
+      "label": "Propose a data-repair ticket",
+      "description": "When Robert cannot fix records himself in MiniMoi's screens (for example guest requests he cannot accept or reject there), call this to offer a data-repair ticket for Claude Code or Codex. The call only makes the offer; the ticket is opened when Robert answers yes. Name the records only by ref (from minimoi_guest_requests), never by name or email: the ticket is public.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "refs",
+          "change"
+        ],
+        "properties": {
+          "refs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^guild:[1-9][0-9]{0,9}$",
+              "maxLength": 16
+            }
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "reject",
+              "grant",
+              "remove"
+            ]
+          }
+        }
+      }
     },
     {
       "name": "minimoi_lesson_propose",
       "capability": "lessons.propose",
       "label": "Propose a standing lesson",
       "description": "Propose a standing lesson Robert asked you to remember, in his words. It is kept only after he replies Confirm. A lesson shapes how you work and answer; it never grants a permission or approves an action.",
-      "parameters": {"type": "object", "additionalProperties": false, "required": ["text"],
-        "properties": {"text": {"type": "string", "minLength": 3, "maxLength": 500}}}
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      }
     },
     {
       "name": "minimoi_delegate_research",
       "capability": "delegate.propose_research",
       "label": "Propose delegated research",
       "description": "Propose asking Claude Code or Codex to research what Robert asked in THIS message: read-only, in a fresh copy of the repository, cost cap 2 USD. His own message is the brief; you give only a short title. It starts only after he replies Confirm.",
-      "parameters": {"type": "object", "additionalProperties": false, "required": ["agent", "title"],
-        "properties": {"agent": {"type": "string", "enum": ["claude-code", "codex"]},
-                       "title": {"type": "string", "minLength": 3, "maxLength": 80}}}
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent",
+          "title"
+        ],
+        "properties": {
+          "agent": {
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "codex"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80
+          }
+        }
+      }
     },
     {
       "name": "minimoi_access_invite",
       "capability": "access.propose_invite",
       "label": "Propose a Meu Português login",
       "description": "Propose giving someone (for example Robert's family) a guest login to Meu Português. They get an email with a temporary password that they change at first sign-in. Nothing is created until Robert replies Confirm. Ask Robert for the name and email if he did not give them.",
-      "parameters": {"type": "object", "additionalProperties": false, "required": ["name", "email", "days"],
-        "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80},
-                       "email": {"type": "string", "pattern": "^[^@\\s]{1,64}@[^@\\s]{1,189}\\.[A-Za-z]{2,24}$", "maxLength": 254},
-                       "days": {"type": "integer", "minimum": 1, "maximum": 30}}}
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "email",
+          "days"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "email": {
+            "type": "string",
+            "pattern": "^[^@\\s]{1,64}@[^@\\s]{1,189}\\.[A-Za-z]{2,24}$",
+            "maxLength": 254
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          }
+        }
+      }
     }
   ]
 }
