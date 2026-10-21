@@ -47,7 +47,7 @@ Robert wants observability as one reusable platform capability for **all of Mini
 
 ## Output
 
-Please write findings to `mc-onboarding/reviews/CODEX_REVIEW_SPEC_161_<date>.md`:
+Please write findings to `docs/specs/reviews/spec_161/02_codex_review_v0.1_<date>.md` on branch `claude/spec-161-observability` (versioned; commit it there):
 - numbered findings, each with a severity;
 - the exact spec section for each;
 - a verdict: ready for the second review, or changes first.
