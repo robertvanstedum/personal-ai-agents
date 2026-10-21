@@ -851,6 +851,9 @@ def _answer_turn(found, turn):
     try:
         phase = "platform"
         result = _platform_command(found)
+        if isinstance(result, PlatformOutcome):
+            phase = "model"
+            return _voiced_turn(found, turn, result)
         if result is not None:
             if turn is not None:
                 turn.finish_platform(_json_body(result))
@@ -1012,6 +1015,67 @@ def _owner_action_command(found):
                    history_saved=result.get('history_saved', False)), 200
 
 
+VOICED_VAR = "MINIMOI_MC_VOICED_OUTCOMES"
+
+
+class PlatformOutcome:
+    """A platform command's verified outcome (the platform decided and acted; no model did). With
+    MINIMOI_MC_VOICED_OUTCOMES=1 Master Craftsman tells the owner in its own voice, in reply to the whole message;
+    otherwise, or when MC cannot answer, the platform's own note says it, so an outcome is never lost."""
+
+    def __init__(self, floor, note_key, result, area):
+        self.floor, self.note_key, self.result, self.area = floor, note_key, result, area
+
+    def respond(self, message=None):
+        try:
+            kept = self.floor.add_note(self.note_key, self.result["reply"], GUILD_PLATFORM, area=self.area, page="mc")
+            reply_note = kept.value if kept.outcome == "kept" else None
+        except FloorStoreUnavailable:
+            reply_note = None
+        return jsonify(status="answered", backend_kind="platform", reply_note=reply_note,
+                       message=message or self.result["reply"], operation=self.result["operation"],
+                       history_saved=reply_note is not None), 200
+
+    def context(self) -> str:
+        op = self.result["operation"]
+        return ("[MiniMoi platform outcome for the owner's message above. MiniMoi, not you, found and checked this; "
+                f"it is already recorded (state: {op.get('state')}). Answer the owner's whole message in your own voice, "
+                "naturally and briefly, and include this outcome accurately: never say more was done than stated here, "
+                "add no details, and if it waits for the owner, ask them to reply Confirm or Cancel.]\n"
+                + self.result["reply"])
+
+
+def _platform_outcome(floor, note_key, result, *, area):
+    from . import feature_environ
+    outcome = PlatformOutcome(floor, note_key, result, area)
+    return outcome if feature_environ().get(VOICED_VAR) == "1" else outcome.respond()
+
+
+def _voiced_turn(found, turn, outcome):
+    """MC answers in its own voice with the verified outcome as trusted context; buffered, so nothing about an
+    effect is streamed before it is complete. If MC does not answer, the platform's note reports the outcome."""
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    g.mc_platform_outcome = outcome
+    try:
+        answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
+                                     principal=principal, note=note, note_id=note_id, request_id=request_id,
+                                     attachment_ids=attachment_ids, ledger_turn=turn)
+    except Exception:
+        _mc_log().exception("voiced platform outcome: Master Craftsman turn failed; the platform reports it")
+        answer, status = None, 500
+    finally:
+        g.mc_platform_outcome = None
+    if status == 200 and isinstance(answer, dict) and answer.get("status") == "answered":
+        answer["operation"] = outcome.result["operation"]
+        if turn is not None:
+            turn.finish_model(answer, status)
+        return jsonify(answer), status
+    result = outcome.respond()
+    if turn is not None:
+        turn.finish_platform(_json_body(result))
+    return result
+
+
 def _lesson_ledger(principal):
     """The owner's lesson ledger when MINIMOI_MC_LESSONS=1 with MINIMOI_MC_LESSONS_ENV=dev|prod and an absolute
     MINIMOI_MC_LESSONS_DIR; otherwise None (lessons off)."""
@@ -1047,13 +1111,7 @@ def _owner_lesson_command(found):
         result = {"reply": "I could not complete that lesson command, and I cannot confirm what was kept. "
                            "Ask me to list your lessons before trying again.",
                   "operation": {"type": "lesson", "state": "unknown"}}
-    try:
-        kept = floor.add_note("lesson-" + note_id + "-reply", result["reply"], GUILD_PLATFORM, area="Lessons", page="mc")
-        reply_note = kept.value if kept.outcome == "kept" else None
-    except FloorStoreUnavailable:
-        reply_note = None
-    return jsonify(status="answered", backend_kind="platform", reply_note=reply_note, message=result["reply"],
-                   operation=result["operation"], history_saved=reply_note is not None), 200
+    return _platform_outcome(floor, "lesson-" + note_id + "-reply", result, area="Lessons")
 
 
 def _owner_guest_command(found):
@@ -1084,14 +1142,7 @@ def _owner_guest_command(found):
         result = {"reply": "I could not complete that guest request action, and I cannot confirm its outcome. "
                            "Do not repeat it yet; I will check it.",
                   "operation": {"type": "guest_action", "state": "unknown"}}
-    try:
-        kept = floor.add_note("guest-action-" + note_id + "-reply", result["reply"], GUILD_PLATFORM,
-                              area="Guests", page="mc")
-        reply_note = kept.value if kept.outcome == "kept" else None
-    except FloorStoreUnavailable:
-        reply_note = None
-    return jsonify(status="answered", backend_kind="platform", reply_note=reply_note, message=result["reply"],
-                   operation=result["operation"], history_saved=reply_note is not None), 200
+    return _platform_outcome(floor, "guest-action-" + note_id + "-reply", result, area="Guests")
 
 
 PRIVATE_TEXT_MAX = 4000
@@ -1218,6 +1269,9 @@ def _stream_turn(found, turn):
     try:
         phase = "platform"
         result = _platform_command(found)                 # spoken job commands are answered here, streaming or not
+        if isinstance(result, PlatformOutcome):
+            phase = "model"
+            return _voiced_turn(found, turn, result)      # buffered: no partial words about an effect
         if result is not None:
             if turn is not None:
                 turn.finish_platform(_json_body(result))
@@ -2219,6 +2273,10 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
                 extra.append(awareness)
     except Exception:
         pass
+    from flask import has_app_context
+    outcome = getattr(g, "mc_platform_outcome", None) if has_app_context() else None   # probes/workers have none
+    if outcome is not None:
+        extra.append(outcome.context())
     # Owner-adopted lessons: standing guidance for how MC answers, never authority (core/mc_lessons).
     try:
         ledger = _lesson_ledger(principal)

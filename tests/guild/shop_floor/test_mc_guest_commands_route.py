@@ -1,10 +1,13 @@
 """The guest owner commands on the real MC turn route (journey link 4 wiring): gated by flag,
 answered by the platform with no model call, and an ordinary 'Confirm' still reaches MC."""
+import json
+
 import pytest
 
 from floor_helpers import load_portal, write_headers  # noqa: F401
 from floor_db_helpers import floor_db, floored, keyed  # noqa: F401
 from test_mc_turn_ledger_routes import turned, owner, _keep, _ask  # noqa: F401
+from test_mc_turns import Resp
 from core.mc_domain_actions import guest_commands as gc
 
 
@@ -79,3 +82,38 @@ def test_a_failure_is_reported_as_unknown_never_as_done(guests, monkeypatch):
     monkeypatch.setattr(FakeCommands, "handle", boom)
     body = say(guests, "Reject the guest request from Bruno")
     assert body["operation"]["state"] == "unknown" and "cannot confirm" in body["message"]
+
+
+# ── MC speaks: the platform acts, Master Craftsman tells the owner in its own voice ──
+
+@pytest.fixture
+def voiced(guests, monkeypatch):
+    ext = guests.app.extensions["guild_ui_next"]
+    monkeypatch.setitem(ext, "feature_environ", {**ext["feature_environ"], "MINIMOI_MC_VOICED_OUTCOMES": "1"})
+    return guests
+
+
+def test_mc_answers_in_its_own_voice_with_the_verified_outcome(voiced):
+    runtime = voiced.extra["runtime"]
+    sent = len(runtime.sent)
+    body = say(voiced, "Guten Morgen. Just reject the guest requests we have.")
+    assert FakeCommands.calls == ["reject"]                                   # the platform decided and acted
+    assert len(runtime.sent) == sent + 1                                       # then MC was asked to answer
+    payload = json.dumps(runtime.sent[-1]["body"])
+    assert "MiniMoi platform outcome" in payload and "platform:reject" in payload and "Guten Morgen" in payload
+    assert body["backend_kind"] != "platform" and body["operation"]["type"] == "guest_action"
+    assert body["reply_note"]["who"] == "master_craftsman"
+
+
+def test_if_mc_cannot_answer_the_platform_still_reports_the_outcome(voiced):
+    runtime = voiced.extra["runtime"]
+    runtime.answer = lambda body, headers: Resp(503, "{}", {})
+    body = say(voiced, "Reject the guest request from Bruno")
+    assert FakeCommands.calls == ["reject"]
+    assert body["backend_kind"] == "platform" and body["message"] == "platform:reject"
+    assert body["operation"]["type"] == "guest_action"
+
+
+def test_mc_is_never_asked_to_voice_a_turn_without_an_outcome(voiced):
+    say(voiced, "What is on the board today?")
+    assert "MiniMoi platform outcome" not in json.dumps(voiced.extra["runtime"].sent[-1]["body"])
