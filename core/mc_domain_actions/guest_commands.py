@@ -106,14 +106,14 @@ class GuestCommands:
         finally:
             conn.close()
 
-    def has_pending(self, conversation: str) -> bool:
-        """'Confirm'/'Cancel' are ordinary words: only claim them while a guest proposal is
-        pending (or was just confirmed) in this conversation."""
+    def has_pending(self, conversation: str, turn_key: str | None = None) -> bool:
+        """'Confirm'/'Cancel' are ordinary words: only claim them while a guest proposal is pending in
+        this conversation, or when this very turn already confirmed one (a retry). A later Confirm meant
+        for something else (a lesson, or MC) is not ours."""
         with self.connect() as conn, _cursor(conn) as cur:
             cur.execute("""SELECT 1 FROM guild.mc_guest_proposals WHERE principal_id=%s AND environment=%s
-                AND conversation_id=%s AND (state='pending' OR (state='confirmed'
-                AND created_at > clock_timestamp() - interval '30 minutes')) LIMIT 1""",
-                (self.principal, self.environment, conversation))
+                AND conversation_id=%s AND (state='pending' OR (state='confirmed' AND confirm_turn_id=%s))
+                LIMIT 1""", (self.principal, self.environment, conversation, turn_key or ""))
             return cur.fetchone() is not None
 
     def handle(self, command: Command, *, conversation: str, turn_key: str, now=None) -> dict:

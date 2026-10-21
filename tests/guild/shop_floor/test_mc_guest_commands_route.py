@@ -18,7 +18,7 @@ class FakeCommands:
     def __init__(self, connect, *, principal, environment):
         FakeCommands.env = environment
 
-    def has_pending(self, conversation):
+    def has_pending(self, conversation, turn_key=None):
         return FakeCommands.pending
 
     def handle(self, command, *, conversation, turn_key):
@@ -117,3 +117,26 @@ def test_if_mc_cannot_answer_the_platform_still_reports_the_outcome(voiced):
 def test_mc_is_never_asked_to_voice_a_turn_without_an_outcome(voiced):
     say(voiced, "What is on the board today?")
     assert "MiniMoi platform outcome" not in json.dumps(voiced.extra["runtime"].sent[-1]["body"])
+
+
+def test_mc_overstating_an_outcome_gets_the_platforms_correction_beside_it(voiced, monkeypatch):
+    def nothing(self, command, *, conversation, turn_key):
+        FakeCommands.calls.append(command.kind)
+        return {"reply": "There's no lesson waiting here. Nothing was kept.",
+                "operation": {"type": "guest_action", "state": "nothing_pending"}}
+    monkeypatch.setattr(FakeCommands, "handle", nothing)
+    FakeCommands.pending = True
+    runtime = voiced.extra["runtime"]
+    ok = runtime.answer
+    runtime.answer = lambda body, headers: Resp(200, json.dumps({"id": "x", "object": "chat.completion", "model": "m",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "Done, it is now kept."}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}), {"X-MC-Correlation-Id": headers.get("X-MC-Correlation-Id")})
+    body = say(voiced, "Confirm")
+    assert "NOTHING WAS DONE" in json.dumps(runtime.sent[-1]["body"])
+    assert body["correction_note"] and "Nothing was kept" in body["correction_note"]["text"]
+
+
+def test_an_accurate_voiced_answer_gets_no_correction(voiced):
+    body = say(voiced, "Reject the guest request from Bruno")       # state proposed; fake MC says "Item 12 is in build."
+    assert "correction_note" not in body
+    assert "WAITING FOR THE OWNER" in json.dumps(voiced.extra["runtime"].sent[-1]["body"])

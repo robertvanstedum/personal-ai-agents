@@ -1036,13 +1036,32 @@ class PlatformOutcome:
                        message=message or self.result["reply"], operation=self.result["operation"],
                        history_saved=reply_note is not None), 200
 
+    DONE = frozenset({"verified", "revoked", "listed", "already_adopted"})
+    WAITING = frozenset({"proposed", "clarify"})
+
+    def verdict(self) -> str:
+        state = (self.result.get("operation") or {}).get("state")
+        return "DONE" if state in self.DONE else "WAITING FOR THE OWNER" if state in self.WAITING else "NOTHING WAS DONE"
+
     def context(self) -> str:
         op = self.result["operation"]
+        verdict = self.verdict()
+        rule = {"DONE": "Say it is done, exactly as stated, and nothing more.",
+                "WAITING FOR THE OWNER": "Say nothing has happened yet; ask the owner to reply Confirm or Cancel. "
+                                         "Do not say it is kept, done or in effect.",
+                "NOTHING WAS DONE": "Say plainly that nothing was done or kept, and why, as stated. Never say it "
+                                    "succeeded."}[verdict]
         return ("[MiniMoi platform outcome for the owner's message above. MiniMoi, not you, found and checked this; "
-                f"it is already recorded (state: {op.get('state')}). Answer the owner's whole message in your own voice, "
-                "naturally and briefly, and include this outcome accurately: never say more was done than stated here, "
-                "add no details, and if it waits for the owner, ask them to reply Confirm or Cancel.]\n"
+                f"it is already recorded. OUTCOME: {verdict} (state: {op.get('state')}). {rule} Answer the owner's "
+                "whole message in your own voice, naturally and briefly; add no details beyond this.]\n"
                 + self.result["reply"])
+
+    _CLAIMS = re.compile(r"\b(?:kept|saved|done|rejected|adopted|verified|completed|in effect|from now on|"
+                         r"will follow|have recorded|now (?:a|kept|in))\b", re.I)
+
+    def contradicts(self, text: str) -> bool:
+        """MC's words claim an effect that the platform did not perform (checked on every voiced reply)."""
+        return self.verdict() != "DONE" and bool(self._CLAIMS.search(text or ""))
 
 
 def _platform_outcome(floor, note_key, result, *, area):
@@ -1067,6 +1086,14 @@ def _voiced_turn(found, turn, outcome):
         g.mc_platform_outcome = None
     if status == 200 and isinstance(answer, dict) and answer.get("status") == "answered":
         answer["operation"] = outcome.result["operation"]
+        said = (answer.get("reply_note") or {}).get("text") or ""
+        if outcome.contradicts(said):
+            # MC overstated the outcome: the platform's verified words go beside it, never a false claim alone.
+            _mc_log().warning("voiced platform outcome: MC claimed more than the platform did; correction kept")
+            corrected = outcome.respond()
+            body = _json_body(corrected)
+            answer["correction_note"] = body.get("reply_note")
+            answer["message"] = body.get("message")
         if turn is not None:
             turn.finish_model(answer, status)
         return jsonify(answer), status
@@ -1134,7 +1161,7 @@ def _owner_guest_command(found):
     commands = guest_commands.GuestCommands(lambda: psycopg2.connect(dsn, connect_timeout=5),
                                             principal=principal, environment=env["MINIMOI_MC_GUEST_ACTIONS_ENV"])
     try:
-        if command.kind != "reject" and not commands.has_pending(conv["id"]):
+        if command.kind != "reject" and not commands.has_pending(conv["id"], note_id):
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
         result = commands.handle(command, conversation=conv["id"], turn_key=note_id)
     except Exception:

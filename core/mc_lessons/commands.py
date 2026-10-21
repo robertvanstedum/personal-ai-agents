@@ -118,13 +118,13 @@ class LessonCommands:
     def _remember(self, st, append, cmd, conversation, turn_key):
         text, reason = clean(cmd.text)
         if reason:
-            return _reply(REFUSALS[reason], "refused", reason=reason)
+            return _reply(REFUSALS[reason], "declined", reason=reason)     # nothing attempted: an answer, not a failure
         for no, lesson in st.active():
             if lesson["sha256"] == text_sha(text):
                 return _reply(f"That is already lesson L{no}. Nothing new was kept.", "already_adopted", lesson=no)
         if len(st.active()) >= MAX_ACTIVE:
             return _reply(f"I already keep {MAX_ACTIVE} lessons. Forget one first (Forget lesson <n>). Nothing was kept.",
-                          "refused", reason="full")
+                          "declined", reason="full")
         expires = self.clock() + timedelta(minutes=PROPOSAL_MINUTES)
         append({"type": "proposed", "proposal_id": str(uuid.uuid4()), "text": text, "conversation": conversation,
                 "turn_key": turn_key, "expires_at": _iso(expires)})
