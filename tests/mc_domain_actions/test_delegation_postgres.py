@@ -158,6 +158,25 @@ class DelegationTests(PostgresFixture, unittest.TestCase):
         self.assertEqual(routing.status("j-aaaaaaaaaaaaaaaa")[1]["state"], "running")
 
 
+class OutputAndConfigTests(unittest.TestCase):
+    def test_the_owner_reads_claude_codes_answer_not_its_json_envelope(self):
+        from core.mc_delegation_runner.dispatcher_adapter import readable
+        env = b'{"type":"result","subtype":"success","is_error":false,"result":"References.py reads them.","total_cost_usd":0.12}'
+        self.assertEqual(readable(env), "References.py reads them.")
+        self.assertTrue(readable(env.replace(b"false", b"true")).startswith("Claude Code reported an error"))
+        self.assertEqual(readable(b"plain answer\n"), "plain answer")
+        self.assertEqual(readable(b'{"other": 1}'), '{"other": 1}')
+
+    def test_the_dsn_can_come_from_the_environment_once_and_is_then_removed(self):
+        import os
+        from core.mc_delegation_runner import cli
+        os.environ["MC_TEST_DSN"] = "postgresql://x"
+        self.assertEqual(cli._dsn_from_env("MC_TEST_DSN"), "postgresql://x")
+        self.assertNotIn("MC_TEST_DSN", os.environ)
+        with self.assertRaises(SystemExit):
+            cli._dsn_from_env("MC_TEST_DSN")
+
+
 class BudgetTests(unittest.TestCase):
     def test_claude_budget_is_bound_on_the_real_cli_only(self):
         argv = commands.argv("claude-code", "research", "brief", Path("/tmp/x"))
