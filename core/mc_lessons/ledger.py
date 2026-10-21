@@ -39,6 +39,7 @@ class State:
     next_no: int = 1
     head: str = GENESIS
     count: int = 0
+    numbered: bool = False        # events carry their line number ("n"): written since anchors existed
 
     def active(self):
         return [(no, l) for no, l in sorted(self.lessons.items()) if l["revoked_at"] is None]
@@ -95,6 +96,10 @@ class LessonLedger:
                 raise LedgerDamaged("line_unreadable") from exc
             if not isinstance(ev, dict) or ev.get("prev") != st.head or ev.get("type") not in EVENT_TYPES:
                 raise LedgerDamaged("chain_broken")
+            if "n" in ev:
+                if ev["n"] != st.count + 1:
+                    raise LedgerDamaged("chain_broken")
+                st.numbered = True
             st.head = _sha(line)
             st.count += 1
             _apply(st, ev)
@@ -136,10 +141,21 @@ class LessonLedger:
             data = data[: data.rfind(b"\n") + 1]            # an unfinished append was never acknowledged
         anchor = self._anchor()
         if anchor is None:
-            return self._fold(data), len(data)
+            st = self._fold(data)
+            if st.numbered:                               # anchored once: a missing anchor is damage, never legacy
+                raise LedgerDamaged("anchor_missing")
+            return st, len(data)
         count, head = anchor
         lines = data.split(b"\n")[:-1] if data else []
         if len(lines) == count + 1:
+            # Only a genuine unacknowledged append is dropped: a valid event chained to the anchored head.
+            try:
+                extra = json.loads(lines[-1])
+            except ValueError as exc:
+                raise LedgerDamaged("line_unreadable") from exc
+            if (not isinstance(extra, dict) or extra.get("type") not in EVENT_TYPES
+                    or extra.get("prev") != (head if count else GENESIS) or extra.get("n") != count + 1):
+                raise LedgerDamaged("chain_broken")
             data = data[: len(data) - len(lines[-1]) - 1]
         st = self._fold(data)
         if st.count != count or st.head != (head if count else GENESIS):
@@ -169,7 +185,7 @@ class LessonLedger:
             def append(event: dict) -> State:
                 if event.get("type") not in EVENT_TYPES:
                     raise ValueError("event_type_invalid")
-                ev = {**event, "prev": box["state"].head, "at": event.get("at") or _now()}
+                ev = {**event, "prev": box["state"].head, "n": box["state"].count + 1, "at": event.get("at") or _now()}
                 line = json.dumps(ev, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
                 if len(line) > MAX_LINE:
                     raise ValueError("event_too_large")

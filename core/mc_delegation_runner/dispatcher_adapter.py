@@ -3,6 +3,7 @@ bounded output text returned with each result so the owner sees what the delegat
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 OUTPUT_MAX = 64 * 1024
@@ -61,7 +62,8 @@ def cost_usd(raw: bytes):
     """The cost Claude Code's result envelope reports, or None."""
     doc = _envelope(raw)
     value = doc.get("total_cost_usd") if doc else None
-    return round(float(value), 4) if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0 else None
+    ok = isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+    return round(float(value), 4) if ok else None
 
 
 def readable(raw: bytes) -> str:

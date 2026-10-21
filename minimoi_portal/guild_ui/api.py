@@ -852,7 +852,8 @@ def _answer_turn(found, turn):
         phase = "platform"
         result = _platform_command(found)
         if isinstance(result, PlatformOutcome):
-            # phase stays "platform": the platform already acted, so an escape is unknown, never not_sent.
+            # The platform acted (an escape is unknown), unless its outcome is that nothing was done.
+            phase = "model" if result.verdict() == "NOTHING WAS DONE" else "platform"
             return _voiced_turn(found, turn, result)
         if result is not None:
             if turn is not None:
@@ -1330,7 +1331,8 @@ def _stream_turn(found, turn):
         phase = "platform"
         result = _platform_command(found)                 # spoken job commands are answered here, streaming or not
         if isinstance(result, PlatformOutcome):
-            # phase stays "platform": the platform already acted, so an escape is unknown, never not_sent.
+            # The platform acted (an escape is unknown), unless its outcome is that nothing was done.
+            phase = "model" if result.verdict() == "NOTHING WAS DONE" else "platform"
             return _voiced_turn(found, turn, result)      # buffered: no partial words about an effect
         if result is not None:
             if turn is not None:

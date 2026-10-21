@@ -296,6 +296,7 @@ def test_an_error_envelope_reads_as_a_sentence_and_its_cost_is_recorded():
     assert readable(raw) == "Claude Code stopped at its cost cap before finishing."
     assert cost_usd(raw) == 2.0034
     assert cost_usd(b"plain text") is None
+    assert cost_usd(b'{"type":"result","total_cost_usd":1e999}') is None
 
 
 def test_new_generation_gets_its_own_workspace_and_artifacts(tmp_path, mirror, monkeypatch):

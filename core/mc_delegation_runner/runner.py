@@ -446,7 +446,7 @@ def _finish(dispatcher, cfg, env, status, artifacts, detail, workspace_dir=None,
         out["workspace"] = str(workspace_dir)
         # The result and its artifacts are persisted: a finished checkout (~0.5 GB) goes, except an interrupted one,
         # which is kept for inspection.
-        if status != "interrupted":
+        if status != "interrupted" and artifacts:          # no evidence collected (e.g. capture failed): keep it
             try:
                 workspace.remove(workspace_dir, Path(cfg.workspace_root))
                 out["workspace_removed"] = True
