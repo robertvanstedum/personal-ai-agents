@@ -1,0 +1,317 @@
+# promtool unit tests for rules/minimoi_o1.yaml (spec 161 §9.2). Every rule has a firing case
+# and a non-firing case; scripts/observability/check_rules_meta.py enforces that.
+rule_files: [../minimoi_o1.yaml]
+evaluation_interval: 1m
+
+tests:
+# ── jobs ────────────────────────────────────────────────────────────────────
+- interval: 1m
+  input_series:
+  - series: 'minimoi_job_last_success_timestamp_seconds{job_id="backup-s3"}'
+    values: '0x120'
+  - series: 'minimoi_job_missed_after_seconds{job_id="backup-s3"}'
+    values: '3600x120'
+  - series: 'minimoi_job_last_success_timestamp_seconds{job_id="vault-sync"}'
+    values: '0+60x120'                      # succeeds every minute: never missed
+  - series: 'minimoi_job_missed_after_seconds{job_id="vault-sync"}'
+    values: '3600x120'
+  alert_rule_test:
+  - eval_time: 65m
+    alertname: JobMissed
+    exp_alerts: []
+  - eval_time: 75m
+    alertname: JobMissed
+    exp_alerts:
+    - exp_labels: {severity: critical, job_id: backup-s3, minimoi_alert_key: 'job:backup-s3:missed'}
+      exp_annotations:
+        summary: 'Job backup-s3 has not succeeded within its missed-after window'
+        runbook_url: 'docs/runbooks/job-missed.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_job_running{job_id="backup-local"}'
+    values: '1x120'
+  - series: 'minimoi_job_last_finish_timestamp_seconds{job_id="backup-local"}'
+    values: '0x120'
+  - series: 'minimoi_job_stuck_after_seconds{job_id="backup-local"}'
+    values: '3600x120'
+  - series: 'minimoi_job_running{job_id="vault-apply"}'
+    values: '0x120'
+  - series: 'minimoi_job_last_finish_timestamp_seconds{job_id="vault-apply"}'
+    values: '0x120'
+  - series: 'minimoi_job_stuck_after_seconds{job_id="vault-apply"}'
+    values: '3600x120'
+  alert_rule_test:
+  - eval_time: 62m
+    alertname: JobStuck
+    exp_alerts: []
+  - eval_time: 70m
+    alertname: JobStuck
+    exp_alerts:
+    - exp_labels: {severity: major, job_id: backup-local, minimoi_alert_key: 'job:backup-local:stuck'}
+      exp_annotations:
+        summary: 'Job backup-local has been running longer than its stuck-after window'
+        runbook_url: 'docs/runbooks/job-stuck.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_job_last_exit_code{job_id="memory-watch"}'
+    values: '3x10'
+  - series: 'minimoi_job_last_exit_code{job_id="vault-sync"}'
+    values: '0x10'
+  - series: 'minimoi_job_status_readable{job_id="never-ran"}'
+    values: '0x60'
+  - series: 'minimoi_job_status_readable{job_id="vault-sync"}'
+    values: '1x60'
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: JobFailed
+    exp_alerts: []
+  - eval_time: 2m
+    alertname: JobFailed
+    exp_alerts:
+    - exp_labels: {severity: major, job_id: memory-watch, minimoi_alert_key: 'job:memory-watch:failed'}
+      exp_annotations:
+        summary: 'Job memory-watch last run exited non-zero'
+        runbook_url: 'docs/runbooks/job-failed.md'
+  - eval_time: 20m
+    alertname: JobStatusUnreadable
+    exp_alerts: []
+  - eval_time: 35m
+    alertname: JobStatusUnreadable
+    exp_alerts:
+    - exp_labels: {severity: warning, job_id: never-ran, minimoi_alert_key: 'job:never-ran:unreadable'}
+      exp_annotations:
+        summary: 'Status of job never-ran cannot be read (unknown, not healthy)'
+        runbook_url: 'docs/runbooks/job-status-unreadable.md'
+
+# ── services and host ──────────────────────────────────────────────────────
+- interval: 1m
+  input_series:
+  - series: 'minimoi_service_up{service="curator"}'
+    values: '0x20'
+  - series: 'minimoi_service_up{service="portal"}'
+    values: '1x20'
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: ServiceDown
+    exp_alerts: []
+  - eval_time: 7m
+    alertname: ServiceDown
+    exp_alerts:
+    - exp_labels: {severity: critical, service: curator, minimoi_alert_key: 'service:curator:down'}
+      exp_annotations:
+        summary: 'Service curator is down'
+        runbook_url: 'docs/runbooks/service-down.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_host_filesystem_used_ratio{mountpoint="/"}'
+    values: '0.90x20 0.96x20'
+  - series: 'minimoi_host_filesystem_used_ratio{mountpoint="/opt/minimoi"}'
+    values: '0.50x41'
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: DiskCritical
+    exp_alerts: []
+  - eval_time: 35m
+    alertname: DiskCritical
+    exp_alerts:
+    - exp_labels: {severity: critical, mountpoint: '/', minimoi_alert_key: 'host:disk:/'}
+      exp_annotations:
+        summary: 'Disk / is 96% full'
+        runbook_url: 'docs/runbooks/disk.md'
+  - eval_time: 25m
+    alertname: DiskHigh
+    exp_alerts: []
+  - eval_time: 35m
+    alertname: DiskHigh
+    exp_alerts:
+    - exp_labels: {severity: warning, mountpoint: '/', minimoi_alert_key: 'host:disk:/'}
+      exp_annotations:
+        summary: 'Disk / is 96% full'
+        runbook_url: 'docs/runbooks/disk.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_host_memory_used_ratio'
+    values: '0.88x20 0.97x20'
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: MemoryCritical
+    exp_alerts: []
+  - eval_time: 35m
+    alertname: MemoryCritical
+    exp_alerts:
+    - exp_labels: {severity: critical, minimoi_alert_key: 'host:memory'}
+      exp_annotations:
+        summary: 'Memory is 97% used'
+        runbook_url: 'docs/runbooks/memory.md'
+  - eval_time: 25m
+    alertname: MemoryHigh
+    exp_alerts: []
+  - eval_time: 35m
+    alertname: MemoryHigh
+    exp_alerts:
+    - exp_labels: {severity: warning, minimoi_alert_key: 'host:memory'}
+      exp_annotations:
+        summary: 'Memory is 97% used'
+        runbook_url: 'docs/runbooks/memory.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_deploy_last_outcome'
+    values: '1x20'
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: DeployFailed
+    exp_alerts: []
+  - eval_time: 7m
+    alertname: DeployFailed
+    exp_alerts:
+    - exp_labels: {severity: major, minimoi_alert_key: 'deploy:last'}
+      exp_annotations:
+        summary: 'The last deployment failed verification'
+        runbook_url: 'docs/runbooks/deploy-failed.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_deploy_last_outcome'
+    values: '2x80'
+  - series: 'minimoi_deploy_last_timestamp_seconds'
+    values: '0x80'
+  alert_rule_test:
+  - eval_time: 62m
+    alertname: DeployNotFinished
+    exp_alerts: []
+  - eval_time: 70m
+    alertname: DeployNotFinished
+    exp_alerts:
+    - exp_labels: {severity: warning, minimoi_alert_key: 'deploy:unfinished'}
+      exp_annotations:
+        summary: 'The last deployment has been unverified or in progress for over an hour'
+        runbook_url: 'docs/runbooks/deploy-failed.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_deploy_last_outcome'
+    values: '0x80'
+  - series: 'minimoi_deploy_last_timestamp_seconds'
+    values: '0x80'
+  alert_rule_test:
+  - eval_time: 75m
+    alertname: DeployFailed
+    exp_alerts: []
+  - eval_time: 75m
+    alertname: DeployNotFinished
+    exp_alerts: []
+
+# ── guests and standing checks ─────────────────────────────────────────────
+- interval: 1m
+  input_series:
+  - series: 'minimoi_guest_requests_oldest_age_seconds'
+    values: '172801x80'
+  - series: 'minimoi_bridge_source_readable{source="host_snapshot"}'
+    values: '0x80'
+  - series: 'minimoi_bridge_source_readable{source="health_snapshot"}'
+    values: '1x80'
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: GuestRequestWaiting
+    exp_alerts: []
+  - eval_time: 65m
+    alertname: GuestRequestWaiting
+    exp_alerts:
+    - exp_labels: {severity: warning, minimoi_alert_key: 'guests:waiting'}
+      exp_annotations:
+        summary: 'A guest access request has been waiting more than 48 hours'
+        runbook_url: 'docs/runbooks/guest-waiting.md'
+  - eval_time: 20m
+    alertname: CheckSourceUnreadable
+    exp_alerts: []
+  - eval_time: 35m
+    alertname: CheckSourceUnreadable
+    exp_alerts:
+    - exp_labels: {severity: warning, source: host_snapshot, minimoi_alert_key: 'check:source-unreadable'}
+      exp_annotations:
+        summary: 'A monitored source cannot be read (unknown, not healthy)'
+        runbook_url: 'docs/runbooks/check-unreadable.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_guest_requests_oldest_age_seconds'
+    values: '3600x80'
+  alert_rule_test:
+  - eval_time: 75m
+    alertname: GuestRequestWaiting
+    exp_alerts: []
+
+# ── self-monitoring ────────────────────────────────────────────────────────
+- interval: 1m
+  input_series:
+  - series: 'minimoi_telemetry_heartbeat_timestamp_seconds{service_name="minimoi-curator"}'
+    values: '0x40'
+  - series: 'minimoi_telemetry_heartbeat_timestamp_seconds{service_name="minimoi-portal"}'
+    values: '0+60x40'
+  - series: 'minimoi_telemetry_dropped_total{signal="logs"}'
+    values: '0+1x40'
+  - series: 'otelcol_exporter_send_failed_metric_points_total{exporter="otlphttp"}'
+    values: '0+5x40'
+  - series: 'prometheus_target_scrapes_exceeded_sample_limit_total'
+    values: '0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+  alert_rule_test:
+  - eval_time: 1m
+    alertname: Watchdog
+    exp_alerts:
+    - exp_labels: {severity: none, minimoi_alert_key: 'self:watchdog'}
+      exp_annotations:
+        summary: 'Always firing. If the dead-man switch stops hearing this, the alert pipeline is broken'
+        runbook_url: 'docs/runbooks/watchdog.md'
+  - eval_time: 16m
+    alertname: TelemetryHeartbeatStale
+    exp_alerts: []
+  - eval_time: 25m
+    alertname: TelemetryHeartbeatStale
+    exp_alerts:
+    - exp_labels: {severity: critical, service_name: minimoi-curator, minimoi_alert_key: 'self:heartbeat:minimoi-curator'}
+      exp_annotations:
+        summary: 'No telemetry heartbeat from minimoi-curator for over 15 minutes'
+        runbook_url: 'docs/runbooks/heartbeat.md'
+  - eval_time: 5m
+    alertname: TelemetryDropping
+    exp_alerts:
+    - exp_labels: {severity: warning, signal: logs, minimoi_alert_key: 'self:dropping'}
+      exp_annotations:
+        summary: 'Telemetry is being dropped (contract errors or a full queue)'
+        runbook_url: 'docs/runbooks/telemetry-dropping.md'
+  - eval_time: 20m
+    alertname: CollectorExportFailing
+    exp_alerts:
+    - exp_labels: {severity: major, minimoi_alert_key: 'self:collector-export'}
+      exp_annotations:
+        summary: 'The OpenTelemetry Collector cannot export'
+        runbook_url: 'docs/runbooks/collector.md'
+  - eval_time: 5m
+    alertname: ScrapeLimitHit
+    exp_alerts:
+    - exp_labels: {severity: warning, minimoi_alert_key: 'self:cardinality'}
+      exp_annotations:
+        summary: 'The series cap was hit; new series are being dropped'
+        runbook_url: 'docs/runbooks/cardinality.md'
+
+- interval: 1m
+  input_series:
+  - series: 'minimoi_telemetry_dropped_total{signal="logs"}'
+    values: '5x40'
+  - series: 'prometheus_target_scrapes_exceeded_sample_limit_total'
+    values: '0x40'
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: TelemetryDropping
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: ScrapeLimitHit
+    exp_alerts: []
+  - eval_time: 30m
+    alertname: CollectorExportFailing
+    exp_alerts: []

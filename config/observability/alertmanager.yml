@@ -1,0 +1,39 @@
+# Alertmanager (spec 161 §9.3). Rendered at deploy with envsubst (TELEGRAM_CHAT_ID from a private
+# file); secrets are Docker secrets, never in this file. Only critical/major notify; warnings
+# stay on dashboards; resolved notices are sent; the Watchdog goes to the dead-man switch.
+global:
+  resolve_timeout: 5m
+route:
+  receiver: telegram-critical
+  group_by: [minimoi_alert_key]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+  - matchers: ['alertname="Watchdog"']
+    receiver: deadman
+    group_wait: 0s
+    group_interval: 1m
+    repeat_interval: 1m
+  - matchers: ['severity=~"warning|none"']
+    receiver: blackhole
+  - matchers: ['severity=~"critical|major"']
+    receiver: telegram-critical
+inhibit_rules:
+- source_matchers: ['severity="critical"']
+  target_matchers: ['severity="warning"']
+  equal: [minimoi_alert_key]
+receivers:
+- name: blackhole
+- name: telegram-critical
+  telegram_configs:
+  - bot_token_file: /run/secrets/am_telegram_bot_token
+    chat_id: ${TELEGRAM_CHAT_ID}
+    send_resolved: true
+    parse_mode: HTML
+    message: '{{ template "minimoi.telegram" . }}'
+- name: deadman
+  webhook_configs:
+  - url_file: /run/secrets/deadman_ping_url
+    send_resolved: false
+templates: ['/etc/alertmanager/templates/*.tmpl']

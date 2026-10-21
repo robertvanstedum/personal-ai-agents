@@ -1,0 +1,6 @@
+{{/* MiniMoi Telegram alert (spec 161 §9.3): severity, summary, key, time, runbook. Only fixed
+     rule text and vocabulary labels reach this template; nothing else is printed. */}}
+{{ define "minimoi.telegram" }}{{ range .Alerts }}{{ if eq .Status "firing" }}🔴 <b>{{ .Labels.severity | toUpper }}</b>{{ else }}✅ <b>RESOLVED</b>{{ end }} {{ .Annotations.summary }}
+<code>{{ .Labels.minimoi_alert_key }}</code> · {{ .StartsAt.Format "2006-01-02 15:04 MST" }}
+Runbook: {{ .Annotations.runbook_url }}
+{{ end }}{{ end }}

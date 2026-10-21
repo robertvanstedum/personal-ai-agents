@@ -1,0 +1,45 @@
+# OpenTelemetry Collector contrib 0.162.0 (spec 161 §10.3). Receives OTLP on the private network,
+# enforces the attribute allowlist, exposes metrics for Prometheus and archives everything.
+# Backends (Grafana, Splunk, Netcool, ...) are added as exporters here; no code changes (§16).
+# CI: `otelcol-contrib validate --config=collector.yaml` with the pinned image.
+extensions:
+  health_check: {endpoint: 0.0.0.0:13133}
+  file_storage: {directory: /var/lib/otelcol/queue, timeout: 2s}
+receivers:
+  otlp:
+    protocols:
+      http: {endpoint: 0.0.0.0:4318}
+processors:
+  memory_limiter: {check_interval: 1s, limit_mib: 200, spike_limit_mib: 50}
+  resource/env:
+    attributes:
+    - {key: deployment.environment.name, value: '${env:MINIMOI_ENV}', action: upsert}
+  transform/allowlist:
+    metric_statements:
+    - context: datapoint
+      statements: ['keep_keys(attributes, ["job_id", "service", "mountpoint", "check_id", "signal", "source"])']
+    log_statements:
+    - context: log
+      statements: ['keep_keys(attributes, ["event.name", "minimoi.alert_key", "minimoi.state", "minimoi.component", "minimoi.summary_code", "job_id", "service", "check_id"])']
+  batch: {timeout: 5s, send_batch_size: 1024}
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion: {enabled: true}
+  file/archive:
+    path: /var/lib/otelcol/archive/telemetry.jsonl
+    rotation: {max_megabytes: 50, max_days: 14, max_backups: 10}
+service:
+  extensions: [health_check, file_storage]
+  telemetry:
+    metrics:
+      level: normal
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/env, transform/allowlist, batch]
+      exporters: [prometheus, file/archive]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/env, transform/allowlist, batch]
+      exporters: [file/archive]

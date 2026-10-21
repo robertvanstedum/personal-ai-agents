@@ -1,0 +1,26 @@
+name: observability-config
+# Spec 161 §12.2: every change to alert rules, routing or the telemetry library is validated.
+on:
+  pull_request:
+    paths: ['config/observability/**', 'core/observability/**', 'docs/runbooks/**', 'scripts/observability/**']
+  push:
+    branches: [main]
+    paths: ['config/observability/**', 'core/observability/**']
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Rule tests (promtool)
+      run: |
+        docker run --rm -v "$PWD/config/observability:/c" -w /c --entrypoint promtool prom/prometheus:v3.15.0 check rules rules/minimoi_o1.yaml
+        docker run --rm -v "$PWD/config/observability:/c" -w /c --entrypoint promtool prom/prometheus:v3.15.0 test rules rules/tests/minimoi_o1_test.yaml
+    - name: Collector config (otelcol validate)
+      run: docker run --rm -e MINIMOI_ENV=dev -v "$PWD/config/observability:/c" otel/opentelemetry-collector-contrib:0.162.0 validate --config=/c/collector.yaml
+    - uses: actions/setup-python@v5
+      with: {python-version: '3.12'}
+    - name: Rule hygiene and library tests
+      run: |
+        pip install -q pyyaml pytest "opentelemetry-sdk==1.45.1" "opentelemetry-exporter-otlp-proto-http==1.45.1"
+        python scripts/observability/check_rules_meta.py
+        python -m pytest -q tests/observability

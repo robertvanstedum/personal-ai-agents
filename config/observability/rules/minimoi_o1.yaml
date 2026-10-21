@@ -1,0 +1,136 @@
+# MiniMoi O1 alert rules (spec 161 §9). Thresholds live HERE, never in code.
+# Every rule: severity, minimoi_alert_key, summary, runbook_url; at least one firing and one
+# non-firing test in rules/tests/. Values from Robert's approved MC watchlist (20 Oct 2026)
+# and the job registry's own windows. Change by pull request; CI runs promtool + amtool.
+groups:
+- name: minimoi-jobs
+  rules:
+  - alert: JobMissed
+    expr: (time() - minimoi_job_last_success_timestamp_seconds) > on(job_id) minimoi_job_missed_after_seconds
+    for: 10m
+    labels: {severity: critical, minimoi_alert_key: 'job:{{ $labels.job_id }}:missed'}
+    annotations:
+      summary: 'Job {{ $labels.job_id }} has not succeeded within its missed-after window'
+      runbook_url: 'docs/runbooks/job-missed.md'
+  - alert: JobStuck
+    expr: (minimoi_job_running == 1) and on(job_id) ((time() - minimoi_job_last_finish_timestamp_seconds) > on(job_id) minimoi_job_stuck_after_seconds)
+    for: 5m
+    labels: {severity: major, minimoi_alert_key: 'job:{{ $labels.job_id }}:stuck'}
+    annotations:
+      summary: 'Job {{ $labels.job_id }} has been running longer than its stuck-after window'
+      runbook_url: 'docs/runbooks/job-stuck.md'
+  - alert: JobFailed
+    expr: minimoi_job_last_exit_code != 0
+    for: 1m
+    labels: {severity: major, minimoi_alert_key: 'job:{{ $labels.job_id }}:failed'}
+    annotations:
+      summary: 'Job {{ $labels.job_id }} last run exited non-zero'
+      runbook_url: 'docs/runbooks/job-failed.md'
+  - alert: JobStatusUnreadable
+    expr: minimoi_job_status_readable == 0
+    for: 30m
+    labels: {severity: warning, minimoi_alert_key: 'job:{{ $labels.job_id }}:unreadable'}
+    annotations:
+      summary: 'Status of job {{ $labels.job_id }} cannot be read (unknown, not healthy)'
+      runbook_url: 'docs/runbooks/job-status-unreadable.md'
+- name: minimoi-services-host
+  rules:
+  - alert: ServiceDown
+    expr: minimoi_service_up == 0
+    for: 5m
+    labels: {severity: critical, minimoi_alert_key: 'service:{{ $labels.service }}:down'}
+    annotations:
+      summary: 'Service {{ $labels.service }} is down'
+      runbook_url: 'docs/runbooks/service-down.md'
+  - alert: DiskCritical
+    expr: minimoi_host_filesystem_used_ratio >= 0.95
+    for: 10m
+    labels: {severity: critical, minimoi_alert_key: 'host:disk:{{ $labels.mountpoint }}'}
+    annotations:
+      summary: 'Disk {{ $labels.mountpoint }} is {{ $value | humanizePercentage }} full'
+      runbook_url: 'docs/runbooks/disk.md'
+  - alert: DiskHigh
+    expr: minimoi_host_filesystem_used_ratio >= 0.80
+    for: 30m
+    labels: {severity: warning, minimoi_alert_key: 'host:disk:{{ $labels.mountpoint }}'}
+    annotations:
+      summary: 'Disk {{ $labels.mountpoint }} is {{ $value | humanizePercentage }} full'
+      runbook_url: 'docs/runbooks/disk.md'
+  - alert: MemoryCritical
+    expr: minimoi_host_memory_used_ratio >= 0.95
+    for: 10m
+    labels: {severity: critical, minimoi_alert_key: 'host:memory'}
+    annotations:
+      summary: 'Memory is {{ $value | humanizePercentage }} used'
+      runbook_url: 'docs/runbooks/memory.md'
+  - alert: MemoryHigh
+    expr: minimoi_host_memory_used_ratio >= 0.85
+    for: 30m
+    labels: {severity: warning, minimoi_alert_key: 'host:memory'}
+    annotations:
+      summary: 'Memory is {{ $value | humanizePercentage }} used'
+      runbook_url: 'docs/runbooks/memory.md'
+  - alert: DeployFailed
+    expr: minimoi_deploy_last_outcome == 1
+    for: 5m
+    labels: {severity: major, minimoi_alert_key: 'deploy:last'}
+    annotations:
+      summary: 'The last deployment failed verification'
+      runbook_url: 'docs/runbooks/deploy-failed.md'
+  - alert: DeployNotFinished
+    expr: minimoi_deploy_last_outcome == 2 and (time() - minimoi_deploy_last_timestamp_seconds) > 3600
+    for: 5m
+    labels: {severity: warning, minimoi_alert_key: 'deploy:unfinished'}
+    annotations:
+      summary: 'The last deployment has been unverified or in progress for over an hour'
+      runbook_url: 'docs/runbooks/deploy-failed.md'
+- name: minimoi-guests-standing
+  rules:
+  - alert: GuestRequestWaiting
+    expr: minimoi_guest_requests_oldest_age_seconds > 172800
+    for: 1h
+    labels: {severity: warning, minimoi_alert_key: 'guests:waiting'}
+    annotations:
+      summary: 'A guest access request has been waiting more than 48 hours'
+      runbook_url: 'docs/runbooks/guest-waiting.md'
+  - alert: CheckSourceUnreadable
+    expr: minimoi_check_source_readable == 0 or minimoi_bridge_source_readable == 0
+    for: 30m
+    labels: {severity: warning, minimoi_alert_key: 'check:source-unreadable'}
+    annotations:
+      summary: 'A monitored source cannot be read (unknown, not healthy)'
+      runbook_url: 'docs/runbooks/check-unreadable.md'
+- name: minimoi-self
+  rules:
+  - alert: Watchdog
+    expr: vector(1)
+    labels: {severity: none, minimoi_alert_key: 'self:watchdog'}
+    annotations:
+      summary: 'Always firing. If the dead-man switch stops hearing this, the alert pipeline is broken'
+      runbook_url: 'docs/runbooks/watchdog.md'
+  - alert: TelemetryHeartbeatStale
+    expr: (time() - max by (service_name) (minimoi_telemetry_heartbeat_timestamp_seconds)) > 900
+    for: 5m
+    labels: {severity: critical, minimoi_alert_key: 'self:heartbeat:{{ $labels.service_name }}'}
+    annotations:
+      summary: 'No telemetry heartbeat from {{ $labels.service_name }} for over 15 minutes'
+      runbook_url: 'docs/runbooks/heartbeat.md'
+  - alert: TelemetryDropping
+    expr: increase(minimoi_telemetry_dropped_total[15m]) > 0
+    labels: {severity: warning, minimoi_alert_key: 'self:dropping'}
+    annotations:
+      summary: 'Telemetry is being dropped (contract errors or a full queue)'
+      runbook_url: 'docs/runbooks/telemetry-dropping.md'
+  - alert: CollectorExportFailing
+    expr: (sum(rate(otelcol_exporter_send_failed_metric_points_total[10m])) or vector(0)) + (sum(rate(otelcol_exporter_send_failed_log_records_total[10m])) or vector(0)) > 0
+    for: 10m
+    labels: {severity: major, minimoi_alert_key: 'self:collector-export'}
+    annotations:
+      summary: 'The OpenTelemetry Collector cannot export'
+      runbook_url: 'docs/runbooks/collector.md'
+  - alert: ScrapeLimitHit
+    expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total[15m]) > 0
+    labels: {severity: warning, minimoi_alert_key: 'self:cardinality'}
+    annotations:
+      summary: 'The series cap was hit; new series are being dropped'
+      runbook_url: 'docs/runbooks/cardinality.md'
