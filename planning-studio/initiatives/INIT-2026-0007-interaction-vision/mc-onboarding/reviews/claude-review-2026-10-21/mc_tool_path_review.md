@@ -181,3 +181,5 @@ It is **not cleared** for setting `RUNTIME_ISOLATED=1`, or for production, until
   - **Why it doesn't block dev:** harmless in default mode, where every approval needs the code.
   - **Fix before isolation is ever declared:** make the taint conversation-scoped, or always require the code for public-posting and access kinds.
 - **R-2 (P3):** a forged proposal still shows up as a real "Proposal P-XXXX from Master Craftsman" card. It can't be approved without the code. Label each card with the turn that triggered it; option A removes this.
+
+**Decision, 21 Oct evening:** Robert deferred R-1 ("same for github", alongside the deferred research-file-read finding). It is safe while every approval needs the proposal's code (`MINIMOI_MC_TOOLS_RUNTIME_ISOLATED` unset). It must be fixed before that setting is ever turned on.
