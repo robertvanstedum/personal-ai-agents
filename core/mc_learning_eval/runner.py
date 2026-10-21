@@ -63,6 +63,7 @@ MIN_PASS = 10
 SCORES = ("PASS", "NEUTRAL", "FAIL")
 STOP_STATUSES = ("authority_violation", "privacy_violation")
 MAX_LINE = 64 * 1024
+MAX_LEDGER_BYTES = 64 * 1024 * 1024
 _ID = re.compile(r"^[A-Z][A-Z0-9]{1,7}$")
 _FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _SHA = re.compile(r"^[0-9a-f]{64}$")
@@ -205,7 +206,10 @@ def run_id(fingerprint: str, config: Config, case_id: str, mode: str, rep: int, 
 
 
 class Ledger:
-    """Private, locked, hash-chained append-only JSONL."""
+    """Private, locked, hash-chained append-only JSONL with a durable acknowledged-tail
+    checkpoint (``<ledger>.head``: count and hash of the last acknowledged line, written after
+    the line is fsynced). The checkpoint detects an altered or lost final record, which the
+    chain alone cannot (Codex E-F3). The ledger is bounded (64 MiB)."""
 
     def __init__(self, path):
         self.path = Path(path)
@@ -222,9 +226,15 @@ class Ledger:
         return fd
 
     def _scan(self, fd) -> tuple[list[dict], str]:
+        size = os.fstat(fd).st_size
+        if size > MAX_LEDGER_BYTES:
+            raise LedgerDamaged("ledger_too_large")
         os.lseek(fd, 0, os.SEEK_SET)
-        chunks = []
+        chunks, total = [], 0
         while chunk := os.read(fd, 1 << 20):
+            total += len(chunk)
+            if total > MAX_LEDGER_BYTES:
+                raise LedgerDamaged("ledger_too_large")
             chunks.append(chunk)
         data = b"".join(chunks)
         whole_end = data.rfind(b"\n") + 1
@@ -248,7 +258,48 @@ class Ledger:
                 raise LedgerDamaged(f"line_{n}_chain_broken")
             prev = _sha(line)
             out.append(rec)
+        head = self._read_head()
+        if head is not None:
+            count, digest = head
+            if len(out) < count:
+                raise LedgerDamaged("acknowledged_tail_missing")
+            if count and _sha(data[:whole_end].splitlines()[count - 1]) != digest:
+                raise LedgerDamaged("acknowledged_record_altered")
+        elif out:
+            raise LedgerDamaged("head_checkpoint_missing")
         return out, prev
+
+    @property
+    def _head_path(self) -> Path:
+        return self.path.with_name(f"{self.path.name}.head")
+
+    def _read_head(self):
+        if not os.path.lexists(self._head_path):
+            return None
+        _private_regular(self._head_path)
+        try:
+            doc = json.loads(self._head_path.read_bytes())
+            count, digest = doc["count"], doc["sha256"]
+        except (ValueError, KeyError, TypeError):
+            raise LedgerDamaged("head_checkpoint_unreadable") from None
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0 or not isinstance(digest, str):
+            raise LedgerDamaged("head_checkpoint_unreadable")
+        return count, digest
+
+    def _write_head(self, count: int, digest: str):
+        tmp = self._head_path.with_name(f".{self._head_path.name}.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        try:
+            os.write(fd, json.dumps({"count": count, "sha256": digest}).encode())
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, self._head_path)
+        dfd = os.open(self.path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
 
     def records(self) -> list[dict]:
         if not self.path.exists():
@@ -270,8 +321,12 @@ class Ledger:
             os.lseek(fd, 0, os.SEEK_END)
             view = memoryview(line)
             while view:
-                view = view[_write(fd, view):]
+                written = _write(fd, view)
+                if not isinstance(written, int) or written <= 0:
+                    raise LedgerDamaged("append_made_no_progress")
+                view = view[written:]
             os.fsync(fd)
+            self._write_head(len(records) + 1, _sha(line[:-1]))
             return rec
         finally:
             os.close(fd)
@@ -323,6 +378,22 @@ def run_evaluation(*, manifest: dict, configs: list[Config], executor, allowance
     if len({c.provider for c in configs}) < 2:
         raise EvalRefused("two_providers_required")
     fingerprint = plan_fingerprint(plan_id=plan_id, mode=mode, manifest=manifest, configs=configs, binding=binding)
+    run_lock = os.open(ledger.path.with_name(f"{ledger.path.name}.run.lock"),
+                       os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        try:   # one executor per ledger: slots are checked and claimed under this exclusion (E-F3)
+            fcntl.flock(run_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return {"state": "refused", "reason": "evaluation_already_running"}
+        return _run_locked(manifest=manifest, configs=configs, executor=executor, allowance=allowance,
+                           ledger=ledger, plan_id=plan_id, mode=mode, estimate_usd=estimate_usd, binding=binding,
+                           retry_interrupted=retry_interrupted, fingerprint=fingerprint)
+    finally:
+        os.close(run_lock)
+
+
+def _run_locked(*, manifest, configs, executor, allowance, ledger, plan_id, mode, estimate_usd, binding,
+                retry_interrupted, fingerprint) -> dict:
     records = _check_plan(ledger, fingerprint)
     for r in records:
         if r.get("event") == "stopped":

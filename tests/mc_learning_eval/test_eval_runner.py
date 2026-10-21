@@ -428,3 +428,88 @@ def test_runner_source_holds_no_sealed_case_ids_or_text():
     import inspect
     src = inspect.getsource(ev)
     assert not any(f"C{i:02d}" in src for i in range(1, 13)) and "F01" not in src
+
+
+# ── Codex delta review of 267ec406 (E-F3 remainder) ─────────────────────────
+
+def test_an_altered_final_record_is_detected(tmp_path):
+    """Codex's reproduction: rewrite only the final record's status, keeping seq/prev."""
+    m, runs, _ = setup(tmp_path)
+    execute(m, runs, Executor(lambda spec: "privacy_violation"))
+    lines = runs.path.read_bytes().splitlines(keepends=True)
+    last = json.loads(lines[-1])
+    assert last["event"] == "stopped"
+    finished = json.loads(lines[-2])
+    finished["status"] = "completed"
+    lines[-2] = json.dumps(finished, sort_keys=True).encode() + b"\n"
+    lines = lines[:-1]                                     # and drop the stop record entirely
+    runs.path.write_bytes(b"".join(lines))
+    with pytest.raises(ev.LedgerDamaged, match="acknowledged_tail_missing|acknowledged_record_altered"):
+        runs.records()
+
+
+def test_altering_only_the_last_line_is_detected(tmp_path):
+    m, runs, _ = setup(tmp_path)
+    execute(m, runs, allowance=Allowance(budget=1))
+    lines = runs.path.read_bytes().splitlines(keepends=True)
+    rec = json.loads(lines[-1])
+    rec["status"] = "privacy_violation" if rec.get("status") == "completed" else "completed"
+    lines[-1] = json.dumps(rec, sort_keys=True).encode() + b"\n"
+    runs.path.write_bytes(b"".join(lines))
+    with pytest.raises(ev.LedgerDamaged, match="acknowledged_record_altered"):
+        runs.records()
+
+
+def test_a_lost_acknowledged_final_line_is_detected(tmp_path):
+    m, runs, _ = setup(tmp_path)
+    execute(m, runs, allowance=Allowance(budget=2))
+    lines = runs.path.read_bytes().splitlines(keepends=True)
+    runs.path.write_bytes(b"".join(lines[:-1]))
+    with pytest.raises(ev.LedgerDamaged, match="acknowledged_tail_missing"):
+        execute(m, runs)
+
+
+def test_concurrent_evaluations_never_execute_the_same_slot_twice(tmp_path):
+    """Codex's reproduction: two callers raced to the same slot and both executed it."""
+    import threading
+    m, runs, _ = setup(tmp_path)
+    barrier = threading.Barrier(2, timeout=5)
+    calls, results = [], []
+
+    class Slow(Executor):
+        def run(self, spec):
+            calls.append(spec["run_id"])
+            return super().run(spec)
+
+    class Gate(Allowance):
+        def check(self, spec, estimate):
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+            return super().check(spec, estimate)
+
+    def go():
+        results.append(execute(m, runs, Slow(), allowance=Gate(budget=1)))
+    threads = [threading.Thread(target=go) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert len(calls) == len(set(calls))
+    assert {"state": "refused", "reason": "evaluation_already_running"} in results
+
+
+def test_a_write_that_makes_no_progress_is_refused(tmp_path, monkeypatch):
+    m, runs, _ = setup(tmp_path)
+    monkeypatch.setattr(ev, "_write", lambda fd, view: 0)
+    with pytest.raises(ev.LedgerDamaged, match="no_progress"):
+        execute(m, runs)
+
+
+def test_an_oversize_ledger_holds(tmp_path, monkeypatch):
+    m, runs, _ = setup(tmp_path)
+    execute(m, runs, allowance=Allowance(budget=2))
+    monkeypatch.setattr(ev, "MAX_LEDGER_BYTES", 100)
+    with pytest.raises(ev.LedgerDamaged, match="too_large"):
+        runs.records()
