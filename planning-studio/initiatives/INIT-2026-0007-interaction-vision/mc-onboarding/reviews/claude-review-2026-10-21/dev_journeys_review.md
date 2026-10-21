@@ -321,3 +321,15 @@ This review's own PostgreSQL run was blocked by the gate once; the coordinating 
 6. A runner crash mid-job: lease lapse, reclaim or reap, the orphan killed, and Stop after the crash (P2-6).
 7. The research delegate refused a read outside the checkout (P2-7), once the scoping is in.
 8. `_voiced_turn` ledger states when `respond()` raises, and when `run_mc_turn` returns busy or unavailable (P3-4).
+
+---
+
+## Update, 21 Oct evening: P2-7 confirmed, deferred by Robert
+
+Robert ran the canary check. The research argv (`--permission-mode dontAsk --tools Read,Grep,Glob --allowedTools Read Grep Glob`), started from a temporary folder, read a 0600 file in `~/canary-test/` and returned `CANARY-7f3e`. Cost $0.019. **P2-7 is reproduced: research delegates can read any file the Mac user can.**
+
+**The proposed fix is untested:** scope the rules to `--allowedTools "Read(./**)" "Grep(./**)" "Glob(./**)"` and re-run the canary. Inside the folder should be read; the canary should be denied.
+
+**Decision:** Robert, 21 Oct: "I don't really see a risk now. Can we revisit this later?" Deferred, not fixed. Revisit before delegation leaves dev, or before build-scope delegation is enabled.
+
+**Related:** the runner's own database login `mc_delegation_runner` exists on dev with only the delegation-table grants. Robert hasn't set its password yet, so it can't log in, and the runner still uses the portal's database login (P2-8 open).
