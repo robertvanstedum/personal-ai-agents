@@ -106,14 +106,14 @@ class GuestCommands:
         finally:
             conn.close()
 
-    def has_pending(self, conversation: str) -> bool:
-        """'Confirm'/'Cancel' are ordinary words: only claim them while a guest proposal is
-        pending (or was just confirmed) in this conversation."""
+    def has_pending(self, conversation: str, turn_key: str | None = None) -> bool:
+        """'Confirm'/'Cancel' are ordinary words: only claim them while a guest proposal is pending in
+        this conversation, or when this very turn already confirmed one (a retry). A later Confirm meant
+        for something else (a lesson, or MC) is not ours."""
         with self.connect() as conn, _cursor(conn) as cur:
             cur.execute("""SELECT 1 FROM guild.mc_guest_proposals WHERE principal_id=%s AND environment=%s
-                AND conversation_id=%s AND (state='pending' OR (state='confirmed'
-                AND created_at > clock_timestamp() - interval '30 minutes')) LIMIT 1""",
-                (self.principal, self.environment, conversation))
+                AND conversation_id=%s AND (state='pending' OR (state='confirmed' AND confirm_turn_id=%s))
+                LIMIT 1""", (self.principal, self.environment, conversation, turn_key or ""))
             return cur.fetchone() is not None
 
     def handle(self, command: Command, *, conversation: str, turn_key: str, now=None) -> dict:
@@ -178,12 +178,19 @@ class GuestCommands:
     # ── approve and act ────────────────────────────────────────────────────
     def _confirm(self, conversation, turn_key, now):
         with self.connect() as conn, _cursor(conn) as cur:
+            # A retried confirming turn answers only from the proposal IT confirmed (review P1-1): a newer
+            # pending proposal is never approved by an older turn.
             cur.execute("""SELECT * FROM guild.mc_guest_proposals
-                WHERE principal_id=%s AND environment=%s AND conversation_id=%s
-                  AND (state='pending' OR (state='confirmed' AND confirm_turn_id=%s))
-                ORDER BY created_at DESC LIMIT 1 FOR UPDATE""",
-                (self.principal, self.environment, conversation, turn_key))
+                WHERE principal_id=%s AND environment=%s AND conversation_id=%s AND confirm_turn_id=%s
+                FOR UPDATE""", (self.principal, self.environment, conversation, turn_key))
             p = cur.fetchone()
+            if p is None:
+                cur.execute("""SELECT * FROM guild.mc_guest_proposals
+                    WHERE principal_id=%s AND environment=%s AND conversation_id=%s AND state='pending'
+                      AND owner_turn_id <> %s
+                    ORDER BY created_at DESC LIMIT 1 FOR UPDATE""",
+                    (self.principal, self.environment, conversation, turn_key))
+                p = cur.fetchone()
             if p is None:
                 return {"reply": "Nothing is waiting for your confirmation in this conversation.",
                         "operation": {"type": "guest_action", "state": "nothing_pending"}}
