@@ -46,6 +46,9 @@ The narrowest proven mechanism uses two things MiniMoi already trusts, and adds 
 |---|---|---|---|
 | `minimoi_host_health` | `host.health` (read) | nothing | none; the plugin measures the runtime host |
 | `minimoi_guest_requests` | `guest.list` (read) | nothing | none |
+| `minimoi_guest_request_reject` | `guest.propose_reject` → `guest.reject_request` | `ref` from the list | proposal; after the owner's **yes**, the guest action path rejects it and verifies by read-back |
+| `minimoi_github_issues` | `github.issues.read` (read) | an issue number or a search query | none; public read of one fixed repository, untrusted data |
+| `minimoi_issue_comment` | `issue.propose_comment` → `issue.comment` | issue number, a short summary, refs | proposal showing the exact public text; posted only after the owner's **yes**; names and emails refused |
 | `minimoi_data_repair_ticket` | `issue.propose_data_repair` → `issue.create_data_repair` | guest-request refs (`guild:N`) and a change (reject, grant, remove) | proposal; a public GitHub issue naming refs only, opened only after the owner's **yes** |
 | `minimoi_lesson_propose` | `lessons.propose` | the lesson text | proposal; adoption only after **Confirm** |
 | `minimoi_delegate_research` | `delegate.propose_research` → `delegate.start_research` | agent, a short title | proposal; the job's brief is the owner's own kept note, never model text |
@@ -53,7 +56,7 @@ The narrowest proven mechanism uses two things MiniMoi already trusts, and adds 
 
 - **Proposals** are effects too, so each one runs through C06 receipts under a **turn grant** that the tool service issues for exactly that request (one operation, owner turn id = the ledger turn, expiry ≤ the claim's lease). It is zero-spend and needs no exact approval: the owner's live turn authorizes MC to *ask*.
 - **Consequential effects** need a C07 **exact-approval grant**, issued only by the platform's owner-command path when the owner replies yes (or Confirm) in the same conversation: the existing lesson flow, and a new one for tickets, delegation and invites. The model has no confirm tool. A proposal lasts 10 minutes and binds its exact request.
-- **Guest requests (Robert, 21 Oct):** MC does not reject them. It lists them, points Robert to Operate, and when the screens cannot do it, offers a data-repair ticket. The ticket names records by ref only, because the repository is public.
+- **Robert's direction (21 Oct): "I need MC to be my production support. Discipline with access."** MC rejects guest requests on his yes, reads issues for context (for example #69, the lost guest approval path), and documents workarounds on issues on his yes. Anything public names records by ref only; the service refuses text containing an email address or the name of anyone who asked for access.
 - **Voiced outcomes do not get tools.** When MC voices a platform outcome (the reply to Robert's yes), no binding is recorded, so it can only speak (review P2-1; this composes with the parent's `run_mc_turn(..., voice_only=True)`).
 - **Delegation spend.** C07 refuses paid capabilities. `delegate.start_research` authorizes *queueing* a capped request; spend admission stays with the runner, which refuses any actor without a budget-binding adapter and enforces the job's cap (`--max-budget-usd`, $2). This is flagged for Codex's review.
 - **Secrets never reach the model.** An invite's temporary password goes only to the invitee's approval email (and, as on the existing Operate grant path, the owner's Telegram notice if email fails). Tool results are bounded JSON with a plain sentence for MC to voice.
@@ -62,7 +65,19 @@ The narrowest proven mechanism uses two things MiniMoi already trusts, and adds 
 
 A tool handler receives a `ToolCall`: the validated arguments, the trusted `observation` (plugin-measured, `host.health` only), and a `TurnBinding` (principal, environment, conversation, owner note id, ledger id, generation, lease end) with its `ActionContext`. It returns `{status, code, message, data}`, with status one of `done`, `needs_confirmation`, `needs_clarification`, `refused`, `unknown`. Registration is a static catalogue (`core/mc_tools/catalogue.py`): a tool exists only if it is listed there **and** in the plugin's operator configuration.
 
-## 6. Not in this change
+## 6. Approving a guest: designed, not shipped
+
+Approval creates an account and a credential, so it needs more than a reject. Proposed shape, for review before any code:
+
+1. **Offer.** `minimoi_guest_request_approve` (capability `guest.propose_grant`) proposes one open request by ref with a duration (1–30 days). Robert sees who, which app and for how long, privately in the conversation.
+2. **Approval.** His yes issues an exact grant for `guest.grant_request` bound to the request's target version (still open, same `requested_at`).
+3. **Effect.** The receipt is dispatched and committed, then `minimoi_portal.guest_requests.grant` runs: the hardened account state machine (intent before mutation, credential generation, G-F3 reconcile). Verified means a read-back shows the request `granted` and the account active with a must-change password.
+4. **Credential delivery** is a separate notification after the verified effect: the approval email carries the one-time password; `confirm_delivery` records the generation. If email fails, the password reaches only Robert's private Telegram notice (as on the Operate path), never the conversation, the model or a log. Repeat delivery uses `reissue_credential`, never a second grant.
+5. **Uncertainty** at any step ends `unknown` with no retry; the grant intent is the reconciliation record.
+
+Review questions: whether Telegram is an acceptable fallback channel; whether the delivery should be a durable outbox (today it is send-then-confirm in one process); and whether approvals need a daily cap. The invite tool already uses steps 3–4 for owner-initiated logins.
+
+## 7. Not in this change
 
 - Production. Dev only, behind `MINIMOI_MC_TOOLS=1`.
 - Codex's run-ID binding (`BindingStore`, `/internal/mc/v1/actions`), which stays as is.

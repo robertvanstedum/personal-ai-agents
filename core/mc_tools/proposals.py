@@ -5,6 +5,8 @@ the guest-request and lesson commands. Model output alone never acts: only the o
 pending proposal in THIS conversation into a one-time exact-approval grant for the request MC
 proposed, and then the platform acts and verifies:
 
+  guest_reject       one open guest request rejected through the guest action path, verified by read-back
+  issue_comment      a comment on an existing GitHub issue, exactly the text the owner saw, refs only
   data_repair        a public GitHub issue naming the records by ref only (no names or emails)
   delegate_research  the job starts from the owner's own note of the proposing turn (never model text)
   access_invite      a Meu Português guest request is recorded and granted through guest_requests.grant;
@@ -30,7 +32,8 @@ from . import effects
 from .binding import POLICY
 
 _log = logging.getLogger("mc_tools")
-KINDS = {"data_repair": "issue.create_data_repair", "delegate_research": "delegate.start_research",
+KINDS = {"guest_reject": "guest.reject_request", "issue_comment": "issue.comment",
+         "data_repair": "issue.create_data_repair", "delegate_research": "delegate.start_research",
          "access_invite": "access.invite_user"}
 _YES = re.compile(r"^(?:yes|yes,?\s+please|yep|yeah|ok(?:ay)?|sure|go\s+ahead|do\s+it|please\s+do|confirm(?:ed)?|"
                   r"approve(?:d)?)(?:[,.!]?\s+(?:please|thanks|thank\s+you|do\s+it|go\s+ahead))?\s*[.!]?$", re.I)
@@ -60,18 +63,29 @@ def issue_text(payload, operation_id):
 INVITE_REASON = "Invited by Robert through Master Craftsman"
 
 
+def comment_text(payload, operation_id):
+    """The public comment: the owner-approved summary, then refs and provenance. Never names or emails."""
+    refs = payload["refs"]
+    tail = (f"Records: {', '.join(refs)} (`guild.guest_requests`). " if refs else "") + \
+        f"Environment: {payload['environment']}. Operation {operation_id}."
+    return (f"{payload['summary']}\n\n---\n{tail}\nPosted by MiniMoi's Master Craftsman after Robert approved this "
+            "exact text in the Guild conversation.")
+
+
 def _reply(text, state, **extra):
     return {"reply": text, "operation": {"type": "mc_tool_proposal", "state": state, **extra}}
 
 
 class ToolProposals:
     def __init__(self, connect, *, principal: str, environment: str, start_research=None, invite=None,
-                 file_issue=None):
-        """``file_issue(title, body) -> (state, number | None)``; state is created | refused | unknown.
+                 file_issue=None, comment_issue=None, guest_rejects: bool = False):
+        """``file_issue(title, body) -> (state, number | None)`` and ``comment_issue(number, body) -> (state, id)``;
+        state is created | refused | unknown. ``guest_rejects`` switches on the guest reject (a local effect).
         ``start_research(proposal) -> (state, job_id | None)``; state is started | refused | unknown.
         ``invite(proposal, ref) -> (state, detail)``; state is done | conflict | unknown, detail content-free."""
         self._connect, self.principal, self.environment = connect, principal, environment
         self.start_research, self.invite, self.file_issue = start_research, invite, file_issue
+        self.comment_issue, self.guest_rejects = comment_issue, guest_rejects
 
     @contextmanager
     def _tx(self):
@@ -123,15 +137,22 @@ class ToolProposals:
             if p["state"] == "pending" and p["expires_at"] <= now:
                 cur.execute("UPDATE guild.mc_tool_proposals SET state='stale' WHERE proposal_id=%s", (p["proposal_id"],))
                 return _reply("That proposal expired, so nothing was done. Ask again if you still want it.", "expired")
-            handlers = {"data_repair": self.file_issue, "delegate_research": self.start_research,
+            handlers = {"guest_reject": self.guest_rejects or None, "issue_comment": self.comment_issue,
+                        "data_repair": self.file_issue, "delegate_research": self.start_research,
                         "access_invite": self.invite}
             if handlers[p["kind"]] is None:
                 cur.execute("UPDATE guild.mc_tool_proposals SET state='stale' WHERE proposal_id=%s", (p["proposal_id"],))
                 return _reply("That is not switched on here, so nothing was done.", "refused", code="kind_off")
-            req = effects.request(KINDS[p["kind"]], p["payload"])
+            target = None
+            if p["kind"] == "guest_reject":
+                from core.mc_domain_actions import guest
+                req, target = guest.reject_request(p["payload"]["ref"]), p["payload"]["target_version"]
+            else:
+                req = effects.request(KINDS[p["kind"]], p["payload"])
             grant_id = str(UUID(hashlib.sha256(("mc-tool-grant\0" + str(p["proposal_id"])).encode()).hexdigest()[:32]))
             context = self._context(conversation, turn_key, now, grant_id)
-            intent = EffectIntent(str(p["operation_id"]), req, grant_id=grant_id, proposal_id=str(p["proposal_id"]))
+            intent = EffectIntent(str(p["operation_id"]), req, grant_id=grant_id, proposal_id=str(p["proposal_id"]),
+                                  expected_target_version=target)
             if p["state"] == "confirmed":                    # the same Confirm retried: report, never act twice
                 try:
                     receipt = effects.RECEIPTS.read(conn, self.principal, self.environment, intent.operation_id)
@@ -144,18 +165,62 @@ class ToolProposals:
                                 conversation_id=conversation,
                                 owner_turn_ids=tuple(dict.fromkeys((p["owner_turn_id"], turn_key))), req=req,
                                 proposal_id=str(p["proposal_id"]), operation_id=str(p["operation_id"]),
-                                approval_expires_at=p["expires_at"])
+                                approval_expires_at=p["expires_at"], expected_target_version=target)
             cur.execute("UPDATE guild.mc_tool_proposals SET state='confirmed', confirm_turn_id=%s WHERE proposal_id=%s",
                         (turn_key, p["proposal_id"]))
+            if p["kind"] == "guest_reject":
+                return self._guest_reject(conn, cur, p, context, intent, turn_key)
             effects.prepare_exact(conn, context, intent)
             effect = effects.dispatch_exact(conn, context, intent, worker=f"portal-{turn_key[:40]}")
             proposal = dict(p)
         # The approval, the prepared receipt and its dispatch are committed; now act outside this transaction.
         if proposal["kind"] == "data_repair":
             return self._run_ticket(effect, proposal)
+        if proposal["kind"] == "issue_comment":
+            return self._run_comment(effect, proposal)
         if proposal["kind"] == "delegate_research":
             return self._run_research(effect, proposal)
         return self._run_invite(effect, proposal)
+
+    def _guest_reject(self, conn, cur, p, context, intent, turn_key):
+        """A local effect, as in the guest command path: the approval and prepared receipt commit first (only if the
+        request is still exactly what MC proposed), then one transaction rejects, reads back and finishes."""
+        from core.mc_domain_actions import guest
+        actions = guest.GuestActions(effects.GRANTS, owner_principal=self.principal)
+        cur.execute("SAVEPOINT tool_guest_prepare")
+        try:
+            actions.prepare(conn, context, intent, current_policy_version=POLICY)
+        except ActionContractError as exc:
+            cur.execute("ROLLBACK TO SAVEPOINT tool_guest_prepare")
+            if str(exc) not in ("guest_request_changed_since_approval", "guest_request_not_found"):
+                raise
+            cur.execute("UPDATE guild.mc_tool_proposals SET state='stale' WHERE proposal_id=%s", (p["proposal_id"],))
+            return _reply("That request changed since I proposed it (for example it was already handled), so "
+                          "nothing was done.", "stale")
+        conn.commit()
+        with self._tx() as conn2:
+            result = actions.execute(conn2, context, intent, f"portal-{turn_key[:40]}", current_policy_version=POLICY)
+        return _reply(actions.reply(result), result["receipt"]["state"], outcome=result["outcome"], ref=result["ref"],
+                      receipt_id=str(result["receipt"]["receipt_id"]))
+
+    def _run_comment(self, effect, p):
+        number = p["payload"]["number"]
+        try:
+            state, comment_id = self.comment_issue(number, comment_text(p["payload"], effect.operation_id))
+        except Exception:
+            _log.exception("mc tool issue comment: outcome unknown")
+            state, comment_id = "unknown", None
+        if state == "unknown":
+            self._unknown(effect)
+            return _reply(f"I sent the comment to issue #{number} but cannot confirm it was posted. Do not ask again "
+                          "yet; check the issue first.", "unknown")
+        receipt = self._finish(effect, "issue_comment", {"state": state, "issue": number, "comment": comment_id},
+                               state == "created")
+        if state != "created":
+            return _reply(f"The comment on issue #{number} could not be posted, so nothing was added.", "failed",
+                          receipt_id=str(receipt["receipt_id"]))
+        return _reply(f"Comment added to issue #{number}.", "verified", issue=number,
+                      receipt_id=str(receipt["receipt_id"]))
 
     def _finish(self, effect, kind, outcome, verified):
         with self._tx() as conn:

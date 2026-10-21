@@ -91,6 +91,17 @@ class IssueFilerTests(unittest.TestCase):
         self.assertEqual(self.filer(201, {"number": "123"})[0]("t", "b"), ("unknown", None))
         self.assertEqual(self.filer(0, raises=True)[0]("t", "b"), ("unknown", None))
 
+    def test_comment_goes_to_that_issue_only(self):
+        with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://unused"}):
+            cfg = dict(self.cfg, comments=True)
+        sent = []
+        comment = w.issue_commenter(cfg, http_post=lambda url, **kw: sent.append((url, kw)) or
+                                    SimpleNamespace(status_code=201, json=lambda: {"id": 77}))
+        self.assertEqual(comment(69, "text"), ("created", 77))
+        self.assertEqual(sent[0][0], "https://api.github.com/repos/robertvanstedum/personal-ai-agents/issues/69/comments")
+        self.assertEqual(comment(0, "text"), ("refused", None))
+        self.assertIsNone(w.issue_commenter(self.cfg))                    # comments not switched on
+
     def test_off_without_a_private_token_file(self):
         os.chmod(self.token, 0o644)
         self.assertIsNone(w.issue_filer(self.cfg))

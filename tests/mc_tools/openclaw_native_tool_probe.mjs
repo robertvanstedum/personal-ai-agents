@@ -2,7 +2,7 @@
 // An isolated gateway (own HOME, state and config under a temp dir; loopback only; no real provider)
 // loads the minimoi-tools plugin. A fake model provider asks for minimoi_guest_requests; a fake
 // MiniMoi listener records exactly what the plugin sends. The probe checks that:
-//   1. mc-chat's tool list (the dev policy with group:plugins lifted, minimoi-tools allowed) offers the tools;
+//   1. mc-chat's tool list (the dev policy with group:plugins lifted, minimoi-tools allowed) offers every catalogued tool;
 //   2. the plugin sends the session key OpenClaw derived from the portal's `user`, and the agent id;
 //   3. the main agent is offered none of the tools.
 // The mc-chat tool policy is tests/mc_tools/fixtures/mc_chat_tools_policy.json: dev's own, changed only as the handoff says.
@@ -116,8 +116,8 @@ try {
   results.tool_calls = toolCalls.map(c => ({url: c.url, session: c.session, agent: c.agent, body: c.body,
                                            bearer_matches: c.auth === `Bearer ${executor}`}));
   assert.equal(r1.status, 200, JSON.stringify(a1));
-  assert.deepEqual(results.offered_to_mc_chat.sort(), ['minimoi_access_invite', 'minimoi_data_repair_ticket', 'minimoi_delegate_research',
-                                                      'minimoi_guest_requests', 'minimoi_host_health', 'minimoi_lesson_propose']);
+  assert.deepEqual(results.offered_to_mc_chat.sort(), JSON.parse(readFileSync(join(pluginSrc, 'tools.json'), 'utf8'))
+                     .tools.map(t => t.name).sort());
   assert.equal(toolCalls.length, 1);
   assert.equal(toolCalls[0].url, '/internal/mc/v1/tools/minimoi_guest_requests');
   assert.equal(toolCalls[0].session, `agent:mc-chat:openai-user:${user}`);    // what core/mc_tools/binding.py parses

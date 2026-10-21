@@ -7,8 +7,10 @@ Three pieces:
 * ``attach``: start the internal tool listener on its own port (MINIMOI_MC_TOOLS_PORT, default 5011);
 * ``proposals``: the owner's yes / no for MC's proposals (data-repair tickets, delegation, invites).
 
-Data-repair tickets need MINIMOI_MC_TOOLS_TICKETS=1 and MINIMOI_MC_ISSUES_TOKEN_FILE: a private file holding a
-GitHub token that can only create issues in MINIMOI_GITHUB_REPO. Without it MC is told tickets are off.
+Guest rejects follow MINIMOI_MC_GUEST_ACTIONS=1. GitHub issue reads (public, no credential) are on with the tools
+unless MINIMOI_MC_TOOLS_GITHUB=0. Issue comments (MINIMOI_MC_TOOLS_COMMENTS=1) and data-repair tickets
+(MINIMOI_MC_TOOLS_TICKETS=1) need MINIMOI_MC_ISSUES_TOKEN_FILE: a private file holding a GitHub token that can only
+write issues in MINIMOI_GITHUB_REPO. Without it MC is told they are off.
 """
 from __future__ import annotations
 
@@ -33,6 +35,9 @@ def settings(environ) -> dict | None:
             "port": int(environ.get("MINIMOI_MC_TOOLS_PORT") or 5011),
             "invites": environ.get("MINIMOI_MC_TOOLS_INVITES") == "1",
             "tickets": environ.get("MINIMOI_MC_TOOLS_TICKETS") == "1",
+            "comments": environ.get("MINIMOI_MC_TOOLS_COMMENTS") == "1",
+            "github_read": environ.get("MINIMOI_MC_TOOLS_GITHUB", "1") != "0",
+            "guest_rejects": environ.get("MINIMOI_MC_GUEST_ACTIONS") == "1",
             "issues_token_file": environ.get("MINIMOI_MC_ISSUES_TOKEN_FILE") or "",
             "repo": environ.get("MINIMOI_GITHUB_REPO") or "",
             "delegation": environ.get("MINIMOI_MC_DELEGATION") == "1"}
@@ -99,36 +104,60 @@ def _private_token(path):
         return None
 
 
+def _repo(cfg):
+    from .mc_context import repo as default_repo
+    return default_repo({"MINIMOI_GITHUB_REPO": cfg["repo"]} if cfg["repo"] else {})
+
+
+def _github_post(cfg, path, payload, key, http_post):
+    """POST one issue write. A 201 carrying ``key`` (an int) is ``created``; an answer GitHub gives before writing
+    anything (401/403/404/410/422) is ``refused``; anything else, including a timeout, is ``unknown``, never retried."""
+    import requests
+    from .mc_context import API
+    token = _private_token(cfg["issues_token_file"])
+    if token is None:
+        return "refused", None
+    try:
+        r = (http_post or requests.post)(f"{API}/repos/{_repo(cfg)}{path}", json=payload, timeout=(5, 15),
+                                         allow_redirects=False, headers={"Authorization": f"Bearer {token}",
+                                                                         "Accept": "application/vnd.github+json",
+                                                                         "X-GitHub-Api-Version": "2022-11-28"})
+    except Exception:
+        return "unknown", None
+    if r.status_code in (401, 403, 404, 410, 422):
+        return "refused", None
+    try:
+        value = r.json().get(key) if r.status_code == 201 else None
+    except ValueError:
+        value = None
+    return ("created", value) if type(value) is int else ("unknown", None)
+
+
 def issue_filer(cfg, *, http_post=None):
-    """``file_issue(title, body) -> (state, number)`` for data-repair tickets, or None while tickets are off.
-    A 201 with an issue number is ``created``; an answer GitHub gives before creating anything (401/403/404/410/422)
-    is ``refused``; anything else, including a timeout, is ``unknown`` and is never retried."""
+    """``file_issue(title, body) -> (state, number)`` for data-repair tickets, or None while tickets are off."""
     if not cfg["tickets"] or _private_token(cfg["issues_token_file"]) is None:
         return None
-    from .mc_context import API, repo as default_repo
-    target = default_repo({"MINIMOI_GITHUB_REPO": cfg["repo"]} if cfg["repo"] else {})
+    return lambda title, body: _github_post(cfg, "/issues", {"title": title, "body": body}, "number", http_post)
 
-    def file_issue(title, body):
-        import requests
-        token = _private_token(cfg["issues_token_file"])
-        if token is None:
+
+def issue_commenter(cfg, *, http_post=None):
+    """``comment_issue(number, body) -> (state, comment id)``, or None while comments are off."""
+    if not cfg["comments"] or _private_token(cfg["issues_token_file"]) is None:
+        return None
+
+    def comment_issue(number, body):
+        if type(number) is not int or not 1 <= number <= 99999:
             return "refused", None
-        post = http_post or requests.post
-        try:
-            r = post(f"{API}/repos/{target}/issues", json={"title": title, "body": body}, timeout=(5, 15),
-                     allow_redirects=False, headers={"Authorization": f"Bearer {token}",
-                                                     "Accept": "application/vnd.github+json",
-                                                     "X-GitHub-Api-Version": "2022-11-28"})
-        except Exception:
-            return "unknown", None
-        if r.status_code in (401, 403, 404, 410, 422):
-            return "refused", None
-        try:
-            number = r.json().get("number") if r.status_code == 201 else None
-        except ValueError:
-            number = None
-        return ("created", number) if type(number) is int else ("unknown", None)
-    return file_issue
+        return _github_post(cfg, f"/issues/{number}/comments", {"body": body}, "id", http_post)
+    return comment_issue
+
+
+def github_reader(cfg, *, http_get=None):
+    if not cfg["github_read"]:
+        return None
+    import requests
+    from core.mc_tools.github import GitHubIssues
+    return GitHubIssues(http_get or requests.get, repo=_repo(cfg))
 
 
 def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None):
@@ -140,7 +169,8 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None):
     return ToolService(_connect(cfg["dsn"]), principal=cfg["principal"], environment=cfg["environment"],
                        allowed_agents=cfg["agents"], lessons=lessons, delegation=cfg["delegation"],
                        invites=cfg["invites"] if invites is None else invites,
-                       tickets=issue_filer(cfg) is not None, guests_lookup=_guests_lookup)
+                       tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
+                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), guests_lookup=_guests_lookup)
 
 
 def attach(app, blueprint_name, services):
@@ -202,4 +232,5 @@ def proposals(environ, *, start_research, delivery):
     invite = invite_runner(*delivery) if cfg["invites"] and delivery else None
     return ToolProposals(_connect(cfg["dsn"]), principal=cfg["principal"], environment=cfg["environment"],
                          start_research=start_research if cfg["delegation"] else None, invite=invite,
-                         file_issue=issue_filer(cfg))
+                         file_issue=issue_filer(cfg), comment_issue=issue_commenter(cfg),
+                         guest_rejects=cfg["guest_rejects"])

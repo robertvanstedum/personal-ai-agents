@@ -26,11 +26,12 @@ from core.minimoi_actions.requests import ToolRequest
 from .binding import POLICY, TurnBinding
 
 # Proposals: the owner's live turn is enough (zero spend, no exact approval).
-PROPOSAL_CAPABILITIES = ("issue.propose_data_repair", "lessons.propose", "delegate.propose_research",
-                         "access.propose_invite")
+PROPOSAL_CAPABILITIES = ("guest.propose_reject", "issue.propose_comment", "issue.propose_data_repair",
+                         "lessons.propose", "delegate.propose_research", "access.propose_invite")
 # Consequential effects: one exact owner approval each. delegate.start_research queues a capped request;
 # spend admission stays with the delegation runner, which enforces the job's cap or refuses it.
-EXACT_CAPABILITIES = ("issue.create_data_repair", "delegate.start_research", "access.invite_user")
+EXACT_CAPABILITIES = ("guest.reject_request", "issue.comment", "issue.create_data_repair", "delegate.start_research",
+                      "access.invite_user")
 CATALOGUE = {**{c: CapabilityRule(1, False, True) for c in PROPOSAL_CAPABILITIES},
              **{c: CapabilityRule(1, True, True) for c in EXACT_CAPABILITIES}}
 GRANTS = GrantStore(CATALOGUE)

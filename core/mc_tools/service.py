@@ -11,6 +11,7 @@ refusal says nothing was changed; an uncertain outcome says so and is never retr
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import contextmanager
 
 from core.minimoi_actions.context import ActionContractError
@@ -25,6 +26,9 @@ STATUSES = ("done", "needs_confirmation", "needs_clarification", "refused", "unk
 PROPOSAL_MINUTES = 10
 INVITE_APP = "portuguese"
 INVITE_APP_NAME = "Meu Português"
+# Words that appear in placeholder names ("Test Guest") and in any workaround text; never treated as a person's name.
+_GENERIC_WORDS = {"test", "guest", "guests", "user", "users", "admin", "request", "requests", "info", "contact", "hello",
+                  "mail", "the", "and", "for", "example", "demo", "new", "minimoi", "robert"}
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 REFUSED_WORDS = {
     "tool_turn_not_live": "This tool only works inside Robert's own live turn, and that turn is no longer running. Nothing was done.",
@@ -49,7 +53,8 @@ def refused(code) -> dict:
 class ToolService:
     def __init__(self, connect, *, principal: str, environment: str, allowed_agents=("mc-chat",),
                  lessons=None, delegation: bool = False, invites: bool = False, tickets: bool = False,
-                 worker: str = "mc-tools", guests_lookup=None):
+                 comments: bool = False, guest_rejects: bool = False, github=None, worker: str = "mc-tools",
+                 guests_lookup=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -58,7 +63,8 @@ class ToolService:
         self._connect, self.principal, self.environment = connect, principal, environment
         self.allowed_agents = frozenset(allowed_agents)
         self.lessons, self.delegation, self.invites = lessons, bool(delegation), bool(invites)
-        self.tickets = bool(tickets)
+        self.tickets, self.comments, self.guest_rejects = bool(tickets), bool(comments), bool(guest_rejects)
+        self.github = github                          # core.mc_tools.github.GitHubIssues, or None: GitHub reads off
         self.worker, self.guests_lookup = worker[:80], guests_lookup
 
     @contextmanager
@@ -112,6 +118,69 @@ class ToolService:
         return result("done", "listed", f"{len(items)} open guest request(s):\n" + "\n".join(lines), {"requests": items})
 
     # ── proposals (turn grant, C06 receipt) ─────────────────────────────────
+    def _guest_request_reject(self, args, session_key, agent_id, observation):
+        if not self.guest_rejects:
+            return refused("tool_unavailable")
+        with self._tx() as conn:
+            b = self._bind(conn, session_key, agent_id)
+            m = next((r for r in self._guest_actions().open_requests(conn, b.context(), limit=200)
+                      if r["ref"] == args["ref"]), None)
+            if m is None:
+                return result("refused", "no_open_request", f"There is no open guest request {args['ref']}. "
+                              "Nothing was changed; list the open requests again.")
+            words = (f"Reject the guest request from {m['name'] or m['email']} <{m['email']}> for {m['domain']}, "
+                     f"requested {m['requested_at'][:10]} ({m['ref']})? Reply yes within {PROPOSAL_MINUTES} minutes, "
+                     "or no.")
+            return self._pending_tool_proposal(conn, b, "guest_reject",
+                                               {"ref": m["ref"], "target_version": m["target_version"]},
+                                               effects.request("guest.propose_reject", {"ref": m["ref"]}), words)
+
+    def _github_issues(self, args, session_key, agent_id, observation):
+        if self.github is None:
+            return refused("tool_unavailable")
+        if len(args) != 1:
+            return refused("tool_arguments_invalid")
+        with self._tx() as conn:
+            self._bind(conn, session_key, agent_id)
+        state, message, data = (self.github.issue(args["number"]) if "number" in args
+                                else self.github.search(args["query"]))
+        return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
+
+    def _public_text_refusal(self, conn, text):
+        """The reason this text must not go to the public repository, or None: no email address, and no name of
+        anyone who asked for guest access (records are named by ref only)."""
+        if "@" in text:
+            return "email_in_public_text"
+        with _cursor(conn) as cur:
+            cur.execute("SELECT name, email FROM guild.guest_requests")
+            rows = cur.fetchall()
+        lowered = text.lower()
+        for row in rows:
+            for word in re.findall(r"[^\W\d_]{3,}", f"{row['name'] or ''} {(row['email'] or '').split('@')[0]}"):
+                if word.lower() in _GENERIC_WORDS:
+                    continue
+                if re.search(r"(?<!\w)" + re.escape(word.lower()) + r"(?!\w)", lowered):
+                    return "name_in_public_text"
+        return None
+
+    def _issue_comment(self, args, session_key, agent_id, observation):
+        if not self.comments:
+            return refused("tool_unavailable")
+        from .proposals import comment_text
+        payload = {"number": args["number"], "summary": args["summary"],
+                   "refs": sorted(args["refs"], key=lambda r: int(r.split(":")[1])), "environment": self.environment}
+        with self._tx() as conn:
+            b = self._bind(conn, session_key, agent_id)
+            reason = self._public_text_refusal(conn, args["summary"])
+            if reason:
+                return result("refused", reason, "That text names a person or an email address, and the repository is "
+                              "public. Nothing was proposed; say it with refs (guild:N) only.")
+            preview = comment_text(payload, "<operation id>")
+            words = (f"Add this comment to issue #{args['number']}? It is public.\n\n{preview}\n\n"
+                     f"Reply yes within {PROPOSAL_MINUTES} minutes, or no.")
+            return self._pending_tool_proposal(conn, b, "issue_comment", payload,
+                                               effects.request("issue.propose_comment", payload), words)
+
     def _data_repair_ticket(self, args, session_key, agent_id, observation):
         """Propose a public data-repair ticket naming guest requests by ref only (no names or emails)."""
         if not self.tickets:

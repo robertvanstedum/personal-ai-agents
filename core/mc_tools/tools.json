@@ -16,11 +16,91 @@
       "name": "minimoi_guest_requests",
       "capability": "guest.list",
       "label": "Open guest requests",
-      "description": "The open guest access requests (name, email, app, date and ref). Read-only: you cannot accept or reject them. Tell Robert where to act (Operate, guest requests); if he cannot there, offer a data-repair ticket.",
+      "description": "The open guest access requests (name, email, app, date and ref). Read-only. To reject one, use minimoi_guest_request_reject with its ref.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,
         "properties": {}
+      }
+    },
+    {
+      "name": "minimoi_guest_request_reject",
+      "capability": "guest.propose_reject",
+      "label": "Propose rejecting a guest request",
+      "description": "Propose rejecting ONE open guest request, by its ref from minimoi_guest_requests. Nothing changes until Robert answers yes; then MiniMoi rejects it and checks the result. For several, propose one at a time.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ref"
+        ],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "pattern": "^guild:[1-9][0-9]{0,9}$",
+            "maxLength": 16
+          }
+        }
+      }
+    },
+    {
+      "name": "minimoi_github_issues",
+      "capability": "github.issues.read",
+      "label": "Read GitHub issues",
+      "description": "Read MiniMoi's GitHub issues: one issue with its latest comments (number), or a search (query), for ticket and history context such as a known bug or its workaround. Read-only. Give exactly one of number or query.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999
+          },
+          "query": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100
+          }
+        }
+      }
+    },
+    {
+      "name": "minimoi_issue_comment",
+      "capability": "issue.propose_comment",
+      "label": "Propose a comment on an issue",
+      "description": "Propose adding a comment to an existing GitHub issue, for example documenting a workaround. Robert sees the exact text and it is posted only after he answers yes. The repository is public: name records only by ref (guild:N) in refs, never names or emails in the text.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "number",
+          "summary",
+          "refs"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 600
+          },
+          "refs": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^guild:[1-9][0-9]{0,9}$",
+              "maxLength": 16
+            }
+          }
+        }
       }
     },
     {

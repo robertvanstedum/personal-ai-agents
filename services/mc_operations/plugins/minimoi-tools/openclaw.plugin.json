@@ -6,6 +6,9 @@
   "tools": [
    "minimoi_host_health",
    "minimoi_guest_requests",
+   "minimoi_guest_request_reject",
+   "minimoi_github_issues",
+   "minimoi_issue_comment",
    "minimoi_data_repair_ticket",
    "minimoi_lesson_propose",
    "minimoi_delegate_research",

@@ -33,6 +33,19 @@ HOST = {"host": "mac", "disks": [{"mount": "/System/Volumes/Data", "total_gb": 2
                        {"name": "minimoi-mc-relay", "status": "Exited (0) 2 hours ago"}]}
 
 
+class FakeGitHub:
+    def __init__(self):
+        self.asked = []
+
+    def issue(self, number):
+        self.asked.append(("issue", number))
+        return "ok", f"#{number} · issue · open · Guest approval path lost", {"number": number}
+
+    def search(self, query):
+        self.asked.append(("search", query))
+        return "not_found", "GitHub has no the search.", {}
+
+
 def session_user(conv=CONV, principal=OWNER):
     return "guild-mc:" + hashlib.sha256(f"guild:{principal}:{conv}".encode()).hexdigest()[:32]
 
@@ -56,7 +69,8 @@ class Base(PostgresFixture):
         self.tmp = TemporaryDirectory()
         self.ledger = LessonLedger(Path(self.tmp.name), principal=OWNER, environment="dev")
         self.service = ToolService(self.connect, principal=OWNER, environment="dev", lessons=self.ledger,
-                                   delegation=True, invites=True, tickets=True, guests_lookup=lambda email: None)
+                                   delegation=True, invites=True, tickets=True, comments=True, guest_rejects=True,
+                                   github=FakeGitHub(), guests_lookup=lambda email: None)
         self.ledger_id = self.claim(NOTE)
         self.bind(self.ledger_id, NOTE)
 
@@ -159,7 +173,6 @@ class ToolTests(Base, unittest.TestCase):
             r = self.call("minimoi_data_repair_ticket", args)
             self.assertEqual(r["status"], "refused", args)
         self.assertEqual(self.call("minimoi_nope")["code"], "tool_unknown")
-        self.assertEqual(self.call("minimoi_guest_request_reject", {"ref": "guild:1"})["code"], "tool_unknown")
         self.assertEqual(self.receipts(), [])
         self.assertIsNone(self.one("SELECT 1 FROM guild.mc_tool_proposals"))
 
@@ -200,6 +213,64 @@ class ToolTests(Base, unittest.TestCase):
         again = proposals.handle("confirm", conversation=CONV, turn_key="note-yes")    # the same yes retried
         self.assertTrue(again["operation"].get("repeated"))
         self.assertEqual(len(filed), 1)
+
+    def test_guest_reject_after_the_owners_yes_is_verified_by_read_back(self):
+        r = self.call("minimoi_guest_request_reject", {"ref": "guild:2"})
+        self.assertEqual((r["status"], r["code"]), ("needs_confirmation", "proposed"))
+        self.assertIn("Bruno Costa", r["message"])                                  # private conversation, not public
+        self.assertEqual(self.one("SELECT status FROM guild.guest_requests WHERE id=2")[0], "requested")
+        proposals = ToolProposals(self.connect, principal=OWNER, environment="dev", guest_rejects=True)
+        done = proposals.handle(parse("yes"), conversation=CONV, turn_key="note-yes")
+        self.assertEqual((done["operation"]["state"], done["operation"]["outcome"]), ("verified", "rejected"))
+        self.assertIn("verified by read-back", done["reply"])
+        self.assertEqual(self.one("SELECT status FROM guild.guest_requests WHERE id=2")[0], "rejected")
+        self.assertEqual([x[:2] for x in self.receipts()],
+                         [("guest.propose_reject", "verified"), ("guest.reject_request", "verified")])
+        again = proposals.handle("confirm", conversation=CONV, turn_key="note-yes")
+        self.assertTrue(again["operation"].get("repeated"))
+
+    def test_guest_reject_does_nothing_when_the_request_changed(self):
+        self.call("minimoi_guest_request_reject", {"ref": "guild:1"})
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE guild.guest_requests SET status='granted' WHERE id=1")
+        done = ToolProposals(self.connect, principal=OWNER, environment="dev", guest_rejects=True).handle(
+            "confirm", conversation=CONV, turn_key="n2")
+        self.assertEqual(done["operation"]["state"], "stale")
+        self.assertEqual(self.one("SELECT status FROM guild.guest_requests WHERE id=1")[0], "granted")
+        self.assertEqual(self.one("SELECT count(*) FROM guild.mc_action_receipts WHERE capability='guest.reject_request'")[0], 0)
+        self.assertEqual(self.call("minimoi_guest_request_reject", {"ref": "guild:999"})["code"], "no_open_request")
+
+    def test_github_read_is_bound_and_read_only(self):
+        r = self.call("minimoi_github_issues", {"number": 69})
+        self.assertEqual((r["status"], r["data"]["number"]), ("done", 69))
+        self.assertEqual(self.call("minimoi_github_issues", {"number": 69, "query": "guest"})["status"], "refused")
+        self.assertEqual(self.call("minimoi_github_issues", {})["status"], "refused")
+        self.finish_turn(self.ledger_id)
+        self.assertEqual(self.call("minimoi_github_issues", {"query": "guest approval"})["code"], "tool_turn_not_live")
+        self.assertEqual(self.service.github.asked, [("issue", 69)])
+        self.assertEqual(self.receipts(), [])
+
+    def test_issue_comment_shows_the_exact_public_text_and_posts_only_after_yes(self):
+        for summary in ("Workaround: Bruno can be rejected on the backend.", "Mail ana@example.test about it."):
+            r = self.call("minimoi_issue_comment", {"number": 69, "summary": summary, "refs": ["guild:2"]})
+            self.assertEqual(r["status"], "refused", summary)
+        summary = "Workaround until the approval path is rebuilt: MC rejects stuck guest requests on the backend."
+        r = self.call("minimoi_issue_comment", {"number": 69, "summary": summary, "refs": ["guild:2", "guild:1"]})
+        self.assertEqual(r["status"], "needs_confirmation")
+        self.assertIn(summary, r["message"])
+        self.assertIn("guild:1, guild:2", r["message"])
+        posted = []
+        proposals = ToolProposals(self.connect, principal=OWNER, environment="dev",
+                                  comment_issue=lambda n, body: posted.append((n, body)) or ("created", 9001))
+        done = proposals.handle(parse("Yes, please"), conversation=CONV, turn_key="note-yes")
+        self.assertEqual((done["operation"]["state"], done["reply"]), ("verified", "Comment added to issue #69."))
+        (number, body), = posted
+        self.assertEqual(number, 69)
+        self.assertTrue(body.startswith(summary))
+        for private in ("Ana", "Bruno", "example.test", "@"):
+            self.assertNotIn(private, body)
+        self.assertEqual([x[:2] for x in self.receipts()],
+                         [("issue.propose_comment", "verified"), ("issue.comment", "verified")])
 
     def test_ticket_for_an_unknown_ref_or_a_refused_filing(self):
         r = self.call("minimoi_data_repair_ticket", {"refs": ["guild:999"], "change": "reject"})
