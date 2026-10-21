@@ -171,3 +171,22 @@ def test_an_unreadable_pending_check_leaves_confirm_to_mc(guests, monkeypatch): 
     sent = len(guests.extra["runtime"].sent)
     body = say(guests, "Don't.")
     assert body["backend_kind"] != "platform" and len(guests.extra["runtime"].sent) == sent + 1
+
+
+def test_a_note_failure_after_the_platform_acted_still_reports_it_and_is_never_not_sent(voiced, monkeypatch):
+    from test_mc_turn_ledger_routes import FakeLedger, _ledger_on
+    ledger = FakeLedger()
+    _ledger_on(voiced, ledger)
+    voiced.extra["runtime"].answer = lambda body, headers: Resp(503, "{}", {})          # MC cannot voice it
+    from minimoi_portal.guild_ui.stores import FloorStores
+    real = FloorStores.add_note
+
+    def add_note(self, key, *a, **k):
+        if str(key).startswith("guest-action-"):
+            raise RuntimeError("disk full")
+        return real(self, key, *a, **k)
+    monkeypatch.setattr(FloorStores, "add_note", add_note)
+    body = say(voiced, "Reject the guest request from Bruno")
+    assert FakeCommands.calls == ["reject"]
+    assert body["message"] == "platform:reject" and body["history_saved"] is False
+    assert ledger.finished and ledger.finished[-1][0] != "not_sent"

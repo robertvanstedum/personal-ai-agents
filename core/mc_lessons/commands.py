@@ -36,7 +36,12 @@ _AUTHORITY = re.compile(
     r"(?:skip|bypass|ignore|override)\s+(?:the\s+|any\s+|all\s+|my\s+)?(?:review|approval|confirm\w*|check\w*|limit\w*|rule\w*|polic\w*|guard\w*)|"
     r"no\s+need\s+to\s+(?:ask|confirm|check)|"
     r"you\s+(?:may|can|are\s+free\s+to)\s+(?:now\s+)?(?:deploy|merge|push|delete|spend|send|publish|reject|run|execute|release|pay)|"
-    r"budget|spend\w*|cost\s+cap|password\w*|token\w*|api\s+key\w*|secret\w*|credential\w*|sudo|admin\w*)\b",
+    r"budget|spend\w*|cost\s+cap|password\w*|token\w*|api\s+key\w*|secret\w*|credential\w*|sudo|admin\w*|"
+    # Standing consent in other words, and the markers that make MC start work (review P3-2).
+    r"(?:already|pre)[\s-]*(?:confirm\w*|accept\w*|agree\w*|ok(?:ay)?(?:'?e?d)?)|treat\s+.{0,40}\s+as\s+(?:a\s+)?(?:yes|confirm\w*|ok(?:ay)?)|"
+    r"(?:don'?t|do\s+not|never)\s+(?:have|need)\s+to\s+(?:wait|ask|check|confirm)|without\s+(?:waiting|checking|telling)|"
+    r"on\s+my\s+behalf|for\s+me\s+automatically|automatically\s+(?:reject|accept|delete|start|send|post|run)\w*|"
+    r"job(?=\s*:)|ask\s+(?:claude|codex|both)(?=\s*:)|meeting(?=\s*:)|delegat\w*)\b",
     re.I)
 _HEADER = "[Owner lessons"
 
@@ -52,7 +57,7 @@ def parse(text):
     if not isinstance(text, str):
         return None
     t = text.strip()
-    if m := _REMEMBER.match(t):
+    if (m := _REMEMBER.match(t)) and "?" not in m.group("text"):     # a question is asked, not kept (review P3-3)
         return Command("remember", text=m.group("text"))
     if m := _FORGET.match(t):
         return Command("forget", no=int(m.group("no")))
@@ -74,7 +79,10 @@ def clean(text: str):
         return None, "too_long"
     if any(unicodedata.category(c) in ("Cc", "Cf", "Co", "Cs") for c in t) or any(c in t for c in "[]`<>"):
         return None, "characters"
-    if _AUTHORITY.search(t):
+    # Look-alike letters (Cyrillic а, fullwidth ａ) would slip past the word check: lessons are Latin-script prose.
+    if any(c.isalpha() and "LATIN" not in unicodedata.name(c, "") for c in t):
+        return None, "characters"
+    if _AUTHORITY.search(unicodedata.normalize("NFKC", t)):
         return None, "authority"
     return t, None
 

@@ -38,6 +38,7 @@ class State:
     turns: dict = field(default_factory=dict)          # turn_key -> the event that turn wrote
     next_no: int = 1
     head: str = GENESIS
+    count: int = 0
 
     def active(self):
         return [(no, l) for no, l in sorted(self.lessons.items()) if l["revoked_at"] is None]
@@ -58,6 +59,7 @@ class LessonLedger:
             raise ValueError("ledger_config_invalid")
         self.dir = root / environment / _sha(principal.encode())[:16]
         self.path, self.lock_path = self.dir / "lessons.jsonl", self.dir / "lessons.lock"
+        self.anchor_path = self.dir / "lessons.head"
 
     # ── locking and reading ──
     @contextmanager
@@ -94,15 +96,59 @@ class LessonLedger:
             if not isinstance(ev, dict) or ev.get("prev") != st.head or ev.get("type") not in EVENT_TYPES:
                 raise LedgerDamaged("chain_broken")
             st.head = _sha(line)
+            st.count += 1
             _apply(st, ev)
         return st
 
+    # ── the anchor: the acknowledged line count and head, so a lost LAST line is detected too ──
+    def _anchor(self):
+        try:
+            fd = os.open(self.anchor_path, os.O_RDONLY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return None
+        with os.fdopen(fd, "rb") as f:
+            raw = f.read(512)
+        try:
+            doc = json.loads(raw)
+            count, head = doc["count"], doc["head"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise LedgerDamaged("anchor_unreadable") from exc
+        if type(count) is not int or count < 0 or not isinstance(head, str) or len(head) != 64:
+            raise LedgerDamaged("anchor_unreadable")
+        return count, head
+
+    def _write_anchor(self, st: State) -> None:
+        tmp = self.dir / "lessons.head.tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        try:
+            _write_all(fd, json.dumps({"count": st.count, "head": st.head}).encode())
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, self.anchor_path)
+        _fsync_dir(self.dir)
+
+    def _verified(self, data: bytes):
+        """(state, bytes to keep). Complete lines must match the anchor exactly; one extra complete line is an
+        append whose acknowledgement (the anchor) never happened, so it is dropped. Anything else holds the ledger.
+        A ledger written before anchors existed (no anchor yet) is trusted once and anchored at its next write."""
+        if data and not data.endswith(b"\n"):
+            data = data[: data.rfind(b"\n") + 1]            # an unfinished append was never acknowledged
+        anchor = self._anchor()
+        if anchor is None:
+            return self._fold(data), len(data)
+        count, head = anchor
+        lines = data.split(b"\n")[:-1] if data else []
+        if len(lines) == count + 1:
+            data = data[: len(data) - len(lines[-1]) - 1]
+        st = self._fold(data)
+        if st.count != count or st.head != (head if count else GENESIS):
+            raise LedgerDamaged("anchor_mismatch")
+        return st, len(data)
+
     def read(self) -> State:
         with self._locked(exclusive=False):
-            data = self._raw()
-            if data and not data.endswith(b"\n"):
-                data = data[: data.rfind(b"\n") + 1]        # an unfinished append was never acknowledged
-            return self._fold(data)
+            return self._verified(self._raw())[0]
 
     # ── writing ──
     @contextmanager
@@ -110,14 +156,15 @@ class LessonLedger:
         """Exclusive section: yields (state, append). ``append(event)`` writes durably and returns the new state."""
         with self._locked(exclusive=True):
             data = self._raw()
-            if data and not data.endswith(b"\n"):
-                keep = data.rfind(b"\n") + 1
+            st, keep = self._verified(data)
+            if keep != len(data):                           # cut what was never acknowledged
                 with open(self.path, "r+b") as f:
                     f.truncate(keep)
                     f.flush()
                     os.fsync(f.fileno())
-                data = data[:keep]
-            box = {"state": self._fold(data)}
+            if data and self._anchor() is None:
+                self._write_anchor(st)                       # anchor a ledger from before anchors existed
+            box = {"state": st}
 
             def append(event: dict) -> State:
                 if event.get("type") not in EVENT_TYPES:
@@ -128,17 +175,15 @@ class LessonLedger:
                     raise ValueError("event_too_large")
                 fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
                 try:
-                    os.write(fd, line + b"\n")
+                    _write_all(fd, line + b"\n")
                     os.fsync(fd)
                 finally:
                     os.close(fd)
-                dfd = os.open(self.dir, os.O_RDONLY)
-                try:
-                    os.fsync(dfd)
-                finally:
-                    os.close(dfd)
+                _fsync_dir(self.dir)
                 box["state"].head = _sha(line)
+                box["state"].count += 1
                 _apply(box["state"], ev)
+                self._write_anchor(box["state"])              # the acknowledgement point
                 return box["state"]
             yield box["state"], append
 
@@ -165,6 +210,20 @@ def _apply(st: State, ev: dict) -> None:
         lesson["revoked_at"] = ev["at"]
     if ev.get("turn_key"):
         st.turns[ev["turn_key"]] = ev
+
+
+def _write_all(fd, data: bytes) -> None:
+    view = memoryview(data)
+    while view:
+        view = view[os.write(fd, view):]
+
+
+def _fsync_dir(path) -> None:
+    dfd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
 
 
 def _now() -> str:
