@@ -50,7 +50,7 @@ def readable(raw: bytes) -> str:
     except ValueError:
         doc = None
     if isinstance(doc, dict) and doc.get("type") == "result" and isinstance(doc.get("result"), str):
-        text = doc["result"]
+        text = doc["result"].strip() or "Claude Code finished but returned no answer text."
         if doc.get("is_error"):
             text = "Claude Code reported an error: " + text
     return text.encode("utf-8")[:OUTPUT_MAX].decode("utf-8", errors="ignore")
