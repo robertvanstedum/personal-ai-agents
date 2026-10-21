@@ -36,7 +36,8 @@ Collaborator contracts (proposed to Codex; fixtures until the harness ships them
   claims.release(claim_id, reason) · claims.hold(claim_id, reason) · claims.complete(claim_id, result_ref)
   admission.reserve(key, input_tokens, output_tokens) -> {status: admitted|deferred|refused,
         reservation_id}           (idempotent by key)
-  admission.release(reservation_id) · admission.settle(reservation_id, usage)
+  admission.release(reservation_id) · admission.settle(reservation_id, usage) -> {status: "settled"}
+        (anything else, including None, is unconfirmed and stays queued)
   extractor.extract(texts, learning_refs) -> {proposals:[{kind, payload, target_record_id?}],
         extractor_version, usage}; raises NotDispatched only when no request left the host
   ingress.post(event) / ingress.get(event_id)  (same client as the brief)
@@ -292,13 +293,25 @@ def _prepare_and_deliver(spool, state, claims, admission, ingress, environment, 
 
 def _settle_queue(spool, state, admission):
     """Budget reconciliation outlives delivery (L-F2): every unsettled reservation stays queued,
-    durably, until the gateway confirms settlement."""
+    durably, until the gateway *confirms* settlement. A missing or unreadable result (no measured
+    usage) is held, never settled as "nothing used"; any reply other than an explicit
+    ``{"status": "settled"}`` (including None or an exception) keeps the item queued."""
     remaining = []
     for item in state.get("unsettled") or []:
-        result = spool.read("delivery", item["result_ref"]) or {}
         try:
-            admission.settle(item["reservation_id"], result.get("usage"))
+            result = spool.read("delivery", item["result_ref"])
         except Exception:
+            result = None
+        usage = result.get("usage") if isinstance(result, dict) else None
+        if not isinstance(usage, dict):
+            item = dict(item, held="result_or_usage_missing")
+            remaining.append(item)
+            continue
+        try:
+            reply = admission.settle(item["reservation_id"], usage)
+        except Exception:
+            reply = None
+        if not (isinstance(reply, dict) and reply.get("status") == "settled"):
             remaining.append(item)
     if remaining != (state.get("unsettled") or []):
         state["unsettled"] = remaining

@@ -92,6 +92,7 @@ class Admission:
 
     def settle(self, rid, usage):
         self.settled.append((rid, usage))
+        return {"status": "settled"}
 
 
 def ack(event_id, state):
@@ -360,7 +361,7 @@ def test_settlement_outage_keeps_a_durable_queue_and_retries(tmp_path):
         def settle(self, rid, usage):
             if self.down:
                 raise ConnectionError("gateway down")
-            super().settle(rid, usage)
+            return super().settle(rid, usage)
     adm, claims = FlakyAdmission(), Claims()
     spool, out = run(tmp_path, setup(), admission=adm, claims=claims)
     assert out["state"] == "delivered" and out["settlement"] == "pending"
@@ -491,3 +492,29 @@ def test_pause_and_kill_stop_before_reads(tmp_path):
     assert out["state"] == "paused" and ext.calls == 0
     _, out = run(tmp_path / "k", setup(), extractor=ext, kill=lambda: True)
     assert out["state"] == "paused" and ext.calls == 0
+
+
+
+def test_missing_result_evidence_is_held_not_settled_as_zero(tmp_path):
+    """Codex delta review of 113d1cf6: a missing result used to be settled with usage None and
+    dropped from the queue."""
+    adm, claims = Admission(), Claims()
+    spool, out = run(tmp_path, setup(), admission=adm, claims=claims)
+    st = state(spool)
+    st["unsettled"] = [{"reservation_id": "res-x", "result_ref": "learning-result.missing"}]
+    spool.put_state("cycles", c.STATE_NAME, st)
+    adm.settled.clear()
+    run(tmp_path, setup(), spool=spool, admission=adm, claims=claims)
+    assert adm.settled == []
+    assert state(spool)["unsettled"][0]["held"] == "result_or_usage_missing"
+
+
+@pytest.mark.parametrize("reply", [None, {}, {"status": "accepted"}, "settled"])
+def test_only_an_explicit_settled_reply_clears_the_queue(tmp_path, reply):
+    class Vague(Admission):
+        def settle(self, rid, usage):
+            self.settled.append((rid, usage))
+            return reply
+    adm = Vague()
+    spool, out = run(tmp_path, setup(), admission=adm)
+    assert out["settlement"] == "pending" and len(state(spool)["unsettled"]) == 1

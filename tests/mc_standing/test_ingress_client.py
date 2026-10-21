@@ -207,3 +207,23 @@ def test_learning_payloads_resolve_by_their_own_refs(tmp_path):
     assert load_payload(tmp_path, "learning.0123456789abcdef01234567.0") == payload.encode()
     with pytest.raises(ValueError):
         load_payload(tmp_path, "learning.NOTHEX.0")
+
+
+def test_payload_resolver_never_hangs_on_a_fifo(tmp_path):
+    """Codex delta review of 113d1cf6: a FIFO in a restored spool blocked the open."""
+    import threading
+    _brief(tmp_path)
+    ref = "prod.2026-10-22.p0.morning.brief"
+    os.mkfifo(tmp_path / "delivery" / f"{ref}.json")
+    result = {}
+
+    def call():
+        try:
+            load_payload(tmp_path, ref)
+        except LookupError as exc:
+            result["err"] = str(exc)
+    t = threading.Thread(target=call, daemon=True)
+    t.start()
+    t.join(3)
+    assert not t.is_alive(), "resolver blocked on a FIFO"
+    assert result["err"] == "payload_invalid"

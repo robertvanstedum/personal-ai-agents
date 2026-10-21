@@ -29,7 +29,9 @@ def _read_record(state_root: str | Path, name: str) -> dict:
         dir_fd = os.open("delivery", _DIR_FLAGS, dir_fd=root_fd)
         try:
             try:
-                fd = os.open(f"{name}.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
+                # O_NONBLOCK: a FIFO or device planted in a restored spool cannot hang the open;
+                # the regular-file check below then refuses it.
+                fd = os.open(f"{name}.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
             except FileNotFoundError:
                 raise LookupError("payload_not_found") from None
             try:
