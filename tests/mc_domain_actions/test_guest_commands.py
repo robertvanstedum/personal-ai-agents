@@ -100,6 +100,12 @@ class FlowTests(PostgresFixture, unittest.TestCase):
         self.assertEqual(self.status("bruno@example.test"), "rejected")
         self.assertEqual(self.say("Reject the guest requests", "t3")["operation"]["state"], "no_match")
 
+    def test_after_a_confirmed_reject_a_later_confirm_is_not_claimed_except_as_a_retry(self):
+        self.say("Reject the guest request from Bruno", "t1")
+        self.say("Confirm", "t2")
+        self.assertFalse(self.cmds.has_pending("conv-1", "t3"))        # e.g. confirming a lesson next
+        self.assertTrue(self.cmds.has_pending("conv-1", "t2"))         # the same turn retried
+
     def test_no_match_says_so(self):
         r = self.say("Reject the guest request from Zed", "t1")
         self.assertEqual(r["operation"]["state"], "no_match")
