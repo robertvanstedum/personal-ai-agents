@@ -129,6 +129,41 @@ class ReviewFixes(Base, unittest.TestCase):
                                                  "backend; the approval path is still missing.", "refs": ["guild:1"]})
         self.assertEqual(ok["status"], "needs_confirmation")
 
+    def test_p2_6_prod_refuses_data_and_access_changes_without_a_standard_change(self):
+        self.service.environment = "prod"
+        r = self.call("minimoi_guest_request_reject", {"ref": "guild:2"})
+        self.assertEqual((r["status"], r["code"]), ("refused", "needs_change_record"))
+        r = self.call("minimoi_access_invite", {"name": "Sofia", "email": "sofia@example.test", "days": 7})
+        self.assertEqual(r["code"], "needs_change_record")
+        self.assertEqual(self.receipts(), [])
+
+    def test_p2_6_prod_standard_change_is_offered_named_and_each_use_logged_on_its_ticket(self):
+        self.service.environment = "prod"
+        self.service.standard_changes = {"guest_reject": {"id": "SC-guest-reject-1", "ticket": 371}}
+        r = self.call("minimoi_guest_request_reject", {"ref": "guild:2"})
+        self.assertEqual(r["status"], "needs_confirmation")
+        self.assertIn("Standard change SC-guest-reject-1 (ticket #371)", self.shown[-1][2])
+        logged = []
+        p = ToolProposals(self.connect, principal=OWNER, environment="prod", guest_rejects=True,
+                          comment_issue=lambda n, body: logged.append((n, body)) or ("created", 5))
+        done = self.say(p, "yes", "note-yes")
+        self.assertEqual(done["operation"]["state"], "verified", done)
+        self.assertIn("Logged on ticket #371", done["reply"])
+        (number, body), = logged
+        self.assertEqual(number, 371)
+        self.assertIn("guild:2", body)
+        for private in ("Bruno", "example.test", "@"):
+            self.assertNotIn(private, body)
+
+    def test_p2_6_the_data_repair_ticket_is_a_draft_change_record(self):
+        from core.mc_tools.proposals import issue_text
+        title, body = issue_text({"refs": ["guild:3"], "change": "reject", "environment": "prod"}, "op-1")
+        self.assertTrue(title.startswith("RFC (draft, prod)"))
+        self.assertIn("Not approved", body)
+        for field in ("**What:**", "**Why:**", "**Risk and impact:**", "**Steps:**", "**Pre-checks:**", "**Verification:**",
+                      "**Rollback:**", "**Test evidence:**", "**Review:**", "**Approval:**", "**Outcome:**"):
+            self.assertIn(field, body)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -40,9 +40,22 @@ def settings(environ) -> dict | None:
             "guest_rejects": environ.get("MINIMOI_MC_GUEST_ACTIONS") == "1",
             # Operator statement, not a check: mc-chat's gateway runs alone under its own OS user (deploy handoff §4).
             "isolated_runtime": environ.get("MINIMOI_MC_TOOLS_RUNTIME_ISOLATED") == "1",
+            "standard_changes": _standard_changes(environ.get("MINIMOI_MC_TOOLS_STANDARD_CHANGES") or ""),
             "issues_token_file": environ.get("MINIMOI_MC_ISSUES_TOKEN_FILE") or "",
             "repo": environ.get("MINIMOI_GITHUB_REPO") or "",
             "delegation": environ.get("MINIMOI_MC_DELEGATION") == "1"}
+
+
+def _standard_changes(value):
+    """'guest_reject=SC-3@371,access_invite=SC-4@372' -> {kind: {"id", "ticket"}}: standard changes Robert pre-approved
+    (change-control standard §5). Malformed entries are ignored, so a typo means 'no standard change', never wider."""
+    import re
+    out = {}
+    for part in value.split(","):
+        m = re.fullmatch(r"\s*(guest_reject|access_invite)=([A-Za-z0-9_.-]{1,40})@([1-9][0-9]{0,4})\s*", part)
+        if m:
+            out[m.group(1)] = {"id": m.group(2), "ticket": int(m.group(3))}
+    return out
 
 
 def _connect(dsn):
@@ -199,6 +212,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
                        guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), show=show,
                        isolated_runtime=cfg["isolated_runtime"], people=_guest_people,
+                       standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup)
 
 

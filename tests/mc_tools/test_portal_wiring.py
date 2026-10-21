@@ -32,6 +32,11 @@ class WiringTests(unittest.TestCase):
             self.assertIsNone(w.settings({k: v for k, v in ON.items() if k != missing}), missing)
         self.assertIsNone(w.settings(dict(ON, MINIMOI_MC_TOOLS_ENV="staging")))
 
+    def test_standard_changes_parse_strictly(self):
+        self.assertEqual(w._standard_changes("guest_reject=SC-3@371, access_invite=SC-4@372"),
+                         {"guest_reject": {"id": "SC-3", "ticket": 371}, "access_invite": {"id": "SC-4", "ticket": 372}})
+        self.assertEqual(w._standard_changes("delete_everything=SC-1@1,guest_reject=SC 3@371,guest_reject=SC-3@0"), {})
+
     def test_binding_recorded_with_the_runtime_user_the_turn_is_sent_with(self):
         recorded = []
         conn = mock.MagicMock()

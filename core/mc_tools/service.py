@@ -35,6 +35,9 @@ _GENERIC_WORDS = {"test", "guest", "guests", "user", "users", "admin", "request"
                   "mail", "the", "and", "for", "example", "demo", "new", "minimoi"}
 # Letters spaced or dotted apart ("B r u n o", "B.r.u.n.o") are read back as one word before matching.
 _SPACED = re.compile(r"(?<![A-Za-z])(?:[A-Za-z][\s.\-_'*]+){2,}[A-Za-z](?![A-Za-z])")
+# Production changes under the change-control standard (planning-studio/governance/CHANGE_CONTROL_STANDARD_ITIL
+# §2, §5): on prod MC may only offer these as a standard change Robert pre-approved, each use logged on its ticket.
+PROD_CHANGE_KINDS = {"guest_reject": "production data change", "access_invite": "production access change"}
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Robert types it back
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 REFUSED_WORDS = {
@@ -46,6 +49,10 @@ REFUSED_WORDS = {
     "host_observation_invalid": "The host measurement could not be checked, so I am not reporting it.",
     "tool_unavailable": "That tool is not switched on here. Nothing was done.",
 }
+
+
+def _standard_change_words(sc):
+    return f"\n\nStandard change {sc['id']} (ticket #{sc['ticket']}); this use is logged there." if sc else ""
 
 
 def result(status, code, message, data=None) -> dict:
@@ -61,7 +68,8 @@ class ToolService:
     def __init__(self, connect, *, principal: str, environment: str, allowed_agents=("mc-chat",),
                  lessons=None, delegation: bool = False, invites: bool = False, tickets: bool = False,
                  comments: bool = False, guest_rejects: bool = False, github=None, show=None,
-                 isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None):
+                 isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
+                 standard_changes=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -79,7 +87,22 @@ class ToolService:
         # needs Robert to name its code: a forged one can never ride on his next plain "ok" (review P1-2).
         self.isolated_runtime = bool(isolated_runtime)
         self.people = people                          # people() -> names/emails of guest logins, for public-text checks
+        # {kind: {"id": runbook id, "ticket": issue number}}: standard changes Robert pre-approved (prod only).
+        self.standard_changes = dict(standard_changes or {})
         self.worker, self.guests_lookup = worker[:80], guests_lookup
+
+    def _change_gate(self, kind):
+        """(standard change, None) when MC may offer this kind here, else (None, refusal). Dev: no gate. Prod: a data or
+        access change needs a pre-approved standard change and a way to log its use on the ticket (review P2-6)."""
+        if self.environment != "prod" or kind not in PROD_CHANGE_KINDS:
+            return None, None
+        sc = self.standard_changes.get(kind)
+        if not sc or not self.comments:
+            return None, result("refused", "needs_change_record",
+                                f"On production this is a {PROD_CHANGE_KINDS[kind]}: it needs a ticket and an approved "
+                                "change record, and no pre-approved standard change covers it. Nothing was proposed. "
+                                "Offer Robert a draft change record (minimoi_data_repair_ticket) instead.")
+        return sc, None
 
     @contextmanager
     def _tx(self):
@@ -143,10 +166,13 @@ class ToolService:
             if m is None:
                 return result("refused", "no_open_request", f"There is no open guest request {args['ref']}. "
                               "Nothing was changed; list the open requests again.")
+            sc, refusal = self._change_gate("guest_reject")
+            if refusal:
+                return refusal
             words = (f"Reject the guest request from {m['name'] or m['email']} <{m['email']}> for {m['domain']}, "
-                     f"requested {m['requested_at'][:10]} ({m['ref']})?")
-            return self._pending_tool_proposal(conn, b, "guest_reject",
-                                               {"ref": m["ref"], "target_version": m["target_version"]},
+                     f"requested {m['requested_at'][:10]} ({m['ref']})?" + _standard_change_words(sc))
+            payload = {"ref": m["ref"], "target_version": m["target_version"], **({"standard_change": sc} if sc else {})}
+            return self._pending_tool_proposal(conn, b, "guest_reject", payload,
                                                effects.request("guest.propose_reject", {"ref": m["ref"]}), words)
 
     def _github_issues(self, args, session_key, agent_id, observation):
@@ -338,9 +364,13 @@ class ToolService:
             return result("needs_clarification", "login_exists",
                           f"{email} already has a MiniMoi guest login ({existing}). Nothing was changed. "
                           "Ask Robert whether he wants it extended instead.")
-        payload = {"name": args["name"], "email": email, "app": INVITE_APP, "days": args["days"]}
+        sc, refusal = self._change_gate("access_invite")
+        if refusal:
+            return refusal
+        payload = {"name": args["name"], "email": email, "app": INVITE_APP, "days": args["days"],
+                   **({"standard_change": sc} if sc else {})}
         words = (f"Give {args['name']} <{email}> a guest login to {INVITE_APP_NAME} for {args['days']} days? "
-                 "They get an email with a temporary password to change at first sign-in.")
+                 "They get an email with a temporary password to change at first sign-in." + _standard_change_words(sc))
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
             return self._pending_tool_proposal(conn, b, "access_invite", payload,

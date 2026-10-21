@@ -60,15 +60,24 @@ def parse(text):
 
 
 def issue_text(payload, operation_id):
-    """The public ticket: refs, change and environment only. Names and emails stay in the database."""
+    """A DRAFT change record (RFC) under the change-control standard §4, not a work order (review P2-6): refs, change
+    and environment only; names and emails stay in the database. It authorizes nothing by itself."""
     refs, change, env = payload["refs"], payload["change"], payload["environment"]
     ids = ", ".join(r.split(":")[1] for r in refs)
-    title = f"Data repair ({env}): {change} guest request(s) {', '.join(refs)}"[:200]
-    body = (f"Robert asked Master Craftsman for this in the Guild conversation and confirmed it; MiniMoi's screens "
-            f"could not make the change.\n\n- Environment: {env}\n- Records: `guild.guest_requests` id(s) {ids} "
-            f"(refs {', '.join(refs)})\n- Requested change: {change}\n- Operation: {operation_id} "
-            f"(receipt in `guild.mc_action_receipts`)\n\nNames and emails are left out on purpose because this "
-            "repository is public: read them from the database.")
+    title = f"RFC (draft, {env}): {change} guest request(s) {', '.join(refs)}"[:200]
+    todo = "_to be written by the implementer before review_"
+    body = (f"**Status: draft change record. Not approved. Apply only after independent review and Robert's approval "
+            f"(change-control standard §4–§5).** Requested by Robert in the Guild conversation, where MiniMoi's screens "
+            f"could not make the change.\n\n"
+            f"1. **What:** {change} `guild.guest_requests` id(s) {ids} (refs {', '.join(refs)}), environment {env}.\n"
+            f"2. **Why:** MiniMoi's screens cannot do it; link the incident or problem ticket (for guest approval, #69).\n"
+            f"3. **Risk and impact:** {todo}\n4. **Steps:** a reviewed application operation, never ad hoc SQL: {todo}\n"
+            f"5. **Pre-checks:** each record still in the state it had when requested: {todo}\n"
+            f"6. **Verification:** read-back of each record: {todo}\n7. **Rollback:** {todo}\n"
+            f"8. **Test evidence:** the dev run: {todo}\n9. **Review:** an agent other than the author: {todo}\n"
+            f"10. **Approval:** Robert, with date and time: {todo}\n11. **Outcome:** {todo}\n\n"
+            f"Request receipt: operation {operation_id} in `guild.mc_action_receipts`. Names and emails are left out "
+            "on purpose because this repository is public: read them from the database.")
     return title, body
 INVITE_REASON = "Invited by Robert through Master Craftsman"
 
@@ -234,7 +243,8 @@ class ToolProposals:
         conn.commit()
         with self._tx() as conn2:
             result = actions.execute(conn2, context, intent, f"portal-{turn_key[:40]}", current_policy_version=POLICY)
-        return _reply(actions.reply(result), result["receipt"]["state"], outcome=result["outcome"], ref=result["ref"],
+        logged = self._log_standard_change(p, result["receipt"], intent.operation_id) if result["receipt"]["state"] == "verified" else ""
+        return _reply(actions.reply(result) + logged, result["receipt"]["state"], outcome=result["outcome"], ref=result["ref"],
                       receipt_id=str(result["receipt"]["receipt_id"]))
 
     def _run_lesson(self, effect, p):
@@ -256,6 +266,23 @@ class ToolProposals:
                                                   "lesson": kept["operation"].get("lesson")}, verified)
         return _reply(kept["reply"], "verified" if verified else kept["operation"]["state"],
                       receipt_id=str(receipt["receipt_id"]))
+
+    def _log_standard_change(self, p, receipt, operation_id):
+        """Prod: log this use of a pre-approved standard change on its ticket, refs and receipt only (standard §5)."""
+        sc = p["payload"].get("standard_change")
+        if not sc:
+            return ""
+        ref = p["payload"].get("ref") or "a new guest request"
+        text = (f"Standard change {sc['id']} used ({self.environment}): {p['kind']} {ref}. Receipt "
+                f"{receipt['receipt_id']}, operation {operation_id}, verified by read-back. Approved by Robert in the "
+                "Guild conversation.")
+        try:
+            state, _ = self.comment_issue(sc["ticket"], text) if self.comment_issue else ("refused", None)
+        except Exception:
+            state = "unknown"
+        if state == "created":
+            return f" Logged on ticket #{sc['ticket']}."
+        return f" I could not log this use on ticket #{sc['ticket']}; please log it there by hand."
 
     def _run_comment(self, effect, p):
         number = p["payload"]["number"]
@@ -382,5 +409,6 @@ class ToolProposals:
                 "carries the temporary password when email fails; if it did not arrive either, reset the password "
                 "in Operate.")
         return _reply(f"Done: {pay['name']} has a {pay['days']}-day guest login to Meu Português "
-                      f"(user {detail.get('username')}), verified by read-back. {tail}", "verified",
+                      f"(user {detail.get('username')}), verified by read-back. {tail}"
+                      + self._log_standard_change(p, receipt, effect.operation_id), "verified",
                       ref=ref, receipt_id=str(receipt["receipt_id"]))
