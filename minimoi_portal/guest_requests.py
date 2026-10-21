@@ -84,17 +84,21 @@ class PostgresStore:
         try:
             with conn:
                 with conn.cursor() as cur:
-                    cur.execute(
-                        "UPDATE guild.guest_requests SET status='rejected', actioned_at=NOW()"
-                        " WHERE id=%s AND status='requested' RETURNING id",
-                        (request_id,),
-                    )
-                    changed = cur.fetchone()
+                    changed = {"id": request_id} if reject_guild_in(cur, request_id) else None
                     cur.execute(_SELECT_GUILD + " WHERE id=%s", (request_id,))
                     row = cur.fetchone()
             return (dict(changed) if changed else None), (dict(row) if row else None)
         finally:
             conn.close()
+
+
+def reject_guild_in(cur, request_id: int) -> bool:
+    """THE application rejection of a website/Telegram request, inside the caller's transaction (so MC's
+    receipt-guarded action and this service run the identical operation; the MC job description asks for the
+    application operation, never ad hoc SQL). True when this call changed a ``requested`` row to rejected."""
+    cur.execute("UPDATE guild.guest_requests SET status='rejected', actioned_at=NOW()"
+                " WHERE id=%s AND status='requested' RETURNING id", (request_id,))
+    return cur.fetchone() is not None
 
 
 def _grant_if_requested(self, request_id: int) -> tuple[dict | None, dict | None]:
