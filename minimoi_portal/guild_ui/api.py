@@ -737,7 +737,8 @@ def _dispatch_marker(ledger_turn, recorder):
 
 def _platform_command(found):
     """The owner's deterministic commands, in their existing order; None for an ordinary message."""
-    for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command):
+    for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command,
+                    _owner_guest_command):
         result = command(found)
         if result is not None:
             return result
@@ -1009,6 +1010,44 @@ def _owner_action_command(found):
     return jsonify(status='answered', backend_kind='platform', reply_note=result.get('reply_note'),
                    message=result['reply'], operation=result['operation'],
                    history_saved=result.get('history_saved', False)), 200
+
+
+def _owner_guest_command(found):
+    """Guest requests by owner command (core/mc_domain_actions/guest_commands.py): propose, then
+    Confirm/Cancel, through receipts and a one-time exact approval. Off unless the mount enables
+    MINIMOI_MC_GUEST_ACTIONS=1 with MINIMOI_MC_GUEST_ACTIONS_ENV=dev|prod and DATABASE_URL is set."""
+    from . import feature_environ
+    env = feature_environ()
+    if env.get("MINIMOI_MC_GUEST_ACTIONS") != "1" or env.get("MINIMOI_MC_GUEST_ACTIONS_ENV") not in ("dev", "prod"):
+        return None
+    from core.mc_domain_actions import guest_commands
+    services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
+    command = guest_commands.parse(note.get("text"))
+    if command is None or attachment_ids or getattr(g, "topic_context", None):
+        return None
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        return None
+    import psycopg2
+    commands = guest_commands.GuestCommands(lambda: psycopg2.connect(dsn, connect_timeout=5),
+                                            principal=principal, environment=env["MINIMOI_MC_GUEST_ACTIONS_ENV"])
+    try:
+        if command.kind != "reject" and not commands.has_pending(conv["id"]):
+            return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        result = commands.handle(command, conversation=conv["id"], turn_key=note_id)
+    except Exception:
+        _mc_log().exception("guest command could not be completed")
+        result = {"reply": "I could not complete that guest request action, and I cannot confirm its outcome. "
+                           "Do not repeat it yet; I will check it.",
+                  "operation": {"type": "guest_action", "state": "unknown"}}
+    try:
+        kept = floor.add_note("guest-action-" + note_id + "-reply", result["reply"], GUILD_PLATFORM,
+                              area="Guests", page="mc")
+        reply_note = kept.value if kept.outcome == "kept" else None
+    except FloorStoreUnavailable:
+        reply_note = None
+    return jsonify(status="answered", backend_kind="platform", reply_note=reply_note, message=result["reply"],
+                   operation=result["operation"], history_saved=reply_note is not None), 200
 
 
 PRIVATE_TEXT_MAX = 4000
