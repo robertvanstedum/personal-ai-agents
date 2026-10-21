@@ -1233,15 +1233,16 @@ def _owner_tool_proposal_command(found):
     if cfg is None or principal != cfg["principal"] or attachment_ids or getattr(g, "topic_context", None):
         return None
     from core.mc_tools.proposals import parse
-    kind = parse(note.get("text"))
-    if kind is None:
+    parsed = parse(note.get("text"))
+    if parsed is None:
         return None
+    kind, code = parsed
     handler = proposals(environ, start_research=lambda p: _start_proposed_research(found, p),
                         delivery=current_app.extensions.get("mc_invite_delivery"))
     try:
         if not handler.has_pending(conv["id"], note_id):
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
-        result = handler.handle(kind, conversation=conv["id"], turn_key=note_id)
+        result = handler.handle(kind, conversation=conv["id"], turn_key=note_id, code=code)
     except Exception:
         _mc_log().exception("tool proposal command could not be completed")
         result = {"reply": "I could not complete that, and I cannot confirm its outcome. Do not repeat it yet; "

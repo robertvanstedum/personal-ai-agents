@@ -110,5 +110,17 @@ class CatalogueTests(unittest.TestCase):
                 parse_session_key(key, agent, {"mc-chat"})
 
 
+class ParseTests(unittest.TestCase):
+    def test_owner_replies(self):
+        from core.mc_tools.proposals import parse
+        self.assertEqual(parse("yes"), ("confirm", None))
+        self.assertEqual(parse("Yes P-7K3M."), ("confirm", "P-7K3M"))
+        self.assertEqual(parse("confirm p7k3m"), ("confirm", "P-7K3M"))
+        self.assertEqual(parse("no P-7K3M"), ("cancel", "P-7K3M"))
+        self.assertEqual(parse("No thanks"), ("cancel", None))
+        for text in ("yes, but change it", "yes P-7K3M and also P-AAAA", "maybe", "", None, "y" * 70):
+            self.assertIsNone(parse(text), text)
+
+
 if __name__ == "__main__":
     unittest.main()

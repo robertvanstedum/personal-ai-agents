@@ -40,13 +40,22 @@ _YES = re.compile(r"^(?:yes|yes,?\s+please|yep|yeah|ok(?:ay)?|sure|go\s+ahead|do
 _NO = re.compile(r"^(?:no|nope|no,?\s+thanks|cancel|don['’]t|do\s+not|never\s*mind)\s*[.!]?$", re.I)
 
 
+_NAMED = re.compile(r"^(?P<word>yes|ok(?:ay)?|confirm|approve|no|cancel)[,:]?\s+(?:proposal\s+)?p-?(?P<code>[a-z0-9]{4})\s*[.!]?$",
+                    re.I)
+
+
 def parse(text):
-    """'confirm' for the owner's plain yes, 'cancel' for a plain no, else None. Only the whole short message
-    counts, and the caller claims it only while a proposal waits in this conversation."""
+    """(kind, code) for the owner's own short reply, else None: kind 'confirm' or 'cancel'; code 'P-XXXX' when he
+    named the proposal ("yes P-7K3M"), else None. Only the whole short message counts, and the caller claims it only
+    while a proposal waits in this conversation."""
     if not isinstance(text, str) or len(text) > 60:
         return None
     t = text.strip()
-    return "confirm" if _YES.match(t) else "cancel" if _NO.match(t) else None
+    m = _NAMED.match(t)
+    if m:
+        kind = "cancel" if m.group("word").lower() in ("no", "cancel") else "confirm"
+        return kind, "P-" + m.group("code").upper()
+    return ("confirm", None) if _YES.match(t) else ("cancel", None) if _NO.match(t) else None
 
 
 def issue_text(payload, operation_id):
@@ -106,16 +115,18 @@ class ToolProposals:
                 (self.principal, self.environment, conversation, turn_key))
             return cur.fetchone() is not None
 
-    def handle(self, kind: str, *, conversation: str, turn_key: str) -> dict:
+    def handle(self, kind: str, *, conversation: str, turn_key: str, code: str | None = None) -> dict:
         try:
-            return self._confirm(conversation, turn_key) if kind == "confirm" else self._cancel(conversation)
+            return (self._confirm(conversation, turn_key, code) if kind == "confirm"
+                    else self._cancel(conversation, code))
         except ActionContractError as exc:
             return _reply(f"I could not do that safely ({exc}). Nothing was changed.", "refused", code=str(exc))
 
-    def _cancel(self, conversation):
+    def _cancel(self, conversation, code=None):
         with self._tx() as conn, _cursor(conn) as cur:
             cur.execute("""UPDATE guild.mc_tool_proposals SET state='cancelled' WHERE principal_id=%s AND environment=%s
-                AND conversation_id=%s AND state='pending' RETURNING kind""", (self.principal, self.environment, conversation))
+                AND conversation_id=%s AND state='pending' AND (%s::text IS NULL OR code=%s) RETURNING kind""",
+                (self.principal, self.environment, conversation, code, code))
             row = cur.fetchone()
         if row is None:
             return _reply("Nothing was waiting, so there is nothing to cancel.", "nothing_pending")
@@ -125,7 +136,14 @@ class ToolProposals:
         return ActionContext(self.principal, "mc", self.environment, conversation, turn_key, turn_key, 1,
                              now + timedelta(minutes=5), POLICY, "mc", "recorded", "owner", (grant_id,))
 
-    def _confirm(self, conversation, turn_key):
+    def _next_turn(self, cur, p, turn_key) -> bool:
+        """Whether this confirming note is the owner's very next turn in the conversation after the proposal's."""
+        cur.execute("""SELECT note_request_id FROM guild.mc_turn_ledger WHERE principal=%s AND conversation_id=%s
+            AND id > %s ORDER BY id LIMIT 1""", (self.principal, p["conversation_id"], p["proposing_ledger_id"]))
+        row = cur.fetchone()
+        return row is not None and row["note_request_id"] == turn_key
+
+    def _confirm(self, conversation, turn_key, code=None):
         with self._tx() as conn, _cursor(conn) as cur:
             # A retried yes resolves to what THAT yes confirmed, never to a newer proposal (review P2-1).
             cur.execute("""SELECT * FROM guild.mc_tool_proposals WHERE principal_id=%s AND environment=%s
@@ -134,9 +152,15 @@ class ToolProposals:
             p = cur.fetchone()
             if p is None:
                 cur.execute("""SELECT * FROM guild.mc_tool_proposals WHERE principal_id=%s AND environment=%s
-                    AND conversation_id=%s AND state='pending' ORDER BY created_at DESC LIMIT 1 FOR UPDATE""",
-                    (self.principal, self.environment, conversation))
+                    AND conversation_id=%s AND state='pending' AND (%s::text IS NULL OR code=%s)
+                    ORDER BY created_at DESC LIMIT 1 FOR UPDATE""",
+                    (self.principal, self.environment, conversation, code, code))
                 p = cur.fetchone()
+                # A plain yes approves only what the platform showed in the turn just before, and never a
+                # proposal made after reading text anyone can write; otherwise Robert names it (review P1-1).
+                if p is not None and code is None and (p["untrusted_input"] or not self._next_turn(cur, p, turn_key)):
+                    return _reply(f"To approve proposal {p['code']}, reply “yes {p['code']}” (it is shown above). "
+                                  "Nothing was done.", "needs_code", proposal=p["code"])
             if p is None:
                 return _reply("Nothing is waiting for your confirmation in this conversation.", "nothing_pending")
             cur.execute("SELECT clock_timestamp() AS now")

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS guild.mc_tool_turns (
     conversation_id   text NOT NULL,
     note_request_id   text NOT NULL,
     runtime_user      text NOT NULL CHECK (runtime_user ~ '^guild-mc:[0-9a-f]{32}$'),
+    untrusted_read    boolean NOT NULL DEFAULT false,      -- this turn read text anyone can write (GitHub)
     created_at        timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (ledger_id, claim_generation)
 );
@@ -25,6 +26,10 @@ CREATE TABLE IF NOT EXISTS guild.mc_tool_proposals (
     environment      text NOT NULL CHECK (environment IN ('dev', 'prod')),
     conversation_id  text NOT NULL,
     owner_turn_id    text NOT NULL,                 -- the owner's kept note whose turn MC proposed in
+    proposing_ledger_id bigint NOT NULL,            -- that turn's ledger entry: a plain yes must be the next one
+    code             text NOT NULL CHECK (code ~ '^P-[A-Z0-9]{4}$'),   -- what Robert names to approve it
+    shown_text       text NOT NULL,                 -- exactly what the platform showed Robert
+    untrusted_input  boolean NOT NULL DEFAULT false,-- proposed after reading GitHub: only a named yes approves
     kind             text NOT NULL CHECK (kind IN ('guest_reject', 'issue_comment', 'data_repair',
                                          'delegate_research', 'access_invite')),
     payload          jsonb NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
@@ -35,6 +40,8 @@ CREATE TABLE IF NOT EXISTS guild.mc_tool_proposals (
     created_at       timestamptz NOT NULL DEFAULT clock_timestamp(),
     expires_at       timestamptz NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS mc_tool_proposals_code
+    ON guild.mc_tool_proposals (principal_id, environment, conversation_id, code);
 CREATE INDEX IF NOT EXISTS mc_tool_proposals_pending
     ON guild.mc_tool_proposals (principal_id, environment, conversation_id, created_at DESC);
 

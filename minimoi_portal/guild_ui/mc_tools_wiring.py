@@ -160,7 +160,26 @@ def github_reader(cfg, *, http_get=None):
     return GitHubIssues(http_get or requests.get, repo=_repo(cfg))
 
 
-def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None):
+def proposal_shower(services, principal):
+    """``show(conversation_id, note_key, text) -> bool``: the platform keeps a proposal, word for word, as its own note
+    in that conversation, so Robert approves what the platform showed, not MC's retelling (review P1-1)."""
+    def show(conversation_id, note_key, text):
+        from .conversations import conversations_of
+        from .stores import GUILD_PLATFORM
+        try:
+            conv = conversations_of(services).get(conversation_id, principal)
+            if not isinstance(conv, dict) or conv.get("principal") != principal or conv.get("archived"):
+                return False
+            base, nf = services.floor, conv.get("notes_floor")
+            floor = base if not nf or nf == base.floor else base.for_floor(nf)
+            return floor.add_note(note_key, text, GUILD_PLATFORM, area="Guild", page="mc").outcome == "kept"
+        except Exception:
+            _log.exception("mc tools: proposal could not be shown")
+            return False
+    return show
+
+
+def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, show=None):
     from core.mc_tools.service import ToolService
     lessons = None
     if lessons_root and os.path.isabs(lessons_root) and lessons_env in ("dev", "prod"):
@@ -170,7 +189,8 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None):
                        allowed_agents=cfg["agents"], lessons=lessons, delegation=cfg["delegation"],
                        invites=cfg["invites"] if invites is None else invites,
                        tickets=issue_filer(cfg) is not None, comments=issue_commenter(cfg) is not None,
-                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), guests_lookup=_guests_lookup)
+                       guest_rejects=cfg["guest_rejects"], github=github_reader(cfg), show=show,
+                       guests_lookup=_guests_lookup)
 
 
 def attach(app, blueprint_name, services):
@@ -188,7 +208,7 @@ def attach(app, blueprint_name, services):
     # Invites need the portal's own delivery (app.py); without it MC is told invites are off, never half-done.
     invites = cfg["invites"] and app.extensions.get("mc_invite_delivery") is not None
     service = build_service(cfg, lessons_root=environ.get("MINIMOI_MC_LESSONS_DIR"), lessons_env=lessons_env,
-                            invites=invites)
+                            invites=invites, show=proposal_shower(services, cfg["principal"]))
     thread = serve(create_app(service, token_sha256=cfg["token_sha256"]), host="0.0.0.0", port=cfg["port"])
     app.extensions["mc_tools_listener"] = thread
     _log.info("mc tools: listener on port %s (agents %s)", cfg["port"], ",".join(cfg["agents"]))

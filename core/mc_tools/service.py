@@ -10,9 +10,12 @@ refusal says nothing was changed; an uncertain outcome says so and is never retr
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
+import secrets
 from contextlib import contextmanager
+from uuid import uuid4
 
 from core.minimoi_actions.context import ActionContractError
 from core.minimoi_actions.grants import GrantStore
@@ -29,6 +32,7 @@ INVITE_APP_NAME = "Meu Português"
 # Words that appear in placeholder names ("Test Guest") and in any workaround text; never treated as a person's name.
 _GENERIC_WORDS = {"test", "guest", "guests", "user", "users", "admin", "request", "requests", "info", "contact", "hello",
                   "mail", "the", "and", "for", "example", "demo", "new", "minimoi", "robert"}
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Robert types it back
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
 REFUSED_WORDS = {
     "tool_turn_not_live": "This tool only works inside Robert's own live turn, and that turn is no longer running. Nothing was done.",
@@ -53,8 +57,8 @@ def refused(code) -> dict:
 class ToolService:
     def __init__(self, connect, *, principal: str, environment: str, allowed_agents=("mc-chat",),
                  lessons=None, delegation: bool = False, invites: bool = False, tickets: bool = False,
-                 comments: bool = False, guest_rejects: bool = False, github=None, worker: str = "mc-tools",
-                 guests_lookup=None):
+                 comments: bool = False, guest_rejects: bool = False, github=None, show=None,
+                 worker: str = "mc-tools", guests_lookup=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -65,6 +69,8 @@ class ToolService:
         self.lessons, self.delegation, self.invites = lessons, bool(delegation), bool(invites)
         self.tickets, self.comments, self.guest_rejects = bool(tickets), bool(comments), bool(guest_rejects)
         self.github = github                          # core.mc_tools.github.GitHubIssues, or None: GitHub reads off
+        # show(conversation_id, note_key, text) -> bool: the platform posts a proposal verbatim in the conversation.
+        self.show = show
         self.worker, self.guests_lookup = worker[:80], guests_lookup
 
     @contextmanager
@@ -129,8 +135,7 @@ class ToolService:
                 return result("refused", "no_open_request", f"There is no open guest request {args['ref']}. "
                               "Nothing was changed; list the open requests again.")
             words = (f"Reject the guest request from {m['name'] or m['email']} <{m['email']}> for {m['domain']}, "
-                     f"requested {m['requested_at'][:10]} ({m['ref']})? Reply yes within {PROPOSAL_MINUTES} minutes, "
-                     "or no.")
+                     f"requested {m['requested_at'][:10]} ({m['ref']})?")
             return self._pending_tool_proposal(conn, b, "guest_reject",
                                                {"ref": m["ref"], "target_version": m["target_version"]},
                                                effects.request("guest.propose_reject", {"ref": m["ref"]}), words)
@@ -141,7 +146,10 @@ class ToolService:
         if len(args) != 1:
             return refused("tool_arguments_invalid")
         with self._tx() as conn:
-            self._bind(conn, session_key, agent_id)
+            b = self._bind(conn, session_key, agent_id)
+            with _cursor(conn) as cur:                # anyone can write on GitHub: this turn's proposals need a code
+                cur.execute("""UPDATE guild.mc_tool_turns SET untrusted_read=true WHERE ledger_id=%s
+                    AND claim_generation=%s""", (b.ledger_id, b.generation))
         state, message, data = (self.github.issue(args["number"]) if "number" in args
                                 else self.github.search(args["query"]))
         return result("done" if state == "ok" else "refused", "read" if state == "ok" else state, message, data)
@@ -176,8 +184,7 @@ class ToolService:
                 return result("refused", reason, "That text names a person or an email address, and the repository is "
                               "public. Nothing was proposed; say it with refs (guild:N) only.")
             preview = comment_text(payload, "<operation id>")
-            words = (f"Add this comment to issue #{args['number']}? It is public.\n\n{preview}\n\n"
-                     f"Reply yes within {PROPOSAL_MINUTES} minutes, or no.")
+            words = f"Add this comment to issue #{args['number']}? It is public.\n\n{preview}"
             return self._pending_tool_proposal(conn, b, "issue_comment", payload,
                                                effects.request("issue.propose_comment", payload), words)
 
@@ -190,8 +197,7 @@ class ToolService:
         payload = {"refs": refs, "change": args["change"], "environment": self.environment}
         listed = " and ".join(refs) if len(refs) < 3 else ", ".join(refs[:-1]) + " and " + refs[-1]
         words = (f"Open a data-repair ticket asking Claude Code or Codex to {args['change']} guest request(s) {listed}? "
-                 "It names them by ref only, because the ticket is public. Reply yes within "
-                 f"{PROPOSAL_MINUTES} minutes, or no.")
+                 "It names them by ref only, because the ticket is public.")
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
             with _cursor(conn) as cur:
@@ -232,29 +238,66 @@ class ToolService:
         return result(status, state, answer["reply"])
 
     def _pending_tool_proposal(self, conn, b, kind, payload, req, words):
-        """Record a proposal under the turn grant; only the owner's own yes in a later turn acts on it."""
-        import json
-        from uuid import uuid4
+        """Record one proposal under the turn grant and have the PLATFORM show it to Robert verbatim, with its code
+        (review P1-1). The model is only told that it was shown; it never relays the text that Robert approves.
+        One proposal per owner turn; a new turn's proposal supersedes any older one still waiting."""
+        if self.show is None:
+            return refused("tool_unavailable")
+        with _cursor(conn) as cur:
+            cur.execute("""SELECT 1 FROM guild.mc_tool_proposals WHERE principal_id=%s AND environment=%s
+                AND proposing_ledger_id=%s AND state <> 'cancelled' LIMIT 1""",
+                (self.principal, self.environment, b.ledger_id))
+            if cur.fetchone() is not None:
+                return result("refused", "one_proposal_per_turn", "I can offer only one change per message. Nothing "
+                              "more was proposed; tell Robert about the next one after he answers this one.")
+            cur.execute("""SELECT untrusted_read FROM guild.mc_tool_turns WHERE ledger_id=%s AND claim_generation=%s""",
+                        (b.ledger_id, b.generation))
+            untrusted = bool(cur.fetchone()["untrusted_read"])
         effect = effects.begin_turn_effect(conn, b, req, worker=self.worker)
         proposal_id, operation_id = str(uuid4()), str(uuid4())
         with _cursor(conn) as cur:
             cur.execute("""UPDATE guild.mc_tool_proposals SET state='cancelled' WHERE principal_id=%s AND environment=%s
                 AND conversation_id=%s AND state='pending'""", (self.principal, self.environment, b.conversation_id))
-            cur.execute("""INSERT INTO guild.mc_tool_proposals (proposal_id, principal_id, environment, conversation_id,
-                owner_turn_id, kind, payload, operation_id, expires_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s, clock_timestamp() + %s * interval '1 minute')""",
-                (proposal_id, self.principal, self.environment, b.conversation_id, b.note_request_id, kind,
-                 json.dumps(payload, sort_keys=True), operation_id, PROPOSAL_MINUTES))
-        receipt = effect.finish(conn, kind + "_proposal", {"proposal_id": proposal_id}, verified=True)
-        return result("needs_confirmation", "proposed", words, {"receipt_id": str(receipt["receipt_id"])})
+            for _ in range(5):
+                code = "P-" + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(4))
+                cur.execute("SAVEPOINT tool_code")
+                try:
+                    cur.execute("""INSERT INTO guild.mc_tool_proposals (proposal_id, principal_id, environment,
+                        conversation_id, owner_turn_id, proposing_ledger_id, kind, payload, code, shown_text,
+                        untrusted_input, operation_id, expires_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s, clock_timestamp() + %s * interval '1 minute')""",
+                        (proposal_id, self.principal, self.environment, b.conversation_id, b.note_request_id,
+                         b.ledger_id, kind, json.dumps(payload, sort_keys=True), code, words, untrusted, operation_id,
+                         PROPOSAL_MINUTES))
+                    cur.execute("RELEASE SAVEPOINT tool_code")
+                    break
+                except Exception:
+                    cur.execute("ROLLBACK TO SAVEPOINT tool_code")
+            else:
+                raise ActionContractError("proposal_code_unavailable")
+        receipt = effect.finish(conn, kind + "_proposal", {"proposal_id": proposal_id, "code": code}, verified=True)
+        conn.commit()
+        how = (f"Reply “yes {code}” to approve" if untrusted else f"Reply “yes” as your next message (or “yes {code}”)")
+        card = (f"Proposal {code} from Master Craftsman, waiting for you:\n\n{words}\n\n{how}, or “no”. Nothing "
+                f"happens until you do; it lapses after {PROPOSAL_MINUTES} minutes.")
+        if not self.show(b.conversation_id, f"mc-tool-proposal-{proposal_id}", card):
+            with _cursor(conn) as cur:
+                cur.execute("UPDATE guild.mc_tool_proposals SET state='cancelled' WHERE proposal_id=%s", (proposal_id,))
+            conn.commit()
+            return result("refused", "proposal_not_shown", "MiniMoi could not show Robert this proposal, so it was "
+                          "withdrawn and nothing will happen. Tell him plainly.")
+        return result("needs_confirmation", "proposed",
+                      f"MiniMoi has shown Robert proposal {code} word for word in the conversation:\n\n{words}\n\n"
+                      "In one or two sentences, say what it is and that nothing happens until he approves it there"
+                      + (f" by replying “yes {code}”" if untrusted else "") + ". Do not restate it as done.",
+                      {"code": code, "receipt_id": str(receipt["receipt_id"])})
 
     def _delegate_research(self, args, session_key, agent_id, observation):
         if not self.delegation:
             return refused("tool_unavailable")
         who = AGENT_NAMES[args["agent"]]
         words = (f"Ask {who} to research your message (“{args['title']}”), read-only in a fresh copy of the "
-                 f"repository, cost cap 2 USD? Your own message is the brief. Reply yes within "
-                 f"{PROPOSAL_MINUTES} minutes, or no.")
+                 "repository, cost cap 2 USD? Your own message is the brief.")
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
             return self._pending_tool_proposal(conn, b, "delegate_research", args,
@@ -271,8 +314,7 @@ class ToolService:
                           "Ask Robert whether he wants it extended instead.")
         payload = {"name": args["name"], "email": email, "app": INVITE_APP, "days": args["days"]}
         words = (f"Give {args['name']} <{email}> a guest login to {INVITE_APP_NAME} for {args['days']} days? "
-                 "They get an email with a temporary password to change at first sign-in. "
-                 f"Reply yes within {PROPOSAL_MINUTES} minutes, or no.")
+                 "They get an email with a temporary password to change at first sign-in.")
         with self._tx() as conn:
             b = self._bind(conn, session_key, agent_id)
             return self._pending_tool_proposal(conn, b, "access_invite", payload,
