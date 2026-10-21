@@ -319,8 +319,8 @@ class ToolTests(Base, unittest.TestCase):
         self.assertEqual(r["status"], "needs_confirmation")
         proposals = ToolProposals(self.connect, principal=OWNER, environment="dev",
                                   start_research=lambda p: started.append(p) or ("started", "job-1"))
-        self.assertTrue(proposals.has_pending(CONV))
-        self.assertFalse(proposals.has_pending("c-elsewhere"))
+        self.assertTrue(proposals.has_pending(CONV, "note-confirm"))
+        self.assertFalse(proposals.has_pending("c-elsewhere", "note-confirm"))
         done = proposals.handle("confirm", conversation=CONV, turn_key="note-confirm")
         self.assertEqual(done["operation"]["state"], "verified")
         self.assertEqual(len(started), 1)

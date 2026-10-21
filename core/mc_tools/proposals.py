@@ -96,13 +96,14 @@ class ToolProposals:
         finally:
             conn.close()
 
-    def has_pending(self, conversation: str) -> bool:
-        """'Confirm' and 'Cancel' are ordinary words: ours only while a proposal waits (or was just confirmed)."""
+    def has_pending(self, conversation: str, turn_key: str) -> bool:
+        """'yes', 'ok' and 'no' are Robert's commonest words: ours only while a proposal is live, or when this very
+        note already confirmed one (a retry). Never a window after a finished one (review P2-2)."""
         with self._tx() as conn, _cursor(conn) as cur:
             cur.execute("""SELECT 1 FROM guild.mc_tool_proposals WHERE principal_id=%s AND environment=%s
-                AND conversation_id=%s AND ((state='pending' AND expires_at > clock_timestamp()) OR (state='confirmed'
-                AND created_at > clock_timestamp() - interval '30 minutes')) LIMIT 1""",
-                (self.principal, self.environment, conversation))
+                AND conversation_id=%s AND ((state='pending' AND expires_at > clock_timestamp())
+                OR (state='confirmed' AND confirm_turn_id=%s)) LIMIT 1""",
+                (self.principal, self.environment, conversation, turn_key))
             return cur.fetchone() is not None
 
     def handle(self, kind: str, *, conversation: str, turn_key: str) -> dict:

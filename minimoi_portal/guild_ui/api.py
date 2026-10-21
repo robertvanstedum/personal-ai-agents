@@ -1239,7 +1239,7 @@ def _owner_tool_proposal_command(found):
     handler = proposals(environ, start_research=lambda p: _start_proposed_research(found, p),
                         delivery=current_app.extensions.get("mc_invite_delivery"))
     try:
-        if not handler.has_pending(conv["id"]):
+        if not handler.has_pending(conv["id"], note_id):
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
         result = handler.handle(kind, conversation=conv["id"], turn_key=note_id)
     except Exception:

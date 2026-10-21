@@ -22,6 +22,14 @@ class ReviewFixes(Base, unittest.TestCase):
         self.assertEqual(posted, [69])
         self.assertEqual(self.one("SELECT state FROM guild.mc_tool_proposals WHERE payload->>'number'='70'")[0], "pending")
 
+    def test_p2_2_short_words_are_not_captured_after_a_proposal_is_done(self):
+        p = self.props(comment_issue=lambda n, b: ("created", 1))
+        self.call("minimoi_issue_comment", {"number": 69, "summary": "Workaround noted for the record here.", "refs": ["guild:1"]})
+        self.assertTrue(p.has_pending(CONV, "note-yes-1"))
+        p.handle("confirm", conversation=CONV, turn_key="note-yes-1")
+        self.assertFalse(p.has_pending(CONV, "note-later"))       # "ok" / "no" later go to MC, not the platform
+        self.assertTrue(p.has_pending(CONV, "note-yes-1"))        # only the same note, retried
+
 
 if __name__ == "__main__":
     unittest.main()
