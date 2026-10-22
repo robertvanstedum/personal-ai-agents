@@ -191,6 +191,35 @@ The packet's direction is right: CoS becomes useful in daily life by calling wor
 
 ---
 
+## 8a. Robert's latency rule (added 22 Oct, after his first-light decision)
+
+Robert: "I do not want latency in the conversation. It should flow freely and quickly, no worse than you and I now. The layers to me are on action: what and when an action can be taken, and I am OK with more latency there."
+
+**Design rule for v0.3:** the conversation path carries no authority machinery. Binding, policy, grants, receipts and verification run only inside a tool call. A plain reply must feel like a plain chat.
+
+**Measured today (dev, 22 Oct, 15 replies, 06:24–06:44 CDT):** median 12.0 s, min 7.5 s, max 26.7 s per reply, none streamed (`MINIMOI_GUILD_MC_STREAM=off`), through the CoS backend and the model gateway (`minimoi-gateway/minimoi-cos-agent`). Action turns pay a second model call for the voiced outcome. Context assembly is small by comparison; the model call is nearly all of it. A per-hop trace (A22) is still needed to split model time from gateway time.
+
+**What first light changes for the conversation:**
+- the native `mc-chat` backend streams, so the first words arrive in about a second instead of after twelve;
+- no second model call to voice an outcome: the platform posts the result at once, MC's explanation follows as a separate, optional continuation;
+- a small, stable context: persona, lessons, the last turns, and an **in-context house summary** so "do you see Mein Deutsch?" needs no tool round trip; tools and retrieval only when a specific lookup or an action is needed;
+- reasoning effort chosen per turn: low for plain conversation, higher only when a tool or action is involved;
+- the authority layers cost milliseconds for local effects (one Postgres transaction) and seconds only for external effects (GitHub), shown as visible progress.
+
+**The one spec change this rule forces (P2-1 again):** keep a **stable runtime session** for the conversation rather than a fresh session per dispatch. A fresh session makes every turn re-send the full context pack and defeats the provider's prefix cache, which is exactly the per-turn latency Robert refuses. The binding ambiguity that fresh sessions were meant to fix is already covered by the code-required approval in T (a delayed call cannot approve anything) and will be closed properly by a per-run binding. Measure before deciding, as §18 Q1 says; the default should be the stable session.
+
+**Latency budget as an M1 gate (proposed):**
+
+| Turn kind | Target |
+|---|---|
+| Plain reply | first token ≤ 2 s; streamed; complete in the time a plain chat takes for the same length |
+| Reply with one tier-1 lookup (a read tool) | adds ≤ 2 s, visible as "checking…" |
+| Tier-2 action (keep a preference, Board note) | result posted ≤ 3 s after the yes-free decision; MC's words follow |
+| Tier-3 proposal | card rendered ≤ 2 s after MC's request; execution after yes may take seconds, with progress |
+| External effect (GitHub, invite email) | no budget; visible progress and an honest unknown state |
+
+Record all of these from the A22 trace before and after first light; no claim without the numbers.
+
 ## 9. Where I agree with Codex's dispositions
 
 - Keeping C07 for tier 2 (compile a grant from standing authority) rather than bypassing it.
@@ -205,3 +234,4 @@ The packet's direction is right: CoS becomes useful in daily life by calling wor
 | Version | Date | Change |
 |---|---|---|
 | 0.1 | 22 Oct 2026 | First review of v0.2 + v1.0 + domain API v0.1, with code verification and live dev facts. |
+| 0.1a | 22 Oct 2026 | §8a added: Robert's latency rule, today's measured reply times, the stable-session change and an M1 latency budget. |
