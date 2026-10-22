@@ -1,6 +1,14 @@
 # Master Craftsman: how it's built, and why it acts like a bot
 
-**A brief for outside advice (Claude chat, Grok, Codex), 22 Oct 2026.** Prepared by Claude Code from the code and from Robert's dev trial this morning.
+**Version 0.1, 22 Oct 2026, for feedback.** A brief for outside advice (Claude chat, Grok, Codex). Prepared by Claude Code from the code and from Robert's dev trial this morning.
+
+> **To the advisor:** please answer in this shape, so replies can be compared side by side:
+> 1. **Verdict:** your recommended direction (A–D in §6, a mix, or your own), in two or three sentences.
+> 2. **Answers to §7:** one short paragraph per question (1–7).
+> 3. **What we're missing:** anything wrong or absent in our diagnosis (§4) or the non-negotiables (§5).
+> 4. **First two weeks:** the concrete first steps you'd take.
+>
+> Be direct. Disagreement is more useful than agreement.
 
 **What we're asking for:** solution advice, and possibly a new direction. We're at risk of getting stuck adding more parsers and rules to an agent that should simply behave like a capable colleague.
 
@@ -152,3 +160,13 @@ Two independent reviews ran this week. The authority core held. The defects were
 | CoS | Chief of Staff, an existing MiniMoi agent service; it currently answers the MC conversation |
 | OpenClaw | The agent runtime on the Mac. `mc-chat` is the chat agent (minimal tools); `mc-agent` runs background jobs (full tools) |
 | Mein Deutsch / Wörter | Robert's German-learning app in MiniMoi, and its word and phrase store |
+
+---
+
+## Version history
+
+| Version | Date | Change |
+|---|---|---|
+| 0.1 | 22 Oct 2026 | First draft, from the code and Robert's dev trial. Circulated to Claude chat, Grok and Codex for feedback. |
+
+Feedback is collected beside this file as `MC_ADVISOR_FEEDBACK_<advisor>_<date>.md`. v0.2 will record which direction was chosen and why.
