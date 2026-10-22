@@ -220,6 +220,10 @@ Robert: "I do not want latency in the conversation. It should flow freely and qu
 
 Record all of these from the A22 trace before and after first light; no claim without the numbers.
 
+**Measured after M1.1 (22 Oct, 15:55–15:58Z, Robert's first live test on dev, native `mc-chat`, streaming on):** four conversation turns 2.8–5.7 s total (median 4.4 s) with words shown while generating; two voiced platform turns (Remember, Confirm) 2.3 s each, buffered. The relay's own timing is within ~0.2 s of the portal's, so the model round trip is nearly all of it. Same morning on the CoS backend: median 12.0 s, max 26.7 s, nothing streamed. First-token time is not yet logged separately; add it to the A22 trace.
+
+**Still a bot in that transcript:** asked "feel free to correct my mistakes", MC answered "say 'Remember: …' and I'll lock it in". That is M1.3 (a natural preference becomes a tier-2 keep with undo) and D5 (the persona), not a parser.
+
 ## 9. Where I agree with Codex's dispositions
 
 - Keeping C07 for tier 2 (compile a grant from standing authority) rather than bypassing it.
@@ -235,3 +239,4 @@ Record all of these from the A22 trace before and after first light; no claim wi
 |---|---|---|
 | 0.1 | 22 Oct 2026 | First review of v0.2 + v1.0 + domain API v0.1, with code verification and live dev facts. |
 | 0.1a | 22 Oct 2026 | §8a added: Robert's latency rule, today's measured reply times, the stable-session change and an M1 latency budget. |
+| 0.1b | 22 Oct 2026 | M1.1 done on dev (native route, streaming); measured after-numbers added to §8a. |
