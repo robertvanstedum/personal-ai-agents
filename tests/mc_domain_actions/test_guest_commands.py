@@ -31,6 +31,16 @@ class GrammarTests(unittest.TestCase):
         self.assertEqual(gc.parse("Hi. Can you reject the guest request from Bruno Costa please."),
                          gc.Command("reject", "Bruno Costa"))
 
+    def test_roberts_real_phrasing_on_dev_22_oct(self):
+        for t in ("Guten Morgen.  Can you reject guest requests we currently have",
+                  "Hey MC, please reject all the pending guest requests.",
+                  "Could you decline the guest requests that are still open?",
+                  "Reject the outstanding guest requests for me", "Go ahead and reject these guest requests."):
+            self.assertEqual(gc.parse(t), gc.Command("reject", None), t)
+        for t in ("Do you want me to reject guest requests?", "I don't want you to reject guest requests.",
+                  "Don't reject the guest requests yet.", "Why did you reject the guest request?"):
+            self.assertIsNone(gc.parse(t), t)
+
     def test_not_commands(self):
         for t in ('He said "Reject the guest request from Bruno"', "> Reject the guest request from Bruno",
                   "Should I reject the guest request from Bruno?", "I can't accept or reject it.",

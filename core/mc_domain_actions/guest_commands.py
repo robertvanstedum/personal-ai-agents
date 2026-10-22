@@ -33,12 +33,18 @@ PROPOSAL_MINUTES = 10
 _GUARDS = ('"', "“", "”", "`", ">")
 _REJECT = re.compile(r"^(?:please\s+)?(?:reject|decline|deny)\s+(?:the\s+)?(?:guest\s+)?(?:access\s+)?request\s+"
                      r"(?:from|by|for|of)\s+(?P<who>[^!?\n]{2,80}?)\s*[.!]?$", re.I)
-# The owner's own words, inside a longer message: "Guten Morgen. … Just reject the guest requests we have."
-_NATURAL = re.compile(r"^(?:(?:just|please|so|and|then|ok(?:ay)?|now|can\s+you|could\s+you|would\s+you|kindly)[,\s]+)*"
-                      r"(?:reject|decline|deny)\s+(?:the\s+|all\s+(?:the\s+|of\s+the\s+)?|our\s+|any\s+|that\s+|this\s+)?"
-                      r"(?:open\s+|pending\s+|new\s+)?guest\s+(?:access\s+)?requests?"
-                      r"(?:\s+(?:from|by|for|of)\s+(?P<who>[^!?\n]{2,80}?))?"
-                      r"(?:\s+(?:we\s+have|that\s+are\s+(?:open|pending)|(?:for|with)\s+me|(?:right\s+)?now|please))*\s*$", re.I)
+# The owner's own words, inside a longer message: "Guten Morgen. … Just reject the guest requests we have." Robert's
+# real phrasing varies ("Can you reject guest requests we currently have", 22 Oct), so filler words around the
+# command are accepted; the command itself must still open the sentence, and nothing happens without Confirm.
+_FILLER = (r"we|we've|i|you|currently|still|now|right|today|at|the|moment|have|got|that|are|is|were|open|pending|"
+           r"waiting|outstanding|remaining|in|there|please|for|me|with|all|of|them|so|far|yet|left")
+_NATURAL = re.compile(r"^(?:(?:hey|hi|mc|just|please|so|and|then|ok(?:ay)?|now|kindly|can\s+you|could\s+you|would\s+you|"
+                      r"will\s+you|go\s+ahead\s+and|i(?:'d|\s+would)\s+like\s+you\s+to)[,\s]+)*"
+                      r"(?:reject|decline|deny)\s+(?:the\s+|all\s+(?:the\s+|of\s+the\s+)?|our\s+|any\s+|that\s+|this\s+|"
+                      r"these\s+|those\s+|every\s+)?"
+                      r"(?:(?:open|pending|new|current|outstanding|waiting|remaining)\s+)*guest\s+(?:access\s+)?requests?"
+                      r"(?:\s+(?:from|by|for|of)\s+(?!(?:me|us)\b)(?P<who>[^!?\n]{2,80}?))?"
+                      r"(?:[,\s]+(?:" + _FILLER + r"))*\s*$", re.I)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 _CONFIRM = re.compile(r"^(?:yes[,.!]?\s+)?(?:confirm(?:ed)?|approve(?:d)?)(?:\s+(?:it|that|the\s+reject(?:ion)?))?\s*[.!]?$", re.I)
 _CANCEL = re.compile(r"^(?:no[,.!]?\s+)?(?:cancel|don['’]t|do\s+not)(?:\s+(?:it|that|the\s+reject(?:ion)?))?\s*[.!]?$", re.I)
