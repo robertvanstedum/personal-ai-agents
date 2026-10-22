@@ -17,6 +17,7 @@
 | D9 | **Persona:** Robert writes it with Claude chat, in his words, versioned in GitHub, per the persona file contract. After the spec is final. |
 | D10 | **CoS tools:** CoS needs a real tool dispatch before any CoS domain slice can claim CoS (new slice D0; review P1-2). Backend choice still open. |
 | D11 | **Production MC runtime** is a separate decision and change record; not needed for M1. |
+| D12 | **Builder:** Claude Code builds first light (M1.0–M1.4); Codex builds the later slices; whichever is not building reviews. Decided by Robert, 22 Oct. |
 | Done | **M1.1 is on dev** since 22 Oct 10:5x CDT: `MINIMOI_GUILD_MC=openclaw`, streaming on, native `mc-chat`; measured 2.8–5.7 s per conversation turn versus 12 s before. Record in `~/minimoi-runtime/operators/dev-mc-native-route-20261022/`. |
 
 ## 3. What each pass should do
@@ -27,9 +28,9 @@
 
 **Grok:** authority and recovery boundaries after the changes: stable session with code-required approval, tier-2 standing grants (`mandate_ref`), the batch guest card, the lethal-trifecta placements, production runtime isolation.
 
-**Robert:** approves v1.1 and names the builder.
+**Robert:** approves v1.1. The builder is decided (D12).
 
-## 4. Who builds (Claude Code's recommendation, for Robert's decision)
+## 4. Who builds (decided by Robert, 22 Oct: D12)
 
 Split by knowledge, not by preference:
 - **First light (M1.0–M1.4): Claude Code.** It is integration of code Claude Code built this week (tool path, proposals, lessons, the route it switched today) plus two small new pieces (policy file v0, `keep_preference`). Codex reviews each slice against its own spec, Grok the authority points. Robert is in the room, which keeps the loop short.
