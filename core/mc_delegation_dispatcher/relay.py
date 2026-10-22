@@ -9,7 +9,11 @@ dispatcher queue for the Mac runner instead of on MC's own runtime, and reports 
 """
 from __future__ import annotations
 
-from .store import DispatcherStore
+import logging
+
+from .store import LEASE_SECONDS, DispatcherStore
+
+_log = logging.getLogger("mc_delegation")
 
 DELEGATE_AGENTS = ("claude-code", "codex")
 _MAP = {"queued": "running", "claimed": "running", "running": "running", "completed": "completed",
@@ -48,12 +52,13 @@ class DelegationRelay:
             return "unreachable", None
         if row is None:
             return "not_found", None
-        if row["state"] in ("claimed", "running"):
+        lapsed = row["lease_until"] is not None and (row["now"] - row["lease_until"]).total_seconds() > LEASE_SECONDS
+        if row["state"] in ("claimed", "running") and lapsed:     # only then: no write on an ordinary poll
             try:
                 if self.store.reap_lapsed(job_id):     # the runner died mid-job: say so instead of "running" forever
                     row = self.store.by_job(job_id)
             except Exception:
-                pass
+                _log.warning("delegation %s: lapsed claim could not be ended", job_id)
         state = _MAP[row["state"]]
         error = None
         if row["state"] == "queued" and row["deadline"] <= row["now"]:

@@ -869,7 +869,8 @@ def _answer_turn(found, turn):
         phase = "platform"
         result = _platform_command(found)
         if isinstance(result, PlatformOutcome):
-            phase = "model"
+            # The platform acted (an escape is unknown), unless its outcome is that nothing was done.
+            phase = "model" if result.verdict() == "NOTHING WAS DONE" else "platform"
             return _voiced_turn(found, turn, result)
         if result is not None:
             if turn is not None:
@@ -1059,7 +1060,8 @@ class PlatformOutcome:
         try:
             kept = self.floor.add_note(self.note_key, self.result["reply"], GUILD_PLATFORM, area=self.area, page="mc")
             reply_note = kept.value if kept.outcome == "kept" else None
-        except FloorStoreUnavailable:
+        except Exception:                      # the outcome stands; only its note may be missing (history_saved)
+            _mc_log().exception("platform outcome note could not be kept")
             reply_note = None
         return jsonify(status="answered", backend_kind="platform", reply_note=reply_note,
                        message=message or self.result["reply"], operation=self.result["operation"],
@@ -1396,7 +1398,8 @@ def _stream_turn(found, turn):
         phase = "platform"
         result = _platform_command(found)                 # spoken job commands are answered here, streaming or not
         if isinstance(result, PlatformOutcome):
-            phase = "model"
+            # The platform acted (an escape is unknown), unless its outcome is that nothing was done.
+            phase = "model" if result.verdict() == "NOTHING WAS DONE" else "platform"
             return _voiced_turn(found, turn, result)      # buffered: no partial words about an effect
         if result is not None:
             if turn is not None:

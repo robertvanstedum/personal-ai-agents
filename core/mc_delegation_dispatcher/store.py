@@ -141,7 +141,9 @@ class DispatcherStore:
     def cancel_requested(self, request_id, generation) -> bool:
         with self._tx() as cur:
             row = self._current(cur, request_id, generation, lock=False)
-            return row is None or bool(row["cancel_requested"])          # a lost claim also means stop
+            # Only the owner's Stop reads as cancelled. A lost claim is found by renew() and ends lease_lost, so it is
+            # never recorded as a Stop that was not pressed (independent review P3-d).
+            return row is not None and bool(row["cancel_requested"])
 
     def renew(self, request_id, generation) -> bool:
         with self._tx() as cur:
@@ -160,13 +162,16 @@ class DispatcherStore:
             row = cur.fetchone()
             if row is None:
                 return {"state": "refused", "event_id": event_id, "code": "unknown_request"}
+            if row["state"] == "interrupted" and (row["result_detail"] or {}).get("code") == "runner_lost":
+                # The owner was already told this job did not complete; a late result never rewrites that.
+                return {"state": "already_applied", "event_id": event_id, "code": "job_already_ended"}
             if row["result_event_id"] is not None:
                 same = str(row["result_event_id"]) == str(event_id)
                 return {"state": "already_applied" if same else "refused", "event_id": event_id,
                         **({} if same else {"code": "different_result_already_recorded"})}
             # Refusals may arrive without a claim (an envelope the runner rejected). Anything else needs the
             # current generation; a stale worker never completes someone else's claim.
-            if row["generation"] != generation and status != "refused":
+            if row["generation"] != generation and (status != "refused" or row["state"] not in ("queued", "claimed")):
                 return {"state": "refused", "event_id": event_id, "code": "stale_generation"}
             if row["cancel_requested"] and status == "completed":
                 status = "cancelled"                       # Stop was pressed: the result is kept, not claimed as done

@@ -91,6 +91,34 @@ class DelegationTests(PostgresFixture, unittest.TestCase):
         self.assertEqual((st["state"], st["error_class"]), ("failed", "interrupted"))
         self.assertIn("did not complete", st["result_text"])
 
+    def test_a_refusal_never_overwrites_a_job_stopped_before_pickup(self):
+        self.start()
+        self.assertEqual(self.relay.stop("j-0123456789abcdef"), "confirmed")
+        row = self.store.by_job("j-0123456789abcdef")
+        ack = self.store.result(str(row["request_id"]), 7, event_id=str(uuid4()), status="refused", artifacts=[],
+                                detail={"code": "late"})
+        self.assertEqual(ack["code"], "stale_generation")
+        self.assertEqual(self.store.by_job("j-0123456789abcdef")["state"], "cancelled")
+
+    def test_a_late_result_after_the_runner_was_declared_lost_changes_nothing(self):
+        self.start()
+        caps = {"cost_enforced_actors": ["claude-code"], "scopes": ["research"], "repositories": ["personal-ai-agents"]}
+        env = self.store.claim("mac-1", caps)
+        self.assertFalse(self.store.cancel_requested(env["request_id"], env["generation"]))
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '60 seconds'")
+        self.assertEqual(self.relay.status("j-0123456789abcdef")[1]["state"], "running")     # within the grace
+        # A lost claim is not a Stop: the runner finds it through renew() and records nothing as cancelled.
+        self.assertFalse(self.store.cancel_requested(env["request_id"], env["generation"]))
+        self.assertFalse(self.store.renew(env["request_id"], env["generation"]))
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE guild.mc_delegations SET lease_until = clock_timestamp() - interval '300 seconds'")
+        self.assertEqual(self.relay.status("j-0123456789abcdef")[1]["error_class"], "interrupted")
+        ack = self.store.result(env["request_id"], env["generation"], event_id=str(uuid4()), status="completed",
+                                artifacts=[], detail={}, output_text="late answer")
+        self.assertEqual((ack["state"], ack["code"]), ("already_applied", "job_already_ended"))
+        self.assertEqual(self.store.by_job("j-0123456789abcdef")["state"], "interrupted")
+
     def test_a_finished_job_leaves_no_workspace_behind(self):
         self.fake_cli("print('done')")
         self.start()
@@ -143,8 +171,8 @@ class DelegationTests(PostgresFixture, unittest.TestCase):
         stale = self.store.result(rid, first["generation"], event_id=str(uuid4()), status="completed", artifacts=[],
                                   detail={}, output_text="old")
         self.assertEqual(stale["state"], "refused")
-        self.assertFalse(self.store.renew(rid, first["generation"]))
-        self.assertTrue(self.store.cancel_requested(rid, first["generation"]))    # a lost claim means stop
+        self.assertFalse(self.store.renew(rid, first["generation"]))              # a lost claim stops the runner here
+        self.assertFalse(self.store.cancel_requested(rid, first["generation"]))   # ... never as an owner's Stop
 
     def test_results_are_idempotent_by_event(self):
         self.start()
