@@ -309,7 +309,10 @@ def build(host, service, row, commit, mode, base_image, record, labels):
         context = host.git_bytes('archive', '--format=tar', commit)
         dockerfile = row['dockerfile']
     else:
-        context, dockerfile = overlay_context(host, row, commit, base_image)
+        # BuildKit cannot start FROM a bare image ID, so name the exact running image first.
+        base_tag = f'minimoi-{service}:dev-overlay-base'
+        host.docker('tag', base_image['Id'], base_tag)
+        context, dockerfile = overlay_context(host, row, commit, base_image, base_tag)
     (record / 'build-context.sha256').write_text(hashlib.sha256(context).hexdigest() + '\n')
     host.docker('build', '-f', dockerfile, '--iidfile', str(iid), '-t', tag, *label_args, '-',
                 stdin=context, log=str(log), timeout=1800)
@@ -319,7 +322,7 @@ def build(host, service, row, commit, mode, base_image, record, labels):
     return image, tag
 
 
-def overlay_context(host, row, commit, base_image):
+def overlay_context(host, row, commit, base_image, base_tag):
     """A tar of the service's source directories at the commit plus a Dockerfile that replaces them
     wholesale on top of the running image (so deletions are real)."""
     import io
@@ -327,13 +330,15 @@ def overlay_context(host, row, commit, base_image):
     archive = host.git_bytes('archive', '--format=tar', commit, '--', *row['source'])
     user = base_image['Config'].get('User') or 'root'
     root = row['app_root']
-    lines = [f'FROM {base_image["Id"]}', 'USER root',
+    lines = [f'FROM {base_tag}', 'USER root',
              'RUN rm -rf ' + ' '.join(f'{root}/{d}' for d in row['source'])]
     lines += [f'COPY {d}/ {root}/{d}/' for d in row['source']]
     lines.append(f'USER {user}')
     dockerfile = ('\n'.join(lines) + '\n').encode()
     buf = io.BytesIO()
-    with tarfile.open(fileobj=io.BytesIO(archive)) as src, tarfile.open(fileobj=buf, mode='w') as out:
+    # GNU format: Docker does not recognise a stdin context that opens with Python's pax header.
+    with tarfile.open(fileobj=io.BytesIO(archive)) as src, \
+            tarfile.open(fileobj=buf, mode='w', format=tarfile.GNU_FORMAT) as out:
         for member in src.getmembers():
             out.addfile(member, src.extractfile(member) if member.isfile() else None)
         info = tarfile.TarInfo('Dockerfile.dev-overlay')

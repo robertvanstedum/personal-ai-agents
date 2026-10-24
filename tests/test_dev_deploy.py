@@ -299,3 +299,28 @@ def test_every_supported_service_has_a_dockerfile_and_health_url():
         assert all((root / d).exists() for d in row['deps']), name
         assert row['health'], name
     assert 'model-gateway' not in dd.SERVICES and 'postgres' not in dd.SERVICES
+
+
+def test_overlay_context_replaces_source_dirs_from_a_named_base():
+    import io
+    import tarfile
+    src = io.BytesIO()
+    with tarfile.open(fileobj=src, mode='w', format=tarfile.PAX_FORMAT) as t:
+        body = b'print(1)\n'
+        info = tarfile.TarInfo('domains/german/html_server.py')
+        info.size = len(body)
+        t.addfile(info, io.BytesIO(body))
+
+    class Git:
+        def git_bytes(self, *args):
+            assert args[:3] == ('archive', '--format=tar', COMMIT)
+            return src.getvalue()
+
+    ctx, dockerfile = dd.overlay_context(Git(), dd.SERVICES['german'], COMMIT, image(), 'minimoi-german:dev-overlay-base')
+    assert ctx[257:265] == b'ustar  \x00'           # GNU header: what Docker accepts as a stdin context
+    with tarfile.open(fileobj=io.BytesIO(ctx)) as t:
+        text = t.extractfile(dockerfile).read().decode()
+        assert 'domains/german/html_server.py' in t.getnames()
+    assert text.startswith('FROM minimoi-german:dev-overlay-base\nUSER root\n')
+    assert 'RUN rm -rf /app/domains/german /app/core /app/utils' in text
+    assert 'COPY domains/german/ /app/domains/german/' in text and text.rstrip().endswith('USER root')
