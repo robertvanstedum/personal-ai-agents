@@ -182,6 +182,7 @@ def build(doc: dict, out: Path) -> Path:
             cells = _row(sp, (0.25, 0.75), usable)
             _para(cells[0], f"{_text(row.get('employer'), 'employer') or _text(row.get('title'), 'title')} [{row['id']}]",
                   first=True)
+            _para(cells[1], _text(row.get("speaking_points"), "speaking_points"), first=True)
 
     document.add_heading("Agreement check (LinkedIn vs resume)", level=2)
     ac = _table(document, ("Job", "LinkedIn", "Resume", "Decision"), (0.18, 0.32, 0.32, 0.18), usable)
