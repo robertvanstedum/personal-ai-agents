@@ -22,4 +22,4 @@ The flow:
 Column 4 conventions (read by the export): `LinkedIn:` paragraph = LinkedIn entry; `•`/`-` = resume bullet; other
 paragraphs = resume entry. In the About row: `Headline:`, `About:`, `Summary:`.
 
-Tests: `tests/cos/test_career_kit_workbook.py` (placeholder data only). Needs `python-docx`.
+Tests: `tests/cos/test_career_kit_workbook.py` (placeholder data only). Dependency: `python-docx`, declared in `requirements.txt`.

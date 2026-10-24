@@ -3,11 +3,9 @@ import json
 from pathlib import Path
 
 import pytest
+from docx import Document
 
-pytest.importorskip("docx")                       # python-docx: an authoring tool, not a service dependency
-from docx import Document  # noqa: E402
-
-from domains.cos.career_kit import workbook  # noqa: E402
+from domains.cos.career_kit import workbook
 
 EXAMPLE = Path(workbook.__file__).with_name("example_input.json")
 
