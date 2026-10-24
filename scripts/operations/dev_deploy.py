@@ -1,6 +1,7 @@
-"""Deploy one named service at a pinned commit to dev (the Mac), with a dated record and rollback.
+"""Deploy one unit (a whole domain or part of one) at a pinned commit to dev (the Mac), with a dated
+record and rollback. Units are listed in dev_deploy_units.json.
 
-Design: docs/DEV_DEPLOY_DESIGN_v0.1_2026-10-24.md. Dev only: this never talks to EC2, ECR or
+Spec: docs/specs/spec_163_dev_deploy_by_domain_2026-10-24.md. Dev only: this never talks to EC2, ECR or
 production. Source comes from `git archive <commit>`; no checkout is ever touched. The running
 container's recorded compose chain is re-applied with one stable per-service pin file at its end,
 and the only difference allowed between the running and the rendered service is the image.
@@ -37,39 +38,51 @@ DEP_FILES = ('requirements.txt', 'requirements.test.txt', 'package.json', 'packa
 # handed to `docker compose` through the process environment only, never printed or written.
 PASSTHROUGH = {'MC_NATIVE_RELAY_TOKEN': ('minimoi-portal', 'MC_RUNTIME_TOKEN')}
 
-# One row per supported service. `sidecars` share the image and move with it; `source` is what an
-# overlay replaces and what the post-deploy source check hashes.
-SERVICES = {
-    'portal': dict(container='minimoi-portal', dockerfile='docker/Dockerfile.portal',
-                   deps=('docker/requirements.portal.txt',),
-                   source=('minimoi_portal', 'core', 'services', 'domains', 'utils'),
-                   health=('http://127.0.0.1:5001/health', 'https://dev.minimoi.ai/health'),
-                   sidecars=(('board-api', 'minimoi-board-api-dev'),), mc_turn_probe=True),
-    'german': dict(container='minimoi-german', dockerfile='docker/Dockerfile.german',
-                   deps=('docker/requirements.german.txt',), source=('domains/german', 'core', 'utils'),
-                   health=('http://127.0.0.1:8767/health',)),
-    'portuguese': dict(container='minimoi-portuguese', dockerfile='docker/Dockerfile.portuguese',
-                       deps=('docker/requirements.portuguese.txt',), source=('domains/portuguese', 'core', 'utils'),
-                       health=('http://127.0.0.1:8770/health',)),
-    'cos-scheduler': dict(container='minimoi-cos-scheduler', dockerfile='docker/Dockerfile.cos-scheduler',
-                          deps=('docker/requirements.cos-agent.txt',),
-                          source=('core', 'utils', 'domains/guild', 'domains/cos', 'services/model_gateway',
-                                  'services/usage'),
-                          health=('http://127.0.0.1:8769/health',)),
-}
-# Mac-only launchd agents: pinned code directories instead of images (see change_launchd).
-SERVICES['operations'] = dict(
-    kind='launchd', label='com.user.operations', script='domains/guild/agents/operations.py',
-    deps=('requirements.txt',), source=('domains/guild', 'core', 'utils'),
-    # Paths the agent writes inside its code directory: they stay in their current home and every pinned
-    # code directory links to them, so a deploy or rollback never loses logs or memory.
-    state=('logs', 'data/guild/memory'),
-    health=('http://127.0.0.1:8768/health',))
-for row in SERVICES.values():
-    row.setdefault('kind', 'container')
-    row.setdefault('sidecars', ())
-    row.setdefault('mc_turn_probe', False)
-    row.setdefault('app_root', '/app')
+# The deployable units (a whole domain or part of one) live in one registry next to this file:
+# one entry per unit, one command per unit. Spec 163 section 1 lists the fields.
+REGISTRY = Path(__file__).with_name('dev_deploy_units.json')
+REQUIRED = {'docker': ('domain', 'container', 'dockerfile', 'deps', 'source', 'health'),
+            'launchd': ('domain', 'label', 'script', 'deps', 'source', 'state', 'health')}
+
+
+def load_registry(path=REGISTRY):
+    """Units with defaults filled in, plus the names that are out of bounds. Malformed entries fail loudly."""
+    doc = json.loads(Path(path).read_text())
+    units = {}
+    for name, entry in doc['units'].items():
+        runtime = entry.get('runtime')
+        if runtime not in REQUIRED:
+            raise ValueError(f'unit {name}: runtime must be docker or launchd')
+        missing = [k for k in REQUIRED[runtime] if k not in entry]
+        if missing:
+            raise ValueError(f'unit {name}: missing {", ".join(missing)}')
+        if not entry['health'] and not entry.get('docker_healthcheck'):
+            raise ValueError(f'unit {name}: needs a health URL or docker_healthcheck')
+        if entry.get('part_of') and entry['part_of'] not in doc['units']:
+            raise ValueError(f'unit {name}: part_of names no unit')
+        if name in doc.get('out_of_bounds', {}):
+            raise ValueError(f'unit {name} is also listed as out of bounds')
+        row = dict(entry, name=name)
+        row['kind'] = 'launchd' if runtime == 'launchd' else 'container'
+        row['sidecars'] = tuple(tuple(x) for x in entry.get('sidecars', ()))
+        for key, default in (('mc_turn_probe', False), ('app_root', '/app'), ('available', True),
+                             ('overlay', True), ('exclude', ()), ('part_of', None), ('includes', '')):
+            row.setdefault(key, default)
+        units[name] = row
+    return units, dict(doc.get('out_of_bounds', {}))
+
+
+UNITS, OUT_OF_BOUNDS = load_registry()
+
+
+def source_paths(row):
+    """(repo path, path inside the container) for each source entry; `repo:dest` remaps, as records does."""
+    out = []
+    for entry in row['source']:
+        repo, _, dest = entry.partition(':')
+        out.append((repo, dest or f'{row["app_root"]}/{repo}'))
+    return out
+
 
 MC_TURN_PROBE = ("import os,psycopg2; c=psycopg2.connect(os.environ['DATABASE_URL']); cur=c.cursor(); "
                  "cur.execute(\"SELECT count(*) FROM guild.mc_turn_ledger WHERE state = %s AND lease_until > "
@@ -309,6 +322,14 @@ def source_commit(image):
     return sha if sha and SHA.fullmatch(sha) else None
 
 
+def unit_commit(row, image):
+    """The commit a unit's code is at in `image`. A part (e.g. guild-ui) carries its own label, because
+    an overlay of the part does not move the rest of the image."""
+    labels = (image or {}).get('Config', {}).get('Labels') or {}
+    part = labels.get(f'minimoi.part.{row["name"]}') if row['part_of'] else None
+    return part if part and SHA.fullmatch(part) else source_commit(image or {'Config': {}})
+
+
 def dropped_commits(host, current, target):
     """Commits on dev now that the target does not contain."""
     if current == target:
@@ -328,6 +349,8 @@ def migration_paths(host, current, target):
 
 
 def overlay_blockers(host, row, current, target):
+    if not row['overlay']:
+        return ['this unit does not allow overlays']
     if not current:
         return ['the running image has no minimoi.source_commit label']
     watched = {row['dockerfile'], *row['deps']}
@@ -363,12 +386,11 @@ def overlay_context(host, row, commit, base_image, base_tag):
     wholesale on top of the running image (so deletions are real)."""
     import io
     import tarfile
-    archive = host.git_bytes('archive', '--format=tar', commit, '--', *row['source'])
+    paths = source_paths(row)
+    archive = host.git_bytes('archive', '--format=tar', commit, '--', *[repo for repo, _ in paths])
     user = base_image['Config'].get('User') or 'root'
-    root = row['app_root']
-    lines = [f'FROM {base_tag}', 'USER root',
-             'RUN rm -rf ' + ' '.join(f'{root}/{d}' for d in row['source'])]
-    lines += [f'COPY {d}/ {root}/{d}/' for d in row['source']]
+    lines = [f'FROM {base_tag}', 'USER root', 'RUN rm -rf ' + ' '.join(dest for _, dest in paths)]
+    lines += [f'COPY {repo}/ {dest}/' for repo, dest in paths]
     lines.append(f'USER {user}')
     dockerfile = ('\n'.join(lines) + '\n').encode()
     buf = io.BytesIO()
@@ -398,14 +420,17 @@ def up(host, chain, files, env, log):
 
 
 def source_check(host, row, container_name, commit, container):
-    tree = host.git('ls-tree', '-r', commit, '--', *row['source'])
+    paths = source_paths(row)
+    tree = host.git('ls-tree', '-r', commit, '--', *[repo for repo, _ in paths])
     mounted = [m['Destination'] for m in container['Mounts']]
     expected = {}
     for line in tree.splitlines():
         meta, path = line.split('\t', 1)
         _, kind, blob = meta.split()
-        target = f'{row["app_root"]}/{path}'
-        if kind == 'blob' and path.endswith('.py') and not any(target.startswith(m + '/') for m in mounted):
+        repo, dest = next((r, d) for r, d in paths if path == r or path.startswith(r + '/'))
+        target = dest + path[len(repo):]
+        if (kind == 'blob' and path.endswith('.py') and not any(target.startswith(m + '/') for m in mounted)
+                and not any(path.startswith(x + '/') for x in row['exclude'])):
             expected[target] = blob
     got = json.loads(host.docker('exec', '-i', container_name, 'python3', '-c', BLOB_PROBE,
                                  stdin=json.dumps(sorted(expected)).encode(), timeout=120))
@@ -433,7 +458,7 @@ def health(host, row, container_name, image, commit, timeout):
     checks['docker_health'] = hc or 'none defined'
     checks['urls'] = urls
     if commit:
-        checks['label'] = source_commit(image_doc) == commit
+        checks['label'] = unit_commit(row, image_doc) == commit
         checks['source'] = source_check(host, row, container_name, commit, c) if checks['running'] else {'ok': False}
     else:
         checks['label'] = checks['source'] = 'skipped: target image has no source label'
@@ -527,18 +552,22 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
            dry_run=False, timeout=90, out=print):
     """Move `service` to a new image. `action` is 'deploy' (build from `commit`) or 'rollback'
     (re-pin `target_image`). Returns the record directory (None for a dry run)."""
-    row = SERVICES[service]
+    row = UNITS[service]
     if row['kind'] == 'launchd':
         return change_launchd(host, service, operator, action=action, commit=commit, target=target_image,
                               mode=mode, flags=flags, dry_run=dry_run, timeout=timeout, out=out)
     flags = flags or {}
     check_hold(service, operator)
+    if row['part_of']:
+        check_hold(row['part_of'], operator)      # a hold on the whole domain covers its parts
+        mode = 'overlay' if action == 'deploy' else mode
     container = host.inspect('container', row['container'])
     if not container:
         raise Refused(f'{row["container"]} is not running on this host')
     chain = chain_of(container)
+    svc = chain['service']                        # the compose service; parts share their domain's pin
     before_image = host.inspect('image', container['Image'])
-    current = source_commit(before_image)
+    current = unit_commit(row, before_image)
     sidecars = [(name, host.inspect('container', cname)) for name, cname in row['sidecars']]
     sidecars = [(name, c) for name, c in sidecars if c]
     for name, c in sidecars:
@@ -563,12 +592,12 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
 
     env = compose_env(host)
     PINS.mkdir(parents=True, exist_ok=True)
-    pin = PINS / f'{service}.json'
+    pin = PINS / f'{svc}.json'
     files = with_pin(chain['files'], pin)
     running = running_view(container, before_image)
     if dry_run:
-        probe = PINS / f'.{service}.dry-run.json'
-        write_pin(probe, service, container['Image'], sidecars)
+        probe = PINS / f'.{svc}.dry-run.json'
+        write_pin(probe, svc, container['Image'], sidecars)
         try:
             rendered = rendered_view(render(host, chain, with_pin(chain['files'], probe), env), chain['service'])
         finally:
@@ -587,7 +616,7 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     write_json(record / 'REQUEST.json', plan)
     write_json(record / 'running-before.json', config_summary(running))
     write_json(record / 'pin-before.json', json.loads(pin.read_text()) if pin.exists()
-               else {'services': {n: {'image': container['Image']} for n in (service, *[s for s, _ in sidecars])}})
+               else {'services': {n: {'image': container['Image']} for n in (svc, *[s for s, _ in sidecars])}})
     gateway_before = host.gateway()
     out(f'record: {record}')
 
@@ -596,12 +625,16 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
             out(f'building {service} at {commit[:12]} ({mode})…')
             # No per-record label: the same commit and mode build the same image, so a re-deploy is identical.
             labels = {'minimoi.source_commit': commit, 'minimoi.environment': 'dev', 'minimoi.service': service}
+            if row['part_of']:
+                # A part moves only its own paths: the image keeps its domain's commit label and gains one
+                # for the part.
+                labels = {f'minimoi.part.{service}': commit, 'minimoi.environment': 'dev'}
             image, tag = build(host, service, row, commit, mode, before_image, record, labels)
         else:
             image, tag = target_image, None
-            commit = source_commit(host.inspect('image', image) or {'Config': {}})
+            commit = unit_commit(row, host.inspect('image', image))
         candidate = record / 'pin-after.json'
-        write_pin(candidate, service, image, sidecars)
+        write_pin(candidate, svc, image, sidecars)
         target_image_doc = host.inspect('image', image)
         rendered = rendered_view(render(host, chain, with_pin(chain['files'], candidate), env), chain['service'])
         diff = config_diff(rendered, running)
@@ -628,14 +661,14 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     os.chmod(record / 'rollback.sh', 0o755)
 
     def apply(pin_doc, log):
-        write_pin(pin, service, pin_doc['services'][service]['image'], sidecars)
+        write_pin(pin, svc, pin_doc['services'][svc]['image'], sidecars)
         up(host, chain, files, env, record / log)
         for name, c in sidecars:
             up(host, chain_of(c), with_pin(chain_of(c)['files'], pin), env, record / log)
 
     out(f'applying {image[:19]} to {row["container"]}…')
     try:
-        apply({'services': {service: {'image': image}}}, 'up.log')
+        apply({'services': {svc: {'image': image}}}, 'up.log')
         ok, checks = health(host, row, row['container'], image, commit, timeout)
         for name, c in sidecars:
             sc = host.inspect('container', c['Name'].lstrip('/')) or {}
@@ -733,8 +766,7 @@ def plist_diff(old, new):
 
 def prepare_code(host, row, commit, state_home):
     """CODE/<service>/<commit>, extracted once and reused; state paths link to `state_home`."""
-    service = next(k for k, v in SERVICES.items() if v is row)
-    target = CODE / service / commit
+    target = CODE / row['name'] / commit
     if (target / '.minimoi-source-commit').exists():
         if (target / '.minimoi-source-commit').read_text().strip() != commit:
             raise Refused(f'{target} holds a different commit')
@@ -761,7 +793,7 @@ def prepare_code(host, row, commit, state_home):
 
 
 def local_source_check(host, row, location, commit):
-    tree = host.git('ls-tree', '-r', commit, '--', *row['source'])
+    tree = host.git('ls-tree', '-r', commit, '--', *[repo for repo, _ in source_paths(row)])
     bad, files = [], 0
     for line in tree.splitlines():
         meta, path = line.split('\t', 1)
@@ -816,7 +848,7 @@ def reload_job(host, label, plist_path, plist_bytes):
 
 def change_launchd(host, service, operator, *, action, commit=None, target=None, mode=None, flags=None,
                    dry_run=False, timeout=90, out=print):
-    row = SERVICES[service]
+    row = UNITS[service]
     flags = flags or {}
     check_hold(service, operator)
     job = host.launchd(row['label'])
@@ -927,7 +959,8 @@ def rollback_target(service, to=None):
     if to:
         record = Path(to)
         doc = json.loads((record / 'pin-before.json').read_text())
-        return (doc['location'] if 'location' in doc else doc['services'][service]['image']), record
+        # Docker pins list the unit's own compose service first, then its sidecars.
+        return (doc['location'] if 'location' in doc else next(iter(doc['services'].values()))['image']), record
     rows = [r for r in history(service) if r.get('ok')]
     if not rows:
         raise Refused(f'no recorded change for {service} to roll back')
@@ -936,24 +969,44 @@ def rollback_target(service, to=None):
 
 
 def status(host, service=None, out=print):
-    names = [service] if service else list(SERVICES)
+    names = [service] if service else list(UNITS)
     rows = []
     for name in names:
-        if SERVICES[name]['kind'] == 'launchd':
-            job = host.launchd(SERVICES[name]['label'])
+        if UNITS[name]['kind'] == 'launchd':
+            job = host.launchd(UNITS[name]['label'])
             location = job and job.get('working_directory')
             rows.append({'service': name, 'running': bool(job and job.get('state') == 'running'),
                          'location': location, 'commit': location and location_commit(host, location),
                          'hold': read_hold(name), 'last_change': ([r for r in history(name)] or [None])[-1]})
             continue
-        c = host.inspect('container', SERVICES[name]['container'])
+        c = host.inspect('container', UNITS[name]['container'])
         image = host.inspect('image', c['Image']) if c else None
         last = ([r for r in history(name)] or [None])[-1]
         rows.append({'service': name, 'running': bool(c and c['State'].get('Running')),
-                     'image': c and c['Image'], 'commit': image and source_commit(image),
+                     'image': c and c['Image'], 'commit': image and unit_commit(UNITS[name], image),
                      'hold': read_hold(name), 'last_change': last})
     out(json.dumps(rows, indent=2, sort_keys=True))
     return rows
+
+
+def check_unit(name, deploying=True):
+    if name in OUT_OF_BOUNDS:
+        raise Refused(f'{name} is out of bounds for dev deploys: {OUT_OF_BOUNDS[name]}')
+    if name not in UNITS:
+        raise Refused(f'no unit {name!r}; units are: {", ".join(UNITS)} (registry: {REGISTRY.name})')
+    if deploying and not UNITS[name]['available']:
+        raise Refused(f'{name} is registered but not deployable today: {UNITS[name]["includes"]}')
+
+
+def list_units(out=print):
+    """The registry as a table: what each unit is, how it runs and how it is checked."""
+    out(f'{"unit":<14} {"domain":<11} {"runtime":<8} {"part of":<8} health')
+    for name, row in UNITS.items():
+        health = ', '.join(row['health']) or 'docker healthcheck'
+        flag = '' if row['available'] else '  [not deployable today]'
+        out(f'{name:<14} {row["domain"]:<11} {row["runtime"]:<8} {row["part_of"] or "-":<8} {health}{flag}')
+    for name, why in OUT_OF_BOUNDS.items():
+        out(f'{name:<14} out of bounds: {why}')
 
 
 def main(argv=None, host=None):
@@ -961,7 +1014,7 @@ def main(argv=None, host=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest='cmd', required=True)
     d = sub.add_parser('deploy')
-    d.add_argument('service', choices=sorted(SERVICES))
+    d.add_argument('service', metavar='unit')
     d.add_argument('commit')
     d.add_argument('--operator', required=True)
     d.add_argument('--overlay', action='store_true')
@@ -971,15 +1024,21 @@ def main(argv=None, host=None):
     d.add_argument('--dry-run', action='store_true')
     d.add_argument('--timeout', type=int, default=90)
     r = sub.add_parser('rollback')
-    r.add_argument('service', choices=sorted(SERVICES))
+    r.add_argument('service', metavar='unit')
     r.add_argument('--operator', required=True)
     r.add_argument('--to')
     r.add_argument('--dry-run', action='store_true')
     r.add_argument('--timeout', type=int, default=90)
     s = sub.add_parser('status')
-    s.add_argument('service', nargs='?', choices=sorted(SERVICES))
+    s.add_argument('service', nargs='?', metavar='unit')
+    sub.add_parser('units')
     a = p.parse_args(argv)
     try:
+        if a.cmd == 'units':
+            list_units()
+            return 0
+        if getattr(a, 'service', None):
+            check_unit(a.service, deploying=a.cmd != 'status')
         if a.cmd == 'status':
             status(host, a.service)
             return 0

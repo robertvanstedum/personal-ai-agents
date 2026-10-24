@@ -1136,5 +1136,17 @@
     "blocked_reason": "Final Claude Code review pending (Claude Chat and Codex reviews folded into v0.4). Build after Master Craftsman stage 1 works (Robert, 2026-09-28).",
     "notes": "v0.4 (SHA-256 baaab1ab…). Owner direction: planning-studio INIT-2026-0007 documents/OWNER_DIRECTION_AGENT_MEMORY_V04_2026-09-28.md.",
     "last_transition_at": "2026-09-28T17:30:00+00:00"
+  },
+  {
+    "id": 163,
+    "spec_title": "Dev deploys by domain — one command per unit (a domain or part of one), one registry, record and rollback",
+    "spec_file": "spec_163_dev_deploy_by_domain_2026-10-24.md",
+    "status": "in-review",
+    "priority": "high",
+    "github_issue": "#373",
+    "summary": "scripts/operations/deploy_dev.sh deploys one registered unit (portal with Guild UI and MC chat, guild-ui part, german, portuguese, cos-scheduler, curator, records, the launchd Guild operations agent; dev-agent registered, not deployable today) at a pinned commit to dev, with a dated record, health checks and one-command rollback. Registry: scripts/operations/dev_deploy_units.json; model-gateway and postgres out of bounds. Dev only.",
+    "blocked_reason": "PR #372 awaiting Codex review and Robert's merge; #373 stays open until OPERATIONS.md on main references the path and registry.",
+    "notes": "v0.1 approved for dev by Robert 24 Oct 2026. Proven live on german and the operations agent (deploy, rollback, re-deploy).",
+    "last_transition_at": "2026-10-24T22:00:00+00:00"
   }
 ]

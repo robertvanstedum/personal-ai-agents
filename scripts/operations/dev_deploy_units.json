@@ -1,0 +1,107 @@
+{
+  "about": "Deployable units for dev (the Mac). One entry = one unit = one command: scripts/operations/deploy_dev.sh deploy <unit> <commit> --operator <name>. A unit is a whole domain or part of one. To add a unit, add one entry here (fields: spec 163 section 1, OPERATIONS.md 'Adding a unit') and run tests/test_dev_deploy.py.",
+  "units": {
+    "portal": {
+      "domain": "portal",
+      "runtime": "docker",
+      "container": "minimoi-portal",
+      "dockerfile": "docker/Dockerfile.portal",
+      "deps": ["docker/requirements.portal.txt"],
+      "source": ["minimoi_portal", "core", "services", "domains", "utils"],
+      "health": ["http://127.0.0.1:5001/health", "https://dev.minimoi.ai/health"],
+      "sidecars": [["board-api", "minimoi-board-api-dev"]],
+      "mc_turn_probe": true,
+      "includes": "The portal shell plus the Guild UI (Build, Operate, the queue) and MC chat, all in minimoi_portal/guild_ui; the board-api sidecar runs the same image and moves with it."
+    },
+    "guild-ui": {
+      "domain": "guild",
+      "part_of": "portal",
+      "runtime": "docker",
+      "container": "minimoi-portal",
+      "dockerfile": "docker/Dockerfile.portal",
+      "deps": ["docker/requirements.portal.txt"],
+      "source": ["minimoi_portal/guild_ui"],
+      "health": ["http://127.0.0.1:5001/health", "https://dev.minimoi.ai/health"],
+      "sidecars": [["board-api", "minimoi-board-api-dev"]],
+      "mc_turn_probe": true,
+      "includes": "Part of portal: replaces only minimoi_portal/guild_ui (Guild UI and MC chat) on top of the running portal image."
+    },
+    "german": {
+      "domain": "german",
+      "runtime": "docker",
+      "container": "minimoi-german",
+      "dockerfile": "docker/Dockerfile.german",
+      "deps": ["docker/requirements.german.txt"],
+      "source": ["domains/german", "core", "utils"],
+      "health": ["http://127.0.0.1:8767/health"]
+    },
+    "portuguese": {
+      "domain": "portuguese",
+      "runtime": "docker",
+      "container": "minimoi-portuguese",
+      "dockerfile": "docker/Dockerfile.portuguese",
+      "deps": ["docker/requirements.portuguese.txt"],
+      "source": ["domains/portuguese", "core", "utils"],
+      "health": ["http://127.0.0.1:8770/health"]
+    },
+    "cos-scheduler": {
+      "domain": "cos",
+      "runtime": "docker",
+      "container": "minimoi-cos-scheduler",
+      "dockerfile": "docker/Dockerfile.cos-scheduler",
+      "deps": ["docker/requirements.cos-agent.txt"],
+      "source": ["core", "utils", "domains/guild", "domains/cos", "services/model_gateway", "services/usage"],
+      "health": ["http://127.0.0.1:8769/health"]
+    },
+    "curator": {
+      "domain": "curator",
+      "runtime": "docker",
+      "container": "minimoi-curator",
+      "dockerfile": "docker/Dockerfile.curator",
+      "deps": ["docker/requirements.curator.txt"],
+      "source": ["domains/curator", "core", "utils"],
+      "health": ["http://127.0.0.1:8766/health"],
+      "includes": "Its runtime state lives on host mounts (scripts/operations/curator_state.map); the config check refuses any mount change."
+    },
+    "records": {
+      "domain": "records",
+      "runtime": "docker",
+      "container": "minimoi-records",
+      "dockerfile": "docker/Dockerfile.records",
+      "deps": ["docker/requirements.records.txt"],
+      "source": ["prototype-lab/projects/project-records-room-poc:/app"],
+      "exclude": ["prototype-lab/projects/project-records-room-poc/tests", "prototype-lab/projects/project-records-room-poc/static/v2/fixtures"],
+      "overlay": false,
+      "health": [],
+      "docker_healthcheck": true,
+      "includes": "Not published on a host port; health is the container's own healthcheck (port 18880 inside)."
+    },
+    "operations": {
+      "domain": "guild",
+      "runtime": "launchd",
+      "label": "com.user.operations",
+      "script": "domains/guild/agents/operations.py",
+      "deps": ["requirements.txt"],
+      "source": ["domains/guild", "core", "utils"],
+      "state": ["logs", "data/guild/memory"],
+      "health": ["http://127.0.0.1:8768/health"],
+      "includes": "Guild Operations agent, port 8768."
+    },
+    "dev-agent": {
+      "domain": "guild",
+      "runtime": "launchd",
+      "label": "com.user.devagent",
+      "script": "domains/guild/agents/dev_agent.py",
+      "deps": ["requirements.txt"],
+      "source": ["domains/guild", "core", "utils"],
+      "state": ["logs", "data/guild/memory"],
+      "health": ["http://127.0.0.1:8771/health"],
+      "available": false,
+      "includes": "Guild Design/Dev agent. Not deployable today: its launchd job was disabled on 26 Sep 2026 (com.user.devagent.plist.disabled-2026-09-26) and port 8771 is now Vault Ask. Re-enable the plist, then set available to true."
+    }
+  },
+  "out_of_bounds": {
+    "model-gateway": "Holds the provider keys; never restarted by this path.",
+    "postgres": "Data. Schema changes are explicit migrations, never a deploy."
+  }
+}

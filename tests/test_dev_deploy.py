@@ -291,18 +291,80 @@ def test_main_refuses_a_real_run_outside_the_wrapper(runtime, monkeypatch, capsy
     assert 'deploy_dev.sh' in capsys.readouterr().err
 
 
-def test_every_supported_service_has_a_dockerfile_and_health_url():
+def test_registry_units_point_at_real_files_and_name_what_is_out_of_bounds():
     from pathlib import Path
     root = Path(dd.__file__).resolve().parents[2]
-    for name, row in dd.SERVICES.items():
+    for name, row in dd.UNITS.items():
+        assert all((root / d).exists() for d in row['deps']), name
+        assert all((root / repo).exists() for repo, _ in dd.source_paths(row)), name
+        assert row['health'] or row.get('docker_healthcheck'), name
         if row['kind'] == 'launchd':
             assert (root / row['script']).exists(), name
-            continue
-        assert (root / row['dockerfile']).exists(), name
-        assert all((root / d).exists() for d in row['deps']), name
-        assert row['health'], name
-    assert 'model-gateway' not in dd.SERVICES and 'postgres' not in dd.SERVICES
+        else:
+            assert (root / row['dockerfile']).exists(), name
+    assert {'portal', 'guild-ui', 'german', 'portuguese', 'cos-scheduler', 'curator', 'records',
+            'operations', 'dev-agent'} <= set(dd.UNITS)
+    assert dd.UNITS['guild-ui']['part_of'] == 'portal'
+    assert 'guild_ui' in dd.UNITS['portal']['includes'] and 'MC chat' in dd.UNITS['portal']['includes']
+    assert set(dd.OUT_OF_BOUNDS) == {'model-gateway', 'postgres'}
+    assert dd.source_paths(dd.UNITS['records']) == [('prototype-lab/projects/project-records-room-poc', '/app')]
 
+
+def test_registry_rejects_malformed_entries(tmp_path):
+    def load(units, oob=None):
+        path = tmp_path / 'units.json'
+        path.write_text(json.dumps({'units': units, 'out_of_bounds': oob or {}}))
+        return dd.load_registry(path)
+    good = {'domain': 'x', 'runtime': 'docker', 'container': 'c', 'dockerfile': 'd', 'deps': [], 'source': ['s'],
+            'health': ['http://h']}
+    assert load({'x': good})[0]['x']['kind'] == 'container'
+    with pytest.raises(ValueError, match='missing dockerfile'):
+        load({'x': {k: v for k, v in good.items() if k != 'dockerfile'}})
+    with pytest.raises(ValueError, match='health'):
+        load({'x': dict(good, health=[])})
+    with pytest.raises(ValueError, match='runtime'):
+        load({'x': dict(good, runtime='k8s')})
+    with pytest.raises(ValueError, match='part_of'):
+        load({'x': dict(good, part_of='nope')})
+    with pytest.raises(ValueError, match='out of bounds'):
+        load({'postgres': good}, {'postgres': 'data'})
+
+
+def test_out_of_bounds_unknown_and_unavailable_units_are_refused(runtime, capsys):
+    host = FakeHost(runtime)
+    assert dd.main(['deploy', 'model-gateway', 'HEAD', '--operator', 'x', '--dry-run'], host=host) == 2
+    assert 'provider keys' in capsys.readouterr().err
+    assert dd.main(['deploy', 'nope', 'HEAD', '--operator', 'x', '--dry-run'], host=host) == 2
+    assert 'units are:' in capsys.readouterr().err
+    assert dd.main(['deploy', 'dev-agent', 'HEAD', '--operator', 'x', '--dry-run'], host=host) == 2
+    assert 'not deployable today' in capsys.readouterr().err
+
+
+def test_a_part_deploys_as_an_overlay_with_its_own_label(runtime, monkeypatch):
+    import io
+    import tarfile
+    part = dict(dd.UNITS['german'], name='german-words', part_of='german', source=('domains/german',))
+    monkeypatch.setitem(dd.UNITS, 'german-words', part)
+    host = FakeHost(runtime, current_commit=BEFORE)
+    host.images[NEW] = image(NEW)
+    host.images[NEW]['Config']['Labels'] = {'minimoi.source_commit': BEFORE, 'minimoi.part.german-words': COMMIT}
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode='w') as t:
+        info = tarfile.TarInfo('domains/german/html_server.py')
+        t.addfile(info, io.BytesIO(b''))
+    host.git_bytes = lambda *args: buf.getvalue()
+    record = dd.change(host, 'german-words', 'claude-code', action='deploy', commit=COMMIT, mode='full',
+                       timeout=0, out=lambda *_: None)
+    build = next(c for c in host.calls if c[:2] == ('docker', 'build'))
+    assert 'Dockerfile.dev-overlay' in build                         # a part is always an overlay
+    assert f'minimoi.part.german-words={COMMIT}' in build
+    assert not any(str(a).startswith('minimoi.source_commit=') for a in build)   # the domain label is kept
+    assert json.loads((record / 'RESULT.json').read_text())['commit_before'] == BEFORE
+    assert (runtime / 'dev-pins' / 'german.json').exists()          # the part shares its domain's pin
+    (runtime / 'dev-pins' / 'HOLD-german').write_text(json.dumps({'owner': 'codex', 'reason': 'trial'}))
+    with pytest.raises(dd.Refused, match='held by codex'):
+        dd.change(host, 'german-words', 'claude-code', action='deploy', commit=COMMIT, timeout=0,
+                  out=lambda *_: None)
 
 def test_overlay_context_replaces_source_dirs_from_a_named_base():
     import io
@@ -319,7 +381,7 @@ def test_overlay_context_replaces_source_dirs_from_a_named_base():
             assert args[:3] == ('archive', '--format=tar', COMMIT)
             return src.getvalue()
 
-    ctx, dockerfile = dd.overlay_context(Git(), dd.SERVICES['german'], COMMIT, image(), 'minimoi-german:dev-overlay-base')
+    ctx, dockerfile = dd.overlay_context(Git(), dd.UNITS['german'], COMMIT, image(), 'minimoi-german:dev-overlay-base')
     assert ctx[257:265] == b'ustar  \x00'           # GNU header: what Docker accepts as a stdin context
     with tarfile.open(fileobj=io.BytesIO(ctx)) as t:
         text = t.extractfile(dockerfile).read().decode()
