@@ -527,8 +527,8 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     try:
         if action == 'deploy':
             out(f'building {service} at {commit[:12]} ({mode})…')
-            labels = {'minimoi.source_commit': commit, 'minimoi.environment': 'dev',
-                      'minimoi.deploy_record': str(record), 'minimoi.service': service}
+            # No per-record label: the same commit and mode build the same image, so a re-deploy is identical.
+            labels = {'minimoi.source_commit': commit, 'minimoi.environment': 'dev', 'minimoi.service': service}
             image, tag = build(host, service, row, commit, mode, before_image, record, labels)
         else:
             image, tag = target_image, None
@@ -554,8 +554,10 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     host.docker('tag', container['Image'], f'minimoi-{service}:dev-prev')   # keeps the rollback target from a prune
     pin_before = json.loads((record / 'pin-before.json').read_text())
     (record / 'rollback.sh').write_text(
-        f'#!/bin/sh\n# Put {service} back on the image it ran before this record.\n'
-        f'exec "{ROOT}/scripts/operations/deploy_dev.sh" rollback {service} --to "{record}" --operator "$1"\n')
+        f'#!/bin/sh\n# Put {service} back on the image it ran before this record. Usage: rollback.sh <operator>\n'
+        f'script="{ROOT}/scripts/operations/deploy_dev.sh"\n'
+        f'[ -x "$script" ] || script="$HOME/Projects/personal-ai-agents/scripts/operations/deploy_dev.sh"\n'
+        f'exec "$script" rollback {service} --to "{record}" --operator "${{1:?operator name}}"\n')
     os.chmod(record / 'rollback.sh', 0o755)
 
     def apply(pin_doc, log):

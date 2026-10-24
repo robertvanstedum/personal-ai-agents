@@ -478,6 +478,41 @@ native listener. Both native curator launchd jobs (`com.user.curator-server`,
 `com.vanstedum.minimoi-curator`) were pre-Docker leftovers that could never bind, and
 are disabled as `*.plist.disabled-2026-09-08`.
 
+### Deploying a branch or commit to dev
+
+Merging to `main` is a production release, so dev is never updated by merging. The standard
+path is one command on the Mac, from any worktree (design and rules:
+[docs/DEV_DEPLOY_DESIGN_v0.1_2026-10-24.md](docs/DEV_DEPLOY_DESIGN_v0.1_2026-10-24.md)):
+
+```bash
+scripts/operations/deploy_dev.sh deploy <service> <commit> --operator <name> --dry-run   # checks only
+scripts/operations/deploy_dev.sh deploy <service> <commit> --operator <name>             # build, apply, verify
+scripts/operations/deploy_dev.sh rollback <service> --operator <name>                    # undo the last change
+scripts/operations/deploy_dev.sh status                                                  # commit/image per service
+```
+
+- **Services:** `portal` (moves its `board-api` sidecar with it), `german`, `portuguese`,
+  `cos-scheduler`. Never model-gateway or postgres.
+- **What it does:** builds the production Dockerfile over `git archive <commit>` (`--overlay`
+  for a fast copy onto the running image, allowed only when dependencies are unchanged),
+  labels the image with the commit, rewrites `~/minimoi-runtime/dev-pins/<service>.json` (the
+  last file in the running compose chain), refuses if anything but the image would change,
+  recreates only that service, checks the container, health URLs, the source files against the
+  commit, and that the OpenClaw gateway was untouched. A failed check rolls back by itself.
+- **Record:** `~/minimoi-runtime/operators/dev-<deploy|rollback>-<service>-<sha>-<UTC>/`
+  (REQUEST, pin before/after, config and running before/after as key lists and digests,
+  health, RESULT or FAILURE/REFUSED, `rollback.sh`); one line per change in
+  `~/minimoi-runtime/dev-pins/HISTORY.jsonl`.
+- **It refuses** when: the service is held by another operator
+  (`~/minimoi-runtime/dev-pins/HOLD-<service>`, JSON `{"owner", "reason"}`); the deploy would
+  drop commits dev runs now (`--replace-unrelated`); the running image has no commit label
+  (`--accept-unknown-current`, first deploy only); migrations are involved
+  (apply them as their own step, then `--with-migrations-applied` — rollback never undoes
+  schema); an MC turn is in progress (portal); another deploy or heavy job is running.
+- `deploy_dev.sh` takes the host-wide lock (`_working/tools/heavy_job.py`); dry runs and
+  `status` do not. There is no CI job for dev: reaching the Mac from GitHub would need a runner
+  or an inbound endpoint on the host that holds the Keychain and personal data.
+
 ## Mac restart protocol
 
 Dev being down never affects production. Nothing here is urgent — but nothing here
