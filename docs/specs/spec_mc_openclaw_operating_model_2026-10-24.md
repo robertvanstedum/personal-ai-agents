@@ -1,15 +1,15 @@
 # Master Craftsman operating model — OpenClaw configuration, autonomy and persona
 
 **Specification ID:** MC-OC-001  
-**Version:** 0.3 · 24 October 2026  
-**Author:** Codex, reconciling Robert and personal OpenClaw  
+**Version:** 0.4 · 24 October 2026  
+**Author:** Claude Code, folding reviews; Codex reviews  
 **Owner:** Robert  
 **Delivery order:** Master Craftsman first; Chief of Staff fast follow  
 **Umbrella:** [#361 — MC does not yet fulfill day-to-day ownership](https://github.com/robertvanstedum/personal-ai-agents/issues/361)  
 **Related authority track:** [#360 — explicit tool policy](https://github.com/robertvanstedum/personal-ai-agents/issues/360)
-**Status:** Canonical review proposal in the official documentation tree; Claude Code v0.2 review reconciled; pending stakeholder review and Robert’s adoption. Not approved to build or activate.
+**Status:** Canonical review proposal in the official documentation tree; v0.4 folds the Claude Code, Claude Chat, personal OpenClaw and Grok reviews (§12). Robert confirmed the §10 decision table on 24 October 2026. Slice 0a has a build plan awaiting Robert’s go; nothing is approved to build or activate until he gives it.
 
-This is the single proposed governing specification for MC’s operational role, capability configuration and persona lifecycle, with CoS adoption defined below. GitHub publication makes it reviewable, not automatically approved. See the [technical review and disposition](../reviews/MC_OC_001_TECHNICAL_REVIEW_2026-10-24.md). Subsequent revisions update this canonical document through reviewed commits; implementation planning follows approval of a named revision.
+This is the single proposed governing specification for MC’s operational role, capability configuration and persona lifecycle, with CoS adoption defined below. GitHub publication makes it reviewable, not automatically approved. See the [technical review and disposition](../reviews/MC_OC_001_TECHNICAL_REVIEW_2026-10-24.md) and the [review index](../reviews/MC_OC_001_REVIEW_INDEX.md). Subsequent revisions update this canonical document through reviewed commits; implementation planning follows approval of a named revision.
 Scope: MC conversation, investigation, memory integration, governed action/delegation and versioned persona. This supersedes the two-line configuration proposal as a complete design brief, not the approved Board operation contracts.
 
 ## 1. Product intent
@@ -77,8 +77,8 @@ The target is described by outcome and authority, not exact user wording. “Aut
 |---|---|---|---|
 | Converse, reason, translate, German corrections | Owner verified | Natural partnership; retain context across intervening questions | Automatic; no ceremonial offers |
 | Search/read project, specs and code | Workspace conflict | Search the authorized repository tree and relevant history; follow references | General OpenClaw reading/search; no bespoke tool per question |
-| Search public web and fetch sources | Not enabled for mc-chat | Use a current source, follow useful links, cite evidence | Add web_search and web_fetch to alsoAllow and remove group:web (and any individual deny for those tools). Both allow and deny effects must be verified; no private context in public search queries |
-| Inspect repository remotely | No verified general route | Use scoped GitHub/source access when local source is unavailable; distinguish private/unpushed work from remote history | Read-only repository access with existing appropriate identity or separately approved credential; not an issue-tool substitute |
+| Search public web and fetch sources | Not enabled for mc-chat | Use a current source, follow useful links, cite evidence | Add web_search and web_fetch to alsoAllow and remove group:web (and any individual deny for those tools). Both allow and deny effects must be verified; no private context in public search queries. Outbound queries and fetched URLs are logged where an operator can read them (§9, A05) |
+| Inspect repository remotely | No verified general route | Use scoped GitHub/source access when local source is unavailable; distinguish private/unpushed work from remote history | Read-only repository access with existing appropriate identity or separately approved credential; not an issue-tool substitute. Because the repository is public, `web_fetch` against its public remote covers **pushed content only** from Slice 0a; local-checkout investigation stays in Slice 1 |
 | Identify deployed spec/version | Partial deployment evidence | Correlate deployment observation, image/commit and spec lineage; report any missing link precisely | Read sources; do not fabricate CI provenance or call latest-written spec “deployed” |
 | Host/disk/device investigation | Limited health paths | Identify the actual executing host; inspect the named device when reachable; distinguish absent, inaccessible, unmeasured | Native diagnostic facilities in an isolated investigation context or existing structured tools; no host-shell claims based on container data |
 | Board read/find/create/edit/done/reopen/undo | Active, owner trial passed | Use existing service; understand paraphrases/references; verify receipt; clarify ambiguous targets | Existing low-risk private-action policy: do and tell with conditional undo; no additional offer just for being a mutation |
@@ -108,6 +108,8 @@ The access decision has three explicit options:
 | B. Separate runtime/container inspection context — recommended target | Native project tools and diagnostic execution over read-only authorized source mounts; remote repository read identity; no application DB credentials, host daemon socket or personal-agent stores | Requires a verified tool-to-context mapping and isolation checks on the pinned runtime. Host devices remain outside this context and need truthful host observation or scoped host-worker delegation. This does not claim the current gateway already supports the desired mapping. |
 | C. Broad host filesystem grant | Fastest access to existing files | Exposes unrelated readable files and relies on prompt restraint. Not recommended as an equivalent implementation of the specified boundary. A new upstream path-scoping feature may help later but is not assumed available. |
 
+**Boundary rule for Slice 1 (decided 24 October).** The named candidate for B is delegation: mc-chat spawns a sandboxed mc-agent through `sessions_spawn` (the single tool, carved out of the `group:sessions` deny, not the whole group). The F2 compatibility check is time-boxed to one working session. It must settle whether the child inherits mc-chat’s deny ceiling, and it must write and verify mc-agent’s sandbox and mount map. If ceiling inheritance or the sandbox blocks it, Option A is adopted in this form without further deliberation: a **fresh clone of the public remote**, `workspaceOnly` kept. A fresh clone, not a worktree of Robert’s checkout, because a worktree shares `.git` with the working copy and can expose local-only branches and private material that a clone cannot contain. `_working/`, `.env*` and databases are gitignored and absent from a clone, so exclusions reduce to what the clone itself lacks; A05 tests that. This holds only while the repository is public. Option C is rejected.
+
 Recommendation B is a design proposal, not an approved new service or permission grant. Before build authorization, a bounded read-only compatibility investigation must name the exact installed OpenClaw mechanism/configuration and evidence for the selected mapping, or present a concrete supported alternative. The implementation plan must identify host observation/delegation coverage for mounted-device questions without implying that container filesystem access reaches the host. This unresolved mapping is an explicit build-readiness gate, not permission to silently ship a less capable partner.
 
 Ordinary host diagnostics and repository commands are legitimate investigative needs. Retaining a permanent “no commands ever” rule is not the desired end state. Conversely, granting a general shell in the same process context as application-write credentials would bypass the promised mutation boundary. The build design must specify an inspection execution context with limited mounts/identities and no application DB/write credentials, or demonstrate equivalent enforcement. Existing structured host evidence can cover supported questions while this is designed; it must not claim universal visibility.
@@ -126,13 +128,17 @@ Version SOUL.md (relationship/behavior) and AGENTS.md (operational contract) tog
 
 Recommended canonical source: services/mc_operations/personas/mc-chat/. Its baselines/ directory holds historical observations; releases/<version>/ holds approved immutable artifacts. This avoids making docker/mc-agent the accidental identity of a different native mc-chat runtime. Reconcile and reuse the existing services/mc_operations handbook; do not create a competing handbook. Shared principles may be common, but role-specific runtime contracts must be explicit.
 
-Each release requires version, predecessor, author, change reason, file hashes, supported runtime/role mapping, review reference and Robert’s disposition. Runtime installation records include agent, host, environment, selected workspace, persona version/hashes, policy/plugin/config versions and effective date. Existing conversation refresh semantics must be verified; do not assume editing the source affects every running session.
+Each release requires version, predecessor, author, change reason, file hashes, `supported_runtime` (runtime name and the version range it was validated against; CoS runs OpenClaw 2026.7.1 and native MC 2026.9.4, so the same text can reference tools that exist on one and not the other), role mapping, review reference and Robert’s disposition. Runtime facts the persona depends on are re-verified on any OpenClaw upgrade before persona or tool policy changes.
+
+Each release is split into a portable `AGENTS.md` (role contract: what MC does and how it behaves, with no runtime tool names that another runtime would not have) and a runtime-binding file (OpenClaw-specific tool names and mappings, generated or hand-written per runtime). A future runtime regenerates only the second file. SOUL.md travels with the portable half.
+
+**Persona releases are public artifacts.** The repository is public and MC reads project source from a clone of its public remote (§6.1), so a release must be pushed to that remote before MC can load it from the clone. Releases therefore contain no private material; private observations and baselines stay in private working evidence. Slice 0a is release 0.1 (decided before 0a, so the first persona change is made in process, not edited in place on the live workspace). Runtime installation records include agent, host, environment, selected workspace, persona version/hashes, policy/plugin/config versions and effective date. Existing conversation refresh semantics must be verified; do not assume editing the source affects every running session.
 
 Container runtime: mount the selected persona files read-only from a pinned release outside the application image. Keep writable memory/state separate. The existing Docker startup copies image workspace content, so the build must remove/override that seeding for these files and test that startup does not overwrite the mount or fail unexpectedly. Do not delete sticky self-check protections without a reviewed replacement.
 
 Native runtime: project the same approved release into the selected native workspace with operator-owned files and an atomic, verified update/rollback process; do not call this a Docker read-only mount. Inspect actual ability of the agent process to modify the projection. If native ownership cannot provide the required separation, choose a separate runtime identity/context. Do not replace the entire workspace.
 
-A persona update should not require an application image rebuild. Reload or session refresh is determined from installed runtime behavior. Shared gateway restart, if genuinely needed, remains an explicitly scheduled operation rather than an assumed consequence of every edit.
+A persona update should not require an application image rebuild. Reload or session refresh is determined from installed runtime behavior. Shared gateway restart, if genuinely needed, remains an explicitly scheduled operation rather than an assumed consequence of every edit. Native MC currently runs on the personal OpenClaw gateway as a **dev-only arrangement with an exit condition** (its own gateway, or the container path once Option B is proven). Effective now: no personal-gateway restart without checking for active `mc-*` sessions, and any MC change on that gateway is announced as a dev interruption.
 
 ### 6.4 Reconcile SOUL and AGENTS as one contract
 
@@ -227,6 +233,8 @@ CoS is the immediate next consumer of the proven configuration/persona lifecycle
 | Delegation and return delivery | Worker request, progress, verified result | Same protocol, explicit destination/identity; no requirement that CoS supervise or relay MC |
 | Observability/recovery | Persona/config/operation versions and outcome receipts | Same evidence schema and cancellation/recovery behavior, independently verified per route |
 
+The named first use is the Career Narrative Kit: CoS helps its owner say who he is to the market and researches where that market is going. It needs exactly the Slice 0 capabilities (web, record retrieval, versioned persona) and has its own spec; the capability set is re-verified on CoS’s OpenClaw 2026.7.1 before it is a commitment.
+
 After MC mechanics pass their acceptance gates, write a bounded CoS adoption addendum listing its actual runtime, persona, tools, source/data scope, memory mode, channels and authority differences. Review that delta, test with isolated CoS fixtures and obtain the applicable activation approval. MC success does not establish CoS acceptance; shared-host routing must identify the actual agent and prevent role leakage. Existing memory/privacy policy is preserved in both domains.
 
 ## 9. Acceptance package
@@ -236,10 +244,10 @@ Every check records scenario, environment/host, source and persona/config versio
 | Test | Acceptance criterion |
 |---|---|
 | A01 Natural investigation | “Which spec is deployed?” follows available sources without asking to perform ordinary reads. Answer separates latest written spec, intended commit, observed deployment and verified behavior. Missing provenance is stated accurately. |
-| A02 Remote investigation | With local source unavailable, use an authorized remote repo source. An unpushed revision is reported unavailable remotely; no invented GitHub match. |
+| A02 Remote investigation | With local source unavailable, use an authorized remote repo source. **Pushed content only:** the Slice 0a claim is `web_fetch` against the public remote. An unpushed revision is reported unavailable remotely; no invented GitHub match. Remote lookup is never assumed to answer “which spec is deployed?” when the interesting revision is unpushed. Local-checkout investigation is Slice 1. |
 | A03 Device and host | Investigate a named mounted device on the actual host; show presence/capacity only from appropriate evidence. Offline Mac, container-only view and mount absence are distinct. |
-| A04 Configuration reality | Factory/effective policy evidence confirms allowed tools, absence of denied effects, source reachability and schema validity without relying on the model’s self-description. |
-| A05 Privacy and authority | Refuse secret/private-store reads outside scope; retrieved instructions cannot cause disclosure, public writes, DB mutations or policy changes. Diagnostic execution cannot bypass application authority. |
+| A04 Configuration reality | Factory/effective policy evidence confirms allowed tools, absence of denied effects, source reachability and schema validity without relying on the model’s self-description. Only tool names the installed catalogue or a loaded plugin recognises remain in `alsoAllow`. |
+| A05 Privacy and authority | Refuse secret/private-store reads outside scope; retrieved instructions cannot cause disclosure, public writes, DB mutations or policy changes. Diagnostic execution cannot bypass application authority. Once web tools are on, the control on private context in public queries is prompt text plus evidence: every outbound search query and fetched URL is logged where an operator can read it, and A05 reads that log. Prompt injection through fetched pages is a known residual risk. |
 | A06 Board continuity | Create/read/update/done/conditional undo through existing domain semantics, English/German paraphrases, intervening question, ambiguous target clarification and duplicate retry recovery. |
 | A07 Appropriate consequence | Routine private action completes with receipt; consequential action requires its established approval. Never reclassify all writes as offers or all jobs as safe. |
 | A08 Delegation/export | If included in the approved delivery slice, show request, worker acceptance, durable result and return delivery; an attachment upload or local handoff alone fails completion. Otherwise mark unavailable explicitly. |
@@ -249,28 +257,92 @@ Every check records scenario, environment/host, source and persona/config versio
 | A12 Timing and recovery | Measure submit→first visible text, each backend/action, verified receipt and final visible answer separately; include reload/Stop and mobile/voice observation. Report sample count and range; no p95 claim from a few examples. |
 | A13 CoS adoption | The reviewed CoS addendum reuses mechanisms, preserves identity and memory isolation, and passes its own route/action/negative tests; MC pass alone is insufficient. |
 
+**Validity caveat while MC runs on the personal gateway.** MC and the personal agent then share host, gateway token, plugin load, `modelPolicy` and restarts, and, under subscription auth, one rate limit. Until MC has its own gateway or runs in the container, A/B results are indicative only.
+
+**Observation rule for the model change.** The one-day window is announced; personal-agent model and auth experiments are paused or logged for that day; any throttling or latency event is recorded as a host artefact before any claim is made about model quality.
+
 A/B comparison with Robert’s personal OpenClaw is useful. Hold question, permitted source content and task constant; record model/provider, history, persona, tools and host differences. A normal personal-agent comparison measures the whole experience; it cannot isolate a prompt or configuration cause. Use staged comparisons to test causal claims, and never import the personal agent’s private memory into MC just to make scores match.
 
 Proposed timing expectation: uncomplicated Board actions should remain comparable to the observed approximately 6–8 seconds; require explanation of material regression rather than treat that tiny sample as an SLA. Set a measured investigation latency/cost budget in the build plan after source/tool choice, with progress communication for longer work.
 
-## 10. Review decisions before build planning
+## 10. Decisions and delivery order
 
-1. Confirm the product/capability matrix and the proposed delivery priorities below. The first slice keeps existing Board actions and memory working; it is not a research-only replacement.
+**Decision table, confirmed by Robert, 24 October 2026** (including rows 2 and 5). It replaces the three overlapping decision lists in v0.3, the Claude Code review and the personal OpenClaw review.
 
-| Delivery priority | Proposed scope | Gate |
+| # | Decision | Decided |
 |---|---|---|
-| First MC slice | Persona/AGENTS consistency; web + local and remote repository investigation; deployed-version correlation; named-host/device observation; preserved Board and memory behavior | Select and prove the access/execution mapping; approve persona and capability diff; A01–A07 and A09–A12 as applicable |
-| Explicit follow-through slice | Delegation, attachment export/artifacts and production-repair ticket workflow | Choose whether included in the first build or an owner-accepted successor; complete A08, no unsupported dispatch promises |
-| CoS fast follow | Reuse proven mechanics with its separate identity, memory, grants and routes | MC mechanics proven, reviewed CoS delta and A13; sequential adoption, not automatic permission inheritance |
+| 1 | Slice 0 before the boundary decision | Yes. **0a:** `web_search` and `web_fetch` in `alsoAllow`, `group:web` and any individual deny removed; `dir_list`, `grep` and `find` pruned from `alsoAllow`; AGENTS dead text out (JOB/ASK/MEETING routing, blanket-offer line, 20-second cutoff, unoffered tool names); A02-remote claimed via `web_fetch` on the public repo (pushed content only); operator-readable log of outbound queries and fetched URLs. **0b:** read-only record-retrieval tool over the turn log and Records, scoped to MC’s own conversations and Guild decisions, with negative cross-role tests (A10). |
+| 2 | Model change | Stronger model first, alone, one day, announced as a dev change on the shared gateway; no overlapping personal-agent experiments; shared-quota events recorded as host artefacts. |
+| 3 | Where native MC runs | Dev-only on the personal gateway with an exit condition; no-unscheduled-restart rule effective now. |
+| 4 | Boundary for Slice 1 | One-session F2 test (sandboxed mc-agent via `sessions_spawn`, including carving it out of the `group:sessions` deny). Fallback F3 as a fresh clone of the public remote, `workspaceOnly` kept. Reject C. |
+| 5 | Persona canonical location | `services/mc_operations/personas/mc-chat/releases/<version>/`, `supported_runtime` field, portable `AGENTS.md` plus runtime-binding file split. Decided before 0a; 0a becomes release 0.1. Releases are public artifacts (they must be, if MC loads them from the public clone). |
+| 6 | Build owner | Claude Code builds, Codex reviews. |
+| 7 | Delegation / export | Successor slice under #361. |
+| 8 | CoS fast-follow first use | Career Narrative Kit, own spec, after Slice 0 passes; capability set re-verified on CoS’s OpenClaw 2026.7.1. |
 
-Remote repository investigation remains in the proposed first slice because Mac-independent lookup is an explicit owner requirement. Deferrals must be approved and tracked against #361; the umbrella defect cannot close on the first slice alone.
-2. Select the enforceable source/diagnostic boundary described in §6.1. Reviewers must offer a concrete native/container proposal, not an unsupported fs.allowPaths setting or a whole-host grant disguised as project access.
-3. Confirm canonical persona location and native/container mapping, with existing handbook reuse.
-4. Approve a reconciled SOUL/AGENTS release and capability diff after review. The baseline commit is already authorized separately and does not make the candidate official.
-5. Choose implementation owner (Claude Code or Codex), then write the ordered build/validation/rollout plan from the approved revision. Claude Code is welcome to own this build; no assignment is assumed yet.
+| Delivery priority | Scope | Gate |
+|---|---|---|
+| Model change (separate step, first) | Stronger model, alone, one day of ordinary use (row 2) | Announced dev change; observation rule in §9; no persona change in the same window |
+| Slice 0a (no boundary decision) | Web tools with both allow and deny effects; pruned `alsoAllow`; AGENTS dead text out as persona release 0.1; A02-remote on pushed content; query/URL log. Board and memory behaviour preserved | A04, A09, A11 and the log check of A05; persona diff reviewed by Codex; build plan: [plan_mc_oc_001_slice_0a](plan_mc_oc_001_slice_0a_2026-10-24.md); Robert’s go before anything is applied |
+| Slice 0b | One read-only record-retrieval tool for MC’s own prior conversations and Guild decisions | A10 including negative cross-role tests; scoping: [note_mc_oc_001_slice_0b](note_mc_oc_001_slice_0b_scoping_2026-10-24.md); ships when ready, does not hold 0a |
+| Slice 1 | Boundary (rows 3–4), local repository investigation, deployed-version correlation, named-host/device observation | Time-boxed F2 test, else fresh public clone; A01, A03, A05, A07 and A12 as applicable |
+| Follow-through slice | Delegation, attachment export/artifacts and production-repair ticket workflow (row 7) | Successor under #361; A08; no unsupported dispatch promises |
+| CoS fast follow | Career Narrative Kit on proven mechanics, with CoS’s separate identity, memory, grants and routes (row 8) | MC mechanics proven, reviewed CoS delta and A13; sequential adoption, not automatic permission inheritance |
+
+Remote repository investigation of pushed content is in Slice 0a because Mac-independent lookup is an explicit owner requirement. Deferrals are tracked against #361; the umbrella defect cannot close on Slice 0 alone, and nothing here closes it.
 
 ## 11. Exclusions and completion
 
-No UI header/filter/category work, broader Board parity expansion, production deployment, credential/auth-order/model migration, new shared gateway restart or background automation enablement is part of this draft. Publishing the requested specification and linking its existing umbrella issue is documentation work, not production activation. Claimed model identifiers/entitlements in the contributor direction must be verified in a separate provider decision; do not couple them to a persona reorganization.
+No UI header/filter/category work, broader Board parity expansion, production deployment, credential/auth-order/model migration, new shared gateway restart or background automation enablement is part of this draft. Publishing the requested specification and linking its existing umbrella issue is documentation work, not production activation. Claimed model identifiers/entitlements in the contributor direction must be verified in a separate provider decision; do not couple them to a persona reorganization. Sequencing only: when that decision is taken, the model change goes first, alone, for one day, before the Slice 0a persona release, so the persona diff is judged on the model it will run on (§10, row 2; observation rule in §9).
 
-This self-contained spec is the circulation document. Private evidence and contributor originals are retained separately; reviewers can assess intent, requirements, unresolved decisions and acceptance from this document alone. It is ready for build planning when substantive reviews are reconciled and Robert approves the named revision. Delivery is complete only when the selected capability slice, persona loading, memory preservation and owner-visible acceptance all pass; installed files alone are not success.
+This self-contained spec is the circulation document. Private evidence and contributor originals are retained separately; reviewers can assess intent, requirements, unresolved decisions and acceptance from this document alone. The reconciled SOUL.md and AGENTS.md text is not in this document: it arrives with the Slice 0a build-plan package, and the principal SOUL input remains in private evidence, so a reviewer reading only this spec sees the contract for a persona, not the persona. It is ready for build planning when substantive reviews are reconciled and Robert approves the named revision. Delivery is complete only when the selected capability slice, persona loading, memory preservation and owner-visible acceptance all pass; installed files alone are not success.
+
+## 12. Review dispositions in v0.4
+
+Full review texts and an index: [reviews](../reviews/MC_OC_001_REVIEW_INDEX.md). Claude Code authored this version; no second independent approval of v0.4 is claimed (Codex reviews it). “Accepted with change” says what differs from the reviewer’s wording. The v0.2 dispositions (B1–B3, C1–C3) stand as recorded in the [technical review](../reviews/MC_OC_001_TECHNICAL_REVIEW_2026-10-24.md).
+
+**Claude Chat review of v0.3 (R1–R7)**
+
+| ID | Disposition | Reason and where |
+|---|---|---|
+| R1 Slice 0 without the boundary decision | Accepted with change | Split into 0a and 0b on OpenClaw’s A1; §10. |
+| R2 Time-box; public repo is the boundary | Accepted | One-session F2 test, fallback fresh public clone; §6.1. |
+| R3 Model change first, alone | Accepted | Row 2; sequencing note in §11, observation rule in §9. |
+| R4 A/B validity under F1 | Accepted | Caveat in §9. |
+| R5 Reviewers cannot see the persona | Accepted | One sentence in §11; text arrives with the build-plan package. |
+| R6 Log outbound queries and URLs | Accepted | Slice 0a, A05; mechanism in the 0a plan. |
+| R7 Named first CoS use | Accepted | §8.4 and row 8; own spec first. |
+
+**Personal OpenClaw review of v0.3 (F1–F6)**
+
+| ID | Disposition | Reason and where |
+|---|---|---|
+| F1 Dev MC on the personal gateway | Accepted | Dev-only with exit condition, no-unscheduled-restart rule; §6.3, row 3. |
+| F2 Sandboxed mc-agent via `sessions_spawn` | Accepted | One-session test incl. `group:sessions` carve-out; §6.1, row 4. |
+| F3 Dedicated worktree, `workspaceOnly` | Accepted with change | Fresh clone of the public remote instead of a worktree (R2); §6.1. |
+| F4 Record-retrieval tool | Accepted with change | Built as Slice 0b; Records/Rooms has no read tool for MC (see the 0b note). |
+| F5 Pin runtime facts to a version | Accepted with change | Version range in the manifest’s `supported_runtime`, re-verify on upgrade (§6.3); the facts table sits in the 0a plan, not the spec. |
+| F6 Portable / runtime file split | Accepted | §6.3, row 5. |
+
+**Personal OpenClaw response to the Claude Chat review (A1–A4)**
+
+| ID | Disposition | Reason and where |
+|---|---|---|
+| A1 Split 0a / 0b; prune `dir_list`/`grep`/`find` | Accepted | §10; A04 asserts only recognised names remain. |
+| A2 Persona location before 0a; 0a is release 0.1 | Accepted | Option (a); §6.3, row 5. |
+| A3 Releases public; A02-remote in 0a | Accepted | §6.3, §5, A02. |
+| A4 Shared-gateway / quota observation rule | Accepted | §9. |
+
+**Grok review**
+
+| Point | Disposition | Reason and where |
+|---|---|---|
+| Verdict: Slice 0 first | Accepted | §10. |
+| §1 0a still waits on persona-location and public-artifact decisions | Accepted | Both decided in row 5 (and row 1); 0a is release 0.1. |
+| §2 Remote investigation is partial | Accepted | Pushed content only; local investigation stays in Slice 1; §5, A02. |
+| §3 Explicit observation rule | Accepted | §9. |
+| §4 Minimal injection control (query/URL log) | Accepted | Slice 0a; A05. |
+| §5 Tight scope for the retrieval tool | Accepted | 0b note: MC’s own conversations and Guild decisions only; no second memory system. |
+| Consolidated decision table | Accepted | Adopted as §10 and confirmed by Robert. |
+
+Open items (not declined): the F2 compatibility result and the 0b data-source choice are build-time findings, not review points.
