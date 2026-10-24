@@ -1,6 +1,6 @@
 # Career Narrative Kit — Chief of Staff early capability, spec v0.2
 
-**Specification ID:** pending (allocate from the Guild build queue; rename this file then) · **Domain:** Chief of Staff (CoS), early capability · **Status:** draft v0.2, 24 October 2026 (Claude Chat review K1–K7 folded in; Grok review pending) · **Reviewers:** Grok, Claude Chat (Codex reviewed 24 October) · **Source design:** Claude Chat with the owner; publication copy prepared by Codex; registered by Claude Code.
+**Specification ID:** 162 (Guild build queue) · **Domain:** Chief of Staff (CoS), early capability · **Status:** draft v0.2, 24 October 2026 (Claude Chat review K1–K7 folded in; Grok review pending) · **Reviewers:** Grok, Claude Chat (Codex reviewed 24 October) · **Source design:** Claude Chat with the owner; publication copy prepared by Codex; registered by Claude Code.
 
 The original v0.1 is preserved in the private working home. This derivative removes personal examples and a private incident, makes publication of research deliberate, and avoids claiming an already implemented CoS capability. These editorial changes are proposals for the reviewers; substantive revisions follow as v0.2.
 

@@ -1,8 +1,8 @@
 # Career Narrative Kit — tools (CoS early capability)
 
 Intent and tools are public; data is private. Real workbooks, resumes, letters and inputs live in the owner's private
-career area, never in this repository. Spec: `docs/specs/spec_TBD_career_narrative_kit_2026-10-24.md` (number pending
-the Guild build queue). Every tool refuses to overwrite an existing file: new output, new versioned name.
+career area, never in this repository. Spec: `docs/specs/spec_162_career_narrative_kit_2026-10-24.md` (Guild build
+queue item 162). Every tool refuses to overwrite an existing file: new output, new versioned name.
 
 The flow:
 
