@@ -1141,7 +1141,7 @@
     "id": 163,
     "spec_title": "Dev deploys by domain — one command per unit (a domain or part of one), one registry, record and rollback",
     "spec_file": "spec_163_dev_deploy_by_domain_2026-10-24.md",
-    "status": "in-review",
+    "status": "in_build",
     "priority": "high",
     "github_issue": "#373",
     "summary": "scripts/operations/deploy_dev.sh deploys one registered unit (portal with Guild UI and MC chat, guild-ui part, german, portuguese, cos-scheduler, curator, records, the launchd Guild operations agent; dev-agent registered, not deployable today) at a pinned commit to dev, with a dated record, health checks and one-command rollback. Registry: scripts/operations/dev_deploy_units.json; model-gateway and postgres out of bounds. Dev only.",
