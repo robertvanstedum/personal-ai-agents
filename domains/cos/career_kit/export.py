@@ -33,7 +33,7 @@ from docx.shared import Inches, Pt
 from .workbook import load
 
 LIMITS = {"headline": 220, "about": 2600, "experience": 2000}       # characters; verify when they matter
-_ID = re.compile(r"\[([a-z0-9][a-z0-9-]*)\]\s*$")
+from .workbook import _ID_TAIL as _ID  # noqa: E402  (one id rule for writer and reader)
 
 
 FINAL, REWRITE = 4, 3                                              # workbook columns

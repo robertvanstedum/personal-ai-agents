@@ -188,3 +188,48 @@ def test_the_export_writes_into_the_owners_resume_keeping_header_and_tail(tmp_pa
     assert "Led operations through a merger." not in texts                                 # old middle replaced
     assert texts[-4:] == ["EDUCATION", "B.A., Example University", "CAPABILITIES", "Delivery and operations"]
     assert Document(template).paragraphs[3].text == "Operations leader for platforms in change."  # template untouched
+
+
+# ── Codex review of PR #369 (24 Oct): two reproduced defects ──────────────────────────────────────────────────
+
+def test_a_row_id_the_input_accepts_is_one_the_export_reads(tmp_path):
+    from domains.cos.career_kit import export
+    doc = json.loads(EXAMPLE.read_text())
+    doc["rows"][0]["id"] = "Acme_1"
+    path = tmp_path / "in.json"
+    path.write_text(json.dumps(doc))
+    wb = workbook.build(workbook.load(path), tmp_path / "wb.docx")
+    _fill(wb, {"Acme_1": {4: [("Final for Acme_1.", None)]}})
+    out = export.export(path, wb, tmp_path / "out", pages=False)
+    assert "Final for Acme_1." in [p.text for p in Document(out / "resume.docx").paragraphs]
+    assert "- Acme_1" not in (out / "report.md").read_text()
+    doc["rows"][0]["id"] = "bad id [x]"                                 # ids the workbook could not print back
+    path.write_text(json.dumps(doc))
+    with pytest.raises(workbook.InputInvalid):
+        workbook.load(path)
+
+
+def test_carry_forward_keeps_every_owner_edit_in_speaking_points_and_agreement(tmp_path):
+    doc = workbook.load(EXAMPLE)
+    old = workbook.build(doc, tmp_path / "v1.docx")
+    d = Document(old)
+    speaking, agreement = d.tables[1], d.tables[2]
+    speaking.rows[1].cells[1].paragraphs[0].add_run("my speaking point")
+    speaking.rows[1].cells[1].add_paragraph("second paragraph")
+    row = agreement.rows[1]
+    row.cells[1].paragraphs[0].add_run(" (owner corrected)")
+    row.cells[3].paragraphs[0].add_run("decided")
+    added = agreement.add_row().cells                                    # a row the owner added himself
+    for cell, text in zip(added, ("Owner-added row", "LI", "Resume", "Decision too")):
+        cell.paragraphs[0].add_run(text)
+    d.save(old)
+    new = workbook.build(doc, tmp_path / "v2.docx", carry_from=old)
+    n = Document(new)
+    assert n.tables[1].rows[1].cells[1].text == "my speaking point\nsecond paragraph"
+    rows = {r.cells[0].text.strip(): [c.text.strip() for c in r.cells] for r in n.tables[2].rows[1:]}
+    assert rows["Beta Telecom"][1].endswith("(owner corrected)") and rows["Beta Telecom"][3] == "decided"
+    assert rows["Owner-added row"] == ["Owner-added row", "LI", "Resume", "Decision too"]
+    doc2 = workbook.load(EXAMPLE)                                         # a speaking point whose row disappears
+    doc2["rows"] = [r for r in doc2["rows"] if r["id"] != "acme"]
+    with pytest.raises(workbook.InputInvalid):
+        workbook.build(doc2, tmp_path / "v3.docx", carry_from=old)

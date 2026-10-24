@@ -29,6 +29,8 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 SCHEMA = "career-narrative-workbook/1"
+ROW_ID = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}"         # one rule for the input, the printed [id] and every reader
+_ID_TAIL = re.compile(r"\[(" + ROW_ID + r")\]\s*$")
 HEADERS = ("Job", "1. Current text (LinkedIn / resume)", "2. Owner notes", "3. Rewrite (AI v0)", "4. Owner final")
 WIDTHS = (0.14, 0.28, 0.20, 0.20, 0.18)                    # of the usable page width
 RULES = ("Writing rules: change line first, when there was a change · situation, then operating style, then proof · "
@@ -63,6 +65,8 @@ def load(path: Path) -> dict:
         rid = _text(row.get("id"), f"rows[{i}].id")
         if not rid or rid in ids:
             raise InputInvalid(f"rows[{i}].id missing or duplicate")
+        if not re.fullmatch(ROW_ID, rid):
+            raise InputInvalid(f"rows[{i}].id {rid!r}: letters, digits, _ . - only (it is printed in the workbook as [id])")
         ids.add(rid)
         bullets = row.get("resume_bullets", [])
         if not isinstance(bullets, list) or not all(isinstance(b, str) for b in bullets):
@@ -155,21 +159,22 @@ def read_carry(old: Path) -> dict:
     decisions by label. Word list bullets come back as "• …"."""
     from .export import cell_lines, row_id                 # lazy: export imports this module
     tables = Document(old).tables
-    carry = {"cols": {}, "speaking": {}, "decisions": {}}
+    carry = {"cols": {}, "speaking": {}, "agreement": {}}
     for row in tables[0].rows[1:]:
         rid = row_id(row.cells[0])
         if rid:
             carry["cols"][rid] = {i: cell_lines(row.cells[i]) for i in (2, 3, 4)}
     if len(tables) > 1:
         for row in tables[1].rows[1:]:
-            m = re.search(r"\[([a-z0-9][a-z0-9-]*)\]\s*$", row.cells[0].text.strip())
-            if m and row.cells[1].text.strip():
-                carry["speaking"][m.group(1)] = row.cells[1].text.strip()
+            m = _ID_TAIL.search(row.cells[0].text.strip())
+            lines = [p.text.strip() for p in row.cells[1].paragraphs if p.text.strip()]
+            if m and lines:
+                carry["speaking"][m.group(1)] = lines
     if len(tables) > 2:
         for row in tables[2].rows[1:]:
-            label, decision = row.cells[0].text.strip(), row.cells[-1].text.strip()
-            if label and decision:
-                carry["decisions"][label] = decision
+            cells = [c.text.strip() for c in row.cells]
+            if cells and cells[0]:
+                carry["agreement"][cells[0]] = cells[1:4] + [""] * (3 - len(cells[1:4]))
     return carry
 
 
@@ -183,9 +188,10 @@ def build(doc: dict, out: Path, carry_from: Path | None = None) -> Path:
     (owner text always wins over the input's rewrite). Rows that no longer exist are reported, never silently lost."""
     if out.exists():
         raise FileExistsError(f"{out} exists; write a new versioned name instead")
-    carry = read_carry(carry_from) if carry_from else {"cols": {}, "speaking": {}, "decisions": {}}
+    carry = read_carry(carry_from) if carry_from else {"cols": {}, "speaking": {}, "agreement": {}}
     ids = {r["id"] for r in doc["rows"]}
-    orphans = sorted(rid for rid, cols in carry["cols"].items() if rid not in ids and any(cols.values()))
+    orphans = sorted({rid for rid, cols in carry["cols"].items() if rid not in ids and any(cols.values())}
+                     | {rid for rid in carry["speaking"] if rid not in ids})
     if orphans:
         raise InputInvalid("the earlier workbook has rows this input lacks (their text would be lost): "
                            + ", ".join(orphans))
@@ -227,17 +233,24 @@ def build(doc: dict, out: Path, carry_from: Path | None = None) -> Path:
             cells = _row(sp, (0.25, 0.75), usable)
             _para(cells[0], f"{_text(row.get('employer'), 'employer') or _text(row.get('title'), 'title')} [{row['id']}]",
                   first=True)
-            _para(cells[1], carry["speaking"].get(row["id"]) or _text(row.get("speaking_points"), "speaking_points"),
-                  first=True)
+            _lines_into(cells[1], carry["speaking"].get(row["id"])
+                        or [_text(row.get("speaking_points"), "speaking_points")])
 
     document.add_heading("Agreement check (LinkedIn vs resume)", level=2)
     ac = _table(document, ("Job", "LinkedIn", "Resume", "Decision"), (0.18, 0.32, 0.32, 0.18), usable)
-    for item in doc.get("agreement", []):
+    seen = set()
+    items = [(_text(i.get("row"), "row"), [_text(i.get("linkedin"), "linkedin"), _text(i.get("resume"), "resume"), ""])
+             for i in doc.get("agreement", [])]
+    items += [(label, ["", "", ""]) for label in carry["agreement"] if label not in {l for l, _ in items}]
+    for label, values in items:                     # owner text wins, cell by cell; owner-added rows are kept
+        if label in seen:
+            continue
+        seen.add(label)
+        owner = carry["agreement"].get(label, ["", "", ""])
         cells = _row(ac, (0.18, 0.32, 0.32, 0.18), usable)
-        _para(cells[0], _text(item.get("row"), "row"), first=True)
-        _para(cells[1], _text(item.get("linkedin"), "linkedin"), first=True)
-        _para(cells[2], _text(item.get("resume"), "resume"), first=True)
-        _para(cells[3], carry["decisions"].get(item["row"].strip(), ""), first=True)
+        _para(cells[0], label, first=True)
+        for i in range(3):
+            _para(cells[i + 1], owner[i] or values[i], first=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     document.save(out)
     return out
