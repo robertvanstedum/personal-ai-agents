@@ -1,0 +1,23 @@
+{
+ "schema": "career-narrative-workbook/1",
+ "title": "Career narrative workbook — Example Person",
+ "variant": "example",
+ "version": "v0.1",
+ "rows": [
+  {"id": "acme", "kind": "job", "title": "Director, Platform Operations", "employer": "Acme Networks",
+   "dates": "2020–Present", "place": "Springfield",
+   "linkedin": "Director, Platform Operations · 2020 – Present. Ran platform operations through a merger.",
+   "resume_entry": "Led platform operations through the Acme–Beta merger and a billing cut-over.",
+   "resume_bullets": ["Cut incidents by half within a year.", "Moved two million accounts with no customer impact."]},
+  {"id": "beta", "kind": "job", "title": "Program Manager", "employer": "Beta Telecom", "dates": "2014–2020",
+   "place": "Shelbyville", "linkedin": null, "resume_entry": "Launched a prepaid product in a new market.",
+   "resume_bullets": []},
+  {"id": "side", "kind": "project", "title": "Home automation project", "employer": "example.org",
+   "dates": "2024–Present", "linkedin": "", "resume_entry": "A personal project in daily use.", "resume_bullets": []},
+  {"id": "about", "kind": "about", "linkedin": "Headline: Operations leader. About: I run platforms through change.",
+   "resume_entry": "Professional summary: Operations leader for platforms in the middle of change."}
+ ],
+ "agreement": [
+  {"row": "Beta Telecom", "linkedin": "not on LinkedIn", "resume": "Program Manager, 2014–2020"}
+ ]
+}
