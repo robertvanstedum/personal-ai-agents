@@ -37,6 +37,9 @@ DEP_FILES = ('requirements.txt', 'requirements.test.txt', 'package.json', 'packa
 # Values the dev chain interpolates that no env file holds: read from a running container's env,
 # handed to `docker compose` through the process environment only, never printed or written.
 PASSTHROUGH = {'MC_NATIVE_RELAY_TOKEN': ('minimoi-portal', 'MC_RUNTIME_TOKEN')}
+# Plain (non-secret) variables the staging scripts export to every compose call (scripts/staging/lib.sh);
+# the config check still proves the rendered mounts equal the running ones.
+STAGING_DEFAULTS = {'MINIMOI_ROOT': os.environ.get('STAGING_ROOT', str(Path.home() / 'minimoi-staging'))}
 
 # The deployable units (a whole domain or part of one) live in one registry next to this file:
 # one entry per unit, one command per unit. Spec 163 section 1 lists the fields.
@@ -211,7 +214,7 @@ def compose_cmd(chain, files):
 
 
 def compose_env(host):
-    env = dict(os.environ)
+    env = dict(STAGING_DEFAULTS, **os.environ)
     for var, (container, key) in PASSTHROUGH.items():
         if var in env:
             continue
