@@ -1,7 +1,9 @@
 # Dev deploy path — design v0.1 (24 Oct 2026)
 
-Status: **design, awaiting Robert's go.** Nothing built, nothing changed on dev.
-Author: Claude Code. Reviewer: Codex.
+Status: **approved by Robert 24 Oct 2026 ("deploy and you test in dev end to end"); built** as
+`scripts/operations/deploy_dev.sh` + `dev_deploy.py`, proven live on `german` the same day (full
+deploy, rollback, re-deploy, overlay deploy, history rollback). Portal support is built and dry-run
+clean but not yet exercised live (Codex's MC trial holds it). Author: Claude Code. Reviewer: Codex.
 
 ## Problem
 
@@ -25,7 +27,7 @@ Production is untouched; production stays behind the ITIL change control standar
 ## Command shape
 
 ```
-scripts/operations/deploy_dev.sh <service> <commit> --operator <name> [--overlay] [--with-migrations-applied] [--dry-run]
+scripts/operations/deploy_dev.sh deploy <service> <commit> --operator <name> [--overlay] [--with-migrations-applied] [--dry-run]
 scripts/operations/deploy_dev.sh rollback <service> [--operator <name>]      # back to the previous pin
 scripts/operations/deploy_dev.sh status [<service>]                          # what commit/image each service runs
 ```
@@ -70,7 +72,8 @@ the order Codex's `runtime-deployment/deploy.py` uses today. If either fails, bo
   Dockerfile and `package*.json` are unchanged between that commit and the target. Otherwise refused
   with "use a full build".
 - Every image built by this path is labelled `minimoi.source_commit=<40-char sha>`,
-  `minimoi.deploy_record=<record dir>`, `minimoi.environment=dev`, and tagged
+  `minimoi.environment=dev`, `minimoi.service=<service>` (no per-record label, so the same commit
+  and mode rebuild the same image), and tagged
   `minimoi-<service>:dev-<short sha>`. Today's dev images have no label; the first deploy of each
   service must be full (or `--accept-unknown-current`, recorded).
 
