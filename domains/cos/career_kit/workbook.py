@@ -29,7 +29,8 @@ HEADERS = ("Job", "1. Current text (LinkedIn / resume)", "2. Owner notes", "3. R
 WIDTHS = (0.14, 0.28, 0.20, 0.20, 0.18)                    # of the usable page width
 RULES = ("Writing rules: change line first, when there was a change · situation, then operating style, then proof · "
          "concrete nouns, not \"transformation\" · LinkedIn text is the entry line; resume adds 2–3 bullets · wins on "
-         "the page, the rest as speaking points · nothing confidential unless the owner clears it · owner's voice wins.")
+         "the page, the rest as speaking points · no new facts in the rewrite (only what columns 1 and 2 hold) · "
+         "nothing confidential unless the owner clears it · owner's voice wins.")
 
 
 class InputInvalid(ValueError):
