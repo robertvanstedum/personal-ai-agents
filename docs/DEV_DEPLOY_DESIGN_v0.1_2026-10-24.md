@@ -2,7 +2,8 @@
 
 Status: **approved by Robert 24 Oct 2026 ("deploy and you test in dev end to end"); built** as
 `scripts/operations/deploy_dev.sh` + `dev_deploy.py`, proven live on `german` the same day (full
-deploy, rollback, re-deploy, overlay deploy, history rollback). Portal support is built and dry-run
+deploy, rollback, re-deploy, overlay deploy, history rollback). The launchd Guild Operations agent (section 11) was added
+at Robert's request and proven live the same evening (deploy, rollback, re-deploy). Portal support is built and dry-run
 clean but not yet exercised live (Codex's MC trial holds it). Author: Claude Code. Reviewer: Codex.
 
 ## Problem
@@ -41,7 +42,8 @@ checkout `~/Projects/personal-ai-agents` is never touched.
 
 | v1 | Service | Container | Health |
 |---|---|---|---|
-| yes | portal (+ linked `board-api` sidecar, same image) | minimoi-portal, minimoi-board-api-dev | `127.0.0.1:5001/health`, `https://dev.minimoi.ai/health` |
+| yes | portal — **includes the Guild UI** (Build, Operate, queue, MC chat: `minimoi_portal/guild_ui`) (+ linked `board-api` sidecar, same image) | minimoi-portal, minimoi-board-api-dev | `127.0.0.1:5001/health`, `https://dev.minimoi.ai/health` |
+| yes | **operations** — Guild Operations agent (`domains/guild/agents/operations.py`) | launchd `com.user.operations`, Mac only, not a container (section 11) | `127.0.0.1:8768/health` |
 | yes | german | minimoi-german | `127.0.0.1:8767/health` |
 | yes | portuguese | minimoi-portuguese | `127.0.0.1:8770/health` |
 | yes | cos-scheduler | minimoi-cos-scheduler | `127.0.0.1:8769/health` |
@@ -51,6 +53,14 @@ checkout `~/Projects/personal-ai-agents` is never touched.
 | **no** | postgres | data | — |
 
 German and Portuguese are both in v1 so a parity fix can be deployed to both the same way.
+
+**Guild.** The Guild UI is not a separate service: Build, Operate, the queue and MC chat are
+`minimoi_portal/guild_ui` and ship inside the portal image, so a portal deploy is a Guild UI deploy.
+The Guild **Operations agent** runs only on the Mac under launchd and has its own path (section 11).
+The Guild **Dev agent** listed in OPERATIONS.md (`com.user.devagent`, port 8771) no longer exists on the
+Mac: no such launchd job is loaded, and port 8771 is now the Vault Ask service
+(`com.vanstedum.minimoi-vault-ask`, `core.memory_ask.service`). If it comes back, it is one more launchd
+row like `operations`.
 Each supported service is one row in a table in `dev_deploy.py` (container, compose service,
 Dockerfile, health URLs, overlay paths, env pass-through). Adding a service = adding a row + a test.
 
@@ -181,6 +191,37 @@ endpoint puts a deploy trigger on the public internet. Both enlarge the attack s
 convenience is worth today. CI's part stays what it is: tests on the branch/PR before a dev deploy.
 If wanted later, the safer shape is pull-based — a local launchd job that picks up a signed request —
 as its own decision.
+
+## 11. launchd agents (Mac only): pinned code directories
+
+The Operations agent is a Python process under launchd (`~/Library/LaunchAgents/com.user.operations.plist`,
+KeepAlive, venv interpreter), not a container, so it has no image to pin. The same command handles it:
+`deploy_dev.sh deploy operations <commit> --operator <name>`.
+
+- **Pinned code location:** `git archive <commit>` extracted once into
+  `~/minimoi-runtime/dev-code/operations/<commit>/`, marked with `.minimoi-source-commit`, and reused
+  when the same commit is deployed again. Nothing is checked out; no worktree is created.
+- **State stays put:** the agent writes inside its code directory (`logs/`, `data/guild/memory/`). Those
+  paths in the pinned directory are symlinks to the agent's current home (`~/.worktrees/ops-runtime`,
+  recorded as `state_home` in the pin file), so logs and memory survive deploys and rollbacks.
+- **Plist re-point with plistlib:** only `ProgramArguments[1]` (the script) and `WorkingDirectory`
+  change; the interpreter, environment, KeepAlive and log paths are untouched, and the script refuses if
+  anything else would differ. It also refuses if the loaded job's arguments differ from the plist on disk
+  (someone edited it without reloading). The array is written as an array by plistlib; never
+  `plutil -replace` on it.
+- **Apply:** write the plist atomically, `launchctl bootout`, wait until unloaded, `launchctl bootstrap`,
+  `kickstart`.
+- **Health:** the job is running with a new PID, `ps` shows it running the pinned script, `/health`
+  returns 200, the `.py` files in the pinned directory match the commit's git blobs, and the gateway is
+  unchanged. A failure restores the previous plist bytes and reloads.
+- **Record and rollback:** the same record shape, with `plist-before.plist` / `plist-after.plist`
+  and pin files holding the code location. Rollback re-points to the previous location, which can be
+  the original `~/.worktrees/ops-runtime`.
+- **Current code:** a pinned directory's marker, or a clean git checkout's HEAD (`ops-runtime` is
+  99dba734, the open PR #280, so a deploy of `main` there is refused by the drop check until #280 lands
+  or `--replace-unrelated` is given).
+- The venv interpreter is shared and not pinned. A commit that changes `requirements.txt` is refused,
+  the same way an overlay is.
 
 ## Out of scope
 

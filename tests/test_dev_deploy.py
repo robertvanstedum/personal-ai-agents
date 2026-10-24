@@ -168,7 +168,7 @@ def test_pin_goes_last_exactly_once():
 # ---------- gates ----------
 
 def test_unlabelled_current_image_needs_explicit_acceptance(runtime):
-    with pytest.raises(dd.Refused, match='no source label'):
+    with pytest.raises(dd.Refused, match='no known source commit'):
         deploy(FakeHost(runtime), flags={'accept_unknown_current': False})
 
 
@@ -295,6 +295,9 @@ def test_every_supported_service_has_a_dockerfile_and_health_url():
     from pathlib import Path
     root = Path(dd.__file__).resolve().parents[2]
     for name, row in dd.SERVICES.items():
+        if row['kind'] == 'launchd':
+            assert (root / row['script']).exists(), name
+            continue
         assert (root / row['dockerfile']).exists(), name
         assert all((root / d).exists() for d in row['deps']), name
         assert row['health'], name
@@ -324,3 +327,173 @@ def test_overlay_context_replaces_source_dirs_from_a_named_base():
     assert text.startswith('FROM minimoi-german:dev-overlay-base\nUSER root\n')
     assert 'RUN rm -rf /app/domains/german /app/core /app/utils' in text
     assert 'COPY domains/german/ /app/domains/german/' in text and text.rstrip().endswith('USER root')
+
+
+# ---------- launchd agents ----------
+
+LAUNCHCTL_PRINT = """gui/501/com.user.operations = {
+\tactive count = 1
+\tpath = {path}
+\tstate = running
+
+\tprogram = /venv/bin/python3
+\targuments = {
+\t\t/venv/bin/python3
+\t\t{location}/domains/guild/agents/operations.py
+\t}
+
+\tworking directory = {location}
+\tenvironment = {
+\t\tPORT => 8768
+\t}
+\tpid = {pid}
+}
+"""
+
+
+def test_parse_launchd_reads_top_level_fields_and_arguments():
+    job = dd.parse_launchd(LAUNCHCTL_PRINT.replace('{path}', '/p.plist').replace('{location}', '/ops')
+                           .replace('{pid}', '819'))
+    assert job['state'] == 'running' and job['pid'] == 819 and job['path'] == '/p.plist'
+    assert job['working_directory'] == '/ops'
+    assert job['arguments'] == ['/venv/bin/python3', '/ops/domains/guild/agents/operations.py']
+
+
+def test_plist_repoint_changes_only_the_code_location():
+    import plistlib
+    old = {'Label': 'x', 'KeepAlive': True, 'WorkingDirectory': '/ops', 'EnvironmentVariables': {'PORT': '8768'},
+           'ProgramArguments': ['/venv/bin/python3', '/ops/domains/guild/agents/operations.py']}
+    new = dd.repoint(old, '/code/abc', 'domains/guild/agents/operations.py')
+    assert dd.plist_diff(old, new) == []
+    assert new['ProgramArguments'] == ['/venv/bin/python3', '/code/abc/domains/guild/agents/operations.py']
+    assert plistlib.loads(plistlib.dumps(new))['ProgramArguments'][0] == '/venv/bin/python3'   # still an array
+    assert dd.plist_diff(old, dict(new, KeepAlive=False)) == ['KeepAlive']
+    assert dd.plist_diff(old, dict(new, ProgramArguments=['/other/python', 'x'])) == ['ProgramArguments[interpreter]']
+
+
+class FakeLaunchd(FakeHost):
+    """A launchd agent whose plist and code directories live under tmp."""
+
+    def __init__(self, tmp, *, healthy=True):
+        super().__init__(tmp)
+        import plistlib
+        self.home = tmp / 'ops-runtime'
+        (self.home / 'domains/guild/agents').mkdir(parents=True)
+        (self.home / 'domains/guild/agents/operations.py').write_bytes(b'old\n')
+        (self.home / 'logs').mkdir()
+        (self.home / 'logs/operations.log').write_text('history\n')
+        self.plist = tmp / 'com.user.operations.plist'
+        self.plist.write_bytes(plistlib.dumps({
+            'Label': 'com.user.operations', 'KeepAlive': True, 'WorkingDirectory': str(self.home),
+            'ProgramArguments': ['/venv/bin/python3', f'{self.home}/domains/guild/agents/operations.py']}))
+        self.loaded, self.pid, self.healthy = True, 819, healthy
+
+    def git_at(self, location, *args):
+        return None                       # the fake home is not a git checkout: unknown current code
+
+    def git(self, *args):
+        if args[0] == 'ls-tree' and '--name-only' not in args:
+            body = b'new\n'
+            blob = __import__('hashlib').sha1(b'blob %d\0' % len(body) + body).hexdigest()
+            return f'100644 blob {blob}\tdomains/guild/agents/operations.py\n'
+        return super().git(*args)
+
+    def extract(self, commit, dest):
+        (dest / 'domains/guild/agents').mkdir(parents=True)
+        (dest / 'domains/guild/agents/operations.py').write_bytes(b'new\n')
+        (dest / 'data/guild/memory').mkdir(parents=True)
+        (dest / 'data/guild/memory/ops_memory.md').write_text('repo copy\n')
+
+    def _location(self):
+        import plistlib
+        return plistlib.loads(self.plist.read_bytes())['WorkingDirectory']
+
+    def launchd(self, label):
+        if not self.loaded:
+            return None
+        text = LAUNCHCTL_PRINT.replace('{path}', str(self.plist)).replace('{location}', self._location())
+        running = self.healthy or self._location() == str(self.home)
+        text = text.replace('{pid}', str(self.pid))
+        return dict(dd.parse_launchd(text), state='running' if running else 'waiting')
+
+    def launchctl(self, *args, check=True):
+        self.calls.append(('launchctl',) + args)
+        if args[0] == 'bootout':
+            self.loaded = False
+        elif args[0] == 'bootstrap':
+            self.loaded, self.pid = True, self.pid + 1
+        return 0
+
+    def process_args(self, pid):
+        return f'/venv/bin/python3 {self._location()}/domains/guild/agents/operations.py'
+
+    def http_status(self, url):
+        return 200 if self.healthy or self._location() == str(self.home) else None
+
+
+def deploy_ops(host, **kw):
+    return dd.change(host, 'operations', 'claude-code', action='deploy', commit=COMMIT, mode='full',
+                     flags={'accept_unknown_current': True}, timeout=0, out=lambda *_: None, **kw)
+
+
+def test_launchd_deploy_pins_code_keeps_state_and_rolls_back(runtime, monkeypatch):
+    monkeypatch.setattr(dd, 'CODE', runtime / 'dev-code')
+    host = FakeLaunchd(runtime)
+    before = host.plist.read_bytes()
+    record = deploy_ops(host)
+    code = runtime / 'dev-code' / 'operations' / COMMIT
+    assert host._location() == str(code)
+    assert (code / 'logs').resolve() == (host.home / 'logs').resolve()
+    assert (code / 'logs' / 'operations.log').read_text() == 'history\n'          # state carried over
+    assert (code / 'data/guild/memory').is_symlink()                                 # repo copy replaced by link
+    assert (code / '.minimoi-source-commit').read_text().strip() == COMMIT
+    health = json.loads((record / 'health.json').read_text())
+    assert health['runs_pinned_code'] and health['new_process'] and health['source']['ok']
+    assert (record / 'plist-before.plist').read_bytes() == before
+    assert [c[1] for c in host.calls if c[0] == 'launchctl'] == ['bootout', 'bootstrap', 'kickstart']
+
+    target, source = dd.rollback_target('operations', str(record))
+    assert target == str(host.home)
+    dd.change(host, 'operations', 'claude-code', action='rollback', target_image=target, timeout=0,
+              out=lambda *_: None)
+    assert host._location() == str(host.home)
+    assert json.loads((runtime / 'dev-pins' / 'operations.json').read_text())['location'] == str(host.home)
+    # Re-deploying the same commit reuses the extracted directory.
+    deploy_ops(host)
+    assert host._location() == str(code)
+
+
+def test_launchd_failed_health_restores_the_old_plist(runtime, monkeypatch):
+    monkeypatch.setattr(dd, 'CODE', runtime / 'dev-code')
+    host = FakeLaunchd(runtime, healthy=False)
+    before = host.plist.read_bytes()
+    with pytest.raises(RuntimeError, match='rolled back: True'):
+        deploy_ops(host)
+    assert host.plist.read_bytes() == before
+    record = next((runtime / 'operators').iterdir())
+    assert json.loads((record / 'FAILURE.json').read_text())['rolled_back'] is True
+
+
+def test_launchd_refuses_a_plist_edited_without_reload(runtime, monkeypatch):
+    import plistlib
+    host = FakeLaunchd(runtime)
+    doc = plistlib.loads(host.plist.read_bytes())
+    host.launchd = lambda label: dict(dd.parse_launchd(LAUNCHCTL_PRINT.replace('{path}', str(host.plist))
+                                                       .replace('{location}', '/elsewhere').replace('{pid}', '1')))
+    with pytest.raises(dd.Refused, match='without reloading'):
+        deploy_ops(host)
+    assert plistlib.loads(host.plist.read_bytes()) == doc
+
+
+def test_launchd_overlay_is_refused(runtime):
+    with pytest.raises(dd.Refused, match='container images only'):
+        dd.change(FakeLaunchd(runtime), 'operations', 'claude-code', action='deploy', commit=COMMIT,
+                  mode='overlay', flags={'accept_unknown_current': True}, timeout=0, out=lambda *_: None)
+
+
+def test_launchd_refuses_when_requirements_changed(runtime, monkeypatch):
+    host = FakeLaunchd(runtime)
+    host.git_at = lambda location, *args: '' if args[0] == 'status' else BEFORE + '\n'
+    host.migrations = ['requirements.txt']
+    with pytest.raises(dd.Refused, match='shared venv'):
+        deploy_ops(host)

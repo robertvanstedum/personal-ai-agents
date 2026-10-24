@@ -14,7 +14,9 @@ import fcntl
 import hashlib
 import json
 import os
+import plistlib
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -23,6 +25,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = Path(os.environ.get('MINIMOI_DEV_RUNTIME', Path.home() / 'minimoi-runtime'))
 PINS = RUNTIME / 'dev-pins'
+CODE = RUNTIME / 'dev-code'
 OPERATORS = RUNTIME / 'operators'
 GATEWAY_CONFIG = Path.home() / '.openclaw' / 'openclaw.json'
 SHA = re.compile(r'[0-9a-f]{40}\Z')
@@ -54,7 +57,16 @@ SERVICES = {
                                   'services/usage'),
                           health=('http://127.0.0.1:8769/health',)),
 }
+# Mac-only launchd agents: pinned code directories instead of images (see change_launchd).
+SERVICES['operations'] = dict(
+    kind='launchd', label='com.user.operations', script='domains/guild/agents/operations.py',
+    deps=('requirements.txt',), source=('domains/guild', 'core', 'utils'),
+    # Paths the agent writes inside its code directory: they stay in their current home and every pinned
+    # code directory links to them, so a deploy or rollback never loses logs or memory.
+    state=('logs', 'data/guild/memory'),
+    health=('http://127.0.0.1:8768/health',))
 for row in SERVICES.values():
+    row.setdefault('kind', 'container')
     row.setdefault('sidecars', ())
     row.setdefault('mc_turn_probe', False)
     row.setdefault('app_root', '/app')
@@ -130,6 +142,30 @@ class Host:
 
     def sleep(self, seconds):
         time.sleep(seconds)
+
+    def launchd(self, label):
+        """The loaded launchd job as launchd itself reports it, or None when it is not loaded."""
+        r = subprocess.run(['launchctl', 'print', f'gui/{os.getuid()}/{label}'], capture_output=True, text=True)
+        return parse_launchd(r.stdout) if r.returncode == 0 else None
+
+    def launchctl(self, *args, check=True):
+        r = subprocess.run(['launchctl', *[a.replace('{uid}', str(os.getuid())) for a in args]],
+                           capture_output=True, text=True, timeout=60)
+        if check and r.returncode:
+            raise RuntimeError(f'launchctl {args[0]} failed: {(r.stderr or r.stdout)[-400:]}')
+        return r.returncode
+
+    def process_args(self, pid):
+        r = subprocess.run(['ps', '-o', 'command=', '-p', str(pid)], capture_output=True, text=True)
+        return r.stdout.strip()
+
+    def git_at(self, location, *args):
+        r = subprocess.run(['git', '-C', str(location), *args], capture_output=True, text=True, timeout=60)
+        return r.stdout if r.returncode == 0 else None
+
+    def extract(self, commit, dest):
+        archive = self.git_bytes('archive', '--format=tar', commit)
+        subprocess.run(['tar', '-x', '-C', str(dest)], input=archive, check=True)
 
     def now(self):
         return datetime.now(timezone.utc)
@@ -413,6 +449,19 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n')
 
 
+def new_record(name):
+    """A fresh record directory; a second change in the same second gets a -2 suffix, never a shared one."""
+    OPERATORS.mkdir(parents=True, exist_ok=True)
+    for n in range(1, 100):
+        record = OPERATORS / (name if n == 1 else f'{name}-{n}')
+        try:
+            record.mkdir()
+            return record
+        except FileExistsError:
+            continue
+    raise RuntimeError(f'cannot create a record directory for {name}')
+
+
 def history(service=None):
     path = PINS / 'HISTORY.jsonl'
     if not path.exists():
@@ -443,6 +492,35 @@ class Lock:
         os.close(self.fd)
 
 
+def deploy_gates(host, row, current, commit, mode, flags, gate, plan):
+    """Refusals shared by every kind of service: dropped commits, unknown current code, migrations, overlay."""
+    if current:
+        dropped = dropped_commits(host, current, commit)
+        plan['drops'] = dropped
+        if dropped and not flags.get('replace_unrelated'):
+            gate(f'{len(dropped)} commit(s) on dev now are not in {commit[:12]}:\n  '
+                 + '\n  '.join(dropped[:15]) + '\nre-run with --replace-unrelated to drop them')
+    elif not flags.get('accept_unknown_current'):
+        gate(f'what dev runs now for this service has no known source commit; '
+             're-run with --accept-unknown-current (recorded) for this first labelled deploy')
+    migrations = migration_paths(host, current, commit)
+    plan['migrations'] = migrations
+    if migrations and not flags.get('migrations_applied'):
+        gate('migrations are involved; apply them explicitly as their own recorded step, then re-run '
+             'with --with-migrations-applied (code rollback never undoes schema):\n  '
+             + '\n  '.join(migrations[:20]))
+    if row['kind'] == 'launchd' and current:
+        deps = [p for p in changed_paths(host, current, commit) if p in row['deps']]
+        if deps:
+            gate('the shared venv is not pinned and ' + ', '.join(deps) + ' changed; update the venv as its own '
+                 'recorded step first')
+    if mode == 'overlay':
+        blockers = overlay_blockers(host, row, current, commit) if row['kind'] == 'container' \
+            else ['overlay applies to container images only']
+        if blockers:
+            gate('overlay not allowed (' + ', '.join(blockers[:10]) + '); use a full build')
+
+
 # ---------- the change itself (deploy and rollback share it) ----------
 
 def change(host, service, operator, *, action, commit=None, target_image=None, mode=None, flags=None,
@@ -450,6 +528,9 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     """Move `service` to a new image. `action` is 'deploy' (build from `commit`) or 'rollback'
     (re-pin `target_image`). Returns the record directory (None for a dry run)."""
     row = SERVICES[service]
+    if row['kind'] == 'launchd':
+        return change_launchd(host, service, operator, action=action, commit=commit, target=target_image,
+                              mode=mode, flags=flags, dry_run=dry_run, timeout=timeout, out=out)
     flags = flags or {}
     check_hold(service, operator)
     container = host.inspect('container', row['container'])
@@ -474,25 +555,7 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
             raise Refused(message)
         plan.setdefault('would_refuse', []).append(message)
     if action == 'deploy':
-        if current:
-            dropped = dropped_commits(host, current, commit)
-            plan['drops'] = dropped
-            if dropped and not flags.get('replace_unrelated'):
-                gate(f'{len(dropped)} commit(s) on dev now are not in {commit[:12]}:\n  '
-                              + '\n  '.join(dropped[:15]) + '\nre-run with --replace-unrelated to drop them')
-        elif not flags.get('accept_unknown_current'):
-            gate(f'the running {service} image has no source label, so what dev runs now is unknown; '
-                          're-run with --accept-unknown-current (recorded) for this first labelled deploy')
-        migrations = migration_paths(host, current, commit)
-        plan['migrations'] = migrations
-        if migrations and not flags.get('migrations_applied'):
-            gate('migrations are involved; apply them explicitly as their own recorded step, then re-run '
-                          'with --with-migrations-applied (code rollback never undoes schema):\n  '
-                          + '\n  '.join(migrations[:20]))
-        if mode == 'overlay':
-            blockers = overlay_blockers(host, row, current, commit)
-            if blockers:
-                gate('overlay not allowed (' + ', '.join(blockers[:10]) + '); use a full build')
+        deploy_gates(host, row, current, commit, mode, flags, gate, plan)
     if row['mc_turn_probe']:
         busy = host.docker('exec', row['container'], 'python', '-c', MC_TURN_PROBE, timeout=30).strip()
         if busy != '0':
@@ -518,8 +581,7 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
 
     now = host.now()
     name = f'dev-{action}-{service}-{(commit or target_image[7:])[:12]}-{utc_stamp(now)}'
-    record = OPERATORS / name
-    record.mkdir(parents=True)
+    record = new_record(name)
     plan['started'] = now.isoformat()
     plan['host_production_changed'] = False
     write_json(record / 'REQUEST.json', plan)
@@ -613,11 +675,259 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     raise RuntimeError(f'{action} of {service} failed verification; rolled back: {back_ok}. See {record}')
 
 
+# ---------- launchd agents (Mac only): pinned code directories ----------
+#
+# A launchd agent has no image. Each deploy extracts `git archive <commit>` into an immutable directory
+# CODE/<service>/<commit>/, links the agent's state paths back to their current home, and re-points the
+# plist (plistlib; only the script argument and WorkingDirectory change) before reloading the job.
+# The "image" in records and history is that code directory, so rollback is a re-point.
+
+def parse_launchd(text):
+    job, args, in_args = {}, [], False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if in_args:
+            if line == '}':
+                in_args = False
+            else:
+                args.append(line)
+            continue
+        if line == 'arguments = {':
+            in_args = True
+        elif ' = ' in line and raw.startswith('\t') and not raw.startswith('\t\t'):
+            key, value = line.split(' = ', 1)
+            job.setdefault(key.replace(' ', '_'), value)
+    job['arguments'] = args
+    if 'pid' in job:
+        job['pid'] = int(job['pid'])
+    return job
+
+
+def location_commit(host, location):
+    """The commit a code directory holds: our marker, or a clean git checkout's HEAD; None if unknown."""
+    marker = Path(location) / '.minimoi-source-commit'
+    if marker.exists():
+        sha = marker.read_text().strip()
+        return sha if SHA.fullmatch(sha) else None
+    head = host.git_at(location, 'rev-parse', 'HEAD')
+    dirty = host.git_at(location, 'status', '--porcelain', '--untracked-files=no')
+    return head.strip() if head and dirty == '' and SHA.fullmatch(head.strip()) else None
+
+
+def repoint(plist, location, script):
+    new = json.loads(json.dumps(plist))
+    new['ProgramArguments'] = [plist['ProgramArguments'][0], f'{location}/{script}']
+    new['WorkingDirectory'] = str(location)
+    return new
+
+
+def plist_diff(old, new):
+    """Plist keys that differ beyond the code location (names only)."""
+    keys = sorted(set(old) | set(new))
+    diff = [k for k in keys if k not in ('ProgramArguments', 'WorkingDirectory') and old.get(k) != new.get(k)]
+    if old.get('ProgramArguments', [None])[:1] != new.get('ProgramArguments', [None])[:1] \
+            or len(old.get('ProgramArguments', [])) != len(new.get('ProgramArguments', [])):
+        diff.append('ProgramArguments[interpreter]')
+    return diff
+
+
+def prepare_code(host, row, commit, state_home):
+    """CODE/<service>/<commit>, extracted once and reused; state paths link to `state_home`."""
+    service = next(k for k, v in SERVICES.items() if v is row)
+    target = CODE / service / commit
+    if (target / '.minimoi-source-commit').exists():
+        if (target / '.minimoi-source-commit').read_text().strip() != commit:
+            raise Refused(f'{target} holds a different commit')
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.parent / f'.{commit}.partial'
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir()
+    host.extract(commit, tmp)
+    for rel in row['state']:
+        home = Path(state_home) / rel
+        home.mkdir(parents=True, exist_ok=True)
+        path = tmp / rel
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        elif path.exists() or path.is_symlink():
+            path.unlink()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.symlink_to(home)
+    (tmp / '.minimoi-source-commit').write_text(commit + '\n')
+    os.replace(tmp, target)
+    return target
+
+
+def local_source_check(host, row, location, commit):
+    tree = host.git('ls-tree', '-r', commit, '--', *row['source'])
+    bad, files = [], 0
+    for line in tree.splitlines():
+        meta, path = line.split('\t', 1)
+        _, kind, blob = meta.split()
+        if kind != 'blob' or not path.endswith('.py') or any(path.startswith(s + '/') for s in row['state']):
+            continue
+        files += 1
+        try:
+            b = (Path(location) / path).read_bytes()
+        except OSError:
+            bad.append(path)
+            continue
+        if hashlib.sha1(b'blob %d\0' % len(b) + b).hexdigest() != blob:
+            bad.append(path)
+    return {'files': files, 'mismatched': bad[:20], 'ok': files > 0 and not bad}
+
+
+def launchd_health(host, row, location, pid_before, commit, timeout):
+    deadline = time.monotonic() + timeout
+    script = f'{location}/{row["script"]}'
+    while True:
+        job = host.launchd(row['label']) or {}
+        pid = job.get('pid')
+        command = host.process_args(pid) if pid else ''
+        urls = {u: host.http_status(u) for u in row['health']}
+        ready = (job.get('state') == 'running' and pid and pid != pid_before and script in command
+                 and all(v == 200 for v in urls.values()))
+        if ready or time.monotonic() >= deadline:
+            break
+        host.sleep(2)
+    checks = {'running': job.get('state') == 'running', 'new_process': bool(pid) and pid != pid_before,
+              'runs_pinned_code': script in command, 'urls': urls}
+    checks['source'] = local_source_check(host, row, location, commit) if commit \
+        else 'skipped: the code location has no known commit'
+    ok = (checks['running'] and checks['new_process'] and checks['runs_pinned_code']
+          and all(v == 200 for v in urls.values()) and (not commit or checks['source']['ok']))
+    return ok, checks
+
+
+def reload_job(host, label, plist_path, plist_bytes):
+    tmp = plist_path.with_suffix('.plist.tmp')
+    tmp.write_bytes(plist_bytes)
+    os.replace(tmp, plist_path)
+    host.launchctl('bootout', f'gui/{{uid}}/{label}', check=False)
+    for _ in range(20):
+        if host.launchd(label) is None:
+            break
+        host.sleep(0.5)
+    host.launchctl('bootstrap', 'gui/{uid}', str(plist_path))
+    host.launchctl('kickstart', f'gui/{{uid}}/{label}', check=False)
+
+
+def change_launchd(host, service, operator, *, action, commit=None, target=None, mode=None, flags=None,
+                   dry_run=False, timeout=90, out=print):
+    row = SERVICES[service]
+    flags = flags or {}
+    check_hold(service, operator)
+    job = host.launchd(row['label'])
+    if not job:
+        raise Refused(f'launchd job {row["label"]} is not loaded on this host')
+    plist_path = Path(job['path'])
+    plist_bytes = plist_path.read_bytes()
+    plist = plistlib.loads(plist_bytes)
+    location = plist.get('WorkingDirectory', '')
+    args = plist.get('ProgramArguments', [])
+    if len(args) != 2 or args[1] != f'{location}/{row["script"]}':
+        raise Refused(f'{plist_path} does not run {row["script"]} from its WorkingDirectory; not guessing')
+    if job.get('arguments') != args:
+        raise Refused(f'the loaded {row["label"]} job differs from {plist_path}; someone edited it without reloading')
+    current = location_commit(host, location)
+    PINS.mkdir(parents=True, exist_ok=True)
+    pin = PINS / f'{service}.json'
+    pinned = json.loads(pin.read_text()) if pin.exists() else {}
+    state_home = pinned.get('state_home') or location
+
+    plan = {'service': service, 'action': action, 'operator': operator, 'label': row['label'],
+            'image_before': location, 'commit_before': current, 'commit': commit, 'mode': mode or 'code',
+            'flags': flags, 'state_home': state_home, 'dry_run': dry_run}
+
+    def gate(message):
+        if not dry_run:
+            raise Refused(message)
+        plan.setdefault('would_refuse', []).append(message)
+    if action == 'deploy':
+        deploy_gates(host, row, current, commit, mode, flags, gate, plan)
+    if dry_run:
+        plan['config_diff'] = plist_diff(plist, repoint(plist, location, row['script']))
+        out(json.dumps(plan, indent=2, sort_keys=True))
+        return None
+
+    now = host.now()
+    tag = commit[:12] if commit else Path(target).name[:12]
+    record = new_record(f'dev-{action}-{service}-{tag}-{utc_stamp(now)}')
+    plan['started'] = now.isoformat()
+    plan['host_production_changed'] = False
+    write_json(record / 'REQUEST.json', plan)
+    (record / 'plist-before.plist').write_bytes(plist_bytes)
+    write_json(record / 'pin-before.json', {'location': location, 'state_home': state_home, 'commit': current})
+    gateway_before = host.gateway()
+    out(f'record: {record}')
+    try:
+        if action == 'deploy':
+            out(f'extracting {service} at {commit[:12]}…')
+            new_location = prepare_code(host, row, commit, state_home)
+        else:
+            new_location = Path(target)
+            if not (new_location / row['script']).exists():
+                raise Refused(f'{new_location} has no {row["script"]}')
+            commit = location_commit(host, new_location)
+        new_plist = repoint(plist, new_location, row['script'])
+        diff = plist_diff(plist, new_plist)
+        new_bytes = plistlib.dumps(new_plist)
+        (record / 'plist-after.plist').write_bytes(new_bytes)
+        write_json(record / 'pin-after.json', {'location': str(new_location), 'state_home': state_home,
+                                               'commit': commit})
+        if diff:
+            raise Refused('the re-pointed plist differs in more than the code location: ' + ', '.join(diff))
+    except Exception as exc:
+        write_json(record / 'REFUSED.json', {'stage': 'code/config check', 'reason': f'{type(exc).__name__}: {exc}'[:1500],
+                                             'dev_changed': False, 'at': host.now().isoformat()})
+        raise
+    (record / 'rollback.sh').write_text(
+        f'#!/bin/sh\n# Put {service} back on the code it ran before this record. Usage: rollback.sh <operator>\n'
+        f'script="{ROOT}/scripts/operations/deploy_dev.sh"\n'
+        f'[ -x "$script" ] || script="$HOME/Projects/personal-ai-agents/scripts/operations/deploy_dev.sh"\n'
+        f'exec "$script" rollback {service} --to "{record}" --operator "${{1:?operator name}}"\n')
+    os.chmod(record / 'rollback.sh', 0o755)
+
+    out(f'pointing {row["label"]} at {new_location}…')
+    pid_before = job.get('pid')
+    try:
+        reload_job(host, row['label'], plist_path, new_bytes)
+        ok, checks = launchd_health(host, row, str(new_location), pid_before, commit, timeout)
+    except Exception as exc:
+        ok, checks = False, {'error': f'{type(exc).__name__}: {exc}'[:500]}
+    checks['gateway_untouched'] = host.gateway() == gateway_before
+    ok = ok and checks['gateway_untouched']
+    write_json(record / 'health.json', checks)
+    entry = {'service': service, 'action': action, 'operator': operator, 'record': str(record),
+             'image_before': location, 'image': str(new_location), 'commit_before': current, 'commit': commit,
+             'at': host.now().isoformat()}
+    if ok:
+        write_json(pin, {'location': str(new_location), 'state_home': state_home, 'commit': commit})
+        write_json(record / 'RESULT.json', dict(entry, ok=True, production_changed=False, gateway_restarted=False))
+        append_history(dict(entry, ok=True))
+        out(f'ok: {service} runs {new_location} ({(commit or "unknown")[:12]}); rollback: {record}/rollback.sh')
+        return record
+
+    out('verification failed; rolling back…')
+    try:
+        pid_now = (host.launchd(row['label']) or {}).get('pid')
+        reload_job(host, row['label'], plist_path, plist_bytes)
+        back_ok, back = launchd_health(host, row, location, pid_now, current, timeout)
+    except Exception as exc:
+        back_ok, back = False, {'error': f'{type(exc).__name__}: {exc}'[:500]}
+    write_json(record / 'FAILURE.json', dict(entry, ok=False, checks=checks, rolled_back=back_ok, rollback=back,
+                                             production_changed=False))
+    append_history(dict(entry, ok=False, rolled_back=back_ok, image=location if back_ok else str(new_location)))
+    raise RuntimeError(f'{action} of {service} failed verification; rolled back: {back_ok}. See {record}')
+
+
 def rollback_target(service, to=None):
     if to:
         record = Path(to)
         doc = json.loads((record / 'pin-before.json').read_text())
-        return doc['services'][service]['image'], record
+        return (doc['location'] if 'location' in doc else doc['services'][service]['image']), record
     rows = [r for r in history(service) if r.get('ok')]
     if not rows:
         raise Refused(f'no recorded change for {service} to roll back')
@@ -629,6 +939,13 @@ def status(host, service=None, out=print):
     names = [service] if service else list(SERVICES)
     rows = []
     for name in names:
+        if SERVICES[name]['kind'] == 'launchd':
+            job = host.launchd(SERVICES[name]['label'])
+            location = job and job.get('working_directory')
+            rows.append({'service': name, 'running': bool(job and job.get('state') == 'running'),
+                         'location': location, 'commit': location and location_commit(host, location),
+                         'hold': read_hold(name), 'last_change': ([r for r in history(name)] or [None])[-1]})
+            continue
         c = host.inspect('container', SERVICES[name]['container'])
         image = host.inspect('image', c['Image']) if c else None
         last = ([r for r in history(name)] or [None])[-1]

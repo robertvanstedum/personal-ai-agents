@@ -450,8 +450,8 @@ is the fully verified picture (live `launchctl`/`docker`/`crontab`/`lsof` inspec
 
 | Service | Port | Runs as | Notes |
 |---|---|---|---|
-| Guild Operations agent | 8768 | launchd `com.user.operations` | **Guild's agents appear only here** — absent from the prod container list entirely |
-| Guild Dev agent | 8771 | launchd `com.user.devagent` | Same |
+| Guild Operations agent | 8768 | launchd `com.user.operations` | **Guild's agents appear only here** — absent from the prod container list entirely. Code is deployed with `deploy_dev.sh deploy operations` (below) |
+| Vault Ask | 8771 | launchd `com.vanstedum.minimoi-vault-ask` | `core.memory_ask.service`. The former Guild Dev agent (`com.user.devagent`) that used this port is no longer loaded (checked 2026-10-24) |
 | CoS (bare) | 8769 | launchd `com.user.cos` | Runs **simultaneously** with the containerized dev CoS below — dual-instance |
 | CoS (containerized dev) | 18769 | Docker `minimoi-cos-dev` | |
 | Portuguese | 8770 | launchd `com.user.portuguese` | Plus scheduled `com.user.portuguese-leitura` |
@@ -491,8 +491,15 @@ scripts/operations/deploy_dev.sh rollback <service> --operator <name>           
 scripts/operations/deploy_dev.sh status                                                  # commit/image per service
 ```
 
-- **Services:** `portal` (moves its `board-api` sidecar with it), `german`, `portuguese`,
-  `cos-scheduler`. Never model-gateway or postgres.
+- **Services:** `portal` (moves its `board-api` sidecar with it; **the Guild UI — Build, Operate,
+  queue, MC chat, `minimoi_portal/guild_ui` — ships inside the portal**), `german`, `portuguese`,
+  `cos-scheduler`, and the launchd Guild **Operations agent** `operations`. Never model-gateway or postgres.
+- **Operations agent (launchd):** the commit is extracted once into
+  `~/minimoi-runtime/dev-code/operations/<commit>/`, its `logs/` and `data/guild/memory/` link back to
+  the agent's state home (`~/.worktrees/ops-runtime`), and the plist is re-pointed with plistlib
+  (script path and WorkingDirectory only), then `launchctl bootout`/`bootstrap`. Health: new PID running
+  the pinned script, `127.0.0.1:8768/health` 200, source files match. Records keep
+  `plist-before.plist`; rollback re-points to the previous code location.
 - **What it does:** builds the production Dockerfile over `git archive <commit>` (`--overlay`
   for a fast copy onto the running image, allowed only when dependencies are unchanged),
   labels the image with the commit, rewrites `~/minimoi-runtime/dev-pins/<service>.json` (the
