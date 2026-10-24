@@ -7,13 +7,17 @@ table come a speaking-points table and a LinkedIn/resume agreement-check table.
 
 The workbook is for authoring only. Resumes sent to employers are separate, single-column documents.
 
-    python -m domains.cos.career_kit.workbook INPUT.json OUTPUT.docx
+    python -m domains.cos.career_kit.workbook INPUT.json OUTPUT.docx [--carry-from OLD.docx]
+
+A row may carry "rewrite": [lines] for column 3. --carry-from keeps the owner's columns 2–4, speaking points and
+agreement decisions from an earlier workbook, by row id; it refuses if a row with owner text would disappear.
 
 It never overwrites: if OUTPUT exists, it refuses (pass a new versioned name). Input format: see example_input.json.
 """
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -146,9 +150,45 @@ def _current_cell(cell, row):
         _para(cell, "(not on the resume)", label="Resume:")
 
 
-def build(doc: dict, out: Path) -> Path:
+def read_carry(old: Path) -> dict:
+    """What the owner wrote in an earlier workbook: columns 2–4 by row id, speaking points by row id, agreement
+    decisions by label. Word list bullets come back as "• …"."""
+    from .export import cell_lines, row_id                 # lazy: export imports this module
+    tables = Document(old).tables
+    carry = {"cols": {}, "speaking": {}, "decisions": {}}
+    for row in tables[0].rows[1:]:
+        rid = row_id(row.cells[0])
+        if rid:
+            carry["cols"][rid] = {i: cell_lines(row.cells[i]) for i in (2, 3, 4)}
+    if len(tables) > 1:
+        for row in tables[1].rows[1:]:
+            m = re.search(r"\[([a-z0-9][a-z0-9-]*)\]\s*$", row.cells[0].text.strip())
+            if m and row.cells[1].text.strip():
+                carry["speaking"][m.group(1)] = row.cells[1].text.strip()
+    if len(tables) > 2:
+        for row in tables[2].rows[1:]:
+            label, decision = row.cells[0].text.strip(), row.cells[-1].text.strip()
+            if label and decision:
+                carry["decisions"][label] = decision
+    return carry
+
+
+def _lines_into(cell, lines):
+    for i, line in enumerate(lines):
+        _para(cell, line, first=(i == 0))
+
+
+def build(doc: dict, out: Path, carry_from: Path | None = None) -> Path:
+    """carry_from: an earlier workbook whose columns 2–4, speaking points and decisions are carried forward by row id
+    (owner text always wins over the input's rewrite). Rows that no longer exist are reported, never silently lost."""
     if out.exists():
         raise FileExistsError(f"{out} exists; write a new versioned name instead")
+    carry = read_carry(carry_from) if carry_from else {"cols": {}, "speaking": {}, "decisions": {}}
+    ids = {r["id"] for r in doc["rows"]}
+    orphans = sorted(rid for rid, cols in carry["cols"].items() if rid not in ids and any(cols.values()))
+    if orphans:
+        raise InputInvalid("the earlier workbook has rows this input lacks (their text would be lost): "
+                           + ", ".join(orphans))
     document = Document()
     section = document.sections[0]
     section.orientation = WD_ORIENT.LANDSCAPE
@@ -175,6 +215,10 @@ def build(doc: dict, out: Path) -> Path:
         cells = _row(table, WIDTHS, usable)
         _job_cell(cells[0], row)
         _current_cell(cells[1], row)
+        old = carry["cols"].get(row["id"], {})
+        _lines_into(cells[2], old.get(2) or [])
+        _lines_into(cells[3], old.get(3) or row.get("rewrite") or [])
+        _lines_into(cells[4], old.get(4) or [])
 
     document.add_heading("Speaking points (off the page)", level=2)
     sp = _table(document, ("Job", "Details kept for interviews, not for the resume"), (0.25, 0.75), usable)
@@ -183,7 +227,8 @@ def build(doc: dict, out: Path) -> Path:
             cells = _row(sp, (0.25, 0.75), usable)
             _para(cells[0], f"{_text(row.get('employer'), 'employer') or _text(row.get('title'), 'title')} [{row['id']}]",
                   first=True)
-            _para(cells[1], _text(row.get("speaking_points"), "speaking_points"), first=True)
+            _para(cells[1], carry["speaking"].get(row["id"]) or _text(row.get("speaking_points"), "speaking_points"),
+                  first=True)
 
     document.add_heading("Agreement check (LinkedIn vs resume)", level=2)
     ac = _table(document, ("Job", "LinkedIn", "Resume", "Decision"), (0.18, 0.32, 0.32, 0.18), usable)
@@ -192,18 +237,28 @@ def build(doc: dict, out: Path) -> Path:
         _para(cells[0], _text(item.get("row"), "row"), first=True)
         _para(cells[1], _text(item.get("linkedin"), "linkedin"), first=True)
         _para(cells[2], _text(item.get("resume"), "resume"), first=True)
+        _para(cells[3], carry["decisions"].get(item["row"].strip(), ""), first=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     document.save(out)
     return out
 
 
 def main(argv=None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-    if len(argv) != 2:
-        print(__doc__.strip().splitlines()[-3].strip(), file=sys.stderr)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    carry, bad = None, False
+    if "--carry-from" in argv:
+        i = argv.index("--carry-from")
+        if i + 1 < len(argv):
+            carry = Path(argv[i + 1])
+        else:
+            bad = True
+        del argv[i:i + 2]
+    if len(argv) != 2 or bad:
+        print("usage: python -m domains.cos.career_kit.workbook INPUT.json OUTPUT.docx [--carry-from OLD.docx]",
+              file=sys.stderr)
         return 2
     try:
-        print(build(load(Path(argv[0])), Path(argv[1])))
+        print(build(load(Path(argv[0])), Path(argv[1]), carry_from=carry))
     except (InputInvalid, FileExistsError, json.JSONDecodeError) as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 1

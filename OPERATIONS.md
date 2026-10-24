@@ -467,8 +467,10 @@ container. Keychain-based credentials are the dev flow; production uses SSM.
 
 **Owner tools (Mac, run on demand, no service).** The Career Narrative Kit (`domains/cos/career_kit/`, CoS early
 capability) runs from the repo venv: resume import, workbook generator, export of the owner's finals (single-column,
-ATS-safe resume, LinkedIn text, report) and cover-letter assembly. Dependency: `python-docx` (pinned in
-`requirements.txt`, and in `requirements.test.txt` for CI). Install with `pip install -r requirements.txt`. Real
+ATS-safe resume, LinkedIn text, report) and cover-letter assembly. Dependencies: `python-docx` and `pypdf` (pinned in
+`requirements.txt`; `requirements.test.txt` for CI); install with `pip install -r requirements.txt`. Resume page
+counts use LibreOffice headless (`brew install --cask libreoffice`, installed on the Mac 2026-10-24); without it the
+export reports "not checked". Real
 workbooks, resumes and letters stay in the owner's private career area outside this repository; the tools never
 overwrite a file. Usage: `domains/cos/career_kit/README.md`.
 

@@ -81,10 +81,10 @@ Research notes, employer assessments and target lists remain private by default.
 
 - `WORKBOOK_TEMPLATE.md`: the blank table (markdown).
 - `resume_import`: current resume (.docx) → workbook input rows, plus the resume's header and its Education/Capabilities tail, carried through unchanged.
-- `workbook`: input → landscape Word workbook. Refuses to overwrite; successors get a new name.
-- `export`: workbook → ATS-safe `resume.docx`, `linkedin.md`, and `report.md` (rows still without a final, LinkedIn length flags, agreement decisions). Rows without an owner final are never filled with old or AI text.
+- `workbook`: input → landscape Word workbook. Refuses to overwrite; successors get a new name. `--carry-from` builds the next version keeping the owner's columns 2–4, speaking points and decisions by row id, and refuses if a row with owner text would be lost.
+- `export`: workbook → ATS-safe `resume.docx`, `linkedin.md`, and `report.md` (page count, rows still without a final, LinkedIn length flags, agreement decisions). Rows without an owner final are never filled with old or AI text. `--template` writes into the owner's own resume to keep its layout; `--draft` previews from column 3, marked DRAFT throughout. Bullets made with Word's list button count; `Note:` lines are never exported.
 - `letter`: posting-side opening + owner's fixed middle + optional project paragraph + close. A placeholder opening is refused.
-- Checks: title/date/place agreement is surfaced as flags for the owner to decide, never auto-corrected. A resume page-count check is planned and needs a renderer; not in v0.2.
+- Checks: title/date/place agreement is surfaced as flags for the owner to decide, never auto-corrected. The resume page count is rendered headless with LibreOffice; without it the report says "not checked".
 - Round trip: the Word workbook is read back by `export` only for the columns named above. Lossless regeneration from an edited Word file is not claimed.
 
 ## 6. Spin-offs (not in this spec)

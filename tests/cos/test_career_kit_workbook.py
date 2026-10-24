@@ -120,3 +120,71 @@ def test_letter_refuses_a_placeholder_opening_and_never_overwrites(tmp_path):
     assert (tmp_path / "l.md").read_text().startswith("Hello,\n\nYou need someone")
     with pytest.raises(FileExistsError):
         letter.write(parts, out)
+
+
+# ── hardening found by the end-to-end dry run (24 Oct) ────────────────────────────────────────────────────────
+
+def _fill(path, rid_col_lines, decisions=None):
+    from domains.cos.career_kit.export import row_id
+    d = Document(path)
+    for row in d.tables[0].rows[1:]:
+        rid = row_id(row.cells[0])
+        for col, lines in rid_col_lines.get(rid, {}).items():
+            cell = row.cells[col]
+            for i, (text, style) in enumerate(lines):
+                para = cell.paragraphs[0] if i == 0 and not cell.paragraphs[0].text else cell.add_paragraph()
+                para.add_run(text)
+                if style:
+                    para.style = d.styles[style]
+    for row in d.tables[2].rows[1:]:
+        if decisions and row.cells[0].text.strip() in decisions:
+            row.cells[3].paragraphs[0].add_run(decisions[row.cells[0].text.strip()])
+    d.save(path)
+
+
+def test_word_list_bullets_and_notes_and_the_draft_preview(tmp_path):
+    from domains.cos.career_kit import export
+    wb = workbook.build(workbook.load(EXAMPLE), tmp_path / "wb.docx")
+    _fill(wb, {"acme": {3: [("Note: helper's note, never exported", None), ("Rewrite entry.", None),
+                            ("A bullet made with Word's list button.", "List Bullet")],
+                        4: [("Final entry.", None), ("Final bullet via Word list.", "List Bullet")]}})
+    final = export.export(EXAMPLE, wb, tmp_path / "final", pages=False)
+    texts = [(p.style.name, p.text) for p in Document(final / "resume.docx").paragraphs]
+    assert ("List Bullet", "Final bullet via Word list.") in texts
+    assert not any("Rewrite entry." in t for _, t in texts)                    # column 3 never ships as final
+    draft = export.export(EXAMPLE, wb, tmp_path / "draft", draft=True, pages=False)
+    dtexts = [p.text for p in Document(draft / "resume.docx").paragraphs]
+    assert any(t.startswith("DRAFT PREVIEW") for t in dtexts)
+    assert "Rewrite entry." in dtexts and not any("helper's note" in t for t in dtexts)
+    assert "DRAFT (column 3)" in (draft / "report.md").read_text()
+
+
+def test_carry_forward_keeps_owner_text_and_refuses_to_lose_a_row(tmp_path):
+    from domains.cos.career_kit import export
+    doc = workbook.load(EXAMPLE)
+    old = workbook.build(doc, tmp_path / "v1.docx")
+    _fill(old, {"acme": {2: [("my notes", None)], 4: [("my final", None), ("my bullet", "List Bullet")]}},
+          {"Beta Telecom": "keep it off LinkedIn"})
+    new = workbook.build(doc, tmp_path / "v2.docx", carry_from=old)
+    for col in (2, 3, 4):
+        assert export.read_finals(old, col) == export.read_finals(new, col)
+    assert export.read_decisions(new) == {"Beta Telecom": "keep it off LinkedIn"}
+    doc["rows"] = [r for r in doc["rows"] if r["id"] != "acme"]
+    with pytest.raises(workbook.InputInvalid):
+        workbook.build(doc, tmp_path / "v3.docx", carry_from=old)
+    assert not (tmp_path / "v3.docx").exists()
+
+
+def test_the_export_writes_into_the_owners_resume_keeping_header_and_tail(tmp_path):
+    from domains.cos.career_kit import export
+    template = _resume(tmp_path / "resume.docx")
+    wb = workbook.build(workbook.load(EXAMPLE), tmp_path / "wb.docx")
+    _fill(wb, {"acme": {4: [("New entry line.", None), ("New bullet.", "List Bullet")]},
+               "about": {4: [("Summary: New summary.", None)]}})
+    out = export.export(EXAMPLE, wb, tmp_path / "out", template=template, pages=False)
+    texts = [p.text for p in Document(out / "resume.docx").paragraphs]
+    assert texts[:2] == ["Example Person", "Springfield · example@example.org"]          # header kept verbatim
+    assert "New summary." in texts and "New entry line." in texts and "New bullet." in texts
+    assert "Led operations through a merger." not in texts                                 # old middle replaced
+    assert texts[-4:] == ["EDUCATION", "B.A., Example University", "CAPABILITIES", "Delivery and operations"]
+    assert Document(template).paragraphs[3].text == "Operations leader for platforms in change."  # template untouched
