@@ -258,6 +258,20 @@ def network_mode(value):
     return value if value in ('host', 'none') else 'default'
 
 
+def tmpfs_view(value):
+    """Compare destinations and all options, retaining option order conservatively.
+
+    Compose uses destination[:options] strings; Docker inspect uses a mapping.
+    Do not discard or reorder flags: conflicting options can be order-sensitive.
+    """
+    if isinstance(value, dict):
+        pairs = value.items()
+    else:
+        entries = [value] if isinstance(value, str) else value or []
+        pairs = [(entry.partition(':')[0], entry.partition(':')[2]) for entry in entries]
+    return sorted([destination, options or ''] for destination, options in pairs)
+
+
 def rendered_view(doc, service):
     s = doc['services'][service]
     networks = doc.get('networks') or {}
@@ -276,6 +290,7 @@ def rendered_view(doc, service):
             'mounts': sorted(mount(v) for v in s.get('volumes') or []),
             'ports': ports,
             'command': s.get('command'), 'entrypoint': s.get('entrypoint'),
+            'user': s.get('user'), 'working_dir': s.get('working_dir'),
             'networks': sorted((networks.get(n) or {}).get('name', n) for n in (s.get('networks') or {})),
             'memory': int(s['mem_limit']) if s.get('mem_limit') else 0,
             'nano_cpus': int(round(float(s['cpus']) * 1e9)) if s.get('cpus') else 0,
@@ -284,8 +299,7 @@ def rendered_view(doc, service):
             'network_mode': network_mode(s.get('network_mode')),
             'read_only': bool(s.get('read_only')), 'cap_drop': sorted(s.get('cap_drop') or []),
             'security_opt': sorted(s.get('security_opt') or []),
-            'tmpfs': sorted(t.split(':')[0] for t in ([s['tmpfs']] if isinstance(s.get('tmpfs'), str)
-                                                       else s.get('tmpfs') or []))}
+            'tmpfs': tmpfs_view(s.get('tmpfs'))}
 
 
 def running_view(container, image):
@@ -300,26 +314,33 @@ def running_view(container, image):
             'mounts': mounts, 'ports': ports,
             'command': container['Config'].get('Cmd'), 'entrypoint': container['Config'].get('Entrypoint'),
             'image_command': image['Config'].get('Cmd'), 'image_entrypoint': image['Config'].get('Entrypoint'),
+            'user': container['Config'].get('User') or '', 'working_dir': container['Config'].get('WorkingDir') or '',
+            'image_user': image['Config'].get('User') or '', 'image_working_dir': image['Config'].get('WorkingDir') or '',
             'networks': sorted(container['NetworkSettings']['Networks']),
             'memory': hc.get('Memory') or 0, 'nano_cpus': hc.get('NanoCpus') or 0,
             'restart': (hc.get('RestartPolicy') or {}).get('Name') or 'no',
             'network_mode': network_mode(hc.get('NetworkMode')),
             'read_only': bool(hc.get('ReadonlyRootfs')), 'cap_drop': sorted(hc.get('CapDrop') or []),
-            'security_opt': sorted(hc.get('SecurityOpt') or []), 'tmpfs': sorted(hc.get('Tmpfs') or {})}
+            'security_opt': sorted(hc.get('SecurityOpt') or []), 'tmpfs': tmpfs_view(hc.get('Tmpfs'))}
 
 
-def config_diff(rendered, running):
+def config_diff(rendered, running, target_image=None):
     """Differences other than the image, as names only (never values)."""
     diff = []
-    env, live = rendered['env'], running['env']
+    defaults = target_image['Config'] if target_image is not None else None
+    env = dict(env_dict(defaults.get('Env')), **rendered['env']) if defaults is not None else rendered['env']
+    live = running['env']
     for k in sorted(set(env) | set(live)):
         if k in env:
             if live.get(k) != env[k]:
                 diff.append(f'env:{k}')
-        elif running['image_env'].get(k) != live[k]:
+        elif defaults is not None or running['image_env'].get(k) != live[k]:
             diff.append(f'env:{k}')        # set on the container, but by nothing in the chain any more
-    for key in ('command', 'entrypoint'):
-        want = rendered[key] if rendered[key] is not None else running['image_' + key]
+    for key, image_key in (('command', 'Cmd'), ('entrypoint', 'Entrypoint'), ('user', 'User'), ('working_dir', 'WorkingDir')):
+        inherited = defaults.get(image_key) if defaults is not None else running['image_' + key]
+        if key == 'command' and rendered['entrypoint'] is not None:
+            inherited = None
+        want = rendered[key] if rendered[key] is not None else inherited
         if (want or None) != (running[key] or None):      # compose `command: []` is stored as no command
             diff.append(key)
     for key in ('mounts', 'ports', 'networks', 'memory', 'nano_cpus', 'restart', 'network_mode', 'read_only',
@@ -560,10 +581,10 @@ def health(host, row, container_name, image, commit, timeout, mode=None):
 
 # ---------- sidecars (e.g. board-api in the portal's namespace) ----------
 
-def sidecar_config_diff(host, spec, c, pin_path, env):
+def sidecar_config_diff(host, spec, c, pin_path, env, target_image=None):
     chain = chain_of(c)
     rendered = rendered_view(render(host, chain, with_pin(chain['files'], pin_path), env), chain['service'])
-    return config_diff(rendered, running_view(c, host.inspect('image', c['Image'])))
+    return config_diff(rendered, running_view(c, host.inspect('image', c['Image'])), target_image)
 
 
 def credential_digest(host, spec, c):
@@ -586,7 +607,7 @@ def stop_sidecar(host, spec):
     host.docker('rm', '-f', spec['container'], timeout=60)
 
 
-SIDECAR_INVARIANTS = ('env', 'mounts', 'ports', 'command', 'entrypoint', 'restart', 'network_mode', 'read_only',
+SIDECAR_INVARIANTS = ('env', 'mounts', 'ports', 'command', 'entrypoint', 'user', 'working_dir', 'restart', 'network_mode', 'read_only',
                       'cap_drop', 'security_opt', 'tmpfs', 'memory', 'nano_cpus')
 
 
@@ -721,7 +742,9 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     before_image = host.inspect('image', container['Image'])
     current = unit_commit(row, before_image)
     sidecars = [(spec, host.inspect('container', spec['container'])) for spec in row['sidecars']]
-    sidecars = [(spec, c) for spec, c in sidecars if c]
+    missing = [spec['service'] for spec, c in sidecars if c is None]
+    if missing:
+        raise Refused('required sidecar missing: ' + ', '.join(missing) + '; repair it before deployment')
     for spec, c in sidecars:
         if c['Image'] != container['Image']:
             raise Refused(f'sidecar {spec["service"]} runs {c["Image"][:19]}, not the {service} image; '
@@ -749,6 +772,12 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     env = compose_env(host)
     PINS.mkdir(parents=True, exist_ok=True)
     pin = PINS / f'{svc}.json'
+    observed_pin = {'services': {n: {'image': container['Image']}
+                                for n in (svc, *[x['service'] for x, _ in sidecars])}}
+    if pin.exists():
+        saved = json.loads(pin.read_text()).get('services', {})
+        if any(saved.get(n, {}).get('image') != v['image'] for n, v in observed_pin['services'].items()):
+            raise Refused('existing pin differs from running images; reconcile it before deployment')
     files = with_pin(chain['files'], pin)
     running = running_view(container, before_image)
     if dry_run:
@@ -773,9 +802,7 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     plan['host_production_changed'] = False
     write_json(record / 'REQUEST.json', plan)
     write_json(record / 'running-before.json', config_summary(running))
-    write_json(record / 'pin-before.json', json.loads(pin.read_text()) if pin.exists()
-               else {'services': {n: {'image': container['Image']}
-                                  for n in (svc, *[x['service'] for x, _ in sidecars])}})
+    write_json(record / 'pin-before.json', observed_pin)
     gateway_before = host.gateway()
     out(f'record: {record}')
 
@@ -796,7 +823,14 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
         write_pin(candidate, svc, image, sidecars)
         target_image_doc = host.inspect('image', image)
         rendered = rendered_view(render(host, chain, with_pin(chain['files'], candidate), env), chain['service'])
-        diff = config_diff(rendered, running)
+        diff = config_diff(rendered, running, target_image_doc)
+        if (target_image_doc['Config'].get('Volumes') or {}) != (before_image['Config'].get('Volumes') or {}):
+            diff.append('image_volumes')
+        # Conservatively refuse changes to inherited identity/directory too,
+        # even when Compose might override them.
+        for key in ('User', 'WorkingDir'):
+            if (target_image_doc['Config'].get(key) or '') != (before_image['Config'].get(key) or ''):
+                diff.append('image_' + key.lower())
         write_json(record / 'config-before.json', config_summary(running))
         write_json(record / 'config-after.json', dict(config_summary(rendered), diff=diff))
         if rendered['image'] != image:
@@ -805,7 +839,7 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
             raise Refused('the rendered config differs from the running one in more than the image: '
                           + ', '.join(diff) + '; nothing changed (see config-after.json)')
         for x, c in sidecars:
-            side_diff = sidecar_config_diff(host, x, c, candidate, env)
+            side_diff = sidecar_config_diff(host, x, c, candidate, env, target_image_doc)
             if side_diff:
                 raise Refused(f'sidecar {x["service"]} would change in more than the image: '
                               + ', '.join(side_diff) + '; nothing changed')
@@ -814,6 +848,12 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
                                       credential_digest(host, x, c)) for x, c in sidecars}
         write_json(record / 'sidecars-before.json', {n: {'config': config_summary(v), 'credentials_sha256': d}
                                                      for n, (v, d) in side_before.items()})
+        # Builds can take minutes. Refuse if a chat started meanwhile. This is a
+        # last snapshot, not an admission barrier: live MC rollout still needs
+        # an operator-held suspension/drain across replacement and rollback.
+        if row['mc_turn_probe'] and host.docker('exec', row['container'], 'python', '-c', MC_TURN_PROBE,
+                                               timeout=30).strip() != '0':
+            raise Refused('an MC turn started during preparation; nothing changed')
     except Exception as exc:
         # Nothing on dev changed yet: the container still runs the old image.
         write_json(record / 'REFUSED.json', {'stage': 'build/config check', 'reason': f'{type(exc).__name__}: {exc}'[:1500],
@@ -839,6 +879,12 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
         up(host, chain, files, env, record / log)
         ok, checks = health(host, row, row['container'], image_now, commit_now, timeout, mode=mode_now)
         portal_now = host.inspect('container', row['container']) or {}
+        if portal_now:
+            actual = running_view(portal_now, host.inspect('image', portal_now['Image']))
+            checks['config_changed'] = [k for k in SIDECAR_INVARIANTS + ('networks',) if actual[k] != running[k]]
+        else:
+            checks['config_changed'] = ['missing']
+        ok = ok and not checks['config_changed']
         for x, c in sidecars:
             up(host, chain_of(c), with_pin(chain_of(c)['files'], pin), env, record / log)
             side_ok, side = verify_sidecar(host, x, portal_now.get('Id'), image_now, *side_before[x['service']],
@@ -850,6 +896,12 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     out(f'applying {image[:19]} to {row["container"]}…')
     try:
         ok, checks = apply({'services': {svc: {'image': image}}}, 'up.log', image, commit, mode)
+    except subprocess.TimeoutExpired:
+        # Killing the CLI does not cancel daemon work. A competing rollback is
+        # unsafe until an operator reconciles the actual containers.
+        write_json(record / 'UNCERTAIN.json', {'stage': 'apply', 'reason': 'mutation timed out',
+                                              'automatic_rollback': False, 'reconciliation_required': True})
+        raise RuntimeError(f'deployment outcome uncertain; no competing rollback issued. Reconcile {record}') from None
     except Exception as exc:
         ok, checks = False, {'error': f'{type(exc).__name__}: {exc}'[:500]}
     gateway_after = host.gateway()

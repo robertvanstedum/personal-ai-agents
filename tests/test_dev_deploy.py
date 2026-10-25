@@ -4,6 +4,7 @@ Docker, git and HTTP are replaced by a fake host; nothing here touches a real co
 """
 from datetime import datetime, timezone
 import json
+import subprocess
 
 import pytest
 
@@ -571,7 +572,7 @@ def portal_container(image_id, cid):
 
 
 def board_container(image_id, portal_id):
-    c = container(image_id, env=['MINIMOI_BOARD_ENV=dev', 'BOARD_API_PORT=5013'], name='minimoi-board-api-dev')
+    c = container(image_id, env=['MINIMOI_BOARD_ENV=dev', 'BOARD_API_PORT=5013', 'PATH=/usr/bin'], name='minimoi-board-api-dev')
     c['Id'] = 'board-' + portal_id
     c['Config']['Labels'] = dict(c['Config']['Labels'], **{'com.docker.compose.service': 'board-api'})
     c['Config']['Cmd'] = None
@@ -724,6 +725,32 @@ def test_sidecar_on_a_stale_namespace_is_refused_before_anything_changes(runtime
     assert host.order == []
 
 
+@pytest.mark.parametrize('unit', ['portal', 'guild-ui'])
+def test_missing_required_sidecar_is_refused_before_deployment(runtime, unit):
+    host = FakePortal(runtime)
+    del host.containers['minimoi-board-api-dev']
+    with pytest.raises(dd.Refused, match='required sidecar missing: board-api'):
+        deploy_portal(host, unit=unit)
+    assert host.order == []
+
+
+@pytest.mark.parametrize('changed', ['rw,exec,size=64m', 'rw,noexec,size=4g'])
+def test_tmpfs_options_are_compared_before_and_after_deployment(changed):
+    before = board_container(OLD, 'p-old')
+    before['HostConfig']['Tmpfs'] = {'/tmp': 'rw,noexec,size=64m'}
+    original = dd.running_view(before, image(OLD))
+    spec = board_rendered(OLD)
+    spec['tmpfs'] = ['/tmp:rw,noexec,size=64m']
+    assert 'tmpfs' not in dd.config_diff(dd.rendered_view({'services': {'board-api': spec}}, 'board-api'), original)
+    spec['tmpfs'] = ['/tmp:' + changed]
+    proposed = dd.rendered_view({'services': {'board-api': spec}}, 'board-api')
+    assert 'tmpfs' in dd.config_diff(proposed, original)
+    before['HostConfig']['Tmpfs']['/tmp'] = changed
+    after = dd.running_view(before, image(OLD))
+    assert after['tmpfs'] != original['tmpfs']
+    assert 'tmpfs' in dd.SIDECAR_INVARIANTS
+
+
 def test_sidecar_security_drift_in_the_chain_is_refused(runtime):
     host = FakePortal(runtime)
     real = host.run
@@ -759,3 +786,100 @@ def test_dockerignore_rules():
     assert dd.dockerignored('core/x/__pycache__/a.py', patterns)
     assert dd.dockerignored('docs/a.md', patterns) and not dd.dockerignored('docs/keep.md', patterns)
     assert not dd.dockerignored('minimoi_portal/guild_ui/static/board.js', patterns)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('Env', ['PATH=/different']), ('Cmd', ['different-server']),
+    ('Entrypoint', ['different-entrypoint']), ('Volumes', {'/new-data': {}}),
+    ('User', 'root'), ('WorkingDir', '/different'),
+])
+def test_candidate_image_defaults_cannot_change_effective_config(runtime, field, value):
+    host = FakeHost(runtime)
+    host.images[NEW]['Config'][field] = value
+    with pytest.raises(dd.Refused, match='rendered config differs'):
+        deploy(host)
+    assert not any('up' in call for call in host.calls)
+    assert host.containers['minimoi-german']['Image'] == OLD
+
+
+def test_stale_rollback_pin_refused_before_build(runtime):
+    pins = runtime / 'dev-pins'
+    pins.mkdir()
+    (pins / 'german.json').write_text(json.dumps({'services': {'german': {'image': NEW}}}))
+    host = FakeHost(runtime)
+    with pytest.raises(dd.Refused, match='existing pin differs'):
+        deploy(host)
+    assert not any(call[:2] == ('docker', 'build') for call in host.calls)
+
+
+def test_mc_turn_started_during_build_refuses_before_mutation(runtime):
+    host = FakePortal(runtime)
+    original = host.docker
+    probes = []
+
+    def docker(*args, **kwargs):
+        if dd.MC_TURN_PROBE in args:
+            probes.append(True)
+            return '0' if len(probes) == 1 else '1'
+        return original(*args, **kwargs)
+
+    host.docker = docker
+    with pytest.raises(dd.Refused, match='MC turn started'):
+        deploy_portal(host)
+    assert len(probes) == 2
+    assert host.order == []
+    assert not (runtime / 'dev-pins' / 'portal.json').exists()
+
+
+def test_apply_timeout_is_uncertain_without_competing_rollback(runtime):
+    host = FakePortal(runtime)
+    original = host.run
+
+    def run(args, **kwargs):
+        if 'up' in args:
+            raise subprocess.TimeoutExpired('docker compose up', 300)
+        return original(args, **kwargs)
+
+    host.run = run
+    with pytest.raises(RuntimeError, match='outcome uncertain'):
+        deploy_portal(host)
+    assert host.order == ['stop:minimoi-board-api-dev']
+    record = next((runtime / 'operators').iterdir())
+    assert json.loads((record / 'UNCERTAIN.json').read_text())['reconciliation_required']
+    assert not (record / 'RESULT.json').exists()
+    assert not (record / 'FAILURE.json').exists()
+
+
+def test_runtime_config_drift_triggers_verified_rollback(runtime):
+    host = FakeHost(runtime)
+    original = host.run
+
+    def run(args, **kwargs):
+        result = original(args, **kwargs)
+        if 'up' in args and host.containers['minimoi-german']['Image'] == NEW:
+            host.containers['minimoi-german']['Config']['Env'].append('UNEXPECTED=value')
+        return result
+
+    host.run = run
+    with pytest.raises(RuntimeError, match='rolled back: True'):
+        deploy(host)
+    record = next((runtime / 'operators').iterdir())
+    failure = json.loads((record / 'FAILURE.json').read_text())
+    assert failure['checks']['config_changed'] == ['env']
+    assert failure['rolled_back']
+
+
+@pytest.mark.parametrize('field', ['user', 'working_dir'])
+def test_compose_identity_and_directory_drift_are_refused(field):
+    doc = rendered(NEW)
+    doc['services']['german'][field] = 'unexpected'
+    assert dd.config_diff(*views(doc)) == [field]
+
+
+def test_explicit_entrypoint_suppresses_image_command():
+    doc = rendered(NEW)
+    doc['services']['german']['entrypoint'] = ['custom-server']
+    c = container()
+    c['Config']['Entrypoint'] = ['custom-server']
+    c['Config']['Cmd'] = None
+    assert dd.config_diff(*views(doc, c)) == []
