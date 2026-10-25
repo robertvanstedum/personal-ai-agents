@@ -1,0 +1,28 @@
+{
+ "profile": "minimal",
+ "alsoAllow": [
+  "read",
+  "ls",
+  "dir_list",
+  "grep",
+  "find",
+  "view_image",
+  "minimoi-tools"
+ ],
+ "deny": [
+  "group:runtime",
+  "write",
+  "edit",
+  "apply_patch",
+  "group:web",
+  "group:ui",
+  "group:automation",
+  "group:messaging",
+  "group:nodes",
+  "group:sessions",
+  "group:memory",
+  "group:media",
+  "cron",
+  "gateway"
+ ]
+}

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import codecs
 import json
+import re
 import time
 from dataclasses import dataclass
 from typing import Iterable, Iterator
@@ -37,6 +38,16 @@ FAILURE_CLASSES = ("deadline", "idle", "too_large", "upstream", "stopped", "trun
 @dataclass(frozen=True)
 class Delta:
     text: str
+
+
+# OpenClaw's run id, which the MC relay forwards once, first (relay_v2 `{"t":"run"}`; MC spec v1.2 §7.1).
+RUN_ID = re.compile(r"chatcmpl_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+@dataclass(frozen=True)
+class RunStarted:
+    """The runtime run this turn's request opened: the portal binds the turn's tool calls to it."""
+    run_id: str
 
 
 @dataclass(frozen=True)
@@ -96,6 +107,8 @@ def parse_relay_line(line: str):
     if not isinstance(obj, dict):
         return None
     kind = obj.get("t")
+    if kind == "run" and isinstance(obj.get("id"), str) and RUN_ID.fullmatch(obj["id"]):
+        return RunStarted(obj["id"])
     if kind == "delta" and isinstance(obj.get("text"), str) and obj["text"]:
         return Delta(obj["text"])
     if kind == "finish" and isinstance(obj.get("reason"), str):
@@ -204,5 +217,5 @@ def read_stream(chunks: Iterable[bytes], *, limits: Limits, fmt: str = "ndjson",
             yield Failure("upstream")
 
 
-__all__ = ["Delta", "Finish", "Usage", "Failure", "StreamRefused", "Limits", "read_stream", "parse_relay_line",
+__all__ = ["Delta", "RunStarted", "Finish", "Usage", "Failure", "StreamRefused", "Limits", "read_stream", "parse_relay_line",
            "parse_sse_line", "STREAM_ANSWER_FINISH_REASONS", "FAILURE_CLASSES"]

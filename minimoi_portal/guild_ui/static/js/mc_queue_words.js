@@ -18,6 +18,7 @@ export function notSentWords(entry) {
   const reason = entry.outcome && entry.outcome.reason;
   if (entry.state === 'expired') return 'Not sent · it waited more than 24 hours';
   if (entry.state === 'cancelled' && reason === 'earlier_expired') return 'Not sent · cancelled because an earlier message expired';
+  if (entry.state === 'cancelled' && reason === 'owner_stop_acknowledged') return null; // already explained by Stop; it WAS sent
   if (entry.state === 'cancelled') return 'Not sent · cancelled';
   return null;
 }

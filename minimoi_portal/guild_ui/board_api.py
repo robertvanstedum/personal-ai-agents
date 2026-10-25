@@ -12,7 +12,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 
 from . import cfg, owner_api, owner_page
 from .adapters.contract import now_iso
-from .api import _author, _clean_text, _floor, _principal, _source, _store_down, _write_body
+from .api import _board_text, _author, _clean_text, _floor, _principal, _source, _store_down, _write_body
 from .stores import POSTIT_MAX
 from .board import LABELS, PHOTO_CAPTION_MAX
 from .media import (MAX_BYTES, OWNER_RE, MediaRejected, media_of, root_problem, sanitize, thumb_key)
@@ -20,6 +20,7 @@ from .security import check_upload, json_error
 from .stores import FloorStoreUnavailable
 
 WORDS = {
+    "unknown": "The save could not be confirmed. Retry this request to recover its result; avoid adding another copy.",
     "done": "Marked done", "undone": "Back on the board", "already_done": "Already done",
     "already_active": "Already on the board", "labelled": "Label saved", "linked": "Link saved",
     "added": "Added to the Board", "moved": "Moved", "edited": "Saved", "unchanged": "Nothing to change",
@@ -37,7 +38,7 @@ WORDS = {
     "duplicate": "Already in your library: the same image is used", "purged": "Deleted permanently · receipt {receipt}",
     "in_use": "Still used, so nothing was deleted. Remove it where it is used first",
 }
-HTTP = {"invalid": 422,"conflict": 409, "occupied": 409, "in_trash": 409, "not_a_note": 409, "asset_trashed": 409, "in_use": 409, "idempotency_mismatch": 409,
+HTTP = {"unknown": 503, "invalid": 422,"conflict": 409, "occupied": 409, "in_trash": 409, "not_a_note": 409, "asset_trashed": 409, "in_use": 409, "idempotency_mismatch": 409,
         "not_found": 404, "gone": 410}
 MEDIA_DOWN = "The media library is unavailable right now. Nothing was changed"
 
@@ -80,6 +81,11 @@ def _answer(done, *, value_key="postit", **extra):
     receipt = done.value.get("receipt_id") if isinstance(done.value, dict) else None
     payload = {"result": outcome, "repeated": done.repeated, value_key: done.value,
                "message": words.format(receipt=receipt or "?"), "observed_at": now_iso(), **extra}
+    operation = getattr(done, "operation", None)
+    if operation:
+        payload["operation"] = operation
+        if operation.get("receipt") and operation["receipt"].get("text_scrubbed"):
+            payload["message"] += " · sensitive details were masked; the saved text is shown."
     status = HTTP.get(outcome, 200)
     if status >= 400:
         payload["error"] = outcome
@@ -121,7 +127,7 @@ def _postit_change(postit_id, fn):
     except ValueError as exc:
         return json_error("invalid", f"That change is not allowed ({exc}). Nothing was changed.", 422)
     except FloorStoreUnavailable as exc:
-        return _store_down(exc, {"unavailable": "The Board is unavailable — nothing was changed",
+        return _store_down(exc, {"unavailable": "The Board is unavailable — the result could not be confirmed",
                                  "not_configured": "The Board is not configured on this portal — nothing was changed"})
     if hasattr(done, "status_code"):         # the change refused before it reached the store
         return done
@@ -130,16 +136,21 @@ def _postit_change(postit_id, fn):
     return _answer(done)
 
 
+def _note_write(body, version, postit_id, changes, legacy):
+    from .board_ui_actions import enabled, write
+    return write(body["_key"], changes, target=postit_id, version=version) if enabled() else legacy()
+
+
 @owner_api
 def postit_done(postit_id: int):
-    return _postit_change(postit_id, lambda body, v: _floor().set_done(
-        postit_id, True, _author(), expect_version=v, idempotency_key=body["_key"]))
+    return _postit_change(postit_id, lambda body, v: _note_write(body, v, postit_id, {"done": True}, lambda: _floor().set_done(
+        postit_id, True, _author(), expect_version=v, idempotency_key=body["_key"])))
 
 
 @owner_api
 def postit_undone(postit_id: int):
-    return _postit_change(postit_id, lambda body, v: _floor().set_done(
-        postit_id, False, _author(), expect_version=v, idempotency_key=body["_key"]))
+    return _postit_change(postit_id, lambda body, v: _note_write(body, v, postit_id, {"done": False}, lambda: _floor().set_done(
+        postit_id, False, _author(), expect_version=v, idempotency_key=body["_key"])))
 
 
 @owner_api
@@ -148,7 +159,7 @@ def postit_label(postit_id: int):
         label = body.get("label")
         if label is not None and label not in LABELS:
             raise ValueError(f"a label is one of {', '.join(LABELS)}, or none")
-        return _floor().set_label(postit_id, label, _author(), expect_version=v, idempotency_key=body["_key"])
+        return _note_write(body, v, postit_id, {"label": label}, lambda: _floor().set_label(postit_id, label, _author(), expect_version=v, idempotency_key=body["_key"]))
     return _postit_change(postit_id, fn)
 
 
@@ -157,10 +168,10 @@ def postit_text(postit_id: int):
     """Edit what a Post-it says, in place. {text, version, idempotency_key}:
     scrubbed and length-checked like an add, then behind the note's version."""
     def fn(body, v):
-        text, bad = _clean_text(body.get("text"), POSTIT_MAX, "post-it")
+        text, bad = _board_text(body.get("text"))
         if bad is not None:
             return bad                       # a refusal response: nothing was sent to the store
-        return _floor().set_text(postit_id, text, _author(), expect_version=v, idempotency_key=body["_key"])
+        return _note_write(body, v, postit_id, {"text": body["text"]}, lambda: _floor().set_text(postit_id, text, _author(), expect_version=v, idempotency_key=body["_key"]))
     return _postit_change(postit_id, fn)
 
 
@@ -202,9 +213,9 @@ def postit_link(postit_id: int):
     if version is None:
         return json_error("invalid", "Send the note's version (this page was out of date; reload).", 422)
     try:
-        done = _floor().set_link(postit_id, ref, _author(), expect_version=version, idempotency_key=body["_key"])
+        done = _note_write(body, version, postit_id, {"item_ref": ref}, lambda: _floor().set_link(postit_id, ref, _author(), expect_version=version, idempotency_key=body["_key"]))
     except FloorStoreUnavailable as exc:
-        return _store_down(exc, {"unavailable": "The Board is unavailable — nothing was changed",
+        return _store_down(exc, {"unavailable": "The Board is unavailable — the result could not be confirmed",
                                  "not_configured": "The Board is not configured on this portal — nothing was changed"})
     if done.value and "id" in done.value:
         _decorate([done.value], _queue_index())
@@ -250,7 +261,7 @@ def postits_reorder():
     except ValueError as exc:
         return json_error("invalid", f"That move is not allowed ({exc}). Nothing was changed.", 422)
     except FloorStoreUnavailable as exc:
-        return _store_down(exc, {"unavailable": "The Board is unavailable — nothing was changed",
+        return _store_down(exc, {"unavailable": "The Board is unavailable — the result could not be confirmed",
                                  "not_configured": "The Board is not configured on this portal — nothing was changed"})
     return _answer(done, value_key="order")
 
@@ -269,7 +280,7 @@ def postits_layout():
     except ValueError as exc:
         return json_error("invalid", f"That placement is not allowed ({exc}). Nothing was changed.", 422)
     except FloorStoreUnavailable as exc:
-        return _store_down(exc, {"unavailable": "The Board is unavailable — nothing was changed",
+        return _store_down(exc, {"unavailable": "The Board is unavailable — the result could not be confirmed",
                                  "not_configured": "The Board is not configured on this portal — nothing was changed"})
     return _answer(done, value_key="layout")
 

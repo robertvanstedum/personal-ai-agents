@@ -76,12 +76,27 @@ def admission(enrollment):
             'queue_acceptance_is_pickup': False, 'text_only': True}
 
 
+def message_for(target, request, correlation):
+    return json.dumps({'format': 'minimoi.direct-session-notice.v1',
+                      'request_id': request['request_id'], 'correlation': correlation,
+                      'from': 'mc', 'target_session': target.session_id,
+                      'action': request['action'], 'authority': 'request_not_new_owner_approval',
+                      'reply_protocol': 'Acknowledge with a standalone MC-ACK:' + correlation +
+                      ' line. Begin the final response with MC-RESULT:' + correlation + '\n' +
+                      'then your report. Report status only; this notice grants no new work authority.'},
+                     ensure_ascii=False, separators=(',', ':'))
+
+
 class CodexDesktopQueue:
     name = TRANSPORT
 
-    def __init__(self, enrollment, *, run=subprocess.run):
+    def __init__(self, enrollment, *, run=subprocess.run, native_home=None):
         _need(isinstance(enrollment, QueueEnrollment), 'enrollment_required')
         self.enrollment, self._run = enrollment, run
+        if native_home is not None:
+            _need(type(native_home) is str and native_home.startswith('/') and '..' not in Path(native_home).parts,
+                  'invalid_native_home')
+        self.native_home = native_home
 
     def deliver(self, target, envelope, *, timeout):
         """One queue command, called only behind Outbox's durable intent/lock.
@@ -111,20 +126,19 @@ class CodexDesktopQueue:
         # No implied attachment transfer or arbitrary file-path expansion.
         _need(not r.get('pointer') and not r.get('files') and not r.get('attachments'),
               'attachment_transport_unavailable')
-        message = json.dumps({'format': 'minimoi.direct-session-notice.v1',
-                              'request_id': r['request_id'], 'correlation': correlation,
-                              'from': 'mc', 'target_session': target.session_id,
-                              'action': r['action'],
-                              'authority': 'request_not_new_owner_approval'},
-                             ensure_ascii=False, separators=(',', ':'))
+        from .status_v2 import request_message
+        message = request_message(target, r, correlation)
         _need(len(message.encode('utf-8')) <= 20 * 1024, 'message_too_large')
         # Fixed binary + UUID. No remote/profile/model/cwd/sandbox/approval options;
         # no daemon/bootstrap/resume/start. Existing app settings stay in charge.
         argv = [BUNDLED_BINARY, 'queue', '--thread', target.session_id, '--message', message]
+        environment = {} if self.native_home is None else {'env': {
+            'HOME':str(Path(self.native_home).parent),'CODEX_HOME':self.native_home,
+            'PATH':'/usr/bin:/bin','LANG':'en_US.UTF-8'}}
         try:
             result = self._run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL, timeout=timeout, check=False,
-                               cwd=target.cwd)
+                               cwd=target.cwd, **environment)
         except (Exception, KeyboardInterrupt):
             return Delivery('unknown', target.session_id)
         # A binary replacement during invocation is also uncertain, not a resend.

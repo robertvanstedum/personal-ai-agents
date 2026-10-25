@@ -1,0 +1,214 @@
+{
+  "enabled": false,
+  "tools": [
+    {
+      "capability": "guild.board.notes.read",
+      "description": "Find current Board notes by text. Read only; ask which note if results are ambiguous.",
+      "name": "minimoi_board_notes_query",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "default": 10,
+            "maximum": 20,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "state": {
+            "default": "active",
+            "enum": [
+              "active",
+              "done",
+              "all"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
+    {
+      "capability": "guild.board.notes.read",
+      "description": "Read a previously supplied Board note reference and its current revision.",
+      "name": "minimoi_board_note_read",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "note_ref": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "note_ref"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "capability": "guild.board.note.create",
+      "description": "Save one private text note when the owner asks. Preserve its language; no extra approval. An overlong note needs a shorter-text offer, never truncation. Discussion alone is not a save request.",
+      "name": "minimoi_board_note_create",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "clarification_ref": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "item_ref": {
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "label": {
+            "enum": [
+              "decide",
+              "blocked",
+              "remember",
+              "followup",
+              "idea",
+              "fyi",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "description": "The domain accepts at most 280 Unicode scalar values; never truncate an overlong request.",
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "capability": "guild.board.note.update",
+      "description": "Change specified fields of one referenced Board note, including done true or false. Read the current note first; clarify ambiguous targets or intervening edits.",
+      "name": "minimoi_board_note_update",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "done": {
+                "type": "boolean"
+              },
+              "item_ref": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "label": {
+                "enum": [
+                  "decide",
+                  "blocked",
+                  "remember",
+                  "followup",
+                  "idea",
+                  "fyi",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "text": {
+                "description": "The domain accepts at most 280 Unicode scalar values; never truncate an overlong request.",
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "clarification_ref": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "note_ref": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "note_ref",
+          "changes"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "capability": "guild.board.operations.read",
+      "description": "Recover a prior Board action's receipt and current state. A lost reply never warrants a new create.",
+      "name": "minimoi_board_operation_read",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "operation_ref": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_ref"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "capability": "guild.board.operation.undo",
+      "description": "Undo a specified successful Board creation or update only when the owner requests it. Later substantive edits cause a conflict; no force option or permanent deletion.",
+      "name": "minimoi_board_operation_undo",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "clarification_ref": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation_ref": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_ref"
+        ],
+        "type": "object"
+      }
+    }
+  ],
+  "version": "board-tools/1"
+}

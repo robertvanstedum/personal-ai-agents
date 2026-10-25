@@ -9,7 +9,8 @@ import { $, $$, clone, slot, setSlot, el, announce, localTime } from './dom.js';
 import { live, setOff, onChange } from './state.js';
 import { apiGet, apiPost, apiPrivate, apiStream, apiStop, recordMode, RECORD_UNKNOWN_TEXT } from './api.js';
 import { newKey } from './actions.js';
-import { answerFailed, answerArrived } from './floorlayout.js';
+import { answerFailed, answerArrived, answerStopped } from './floorlayout.js';
+import { platformNotes, noteWatch, confirmedStop } from './platform_notes.js';
 
 // The conversation partner's name: the server says who answers on this portal (Master Craftsman, or the Chief of Staff).
 const mcName = () => document.body.dataset.mcName || 'Master Craftsman';
@@ -280,6 +281,52 @@ function appendNote(note) {
   follow();
 }
 
+// The assistant response is not the platform's proposal. Read the persisted
+// cards independently, scoped to the conversation captured when Send was pressed.
+// This also serves buffered turns; it never retries a chat/tool write.
+function watchPlatformNotes(t) {
+  const after = Number(t.note.id) || Math.max(0, ...Array.from(thread.querySelectorAll('[data-note]'), (n) => Number(n.dataset.note) || 0));
+  let disposed = false;
+  const current = () => !disposed && live.known && !live.off && !document.hidden
+    && page.conversation?.id === t.conversationId && page.chat_scope === t.chatScope;
+  const sync = platformNotes({ after, current,
+    fetchPage: async (before) => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 5000);
+      try {
+        const conv = t.conversationId ? `&conversation=${encodeURIComponent(t.conversationId)}` : '';
+        return await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal);
+      } finally { window.clearTimeout(timeout); }
+    },
+    insert: (note) => {
+      if (thread.querySelector(`[data-note="${note.id}"]`)) return;
+      const rows = Array.from(thread.querySelectorAll('[data-note]'));
+      const next = rows.find((n) => Number(n.dataset.note) > note.id);
+      const active = thread.querySelector('[data-live-turn]');
+      thread.insertBefore(noteLine(note), next || active || null);
+      follow();
+    },
+  });
+  const dispose = () => watcher.dispose();
+  const wake = () => { if (!document.hidden) void watcher.wake(); };
+  const watcher = noteWatch({ refresh: () => sync.refresh(), onDispose: () => {
+    disposed = true;
+    window.removeEventListener('pagehide', dispose);
+    window.removeEventListener('online', wake);
+    document.removeEventListener('visibilitychange', wake);
+  } });
+  window.addEventListener('pagehide', dispose, { once: true });
+  window.addEventListener('online', wake);
+  document.addEventListener('visibilitychange', wake);
+  void watcher.wake();
+  return () => watcher.finish();
+}
+
+async function withPlatformNotes(t, work) {
+  const finish = watchPlatformNotes(t);
+  try { return await work(); } finally { await finish(); }
+}
+
 // While Master Craftsman works, a quiet line sits in the thread exactly where
 // its reply will appear (Robert, 2026-09-29, after his own OpenClaw chat): MC's
 // mark, "Waiting for a response…" and the seconds so far. It is not a platform
@@ -291,6 +338,7 @@ const clock = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60
 
 function waitingLine() {
   const li = clone('tpl-mc-waiting');
+  li.dataset.liveTurn = 'true';
   const elapsed = li.querySelector('[data-slot="elapsed"]');
   const started = Date.now();
   const still = li.querySelector('[data-slot="still"]');
@@ -355,6 +403,14 @@ function showAnswer(holder, r, t) {
     follow();
     return kept();
   }
+  if (confirmedStop(body)) {
+    if (holder.stopTicking) holder.stopTicking();
+    holder.replaceWith(platformLine('Guild platform', body.message || 'Stopped. Your message is kept.'));
+    answerStopped();
+    announce(body.message || 'Stopped');
+    follow();
+    return { answered: false, error: null };
+  }
   // Another tab is sending it, or a pause holds it: nothing to say here (the line above the composer shows a pause and its Continue).
   if (t.queued && ['busy', 'not_next', 'not_queued', 'paused'].includes(body.error)) { holder.remove(); return { answered: false, error: body.error }; }
   // A waiting message refused at its turn stays on the server (first in line, or failed with a pause): its files are not handed back.
@@ -415,7 +471,7 @@ function askMasterCraftsman(note, files, opts, ctx, target) {
   clearFailureLines();
   if (live.off || document.body.dataset.mcTurns !== 'true') { restoreTray(files || []); restoreTopicContext(ctx || []); return Promise.resolve({ answered: false, error: 'mc_turns_off' }); }   // no turn: nothing was sent, the files stay in the tray
   const t = snapshot(note, files, opts && opts.voice ? [] : ctx, target);
-  return document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(t) : turnMasterCraftsman(t);
+  return withPlatformNotes(t, () => document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(t) : turnMasterCraftsman(t));
 }
 
 // A waiting message's turn (mc_queue.js): only the server's ids are needed; the server sends exactly what was queued.
@@ -432,8 +488,8 @@ function dispatchQueued(entry, here) {
   if (chip) chip.remove();                     // it is going out now; the answer (or what happened) appears below
   const path = `/mc/turns/queue/${entry.id}/dispatch`;
   if (entry.conversation_id !== here) return dispatchElsewhere(path);
-  const done = document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(t, { path, body: { stream: true } })
-    : turnMasterCraftsman(t, null, { path, body: { stream: false } });
+  const done = withPlatformNotes(t, () => document.body.dataset.mcStream === 'true' ? streamMasterCraftsman(t, { path, body: { stream: true } })
+    : turnMasterCraftsman(t, null, { path, body: { stream: false } }));
   return done.finally(() => queuedHere.delete(entry.request_id));
 }
 
@@ -473,6 +529,7 @@ const STREAM_LINE_CAP = 2 * 1024 * 1024;
 
 function streamLine() {
   const li = clone('tpl-mc-stream');
+  li.dataset.liveTurn = 'true';
   setSlot(li, 'label', document.body.dataset.mcState === 'stub' ? mcSay('Master Craftsman stub · scripted') : mcSay('Master Craftsman'));
   const elapsed = slot(li, 'elapsed');
   const started = Date.now();
@@ -488,6 +545,7 @@ function streamLine() {
 function endLine(li, state) {
   li.stopTicking();
   li.dataset.ended = 'true';
+  delete li.dataset.liveTurn;
   li.removeAttribute('aria-busy');
   setSlot(li, 'state', state);
   slot(li, 'elapsed').textContent = clock(Math.floor((Date.now() - (li.startedAt || Date.now())) / 1000));   // the time it took stays on the message
@@ -556,6 +614,8 @@ async function streamMasterCraftsman(t, via) {
     if (ev.t === 'ack' && typeof ev.turn_id === 'string') {
       acked = true;
       li.turnId = ev.turn_id;
+      // Receipt of this turn is confirmed; its intended scope comes from MC, not the transport.
+      setSlot(li, 'state', 'Received · starting');
       if (Array.isArray(ev.files)) showFiles(note.id, ev.files);
       stop.hidden = false;
       follow();
@@ -591,12 +651,14 @@ async function streamMasterCraftsman(t, via) {
     } else if (ev.t === 'error') {
       ended = true;
       applyHeader(ev);
-      endLine(li, ev.failure_class === 'stopped' ? 'Stopped' : '(interrupted)');
+      const stopped = confirmedStop(ev);
+      endLine(li, stopped ? 'Stopped · partial answer not saved' : '(interrupted)');
       if (!deltas.length) li.remove();          // partial text, if any, stays shown once and is never kept
       const text = ev.message || mcSay('Master Craftsman did not answer. Your message is kept.');
-      thread.append(failureLine(text));
+      thread.append(stopped ? platformLine('Guild platform', text) : failureLine(text));
       announce(text);
-      answerFailed(ev.mc_header || mcSay('Master Craftsman did not answer'));
+      if (stopped) answerStopped();
+      else answerFailed(ev.mc_header || mcSay('Master Craftsman did not answer'));
       follow();
     }
   };
@@ -1051,6 +1113,39 @@ export function initConversation(p) {
   renderRecord();
   follow();
   jobsUi = initJobs({ page, thread, noteLine, follow });
-  if (page.mc_queue) queue = initQueue({ page, thread, dispatch: dispatchQueued, follow });
+  if (page.mc_queue) {
+    // After reload the original stream belongs to the old page. Read saved
+    // messages while its ledger entry runs; never redispatch that turn.
+    const conversationId = page.conversation?.id;
+    const chatScope = page.chat_scope;
+    const ids = Array.from(thread.querySelectorAll('[data-note]'), (n) => Number(n.dataset.note)).filter(Number.isSafeInteger);
+    const recovery = platformNotes({
+      after: ids.length ? Math.max(0, Math.min(...ids) - 1) : 0,
+      kinds: ['platform', 'agent'],
+      current: () => live.known && !live.off && !document.hidden
+        && page.conversation?.id === conversationId && page.chat_scope === chatScope
+        && !thread.querySelector('[data-live-turn]'),
+      fetchPage: async (before) => {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 5000);
+        try {
+          const conv = conversationId ? `&conversation=${encodeURIComponent(conversationId)}` : '';
+          return await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal);
+        } finally { window.clearTimeout(timeout); }
+      },
+      insert: (note) => {
+        if (thread.querySelector(`[data-note="${note.id}"]`)) return;
+        const next = Array.from(thread.querySelectorAll('[data-note]')).find((n) => Number(n.dataset.note) > note.id);
+        thread.insertBefore(noteLine(note), next || null);
+        if (note.author_kind === 'agent') {
+          applyHeader({ mc_header: mcSay('Master Craftsman answered · saved reply recovered') });
+          answerArrived();
+        }
+        follow();
+      },
+    });
+    queue = initQueue({ page, thread, dispatch: dispatchQueued, follow,
+      readBack: () => thread.querySelector('[data-live-turn]') ? Promise.resolve(true) : recovery.refresh() });
+  }
   agentUi = initAgentRequests({ page, thread, noteLine, follow });
 }

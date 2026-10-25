@@ -214,7 +214,7 @@ class BoardMixin:
         return self._run(work, write=True)
 
     def _update_row(self, q, postit_id, sets: str, params: list):
-        rows = q(f"UPDATE guild.floor_postits SET {sets}, version = version + 1 WHERE id = %s AND floor = %s "
+        rows = q(f"UPDATE guild.floor_postits SET {sets}, version = version + 1, semantic_revision = semantic_revision + 1 WHERE id = %s AND floor = %s "
                  f"RETURNING {S._POSTIT_COLS}", params + [int(postit_id), self.floor])
         return S._postit(rows[0])
 

@@ -140,6 +140,11 @@ export function answerFailed(text) {
   renderBlockers();              // with the latest server blockers, not the page-load ones
 }
 
+export function answerStopped() {
+  failed = null;
+  renderBlockers(); // Stop does not prove availability or clear cost/other blockers.
+}
+
 export function answerArrived() {
   // A real answer supersedes the page-load MC availability warning only.
   // Preserve cost and other independent blockers.

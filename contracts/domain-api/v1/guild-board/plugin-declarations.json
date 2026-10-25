@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "tool_names": [
+    "minimoi_board_notes_query",
+    "minimoi_board_note_read",
+    "minimoi_board_note_create",
+    "minimoi_board_note_update",
+    "minimoi_board_operation_read",
+    "minimoi_board_operation_undo"
+  ],
+  "version": 1
+}

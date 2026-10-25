@@ -532,14 +532,16 @@ class AskService:
         finally:
             os.close(fd)
 
-    def status_block(self, conversation_id: str) -> tuple[str, list[str]]:
+    def status_block(self, conversation_id: str, *, teach: bool = True) -> tuple[str, list[str]]:
         """(text, event ids included). Only THIS conversation's requests, bounded, with a boundary code; empty when there is nothing to say. What did not
-        fit is not marked, so it comes next turn: nothing is lost and nothing is repeated."""
+        fit is not marked, so it comes next turn: nothing is lost and nothing is repeated. ``teach=False`` (MC's tools own its actions, A15): the
+        status of existing requests only, never the reminder that teaches ASK or MEETING lines."""
         docs = ar.for_conversation(self.root, conversation_id)
         told = self._told(conversation_id)
         from .meeting_action import enabled as meetings_enabled, REMINDER as MEETING_REMINDER
-        extra_reminder = ("\n" + MEETING_REMINDER) if meetings_enabled() else ""
-        reminder = (REMINDER + extra_reminder, [REMINDER_ID]) if REMINDER_ID not in told else (extra_reminder, [])     # once per conversation, so chats that began before the new instructions learn ASK
+        extra_reminder = ("\n" + MEETING_REMINDER) if meetings_enabled() and teach else ""
+        reminder = ((REMINDER + extra_reminder, [REMINDER_ID]) if REMINDER_ID not in told and teach
+                    else (extra_reminder, []))     # once per conversation, so chats that began before the new instructions learn ASK
         limits = self._limits_part(told)
         if not docs:
             return self._join(reminder, limits)
@@ -671,7 +673,8 @@ def turn_state(conv) -> TurnState | None:
         svc = service()
         if svc is None or not conv or not ar.valid_conversation(conv.get("id")):
             return None
-        text, included = svc.status_block(conv["id"])
+        from .api import _tools_own_actions
+        text, included = svc.status_block(conv["id"], teach=not _tools_own_actions(conv.get("principal")))
         return TurnState(svc, conv["id"], text, included) if text else None
     except Exception:
         return None

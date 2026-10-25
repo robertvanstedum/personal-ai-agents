@@ -1,0 +1,11 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const root=require('node:path').resolve(process.argv[2] || '.', 'minimoi_portal/guild_ui/static/js')+'/';
+const src=fs.readFileSync(root+'conversation.js','utf8').replace(/^import .*;\n/gm,'').replace(/export /g,'');
+let complete,posts=0;const pending=new Promise(r=>complete=r);
+const refusal={};const context={document:{body:{dataset:{}}},live:{off:false},apiPost:async()=>{posts++;return {ok:true,body:{result:'kept',note:{id:'n',request_id:'r'}}}},newKey:()=> 'key',recordMode:()=> 'on',applyConversation:()=>{},announce:()=>{},$:s=>s==='[data-mc-refusal]'?refusal:null,$$:()=>[],};
+vm.createContext(context);vm.runInContext(src,context);
+context.pending=pending;
+vm.runInContext('page={}; appendNote=()=>{}; askMasterCraftsman=()=>pending;',context);
+(async()=>{const input={value:'question'},send={disabled:false};const first=context.sendNote(input,send);await new Promise(r=>setImmediate(r));assert.equal(send.disabled,true);input.value='follow-up';await context.sendNote(input,send);assert.equal(posts,1);assert.equal(input.value,'follow-up');context.live.off=true;vm.runInContext('appendOffRecord=()=>{};',context);input.value='private draft';await context.sendNote(input,send);assert.equal(posts,1);assert.equal(input.value,'');context.live.off=false;input.value='follow-up';complete();await first;assert.equal(send.disabled,false);assert.equal(input.value,'follow-up');await context.sendNote(input,send);assert.equal(posts,2);
+context.apiPost=async()=>{throw new Error('offline')};input.value='retry';await assert.rejects(context.sendNote(input,send));assert.equal(send.disabled,false);assert.equal(input.value,'retry');
+const floor=fs.readFileSync(root+'floorlayout.js','utf8').replace(/^import .*;\n/gm,'').replace(/export /g,'');const line={replaceChildren(...items){this.items=items}};const c={document:{},$:()=>line,el:(tag,attrs,text)=>({attrs,text})};vm.createContext(c);vm.runInContext(floor,c);c.renderBlockers([{kind:'mc_down',text:'unavailable'},{kind:'cost',text:'cost limit'}]);c.answerArrived();assert.equal(line.items.length,1);assert.equal(line.items[0].text,'cost limit');assert.equal(line.hidden,false);console.log('PASS: pending turn blocks second submit, draft retained, completion/error unlock, stale MC warning removed, cost blocker preserved');})();

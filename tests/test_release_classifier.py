@@ -204,6 +204,14 @@ BACKEND_IMPORT_EXPECTED = {
     "scripts/jobs/watchdog.py": ("core.jobs",),
     "scripts/memory/daily_watch.py": ("core.jobs",),
     "scripts/memory/index_job.py": ("core.jobs",),
+    # MC learning (Codex's MC runtime work, 24 Oct): portal-owned, reached through mc_tools_wiring and the MC tools
+    # listener inside the portal image. Exact dependencies only.
+    "core/mc_learning/annotation_actions.py": ("core.workshop_journal.errors",),
+    "core/mc_learning/annotation_shelf.py": ("core.vault_t1.reader", "core.workshop_journal.errors", "core.workshop_journal.fsutil"),
+    "core/mc_learning/corrections.py": ("core.workshop_journal.errors",),
+    "core/mc_learning/floor_source.py": ("utils.credential_scrub", "utils.payment_scrub"),
+    "core/mc_learning/statement_journal.py": ("core.workshop_journal.errors", "core.workshop_journal.fsutil"),
+    "core/mc_learning/statement_shelf.py": ("core.vault_t1.reader", "core.workshop_journal.errors", "core.workshop_journal.fsutil"),
 }
 SKIPPED_DIRS = {".git", "node_modules", "venv", "ai-env", ".venv", "_working", ".claude", "__pycache__"}
 
@@ -307,7 +315,11 @@ GUILD_ALLOWED_PREFIXES = ("core/agent_requests/", "minimoi_portal/", "tests/",
                           "prototype-lab/projects/project-records-room-poc/tests/",
                           "services/rooms_connector/", "services/rooms_worker/",
                           "services/agent_installer/")
-GUILD_ALLOWED_FILES = {"core/limits.py", "scripts/agent_connection.py", "scripts/agent_requests.py"}
+GUILD_ALLOWED_FILES = {"core/limits.py", "scripts/agent_connection.py", "scripts/agent_requests.py",
+                       # MC tools served by the portal's MC tools listener (Codex's MC runtime work, 24 Oct).
+                       "core/mc_tools/agent_contact.py", "core/mc_tools/approved_handoff.py", "core/mc_tools/task_watch.py",
+                       # Host bridge (runs from the installed agent-bridge bundle on the Mac host; no production image).
+                       "scripts/mc_host/agent_worker.py", "scripts/mc_host/claude_send_guard.py"}
 SHARED_LIMIT_CONSUMERS = {"core/realtime_voice/budget.py"}
 LOCAL_GUILD_ALLOWED_PREFIXES = ("tests/", "prototype-lab/projects/project-records-room-poc/tests/",
                                 "services/rooms_connector/", "services/rooms_worker/", "services/agent_installer/")
@@ -412,10 +424,13 @@ def test_expected_vault_backend_homes_do_not_waive_unrelated_dependencies(tmp_pa
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("\n".join("import " + module for module in modules))
     assert _backend_importers(tmp_path) == []
-    for rel in BACKEND_IMPORT_EXPECTED:
+    for rel, modules in BACKEND_IMPORT_EXPECTED.items():
         target = tmp_path / rel
         original = target.read_text()
-        target.write_text(original + "\nimport core.workshop_journal\n")
+        # A bare package is pruned beside a more specific import, so inject a leaf this home does not expect.
+        unrelated = next(m for m in ("core.workshop_journal.journal", "utils.payment_scrub")
+                         if not any(m == e or m.startswith(e + ".") for e in modules))
+        target.write_text(original + f"\nimport {unrelated}\n")
         assert _backend_importers(tmp_path) == [rel]
         target.write_text(original)
 
@@ -426,7 +441,17 @@ def _vault_runtime_importers(root):
     packages = ("core.memory_ask", "core.memory_shelf", "core.memory_index", "core.memory_backup", "core.workshop_journal.vault_export") + tuple(
         path[:-3].replace("/", ".") for path in LOCAL_TOOL_FILES)
     expected_host = {"domains/cos/vault_context.py": ("core.memory_ask.consumer",),
-                     "minimoi_portal/guild_ui/mc_regression.py": ("core.memory_ask.regression", "core.memory_ask.runner")}
+                     "minimoi_portal/guild_ui/mc_regression.py": ("core.memory_ask.regression", "core.memory_ask.runner"),
+                     # MC learning, portal-owned; only shelf modules that ship in the portal image (VAULT_SERVER_FILES).
+                     "core/mc_learning/annotation_shelf.py": ("core.memory_shelf.bundle", "core.memory_shelf.codes", "core.memory_shelf.sessions",
+                                                              "core.memory_shelf.shelf", "core.memory_shelf.ulid"),
+                     "core/mc_learning/corrections.py": ("core.memory_shelf.render",),
+                     "core/mc_learning/floor_source.py": ("core.memory_shelf.render",),
+                     "core/mc_learning/statement_journal.py": ("core.memory_shelf.fsio", "core.memory_shelf.record", "core.memory_shelf.render",
+                                                               "core.memory_shelf.ulid"),
+                     "core/mc_learning/statement_shelf.py": ("core.memory_shelf.bundle", "core.memory_shelf.codes", "core.memory_shelf.render",
+                                                             "core.memory_shelf.sessions", "core.memory_shelf.shelf", "core.memory_shelf.ulid"),
+                     "core/mc_learning/statements.py": ("core.memory_shelf.render",)}
     report_dependencies = {
         "core/memory_ask/regression.py": ("core.memory_ask.runner",),
         "core/memory_ask/runner.py": ("core.memory_ask.consumer", "core.memory_ask.context", "core.memory_ask.citation"),

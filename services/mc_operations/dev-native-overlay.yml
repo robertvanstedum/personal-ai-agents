@@ -1,0 +1,8 @@
+# Apply only to the existing Dev portal with --no-deps --no-build.
+# Native relay listens on Mac loopback; Colima's host.lima.internal reaches it.
+# No personal OpenClaw operator token enters the container.
+services:
+  portal:
+    environment:
+      MC_RUNTIME_URL: http://host.lima.internal:18796/v1
+      MC_RUNTIME_TOKEN: ${MC_NATIVE_RELAY_TOKEN:?native relay caller token required}

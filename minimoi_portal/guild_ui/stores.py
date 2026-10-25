@@ -300,6 +300,45 @@ class FloorStores(BoardMixin):
             return _note(rows[0]) if rows else None
         return self._run(work, write=False)
 
+    def get_owner_note(self, request_id: str, principal: str, *, max_bytes: int = 256*1024) -> dict | None:
+        """One bounded, kept owner note; authorization predicates precede text.
+
+        Used by source-faithful learning capture. The caller must first bind this
+        floor to the authenticated conversation and approve capture. A foreign,
+        assistant, off-record or oversized row never returns its text. No change
+        to the note, no reply requirement, and no fallback to a wider query.
+        """
+        if (type(request_id) is not str or not 0 < len(request_id) <= 256
+                or type(principal) is not str or not 0 < len(principal) <= 256
+                or type(max_bytes) is not int or not 1 <= max_bytes <= 256*1024):
+            raise FloorStoreUnavailable('owner_note_request_invalid')
+        def work(q):
+            rows = q(f"SELECT {_NOTE_COLS} FROM guild.floor_messages "
+                     "WHERE floor = %s AND request_id = %s AND author = %s "
+                     "AND author_kind = 'owner' AND record_mode = 'on_record' "
+                     "AND OCTET_LENGTH(text) <= %s",
+                     [self.floor,request_id,principal,max_bytes])
+            return _note(rows[0]) if rows else None
+        return self._run(work,write=False)
+
+    def export_notes_snapshot(self, request_id: str, principal: str):
+        """One MVCC statement: only on-record rows through this exact owned owner note; no paging/truncation."""
+        if not isinstance(request_id, str) or not request_id or not isinstance(principal, str) or not principal:
+            raise FloorStoreUnavailable('export_snapshot_unavailable')
+        def work(q):
+            rows = q(f"""WITH boundary AS (
+                SELECT id FROM guild.floor_messages WHERE floor=%s AND request_id=%s AND author=%s
+                AND author_kind='owner' AND record_mode='on_record'), scoped AS (
+                SELECT * FROM guild.floor_messages WHERE floor=%s AND record_mode='on_record'
+                AND id <= (SELECT id FROM boundary)), bounds AS (
+                SELECT count(*) AS n, coalesce(sum(octet_length(text)),0) AS size FROM scoped)
+                SELECT {_NOTE_COLS} FROM scoped, bounds WHERE bounds.n <= 4000 AND bounds.size <= 1048576
+                ORDER BY id ASC""", [self.floor, request_id, principal, self.floor])
+            if not rows:
+                raise FloorStoreUnavailable('export_snapshot_unavailable')
+            return [_note(row) for row in rows]
+        return self._run(work, write=False)
+
     def list_postits(self) -> SourceResult:
         return self._read(lambda q: {"postits": self._active(q), "bin_total": self._count(q, binned=True)})
 
@@ -348,6 +387,13 @@ class FloorStores(BoardMixin):
                  [int(postit_id), self.floor])
         return _postit(rows[0]) if rows else None
 
+    def _insert_postit(self, q, text, author, now, *, label=None, item_ref=None):
+        """Borrow the caller's transaction; never open or commit a connection here."""
+        rows = q(f"INSERT INTO guild.floor_postits (floor, text, author, author_kind, author_label, created_at, "
+                 f"label, item_ref) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING {_POSTIT_COLS}",
+                 [self.floor, text, author.id, author.kind, author.label, now, label, item_ref])
+        return _postit(rows[0])
+
     def add_postit(self, text: str, author: Author, *, idempotency_key: str, label: str | None = None,
                    item_ref: int | None = None) -> WriteResult:
         """A note on top of the Board (optionally labelled and linked to a
@@ -362,10 +408,7 @@ class FloorStores(BoardMixin):
                     return WriteResult("idempotency_mismatch", None, True)
                 return WriteResult(prior["outcome"], self._postit_by_id(q, prior["ref"]), True)
             self._meta(q)
-            rows = q(f"INSERT INTO guild.floor_postits (floor, text, author, author_kind, author_label, created_at, "
-                     f"label, item_ref) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING {_POSTIT_COLS}",
-                     [self.floor, text, author.id, author.kind, author.label, now, label, item_ref])
-            postit = _postit(rows[0])
+            postit = self._insert_postit(q, text, author, now, label=label, item_ref=item_ref)
             self._bump(q, order=True)
             self._settle(q, idempotency_key, "added", postit["id"])
             return WriteResult("added", postit, False)
@@ -384,7 +427,7 @@ class FloorStores(BoardMixin):
             self._meta(q)
             if to_bin:
                 rows = q(f"UPDATE guild.floor_postits SET binned_at = %s, binned_by = %s, binned_by_label = %s, "
-                         f"version = version + 1 "
+                         f"version = version + 1, semantic_revision = semantic_revision + 1 "
                          f"WHERE id = %s AND floor = %s AND binned_at IS NULL RETURNING {_POSTIT_COLS}",
                          [now, by.id, by.label, int(postit_id), self.floor])
                 done, already = "binned", "already_binned"
@@ -396,7 +439,7 @@ class FloorStores(BoardMixin):
                 # binned_by stays: who last binned it is kept beside who restored it.
                 # done_at stays too: Restore returns the note to its prior state.
                 rows = q(f"UPDATE guild.floor_postits SET binned_at = NULL, restored_at = %s, restored_by = %s, "
-                         f"restored_by_label = %s, version = version + 1 WHERE id = %s AND floor = %s "
+                         f"restored_by_label = %s, version = version + 1, semantic_revision = semantic_revision + 1 WHERE id = %s AND floor = %s "
                          f"AND binned_at IS NOT NULL RETURNING {_POSTIT_COLS}",
                          [now, by.id, by.label, int(postit_id), self.floor])
                 done, already = "restored", "already_active"
@@ -421,9 +464,16 @@ class FloorStores(BoardMixin):
         return self._move(postit_id, by, idempotency_key, to_bin=False)
 
     def add_note(self, request_id: str, text: str, author: Author, *, area: str | None = None,
-                 item_ref: int | None = None, page: str | None = None) -> WriteResult:
+                 item_ref: int | None = None, page: str | None = None,
+                 transaction=None) -> WriteResult:
         """Keep one on-record note. The request id is its idempotency key: a
-        repeated id keeps it once, and a different text under it is refused."""
+        repeated id keeps it once, and a different text under it is refused.
+
+        Internal service operations may lend a transaction so a service receipt
+        and the note commit together. The caller owns commit/rollback/close;
+        authentication, floor binding and text scrubbing remain caller duties.
+        Existing UI callers keep the default self-contained transaction.
+        """
         now = utc_now()
 
         def work(q):
@@ -442,6 +492,17 @@ class FloorStores(BoardMixin):
             if note["text"] != text or note["who"] != author.id:
                 return WriteResult("idempotency_mismatch", None, True)
             return WriteResult("kept", note, True)
+        if transaction is not None:
+            if getattr(transaction, 'autocommit', False) is True:
+                raise FloorStoreUnavailable('note requires a transaction')
+            def borrowed_query(sql, params=()):
+                cur = transaction.cursor()
+                try:
+                    cur.execute(self._sql(sql), tuple(params))
+                    return cur.fetchall() if cur.description else []
+                finally:
+                    cur.close()
+            return work(borrowed_query)
         return self._run(work, write=True)
 
     def set_continue(self, principal: str, *, kind: str, ref: str, label: str, idempotency_key: str) -> WriteResult:

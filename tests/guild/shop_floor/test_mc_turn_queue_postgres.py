@@ -289,3 +289,27 @@ def test_status_lists_waiting_turns_in_order_with_the_running_one_apart(owner):
     view = led.status(owner)
     assert view["running"]["id"] == a.entry["id"]
     assert [e["id"] for e in view["queued"]] == [b.entry["id"], c.entry["id"]]
+
+
+def test_confirmed_owner_stop_releases_next_turn_without_replaying_stopped_work(owner):
+    led = ledger()
+    first = admit(led, owner, note="note-stop-0001")
+    waiting = enqueue(led, owner, note="note-after-stop-0001")
+    assert led.finish(first.claim, "cancelled", {"status": "stopped", "reason": "owner_stop_acknowledged"})
+    assert led.status(owner)["pause"] is None
+    assert admit(led, owner, note="note-stop-0001").result == "done"
+    assert not led.finish(first.claim, "answered", {"status": "answered"})
+    assert led.claim_queued(owner, first.entry["id"]).result == "gone"
+    assert led.claim_queued(owner, waiting.entry["id"]).result == "claimed"
+
+
+def test_a_dispatched_cancellation_cannot_silently_clear_uncertainty(owner):
+    led = ledger()
+    first = admit(led, owner)
+    waiting = enqueue(led, owner)
+    with pytest.raises(ValueError, match="acknowledged owner Stop"):
+        led.finish(first.claim, "cancelled", {"status": "stopped"})
+    assert led.status(owner)["running"]["id"] == first.entry["id"]
+    assert led.finish(first.claim, "unknown", {"status": "stopped"})
+    assert led.status(owner)["pause"]["reason"] == "unknown"
+    assert led.claim_queued(owner, waiting.entry["id"]).result == "paused"

@@ -153,3 +153,23 @@ def test_the_text_is_kept_and_html_added():
 def test_very_long_input_is_bounded_and_never_raises():
     html = render_markdown("x" * 100_000)
     assert len(html) < 20_000
+
+
+@pytest.mark.parametrize("note_id", ["1", "90210", "9223372036854775807"])
+def test_board_receipt_links_keep_the_exact_read_only_destination(note_id):
+    href = f"/guild-next/guild/board?note={note_id}"
+    html = render_markdown(f"Gespeichert. [Notiz]({href})")
+    assert f'href="{href}"' in html
+    assert 'rel="noopener noreferrer"' in html
+
+
+@pytest.mark.parametrize("href", [
+    "/guild-next/guild/board?note=0", "/guild-next/guild/board?note=-1",
+    "/guild-next/guild/board?note=1&delete=1", "/guild-next/guild/board?note=1#evil",
+    "/guild-next/guild/board?note=1%0A", "/guild-next/guild/board?note=12345678901234567890",
+    "//guild-next/guild/board?note=1", "/guild-next/guild/../admin?note=1",
+    "/guild-next/guild/board?note=1/../../logout", "/logout",
+    "/guild-next/api/v1/board/operations/1", "/guild-next/guild/board?note=1%26next=https://evil.test",
+])
+def test_board_link_exception_does_not_admit_other_relative_actions(href):
+    assert 'href=' not in render_markdown(f"[note]({href})")

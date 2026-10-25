@@ -15,7 +15,7 @@ const OTHER_SENDER = ['busy', 'not_next', 'not_queued'];
 // This tab may not send (Private, record mode unknown) or cannot (signed out): stop, and start again only when that changes.
 const may = () => live.known && !live.off;
 const QUEUE_ROUNDS = 6;          // at most five wait, so six rounds empty the queue
-export function initQueue({ page, thread, dispatch, follow }) {
+export function initQueue({ page, thread, dispatch, follow, readBack = async () => true }) {
   const bar = $('[data-mc-queue-bar]');
   const text = $('[data-mc-queue-text]');
   const cont = $('[data-mc-queue-continue]');
@@ -23,6 +23,7 @@ export function initQueue({ page, thread, dispatch, follow }) {
   let timer = null;
   let delay = 0;
   let view = null;
+  let needsReadback = false;
   const here = () => (page.conversation ? page.conversation.id : undefined);
   const noteRow = (requestId) => thread.querySelector(`[data-note-request="${CSS.escape(requestId)}"]`);
 
@@ -61,7 +62,8 @@ export function initQueue({ page, thread, dispatch, follow }) {
       const row = words && noteRow(e.note_request_id);
       if (row && !row.querySelector('[data-not-sent]')) row.append(el('p', { class: 'mc-queued small', 'data-not-sent': e.state }, words));
     }
-    const line = barWords(v, here());
+    const line = barWords(v, here()) || (v.running?.conversation_id === here() && !thread.querySelector('[data-live-turn]')
+      ? 'An earlier reply is still running. Its saved answer will appear here.' : '');
     if (bar) {
       bar.hidden = !line;
       bar.dataset.state = v.pause ? 'paused' : v.queued.length ? 'waiting' : 'idle';
@@ -76,6 +78,7 @@ export function initQueue({ page, thread, dispatch, follow }) {
     if (r.status === 401) return { signedOut: true };
     if (!r.ok || !r.body || !Array.isArray(r.body.queued)) return null;
     render(r.body);
+    needsReadback = !(await readBack());
     return r.body;
   }
 
@@ -88,9 +91,19 @@ export function initQueue({ page, thread, dispatch, follow }) {
     window.clearTimeout(timer);
     try {
       for (let rounds = 0; rounds < QUEUE_ROUNDS; rounds += 1) {
+        if (!may()) return;
+        // Backgrounding a phone must not strand messages the owner already
+        // queued. Only read-only recovery sleeps when the hidden tab is idle.
+        if (document.hidden && view && !view.queued.length) return;
         const v = await read();
         if (!v) { delay = nextDelay(delay); later(Math.max(delay, 30000)); return; }   // the view could not be read: look again later
-        if (v.signedOut || v.pause || !v.queued.length) { delay = 0; return; }
+        if (v.signedOut || v.pause) { delay = 0; return; }
+        if (!v.queued.length) {
+          if (v.running) later(2000);
+          else if (needsReadback) { delay = nextDelay(delay); later(delay); }
+          else delay = 0;
+          return;
+        }
         if (!may()) return;                                              // Private or record mode unknown: nothing is sent from this tab
         if (v.running) { later(5000); return; }                          // an earlier message is being answered (here, in another tab or conversation)
         const out = await dispatch(v.queued[0], here());

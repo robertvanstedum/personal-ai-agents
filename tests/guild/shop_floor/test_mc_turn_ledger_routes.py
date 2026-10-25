@@ -311,14 +311,16 @@ def test_stream_end_mapping(args, state):
     assert ledger.finished[0][0] == state and ledger.events[-1][0] == "release"
 
 
-def test_stopped_stream_is_failed_only_when_the_runtime_acknowledged():
+def test_confirmed_stop_is_cancelled_but_unconfirmed_stop_stays_unknown():
     turn, ledger = _turn()
     turn.mark_started()
     turn.finish_stream("stopped", "stopped", "openclaw", True, True)
     other, ledger2 = _turn()
     other.mark_started()
     other.finish_stream("stopped", "stopped", "openclaw", True, None)
-    assert ledger.finished[0][0] == "failed" and ledger2.finished[0][0] == "unknown"
+    assert ledger.finished[0] == ("cancelled", {"status": "stopped", "failure_class": "stopped",
+        "backend_kind": "openclaw", "reason": "owner_stop_acknowledged"})
+    assert ledger2.finished[0][0] == "unknown"
 
 
 def test_not_sent_cannot_be_claimed_after_work_started():

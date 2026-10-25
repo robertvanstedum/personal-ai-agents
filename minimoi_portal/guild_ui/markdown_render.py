@@ -10,7 +10,7 @@ stays strict. Two layers:
    off, and single newlines kept as line breaks.
 2. nh3 (ammonia), an allow-list sanitiser: only the tags below survive; a link
    keeps its href only when it is an absolute http, https or mailto URL
-   (relative, protocol-relative and backslash URLs are dropped), and gets
+   (plus the exact read-only Board note route; other relative, protocol-relative and backslash URLs are dropped), and gets
    rel="noopener noreferrer" and target="_blank"; no images, no style, no
    event handlers, no classes.
 
@@ -31,6 +31,8 @@ ATTRIBUTES = {"a": {"href", "title"}, "ol": {"start"}, "th": {"style"}, "td": {"
 URL_SCHEMES = {"http", "https", "mailto"}
 MAX_CHARS = 16_000          # rendered length; the stored text is never cut (#261 review, finding 1)
 _SAFE_HREF = re.compile(r"^(https?://[^\s/\\]|mailto:[^\s])", re.IGNORECASE)
+# Only a read-only UI destination emitted by Board receipts, never an API or redirect.
+_BOARD_NOTE_HREF = re.compile(r"/guild-next/guild/board\?note=[1-9][0-9]{0,18}\Z")
 _SAFE_ALIGN = re.compile(r"^text-align:(left|right|center)$")
 
 _ANY_LIST = re.compile(r"^\s*([-*+]|\d{1,3}[.)])\s")
@@ -69,7 +71,7 @@ _MD = (MarkdownIt("commonmark", {"html": False, "breaks": True, "linkify": False
 
 def _attribute_filter(tag: str, attr: str, value: str):
     if tag == "a" and attr == "href":
-        return value if _SAFE_HREF.match(value.strip()) else None
+        return value if _SAFE_HREF.match(value.strip()) or _BOARD_NOTE_HREF.fullmatch(value) else None
     if tag in ("th", "td") and attr == "style":
         return value if _SAFE_ALIGN.match(value.replace(" ", "")) else None
     return value

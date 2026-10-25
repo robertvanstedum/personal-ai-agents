@@ -14,7 +14,9 @@ Rewriting strategy:
 """
 
 import json
+import posixpath
 import re
+from urllib.parse import unquote
 
 import requests
 from bs4 import BeautifulSoup
@@ -238,6 +240,30 @@ def _forward_headers(user: dict | None, strip_header_prefixes: tuple[str, ...] =
     return headers
 
 
+def _internal_domain_api_path(path: str) -> bool:
+    # Do not expose the internal signed API via an authenticated browser proxy.
+    # Account for URL decoding and dot-segment normalization on either hop.
+    decoded = path
+    for _ in range(4):
+        expanded = unquote(decoded)
+        if expanded == decoded:
+            break
+        decoded = expanded
+    else:
+        return True  # refuse excessive nested encodings rather than guess
+    # Werkzeug has already decoded the route once. URL delimiters must never
+    # reach requests' URL parser after our namespace check (including nested
+    # encodings); otherwise ?/# can hide the path that reaches the backend.
+    if any(c in decoded for c in ('?', '#', '%', '\\', ';')) or any(ord(c) < 32 or ord(c) == 127 for c in decoded):
+        return True
+    # Refuse ambiguous path segments before either HTTP library normalizes them.
+    # RFC3986 and posixpath disagree when '..' follows an empty segment.
+    if '//' in decoded or any(part in {'.', '..'} for part in decoded.split('/')):
+        return True
+    normalized = posixpath.normpath('/' + decoded.lstrip('/'))
+    return normalized == '/internal/domain-api' or normalized.startswith('/internal/domain-api/')
+
+
 def proxy_to(backend_url: str, path: str, portal_prefix: str,
              user: dict | None = None,
              strip_header_prefixes: tuple[str, ...] = (),
@@ -263,6 +289,8 @@ def proxy_to(backend_url: str, path: str, portal_prefix: str,
     head_meta:     <meta name=… content=…> tags the portal adds to an HTML
                    page's <head> (for example the page's write-guard token).
     """
+    if _internal_domain_api_path(path):
+        return Response(status=404)
     if forward_prefix:
         target = f"{backend_url}{portal_prefix}/{path.lstrip('/')}"
     else:

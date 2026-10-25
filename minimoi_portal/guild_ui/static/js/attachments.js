@@ -8,6 +8,7 @@ import { $, el, announce, toast } from './dom.js';
 import { live, onChange } from './state.js';
 import { apiUpload, apiPost } from './api.js';
 import { newKey } from './actions.js';
+import { longPasteFile } from './paste_file.js';
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MB = (n) => `${Math.round(n / (1024 * 1024))} MB`;
@@ -205,13 +206,22 @@ export function initAttachments(page) {
   button.addEventListener('click', () => { if (!button.disabled) input.click(); });
   input.addEventListener('change', () => { take(input.files); input.value = ''; });
 
-  // Paste an image into the composer.
+  // Paste an image into the composer; a text paste over the message limit becomes a .txt file in the tray.
   const composer = $('[data-mc-input]');
   if (composer) composer.addEventListener('paste', (e) => {
     const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter((f) => f.type.startsWith('image/'));
-    if (!files.length || live.off) return;
+    if (files.length) {
+      if (live.off) return;
+      e.preventDefault();
+      take(files);
+      return;
+    }
+    const long = longPasteFile(e.clipboardData ? e.clipboardData.getData('text/plain') : '',
+      { noteMax: page.note_max, docCap, docChars: page.attach && page.attach.doc_chars, off: live.off });
+    if (!long) return;
     e.preventDefault();
-    take(files);
+    take([long.file]);
+    announce(long.note);
   });
 
   // Drop files on the chat.

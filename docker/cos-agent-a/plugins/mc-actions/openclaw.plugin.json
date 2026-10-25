@@ -1,0 +1,14 @@
+{
+  "id":"mc-actions",
+  "name":"MiniMoi authorized actions",
+  "contracts":{"tools":["minimoi_action"]},
+  "configSchema":{
+    "type":"object","additionalProperties":false,
+    "properties":{
+      "enabled":{"type":"boolean","default":false},
+      "endpoint":{"type":"string"},
+      "executeTokenFile":{"type":"string"},
+      "operations":{"type":"array","maxItems":100,"items":{"type":"string"}}
+    }
+  }
+}

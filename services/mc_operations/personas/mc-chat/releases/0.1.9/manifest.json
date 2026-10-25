@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.9",
+  "spec": "MC-OC-001 v0.4 with owner-directed SOUL inclusion",
+  "status": "candidate-not-activated",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "f458ed6c2a5769dfd58ff4f52f27347971a6c81f8c2bfdea3de4290c3f91d09c",
+    "RUNTIME.openclaw.md": "1d250019828973f2e0170b0792a430ecb6bc8c6a8f5bc9f6bd4d466229918442",
+    "CHANGES.md": "9a90c9e3f11e5e91b96c19d7de7141d09983758930749210817285ee076b38ee"
+  },
+  "projection": "SOUL verbatim; AGENTS plus runtime binding and optional private dated context",
+  "private_context": "excluded from public release; <=6500 chars, <=48-hour validity",
+  "runtime": "native OpenClaw 2026.9.4",
+  "memory_owner": "MiniMoi",
+  "container_loading": "not exercised",
+  "rollback": "private captured baseline, hash-guarded"
+}

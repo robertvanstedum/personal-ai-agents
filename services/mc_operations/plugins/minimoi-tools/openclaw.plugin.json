@@ -1,0 +1,110 @@
+{
+  "id": "minimoi-tools",
+  "name": "MiniMoi tools",
+  "description": "MC's MiniMoi tools, bound to Robert's live turn by MiniMoi (docs/design/mc_tool_path_design_2026-10-21.md).",
+  "contracts": {
+    "tools": [
+      "minimoi_host_health",
+      "minimoi_describe_house",
+      "minimoi_describe_domain",
+      "minimoi_guest_requests",
+      "minimoi_guest_request_reject",
+      "minimoi_github_issues",
+      "minimoi_issue_comment",
+      "minimoi_data_repair_ticket",
+      "minimoi_lesson_propose",
+      "minimoi_keep_preference",
+      "minimoi_revoke_preference",
+      "minimoi_record_gap",
+      "minimoi_withdraw_gap",
+      "minimoi_delegate_research",
+      "minimoi_access_invite",
+      "minimoi_board_notes_query",
+      "minimoi_board_note_read",
+      "minimoi_board_note_create",
+      "minimoi_board_note_update",
+      "minimoi_board_operation_read",
+      "minimoi_board_operation_undo",
+      "minimoi_clarify_action",
+      "minimoi_host_read",
+      "minimoi_host_list",
+      "minimoi_working_write",
+      "minimoi_conversation_export",
+      "minimoi_artifact_recover",
+      "minimoi_agent_contact",
+      "minimoi_agent_status",
+      "minimoi_agent_watch",
+      "minimoi_career_trial",
+      "minimoi_recall"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": false
+      },
+      "endpoint": {
+        "type": "string"
+      },
+      "tokenFile": {
+        "type": "string"
+      },
+      "agents": {
+        "type": "array",
+        "maxItems": 4,
+        "items": {
+          "type": "string"
+        }
+      },
+      "tools": {
+        "type": "array",
+        "maxItems": 32,
+        "items": {
+          "type": "string"
+        }
+      },
+      "diskPaths": {
+        "type": "array",
+        "maxItems": 4,
+        "items": {
+          "type": "string"
+        }
+      },
+      "docker": {
+        "type": "string"
+      },
+      "allowTokenReadableByAgent": {
+        "type": "boolean",
+        "default": false
+      },
+      "hostPython": {
+        "type": "string"
+      },
+      "hostHelper": {
+        "type": "string"
+      },
+      "hostDeniedPaths": {
+        "type": "array",
+        "maxItems": 20,
+        "items": {
+          "type": "string"
+        }
+      },
+      "hostArtifactHelper": {
+        "type": "string"
+      },
+      "hostArtifactRoot": {
+        "type": "string"
+      },
+      "hostCareerHelper": {
+        "type": "string"
+      },
+      "hostCareerKit": {
+        "type": "string"
+      }
+    }
+  }
+}

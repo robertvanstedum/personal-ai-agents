@@ -31,13 +31,14 @@ from typing import Callable
 from ..topics import ITEM_RE, REV_RE, TOPIC_RE
 from ..topic_context import REFS_MAX
 from ..turn_files import DOC_ID_RE, IDS_MAX
+from ..conversations import ASSET_ID_RE
 
 LEASE_S = 120                     # a claim without a heartbeat for this long is abandoned
 QUEUE_MAX = 5                     # waiting turns per owner (issue #346 P2)
 QUEUE_TTL_S = 24 * 3600           # a waiting turn not sent within this is expired (never sent)
 HEARTBEAT_S = 30
 TERMINAL = ("answered", "failed", "unknown", "not_sent", "cancelled", "expired")
-FINISH_STATES = ("answered", "failed", "unknown", "not_sent")
+FINISH_STATES = ("answered", "failed", "unknown", "not_sent", "cancelled")
 KINDS = ("typed", "voice")
 
 
@@ -152,9 +153,12 @@ def _clean_outcome(outcome) -> dict:
 
 def _clean_files(attachment_ids) -> list:
     files = list(attachment_ids or [])
-    if len(files) > IDS_MAX or len(set(files)) != len(files) or \
-            not all(isinstance(f, str) and DOC_ID_RE.fullmatch(f) for f in files):
-        raise ValueError(f"attachment ids are up to {IDS_MAX} distinct document ids")
+    # Image uploads use Media UUIDs, documents use d- ids. Conversation/owner
+    # membership is checked by the route and again before queued dispatch.
+    if len(files) > IDS_MAX or not all(
+            isinstance(f, str) and (DOC_ID_RE.fullmatch(f) or ASSET_ID_RE.fullmatch(f)) for f in files
+    ) or len(set(files)) != len(files):
+        raise ValueError(f"attachment ids are up to {IDS_MAX} distinct document or image ids")
     return files
 
 
@@ -442,6 +446,9 @@ class TurnLedger:
         if state not in FINISH_STATES:
             raise ValueError("unknown finish state")
         clean = _clean_outcome(outcome)
+        if state == "cancelled" and not (clean.get("status") == "stopped" and
+                clean.get("reason") == "owner_stop_acknowledged"):
+            raise ValueError("a dispatched cancellation requires an acknowledged owner Stop")
         with self._tx() as cur:
             cur.execute("SELECT principal FROM guild.mc_turn_ledger WHERE id = %s", (claim.ledger_id,))
             row = cur.fetchone()

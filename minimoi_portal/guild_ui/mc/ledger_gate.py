@@ -226,7 +226,7 @@ class Turn:
         elif status == "answered":
             self._end("answered", outcome)
         elif status == "stopped" and stop_acknowledged is True:
-            self._end("failed", outcome)          # the owner's Stop, acknowledged by the runtime
+            self._end("cancelled", {**outcome, "reason": "owner_stop_acknowledged"})
         elif status in ("error", "unavailable") and failure_class not in (None, "truncated", "upstream"):
             self._end("failed", outcome)
         else:
@@ -255,7 +255,7 @@ def _paused(admission):
 def _invalid(exc):
     if "request_mismatch" in str(exc):
         return Refusal("request_mismatch", "These ids were already used for a different message. Nothing was sent.", 409)
-    return Refusal("invalid", "This message could not be recorded. Nothing was sent.", 422)
+    return Refusal("invalid", "Your message is saved, but could not be prepared for Master Craftsman. Nothing was sent to Master Craftsman.", 422)
 
 
 def gate(services, environ, *, principal, conversation_id, note_request_id, request_id, kind="typed",

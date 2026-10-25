@@ -54,8 +54,9 @@ def test_every_failure_has_its_own_words():
 
 def test_the_portal_waits_longer_than_a_relay_configured_for_long_tool_work():
     from minimoi_portal.guild_ui.mc.openclaw import STREAM_LIMITS
-    assert STREAM_LIMITS.idle_s == 105.0 and STREAM_LIMITS.deadline_s == 125.0
-    assert STREAM_LIMITS.idle_s > 100 and STREAM_LIMITS.deadline_s > 120      # a relay at 100 s idle / 120 s deadline speaks first
+    # Raised for long tool work (relay idle/deadline 300 s, deployed on dev 24 Oct; STATUS relay_idle_ms 300000).
+    assert STREAM_LIMITS.idle_s == 305.0 and STREAM_LIMITS.deadline_s == 310.0
+    assert STREAM_LIMITS.idle_s > 300 and STREAM_LIMITS.deadline_s > 300      # a relay at 300 s idle / 300 s deadline speaks first
 
 
 def test_a_streamed_idle_stop_reaches_the_page_with_the_honest_wording(streaming):

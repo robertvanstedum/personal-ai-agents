@@ -84,7 +84,8 @@ def test_package_never_imports_the_prototype():
         for line in path.read_text(encoding="utf-8").splitlines():
             code = line.strip()
             if code.startswith(("import ", "from ")):
-                assert "proto" not in code and "guild_interaction" not in code, (path, code)
+                # Module-name match, not a substring: core.domain_api.protocol is not the prototype.
+                assert not re.search(r"\bproto\b|prototype|guild_interaction", code), (path, code)
             assert "sys.path" not in code and "spec_from_file_location" not in code, (path, code)
 
 
