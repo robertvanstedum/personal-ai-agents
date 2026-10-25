@@ -180,6 +180,14 @@ intermediary, exists.
   endpoint reached on a dedicated network, never the portal's front network.
 - **Phase 3:** prod (§8).
 
+## 7b. Prod capture store (Robert's decision, 25 Oct)
+
+"Private path on EC2 and really just a data path with user restriction if needed, but whatever works."
+
+- **Location:** `/opt/minimoi/private/judgment/` on the EC2 host. Owner-only (0700, owned by the deploy user), outside every repo, and **never mounted into any agent container**, including MC's.
+- **Collector:** runs on the host and reads MC's session records from outside the container (a read-only copy of the agent database), the same writer split as dev (judgment spec v0.2 §2).
+- **Mac copy:** optional, later. Not required for the soak.
+
 ## 8. Later
 
 - Prod: the same image and compose project on EC2, with an EC2 memory
