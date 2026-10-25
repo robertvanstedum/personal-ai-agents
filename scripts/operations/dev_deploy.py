@@ -782,7 +782,7 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     try:
         if action == 'deploy':
             out(f'building {service} at {commit[:12]} ({mode})…')
-            # No per-record label: the same commit and mode build the same image, so a re-deploy is identical.
+            # No per-record label, so a rebuild of the same commit reuses the build cache.
             labels = {'minimoi.source_commit': commit, 'minimoi.environment': 'dev', 'minimoi.service': service}
             if row['part_of']:
                 # A part moves only its own paths: the image keeps its domain's commit label and gains one
@@ -1159,7 +1159,8 @@ def status(host, service=None, out=print):
         last = ([r for r in history(name)] or [None])[-1]
         rows.append({'service': name, 'running': bool(c and c['State'].get('Running')),
                      'image': c and c['Image'], 'commit': image and unit_commit(UNITS[name], image),
-                     'hold': read_hold(name), 'last_change': last})
+                     'hold': read_hold(name) or (UNITS[name]['part_of'] and read_hold(UNITS[name]['part_of'])),
+                     'last_change': last})
     out(json.dumps(rows, indent=2, sort_keys=True))
     return rows
 

@@ -517,8 +517,10 @@ scripts/operations/deploy_dev.sh status [<unit>]                                
   or always for a part, copies just the unit's source onto the running image, and only when dependencies
   are unchanged). It labels the image with the commit and rewrites `~/minimoi-runtime/dev-pins/<service>.json`
   (the last file in the running compose chain). It refuses if anything but the image would change, recreates
-  only that container, and checks it: health URLs, source files against the commit, and the OpenClaw gateway
-  untouched. A failed check rolls back by itself.
+  only that container, and checks it: health URLs, every deployed file (code and HTML/JS/CSS assets) against
+  the commit, and the OpenClaw gateway untouched. For `portal` and `guild-ui`, the `board-api` sidecar is stopped
+  first, rejoined to the new portal, and proven: same namespace, same security settings, same credentials, signed
+  readiness. A failed check rolls back by itself.
 - **What a launchd deploy does** (`operations`): extracts the commit once into
   `~/minimoi-runtime/dev-code/<unit>/<commit>/` and links `logs/` and `data/guild/memory/` back to the agent's
   state home (`~/.worktrees/ops-runtime`). It re-points the plist with plistlib (script path and

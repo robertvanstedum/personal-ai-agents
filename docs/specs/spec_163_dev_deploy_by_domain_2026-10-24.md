@@ -90,11 +90,25 @@ drop check, source check and history are kept per part.
 The loader rejects a malformed entry by name: a missing field, no health check, an unknown `part_of`, or a name
 that is also out of bounds.
 
-**board-api:** it runs the portal image as a sidecar. A portal deploy moves both: stop board-api,
-recreate portal, verify, then recreate board-api on the same image from its own recorded chain —
-the order Codex's `runtime-deployment/deploy.py` uses today. If either fails, both roll back.
-*Open question for Codex:* whether its `headless_lifecycle.py stop/start` must wrap this, or a plain
-`compose up --no-deps board-api` is enough.
+**Sidecars (board-api).** The registry declares each sidecar with its `readiness` probe and `credential_mounts`.
+A deploy or rollback of `portal` or `guild-ui` follows the reviewed headless lifecycle (Codex review of 4da2d0a0):
+
+1. **Before anything changes:** the sidecar's own chain, rendered with the new pin, must differ from the running
+   sidecar only in its image. Security and config invariants are part of that comparison: env, mounts and their
+   read-only flags, ports, network mode, read-only root, `cap_drop`, `security_opt` and tmpfs. The sidecar must
+   also be attached to the running portal now. The credential digest is recorded.
+2. **Stop** the sidecar, after checking that the container is the labelled `board-api`, joined to a namespace.
+3. **Replace** the portal and run its health and source checks.
+4. **Rejoin** the sidecar from its own chain with the same pin, reusing the portal's existing database
+   connection (passed through in memory) and the existing key profile. Credentials are never rotated.
+5. **Prove:**
+   - `NetworkMode == container:<new portal id>`;
+   - no invariant changed;
+   - the credential digest is unchanged;
+   - signed `capabilities.read` readiness passes (`scripts/operations/dev_deploy_probes/board_api_ready.py`,
+     run inside the sidecar; it reads no owner notes and makes no mutations).
+
+Any failure runs the same lifecycle back to the previous image.
 
 ## 2. Image build: full by default, overlay as a fast path
 
@@ -108,8 +122,8 @@ the order Codex's `runtime-deployment/deploy.py` uses today. If either fails, bo
   Dockerfile and `package*.json` are unchanged between that commit and the target. Otherwise refused
   with "use a full build".
 - Every image built by this path is labelled `minimoi.source_commit=<40-char sha>`,
-  `minimoi.environment=dev`, `minimoi.service=<service>` (no per-record label, so the same commit
-  and mode rebuild the same image), and tagged
+  `minimoi.environment=dev`, `minimoi.service=<service>` (no per-record label, so a rebuild of the same
+  commit reuses the build cache; the image ID can still differ, because BuildKit records a creation time), and tagged
   `minimoi-<service>:dev-<short sha>`. Today's dev images have no label; the first deploy of each
   service must be full (or `--accept-unknown-current`, recorded).
 
@@ -151,8 +165,9 @@ After `up`, within a bounded wait (default 90 s):
 1. Container running, image ID = pinned ID, `minimoi.source_commit` label = requested commit.
 2. Docker healthcheck `healthy`, when the service defines one.
 3. Service HTTP health URL(s) return 200 (portal: local and public).
-4. Source spot-check: SHA-256 of the copied/built source files inside the container match the commit
-   (same idea as Codex's `LIVE_SOURCE_HASHES.json`).
+4. Source check: **every file the unit deploys** from its `source` paths, including code, templates, HTML/JS/CSS,
+   SQL and images, must match the commit's git blob inside the container (`health.json` lists counts by type).
+   Skipped: host mounts, the unit's `exclude`, symlinks, and, for full builds, what `.dockerignore` keeps out.
 5. Gateway untouched: SHA-256 of `~/.openclaw/openclaw.json` unchanged, gateway process not restarted.
 
 Any failure → re-pin the previous image, `up`, re-run checks, write `FAILURE.json`, exit non-zero.
@@ -238,7 +253,7 @@ KeepAlive, venv interpreter), not a container, so it has no image to pin. The sa
 - **Apply:** write the plist atomically, `launchctl bootout`, wait until unloaded, `launchctl bootstrap`,
   `kickstart`.
 - **Health:** the job is running with a new PID, `ps` shows it running the pinned script, `/health`
-  returns 200, the `.py` files in the pinned directory match the commit's git blobs, and the gateway is
+  returns 200, every file in the pinned directory's `source` paths matches the commit's git blobs, and the gateway is
   unchanged. A failure restores the previous plist bytes and reloads.
 - **Record and rollback:** the same record shape, with `plist-before.plist` / `plist-after.plist`
   and pin files holding the code location. Rollback re-points to the previous location, which can be
