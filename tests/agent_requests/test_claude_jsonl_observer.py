@@ -9,7 +9,7 @@ from core.agent_requests import claude_jsonl_observer as E
 
 class Tests(unittest.TestCase):
  def setUp(self):
-  self.tmp=tempfile.TemporaryDirectory(dir='/private/tmp');self.path=Path(self.tmp.name)/'target.jsonl'
+  self.tmp=tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None));self.path=Path(self.tmp.name)/'target.jsonl'
   self.path.write_bytes(b'{"type":"custom-title"}\n');self.path.chmod(0o600)
   self.base=E.baseline(self.path,'receiver')
   self.binding={'native_shape_validated':True,'session_id':'receiver','sender_pid':123,'sender_process_start':'start-123','msg_id':'msg-1','payload_sha256':E.hashed(b'fixed envelope'),'dispatch_at':'2026-10-24T20:00:00Z','observation_at':'2026-10-24T21:00:00Z'}

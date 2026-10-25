@@ -9,7 +9,7 @@ from core.agent_requests import claude_send_guard as A
 
 class Tests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir='/private/tmp')
+        self.tmp = tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None))
         self.root = Path(self.tmp.name)
         self.b = {'enabled':True, 'binary_sha256':A.BINARY_SHA256, 'issued_at':10, 'expires_at':20,
                   'input':{'to':'Fixture session [abcdef]', 'message':'Offline fixture only', 'summary':'Offline schema fixture'},
@@ -97,7 +97,7 @@ if __name__=='__main__':unittest.main(verbosity=2)
 
 class ConfigurationTests(unittest.TestCase):
     def test_inherited_deny_is_preserved_and_additional_hooks_refuse(self):
-        with tempfile.TemporaryDirectory(dir='/private/tmp') as tmp:
+        with tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None)) as tmp:
             path=Path(tmp)/'settings.json'
             raw=json.dumps({'permissions':{'deny':['SendMessage']}}).encode();path.write_bytes(raw);path.chmod(0o600)
             import hashlib

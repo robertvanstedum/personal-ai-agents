@@ -1,3 +1,4 @@
+import os
 import base64
 import hashlib
 import importlib.util
@@ -27,7 +28,7 @@ def request(payload=None,mode='create',operation=None):
 
 class ArtifactHelperTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory(dir='/private/tmp');self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name)
+        self.tmp=tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None));self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name)
 
     def test_exclusive_create_reopen_readback_and_never_repeat(self):
         r=request();out=H.run(r,str(self.root));self.assertTrue(out['verified'])

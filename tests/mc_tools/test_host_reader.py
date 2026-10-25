@@ -19,7 +19,7 @@ spec.loader.exec_module(H)
 
 class HostReaderTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir='/private/tmp')
+        self.tmp = tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None))
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
 

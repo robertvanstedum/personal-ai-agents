@@ -13,7 +13,7 @@ KIT=os.environ.get('MC_CAREER_TEST_KIT')
 
 @pytest.fixture
 def root():
-    with tempfile.TemporaryDirectory(dir='/private/tmp') as tmp:yield Path(tmp)
+    with tempfile.TemporaryDirectory(dir=('/private/tmp' if os.path.isdir('/private/tmp') else None)) as tmp:yield Path(tmp)
 
 @pytest.fixture
 def kit():
