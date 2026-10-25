@@ -587,8 +587,15 @@ def _board_text(value):
     try:
         return clean(value).text, None
     except TextRefused as exc:
-        words = ("This note is over 280 characters. Your draft is kept; shorten it before saving."
-                 if "too_long" in exc.code else "A post-it needs valid, nonempty text.")
+        if exc.code == "scrubbed_text_too_long":
+            # Within the limit as typed, over it only because payment details were replaced: say so, never "you typed too much".
+            count = f"{exc.count} characters" if exc.count else "over 280 characters"
+            words = (f"The post-it is too long after removing payment details ({count}, the limit is 280). "
+                     "Your draft is kept; shorten it before saving.")
+        elif "too_long" in exc.code:
+            words = "This note is over 280 characters. Your draft is kept; shorten it before saving."
+        else:
+            words = "A post-it needs valid, nonempty text."
         return None, json_error("invalid", words, 422)
 
 

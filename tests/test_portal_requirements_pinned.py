@@ -24,6 +24,14 @@ MANAGED_REALTIME_ADDED = {
 }
 
 
+# Domain API contract validation (contracts/domain-api/v1; used by core/mc_tools/catalogue.py, board_headless.py,
+# domains/guild/board_client.py): jsonschema and its pinned closure, added with Codex's MC runtime work.
+DOMAIN_API_ADDED = {
+    "jsonschema": "4.26.0", "jsonschema-specifications": "2025.9.1", "referencing": "0.37.0",
+    "rpds-py": "2026.9.1", "attrs": "26.1.0",
+}
+
+
 def _pins():
     pins = {}
     for line in (REPO / "docker" / "requirements.portal.txt").read_text().splitlines():
@@ -43,8 +51,9 @@ def test_every_portal_dependency_is_pinned_exactly():
 def test_production_baseline_unchanged_and_only_reviewed_ui_and_realtime_packages_added():
     pins = _pins()
     assert {name: pins.get(name) for name in BASELINE} == BASELINE
-    assert set(pins) - set(BASELINE) == UI_ADDED | set(MANAGED_REALTIME_ADDED) | set(REGISTER_ADDED)
+    assert set(pins) - set(BASELINE) == UI_ADDED | set(MANAGED_REALTIME_ADDED) | set(REGISTER_ADDED) | set(DOMAIN_API_ADDED)
     assert {name: pins.get(name) for name in MANAGED_REALTIME_ADDED} == MANAGED_REALTIME_ADDED
+    assert {name: pins.get(name) for name in DOMAIN_API_ADDED} == DOMAIN_API_ADDED
     assert {name: pins.get(name) for name in REGISTER_ADDED} == REGISTER_ADDED
 
 
