@@ -36,7 +36,9 @@ DEP_FILES = ('requirements.txt', 'requirements.test.txt', 'package.json', 'packa
 
 # Values the dev chain interpolates that no env file holds: read from a running container's env,
 # handed to `docker compose` through the process environment only, never printed or written.
-PASSTHROUGH = {'MC_NATIVE_RELAY_TOKEN': ('minimoi-portal', 'MC_RUNTIME_TOKEN')}
+PASSTHROUGH = {'MC_NATIVE_RELAY_TOKEN': ('minimoi-portal', 'MC_RUNTIME_TOKEN'),
+               # The Board API sidecar reuses the portal's existing connection (reviewed headless lifecycle).
+               'BOARD_API_DATABASE_URL': ('minimoi-portal', 'DATABASE_URL')}
 # Plain (non-secret) variables the staging scripts export to every compose call (scripts/staging/lib.sh);
 # the config check still proves the rendered mounts equal the running ones.
 STAGING_DEFAULTS = {'MINIMOI_ROOT': os.environ.get('STAGING_ROOT', str(Path.home() / 'minimoi-staging'))}
@@ -67,7 +69,12 @@ def load_registry(path=REGISTRY):
             raise ValueError(f'unit {name} is also listed as out of bounds')
         row = dict(entry, name=name)
         row['kind'] = 'launchd' if runtime == 'launchd' else 'container'
-        row['sidecars'] = tuple(tuple(x) for x in entry.get('sidecars', ()))
+        row['sidecars'] = tuple(dict({'readiness': None, 'credential_mounts': ()}, **x)
+                                for x in entry.get('sidecars', ()))
+        if any(set(x) - {'service', 'container', 'readiness', 'credential_mounts'} or 'container' not in x
+               for x in row['sidecars']):
+            raise ValueError(f'unit {name}: a sidecar needs service and container (optional readiness, '
+                             'credential_mounts)')
         for key, default in (('mc_turn_probe', False), ('app_root', '/app'), ('available', True),
                              ('overlay', True), ('exclude', ()), ('part_of', None), ('includes', '')):
             row.setdefault(key, default)
@@ -175,6 +182,15 @@ class Host:
         r = subprocess.run(['ps', '-o', 'command=', '-p', str(pid)], capture_output=True, text=True)
         return r.stdout.strip()
 
+    def dir_digest(self, paths):
+        h = hashlib.sha256()
+        for root in paths:
+            root = Path(root)
+            files = [root] if root.is_file() else sorted(p for p in root.rglob('*') if p.is_file())
+            for f in files:
+                h.update(f'{f.relative_to(root.parent)}\0'.encode() + hashlib.sha256(f.read_bytes()).digest())
+        return h.hexdigest()
+
     def git_at(self, location, *args):
         r = subprocess.run(['git', '-C', str(location), *args], capture_output=True, text=True, timeout=60)
         return r.stdout if r.returncode == 0 else None
@@ -233,6 +249,15 @@ def render(host, chain, files, env):
 
 # ---------- config comparison: only the image may change ----------
 
+def network_mode(value):
+    """`joined` for a sidecar in another container's namespace (`service:x` in compose, `container:<id>`
+    live); `host`/`none` as they are; everything else is a normal network, compared by name elsewhere."""
+    value = value or ''
+    if value.startswith(('service:', 'container:')):
+        return 'joined'
+    return value if value in ('host', 'none') else 'default'
+
+
 def rendered_view(doc, service):
     s = doc['services'][service]
     networks = doc.get('networks') or {}
@@ -254,7 +279,13 @@ def rendered_view(doc, service):
             'networks': sorted((networks.get(n) or {}).get('name', n) for n in (s.get('networks') or {})),
             'memory': int(s['mem_limit']) if s.get('mem_limit') else 0,
             'nano_cpus': int(round(float(s['cpus']) * 1e9)) if s.get('cpus') else 0,
-            'restart': s.get('restart') or 'no'}
+            'restart': s.get('restart') or 'no',
+            # A sidecar joins its domain's network namespace (`service:portal` here, `container:<id>` live).
+            'network_mode': network_mode(s.get('network_mode')),
+            'read_only': bool(s.get('read_only')), 'cap_drop': sorted(s.get('cap_drop') or []),
+            'security_opt': sorted(s.get('security_opt') or []),
+            'tmpfs': sorted(t.split(':')[0] for t in ([s['tmpfs']] if isinstance(s.get('tmpfs'), str)
+                                                       else s.get('tmpfs') or []))}
 
 
 def running_view(container, image):
@@ -271,7 +302,10 @@ def running_view(container, image):
             'image_command': image['Config'].get('Cmd'), 'image_entrypoint': image['Config'].get('Entrypoint'),
             'networks': sorted(container['NetworkSettings']['Networks']),
             'memory': hc.get('Memory') or 0, 'nano_cpus': hc.get('NanoCpus') or 0,
-            'restart': (hc.get('RestartPolicy') or {}).get('Name') or 'no'}
+            'restart': (hc.get('RestartPolicy') or {}).get('Name') or 'no',
+            'network_mode': network_mode(hc.get('NetworkMode')),
+            'read_only': bool(hc.get('ReadonlyRootfs')), 'cap_drop': sorted(hc.get('CapDrop') or []),
+            'security_opt': sorted(hc.get('SecurityOpt') or []), 'tmpfs': sorted(hc.get('Tmpfs') or {})}
 
 
 def config_diff(rendered, running):
@@ -286,9 +320,10 @@ def config_diff(rendered, running):
             diff.append(f'env:{k}')        # set on the container, but by nothing in the chain any more
     for key in ('command', 'entrypoint'):
         want = rendered[key] if rendered[key] is not None else running['image_' + key]
-        if want != running[key]:
+        if (want or None) != (running[key] or None):      # compose `command: []` is stored as no command
             diff.append(key)
-    for key in ('mounts', 'ports', 'networks', 'memory', 'nano_cpus', 'restart'):
+    for key in ('mounts', 'ports', 'networks', 'memory', 'nano_cpus', 'restart', 'network_mode', 'read_only',
+                'cap_drop', 'security_opt', 'tmpfs'):
         if rendered[key] != running[key]:
             diff.append(key)
     return diff
@@ -411,7 +446,7 @@ def overlay_context(host, row, commit, base_image, base_tag):
 # ---------- apply and verify ----------
 
 def write_pin(path, service, image, sidecars):
-    doc = {'services': {name: {'image': image} for name in (service, *[s for s, _ in sidecars])}}
+    doc = {'services': {name: {'image': image} for name in (service, *[x['service'] for x, _ in sidecars])}}
     tmp = path.with_suffix('.tmp')
     tmp.write_text(json.dumps(doc, indent=2) + '\n')
     os.replace(tmp, path)
@@ -422,26 +457,77 @@ def up(host, chain, files, env, log):
     host.run(compose_cmd(chain, files) + ['up', '-d', '--no-deps', chain['service']], env=env, log=str(log), timeout=300)
 
 
-def source_check(host, row, container_name, commit, container):
+def dockerignore_patterns(host, commit):
+    try:
+        text = host.git('show', f'{commit}:.dockerignore')
+    except Exception:
+        return []
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith('#')]
+
+
+def _ignore_regex(pattern):
+    pattern = pattern.strip('/')
+    out, i = '', 0
+    while i < len(pattern):
+        if pattern.startswith('**', i):
+            out += '.*'
+            i += 2
+            if pattern.startswith('/', i):
+                out, i = out + '(?:/|)', i + 1
+            continue
+        ch = pattern[i]
+        out += '[^/]*' if ch == '*' else '[^/]' if ch == '?' else re.escape(ch)
+        i += 1
+    return re.compile(out + r'\Z')
+
+
+def dockerignored(path, patterns):
+    """Docker's .dockerignore rule: a pattern matching the path or any of its parent directories excludes
+    it, a later `!pattern` re-includes it, and the last match wins."""
+    parts = path.split('/')
+    candidates = ['/'.join(parts[:n]) for n in range(1, len(parts) + 1)]
+    ignored = False
+    for pattern in patterns:
+        negate = pattern.startswith('!')
+        rx = _ignore_regex(pattern[1:] if negate else pattern)
+        if any(rx.match(c) for c in candidates):
+            ignored = not negate
+    return ignored
+
+
+def source_check(host, row, container_name, commit, container, ignore=True):
+    """Every file the unit deploys (code, templates, HTML/JS/CSS, data) must equal the commit's git blob
+    inside the container. Skipped: host mounts, the unit's `exclude`, symlinks, and for full builds the
+    paths .dockerignore keeps out of the image."""
     paths = source_paths(row)
     tree = host.git('ls-tree', '-r', commit, '--', *[repo for repo, _ in paths])
+    patterns = dockerignore_patterns(host, commit) if ignore else []
     mounted = [m['Destination'] for m in container['Mounts']]
     expected = {}
     for line in tree.splitlines():
         meta, path = line.split('\t', 1)
-        _, kind, blob = meta.split()
+        filemode, kind, blob = meta.split()
+        if kind != 'blob' or filemode == '120000':
+            continue
         repo, dest = next((r, d) for r, d in paths if path == r or path.startswith(r + '/'))
         target = dest + path[len(repo):]
-        if (kind == 'blob' and path.endswith('.py') and not any(target.startswith(m + '/') for m in mounted)
-                and not any(path.startswith(x + '/') for x in row['exclude'])):
-            expected[target] = blob
+        if any(target == m or target.startswith(m + '/') for m in mounted) \
+                or any(path.startswith(x + '/') for x in row['exclude']) \
+                or (patterns and dockerignored(path, patterns)):
+            continue
+        expected[target] = blob
     got = json.loads(host.docker('exec', '-i', container_name, 'python3', '-c', BLOB_PROBE,
-                                 stdin=json.dumps(sorted(expected)).encode(), timeout=120))
+                                 stdin=json.dumps(sorted(expected)).encode(), timeout=300))
     bad = sorted(p for p, blob in expected.items() if got.get(p) != blob)
-    return {'files': len(expected), 'mismatched': bad[:20], 'ok': not bad}
+    kinds = {}
+    for p in expected:
+        ext = Path(p).suffix or '(none)'
+        kinds[ext] = kinds.get(ext, 0) + 1
+    return {'files': len(expected), 'by_type': dict(sorted(kinds.items(), key=lambda kv: -kv[1])[:12]),
+            'mismatched': bad[:20], 'mismatched_count': len(bad), 'ok': bool(expected) and not bad}
 
 
-def health(host, row, container_name, image, commit, timeout):
+def health(host, row, container_name, image, commit, timeout, mode=None):
     """Wait for the container to be up on the expected image, then run every check once."""
     deadline = time.monotonic() + timeout
     checks = {}
@@ -462,12 +548,75 @@ def health(host, row, container_name, image, commit, timeout):
     checks['urls'] = urls
     if commit:
         checks['label'] = unit_commit(row, image_doc) == commit
-        checks['source'] = source_check(host, row, container_name, commit, c) if checks['running'] else {'ok': False}
+        checks['source'] = (source_check(host, row, container_name, commit, c, ignore=mode != 'overlay')
+                            if checks['running'] else {'ok': False})
     else:
         checks['label'] = checks['source'] = 'skipped: target image has no source label'
     ok = (checks['running'] and checks['image'] and hc in (None, 'healthy')
           and all(s == 200 for s in urls.values())
           and (not commit or (checks['label'] and checks['source']['ok'])))
+    return ok, checks
+
+
+# ---------- sidecars (e.g. board-api in the portal's namespace) ----------
+
+def sidecar_config_diff(host, spec, c, pin_path, env):
+    chain = chain_of(c)
+    rendered = rendered_view(render(host, chain, with_pin(chain['files'], pin_path), env), chain['service'])
+    return config_diff(rendered, running_view(c, host.inspect('image', c['Image'])))
+
+
+def credential_digest(host, spec, c):
+    """One digest over the files behind the sidecar's credential mounts: equal before and after proves no
+    rotation. File contents are hashed on the host and never printed or recorded."""
+    sources = [m['Source'] for m in c['Mounts'] if m['Destination'] in spec['credential_mounts']]
+    if len(sources) != len(spec['credential_mounts']):
+        raise Refused(f'sidecar {spec["service"]} lacks a credential mount: {", ".join(spec["credential_mounts"])}')
+    return host.dir_digest(sources) if sources else None
+
+
+def stop_sidecar(host, spec):
+    c = host.inspect('container', spec['container'])
+    if not c:
+        return
+    labels = c['Config']['Labels']
+    if labels.get('com.docker.compose.service') != spec['service'] or \
+            not c['HostConfig'].get('NetworkMode', '').startswith('container:'):
+        raise Refused(f'{spec["container"]} is not the {spec["service"]} sidecar; not removing it')
+    host.docker('rm', '-f', spec['container'], timeout=60)
+
+
+SIDECAR_INVARIANTS = ('env', 'mounts', 'ports', 'command', 'entrypoint', 'restart', 'network_mode', 'read_only',
+                      'cap_drop', 'security_opt', 'tmpfs', 'memory', 'nano_cpus')
+
+
+def verify_sidecar(host, spec, portal_id, image, before, credentials_before, timeout=90):
+    deadline = time.monotonic() + timeout
+    while True:
+        c = host.inspect('container', spec['container']) or {}
+        if (c.get('State') or {}).get('Running') or time.monotonic() >= deadline:
+            break
+        host.sleep(2)
+    checks = {'running': bool((c.get('State') or {}).get('Running')), 'image': c.get('Image') == image,
+              'network_mode': (c.get('HostConfig') or {}).get('NetworkMode') == f'container:{portal_id}'}
+    if c:
+        after = running_view(c, host.inspect('image', c['Image']) or {'Config': {}})
+        checks['invariants_changed'] = [k for k in SIDECAR_INVARIANTS if after[k] != before[k]]
+        checks['credentials_unchanged'] = credential_digest(host, spec, c) == credentials_before
+    else:
+        checks['invariants_changed'], checks['credentials_unchanged'] = ['missing'], False
+    checks['readiness'] = 'not defined'
+    if spec['readiness'] and checks['running'] and checks['network_mode']:
+        try:
+            probe = (ROOT / spec['readiness']).read_bytes()
+            checks['readiness'] = json.loads(host.docker('exec', '-i', spec['container'], 'python', '-', stdin=probe,
+                                                         timeout=120).strip().splitlines()[-1])
+        except Exception as exc:
+            checks['readiness'] = {'error': f'{type(exc).__name__}'}
+    ready = not spec['readiness'] or (isinstance(checks['readiness'], dict)
+                                      and checks['readiness'].get('signed_readiness') == 'pass')
+    ok = (checks['running'] and checks['image'] and checks['network_mode'] and not checks['invariants_changed']
+          and checks['credentials_unchanged'] and ready)
     return ok, checks
 
 
@@ -571,15 +720,19 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     svc = chain['service']                        # the compose service; parts share their domain's pin
     before_image = host.inspect('image', container['Image'])
     current = unit_commit(row, before_image)
-    sidecars = [(name, host.inspect('container', cname)) for name, cname in row['sidecars']]
-    sidecars = [(name, c) for name, c in sidecars if c]
-    for name, c in sidecars:
+    sidecars = [(spec, host.inspect('container', spec['container'])) for spec in row['sidecars']]
+    sidecars = [(spec, c) for spec, c in sidecars if c]
+    for spec, c in sidecars:
         if c['Image'] != container['Image']:
-            raise Refused(f'sidecar {name} runs {c["Image"][:19]}, not the {service} image; not moving them together')
+            raise Refused(f'sidecar {spec["service"]} runs {c["Image"][:19]}, not the {service} image; '
+                          'not moving them together')
+        if c['HostConfig'].get('NetworkMode') != 'container:' + container['Id']:
+            raise Refused(f'sidecar {spec["service"]} is not attached to the running {row["container"]}; '
+                          'repair it first')
 
     plan = {'service': service, 'action': action, 'operator': operator, 'container': row['container'],
             'image_before': container['Image'], 'commit_before': current, 'commit': commit, 'mode': mode,
-            'flags': flags, 'sidecars': [n for n, _ in sidecars], 'dry_run': dry_run}
+            'flags': flags, 'sidecars': [x['service'] for x, _ in sidecars], 'dry_run': dry_run}
 
     def gate(message):
         # A dry run reports every refusal it would hit; a real run stops at the first.
@@ -603,6 +756,8 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
         write_pin(probe, svc, container['Image'], sidecars)
         try:
             rendered = rendered_view(render(host, chain, with_pin(chain['files'], probe), env), chain['service'])
+            plan['sidecar_config_diff'] = {x['service']: sidecar_config_diff(host, x, c, probe, env)
+                                           for x, c in sidecars}
         finally:
             probe.unlink()
         plan['config_diff'] = config_diff(rendered, running)
@@ -619,7 +774,8 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
     write_json(record / 'REQUEST.json', plan)
     write_json(record / 'running-before.json', config_summary(running))
     write_json(record / 'pin-before.json', json.loads(pin.read_text()) if pin.exists()
-               else {'services': {n: {'image': container['Image']} for n in (svc, *[s for s, _ in sidecars])}})
+               else {'services': {n: {'image': container['Image']}
+                                  for n in (svc, *[x['service'] for x, _ in sidecars])}})
     gateway_before = host.gateway()
     out(f'record: {record}')
 
@@ -648,6 +804,16 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
         if diff:
             raise Refused('the rendered config differs from the running one in more than the image: '
                           + ', '.join(diff) + '; nothing changed (see config-after.json)')
+        for x, c in sidecars:
+            side_diff = sidecar_config_diff(host, x, c, candidate, env)
+            if side_diff:
+                raise Refused(f'sidecar {x["service"]} would change in more than the image: '
+                              + ', '.join(side_diff) + '; nothing changed')
+        # What a rejoined sidecar must still be: same config apart from the image, same credentials.
+        side_before = {x['service']: (running_view(c, host.inspect('image', c['Image'])),
+                                      credential_digest(host, x, c)) for x, c in sidecars}
+        write_json(record / 'sidecars-before.json', {n: {'config': config_summary(v), 'credentials_sha256': d}
+                                                     for n, (v, d) in side_before.items()})
     except Exception as exc:
         # Nothing on dev changed yet: the container still runs the old image.
         write_json(record / 'REFUSED.json', {'stage': 'build/config check', 'reason': f'{type(exc).__name__}: {exc}'[:1500],
@@ -663,20 +829,27 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
         f'exec "$script" rollback {service} --to "{record}" --operator "${{1:?operator name}}"\n')
     os.chmod(record / 'rollback.sh', 0o755)
 
-    def apply(pin_doc, log):
+    def apply(pin_doc, log, image_now, commit_now, mode_now):
+        """The reviewed sidecar lifecycle: stop each sidecar, replace the domain container, verify it,
+        then rejoin each sidecar to the new container's namespace and prove it. Credentials are reused,
+        never rotated."""
+        for x, _ in sidecars:
+            stop_sidecar(host, x)
         write_pin(pin, svc, pin_doc['services'][svc]['image'], sidecars)
         up(host, chain, files, env, record / log)
-        for name, c in sidecars:
+        ok, checks = health(host, row, row['container'], image_now, commit_now, timeout, mode=mode_now)
+        portal_now = host.inspect('container', row['container']) or {}
+        for x, c in sidecars:
             up(host, chain_of(c), with_pin(chain_of(c)['files'], pin), env, record / log)
+            side_ok, side = verify_sidecar(host, x, portal_now.get('Id'), image_now, *side_before[x['service']],
+                                           timeout=timeout)
+            checks[f'sidecar:{x["service"]}'] = side
+            ok = ok and side_ok
+        return ok, checks
 
     out(f'applying {image[:19]} to {row["container"]}…')
     try:
-        apply({'services': {svc: {'image': image}}}, 'up.log')
-        ok, checks = health(host, row, row['container'], image, commit, timeout)
-        for name, c in sidecars:
-            sc = host.inspect('container', c['Name'].lstrip('/')) or {}
-            checks[f'sidecar:{name}'] = sc.get('Image') == image and (sc.get('State') or {}).get('Running', False)
-            ok = ok and checks[f'sidecar:{name}']
+        ok, checks = apply({'services': {svc: {'image': image}}}, 'up.log', image, commit, mode)
     except Exception as exc:
         ok, checks = False, {'error': f'{type(exc).__name__}: {exc}'[:500]}
     gateway_after = host.gateway()
@@ -700,8 +873,7 @@ def change(host, service, operator, *, action, commit=None, target_image=None, m
 
     out('verification failed; rolling back…')
     try:
-        apply(pin_before, 'rollback.log')
-        back_ok, back = health(host, row, row['container'], container['Image'], current, timeout)
+        back_ok, back = apply(pin_before, 'rollback.log', container['Image'], current, None)
     except Exception as exc:
         back_ok, back = False, {'error': f'{type(exc).__name__}: {exc}'[:500]}
     write_json(record / 'FAILURE.json', dict(entry, ok=False, checks=checks, rolled_back=back_ok, rollback=back,
@@ -801,7 +973,7 @@ def local_source_check(host, row, location, commit):
     for line in tree.splitlines():
         meta, path = line.split('\t', 1)
         _, kind, blob = meta.split()
-        if kind != 'blob' or not path.endswith('.py') or any(path.startswith(s + '/') for s in row['state']):
+        if kind != 'blob' or meta.split()[0] == '120000' or any(path.startswith(s + '/') for s in row['state']):
             continue
         files += 1
         try:

@@ -9,7 +9,7 @@
       "deps": ["docker/requirements.portal.txt"],
       "source": ["minimoi_portal", "core", "services", "domains", "utils"],
       "health": ["http://127.0.0.1:5001/health", "https://dev.minimoi.ai/health"],
-      "sidecars": [["board-api", "minimoi-board-api-dev"]],
+      "sidecars": [{"service": "board-api", "container": "minimoi-board-api-dev", "readiness": "scripts/operations/dev_deploy_probes/board_api_ready.py", "credential_mounts": ["/run/board-api"]}],
       "mc_turn_probe": true,
       "includes": "The portal shell plus the Guild UI (Build, Operate, the queue) and MC chat, all in minimoi_portal/guild_ui; the board-api sidecar runs the same image and moves with it."
     },
@@ -22,7 +22,7 @@
       "deps": ["docker/requirements.portal.txt"],
       "source": ["minimoi_portal/guild_ui"],
       "health": ["http://127.0.0.1:5001/health", "https://dev.minimoi.ai/health"],
-      "sidecars": [["board-api", "minimoi-board-api-dev"]],
+      "sidecars": [{"service": "board-api", "container": "minimoi-board-api-dev", "readiness": "scripts/operations/dev_deploy_probes/board_api_ready.py", "credential_mounts": ["/run/board-api"]}],
       "mc_turn_probe": true,
       "includes": "Part of portal: replaces only minimoi_portal/guild_ui (Guild UI and MC chat) on top of the running portal image."
     },

@@ -559,3 +559,203 @@ def test_launchd_refuses_when_requirements_changed(runtime, monkeypatch):
     host.migrations = ['requirements.txt']
     with pytest.raises(dd.Refused, match='shared venv'):
         deploy_ops(host)
+
+
+# ---------- sidecar lifecycle (portal + board-api) and full source coverage ----------
+
+def portal_container(image_id, cid):
+    c = container(image_id, name='minimoi-portal')
+    c['Id'] = cid
+    c['Config']['Labels'] = dict(c['Config']['Labels'], **{'com.docker.compose.service': 'portal'})
+    return c
+
+
+def board_container(image_id, portal_id):
+    c = container(image_id, env=['MINIMOI_BOARD_ENV=dev', 'BOARD_API_PORT=5013'], name='minimoi-board-api-dev')
+    c['Id'] = 'board-' + portal_id
+    c['Config']['Labels'] = dict(c['Config']['Labels'], **{'com.docker.compose.service': 'board-api'})
+    c['Config']['Cmd'] = None
+    c['HostConfig'] = {'NetworkMode': f'container:{portal_id}', 'ReadonlyRootfs': True, 'CapDrop': ['ALL'],
+                       'SecurityOpt': ['no-new-privileges:true'], 'Tmpfs': {'/tmp': ''}, 'PortBindings': {},
+                       'RestartPolicy': {'Name': 'unless-stopped'}}
+    c['Mounts'] = [{'Type': 'bind', 'Source': '/staging/secrets/board-api', 'Destination': '/run/board-api', 'RW': False},
+                   {'Type': 'bind', 'Source': '/staging/data/guild', 'Destination': '/app/runtime/guild', 'RW': False}]
+    c['NetworkSettings'] = {'Networks': {}}
+    return c
+
+
+def board_rendered(image_id):
+    return {'image': image_id, 'command': [], 'entrypoint': None, 'network_mode': 'service:portal',
+            'environment': {'MINIMOI_BOARD_ENV': 'dev', 'BOARD_API_PORT': '5013'}, 'read_only': True,
+            'cap_drop': ['ALL'], 'security_opt': ['no-new-privileges:true'], 'tmpfs': ['/tmp'],
+            'restart': 'unless-stopped',
+            'volumes': [{'type': 'bind', 'source': '/staging/secrets/board-api', 'target': '/run/board-api',
+                         'read_only': True},
+                        {'type': 'bind', 'source': '/staging/data/guild', 'target': '/app/runtime/guild',
+                         'read_only': True}]}
+
+
+class FakePortal(FakeHost):
+    """portal + its board-api sidecar. `stale_join` makes the sidecar keep the old namespace, `rotate` changes
+    the credential files during the change, `ready` is the signed readiness answer, `bad_asset` a JS file
+    whose deployed bytes differ from the commit."""
+
+    def __init__(self, tmp, *, stale_join=False, rotate=False, ready='pass', bad_asset=False, healthy=True):
+        super().__init__(tmp, current_commit=BEFORE, healthy=healthy)
+        self.containers = {'minimoi-portal': portal_container(OLD, 'p-old'),
+                           'minimoi-board-api-dev': board_container(OLD, 'p-old')}
+        self.stale_join, self.rotate, self.ready, self.bad_asset = stale_join, rotate, ready, bad_asset
+        self.cred = 'cred-1'
+        self.order = []
+
+    def git(self, *args):
+        if args[0] == 'ls-tree' and '--name-only' not in args:
+            return ('100644 blob 1111\tminimoi_portal/guild_ui/templates/board.html\n'
+                    '100644 blob 2222\tminimoi_portal/guild_ui/static/board.js\n'
+                    '100644 blob 3333\tminimoi_portal/guild_ui/static/board.css\n'
+                    '120000 blob 4444\tminimoi_portal/guild_ui/static/link\n')
+        if args[0] == 'show':
+            return 'docs/\n*.md\n'
+        return super().git(*args)
+
+    def docker(self, *args, stdin=None, env=None, log=None, timeout=900):
+        self.calls.append(('docker',) + args)
+        if args[0] == 'build':
+            open(args[args.index('--iidfile') + 1], 'w').write(NEW)
+            return ''
+        if args[:2] == ('rm', '-f'):
+            self.order.append('stop:' + args[2])
+            self.containers.pop(args[2], None)
+            return ''
+        if args[0] == 'exec' and dd.MC_TURN_PROBE in args:
+            return '0\n'
+        if args[0] == 'exec' and args[-1] == '-':
+            assert b'capabilities.read' in stdin
+            return json.dumps({'signed_readiness': self.ready, 'mutations': 0}) + '\n'
+        if args[0] == 'exec':
+            blobs = {'/app/minimoi_portal/guild_ui/templates/board.html': '1111',
+                     '/app/minimoi_portal/guild_ui/static/board.js': '2222',
+                     '/app/minimoi_portal/guild_ui/static/board.css': '3333'}
+            if self.bad_asset and self.containers['minimoi-portal']['Image'] == NEW:
+                blobs['/app/minimoi_portal/guild_ui/static/board.js'] = 'ffff'
+            self.probed = json.loads(stdin)
+            return json.dumps({p: blobs.get(p) for p in self.probed})
+        return ''
+
+    def run(self, args, *, stdin=None, env=None, timeout=900, log=None):
+        self.calls.append(tuple(args))
+        pin = json.load(open(args[[i for i, a in enumerate(args) if a == '-f'][-1] + 1]))
+        service = 'board-api' if 'board-api' in args else 'portal'
+        pinned = pin['services'][service]['image']
+        if 'config' in args:
+            if service == 'board-api':
+                return json.dumps({'services': {'board-api': board_rendered(pinned)}})
+            doc = rendered(pinned)
+            doc['services']['portal'] = doc['services'].pop('german')
+            return json.dumps(doc)
+        self.order.append('up:' + service)
+        if service == 'portal':
+            ok = self.healthy or pinned == OLD
+            self.containers['minimoi-portal'] = dict(portal_container(pinned, 'p-' + pinned[7:10]),
+                                                     State={'Running': ok, 'Restarting': False})
+            if self.rotate:
+                self.cred = 'cred-2'
+        else:
+            portal_id = 'p-old' if self.stale_join else self.containers['minimoi-portal']['Id']
+            self.containers['minimoi-board-api-dev'] = board_container(pinned, portal_id)
+        return ''
+
+    def http_status(self, url):
+        return 200 if self.containers['minimoi-portal']['State']['Running'] else None
+
+    def git_bytes(self, *args):
+        import io
+        import tarfile
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode='w') as t:
+            t.addfile(tarfile.TarInfo('minimoi_portal/guild_ui/static/board.js'), io.BytesIO(b''))
+        return buf.getvalue()
+
+    def dir_digest(self, paths):
+        assert paths == ['/staging/secrets/board-api']
+        return self.cred
+
+
+def deploy_portal(host, unit='portal'):
+    return dd.change(host, unit, 'codex', action='deploy', commit=COMMIT, mode='full', timeout=0,
+                     out=lambda *_: None)
+
+
+def test_portal_deploy_stops_board_api_first_then_rejoins_it_to_the_new_portal(runtime):
+    host = FakePortal(runtime)
+    record = deploy_portal(host)
+    assert host.order == ['stop:minimoi-board-api-dev', 'up:portal', 'up:board-api']
+    board = host.containers['minimoi-board-api-dev']
+    assert board['HostConfig']['NetworkMode'] == 'container:' + host.containers['minimoi-portal']['Id'] != 'container:p-old'
+    side = json.loads((record / 'health.json').read_text())['sidecar:board-api']
+    assert side == {'running': True, 'image': True, 'network_mode': True, 'invariants_changed': [],
+                    'credentials_unchanged': True, 'readiness': {'signed_readiness': 'pass', 'mutations': 0}}
+    # Only a digest of the credential files is recorded (the fake's digest is the string 'cred-1').
+    assert json.loads((record / 'sidecars-before.json').read_text())['board-api']['credentials_sha256'] == 'cred-1'
+    assert json.loads((runtime / 'dev-pins' / 'portal.json').read_text())['services'] == {
+        'portal': {'image': NEW}, 'board-api': {'image': NEW}}
+
+
+@pytest.mark.parametrize('fault, field', [('stale_join', 'network_mode'), ('rotate', 'credentials_unchanged'),
+                                          ('ready', 'readiness')])
+def test_board_api_faults_fail_verification_and_roll_both_back(runtime, fault, field):
+    host = FakePortal(runtime, **{fault: 'timeout' if fault == 'ready' else True})
+    with pytest.raises(RuntimeError, match='failed verification'):
+        deploy_portal(host)
+    record = next((runtime / 'operators').iterdir())
+    failure = json.loads((record / 'FAILURE.json').read_text())
+    side = failure['checks']['sidecar:board-api']
+    assert side[field] in (False, {'signed_readiness': 'timeout', 'mutations': 0})
+    assert host.containers['minimoi-portal']['Image'] == OLD
+    # The rollback ran the same lifecycle: sidecar stopped again, portal restored, sidecar rejoined.
+    assert host.order[3:] == ['stop:minimoi-board-api-dev', 'up:portal', 'up:board-api']
+
+
+def test_sidecar_on_a_stale_namespace_is_refused_before_anything_changes(runtime):
+    host = FakePortal(runtime)
+    host.containers['minimoi-board-api-dev']['HostConfig']['NetworkMode'] = 'container:gone'
+    with pytest.raises(dd.Refused, match='not attached'):
+        deploy_portal(host)
+    assert host.order == []
+
+
+def test_sidecar_security_drift_in_the_chain_is_refused(runtime):
+    host = FakePortal(runtime)
+    real = host.run
+
+    def drifted(args, **kw):
+        out = real(args, **kw)
+        if 'config' in args and 'board-api' in args:
+            doc = json.loads(out)
+            doc['services']['board-api']['read_only'] = False
+            return json.dumps(doc)
+        return out
+    host.run = drifted
+    with pytest.raises(dd.Refused, match='read_only'):
+        deploy_portal(host)
+    assert host.order == []
+
+
+def test_source_check_covers_html_js_css_and_catches_a_changed_asset(runtime):
+    host = FakePortal(runtime, bad_asset=True)
+    with pytest.raises(RuntimeError, match='failed verification'):
+        deploy_portal(host, unit='guild-ui')
+    record = next((runtime / 'operators').iterdir())
+    source = json.loads((record / 'FAILURE.json').read_text())['checks']['source']
+    assert source['mismatched'] == ['/app/minimoi_portal/guild_ui/static/board.js']
+    assert source['by_type'] == {'.html': 1, '.js': 1, '.css': 1}         # the symlink is not a file to compare
+
+
+def test_dockerignore_rules():
+    patterns = ['_working/', '*.pyc', 'domains/curator/research/data/', '**/__pycache__', 'docs', '!docs/keep.md']
+    assert dd.dockerignored('_working/x/y.py', patterns)
+    assert dd.dockerignored('core/a.pyc', patterns) is False          # `*.pyc` is root-only in Docker
+    assert dd.dockerignored('domains/curator/research/data/f.json', patterns)
+    assert dd.dockerignored('core/x/__pycache__/a.py', patterns)
+    assert dd.dockerignored('docs/a.md', patterns) and not dd.dockerignored('docs/keep.md', patterns)
+    assert not dd.dockerignored('minimoi_portal/guild_ui/static/board.js', patterns)
