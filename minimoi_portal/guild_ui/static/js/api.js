@@ -126,7 +126,7 @@ export async function apiStop(path) {
   }
 }
 
-export const apiGet = (path, etag) => call('GET', path, null, etag);
+export const apiGet = (path, etag, signal) => call('GET', path, null, etag, signal);
 export const apiPost = (path, body, signal) => call('POST', path, body || {}, undefined, signal);
 export const apiPut = (path, body) => call('PUT', path, body || {});
 

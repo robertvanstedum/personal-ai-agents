@@ -1,0 +1,146 @@
+{
+  "schema": "minimoi-domain-manifest/1",
+  "domain_id": "guild",
+  "display_name": "Guild",
+  "aliases": [
+    "Shop floor",
+    "Operations",
+    "Board"
+  ],
+  "purpose": "Where Robert works with Master Craftsman and the agents: conversations, Board, jobs, guest requests and operations.",
+  "capabilities": [
+    {
+      "id": "guest.list",
+      "kind": "read",
+      "label": "List open guest requests",
+      "mc_tool": "minimoi_guest_requests",
+      "status": "implemented"
+    },
+    {
+      "id": "guest.reject_request",
+      "kind": "action",
+      "label": "Reject guest requests (with Robert's yes)",
+      "mc_tool": "minimoi_guest_request_reject",
+      "status": "implemented"
+    },
+    {
+      "id": "guest.approve_request",
+      "kind": "action",
+      "label": "Approve a guest request",
+      "mc_tool": null,
+      "status": "planned",
+      "milestone": "post-M1",
+      "note": "Tracked as GitHub issue #69."
+    },
+    {
+      "id": "host.health",
+      "kind": "read",
+      "label": "Host disk, memory and containers",
+      "mc_tool": "minimoi_host_health",
+      "status": "implemented"
+    },
+    {
+      "id": "github.issues.read",
+      "kind": "read",
+      "label": "Read known issues",
+      "mc_tool": "minimoi_github_issues",
+      "status": "implemented"
+    },
+    {
+      "id": "issue.comment",
+      "kind": "action",
+      "label": "Comment on an issue (with Robert's yes)",
+      "mc_tool": "minimoi_issue_comment",
+      "status": "implemented"
+    },
+    {
+      "id": "issue.create_data_repair",
+      "kind": "action",
+      "label": "Draft a data-repair change record (with Robert's yes)",
+      "mc_tool": "minimoi_data_repair_ticket",
+      "status": "implemented"
+    },
+    {
+      "id": "lessons.keep_preference",
+      "kind": "action",
+      "label": "Keep how Robert wants MC to work",
+      "mc_tool": "minimoi_keep_preference",
+      "status": "implemented"
+    },
+    {
+      "id": "lessons.revoke_preference",
+      "kind": "action",
+      "label": "Undo a kept preference",
+      "mc_tool": "minimoi_revoke_preference",
+      "status": "implemented"
+    },
+    {
+      "id": "work.record_gap",
+      "kind": "action",
+      "label": "Record a capability gap as a tracked follow-up",
+      "mc_tool": "minimoi_record_gap",
+      "status": "implemented"
+    },
+    {
+      "id": "delegate.start_research",
+      "kind": "action",
+      "label": "Ask Claude Code or Codex to research (with Robert's yes)",
+      "mc_tool": "minimoi_delegate_research",
+      "status": "implemented"
+    },
+    {
+      "id": "board.notes.query",
+      "kind": "read",
+      "label": "board notes query",
+      "mc_tool": "minimoi_board_notes_query",
+      "status": "implemented",
+      "note": "Requires the Board adapter, exact operator policy and installed native tool declaration; descriptions grant nothing."
+    },
+    {
+      "id": "board.note.read",
+      "kind": "read",
+      "label": "board note read",
+      "mc_tool": "minimoi_board_note_read",
+      "status": "implemented",
+      "note": "Requires the Board adapter, exact operator policy and installed native tool declaration; descriptions grant nothing."
+    },
+    {
+      "id": "board.note.create",
+      "kind": "action",
+      "label": "board note create",
+      "mc_tool": "minimoi_board_note_create",
+      "status": "implemented",
+      "note": "Requires the Board adapter, exact operator policy and installed native tool declaration; descriptions grant nothing."
+    },
+    {
+      "id": "board.note.update",
+      "kind": "action",
+      "label": "board note update",
+      "mc_tool": "minimoi_board_note_update",
+      "status": "implemented",
+      "note": "Requires the Board adapter, exact operator policy and installed native tool declaration; descriptions grant nothing."
+    },
+    {
+      "id": "board.operation.read",
+      "kind": "read",
+      "label": "board operation read",
+      "mc_tool": "minimoi_board_operation_read",
+      "status": "implemented",
+      "note": "Requires the Board adapter, exact operator policy and installed native tool declaration; descriptions grant nothing."
+    },
+    {
+      "id": "board.operation.undo",
+      "kind": "action",
+      "label": "board operation undo",
+      "mc_tool": "minimoi_board_operation_undo",
+      "status": "implemented",
+      "note": "Requires the Board adapter, exact operator policy and installed native tool declaration; descriptions grant nothing."
+    }
+  ],
+  "source_adapters": [
+    "internal_health:portal"
+  ],
+  "links": [
+    "ARCHITECTURE.md"
+  ]
+}

@@ -69,7 +69,7 @@ def test_the_snapshot_describes_each_limit_for_operate_and_for_master_craftsman(
     lim.set("claude.session_cap_usd", 8, by="robert")
     rows = {r["id"]: r for r in lim.snapshot()["limits"]}
     assert rows["claude.session_cap_usd"]["value"] == 8.0 and rows["claude.session_cap_usd"]["is_default"] is False
-    assert rows["mc.relay_idle_s"]["editable"] is False and rows["mc.relay_idle_s"]["value"] == 100.0
+    assert rows["mc.relay_idle_s"]["editable"] is False and rows["mc.relay_idle_s"]["value"] == 300.0
     assert all(r["what"] and r["unit"] and r["enforced_by"] for r in rows.values())
 
 

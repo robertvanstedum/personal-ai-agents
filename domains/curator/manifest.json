@@ -1,0 +1,25 @@
+{
+  "schema": "minimoi-domain-manifest/1",
+  "domain_id": "curator",
+  "display_name": "Curator",
+  "aliases": [
+    "Library",
+    "Daily briefing"
+  ],
+  "purpose": "Daily curated reading and the Library of saved sources; CoS's working domain.",
+  "capabilities": [
+    {
+      "id": "library.intake",
+      "kind": "action",
+      "label": "Add a link or file to the Library",
+      "mc_tool": null,
+      "status": "planned",
+      "milestone": "D3",
+      "note": "Library intake belongs to the Chief of Staff's working domain."
+    }
+  ],
+  "source_adapters": [
+    "internal_health:curator"
+  ],
+  "links": []
+}

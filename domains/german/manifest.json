@@ -1,0 +1,37 @@
+{
+  "schema": "minimoi-domain-manifest/1",
+  "domain_id": "german",
+  "display_name": "Mein Deutsch",
+  "aliases": [
+    "German",
+    "Deutsch",
+    "Wörter",
+    "Lesen"
+  ],
+  "purpose": "Robert's German practice: reading (Lesen), drills and his personal phrasebook (Wörter).",
+  "capabilities": [
+    {
+      "id": "phrases.create",
+      "kind": "action",
+      "label": "Save a phrase to Wörter",
+      "mc_tool": null,
+      "status": "planned",
+      "milestone": "D1",
+      "note": "Wörter saves exist in the German web app and Telegram; an agent-callable save comes with the domain API (D1)."
+    },
+    {
+      "id": "phrases.read",
+      "kind": "read",
+      "label": "Read the Wörter phrasebook",
+      "mc_tool": null,
+      "status": "planned",
+      "milestone": "D1"
+    }
+  ],
+  "source_adapters": [
+    "internal_health:german"
+  ],
+  "links": [
+    "_working/mc-redirect-final-review-2026-10-22/SPEC_MC_REDIRECT_v1.2_IMPLEMENTATION_2026-10-22.md#11.2"
+  ]
+}

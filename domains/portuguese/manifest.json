@@ -1,0 +1,31 @@
+{
+  "schema": "minimoi-domain-manifest/1",
+  "domain_id": "portuguese",
+  "display_name": "Meu Português",
+  "aliases": [
+    "Portuguese",
+    "Palavras"
+  ],
+  "purpose": "Portuguese practice for Robert and invited family guests, with its own phrasebook (Palavras).",
+  "capabilities": [
+    {
+      "id": "access.invite_user",
+      "kind": "action",
+      "label": "Give someone a guest login",
+      "mc_tool": "minimoi_access_invite",
+      "status": "implemented"
+    },
+    {
+      "id": "phrases.create",
+      "kind": "action",
+      "label": "Save a phrase to Palavras",
+      "mc_tool": null,
+      "status": "planned",
+      "milestone": "D2"
+    }
+  ],
+  "source_adapters": [
+    "internal_health:portuguese"
+  ],
+  "links": []
+}

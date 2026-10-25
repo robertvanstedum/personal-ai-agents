@@ -56,6 +56,7 @@ class Upstream:
         self.delay = 0
         self.script = None           # a list of (bytes, delay): answer POSTs as text/event-stream
         self.status = 200
+        self.header_delay = 0
         self.finished = threading.Event()
         self.aborted = threading.Event()
         outer = self
@@ -90,6 +91,7 @@ class Upstream:
                     self.end_headers()
                     self.wfile.write(data)
                     return
+                time.sleep(outer.header_delay)
                 self.send_response(200)
                 self.send_header("content-type", "text/event-stream")
                 self.end_headers()

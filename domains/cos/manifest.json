@@ -1,0 +1,21 @@
+{
+  "schema": "minimoi-domain-manifest/1",
+  "domain_id": "cos",
+  "display_name": "Chief of Staff",
+  "aliases": [
+    "CoS"
+  ],
+  "purpose": "Robert's Chief of Staff agent: planning, the daily briefing, reading and Library work; separate from Master Craftsman.",
+  "capabilities": [
+    {
+      "id": "handoff.receive",
+      "kind": "action",
+      "label": "Receive a request handed over by Master Craftsman",
+      "mc_tool": null,
+      "status": "planned",
+      "milestone": "M1.4"
+    }
+  ],
+  "source_adapters": [],
+  "links": []
+}

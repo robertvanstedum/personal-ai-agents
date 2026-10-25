@@ -96,6 +96,7 @@ class SqliteFloor:
             conn.executescript(sqlite_ddl_place())
             conn.executescript(sqlite_ddl_place((PLACE.parent / "005_board_size.sql").read_text()))       # free placement (11 Oct)
             conn.executescript(sqlite_ddl_media())
+            conn.executescript(sqlite_ddl_board((PLACE.parent / "008_board_operations.sql").read_text()))
             conn.commit()
             conn.close()
 

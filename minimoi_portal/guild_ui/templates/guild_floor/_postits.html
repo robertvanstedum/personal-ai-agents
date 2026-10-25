@@ -22,7 +22,7 @@
 {% macro add_form(enabled, scope) -%}
 <form class="postit-add" data-postit-add>
   <label class="visually-hidden" for="postit-input-{{ scope }}">New post-it</label>
-  <input id="postit-input-{{ scope }}" class="postit-input" data-postit-input maxlength="{{ postit_max }}" autocomplete="off" placeholder="Add a post-it"{% if not enabled %} disabled{% endif %}>
+  <input id="postit-input-{{ scope }}" class="postit-input" data-postit-input autocomplete="off" placeholder="Add a post-it"{% if not enabled %} disabled{% endif %}>
   <button type="submit" class="btn-mini" data-postit-add-btn{% if not enabled %} disabled{% endif %}>Add</button>
 </form>
 <p class="postit-result" data-postit-result role="status" hidden></p>

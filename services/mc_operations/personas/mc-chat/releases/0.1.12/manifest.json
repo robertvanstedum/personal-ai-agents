@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.12",
+  "base": "0.1.11 portable AGENTS (capture) + container runtime binding",
+  "spec": "spec_mc_agent_container v0.2 phase 1",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "cc67620eda1eea3d4696269290f687b2881ceabdb298a7b33451c02c3eceefbe",
+    "RUNTIME.openclaw.md": "d8e6f820aaa7ef380691e5146b9423dfbb2338e5758f39efd569ada710543c98",
+    "CHANGES.md": "42d96cce537ed2072dd46c138f64a897a787afb8462af39a56da376008d05aa0"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding",
+  "projection_budget_chars": 16000,
+  "config_change": true
+}

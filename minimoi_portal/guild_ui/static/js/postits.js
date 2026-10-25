@@ -6,6 +6,7 @@ import { $, $$, el, localTime, announce } from './dom.js';
 import { apiGet, apiPost, recordMode } from './api.js';
 import { live } from './state.js';
 import { newKey } from './actions.js';
+import { inspectText, attachCounter } from './board_text.js';
 
 let page;
 let lastListRead = new Date().toISOString();
@@ -159,8 +160,12 @@ export async function reloadPostits() {
 async function onAdd(form) {
   const container = form.closest('[data-postits]');
   const input = $('[data-postit-input]', form);
-  const text = input.value.trim();
-  if (!text) return;
+  const draft = inspectText(input.value);
+  if (!draft.valid) {
+    if (draft.code !== 'text_empty') result(container, 'warn', 'Shorten this note to 280 characters before saving. Your full draft is kept.');
+    return;
+  }
+  const text = draft.normalized;
   if (live.off) { result(container, 'warn', page.off_record_text); return; }   // never sent off the record
   const id = input.id;
   if (!addKeys.has(id)) addKeys.set(id, newKey());
@@ -192,6 +197,7 @@ async function onMove(btn, action) {
 
 export function initPostits(p) {
   page = p;
+  for (const input of $$('[data-postit-input]')) input.after(attachCounter(input));
   window.addEventListener('focus', () => { reloadLists(); });
   document.addEventListener('submit', (e) => {
     const form = e.target.closest('[data-postit-add]');

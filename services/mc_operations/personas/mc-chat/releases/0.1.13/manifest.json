@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.13",
+  "spec": "MC-OC-001 v0.4 + SPEC_JUDGMENT_REFINERY v0.2 capture (sha256 711cc985)",
+  "base": "0.1.10",
+  "status": "candidate",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "0c94dd2d2550f076d65459d89d3ceb9c07eae74e06a4d44bdcdcb7726602f064",
+    "RUNTIME.openclaw.md": "ba53818ccf5d69aebb9fc23c652ceecbaec8407fad72b33b16ae7645a4ee414f",
+    "CHANGES.md": "faec973d41cfe17fb818c5e4ea317d4d2235c8a949dbcfd25ec0deff159dd12e"
+  },
+  "projection": "SOUL verbatim; AGENTS plus runtime binding and optional private dated context",
+  "projection_budget_chars": 16000,
+  "private_context": "excluded from public release; <=6500 chars, <=48-hour validity",
+  "runtime": "native OpenClaw 2026.9.4",
+  "memory_owner": "MiniMoi",
+  "config_change": false,
+  "rollback": "private captured preimage, hash-guarded (scripts/mc_persona/project_agents.py --rollback)"
+}

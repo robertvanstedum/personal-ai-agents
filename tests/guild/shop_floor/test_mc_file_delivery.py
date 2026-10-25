@@ -433,3 +433,27 @@ def test_a_private_question_with_an_attachment_is_refused_and_copies_nothing(tur
     r = client.post(f"{API}/mc/private", json={"text": "hello", "session": "p" + "a1b2c3d4" * 4, "attachment_ids": [asset]},
                     headers=write_headers(token, mode="off_record"))
     assert r.status_code == 422 and _evidence_count(ledger) == 0 and not turned.extra["runtime"].sent
+
+
+@pytest.mark.parametrize("foreign", [False, True])
+def test_uploaded_picture_with_real_ledger_validation(turned, tmp_path, foreign):
+    from test_mc_turn_ledger_routes import FakeLedger, _ledger_on
+    from minimoi_portal.guild_ui.mc.turn_ledger import TurnLedger
+    class ValidatingLedger(FakeLedger):
+        def admit(self, **kw):
+            TurnLedger._validate(**kw)
+            return super().admit(**kw)
+    client, token, cid, asset, _png, _folder = _with_picture(turned, tmp_path)
+    led = ValidatingLedger()
+    _ledger_on(turned, led)
+    target = _new(client, token) if foreign else cid
+    response = _ask(client, token, _note(client, token, target)["request_id"], target, [asset])
+    if foreign:
+        assert response.status_code == 422
+        assert response.get_json()["error"] == "not_found"
+        assert not turned.extra["runtime"].sent
+    else:
+        assert response.status_code == 200, response.get_json()
+        assert response.get_json()["status"] == "answered"
+        assert led.events[0][1]["attachment_ids"] == [asset]
+        assert len(turned.extra["runtime"].sent) == 1

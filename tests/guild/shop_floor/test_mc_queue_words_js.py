@@ -60,3 +60,7 @@ def test_bar_words():
 def test_retry_delays_back_off_and_cap():
     assert run("let d = 0, out = []; for (let i = 0; i < 6; i++) { d = W.nextDelay(d); out.push(d); } return out;") == [
         5000, 15000, 30000, 60000, 60000, 60000]
+
+
+def test_confirmed_stop_never_claims_the_message_was_not_sent():
+    assert run("return W.notSentWords({state:'cancelled', outcome:{status:'stopped', reason:'owner_stop_acknowledged'}});") is None

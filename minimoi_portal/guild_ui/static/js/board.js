@@ -6,6 +6,7 @@
 // version, the board's order and trash revisions). Only the view (Show,
 // label, search) stays in the page. No model call.
 import { $, $$, el, announce, localTime } from './dom.js';
+import { inspectText, attachCounter } from './board_text.js';
 import { apiGet, apiPost, apiUpload, recordMode, RECORD_UNKNOWN_TEXT } from './api.js';
 import { live } from './state.js';
 import { kindOf, newKey } from './actions.js';
@@ -20,7 +21,8 @@ let syncPending = false;          // a change was seen while a note was being ed
 let syncBusy = false;
 let geometryBusy = false;
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('guild-board') : null;   // a hint only; the server is the truth
-const POLL_MS = 15000;
+const POLL_MS = 2000;
+let syncFailures = 0;
 const ui = { show: 'active', label: '', q: '' };
 const keys = new Map();
 const opened = new Set();      // long notes the owner expanded; kept across redraws
@@ -92,23 +94,13 @@ function menuBox(p, n, shown, reorderable) {
 }
 
 
-// A pasted text longer than a note holds is cut at the limit by the browser, silently. Say so, so nobody believes a long paste was kept whole.
-function watchPaste(ta) {
-  const max = Number(page.postit_max || 280);
-  ta.addEventListener('paste', (e) => {
-    const pasted = (e.clipboardData && e.clipboardData.getData('text')) || '';
-    const selected = ta.selectionEnd - ta.selectionStart;
-    if (ta.value.length - selected + pasted.length > max) say(`That is longer than a note holds (${max} characters), so only the start was kept. Split it into more than one note.`, 'warn');
-  });
-}
-
 // ── a new note, typed straight into the Board ───────────────────────────────
 function newCard() {
   const li = el('li', { class: 'bd-note bd-new', 'data-bd-new-card': '' });
-  const ta = el('textarea', { class: 'bd-edit-text', 'data-bd-new-field': '', maxlength: String(page.postit_max || 280),
+  const ta = el('textarea', { class: 'bd-edit-text', 'data-bd-new-field': '',
     'aria-label': 'New note', placeholder: 'Type or paste…', rows: '3', title: 'Leaving the note saves it · an empty note is never kept · Esc cancels' });
   ta.value = creating.value;
-  watchPaste(ta);
+  const counter = attachCounter(ta);
   ta.addEventListener('input', () => { creating.value = ta.value; });
   ta.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); stopCreating(); }
@@ -117,7 +109,7 @@ function newCard() {
   li.addEventListener('focusout', () => setTimeout(() => {
     if (li.isConnected && creating && !li.contains(document.activeElement)) { if (creating.value.trim()) saveNew(); else stopCreating(); }   // leaving it saves it; an empty note is never kept
   }, 0));
-  li.append(ta);
+  li.append(ta, counter);
   return li;
 }
 
@@ -138,8 +130,10 @@ async function stopCreating() {
 
 async function saveNew() {
   if (!creating) return;
-  const text = creating.value.trim();
-  if (!text) { await stopCreating(); return; }
+  const draft = inspectText(creating.value);
+  if (!draft.valid && draft.code !== "text_empty") { say("Shorten this note to 280 characters before saving. Your full draft is kept.", "warn"); return; }
+  const text = draft.normalized;
+  if (!draft.text) { await stopCreating(); return; }
   const body = { text, label: null, item_ref: null };
   const name = `add:${JSON.stringify(body)}`;
   const mine = creating.value;
@@ -151,7 +145,7 @@ async function saveNew() {
   say(res.message || 'Nothing was added', code === 'added' ? 'ok' : kindOf(code));
   if (code !== 'added') {
     if (!creating && !editing) { creating = { value: mine }; render(); const f = $('[data-bd-new-field]'); if (f) f.focus(); return; }   // their words are kept
-    say(`The new note could not be saved, and you have moved on. Your words: "${mine.slice(0, 280)}"`, 'warn');                         // never over a newer draft
+    say(`The new note could not be saved, and you have moved on. Your words: "${mine}"`, 'warn');                         // never over a newer draft
     return;
   }
   await reload();
@@ -161,16 +155,16 @@ async function saveNew() {
 // ── editing a note in place ─────────────────────────────────────────────────
 function textEditor(p) {
   const box = el('div', { class: 'bd-texteditor' });
-  const ta = el('textarea', { class: 'bd-edit-text', 'data-bd-edit-field': p.id, maxlength: String(page.postit_max || 280),
+  const ta = el('textarea', { class: 'bd-edit-text', 'data-bd-edit-field': p.id,
     'aria-label': 'Note text', rows: '3', title: 'Leaving the note saves it · Esc cancels' });
   ta.value = editing.value;
-  watchPaste(ta);
+  const counter = attachCounter(ta);
   ta.addEventListener('input', () => { editing.value = ta.value; });
   ta.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); stopEditing(false); }
     else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(p.id); }
   });
-  box.append(ta);
+  box.append(ta, counter);
   if (editing.conflict) {                                 // the one time buttons are needed: two versions exist, so the person chooses
     box.append(el('p', { class: 'bd-conflict', role: 'status' }, 'This note changed in another window. Your text is kept here.'),
       h('div', { class: 'bd-edit-row' },
@@ -223,11 +217,13 @@ function saveEdit(id) {                                              // the keyb
 
 async function saveEditNow(id, inst) {                               // this editor, whatever happens to the page while the save is away
   const p = noteById(id);
-  const text = inst.value.trim();
+  const draft = inspectText(inst.value);
+  if (!draft.valid && draft.code !== "text_empty") { say("Shorten this note to 280 characters before saving. Your full draft is kept.", "warn"); return; }
+  const text = draft.normalized;
   const where = $(`[data-bd-note-result="${id}"]`);
   if (!p) { await stopEditing(false, inst); return; }
-  if (!text) { say('A note cannot be empty. Use Discard to remove it.', 'warn', where || $('[data-bd-result]')); return; }
-  if (text === p.text) { await stopEditing(false, inst); return; }
+  if (!draft.text) { say('A note cannot be empty. Use Discard to remove it.', 'warn', where || $('[data-bd-result]')); return; }
+  if (draft.text === p.text) { await stopEditing(false, inst); return; }
   const mine = inst.value;
   const { code } = await write(`/postits/${id}/text`, { text, version: p.version }, `text:${id}:${p.version}:${text}`, id, { keepEditing: true });
   if ((code === 'edited' || code === 'unchanged') && editing === inst && inst.value.trim() !== text) { render(); return; }   // more was typed in this editor while the save was away: it stays open with those words
@@ -436,11 +432,12 @@ function stamp(text, warn = false) {
 
 async function syncNow(force = false) {
   if (syncBusy) return;
-  if (editing || creating || geometryBusy) { syncPending = true; say('The Board changed in another window. It will update when you finish editing.', 'warn'); return; }
+  if (editing || creating || geometryBusy) { syncPending = true; return; }
   syncBusy = true;
   try {
     const rev = await peekRev();
-    if (rev == null) { stamp('Cannot reach the server · showing what was last loaded', true); return; }
+    if (rev == null) { syncFailures++; stamp('Cannot reach the server · showing what was last loaded', true); return; }
+    syncFailures = 0;
     if (force || needsRetry || rev !== syncRev) await reload(); else stamp('Up to date');
   } finally { syncBusy = false; }
 }
@@ -449,7 +446,12 @@ function startSync() {
   if (channel) channel.onmessage = () => { syncNow(); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); });
   window.addEventListener('focus', () => { syncNow(); });
-  window.setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, POLL_MS);
+  document.addEventListener('minimoi:board-changed', () => { syncNow(); });
+  const poll = async () => {
+    if (document.visibilityState === 'visible') await syncNow();
+    window.setTimeout(poll, Math.min(30000, POLL_MS * (2 ** Math.min(syncFailures, 4))));
+  };
+  window.setTimeout(poll, POLL_MS);
 }
 
 // ── Pop out: the same Board in its own window ───────────────────────────────
@@ -897,6 +899,9 @@ export function initBoard(p) {
   if (!raw || !$('[data-bd-grid]')) return;
   data = JSON.parse(raw.textContent);
   for (const l of data.labels || []) $('[data-bd-label-filter]').append(el('option', { value: l }, LABEL_NAMES[l] || l));
+  const requested = new URLSearchParams(window.location.search).get('note');
+  const target = /^[1-9][0-9]{0,17}$/.test(requested || '') ? allNotes().find(n => String(n.id) === requested) : null;
+  if (target) ui.show = target.state === 'binned' ? 'trash' : target.state === 'done' ? 'done' : 'active';
   bind();
   const pop = $('[data-bd-popout]');
   if (pop) pop.addEventListener('click', popOut);
@@ -905,6 +910,10 @@ export function initBoard(p) {
   const retry = $('[data-bd-retry]');
   if (retry) retry.addEventListener('click', () => { retry.disabled = true; syncNow(true).finally(() => { retry.disabled = false; }); });
   render();
+  if (target) {
+    const card = $(`[data-bd-note="${target.id}"]`);
+    if (card) { card.setAttribute('tabindex', '-1'); card.focus(); card.scrollIntoView({block:'center'}); }
+  }
   if (data.status !== 'ok') {                                  // the page was drawn while the Board could not be read: never treat that as "current"
     needsRetry = true;
     for (const ms of [1500, 4000, 9000]) window.setTimeout(() => { if (needsRetry) syncNow(true); }, ms);

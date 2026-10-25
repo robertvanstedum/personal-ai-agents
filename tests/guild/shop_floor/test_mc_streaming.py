@@ -353,6 +353,7 @@ def test_stop_ends_the_turn_tells_the_relay_and_keeps_nothing_even_off_the_recor
     end = rest[-1]
     assert end["t"] == "error" and end["failure_class"] == "stopped" and end["status"] == "stopped"
     assert end["partial"] is True and end["reply_note"] is None and "billed" in end["message"]
+    assert end["stop_acknowledged"] is True
     assert any(p["url"].endswith("/turns/stop") and p["body"] == {"correlation_id": turn_id} for p in runtime.posts)
     _wait_idle()
     assert not any(n["author_kind"] != "owner" for n in client.get(f"{API}/notes").get_json()["notes"])
@@ -361,6 +362,37 @@ def test_stop_ends_the_turn_tells_the_relay_and_keeps_nothing_even_off_the_recor
     assert usage and usage[0]["status"] == "error" and usage[0]["output_tokens"] is None
     assert usage[0]["cost_source"] == "unrecorded-abort"          # the gateway logs nothing for a cancelled stream
     assert client.post(f"{API}/mc/turns/{turn_id}/stop", json={}, headers=write_headers(token)).status_code == 404
+
+
+def test_the_stop_route_revokes_tool_admission_before_it_asks_the_relay(streaming, monkeypatch):
+    """Spec v1.2 §7.4 on the real Stop route: the turn's tools are revoked first; the relay hears about it after."""
+    import minimoi_portal.guild_ui.api as api
+    runtime, order = streaming.extra["runtime"], []
+
+    class Binding:
+        def __call__(self):
+            pass
+
+        def attach_run(self, run_id):
+            pass
+
+        def revoke(self):
+            order.append(("revoke", len([p for p in runtime.posts if p["url"].endswith("/turns/stop")])))
+    monkeypatch.setattr(api, "_tool_binder", lambda *a: Binding())
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "hello")
+    runtime.script = [nd({"t": "delta", "text": "partial "}), "WAIT"] + HAPPY
+    resp = _stream(client, token, note["request_id"])
+    stream = iter(resp.response)
+    turn_id = json.loads(next(stream))["turn_id"]
+    assert json.loads(next(stream))["t"] == "delta"
+    assert runtime.waiting.wait(5)
+    assert client.post(f"{API}/mc/turns/{turn_id}/stop", json={}, headers=write_headers(token)).status_code == 200
+    b"".join(stream)
+    _wait_idle()
+    assert order == [("revoke", 0)]                                # revoked while the relay had not yet been told
+    assert any(p["url"].endswith("/turns/stop") for p in runtime.posts)
 
 
 @pytest.mark.parametrize("script,cls,status", [
@@ -405,6 +437,62 @@ def test_no_token_url_or_runtime_id_reaches_the_browser(streaming):
     text = _stream(client, token, note["request_id"]).get_data(as_text=True)
     for leak in (RELAY_TOKEN, "mc-relay", "chatcmpl_secret", "exec", "http://"):
         assert leak not in text
+
+
+RUN = "chatcmpl_12345678-1234-4234-8234-123456789abc"
+
+
+def test_the_relay_run_event_is_parsed_only_in_openclaws_exact_shape():
+    assert st.parse_relay_line(nd({"t": "run", "id": RUN})) == st.RunStarted(RUN)
+    for bad in ("chatcmpl_x", RUN + "0", RUN.upper(), 7, None):
+        assert st.parse_relay_line(nd({"t": "run", "id": bad})) is None
+
+
+def test_the_streamed_run_is_attached_once_to_this_turns_tool_binding_and_never_shown(streaming, monkeypatch):
+    """Spec v1.2 §7.1: the relay's run event binds that OpenClaw run to this owner turn; a second one is ignored."""
+    import minimoi_portal.guild_ui.api as api
+    seen = []
+
+    class Binding:
+        def __call__(self):
+            seen.append("record")
+
+        def attach_run(self, run_id):
+            seen.append(run_id)
+
+        def revoke(self):
+            seen.append("revoke")
+    monkeypatch.setattr(api, "_tool_binder", lambda *a: Binding())
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "hello")
+    other = "chatcmpl_87654321-1234-4234-8234-123456789abc"
+    streaming.extra["runtime"].script = [nd({"t": "run", "id": RUN}), nd({"t": "run", "id": other})] + HAPPY
+    events = _events(_stream(client, token, note["request_id"]))
+    _wait_idle()
+    assert seen == ["record", RUN]
+    assert events[-1]["status"] == "answered" and RUN not in json.dumps(events) and all(e["t"] != "run" for e in events)
+
+
+def test_a_failed_run_attach_never_stops_the_turn(streaming, monkeypatch):
+    import minimoi_portal.guild_ui.api as api
+
+    class Binding:
+        def __call__(self):
+            pass
+
+        def attach_run(self, run_id):
+            raise OSError("db down")
+
+        def revoke(self):
+            pass
+    monkeypatch.setattr(api, "_tool_binder", lambda *a: Binding())
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "hello")
+    streaming.extra["runtime"].script = [nd({"t": "run", "id": RUN})] + HAPPY
+    assert _events(_stream(client, token, note["request_id"]))[-1]["status"] == "answered"
+    _wait_idle()
 
 
 def test_the_stub_streams_its_own_scripted_reply(streaming):
@@ -630,10 +718,11 @@ def test_relay_answers_after_dispatch_leave_a_usage_trace_with_null_tokens(strea
 
 
 def test_the_portal_idle_limit_outlasts_the_relays():
-    from minimoi_portal.guild_ui.mc.openclaw import STREAM_LIMITS
-    relay = (REPO / "docker/mc-agent/relay.mjs").read_text()
-    assert "MC_RELAY_IDLE_MS || 30000" in relay and "MC_RELAY_DEADLINE_MS || 120000" in relay
-    assert STREAM_LIMITS.idle_s > 30 and STREAM_LIMITS.deadline_s > 120
+    from minimoi_portal.guild_ui.mc.openclaw import STREAM_LIMITS, TURN_DEADLINE_S
+    relay = (REPO / "docker/mc-agent/relay_v2.mjs").read_text()
+    assert "MC_RELAY_IDLE_MS || 300000" in relay and "MC_RELAY_DEADLINE_MS || 300000" in relay
+    assert STREAM_LIMITS.idle_s > 300 and STREAM_LIMITS.deadline_s > STREAM_LIMITS.idle_s
+    assert TURN_DEADLINE_S > 300
 
 
 
@@ -745,3 +834,159 @@ def test_a_real_rate_limit_is_not_waited_out_and_the_owner_can_stop_the_wait(mon
     stop.set()
     out = _run(b2, stop)
     assert len(runtime2.posts) == 0                                            # already stopped: nothing is even sent
+
+
+def test_stop_revokes_tool_admission_before_asking_the_runtime_and_even_if_that_fails():
+    """Spec v1.2 §7.4 (Codex M1 review P1-1): the revocation comes first; a failing revocation is logged and the
+    runtime is still asked to abort."""
+    from types import SimpleNamespace
+    from minimoi_portal.guild_ui.mc.streaming import StreamContext, StreamRun
+    order = []
+
+    def runtime_stop(turn_id):
+        order.append("runtime")
+        return False
+    for revoke in (lambda: order.append("revoke"), lambda: (order.append("revoke"), 1 / 0)):
+        order.clear()
+        ctx = StreamContext(turn_id="t" * 32, principal="p", backend=SimpleNamespace(kind="openclaw", stop=runtime_stop),
+                            events=None, floor=None, reply_key="k", context={}, release=lambda: None, on_stop=revoke)
+        assert StreamRun(ctx, record_usage=lambda **kw: None).stop() is False
+        assert order == ["revoke", "runtime"] and ctx.cancel.is_set()
+
+
+# ── a buffered frontend streams internally when MC's tools are on (spec v1.2 §7.1 step 1; Codex M1 review P2-3) ──
+
+class _FakeStreamBackend:
+    kind = "openclaw"
+
+    def __init__(self, events, refuse=False):
+        self.events, self.refuse, self.settled, self.turned = events, refuse, [], 0
+
+    def stream_turn(self, req, cancel=None):
+        if self.refuse:
+            raise st.StreamRefused("not_connected")
+        return iter(self.events)
+
+    def turn(self, req):
+        from minimoi_portal.guild_ui.mc import TurnResult
+        self.turned += 1
+        return TurnResult("answered", self.kind, text="buffered")
+
+    def settle(self, result):
+        self.settled.append(result.status)
+
+
+def _collect(events, **kw):
+    from minimoi_portal.guild_ui.mc import TurnRequest
+    from minimoi_portal.guild_ui.mc.internal_stream import collect
+    backend, runs, usage = _FakeStreamBackend(events, **kw), [], []
+    req = TurnRequest(conversation_id="c", text="x", note_request_id="n", correlation_id="d" * 32)
+    result = collect(backend, req, on_run=runs.append, record_usage=lambda **f: usage.append(f))
+    return result, backend, runs, usage
+
+
+def test_the_internal_stream_attaches_the_run_once_and_answers_as_the_buffered_route_expects():
+    result, backend, runs, usage = _collect([st.RunStarted(RUN), st.RunStarted(RUN), st.Delta("Item 12 "),
+                                             st.Delta("is in build."), st.Finish("stop"), st.Usage(50, 7)])
+    assert (result.status, result.text, result.trace["finish_reason"]) == ("answered", "Item 12 is in build.", "stop")
+    assert runs == [RUN] and backend.settled == ["answered"]
+    assert usage == [{"turn_id": "d" * 32, "status": "ok", "prompt_tokens": 50, "completion_tokens": 7,
+                      "latency_ms": usage[0]["latency_ms"], "error_class": None}]
+
+
+@pytest.mark.parametrize("events,cls", [
+    ([st.Delta("half"), st.Failure("deadline")], "deadline"),
+    ([st.Delta("no finish")], "truncated"),
+    ([st.Delta("No response from OpenClaw."), st.Finish("stop")], "no_run_status"),
+    ([st.Finish("tool_calls")], "no_run_status"),
+])
+def test_the_internal_stream_keeps_the_streaming_answer_rules(events, cls):
+    result, _, _, usage = _collect(events)
+    assert result.status != "answered" and result.failure_class == cls
+    assert usage[0]["status"] == "error" and usage[0]["error_class"] == cls
+
+
+def test_a_backend_that_will_not_stream_goes_the_ordinary_buffered_way_with_no_run():
+    result, backend, runs, usage = _collect([], refuse=True)
+    assert (result.text, backend.turned, runs, usage) == ("buffered", 1, [], [])
+
+
+def test_the_buffered_route_streams_internally_and_binds_the_run_when_tools_are_on(streaming, monkeypatch):
+    import minimoi_portal.guild_ui.api as api
+    seen = []
+
+    class Binding:
+        def __call__(self):
+            seen.append("record")
+
+        def attach_run(self, run_id):
+            seen.append(run_id)
+
+        def revoke(self):
+            pass
+    monkeypatch.setattr(api, "_tool_binder", lambda *a: Binding())
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "What is in build?")
+    streaming.extra["runtime"].script = [nd({"t": "run", "id": RUN})] + HAPPY
+    resp = client.post(f"{API}/mc/turns", json={"note_request_id": note["request_id"], "request_id": "req-" + "b" * 20,
+                                                "record_mode": "on_record"}, headers=write_headers(token))
+    body = resp.get_json()
+    assert resp.status_code == 200 and body["status"] == "answered", body
+    assert body["reply_note"]["text"] == "Item **12** is in build."
+    assert seen == ["record", RUN]
+    sent = streaming.extra["runtime"].posts[-1]
+    assert sent["stream"] is True and sent["body"]["stream"] is True             # internal stream, buffered answer
+    assert RUN not in json.dumps(body)
+
+
+def test_stop_terminal_waits_for_delayed_ack_without_reordering_revocation(streaming, monkeypatch):
+    from minimoi_portal.guild_ui.mc.streaming import RUNS
+    client = streaming.owner()
+    token = streaming.csrf(client)
+    note = _keep(client, token, "synthetic stop race")
+    runtime = streaming.extra["runtime"]
+    runtime.script = [nd({"t": "delta", "text": "partial"}), "WAIT"] + HAPPY
+    response = _stream(client, token, note["request_id"])
+    stream = iter(response.response)
+    turn_id = json.loads(next(stream))["turn_id"]
+    assert json.loads(next(stream))["t"] == "delta"
+    assert runtime.waiting.wait(5)
+    run = RUNS.get(turn_id)
+    entered, release = threading.Event(), threading.Event()
+    order, terminal = [], []
+    run.ctx.on_stop = lambda: order.append("revoke")
+    run.ctx.on_end = lambda *args: terminal.append(args)
+
+    def slow_ack(_):
+        order.append("relay")
+        runtime.stopped.set()  # the worker ends BEFORE the HTTP acknowledgement
+        entered.set()
+        assert release.wait(3)
+        return True
+    monkeypatch.setattr(run.ctx.backend, "stop", slow_ack)
+    stopper = threading.Thread(target=run.stop)
+    stopper.start()
+    try:
+        assert entered.wait(2)
+        assert not run.done.wait(.1)
+    finally:
+        release.set()
+        stopper.join(3)
+    events = [json.loads(line) for line in b"".join(stream).decode().splitlines() if line.strip()]
+    assert run.join(3)
+    assert events[-1]["stop_acknowledged"] is True
+    assert terminal[0][-1] is True and order == ["revoke", "relay"]
+
+
+def test_failed_admission_revocation_cannot_release_the_queue_as_confirmed():
+    from types import SimpleNamespace
+    from minimoi_portal.guild_ui.mc.streaming import StreamContext, StreamRun
+    terminal = []
+    ctx = StreamContext(turn_id="f" * 32, principal="test", events=None, floor=None, reply_key="k",
+        context={}, release=lambda: None, on_stop=lambda: 1/0, on_end=lambda *args: terminal.append(args),
+        backend=SimpleNamespace(kind="openclaw", stop=lambda _: True))
+    run = StreamRun(ctx, record_usage=lambda **kw: None)
+    assert run.stop() is True
+    run._notify_end("stopped", "stopped", True)
+    assert terminal[0][-1] is False

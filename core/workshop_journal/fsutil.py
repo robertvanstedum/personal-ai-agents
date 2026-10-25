@@ -8,6 +8,7 @@ profile that is reported, never silent.
 """
 from __future__ import annotations
 
+import ctypes
 import errno
 import fcntl
 import os
@@ -199,8 +200,32 @@ def _write_temp(dir_fd: int, data: bytes, durable: bool = True) -> str:
     return name
 
 
+def _rename_exclusive(dir_fd: int, source: str, target: str) -> None:
+    """Atomic no-replace publication, with no transient second hard link.
+
+    Both supported hosts expose descriptor-relative exclusive rename. Refuse
+    unsupported kernels/filesystems rather than emulate it with link/unlink:
+    a crash in that emulation violates our single-link reader invariant.
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == 'darwin':
+        symbol, flag = 'renameatx_np', 0x00000004  # SDK sys/stdio.h RENAME_EXCL
+    elif sys.platform.startswith('linux'):
+        symbol, flag = 'renameat2', 1  # Linux RENAME_NOREPLACE
+    else:
+        raise OSError(errno.ENOTSUP, 'exclusive rename unavailable')
+    rename = getattr(libc, symbol, None)
+    if rename is None:
+        raise OSError(errno.ENOTSUP, 'exclusive rename unavailable')
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    if rename(dir_fd, os.fsencode(source), dir_fd, os.fsencode(target), flag) != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), target)
+
+
 def publish_new(dir_fd: int, name: str, data: bytes, *, durable: bool = True) -> bool:
-    """Publish a file that must not replace a different one: temp, full sync, hard-link into place, sync the folder.
+    """Publish a file that must not replace a different one: temp, full sync, exclusive rename, sync the folder.
 
     ``durable=False`` is for files a crash can safely lose (a prepare receipt: losing it only turns a completion into a
     quarantine); everything else keeps full sync on the file and the folder, and a failure raises.
@@ -210,7 +235,7 @@ def publish_new(dir_fd: int, name: str, data: bytes, *, durable: bool = True) ->
     temp = _write_temp(dir_fd, data, durable)
     try:
         try:
-            os.link(temp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd, follow_symlinks=False)
+            _rename_exclusive(dir_fd, temp, name)
             created = True
         except FileExistsError:
             fd = open_file(dir_fd, name, os.O_RDONLY)

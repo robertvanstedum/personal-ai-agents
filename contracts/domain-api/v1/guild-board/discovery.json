@@ -1,0 +1,90 @@
+{
+  "enabled": false,
+  "operations": [
+    {
+      "capability": "guild.board.notes.read",
+      "dependencies": [
+        "guild_board_service_v1"
+      ],
+      "description": "Find current Board notes by text. Read only; ask which note if results are ambiguous.",
+      "effect": "read",
+      "handler": "board_notes_query_v1",
+      "id": "guild.board.notes.query",
+      "undo": null,
+      "version": 1
+    },
+    {
+      "capability": "guild.board.notes.read",
+      "dependencies": [
+        "guild_board_service_v1"
+      ],
+      "description": "Read a previously supplied Board note reference and its current revision.",
+      "effect": "read",
+      "handler": "board_note_read_v1",
+      "id": "guild.board.note.read",
+      "undo": null,
+      "version": 1
+    },
+    {
+      "capability": "guild.board.note.create",
+      "dependencies": [
+        "guild_board_service_v1"
+      ],
+      "description": "Save one private text note when the owner asks. Preserve its language; no extra approval. An overlong note needs a shorter-text offer, never truncation. Discussion alone is not a save request.",
+      "effect": "private_write",
+      "handler": "board_note_create_v1",
+      "id": "guild.board.note.create",
+      "undo": "guild.board.operation.undo",
+      "version": 1
+    },
+    {
+      "capability": "guild.board.note.update",
+      "dependencies": [
+        "guild_board_service_v1"
+      ],
+      "description": "Change specified fields of one referenced Board note, including done true or false. Read the current note first; clarify ambiguous targets or intervening edits.",
+      "effect": "private_write",
+      "handler": "board_note_update_v1",
+      "id": "guild.board.note.update",
+      "undo": "guild.board.operation.undo",
+      "version": 1
+    },
+    {
+      "capability": "guild.board.operations.read",
+      "dependencies": [
+        "guild_board_service_v1"
+      ],
+      "description": "Recover a prior Board action's receipt and current state. A lost reply never warrants a new create.",
+      "effect": "read",
+      "handler": "board_operation_read_v1",
+      "id": "guild.board.operation.read",
+      "undo": null,
+      "version": 1
+    },
+    {
+      "capability": "guild.board.operation.undo",
+      "dependencies": [
+        "guild_board_service_v1"
+      ],
+      "description": "Undo a specified successful Board creation or update only when the owner requests it. Later substantive edits cause a conflict; no force option or permanent deletion.",
+      "effect": "private_write",
+      "handler": "board_operation_undo_v1",
+      "id": "guild.board.operation.undo",
+      "undo": null,
+      "version": 1
+    },
+    {
+      "capability": "guild.board.capabilities.read",
+      "dependencies": [
+        "guild_board_service_v1"
+      ],
+      "description": "Describe the authenticated caller's effective Board capabilities; descriptions grant no authority.",
+      "effect": "read",
+      "handler": "board_capabilities_read_v1",
+      "id": "guild.board.capabilities.read",
+      "undo": null,
+      "version": 1
+    }
+  ],
+  "version": 1
+}

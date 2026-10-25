@@ -45,7 +45,7 @@ from typing import Callable
 from ..adapters.contract import now_iso
 from .backend import REAL_KINDS, NotAnAnswer, TurnResult, keep_reply
 from .openclaw import OPENCLAW_NO_RESPONSE
-from .stream import STREAM_ANSWER_FINISH_REASONS, Delta, Failure, Finish, Usage
+from .stream import STREAM_ANSWER_FINISH_REASONS, Delta, Failure, Finish, RunStarted, Usage
 
 PING_S = 10.0
 RENDER_EVERY_S = 0.5
@@ -173,6 +173,11 @@ class StreamContext:
     cancel: threading.Event = field(default_factory=threading.Event)
     files: list | None = None            # the per-turn report of files that went with the message (turn_files.summary)
     on_dispatch: Callable[[], None] = lambda: None   # called once, right before the request is sent
+    # Called once with the runtime's run id when the relay reports it (before any text): binds this turn's tool
+    # calls to that exact run (MC spec v1.2 §7.1). A failure leaves tools refused for the turn, never the chat.
+    on_run: Callable[[str], None] = lambda run_id: None
+    # The owner's Stop, before the runtime is asked to abort: revoke this turn's tool admission (spec §7.4).
+    on_stop: Callable[[], None] = lambda: None
     on_answered: Callable[[], None] = lambda: None   # called once, only when the turn ended answered and its reply was kept (never for a failure, timeout or cancel)
     job_hook: object = None              # jobs.JobHook: lets the reply PROPOSE a job (None: a reply is kept exactly as written)
     # The turn ledger's end (mc/ledger_gate.Turn.finish_stream): called exactly once, when the
@@ -189,6 +194,7 @@ class StreamRun:
         self.done = threading.Event()
         self.started = False
         self.outcome: dict | None = None
+        self._stop_lock = threading.Lock()
         self.stop_acknowledged: bool | None = None      # None: Stop was never pressed
         self.job: dict | None = None                    # the job this reply started (a view), when the lane proposed one and the server agreed
         if record_usage is None:
@@ -220,19 +226,34 @@ class StreamRun:
         if on_end is None:
             return
         try:
-            on_end(status, failure_class, getattr(self.ctx.backend, "kind", None), dispatched, self.stop_acknowledged)
+            acknowledged = self.stop_acknowledged
+            if getattr(self, "tool_admission", "none") == "unconfirmed":
+                acknowledged = False
+            on_end(status, failure_class, getattr(self.ctx.backend, "kind", None), dispatched, acknowledged)
         except Exception:
             _log.exception("mc turn %s: the ledger end could not be recorded", self.ctx.turn_id)
 
     def stop(self) -> bool:
         """The owner's Stop: end MiniMoi's side now, and ask the runtime to abort. True only when the relay
         acknowledged it; the answer is remembered so the final message says requested or confirmed truthfully."""
-        self.ctx.cancel.set()
-        try:
-            self.stop_acknowledged = bool(self.ctx.backend.stop(self.ctx.turn_id))
-        except Exception:
-            self.stop_acknowledged = False
-        return self.stop_acknowledged
+        # The worker can see cancel before the relay answers. Serialize terminal
+        # classification with this bounded backend call, so it cannot report an
+        # acknowledged Stop as unknown solely because of that race.
+        with self._stop_lock:
+            if self.stop_acknowledged is not None:
+                return self.stop_acknowledged
+            self.ctx.cancel.set()
+            try:
+                # First: no new tool call for this turn, acknowledged or not ("revoked", "fenced" or "none").
+                self.tool_admission = self.ctx.on_stop() or "revoked"
+            except Exception:
+                self.tool_admission = "unconfirmed"
+                _log.error("mc turn %s: tool admission could not be revoked at Stop", self.ctx.turn_id, exc_info=True)
+            try:
+                self.stop_acknowledged = bool(self.ctx.backend.stop(self.ctx.turn_id))
+            except Exception:
+                self.stop_acknowledged = False
+            return self.stop_acknowledged
 
     def join(self, timeout: float | None = None) -> bool:
         return self.done.wait(timeout)
@@ -281,6 +302,7 @@ class StreamRun:
         answered: TurnResult | None = None
         reply_note = None
         decided = False
+        run_seen = False
         emitted = 0
         _log.info("mc turn %s stream start backend=%s", ctx.turn_id, ctx.backend.kind)
         try:
@@ -289,6 +311,14 @@ class StreamRun:
             _log.warning("mc turn %s files report not saved", ctx.turn_id)
         try:
             for event in ctx.events:
+                if isinstance(event, RunStarted):
+                    if not run_seen:
+                        run_seen = True
+                        try:
+                            ctx.on_run(event.run_id)
+                        except Exception:
+                            _log.warning("mc turn %s: run binding not recorded; tools refused for this turn", ctx.turn_id)
+                    continue
                 if isinstance(event, Delta):
                     parts.append(event.text)
                     hook = ctx.job_hook
@@ -365,6 +395,8 @@ class StreamRun:
 
     def _finish(self, started, final_at, parts, usage, failure, answered, reply_note):
         ctx = self.ctx
+        with self._stop_lock:
+            stop_acknowledged = self.stop_acknowledged is True
         ended = self.clock()
         duration_ms = int(((final_at if final_at is not None else ended) - started) * 1000)
         kind = ctx.backend.kind
@@ -445,12 +477,16 @@ class StreamRun:
             if history_saved is not None:
                 outcome["history_saved"] = history_saved
         else:
-            key = "stopped_confirmed" if cls == "stopped" and self.stop_acknowledged else cls
+            key = "stopped_confirmed" if cls == "stopped" and stop_acknowledged else cls
             message = MESSAGES.get(key or "") or (
                 f"{header.get('header') or 'Master Craftsman did not answer'}. Your note is kept; "
                 "Master Craftsman did not answer.")
+            if cls == "stopped" and getattr(self, "tool_admission", "none") == "unconfirmed":
+                message += " Tool access could not be confirmed revoked; further messages remain paused."
             outcome = {**base, "t": "error", "status": status, "failure_class": cls, "partial": bool(parts),
-                       "reply_note": None, "message": message}
+                       "reply_note": None, "message": message,
+                       "stop_acknowledged": stop_acknowledged,
+                       "tool_admission": getattr(self, "tool_admission", "none")}
         self.outcome = outcome
         _log.info("mc turn %s stream end status=%s class=%s caller_gone=%s", ctx.turn_id, status, cls,
                   self.consumer_gone.is_set())

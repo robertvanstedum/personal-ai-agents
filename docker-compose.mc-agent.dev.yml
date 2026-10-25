@@ -1,0 +1,109 @@
+# Master Craftsman's own container on dev (spec_mc_agent_container v0.2, phase 1). Its own compose project:
+#   docker compose -p minimoi-dev-mc --env-file ~/minimoi-runtime/mc-container/mc.env -f docker-compose.mc-agent.dev.yml up -d
+# Runs ALONGSIDE native MC; the portal is not pointed here until the toggle (spec §5).
+# Boundaries:
+#   * mc-agent is only on mc-internal (internal: no route out). Its one way out is mc-egress, a CONNECT proxy that
+#     tunnels only to model-provider hosts. No published port, no Docker socket, no host credentials.
+#   * no provider API keys anywhere (start.sh refuses); models run on Robert's plans via signed-in CLIs whose state
+#     lives only on the mc-claude-home volume.
+#   * mounts: exactly the folders in the spec; ~/minimoi-staging/data is NOT mounted (it holds other agents' tokens).
+services:
+  mc-egress:
+    image: minimoi-dev/mc-agent:current
+    pull_policy: never
+    container_name: minimoi-dev-mc-egress
+    entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/egress-proxy.mjs"]
+    restart: on-failure:3
+    networks: [mc-internal, mc-egress-out]
+    mem_limit: 96m
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    labels: [minimoi.runtime.role=guild-mc-egress]
+
+  mc-agent:
+    image: minimoi-dev/mc-agent:current
+    pull_policy: never
+    container_name: minimoi-dev-mc-agent
+    restart: on-failure:3
+    depends_on: [mc-egress]
+    environment:
+      - OPENCLAW_GATEWAY_TOKEN=${MC_CONTAINER_GATEWAY_TOKEN:?run the token step (see README)}
+      - OPENCLAW_STATE_DIR=/home/node/.openclaw
+      - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
+      - OPENCLAW_DISABLE_BONJOUR=1
+      - HTTPS_PROXY=http://mc-egress:3128
+      - HTTP_PROXY=http://mc-egress:3128
+      - https_proxy=http://mc-egress:3128
+      - http_proxy=http://mc-egress:3128
+      - NO_PROXY=localhost,127.0.0.1
+      - no_proxy=localhost,127.0.0.1
+      - TZ=America/Chicago
+      - MALLOC_ARENA_MAX=2
+    volumes:
+      - mc-state:/home/node/.openclaw
+      - mc-auth:/home/node/.config/openclaw
+      - mc-claude-home:/home/node/.claude
+      - ${HOME}/minimoi-mc-repo:/minimoi/repo
+      - ${HOME}/minimoi-private:/minimoi/private
+      - ${HOME}/minimoi-work:/minimoi/work
+      - ${HOME}/minimoi-workshops:/minimoi/workshops
+      - ${HOME}/minimoi-inbox:/minimoi/inbox
+      - ${HOME}/minimoi-german-state:/minimoi/german-state
+      - ${HOME}/minimoi-portuguese-state:/minimoi/portuguese-state
+      - ${HOME}/Downloads:/minimoi/downloads:ro
+      - ${HOME}/minimoi-runtime/mc-container/apprenticeship:/minimoi/apprenticeship:ro
+    networks: [mc-internal]
+    mem_limit: 2048m          # measured 25 Oct: OpenClaw ~600-770 MiB idle; a turn adds a Claude Code subprocess; 1024m and 1536m were OOM-killed (137)
+    oom_score_adj: 1000
+    stop_grace_period: 120s   # a SIGKILL before OpenClaw releases its state-directory lease costs ~4 minutes on the next start
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    labels: [minimoi.runtime.role=guild-mc, minimoi.runtime.implementation=openclaw]
+
+  # The portal's way in (relay v2, the same reviewed source as the native relay). Listens only on the Mac's loopback
+  # (127.0.0.1:18797), accepts only the portal's existing caller token, and forwards only to mc-agent with MC's own
+  # gateway token. Phase 1: chat only; its job inbox and handoff folders are its own (empty) so it can never compete with
+  # the native relay. The portal is NOT pointed here except during the rehearsed toggle (spec §5).
+  mc-relay:
+    image: minimoi-dev/mc-agent:current
+    pull_policy: never
+    container_name: minimoi-dev-mc-relay
+    entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/relay_v2.mjs"]
+    restart: on-failure:3
+    depends_on: [mc-agent]
+    environment:
+      - MC_RELAY_TOKEN=${MC_RELAY_CALLER_TOKEN:?add the portal caller token (see README)}
+      - MC_OPENCLAW_GATEWAY_TOKEN=${MC_CONTAINER_GATEWAY_TOKEN:?run the token step (see README)}
+      - MC_RELAY_TARGET=http://mc-agent:18789
+      - MC_RELAY_PORT=8790
+      - MC_RELAY_STATE_DIR=/relay/state
+      - MC_RELAY_HANDOFF=/relay/handoff
+      - MC_RELAY_INBOX_ROOT=/relay/inbox
+      - MC_RELAY_WORKSPACE=/mc-state/workspace-mc
+      - MC_RELAY_AGENT_DB=/mc-state/agents/mc-agent/openclaw-agent.sqlite
+      - MC_RELAY_PROJECT_ROOT=/relay/project
+      - MC_RELAY_IDLE_MS=300000
+      - MC_RELAY_DEADLINE_MS=300000
+    volumes:
+      - mc-state:/mc-state:ro
+      - mc-relay-state:/relay
+    networks: [mc-internal, mc-egress-out]
+    ports: ["127.0.0.1:18797:8790"]
+    mem_limit: 128m
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    labels: [minimoi.runtime.role=guild-mc-relay]
+
+volumes:
+  mc-relay-state: {name: minimoi-dev-mc-relay-state}
+  mc-state: {name: minimoi-dev-mc-state}
+  mc-auth: {name: minimoi-dev-mc-auth}
+  mc-claude-home: {name: minimoi-dev-mc-claude-home}
+
+networks:
+  mc-internal:
+    name: minimoi-dev-mc-internal
+    internal: true
+  mc-egress-out:
+    name: minimoi-dev-mc-egress-out

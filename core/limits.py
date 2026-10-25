@@ -37,11 +37,11 @@ DEFINITIONS: dict[str, dict] = {
                 "session or reading starts (about three times the provider's published estimate), not a bill. Lowering it applies at once; raising it applies from the next day.",
         "enforced_by": "the shared voice budget (core.realtime_voice.budget), before any provider call", "reload": "live (lower) / next day (raise)", "mc_may_propose": False},
     "mc.relay_idle_s": {
-        "label": "Master Craftsman silence limit", "unit": "seconds", "default": 100.0, "hard_min": 30.0, "hard_max": 100.0, "editable": False,
+        "label": "Master Craftsman silence limit", "unit": "seconds", "default": 300.0, "hard_min": 30.0, "hard_max": 300.0, "editable": False,
         "what": "How long the relay waits without a single word from Master Craftsman before it cancels a turn (its model may think and read for a while first).",
         "enforced_by": "MC relay (launchd environment MC_RELAY_IDLE_MS)", "reload": "relay restart", "mc_may_propose": False},
     "mc.relay_deadline_s": {
-        "label": "Master Craftsman turn deadline", "unit": "seconds", "default": 120.0, "hard_min": 30.0, "hard_max": 120.0, "editable": False,
+        "label": "Master Craftsman turn deadline", "unit": "seconds", "default": 300.0, "hard_min": 30.0, "hard_max": 300.0, "editable": False,
         "what": "The longest any one chat turn may take, however active.",
         "enforced_by": "MC relay", "reload": "relay restart", "mc_may_propose": False},
 }

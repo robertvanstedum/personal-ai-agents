@@ -1,0 +1,190 @@
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "lan",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    },
+    "controlUi": {
+      "enabled": false
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "update": {
+    "checkOnStart": false
+  },
+  "models": {
+    "catalogRefresh": {
+      "enabled": false
+    }
+  },
+  "plugins": {
+    "allow": [
+      "memory-core",
+      "anthropic",
+      "xai",
+      "openai"
+    ],
+    "entries": {
+      "memory-core": {
+        "config": {
+          "dreaming": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  },
+  "skills": {
+    "workshop": {
+      "autonomous": {
+        "mode": "off"
+      }
+    }
+  },
+  "cron": {
+    "enabled": false
+  },
+  "tools": {
+    "sessions": {
+      "visibility": "self"
+    },
+    "agentToAgent": {
+      "enabled": false
+    },
+    "toolSearch": false,
+    "links": {
+      "enabled": false
+    },
+    "web": {
+      "search": {
+        "enabled": true,
+        "provider": "grok"
+      },
+      "fetch": {
+        "enabled": false
+      }
+    }
+  },
+  "agents": {
+    "ownership": "explicit",
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-opus-5"
+      },
+      "models": {
+        "anthropic/claude-opus-5": {
+          "agentRuntime": {
+            "id": "claude-cli"
+          }
+        },
+        "anthropic/claude-sonnet-4-6": {
+          "agentRuntime": {
+            "id": "claude-cli"
+          }
+        }
+      },
+      "modelPolicy": {
+        "allow": [
+          "anthropic/claude-opus-5",
+          "anthropic/claude-sonnet-4-6"
+        ]
+      }
+    },
+    "entries": {
+      "mc-agent": {
+        "name": "Master Craftsman",
+        "workspace": "/home/node/.openclaw/workspace-mc",
+        "agentDir": "/home/node/.openclaw/agents/mc-agent",
+        "model": {
+          "primary": "anthropic/claude-opus-5",
+          "fallbacks": []
+        },
+        "memory": {
+          "search": {
+            "enabled": false,
+            "rememberAcrossConversations": false
+          }
+        },
+        "heartbeat": {
+          "every": "0m"
+        },
+        "sandbox": {
+          "mode": "off"
+        },
+        "tools": {
+          "profile": "full",
+          "deny": [
+            "group:messaging",
+            "group:nodes",
+            "group:automation",
+            "group:ui",
+            "cron",
+            "gateway",
+            "sessions_spawn",
+            "sessions_send",
+            "subagents",
+            "agents_list",
+            "web_fetch"
+          ],
+          "elevated": {
+            "enabled": false
+          }
+        }
+      },
+      "mc-chat": {
+        "name": "Master Craftsman (conversation)",
+        "workspace": "/home/node/.openclaw/workspace-mc",
+        "agentDir": "/home/node/.openclaw/agents/mc-chat",
+        "model": {
+          "primary": "anthropic/claude-opus-5",
+          "fallbacks": []
+        },
+        "memory": {
+          "search": {
+            "enabled": false,
+            "rememberAcrossConversations": false
+          }
+        },
+        "heartbeat": {
+          "every": "0m"
+        },
+        "sandbox": {
+          "mode": "off"
+        },
+        "tools": {
+          "profile": "full",
+          "deny": [
+            "group:messaging",
+            "group:nodes",
+            "group:automation",
+            "group:ui",
+            "cron",
+            "gateway",
+            "sessions_spawn",
+            "sessions_send",
+            "subagents",
+            "agents_list",
+            "web_fetch"
+          ],
+          "elevated": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  },
+  "session": {
+    "reset": {
+      "mode": "none"
+    }
+  }
+}

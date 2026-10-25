@@ -30,12 +30,12 @@ Rules carried from spec v0.5 §2:
 
 Streaming (spec v0.2 §3, v0.3 §2): ``stream_turn()`` sends the same body with
 ``stream: true`` to the relay, which answers with its own NDJSON. The portal's
-bounded reader (stream.py) reads it: a 125 s wall clock, 105 s idle (the read
+bounded reader (stream.py) reads it: a 310 s wall clock, 305 s idle (the read
 timeout), 256 KB of text, a 64 KB line. ``stop()`` asks the relay to abort the
 turn (POST /v1/turns/stop). A non-200 from the relay is classified exactly as
-the non-streaming path's. The portal's idle limit (105 s) outlasts the relay's
-(30 s by default, up to about 100 s when configured), as its deadline (125 s)
-outlasts the relay's (120 s).
+the non-streaming path's. Both portal paths outlast the relay's 300 s budget,
+including silence while OpenClaw works through tools. Timeout remains uncertain;
+no turn is automatically retried.
 """
 from __future__ import annotations
 
@@ -62,14 +62,11 @@ MAX_REQUEST_BODY_BYTES = 262_144
 CONNECT_TIMEOUT_S = 5
 IN_FLIGHT_WAIT_S = 45         # Master Craftsman does one turn at a time (Rooms turns count). A note that arrives meanwhile waits this long for its turn instead of failing at once.
 IN_FLIGHT_POLL_S = 1.5
-TURN_DEADLINE_S = 90
+TURN_DEADLINE_S = 310
 HEALTH_TIMEOUT_S = 5
-# The portal's limits outlast the relay's, so the relay's own in-band error always arrives first (#275 review,
-# finding 5). The relay's source defaults are 120 s and 30 s idle. OpenClaw sends nothing at all while an agent run
-# works through its tools (no headers, no keepalive), so a Dev relay may be configured with a longer idle
-# (MC_RELAY_IDLE_MS, up to about 100 s; its deadline stays 120 s). The portal waits 105 s of silence, so it never
-# gives up before a relay configured that way does, and the relay's 120 s deadline still bounds every turn.
-STREAM_LIMITS = Limits(deadline_s=125.0, idle_s=105.0, text_max=256 * 1024, line_max=64 * 1024)
+# OpenClaw can send no headers or bytes while using tools. Keep the portal
+# outside the relay's 300 s deadline so its classified failure can arrive first.
+STREAM_LIMITS = Limits(deadline_s=310.0, idle_s=305.0, text_max=256 * 1024, line_max=64 * 1024)
 STOP_TIMEOUT_S = 5
 # OpenClaw 2026.9.6 (dist/openai-http: the non-streaming chat completion)
 # answers 200 with this text when the agent run produced no reply text, and
@@ -177,6 +174,11 @@ class OpenClawMasterCraftsman(MasterCraftsmanBackend):
 
     def _user(self, conversation_id: str) -> str:
         return USER_PREFIX + hashlib.sha256(conversation_id.encode("utf-8")).hexdigest()[:32]
+
+    def session_user(self, conversation_id: str) -> str:
+        """The ``user`` a turn in this conversation is sent with; OpenClaw derives the session key
+        from it, and MC's tool path binds tool calls through it (core/mc_tools/binding.py)."""
+        return self._user(conversation_id)
 
     def turn(self, req, cancel=None) -> TurnResult:
         result = self._turn(req, cancel)

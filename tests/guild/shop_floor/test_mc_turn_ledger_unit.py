@@ -65,3 +65,31 @@ def test_finish_refuses_an_unknown_state():
 def test_continue_needs_an_entry_id():
     with pytest.raises(ValueError):
         TurnLedger(lambda: "postgresql://x").continue_after("p", "1")
+
+
+@pytest.mark.parametrize("method", ["admit", "enqueue"])
+def test_image_and_document_ids_reach_ledger_storage(method):
+    """An uploaded image must not be rejected as an invalid document before storage."""
+    calls = []
+    def unavailable(url):
+        calls.append(url)
+        raise OSError("synthetic unavailable database")
+    led = TurnLedger(lambda: "postgresql://synthetic", connect=unavailable)
+    with pytest.raises(LedgerUnavailable):
+        getattr(led, method)(principal="p", conversation_id="c", note_request_id="n", turn_request_id="t",
+                            attachment_ids=["12345678-1234-1234-1234-123456789abc", "d-0123456789abcdef"])
+    assert calls
+
+
+@pytest.mark.parametrize("ids", [
+    ["12345678-1234-1234-1234-123456789abc"] * 2,
+    ["12345678-1234-1234-1234-123456789abc/../../secret"],
+    ["12345678123412341234123456789abc"],
+    [["nested"]], [{}],
+])
+def test_bad_image_ids_never_reach_storage(ids):
+    def never(url):
+        raise AssertionError("invalid ids must not reach storage")
+    with pytest.raises(ValueError):
+        TurnLedger(lambda: "postgresql://synthetic", connect=never).admit(
+            principal="p", conversation_id="c", note_request_id="n", turn_request_id="t", attachment_ids=ids)

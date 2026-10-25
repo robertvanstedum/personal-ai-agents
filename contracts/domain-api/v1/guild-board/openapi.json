@@ -1,0 +1,2215 @@
+{
+  "components": {
+    "schemas": {
+      "Error": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "not_applied",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "error"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "SignedRequest": {
+        "description": "HMAC protocol; do not paste an application key here as a bearer token.",
+        "in": "header",
+        "name": "X-Minimoi-Signature",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Contract projection, not evidence of deployed routes. Internal signed callers only. API-key notation represents the signature header, not bearer-token authentication; shared domain API v0.2 exact method/path/body/nonce/time signing is mandatory. Queries are signed JSON bodies; query strings are forbidden.",
+    "title": "MiniMoi internal Board API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/internal/domain-api/v1/guild/board/capabilities": {
+      "get": {
+        "description": "Describe the authenticated caller's effective Board capabilities; descriptions grant no authority.",
+        "operationId": "guild_board_capabilities_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "capabilities": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "count_convention": {
+                      "const": "unicode_scalar_lf_v1"
+                    },
+                    "labels": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "text_limit": {
+                      "const": 280
+                    },
+                    "version": {
+                      "const": 1
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "capabilities",
+                    "labels",
+                    "text_limit",
+                    "count_convention"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Scoped application result; original receipt and current state are distinct."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          }
+        },
+        "security": [
+          {
+            "SignedRequest": []
+          }
+        ],
+        "x-capability": "guild.board.capabilities.read",
+        "x-effect": "read",
+        "x-enabled-by-this-document": false,
+        "x-operation-version": 1
+      }
+    },
+    "/internal/domain-api/v1/guild/board/notes": {
+      "post": {
+        "description": "Save one private text note when the owner asks. Preserve its language; no extra approval. An overlong note needs a shorter-text offer, never truncation. Discussion alone is not a save request.",
+        "operationId": "guild_board_note_create",
+        "parameters": [
+          {
+            "description": "Persist before dispatch; same identity and body on retry.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "clarification_ref": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "item_ref": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "label": {
+                    "enum": [
+                      "decide",
+                      "blocked",
+                      "remember",
+                      "followup",
+                      "idea",
+                      "fyi",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "text": {
+                    "description": "The domain accepts at most 280 Unicode scalar values; never truncate an overlong request.",
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "current": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "item_ref": {
+                              "minimum": 1,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "label": {
+                              "enum": [
+                                "decide",
+                                "blocked",
+                                "remember",
+                                "followup",
+                                "idea",
+                                "fyi",
+                                null
+                              ],
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "semantic_revision": {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            "state": {
+                              "enum": [
+                                "active",
+                                "done",
+                                "binned",
+                                "unavailable",
+                                "purged"
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "state"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "receipt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "after_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "before_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "board": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "capability": {
+                              "type": "string"
+                            },
+                            "committed_at": {
+                              "type": "string"
+                            },
+                            "environment": {
+                              "enum": [
+                                "dev",
+                                "prod"
+                              ]
+                            },
+                            "executor": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "operation_id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "payload_sha256": {
+                              "pattern": "^[a-f0-9]{64}$",
+                              "type": "string"
+                            },
+                            "principal": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "source_ref": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "target_ref": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "text_scrubbed": {
+                              "type": "boolean"
+                            },
+                            "undo_of": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "version": {
+                              "const": 1
+                            }
+                          },
+                          "required": [
+                            "operation_id",
+                            "capability",
+                            "version",
+                            "principal",
+                            "executor",
+                            "environment",
+                            "board",
+                            "payload_sha256",
+                            "target_ref",
+                            "outcome",
+                            "committed_at",
+                            "before_revision",
+                            "after_revision",
+                            "source_ref",
+                            "undo_of",
+                            "text_scrubbed"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    },
+                    "state": {
+                      "enum": [
+                        "verified",
+                        "not_applied",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "receipt",
+                    "current",
+                    "replayed",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Scoped application result; original receipt and current state are distinct."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "current": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "item_ref": {
+                              "minimum": 1,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "label": {
+                              "enum": [
+                                "decide",
+                                "blocked",
+                                "remember",
+                                "followup",
+                                "idea",
+                                "fyi",
+                                null
+                              ],
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "semantic_revision": {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            "state": {
+                              "enum": [
+                                "active",
+                                "done",
+                                "binned",
+                                "unavailable",
+                                "purged"
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "state"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "receipt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "after_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "before_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "board": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "capability": {
+                              "type": "string"
+                            },
+                            "committed_at": {
+                              "type": "string"
+                            },
+                            "environment": {
+                              "enum": [
+                                "dev",
+                                "prod"
+                              ]
+                            },
+                            "executor": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "operation_id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "payload_sha256": {
+                              "pattern": "^[a-f0-9]{64}$",
+                              "type": "string"
+                            },
+                            "principal": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "source_ref": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "target_ref": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "text_scrubbed": {
+                              "type": "boolean"
+                            },
+                            "undo_of": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "version": {
+                              "const": 1
+                            }
+                          },
+                          "required": [
+                            "operation_id",
+                            "capability",
+                            "version",
+                            "principal",
+                            "executor",
+                            "environment",
+                            "board",
+                            "payload_sha256",
+                            "target_ref",
+                            "outcome",
+                            "committed_at",
+                            "before_revision",
+                            "after_revision",
+                            "source_ref",
+                            "undo_of",
+                            "text_scrubbed"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    },
+                    "state": {
+                      "enum": [
+                        "verified",
+                        "not_applied",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "receipt",
+                    "current",
+                    "replayed",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Scoped application result; original receipt and current state are distinct."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          }
+        },
+        "security": [
+          {
+            "SignedRequest": []
+          }
+        ],
+        "x-capability": "guild.board.note.create",
+        "x-effect": "private_write",
+        "x-enabled-by-this-document": false,
+        "x-operation-version": 1
+      }
+    },
+    "/internal/domain-api/v1/guild/board/notes/query": {
+      "post": {
+        "description": "Find current Board notes by text. Read only; ask which note if results are ambiguous.",
+        "operationId": "guild_board_notes_query",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "cursor": {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "limit": {
+                    "default": 10,
+                    "maximum": 20,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "query": {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "state": {
+                    "default": "active",
+                    "enum": [
+                      "active",
+                      "done",
+                      "all"
+                    ]
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "notes": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "maxLength": 256,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "item_ref": {
+                            "minimum": 1,
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "label": {
+                            "enum": [
+                              "decide",
+                              "blocked",
+                              "remember",
+                              "followup",
+                              "idea",
+                              "fyi",
+                              null
+                            ],
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "semantic_revision": {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          "state": {
+                            "enum": [
+                              "active",
+                              "done",
+                              "binned",
+                              "unavailable",
+                              "purged"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "state"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 20,
+                      "type": "array"
+                    },
+                    "observed_at": {
+                      "type": "string"
+                    },
+                    "observed_revision": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "notes",
+                    "next_cursor",
+                    "truncated",
+                    "observed_revision",
+                    "observed_at"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Scoped application result; original receipt and current state are distinct."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          }
+        },
+        "security": [
+          {
+            "SignedRequest": []
+          }
+        ],
+        "x-capability": "guild.board.notes.read",
+        "x-effect": "read",
+        "x-enabled-by-this-document": false,
+        "x-operation-version": 1
+      }
+    },
+    "/internal/domain-api/v1/guild/board/notes/{note_id}": {
+      "get": {
+        "description": "Read a previously supplied Board note reference and its current revision.",
+        "operationId": "guild_board_note_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "maxLength": 256,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "item_ref": {
+                      "minimum": 1,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "label": {
+                      "enum": [
+                        "decide",
+                        "blocked",
+                        "remember",
+                        "followup",
+                        "idea",
+                        "fyi",
+                        null
+                      ],
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "semantic_revision": {
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "state": {
+                      "enum": [
+                        "active",
+                        "done",
+                        "binned",
+                        "unavailable",
+                        "purged"
+                      ]
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "state"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Scoped application result; original receipt and current state are distinct."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          }
+        },
+        "security": [
+          {
+            "SignedRequest": []
+          }
+        ],
+        "x-capability": "guild.board.notes.read",
+        "x-effect": "read",
+        "x-enabled-by-this-document": false,
+        "x-operation-version": 1
+      },
+      "patch": {
+        "description": "Change specified fields of one referenced Board note, including done true or false. Read the current note first; clarify ambiguous targets or intervening edits.",
+        "operationId": "guild_board_note_update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persist before dispatch; same identity and body on retry.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "changes": {
+                    "additionalProperties": false,
+                    "minProperties": 1,
+                    "properties": {
+                      "done": {
+                        "type": "boolean"
+                      },
+                      "item_ref": {
+                        "minimum": 1,
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "label": {
+                        "enum": [
+                          "decide",
+                          "blocked",
+                          "remember",
+                          "followup",
+                          "idea",
+                          "fyi",
+                          null
+                        ],
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "text": {
+                        "description": "The domain accepts at most 280 Unicode scalar values; never truncate an overlong request.",
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [],
+                    "type": "object"
+                  },
+                  "expected_revision": {
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "expected_revision",
+                  "changes"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "current": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "item_ref": {
+                              "minimum": 1,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "label": {
+                              "enum": [
+                                "decide",
+                                "blocked",
+                                "remember",
+                                "followup",
+                                "idea",
+                                "fyi",
+                                null
+                              ],
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "semantic_revision": {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            "state": {
+                              "enum": [
+                                "active",
+                                "done",
+                                "binned",
+                                "unavailable",
+                                "purged"
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "state"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "receipt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "after_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "before_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "board": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "capability": {
+                              "type": "string"
+                            },
+                            "committed_at": {
+                              "type": "string"
+                            },
+                            "environment": {
+                              "enum": [
+                                "dev",
+                                "prod"
+                              ]
+                            },
+                            "executor": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "operation_id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "payload_sha256": {
+                              "pattern": "^[a-f0-9]{64}$",
+                              "type": "string"
+                            },
+                            "principal": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "source_ref": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "target_ref": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "text_scrubbed": {
+                              "type": "boolean"
+                            },
+                            "undo_of": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "version": {
+                              "const": 1
+                            }
+                          },
+                          "required": [
+                            "operation_id",
+                            "capability",
+                            "version",
+                            "principal",
+                            "executor",
+                            "environment",
+                            "board",
+                            "payload_sha256",
+                            "target_ref",
+                            "outcome",
+                            "committed_at",
+                            "before_revision",
+                            "after_revision",
+                            "source_ref",
+                            "undo_of",
+                            "text_scrubbed"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    },
+                    "state": {
+                      "enum": [
+                        "verified",
+                        "not_applied",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "receipt",
+                    "current",
+                    "replayed",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Scoped application result; original receipt and current state are distinct."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          }
+        },
+        "security": [
+          {
+            "SignedRequest": []
+          }
+        ],
+        "x-capability": "guild.board.note.update",
+        "x-effect": "private_write",
+        "x-enabled-by-this-document": false,
+        "x-operation-version": 1
+      }
+    },
+    "/internal/domain-api/v1/guild/board/operations/{operation_id}": {
+      "get": {
+        "description": "Recover a prior Board action's receipt and current state. A lost reply never warrants a new create.",
+        "operationId": "guild_board_operation_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "current": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "item_ref": {
+                              "minimum": 1,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "label": {
+                              "enum": [
+                                "decide",
+                                "blocked",
+                                "remember",
+                                "followup",
+                                "idea",
+                                "fyi",
+                                null
+                              ],
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "semantic_revision": {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            "state": {
+                              "enum": [
+                                "active",
+                                "done",
+                                "binned",
+                                "unavailable",
+                                "purged"
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "state"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "receipt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "after_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "before_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "board": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "capability": {
+                              "type": "string"
+                            },
+                            "committed_at": {
+                              "type": "string"
+                            },
+                            "environment": {
+                              "enum": [
+                                "dev",
+                                "prod"
+                              ]
+                            },
+                            "executor": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "operation_id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "payload_sha256": {
+                              "pattern": "^[a-f0-9]{64}$",
+                              "type": "string"
+                            },
+                            "principal": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "source_ref": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "target_ref": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "text_scrubbed": {
+                              "type": "boolean"
+                            },
+                            "undo_of": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "version": {
+                              "const": 1
+                            }
+                          },
+                          "required": [
+                            "operation_id",
+                            "capability",
+                            "version",
+                            "principal",
+                            "executor",
+                            "environment",
+                            "board",
+                            "payload_sha256",
+                            "target_ref",
+                            "outcome",
+                            "committed_at",
+                            "before_revision",
+                            "after_revision",
+                            "source_ref",
+                            "undo_of",
+                            "text_scrubbed"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    },
+                    "state": {
+                      "enum": [
+                        "verified",
+                        "not_applied",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "receipt",
+                    "current",
+                    "replayed",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Scoped application result; original receipt and current state are distinct."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          }
+        },
+        "security": [
+          {
+            "SignedRequest": []
+          }
+        ],
+        "x-capability": "guild.board.operations.read",
+        "x-effect": "read",
+        "x-enabled-by-this-document": false,
+        "x-operation-version": 1
+      }
+    },
+    "/internal/domain-api/v1/guild/board/operations/{operation_id}/undo": {
+      "post": {
+        "description": "Undo a specified successful Board creation or update only when the owner requests it. Later substantive edits cause a conflict; no force option or permanent deletion.",
+        "operationId": "guild_board_operation_undo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persist before dispatch; same identity and body on retry.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "expected_revision": {
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "expected_revision"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "current": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "item_ref": {
+                              "minimum": 1,
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "label": {
+                              "enum": [
+                                "decide",
+                                "blocked",
+                                "remember",
+                                "followup",
+                                "idea",
+                                "fyi",
+                                null
+                              ],
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "semantic_revision": {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            "state": {
+                              "enum": [
+                                "active",
+                                "done",
+                                "binned",
+                                "unavailable",
+                                "purged"
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "state"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "receipt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "after_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "before_revision": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ]
+                            },
+                            "board": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "capability": {
+                              "type": "string"
+                            },
+                            "committed_at": {
+                              "type": "string"
+                            },
+                            "environment": {
+                              "enum": [
+                                "dev",
+                                "prod"
+                              ]
+                            },
+                            "executor": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "operation_id": {
+                              "format": "uuid",
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "payload_sha256": {
+                              "pattern": "^[a-f0-9]{64}$",
+                              "type": "string"
+                            },
+                            "principal": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "source_ref": {
+                              "maxLength": 256,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "target_ref": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "text_scrubbed": {
+                              "type": "boolean"
+                            },
+                            "undo_of": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "version": {
+                              "const": 1
+                            }
+                          },
+                          "required": [
+                            "operation_id",
+                            "capability",
+                            "version",
+                            "principal",
+                            "executor",
+                            "environment",
+                            "board",
+                            "payload_sha256",
+                            "target_ref",
+                            "outcome",
+                            "committed_at",
+                            "before_revision",
+                            "after_revision",
+                            "source_ref",
+                            "undo_of",
+                            "text_scrubbed"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    },
+                    "state": {
+                      "enum": [
+                        "verified",
+                        "not_applied",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "receipt",
+                    "current",
+                    "replayed",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Scoped application result; original receipt and current state are distinct."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Scoped refusal or uncertain result; never infer rollback from a transport error."
+          }
+        },
+        "security": [
+          {
+            "SignedRequest": []
+          }
+        ],
+        "x-capability": "guild.board.operation.undo",
+        "x-effect": "private_write",
+        "x-enabled-by-this-document": false,
+        "x-operation-version": 1
+      }
+    }
+  }
+}

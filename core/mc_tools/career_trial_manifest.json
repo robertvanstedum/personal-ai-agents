@@ -1,0 +1,128 @@
+{
+  "check_names": [
+    "carry_forward",
+    "column_widths",
+    "decision_readback",
+    "draft_marked",
+    "export_overwrite_refused",
+    "final_column_only",
+    "five_columns",
+    "import_cli",
+    "import_header_tail",
+    "import_overwrite_refused",
+    "import_roles",
+    "invalid_about_not_last_no_output",
+    "invalid_about_not_last_refused",
+    "invalid_duplicate_id_no_output",
+    "invalid_duplicate_id_refused",
+    "invalid_schema_no_output",
+    "invalid_schema_refused",
+    "landscape",
+    "letter_overwrite_refused",
+    "letter_placeholder_refused",
+    "letter_sidecar_refused",
+    "linkedin_length_flag",
+    "overwrite_refused",
+    "owner_columns_empty",
+    "page_count_not_checked",
+    "partial_finals_not_filled",
+    "unique_ids_about_last"
+  ],
+  "dependencies": {
+    "lxml": "6.1.1",
+    "pypdf": "6.8.0",
+    "python-docx": "1.2.0"
+  },
+  "dependency_sha256": {
+    "lxml": "ef1320888e7762ebc881ace737914e45c0c380d2771d9e141d9627ae8edc178d",
+    "pypdf": "de93706b1405d4bfa54da1c6a81a02a8c741cb7d7033ba8575e1b6b1db844a7e",
+    "python-docx": "8dc586bfa88a40358970638fac0d9b8adbda5d17bb09d62159f472271f0f8c3c"
+  },
+  "expected": [
+    {
+      "bytes": 38014,
+      "name": "carried.docx",
+      "sha256": "5ff6024cf834aa96e7cbeb3ce11722f3b0e9b510abc346078b23f5ed616f5735"
+    },
+    {
+      "bytes": 2452,
+      "name": "checks.json",
+      "sha256": "cf3c6eb45553f9a3f59f35c50a095a034319e5b1815b3b2affa4209a289819eb"
+    },
+    {
+      "bytes": 151,
+      "name": "draft-linkedin.md",
+      "sha256": "d7666707cbd9b855d9f4a1b7ef656cf24dd227e19a3e931e035e1f181e3570bf"
+    },
+    {
+      "bytes": 469,
+      "name": "draft-report.md",
+      "sha256": "028ca72ffb2462d9a522edb1c1730c8feb9e7b5779845e1acf32cc02221f6dc6"
+    },
+    {
+      "bytes": 36968,
+      "name": "draft-resume.docx",
+      "sha256": "ed8ed74263f2a52e42bf26fa49ad8af60cbea17ce8777c72713e67e8acd79f8a"
+    },
+    {
+      "bytes": 308,
+      "name": "final-linkedin.md",
+      "sha256": "5ff7a796fb25e7acb4dedf099a37557ca0a49a77f98c57b774eb041fee3d4e68"
+    },
+    {
+      "bytes": 462,
+      "name": "final-report.md",
+      "sha256": "13b8aad0b632c7fc619d8ca96f164b2edb50ed46d9bc273ee690964e84ec707c"
+    },
+    {
+      "bytes": 36902,
+      "name": "final-resume.docx",
+      "sha256": "d13176d295ea53ca1e72e9e79df4c1446c338133a0e7729fee141b8f1f8a6c95"
+    },
+    {
+      "bytes": 1249,
+      "name": "imported.json",
+      "sha256": "266fa253d8bab2b787d6545a96804c4d52ce9eb9bdb176649edee5dca8b2419d"
+    },
+    {
+      "bytes": 36681,
+      "name": "letter.docx",
+      "sha256": "631bfe2369bee6e4d61b44213e2db6eb184fcb69abb523b356878d630609187f"
+    },
+    {
+      "bytes": 126,
+      "name": "letter.md",
+      "sha256": "0201a02a8c4ba1491de33e341289a674e6d08fe3df2504950dffec184739d6ce"
+    },
+    {
+      "bytes": 457,
+      "name": "partial-report.md",
+      "sha256": "7289d0225bbceb33665e7cf63651beae34e3b9dc14b0b075da89cf5fc90153f2"
+    },
+    {
+      "bytes": 36886,
+      "name": "source-resume.docx",
+      "sha256": "ad4ee261383cd581a440b3478eae537585832399dbd084eae4cf69219b6c634d"
+    },
+    {
+      "bytes": 37950,
+      "name": "workbook.docx",
+      "sha256": "3adac177f797b2c18a7bdbe5d382d5734c9984b6857ed0b71eb6b64fe1dc5568"
+    }
+  ],
+  "fixture": "synthetic-v1",
+  "kit_commit": "1cdd354ae520516cac30125c57a23c4a469068b2",
+  "kit_files": {
+    "README.md": "35d6f94338f9857082b768f76a9c36f6bd956fecfb29fdb1f149dbf0d0c09e2b",
+    "WORKBOOK_TEMPLATE.md": "9f7f14ac85b56af82395e314b8b77c5a726b384452e58d9d7a6588a303cb254f",
+    "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "example_input.json": "df48052f73d95971912181b6796c5a8a686817c536a93be8b7a094d524cb7d86",
+    "export.py": "93d0798081c371d46b5d0d6d2d5bbb665d749904b199a7a6a6e5d2ef2c14debc",
+    "letter.py": "3e8fe61356127df8992d1afa56f55db11fc4c07781846f99394f179f34bd123d",
+    "pages.py": "28d80f5d162f942751df708f05f40e1b6e69ec31d607c147cbcec02cde296527",
+    "resume_import.py": "8a2069a2045bb6cc5a95776cd3c8562ff1e13eebd686047396d623d13c484739",
+    "resume_template.py": "e8095c637bd55f14e5926497a6be89b736d5f1a6dca5103b8be22021adcfb1e4",
+    "workbook.py": "c6964aeb7033ba2ed39feee6ea5833c71899b1cf354e6a2eacef22f92b22cc47"
+  },
+  "recipe_sha256": "aa94d36a794da60cd79b8feb53d30b7ea293c5ebe2a24072ef1773de3a0595e1"
+}
