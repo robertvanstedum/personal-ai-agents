@@ -83,6 +83,8 @@ approval: MC proposes, Robert says yes in the chat, the portal writes. Both rule
   `MINIMOI_MC_TOOLS_TICKETS=1` and `MINIMOI_MC_TOOLS_COMMENTS=1` in `/opt/minimoi/.env`, and redeploys the portal alone
   (about 30 s; MC's container is not restarted). It ends by printing `issue comments on | tickets on`.
 - The token is never in `.env` (every main service loads `.env`) and never in MC's container.
+- MC's container must also offer both tools (`docker/mc-agent-container/openclaw.json`, plugin `tools`). The ticket tool
+  was left out on 25 Oct and added in `mc-agent-v0.1.14-2`; without it MC reports `plugin: not_offered`.
 - **Rotate** (before the expiry): update the parameter, run `issues on` again.
 - **Off:** `issues off` (removes the file and both flags). `switch cos` also clears both flags.
 
