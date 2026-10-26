@@ -98,3 +98,12 @@ def test_cos_prod_script_parses_and_never_prints_the_key():
     text = path.read_text()
     assert "echo \"$out\"" not in text and "cat \"$KEY_FILE\"\n" not in text
     assert '"$ROOT/scripts/deploy_scoped_release.sh" "$tag" cos-agent-a' in text
+
+
+def test_cos_loads_only_its_allowed_plugins_and_no_paired_node_tools():
+    import json
+    config = json.loads((REPO / "docker/cos-agent-a/openclaw.json").read_text())
+    allow = config["plugins"]["allow"]
+    assert set(allow) == {"memory-core", "anthropic", "xai", "openai", "cos-bounded-search", "mc-cutoff-delivery"}
+    for stock in ("file-transfer", "device-pair", "linux-node", "browser", "canvas", "cua-computer", "github"):
+        assert stock not in allow

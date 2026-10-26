@@ -50,6 +50,14 @@
     }
   },
   "plugins": {
+    "allow": [
+      "memory-core",
+      "anthropic",
+      "xai",
+      "openai",
+      "cos-bounded-search",
+      "mc-cutoff-delivery"
+    ],
     "load": {
       "paths": [
         "/opt/minimoi/openclaw-plugins/cos-bounded-search",

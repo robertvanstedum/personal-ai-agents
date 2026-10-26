@@ -138,6 +138,8 @@ FILE_NOTICE = (
 )
 _FILE_CLAIM = re.compile(
     r"\b(?:ready|available)\s+(?:for|to)\s+download\b|"
+    r"\bsaved\s+(?:it|this|that|them|the\s+\w+)\s+as\s+a\s+(?:downloadable\s+)?file\b|"
+    r"\b(?:a|the|your)\s+downloadable\s+(?:file|document|copy)\b|"
     r"\bdownload\s+(?:link|package)\s+(?:is\s+)?(?:ready|attached)\b|"
     r"\b(?:I(?:[’']ve| have)?|(?:has|have) been|was|is(?: now)?)\s+(?:saved|written|exported|created)\b[^.!?\n]{0,160}\b(?:to|in|at)\s+(?:a\s+)?(?:file\b|[`\"']?(?:/|[A-Z]:\\))",
     re.IGNORECASE,

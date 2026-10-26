@@ -55,6 +55,7 @@ from domains.cos.confer_service import (
 )
 from domains.cos.cost_checkpoint import run_cost_checkpoint
 from domains.cos import conversation_log
+from domains.cos.claim_truth import enforce_file_claims
 from domains.cos import files as cos_files
 from domains.cos import reminders
 from domains.cos.spoken_reply_store import SpokenReplyStore
@@ -1472,10 +1473,13 @@ def _ui_turn(body: dict) -> tuple[dict, int]:
             delivered = _cos_files.delivered_since(before)
             if delivered:
                 payload["files"] = delivered
+            else:
+                # No file reached the outbox: a sentence claiming a saved or downloadable file is untrue (claim_truth).
+                payload["reply"], _ = enforce_file_claims(payload["reply"])
         if not payload.get("operation"):       # notes, reminders and /new keep their own records
             conversation_log.append(_conversations_dir, conversation_id=result.conversation_id, turn_id=result.turn_id,
                                     channel=channel, owner_text=owner_text, attachments=attachment_names,
-                                    reply=result.reply, files=payload.get("files"))
+                                    reply=payload["reply"], files=payload.get("files"))
         if voice_provider and speech_output:
             _spoken_replies.put(
                 result.turn_id,

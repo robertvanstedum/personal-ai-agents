@@ -259,6 +259,10 @@ def tests_for(repo: Repo, path: str) -> tuple[set[str], bool]:
                 seen_modules.add(name)
                 for importer, fixture in repo.importers.get(name, ()):
                     if importer.endswith("conftest.py"):
+                        if not importer.startswith("tests/"):
+                            # e.g. prototype-lab/: CI never runs tests outside tests/ (the full suite is tests/), and
+                            # their own dependencies are not installed (26 Oct 2026: fastapi, #393).
+                            continue
                         if fixture is None:
                             selected.add(importer.rpartition("/")[0] + "/")
                         else:

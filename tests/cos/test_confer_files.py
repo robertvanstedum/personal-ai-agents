@@ -237,3 +237,11 @@ def test_background_turn_gets_the_longer_backend_timeout(cos, monkeypatch):
             break
         time.sleep(0.02)
     assert seen == [openclaw_backend._TURN_TIMEOUT_SECONDS, openclaw_backend.BACKGROUND_TURN_TIMEOUT_SECONDS]
+
+
+def test_a_file_claim_without_a_delivered_file_gets_the_platform_notice(cos, monkeypatch):
+    from domains.cos.claim_truth import FILE_NOTICE
+    monkeypatch.setattr(cos._TestBackend, "call_backend",
+                        lambda self, prompt, context, policy: "Done. I saved it as a downloadable file.")
+    r = cos.app.test_client().post("/ui/send", json={"text": "make me a file"})
+    assert r.status_code == 200 and "files" not in r.json and r.json["reply"].endswith(FILE_NOTICE)
