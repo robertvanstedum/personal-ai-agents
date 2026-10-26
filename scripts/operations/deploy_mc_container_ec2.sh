@@ -80,7 +80,9 @@ prepare() {
 
 mint_search_key() {
   local out
-  out=$(docker exec -i minimoi-model-gateway python3 - <<'PY'
+  # A gateway without its key database cannot issue per-agent keys (prod, 26 Oct). Then MC runs with web search off
+  # and says so; nothing else depends on it, and no shared or master key ever stands in.
+  out=$(docker exec -i minimoi-model-gateway python3 - 2>/dev/null <<'PY'
 import json, os, urllib.request as u
 master = os.environ["LITELLM_MASTER_KEY"]
 req = u.Request("http://127.0.0.1:4000/key/generate", method="POST",
@@ -91,8 +93,11 @@ req = u.Request("http://127.0.0.1:4000/key/generate", method="POST",
                      "metadata": {"role": "guild.mc.search", "caller": "deploy"}}).encode())
 print(json.loads(u.urlopen(req, timeout=60).read())["key"])
 PY
-)
-  [[ "$out" =~ ^sk-[A-Za-z0-9_-]{16,200}$ ]] || die "could not mint MC's search key"
+) || true
+  if [[ ! "$out" =~ ^sk-[A-Za-z0-9_-]{16,200}$ ]]; then
+    log "WARNING: MC's search key could not be minted (gateway key database unavailable?); MC web search stays OFF"
+    return 0
+  fi
   printf 'MC_SEARCH_KEY=%s\n' "$out" >> "$MC_ENV"
   log "minted MC's capped search key (\$5 / 30 days, search route only); not printed"
 }
