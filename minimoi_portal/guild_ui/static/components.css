@@ -467,6 +467,10 @@ body.gu[data-page="floor"] .mc-pill { display: none; }
 .msg-md pre { margin: 0 0 var(--gu-s2); padding: var(--gu-s2); background: var(--gu-surface-2); border: 1px solid var(--gu-border); border-radius: var(--gu-radius); overflow-x: auto; }
 .msg-md pre code { background: none; padding: 0; font-size: var(--gu-size-xs); white-space: pre; overflow-wrap: normal; }
 .msg-md blockquote { margin: 0 0 var(--gu-s2); padding: 0 0 0 var(--gu-s2); border-left: 3px solid var(--gu-border-strong); color: var(--gu-text-dim); }
+/* MC's folded detail under a short answer: a small, quiet control; the answer stays the star. */
+.msg-md details.mc-detail { margin: 0 0 var(--gu-s2); }
+.msg-md details.mc-detail > summary { cursor: pointer; color: var(--gu-text-muted); font-size: 0.9em; width: fit-content; }
+.msg-md details.mc-detail[open] > summary { margin-bottom: var(--gu-s2); }
 .msg-md table { display: block; overflow-x: auto; border-collapse: collapse; margin: 0 0 var(--gu-s2); font-size: var(--gu-size-sm); overflow-wrap: normal; }
 .msg-md th, .msg-md td { border: 1px solid var(--gu-border); padding: 3px 8px; text-align: left; vertical-align: top; }
 .msg-md th { background: var(--gu-surface-2); font-weight: 700; }
