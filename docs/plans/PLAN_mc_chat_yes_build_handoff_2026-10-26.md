@@ -45,7 +45,9 @@ in the same conversation, from Robert's authenticated session.
 - **Typed:** Robert's next on-record note replies to the proposal ("yes", "go ahead").
 - **Spoken:** Guild voice keeps Robert's speech as his own on-record note (owner author, his session), so a spoken yes
   is the same owner turn. MC's own speech, and anything MC reads aloud, never arrive as owner notes and cannot confirm.
-- **Tapped:** the Confirm button on the proposal card.
+- **Tapped:** a small Confirm inside MC's proposal message in the chat, present only while that proposal is pending; no
+  permanent button or layout change (Robert, 26 Oct). Once answered, declined or expired it becomes a plain line in the
+  conversation ("Confirmed 21:14 → sent to Claude Code").
 - **Read-back:** before the yes, MC states (on screen and, in voice, aloud) exactly what it will hand off: target,
   Robert's request, the constraints. After delivery it confirms what was sent. A misheard request is heard before any
   handoff; a yes binds only to the immediately preceding proposal, and only once.
