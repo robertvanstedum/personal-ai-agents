@@ -95,7 +95,8 @@ MC_IMAGE_PREFIXES = ("docker/mc-agent-container/",)
 # scoped deploy never recreates it (--no-deps), so its block keeps the full
 # fallback, as does any other service or top-level key (networks, volumes).
 PROD_COMPOSE = "docker-compose.prod.yml"
-COMPOSE_SERVICE_OWNERS = {**{service: (service,) for service in ALL_SERVICES}, "vault-ask": ("portal",)}
+COMPOSE_SERVICE_OWNERS = {**{service: (service,) for service in ALL_SERVICES}, "vault-ask": ("portal",),
+                          "supervisor": ("portal",)}
 
 
 # Top-level definitions a service uses by name: they are part of its rendered config.

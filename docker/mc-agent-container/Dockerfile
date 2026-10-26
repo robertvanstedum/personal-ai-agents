@@ -21,7 +21,7 @@ ENV DISABLE_AUTOUPDATER=1 \
 COPY --chown=root:root docker/mc-agent-container/openclaw.json docker/mc-agent-container/start.sh docker/mc-agent-container/egress-proxy.mjs /opt/minimoi/mc-agent/
 # The reviewed portal relay (relay v2; byte-identical to the pinned native relay source). Runs as the mc-relay service.
 COPY --chown=root:root docker/mc-agent/relay_v2.mjs /opt/minimoi/mc-agent/relay_v2.mjs
-COPY --chown=root:root services/mc_operations/personas/mc-chat/releases/0.1.14/ /opt/minimoi/mc-agent/persona/
+COPY --chown=root:root services/mc_operations/personas/mc-chat/releases/0.1.15/ /opt/minimoi/mc-agent/persona/
 # Phase 2: the MiniMoi tools plugin (the same reviewed source native MC loads) and its two fixed host helpers, plus the
 # fixed TCP forwarder that is the plugin's only way to the portal (via the tools door).
 COPY --chown=root:root services/mc_operations/plugins/minimoi-tools/ /opt/minimoi/mc-agent/plugins/minimoi-tools/
@@ -41,6 +41,7 @@ COPY --chown=root:root core/minimoi_actions/sql/ /opt/minimoi/mc-release/mc-migr
 COPY --chown=root:root core/mc_domain_actions/sql/ /opt/minimoi/mc-release/mc-migrations/core/mc_domain_actions/sql/
 COPY --chown=root:root core/mc_tools/sql/ /opt/minimoi/mc-release/mc-migrations/core/mc_tools/sql/
 COPY --chown=root:root core/mc_delegation_dispatcher/sql/ /opt/minimoi/mc-release/mc-migrations/core/mc_delegation_dispatcher/sql/
+COPY --chown=root:root core/supervision/sql/ /opt/minimoi/mc-release/mc-migrations/core/supervision/sql/
 RUN chmod 0755 /opt/minimoi/mc-agent/start.sh \
  && mkdir -p /home/node/.claude /minimoi \
  && chown node:node /home/node/.claude
@@ -49,4 +50,4 @@ USER node
 ENTRYPOINT ["tini", "-g", "--", "/opt/minimoi/mc-agent/start.sh"]
 ARG MINIMOI_RELEASE_SHA=unknown
 ENV MINIMOI_RELEASE_SHA=${MINIMOI_RELEASE_SHA}
-LABEL minimoi.runtime.role=guild-mc minimoi.runtime.implementation=openclaw minimoi.persona=0.1.14
+LABEL minimoi.runtime.role=guild-mc minimoi.runtime.implementation=openclaw minimoi.persona=0.1.15

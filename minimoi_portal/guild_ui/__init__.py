@@ -303,6 +303,8 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
     attach_mc_realtime(app,blueprint_name,environ=app.extensions[blueprint_name]['feature_environ'])
     from .mc_tools_wiring import attach as attach_mc_tools
     attach_mc_tools(app, blueprint_name, services)     # MC's tool listener: nothing happens unless MINIMOI_MC_TOOLS is on
+    from .supervision import attach as attach_supervision
+    attach_supervision(app, app.extensions[blueprint_name]["feature_environ"])   # the Mac sync's path: off unless MINIMOI_SUPERVISION=1
     return bp
 
 
