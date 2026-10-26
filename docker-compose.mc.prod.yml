@@ -1,0 +1,153 @@
+# Master Craftsman's own container on EC2 (spec_mc_agent_container v0.2, phase 3: prod). Its own compose project, beside
+# the main one; deployed and switched only by scripts/operations/mc_container_prod.sh (see docs/runbooks/mc_container_prod.md):
+#   docker compose -p minimoi-mc --env-file /opt/minimoi/mc/mc.env -f /opt/minimoi/docker-compose.mc.prod.yml up -d
+# Same image and shape as dev (docker-compose.mc-agent.dev.yml); differences are only EC2 paths, the ECR image and the
+# portal network. Boundaries:
+#   * mc-agent is only on mc-internal (internal: no route out). Its one way out is mc-egress, a CONNECT proxy that
+#     tunnels only to model-provider hosts. No published port, no Docker socket, no host credentials, no .env.
+#   * no provider API keys anywhere (start.sh refuses); models run on Robert's plans via signed-in CLIs whose state
+#     lives only on the mc-claude-home / mc-auth volumes.
+#   * the portal reaches MC only through mc-relay on minimoi-mc-portal (created by docker-compose.prod.yml; only the
+#     portal and mc-relay are on it). Nothing here can reach postgres or the other services.
+#   * the judgment store /opt/minimoi/private/judgment is NEVER mounted here; a host collector reads MC's records.
+services:
+  mc-egress:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:mc-agent-${MC_IMAGE_TAG:?set MC_IMAGE_TAG}
+    container_name: minimoi-mc-egress
+    entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/egress-proxy.mjs"]
+    restart: unless-stopped
+    networks: [mc-internal, mc-egress-out]
+    mem_limit: 96m
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    # The base image's check probes the OpenClaw gateway, which this service does not run; check the proxy port instead.
+    healthcheck:
+      test: [CMD, node, -e, "require('net').connect(3128,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    labels: [minimoi.runtime.role=guild-mc-egress]
+
+  mc-agent:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:mc-agent-${MC_IMAGE_TAG:?set MC_IMAGE_TAG}
+    container_name: minimoi-mc-agent
+    restart: unless-stopped
+    depends_on: [mc-egress]
+    environment:
+      - OPENCLAW_GATEWAY_TOKEN=${MC_CONTAINER_GATEWAY_TOKEN:?run mc_container_prod.sh tokens}
+      - OPENCLAW_STATE_DIR=/home/node/.openclaw
+      - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
+      - OPENCLAW_DISABLE_BONJOUR=1
+      - HTTPS_PROXY=http://mc-egress:3128
+      - HTTP_PROXY=http://mc-egress:3128
+      - https_proxy=http://mc-egress:3128
+      - http_proxy=http://mc-egress:3128
+      - NO_PROXY=localhost,127.0.0.1
+      - no_proxy=localhost,127.0.0.1
+      - TZ=America/Chicago
+      - MALLOC_ARENA_MAX=2
+      # Phase 2: MC's own tools credential and capped search key (each written to a node-only file at start, then dropped
+      # from the environment), the tools door, and the artifact root (must equal the portal's MINIMOI_MC_ARTIFACT_ROOT).
+      - MC_TOOLS_TOKEN=${MC_TOOLS_TOKEN:-}
+      - MC_SEARCH_KEY=${MC_SEARCH_KEY:-}
+      - MC_TOOLS_DOOR=mc-tools-door
+      - MC_ARTIFACT_ROOT=/opt/minimoi/mc/artifacts
+    volumes:
+      - mc-state:/home/node/.openclaw
+      - mc-auth:/home/node/.config/openclaw
+      - mc-claude-home:/home/node/.claude
+      # Prod phase 1 working folders (EC2 has no Mac folders). Owned by uid 1000 (node), created by mc_container_prod.sh.
+      - /opt/minimoi/mc/work:/minimoi/work
+      - /opt/minimoi/mc/inbox:/minimoi/inbox
+      - /opt/minimoi/mc/workshops:/minimoi/workshops
+      - /opt/minimoi/mc/apprenticeship:/minimoi/apprenticeship:ro
+      # Governed artifacts (minimoi_working_write), at the same path the portal names; and a self-contained repo clone.
+      - /opt/minimoi/mc/artifacts:/opt/minimoi/mc/artifacts
+      - /opt/minimoi/mc/repo:/minimoi/repo
+      # Published specs and design docs (scripts/sync_docs.sh), for reference only.
+      - /opt/minimoi/docs:/minimoi/docs:ro
+    networks: [mc-internal]
+    mem_limit: 2048m          # dev, 25 Oct: OpenClaw ~600-770 MiB idle plus a Claude Code subprocess per turn; 1024m/1536m OOM-killed
+    oom_score_adj: 1000
+    stop_grace_period: 120s   # a SIGKILL before OpenClaw releases its state-directory lease costs ~4 minutes on the next start
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    labels: [minimoi.runtime.role=guild-mc, minimoi.runtime.implementation=openclaw]
+
+  # MC's only way to MiniMoi: a fixed forwarder to the portal's tools listener and the gateway's search route, nothing
+  # else. On mc-internal (MC reaches it) and minimoi-mc-portal (it reaches the portal and the gateway).
+  mc-tools-door:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:mc-agent-${MC_IMAGE_TAG:?set MC_IMAGE_TAG}
+    container_name: minimoi-mc-tools-door
+    entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/tcp-forward.mjs"]
+    restart: unless-stopped
+    environment:
+      - MC_FORWARD=0.0.0.0:5011=minimoi-portal:5011,0.0.0.0:4000=minimoi-model-gateway:4000
+    networks: [mc-internal, mc-portal]
+    mem_limit: 64m
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, node, -e, "require('net').connect(5011,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    labels: [minimoi.runtime.role=guild-mc-tools-door]
+
+  # The portal's only way in (relay v2). No host port: the portal reaches it as http://mc-relay:8790/v1 on
+  # minimoi-mc-portal, with the caller token in /opt/minimoi/.env (MC_RUNTIME_TOKEN). Phase 1: chat only; its job inbox
+  # and handoff folders are its own and empty.
+  mc-relay:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:mc-agent-${MC_IMAGE_TAG:?set MC_IMAGE_TAG}
+    container_name: minimoi-mc-relay
+    entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/relay_v2.mjs"]
+    restart: unless-stopped
+    depends_on: [mc-agent]
+    environment:
+      - MC_RELAY_TOKEN=${MC_RELAY_CALLER_TOKEN:?run mc_container_prod.sh tokens}
+      - MC_OPENCLAW_GATEWAY_TOKEN=${MC_CONTAINER_GATEWAY_TOKEN:?run mc_container_prod.sh tokens}
+      - MC_RELAY_TARGET=http://mc-agent:18789
+      - MC_RELAY_PORT=8790
+      - MC_RELAY_STATE_DIR=/relay/state
+      - MC_RELAY_HANDOFF=/relay/handoff
+      - MC_RELAY_INBOX_ROOT=/relay/inbox
+      - MC_RELAY_WORKSPACE=/mc-state/workspace-mc
+      - MC_RELAY_AGENT_DB=/mc-state/agents/mc-agent/openclaw-agent.sqlite
+      - MC_RELAY_PROJECT_ROOT=/relay/project
+      - MC_RELAY_IDLE_MS=300000
+      - MC_RELAY_DEADLINE_MS=300000
+    volumes:
+      - mc-state:/mc-state:ro
+      - mc-relay-state:/relay
+    networks:
+      mc-internal:
+      mc-portal:
+        aliases: [mc-relay]
+    mem_limit: 128m
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    # The base image's check probes the OpenClaw gateway, which this service does not run; check the relay's own healthz.
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8790/healthz').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    labels: [minimoi.runtime.role=guild-mc-relay]
+
+volumes:
+  mc-relay-state: {name: minimoi-mc-relay-state}
+  mc-state: {name: minimoi-mc-state}
+  mc-auth: {name: minimoi-mc-auth}
+  mc-claude-home: {name: minimoi-mc-claude-home}
+
+networks:
+  mc-internal:
+    name: minimoi-mc-internal
+    internal: true
+  mc-egress-out:
+    name: minimoi-mc-egress-out
+  mc-portal:
+    name: minimoi-mc-portal
+    external: true

@@ -1307,6 +1307,7 @@ def _owner_tool_proposal_command(found):
         return None
     kind, code = parsed
     handler = proposals(environ, start_research=lambda p: _start_proposed_research(found, p),
+                        start_build=lambda p: _start_proposed_research(found, p, scope="build"),
                         delivery=current_app.extensions.get("mc_invite_delivery"), lessons=_lesson_ledger(principal),
                         read_shown=proposal_reader(services, principal))
     try:
@@ -1320,9 +1321,10 @@ def _owner_tool_proposal_command(found):
     return _platform_outcome(floor, "mc-tool-" + note_id + "-reply", result, area="Guild")
 
 
-def _start_proposed_research(found, proposal):
-    """Start the research MC proposed and the owner confirmed. The brief is the owner's own kept note from the
-    proposing turn, exactly as for "Ask Claude Code to research: …"; MC's title only names the job."""
+def _start_proposed_research(found, proposal, scope="research"):
+    """Start the research (or, scope="build", the build) MC proposed and the owner confirmed. The brief is the owner's
+    own kept note from the proposing turn, exactly as for "Ask Claude Code to research: …"; MC's title only names the
+    job. A build runs in a fresh checkout on its own branch, with no push or GitHub (core/mc_delegation_runner)."""
     from .jobs_api import manager
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     mgr = manager()
@@ -1334,7 +1336,7 @@ def _start_proposed_research(found, proposal):
     agent, title = proposal["payload"]["agent"], proposal["payload"]["title"]
     who = "Claude Code" if agent == "claude-code" else "Codex"
     job, refusal = mgr.start(conv, principal, asked, proposal["owner_turn_id"], None, title=f"{who}: {title}"[:80],
-                             agent=agent)
+                             agent=agent, scope=scope)
     if refusal is not None:
         return "refused", None
     mgr.wake.set()

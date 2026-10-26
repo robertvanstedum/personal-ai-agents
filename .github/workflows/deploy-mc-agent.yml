@@ -1,0 +1,119 @@
+name: Master Craftsman container release
+
+# Tag-only release of Master Craftsman's own container (spec_mc_agent_container v0.2, phase 3; runbook
+# docs/runbooks/mc_container_prod.md). Never runs on push to main. Builds the one MC image, then starts or updates ONLY
+# the independent `minimoi-mc` compose project via scripts/operations/deploy_mc_container_ec2.sh. It never switches the
+# portal: pointing the Guild chat at MC is a separate operator step (`deploy_mc_container_ec2.sh switch mc|cos`).
+
+on:
+  push:
+    tags: ['mc-agent-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing approved mc-agent-v* tag to (re)deploy'
+        required: true
+
+env:
+  REGISTRY: 332704997792.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.t.outputs.tag }}
+    steps:
+      - id: t
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then TAG="$INPUT_TAG"; else TAG="${GITHUB_REF#refs/tags/}"; fi
+          # Validate before the value reaches any shell/SSM command (same grammar as deploy_mc_container_ec2.sh).
+          [[ "$TAG" =~ ^mc-agent-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+(\.[A-Za-z0-9]+)*)?$ ]] || { echo "invalid tag '$TAG'"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  build-push:
+    needs: resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      - name: Tagged source sanity
+        run: |
+          grep -q '^FROM ghcr.io/openclaw/openclaw:[0-9.]*@sha256:' docker/mc-agent-container/Dockerfile
+          bash -n scripts/operations/deploy_mc_container_ec2.sh
+          python3 -c "import json; m=json.load(open('services/mc_operations/personas/mc-chat/releases/0.1.12/manifest.json')); assert m"
+
+      - name: Build the MC image
+        run: |
+          docker build --platform linux/amd64 -f docker/mc-agent-container/Dockerfile \
+            --build-arg MINIMOI_RELEASE_SHA=${GITHUB_SHA} -t mc-agent-local .
+
+      - name: The image refuses provider keys and a tampered persona (start.sh checks)
+        run: |
+          set +e
+          docker run --rm -e ANTHROPIC_API_KEY=synthetic mc-agent-local > /tmp/key.out 2>&1; code=$?
+          set -e
+          test "$code" = 78 && grep -q "REFUSED: provider key ANTHROPIC_API_KEY" /tmp/key.out
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push the tested image
+        run: |
+          IMG="$REGISTRY/minimoi/cos-scheduler:${{ needs.resolve.outputs.tag }}"
+          docker tag mc-agent-local "$IMG"
+          docker push "$IMG"
+
+  deploy:
+    needs: [resolve, build-push]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Unpack the release bundle from the MC image on EC2, then deploy the MC project (portal unchanged)
+        run: |
+          TAG=${{ needs.resolve.outputs.tag }}
+          IMG="$REGISTRY/minimoi/cos-scheduler:$TAG"
+          # The image carries its own host-side bundle (compose, scripts, policy, migrations): one immutable artifact.
+          # The database migration, the policy approval and the switch are separate operator steps (runbook).
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --timeout-seconds 900 \
+            --parameters "commands=[\"set -e\",\"aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REGISTRY >/dev/null\",\"docker pull -q $IMG\",\"rm -rf /opt/minimoi/mc-release && install -d -m 0700 /opt/minimoi/mc-release\",\"docker run --rm --user 0 --entrypoint sh -v /opt/minimoi/mc-release:/out $IMG -c 'cp -R /opt/minimoi/mc-release/. /out/'\",\"install -m 0644 /opt/minimoi/mc-release/docker-compose.mc.prod.yml /opt/minimoi/docker-compose.mc.prod.yml\",\"install -m 0755 /opt/minimoi/mc-release/deploy_mc_container_ec2.sh /opt/minimoi/mc-release/mc_prod_db_migrate.sh /opt/minimoi/scripts/\",\"install -m 0644 /opt/minimoi/mc-release/judgment_store.py /opt/minimoi/mc-release/mc_container_security_test.py /opt/minimoi/mc-release/mc_container_model_tests.py /opt/minimoi/scripts/\",\"rm -rf /opt/minimoi/mc-migrations && cp -R /opt/minimoi/mc-release/mc-migrations /opt/minimoi/mc-migrations\",\"/opt/minimoi/scripts/deploy_mc_container_ec2.sh deploy $TAG\",\"/opt/minimoi/scripts/deploy_mc_container_ec2.sh status\"]" \
+            --query 'Command.CommandId' --output text)
+          echo "Deploy command ID: $COMMAND_ID"
+          for i in $(seq 1 90); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" \
+              --instance-id ${{ secrets.EC2_INSTANCE_ID }} --query 'Status' --output text 2>/dev/null || echo Pending)
+            echo "[$i/90] $STATUS"
+            [ "$STATUS" = "Success" ] && break
+            case "$STATUS" in Failed|Cancelled|TimedOut)
+              aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
+                --query '[StandardOutputContent,StandardErrorContent]' --output text 2>/dev/null || true
+              exit 1;;
+            esac
+            sleep 10
+          done
+          [ "$STATUS" = "Success" ]
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
+            --query 'StandardOutputContent' --output text | tail -25

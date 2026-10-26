@@ -268,3 +268,50 @@ def test_incomplete_production_shared_file_config_is_all_held_off(missing):
     admitted = production_environ(config)
     assert set(PRODUCTION_COS_FILES).isdisjoint(admitted)
     assert admitted["MINIMOI_GUILD_MC"] == "cos"  # Existing text-only selection stays available.
+
+
+MC_RELAY = "http://mc-relay:8790/v1"
+
+
+def test_production_chat_mc_uses_the_mc_container_relay_only(load_portal, monkeypatch):
+    """Master Craftsman's own container (spec_mc_agent_container §5): MINIMOI_GUILD_CHAT=mc, the exact relay and a token."""
+    monkeypatch.setenv("MINIMOI_GUILD_PRODUCTION", "1")
+    monkeypatch.setenv("MINIMOI_GUILD_CHAT", "mc")
+    monkeypatch.setenv("MC_RUNTIME_URL", MC_RELAY)
+    monkeypatch.setenv("MC_RUNTIME_TOKEN", "synthetic-caller-token")
+    monkeypatch.setenv("MC_RUNTIME_CHAT_MODEL", "openclaw/mc-chat")
+    monkeypatch.setenv("MINIMOI_GUILD_MC", "stub")                 # still ignored: the chat partner decides
+    portal = load_portal(next_flag="1", base_url=PROD)
+    services = portal.app.extensions["guild_ui_next"]["services"]
+    assert services.mc.kind == "openclaw" and services.mc_turns is True and services.mc_stream is True
+
+
+@pytest.mark.parametrize("url,token", [
+    ("http://host.lima.internal:18796/v1", "t"),          # the dev native relay
+    ("http://mc-relay:8790/v1/../x", "t"),
+    ("https://mc-relay:8790/v1", "t"),
+    ("http://cos-agent-a:18789/v1", "t"),
+    ("http://mc-relay:8791/v1", "t"),
+    (MC_RELAY, ""),                                       # no caller token
+    ("", "t"),
+])
+def test_production_chat_mc_with_any_other_relay_or_no_token_is_off(load_portal, monkeypatch, url, token):
+    monkeypatch.setenv("MINIMOI_GUILD_PRODUCTION", "1")
+    monkeypatch.setenv("MINIMOI_GUILD_CHAT", "mc")
+    monkeypatch.setenv("MC_RUNTIME_URL", url)
+    monkeypatch.setenv("MC_RUNTIME_TOKEN", token)
+    portal = load_portal(next_flag="1", base_url=PROD)
+    services = portal.app.extensions["guild_ui_next"]["services"]
+    assert services.mc.kind == "off" and services.mc_turns is False
+
+
+def test_production_chat_mc_admits_voice_like_cos_but_never_the_cos_shared_files():
+    from minimoi_portal.guild_mounts import production_environ, PRODUCTION_COS_FILES
+    flags = {"MINIMOI_GUILD_CHAT": "mc", "MC_RUNTIME_URL": MC_RELAY, "MC_RUNTIME_TOKEN": "t",
+             "MINIMOI_GUILD_VOICE_PRODUCTION": "1", "MINIMOI_MC_VOICE": "1", "MINIMOI_DICTATION": "1",
+             "MINIMOI_MC_MANAGED_REALTIME": "1", **{name: "/tmp/synthetic" for name in PRODUCTION_COS_FILES}}
+    admitted = production_environ(flags)
+    assert admitted["MINIMOI_MC_VOICE"] == "1" and admitted["MINIMOI_DICTATION"] == "1"
+    assert "MINIMOI_MC_MANAGED_REALTIME" not in admitted
+    assert not set(PRODUCTION_COS_FILES) & set(admitted)
+    assert admitted["MINIMOI_GUILD_MC"] == "openclaw"

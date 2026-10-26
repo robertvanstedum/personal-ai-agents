@@ -7,7 +7,7 @@
 * The DSN comes from a private file (0600) or, with ``--dsn-env NAME``, from this process's environment (read once,
   then removed); never from the command line, and never passed to the child (its environment is an allowlist).
 * Before each claim the mirror is fetched, so the dispatcher's exact commit is present.
-* Actors: only those with a real budget adapter (Claude Code today). Scopes: research.
+* Actors: only those with a real budget adapter (Claude Code today). Scopes: research by default; build with --scopes research,build.
 * Each pass is one ``run_once``; a failed pass is logged by type and the loop continues.
 """
 from __future__ import annotations
@@ -60,6 +60,9 @@ def main(argv=None) -> int:
     p.add_argument("--max-cost-usd", type=float, default=5.0)
     p.add_argument("--interval", type=float, default=20.0)
     p.add_argument("--once", action="store_true")
+    # research (read-only) by default; build only when the operator enables it here AND Robert confirmed a build
+    # proposal for the job (commands.py: fresh checkout, edits only, no push or GitHub).
+    p.add_argument("--scopes", default="research", help="comma list from: research, build")
     args = p.parse_args(argv)
     mirrors = {}
     for item in args.mirror:
@@ -70,7 +73,10 @@ def main(argv=None) -> int:
     dsn = _dsn(args.dsn_file.expanduser()) if args.dsn_file else _dsn_from_env(args.dsn_env)
     store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=args.principal,
                             environment=args.environment)
-    cfg = runner.RunnerConfig(runner_id=args.runner_id, actors=tuple(ENFORCERS), scopes=("research",),
+    scopes = tuple(dict.fromkeys(s.strip() for s in args.scopes.split(",") if s.strip()))
+    if not scopes or not set(scopes) <= {"research", "build"}:
+        raise SystemExit("--scopes takes research and/or build")
+    cfg = runner.RunnerConfig(runner_id=args.runner_id, actors=tuple(ENFORCERS), scopes=scopes,
                               repositories={k: str(v) for k, v in mirrors.items()},
                               workspace_root=args.workspace_root.expanduser(),
                               artifact_root=args.artifact_root.expanduser(), max_cost_usd=args.max_cost_usd,

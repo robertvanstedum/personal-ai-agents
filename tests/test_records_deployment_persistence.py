@@ -141,7 +141,7 @@ def test_real_offline_render_proves_project_isolation_and_future_portal_tag(tmp_
     assert 'minimoi-records'not in main['services'] and set(backend['services'])=={'minimoi-records'}
     assert main['services']['portal']['image'].endswith(':future-release')
     assert backend['services']['minimoi-records']['image']==inputs['image']
-    assert set(main['services']['portal']['networks'])=={'default','iotconnect-edge','records-production'}
+    assert set(main['services']['portal']['networks'])=={'default','iotconnect-edge','mc-portal','records-production'}
 
 def test_incomplete_attempt_is_never_an_active_binding(inputs):
     marker=Path(inputs['state'])/'INCOMPLETE';marker.write_text('{}')

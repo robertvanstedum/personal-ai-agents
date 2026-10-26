@@ -30,11 +30,18 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class Endpoint:
+    # Remote portals the worker may pull from (plan 2c): HTTPS with certificate verification, exactly these hosts, the
+    # default port, no redirects, no proxy. Anything else stays the original loopback-only rule.
+    REMOTE_HOSTS=frozenset({'minimoi.ai','dev.minimoi.ai'})
+
     def __init__(self,url,token):
         u=urlsplit(url)
-        if (u.scheme!='http' or u.hostname!='127.0.0.1' or not u.port or u.username or u.password or
+        loopback=u.scheme=='http' and u.hostname=='127.0.0.1' and bool(u.port)
+        remote=u.scheme=='https' and u.hostname in self.REMOTE_HOSTS and u.port is None
+        if ((not loopback and not remote) or u.username or u.password or
                 u.path!='/internal/mc/v1/agent-worker' or u.query or u.fragment):
             raise Refused('worker_endpoint_invalid')
+        self.timeout=15 if remote else 5
         if type(token) is not str or not 32<=len(token)<=256:
             raise Refused('worker_credential_invalid')
         self.url,self.token=url,token
@@ -44,7 +51,7 @@ class Endpoint:
         raw=json.dumps(body,separators=(',',':')).encode()
         if len(raw)>16384:raise Refused('worker_request_bound')
         req=urllib.request.Request(self.url,data=raw,headers={'Content-Type':'application/json','Authorization':'Bearer '+self.token})
-        with self.opener.open(req,timeout=5) as response:
+        with self.opener.open(req,timeout=self.timeout) as response:
             raw=response.read(65537)
         if len(raw)>65536:raise Refused('worker_response_bound')
         value=json.loads(raw)

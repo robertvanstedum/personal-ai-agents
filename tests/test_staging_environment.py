@@ -87,6 +87,9 @@ EXPECTED_PROD_MOUNTS = [
     ("portal", "/opt/minimoi/auth/users.json", "/app/minimoi_portal/auth/users.json"),
     ("portal", "/opt/minimoi/auth/guests.json", "/app/minimoi_portal/auth/guests.json"),
     ("portal", "/opt/minimoi/agent_logs", "/app/agent_logs"),
+    # Master Craftsman's own container (docs/runbooks/mc_container_prod.md): its protected files and lesson store.
+    ("portal", "/opt/minimoi/mc/portal", "/run/secrets/mc"),
+    ("portal", "/opt/minimoi/data/mc-lessons", "/app/data/mc-lessons"),
     ("portuguese", "/opt/minimoi/data/portuguese", "/app/domains/portuguese/data"),
     ("postgres", "postgres-data", "/var/lib/postgresql"),
     ("system-bot", "/opt/minimoi/data/german", "/app/domains/german/data"),

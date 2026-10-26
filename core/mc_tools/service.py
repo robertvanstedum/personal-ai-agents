@@ -1032,6 +1032,18 @@ class ToolService:
             return self._pending_tool_proposal(conn, b, "delegate_research", args,
                                                effects.request("delegate.propose_research", args), words)
 
+    def _delegate_build(self, args, caller, observation):
+        if not self.delegation:
+            return refused("tool_unavailable")
+        who = AGENT_NAMES[args["agent"]]
+        words = (f"Hand your message to {who} to build (“{args['title']}”)? It works in a fresh copy of the repository "
+                 "on a branch of its own: no push, no merge, no production release, cost cap 5 USD. Your own message "
+                 "is the brief; its result and changes come back here for review.")
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+            return self._pending_tool_proposal(conn, b, "delegate_build", args,
+                                               effects.request("delegate.propose_build", args), words)
+
     def _access_invite(self, args, caller, observation):
         if not self.invites or self.guests_lookup is None:
             return refused("tool_unavailable")

@@ -30,9 +30,10 @@ Shop floor can mount on minimoi.ai only when ALL of these hold: BASE_URL's
 host is exactly ``minimoi.ai`` (never ``www``), ``MINIMOI_GUILD_NEXT`` is on,
 and ``MINIMOI_GUILD_PRODUCTION`` is on. Neither switch alone does it, and
 ``MINIMOI_GUILD_ALLOWED_HOSTS`` can never name a production host. There the
-prototype is always refused, and Master Craftsman is held off whatever
-``MINIMOI_GUILD_MC*`` says (no relay exists in production; the chat shows an
-honest "not connected" and never a stub). Everything below still applies.
+prototype is always refused, and ``MINIMOI_GUILD_MC*`` is ignored: the chat
+partner comes only from ``MINIMOI_GUILD_CHAT`` (``cos``, or ``mc`` toward the
+exact MC container relay; see ``production_environ``). Otherwise the chat shows
+an honest "not connected" and never a stub. Everything below still applies.
 
 Both mounts use the portal's real owner guard. A mount that is switched on but
 fails to register never falls back to anything: its prefix answers 503 (JSON
@@ -252,29 +253,52 @@ def is_production_activation(base_url, environ) -> bool:
 
 
 CHAT_VAR = "MINIMOI_GUILD_CHAT"
+# Master Craftsman's own container (spec_mc_agent_container §5, phase 3): MINIMOI_GUILD_CHAT=mc admits the openclaw backend
+# in production only toward this exact relay address on the dedicated portal↔MC network, with a caller token. Rollback is
+# MINIMOI_GUILD_CHAT=cos.
+PRODUCTION_MC_RELAY_URL = "http://mc-relay:8790/v1"
+PRODUCTION_MC_ADMITTED = ("MINIMOI_GUILD_MC", "MINIMOI_GUILD_MC_TURNS", "MINIMOI_GUILD_MC_STREAM")
+
+
+def _production_chat(environ) -> str:
+    """The explicit production chat partner: "cos", "mc" (only with the exact relay and a token), or "" (off)."""
+    chat = str(environ.get(CHAT_VAR, "")).strip().lower()
+    if chat == "mc":
+        url = str(environ.get("MC_RUNTIME_URL", "")).strip().rstrip("/")
+        if url != PRODUCTION_MC_RELAY_URL or not str(environ.get("MC_RUNTIME_TOKEN", "")).strip():
+            log.warning("guild mounts: MINIMOI_GUILD_CHAT=mc needs MC_RUNTIME_URL=%s and a caller token; chat stays off",
+                        PRODUCTION_MC_RELAY_URL)
+            return ""
+    return chat if chat in ("cos", "mc") else ""
 
 
 def production_environ(environ) -> dict:
-    """The environment the production mount reads. Master Craftsman is removed; the only conversation partner that can be
-    switched on is the existing Chief of Staff, by the explicit MINIMOI_GUILD_CHAT=cos (it uses COS_BACKEND, the address the
-    portal already proxies /app/cos to). The four shared-agent attachment settings are admitted only for that selection and valid paths/UID/GID. Anything else leaves the chat honestly "off"."""
+    """The environment the production mount reads. Every MINIMOI_GUILD_MC* setting is removed; the conversation partner is
+    switched on only by the explicit MINIMOI_GUILD_CHAT: =cos is the existing Chief of Staff (COS_BACKEND, the address the
+    portal already proxies /app/cos to); =mc is Master Craftsman's own container, admitted only toward
+    PRODUCTION_MC_RELAY_URL with a caller token. The four shared-agent attachment settings are admitted only for that selection and valid paths/UID/GID. Anything else leaves the chat honestly "off"."""
     held_off = set(PRODUCTION_HELD_OFF) | set(PRODUCTION_COS_FILES)
+    chat = _production_chat(environ)
     # The existing explicit CoS selection is the authority; file paths and runtime
     # ownership must all validate before any attachment configuration is admitted.
-    if str(environ.get(CHAT_VAR, "")).strip().lower() == "cos":
+    if chat == "cos":
         from .guild_ui.mc_files import cos_dirs
         if cos_dirs(environ) is not None:
             held_off.difference_update(PRODUCTION_COS_FILES)
-    if flag_on(environ, "MINIMOI_GUILD_VOICE_PRODUCTION") and str(environ.get(CHAT_VAR, "")).strip().lower() == "cos":
+    if flag_on(environ, "MINIMOI_GUILD_VOICE_PRODUCTION") and chat in ("cos", "mc"):
         held_off.difference_update({"MINIMOI_MC_VOICE", "MINIMOI_DICTATION"})
         # Separate production admission: ordinary speech opt-in alone must not
         # enable controlled sessions. Schema/runtime checks remain in install().
         if flag_on(environ, "MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION"):
             held_off.discard("MINIMOI_MC_MANAGED_REALTIME")
     env = {k: v for k, v in dict(environ).items() if k not in held_off}
-    if str(env.get(CHAT_VAR, "")).strip().lower() == "cos":
+    if chat == "cos":
         env["MINIMOI_GUILD_MC"] = "cos"
         env["MINIMOI_GUILD_MC_TURNS"] = "1"
+    elif chat == "mc":
+        env["MINIMOI_GUILD_MC"] = "openclaw"
+        env["MINIMOI_GUILD_MC_TURNS"] = "1"
+        env["MINIMOI_GUILD_MC_STREAM"] = "1"
     return env
 
 
@@ -301,7 +325,8 @@ def mount_all(app, *, environ, owner_guard, current_user, **next_kwargs) -> dict
     if is_production_activation(base_url, environ):
         if flag_on(environ, PROTO_FLAG):
             log.warning("guild mounts: MINIMOI_GUILD_PROTO ignored on production; the prototype is never mounted there")
-        log.warning("guild mounts: production activation (BASE_URL %r): /guild-next only, Master Craftsman held off", base_url)
+        log.warning("guild mounts: production activation (BASE_URL %r): /guild-next only, chat partner %r", base_url,
+                    _production_chat(environ) or "off")
         return {"guild_proto": "refused_production",
                 "guild_next": mount_guild_next(app, environ=production_environ(environ), owner_guard=owner_guard,
                                                current_user=current_user, **next_kwargs)}

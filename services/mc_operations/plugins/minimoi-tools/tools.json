@@ -401,6 +401,33 @@
       }
     },
     {
+      "name": "minimoi_delegate_build",
+      "capability": "delegate.propose_build",
+      "label": "Propose a build handoff",
+      "description": "Propose handing what Robert asked in THIS message to Claude Code to BUILD: a fresh copy of the repository, a branch of its own, no push, no merge, no production release, cost cap 5 USD. His own message is the brief; you give only a short title. Before he answers, say plainly what you will hand over. It starts only after he replies yes (typed, spoken or the Confirm in the chat).",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent",
+          "title"
+        ],
+        "properties": {
+          "agent": {
+            "type": "string",
+            "enum": [
+              "claude-code"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 80
+          }
+        }
+      }
+    },
+    {
       "name": "minimoi_access_invite",
       "capability": "access.propose_invite",
       "label": "Propose a Meu Portugu\u00eas login",

@@ -81,6 +81,8 @@ rsync_path "${DATA_DIR}/model_gateway_receipts.jsonl" "model_gateway_receipts.js
 rsync_path "${DATA_DIR}/research_dives/"         "research_dives/"
 rsync_path "${DATA_DIR}/german/"                 "german/"
 rsync_path "${DATA_DIR}/portuguese/"             "portuguese/"
+# Master Craftsman's lesson store (portal-owned; docs/runbooks/mc_container_prod.md).
+rsync_path "${DATA_DIR}/mc-lessons/"             "mc-lessons/"
 rsync_path "${AUTH_DIR}/"                        "auth/"
 # CoS platform notes and explicit reminders: outside data/ so cos-agent-a (which
 # mounts data/ read-write) cannot edit them, so they are named here explicitly.
