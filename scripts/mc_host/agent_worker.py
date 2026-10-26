@@ -50,7 +50,9 @@ class Endpoint:
     def __call__(self,body):
         raw=json.dumps(body,separators=(',',':')).encode()
         if len(raw)>16384:raise Refused('worker_request_bound')
-        req=urllib.request.Request(self.url,data=raw,headers={'Content-Type':'application/json','Authorization':'Bearer '+self.token})
+        # A named user agent: minimoi.ai's edge (Cloudflare, error 1010) refuses Python's default one (26 Oct).
+        req=urllib.request.Request(self.url,data=raw,headers={'Content-Type':'application/json','Authorization':'Bearer '+self.token,
+                                                               'User-Agent':'MiniMoi-agent-worker/1'})
         with self.opener.open(req,timeout=self.timeout) as response:
             raw=response.read(65537)
         if len(raw)>65536:raise Refused('worker_response_bound')
