@@ -192,3 +192,10 @@ def test_the_nightly_run_takes_the_whole_suite_on_main_and_deploys_nothing():
     assert "pytest tests/ -v" in nightly and "file_defect.py" in nightly
     for deploying in ("aws", "ssm", "docker", "secrets.EC2"):
         assert deploying not in nightly
+
+
+def test_a_conftest_outside_tests_is_never_selected(tmp_path):
+    # prototype-lab/ keeps its own tests and dependencies; the suite CI runs is tests/ (26 Oct 2026, #393).
+    files = {"core/shared.py": "", "prototype-lab/p/tests/conftest.py": "import core.shared\n",
+             "tests/test_shared.py": "import core.shared\n", **FILLER}
+    assert _targets(tmp_path, files, ["core/shared.py"]) == {"tests/test_shared.py"}
