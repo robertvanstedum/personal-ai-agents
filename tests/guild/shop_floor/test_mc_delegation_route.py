@@ -85,13 +85,15 @@ def test_stop_reaches_the_delegate(delegating):
     assert [j["state"] for j in fake.jobs.values()] == ["stopped"] and runtime.jobs.stops == []
 
 
-def test_codex_is_refused_up_front_until_its_cost_can_be_capped(delegating):
+def test_codex_takes_research_within_its_30_minute_limit(delegating):
     client, token, cid, mgr, runtime = _rig(delegating)
-    r = _ask(client, token, _keep(client, token, "Ask Codex to look into: the flaky ledger test", conversation_id=cid),
-             conversation_id=cid)
-    body = r.get_json()
-    assert body.get("error") == "delegate_unavailable" and "Nothing was started" in body["message"]
-    assert delegating.extra["delegation"].jobs == {}
+    fake = delegating.extra["delegation"]
+    body = _ask(client, token, _keep(client, token, "Ask Codex to look into: the flaky ledger test", conversation_id=cid),
+                conversation_id=cid).get_json()
+    assert body["job_command"] == "delegate" and "within 30 minutes" in body["message"] and runtime.sent == []
+    mgr.tick()
+    [jid] = fake.jobs
+    assert fake.jobs[jid]["spec"]["agent"] == "codex" and runtime.jobs.starts == []
 
 
 @pytest.mark.parametrize("text", ['Ask Claude Code to research: "quoted"', "Tell Claude Code to research: x y z w",
