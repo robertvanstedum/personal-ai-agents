@@ -49,7 +49,7 @@ mkdir -p "$STATE"
 [ -f "$STATE/openclaw.json" ] || cp "$IMAGE_DIR/openclaw.json" "$STATE/openclaw.json"
 node -e '
 const fs=require("fs"),[img,live]=process.argv.slice(1);
-const PLUGINS_PERMITTED=new Set(["memory-core","anthropic","xai","openai","codex"]);
+const PLUGINS_PERMITTED=new Set(["memory-core","anthropic","xai","openai","codex","minimoi-tools"]);
 const I=JSON.parse(fs.readFileSync(img)),L=JSON.parse(fs.readFileSync(live));
 const isObj=v=>v&&typeof v==="object"&&!Array.isArray(v);
 const merge=(i,l)=>{if(!isObj(i)||!isObj(l))return i;const o={...l};for(const k of Object.keys(i))o[k]=merge(i[k],l[k]);return o;};
@@ -82,6 +82,21 @@ const models=((c.agents||{}).defaults||{}).models||{};
 for (const [ref,v] of Object.entries(models)) if (ref.startsWith("anthropic/") && !((v.agentRuntime||{}).id==="claude-cli")) { console.error(ref+" not on claude-cli"); process.exit(1); }
 ' "$STATE/openclaw.json" || die "config would allow a metered Anthropic route"
 OPENCLAW_CONFIG_PATH="$STATE/openclaw.json" $OPENCLAW config validate --json >/tmp/validate.json 2>&1 || { cat /tmp/validate.json >&2; die "openclaw config validate failed"; }
+
+# 4. MiniMoi tools (phase 2, plan D2/D5). The portal's tools credential arrives in MC_TOOLS_TOKEN and is written to a file
+#    only the node user can read, outside the workspace (the plugin refuses anything else); it is then removed from the
+#    environment so neither the gateway nor any tool process inherits it. The plugin reaches the portal only through
+#    127.0.0.1:5011, which forwards to the tools door and nowhere else.
+if [ -n "${MC_TOOLS_TOKEN:-}" ]; then
+  printf '%s' "$MC_TOOLS_TOKEN" | grep -Eq '^[A-Za-z0-9_-]{32,256}$' || die "MC_TOOLS_TOKEN is not a valid tools credential"
+  ( umask 077; mkdir -p /home/node/.minimoi-tools; printf '%s\n' "$MC_TOOLS_TOKEN" > /home/node/.minimoi-tools/executor.token )
+  chmod 0600 /home/node/.minimoi-tools/executor.token
+  unset MC_TOOLS_TOKEN
+  MC_FORWARD="127.0.0.1:5011=${MC_TOOLS_DOOR:-mc-tools-door}:5011" node "$IMAGE_DIR/tcp-forward.mjs" &
+  log "MiniMoi tools: credential in place, forwarder 127.0.0.1:5011 -> ${MC_TOOLS_DOOR:-mc-tools-door}:5011"
+else
+  log "MiniMoi tools: no credential (MC_TOOLS_TOKEN unset); the plugin registers nothing"
+fi
 
 # After a hard stop, OpenClaw's owner lease on the state directory stays held for a few minutes and then clears on its own
 # ("Another Gateway owner lease is still active"; see docker/mc-agent/start-mc.sh). A gateway that exits within 90 s is

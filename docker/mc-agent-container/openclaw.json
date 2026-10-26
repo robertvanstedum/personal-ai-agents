@@ -31,7 +31,8 @@
       "memory-core",
       "anthropic",
       "xai",
-      "openai"
+      "openai",
+      "minimoi-tools"
     ],
     "entries": {
       "memory-core": {
@@ -40,7 +41,67 @@
             "enabled": false
           }
         }
+      },
+      "minimoi-tools": {
+        "enabled": true,
+        "config": {
+          "enabled": true,
+          "endpoint": "http://127.0.0.1:5011/internal/mc/v1/tools",
+          "tokenFile": "/home/node/.minimoi-tools/executor.token",
+          "agents": [
+            "mc-chat"
+          ],
+          "tools": [
+            "minimoi_agent_contact",
+            "minimoi_agent_status",
+            "minimoi_agent_watch",
+            "minimoi_artifact_recover",
+            "minimoi_board_note_create",
+            "minimoi_board_note_read",
+            "minimoi_board_note_update",
+            "minimoi_board_notes_query",
+            "minimoi_board_operation_read",
+            "minimoi_board_operation_undo",
+            "minimoi_clarify_action",
+            "minimoi_conversation_export",
+            "minimoi_describe_domain",
+            "minimoi_describe_house",
+            "minimoi_github_issues",
+            "minimoi_guest_request_reject",
+            "minimoi_guest_requests",
+            "minimoi_host_health",
+            "minimoi_host_list",
+            "minimoi_host_read",
+            "minimoi_keep_preference",
+            "minimoi_lesson_propose",
+            "minimoi_recall",
+            "minimoi_revoke_preference",
+            "minimoi_working_write"
+          ],
+          "diskPaths": [
+            "/",
+            "/minimoi/work"
+          ],
+          "hostPython": "/usr/bin/python3",
+          "hostHelper": "/opt/minimoi/mc-agent/helpers/inspect.py",
+          "hostArtifactHelper": "/opt/minimoi/mc-agent/helpers/artifact.py",
+          "hostArtifactRoot": "${MC_ARTIFACT_ROOT}",
+          "hostDeniedPaths": [
+            "/home/node/.claude",
+            "/home/node/.config",
+            "/home/node/.openclaw",
+            "/home/node/.minimoi-tools",
+            "/proc",
+            "/run/secrets"
+          ],
+          "allowTokenReadableByAgent": false
+        }
       }
+    },
+    "load": {
+      "paths": [
+        "/opt/minimoi/mc-agent/plugins/minimoi-tools"
+      ]
     }
   },
   "skills": {
@@ -177,6 +238,9 @@
           ],
           "elevated": {
             "enabled": false
+          },
+          "fs": {
+            "workspaceOnly": true
           }
         }
       }

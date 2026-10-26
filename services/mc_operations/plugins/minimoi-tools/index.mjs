@@ -314,7 +314,12 @@ async function boundedJson(response) {
 // plugin announces it to MiniMoi with the executor credential; MiniMoi binds each turn's run to the instance current
 // when the run opened, and a new announcement (a restarted gateway) revokes every turn bound to an earlier one. A
 // callback still in flight from a replaced process is therefore refused even while its owner's turn is live.
-export const INSTANCE = randomBytes(16).toString('hex');
+// Held on globalThis, not in the module: OpenClaw can load this module more than once in one gateway process (seen
+// 25 Oct on the claude-cli route, whose tool bridge imports plugins again). Two module copies with two ids made the
+// second announcement retire the first, so every bridged call was refused as tool_runtime_replaced.
+const PROCESS_STATE = Symbol.for('minimoi-tools/process-state/v1');
+globalThis[PROCESS_STATE] ??= Object.freeze({instance: randomBytes(16).toString('hex'), sealKey: randomBytes(32)});
+export const INSTANCE = globalThis[PROCESS_STATE].instance;
 const ANNOUNCERS = new Map();                      // one state/loop per endpoint, credential and instance
 
 export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, schedule = setTimeout}) {
@@ -357,7 +362,7 @@ export function announcer({url, token, instance = INSTANCE, fetchImpl = fetch, s
 }
 
 export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPaths, docker, fetchImpl = fetch,
-                             allowTokenReadableByAgent = false, sealer, instance = INSTANCE, hostPython, hostHelper, hostDeniedPaths = [], hostArtifactHelper, hostArtifactRoot, hostCareerHelper, hostCareerKit}) {
+                             allowTokenReadableByAgent = false, configuredWorkspaceOnly = [], sealer, instance = INSTANCE, hostPython, hostHelper, hostDeniedPaths = [], hostArtifactHelper, hostArtifactRoot, hostCareerHelper, hostCareerKit}) {
   // Trusted operator configuration, never tool parameters.
   const url = endpointUrl(endpoint);
   if (!/^[A-Za-z0-9_-]{32,256}$/.test(token) || !Array.isArray(agents) || !agents.length
@@ -386,14 +391,18 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
     // The agent's own file tools must not be able to read the credential (review P1-2): OpenClaw's default is
     // tools.fs.workspaceOnly=false. Offer no tools unless this run is workspace-only and the credential lies
     // outside the workspace, or the operator explicitly accepted the risk for dev.
+    // The claude-cli tool bridge calls this factory without fsPolicy (OpenClaw sets it only for rooted execution); there
+    // the agent's configured tools.fs.workspaceOnly is the policy OpenClaw enforces on the CLI's own file tools, so it
+    // stands in. A runtime that does pass fsPolicy is always taken at its word.
+    const workspaceOnly = ctx.fsPolicy == null ? configuredWorkspaceOnly.includes(agentId) : ctx.fsPolicy.workspaceOnly === true;
     if (!allowTokenReadableByAgent) {
       const ws = typeof ctx.workspaceDir === 'string' ? ctx.workspaceDir.replace(/\/+$/, '') + '/' : null;
-      if (ctx.fsPolicy?.workspaceOnly !== true || !ws || typeof tokenFile !== 'string' || tokenFile.startsWith(ws)) return null;
+      if (!workspaceOnly || !ws || typeof tokenFile !== 'string' || tokenFile.startsWith(ws)) return null;
     }
 
-    const careerForContext = careerConfigured && typeof ctx.workspaceDir === 'string' && ctx.fsPolicy?.workspaceOnly === true && ![hostCareerHelper,hostCareerKit].some(p => p.startsWith(ctx.workspaceDir.replace(/\/+$/, '') + '/'));
+    const careerForContext = careerConfigured && typeof ctx.workspaceDir === 'string' && workspaceOnly && ![hostCareerHelper,hostCareerKit].some(p => p.startsWith(ctx.workspaceDir.replace(/\/+$/, '') + '/'));
     const actualEnabled = enabled.filter(t => (t.name !== 'minimoi_career_trial' || careerForContext) && ( !(HOST_TOOLS.includes(t.name) || ARTIFACT_TOOLS.includes(t.name)) ||
-      (ctx.fsPolicy?.workspaceOnly === true && ![hostPython, HOST_TOOLS.includes(t.name) ? hostHelper : hostArtifactHelper].some(p =>
+      (workspaceOnly && typeof ctx.workspaceDir === 'string' && ![hostPython, HOST_TOOLS.includes(t.name) ? hostHelper : hostArtifactHelper].some(p =>
         p.startsWith(ctx.workspaceDir.replace(/\/+$/, '') + '/')))));
     return actualEnabled.map(spec => ({
       name: spec.name, label: spec.label, description: spec.description, parameters: providerParameters(spec),
@@ -509,7 +518,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
   };
 }
 
-const PROCESS_SEALER = runSealer();
+const PROCESS_SEALER = runSealer(globalThis[PROCESS_STATE].sealKey);   // one key per process, like INSTANCE
 
 export default {id: 'minimoi-tools', name: 'MiniMoi tools', register(api) {
   const config = api.pluginConfig || {};
@@ -527,7 +536,8 @@ export default {id: 'minimoi-tools', name: 'MiniMoi tools', register(api) {
                            hostPython: config.hostPython, hostHelper: config.hostHelper, hostDeniedPaths: config.hostDeniedPaths,
                            hostArtifactHelper: config.hostArtifactHelper, hostArtifactRoot: config.hostArtifactRoot,
                            hostCareerHelper: config.hostCareerHelper, hostCareerKit: config.hostCareerKit,
-                           allowTokenReadableByAgent: config.allowTokenReadableByAgent === true});
+                           allowTokenReadableByAgent: config.allowTokenReadableByAgent === true,
+                           configuredWorkspaceOnly: agents.filter(a => api.config?.agents?.entries?.[a]?.tools?.fs?.workspaceOnly === true)});
     announce = announcer({url: endpointUrl(config.endpoint), token});
   } catch {
     (api.logger?.warn ?? console.warn).call(api.logger ?? console, 'minimoi-tools: not registered (credential or configuration unavailable)');

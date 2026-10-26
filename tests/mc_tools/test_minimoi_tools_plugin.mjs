@@ -232,6 +232,18 @@ test('a missing credential registers nothing and never throws into the gateway',
   assert.doesNotThrow(() => plugin.register({...api, pluginConfig: {...api.pluginConfig, endpoint: 'http://10.0.0.1/x'}}));
 });
 
+test('without a runtime fsPolicy (claude-cli tool bridge), the agent configured workspace-only stands in', () => {
+  const opts = {endpoint: 'http://127.0.0.1:5011/internal/mc/v1/tools', token: TOKEN, tokenFile: '/secure/mc/token',
+    agents: ['mc-chat'], tools: ['minimoi_host_health', 'minimoi_host_read'], sealer: runSealer(),
+    hostPython: '/usr/bin/python3', hostHelper: '/opt/h/inspect.py'};
+  const base = {agentId: 'mc-chat', sessionKey: SESSION, workspaceDir: '/ws/mc-chat'};
+  const configured = toolFactory({...opts, configuredWorkspaceOnly: ['mc-chat']});
+  assert.deepEqual(configured({...base}).map(t => t.name).sort(), ['minimoi_host_health', 'minimoi_host_read']);
+  assert.equal(toolFactory(opts)({...base}), null);                                          // not configured
+  assert.equal(configured({...base, fsPolicy: {workspaceOnly: false}}), null);               // the runtime's word wins
+  assert.equal(configured({...base, workspaceDir: '/secure'}), null);                        // token inside the workspace
+});
+
 test('no tools when the agent could read the credential with its own file tools', () => {
   const {make} = setup();
   const base = {agentId: 'mc-chat', sessionKey: SESSION};
@@ -437,4 +449,20 @@ test('GitHub source operation args and canonical links reach model content', asy
   assert.ok(out.content.some(c => c.text.includes(url)));
   const bad=await call(t,'bad_ref',{...args,ref:'main'});
   assert.equal(bad.details.status,'refused');assert.equal(sent.length,1);
+});
+
+test('a second copy of the module in the same process shares the instance and the seal key', async () => {
+  // OpenClaw's claude-cli tool bridge imports plugins again inside the gateway process (25 Oct): one process, one id.
+  const first = await import('../../services/mc_operations/plugins/minimoi-tools/index.mjs');
+  const second = await import('../../services/mc_operations/plugins/minimoi-tools/index.mjs?copy=bridge');
+  assert.notEqual(first, second);
+  assert.equal(second.INSTANCE, first.INSTANCE);
+  assert.match(first.INSTANCE, /^[0-9a-f]{32}$/);
+  // A call sealed by one copy's hook opens in the other copy's tool.
+  const key = globalThis[Symbol.for('minimoi-tools/process-state/v1')].sealKey;
+  const hook = first.sealHook({sealer: first.runSealer(key), tools: ['minimoi_describe_house'], agents: ['mc-chat']});
+  const sealed = hook({toolName: 'minimoi_describe_house', params: {}, toolCallId: 'mcp-1', runId: RUN},
+                      {agentId: 'mc-chat', sessionKey: SESSION, runId: RUN, toolCallId: 'mcp-1'}).params;
+  assert.deepEqual(second.runSealer(key).open(sealed, {toolCallId: 'mcp-1', agentId: 'mc-chat', sessionKey: SESSION}),
+                   {run: RUN, args: {}});
 });

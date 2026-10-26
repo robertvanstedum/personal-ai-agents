@@ -22,6 +22,11 @@ COPY --chown=root:root docker/mc-agent-container/openclaw.json docker/mc-agent-c
 # The reviewed portal relay (relay v2; byte-identical to the pinned native relay source). Runs as the mc-relay service.
 COPY --chown=root:root docker/mc-agent/relay_v2.mjs /opt/minimoi/mc-agent/relay_v2.mjs
 COPY --chown=root:root services/mc_operations/personas/mc-chat/releases/0.1.12/ /opt/minimoi/mc-agent/persona/
+# Phase 2: the MiniMoi tools plugin (the same reviewed source native MC loads) and its two fixed host helpers, plus the
+# fixed TCP forwarder that is the plugin's only way to the portal (via the tools door).
+COPY --chown=root:root services/mc_operations/plugins/minimoi-tools/ /opt/minimoi/mc-agent/plugins/minimoi-tools/
+COPY --chown=root:root scripts/mc_host/inspect.py scripts/mc_host/artifact.py /opt/minimoi/mc-agent/helpers/
+COPY --chown=root:root docker/mc-agent-container/tcp-forward.mjs /opt/minimoi/mc-agent/tcp-forward.mjs
 RUN chmod 0755 /opt/minimoi/mc-agent/start.sh \
  && mkdir -p /home/node/.claude /minimoi \
  && chown node:node /home/node/.claude

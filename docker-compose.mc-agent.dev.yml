@@ -40,8 +40,14 @@ services:
       - no_proxy=localhost,127.0.0.1
       - TZ=America/Chicago
       - MALLOC_ARENA_MAX=2
+      # Phase 2 (MiniMoi tools): MC's tools credential (written to a node-only file at start, then dropped from the
+      # environment) and the artifact root, which must equal the portal's (dev: the Mac path, mounted at that path below).
+      - MC_TOOLS_TOKEN=${MC_TOOLS_TOKEN:-}
+      - MC_TOOLS_DOOR=mc-tools-door
+      - MC_ARTIFACT_ROOT=${HOME}/Projects/personal-ai-agents/_working
     volumes:
       - mc-state:/home/node/.openclaw
+      - ${HOME}/Projects/personal-ai-agents/_working:${HOME}/Projects/personal-ai-agents/_working
       - mc-auth:/home/node/.config/openclaw
       - mc-claude-home:/home/node/.claude
       - ${HOME}/minimoi-mc-repo:/minimoi/repo
@@ -60,6 +66,28 @@ services:
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     labels: [minimoi.runtime.role=guild-mc, minimoi.runtime.implementation=openclaw]
+
+  # MC's only way to MiniMoi (phase 2, plan D2): a fixed forwarder to the portal's internal tools listener and nothing else.
+  # On mc-internal (MC reaches it) and the dev portal's network (it reaches the portal); MC itself stays off that network.
+  mc-tools-door:
+    image: minimoi-dev/mc-agent:current
+    pull_policy: never
+    container_name: minimoi-dev-mc-tools-door
+    entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/tcp-forward.mjs"]
+    restart: on-failure:3
+    environment:
+      - MC_FORWARD=0.0.0.0:5011=minimoi-portal:5011
+    networks: [mc-internal, portal-net]
+    mem_limit: 64m
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, node, -e, "require('net').connect(5011,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    labels: [minimoi.runtime.role=guild-mc-tools-door]
 
   # The portal's way in (relay v2, the same reviewed source as the native relay). Listens only on the Mac's loopback
   # (127.0.0.1:18797), accepts only the portal's existing caller token, and forwards only to mc-agent with MC's own
@@ -107,3 +135,6 @@ networks:
     internal: true
   mc-egress-out:
     name: minimoi-dev-mc-egress-out
+  portal-net:
+    name: minimoi-staging_default
+    external: true
