@@ -35,4 +35,22 @@ sync_secret OPENAI_API_KEY /minimoi/production/openai_api_key
 chmod --reference="$target_env" "$tmp_env"
 chown --reference="$target_env" "$tmp_env"
 mv "$tmp_env" "$target_env"
+
+# The model gateway's key database (role and database litellm_keys; runbook docs/runbooks/mc_container_prod.md): its
+# DATABASE_URL goes to a root 0600 file only the gateway loads, never to .env. Optional: without the parameter the file
+# is left as it is, and a gateway without the file runs on the master key alone.
+gateway_env="$(dirname "$target_env")/gateway-keys.env"
+if keydb_pw=$(aws ssm get-parameter --name /minimoi/production/litellm_keys_db_password --with-decryption \
+      --query 'Parameter.Value' --output text 2>/dev/null); then
+  if [[ "$keydb_pw" =~ ^[0-9a-f]{32,128}$ ]]; then
+    gateway_tmp=$(mktemp "${gateway_env}.sync.XXXXXX")
+    chmod 600 "$gateway_tmp"
+    printf 'DATABASE_URL=postgresql://litellm_keys:%s@postgres:5432/litellm_keys\n' "$keydb_pw" > "$gateway_tmp"
+    mv "$gateway_tmp" "$gateway_env"
+    echo "Model gateway key database URL synchronized from SSM."
+  else
+    echo "WARNING: /minimoi/production/litellm_keys_db_password is not 32-128 hex characters; $gateway_env unchanged."
+  fi
+  keydb_pw=""
+fi
 echo "COS runtime credentials synchronized from SSM."

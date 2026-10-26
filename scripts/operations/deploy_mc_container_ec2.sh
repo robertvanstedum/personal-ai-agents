@@ -6,6 +6,7 @@
 #   deploy_mc_container_ec2.sh switch mc|cos                  point the Guild chat at MC's container (mc) or back at CoS (cos)
 #   deploy_mc_container_ec2.sh collect                        move MC's capture blocks into the private judgment store
 #   deploy_mc_container_ec2.sh approve-policy "<words>"       record Robert's approval of the exact prod policy digest
+#   deploy_mc_container_ec2.sh issues on|off                  MC's GitHub issue writes (comments, tickets) on or off
 #
 # The MC project is its own compose project (minimoi-mc). Tokens are generated on the host into /opt/minimoi/mc/mc.env
 # (root, 0600) and never printed. The portal's caller token is the same relay caller token, written into
@@ -27,6 +28,9 @@ CRON_FILE=/etc/cron.d/minimoi-mc-judgment
 REGISTRY=332704997792.dkr.ecr.us-east-1.amazonaws.com
 RELAY_URL=http://mc-relay:8790/v1
 CHAT_MODEL=openclaw/mc-chat
+# MC's GitHub token: fine-grained, this repo only, Issues read/write (Robert makes it; runbook). Never printed.
+ISSUES_TOKEN_PARAM=/minimoi/production/mc_github_issues_token
+ISSUES_TOKEN_FILE=$MC_DIR/portal/github-issues-token
 TAG_ERE='^mc-agent-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+(\.[A-Za-z0-9]+)*)?$'
 
 log() { echo "mc-container: $*"; }
@@ -191,13 +195,48 @@ switch() {
     cos)
       set_env_keys MINIMOI_GUILD_CHAT cos MC_RUNTIME_URL "" MC_RUNTIME_CHAT_MODEL "" MC_RUNTIME_TOKEN "" \
                    MINIMOI_MC_TOOLS "" MINIMOI_MC_TOOLS_TOKEN_SHA256 "" MINIMOI_MC_DELEGATION "" \
-                   MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256 "" MINIMOI_MC_WORKER_PUBLIC ""
+                   MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256 "" MINIMOI_MC_WORKER_PUBLIC "" \
+                   MINIMOI_MC_TOOLS_TICKETS "" MINIMOI_MC_TOOLS_COMMENTS ""
       ;;
     *) die "switch mc|cos";;
   esac
   "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
   log "portal chat partner now: $(docker exec minimoi-portal printenv MINIMOI_GUILD_CHAT)"
   docker logs --since 5m minimoi-portal 2>&1 | grep -E "guild mounts: production activation" | tail -1 || true
+}
+
+issues() {
+  # Project MC's issues-only GitHub token from Parameter Store into the portal's MC folder (root 0600, mounted read-only
+  # at /run/secrets/mc) and turn issue comments and tickets on; `off` removes both. Re-run `on` after rotating the token.
+  local to="${1:-}" tag
+  tag=$(docker inspect --format '{{.Config.Image}}' minimoi-portal | sed 's/.*://')
+  [[ -n "$tag" ]] || die "cannot read the running portal tag"
+  case "$to" in
+    on)
+      [[ "$(env_value "$MAIN_ENV" MINIMOI_MC_TOOLS)" == 1 ]] || die "MC's tools are off (switch mc first)"
+      local tmp; tmp=$(mktemp "$MC_DIR/portal/.issues-token.XXXXXX")
+      aws ssm get-parameter --region us-east-1 --name "$ISSUES_TOKEN_PARAM" --with-decryption \
+        --query Parameter.Value --output text > "$tmp" 2>/dev/null \
+        || { rm -f "$tmp"; die "cannot read $ISSUES_TOKEN_PARAM from Parameter Store"; }
+      # A fine-grained token only (github_pat_…): a classic token cannot be scoped to one repository's issues.
+      grep -qE '^github_pat_[A-Za-z0-9_]{20,240}$' "$tmp" \
+        || { rm -f "$tmp"; die "$ISSUES_TOKEN_PARAM is not a fine-grained GitHub token (github_pat_...)"; }
+      chown root:root "$tmp"; chmod 0600 "$tmp"; mv -f "$tmp" "$ISSUES_TOKEN_FILE"
+      log "projected MC's GitHub issues token into $ISSUES_TOKEN_FILE (not printed)"
+      set_env_keys MINIMOI_MC_TOOLS_TICKETS 1 MINIMOI_MC_TOOLS_COMMENTS 1
+      ;;
+    off)
+      rm -f "$ISSUES_TOKEN_FILE"
+      set_env_keys MINIMOI_MC_TOOLS_TICKETS "" MINIMOI_MC_TOOLS_COMMENTS ""
+      ;;
+    *) die "issues on|off";;
+  esac
+  "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
+  docker exec minimoi-portal python3 -c 'import os
+from minimoi_portal.guild_ui import mc_tools_wiring as w
+cfg = w.settings(os.environ)
+print("mc-container: issue comments", "on" if cfg and w.issue_commenter(cfg) else "off",
+      "| tickets", "on" if cfg and w.issue_filer(cfg) else "off")'
 }
 
 collect() {
@@ -216,5 +255,6 @@ case "${1:-}" in
   switch) switch "${2:-}";;
   collect) collect;;
   approve-policy) approve_policy "${2:-}";;
-  *) echo "usage: $0 deploy <mc-agent-vX.Y.Z> | status | switch mc|cos | collect | approve-policy \"<words>\"" >&2; exit 2;;
+  issues) issues "${2:-}";;
+  *) echo "usage: $0 deploy <mc-agent-vX.Y.Z> | status | switch mc|cos | collect | approve-policy \"<words>\" | issues on|off" >&2; exit 2;;
 esac
