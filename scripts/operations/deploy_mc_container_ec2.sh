@@ -175,7 +175,12 @@ switch() {
       [[ "$(relay_health)" == "200" ]] || die "MC relay is not healthy; not switching"
       [[ -f "$MC_DIR/portal/mc-policy.prod.authority.json" ]] || die "no policy authority yet (approve-policy)"
       local worker_sha=""
-      [[ -f "$MC_DIR/portal/enrollment.json" ]] && worker_sha=$(sha "$(env_value "$MC_ENV" MC_WORKER_TOKEN)")
+      # The Mac worker's token is generated on the Mac; only its hash comes here (MC_WORKER_TOKEN_SHA256), so the secret
+      # never passes through SSM command history. A host-generated MC_WORKER_TOKEN is the fallback.
+      if [[ -f "$MC_DIR/portal/enrollment.json" ]]; then
+        worker_sha=$(env_value "$MC_ENV" MC_WORKER_TOKEN_SHA256)
+        [[ "$worker_sha" =~ ^[0-9a-f]{64}$ ]] || worker_sha=$(sha "$(env_value "$MC_ENV" MC_WORKER_TOKEN)")
+      fi
       set_env_keys MINIMOI_GUILD_CHAT mc MC_RUNTIME_URL "$RELAY_URL" MC_RUNTIME_CHAT_MODEL "$CHAT_MODEL" \
                    MC_RUNTIME_TOKEN "$(env_value "$MC_ENV" MC_RELAY_CALLER_TOKEN)" \
                    MINIMOI_MC_TOOLS 1 MINIMOI_MC_TOOLS_TOKEN_SHA256 "$(sha "$(env_value "$MC_ENV" MC_TOOLS_TOKEN)")" \
