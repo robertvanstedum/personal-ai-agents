@@ -66,6 +66,7 @@ def _is_release_only(path: str) -> bool:
         or path.startswith("services/agent_installer/")
         or path.startswith(OPS_ONLY_PREFIXES)
         or path in OPS_ONLY_FILES
+        or path.startswith(MC_IMAGE_PREFIXES)
     )
 
 
@@ -80,6 +81,11 @@ def _is_release_only(path: str) -> bool:
 OPS_ONLY_PREFIXES = ("scripts/credentials/",)
 OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
                             "scripts/operations/mc_prod_db_migrate.sh"})
+
+
+# MC's own container: built and deployed only by deploy-mc-agent.yml on an mc-agent-v* tag. The portal image copies the
+# repository, but no service reads these files (tests/test_release_classifier.py guards this).
+MC_IMAGE_PREFIXES = ("docker/mc-agent-container/",)
 
 
 # docker-compose.prod.yml: a change restarts only the services whose own

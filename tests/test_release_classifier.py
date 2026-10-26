@@ -771,3 +771,12 @@ def test_no_service_image_runs_the_ops_only_scripts():
 def test_the_test_selector_and_nightly_workflow_redeploy_nothing():
     assert classify(["scripts/ci/select_tests.py", ".github/workflows/nightly-tests.yml"]) == ("documents", ())
     assert classify([".github/workflows/deploy-mc-agent.yml"]) == ("full", ALL_SERVICES)          # other workflows keep the fallback
+
+
+def test_mc_container_files_redeploy_nothing_and_no_service_reads_them():
+    assert classify(["docker/mc-agent-container/openclaw.json", "docker/mc-agent-container/start.sh"]) == ("documents", ())
+    root = Path(__file__).resolve().parent.parent
+    readers = [str(p.relative_to(root)) for top in ("minimoi_portal", "core", "domains", "services", "utils")
+               for p in (root / top).rglob("*") if p.is_file() and p.suffix in (".py", ".sh", ".js", ".mjs", ".json", ".yml", ".yaml")
+               and "mc-agent-container" in p.read_text(errors="ignore")]
+    assert readers == []
