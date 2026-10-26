@@ -46,7 +46,8 @@ MIGRATIONS = ("minimoi_portal/guild_ui/sql/007_mc_turn_ledger.sql",
               "core/mc_tools/sql/008_handoffs.sql",
               "core/mc_tools/sql/009_turn_revocations.sql",
               "core/mc_tools/sql/010_runtime_instance_history.sql",
-              "core/mc_tools/sql/011_portal_epoch.sql")
+              "core/mc_tools/sql/011_portal_epoch.sql",
+              "core/mc_tools/sql/020_issue_create_update.sql")
 HOST = {"host": "mac", "disks": [{"mount": "/System/Volumes/Data", "total_gb": 228.27, "free_gb": 7.5}],
         "memory": {"total_gb": 16, "free_gb": 1.25},
         "containers": [{"name": "minimoi-portal", "status": "Up 6 minutes"},
@@ -472,6 +473,47 @@ class ToolTests(Base, unittest.TestCase):
             self.assertNotIn(private, body)
         self.assertEqual([x[:2] for x in self.receipts()],
                          [("issue.propose_comment", "verified"), ("issue.comment", "verified")])
+
+    def test_issue_create_shows_exact_text_and_opens_only_after_yes_with_agent_footer(self):
+        r = self.call("minimoi_issue_create", {"title": "Bruno cannot sign in", "body": "Reported by Bruno today."})
+        self.assertEqual(r["status"], "refused")                                    # a guest's name, public repo
+        title, body = "Guild chat: keep both agents live", "Switching tabs loses the chat. Keep each one server-side."
+        r = self.call("minimoi_issue_create", {"title": title, "body": body, "labels": ["ui", "enhancement"]})
+        self.assertEqual(r["status"], "needs_confirmation")
+        self.assertIn(title, self.shown[-1][2])
+        self.assertIn(body, self.shown[-1][2])
+        self.assertIn("Labels: enhancement, ui", self.shown[-1][2])
+        filed = []
+        proposals = ToolProposals(self.connect, policy=self.policy, principal=OWNER, environment="dev",
+                                  file_issue=lambda t, b, labels=(): filed.append((t, b, labels)) or ("created", 412))
+        done = self.say(proposals, "yes", "note-yes")
+        self.assertEqual((done["operation"]["state"], done["operation"]["issue"]), ("verified", 412))
+        (t, b, labels), = filed
+        self.assertEqual((t, labels), (title, ["enhancement", "ui"]))
+        self.assertTrue(b.startswith(body))
+        self.assertIn("Opened by MiniMoi's Master Craftsman after Robert approved this exact text", b)
+        self.assertEqual([x[:2] for x in self.receipts()],
+                         [("issue.propose_create", "verified"), ("issue.create", "verified")])
+
+    def test_issue_update_changes_only_what_was_approved_and_no_changes_nothing(self):
+        self.assertEqual(self.call("minimoi_issue_update", {"number": 388})["code"], "nothing_to_change")
+        r = self.call("minimoi_issue_update", {"number": 388, "state": "closed", "labels": ["ui"]})
+        self.assertEqual(r["status"], "needs_confirmation")
+        self.assertIn("Close it", self.shown[-1][2])
+        self.assertIn("Labels become: ui", self.shown[-1][2])
+        changed = []
+        no = ToolProposals(self.connect, policy=self.policy, principal=OWNER, environment="dev",
+                           update_issue=lambda n, f: changed.append((n, f)) or ("created", n))
+        self.assertEqual(self.say(no, "no", "note-no")["operation"]["state"], "cancelled")
+        self.assertEqual(changed, [])
+        self.next_turn("note-2")
+        self.call("minimoi_issue_update", {"number": 388, "title": "MC and CoS stay live", "body": "Scope narrowed."})
+        done = self.say(no, "yes", "note-yes")
+        self.assertEqual((done["operation"]["state"], done["reply"]), ("verified", "Issue #388 updated."))
+        (number, fields), = changed
+        self.assertEqual((number, set(fields), fields["title"]), (388, {"title", "body"}, "MC and CoS stay live"))
+        self.assertTrue(fields["body"].startswith("Scope narrowed.") and "Edited by MiniMoi's" in fields["body"])
+        self.assertEqual(self.receipts()[-1][:2], ("issue.update", "verified"))
 
     def test_ticket_for_an_unknown_ref_or_a_refused_filing(self):
         r = self.call("minimoi_data_repair_ticket", {"refs": ["guild:999"], "change": "reject"})

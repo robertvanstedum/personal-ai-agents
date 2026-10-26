@@ -77,6 +77,8 @@
             "minimoi_host_list",
             "minimoi_host_read",
             "minimoi_issue_comment",
+            "minimoi_issue_create",
+            "minimoi_issue_update",
             "minimoi_keep_preference",
             "minimoi_lesson_propose",
             "minimoi_recall",

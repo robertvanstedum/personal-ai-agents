@@ -8,6 +8,8 @@ proposed, and then the platform acts and verifies:
   lesson             the exact lesson text adopted into the owner's lesson ledger, verified by read-back
   guest_reject       one open guest request rejected through the guest action path, verified by read-back
   issue_comment      a comment on an existing GitHub issue, exactly the text the owner saw, refs only
+  issue_create       a new GitHub issue, exactly the title, body and labels the owner saw
+  issue_update       one change to an existing issue (title, body, complete label set, open/closed), as shown
   data_repair        a public GitHub issue naming the records by ref only (no names or emails)
   delegate_research  the job starts from the owner's own note of the proposing turn (never model text)
   access_invite      a Meu Português guest request is recorded and granted through guest_requests.grant;
@@ -32,6 +34,7 @@ from . import effects, offers
 
 _log = logging.getLogger("mc_tools")
 KINDS = {"lesson": "lessons.adopt", "guest_reject": "guest.reject_request", "issue_comment": "issue.comment",
+         "issue_create": "issue.create", "issue_update": "issue.update",
          "data_repair": "issue.create_data_repair", "delegate_research": "delegate.start_research",
          "access_invite": "access.invite_user", "delegate_build": "delegate.start_build"}
 _YES = re.compile(r"^(?:yes|yes,?\s+please|ja|ja,?\s+bitte|yep|yeah|ok(?:ay)?|sure|go\s+ahead|do\s+it|please\s+do|confirm(?:ed)?|"
@@ -80,13 +83,57 @@ def issue_text(payload, operation_id):
 INVITE_REASON = "Invited by Robert through Master Craftsman"
 
 
+# The agent that proposed a GitHub write, named in its public footer (all writes use Robert's issues-only token).
+AGENT_NAMES = {"mc-chat": "Master Craftsman", "cos-agent-a": "Chief of Staff"}
+
+
+def agent_name(payload):
+    return AGENT_NAMES.get(payload.get("agent") or "mc-chat", payload.get("agent") or "an agent")
+
+
+def _footer(payload, operation_id, verb="Posted"):
+    return (f"\n\n---\n{verb} by MiniMoi's {agent_name(payload)} after Robert approved this exact text. "
+            f"Environment: {payload['environment']}. Operation {operation_id}.")
+
+
 def comment_text(payload, operation_id):
     """The public comment: the owner-approved summary, then refs and provenance. Never names or emails."""
     refs = payload["refs"]
     tail = (f"Records: {', '.join(refs)} (`guild.guest_requests`). " if refs else "") + \
         f"Environment: {payload['environment']}. Operation {operation_id}."
-    return (f"{payload['summary']}\n\n---\n{tail}\nPosted by MiniMoi's Master Craftsman after Robert approved this "
-            "exact text in the Guild conversation.")
+    return (f"{payload['summary']}\n\n---\n{tail}\nPosted by MiniMoi's {agent_name(payload)} after Robert approved "
+            "this exact text.")
+
+
+def create_text(payload, operation_id):
+    """(title, body, labels) of a new issue: exactly what Robert approved, plus the provenance footer."""
+    return payload["title"], payload["body"] + _footer(payload, operation_id, "Opened"), list(payload["labels"])
+
+
+def create_preview(payload):
+    labels = ", ".join(payload["labels"]) or "none"
+    return f"Title: {payload['title']}\nLabels: {labels}\n\n{payload['body']}"
+
+
+def update_fields(payload, operation_id):
+    """The GitHub fields to change: only those Robert approved; a new body carries the provenance footer."""
+    fields = {k: payload[k] for k in ("title", "state", "labels") if k in payload}
+    if "body" in payload:
+        fields["body"] = payload["body"] + _footer(payload, operation_id, "Edited")
+    return fields
+
+
+def update_preview(payload):
+    lines = []
+    if "title" in payload:
+        lines.append(f"New title: {payload['title']}")
+    if "state" in payload:
+        lines.append("Close it" if payload["state"] == "closed" else "Reopen it")
+    if "labels" in payload:
+        lines.append("Labels become: " + (", ".join(payload["labels"]) or "none"))
+    if "body" in payload:
+        lines.append(f"New body:\n\n{payload['body']}")
+    return "\n".join(lines)
 
 
 def _db_now(cur):
@@ -100,7 +147,8 @@ def _reply(text, state, **extra):
 
 class ToolProposals:
     def __init__(self, connect, *, principal: str, environment: str, start_research=None, invite=None, start_build=None,
-                 file_issue=None, comment_issue=None, guest_rejects: bool = False, lessons=None, read_shown=None,
+                 file_issue=None, comment_issue=None, update_issue=None, guest_rejects: bool = False, lessons=None,
+                 read_shown=None,
                  display_tz: str = offers.DISPLAY_TZ, clock=None, policy=None):
         """``file_issue(title, body) -> (state, number | None)`` and ``comment_issue(number, body) -> (state, id)``;
         state is created | refused | unknown. ``guest_rejects`` switches on the guest reject (a local effect).
@@ -111,6 +159,8 @@ class ToolProposals:
         # start_build(proposal) -> (state, job_id | None): like start_research, scope build (Robert's confirmed yes).
         self.start_build = start_build
         self.comment_issue, self.guest_rejects, self.lessons = comment_issue, guest_rejects, lessons
+        # update_issue(number, fields) -> (state, number | None): one PATCH of an issue; state as for file_issue.
+        self.update_issue = update_issue
         # read_shown(conversation_id, note_key) -> note | None: finishes a publication a crash interrupted (§9.1).
         self.read_shown, self.display_tz = read_shown, display_tz
         # clock(cur) -> the approval's "now": the database clock, injectable so the offer-expiry boundary can be tested
@@ -231,6 +281,7 @@ class ToolProposals:
                 version = None
             handlers = {"lesson": self.lessons, "guest_reject": self.guest_rejects or None,
                         "guest_reject_batch": self.guest_rejects or None, "issue_comment": self.comment_issue,
+                        "issue_create": self.file_issue, "issue_update": self.update_issue,
                         "data_repair": self.file_issue, "delegate_research": self.start_research,
                         "access_invite": self.invite, "delegate_build": self.start_build}
             if handlers[p["kind"]] is None:
@@ -277,6 +328,10 @@ class ToolProposals:
             return self._run_ticket(effect, proposal)
         if proposal["kind"] == "issue_comment":
             return self._run_comment(effect, proposal)
+        if proposal["kind"] == "issue_create":
+            return self._run_create(effect, proposal)
+        if proposal["kind"] == "issue_update":
+            return self._run_update(effect, proposal)
         if proposal["kind"] == "lesson":
             return self._run_lesson(effect, proposal)
         if proposal["kind"] == "delegate_research":
@@ -478,6 +533,40 @@ class ToolProposals:
         if state == "created":
             return f" Logged on ticket #{sc['ticket']}."
         return f" I could not log this use on ticket #{sc['ticket']}; please log it there by hand."
+
+    def _run_create(self, effect, p):
+        title, body, labels = create_text(p["payload"], effect.operation_id)
+        try:
+            state, number = self.file_issue(title, body, labels)
+        except Exception:
+            _log.exception("mc tool issue create: outcome unknown")
+            state, number = "unknown", None
+        if state == "unknown":
+            self._unknown(effect)
+            return _reply("I sent the new issue but cannot confirm it was opened. Do not ask again yet; check the "
+                          "repository's issues first.", "unknown")
+        receipt = self._finish(effect, "issue_create", {"state": state, "issue": number}, state == "created")
+        if state != "created":
+            return _reply("GitHub refused the new issue, so nothing was opened.", "failed",
+                          receipt_id=str(receipt["receipt_id"]))
+        return _reply(f"Issue #{number} opened: {title}", "verified", issue=number, receipt_id=str(receipt["receipt_id"]))
+
+    def _run_update(self, effect, p):
+        number = p["payload"]["number"]
+        try:
+            state, _ = self.update_issue(number, update_fields(p["payload"], effect.operation_id))
+        except Exception:
+            _log.exception("mc tool issue update: outcome unknown")
+            state = "unknown"
+        if state == "unknown":
+            self._unknown(effect)
+            return _reply(f"I sent the change to issue #{number} but cannot confirm it was made. Do not ask again yet; "
+                          "check the issue first.", "unknown")
+        receipt = self._finish(effect, "issue_update", {"state": state, "issue": number}, state == "created")
+        if state != "created":
+            return _reply(f"GitHub refused the change to issue #{number}, so nothing was changed.", "failed",
+                          receipt_id=str(receipt["receipt_id"]))
+        return _reply(f"Issue #{number} updated.", "verified", issue=number, receipt_id=str(receipt["receipt_id"]))
 
     def _run_comment(self, effect, p):
         number = p["payload"]["number"]

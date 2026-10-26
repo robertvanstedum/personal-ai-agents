@@ -77,6 +77,11 @@ HANDLERS = {
                                 "github_write"),
     "data_repair_ticket_v1": Handler("minimoi_data_repair_ticket", "issue.create_data_repair", frozenset({3}),
                                      "github_receipt_v1", "github_write"),
+    # Robert's own issue work, done by an agent on his yes: a new issue, or a change to one (title, body, labels, state).
+    "issue_create_v1": Handler("minimoi_issue_create", "issue.create", frozenset({3}), "github_receipt_v1",
+                               "github_write"),
+    "issue_update_v1": Handler("minimoi_issue_update", "issue.update", frozenset({3}), "github_receipt_v1",
+                               "github_write"),
     "lesson_adopt_v1": Handler("minimoi_lesson_propose", "lessons.adopt", frozenset({3}), "lesson_readback_v1", "none"),
     # Ordinary private actions with read-back and undo: tier 2 (kept at once from Robert's own words, spec §10.2).
     "preference_keep_v1": Handler("minimoi_keep_preference", "lessons.keep_preference", frozenset({2}),

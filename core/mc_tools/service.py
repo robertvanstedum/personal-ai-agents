@@ -456,7 +456,8 @@ class ToolService:
             return refused("tool_unavailable")
         from .proposals import comment_text
         payload = {"number": args["number"], "summary": args["summary"],
-                   "refs": sorted(args["refs"], key=lambda r: int(r.split(":")[1])), "environment": self.environment}
+                   "refs": sorted(args["refs"], key=lambda r: int(r.split(":")[1])), "environment": self.environment,
+                   "agent": caller.agent_id}
         with self._tx() as conn:
             b = self._bind(conn, caller)
             reason = self._public_text_refusal(conn, args["summary"])
@@ -468,6 +469,52 @@ class ToolService:
             words = f"Add this comment to issue #{args['number']}? It is public.\n\n{preview}"
             return self._pending_tool_proposal(conn, b, "issue_comment", payload,
                                                effects.request("issue.propose_comment", payload), words)
+
+    def _issue_public_refusal(self, conn, *texts):
+        for text in texts:
+            reason = self._public_text_refusal(conn, text) if text else None
+            if reason:
+                return result("refused", reason, "That text names a person, an email address or uses non-ASCII letters, "
+                              "and the repository is public. Nothing was proposed; say it in plain English with refs "
+                              "(guild:N) only.")
+        return None
+
+    def _issue_create(self, args, caller, observation):
+        """Propose a new public issue, written for Robert; he approves the exact title, body and labels."""
+        if not self.tickets:
+            return refused("tool_unavailable")
+        from .proposals import create_preview
+        payload = {"title": args["title"], "body": args["body"], "labels": sorted(args.get("labels", [])),
+                   "environment": self.environment, "agent": caller.agent_id}
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+            refusal = self._issue_public_refusal(conn, args["title"], args["body"], *payload["labels"])
+            if refusal:
+                return refusal
+            words = f"Open this new issue? It is public.\n\n{create_preview(payload)}"
+            return self._pending_tool_proposal(conn, b, "issue_create", payload,
+                                               effects.request("issue.propose_create", payload), words)
+
+    def _issue_update(self, args, caller, observation):
+        """Propose one change to an existing issue: any of title, body, the complete label set, open or closed."""
+        if not self.comments:
+            return refused("tool_unavailable")
+        if not set(args) & {"title", "body", "labels", "state"}:
+            return result("refused", "nothing_to_change", "Name at least one change: title, body, labels or state. "
+                          "Nothing was proposed.")
+        from .proposals import update_preview
+        payload = {k: args[k] for k in ("number", "title", "body", "state") if k in args}
+        if "labels" in args:
+            payload["labels"] = sorted(args["labels"])
+        payload.update(environment=self.environment, agent=caller.agent_id)
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+            refusal = self._issue_public_refusal(conn, args.get("title"), args.get("body"), *args.get("labels", []))
+            if refusal:
+                return refusal
+            words = f"Make this change to issue #{args['number']}? It is public.\n\n{update_preview(payload)}"
+            return self._pending_tool_proposal(conn, b, "issue_update", payload,
+                                               effects.request("issue.propose_update", payload), words)
 
     def _data_repair_ticket(self, args, caller, observation):
         """Propose a public data-repair ticket naming guest requests by ref only (no names or emails)."""

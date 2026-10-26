@@ -11,6 +11,8 @@
       "minimoi_guest_request_reject",
       "minimoi_github_issues",
       "minimoi_issue_comment",
+      "minimoi_issue_create",
+      "minimoi_issue_update",
       "minimoi_data_repair_ticket",
       "minimoi_lesson_propose",
       "minimoi_keep_preference",
@@ -62,7 +64,7 @@
       },
       "tools": {
         "type": "array",
-        "maxItems": 32,
+        "maxItems": 48,
         "items": {
           "type": "string"
         }

@@ -8,9 +8,10 @@ Three pieces:
 * ``proposals``: the owner's yes / no for MC's proposals (data-repair tickets, delegation, invites).
 
 Guest rejects follow MINIMOI_MC_GUEST_ACTIONS=1. GitHub issue reads (public, no credential) are on with the tools
-unless MINIMOI_MC_TOOLS_GITHUB=0. Issue comments (MINIMOI_MC_TOOLS_COMMENTS=1) and data-repair tickets
-(MINIMOI_MC_TOOLS_TICKETS=1) need MINIMOI_MC_ISSUES_TOKEN_FILE: a private file holding a GitHub token that can only
-write issues in MINIMOI_GITHUB_REPO. Without it MC is told they are off.
+unless MINIMOI_MC_TOOLS_GITHUB=0. Changes to existing issues (comments, edits, labels, close/reopen:
+MINIMOI_MC_TOOLS_COMMENTS=1) and new issues and data-repair tickets (MINIMOI_MC_TOOLS_TICKETS=1) need
+MINIMOI_MC_ISSUES_TOKEN_FILE: a private file holding a GitHub token that can only write issues in MINIMOI_GITHUB_REPO.
+Without it MC is told they are off. Each write still needs its own policy rule and Robert's exact yes.
 """
 from __future__ import annotations
 
@@ -214,35 +215,40 @@ def _repo(cfg):
     return default_repo({"MINIMOI_GITHUB_REPO": cfg["repo"]} if cfg["repo"] else {})
 
 
-def _github_post(cfg, path, payload, key, http_post):
-    """POST one issue write. A 201 carrying ``key`` (an int) is ``created``; an answer GitHub gives before writing
-    anything (401/403/404/410/422) is ``refused``; anything else, including a timeout, is ``unknown``, never retried."""
+def _github_post(cfg, path, payload, key, http_post, *, ok=201):
+    """POST (or, with ``ok=200``, PATCH) one issue write. An ``ok`` answer carrying ``key`` (an int) is ``created``; an
+    answer GitHub gives before writing anything (401/403/404/410/422) is ``refused``; anything else, including a
+    timeout, is ``unknown``, never retried."""
     import requests
     from .mc_context import API
     token = _private_token(cfg["issues_token_file"])
     if token is None:
         return "refused", None
+    send = http_post or (requests.post if ok == 201 else requests.patch)
     try:
-        r = (http_post or requests.post)(f"{API}/repos/{_repo(cfg)}{path}", json=payload, timeout=(5, 15),
-                                         allow_redirects=False, headers={"Authorization": f"Bearer {token}",
-                                                                         "Accept": "application/vnd.github+json",
-                                                                         "X-GitHub-Api-Version": "2022-11-28"})
+        r = send(f"{API}/repos/{_repo(cfg)}{path}", json=payload, timeout=(5, 15), allow_redirects=False,
+                 headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+                          "X-GitHub-Api-Version": "2022-11-28"})
     except Exception:
         return "unknown", None
     if r.status_code in (401, 403, 404, 410, 422):
         return "refused", None
     try:
-        value = r.json().get(key) if r.status_code == 201 else None
+        value = r.json().get(key) if r.status_code == ok else None
     except ValueError:
         value = None
     return ("created", value) if type(value) is int else ("unknown", None)
 
 
 def issue_filer(cfg, *, http_post=None):
-    """``file_issue(title, body) -> (state, number)`` for data-repair tickets, or None while tickets are off."""
+    """``file_issue(title, body, labels=()) -> (state, number)`` for new issues, or None while tickets are off."""
     if not cfg["tickets"] or _private_token(cfg["issues_token_file"]) is None:
         return None
-    return lambda title, body: _github_post(cfg, "/issues", {"title": title, "body": body}, "number", http_post)
+
+    def file_issue(title, body, labels=()):
+        payload = {"title": title, "body": body, **({"labels": list(labels)} if labels else {})}
+        return _github_post(cfg, "/issues", payload, "number", http_post)
+    return file_issue
 
 
 def issue_commenter(cfg, *, http_post=None):
@@ -255,6 +261,20 @@ def issue_commenter(cfg, *, http_post=None):
             return "refused", None
         return _github_post(cfg, f"/issues/{number}/comments", {"body": body}, "id", http_post)
     return comment_issue
+
+
+def issue_updater(cfg, *, http_patch=None):
+    """``update_issue(number, fields) -> (state, number)``: one PATCH of title, body, labels and/or state, or None while
+    issue changes (MINIMOI_MC_TOOLS_COMMENTS) are off."""
+    if not cfg["comments"] or _private_token(cfg["issues_token_file"]) is None:
+        return None
+
+    def update_issue(number, fields):
+        if type(number) is not int or not 1 <= number <= 99999 or not fields \
+                or set(fields) - {"title", "body", "labels", "state"}:
+            return "refused", None
+        return _github_post(cfg, f"/issues/{number}", dict(fields), "number", http_patch, ok=200)
+    return update_issue
 
 
 def github_reader(cfg, *, http_get=None):
@@ -656,6 +676,7 @@ def proposals(environ, *, start_research, delivery, lessons=None, read_shown=Non
                          start_research=start_research if cfg["delegation"] else None, invite=invite,
                          start_build=start_build if cfg["delegation"] else None,
                          file_issue=issue_filer(cfg), comment_issue=issue_commenter(cfg),
+                         update_issue=issue_updater(cfg),
                          guest_rejects=cfg["guest_rejects"], lessons=lessons, read_shown=read_shown,
                          policy=policy_source(cfg))
 

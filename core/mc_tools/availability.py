@@ -28,6 +28,8 @@ def snapshot(service, policy_tools, offered_tools):
         "minimoi_github_issues": [(service.github is not None, "github_reader_unavailable")],
         "minimoi_issue_comment": [(service.comments, "issue_comments_unavailable")],
         "minimoi_data_repair_ticket": [(service.tickets, "issue_filer_unavailable")],
+        "minimoi_issue_create": [(service.tickets, "issue_filer_unavailable")],
+        "minimoi_issue_update": [(service.comments, "issue_updates_unavailable")],
         "minimoi_lesson_propose": [(service.lessons is not None, "lessons_unavailable")],
         "minimoi_keep_preference": [(service.lessons is not None, "lessons_unavailable"),
                                     (service.read_owner_note is not None, "owner_note_reader_unavailable")],
@@ -48,7 +50,7 @@ def snapshot(service, policy_tools, offered_tools):
                 gates[operation.tool].append((service.read_owner_note is not None, "owner_note_reader_unavailable"))
     gates["minimoi_clarify_action"] = [(getattr(service, "board", None) is not None, "board_adapter_unavailable"),
                                        (service.read_owner_note is not None, "owner_note_reader_unavailable")]
-    proposals = ("guest_request_reject", "issue_comment", "data_repair_ticket", "lesson_propose",
+    proposals = ("guest_request_reject", "issue_comment", "issue_create", "issue_update", "data_repair_ticket", "lesson_propose",
                  "delegate_research", "access_invite", "delegate_build")
     for name in proposals:
         gates["minimoi_" + name].extend([(service.show is not None, "proposal_display_unavailable"),

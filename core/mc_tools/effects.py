@@ -27,11 +27,13 @@ from .binding import TurnBinding
 
 # Proposals: the owner's live turn is enough (zero spend, no exact approval).
 PROPOSAL_CAPABILITIES = ("guest.propose_reject", "issue.propose_comment", "issue.propose_data_repair",
+                         "issue.propose_create", "issue.propose_update",
                          "lessons.propose", "delegate.propose_research", "access.propose_invite",
                          "delegate.propose_build")
 # Consequential effects: one exact owner approval each. delegate.start_research queues a capped request;
 # spend admission stays with the delegation runner, which enforces the job's cap or refuses it.
-EXACT_CAPABILITIES = ("lessons.adopt", "guest.reject_request", "issue.comment", "issue.create_data_repair", "delegate.start_research",
+EXACT_CAPABILITIES = ("lessons.adopt", "guest.reject_request", "issue.comment", "issue.create_data_repair",
+                      "issue.create", "issue.update", "delegate.start_research",
                       "delegate.start_build",
                       "access.invite_user")
 # Tier 2 (spec §8.2): ordinary private actions with read-back and undo, done at once under the owner-approved
