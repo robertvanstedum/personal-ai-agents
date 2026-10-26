@@ -38,7 +38,11 @@ class DelegationRelay:
         except Exception:
             return "refused", {"reason": "ref_unavailable"}
         try:
-            outcome = self.store.enqueue(job_id=spec["job_id"], actor=agent, scope=self.scope, repository=self.repository,
+            # A job names its scope: research by default; build only from Robert's confirmed build proposal.
+            scope = spec.get("scope") or self.scope
+            if scope not in ("research", "build"):
+                return "refused", {"reason": "scope_invalid"}
+            outcome = self.store.enqueue(job_id=spec["job_id"], actor=agent, scope=scope, repository=self.repository,
                                          ref=ref, brief=spec["task"], cost_cap_usd=self.cost_cap,
                                          deadline_s=spec.get("deadline_s") or 1800)
         except Exception:

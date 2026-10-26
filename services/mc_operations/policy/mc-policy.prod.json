@@ -147,6 +147,24 @@
       "max_operations_per_turn": 5
     },
     {
+      "capability": "delegate.start_build",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "build_v1",
+      "verify": "job_started_v1",
+      "undo": null,
+      "egress": "delegation",
+      "max_operations_per_turn": 5
+    },
+    {
       "capability": "access.invite_user",
       "version": 1,
       "actors": [

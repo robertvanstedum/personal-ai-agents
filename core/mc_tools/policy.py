@@ -85,6 +85,8 @@ HANDLERS = {
                                     "lesson_readback_v1", "none"),
     "research_v1": Handler("minimoi_delegate_research", "delegate.start_research", frozenset({3}),
                            "job_started_v1", "delegation"),
+    # Robert's yes to MC's build proposal: a build job from his own note (fresh checkout, no push) — tier 3 only.
+    "build_v1": Handler("minimoi_delegate_build", "delegate.start_build", frozenset({3}), "job_started_v1", "delegation"),
     "access_invite_v1": Handler("minimoi_access_invite", "access.invite_user", frozenset({3}), "account_readback_v1",
                                 "email"),
 }

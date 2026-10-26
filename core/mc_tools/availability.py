@@ -36,6 +36,7 @@ def snapshot(service, policy_tools, offered_tools):
                                (service.read_owner_note is not None, "owner_note_reader_unavailable")],
         "minimoi_withdraw_gap": [(service.registers is not None, "work_register_unavailable")],
         "minimoi_delegate_research": [(service.delegation, "delegation_off")],
+        "minimoi_delegate_build": [(service.delegation, "delegation_off")],
         "minimoi_access_invite": [(service.invites, "invites_off"),
                                   (service.guests_lookup is not None, "guest_lookup_unavailable")],
     }
@@ -48,7 +49,7 @@ def snapshot(service, policy_tools, offered_tools):
     gates["minimoi_clarify_action"] = [(getattr(service, "board", None) is not None, "board_adapter_unavailable"),
                                        (service.read_owner_note is not None, "owner_note_reader_unavailable")]
     proposals = ("guest_request_reject", "issue_comment", "data_repair_ticket", "lesson_propose",
-                 "delegate_research", "access_invite")
+                 "delegate_research", "access_invite", "delegate_build")
     for name in proposals:
         gates["minimoi_" + name].extend([(service.show is not None, "proposal_display_unavailable"),
                                       (service.read_shown is not None, "proposal_readback_unavailable")])

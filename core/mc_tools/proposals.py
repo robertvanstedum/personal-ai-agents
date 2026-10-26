@@ -33,7 +33,7 @@ from . import effects, offers
 _log = logging.getLogger("mc_tools")
 KINDS = {"lesson": "lessons.adopt", "guest_reject": "guest.reject_request", "issue_comment": "issue.comment",
          "data_repair": "issue.create_data_repair", "delegate_research": "delegate.start_research",
-         "access_invite": "access.invite_user"}
+         "access_invite": "access.invite_user", "delegate_build": "delegate.start_build"}
 _YES = re.compile(r"^(?:yes|yes,?\s+please|ja|ja,?\s+bitte|yep|yeah|ok(?:ay)?|sure|go\s+ahead|do\s+it|please\s+do|confirm(?:ed)?|"
                   r"approve(?:d)?)(?:[,.!]?\s+(?:please|thanks|thank\s+you|do\s+it|go\s+ahead))?\s*[.!]?$", re.I)
 _NO = re.compile(r"^(?:no|nope|no,?\s+thanks|cancel|don['’]t|do\s+not|never\s*mind)\s*[.!]?$", re.I)
@@ -99,7 +99,7 @@ def _reply(text, state, **extra):
 
 
 class ToolProposals:
-    def __init__(self, connect, *, principal: str, environment: str, start_research=None, invite=None,
+    def __init__(self, connect, *, principal: str, environment: str, start_research=None, invite=None, start_build=None,
                  file_issue=None, comment_issue=None, guest_rejects: bool = False, lessons=None, read_shown=None,
                  display_tz: str = offers.DISPLAY_TZ, clock=None, policy=None):
         """``file_issue(title, body) -> (state, number | None)`` and ``comment_issue(number, body) -> (state, id)``;
@@ -108,6 +108,8 @@ class ToolProposals:
         ``invite(proposal, ref) -> (state, detail)``; state is done | conflict | unknown, detail content-free."""
         self._connect, self.principal, self.environment = connect, principal, environment
         self.start_research, self.invite, self.file_issue = start_research, invite, file_issue
+        # start_build(proposal) -> (state, job_id | None): like start_research, scope build (Robert's confirmed yes).
+        self.start_build = start_build
         self.comment_issue, self.guest_rejects, self.lessons = comment_issue, guest_rejects, lessons
         # read_shown(conversation_id, note_key) -> note | None: finishes a publication a crash interrupted (§9.1).
         self.read_shown, self.display_tz = read_shown, display_tz
@@ -230,7 +232,7 @@ class ToolProposals:
             handlers = {"lesson": self.lessons, "guest_reject": self.guest_rejects or None,
                         "guest_reject_batch": self.guest_rejects or None, "issue_comment": self.comment_issue,
                         "data_repair": self.file_issue, "delegate_research": self.start_research,
-                        "access_invite": self.invite}
+                        "access_invite": self.invite, "delegate_build": self.start_build}
             if handlers[p["kind"]] is None:
                 cur.execute("UPDATE guild.mc_tool_proposals SET state='stale' WHERE proposal_id=%s", (p["proposal_id"],))
                 return _reply("That is not switched on here, so nothing was done.", "refused", code="kind_off")
@@ -279,6 +281,8 @@ class ToolProposals:
             return self._run_lesson(effect, proposal)
         if proposal["kind"] == "delegate_research":
             return self._run_research(effect, proposal)
+        if proposal["kind"] == "delegate_build":
+            return self._run_build(effect, proposal)
         return self._run_invite(effect, proposal)
 
     def _guest_reject(self, conn, cur, p, context, intent, turn_key):
@@ -541,6 +545,25 @@ class ToolProposals:
         return _reply(f"Started: {who} is researching your message, read-only, in the background on the Mac. "
                       "Its answer comes back here when it's done; say stop to cancel.", "verified",
                       receipt_id=str(receipt["receipt_id"]))
+
+    def _run_build(self, effect, p):
+        who = {"claude-code": "Claude Code", "codex": "Codex"}[p["payload"]["agent"]]
+        try:
+            state, job_id = self.start_build(p) if self.start_build else ("refused", None)
+        except Exception:
+            _log.exception("mc tool delegation: build start outcome unknown")
+            state, job_id = "unknown", None
+        if state == "unknown":
+            self._unknown(effect)
+            return _reply(f"I asked {who} to start building but cannot confirm it started. Do not ask again yet; "
+                          "check this conversation's jobs first.", "unknown")
+        receipt = self._finish(effect, "delegate_build", {"state": state, "job_id": job_id}, state == "started")
+        if state != "started":
+            return _reply(f"{who}'s build could not be started, so nothing is running.", "failed",
+                          receipt_id=str(receipt["receipt_id"]))
+        return _reply(f"Started: {who} is building from your message in a fresh copy of the repository, on a branch "
+                      "of its own (no push, no merge, no release). Its status shows here; its result and changes come "
+                      "back here for your review. Say stop to cancel.", "verified", receipt_id=str(receipt["receipt_id"]))
 
     def _guest_request(self, p):
         """The owner's own invite as a guest request (domain = the app), returned as its ref. An open request with the

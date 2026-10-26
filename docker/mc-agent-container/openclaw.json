@@ -65,6 +65,7 @@
             "minimoi_board_operation_undo",
             "minimoi_clarify_action",
             "minimoi_conversation_export",
+            "minimoi_delegate_build",
             "minimoi_delegate_research",
             "minimoi_describe_domain",
             "minimoi_describe_house",

@@ -645,7 +645,7 @@ def invite_runner(send_email, notify, *, db=None):
     return invite
 
 
-def proposals(environ, *, start_research, delivery, lessons=None, read_shown=None):
+def proposals(environ, *, start_research, delivery, lessons=None, read_shown=None, start_build=None):
     """The ToolProposals handler for this mount, or None when tools are off."""
     cfg = settings(environ)
     if cfg is None:
@@ -654,6 +654,7 @@ def proposals(environ, *, start_research, delivery, lessons=None, read_shown=Non
     invite = invite_runner(*delivery) if cfg["invites"] and delivery else None
     return ToolProposals(_connect(cfg["dsn"]), principal=cfg["principal"], environment=cfg["environment"],
                          start_research=start_research if cfg["delegation"] else None, invite=invite,
+                         start_build=start_build if cfg["delegation"] else None,
                          file_issue=issue_filer(cfg), comment_issue=issue_commenter(cfg),
                          guest_rejects=cfg["guest_rejects"], lessons=lessons, read_shown=read_shown,
                          policy=policy_source(cfg))
