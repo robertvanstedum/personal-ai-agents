@@ -2238,8 +2238,10 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
                 fresh = conversations.get(conv['id'], principal)
                 if fresh.get('archived') or fresh.get('notes_floor') != conv.get('notes_floor'):
                     raise mc_deliveries.BundleRefused('conversation_changed')
+                from .mc_tools_wiring import saved_artifacts
                 text, delivery_operation = mc_deliveries.deliver(conversations, principal, conv['id'], note_id,
-                    result.text, scrub=scrub, base_url=cfg()['base_url'].rstrip('/') + cfg()['url_prefix'])
+                    result.text, scrub=scrub, base_url=cfg()['base_url'].rstrip('/') + cfg()['url_prefix'],
+                    artifact_files=saved_artifacts(feature_environ(), principal, conv['id']))
             except mc_deliveries.DeliveryFull:
                 text = "The file delivery limit has been reached: 10 packages per conversation or 50 MiB overall. Expired packages still count. No new download was created."
                 delivery_operation = {'type':'artifact_bundle','saved':False,'state':'refused'}

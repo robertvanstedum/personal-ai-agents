@@ -77,6 +77,27 @@ def _attribute_filter(tag: str, attr: str, value: str):
     return value
 
 
+# A short answer with its detail folded underneath (Robert, 26 Oct: "a short reply, but I like it has the detail …
+# hidden and expandable … without interrupting the conversational flow"). A line that is exactly "Details" (optionally
+# bold, optionally with a colon), outside code blocks, starts the fold. The <details> wrapper is written HERE, never by
+# the model (raw HTML stays off), so the allow-list below admits details/summary only as this code produces them.
+_FOLD = re.compile(r"^\s*(?:\*\*)?Details(?:\*\*)?:?\s*$", re.IGNORECASE)
+_FENCE = re.compile(r"^\s*(```|~~~)")
+
+
+def _split_fold(source: str):
+    """(answer, detail) at the first fold line outside a code block, or (source, None)."""
+    fenced = False
+    lines = source.split("\n")
+    for i, line in enumerate(lines):
+        if _FENCE.match(line):
+            fenced = not fenced
+        elif not fenced and _FOLD.match(line):
+            head, tail = "\n".join(lines[:i]).strip(), "\n".join(lines[i + 1:]).strip()
+            return (head, tail) if head and tail else (source, None)
+    return source, None
+
+
 @functools.lru_cache(maxsize=2048)
 def render_markdown(text: str) -> str:
     """Sanitised HTML for one note's Markdown (never raises; escaped text on error)."""
@@ -84,12 +105,17 @@ def render_markdown(text: str) -> str:
     cut = max(0, len(source) - MAX_CHARS)
     source = source[:MAX_CHARS]
     try:
-        html = _MD.render(_separate_blocks(source))
+        head, detail = _split_fold(source)
+        html = _MD.render(_separate_blocks(head))
+        if detail is not None:
+            html += ('<details class="mc-detail"><summary>Details</summary>'
+                     + _MD.render(_separate_blocks(detail)) + "</details>")
     except Exception:
         html = "<p>" + nh3.clean_text(source) + "</p>"
     if cut:
         html += f"<p><em>… ({cut:,} more characters not shown)</em></p>"
-    return nh3.clean(html.strip(), tags=TAGS, attributes=ATTRIBUTES, url_schemes=URL_SCHEMES,
+    return nh3.clean(html.strip(), tags=TAGS | {"details", "summary"}, attributes={**ATTRIBUTES, "details": {"class"}},
+                     url_schemes=URL_SCHEMES,
                      link_rel="noopener noreferrer", set_tag_attribute_values={"a": {"target": "_blank"}},
                      attribute_filter=_attribute_filter, strip_comments=True)
 

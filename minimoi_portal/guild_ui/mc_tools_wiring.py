@@ -658,3 +658,36 @@ def proposals(environ, *, start_research, delivery, lessons=None, read_shown=Non
                          file_issue=issue_filer(cfg), comment_issue=issue_commenter(cfg),
                          guest_rejects=cfg["guest_rejects"], lessons=lessons, read_shown=read_shown,
                          policy=policy_source(cfg))
+
+
+def saved_artifacts(environ, principal, conversation_id):
+    """For an owner's download request: files(refs) -> [{name, content}] from MC's verified artifact records (bytes
+    kept in the database with their sha256), only this principal's, this environment's and this conversation's.
+    None when MC tools are off (then a model packet naming artifacts is refused)."""
+    cfg = settings(environ)
+    if cfg is None:
+        return None
+
+    def files(refs):
+        import hashlib as _hashlib, json as _json
+        from core.minimoi_actions.receipts import _cursor
+        out = []
+        conn = _connect(cfg["dsn"])()
+        try:
+            with conn, _cursor(conn) as cur:
+                for ref in refs:
+                    cur.execute("""SELECT payload, payload_sha256, state FROM guild.mc_host_artifacts WHERE operation_id=%s
+                        AND principal_id=%s AND environment=%s AND conversation_id=%s""",
+                        (ref, principal, cfg["environment"], conversation_id))
+                    row = cur.fetchone()
+                    payload = bytes(row["payload"]) if row else b""
+                    if (row is None or row["state"] != "verified"
+                            or _hashlib.sha256(payload).hexdigest() != row["payload_sha256"]):
+                        return []
+                    for f in _json.loads(payload).get("files", []):
+                        out.append({"name": f["name"] if len(refs) == 1 else ref[:8] + "-" + f["name"],
+                                    "content": f["text"]})
+        finally:
+            conn.close()
+        return out
+    return files

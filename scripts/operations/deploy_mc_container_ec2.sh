@@ -47,8 +47,9 @@ prepare() {
   install -d -m 0700 -o root -g root "$ROOT/private" "$JUDGMENT"
   # Nightly collection inside the standing batch window (midnight-6am Chicago), after the other early jobs.
   ( umask 022
-    printf 'CRON_TZ=America/Chicago\n50 4 * * * root %s collect >> %s/logs/mc-judgment-collect.log 2>&1\n' \
-      "$ROOT/scripts/deploy_mc_container_ec2.sh" "$ROOT" > "$CRON_FILE" )
+    # 04:40: refresh MC's repo clone from GitHub (MC itself cannot reach GitHub); fast-forward only, as its owner.
+    printf 'CRON_TZ=America/Chicago\n40 4 * * * root runuser -u ec2-user -- git -C %s pull -q --ff-only >> %s/logs/mc-repo-refresh.log 2>&1\n50 4 * * * root %s collect >> %s/logs/mc-judgment-collect.log 2>&1\n' \
+      "$MC_DIR/repo" "$ROOT" "$ROOT/scripts/deploy_mc_container_ec2.sh" "$ROOT" > "$CRON_FILE" )
   if [[ ! -f "$MC_ENV" ]]; then
     ( umask 077
       printf 'MC_CONTAINER_GATEWAY_TOKEN=%s\nMC_RELAY_CALLER_TOKEN=%s\n' \
