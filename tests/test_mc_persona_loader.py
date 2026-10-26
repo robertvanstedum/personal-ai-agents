@@ -66,7 +66,9 @@ def test_existing_adaptations_preserved_by_actual_startup_script(tmp_path):
     originals={'SOUL.md':b'Owner adapted soul\x0a','MEMORY.md':b'memory','USER.md':b'preferences'}
     for name,data in originals.items():(work/name).write_bytes(data)
     import os
-    env={**os.environ,'OPENCLAW_CONFIG_PATH':str(config),'OPENCLAW_AGENT_POLICY_PATH':str(work/'AGENTS.md')}
+    # Compose always provides a gateway key (master or CoS's own); without one the start script refuses.
+    env={**os.environ,'OPENCLAW_CONFIG_PATH':str(config),'OPENCLAW_AGENT_POLICY_PATH':str(work/'AGENTS.md'),
+         'MINIMOI_MODEL_GATEWAY_KEY':'sk-synthetic-master-0000000000','COS_GATEWAY_KEY_FILE':str(tmp_path/'no-cos-key')}
     for _ in range(2):subprocess.run(['/bin/sh',str(script),'/usr/bin/true'],env=env,check=True,capture_output=True,timeout=5)
     for name,data in originals.items():assert (work/name).read_bytes()==data
     docker=(REPO/'docker/Dockerfile.cos-agent-a').read_text()
