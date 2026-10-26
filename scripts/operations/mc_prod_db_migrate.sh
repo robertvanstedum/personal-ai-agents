@@ -75,6 +75,15 @@ apply_all() {  # container $1: every migration, one transaction, as the Guild ow
   if docker exec "$c" grep -rliE '^[[:space:]]*(BEGIN|COMMIT|ROLLBACK|END)[[:space:]]*(TRANSACTION|WORK)?[[:space:]]*;|START[[:space:]]+TRANSACTION' /mc-migrations >/dev/null; then
     die "a migration still controls its own transaction"
   fi
+  # CREATE SCHEMA IF NOT EXISTS needs the database's CREATE right even when the schema exists, and the Guild owner role
+  # does not hold it in prod (first apply, 26 Oct: refused, rolled back). For a schema that already exists the
+  # statement is a no-op, so the copies drop it; a schema that does not exist yet is left in and fails loudly.
+  local s
+  for s in $(docker exec "$c" sh -c "grep -rhoiE '^[[:space:]]*CREATE SCHEMA IF NOT EXISTS [a-z_]+;' /mc-migrations" | awk '{print $6}' | tr -d ';' | sort -u); do
+    if [[ "$(docker exec "$c" psql -U postgres -d "$DB" -Atc "select 1 from pg_namespace where nspname='$s'")" == "1" ]]; then
+      docker exec "$c" find /mc-migrations -name '*.sql' -exec sed -i -E "/^[[:space:]]*CREATE SCHEMA IF NOT EXISTS $s;[[:space:]]*$/Id" {} +
+    fi
+  done
   docker exec "$c" psql "${args[@]}"
   docker exec "$c" rm -rf /mc-migrations
   log "applied ${#MIGRATIONS[@]} migrations in one transaction as role $role"
@@ -90,10 +99,14 @@ case "${1:-}" in
     docker run -d --name "$R" --network none -e POSTGRES_HOST_AUTH_METHOD=trust "$image" >/dev/null
     trap 'docker rm -f "$R" >/dev/null 2>&1 || true' EXIT
     for _ in $(seq 1 30); do docker exec "$R" pg_isready -U postgres >/dev/null 2>&1 && break; sleep 2; done
-    role=$(owner_of "$PG")
-    docker exec "$R" psql -U postgres -qc "CREATE ROLE $role LOGIN" >/dev/null
-    docker exec "$R" createdb -U postgres -O "$role" "$DB"
-    docker exec "$PG" pg_dump -U postgres -Fc "$DB" | docker exec -i "$R" pg_restore -U postgres -d "$DB" --no-owner --role="$role" 2>/dev/null || true
+    # Mirror prod's ownership exactly (database owned by postgres, objects by their real owners, grants restored): a
+    # copy owned by the Guild role hid a missing database privilege on the first apply.
+    for r in $(docker exec "$PG" psql -U postgres -Atc "select rolname from pg_roles where rolname !~ '^pg_' and rolname <> 'postgres'"); do
+      docker exec "$R" psql -U postgres -qc "CREATE ROLE \"$r\"" >/dev/null 2>&1 || true
+    done
+    docker exec "$R" createdb -U postgres "$DB"
+    docker exec "$PG" pg_dump -U postgres -Fc "$DB" | docker exec -i "$R" pg_restore -U postgres -d "$DB" 2>/dev/null || true
+    log "copy owners: database $(docker exec "$R" psql -U postgres -Atc "select pg_get_userbyid(datdba) from pg_database where datname='$DB'"), CREATE for $(owner_of "$PG"): $(docker exec "$R" psql -U postgres -Atc "select has_database_privilege('$(owner_of "$PG")','$DB','CREATE')")"
     log "copy restored: $(tables "$R") guild tables (prod has $(tables "$PG"))"
     apply_all "$R"
     log "after: $(tables "$R") guild tables"
