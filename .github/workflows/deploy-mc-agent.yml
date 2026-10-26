@@ -44,7 +44,7 @@ jobs:
         run: |
           grep -q '^FROM ghcr.io/openclaw/openclaw:[0-9.]*@sha256:' docker/mc-agent-container/Dockerfile
           bash -n scripts/operations/deploy_mc_container_ec2.sh
-          python3 -c "import json; m=json.load(open('services/mc_operations/personas/mc-chat/releases/0.1.12/manifest.json')); assert m"
+          python3 -c "import json; m=json.load(open('services/mc_operations/personas/mc-chat/releases/0.1.14/manifest.json')); assert m"
 
       - name: Build the MC image
         run: |
