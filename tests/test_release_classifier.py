@@ -605,3 +605,169 @@ def test_the_mc_exporter_rebuilds_the_portal_image_vault_mc_export_runs_it_in():
     assert classify(["scripts/vault/vault_mc_export.py"])[1] == ()               # the EC2 host job, from the tools bundle: no image
     for path in ("core/memory_sync/mc_batch.py", "core/memory_sync/mc_export.py"):
         assert classify([path])[1] == ("portal",), path
+
+
+# --- production Compose: only the services whose own block changed (26 Oct 2026) ----------------------------------------
+from scripts.ci.classify_release import COMPOSE_SERVICE_OWNERS, compose_changed_services, git_compose_diff
+
+COMPOSE = """\
+x-hardening: &hardening
+  security_opt: [no-new-privileges:true]
+services:
+  postgres:
+    image: postgres:latest
+  model-gateway:
+    image: gateway:${MINIMOI_IMAGE_TAG:-latest}
+    healthcheck: {start_period: 20s}
+  portal:
+    <<: *hardening
+    image: portal:${MINIMOI_IMAGE_TAG:-latest}
+    environment: [A=1]
+  vault-ask:
+    profiles: [vault]
+    image: portal:${MINIMOI_IMAGE_TAG:-latest}
+networks:
+  default: {}
+"""
+
+
+def test_a_compose_change_restarts_only_the_services_whose_block_changed():
+    gateway = COMPOSE.replace("start_period: 20s", "start_period: 120s")
+    assert compose_changed_services(COMPOSE, gateway) == ("model-gateway",)
+    both = gateway.replace("environment: [A=1]", "environment: [A=1, B=2]")
+    assert compose_changed_services(COMPOSE, both) == ("portal", "model-gateway")
+    # vault-ask runs the portal image; the scoped deploy recreates it beside the portal.
+    assert compose_changed_services(COMPOSE, COMPOSE.replace("profiles: [vault]", "profiles: [vault, x]")) == ("portal",)
+    # A shared anchor changes every service that merges it, and only those.
+    assert compose_changed_services(COMPOSE, COMPOSE.replace("no-new-privileges:true", "no-new-privileges:false")) == ("portal",)
+
+
+def test_named_volumes_and_networks_belong_to_the_services_that_use_them():
+    """PR #330 added a named volume for the portal: that restarts the portal, not all nine."""
+    volume = (COMPOSE.replace("    environment: [A=1]\n", "    environment: [A=1]\n    volumes: [mc-observations:/app/runtime/mc-observations]\n")
+              .replace("networks:\n", "volumes:\n  mc-observations:\nnetworks:\n"))
+    assert compose_changed_services(COMPOSE, volume) == ("portal",)
+    # Bind mounts are not named volumes; an unused top-level definition restarts nothing.
+    bind = COMPOSE.replace("    environment: [A=1]\n", "    environment: [A=1]\n    volumes: [/opt/minimoi/data:/app/data:ro]\n")
+    assert compose_changed_services(COMPOSE, bind) == ("portal",)
+    unused = COMPOSE.replace("networks:\n", "volumes:\n  spare:\nnetworks:\n")
+    assert compose_changed_services(COMPOSE, unused) == ()
+    # A network only the gateway joins restarts the gateway; changing it touches only its users.
+    joined = (COMPOSE.replace("    healthcheck: {start_period: 20s}\n", "    healthcheck: {start_period: 20s}\n    networks: [default, mc]\n")
+              .replace("  default: {}\n", "  default: {}\n  mc: {internal: true}\n"))
+    assert compose_changed_services(COMPOSE, joined) == ("model-gateway",)
+    assert compose_changed_services(joined, joined.replace("mc: {internal: true}", "mc: {internal: false}")) == ("model-gateway",)
+
+
+def test_comments_and_layout_in_compose_restart_nothing():
+    edited = COMPOSE.replace("  portal:\n", "  # the portal\n  portal:\n").replace("environment: [A=1]", "environment:\n      - A=1")
+    assert compose_changed_services(COMPOSE, edited) == ()
+    assert classify(["docker-compose.prod.yml"], compose_diff=lambda: ()) == ("documents", ())
+
+
+def test_compose_changes_the_classifier_cannot_own_stay_full():
+    cases = {
+        "postgres": COMPOSE.replace("postgres:latest", "postgres:17"),                         # the scoped deploy never recreates it
+        "new service": COMPOSE.replace("networks:\n", "  mc:\n    image: mc\nnetworks:\n"),
+        "removed service": COMPOSE.replace("  vault-ask:\n    profiles: [vault]\n    image: portal:${MINIMOI_IMAGE_TAG:-latest}\n", ""),
+        "top-level key": COMPOSE.replace("networks:\n", "name: other\nnetworks:\n"),
+        "postgres's network": COMPOSE.replace("default: {}", "default: {driver: bridge}"),       # every service is on default
+        "unparseable": "services: [",
+        "not a mapping": "- a list\n",
+    }
+    for name, head in cases.items():
+        assert compose_changed_services(COMPOSE, head) is None, name
+    assert compose_changed_services(None, COMPOSE) is None
+    assert compose_changed_services(COMPOSE, None) is None
+
+
+def test_classify_uses_the_compose_diff_and_falls_back_to_full_without_one():
+    assert classify(["docker-compose.prod.yml"]) == ("full", ALL_SERVICES)
+    assert classify(["docker-compose.prod.yml"], compose_diff=lambda: None) == ("full", ALL_SERVICES)
+    assert classify(["docker-compose.prod.yml"], compose_diff=lambda: ("model-gateway",)) == ("domain", ("model-gateway",))
+    # An unknown path beside it still forces the full release.
+    assert classify(["docker-compose.prod.yml", "unexpected/x.py"], compose_diff=lambda: ("portal",)) == ("full", ALL_SERVICES)
+
+
+def test_pr_385_deploys_the_portal_and_the_gateway_not_all_nine():
+    """PR #385: compose (gateway env_file + start_period, portal env), two ops scripts, a runbook, a test, and a lock file."""
+    paths = ["docker-compose.prod.yml", "docs/runbooks/mc_container_prod.md", "minimoi_portal/auth/.auth.lock",
+             "scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh", "scripts/operations/deploy_mc_container_ec2.sh",
+             "tests/test_staging_environment.py"]
+    assert classify(paths) == ("full", ALL_SERVICES)                                               # before: no compose diff
+    assert classify(paths, compose_diff=lambda: ("portal", "model-gateway")) == ("domain", ("portal", "model-gateway"))
+
+
+def test_git_compose_diff_reads_both_commits(tmp_path):
+    import subprocess
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+    git("init", "-q")
+    git("config", "user.email", "ci@example.invalid")
+    git("config", "user.name", "ci")
+    (tmp_path / "docker-compose.prod.yml").write_text(COMPOSE)
+    git("add", ".")
+    git("commit", "-qm", "base")
+    (tmp_path / "docker-compose.prod.yml").write_text(COMPOSE.replace("start_period: 20s", "start_period: 120s"))
+    git("commit", "-qam", "head")
+    assert git_compose_diff("HEAD^", "HEAD", cwd=tmp_path)() == ("model-gateway",)
+    assert git_compose_diff("no-such-commit", "HEAD", cwd=tmp_path)() is None
+
+
+def test_every_production_compose_service_has_an_owner_except_postgres():
+    import yaml
+    root = Path(__file__).resolve().parent.parent
+    text = (root / "docker-compose.prod.yml").read_text()
+    services = set(yaml.safe_load(text)["services"])
+    assert services - set(COMPOSE_SERVICE_OWNERS) == {"postgres"}
+    assert compose_changed_services(text, text) == ()
+
+
+# --- operator scripts no service image runs ----------------------------------------------------------------------------
+def test_ops_only_scripts_are_release_only():
+    for path in ("scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh", "scripts/credentials/credential_manager.py",
+                 "scripts/credentials/ensure_model_gateway_key.py", "scripts/operations/deploy_mc_container_ec2.sh",
+                 "scripts/operations/mc_prod_db_migrate.sh"):
+        assert classify([path]) == ("documents", ()), path
+    # Neighbours keep the full fallback.
+    for path in ("scripts/credentialsx/tool.sh", "scripts/operations/deploy_mc_container_ec2_extra.sh",
+                 "scripts/operations/other.sh"):
+        assert classify([path]) == ("full", ALL_SERVICES), path
+
+
+def test_no_service_image_runs_the_ops_only_scripts():
+    """The day a service imports, copies or starts one, it must be classified as that service."""
+    root = Path(__file__).resolve().parent.parent
+    importers = []
+    for path in sorted(root.rglob("*.py")):
+        rel = path.relative_to(root).as_posix()
+        if SKIPPED_DIRS.intersection(rel.split("/")) or rel.startswith(("tests/", "scripts/credentials/")):
+            continue
+        try:
+            names = _imported_names(path.read_text(errors="ignore"))
+        except SyntaxError:
+            continue
+        if any(name == "scripts.credentials" or name.startswith("scripts.credentials.") for name in names):
+            importers.append(rel)
+    assert importers == []
+    markers = ("scripts/credentials", "credential_manager", "ensure_model_gateway_key", "ensure_cos_agent_a_token",
+               "deploy_mc_container_ec2", "mc_prod_db_migrate")
+    def code(path):
+        return "\n".join(line for line in path.read_text(errors="ignore").splitlines() if not line.lstrip().startswith("#"))
+    production = [root / "docker-compose.prod.yml", root / "scripts/operations/deploy_scoped_release.sh"]
+    production.extend(p for p in (root / "docker").rglob("*") if p.is_file() and "mc-agent-container" not in p.parts)
+    assert [(str(p.relative_to(root)), m) for p in production for m in markers if m in code(p)] == []
+    # MC's host scripts ship only in MC's own image (deploy-mc-agent.yml).
+    mc = (root / "docker/mc-agent-container/Dockerfile").read_text()
+    assert "scripts/operations/deploy_mc_container_ec2.sh" in mc and "scripts/operations/mc_prod_db_migrate.sh" in mc
+    # deploy.yml only pushes the host secret sync, on every deploy, before it runs it.
+    workflow = (root / ".github/workflows/deploy.yml").read_text()
+    assert [m for m in markers if m in workflow] == ["scripts/credentials"]
+    assert workflow.count("scripts/credentials/") == 1 and "scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh" in workflow
+    deploy_job = workflow[workflow.index("  deploy:"):workflow.index("  deploy-docs:")]
+    assert deploy_job.index("COS_SECRET_SYNC=") < deploy_job.index("/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env")
+
+
+def test_the_test_selector_and_nightly_workflow_redeploy_nothing():
+    assert classify(["scripts/ci/select_tests.py", ".github/workflows/nightly-tests.yml"]) == ("documents", ())
+    assert classify([".github/workflows/deploy-mc-agent.yml"]) == ("full", ALL_SERVICES)          # other workflows keep the fallback
