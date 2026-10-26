@@ -44,13 +44,16 @@ services:
       # environment) and the artifact root, which must equal the portal's (dev: the Mac path, mounted at that path below).
       - MC_TOOLS_TOKEN=${MC_TOOLS_TOKEN:-}
       - MC_TOOLS_DOOR=mc-tools-door
+      - MC_SEARCH_KEY=${MC_SEARCH_KEY:-}
       - MC_ARTIFACT_ROOT=${HOME}/Projects/personal-ai-agents/_working
     volumes:
       - mc-state:/home/node/.openclaw
       - ${HOME}/Projects/personal-ai-agents/_working:${HOME}/Projects/personal-ai-agents/_working
       - mc-auth:/home/node/.config/openclaw
       - mc-claude-home:/home/node/.claude
-      - ${HOME}/minimoi-mc-repo:/minimoi/repo
+      # A self-contained clone of main (its own .git; refreshed from the local repo), not a worktree whose git data
+      # points at a Mac path the container cannot see.
+      - ${HOME}/minimoi-mc-repo-main:/minimoi/repo
       - ${HOME}/minimoi-private:/minimoi/private
       - ${HOME}/minimoi-work:/minimoi/work
       - ${HOME}/minimoi-workshops:/minimoi/workshops
@@ -76,7 +79,7 @@ services:
     entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/tcp-forward.mjs"]
     restart: on-failure:3
     environment:
-      - MC_FORWARD=0.0.0.0:5011=minimoi-portal:5011
+      - MC_FORWARD=0.0.0.0:5011=minimoi-portal:5011,0.0.0.0:4000=minimoi-model-gateway:4000
     networks: [mc-internal, portal-net]
     mem_limit: 64m
     read_only: true

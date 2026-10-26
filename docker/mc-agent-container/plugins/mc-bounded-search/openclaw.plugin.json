@@ -1,0 +1,17 @@
+{
+  "id": "mc-bounded-search",
+  "name": "MC Bounded Search",
+  "description": "Master Craftsman's one bounded web-search capability through the internal MiniMoi model gateway.",
+  "activation": {
+    "onStartup": false
+  },
+  "contracts": {
+    "webSearchProviders": [
+      "minimoi"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false
+  }
+}
