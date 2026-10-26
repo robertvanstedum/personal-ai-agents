@@ -26,6 +26,8 @@ services:
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:model-gateway-${MINIMOI_IMAGE_TAG:-latest}
     container_name: minimoi-model-gateway
     restart: unless-stopped
+    # mc-portal: MC's tools door reaches the gateway's search route here (MC's own capped key; MC itself is not on it).
+    networks: [default, mc-portal]
     command:
       - --config
       - /app/config.yaml
@@ -237,6 +239,36 @@ services:
       # The live Build Queue. domains/guild/queue_store.py refuses to Save
       # unless this is set and its folder is a mount (never the image's copy).
       - GUILD_QUEUE_PATH=/app/runtime/guild/build_queue.json
+      # Master Craftsman's own container (docs/runbooks/mc_container_prod.md). Every switch defaults OFF; they are
+      # turned on together, in /opt/minimoi/.env, only by `deploy_mc_container_ec2.sh switch mc` (and off by
+      # `switch cos`). Paths and environments are fixed here; tokens are hashes only.
+      - MINIMOI_MC_TOOLS=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_TOOLS_ENV=prod
+      - MINIMOI_MC_TOOLS_PRINCIPAL=robert
+      - MINIMOI_MC_TOOLS_PORT=5011
+      - MINIMOI_MC_TOOLS_TOKEN_SHA256=${MINIMOI_MC_TOOLS_TOKEN_SHA256:-}
+      - MINIMOI_MC_TURN_LEDGER=${MINIMOI_MC_TOOLS:-0}
+      - MC_TURNS_DIR=/app/data/mc-turns
+      - MINIMOI_MC_POLICY_FILE=/run/secrets/mc/mc-policy.prod.json
+      - MINIMOI_MC_POLICY_AUTHORITY_FILE=/run/secrets/mc/mc-policy.prod.authority.json
+      - MINIMOI_MC_STATUS_PROTOCOL_VERSION=2
+      - MINIMOI_MC_ARTIFACT_ROOT=/opt/minimoi/mc/artifacts
+      - MINIMOI_BOARD_ACTIONS=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_BOARD_ENV=prod
+      - MINIMOI_MC_RECALL=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_DELIVERIES=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_OPERATING_RULES=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_MEETINGS=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_LESSONS=${MINIMOI_MC_TOOLS:-0}
+      - MINIMOI_MC_LESSONS_ENV=prod
+      - MINIMOI_MC_LESSONS_DIR=/app/data/mc-lessons
+      - MINIMOI_MC_DELEGATION=${MINIMOI_MC_DELEGATION:-0}
+      - MINIMOI_MC_DELEGATION_ENV=prod
+      - MINIMOI_MC_DELEGATION_PRINCIPAL=robert
+      - MINIMOI_MC_AGENT_ENROLLMENT=/run/secrets/mc/enrollment.json
+      - MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256=${MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256:-}
+      - MINIMOI_MC_APPROVED_HANDOFF_REGISTRY=/run/secrets/mc/approved-handoff-registry.json
+      - MINIMOI_MC_TASK_WATCH_REGISTRY=/run/secrets/mc/task-watch-registry.json
     volumes:
       # Mount the queue FOLDER, not the file: an atomic replace (the verified
       # Save, the deploy seed, --publish-queue) changes the file's inode, which
@@ -252,6 +284,11 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/auth/users.json:/app/minimoi_portal/auth/users.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/auth/guests.json:/app/minimoi_portal/auth/guests.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/app/agent_logs
+      # Master Craftsman: its operator-installed policy, authority record and registries (read-only), and the
+      # portal-owned stores for MC turns and lessons. Created by deploy_mc_container_ec2.sh; empty until then.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/portal:/run/secrets/mc:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-turns:/app/data/mc-turns
+      - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-lessons:/app/data/mc-lessons
       # Nonsecret root-generated deployment observations; MC has read-only access.
       - type: bind
         source: ${MINIMOI_ROOT:-/opt/minimoi}/release-status

@@ -89,19 +89,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Sync ONLY the MC compose file and script, then deploy the MC project (portal unchanged)
+      - name: Unpack the release bundle from the MC image on EC2, then deploy the MC project (portal unchanged)
         run: |
           TAG=${{ needs.resolve.outputs.tag }}
-          COMPOSE=$(base64 -w 0 docker-compose.mc.prod.yml)
-          SCRIPT=$(base64 -w 0 scripts/operations/deploy_mc_container_ec2.sh)
-          JUDGMENT=$(base64 -w 0 scripts/judgment/judgment_store.py)
-          SECTEST=$(base64 -w 0 scripts/ops/mc_container_security_test.py)
-          MODELTEST=$(base64 -w 0 scripts/ops/mc_container_model_tests.py)
+          IMG="$REGISTRY/minimoi/cos-scheduler:$TAG"
+          # The image carries its own host-side bundle (compose, scripts, policy, migrations): one immutable artifact.
+          # The database migration, the policy approval and the switch are separate operator steps (runbook).
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
             --timeout-seconds 900 \
-            --parameters "commands=[\"set -e\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.mc.prod.yml\",\"echo $SCRIPT | base64 -d > /opt/minimoi/scripts/deploy_mc_container_ec2.sh\",\"echo $JUDGMENT | base64 -d > /opt/minimoi/scripts/judgment_store.py\",\"echo $SECTEST | base64 -d > /opt/minimoi/scripts/mc_container_security_test.py\",\"echo $MODELTEST | base64 -d > /opt/minimoi/scripts/mc_container_model_tests.py\",\"chmod +x /opt/minimoi/scripts/deploy_mc_container_ec2.sh\",\"/opt/minimoi/scripts/deploy_mc_container_ec2.sh deploy $TAG\",\"/opt/minimoi/scripts/deploy_mc_container_ec2.sh status\"]" \
+            --parameters "commands=[\"set -e\",\"aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REGISTRY >/dev/null\",\"docker pull -q $IMG\",\"rm -rf /opt/minimoi/mc-release && install -d -m 0700 /opt/minimoi/mc-release\",\"docker run --rm --user 0 --entrypoint sh -v /opt/minimoi/mc-release:/out $IMG -c 'cp -R /opt/minimoi/mc-release/. /out/'\",\"install -m 0644 /opt/minimoi/mc-release/docker-compose.mc.prod.yml /opt/minimoi/docker-compose.mc.prod.yml\",\"install -m 0755 /opt/minimoi/mc-release/deploy_mc_container_ec2.sh /opt/minimoi/mc-release/mc_prod_db_migrate.sh /opt/minimoi/scripts/\",\"install -m 0644 /opt/minimoi/mc-release/judgment_store.py /opt/minimoi/mc-release/mc_container_security_test.py /opt/minimoi/mc-release/mc_container_model_tests.py /opt/minimoi/scripts/\",\"rm -rf /opt/minimoi/mc-migrations && cp -R /opt/minimoi/mc-release/mc-migrations /opt/minimoi/mc-migrations\",\"/opt/minimoi/scripts/deploy_mc_container_ec2.sh deploy $TAG\",\"/opt/minimoi/scripts/deploy_mc_container_ec2.sh status\"]" \
             --query 'Command.CommandId' --output text)
           echo "Deploy command ID: $COMMAND_ID"
           for i in $(seq 1 90); do

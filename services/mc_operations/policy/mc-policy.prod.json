@@ -1,0 +1,582 @@
+{
+  "schema": "mc-policy/1",
+  "revision": "mc-prod-20261026-container",
+  "rules": [
+    {
+      "capability": "host.health",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "host_health_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guest.list",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "guest_list_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "github.issues.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "github_read_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "github_read",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guest.reject_request",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "guest_reject_v1",
+      "verify": "guest_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "issue.comment",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "issue_comment_v1",
+      "verify": "github_receipt_v1",
+      "undo": null,
+      "egress": "github_write",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "issue.create_data_repair",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "data_repair_ticket_v1",
+      "verify": "github_receipt_v1",
+      "undo": null,
+      "egress": "github_write",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "lessons.adopt",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "lesson_adopt_v1",
+      "verify": "lesson_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "delegate.start_research",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "research_v1",
+      "verify": "job_started_v1",
+      "undo": null,
+      "egress": "delegation",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "access.invite_user",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "access_invite_v1",
+      "verify": "account_readback_v1",
+      "undo": null,
+      "egress": "email",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "lessons.keep_preference",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "preference_keep_v1",
+      "verify": "lesson_readback_v1",
+      "undo": "lesson_revoke_v1",
+      "egress": "none",
+      "max_operations_per_turn": 3
+    },
+    {
+      "capability": "lessons.revoke_preference",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "preference_revoke_v1",
+      "verify": "lesson_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 3
+    },
+    {
+      "capability": "house.describe",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "house_describe_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "house.describe_domain",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "house_describe_domain_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "work.record_gap",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "gap_record_v1",
+      "verify": "register_readback_v1",
+      "undo": "register_withdraw_v1",
+      "egress": "none",
+      "max_operations_per_turn": 2
+    },
+    {
+      "capability": "work.withdraw_gap",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "gap_withdraw_v1",
+      "verify": "register_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 2
+    },
+    {
+      "capability": "guild.board.notes.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "board_notes_query_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.board.notes.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "board_note_read_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.board.note.create",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "board_note_create_v1",
+      "verify": "board_readback_v1",
+      "undo": "board_conditional_undo_v1",
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.board.note.update",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "board_note_update_v1",
+      "verify": "board_readback_v1",
+      "undo": "board_conditional_undo_v1",
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.board.operations.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "board_operation_read_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.board.operation.undo",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "board_operation_undo_v1",
+      "verify": "board_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "guild.board.clarify",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "action_clarify_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    },
+    {
+      "capability": "host.files.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "host_read_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 20
+    },
+    {
+      "capability": "host.files.list",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "host_list_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 20
+    },
+    {
+      "capability": "host.artifacts.create",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "working_write_v1",
+      "verify": "host_artifact_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 4
+    },
+    {
+      "capability": "host.conversation.export",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "conversation_export_v1",
+      "verify": "host_artifact_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 4
+    },
+    {
+      "capability": "host.artifacts.recover",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "artifact_recover_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 20
+    },
+    {
+      "capability": "agent.contact.existing",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "agent_contact_v1",
+      "verify": "native_agent_receipt_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "agent.contact.status",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "agent_status_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "agent.watch",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "agent_watch_v1",
+      "verify": "native_notice_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "host.career.synthetic",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "career_trial_v1",
+      "verify": "host_artifact_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "mc.records.read",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 1,
+      "approval": "none",
+      "source_requirement": "current_owner_turn",
+      "handler": "recall_v1",
+      "verify": null,
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 10
+    }
+  ]
+}

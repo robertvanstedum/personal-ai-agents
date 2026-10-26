@@ -29,6 +29,18 @@ COPY --chown=root:root scripts/mc_host/inspect.py scripts/mc_host/artifact.py /o
 COPY --chown=root:root docker/mc-agent-container/tcp-forward.mjs /opt/minimoi/mc-agent/tcp-forward.mjs
 # Bounded web search: MC's copy of CoS's reviewed provider (query only; fixed gateway route).
 COPY --chown=root:root docker/mc-agent-container/plugins/mc-bounded-search/ /opt/minimoi/mc-agent/plugins/mc-bounded-search/
+# The host-side release bundle (copied out by .github/workflows/deploy-mc-agent.yml, never run inside MC): the EC2
+# deploy/switch script, the DB migration script and its migrations, the prod policy, the judgment collector and the
+# security/model checks. One immutable artifact per release.
+COPY --chown=root:root docker-compose.mc.prod.yml /opt/minimoi/mc-release/
+COPY --chown=root:root scripts/operations/deploy_mc_container_ec2.sh scripts/operations/mc_prod_db_migrate.sh \
+     scripts/judgment/judgment_store.py scripts/ops/mc_container_security_test.py scripts/ops/mc_container_model_tests.py \
+     services/mc_operations/policy/mc-policy.prod.json /opt/minimoi/mc-release/
+COPY --chown=root:root minimoi_portal/guild_ui/sql/ /opt/minimoi/mc-release/mc-migrations/minimoi_portal/guild_ui/sql/
+COPY --chown=root:root core/minimoi_actions/sql/ /opt/minimoi/mc-release/mc-migrations/core/minimoi_actions/sql/
+COPY --chown=root:root core/mc_domain_actions/sql/ /opt/minimoi/mc-release/mc-migrations/core/mc_domain_actions/sql/
+COPY --chown=root:root core/mc_tools/sql/ /opt/minimoi/mc-release/mc-migrations/core/mc_tools/sql/
+COPY --chown=root:root core/mc_delegation_dispatcher/sql/ /opt/minimoi/mc-release/mc-migrations/core/mc_delegation_dispatcher/sql/
 RUN chmod 0755 /opt/minimoi/mc-agent/start.sh \
  && mkdir -p /home/node/.claude /minimoi \
  && chown node:node /home/node/.claude

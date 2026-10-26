@@ -444,7 +444,15 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        isolated_runtime=cfg["isolated_runtime"], people=_guest_people,
                        standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup, policy=policy_source(cfg), read_owner_note=read_owner_note,
-                       domain_health=domain_health, registers=registers, board=board, export_conversation=export_conversation, recall_source=recall_source)
+                       domain_health=domain_health, registers=registers, board=board, export_conversation=export_conversation, recall_source=recall_source,
+                       artifact_root=artifact_root(os.environ))
+
+
+def artifact_root(environ):
+    """Where MC's governed artifacts live, as the MC runtime names it (plan D4). Unset keeps the original Mac default
+    (core/mc_tools/host_artifacts.ROOT); MC's own container on EC2 uses /opt/minimoi/mc/artifacts at the same path."""
+    root = str(environ.get("MINIMOI_MC_ARTIFACT_ROOT", "") or "").strip()
+    return root if root and os.path.isabs(root) and os.path.normpath(root) == root else None
 
 
 def board_adapter(app, environ, services, cfg):
@@ -557,7 +565,56 @@ def attach(app, blueprint_name, services):
                               agent_worker_token_sha256=agent_worker_sha or None), host=host, port=cfg["port"])
     app.extensions["mc_tools_listener"] = thread
     _log.info("mc tools: listener on %s:%s (agents %s)", host, cfg["port"], ",".join(cfg["agents"]))
+    if agent_worker_sha and environ.get("MINIMOI_MC_WORKER_PUBLIC") == "1":
+        attach_worker_door(app, cfg["port"])
     return thread
+
+
+WORKER_PATH = "/internal/mc/v1/agent-worker"
+
+
+def attach_worker_door(app, port, *, opener=None, clock=None, per_minute=120):
+    """The Mac agent worker's way in from outside the host (plan 2c): ONE path on the portal's public port, passed
+    unchanged to the internal tool listener, which alone authenticates the worker's own token. Nothing else of the
+    listener is reachable; bodies and replies are bounded as the worker bounds them; a crude per-address rate limit
+    caps guessing. Off unless MINIMOI_MC_WORKER_PUBLIC=1 (and a worker credential hash is configured)."""
+    import time
+    import urllib.error
+    import urllib.request
+    from flask import Response, request
+    opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    clock = clock or time.monotonic
+    seen = {}
+
+    def worker_door():
+        now, who = clock(), request.headers.get("X-Real-IP") or request.remote_addr or "-"
+        window = [t for t in seen.get(who, ()) if now - t < 60]
+        if len(window) >= per_minute:
+            return Response('{"error":"worker_rate_limited"}', 429, mimetype="application/json")
+        seen[who] = window + [now]
+        if len(seen) > 1000:
+            seen.clear()
+        auth = request.headers.get("Authorization", "")
+        if request.mimetype != "application/json" or not auth.startswith("Bearer ") or (request.content_length or 0) > 16384:
+            return Response('{"error":"worker_request_invalid"}', 400, mimetype="application/json")
+        body = request.get_data(cache=False)
+        if len(body) > 16384:
+            return Response('{"error":"worker_request_invalid"}', 400, mimetype="application/json")
+        req = urllib.request.Request(f"http://127.0.0.1:{int(port)}{WORKER_PATH}", data=body, method="POST",
+                                     headers={"Content-Type": "application/json", "Authorization": auth})
+        try:
+            with opener.open(req, timeout=10) as r:
+                status, raw = r.status, r.read(65537)
+        except urllib.error.HTTPError as e:
+            status, raw = e.code, e.read(65537)
+        except Exception:
+            return Response('{"error":"worker_door_unavailable"}', 503, mimetype="application/json")
+        if len(raw) > 65536:
+            return Response('{"error":"worker_response_bound"}', 502, mimetype="application/json")
+        return Response(raw, status, mimetype="application/json")
+
+    app.add_url_rule(WORKER_PATH, "mc_agent_worker_door", worker_door, methods=["POST"])
+    _log.info("mc tools: agent worker door open on the public port (%s only)", WORKER_PATH)
 
 
 # ── the owner's Confirm / Cancel ──────────────────────────────────────────────

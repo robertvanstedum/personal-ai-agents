@@ -47,6 +47,12 @@ services:
       - no_proxy=localhost,127.0.0.1
       - TZ=America/Chicago
       - MALLOC_ARENA_MAX=2
+      # Phase 2: MC's own tools credential and capped search key (each written to a node-only file at start, then dropped
+      # from the environment), the tools door, and the artifact root (must equal the portal's MINIMOI_MC_ARTIFACT_ROOT).
+      - MC_TOOLS_TOKEN=${MC_TOOLS_TOKEN:-}
+      - MC_SEARCH_KEY=${MC_SEARCH_KEY:-}
+      - MC_TOOLS_DOOR=mc-tools-door
+      - MC_ARTIFACT_ROOT=/opt/minimoi/mc/artifacts
     volumes:
       - mc-state:/home/node/.openclaw
       - mc-auth:/home/node/.config/openclaw
@@ -56,6 +62,9 @@ services:
       - /opt/minimoi/mc/inbox:/minimoi/inbox
       - /opt/minimoi/mc/workshops:/minimoi/workshops
       - /opt/minimoi/mc/apprenticeship:/minimoi/apprenticeship:ro
+      # Governed artifacts (minimoi_working_write), at the same path the portal names; and a self-contained repo clone.
+      - /opt/minimoi/mc/artifacts:/opt/minimoi/mc/artifacts
+      - /opt/minimoi/mc/repo:/minimoi/repo
       # Published specs and design docs (scripts/sync_docs.sh), for reference only.
       - /opt/minimoi/docs:/minimoi/docs:ro
     networks: [mc-internal]
@@ -65,6 +74,27 @@ services:
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     labels: [minimoi.runtime.role=guild-mc, minimoi.runtime.implementation=openclaw]
+
+  # MC's only way to MiniMoi: a fixed forwarder to the portal's tools listener and the gateway's search route, nothing
+  # else. On mc-internal (MC reaches it) and minimoi-mc-portal (it reaches the portal and the gateway).
+  mc-tools-door:
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/cos-scheduler:mc-agent-${MC_IMAGE_TAG:?set MC_IMAGE_TAG}
+    container_name: minimoi-mc-tools-door
+    entrypoint: ["tini", "-g", "--", "node", "/opt/minimoi/mc-agent/tcp-forward.mjs"]
+    restart: unless-stopped
+    environment:
+      - MC_FORWARD=0.0.0.0:5011=minimoi-portal:5011,0.0.0.0:4000=minimoi-model-gateway:4000
+    networks: [mc-internal, mc-portal]
+    mem_limit: 64m
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, node, -e, "require('net').connect(5011,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    labels: [minimoi.runtime.role=guild-mc-tools-door]
 
   # The portal's only way in (relay v2). No host port: the portal reaches it as http://mc-relay:8790/v1 on
   # minimoi-mc-portal, with the caller token in /opt/minimoi/.env (MC_RUNTIME_TOKEN). Phase 1: chat only; its job inbox
