@@ -464,7 +464,7 @@
       "name": "minimoi_delegate_research",
       "capability": "delegate.propose_research",
       "label": "Propose delegated research",
-      "description": "Propose asking Claude Code to research what Robert asked in THIS message: read-only, in a fresh copy of the repository, cost cap 2 USD. His own message is the brief; you give only a short title. It starts only after he replies Confirm.",
+      "description": "Propose asking Claude Code or Codex to research what Robert asked in THIS message: read-only, in a fresh copy of the repository (Claude Code: cost cap 2 USD; Codex: time limit 30 minutes). His own message is the brief; you give only a short title. It starts only after he replies Confirm.",
       "parameters": {
         "type": "object",
         "additionalProperties": false,
@@ -476,7 +476,8 @@
           "agent": {
             "type": "string",
             "enum": [
-              "claude-code"
+              "claude-code",
+              "codex"
             ]
           },
           "title": {

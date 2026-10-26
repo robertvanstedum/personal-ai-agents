@@ -121,6 +121,7 @@ class Supervisor:
             except Exception:
                 log.exception("check-in message not sent")
                 status = "failed"
+        summary["open_items"] = [{"kind": i["kind"], "text": i["text"]} for i in items][:20]
         row = self.store.record_checkin(summary, [i["key"] for i in new_items], status)
         log.info("check-in %s: %d items, %d new, telegram %s", row["id"], len(items), len(new_items), status)
         return summary, new_items

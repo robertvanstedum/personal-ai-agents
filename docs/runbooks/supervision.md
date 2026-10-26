@@ -72,6 +72,33 @@ The supervisor reads open PRs and their checks, release workflow runs (`deploy.y
   receipt.
 - The Mac sync log: `~/.minimoi/supervision/sync.log` (silent when there is nothing to carry).
 
+## MC hands work to Claude Code or Codex on the Mac (delegation)
+
+MC proposes delegated research (`minimoi_delegate_research`, agent `claude-code` or `codex`). Robert confirms, and the
+job is queued in prod's `guild.mc_delegations`. The Mac runner claims it through
+`/internal/mc/v1/delegation-runner`, which is outbound HTTPS from the Mac; prod's database is never exposed. The
+runner works in a fresh read-only checkout of `main` and returns the answer as the job's result note in that Guild
+conversation.
+
+- Limits: Claude Code is capped at 2 USD per job. Codex runs on Robert's plan, research only, read-only sandbox,
+  30 minutes per job (Robert, 26 Oct: "30 minutes and we adjust if needed to be higher":
+  `CODEX_DEADLINE_S` in `core/mc_delegation_dispatcher/relay.py`). One job at a time.
+- Codex runs with `--ignore-user-config`. The Mac user's configured model needs a newer CLI (26 Oct), and a
+  delegated job should carry none of his settings or MCP servers anyway.
+- Turn on, after this is on main:
+  1. Mac: `bash scripts/mc_host/install_delegation_runner.sh`. It prints the token's SHA-256 and loads
+     `ai.minimoi.delegation-runner.prod` from a bundle of `origin/main`.
+  2. EC2: `sudo /opt/minimoi/scripts/deploy_mc_container_ec2.sh runner on <sha256>`.
+  3. Check that the next check-in lists the runner, then ask MC for a small research job.
+- The check-in shows every delegated job: running (agent, minutes), unclaimed after 5 min (no runner), silent
+  after 5 min, or ended badly.
+- Acceptance test: Robert asks MC to triage the open PRs (#282–#375). MC delegates one read-only review, follows it,
+  and brings back close / merge / finish / investigate with one line each. It then proposes each close for his yes.
+  Closing a PR needs the issues token to carry Pull requests: write (Robert's choice). Without it, MC proposes a
+  comment and label instead.
+- Off: `deploy_mc_container_ec2.sh runner off`; on the Mac,
+  `launchctl bootout gui/$(id -u)/ai.minimoi.delegation-runner.prod`.
+
 ## Off and rollback
 
 `sudo /opt/minimoi/scripts/deploy_mc_container_ec2.sh supervision off`: stops the supervisor, removes the token copy,

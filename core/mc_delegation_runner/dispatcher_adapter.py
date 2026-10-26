@@ -29,20 +29,26 @@ class StoreDispatcher:
         return self.store.renew(request_id, generation)
 
     def result(self, request_id, generation, *, event_id, status, artifacts, detail):
-        text, cost = None, None
-        for a in artifacts or []:
-            if isinstance(a, dict) and a.get("kind") == "output" and "/" not in str(a.get("ref", "")):
-                path = self.artifact_root / a["ref"]
-                try:
-                    if path.is_file() and not path.is_symlink():
-                        raw = path.read_bytes()
-                        text, cost = readable(raw), cost_usd(raw)
-                except OSError:
-                    text = None
+        text, cost = output_of(self.artifact_root, artifacts)
         if cost is not None:
             detail = {**(detail or {}), "cost_usd": cost}           # what the delegate reports it spent
         return self.store.result(request_id, generation, event_id=event_id, status=status, artifacts=artifacts,
                                  detail=detail, output_text=text)
+
+
+def output_of(artifact_root: Path, artifacts):
+    """(text the owner reads, cost the delegate reports) from the job's output artifact, or (None, None)."""
+    text, cost = None, None
+    for a in artifacts or []:
+        if isinstance(a, dict) and a.get("kind") == "output" and "/" not in str(a.get("ref", "")):
+            path = Path(artifact_root) / a["ref"]
+            try:
+                if path.is_file() and not path.is_symlink():
+                    raw = path.read_bytes()
+                    text, cost = readable(raw), cost_usd(raw)
+            except OSError:
+                text = None
+    return text, cost
 
 
 _STOPPED = {"error_max_budget_usd": "Claude Code stopped at its cost cap before finishing.",
@@ -66,10 +72,35 @@ def cost_usd(raw: bytes):
     return round(float(value), 4) if ok else None
 
 
+def codex_answer(text: str):
+    """Codex ``exec --json`` events: the last agent message, or a plain failure line; None when not Codex events."""
+    answer, failed, events = None, None, 0
+    for line in text.splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue                                       # stderr lines interleaved in the log
+        if not isinstance(ev, dict) or not isinstance(ev.get("type"), str):
+            continue
+        events += 1
+        item = ev.get("item") if isinstance(ev.get("item"), dict) else {}
+        if ev["type"] == "item.completed" and item.get("type") == "agent_message" and isinstance(item.get("text"), str):
+            answer = item["text"].strip()
+        elif ev["type"] == "turn.failed":
+            failed = "Codex stopped with an error before finishing."
+    if not events or not any(k in text for k in ('"thread.started"', '"turn.started"')):
+        return None
+    return answer or failed or "Codex finished but returned no answer text."
+
+
 def readable(raw: bytes) -> str:
     """The answer the owner reads. Claude Code's ``--output-format json`` wraps it in a result envelope; the raw
-    artifact keeps the envelope, the owner sees its ``result`` text. Anything else is returned as written."""
+    artifact keeps the envelope, the owner sees its ``result`` text. Codex's ``--json`` events give its last message.
+    Anything else is returned as written."""
     text = raw.decode("utf-8", errors="replace").strip()
+    codex = codex_answer(text)
+    if codex is not None:
+        return codex.encode("utf-8")[:OUTPUT_MAX].decode("utf-8", errors="ignore")
     try:
         doc = json.loads(text)
     except ValueError:

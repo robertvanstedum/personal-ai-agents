@@ -199,7 +199,7 @@ switch() {
       set_env_keys MINIMOI_GUILD_CHAT cos MC_RUNTIME_URL "" MC_RUNTIME_CHAT_MODEL "" MC_RUNTIME_TOKEN "" \
                    MINIMOI_MC_TOOLS "" MINIMOI_MC_TOOLS_TOKEN_SHA256 "" MINIMOI_MC_DELEGATION "" \
                    MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256 "" MINIMOI_MC_WORKER_PUBLIC "" \
-                   MINIMOI_MC_TOOLS_TICKETS "" MINIMOI_MC_TOOLS_COMMENTS ""
+                   MINIMOI_MC_TOOLS_TICKETS "" MINIMOI_MC_TOOLS_COMMENTS "" MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256 ""
       ;;
     *) die "switch mc|cos";;
   esac
@@ -285,6 +285,24 @@ supervision() {
   docker logs --since 30m minimoi-supervisor 2>&1 | grep -E "check-in|supervisor up|decision" | tail -5 || true
 }
 
+runner() {
+  # The Mac delegation runner's door (#365): `on <sha256>` records the runner token's HASH (the token is made and
+  # kept in the Mac's Keychain by install_delegation_runner.sh) and redeploys the portal alone; `off` clears it.
+  local to="${1:-}" tag
+  tag=$(docker inspect --format '{{.Config.Image}}' minimoi-portal | sed 's/.*://')
+  [[ -n "$tag" ]] || die "cannot read the running portal tag"
+  case "$to" in
+    on)
+      [[ "${2:-}" =~ ^[0-9a-f]{64}$ ]] || die "runner on <sha256 of the Mac runner token>"
+      [[ "$(env_value "$MAIN_ENV" MINIMOI_MC_DELEGATION)" == 1 ]] || die "delegation is off (switch mc first)"
+      set_env_keys MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256 "$2" ;;
+    off) set_env_keys MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256 "" ;;
+    *) die "runner on <sha256>|off";;
+  esac
+  "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
+  docker logs --since 5m minimoi-portal 2>&1 | grep -E "delegation: runner door" | tail -1 || true
+}
+
 collect() {
   test -f "$MC_DB_DIR/openclaw-agent.sqlite" || { log "no MC records yet; nothing to collect"; return 0; }
   local copy; copy=$(mktemp -d /root/mc-judgment-copy.XXXXXX)
@@ -303,5 +321,6 @@ case "${1:-}" in
   approve-policy) approve_policy "${2:-}";;
   issues) issues "${2:-}";;
   supervision) supervision "${2:-}" "${3:-}";;
-  *) echo "usage: $0 deploy <mc-agent-vX.Y.Z> | status | switch mc|cos | collect | approve-policy \"<words>\" | issues on|off | supervision on <sha256>|off|status" >&2; exit 2;;
+  runner) runner "${2:-}" "${3:-}";;
+  *) echo "usage: $0 deploy <mc-agent-vX.Y.Z> | status | switch mc|cos | collect | approve-policy \"<words>\" | issues on|off | supervision on <sha256>|off|status | runner on <sha256>|off" >&2; exit 2;;
 esac

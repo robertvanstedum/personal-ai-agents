@@ -8,9 +8,9 @@
   "target": "mc-agent container",
   "files": {
     "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
-    "AGENTS.md": "dc0b05b092020cf5c53c2ddf1fe96c1cfd768f889f5df18fcd47d56ee1e12faf",
+    "AGENTS.md": "249badf94f367bd9d2473cc0bbbf05a119e12b637e52cec5607be2229161f2ce",
     "RUNTIME.openclaw.md": "30ef44cf54a21cd32cf7dffa12515099481af9b99be8eba25b7ae56f7f882826",
-    "CHANGES.md": "92b2c2bfb863dc46f5ad168b81905d0b7797275f054a4a37a8c02d9d450ba8ab"
+    "CHANGES.md": "eb71d0b78ad051139e63103423d465544e633f0cf42382ab90398e9a3b068290"
   },
   "projection": "SOUL verbatim; AGENTS + runtime binding",
   "projection_budget_chars": 16000,

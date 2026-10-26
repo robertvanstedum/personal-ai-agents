@@ -6,6 +6,9 @@
 
 * The DSN comes from a private file (0600) or, with ``--dsn-env NAME``, from this process's environment (read once,
   then removed); never from the command line, and never passed to the child (its environment is an allowlist).
+* Production has no database port for the Mac: ``--door https://minimoi.ai/internal/mc/v1/delegation-runner`` speaks
+  the same calls over HTTPS (core/mc_delegation_dispatcher/door.py), with the runner token read from the login
+  Keychain (service minimoi_delegation_runner, account <environment>); production keeps only its SHA-256.
 * Before each claim the mirror is fetched, so the dispatcher's exact commit is present.
 * Actors: only those with a real budget adapter (Claude Code today). Scopes: research by default; build with --scopes research,build.
 * Each pass is one ``run_once``; a failed pass is logged by type and the loop continues.
@@ -40,6 +43,14 @@ def _dsn_from_env(name: str) -> str:
     return value
 
 
+def _keychain_token(environment: str) -> str:
+    value = subprocess.run(["security", "find-generic-password", "-s", "minimoi_delegation_runner", "-a", environment,
+                            "-w"], capture_output=True, text=True, timeout=10).stdout.strip()
+    if not 32 <= len(value) <= 256:
+        raise SystemExit("no runner token in the Keychain (scripts/mc_host/install_delegation_runner.sh)")
+    return value
+
+
 def _fetch(mirror: Path):
     subprocess.run(["git", "--git-dir", str(mirror), "fetch", "--quiet", "origin", "+refs/heads/*:refs/heads/*"],
                    check=False, timeout=120, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
@@ -51,6 +62,7 @@ def main(argv=None) -> int:
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--dsn-file", type=Path)
     src.add_argument("--dsn-env", metavar="NAME")
+    src.add_argument("--door", metavar="URL")
     p.add_argument("--principal", required=True)
     p.add_argument("--environment", required=True, choices=("dev", "prod"))
     p.add_argument("--mirror", action="append", required=True, help="name=path to a bare mirror")
@@ -68,11 +80,13 @@ def main(argv=None) -> int:
     for item in args.mirror:
         name, _, path = item.partition("=")
         mirrors[name] = Path(path).expanduser()
-    import psycopg2
-    from core.mc_delegation_dispatcher.store import DispatcherStore
-    dsn = _dsn(args.dsn_file.expanduser()) if args.dsn_file else _dsn_from_env(args.dsn_env)
-    store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=args.principal,
-                            environment=args.environment)
+    store = None
+    if not args.door:
+        import psycopg2
+        from core.mc_delegation_dispatcher.store import DispatcherStore
+        dsn = _dsn(args.dsn_file.expanduser()) if args.dsn_file else _dsn_from_env(args.dsn_env)
+        store = DispatcherStore(lambda: psycopg2.connect(dsn, connect_timeout=5), principal=args.principal,
+                                environment=args.environment)
     scopes = tuple(dict.fromkeys(s.strip() for s in args.scopes.split(",") if s.strip()))
     if not scopes or not set(scopes) <= {"research", "build"}:
         raise SystemExit("--scopes takes research and/or build")
@@ -81,7 +95,11 @@ def main(argv=None) -> int:
                               workspace_root=args.workspace_root.expanduser(),
                               artifact_root=args.artifact_root.expanduser(), max_cost_usd=args.max_cost_usd,
                               cost_enforcers=dict(ENFORCERS))
-    dispatcher = StoreDispatcher(store, cfg.artifact_root)
+    if args.door:
+        from core.mc_delegation_dispatcher.door import HttpDispatcher
+        dispatcher = HttpDispatcher(args.door, _keychain_token(args.environment), cfg.artifact_root)
+    else:
+        dispatcher = StoreDispatcher(store, cfg.artifact_root)
     while True:
         for mirror in mirrors.values():
             _fetch(mirror)

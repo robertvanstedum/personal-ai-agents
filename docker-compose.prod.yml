@@ -297,6 +297,9 @@ services:
       - MINIMOI_MC_DELEGATION=${MINIMOI_MC_DELEGATION:-0}
       - MINIMOI_MC_DELEGATION_ENV=prod
       - MINIMOI_MC_DELEGATION_PRINCIPAL=robert
+      # The Mac delegation runner's HTTPS door (no database port): on with its token hash, set by
+      # `deploy_mc_container_ec2.sh runner on <sha256>`.
+      - MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256=${MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256:-}
       - MINIMOI_MC_AGENT_ENROLLMENT=/run/secrets/mc/enrollment.json
       # Build supervision (#365; docs/runbooks/supervision.md): the Mac sync's path, Robert's "approve D-n" in the
       # Guild chat and MC's "waiting on you" context. Off until `supervisor_ec2.sh on` sets both keys in .env.

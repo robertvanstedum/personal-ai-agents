@@ -178,7 +178,12 @@ class ReviewFixes(Base, unittest.TestCase):
             self.assertIn(field, body)
 
     def test_p3_3_only_actors_with_a_budget_enforcer_are_offered(self):
+        # Codex has an enforcer since 26 Oct (Robert: research only, read-only, 30 minutes on his plan): it is offered,
+        # with its time limit in the words Robert approves. An agent without one is still refused.
         r = self.call("minimoi_delegate_research", {"agent": "codex", "title": "Look at the relay"})
+        self.assertNotEqual(r["status"], "refused", r)
+        self.assertIn("time limit 30 minutes", self.shown[-1][2])
+        r = self.call("minimoi_delegate_research", {"agent": "grok", "title": "Look at the relay"})
         self.assertEqual(r["status"], "refused")
 
     def test_p3_4_an_invite_never_rewrites_a_guests_rejected_request(self):

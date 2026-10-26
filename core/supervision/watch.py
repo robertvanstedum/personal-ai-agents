@@ -16,6 +16,8 @@ STALL_AFTER = timedelta(minutes=20)        # a turn that ended with no stop line
 ESCALATE_AFTER = timedelta(minutes=40)     # a nudge that changed nothing: Robert hears about it
 REVIEW_WAIT = timedelta(minutes=60)
 GREEN_SETTLE = timedelta(minutes=10)
+UNCLAIMED_AFTER = timedelta(minutes=5)     # a queued delegation nobody picked up: the Mac runner is not there
+SILENT_AFTER = timedelta(minutes=5)        # a running delegation whose runner stopped renewing it
 
 
 class GitHub:
@@ -131,10 +133,38 @@ def check_in(store, github, *, now=None, since=None):
                 store.mark_escalated(stop["id"])
                 items.append({"key": f"stalled:{stop['id']}", "kind": "stalled",
                               "text": f"{who} stopped without saying why and did not resume after a nudge."})
+    running = []
+    try:
+        work = store.delegations() if hasattr(store, "delegations") else {"jobs": [], "runners": []}
+    except Exception as exc:
+        work = {"jobs": [], "runners": []}
+        errors.append(f"delegations unreadable ({type(exc).__name__})")
+    for job in work["jobs"]:
+        who = "Claude Code" if job["actor"] == "claude-code" else "Codex"
+        what = f"{who} {job['scope']} “{job['brief'][:60]}”"
+        if job["state"] in ("queued", "claimed", "running"):
+            minutes = int((job["now"] - (job["started_at"] or job["created_at"])).total_seconds() // 60)
+            running.append({"job": job["job_id"], "agent": job["actor"], "state": job["state"], "minutes": minutes,
+                            "brief": job["brief"][:80]})
+            if job["state"] == "queued" and job["now"] - job["created_at"] >= UNCLAIMED_AFTER:
+                items.append({"key": f"delegation-unclaimed:{job['request_id']}", "kind": "stalled",
+                              "text": f"{what} has waited {minutes} min and no runner on the Mac picked it up."})
+            elif job["state"] == "running" and job["heartbeat_at"] and job["now"] - job["heartbeat_at"] >= SILENT_AFTER:
+                items.append({"key": f"delegation-silent:{job['request_id']}", "kind": "stalled",
+                              "text": f"{what} has not reported for "
+                                      f"{int((job['now'] - job['heartbeat_at']).total_seconds() // 60)} min."})
+        elif job["state"] in ("failed", "refused", "timed_out", "output_limit", "interrupted"):
+            items.append({"key": f"delegation-ended:{job['request_id']}", "kind": "error",
+                          "text": f"{what} ended {job['state'].replace('_', ' ')}"
+                                  + (f" ({job['code']})" if job.get("code") else "") + "."})
     for err in errors:
         items.append({"key": f"watch-error:{err}:{now:%Y%m%d%H}", "kind": "error", "text": f"Check-in: {err}."})
     summary = {"at": now.isoformat(), "prs": prs, "failed_releases": failed_runs, "sessions": sessions,
-               "pending_decisions": [d["code"] for d in pending], "nudged": nudged, "errors": errors}
+               "pending_decisions": [d["code"] for d in pending], "nudged": nudged, "errors": errors,
+               "running": running,
+               "runners": [{"id": r["runner_id"], "state": r["state"],
+                            "seen_minutes_ago": int((r["now"] - r["seen_at"]).total_seconds() // 60)}
+                           for r in work["runners"]]}
     return summary, items
 
 
@@ -149,6 +179,10 @@ def message(items, summary):
         if group:
             lines.append(f"\n{LABEL[kind]}:")
             lines.extend(f"• {t}" for t in group)
+    if summary.get("running"):
+        lines.append("\nRunning:")
+        lines.extend(f"• {'Claude Code' if r['agent'] == 'claude-code' else 'Codex'}: {r['brief'][:70]} "
+                     f"({r['state']}, {r['minutes']} min)" for r in summary["running"])
     tail = [f"{len(summary['prs'])} open PRs", f"{len(summary['pending_decisions'])} decisions waiting"]
     if summary["nudged"]:
         tail.append(f"nudged {', '.join(summary['nudged'])}")

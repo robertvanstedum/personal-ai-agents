@@ -291,6 +291,26 @@ class Store:
             return cur.fetchone()
         return self._run(q)
 
+    def delegations(self, *, hours=24):
+        """Delegated jobs (core/mc_delegation_dispatcher) active or ended in the last ``hours``, and when each runner
+        was last seen. Empty when delegation was never installed here."""
+        def q(cur):
+            cur.execute("SELECT to_regclass('guild.mc_delegations') IS NOT NULL AS present")
+            if not cur.fetchone()["present"]:
+                return {"jobs": [], "runners": []}
+            cur.execute("""SELECT request_id, job_id, actor, scope, state, created_at, started_at, finished_at,
+                    heartbeat_at, deadline, left(brief, 120) AS brief, result_detail->>'code' AS code,
+                    clock_timestamp() AS now
+                FROM guild.mc_delegations
+                WHERE state IN ('queued', 'claimed', 'running')
+                   OR finished_at > clock_timestamp() - make_interval(hours => %s)
+                ORDER BY created_at DESC LIMIT 30""", (hours,))
+            jobs = cur.fetchall()
+            cur.execute("""SELECT runner_id, state, seen_at, clock_timestamp() AS now
+                FROM guild.mc_delegation_runners ORDER BY seen_at DESC LIMIT 5""")
+            return {"jobs": jobs, "runners": cur.fetchall()}
+        return self._run(q)
+
     def latest_checkin(self):
         def q(cur):
             cur.execute("SELECT * FROM guild.supervision_checkins ORDER BY id DESC LIMIT 1")
