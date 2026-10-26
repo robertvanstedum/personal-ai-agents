@@ -213,10 +213,11 @@ jobs:
           RELEASE_STATUS=$(base64 -w 0 scripts/operations/release_status.py)
           RELEASE_MANIFEST=$(python3 scripts/operations/release_status.py manifest | base64 -w 0)
           SEED_QUEUE=$(base64 -w 0 scripts/operations/seed_build_queue.sh)
+          COS_PROD=$(base64 -w 0 scripts/operations/cos_prod.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $COS_SECRET_SYNC | base64 -d > /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"echo $SCOPED_DEPLOY | base64 -d > /opt/minimoi/scripts/deploy_scoped_release.sh\",\"echo $RELEASE_STATUS | base64 -d > /opt/minimoi/scripts/release_status.py\",\"echo $RELEASE_MANIFEST | base64 -d | python3 /opt/minimoi/scripts/release_status.py install-manifest\",\"echo $SEED_QUEUE | base64 -d > /opt/minimoi/scripts/seed_build_queue.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/scripts/deploy_scoped_release.sh /opt/minimoi/scripts/seed_build_queue.sh\"]" \
+            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $COS_SECRET_SYNC | base64 -d > /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"echo $SCOPED_DEPLOY | base64 -d > /opt/minimoi/scripts/deploy_scoped_release.sh\",\"echo $RELEASE_STATUS | base64 -d > /opt/minimoi/scripts/release_status.py\",\"echo $RELEASE_MANIFEST | base64 -d | python3 /opt/minimoi/scripts/release_status.py install-manifest\",\"echo $SEED_QUEUE | base64 -d > /opt/minimoi/scripts/seed_build_queue.sh\",\"echo $COS_PROD | base64 -d > /opt/minimoi/scripts/cos_prod.sh\",\"chmod +x /opt/minimoi/scripts/cos_prod.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/scripts/deploy_scoped_release.sh /opt/minimoi/scripts/seed_build_queue.sh\"]" \
             --query 'Command.CommandId' \
             --output text)
 
@@ -311,6 +312,7 @@ jobs:
               "/opt/minimoi/scripts/seed_build_queue.sh https://raw.githubusercontent.com/robertvanstedum/personal-ai-agents/${{ github.sha }}/data/guild/build_queue.json /opt/minimoi/data/guild/build_queue.json",
               "cd /opt/minimoi",
               "/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env",
+              "/opt/minimoi/scripts/cos_prod.sh prepare",
               "/opt/minimoi/scripts/deploy_scoped_release.sh ${{ needs.build-push.outputs.image_tag }} ${{ needs.classify.outputs.services }}"
             ],executionTimeout=["1800"]' \
             --query 'Command.CommandId' \

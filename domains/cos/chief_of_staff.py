@@ -20,6 +20,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,8 +50,12 @@ from domains.cos.confer_service import (
     ConferTurnRequest,
     ConferTurnService,
     InvalidConferTurn,
+    parse_explicit_note,
+    parse_explicit_reminder,
 )
 from domains.cos.cost_checkpoint import run_cost_checkpoint
+from domains.cos import conversation_log
+from domains.cos import files as cos_files
 from domains.cos import reminders
 from domains.cos.spoken_reply_store import SpokenReplyStore
 from domains.cos.routing_receipts import RoutingReceiptStore
@@ -69,6 +74,19 @@ MODEL_GATEWAY_RECEIPT_FILE = BASE_DIR / "data/model_gateway_receipts.jsonl"
 MODEL_GATEWAY_COST_POLICY_FILE = BASE_DIR / "services/model_gateway/cost_policy.json"
 _spoken_replies = SpokenReplyStore()
 _routing_receipts = RoutingReceiptStore(MODEL_GATEWAY_RECEIPT_FILE)
+# Confer attachments and downloads (domains/cos/files.py) and Confer's own conversation record
+# (domains/cos/conversation_log.py); each None (off) until its folders are configured.
+_cos_files = cos_files.from_environ(os.environ)
+_conversations_dir = conversation_log.folder(os.environ)
+
+
+def _workspace_note() -> str | None:
+    notes = []
+    if _cos_files is not None:
+        notes.append(_cos_files.system_note())
+    if _conversations_dir is not None:
+        notes.append(conversation_log.system_note(os.environ.get("COS_AGENT_CONVERSATIONS") or str(_conversations_dir)))
+    return " ".join(notes) or None
 
 # ── DB (optional — degrades gracefully if Docker is down) ────────────────────
 
@@ -810,6 +828,7 @@ def _process_confer_turn(
         reset_conversation=_reset_backend_conversation,
         get_routing_receipt=receipt_resolver,
         save_reminder=_save_reminder,
+        workspace_note=_workspace_note(),
     )
     return service.handle(ConferTurnRequest(
         text=text,
@@ -1406,12 +1425,13 @@ def ui_tab(tab):
     return render_template("cos_ui.html", initial_tab=tab, managed_realtime_ready=_cos_managed_realtime_ready)
 
 
-@app.route("/ui/send", methods=["POST"])
-def ui_send():
-    body = request.get_json(silent=True) or {}
+def _ui_turn(body: dict) -> tuple[dict, int]:
+    """One Confer turn from the page: (JSON payload, HTTP status). With attachments, the owner's words are followed
+    by the files as marked DATA; files CoS writes to its outbox during the turn come back as download receipts."""
     text = (body.get("text") or "").strip()
-    if not text:
-        return jsonify({"reply": "Nothing to respond to."})
+    attachments = body.get("attachments") or []
+    if not text and not attachments:
+        return {"reply": "Nothing to respond to."}, 200
     try:
         channel = body.get("channel") or "html_text"
         if channel not in {"html_text", "html_voice"}:
@@ -1422,12 +1442,25 @@ def ui_send():
         if not isinstance(speech_output, bool):
             raise InvalidConferTurn("speech_output must be true or false")
         if channel == "html_voice":
-            user_id = resolve_user_id(request)
+            user_id = body.get("_user_id")
             if user_id is None:
-                return jsonify({"reply": "Identity required for voice."}), 401
+                return {"reply": "Identity required for voice."}, 401
             voice_provider = resolve_agent_conversation_provider(
                 body.get("voice_provider"), "en-US"
             ).provider
+        owner_text, attachment_names = text, []
+        if attachments:
+            if _cos_files is None:
+                raise InvalidConferTurn("Attachments are not available here yet.")
+            if text.casefold() == "/new" or parse_explicit_note(text) is not None \
+                    or parse_explicit_reminder(text) is not None:
+                raise InvalidConferTurn("Send a note, reminder or /new on its own, without attachments.")
+            try:
+                attachment_names = _cos_files.names(attachments) if isinstance(attachments, list) else []
+                text = _cos_files.compose_turn(text, attachments)
+            except cos_files.FileRefused as e:
+                raise InvalidConferTurn(str(e)) from None
+        before = _cos_files.snapshot() if _cos_files is not None else None
         result = _process_confer_turn(
             text,
             channel=channel,
@@ -1435,6 +1468,14 @@ def ui_send():
             request_id=body.get("request_id"),
         )
         payload = result.public_dict()
+        if before is not None:
+            delivered = _cos_files.delivered_since(before)
+            if delivered:
+                payload["files"] = delivered
+        if not payload.get("operation"):       # notes, reminders and /new keep their own records
+            conversation_log.append(_conversations_dir, conversation_id=result.conversation_id, turn_id=result.turn_id,
+                                    channel=channel, owner_text=owner_text, attachments=attachment_names,
+                                    reply=result.reply, files=payload.get("files"))
         if voice_provider and speech_output:
             _spoken_replies.put(
                 result.turn_id,
@@ -1445,18 +1486,104 @@ def ui_send():
             # Keep this relative so the same response works both directly at
             # /ui/confer and through the portal's /app/cos/ui/confer proxy.
             payload["speech_url"] = f"speech/{result.turn_id}"
-        return jsonify(payload)
+        return payload, 200
     except ValueError as e:
-        return jsonify({"reply": str(e)}), 400
+        return {"reply": str(e)}, 400
     except ProviderUnavailableError as e:
-        return jsonify({"reply": str(e)}), 503
+        return {"reply": str(e)}, 503
     except InvalidConferTurn as e:
-        return jsonify({"reply": str(e)}), 400
+        return {"reply": str(e)}, 400
     except ConferOperationFailed as e:
-        return jsonify({"reply": str(e)}), 500
+        return {"reply": str(e)}, 500
     except Exception as e:
         _log_file("ui_send_error", str(e))
-        return jsonify({"reply": f"CoS error: {e}"}), 500
+        return {"reply": f"CoS error: {e}"}, 500
+
+
+# Background turns: a research turn (several searches, a file written) can outlast the edge's 120 s request limit.
+# The page starts the turn, then polls for it. One process (the scheduler runs no Gunicorn workers), so a dict holds
+# them; a finished turn is kept for an hour.
+_ui_turns: dict = {}
+_ui_turns_lock = threading.Lock()
+_UI_TURN_KEEP_S = 3600
+
+
+def _start_ui_turn(body: dict) -> str:
+    handle = uuid.uuid4().hex
+    with _ui_turns_lock:
+        now = time.time()
+        for k in [k for k, v in _ui_turns.items() if v.get("done_at") and now - v["done_at"] > _UI_TURN_KEEP_S]:
+            del _ui_turns[k]
+        _ui_turns[handle] = {"state": "running", "started_at": now}
+
+    def run():
+        from domains.cos.backends import openclaw_backend
+        openclaw_backend.turn_timeout_seconds.set(openclaw_backend.BACKGROUND_TURN_TIMEOUT_SECONDS)
+        payload, code = _ui_turn(body)
+        with _ui_turns_lock:
+            _ui_turns[handle] = {"state": "done", "status": code, "payload": payload, "done_at": time.time()}
+    threading.Thread(target=run, name=f"cos-ui-turn-{handle[:8]}", daemon=True).start()
+    return handle
+
+
+@app.route("/ui/send", methods=["POST"])
+def ui_send():
+    body = request.get_json(silent=True) or {}
+    body.pop("_user_id", None)
+    if (body.get("channel") or "html_text") == "html_voice":
+        body["_user_id"] = resolve_user_id(request)
+    if body.get("background") is True and (body.get("channel") or "html_text") == "html_text":
+        return jsonify({"turn": _start_ui_turn(body), "state": "running"}), 202
+    payload, code = _ui_turn(body)
+    return jsonify(payload), code
+
+
+@app.route("/ui/turn/<handle>")
+def ui_turn_status(handle):
+    with _ui_turns_lock:
+        turn = _ui_turns.get(handle)
+    if turn is None:
+        return jsonify({"state": "unknown", "reply": "This turn is not known here (CoS may have restarted)."}), 404
+    if turn["state"] == "running":
+        return jsonify({"state": "running", "seconds": int(time.time() - turn["started_at"])})
+    return jsonify({"state": "done", **turn["payload"]}), turn["status"]
+
+
+@app.route("/ui/upload", methods=["POST"])
+def ui_upload():
+    if _cos_files is None:
+        return jsonify({"error": "Attachments are not available here yet."}), 503
+    upload = request.files.get("file")
+    if upload is None:
+        return jsonify({"error": "No file."}), 400
+    raw = upload.stream.read(cos_files.MAX_UPLOAD_BYTES + 1)
+    try:
+        meta = _cos_files.save_upload(upload.filename or "file", raw)
+    except cos_files.FileRefused as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        _log_file("ui_upload_error", type(e).__name__)
+        return jsonify({"error": "The file could not be kept."}), 500
+    return jsonify({k: meta.get(k) for k in ("file_id", "name", "kind", "bytes", "readable", "chars", "truncated",
+                                              "pages_read", "pages_total", "note")})
+
+
+@app.route("/ui/files")
+def ui_files():
+    if _cos_files is None:
+        return jsonify({"files": [], "available": False})
+    return jsonify({"files": _cos_files.listing(), "available": True})
+
+
+@app.route("/ui/files/<path:rel>")
+def ui_file_download(rel):
+    if _cos_files is None:
+        return jsonify({"error": "not found"}), 404
+    try:
+        path = _cos_files.resolve_download(rel)
+    except cos_files.FileRefused:
+        return jsonify({"error": "not found"}), 404
+    return send_from_directory(path.parent, path.name, as_attachment=True)
 
 
 @app.route("/ui/speech/<turn_id>")

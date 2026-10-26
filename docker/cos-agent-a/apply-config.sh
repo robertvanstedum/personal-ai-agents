@@ -46,4 +46,26 @@ cp "$PINNED_POLICY" "$tmp"
 chmod 600 "$tmp"
 mv -f "$tmp" "$policy_dest"
 
+# CoS's own capped gateway key (scripts/operations/cos_prod.sh key; Robert, 26 Oct 2026). When the read-only key file
+# is mounted and holds a gateway virtual key, it replaces the master key for this process tree: the provider config
+# and the bounded search plugin both read MINIMOI_MODEL_GATEWAY_KEY. Without it the master key stays (the rollback).
+COS_KEY_FILE="${COS_GATEWAY_KEY_FILE:-/run/cos-key/key}"
+if [ -r "$COS_KEY_FILE" ]; then
+  cos_key=$(head -n 1 "$COS_KEY_FILE" | tr -d '[:space:]')
+  if printf '%s' "$cos_key" | grep -Eq '^sk-[A-Za-z0-9_-]{16,200}$'; then
+    MINIMOI_MODEL_GATEWAY_KEY="$cos_key"
+    export MINIMOI_MODEL_GATEWAY_KEY
+    echo "cos-agent-a: gateway key: CoS's own capped key" >&2
+  else
+    echo "cos-agent-a: gateway key file is not a gateway virtual key; refusing to start" >&2
+    exit 1
+  fi
+  cos_key=""
+elif [ -n "${MINIMOI_MODEL_GATEWAY_KEY:-}" ]; then
+  echo "cos-agent-a: gateway key: master (no CoS key file)" >&2
+else
+  echo "cos-agent-a: no gateway key at all (no CoS key file and no master key); refusing to start" >&2
+  exit 1
+fi
+
 exec "$@"

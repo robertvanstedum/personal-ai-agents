@@ -64,3 +64,9 @@ Werkzeug==3.1.9
 
 # Canonical Markdown work-card YAML frontmatter.
 PyYAML==6.0.3
+
+# CoS Confer attachments (domains/cos/files.py): the portal's sandboxed reader needs these for PDF and HTML text.
+# Same pins as docker/requirements.portal.txt.
+pypdf==6.8.0
+beautifulsoup4==4.15.0
+soupsieve==2.10

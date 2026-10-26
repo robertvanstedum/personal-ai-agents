@@ -705,7 +705,7 @@ def curator_static_passthrough(filename):
 
 COS_CSRF_SESSION_KEY = "cos_web_csrf"
 COS_CSRF_META = "minimoi-csrf-token"
-_COS_MULTIPART_PATHS = {"ui/transcribe"}
+_COS_MULTIPART_PATHS = {"ui/transcribe", "ui/upload"}
 
 
 def _cos_write_guard_on() -> bool:
