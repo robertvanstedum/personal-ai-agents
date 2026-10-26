@@ -41,6 +41,13 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in /opt/minimoi/.env}
       - MINIMOI_RECEIPT_ENDPOINT=http://cos-scheduler:8769/internal/model-gateway/receipt
       - MINIMOI_RECEIPT_KEY=${MINIMOI_MODEL_GATEWAY_RECEIPT_KEY:?set MINIMOI_MODEL_GATEWAY_RECEIPT_KEY in /opt/minimoi/.env}
+    # The gateway's own key database (litellm_keys, its own role, in the existing Postgres) holds the per-agent capped
+    # virtual keys (MC's search key); CoS keeps the master key. This root 0600 file holds only its DATABASE_URL, written
+    # from Parameter Store by sync_cos_runtime_secrets_from_ssm.sh, so no other service sees it. Absent (staging, or
+    # before the parameter exists) it is skipped. With it on, the gateway does not start while Postgres is down.
+    env_file:
+      - path: ${MINIMOI_ROOT:-/opt/minimoi}/gateway-keys.env
+        required: false
     healthcheck:
       test:
         - CMD
@@ -50,7 +57,8 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      # Prisma migrations run at start (about 20 s on staging).
+      start_period: 120s
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -247,6 +255,11 @@ services:
       - MINIMOI_MC_TOOLS_PRINCIPAL=robert
       - MINIMOI_MC_TOOLS_PORT=5011
       - MINIMOI_MC_TOOLS_TOKEN_SHA256=${MINIMOI_MC_TOOLS_TOKEN_SHA256:-}
+      # MC's GitHub issue writes (comments, tickets): on only by `deploy_mc_container_ec2.sh issues on`, which projects
+      # the issues-only token from Parameter Store into this root 0600 file.
+      - MINIMOI_MC_TOOLS_TICKETS=${MINIMOI_MC_TOOLS_TICKETS:-0}
+      - MINIMOI_MC_TOOLS_COMMENTS=${MINIMOI_MC_TOOLS_COMMENTS:-0}
+      - MINIMOI_MC_ISSUES_TOKEN_FILE=/run/secrets/mc/github-issues-token
       - MINIMOI_MC_TURN_LEDGER=${MINIMOI_MC_TOOLS:-0}
       - MINIMOI_MC_POLICY_FILE=/run/secrets/mc/mc-policy.prod.json
       - MINIMOI_MC_POLICY_AUTHORITY_FILE=/run/secrets/mc/mc-policy.prod.authority.json

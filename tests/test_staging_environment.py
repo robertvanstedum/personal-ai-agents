@@ -188,6 +188,10 @@ def test_prod_mounts_and_env_files_are_unchanged_with_root_unset():
         if "env_file" not in service:
             continue
         files = service["env_file"]
+        if name == "model-gateway":
+            # Only the gateway's optional key-database file (DATABASE_URL, projected from Parameter Store); never .env.
+            assert files == [{"path": ROOT_VAR + "/gateway-keys.env", "required": False}]
+            continue
         if name == "cos-scheduler":
             assert files == [ROOT_VAR + "/.env",
                              ROOT_VAR + "/${MINIMOI_VAULT_READER_ENV_FILE:-.env}"]
@@ -214,8 +218,8 @@ def test_every_prod_host_path_is_parameterized_one_way_only():
     code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
     forms = set(re.findall(r"\$\{MINIMOI_ROOT[^}]*\}", code))
     assert forms == {ROOT_VAR}
-    # Curator and MC each have an explicitly checked capability env_file.
-    assert code.count(ROOT_VAR) == len(EXPECTED_ENV_FILES) + 2 + sum(
+    # Curator and MC each have an explicitly checked capability env_file; the gateway its key-database file.
+    assert code.count(ROOT_VAR) == len(EXPECTED_ENV_FILES) + 3 + sum(
         1 for _s, host, _c in EXPECTED_PROD_MOUNTS if host.startswith("/opt/minimoi"))
 
 
@@ -258,7 +262,10 @@ def test_docker_renders_prod_identically_with_root_unset_or_default():
             if mount["type"] == "bind":
                 assert mount["source"].startswith(("/opt/minimoi/", "/var/run/docker.sock")), (name, mount)
         for env_file in service.get("env_file", []):
-            assert env_file["path"] == "/opt/minimoi/.env"
+            if name == "model-gateway":
+                assert env_file == {"path": "/opt/minimoi/gateway-keys.env", "required": False}
+            else:
+                assert env_file["path"] == "/opt/minimoi/.env"
     assert "MINIMOI_ROOT" not in unset
 
 
@@ -311,7 +318,7 @@ def test_docker_renders_staging_under_the_staging_root_only():
                 else:
                     assert volume["external"] is True
         for env_file in service.get("env_file", []):
-            assert env_file["path"] == f"{root}/.env"
+            assert env_file["path"] == f"{root}/{'gateway-keys.env' if name == 'model-gateway' else '.env'}"
         for port in service.get("ports", []):
             assert port["host_ip"] == "127.0.0.1", (name, port)
     assert services["portal"]["environment"]["MINIMOI_GUILD_NEXT"] == "1"
