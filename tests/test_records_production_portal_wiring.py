@@ -68,7 +68,7 @@ def test_actual_render_changes_only_portal_env_one_mount_one_network(environment
     assert after==expected
     assert before['services']['minimoi-records']==after['services']['minimoi-records']
     assert after['services']['portal']['environment']['PRIVATE_SENTINEL']=='synthetic-preserved'
-    assert set(after['services']['portal']['networks'])=={'default','iotconnect-edge','records-production'}
+    assert set(after['services']['portal']['networks'])=={'default','iotconnect-edge','mc-portal','records-production'}
     assert after['services']['portal']['image']==before['services']['portal']['image']
     assert after['services']['portal']['ports']==before['services']['portal']['ports']
     assert not Path(environment['MINIMOI_RECORDS_STATE']).exists()

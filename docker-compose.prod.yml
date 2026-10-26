@@ -264,6 +264,7 @@ services:
     networks:
       - default
       - iotconnect-edge
+      - mc-portal
     depends_on:
       - curator
       - german
@@ -423,6 +424,11 @@ networks:
   # first runs (first-release sequencing: mini-moi main deploy → IoT Connect tag).
   iotconnect-edge:
     name: iotconnect-edge
+  # Fixed-name network Master Craftsman's own project (docker-compose.mc.prod.yml) joins as `external`: only the portal
+  # and mc-relay are on it, with no route out. Created by the ordinary deploy so it exists before MC first starts.
+  mc-portal:
+    name: minimoi-mc-portal
+    internal: true
   # Only cos-scheduler and vault-ask: no route out, no other service.
   vault-internal:
     internal: true

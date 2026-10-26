@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Light security test for MC's dev container (spec_mc_agent_container v0.2 §6). Runs from the host; prints PASS/FAIL per check
+"""Light security test for MC's container (spec_mc_agent_container v0.2 §6), dev or prod. Runs from the host; prints PASS/FAIL per check
 and writes a JSON receipt. Checks that need a signed-in model (search abuse, injected instructions, capture loop) are listed
 as PENDING until the plan sign-ins exist. Never prints a secret: it only tests whether paths are reachable.
 
-    mc_container_security_test.py [--receipt FILE]
+    mc_container_security_test.py [--target dev|prod] [--receipt FILE]
+
+On prod (run on the EC2 host) it also checks that MC cannot reach the instance metadata service, which hands out the
+host's AWS credentials.
 """
 from __future__ import annotations
 
@@ -12,8 +15,23 @@ import datetime as dt
 import json
 import subprocess
 
-AGENT = "minimoi-dev-mc-agent"
-IMAGE = "minimoi-dev/mc-agent:current"
+TARGETS = {
+    "dev": {"agent": "minimoi-dev-mc-agent", "image": "minimoi-dev/mc-agent:current",
+            "ro": ["/minimoi/downloads", "/minimoi/apprenticeship"],
+            "unreachable": [["minimoi-portal", 5001], ["host.lima.internal", 5001], ["host.lima.internal", 18789],
+                            ["minimoi-model-gateway", 4000], ["postgres-ai-agents", 5432]],
+            "absent": [],                                                       # ~/minimoi-private is mounted on dev by Robert's decision
+            "tmp": "~/minimoi-runtime/mc-container/tmp"},                     # under $HOME: shared into the Docker VM
+    "prod": {"agent": "minimoi-mc-agent", "image": None,                        # the image the running container uses
+             "ro": ["/minimoi/docs", "/minimoi/apprenticeship"],
+             "unreachable": [["minimoi-portal", 5001], ["postgres-ai-agents", 5432], ["minimoi-model-gateway", 4000],
+                             ["cos-agent-a", 18789], ["cos-scheduler", 8769], ["169.254.169.254", 80]],
+             "absent": ["/minimoi/private", "/opt/minimoi/private", "/opt/minimoi/mc/mc.env"],   # the judgment store and MC's tokens
+             "tmp": "/root/mc-security-tmp"},
+}
+T = TARGETS["dev"]
+AGENT = T["agent"]
+IMAGE = T["image"]
 
 
 def sh(container: str, script: str, timeout: int = 30) -> tuple[int, str]:
@@ -38,7 +56,7 @@ def check(cid: str, what: str):
 
 @check("1a", "host credential locations are not present in the container")
 def _():
-    paths = ["/Users", "/home/node/.ssh", "/run/secrets", "/minimoi/staging-data"]
+    paths = ["/Users", "/home/node/.ssh", "/run/secrets", "/minimoi/staging-data", "/opt/minimoi/.env"] + T["absent"]
     code, out = sh(AGENT, " ; ".join(f'[ -e {p} ] && echo PRESENT:{p}' for p in paths) + " ; (ls /root >/dev/null 2>&1 && echo READABLE:/root) ; true")
     return "PRESENT:" not in out and "READABLE:" not in out, out or "none present; /root not readable"
 
@@ -78,10 +96,9 @@ def _():
     return out.strip() == "200", out
 
 
-@check("2e", "the portal and host services are unreachable")
+@check("2e", "the portal, other services and (prod) instance metadata are unreachable")
 def _():
-    js = ("const net=require('net');const t=[['minimoi-portal',5001],['host.lima.internal',5001],['host.lima.internal',18789],"
-          "['minimoi-model-gateway',4000],['postgres-ai-agents',5432]];let left=t.length,hit=[];"
+    js = ("const net=require('net');const t=" + json.dumps(T["unreachable"]) + ";let left=t.length,hit=[];"
           "for(const [h,p] of t){const s=net.connect({host:h,port:p,timeout:3000});const done=(ok)=>{if(ok)hit.push(h+':'+p);s.destroy();if(--left===0){console.log(hit.join(',')||'none');}};"
           "s.on('connect',()=>done(true));s.on('timeout',()=>done(false));s.on('error',()=>done(false));}")
     code, out = node(AGENT, js, timeout=40)
@@ -96,7 +113,7 @@ def _():
 
 @check("3b", "read-only mounts refuse writes")
 def _():
-    code, out = sh(AGENT, "for d in /minimoi/downloads /minimoi/apprenticeship; do (echo x > $d/.mc-ro-test) 2>/dev/null && echo WROTE:$d && rm -f $d/.mc-ro-test; done; true")
+    code, out = sh(AGENT, "for d in " + " ".join(T["ro"]) + "; do (echo x > $d/.mc-ro-test) 2>/dev/null && echo WROTE:$d && rm -f $d/.mc-ro-test; done; true")
     return "WROTE:" not in out, out or "all refused"
 
 
@@ -125,7 +142,7 @@ def _():
 @check("6b", "start refuses a tampered persona (hash mismatch)")
 def _():
     import tempfile, os
-    base = os.path.expanduser("~/minimoi-runtime/mc-container/tmp")        # under $HOME: shared into the Docker VM
+    base = os.path.expanduser(T["tmp"])
     os.makedirs(base, mode=0o700, exist_ok=True)
     d = tempfile.mkdtemp(dir=base)
     p = os.path.join(d, "AGENTS.md")
@@ -145,8 +162,14 @@ PENDING = [
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--target", choices=sorted(TARGETS), default="dev")
     ap.add_argument("--receipt")
     a = ap.parse_args()
+    global T, AGENT, IMAGE
+    T = TARGETS[a.target]
+    AGENT = T["agent"]
+    IMAGE = T["image"] or subprocess.run(["docker", "inspect", AGENT, "--format", "{{.Config.Image}}"],
+                                         capture_output=True, text=True).stdout.strip()
     results = []
     for cid, what, fn in CHECKS:
         try:
