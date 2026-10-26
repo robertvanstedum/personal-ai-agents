@@ -71,7 +71,7 @@ prepare() {
   fi
   # The portal's MC files (mounted read-only at /run/secrets/mc) and stores. The policy comes from the release; its
   # authority record only from `approve-policy` with Robert's words; registries start empty.
-  install -d -m 0700 -o root -g root "$MC_DIR/portal" "$ROOT/data/mc-turns" "$ROOT/data/mc-lessons"
+  install -d -m 0700 -o root -g root "$MC_DIR/portal" "$ROOT/data/mc-lessons"
   install -m 0600 -o root -g root "$ROOT/mc-release/mc-policy.prod.json" "$MC_DIR/portal/mc-policy.prod.json"
   [[ -f "$MC_DIR/portal/approved-handoff-registry.json" ]] || ( umask 077; echo '{"handoffs":{}}' > "$MC_DIR/portal/approved-handoff-registry.json" )
   [[ -f "$MC_DIR/portal/task-watch-registry.json" ]] || ( umask 077; echo '{"subscriptions":[]}' > "$MC_DIR/portal/task-watch-registry.json" )

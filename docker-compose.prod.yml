@@ -248,7 +248,6 @@ services:
       - MINIMOI_MC_TOOLS_PORT=5011
       - MINIMOI_MC_TOOLS_TOKEN_SHA256=${MINIMOI_MC_TOOLS_TOKEN_SHA256:-}
       - MINIMOI_MC_TURN_LEDGER=${MINIMOI_MC_TOOLS:-0}
-      - MC_TURNS_DIR=/app/data/mc-turns
       - MINIMOI_MC_POLICY_FILE=/run/secrets/mc/mc-policy.prod.json
       - MINIMOI_MC_POLICY_AUTHORITY_FILE=/run/secrets/mc/mc-policy.prod.authority.json
       - MINIMOI_MC_STATUS_PROTOCOL_VERSION=2
@@ -285,9 +284,8 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/auth/guests.json:/app/minimoi_portal/auth/guests.json
       - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/app/agent_logs
       # Master Craftsman: its operator-installed policy, authority record and registries (read-only), and the
-      # portal-owned stores for MC turns and lessons. Created by deploy_mc_container_ec2.sh; empty until then.
+      # portal-owned lesson store (in the daily backup). Created by deploy_mc_container_ec2.sh; empty until then.
       - ${MINIMOI_ROOT:-/opt/minimoi}/mc/portal:/run/secrets/mc:ro
-      - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-turns:/app/data/mc-turns
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/mc-lessons:/app/data/mc-lessons
       # Nonsecret root-generated deployment observations; MC has read-only access.
       - type: bind
