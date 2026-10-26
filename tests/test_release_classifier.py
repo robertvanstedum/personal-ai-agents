@@ -765,7 +765,7 @@ def test_no_service_image_runs_the_ops_only_scripts():
     assert [m for m in markers if m in workflow] == ["scripts/credentials"]
     assert workflow.count("scripts/credentials/") == 1 and "scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh" in workflow
     deploy_job = workflow[workflow.index("  deploy:"):workflow.index("  deploy-docs:")]
-    assert deploy_job.index("COS_SECRET_SYNC=") < deploy_job.index("/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env")
+    assert deploy_job.index("cp scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh") < deploy_job.index("/opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/.env")
 
 
 def test_the_test_selector_and_nightly_workflow_redeploy_nothing():

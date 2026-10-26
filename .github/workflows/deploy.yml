@@ -203,21 +203,27 @@ jobs:
 
       - name: Push docker-compose.prod.yml to EC2
         run: |
-          COMPOSE=$(base64 -w 0 docker-compose.prod.yml)
-          LESEN_CRON=$(base64 -w 0 scripts/operations/install_lesen_refresh_cron.sh)
-          CURATOR_CRON=$(base64 -w 0 scripts/run_curator_cron_ec2.sh)
-          INTELLIGENCE_CRON=$(base64 -w 0 scripts/run_intelligence_cron_ec2.sh)
-          CURATOR_CRON_SETUP=$(base64 -w 0 scripts/setup_ec2_cron.sh)
-          COS_SECRET_SYNC=$(base64 -w 0 scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh)
-          SCOPED_DEPLOY=$(base64 -w 0 scripts/operations/deploy_scoped_release.sh)
-          RELEASE_STATUS=$(base64 -w 0 scripts/operations/release_status.py)
-          RELEASE_MANIFEST=$(python3 scripts/operations/release_status.py manifest | base64 -w 0)
-          SEED_QUEUE=$(base64 -w 0 scripts/operations/seed_build_queue.sh)
-          COS_PROD=$(base64 -w 0 scripts/operations/cos_prod.sh)
+          # One gzipped bundle: as separate base64 strings these files reached the 97 KB SSM command limit (26 Oct
+          # 2026, MaxDocumentSizeExceeded). Each file is written over the existing one with `cat >`, as before, so
+          # owners and modes on the host do not change; the scripts are then made executable as before.
+          BUNDLE_DIR=$(mktemp -d)
+          cp docker-compose.prod.yml "$BUNDLE_DIR/docker-compose.prod.yml"
+          cp scripts/operations/install_lesen_refresh_cron.sh "$BUNDLE_DIR/install_lesen_refresh_cron.sh"
+          cp scripts/run_curator_cron_ec2.sh "$BUNDLE_DIR/run_curator_cron_ec2.sh"
+          cp scripts/run_intelligence_cron_ec2.sh "$BUNDLE_DIR/run_intelligence_cron_ec2.sh"
+          cp scripts/setup_ec2_cron.sh "$BUNDLE_DIR/setup_ec2_cron.sh"
+          cp scripts/credentials/sync_cos_runtime_secrets_from_ssm.sh "$BUNDLE_DIR/sync_cos_runtime_secrets_from_ssm.sh"
+          cp scripts/operations/deploy_scoped_release.sh "$BUNDLE_DIR/deploy_scoped_release.sh"
+          cp scripts/operations/release_status.py "$BUNDLE_DIR/release_status.py"
+          cp scripts/operations/seed_build_queue.sh "$BUNDLE_DIR/seed_build_queue.sh"
+          python3 scripts/operations/release_status.py manifest > "$BUNDLE_DIR/release-manifest.json"
+          BUNDLE=$(tar -czf - -C "$BUNDLE_DIR" . | base64 -w 0)
+          echo "Compose sync bundle: ${#BUNDLE} bytes of base64 (SSM limit 97 KB for the whole command)"
+          [ "${#BUNDLE}" -lt 80000 ] || { echo "Compose sync bundle too large"; exit 1; }
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[\"mkdir -p /opt/minimoi/scripts\",\"echo $COMPOSE | base64 -d > /opt/minimoi/docker-compose.prod.yml\",\"echo $CURATOR_CRON | base64 -d > /opt/minimoi/scripts/run_curator_cron_ec2.sh\",\"echo $INTELLIGENCE_CRON | base64 -d > /opt/minimoi/scripts/run_intelligence_cron_ec2.sh\",\"echo $CURATOR_CRON_SETUP | base64 -d > /opt/minimoi/scripts/setup_ec2_cron.sh\",\"echo $COS_SECRET_SYNC | base64 -d > /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh\",\"echo $LESEN_CRON | base64 -d > /opt/minimoi/scripts/install_lesen_refresh_cron.sh\",\"echo $SCOPED_DEPLOY | base64 -d > /opt/minimoi/scripts/deploy_scoped_release.sh\",\"echo $RELEASE_STATUS | base64 -d > /opt/minimoi/scripts/release_status.py\",\"echo $RELEASE_MANIFEST | base64 -d | python3 /opt/minimoi/scripts/release_status.py install-manifest\",\"echo $SEED_QUEUE | base64 -d > /opt/minimoi/scripts/seed_build_queue.sh\",\"echo $COS_PROD | base64 -d > /opt/minimoi/scripts/cos_prod.sh\",\"chmod +x /opt/minimoi/scripts/cos_prod.sh\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/scripts/deploy_scoped_release.sh /opt/minimoi/scripts/seed_build_queue.sh\"]" \
+            --parameters "commands=[\"set -e\",\"mkdir -p /opt/minimoi/scripts\",\"B=\$(mktemp -d)\",\"echo $BUNDLE | base64 -d | tar -xzf - --no-same-owner -C \$B\",\"cat \$B/docker-compose.prod.yml > /opt/minimoi/docker-compose.prod.yml\",\"for f in run_curator_cron_ec2.sh run_intelligence_cron_ec2.sh setup_ec2_cron.sh sync_cos_runtime_secrets_from_ssm.sh install_lesen_refresh_cron.sh deploy_scoped_release.sh release_status.py seed_build_queue.sh; do cat \$B/\$f > /opt/minimoi/scripts/\$f; done\",\"python3 /opt/minimoi/scripts/release_status.py install-manifest < \$B/release-manifest.json\",\"rm -rf \$B\",\"chmod +x /opt/minimoi/scripts/install_lesen_refresh_cron.sh /opt/minimoi/scripts/run_curator_cron_ec2.sh /opt/minimoi/scripts/run_intelligence_cron_ec2.sh /opt/minimoi/scripts/setup_ec2_cron.sh /opt/minimoi/scripts/sync_cos_runtime_secrets_from_ssm.sh /opt/minimoi/scripts/deploy_scoped_release.sh /opt/minimoi/scripts/seed_build_queue.sh\"]" \
             --query 'Command.CommandId' \
             --output text)
 
@@ -296,6 +302,24 @@ jobs:
             sleep 5
           done
           [ "$STATUS" = Success ] || { echo "Records support sync unconfirmed"; exit 1; }
+
+      # Its own SSM command: the compose sync is at the 97 KB command limit (26 Oct 2026: adding this script there
+      # failed the release with MaxDocumentSizeExceeded). The Deploy step runs `cos_prod.sh prepare`.
+      - name: Push CoS operations script to EC2
+        run: |
+          COS_PROD=$(base64 -w 0 scripts/operations/cos_prod.sh)
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[\"set -e\",\"mkdir -p /opt/minimoi/scripts\",\"echo $COS_PROD | base64 -d > /opt/minimoi/scripts/cos_prod.sh\",\"chmod 755 /opt/minimoi/scripts/cos_prod.sh\"]" \
+            --query 'Command.CommandId' --output text)
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id ${{ secrets.EC2_INSTANCE_ID }} --query 'Status' --output text 2>/dev/null || echo Pending)
+            if [ "$STATUS" = Success ]; then break; fi
+            case "$STATUS" in Failed|Cancelled|TimedOut) echo "CoS script push failed"; exit 1;; esac
+            sleep 5
+          done
+          [ "$STATUS" = Success ] || { echo "CoS script push unconfirmed"; exit 1; }
 
       - name: Deploy on EC2
         run: |

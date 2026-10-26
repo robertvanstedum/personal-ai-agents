@@ -24,8 +24,10 @@ def test_workflow_preserves_current_release_manifest_and_original_steps():
     end=new.index('      - name: Deploy on EC2',start)
     support=new[start:end]
     assert 'release_status.py'not in support
-    assert new.index('RELEASE_MANIFEST=')<start<end
-    assert 'RELEASE_MANIFEST=$(python3 scripts/operations/release_status.py manifest' in new
+    # The manifest travels in the compose-sync bundle (one gzipped SSM payload, 26 Oct 2026) and is installed there.
+    manifest='python3 scripts/operations/release_status.py manifest > "$BUNDLE_DIR/release-manifest.json"'
+    assert new.index(manifest)<start<end
+    assert new.index('release_status.py install-manifest < ')<start
 
 def test_records_is_never_in_default_production_graph():
     import yaml
