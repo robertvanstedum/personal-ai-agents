@@ -13,10 +13,21 @@ jobs:
     outputs:
       release_class: ${{ steps.changes.outputs.release_class }}
       services: ${{ steps.changes.outputs.services }}
+      test_scope: ${{ steps.changes.outputs.test_scope }}
+      test_targets: ${{ steps.changes.outputs.test_targets }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # PyYAML reads docker-compose.prod.yml per service; without it the
+      # classifier falls back to a full release.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install classifier dependencies
+        run: pip install 'PyYAML>=6.0.1'
 
       - name: Classify release contents
         id: changes
@@ -27,9 +38,11 @@ jobs:
           # file is documentation, generated documentation, or the release
           # plumbing/tests that govern that path.
           ALL_SERVICES="portal curator german portuguese system-bot cos-bot cos-scheduler cos-agent-a model-gateway"
+          # A full release runs the whole test suite; select_tests.py says so too.
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "release_class=full" >> "$GITHUB_OUTPUT"
             echo "services=$ALL_SERVICES" >> "$GITHUB_OUTPUT"
+            echo "test_scope=full" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -42,12 +55,20 @@ jobs:
           if [ "$rc" = 3 ]; then
             echo "release_class=full" >> "$GITHUB_OUTPUT"
             echo "services=$ALL_SERVICES" >> "$GITHUB_OUTPUT"
+            echo "test_scope=full" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           [ "$rc" = 0 ] || exit "$rc"
 
-          git diff --name-only "$BEFORE" "${{ github.sha }}" |
-            python3 scripts/ci/classify_release.py --github-output "$GITHUB_OUTPUT"
+          # --base lets a docker-compose.prod.yml change restart only the
+          # services whose own block changed (classify_release.py).
+          CHANGED="$RUNNER_TEMP/changed_paths.txt"
+          git diff --name-only "$BEFORE" "${{ github.sha }}" > "$CHANGED"
+          RELEASE_CLASS=$(python3 scripts/ci/classify_release.py --base "$BEFORE" --head "${{ github.sha }}" \
+            --github-output "$GITHUB_OUTPUT" < "$CHANGED" |
+            python3 -c 'import json, sys; print(json.load(sys.stdin)["release_class"])')
+          python3 scripts/ci/select_tests.py --release-class "$RELEASE_CLASS" --event "${{ github.event_name }}" \
+            --github-output "$GITHUB_OUTPUT" < "$CHANGED"
 
   test:
     needs: classify
@@ -67,8 +88,22 @@ jobs:
       - name: Verify maintained document PDFs are current
         run: python3 scripts/docs/publish_key_docs.py --check
 
+      # A focused set for a domain or document release (scripts/ci/select_tests.py);
+      # the whole suite for a full release, a manual run, or any doubt. Anything
+      # other than "focused" runs the whole suite. The whole suite also runs
+      # nightly on main (nightly-tests.yml).
       - name: Run regression tests
-        run: pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
+        env:
+          TEST_SCOPE: ${{ needs.classify.outputs.test_scope }}
+          TEST_TARGETS: ${{ needs.classify.outputs.test_targets }}
+        run: |
+          if [ "$TEST_SCOPE" = "focused" ] && [ -n "$TEST_TARGETS" ]; then
+            echo "Focused tests: $TEST_TARGETS"
+            # shellcheck disable=SC2086 # the targets are space-separated repository paths
+            pytest $TEST_TARGETS -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
+          else
+            pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
+          fi
 
       - name: Check docs/specs naming/duplicates/supersession
         if: always()

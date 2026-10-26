@@ -1,0 +1,57 @@
+name: Nightly full test suite
+
+# A push to main runs a focused test set chosen from the changed paths
+# (scripts/ci/select_tests.py). This runs the whole suite on main every night,
+# so anything a focused set missed surfaces within a day as a GitHub issue.
+# It runs on GitHub's runners and deploys nothing. Manual: Actions > Run workflow.
+
+on:
+  schedule:
+    # 09:50 UTC: 04:50 America/Chicago in summer time, 03:50 in winter (the batch window).
+    - cron: '50 9 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: |
+          pip install -r requirements.test.txt
+          pip install -r scripts/docs/requirements.txt
+
+      - name: Verify maintained document PDFs are current
+        run: python3 scripts/docs/publish_key_docs.py --check
+
+      - name: Run the whole regression suite
+        run: pytest tests/ -v --junit-xml=data/reports/junit.xml --ignore=tests/smoke
+
+      - name: Check docs/specs naming/duplicates/supersession
+        if: always()
+        run: python3 scripts/check_spec_format.py
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-test-report
+          path: data/reports/junit.xml
+        if: always()
+
+      - name: File GitHub issues for failures
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pip install requests -q
+          python3 scripts/file_defect.py \
+            --junit data/reports/junit.xml \
+            --sha "$(git rev-parse HEAD)" \
+            --branch main

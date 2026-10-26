@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
+from typing import Callable, Optional
 
 
 ALL_SERVICES = (
@@ -34,6 +36,10 @@ def _is_release_only(path: str) -> bool:
         # Chooses the commit the classifier diffs against; CI only, like the
         # classifier, and never in a service image.
         "scripts/ci/release_base.sh",
+        # Chooses which tests CI runs; CI only, never in a service image.
+        "scripts/ci/select_tests.py",
+        # A nightly full-suite run on GitHub's runners; it deploys nothing.
+        ".github/workflows/nightly-tests.yml",
     }
     return (
         path in exact
@@ -58,7 +64,116 @@ def _is_release_only(path: str) -> bool:
         or ((path.startswith(VAULT_LOCAL_PREFIXES) or path in VAULT_LOCAL_FILES) and path not in VAULT_SERVER_FILES)
         or path in GUILD_LOCAL_TOOLS
         or path.startswith("services/agent_installer/")
+        or path.startswith(OPS_ONLY_PREFIXES)
+        or path in OPS_ONLY_FILES
     )
+
+
+# Operator scripts no service image runs. scripts/credentials/ holds the
+# laptop's Keychain tools and the EC2 host's secret sync; none is imported or
+# started by a service (tests/test_release_classifier.py guards this). The host
+# sync (sync_cos_runtime_secrets_from_ssm.sh) is pushed to EC2 and run by every
+# deploy in deploy.yml, so an edit to it alone reaches the host with the next
+# service deploy, which pushes it before running it. MC's host scripts ship in
+# MC's own image through deploy-mc-agent.yml (docker/mc-agent-container), never
+# through this pipeline.
+OPS_ONLY_PREFIXES = ("scripts/credentials/",)
+OPS_ONLY_FILES = frozenset({"scripts/operations/deploy_mc_container_ec2.sh",
+                            "scripts/operations/mc_prod_db_migrate.sh"})
+
+
+# docker-compose.prod.yml: a change restarts only the services whose own
+# block changed. Each production Compose service is owned by the classifier
+# service deploy_scoped_release.sh recreates for it; vault-ask runs the portal
+# image and is recreated beside the portal. postgres is absent on purpose: the
+# scoped deploy never recreates it (--no-deps), so its block keeps the full
+# fallback, as does any other service or top-level key (networks, volumes).
+PROD_COMPOSE = "docker-compose.prod.yml"
+COMPOSE_SERVICE_OWNERS = {**{service: (service,) for service in ALL_SERVICES}, "vault-ask": ("portal",)}
+
+
+# Top-level definitions a service uses by name: they are part of its rendered config.
+COMPOSE_NAMED = ("volumes", "networks", "secrets", "configs")
+
+
+def _compose_references(service: dict, kind: str) -> set[str]:
+    entries = service.get(kind)
+    if kind == "networks" and entries is None and "network_mode" not in service:
+        return {"default"}
+    if isinstance(entries, dict):
+        return {str(name) for name in entries}
+    names: set[str] = set()
+    for entry in entries or ():
+        if isinstance(entry, dict):
+            entry = entry.get("source") if entry.get("type", "volume") == "volume" or kind != "volumes" else None
+        elif isinstance(entry, str) and kind == "volumes":
+            entry = entry.split(":", 1)[0]
+            entry = None if entry.startswith(("/", ".", "~", "$")) else entry          # a bind mount, not a named volume
+        if entry:
+            names.add(str(entry))
+    return names
+
+
+def _compose_view(config: dict, name: str):
+    """A service's rendered config: its block plus the top-level definitions it names."""
+    service = (config.get("services") or {}).get(name)
+    if not isinstance(service, dict):
+        return service
+    named = {kind: {ref: (config.get(kind) or {}).get(ref) for ref in sorted(_compose_references(service, kind))}
+             for kind in COMPOSE_NAMED}
+    return service, named
+
+
+def compose_changed_services(base_text: Optional[str], head_text: Optional[str]) -> Optional[tuple[str, ...]]:
+    """Classifier services whose rendered Compose config differs, or None when only a full release is safe.
+
+    Compares the parsed YAML (anchors and merge keys resolved; comments and
+    layout ignored), so a comment-only edit restarts nothing. A service's
+    config includes the top-level volumes, networks, secrets and configs it
+    names, so a new named volume restarts only the service that mounts it.
+    None for a file that is missing on either side or fails to parse, for any
+    other top-level change (x-* extension fields aside), and for a service that
+    is added, removed or changed without an owner.
+    """
+    try:
+        import yaml
+    except ImportError:
+        return None
+    if base_text is None or head_text is None:
+        return None
+    try:
+        base, head = yaml.safe_load(base_text), yaml.safe_load(head_text)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(base, dict) or not isinstance(head, dict):
+        return None
+    for config in (base, head):
+        if not isinstance(config.get("services") or {}, dict) or not all(
+                isinstance(config.get(kind) or {}, dict) for kind in COMPOSE_NAMED):
+            return None
+    # x-* extension fields do nothing themselves; their anchors are already
+    # resolved into the services that merge them.
+    def rest(config: dict) -> dict:
+        return {k: v for k, v in config.items() if k not in ("services", *COMPOSE_NAMED) and not str(k).startswith("x-")}
+    if rest(base) != rest(head):
+        return None
+    owners: set[str] = set()
+    for name in set(base.get("services") or {}) | set(head.get("services") or {}):
+        before, after = _compose_view(base, name), _compose_view(head, name)
+        if before == after:
+            continue
+        if before is None or after is None or name not in COMPOSE_SERVICE_OWNERS:
+            return None
+        owners.update(COMPOSE_SERVICE_OWNERS[name])
+    return tuple(service for service in ALL_SERVICES if service in owners)
+
+
+def git_compose_diff(base: str, head: str, cwd: Optional[Path] = None) -> Callable[[], Optional[tuple[str, ...]]]:
+    """compose_diff for classify(): the services whose block changed between two commits."""
+    def show(commit: str) -> Optional[str]:
+        result = subprocess.run(["git", "show", f"{commit}:{PROD_COMPOSE}"], capture_output=True, text=True, cwd=cwd)
+        return result.stdout if result.returncode == 0 else None
+    return lambda: compose_changed_services(show(base), show(head))
 
 
 # Files that no production service is built from or mounts yet. Master
@@ -195,9 +310,18 @@ def _is_staging_only(path: str) -> bool:
     return path in STAGING_ONLY_FILES or path.startswith(STAGING_ONLY_PREFIXES)
 
 
-def classify(paths: list[str]) -> tuple[str, tuple[str, ...]]:
+def classify(paths: list[str],
+             compose_diff: Optional[Callable[[], Optional[tuple[str, ...]]]] = None) -> tuple[str, tuple[str, ...]]:
+    """compose_diff returns the services whose docker-compose.prod.yml block changed
+    (or None when it cannot tell); without it a production Compose change is full."""
     services: set[str] = set()
     for path in (item.strip() for item in paths if item.strip()):
+        if path == PROD_COMPOSE:
+            changed = compose_diff() if compose_diff else None
+            if changed is None:
+                return "full", ALL_SERVICES
+            services.update(changed)
+            continue
         # Records is no longer an unrelated prototype: the approved production
         # profile reuses the portal image as its code consumer. Until the actual
         # production service/deploy closure is installed, retain full fallback
@@ -287,9 +411,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", nargs="*")
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument("--base", help="commit the paths were diffed from (reads docker-compose.prod.yml per service)")
+    parser.add_argument("--head", default="HEAD")
     args = parser.parse_args()
     paths = args.paths or sys.stdin.read().splitlines()
-    release_class, services = classify(paths)
+    release_class, services = classify(paths, git_compose_diff(args.base, args.head) if args.base else None)
     result = {
         "release_class": release_class,
         "services": " ".join(services),
