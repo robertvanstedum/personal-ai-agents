@@ -66,3 +66,49 @@ binding is written for the container).
   phase 2 (MiniMoi tools inside the container).
 - `mc-relay`'s job audit path still names the `mc-agent` agent's database; jobs are off in phase 1.
 - Grok sign-in needs the SNI-filtering egress (tomorrow).
+
+## MC's GitHub issue writes (26 Oct 2026)
+
+MC can comment on issues (`issue.comment`) and file tickets (`issue.create_data_repair`). Both are tier 3, exact
+approval: MC proposes, Robert says yes in the chat, the portal writes. Both rules are already in
+`mc-policy.prod.json`, so turning them on does not change the policy digest.
+
+- **Token (Robert makes it):** GitHub → Settings → Developer settings → Fine-grained tokens. Resource owner
+  `robertvanstedum`, only the `personal-ai-agents` repository, Repository permissions **Issues: Read and write**
+  (Metadata read-only is added by GitHub), nothing else, 90-day expiry. Robert stores it in Parameter Store as a
+  SecureString: `/minimoi/production/mc_github_issues_token`.
+- **Turn on:** `sudo /opt/minimoi/scripts/deploy_mc_container_ec2.sh issues on`. It reads the parameter on the host,
+  refuses anything but a fine-grained token (`github_pat_…`), writes it to `/opt/minimoi/mc/portal/github-issues-token`
+  (root 0600; the portal sees it read-only at `/run/secrets/mc/github-issues-token`), sets
+  `MINIMOI_MC_TOOLS_TICKETS=1` and `MINIMOI_MC_TOOLS_COMMENTS=1` in `/opt/minimoi/.env`, and redeploys the portal alone
+  (about 30 s; MC's container is not restarted). It ends by printing `issue comments on | tickets on`.
+- The token is never in `.env` (every main service loads `.env`) and never in MC's container.
+- **Rotate** (before the expiry): update the parameter, run `issues on` again.
+- **Off:** `issues off` (removes the file and both flags). `switch cos` also clears both flags.
+
+## MC's web search: the gateway's key database (26 Oct 2026)
+
+MC searches through its own capped gateway key (`minimoi-cos-web-search` only, `/v1/responses` only, $5 per 30 days,
+rpm 10). LiteLLM can only issue such keys with a key database. Production's gateway now has one, as staging has since
+stage C (`scripts/staging/README.md`, "Master Craftsman stage C").
+
+- **Database:** role and database `litellm_keys` in `postgres-ai-agents` (`NOSUPERUSER NOCREATEDB NOCREATEROLE`, owns
+  only its own database; `CONNECT` revoked from `PUBLIC`). LiteLLM's Prisma migrations create its tables at start.
+- **Password:** Robert generates it (`openssl rand -hex 24`) and stores it as the SecureString
+  `/minimoi/production/litellm_keys_db_password`. `sync_cos_runtime_secrets_from_ssm.sh` (run by every main release)
+  writes `/opt/minimoi/gateway-keys.env` (root 0600) with only the gateway's `DATABASE_URL`. `docker-compose.prod.yml`
+  loads it into the model gateway alone (`required: false`, so a host without it runs on the master key, as before).
+- **Master key:** unchanged (`/minimoi/production/model_gateway_key`). CoS keeps using it; it never needs the database.
+- **MC's key:** `deploy_mc_container_ec2.sh deploy <tag>` mints it inside the gateway (the master key never leaves it)
+  into `/opt/minimoi/mc/mc.env` as `MC_SEARCH_KEY`, if it is not there yet; `mc-agent` is recreated with it
+  (a restart: run a warm-up turn). The key is never CoS's and never the master key.
+- **Checks:** from inside `minimoi-mc-agent` through the tools door, the key answers a web search (200 with citations)
+  and is refused (403) on every other model and route: chat completions, `/v1/models`, `/key/*`, the `/anthropic`
+  and `/openai` pass-throughs. Then one CoS question with web search still answers with citations.
+- **What changes for CoS:** with the database on, the gateway does not start while Postgres is down (it retries until
+  Postgres is back), so Postgres is now a dependency of CoS's gateway too. Start Postgres first after any outage.
+- **Rollback:** `sudo mv /opt/minimoi/gateway-keys.env /root/` then
+  `sudo /opt/minimoi/scripts/deploy_scoped_release.sh <running tag> model-gateway`: the gateway is back on the master key
+  alone (CoS unaffected; MC's key stops working and MC says search is off). The database and its role stay; putting
+  the file back turns it on again. The next main release writes the file again while the parameter exists, so for
+  a lasting rollback Robert also deletes `/minimoi/production/litellm_keys_db_password`.
