@@ -200,6 +200,25 @@ class IssueFilerTests(unittest.TestCase):
         self.assertEqual(comment(0, "text"), ("refused", None))
         self.assertIsNone(w.issue_commenter(self.cfg))                    # comments not switched on
 
+    def test_new_issue_carries_its_labels(self):
+        file_issue, sent = self.filer(201, {"number": 5})
+        self.assertEqual(file_issue("t", "b", ["ui"]), ("created", 5))
+        self.assertEqual(sent[0][1]["json"], {"title": "t", "body": "b", "labels": ["ui"]})
+
+    def test_update_patches_that_issue_with_only_known_fields(self):
+        cfg = dict(self.cfg, comments=True)
+        sent = []
+        update = w.issue_updater(cfg, http_patch=lambda url, **kw: sent.append((url, kw)) or
+                                 SimpleNamespace(status_code=200, json=lambda: {"number": 388}))
+        self.assertEqual(update(388, {"state": "closed", "labels": ["ui"]}), ("created", 388))
+        url, kw = sent[0]
+        self.assertEqual(url, "https://api.github.com/repos/robertvanstedum/personal-ai-agents/issues/388")
+        self.assertEqual(kw["json"], {"state": "closed", "labels": ["ui"]})
+        self.assertEqual(update(388, {"assignees": ["x"]}), ("refused", None))      # nothing beyond the four fields
+        self.assertEqual(update(388, {}), ("refused", None))
+        self.assertEqual(len(sent), 1)
+        self.assertIsNone(w.issue_updater(self.cfg))                     # issue changes not switched on
+
     def test_off_without_a_private_token_file(self):
         os.chmod(self.token, 0o644)
         self.assertIsNone(w.issue_filer(self.cfg))

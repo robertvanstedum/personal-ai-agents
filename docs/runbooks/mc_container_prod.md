@@ -69,6 +69,23 @@ binding is written for the container).
 
 ## MC's GitHub issue writes (26 Oct 2026)
 
+**What an agent can do on Robert's yes** (issues only, this repository only; each tool has its own policy rule, all
+tier 3 with exact approval; the agent shows the exact text, Robert says yes, the portal writes with his issues-only token
+and signs it with the agent's name, for example "Opened by MiniMoi's Master Craftsman after Robert approved this exact
+text"):
+
+| Tool | Capability | Switch |
+|---|---|---|
+| `minimoi_issue_create`: a new issue (title, body, labels) | `issue.create` | `MINIMOI_MC_TOOLS_TICKETS` |
+| `minimoi_issue_update`: new title or body, the complete label set, close or reopen | `issue.update` | `MINIMOI_MC_TOOLS_COMMENTS` |
+| `minimoi_issue_comment`: a comment | `issue.comment` | `MINIMOI_MC_TOOLS_COMMENTS` |
+| `minimoi_data_repair_ticket`: a draft change record for guest requests | `issue.create_data_repair` | `MINIMOI_MC_TOOLS_TICKETS` |
+
+The same tools serve CoS through its own policy file (#215). Public-text guard: plain ASCII, no email address, no
+guest's name. Create and update need migration `core/mc_tools/sql/020_issue_create_update.sql`
+(`mc_prod_db_migrate.sh apply`, which backs up first) and policy revision `mc-prod-20261026-github-issues`, approved
+by Robert with `approve-policy`.
+
 MC can comment on issues (`issue.comment`) and file tickets (`issue.create_data_repair`). Both are tier 3, exact
 approval: MC proposes, Robert says yes in the chat, the portal writes. Both rules are already in
 `mc-policy.prod.json`, so turning them on does not change the policy digest.

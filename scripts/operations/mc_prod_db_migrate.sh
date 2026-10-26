@@ -49,6 +49,7 @@ MIGRATIONS=(
   core/mc_tools/sql/017_approved_agent_handoff.sql
   core/mc_tools/sql/018_status_reply_protocol.sql
   core/mc_tools/sql/019_delegate_build.sql
+  core/mc_tools/sql/020_issue_create_update.sql
   core/mc_delegation_dispatcher/sql/001_delegations.sql
 )
 

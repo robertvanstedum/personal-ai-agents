@@ -111,6 +111,42 @@
       "max_operations_per_turn": 5
     },
     {
+      "capability": "issue.create",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "issue_create_v1",
+      "verify": "github_receipt_v1",
+      "undo": null,
+      "egress": "github_write",
+      "max_operations_per_turn": 5
+    },
+    {
+      "capability": "issue.update",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 3,
+      "approval": "exact",
+      "source_requirement": "current_owner_turn",
+      "handler": "issue_update_v1",
+      "verify": "github_receipt_v1",
+      "undo": null,
+      "egress": "github_write",
+      "max_operations_per_turn": 5
+    },
+    {
       "capability": "lessons.adopt",
       "version": 1,
       "actors": [

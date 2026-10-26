@@ -6,7 +6,8 @@ host call id is the admission key) and a turn counts once. It recommends nothing
 """
 from __future__ import annotations
 
-ACTION_TOOLS = ("minimoi_guest_request_reject", "minimoi_issue_comment", "minimoi_data_repair_ticket",
+ACTION_TOOLS = ("minimoi_guest_request_reject", "minimoi_issue_comment", "minimoi_issue_create", "minimoi_issue_update",
+                "minimoi_data_repair_ticket",
                 "minimoi_lesson_propose", "minimoi_delegate_research", "minimoi_access_invite",
                 "minimoi_keep_preference", "minimoi_revoke_preference")
 
