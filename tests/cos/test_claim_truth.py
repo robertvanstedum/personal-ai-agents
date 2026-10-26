@@ -90,6 +90,9 @@ def test_drafts_and_governed_limitations_are_left_alone(ordinary):
  'The brief has been written to `/tmp/brief.md` and is ready for download.',
  'Your download package is ready.',
  'I exported it to /tmp/brief.md.',
+ # 26 Oct 2026 prod test: CoS said this after its write tool failed twice.
+ "I've created a ranked list of the agencies for your profile and saved it as a downloadable file.",
+ 'Here is your downloadable file with the list.',
 ])
 def test_file_claims_need_delivery_receipt(reply):
  from domains.cos.claim_truth import enforce_file_claims,FILE_NOTICE
@@ -99,6 +102,7 @@ def test_file_claims_need_delivery_receipt(reply):
 @pytest.mark.parametrize('reply',[
  'No file is ready for download.', 'I have not written it to /tmp/brief.md.',
  'Here is the brief inline.', 'You can save this text yourself.',
+ 'No downloadable file was created.', 'You can save this text as a file yourself.',
 ])
 def test_file_limitations_unchanged(reply):
  from domains.cos.claim_truth import enforce_file_claims

@@ -164,11 +164,14 @@ class CosFiles:
         return p
 
     def system_note(self) -> str:
-        return (f"Files: Robert's attachments arrive in the message as DATA and stay readable at {self.agent_inbox}. "
-                f"To hand Robert a file (a report, a table, a draft), write it under {self.agent_outbox}/ with a clear "
-                "name and extension (.md, .csv, .txt, .html, .json); the platform turns every file written there "
-                "during this turn into a download link under your reply. Files anywhere else are not available to "
-                "Robert, and a download exists only when the platform lists it.")
+        return (f"Files: Robert's attachments arrive in the message as DATA and stay readable (read-only) at "
+                f"{self.agent_inbox}; never write there. To hand Robert a file (a report, a table, a draft), use your "
+                f"`write` tool to create it under {self.agent_outbox}/ with a clear name and extension (.md, .csv, "
+                ".txt, .html, .json); never use node or file-transfer tools (no node is paired). The platform turns "
+                "every file written there during this turn into a download link under your reply. Files anywhere "
+                "else are not available to Robert; a download exists only when the platform lists it, so do not say "
+                "a file was saved unless your write tool succeeded. When you used web_search, put the source URL it "
+                "returned next to each claim or table row it supports; current facts without URLs are incomplete.")
 
 
 def safe_name(name: str) -> str:
