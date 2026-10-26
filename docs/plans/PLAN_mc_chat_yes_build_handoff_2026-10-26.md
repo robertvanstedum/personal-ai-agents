@@ -39,6 +39,19 @@ digest → Robert's approve-policy); `core/mc_tools/proposals.py` confirm handle
 `approved_handoff.py` table source; `handoff_payload.py` v3; Guild proposal card (existing component); tests for every
 refusal (other conversation, edited note, expired, second delivery, non-enrolled target, model-supplied task text).
 
+## Robert, 26 Oct: the yes can be typed, spoken or tapped
+"I should be able to do this with voice." One rule for all three: **an owner turn that directly answers MC's proposal**,
+in the same conversation, from Robert's authenticated session.
+- **Typed:** Robert's next on-record note replies to the proposal ("yes", "go ahead").
+- **Spoken:** Guild voice keeps Robert's speech as his own on-record note (owner author, his session), so a spoken yes
+  is the same owner turn. MC's own speech, and anything MC reads aloud, never arrive as owner notes and cannot confirm.
+- **Tapped:** the Confirm button on the proposal card.
+- **Read-back:** before the yes, MC states (on screen and, in voice, aloud) exactly what it will hand off: target,
+  Robert's request, the constraints. After delivery it confirms what was sent. A misheard request is heard before any
+  handoff; a yes binds only to the immediately preceding proposal, and only once.
+- The portal, not the model, decides that a turn is a yes to that proposal (proposal id carried in the turn's context;
+  affirmative owner text or the button); the model's say-so is never enough.
+
 ## Open for review
 - Is the existing proposal Confirm card the right "yes", or should a typed "yes" to MC's question also confirm (bound to
   the immediately preceding proposal and the same turn)? Robert's wording suggests the latter; it must stay unforgeable by
