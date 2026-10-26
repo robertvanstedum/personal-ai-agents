@@ -11,6 +11,8 @@ COPY domains/guild/ domains/guild/
 COPY domains/cos/ domains/cos/
 COPY services/model_gateway/ services/model_gateway/
 COPY services/usage/ services/usage/
+# The portal's sandboxed upload reader, loaded by path for CoS Confer attachments (domains/cos/files.py).
+COPY minimoi_portal/guild_ui/doc_reader.py minimoi_portal/guild_ui/doc_reader.py
 
 ENV PORT=8769
 ENV PYTHONPATH=/app

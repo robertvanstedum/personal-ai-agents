@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chief of Staff</title>
-  <link rel="stylesheet" href="/static/cos.css?v=20261015-dictation1">
+  <link rel="stylesheet" href="/static/cos.css?v=20261026-files1">
 </head>
 <body>
 
@@ -36,7 +36,10 @@
           <h1>Confer</h1>
         </div>
         <div id="chat-log"></div>
+        <div id="attach-tray" aria-live="polite"></div>
         <div class="input-row">
+          <input id="attach-input" type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.html,.htm,.png,.jpg,.jpeg,.gif,.webp">
+          <button id="btn-attach" type="button" title="Attach a file" aria-label="Attach a file">📎</button>
           <input id="send-input" type="text" placeholder="Message CoS…" autocomplete="off" autofocus>
           <button id="btn-voice" title="Start voice conversation" aria-label="Start voice conversation">🎤</button>
           <button id="btn-dictate" type="button" disabled aria-label="Dictate into the message draft">Dictate</button>
@@ -48,6 +51,10 @@
           <span>Voice is AI-generated.</span>
           <a href="/ui/memory" target="_blank">memory ↗</a>
         </div>
+        <details id="cos-files">
+          <summary>Files from CoS</summary>
+          <ul id="cos-files-list"><li class="muted">Loading…</li></ul>
+        </details>
         {% if managed_realtime_ready %}
         <label>Voice mode <select id="voice-mode"><option value="realtime">Realtime · OpenAI</option><option value="chained">Voice · turn by turn</option></select></label>
         <label><input type="checkbox" id="voice-keep-transcript">Download transcript on End</label>
@@ -137,7 +144,14 @@ const chatLog   = document.getElementById('chat-log');
 const sendInput = document.getElementById('send-input');
 const btnSend   = document.getElementById('btn-send');
 
-function appendMsg(role, text) {
+// Downloads are links, not fetches, so the portal does not rewrite them: build them from this page's own place
+// (/app/cos/ui/confer through the portal, /ui/confer directly).
+const UI_BASE = location.pathname.replace(/\/ui(\/[^/]*)?\/?$/, '') + '/ui/';
+function downloadHref(path) {
+  return UI_BASE + 'files/' + String(path).split('/').map(encodeURIComponent).join('/');
+}
+
+function appendMsg(role, text, files) {
   const wrap  = document.createElement('div');
   wrap.className = 'msg msg-' + role;
   const label = document.createElement('div');
@@ -148,6 +162,20 @@ function appendMsg(role, text) {
   body.textContent = text;
   wrap.appendChild(label);
   wrap.appendChild(body);
+  if (Array.isArray(files) && files.length) {
+    // Download links come only from the platform's receipt (files CoS wrote to its outbox this turn).
+    const list = document.createElement('div');
+    list.className = 'msg-files';
+    for (const f of files) {
+      if (!f || typeof f.path !== 'string') continue;
+      const a = document.createElement('a');
+      a.href = downloadHref(f.path);
+      a.setAttribute('download', f.name || '');
+      a.textContent = '⬇ ' + f.path + ' (' + fmtBytes(f.bytes) + ')';
+      list.appendChild(a);
+    }
+    wrap.appendChild(list);
+  }
   chatLog.appendChild(wrap);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
@@ -169,40 +197,132 @@ function cosWriteHeaders() {
   return token ? { 'X-CSRF-Token': token } : {};
 }
 
+// ── Attachments (uploads stay in CoS's inbox; the message names them by id) ──
+const attachInput = document.getElementById('attach-input');
+const btnAttach   = document.getElementById('btn-attach');
+const attachTray  = document.getElementById('attach-tray');
+let attached = [];   // upload records: {file_id, name, readable, note}
+let uploading = 0;
+
+btnAttach.addEventListener('click', () => attachInput.click());
+attachInput.addEventListener('change', async () => {
+  const picked = [...attachInput.files];
+  attachInput.value = '';
+  for (const file of picked) await uploadOne(file);
+});
+
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  return n < 1024 ? n + ' B' : n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+}
+
+function renderTray() {
+  attachTray.textContent = '';
+  for (const a of attached) {
+    const chip = document.createElement('span');
+    chip.className = 'attach-chip' + (a.readable === false ? ' attach-unread' : '');
+    chip.title = a.note || '';
+    chip.textContent = a.name + (a.readable === false ? ' · not read as text' : '');
+    const x = document.createElement('button');
+    x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + a.name);
+    x.addEventListener('click', () => { attached = attached.filter(b => b !== a); renderTray(); });
+    chip.appendChild(x);
+    attachTray.appendChild(chip);
+  }
+  if (uploading) {
+    const busy = document.createElement('span');
+    busy.className = 'attach-chip attach-busy'; busy.textContent = 'Uploading…';
+    attachTray.appendChild(busy);
+  }
+}
+
+async function uploadOne(file) {
+  uploading++; renderTray();
+  try {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    const resp = await fetch('/ui/upload', { method: 'POST', headers: { ...cosWriteHeaders() }, body: form });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.file_id) {
+      appendMsg('cos', (file.name || 'File') + ' was not attached: ' + (data.error || data.message || 'the upload failed') + '.');
+      return;
+    }
+    attached.push(data);
+  } catch (err) {
+    appendMsg('cos', (file.name || 'File') + ' was not attached: the upload failed.');
+  } finally {
+    uploading--; renderTray();
+  }
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// The turn runs in the background and the page polls for it: research can outlast the edge's request limit.
+async function runTurn(payload, thinking) {
+  const resp = await fetch('/ui/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...cosWriteHeaders() },
+    body: JSON.stringify({ ...payload, background: true }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (resp.status !== 202 || !data.turn) return { resp, data };
+  const started = Date.now();
+  while (Date.now() - started < 15 * 60 * 1000) {
+    await sleep(2500);
+    let r;
+    try { r = await fetch('/ui/turn/' + encodeURIComponent(data.turn)); }
+    catch (err) { continue; }            // a dropped poll is retried; the turn keeps running on the server
+    const d = await r.json().catch(() => ({}));
+    if (d.state === 'running') {
+      thinking.textContent = 'Working… ' + (d.seconds || 0) + ' s';
+      continue;
+    }
+    return { resp: r, data: d };
+  }
+  return { resp: { ok: false, status: 504 },
+           data: { reply: 'CoS is still working after 15 minutes. Check Files from CoS later.' } };
+}
+
 async function sendMessage() {
   if(sendInput.disabled||sendInput.readOnly)return;
+  if (uploading) return;
   const text = sendInput.value.trim();
-  if (!text) return;
+  if (!text && !attached.length) return;
+  const files = attached;
   const requestId = crypto.randomUUID();
   sendInput.value = '';
+  attached = []; renderTray();
   setInputDisabled(true);
-  appendMsg('user', text);
+  appendMsg('user', [text, ...files.map(f => '📎 ' + f.name)].filter(Boolean).join('\n'));
   const thinking = appendThinking();
+  const restore = () => {
+    if (!sendInput.value.trim()) sendInput.value = text;
+    if (!attached.length) { attached = files; renderTray(); }
+  };
   try {
-    const resp = await fetch('/ui/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...cosWriteHeaders() },
-      body: JSON.stringify({
-        text,
-        channel: 'html_text',
-        conversation_id: 'owner',
-        request_id: requestId,
-      }),
-    });
-    const data = await resp.json().catch(() => ({}));
+    const { resp, data } = await runTurn({
+      text,
+      channel: 'html_text',
+      conversation_id: 'owner',
+      request_id: requestId,
+      attachments: files.map(f => f.file_id),
+    }, thinking);
     thinking.remove();
     if (!resp.ok || !data || typeof data !== 'object' || Array.isArray(data) || typeof data.reply !== 'string' || !data.reply.trim()) {
-      if (!sendInput.value.trim()) sendInput.value = text;
+      restore();
       const confirmedRefusal = resp.status === 403 && data?.error === 'csrf';
       appendMsg('cos', confirmedRefusal
         ? 'Message was not sent: request verification failed. Your draft is preserved.'
-        : 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
+        : (resp.status === 400 && typeof data?.reply === 'string' && data.reply.trim())
+          ? data.reply + ' Your draft is preserved.'
+          : 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
       return;
     }
-    appendMsg('cos', data.reply);
+    appendMsg('cos', data.reply, data.files);
+    if (Array.isArray(data.files) && data.files.length) loadCosFiles();
   } catch(err) {
     thinking.remove();
-    if (!sendInput.value.trim()) sendInput.value = text;
+    restore();
     appendMsg('cos', 'Delivery is unconfirmed. Your draft is preserved; check the record before retrying.');
   } finally {
     setInputDisabled(false);
@@ -210,9 +330,35 @@ async function sendMessage() {
   }
 }
 
+// ── Files from CoS (its outbox) ───────────────────────────────────────────────
+async function loadCosFiles() {
+  const list = document.getElementById('cos-files-list');
+  const note = text => { list.textContent = ''; const li = document.createElement('li'); li.className = 'muted'; li.textContent = text; list.appendChild(li); };
+  try {
+    const d = await fetch('/ui/files').then(r => r.json());
+    if (!d.available) return note('Not available here yet.');
+    if (!d.files.length) return note('Nothing yet. Ask CoS to save a result as a file.');
+    list.textContent = '';
+    for (const f of d.files) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = downloadHref(f.path);
+      a.setAttribute('download', f.name);
+      a.textContent = f.path;
+      li.appendChild(a);
+      li.appendChild(document.createTextNode(' · ' + fmtBytes(f.bytes) + ' · ' + (f.modified || '').replace('T', ' ').slice(0, 16) + ' UTC'));
+      list.appendChild(li);
+    }
+  } catch (err) {
+    note('Could not load the list.');
+  }
+}
+document.getElementById('cos-files').addEventListener('toggle', e => { if (e.target.open) loadCosFiles(); });
+
 function setInputDisabled(disabled) {
   sendInput.disabled = disabled;
   btnSend.disabled   = disabled;
+  btnAttach.disabled = disabled;
 }
 
 // ── Notes tab ─────────────────────────────────────────────────────────────────

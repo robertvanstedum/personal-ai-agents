@@ -130,7 +130,8 @@ def test_compose_vault_service_is_profile_gated_internal_and_read_only():
         "${MINIMOI_ROOT:-/opt/minimoi}/${MINIMOI_VAULT_READER_ENV_FILE:-.env}",
     ]
     assert "MINIMOI_VAULT_ASK_INCLUDE_RAW=${MINIMOI_VAULT_ASK_INCLUDE_RAW:-0}" in env
-    assert "MINIMOI_VAULT_ASK_CONVERSATIONS=guild-" in env
+    # Guild only by default; Robert's Confer conversation joins only by the host switch (cos_prod.sh vault on).
+    assert "MINIMOI_VAULT_ASK_CONVERSATIONS=${MINIMOI_COS_VAULT_CONVERSATIONS:-guild-}" in env
 
 
 def test_scoped_portal_release_recreates_vault_ask_only_once_it_exists():

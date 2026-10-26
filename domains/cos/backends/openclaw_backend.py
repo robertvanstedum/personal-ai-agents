@@ -5,6 +5,7 @@ This adapter only sends one normalized turn to the dedicated OpenClaw Gateway's
 supported Chat Completions endpoint and returns assistant-visible text.
 """
 
+import contextvars
 import hashlib
 import json
 import logging
@@ -24,6 +25,10 @@ _DEFAULT_RUNTIME_URL = "http://cos-agent-a:18789/v1"
 _DEFAULT_AGENT_ID = "cos-agent-a"
 _CONNECT_TIMEOUT_SECONDS = 5
 _TURN_TIMEOUT_SECONDS = 120
+# A Confer background turn (the page polls for it, so no proxy waits on it) may run longer: research with several
+# searches and a written file. Set only for that turn, by the thread that runs it (chief_of_staff._start_ui_turn).
+BACKGROUND_TURN_TIMEOUT_SECONDS = 600
+turn_timeout_seconds = contextvars.ContextVar("cos_turn_timeout_seconds", default=_TURN_TIMEOUT_SECONDS)
 _EMPTY_OUTPUT_NOTICE = (
     "[MiniMoi platform notice: The model reached its output limit before producing an answer. "
     "Earlier tool actions may still have occurred; no automatic retry was made.]"
@@ -238,7 +243,7 @@ class OpenClawBackend:
                 url,
                 headers=headers,
                 json=body,
-                timeout=(_CONNECT_TIMEOUT_SECONDS, _TURN_TIMEOUT_SECONDS),
+                timeout=(_CONNECT_TIMEOUT_SECONDS, turn_timeout_seconds.get()),
                 allow_redirects=False,
             )
         except requests.exceptions.Timeout as exc:

@@ -209,6 +209,7 @@ class ConferTurnService:
         reset_conversation: Callable[[str], bool] | None = None,
         get_routing_receipt: Callable[[str], dict | None] | None = None,
         save_reminder: Callable[[datetime, str, str], dict] | None = None,
+        workspace_note: str | None = None,
     ) -> None:
         self._call_backend = call_backend
         self._build_context = build_context
@@ -218,6 +219,9 @@ class ConferTurnService:
         self._reset_conversation = reset_conversation
         self._get_routing_receipt = get_routing_receipt
         self._save_reminder = save_reminder
+        # With Confer's folders on (domains/cos/files.py, conversation_log.py) CoS is told where attachments and its
+        # past conversations are and how a file becomes a download; without them, files it writes stay its own.
+        self._workspace_note = workspace_note
 
     def handle(self, request: ConferTurnRequest) -> ConferTurnResult:
         text = request.text.strip()
@@ -337,8 +341,8 @@ class ConferTurnService:
         from core.agent_partner import PARTNER_STYLE
         context['system_prompt'] = (context.get('system_prompt', '').rstrip() + '\n\n' + PARTNER_STYLE).strip()
         context['system_prompt'] += (
-            "\n\nFiles written in your own workspace are not available to Robert. "
-            "Provide requested content in your reply. For an explicit platform delivery contract, "
+            "\n\n" + (self._workspace_note or "Files written in your own workspace are not available to Robert. "
+                        "Provide requested content in your reply.") + " For an explicit platform delivery contract, "
             "return the document data exactly as requested; only a platform receipt confirms download. "
             "Never claim research or cite a source you have not actually retrieved in this task. "
             "When web tools are unavailable or fail, say so and distinguish background knowledge."

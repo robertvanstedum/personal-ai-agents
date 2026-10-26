@@ -20,8 +20,11 @@ def _pins():
 
 def test_every_cos_dependency_is_pinned_exactly_to_the_measured_production_set():
     pins = _pins()
-    # The measured 51-package baseline plus the reviewed server-sideband and register YAML extras.
-    assert len(pins) == 53
+    # The measured 51-package baseline plus the reviewed server-sideband and register YAML extras, plus the
+    # Confer attachment reader's three (pypdf, beautifulsoup4, soupsieve; same pins as the portal).
+    assert len(pins) == 56
+    assert {k: pins[k] for k in ("pypdf", "beautifulsoup4", "soupsieve")} == {
+        "pypdf": "6.8.0", "beautifulsoup4": "4.15.0", "soupsieve": "2.10"}
     assert pins["pyyaml"] == "6.0.3"
     assert pins["websockets"] == "15.0.1"
     # the ten packages a fresh build used to move, held at what production runs

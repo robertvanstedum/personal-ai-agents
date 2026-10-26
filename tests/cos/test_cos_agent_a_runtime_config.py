@@ -211,6 +211,9 @@ def _run_apply_config(tmp_path: Path, state_dir: Path) -> subprocess.CompletedPr
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "OPENCLAW_CONFIG_PATH": str(state_dir / "openclaw.json"),
             "OPENCLAW_AGENT_POLICY_PATH": str(state_dir / "workspace-cos-agent-a/AGENTS.md"),
+            # Compose always provides a key (the master, or CoS's own via /run/cos-key); none would refuse start.
+            "MINIMOI_MODEL_GATEWAY_KEY": "sk-synthetic-master-0000000000",
+            "COS_GATEWAY_KEY_FILE": str(tmp_path / "no-cos-key"),
         },
         capture_output=True,
         text=True,
@@ -289,7 +292,8 @@ def test_unchanged_or_fresh_volume_starts_without_a_replaced_copy(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "gateway-started").exists()
     assert not (fresh / "openclaw.json.replaced-by-image").exists()
-    assert result.stderr == ""
+    # Only the key line (which key, never its value): no replaced-config notice.
+    assert result.stderr == "cos-agent-a: gateway key: master (no CoS key file)\n"
 
 
 COS_MODEL_ROUTES = ["minimoi-gateway/minimoi-cos-agent"]

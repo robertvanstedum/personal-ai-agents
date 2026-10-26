@@ -576,3 +576,27 @@ body.landing-mode .cos-header { position: sticky; top: 0; }
   #send-input { flex-basis: 100%; }
   #btn-voice, #btn-send { min-height: 44px; }
 }
+
+/* ── Confer attachments and CoS's files (26 Oct 2026) ── */
+#btn-attach {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--ink-mid); padding: 0 12px; cursor: pointer; font-size: 1.05rem; flex-shrink: 0; min-height: 44px;
+}
+#btn-attach:hover { background: var(--border); color: var(--ink); }
+#btn-attach:disabled { opacity: 0.45; cursor: default; }
+#attach-tray { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+#attach-tray:empty { display: none; }
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+  padding: 3px 4px 3px 10px; font-size: 0.78rem; color: var(--ink-mid); overflow-wrap: anywhere;
+}
+.attach-chip button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; padding: 0 6px; }
+.attach-unread { border-style: dashed; }
+.attach-busy { padding-right: 10px; font-style: italic; }
+.msg-files { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.msg-files a, #cos-files a { color: var(--accent); font-size: 0.85rem; overflow-wrap: anywhere; }
+#cos-files { margin-top: 12px; font-size: 0.8rem; color: var(--ink-mid); }
+#cos-files summary { cursor: pointer; color: var(--muted); }
+#cos-files ul { margin: 6px 0 0; padding-left: 18px; }
+#cos-files .muted { color: var(--muted); list-style: none; margin-left: -18px; }

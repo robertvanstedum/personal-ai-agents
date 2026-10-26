@@ -70,7 +70,10 @@ services:
     restart: unless-stopped
     environment:
       - OPENCLAW_GATEWAY_TOKEN=${COS_AGENT_A_GATEWAY_TOKEN:?set COS_AGENT_A_GATEWAY_TOKEN in /opt/minimoi/.env}
-      - MINIMOI_MODEL_GATEWAY_KEY=${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}
+      # The master key, unless CoS has its own capped key: `cos_prod.sh key` sets COS_AGENT_MASTER_KEY= (empty, not a
+      # secret) in /opt/minimoi/.env so the master key never enters this container; apply-config.sh then reads CoS's
+      # key from /run/cos-key. `cos_prod.sh key off` removes that line and the master key comes back.
+      - MINIMOI_MODEL_GATEWAY_KEY=${COS_AGENT_MASTER_KEY-${MINIMOI_MODEL_GATEWAY_KEY:?set MINIMOI_MODEL_GATEWAY_KEY in /opt/minimoi/.env}}
       - OPENCLAW_STATE_DIR=/home/node/.openclaw
       - OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
       - OPENCLAW_DISABLE_BONJOUR=1
@@ -86,8 +89,25 @@ services:
       # Native image tools admit this exact owner-selected evidence workspace.
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/mc-evidence:/home/node/.openclaw/workspace-cos-agent-a/mc-evidence:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/docs:/minimoi/docs
-      - ${MINIMOI_ROOT:-/opt/minimoi}/scripts:/minimoi/scripts
+      # Read-only: root runs these scripts on every release, so a writable copy here would let an agent run code as
+      # root on the host (26 Oct 2026).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/scripts:/minimoi/scripts:ro
       - ${MINIMOI_ROOT:-/opt/minimoi}/agent_logs:/minimoi/agent_logs
+      # CoS gets Master Craftsman's working skills (Robert, 26 Oct 2026; #215, #335). Test phase: wide read, writes in
+      # its own folders and Planning Studio; narrowing per subdomain comes later. Folders are prepared by
+      # scripts/operations/cos_prod.sh prepare (every main release). No credential is reachable: never /opt/minimoi
+      # itself, .env, mc.env, mc/portal, auth, private, backups, ~/.ssh or the Docker socket.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/minimoi/cos/inbox:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/minimoi/cos/outbox
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/minimoi/cos/conversations:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/planning-studio:/minimoi/planning-studio
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/repo:/minimoi/repo:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/work:/minimoi/mc/work:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/workshops:/minimoi/mc/workshops:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/mc/artifacts:/minimoi/mc/artifacts:ro
+      # CoS's own capped gateway key (cos_prod.sh key), read by apply-config.sh at start instead of the master key.
+      # Empty folder: the master key stays (the rollback is `cos_prod.sh key off`).
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/agent-key:/run/cos-key:ro
     # Real turns on staging peaked at about 1,031 MB (a 900m probe OOMed in 11
     # of 17 starts); cap it so it can never starve the rest of the host. The
     # staging override inherits this limit. NODE_OPTIONS stays unset: a heap
@@ -388,9 +408,18 @@ services:
       - MINIMOI_VAULT_ASK_URL=${MINIMOI_VAULT_ASK_URL:-}
       - MINIMOI_VAULT_ASK_INTERNAL_HOSTS=vault-ask
       - MINIMOI_VAULT_ASK_INCLUDE_RAW=${MINIMOI_VAULT_ASK_INCLUDE_RAW:-0}
-      # Only the Guild's MC conversations ask the Vault: never Telegram or other CoS channels.
-      - MINIMOI_VAULT_ASK_CONVERSATIONS=guild-
+      # Only the Guild's MC conversations ask the Vault: never Telegram or other CoS channels (17 Oct). Robert's Confer
+      # conversation ("owner") is added only by setting MINIMOI_COS_VAULT_CONVERSATIONS=guild-,owner in /opt/minimoi/.env.
+      - MINIMOI_VAULT_ASK_CONVERSATIONS=${MINIMOI_COS_VAULT_CONVERSATIONS:-guild-}
       - COS_REMINDERS_DIR=/app/data/cos_reminders
+      # Confer files and recall (domains/cos/files.py, conversation_log.py): the scheduler's paths, then the same
+      # folders as CoS's runtime sees them.
+      - COS_FILES_INBOX=/app/data/cos-files/inbox
+      - COS_FILES_OUTBOX=/app/data/cos-files/outbox
+      - COS_CONVERSATIONS_DIR=/app/data/cos-conversations
+      - COS_AGENT_INBOX=/minimoi/cos/inbox
+      - COS_AGENT_OUTBOX=/minimoi/cos/outbox
+      - COS_AGENT_CONVERSATIONS=/minimoi/cos/conversations
     volumes:
       # Same owner limit registry as the portal, including next-day limits.
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/limits:/app/runtime/guild/limits:ro
@@ -401,6 +430,10 @@ services:
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/model_gateway_receipts.jsonl:/app/data/model_gateway_receipts.jsonl
       - ${MINIMOI_ROOT:-/opt/minimoi}/data/guild/cos_context.json:/app/domains/guild/config/cos_context.json
       - /var/run/docker.sock:/var/run/docker.sock
+      # Confer files: the scheduler writes the inbox and the conversation record, and only reads CoS's outbox.
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/inbox:/app/data/cos-files/inbox
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/outbox:/app/data/cos-files/outbox:ro
+      - ${MINIMOI_ROOT:-/opt/minimoi}/cos/conversations:/app/data/cos-conversations
     ports:
       - "127.0.0.1:8769:8769"
     # Vault retrieval for MC/CoS turns (owner decisions 17 Oct 2026). Off until the Vault
