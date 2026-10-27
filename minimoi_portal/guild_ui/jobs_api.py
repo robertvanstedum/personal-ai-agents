@@ -54,9 +54,6 @@ def job_command(found):
     if delegate is not None:
         if attachment_ids:
             return start_refusal("files_not_supported", "Delegated work cannot take attached files yet. Nothing was started.")
-        if delegate["agent"] != "claude-code":
-            return start_refusal("delegate_unavailable", "Codex can't take delegated work yet: there is no way to cap "
-                                 "its cost. Nothing was started. Ask Claude Code instead.")
         job, refusal = mgr.start(conv, principal, note, note_id, None, title=delegate["title"], agent=delegate["agent"])
         if refusal is not None:
             return start_refusal(*refusal)
@@ -101,8 +98,9 @@ def delegation_command(text):
     agent = "claude-code" if m.group("who").lower().startswith("claude") else "codex"
     who = "Claude Code" if agent == "claude-code" else "Codex"
     what = m.group("what").strip()
+    limit = "within 30 minutes" if agent == "codex" else "within a 2 USD cap"
     return {"agent": agent, "title": f"{who}: {what[:60]}",
-            "announce": (f"I've asked {who} to research this in a fresh, read-only copy of the repository. "
+            "announce": (f"I've asked {who} to research this in a fresh, read-only copy of the repository, {limit}. "
                          "It runs in the background on the Mac; I'll post its answer here when it's done. Say stop to cancel.")}
 
 

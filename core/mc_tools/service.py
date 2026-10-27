@@ -1072,8 +1072,9 @@ class ToolService:
         if not self.delegation:
             return refused("tool_unavailable")
         who = AGENT_NAMES[args["agent"]]
+        limit = "time limit 30 minutes" if args["agent"] == "codex" else "cost cap 2 USD"
         words = (f"Ask {who} to research your message (“{args['title']}”), read-only in a fresh copy of the "
-                 "repository, cost cap 2 USD? Your own message is the brief.")
+                 f"repository, {limit}? Your own message is the brief.")
         with self._tx() as conn:
             b = self._bind(conn, caller)
             return self._pending_tool_proposal(conn, b, "delegate_research", args,

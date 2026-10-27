@@ -793,7 +793,8 @@ def _platform_command(found):
     the guest-rejection phrases are not parsed at all and lessons are adopted only through MC's offer (A15)."""
     tools = _tools_own_actions(found[1])
     for command in (_owner_register_command, _owner_library_command, _owner_board_command, _owner_action_command,
-                    *(() if tools else (_owner_guest_command,)), _owner_lesson_command, _owner_tool_proposal_command):
+                    *(() if tools else (_owner_guest_command,)), _owner_lesson_command, _owner_tool_proposal_command,
+                    _owner_decision_command):
         result = command(found)
         if result is not None:
             return result
@@ -1319,6 +1320,24 @@ def _owner_tool_proposal_command(found):
         result = {"reply": "I could not complete that, and I cannot confirm its outcome. Do not repeat it yet; "
                            "I will check it.", "operation": {"type": "mc_tool_proposal", "state": "unknown"}}
     return _platform_outcome(floor, "mc-tool-" + note_id + "-reply", result, area="Guild")
+
+
+def _owner_decision_command(found):
+    """Robert answers a decision an agent asked (build supervision, #365) by naming it: "approve D-12" / "no D-12".
+    Only his own kept note counts; the platform records the receipt and says so. Off unless MINIMOI_SUPERVISION=1."""
+    from . import feature_environ
+    from . import supervision
+    if getattr(g, "topic_context", None):
+        return None
+    try:
+        result = supervision.owner_decision_command(found, environ=feature_environ())
+    except Exception:
+        _mc_log().exception("owner decision could not be recorded")
+        result = {"reply": "I could not record that answer, and I cannot confirm it was kept. Answer it on Telegram, "
+                           "or try again in a minute.", "operation": {"type": "owner_decision", "state": "unknown"}}
+    if result is None:
+        return None
+    return _platform_outcome(found[3], "owner-decision-" + found[5] + "-reply", result, area="Guild")
 
 
 def _start_proposed_research(found, proposal, scope="research"):
@@ -2492,6 +2511,13 @@ def _with_context(text: str, owner_text: str, conv, principal: str, *, current_v
                                                environ=feature_environ(), scrub=scrub)
             if awareness:
                 extra.append(awareness)
+    except Exception:
+        pass
+    try:
+        from . import supervision
+        waiting = supervision.context_block(principal, environ=feature_environ())
+        if waiting:
+            extra.append(waiting)
     except Exception:
         pass
     from . import feature_environ as _fe

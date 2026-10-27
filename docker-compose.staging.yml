@@ -216,6 +216,14 @@ services:
     environment:
       - MINIMOI_ROLE=standby
 
+  # The build supervisor (#365) answers to production's approvals bot: here it keeps production's opt-in profile and a
+  # standby role, so a staging stack never starts a second poller of the same bot.
+  supervisor:
+    image: minimoi-staging/portal:${MINIMOI_IMAGE_TAG:?run scripts/staging/build.sh}
+    pull_policy: never
+    environment:
+      - MINIMOI_ROLE=standby
+
 volumes:
   # Regenerable public cache only; unlike original state, Compose may create it.
   mc-observations:

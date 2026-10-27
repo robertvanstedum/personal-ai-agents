@@ -105,6 +105,7 @@ EXPECTED_PROD_MOUNTS = [
     ("portal", "/opt/minimoi/data/mc-lessons", "/app/data/mc-lessons"),
     ("portuguese", "/opt/minimoi/data/portuguese", "/app/domains/portuguese/data"),
     ("postgres", "postgres-data", "/var/lib/postgresql"),
+    ("supervisor", "/opt/minimoi/supervisor", "/run/secrets/supervisor"),
     ("system-bot", "/opt/minimoi/data/german", "/app/domains/german/data"),
     ("vault-ask", "/opt/minimoi/vault", "/vault"),
     ("vault-ask", "/opt/minimoi/vault-log", "/vault-log"),
@@ -120,7 +121,8 @@ IMAGE_MAP = {
     "cos-scheduler": ("cos-scheduler", ""), "cos-agent-a": ("cos-scheduler", "agent-a-"),
     "model-gateway": ("cos-scheduler", "model-gateway-"),
 }
-PYTHON_SERVICES = ("curator", "german", "portuguese", "portal", "system-bot", "cos-bot", "cos-scheduler", "vault-ask")
+PYTHON_SERVICES = ("curator", "german", "portuguese", "portal", "system-bot", "cos-bot", "cos-scheduler", "vault-ask",
+                   "supervisor")
 
 
 def _load(path):
@@ -350,6 +352,10 @@ def test_staging_override_uses_local_images_never_pulled():
     assert staging["vault-ask"]["pull_policy"] == "never"
     assert prod["vault-ask"]["profiles"] == ["vault"]
     assert "profiles" not in staging["vault-ask"]
+    # The supervisor polls production's approvals bot: staging keeps it behind its profile, never started by default.
+    assert staging["supervisor"]["image"] == staging["portal"]["image"]
+    assert staging["supervisor"]["pull_policy"] == "never"
+    assert prod["supervisor"]["profiles"] == ["supervisor"]
     for name, (repository, prefix) in IMAGE_MAP.items():
         service = staging[name]
         assert service["pull_policy"] == "never", name

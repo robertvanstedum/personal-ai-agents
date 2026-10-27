@@ -31,6 +31,9 @@ CHAT_MODEL=openclaw/mc-chat
 # MC's GitHub token: fine-grained, this repo only, Issues read/write (Robert makes it; runbook). Never printed.
 ISSUES_TOKEN_PARAM=/minimoi/production/mc_github_issues_token
 ISSUES_TOKEN_FILE=$MC_DIR/portal/github-issues-token
+# Build supervision (#365): the approvals bot's token (Robert makes it with BotFather) and its root-only copy.
+APPROVALS_TOKEN_PARAM=/minimoi/production/telegram_approvals_bot_token
+SUPERVISOR_DIR=$ROOT/supervisor
 TAG_ERE='^mc-agent-v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+(\.[A-Za-z0-9]+)*)?$'
 
 log() { echo "mc-container: $*"; }
@@ -196,7 +199,7 @@ switch() {
       set_env_keys MINIMOI_GUILD_CHAT cos MC_RUNTIME_URL "" MC_RUNTIME_CHAT_MODEL "" MC_RUNTIME_TOKEN "" \
                    MINIMOI_MC_TOOLS "" MINIMOI_MC_TOOLS_TOKEN_SHA256 "" MINIMOI_MC_DELEGATION "" \
                    MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256 "" MINIMOI_MC_WORKER_PUBLIC "" \
-                   MINIMOI_MC_TOOLS_TICKETS "" MINIMOI_MC_TOOLS_COMMENTS ""
+                   MINIMOI_MC_TOOLS_TICKETS "" MINIMOI_MC_TOOLS_COMMENTS "" MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256 ""
       ;;
     *) die "switch mc|cos";;
   esac
@@ -239,6 +242,67 @@ print("mc-container: issue comments", "on" if cfg and w.issue_commenter(cfg) els
       "| tickets", "on" if cfg and w.issue_filer(cfg) else "off")'
 }
 
+supervision() {
+  # Build supervision (#365; docs/runbooks/supervision.md). `on <sha256>`: project the approvals bot token from
+  # Parameter Store (root 0600, read-only in the supervisor), record the Mac sync token's HASH (the token itself is made
+  # and kept on the Mac), turn the portal's path on, start or recreate the supervisor on the portal's tag, redeploy the
+  # portal alone. `off`: stop the supervisor, clear both keys, remove the token copy. Run the migrations first.
+  local to="${1:-}" tag
+  tag=$(docker inspect --format '{{.Config.Image}}' minimoi-portal | sed 's/.*://')
+  [[ -n "$tag" ]] || die "cannot read the running portal tag"
+  local compose=(docker-compose --project-name minimoi -f "$ROOT/docker-compose.prod.yml")
+  case "$to" in
+    on)
+      local worker_sha="${2:-}"
+      [[ "$worker_sha" =~ ^[0-9a-f]{64}$ ]] || die "supervision on <sha256 of the Mac sync token>"
+      [[ "$(docker exec postgres-ai-agents psql -U postgres -d personal_agents -Atc \
+            "select to_regclass('guild.supervision_decisions') is not null")" == "t" ]] \
+        || die "supervision tables missing (mc_prod_db_migrate.sh apply first)"
+      install -d -m 0700 -o root -g root "$SUPERVISOR_DIR"
+      local tmp; tmp=$(mktemp "$SUPERVISOR_DIR/.token.XXXXXX")
+      aws ssm get-parameter --region us-east-1 --name "$APPROVALS_TOKEN_PARAM" --with-decryption \
+        --query Parameter.Value --output text > "$tmp" 2>/dev/null \
+        || { rm -f "$tmp"; die "cannot read $APPROVALS_TOKEN_PARAM from Parameter Store"; }
+      grep -qE '^[0-9]{5,15}:[A-Za-z0-9_-]{30,64}$' "$tmp" \
+        || { rm -f "$tmp"; die "$APPROVALS_TOKEN_PARAM is not a Telegram bot token"; }
+      chown root:root "$tmp"; chmod 0600 "$tmp"; mv -f "$tmp" "$SUPERVISOR_DIR/approvals-bot-token"
+      log "projected the approvals bot token into $SUPERVISOR_DIR (not printed)"
+      set_env_keys MINIMOI_SUPERVISION 1 MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256 "$worker_sha"
+      MINIMOI_IMAGE_TAG="$tag" "${compose[@]}" --profile supervisor up -d --no-deps supervisor
+      "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
+      ;;
+    off)
+      "${compose[@]}" --profile supervisor rm -sf supervisor || true
+      rm -f "$SUPERVISOR_DIR/approvals-bot-token"
+      set_env_keys MINIMOI_SUPERVISION "" MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256 ""
+      "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
+      ;;
+    status) ;;
+    *) die "supervision on <sha256>|off|status";;
+  esac
+  echo "supervision (.env): $(env_value "$MAIN_ENV" MINIMOI_SUPERVISION)"
+  echo "supervisor: $(docker inspect --format '{{.Config.Image}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' minimoi-supervisor 2>/dev/null || echo absent)"
+  docker logs --since 30m minimoi-supervisor 2>&1 | grep -E "check-in|supervisor up|decision" | tail -5 || true
+}
+
+runner() {
+  # The Mac delegation runner's door (#365): `on <sha256>` records the runner token's HASH (the token is made and
+  # kept in the Mac's Keychain by install_delegation_runner.sh) and redeploys the portal alone; `off` clears it.
+  local to="${1:-}" tag
+  tag=$(docker inspect --format '{{.Config.Image}}' minimoi-portal | sed 's/.*://')
+  [[ -n "$tag" ]] || die "cannot read the running portal tag"
+  case "$to" in
+    on)
+      [[ "${2:-}" =~ ^[0-9a-f]{64}$ ]] || die "runner on <sha256 of the Mac runner token>"
+      [[ "$(env_value "$MAIN_ENV" MINIMOI_MC_DELEGATION)" == 1 ]] || die "delegation is off (switch mc first)"
+      set_env_keys MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256 "$2" ;;
+    off) set_env_keys MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256 "" ;;
+    *) die "runner on <sha256>|off";;
+  esac
+  "$ROOT/scripts/deploy_scoped_release.sh" "$tag" portal
+  docker logs --since 5m minimoi-portal 2>&1 | grep -E "delegation: runner door" | tail -1 || true
+}
+
 collect() {
   test -f "$MC_DB_DIR/openclaw-agent.sqlite" || { log "no MC records yet; nothing to collect"; return 0; }
   local copy; copy=$(mktemp -d /root/mc-judgment-copy.XXXXXX)
@@ -256,5 +320,7 @@ case "${1:-}" in
   collect) collect;;
   approve-policy) approve_policy "${2:-}";;
   issues) issues "${2:-}";;
-  *) echo "usage: $0 deploy <mc-agent-vX.Y.Z> | status | switch mc|cos | collect | approve-policy \"<words>\" | issues on|off" >&2; exit 2;;
+  supervision) supervision "${2:-}" "${3:-}";;
+  runner) runner "${2:-}" "${3:-}";;
+  *) echo "usage: $0 deploy <mc-agent-vX.Y.Z> | status | switch mc|cos | collect | approve-policy \"<words>\" | issues on|off | supervision on <sha256>|off|status | runner on <sha256>|off" >&2; exit 2;;
 esac

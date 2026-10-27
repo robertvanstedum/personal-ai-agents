@@ -297,7 +297,15 @@ services:
       - MINIMOI_MC_DELEGATION=${MINIMOI_MC_DELEGATION:-0}
       - MINIMOI_MC_DELEGATION_ENV=prod
       - MINIMOI_MC_DELEGATION_PRINCIPAL=robert
+      # The Mac delegation runner's HTTPS door (no database port): on with its token hash, set by
+      # `deploy_mc_container_ec2.sh runner on <sha256>`.
+      - MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256=${MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256:-}
       - MINIMOI_MC_AGENT_ENROLLMENT=/run/secrets/mc/enrollment.json
+      # Build supervision (#365; docs/runbooks/supervision.md): the Mac sync's path, Robert's "approve D-n" in the
+      # Guild chat and MC's "waiting on you" context. Off until `supervisor_ec2.sh on` sets both keys in .env.
+      - MINIMOI_SUPERVISION=${MINIMOI_SUPERVISION:-0}
+      - MINIMOI_SUPERVISION_OWNER=robert
+      - MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256=${MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256:-}
       - MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256=${MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256:-}
       - MINIMOI_MC_APPROVED_HANDOFF_REGISTRY=/run/secrets/mc/approved-handoff-registry.json
       - MINIMOI_MC_TASK_WATCH_REGISTRY=/run/secrets/mc/task-watch-registry.json
@@ -451,6 +459,42 @@ services:
   # so ordinary releases never create it until activation sets COMPOSE_PROFILES=vault.
   # Same portal image (the repository copy); no sqlite-vec, so meaning search reports
   # vector_unavailable. Reachable only on the internal network, never published.
+  # The build supervisor (#365): check-ins every 15 min, decisions to Robert on the approvals bot, his replies back
+  # with receipts. The portal image, its own command (like vault-ask); started only by `supervisor_ec2.sh on`, then
+  # recreated with each portal release. Reads the database and the public GitHub API; holds only the approvals bot
+  # token (a root 0600 file projected from Parameter Store, never in .env).
+  supervisor:
+    profiles: [supervisor]
+    image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}
+    container_name: minimoi-supervisor
+    restart: unless-stopped
+    command: [python, -m, services.supervisor.main]
+    environment:
+      - MINIMOI_ROLE=production
+      - PYTHONDONTWRITEBYTECODE=1
+      - DATABASE_URL=${DATABASE_URL:-}           # the portal's own, from /opt/minimoi/.env (start refuses an empty one)
+      - TELEGRAM_CHAT_ID=8379221702
+      - TELEGRAM_APPROVALS_BOT_TOKEN_FILE=/run/secrets/supervisor/approvals-bot-token
+      - SUPERVISOR_CHECKIN_MINUTES=15
+      - TZ=America/Chicago
+    volumes:
+      - ${MINIMOI_ROOT:-/opt/minimoi}/supervisor:/run/secrets/supervisor:ro
+    depends_on:
+      - postgres
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    mem_limit: 192m
+    cpus: 0.25
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      # Alive when a tick finished in the last 3 minutes (a Telegram long poll is 25 s).
+      test: [CMD, python, -c, "import os,time,sys; sys.exit(0 if time.time()-os.path.getmtime('/tmp/supervisor.alive')<180 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
   vault-ask:
     profiles: [vault]
     image: 332704997792.dkr.ecr.us-east-1.amazonaws.com/minimoi/portal:${MINIMOI_IMAGE_TAG:-latest}

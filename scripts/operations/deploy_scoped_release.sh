@@ -207,6 +207,13 @@ if [[ " ${SERVICES[*]} " == *" portal "* ]] && docker container inspect minimoi-
   "${COMPOSE[@]}" --profile vault up -d --no-deps vault-ask
   VAULT_RECREATED=1
 fi
+# The build supervisor (#365) also runs the portal image (profile `supervisor`); same rule as the Vault: once
+# activated by supervisor_ec2.sh, a portal release recreates it on the same tag.
+SUPERVISOR_RECREATED=0
+if [[ " ${SERVICES[*]} " == *" portal "* ]] && docker container inspect minimoi-supervisor >/dev/null 2>&1; then
+  "${COMPOSE[@]}" --profile supervisor up -d --no-deps supervisor
+  SUPERVISOR_RECREATED=1
+fi
 # Agent A and Curator have been recreated (or were never stopped); nothing to restart now.
 AGENT_A_STOPPED=0
 CURATOR_STOPPED=0
@@ -291,6 +298,13 @@ if [[ "$VAULT_RECREATED" == "1" ]]; then
   [[ "$(docker inspect --format='{{.State.Running}}' minimoi-vault-ask)" == "true" ]] || { echo "minimoi-vault-ask is not running"; exit 1; }
   wait_for_container_health minimoi-vault-ask 24
   echo "vault-ask: recreated on $actual and healthy"
+fi
+
+if [[ "$SUPERVISOR_RECREATED" == "1" ]]; then
+  actual=$(docker inspect --format='{{.Config.Image}}' minimoi-supervisor)
+  [[ "$actual" == "$(expected_image portal)" ]] || { echo "minimoi-supervisor uses $actual; expected $(expected_image portal)"; exit 1; }
+  wait_for_container_health minimoi-supervisor 24
+  echo "supervisor: recreated on $actual and healthy"
 fi
 
 /opt/minimoi/scripts/install_lesen_refresh_cron.sh

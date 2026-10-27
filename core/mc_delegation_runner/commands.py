@@ -23,7 +23,10 @@ def argv(actor: str, scope: str, brief: str, task_dir: Path) -> list[str]:
     prompt = PREAMBLE + brief
     if actor == "codex":
         sandbox = "read-only" if scope == "research" else "workspace-write"
-        return ["codex", "exec", "--sandbox", sandbox, "--cd", str(task_dir), "--skip-git-repo-check", prompt]
+        # --ignore-user-config: none of the Mac user's Codex settings, MCP servers or model choice (his configured
+        # model needs a newer CLI, 26 Oct); --json: events, from which the answer is read (dispatcher_adapter.readable).
+        return ["codex", "exec", "--sandbox", sandbox, "--cd", str(task_dir), "--skip-git-repo-check", "--ephemeral",
+                "--ignore-user-config", "--json", "--color", "never", prompt]
     if actor == "claude-code":
         if scope == "research":
             # Read-only tools only, and nothing to approve: plan mode would end in a plan-approval call that

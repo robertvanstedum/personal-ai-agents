@@ -16,6 +16,8 @@ from .store import LEASE_SECONDS, DispatcherStore
 _log = logging.getLogger("mc_delegation")
 
 DELEGATE_AGENTS = ("claude-code", "codex")
+# Codex runs on Robert's plan: research only, 30 minutes per job (Robert, 26 Oct; raise it here when he says so).
+CODEX_SCOPES, CODEX_DEADLINE_S = ("research",), 30 * 60
 _MAP = {"queued": "running", "claimed": "running", "running": "running", "completed": "completed",
         "cancelled": "stopped", "failed": "failed", "refused": "failed", "timed_out": "failed",
         "output_limit": "failed", "interrupted": "failed"}
@@ -40,11 +42,14 @@ class DelegationRelay:
         try:
             # A job names its scope: research by default; build only from Robert's confirmed build proposal.
             scope = spec.get("scope") or self.scope
-            if scope not in ("research", "build"):
+            if scope not in ("research", "build") or (agent == "codex" and scope not in CODEX_SCOPES):
                 return "refused", {"reason": "scope_invalid"}
+            deadline_s = spec.get("deadline_s") or 1800
+            if agent == "codex":
+                deadline_s = min(deadline_s, CODEX_DEADLINE_S)
             outcome = self.store.enqueue(job_id=spec["job_id"], actor=agent, scope=scope, repository=self.repository,
                                          ref=ref, brief=spec["task"], cost_cap_usd=self.cost_cap,
-                                         deadline_s=spec.get("deadline_s") or 1800)
+                                         deadline_s=deadline_s)
         except Exception:
             return "ambiguous", {"reason": "dispatcher_unavailable"}
         return outcome, {}
