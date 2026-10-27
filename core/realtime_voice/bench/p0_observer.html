@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 0 — German voice timings</title>
+<style>
+  body { font: 15px/1.45 system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; color: #1c1917; }
+  button, select, input { font: inherit; }
+  button { margin-right: .5rem; }
+  #status { font-weight: 600; }
+  #out { white-space: pre-wrap; background: #f5f5f4; padding: 1rem; }
+  .note { color: #57534e; }
+</style>
+</head>
+<body>
+<h1>Phase 0 timings</h1>
+<p class="note">Loads the shared voice controller unchanged, the same one German uses. Records times only. Nothing said is shown or stored. Open this page on the German origin while signed in, one session per provider, with the persona and scene you use on Gespräche.</p>
+<p>
+  <label>Provider <select id="provider"><option value="openai">OpenAI</option><option value="xai">Grok Voice</option></select></label>
+  <label>Persona <input id="persona" value="maria" size="16"></label>
+  <label>Scene <input id="scene" value="cafe" size="16"></label>
+</p>
+<p>
+  <button id="start" type="button">Start</button>
+  <button id="end" type="button" hidden>End</button>
+  <button id="copy" type="button">Copy timings</button>
+</p>
+<p id="status">Idle.</p>
+<ol id="script"></ol>
+<pre id="out">No session yet.</pre>
+<script type="module">
+import { RealtimeVoiceController } from "/static/realtime-voice/realtime-voice-controller.js?v=20260809-ga1";
+import { attachObserver, publicRecord, sessionRecord } from "./p0_observer.js";
+
+const SCRIPT = [
+  "A work question in English.",
+  "One sentence with a deliberate one-second pause inside it. Pass when this thought is exactly one committed turn.",
+  "A German sentence.",
+  "After that German sentence, an English work question. Pass when the reply comes back in English.",
+  "A mixed sentence with one German word.",
+  "An interruption mid-reply.",
+  "We're done.",
+];
+document.querySelector("#script").append(...SCRIPT.map(line => {
+  const item = document.createElement("li");
+  item.textContent = line;
+  return item;
+}));
+
+const statusEl = document.querySelector("#status");
+let controller = null;
+let session = null;
+let last = null;
+
+function render(ended) {
+  last = publicRecord(session, ended);
+  document.querySelector("#out").textContent = JSON.stringify(last, null, 2);
+}
+
+document.querySelector("#start").addEventListener("click", async () => {
+  const provider = document.querySelector("#provider").value;
+  const persona = document.querySelector("#persona").value.trim();
+  const scene = document.querySelector("#scene").value.trim();
+  session = sessionRecord(provider, persona, scene);
+  controller = new RealtimeVoiceController({
+    bootstrapUrl: "/api/realtime-voice/bootstrap",
+    onStateChange(state) {
+      statusEl.textContent = state;
+      document.querySelector("#end").hidden = state === "idle" || state === "ended";
+    },
+    onFatalError(info) {
+      statusEl.textContent = `Error: ${info.reason || "unknown"}`;
+    },
+    onFinalize(result) {
+      render({ partial: Boolean(result.partial), provider: result.provider || provider });
+    },
+  });
+  attachObserver(controller, session);
+  const counted = controller._onUserTurn;
+  controller._onUserTurn = () => {
+    session.committedUserTurns += 1;
+    counted("");
+    render(null);
+  };
+  await controller.startSession({ provider, persona, scene });
+});
+
+document.querySelector("#end").addEventListener("click", () => controller?.endSession("user_ended"));
+document.querySelector("#copy").addEventListener("click", async () => {
+  if (!last) return;
+  await navigator.clipboard.writeText(JSON.stringify(last, null, 2));
+  statusEl.textContent = "Timings copied.";
+});
+</script>
+</body>
+</html>
