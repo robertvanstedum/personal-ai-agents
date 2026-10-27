@@ -46,7 +46,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 ALTER TABLE guild.mc_tool_proposals DROP CONSTRAINT IF EXISTS mc_tool_proposals_kind_check;
 ALTER TABLE guild.mc_tool_proposals ADD CONSTRAINT mc_tool_proposals_kind_check
     CHECK (kind IN ('lesson', 'guest_reject', 'guest_reject_batch', 'issue_comment', 'data_repair',
-                    'delegate_research', 'access_invite'));
+                    'delegate_research', 'access_invite')) NOT VALID;  -- re-run safe: a later migration's list (020) validates existing rows
 
 -- Activation drain (spec §9.1): pending offers from before this deploy, in the tool and guest registers, are
 -- closed as history. The lesson register is a file ledger; the code drains it at its first read (M1.2b).
