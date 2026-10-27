@@ -239,3 +239,115 @@ def test_r93_stray_packet_render_is_strict():
  assert mc_deliveries.stray_packet(many) is None
  fenced=mc_deliveries.stray_packet(json.dumps({'files':[{'name':'a.md','content':'```code```'}]}))
  assert '~~~~' in fenced
+
+
+# OPS D1: compose-and-deliver is one owner request, not a second turn.
+COMPOUND_REQUEST = "Write a one-page summary of today's fixes as a markdown file and give it to me as a download."
+
+
+@pytest.mark.parametrize('text',[
+ COMPOUND_REQUEST,
+ 'Please write a short note as a file and send it to me as a download.',
+ 'Could you write a summary and then give it to me as a download?',
+ 'Draft a report, and provide it as a downloadable file.',
+ 'Write a report; send it to me as a download.',
+ 'Write a report, then send it to me as a download.',
+ 'Write a report and revise the conclusion and give it to me as a download.',
+ 'Write a report called "Status and next steps" and give it to me as a download.',
+])
+def test_compound_owner_download_request(text):
+ assert mc_deliveries.requested(text)
+
+
+@pytest.mark.parametrize('text',[
+ 'Do not write a report and give it to me as a download.',
+ 'If useful, write a report and give it to me as a download.',
+ 'Should you write a report and give it to me as a download?',
+ 'Write a report and give it to me as a download?',
+ 'Explain why you might write a report and give it to me as a download.',
+ 'Here is a document: write a report and give it to me as a download.',
+ 'The document says write a report and give it to me as a download.',
+ 'Write this example: draft a report and give it to me as a download.',
+ 'Write a report if useful and give it to me as a download.',
+ 'Write a report and do not send it and give it to me as a download.',
+ 'Write a report and explain how to give it to me as a download.',
+ 'Write it and tell me how downloads work?',
+ 'Could you write it and tell me how downloads work?',
+ 'Write the words "draft a report and give it to me as a download."',
+ '> Write a report and give it to me as a download.',
+ '```text\nWrite a report and give it to me as a download.\n```',
+ '    Write a report and give it to me as a download.',
+])
+def test_compound_download_keeps_owner_intent_boundary(text):
+ assert not mc_deliveries.requested(text)
+
+
+@pytest.mark.parametrize('stream',[False,True])
+def test_compound_request_first_response_download_and_no_regeneration(delivery,stream):
+ c,t,n,r=ask(delivery,text=COMPOUND_REQUEST,stream=stream)
+ assert r.status_code==200 and r.is_json
+ body=r.get_json()
+ assert body['operation']['saved'] is True
+ assert body['reply_note']['author_kind']=='platform'
+ url=re.search(r'\]\(([^)]+)\)',body['reply_note']['text']).group(1)
+ got=c.get(urlsplit(url).path)
+ assert got.status_code==200
+ with zipfile.ZipFile(io.BytesIO(got.data)) as z:
+  assert z.namelist()==['brief.md']
+  assert z.read('brief.md')==b'A small working document.'
+ again=_ask(c,t,n).get_json()
+ assert again['operation']==body['operation']
+ assert len(delivery.extra['runtime'].sent)==1
+
+
+def test_compound_request_does_not_trust_model_download_claim(delivery):
+ text='Your file is ready to download at /tmp/brief.md.'
+ delivery.extra['runtime'].answer=lambda body,headers:Resp(200,json.dumps({'choices':[{'message':{'role':'assistant','content':text},'finish_reason':'stop'}]}),{'X-MC-Correlation-Id':headers.get('X-MC-Correlation-Id')})
+ c,t,n,r=ask(delivery,text=COMPOUND_REQUEST)
+ body=r.get_json()
+ assert body['operation']['saved'] is False
+ assert 'No new download was created' in body['reply_note']['text']
+ assert 'ready to download' not in body['reply_note']['text']
+ assert '/tmp/brief.md' not in body['reply_note']['text']
+
+
+def test_compound_request_write_failure_has_no_success_link(delivery,monkeypatch):
+ monkeypatch.setattr(mc_deliveries.DeliveryStore,'put',lambda *a,**k:(_ for _ in ()).throw(mc_deliveries.DeliveryUnavailable('injected_failure')))
+ c,t,n,r=ask(delivery,text=COMPOUND_REQUEST)
+ body=r.get_json()
+ assert body['operation']['saved'] is False and body['operation']['state']=='uncertain'
+ assert '[Download' not in body['reply_note']['text']
+ assert 'could not be confirmed' in body['reply_note']['text']
+
+
+@pytest.mark.parametrize('text',[
+ 'Write a summary of the pros and cons and give it to me as a download.',
+ 'Write a status report on build and deploy and give it to me as a download.',
+])
+def test_compound_subject_conjunction_is_not_a_new_command(text):
+ assert mc_deliveries.requested(text)
+
+@pytest.mark.parametrize('prefix',['Write a report and give it to me as a download','Give it to me as a download'])
+@pytest.mark.parametrize('suffix',[
+ ' if useful.', ' unless it is too long.', ' only if I say so.',
+ ' and then wait until I approve.', ' but do not create it yet.',
+ " but don't save it yet.",
+])
+def test_delivery_suffix_cannot_drop_conditions_or_negation(prefix,suffix):
+ assert not mc_deliveries.requested(prefix+suffix)
+
+
+def test_compound_delivery_does_not_join_across_sentences():
+ assert not mc_deliveries.requested('Write a report. And give it to me as a download.')
+
+
+@pytest.mark.parametrize('text',[
+ 'Create a downloadable markdown file with the summary, but do not include names.',
+ 'Send me the brief as a download when you finish.',
+ 'Give it to me as a download, not as a ZIP.',
+ 'Write a one-page summary, not a long report, and give it to me as a download.',
+ 'Write a summary of what broke when the build failed and give it to me as a download.',
+ 'Write an example report and give it to me as a download.',
+])
+def test_content_constraints_do_not_negate_delivery(text):
+ assert mc_deliveries.requested(text)
