@@ -108,11 +108,12 @@ def test_a_malformed_or_unverified_private_question_sends_nothing(turned, case):
     _nothing_written(turned)
 
 
-def test_payment_details_are_removed_before_the_text_leaves(turned):
+def test_the_owners_private_words_reach_mc_as_written(turned):
+    """The owner's input is not edited (#406, Robert 26 Oct)."""
     client = turned.owner()
     token = turned.csrf(client)
     _private(client, token, text="my card is 5555 5555 5555 4444 please remember")
-    assert "5555 5555 5555 4444" not in turned.extra["runtime"].sent[0]["body"]["messages"][0]["content"]
+    assert "5555 5555 5555 4444" in turned.extra["runtime"].sent[0]["body"]["messages"][0]["content"]
 
 
 def test_a_reply_that_proposes_a_job_is_replaced_by_one_plain_sentence_and_no_job_starts(floored):

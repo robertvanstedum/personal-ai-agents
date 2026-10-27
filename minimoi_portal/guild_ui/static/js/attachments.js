@@ -209,14 +209,17 @@ export function initAttachments(page) {
   // Paste an image into the composer; a text paste over the message limit becomes a .txt file in the tray.
   const composer = $('[data-mc-input]');
   if (composer) composer.addEventListener('paste', (e) => {
+    // Word (and most editors) put a picture of the selection on the clipboard beside its text. Text wins: the picture
+    // is taken only when there is no text, as with a screenshot (#407).
+    const pasted = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
     const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter((f) => f.type.startsWith('image/'));
-    if (files.length) {
+    if (files.length && !pasted.trim()) {
       if (live.off) return;
       e.preventDefault();
       take(files);
       return;
     }
-    const long = longPasteFile(e.clipboardData ? e.clipboardData.getData('text/plain') : '',
+    const long = longPasteFile(pasted,
       { noteMax: page.note_max, docCap, docChars: page.attach && page.attach.doc_chars, off: live.off });
     if (!long) return;
     e.preventDefault();

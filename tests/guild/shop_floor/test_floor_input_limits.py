@@ -99,20 +99,12 @@ def test_a_post_it_the_scrub_makes_too_long_is_a_422_not_an_outage(floored):
     assert client.get(f"{API}/floor").get_json()["postits"]["state"] == "ok"   # the store is fine
 
 
-def test_a_note_the_scrub_makes_too_long_is_a_422(floored):
+def test_the_owners_note_is_kept_as_he_wrote_it(floored):
     client = floored.owner()
     token = floored.csrf(client)
-    text = " ".join(f"w a{n}@ex.io" for n in range(400))[:2000]
+    text = "Chicago, IL • (408) 507-4486 • robert.vanstedum@gmail.com • LinkedIn"
     response = client.post(f"{API}/notes", json=keyed(text=text), headers=write_headers(token))
-    assert response.status_code == 422 and "too long after removing payment details" in response.get_json()["message"]
-
-
-def test_adjacent_removals_read_as_one(floored):
-    client = floored.owner()
-    token = floored.csrf(client)
-    text = " ".join(f"a{n}@ex.io" for n in range(10))
-    body = client.post(f"{API}/postits", json=keyed(text=text), headers=write_headers(token)).get_json()
-    assert body["postit"]["text"] == REMOVED
+    assert response.status_code == 200 and response.get_json()["note"]["text"] == text
 
 
 def test_receipt_keys_belong_to_the_platform(floored):

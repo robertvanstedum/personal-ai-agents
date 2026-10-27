@@ -126,13 +126,14 @@ def test_nonliteral_note_refused_before_write(ready):
     assert not r.notes.rows
 
 
-def test_spoken_note_uses_normal_note_redaction_before_persistence(ready):
+def test_spoken_note_is_kept_as_spoken_like_a_typed_note(ready):
+    """The owner's input is not edited (#406, Robert 26 Oct)."""
     r=ready;s,_=start(r)
     original='Keep this reminder: card 4242 4242 4242 4242'
     with ThreadPoolExecutor(max_workers=1) as worker:
         worker.submit(s.dispatch,'consult_cos_agent',original,'c-123456abcdef','redacted-operation').result()
     kept=r.notes.rows['redacted-operation']['text']
-    assert '4242' not in kept and kept!=original
+    assert kept==original
     assert r.calls[0]['note']['text']==kept
 
 def test_literal_job_command_uses_existing_boundary_without_native(ready,monkeypatch):

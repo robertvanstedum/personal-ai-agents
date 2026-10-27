@@ -79,13 +79,15 @@ def test_scrub_is_fast_on_hostile_input(text):
 
 
 def test_payment_details_never_reach_a_row_a_log_an_answer_or_a_page(floored, caplog):
+    """Post-its and context fields keep the scrub. A note's own text is the owner's input and is kept as he wrote
+    it (#406, Robert 26 Oct): see test_the_owners_note_is_kept_but_never_logged."""
     db = floored.extra["floor"]
     client = floored.owner()
     token = floored.csrf(client)
     answers = []
     with caplog.at_level(logging.DEBUG):
         for n, text in enumerate(SYNTHETIC):
-            note = client.post(f"{API}/notes", json=keyed(text=f"paid with {text} today",
+            note = client.post(f"{API}/notes", json=keyed(text="paid today",
                                                           context={"area": f"Build {text}", "page": text}),
                                headers=write_headers(token))
             assert note.status_code == 200, note.get_json()
@@ -104,6 +106,19 @@ def test_payment_details_never_reach_a_row_a_log_an_answer_or_a_page(floored, ca
         for bit in ("4242 4242", "billing@example.com", "021000021", "GB82 WEST"):
             assert bit not in hay, (where, bit)
     assert REMOVED in stored
+
+
+def test_the_owners_note_is_kept_but_never_logged(floored, caplog):
+    db = floored.extra["floor"]
+    client = floored.owner()
+    token = floored.csrf(client)
+    with caplog.at_level(logging.DEBUG):
+        for text in SYNTHETIC:
+            note = client.post(f"{API}/notes", json=keyed(text=f"paid with {text} today"), headers=write_headers(token))
+            assert note.status_code == 200 and note.get_json()["note"]["text"] == f"paid with {text} today"
+    stored = db.all_text()
+    for text in SYNTHETIC:
+        assert f"paid with {text} today" in stored and text not in caplog.text, _id(text)
 
 
 # ── Re-check at 3d75415e, R1: full card numbers must never survive ───────────

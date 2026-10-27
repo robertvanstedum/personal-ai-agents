@@ -297,14 +297,15 @@ def test_a_new_boundary_code_is_used_for_every_turn(turned):
     assert len(codes) == 4
 
 
-def test_payment_details_in_a_file_are_scrubbed_like_a_note(turned):
+def test_the_owners_file_reaches_mc_as_written(turned):
+    """His résumé lost its email to the payment scrub (#406, Robert 26 Oct): his own files are not edited."""
     client = turned.owner()
     token = turned.csrf(client)
     cid = _new(client, token)
     doc = _doc(client, token, cid, f"Invoice paid with card {CARD}, thanks.", "inv.txt")
     _ask(client, token, _note(client, token, cid)["request_id"], cid, [doc])
     content = _sent(turned)
-    assert CARD not in content and "5555" not in content and "Invoice paid with card" in content
+    assert f"Invoice paid with card {CARD}, thanks." in content
 
 
 # ── explicit association: nothing is sent for an id that is not this conversation's ──
