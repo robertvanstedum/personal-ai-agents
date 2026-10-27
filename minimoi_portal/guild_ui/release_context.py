@@ -18,7 +18,11 @@ DEV_CONTAINERS={s:'minimoi-'+s for s in sorted(SERVICES)}|{'board':'minimoi-boar
 LOCAL_IMAGE=re.compile(r'[A-Za-z0-9][A-Za-z0-9._:/@-]{0,159}\Z')
 ROLES={'board':'Board API','cos-bot':'separate legacy bot container; not the agent or scheduler',
        'cos-agent-a':'CoS agent','cos-scheduler':'CoS scheduler','model-gateway':'model gateway'}
-WANTED=re.compile(r"\b(?:deploy(?:ed|ment|ments)?|releas(?:e[ds]?|ing)|versions?|rollouts?)\b|\bwhat(?:'s| has| have)?\s+changed\b.*\b(?:minimoi|platform|production)\b",re.I)
+# "prod" counts like "production": Robert's own 27 Oct question ("what changed in prod in the last 48 hours") never
+# loaded these facts, so MC answered from stale sources (#403).
+WANTED=re.compile(r"\b(?:deploy(?:ed|ment|ments)?|releas(?:e[ds]?|ing)|versions?|rollouts?)\b"
+                  r"|\b(?:changed|changes|shipped|running|live)\b[^.?!\n]{0,80}\b(?:minimoi|platform|production|prod)\b"
+                  r"|\b(?:production|prod)\b[^.?!\n]{0,80}\b(?:changed|changes|shipped|running)\b",re.I)
 UPDATE_QUESTION=re.compile(r'\A(?=.*\b(?:guild|minimoi|platform|plattform|dev|board)\b)(?=.*(?:\b(?:updates?|changed|changes|geändert|änderungen|aktualisiert|bereitgestellt)\b|\b(?:what|was|gibt|ist)\b.{0,60}\b(?:new|neu|neues)\b))',re.I|re.S)
 IMAGE=re.compile(r'332704997792\.dkr\.ecr\.us-east-1\.amazonaws\.com/minimoi/(?:portal|curator|mein-deutsch|portuguese|system-bot|cos-bot|cos-scheduler):[a-z0-9.-]{1,80}\Z')
 

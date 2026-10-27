@@ -22,6 +22,22 @@ def test_unrequested_question_does_not_read_anything():
     calls=[]
     assert C.block('Tell me about my Board notes',loader=lambda:calls.append(1),now=NOW)==''
     assert calls==[]
+@pytest.mark.parametrize('question',[
+    'Walk me through everything that changed in prod in the last 48 hours, with a short section per area.',
+    "What's running in prod right now?",
+    'What changed in production in the last 48 hours?',
+    'What shipped to prod today?',
+    'Is the fix live in prod?'])
+def test_prod_and_production_questions_load_release_facts(question):
+    calls=[]
+    C.block(question,loader=lambda:calls.append(1) or doc(),now=NOW)
+    assert calls==[1], question
+@pytest.mark.parametrize('question',['I produced a report about my Board notes','Tell me about my Board notes',
+                                     'The product changed its name'])
+def test_unrelated_words_do_not_load_release_facts(question):
+    calls=[]
+    assert C.block(question,loader=lambda:calls.append(1),now=NOW)==''
+    assert calls==[], question
 def test_release_question_gets_timestamp_actual_images_and_limits():
     result=C.block('What version is deployed?',loader=doc,now=NOW)
     assert 'requested_image_tag=aaaaaaa'in result and 'actual_image='+W.expected('portal','a'*7)in result
