@@ -1,160 +1,275 @@
-# MC voice in Conversation mode on the shared voice utility: specification v0.1
+# MC voice in Conversation mode on the shared voice utility: specification v0.2
 
-**27 October 2026 · Grok for Robert · INIT-2026-0010 · GitHub issue #420**
+**27 October 2026 · Claude Code for Robert (v0.1 by Grok) · INIT-2026-0010 · GitHub issue #420 · PR #421**
 
-**Status: draft v0.1 for review; authorizes no build.** Reviews, in order: Claude Code, Codex, Claude chat, Robert. Robert's yes starts code, and the first code is the bench. This file authorizes no container, credential, deploy, model call, merge, or production flag.
+**Status: near-final draft v0.2 for Claude chat's review, then Robert's; authorizes no build.** Robert's yes starts
+code, and the first code is the German baseline measurement and the standalone bench. This file authorizes no
+container, credential, deploy, production flag, merge or provider call.
 
-v0.1 follows Claude Code's review of the trial design note (`REVIEW_claude-code_spec.md` in the trial folder) and his decision that Grok Voice on the tool-using path is part of this build (`coordination/CC_04_decision_xai_controlled_provider.md`). The amendment to the shared voice standard is a separate edit of `spec_shared_voice_interaction_standard_2026-08-15.md`. This spec uses that amendment. It does not restate it.
+v0.2 replaces v0.1. It folds in, in this order of authority:
+1. **Robert's binding decision** (`coordination/ROBERT_DECISION_spec164_reuse_and_rollout.md`): German's working voice
+   code is the base; extend it; no fourth voice implementation; standalone first, then MC and CoS, then back to
+   German with no degradation. Robert's words: "German is the code base, extend and expand ... I don't want a 4th
+   version of voice."
+2. **Codex's review** (`REVIEW_codex_spec164.md`, C1–C7).
+3. **Claude Code's reviews** (`REVIEW_claude-code_spec164.md`, `REVIEW_claude-code_spec164_r2.md`).
+4. Robert's earlier decisions: Grok Voice on the tool-using path (CC_04); the spec amendment (CC_01a); four reviews
+   before code (CC_01a).
 
-`file:line` references are to `main` at `85fa56f9965110d040ad76caf706256b6a224967`, for checking only.
+The biggest change from v0.1: **MC voice uses German's own direct voice path for both providers**, extended with
+tools through the browser function bridge that the shared controller already has. v0.1's server-held xAI provider,
+and most of the transport and billing work Codex found it would need (C1, C2), are no longer required. §3 explains
+why, and the one trust decision it rests on.
+
+The amendment to `spec_shared_voice_interaction_standard_2026-08-15.md` is the companion commit in PR #421 and is
+not restated here. `file:line` references are to `main` at `85fa56f9965110d040ad76caf706256b6a224967`.
 
 ## In plain words
 
-Master Craftsman should be someone Robert can talk with, anywhere and every day. Voice is a utility the domains share. Domains do not each rebuild it.
+Master Craftsman should be someone Robert can just talk with, on the Mac or the phone, every day. Robert's German
+conversations already feel right. So MC's voice becomes **the German voice, extended**: the same code, the same
+turn-taking and interruption, the same OpenAI or Grok Voice choice. What MC adds is the ability to check with the
+real Master Craftsman agent mid-conversation ("let me check that"), his own voice and manner, and a short summary
+at the end.
 
-Today the live MC voice cuts him off on a pause, shows text while he is still talking, and lags. The live-voice host that already behaves correctly does not install, because production MC is the OpenClaw container and that host only installs for the old CoS kind.
-
-What he gets when this is built:
-
-- **Voice** is a live conversation. A one-second pause does not send anything. He can interrupt. He sees no running transcript. When voice ends, the turns land in the conversation. When he says he is done, he gets a short summary and confirms it in writing.
-- **Dictate** stays as it is. He starts and stops it. Silence never sends. The text lands in the box for him to edit.
-- He can choose **OpenAI or Grok Voice** for that conversation, including when the voice is consulting Master Craftsman. A later provider joins the same way.
-- Master Craftsman keeps **one voice** wherever he appears, including the floating panel on German, Portuguese, Curator, and the other domains. Chief of Staff keeps her own voice. Practice personas and domain pages keep theirs.
-- He can try the voice on a **local bench** before any of this is wired into MC.
+What Robert gets:
+- **Voice** is a live conversation. A one-second pause sends nothing. He can interrupt. No running text on screen.
+  When voice ends, the conversation shows what was said. When he says he is done, MC gives a short summary of this
+  session, which Robert confirms or corrects in writing.
+- **Dictate** stays as it is: he starts and stops it, silence never sends, the text lands in the box to edit.
+- **OpenAI or Grok Voice**, including when MC is checking with the agent.
+- **MC sounds like MC everywhere** he appears, including the floating panel on German, Portuguese and the other
+  domains. CoS keeps her own voice. German's practice personas keep theirs.
+- **A standalone test page first**, on the Mac, before MC changes, so he hears it early.
+- **German improves last**, only once proven, and only if nothing gets worse.
 
 **Honest limits.**
-
-- The bench does not write a note, a file, or a conversation. Turns on the bench die when the page reloads.
-- A phone test needs HTTPS. The first bench session is on the Mac. The phone test is Robert's, later, before anyone proposes production.
-- Voice ids are chosen by ear on the bench. This spec does not pick `marin`, `eve`, or any other name as Master Craftsman's voice.
-- Chief of Staff's voice does not change. Her provider choice becomes available. Her default stays.
-- Curator does not gain a domain voice.
-- This spec does not deploy, and it does not turn the production flag on.
+- The standalone page writes nothing; its turns vanish on reload.
+- The phone needs HTTPS, so phone tests come at the dev stage. Robert does the phone test before any production
+  proposal; no agent claims it.
+- Voices are picked by ear. No prompt guarantees a stable Austrian accent; the audition is the test.
+- Provider bills are real even on the test page; the page's allowance is MiniMoi's own limit, not a provider cap.
+- This spec does not change CoS's voice or default provider, and adds no Curator voice.
 
 ## 1. Context for a reader without the repository
 
 | Fact | Reference |
 |---|---|
-| Two realtime paths exist. The direct path mints a short-lived browser credential. Gespräche and Conversas use it, with OpenAI or xAI, and no tools | `core/realtime_voice/bootstrap.py:45`, `:224`; `core/realtime_voice/static/adapters/openai-webrtc-adapter.js`; `core/realtime_voice/static/adapters/xai-websocket-adapter.js` |
-| The controlled path holds the provider session on the server and dispatches tools. COS Confer and MC use it. Today both construct `OpenAIControlledProvider` only | `core/realtime_voice/server_openai.py:21`; `domains/cos/managed_realtime.py:47-50`; `minimoi_portal/guild_ui/mc_managed_realtime.py:37-42` |
-| MC's managed host installs only when `services.mc.kind == 'cos'`, the voice flag is on, and the budget tables answer | `minimoi_portal/guild_ui/mc_managed_realtime.py:25-36` |
-| A second `kind == 'cos'` gate on the voice path is inside the turn. Without it, a managed-voice turn does not get the host channel that authenticated the owner | `minimoi_portal/guild_ui/api.py:2222-2224`; binding described at `:946-953` |
-| Two further `kind == 'cos'` branches in that function are Board outcomes, not the voice binding | `minimoi_portal/guild_ui/api.py:2155`, `:2208` |
-| A consult keeps the utterance as a note with `page='voice'` at consult time, before the session ends | `minimoi_portal/guild_ui/mc_managed_realtime.py:131` |
-| The floating MC button is one Guild conversation, injected on Mein Deutsch, Meu Português, Curator, Chief of Staff, IoT Connect, Guild, and Home. The domain name is a label. Guild pages that already have the chat do not get a second button | `minimoi_portal/companion.py:1-5`, `:19-30`; `minimoi_portal/templates/_companion.html:11-16` |
-| Provider VAD commits a user turn as `speech_stopped` with no `source`. The browser RMS timer emits the same event name with `source: "browser_vad"`. The spec forbids that timer from owning boundaries | `core/realtime_voice/static/adapters/openai-webrtc-adapter.js:179-180`; `core/realtime_voice/static/adapters/xai-websocket-adapter.js:209-210`; `core/realtime_voice/static/adapters/openai-transcription-webrtc-adapter.js:178-186` |
-| The controlled host already takes a `dispatch` callable. That is the consult contract | `core/realtime_voice/controlled_host.py:13` |
-| Budget tables are `voice_control_owner`, `voice_control_session`, `voice_control_call`, `voice_control_usage` | `core/realtime_voice/sql/001_voice_budget.sql`; checked at `mc_managed_realtime.py:34-35` |
-| Default voice ids today are `marin` (OpenAI) and `eve` (xAI), unless the persona names one | `core/realtime_voice/bootstrap.py:45`, `:224` |
+| German Gespräche runs voice through the shared browser controller `RealtimeVoiceController`, direct mode: the server mints a short-lived provider credential, the browser talks to OpenAI (WebRTC) or xAI (WebSocket) | `domains/german/templates/german_gesprache.html:1920`, `:1996`; `core/realtime_voice/bootstrap.py:173-240` |
+| The server, not the browser, builds the session instructions from a named persona; browser-sent instructions are discarded | `core/realtime_voice/bootstrap.py:185-220` |
+| Voice per persona and provider, else defaults `marin` / `eve` | `core/realtime_voice/bootstrap.py:45`, `:224` |
+| Both provider session builders already accept `tools` and `tool_choice`; the bootstrap does not pass any yet | `core/realtime_voice/providers/openai_realtime.py:160-190`; `core/realtime_voice/providers/xai_voice.py:40-89` |
+| Both browser adapters already emit `function_call` and send `function_call_output` | `static/adapters/openai-webrtc-adapter.js:166`, `:217-218`; `static/adapters/xai-websocket-adapter.js:185`, `:218-219` |
+| The shared controller already has a browser function bridge: in direct mode it calls the host's `onFunctionCall` and returns the result to the provider | `core/realtime_voice/static/realtime-voice-controller.js:44`, `:65`, `:216-235` |
+| COS used that bridge in its August beta, then moved to a server "sideband" that only OpenAI supports | `73a0280d` (16 Aug); `core/realtime_voice/controlled_session.py:1-8`; `tests/cos/test_confer_voice_wiring.py:14` |
+| The managed (sideband) path is OpenAI-only end to end | `controlled_api.py:23`; `realtime-voice-controller.js` managed branch; `controlled_session.py:61-100`, `:287-319`, `:380-419` |
+| The managed configuration appends a Viennese partner manner to every managed session, CoS included, and fixes `voice: 'cedar'` | `core/realtime_voice/controlled_config.py:9-29`, `:51` |
+| Allowed direct-path locales are `de-AT`, `pt-BR`; capabilities already list `en-US` | `core/realtime_voice/config.py:19`; `core/realtime_voice/capabilities.py:47`, `:59` |
+| MC's managed host installs only for `kind == 'cos'`; prod MC is `openclaw`, so the composer falls back silently to the chained `ConferVoiceController` (this morning's failure) | `minimoi_portal/guild_ui/mc_managed_realtime.py:28`; `static/js/mc_voice.js:136-141` |
+| Voice gates on `kind == 'cos'`: install (`mc_managed_realtime.py:28`) and the voice channel binding (`api.py:2223`). `api.py:2155`, `:2208` are Board outcomes; `mc/backend.py:208`, `:306` are not gates | as listed |
+| The OpenClaw adapter JSON-serializes turn context into the message | `minimoi_portal/guild_ui/mc/openclaw.py:196-202` |
+| Voice turns are already retained as platform notes during a session | `minimoi_portal/guild_ui/mc_voice_transcripts.py:16-36` |
+| The floating MC panel is one Guild conversation in an iframe on each domain; the companion script already coordinates the microphone with the page underneath | `minimoi_portal/companion.py`; `minimoi_portal/static/companion.js:40-57` |
 
-## 2. The voice bench, first
+## 2. One implementation: what is reused, extended, untouched, retired
 
-The first build Robert can use is a local page. No MC file changes in that commit.
+**Reused as is:** `RealtimeVoiceController` (direct mode), both browser adapters, provider VAD settings
+(`standards.py`), the duration guard, the session allowance, the Memo controller (Dictate).
 
-He opens it on the Mac, picks OpenAI or Grok Voice, and presses Voice. A one-second pause does not cut him off. He can interrupt. He sees no running transcript. When he ends the session, the turns appear on the page. A labeled stub summary appears if he says he is done. He does not confirm it inside the voice session. Dictate is on the same page so Memo can be seen beside Conversation. This trial does not rebuild Dictate.
+**Extended (small, shared, opt-in):**
+- `bootstrap.py`: a persona may carry an allow-listed tool list, passed to the provider builders that already accept
+  it; a persona may run without a scene; the `en-US` locale is allowed for the direct path (`config.py`). German
+  personas carry no tools and are byte-for-byte unchanged.
+- The persona source for MC: a short **voice card** plus provider voice ids (§7), loaded by the existing
+  `get_persona` callable.
+- `realtime-voice-controller.js`: measurement hooks (§5) and a per-turn "first audible playback" event; no change
+  to turn-taking.
 
-**Which path.** A bench that can consult is a controlled session, not the direct browser path. It is a small controlled host on localhost, with the existing `dispatch(name, text, cid, operation_id)` plugged in. The stub answers a fixed set of questions and refuses the rest, and each answer is labeled as a stub. The agent implementation comes later, through the same dispatch, and the bench does not call MC until the reconnect in §4 has a reviewed consult path.
+**New, but thin hosts only:**
+- The standalone test page (§5): a page plus one consult endpoint; no session loop.
+- MC's consult endpoint (§3, §9): the existing typed turn service behind a bridge route.
 
-**What it needs to run.**
+**Untouched by this spec:** the managed sideband path (`controlled_*`, `server_openai.py`) as COS uses it today, and
+German's pages. CoS's move, if any, is decided in phase 3 (§10).
 
-- A local server process holds the provider key. The key is read from the Keychain at start. It is never written to a file, a log, or the page.
-- The stub stage may use a named in-memory budget, test-only, so the first listen does not require Postgres. Any stage that claims a real budget uses a local Postgres and the shared SQL in `core/realtime_voice/sql/`.
-- The page is not a Guild route and not a production route. It is off in production compose. It has no production flag.
+**Retired for MC voice:** the chained `ConferVoiceController` fallback in `mc_voice.js`. If MC voice cannot start,
+the button shows "Voice unavailable" with the reason; it never silently becomes the old relay (Codex C7).
 
-**What the page shows, after the session.** Time from provider speech-stop to first assistant audio, in milliseconds. Whether an interruption stopped the active reply. Committed user turns per scripted thought.
+So there are two voice paths in the end, German's direct path and the managed sideband (which itself runs on
+German's controller), and no fourth.
 
-**Fragment.** Count only provider events. `speech_stopped` emitted by the realtime adapters from `input_audio_buffer.speech_stopped` is a committed user turn. Events with `source: "browser_vad"` are never counted. The bench script has Robert say one sentence with a deliberate one-second pause inside it. That thought passes when it produces exactly one committed user turn.
+## 3. Tools on the direct path: the browser function bridge, and the trust decision
 
-**Turns.** They stay on the page and die on reload. Keeping one would be a write, and the bench does not write.
+**How a consult works.** The provider decides to call `consult` (or `save_note`); the browser adapter emits
+`function_call`; the controller hands it to MC's `onFunctionCall`, which POSTs `{call_id, name, arguments,
+owner_transcript_item}` to the host's consult endpoint with the owner's session and CSRF token. The server runs it
+through the **same typed turn service, authority, deduplication and receipts as a typed note**, and returns the
+result; the controller returns it to the provider, which speaks it. Both providers, one code path.
 
-## 3. Grok Voice on the tool-using path
+**The trust decision (for Claude chat and Robert).** The managed design's rule is "only the provider's server-side
+connection may feed tool calls, never the browser". This spec relaxes it for MC, on this argument: the bridge is
+used only by Robert's own authenticated browser, which can already send any typed note through the same turn
+service; a voice consult gets **no authority a typed note does not have**. What makes it acceptable:
+- No voice-only authority anywhere: a bridged consult is processed exactly as typed owner text, and labeled as
+  voice in its record.
+- The server checks session, CSRF, conversation ownership and on-record state on every call, and binds each call to
+  the live voice session id issued at bootstrap; calls after the session ends are refused.
+- `call_id` and operation ids deduplicate: a repeated or replayed call has one effect.
+- The text acted on is the owner's own transcript item, not the model's paraphrase in the arguments; the model's
+  arguments are advisory.
+- Tools are allow-listed per persona (MC: `consult`, `save_note`); German personas have none.
 
-Robert's decision, recorded by Claude Code: the path COS Confer and MC use can consult the agent, and that path gains Grok Voice as part of this build. It is a small shared-layer provider, not a new session loop.
+**Fallback if this is rejected:** MC voice with tools runs on the managed sideband for OpenAI only (it exists),
+and Grok Voice with tools waits for a provider-supported server attach. German keeps xAI on the direct path. The
+standalone bench (§5) then demonstrates both paths for Robert to compare.
 
-- Add `core/realtime_voice/server_xai.py` beside `server_openai.py`. The server holds the xAI realtime session and relays tool calls through the same `dispatch`. Event names follow the existing browser adapter `xai-websocket-adapter.js`.
-- The controlled host selects the provider per session. MC and COS Confer both gain the choice through that one provider. Neither domain gets its own copy.
-- COS Confer's default provider does not change. The choice becomes available. Changing her voice is out of scope.
-- The same controlled-session contract tests run against both providers, stubbed. The release check in §6 runs one consult through each.
-- On the bench page, an xAI voice id can be auditioned on the tool path only after this provider exists. Until then the page says so, and does not pretend a direct-path listen is the tool path.
+This replaces v0.1's server-held xAI provider. Codex's C1 (browser media to a server xAI socket) and C2
+(normalized server-side events and billing) do not arise on this path: audio stays browser-to-provider exactly as
+in German, and usage is admitted by the existing bootstrap allowance as it is for German.
 
-A third provider, when Robert names one, joins this registry the same way. It does not get its own session loop.
+## 4. Phase 0: measure German first
 
-## 4. Reconnect MC
+Before any change, record German Gespräche as it is deployed (the actual production commit, not the PR baseline),
+on both providers, with one fixed script (§5): speech end to first audible playback (ordinary replies), interruption
+stopping playback, committed user turns per scripted thought, transcript delivery at end, persona voice. These
+numbers are the baseline for every later acceptance and for the German backport.
 
-After the bench has been heard and the shared provider reviewed:
+## 5. Phase 1: the standalone test page
 
-- `mc_managed_realtime.install` also installs when MC is the OpenClaw container (`kind == 'openclaw'`), behind the existing `MINIMOI_MC_MANAGED_REALTIME` flag. The `kind == 'cos'` path stays while that kind still exists. A missing flag still installs nothing.
-- The voice binding at `api.py:2223` gets the equivalent for the OpenClaw adapter. A voice consult without that binding does not run. The Board-outcome branches at `:2155` and `:2208` are not this change. Before code, the implementer lists every `kind == 'cos'` on the voice path and shows the list in the commit. That list is not deferred to the reconnect commit's review.
-- Allow-listed tools consult the container MC through the same turn service, session identity, authority, and write deduplication as typed input.
-- A note is spoken as saved only after a platform receipt. No receipt, no success sentence.
-- The voice model speaks. An ordinary utterance does not become an OpenClaw round trip. A consult does. That division stays visible.
-- The instruction string that says "shared CoS/MC build partner" is replaced, for MC only, by the card in §7. COS keeps its own instructions.
+A local page on the Mac, a thin host of the shared code: `RealtimeVoiceController` in direct mode, bootstrapped by
+the extended `bootstrap.py` with a test persona, and a stub `consult` endpoint. Not a Guild route, not in
+production compose, no production flag. Provider keys come from the Keychain at start, never written anywhere. The
+existing allowance and duration guard apply; the page states that provider usage is billed.
 
-## 5. The composer
+**Robert's script, run on OpenAI and on Grok Voice:** a work question in English; one sentence with a deliberate
+one-second pause inside it; a German sentence; a mixed sentence with one German word; an interruption mid-reply;
+a question that triggers the stub consult; "we're done".
 
-A separate commit on the same branch.
+**What the page shows after the session** (timing only, never transcript content in logs):
+- **Latency:** speech end to first audible playback, per reply, split into provider VAD delay, provider generation,
+  and consult time; ordinary and consult replies reported separately (Codex C6).
+- **Committed user turns per scripted thought:** counted from completed user transcript items (the controller's
+  `onUserTurn`), not from speech-stop events, and never from `browser_vad`. The paused sentence passes at exactly one.
+- **Interruption:** whether playback stopped within the reply.
+- Robert's marks: accent held; a stray German word did not flip the language; MC's name and agent names pronounced
+  right.
 
-- Voice on the MC composer uses the Conversation controller. No competing live transcript.
-- Consults do not appear as live chat notes. A voice-page note is held out of the open chat until the session ends, then added with the other turns. A consult that is not a note creates no visible note at all. The current `add_note(..., page='voice')` at consult time is the behavior this commit replaces.
-- On "we're done", a short summary is offered in the conversation for written confirmation. That confirmation is an ordinary typed note. The spoken "we're done" is not the confirmation. The first real summary is a consult. The bench stub summary is not this card.
-- Dictate stays the Memo control it is. Its module is not edited unless a shared-file change is required to keep the two controls from fighting over the microphone. Any such change is named in the commit.
-- Phone width and desktop width are both in this commit.
+**Accepted when:** both providers complete the script; paused sentence = one turn; interruption stops playback;
+ordinary-reply latency no worse than the German baseline on the same provider; Robert's yes after listening. The
+page's code is the code MC and CoS use next; it is not rewritten in integration.
 
-The floating panel is the same composer, in an iframe. It gets these controls because it is that conversation. It does not get a second voice, and it does not take the voice of the page underneath.
+## 6. Durable capture, and revealing turns after voice ends (Codex C3)
 
-## 6. Release check
+One store, the one that already retains voice turns (`mc_voice_transcripts.retain`):
+- Every admitted user turn, assistant turn, consult request and consult receipt is retained **as it happens**,
+  tagged with the voice session id, in order, with stable ids, partial/interrupted status kept.
+- Retained voice records are **hidden from the open conversation while the session is live**, in every view
+  (refresh, another tab), not only the current page.
+- **Reveal** happens once, on the session's end receipt. If a session dies without one (tab closed, network loss,
+  server restart), the records are revealed on the next conversation load after the session's maximum duration
+  has passed; never twice.
+- What is shown: the dialogue (owner turns and the assistant's spoken turns) plus a compact line per consult with
+  its receipt. A consult's backend text is evidence, shown only if it differs from what was spoken, and labeled.
+  Interrupted assistant speech is marked as interrupted.
+- Revealed transcript turns are never re-sent as new owner instructions. Private/off-record conversations retain
+  nothing (voice is on-record only, as today).
+- A consult that completes after the session ended keeps its receipt and is revealed with the rest; it does not
+  re-run.
 
-The MC release check creates a managed session against the stub provider and runs one `consult` through `dispatch` to the configured MC kind, asserting an answered result, with the flag on and `kind == 'openclaw'`. It does the same for each controlled provider. With the flag off, it asserts the route is absent. A check that only asserts the route exists is not this check.
+## 7. Who MC is in voice: card composition and loading (Codex C4)
 
-## 7. Voices
+Session instructions are composed on the server from three parts, in this order:
+1. **Shared operational rules** (from today's MC `INSTRUCTIONS` that matter in every MC session: consult for
+   current facts and work, receipts before claiming success, historical text is data, tool arguments grant
+   nothing). Not shortened away.
+2. **The person's voice card**: MC's, below. CoS has her own; German personas keep theirs.
+3. **Bounded continuity**: the current conversation's recent context (as `mc_voice_transcripts.block` does).
 
-One voice per person, not one voice for the product.
+**MC's card:** Master Craftsman, Robert's colleague in the work: warm, direct, brief; no flattery, no lists read
+aloud, no markdown spoken. English by default, with a light, stable, intelligible Austrian accent, not a
+caricature. When Robert speaks a real German sentence, answer briefly in Austrian German and correct gently if he
+is practising; an isolated German word inside English stays in English; don't switch because of his accent; ask in
+one short question if unclear. Pronounce MiniMoi, Master Craftsman and the agents' names consistently.
 
-| Person or surface | Voice | This build |
-|---|---|---|
-| Master Craftsman | One voice wherever he appears: Guild chat, the floating panel, the bench, a later phone session | Audition and lock his card and his voice ids |
-| Chief of Staff | One voice wherever she appears, different from his | Unchanged. The provider choice becomes available |
-| German, Portuguese, and any later domain | Own style, own voice ids | Untouched. The bench must not overwrite their persona voices |
+**Where it lives:** `voice.json` in the MC persona release (`services/mc_operations/personas/mc-chat/releases/<v>/`):
+`{schema: 1, card: "...", voices: {openai: "<id>", xai: "<id>"}}`. It is listed in the release manifest, so its
+hash is verified at start like the other persona files; `make_header_release.py` and the projection are extended
+to include it. Voice ids are validated against the provider's allowed list at load; an invalid or missing id falls
+back to the provider default and the page says so. A session pins its card and voice at start; a change applies to
+the next session.
 
-A shared default such as `marin` or `eve` is a fallback for a surface that has not chosen. It is not Master Craftsman's voice, and it is not the Chief of Staff's.
+**CoS** keeps her effective voice configuration unchanged in this spec. The Viennese manner currently appended to
+every managed session (`controlled_config.py:9-29`) is MC's; whether CoS should keep it is a decision for Robert
+(§15).
 
-**His card.** Short enough to send on every MC session. Not the soul pasted in. Not sent on a CoS session or a German session.
+## 8. Ending a session and the summary (Codex C5)
 
-- He is Master Craftsman, Robert's colleague in the work. Warm, direct, brief. No flattery. No lists read aloud. No markdown spoken.
-- English is the default for the work, spoken with a light Austrian accent: stable, easy to understand, not a caricature.
-- When Robert speaks a real German sentence, answer in Austrian German, briefly, and correct gently if he is practising. An isolated German word inside English work stays inside the English reply. Do not switch because of his accent. If it is unclear which language he wants, ask in one short question.
-- Mini-moi, Master Craftsman, and the other agents' names are pronounced the same way on every provider. The bench script includes them.
-- One voice id per provider is stored beside the card, not inside it. The same ids are used wherever he speaks. He picks them by ear. Until he picks, the bench offers the provider's quality set and does not pretend a default is already him.
+- "We're done" (or the End button) **proposes** ending: MC answers "Shall I sum up?" in one line; a yes or the End
+  button ends capture. A negated or accidental "we're done" ("we're not done") does not end.
+- The summary is generated **from this session's retained records only** (§6), bounded, with omissions marked
+  ("summary covers the last N turns"); never from earlier sessions in the same conversation.
+- It appears as a **summary proposal** tied to the voice session id. Robert confirms, edits or declines it in
+  writing. His confirmation confirms the summary only: it authorizes nothing the summary mentions; any action
+  still needs its own request and receipt.
+- If the summary fails, the retained turns are still revealed, with "summary unavailable"; Robert can ask for it
+  in writing later.
 
-**Where the card and the ids live.** In the MC persona release, as `voice.json`, so a voice-id change is a persona release and the manifest hash covers it. The live workspace is a projection of that release. It is not a second source.
+## 9. Phase 2: MC
 
-**Practice, checked 27 October 2026, not re-verified by Claude Code.** OpenAI's realtime prompting guide recommends naming accent and language as separate instructions, and recommends `marin` or `cedar` for quality: [realtime conversations](https://developers.openai.com/api/docs/guides/realtime-conversations), [voice prompting](https://developers.openai.com/api/docs/guides/voice-prompting). xAI's voice-agent docs describe `eve` as British, say each voice speaks every supported language, and describe custom-voice cloning as console-limited, with API create enterprise-gated and currently US-only except Illinois: [voice](https://docs.x.ai/docs/guides/voice), [custom voices](https://docs.x.ai/developers/model-capabilities/audio/custom-voices). A reviewer who depends on one of those claims checks the page. The build does not.
+- The MC composer and the floating panel use `RealtimeVoiceController` direct mode with MC's persona (§7), the
+  bridge (§3) and the reveal rule (§6). Same code as the test page.
+- The consult endpoint uses MC's typed turn service with the configured MC kind. For the OpenClaw kind, the adapter
+  receives a voice marker it translates into its context, never the `MANAGED_VOICE_CHANNEL` sentinel serialized into
+  JSON (`openclaw.py:196-202`), and never a browser-supplied substitute (Codex C7).
+- A note is spoken as saved only after its platform receipt.
+- If voice cannot start (flag off, missing persona, provider refused), the button shows "Voice unavailable: <reason>".
+  No silent fallback to the chained relay.
+- Dictate is untouched, except where a shared change is needed so Voice and Dictate don't fight over the microphone;
+  any such change is named in the commit. The floating panel reuses the companion's existing microphone handover.
+- The stale "Voice ended…" status line clears after a few seconds or on the next send (#420 comment).
 
-The first bench audition is one script on both providers, once §3 exists: a work question in English, a German sentence, a mixed sentence, an interruption, and a one-second pause. He marks whether the accent held and whether a stray German word flipped the language. Comparing another card on the bench is allowed if the page labels whose card is playing. Comparing does not assign that card to him.
+## 10. Phase 3: CoS
 
-## 8. What this build does not do
+CoS gets the same capability as an option, with her own persona card, her own voice ids and her current default
+provider unchanged. Whether CoS Confer moves from its current voice path to this one is decided at this phase, on
+the phase-1 and phase-2 evidence, by Robert. Not before.
 
-- It does not add a second session loop. The xAI controlled provider is in scope. A private copy of the controller is not.
-- It does not add Curator voice, and it does not change Chief of Staff's voice or her default provider.
-- It does not pick voice ids. He does, by ear.
-- It does not deploy, set a production flag, or claim a phone test.
-- It does not edit the spec file beyond the amendment in the companion commit.
-- It does not include unrelated branches.
+## 11. Phase 4: back to German, with no degradation
 
-## 9. Acceptance
+The proven shared changes (measurement hooks, `en-US`, optional tools, card composition, playback event) reach German
+through its existing integration, with German's personas, scenes and settings. German gains no tools, no summary
+and no MC personality. Promotion requires German's phase-0 numbers to be met or improved on both providers, persona
+voices unchanged, transcript delivery unchanged, and the floating-MC microphone handover working; any regression
+blocks it, and the previous German build is the rollback.
 
-- The bench script's one-sentence thought, with a one-second pause inside it, produces exactly one committed user turn, on each controlled provider.
-- An interruption stops the active reply.
-- MC Voice, in the Guild and in the floating panel, adds turns to the conversation only after voice ends. A consult does not appear as a live note.
-- On "we're done", a short summary is offered for written confirmation. The spoken phrase is not that confirmation.
-- A note is spoken as saved only after a platform receipt.
-- Dictate still does not submit on silence.
-- The release check in §6 passes for the OpenClaw kind with the flag on, and asserts no route with the flag off.
-- Gespräche, Conversas, Lesen, Schreiben, Leitura, Escrita, and COS Confer still pass their existing voice checks. Maria's voice on Gespräche is unchanged. The Chief of Staff's voice is unchanged.
+## 12. Release check (Codex C7)
 
-## 10. Open questions for Robert
+For each integration, the release check asserts on the deployed configuration:
+- the voice surface reports the intended path and provider list (metadata), not merely that a route exists;
+- one stub-provider session with one bridged consult reaches the configured MC kind and returns an answered receipt,
+  through the real OpenClaw adapter with a stubbed native transport;
+- a forged or replayed `call_id`, a call after session end, and a missing CSRF token are refused, each with one or no
+  effect;
+- with the flag off, the surface shows "Voice unavailable", and the chained relay is not reachable from the MC
+  composer.
+Robert's microphone and phone tests remain separate and outstanding until he does them.
 
-1. **Phone path.** Recommendation from Claude Code: the first bench session on the Mac at localhost; the phone on dev later, when that gate is included. A new tunnel is not proposed.
-2. **Voice ids.** His, by ear, for Master Craftsman only. This spec does not ask him to pick before the bench exists.
-3. **A third provider.** Unnamed until he names it.
-4. **Cloning a voice.** Optional, after he has heard the instruction-steered pair and wants the accent steadier. Not part of the first bench.
+## 13. Cross-surface checks (all phases, as relevant)
+
+Guild Voice ↔ Dictate; German voice → floating MC → German again; closing the floating panel during connect and
+during a consult; two sessions in one conversation (summary covers only the second); a long session beyond the
+continuity window; microphone denied; network loss and End during a consult; a receipt arriving after speech was
+interrupted; saved-conversation switching.
+
+## 14. Not in this build
+
+A fourth voice implementation, a copied controller, or a domain session loop. A server-held xAI session or media
+relay. Changes to CoS's voice or default. Curator voice. Voice cloning. Production deploys or flags. Choosing voice
+ids for Robert.
+
+## 15. Decisions for Robert (everything else is settled in this spec)
+
+1. **The trust model in §3**: a voice consult from Robert's own browser carries the same trust as a typed note.
+   Yes → this spec as written. No → the §3 fallback (OpenAI tools on the managed path; Grok Voice tools later).
+2. **CoS and the Viennese manner** (§7): keep it, or give CoS her own card when she integrates (phase 3).
+3. **Latency bar**: "no worse than German on the same provider" for ordinary replies (§5), or a fixed target.
