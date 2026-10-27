@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "persona": "mc-chat",
+  "version": "0.1.16",
+  "base": "0.1.15 + tools as offered (27 Oct, #395)",
+  "spec": "spec_mc_agent_container v0.2",
+  "status": "candidate",
+  "target": "mc-agent container",
+  "files": {
+    "SOUL.md": "3f79bf7edf148b8971f9707e67e334266027c0d12cecb5e18c1513f5996bd671",
+    "AGENTS.md": "7864637a3899e07d34d60719086af948bc2c758c96e9c575d5be303767ec0640",
+    "RUNTIME.openclaw.md": "2b2428ccded1174e6a9857bd17f1ccfa2b2b0f860c786649bfe39a2dbfdb7197",
+    "CHANGES.md": "c31c7bc637dc01da64584e9549996e6ecd9e6c3aebc92ddfb291c765de430414"
+  },
+  "projection": "SOUL verbatim; AGENTS + runtime binding",
+  "projection_budget_chars": 16000,
+  "config_change": true
+}
