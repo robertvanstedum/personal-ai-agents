@@ -2,7 +2,8 @@
 
 **27 October 2026 · Claude Code for Robert (v0.1 by Grok) · INIT-2026-0010 · GitHub issue #420 · PR #421**
 
-**Status: near-final draft v0.2 for Claude chat's review, then Robert's; authorizes no build.** Robert's yes starts
+**Status: near-final draft v0.2 for Claude chat's review, then Robert's; authorizes no build.** Robert settled the
+three open decisions on 27 October (§15). Robert's yes starts
 code, and the first code is the German baseline measurement and the standalone bench. This file authorizes no
 container, credential, deploy, production flag, merge or provider call.
 
@@ -155,7 +156,8 @@ a question that triggers the stub consult; "we're done".
   right.
 
 **Accepted when:** both providers complete the script; paused sentence = one turn; interruption stops playback;
-ordinary-reply latency no worse than the German baseline on the same provider; Robert's yes after listening. The
+ordinary-reply latency no worse than the German baseline on the same provider (Robert: "no worse and expected to get
+better over time", so each later phase re-measures and the baseline only moves up); Robert's yes after listening. The
 page's code is the code MC and CoS use next; it is not rewritten in integration.
 
 ## 6. Durable capture, and revealing turns after voice ends (Codex C3)
@@ -198,9 +200,11 @@ to include it. Voice ids are validated against the provider's allowed list at lo
 back to the provider default and the page says so. A session pins its card and voice at start; a change applies to
 the next session.
 
-**CoS** keeps her effective voice configuration unchanged in this spec. The Viennese manner currently appended to
-every managed session (`controlled_config.py:9-29`) is MC's; whether CoS should keep it is a decision for Robert
-(§15).
+**CoS** gets her own card when she integrates (phase 3), not MC's. Robert, 27 Oct: "own card, I might want a French
+CoS or Portuguese." So a card names its person's language and accent, and a person's card may be swapped for another
+language without code changes; MC's Viennese manner, currently appended to every managed session
+(`controlled_config.py:9-29`), stops applying to CoS when she moves to her card. Until phase 3 her effective voice
+is unchanged.
 
 ## 8. Ending a session and the summary (Codex C5)
 
@@ -267,9 +271,25 @@ A fourth voice implementation, a copied controller, or a domain session loop. A 
 relay. Changes to CoS's voice or default. Curator voice. Voice cloning. Production deploys or flags. Choosing voice
 ids for Robert.
 
-## 15. Decisions for Robert (everything else is settled in this spec)
+## 15. Decisions (settled by Robert, 27 October 2026)
 
-1. **The trust model in §3**: a voice consult from Robert's own browser carries the same trust as a typed note.
-   Yes → this spec as written. No → the §3 fallback (OpenAI tools on the managed path; Grok Voice tools later).
-2. **CoS and the Viennese manner** (§7): keep it, or give CoS her own card when she integrates (phase 3).
-3. **Latency bar**: "no worse than German on the same provider" for ordinary replies (§5), or a fixed target.
+1. **Trust model (§3): yes.** A voice consult from Robert's own authenticated browser carries the same trust as a
+   typed note, with the safeguards in §3. The fallback in §3 is not needed.
+2. **CoS: her own card** (§7, phase 3). Cards carry language and accent, so a French or Portuguese CoS is a card
+   change, not a build.
+3. **Latency: no worse than German on the same provider, expected to improve over time.** Each phase re-measures
+   against the latest accepted numbers; a regression blocks promotion.
+
+## 16. Future providers (consideration, not in this build)
+
+Robert flagged Block's **Dessa** (27 Oct), a full-duplex speech model trained only on speech: it listens and speaks
+at the same time, with natural pauses and cadence, rather than taking turns after a silence. As of 27 Oct it is a
+research preview with a waitlist: no public API, pricing, benchmarks or language list; Block says it can run
+locally on a high-end Mac, unverified. What it would mean here, when it becomes usable:
+- It joins as a provider through the same registry and adapter shape as OpenAI and xAI; MC's card and the
+  conversation records stay MiniMoi's (optionality principle).
+- Full duplex changes the turn model: the shared standard's Conversation mode assumes provider VAD with a silence
+  boundary (300 ms prefix, 1200 ms silence). A full-duplex model would need a standard amendment for overlapping
+  speech, and the tool bridge (§3) would need a model that can call tools, which a speech-only model may not.
+- A local model would change cost and privacy, and the phone path.
+Revisit when it has a public API or downloadable weights.
