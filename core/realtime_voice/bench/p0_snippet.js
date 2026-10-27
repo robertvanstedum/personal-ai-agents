@@ -11,7 +11,7 @@ if (typeof Controller !== "function" || typeof Controller.prototype?._wireAdapte
   throw new Error("P0 observer refused: RealtimeVoiceController._wireAdapterEvents is missing. Nothing was patched.");
 }
 
-export function observe(adapter, session, clock) {
+function observe(adapter, session, clock) {
   const events = [];
   const note = (name) => events.push({ name, atMs: Math.round(clock()) });
   const rawOn = adapter.on.bind(adapter);

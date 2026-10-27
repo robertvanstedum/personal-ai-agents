@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import { attachObserver, publicRecord, sessionRecord } from "../../core/realtime_voice/bench/p0_observer.js";
 
 function fakeAdapter() {
@@ -56,7 +57,9 @@ function observeBody(source) {
     : source.indexOf("\nconst session = {");
   return source.slice(start, end).replace(/\s+/g, " ").trim();
 }
-const moduleBody = observeBody(fs.readFileSync(new URL("../../core/realtime_voice/bench/p0_observer.js", import.meta.url), "utf8"));
+const moduleBody = observeBody(fs.readFileSync(new URL("../../core/realtime_voice/bench/p0_observer.js", import.meta.url), "utf8")).replace(/^export /, "");
 const snippetBody = observeBody(fs.readFileSync(new URL("../../core/realtime_voice/bench/p0_snippet.js", import.meta.url), "utf8"));
 assert.equal(snippetBody, moduleBody);
+assert.doesNotMatch(fs.readFileSync(new URL("../../core/realtime_voice/bench/p0_snippet.js", import.meta.url), "utf8"), /^export /m);
+new vm.Script(fs.readFileSync(new URL("../../core/realtime_voice/bench/p0_snippet.js", import.meta.url), "utf8").replace(/^const mod = await import[\s\S]*?Nothing was patched\."\);\n\}/m, "const Controller = { prototype: { _wireAdapterEvents() {} } };"));
 console.log("p0 observer events: passed");
