@@ -19,7 +19,6 @@ class ConsultLedger:
     def __init__(self):
         self._lock = threading.Lock()
         self._sessions = {}
-        self._results = {}
 
     def open_session(self, session_id, owner=None):
         with self._lock:
@@ -27,7 +26,7 @@ class ConsultLedger:
 
     def close_session(self, session_id):
         with self._lock:
-            state = self._sessions.setdefault(session_id, {"open": False, "calls": set()})
+            state = self._sessions.setdefault(session_id, {"open": False, "owner": None, "calls": {}, "results": {}})
             state["open"] = False
 
     def issue(self, owner):
@@ -106,6 +105,16 @@ def create_consult_blueprint(*, backend, ledger, csrf_ok, owner_id, session_owne
             result["holding_line"] = HOLDING_LINE
         ledger.remember(session_id, call_id, result)
         return jsonify(result)
+
+    @bp.route("/api/realtime-voice/session/<session_id>/end", methods=["POST"])
+    def end(session_id):
+        if not csrf_ok():
+            return jsonify({"ok": False, "error": "csrf"}), 403
+        owner = owner_id()
+        if owner is None or session_owner(session_id) != owner:
+            return jsonify({"ok": False, "error": "not your session"}), 403
+        ledger.close_session(session_id)
+        return jsonify({"ok": True, "ended": True})
 
     return bp
 

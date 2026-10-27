@@ -41,7 +41,8 @@ def test_bootstrap_issues_a_session_and_a_consult_is_one_effect(monkeypatch):
     assert first.status_code == 200
     assert replay.get_json() == first.get_json()
     assert "What time is it?" in first.get_json()["spoken"]
-    client.application.extensions["voice_ledger"].close_session(session_id)
+    ended = client.post(f"/api/realtime-voice/session/{session_id}/end")
+    assert ended.status_code == 200
     late = client.post("/api/realtime-voice/consult", json={**body, "call_id": "call-2"})
     assert late.status_code == 409
 

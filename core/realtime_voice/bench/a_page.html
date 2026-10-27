@@ -54,7 +54,12 @@ document.querySelector("#start").addEventListener("click", async () => {
     onPlayback() { hear("playback_started", {}); },
     onFunctionCall: (call) => consult(call.call_id, record.ownerText || "Check with MC"),
     onFatalError(info) { statusEl.textContent = `Error: ${info.reason || "unknown"}`; },
-    onFinalize() { render(); },
+    onFinalize() {
+      render();
+      if (controller?._sessionId) {
+        fetch(`/api/realtime-voice/session/${controller._sessionId}/end`, { method: "POST" });
+      }
+    },
   });
   const original = controller._wireAdapterEvents.bind(controller);
   controller._wireAdapterEvents = function () {
