@@ -31,6 +31,6 @@ ALTER TABLE guild.mc_tool_proposals ADD COLUMN IF NOT EXISTS policy_version text
 
 ALTER TABLE guild.mc_tool_turns DROP CONSTRAINT IF EXISTS mc_tool_turns_revoked_reason_check;
 ALTER TABLE guild.mc_tool_turns ADD CONSTRAINT mc_tool_turns_revoked_reason_check
-    CHECK (revoked_reason IN ('owner_stop', 'runtime_replaced', 'policy_changed'));
+    CHECK (revoked_reason IN ('owner_stop', 'runtime_replaced', 'policy_changed')) NOT VALID;  -- re-run safe: 011's list validates existing rows
 
 COMMIT;
