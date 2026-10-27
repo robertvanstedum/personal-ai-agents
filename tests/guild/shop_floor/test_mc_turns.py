@@ -164,9 +164,8 @@ def test_a_timeout_is_shown_as_uncertain(floored):
     assert body["failure_class"] == "local_timeout"            # this portal gave up waiting: not a relay cancellation
 
 
-def test_the_payment_scrub_runs_again_before_the_note_leaves(turned):
-    """A note written straight into the store (bypassing the API's scrub) is
-    still scrubbed before it reaches Master Craftsman."""
+def test_the_owners_note_reaches_mc_as_written(turned):
+    """The owner's input is not edited on its way to Master Craftsman (#406, Robert 26 Oct)."""
     store = turned.app.extensions["guild_ui_next"]["services"].floor
     from minimoi_portal.guild_ui.stores import Author
     store.add_note("n-raw-12345678", f"pay with {CARD} please", Author("robert", "owner", "Robert"))
@@ -174,7 +173,7 @@ def test_the_payment_scrub_runs_again_before_the_note_leaves(turned):
     token = turned.csrf(client)
     assert _ask(client, token, "n-raw-12345678").get_json()["status"] == "answered"
     text = turned.extra["runtime"].sent[0]["body"]["messages"][0]["content"]
-    assert CARD not in text and "5555" not in text
+    assert f"pay with {CARD} please" in text
 
 
 def test_off_the_record_never_reaches_mc(turned):

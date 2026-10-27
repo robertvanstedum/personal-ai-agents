@@ -459,19 +459,14 @@ def _mismatch():
 
 
 def _clean_text(value, limit: int, what: str):
-    """Refuse over-long text before the scrub ever sees it, then check the
-    scrubbed text again: removing payment details can make it longer, and
-    that is the writer's problem to fix (422), never a store outage."""
+    """The owner's own text, kept as he wrote it: empty or over-long is refused (422). It is input, not output, so
+    nothing is removed or cut from it (Robert, 26 Oct, #406: the payment scrub had removed his email from his own
+    résumé). A later safety check may flag his input; it never edits it."""
     if not isinstance(value, str) or not value.strip():
         return None, json_error("invalid", f"The {what} is empty.", 422)
     if len(value) > limit:
         return None, json_error("invalid", f"The {what} is longer than {limit} characters.", 422)
-    clean = scrub(value.strip())
-    if len(clean) > limit:
-        return None, json_error(
-            "invalid", f"The {what} is too long after removing payment details ({len(clean)} characters, "
-                       f"at most {limit}). Nothing was kept; shorten it and send it again.", 422)
-    return clean, None
+    return value.strip(), None
 
 
 def _short(value, limit: int = 60):
@@ -1570,7 +1565,7 @@ def open_mc_stream(services, *, conversations, floor, conv, principal, note, not
     except FilesRefused as exc:
         return "refused", {"error": exc.code, "message": exc.message}, exc.status
     ctx = note.get("context") or {}
-    sent_text = scrub(note["text"])
+    sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
     agent_state = _agent_state(conv)
 
     def request_for(built):
@@ -2203,7 +2198,7 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         # Each conversation is its own session in the backend (the adapter maps
         # the id: OpenClaw hashes it into its `user` field). Only this note is
         # sent: other conversations never reach the model's context.
-        sent_text = scrub(note["text"])
+        sent_text = note["text"]                    # the owner's own words, as he wrote them (#406)
         agent_state = _agent_state(conv)
         # Opt-in on the non-streaming shared CoS transport only. Authority is
         # this authenticated kept owner turn; Board/model text grants nothing.
@@ -2458,7 +2453,7 @@ def _turn_files(conversations, conv, principal, ids, turn_id=None):
             raise LookupError(doc_id) from None
 
     staged, failed = _stage_for_mc(conv, ids, principal, turn_id)
-    built = build(conv, ids, load=load, scrub=scrub, staged=staged, stage_failed=failed) if ids else Built()
+    built = build(conv, ids, load=load, scrub=lambda text: text, staged=staged, stage_failed=failed) if ids else Built()
     built.staged = staged or None
     if refs:                                           # the owner's chosen topic items ride the same data block and report
         from .topic_context import build as build_context
