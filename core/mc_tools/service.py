@@ -123,6 +123,19 @@ def _standard_change_words(sc):
     return f"\n\nStandard change {sc['id']} (ticket #{sc['ticket']}); this use is logged there." if sc else ""
 
 
+_PUBLIC_TEXT_RULES = {
+    "non_ascii_in_public_text": "It has a character outside plain ASCII (curly quotes, accents, dashes, ellipsis)",
+    "email_in_public_text": "It has an email address (an @)",
+    "name_in_public_text": "It names someone who asked for or holds guest access",
+}
+
+
+def _public_text_refused(reason):
+    """Say which rule the public-repository text broke, so MC fixes that and nothing else."""
+    return result("refused", reason, f"{_PUBLIC_TEXT_RULES[reason]}, and the repository is public. Nothing was "
+                  "proposed. Fix only that; issue numbers (#406), line breaks and product names are fine.")
+
+
 @dataclass(frozen=True)
 class Caller:
     """Who is calling, from host context only: the runtime session and agent, the exact run and tool call, and the
@@ -427,13 +440,14 @@ class ToolService:
 
     def _public_text_refusal(self, conn, text):
         """The reason this text must not go to the public repository, or None (review P2-4):
-        - plain ASCII only after NFKC, so no look-alike letters (Cyrillic "А" in "Ana") slip past;
+        - plain ASCII only after NFKC, so no look-alike letters (Cyrillic "А" in "Ana") slip past; line breaks and
+          tabs are allowed, since issue bodies and comments are paragraphs;
         - no email address;
         - no name or email name of anyone who asked for guest access or holds a guest login, matched as a word, also
           when its letters are spaced apart. Records are named by ref only. Robert also sees the exact text (P1-1)."""
         import unicodedata
         folded = unicodedata.normalize("NFKC", text)
-        if any(not (" " <= c <= "~") for c in folded):
+        if any(not (" " <= c <= "~" or c in "\n\t") for c in folded):
             return "non_ascii_in_public_text"
         if "@" in folded:
             return "email_in_public_text"
@@ -462,9 +476,7 @@ class ToolService:
             b = self._bind(conn, caller)
             reason = self._public_text_refusal(conn, args["summary"])
             if reason:
-                return result("refused", reason, "That text names a person, an email address or uses non-ASCII letters, "
-                              "and the repository is public. Nothing was proposed; say it in plain English with refs "
-                              "(guild:N) only.")
+                return _public_text_refused(reason)
             preview = comment_text(payload, "<operation id>")
             words = f"Add this comment to issue #{args['number']}? It is public.\n\n{preview}"
             return self._pending_tool_proposal(conn, b, "issue_comment", payload,
@@ -474,9 +486,7 @@ class ToolService:
         for text in texts:
             reason = self._public_text_refusal(conn, text) if text else None
             if reason:
-                return result("refused", reason, "That text names a person, an email address or uses non-ASCII letters, "
-                              "and the repository is public. Nothing was proposed; say it in plain English with refs "
-                              "(guild:N) only.")
+                return _public_text_refused(reason)
         return None
 
     def _issue_create(self, args, caller, observation):

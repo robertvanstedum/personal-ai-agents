@@ -57,7 +57,8 @@ class AgentContact:
                     target = self.targets.get(args['target'])
                     if target is None:
                         return result('refused','agent_not_enrolled',
-                            'That existing chat is not enrolled for this capability.')
+                            'That existing chat is not enrolled for this capability. Enrolled chats (use one as target): '
+                            + (', '.join(sorted(self.targets)) or 'none') + '.')
                     note = service.read_owner_note(b.conversation_id,b.note_request_id) if service.read_owner_note else None
                     if not note or type(note.get('text')) is not str:
                         return refused('owner_note_unavailable')
