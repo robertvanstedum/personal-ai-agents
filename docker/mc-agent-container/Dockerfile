@@ -11,7 +11,10 @@ RUN npm install -g --no-audit --no-fund --include=optional "@anthropic-ai/claude
  && (claude --version || node "$(npm root -g)/@anthropic-ai/claude-code/install.cjs") \
  && claude --version \
  && npm cache clean --force
+# ENABLE_TOOL_SEARCH=false: MC's MiniMoi tools (mcp__openclaw__minimoi_*) are always loaded, never deferred behind
+# the CLI's tool search. Deferred, a fresh session called them by bare names and got "No such tool available" (27 Oct).
 ENV DISABLE_AUTOUPDATER=1 \
+    ENABLE_TOOL_SEARCH=false \
     CLAUDE_CONFIG_DIR=/home/node/.claude \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
     OPENCLAW_NO_AUTO_UPDATE=1 \
