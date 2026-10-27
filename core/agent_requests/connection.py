@@ -138,7 +138,7 @@ def _safe_dir(path: str) -> None:
 class ConnectionManager:
     def __init__(self, root: str, agent: str, provider: Provider, *, session_id: str, clock=time.time, helper: str = DEFAULT_HELPER, python: str = sys.executable,
                  adopt_identity: bool = False, limits=None):
-        if agent not in L.RECIPIENTS:
+        if agent not in L.CONNECTED:
             raise L.Refused("invalid", "A connection is for claude-code or codex.")
         if not isinstance(session_id, str) or not _SESSION_ID.fullmatch(session_id):
             raise L.Refused("invalid", "Name the session this connection is for (a session id). A fresh session is never started silently.")
