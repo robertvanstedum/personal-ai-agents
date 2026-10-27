@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chunk A voice page</title>
+<style>
+  body { font: 15px/1.45 system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; color: #1c1917; }
+  button, select { font: inherit; }
+  #status { font-weight: 600; }
+  pre { white-space: pre-wrap; background: #f5f5f4; padding: 1rem; }
+  .note { color: #57534e; }
+</style>
+</head>
+<body>
+<h1>Chunk A voice page</h1>
+<p class="note">Local only. Provider use is billed. This page writes nothing, and a reload clears it. OpenAI reports first playback once per session. Grok Voice reports it per reply.</p>
+<p>
+  <label>Provider <select id="provider"><option value="openai">OpenAI</option><option value="xai">Grok Voice</option></select></label>
+  <button id="start" type="button">Start</button>
+  <button id="check" type="button">Check with MC</button>
+  <button id="end" type="button">End</button>
+</p>
+<p id="status">Idle.</p>
+<ol id="script"></ol>
+<pre id="out">No session yet.</pre>
+<script type="module">
+import { RealtimeVoiceController } from "/static/realtime-voice/realtime-voice-controller.js";
+import { SCRIPT, applyEvent, pageRecord, publicPageRecord } from "./page.js";
+
+document.querySelector("#script").append(...SCRIPT.map(line => {
+  const item = document.createElement("li");
+  item.textContent = line;
+  return item;
+}));
+const statusEl = document.querySelector("#status");
+const outEl = document.querySelector("#out");
+let controller = null;
+let record = null;
+
+function render() {
+  outEl.textContent = JSON.stringify(publicPageRecord(record), null, 2);
+}
+function hear(name, event) {
+  applyEvent(record, { name, ...event }, performance.now());
+  render();
+}
+
+document.querySelector("#start").addEventListener("click", async () => {
+  const provider = document.querySelector("#provider").value;
+  record = pageRecord(provider);
+  controller = new RealtimeVoiceController({
+    bootstrapUrl: "/api/realtime-voice/bootstrap",
+    onStateChange(state) { statusEl.textContent = state; },
+    onPlayback() { hear("playback_started", {}); },
+    onFatalError(info) { statusEl.textContent = `Error: ${info.reason || "unknown"}`; },
+    onFinalize() { render(); },
+  });
+  const original = controller._wireAdapterEvents.bind(controller);
+  controller._wireAdapterEvents = function () {
+    original();
+    const adapter = this._adapter;
+    const raw = adapter.on.bind(adapter);
+    adapter.on = (name, handler) => raw(name, (event) => {
+      if (name === "speech_stopped" && !event?.source) hear("speech_stopped", {});
+      if (name === "input_transcript" && event?.completed === true) hear("input_transcript", { completed: true });
+      if (name === "interrupted") hear("interrupted", {});
+      handler(event);
+    });
+  };
+  render();
+  await controller.startSession({ provider, persona: "bench", scene: "" });
+});
+
+document.querySelector("#check").addEventListener("click", async () => {
+  if (!record) return;
+  hear("consult_started", {});
+  const response = await fetch("/api/realtime-voice/consult", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: controller?._sessionId, call_id: `host-${Date.now()}`,
+      name: "consult", owner_transcript_item: "Check with MC", arguments: {},
+    }),
+  });
+  hear("consult_finished", { ok: response.ok });
+});
+document.querySelector("#end").addEventListener("click", () => controller?.endSession("user_ended"));
+</script>
+</body>
+</html>
