@@ -14,13 +14,12 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "scripts" / "mc_host"))
 
 from core import agent_requests as ar  # noqa: E402
 from core.supervision import relay as R  # noqa: E402
 from core.supervision.store import Refused, Store  # noqa: E402
 from minimoi_portal.guild_ui.agent_ask import AskService  # noqa: E402
-import supervision_sync as sync  # noqa: E402
+from scripts.mc_host import supervision_sync as sync  # noqa: E402
 
 CONV = "c-0123456789abcdef"
 NOTE = "Ask Grok to check the phone path.\n\tKeep it short."
