@@ -9,5 +9,6 @@ const controller = fs.readFileSync(new URL("realtime-voice-controller.js", root)
 assert.equal(openai.split('this._emit("playback_started"').length, 2);
 assert.match(openai, /addEventListener\("playing".*\{ once: true \}/s);
 assert.match(xai, /this\._playbackSources\.size === 1\) this\._emit\("playback_started"/);
-assert.match(controller, /on\("playback_started", \(\) => this\._onInputState\("playback_started"\)\)/);
+assert.match(controller, /on\("playback_started", \(\) => this\._onPlayback\(\)\)/);
+assert.doesNotMatch(controller, /onInputState\("playback_started"\)/);
 console.log("playback event: passed");

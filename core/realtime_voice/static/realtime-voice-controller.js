@@ -41,7 +41,7 @@ function admissionRefused(error) {
 export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
-    onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate,
+    onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -63,6 +63,7 @@ export class RealtimeVoiceController {
     this._onUserTurn = onUserTurn || (() => {});
     this._onAssistantTurn = onAssistantTurn || (() => {});
     this._onFunctionCall = onFunctionCall || null;
+    this._onPlayback = onPlayback || (() => {});
     this._openingInstruction = openingInstruction;
     this._pendingAssistantTurns = [];
 
@@ -208,7 +209,7 @@ export class RealtimeVoiceController {
         this._pendingAssistantTurns.push(evt.text.trim());
       }
     });
-    on("playback_started", () => this._onInputState("playback_started"));
+    on("playback_started", () => this._onPlayback());
     on("assistant_stopped", () => {
       for (const text of this._pendingAssistantTurns.splice(0)) {
         this._onAssistantTurn(text);
