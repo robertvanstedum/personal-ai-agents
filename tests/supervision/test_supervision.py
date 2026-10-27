@@ -284,6 +284,19 @@ class StopLine(unittest.TestCase):
         self.assertEqual(len(self.filed()), 1)
 
 
+def _load_sync():
+    """scripts/mc_host/supervision_sync.py by file path: never put scripts/mc_host on sys.path, where its inspect.py would
+    shadow the standard library for every later test (and for multiprocessing children)."""
+    import importlib.util
+    if "supervision_sync" in sys.modules:
+        return sys.modules["supervision_sync"]
+    spec = importlib.util.spec_from_file_location("supervision_sync", ROOT / "scripts" / "mc_host" / "supervision_sync.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["supervision_sync"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 class GrokAndExchanges(unittest.TestCase):
     """27 Oct (INIT-2026-0010): Grok joins supervision, and MC sees the agents' ledger exchanges."""
 
@@ -339,8 +352,7 @@ class GrokAndExchanges(unittest.TestCase):
         import tempfile
         import time as _time
         from core import agent_requests as ar
-        sys.path.insert(0, str(ROOT / "scripts/mc_host"))
-        import supervision_sync as sync
+        sync = _load_sync()
         ledger = tempfile.mkdtemp()
         sync.LEDGER = Path(ledger)
         sync.WORKER_LEDGER = Path(tempfile.mkdtemp())                  # never this Mac's real MC worker ledger

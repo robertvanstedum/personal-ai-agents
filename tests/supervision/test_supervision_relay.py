@@ -14,13 +14,27 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "scripts" / "mc_host"))
 
 from core import agent_requests as ar  # noqa: E402
 from core.supervision import relay as R  # noqa: E402
 from core.supervision.store import Refused, Store  # noqa: E402
 from minimoi_portal.guild_ui.agent_ask import AskService  # noqa: E402
-import supervision_sync as sync  # noqa: E402
+
+
+def _load_sync():
+    """scripts/mc_host/supervision_sync.py by file path: never put scripts/mc_host on sys.path, where its inspect.py would
+    shadow the standard library for every later test (and for multiprocessing children)."""
+    import importlib.util
+    if "supervision_sync" in sys.modules:
+        return sys.modules["supervision_sync"]
+    spec = importlib.util.spec_from_file_location("supervision_sync", ROOT / "scripts" / "mc_host" / "supervision_sync.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["supervision_sync"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+sync = _load_sync()
 
 CONV = "c-0123456789abcdef"
 NOTE = "Ask Grok to check the phone path.\n\tKeep it short."
