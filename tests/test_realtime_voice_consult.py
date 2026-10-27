@@ -7,8 +7,7 @@ OWNER = "42"
 SESSION = "sess-1"
 
 
-def app_for(ledger, sessions=None):
-    sessions = sessions if sessions is not None else {SESSION: OWNER}
+def app_for(ledger):
     app = Flask(__name__)
     app.config["TESTING"] = True
     app.register_blueprint(create_consult_blueprint(
@@ -16,7 +15,7 @@ def app_for(ledger, sessions=None):
         ledger=ledger,
         csrf_ok=lambda: True,
         owner_id=lambda: OWNER,
-        session_owner=sessions.get,
+        session_owner=ledger.owner_of,
     ))
     return app
 
@@ -41,12 +40,12 @@ def test_a_consult_uses_the_owners_words_and_a_replay_does_not_run_again():
         return stub_backend(owner_text, arguments)
 
     ledger = ConsultLedger()
-    ledger.open_session(SESSION)
+    ledger.open_session(SESSION, OWNER)
     app = Flask(__name__)
     app.config["TESTING"] = True
     app.register_blueprint(create_consult_blueprint(
         backend=backend, ledger=ledger, csrf_ok=lambda: True,
-        owner_id=lambda: OWNER, session_owner={SESSION: OWNER}.get,
+        owner_id=lambda: OWNER, session_owner=ledger.owner_of,
     ))
     client = app.test_client()
     first = post(client)
@@ -59,12 +58,12 @@ def test_a_consult_uses_the_owners_words_and_a_replay_does_not_run_again():
 
 def test_missing_csrf_forged_call_and_late_call_are_refused():
     ledger = ConsultLedger()
-    ledger.open_session(SESSION)
+    ledger.open_session(SESSION, OWNER)
     refused = Flask(__name__)
     refused.config["TESTING"] = True
     refused.register_blueprint(create_consult_blueprint(
         backend=stub_backend, ledger=ledger, csrf_ok=lambda: False,
-        owner_id=lambda: OWNER, session_owner={SESSION: OWNER}.get,
+        owner_id=lambda: OWNER, session_owner=ledger.owner_of,
     ))
     assert post(refused.test_client()).status_code == 403
     client = app_for(ledger).test_client()
@@ -75,9 +74,27 @@ def test_missing_csrf_forged_call_and_late_call_are_refused():
     assert late.get_json()["error"] == "session ended"
 
 
+def test_a_call_id_from_another_session_does_not_replay_and_an_in_flight_call_does_not_run_twice():
+    ledger = ConsultLedger()
+    first = ledger.issue(OWNER)
+    second = ledger.issue(OWNER)
+    client = app_for(ledger).test_client()
+    assert post(client, session_id=first, call_id="same").status_code == 200
+    other = post(client, session_id=second, call_id="same")
+    assert other.status_code == 200
+    assert other.get_json()["call_id"] == "same"
+    started = []
+    # The second admit of an in-flight call is refused before the backend returns.
+    ledger.admit(first, "busy")
+    busy = post(client, session_id=first, call_id="busy")
+    assert busy.status_code == 409
+    assert busy.get_json()["error"] == "in flight"
+    assert started == []
+
+
 def test_the_thirteenth_consult_is_the_cap_line_and_a_slow_one_carries_the_holding_line(monkeypatch):
     ledger = ConsultLedger()
-    ledger.open_session(SESSION)
+    ledger.open_session(SESSION, OWNER)
     client = app_for(ledger).test_client()
     for n in range(12):
         assert post(client, call_id=f"c{n}").status_code == 200
@@ -88,7 +105,7 @@ def test_the_thirteenth_consult_is_the_cap_line_and_a_slow_one_carries_the_holdi
     import core.realtime_voice.consult as consult
     times = iter([0.0, 11.0])
     monkeypatch.setattr(consult.time, "monotonic", lambda: next(times))
-    ledger.open_session("sess-slow")
-    slow = app_for(ledger, {"sess-slow": OWNER}).test_client()
+    ledger.open_session("sess-slow", OWNER)
+    slow = app_for(ledger).test_client()
     held = post(slow, session_id="sess-slow", call_id="slow-1")
     assert held.get_json()["holding_line"] == "Still checking."

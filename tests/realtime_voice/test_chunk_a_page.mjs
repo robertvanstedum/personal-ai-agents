@@ -13,7 +13,9 @@ const events = [
   ["consult_started", {}],
   ["playback_started", {}],
   ["consult_finished", {}],
-  ["interrupted", {}],
+  ["playback_started", {}],
+  ["speech_started", {}],
+  ["assistant_stopped", {}],
 ];
 let now = 1000;
 for (const [name, extra] of events) {

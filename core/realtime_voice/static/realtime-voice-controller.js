@@ -154,7 +154,7 @@ export class RealtimeVoiceController {
     }
     this._provider = bootstrap.provider;
     this._model = bootstrap.model;
-    this._sessionId = this._managedBootstrap ? null : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this._sessionId = bootstrap.voice_session_id || (this._managedBootstrap ? null : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     this._warningMinutes = bootstrap.warning_minutes;
     this._maxMinutes = bootstrap.max_minutes;
 

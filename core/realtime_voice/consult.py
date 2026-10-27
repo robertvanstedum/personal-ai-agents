@@ -3,6 +3,7 @@
 The backend is swappable. The bench uses a stub. MC will pass its typed turn
 service. A consult has no authority the backend does not already have.
 """
+import secrets
 import threading
 import time
 
@@ -20,30 +21,47 @@ class ConsultLedger:
         self._sessions = {}
         self._results = {}
 
-    def open_session(self, session_id):
+    def open_session(self, session_id, owner=None):
         with self._lock:
-            self._sessions.setdefault(session_id, {"open": True, "calls": set()})
+            self._sessions.setdefault(session_id, {"open": True, "owner": owner, "calls": {}, "results": {}})
 
     def close_session(self, session_id):
         with self._lock:
             state = self._sessions.setdefault(session_id, {"open": False, "calls": set()})
             state["open"] = False
 
+    def issue(self, owner):
+        session_id = "vs-" + secrets.token_hex(8)
+        with self._lock:
+            self._sessions[session_id] = {"open": True, "owner": owner, "calls": {}, "results": {}}
+        return session_id
+
+    def owner_of(self, session_id):
+        with self._lock:
+            state = self._sessions.get(session_id)
+            return state["owner"] if state else None
+
     def admit(self, session_id, call_id):
         with self._lock:
             state = self._sessions.get(session_id)
             if state is None or not state["open"]:
                 return "closed", None
-            if call_id in self._results:
-                return "replay", self._results[call_id]
-            if len(state["calls"]) >= CAP:
+            if call_id in state["results"]:
+                return "replay", state["results"][call_id]
+            if call_id in state["calls"]:
+                return "in_flight", None
+            if len(state["calls"]) + len(state["results"]) >= CAP:
                 return "capped", None
-            state["calls"].add(call_id)
+            state["calls"][call_id] = "in_flight"
             return "new", None
 
-    def remember(self, call_id, result):
+    def remember(self, session_id, call_id, result):
         with self._lock:
-            self._results[call_id] = result
+            state = self._sessions.get(session_id)
+            if state is None:
+                return
+            state["results"][call_id] = result
+            state["calls"].pop(call_id, None)
 
 
 def stub_backend(owner_text, arguments):
@@ -75,6 +93,8 @@ def create_consult_blueprint(*, backend, ledger, csrf_ok, owner_id, session_owne
         status, prior = ledger.admit(session_id, call_id)
         if status == "replay":
             return jsonify(prior)
+        if status == "in_flight":
+            return jsonify({"ok": False, "error": "in flight"}), 409
         if status == "closed":
             return jsonify({"ok": False, "error": "session ended"}), 409
         if status == "capped":
@@ -84,7 +104,7 @@ def create_consult_blueprint(*, backend, ledger, csrf_ok, owner_id, session_owne
         result = {"ok": True, "call_id": call_id, **result}
         if time.monotonic() - started >= HOLD_AFTER_SECONDS:
             result["holding_line"] = HOLDING_LINE
-        ledger.remember(call_id, result)
+        ledger.remember(session_id, call_id, result)
         return jsonify(result)
 
     return bp

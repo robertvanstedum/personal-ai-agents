@@ -25,24 +25,30 @@ export function pageRecord(provider) {
     speechEndAt: null,
     consultPending: false,
     playbackOncePerSession: provider === "openai",
+    assistantPlaying: false,
+    ownerText: "",
   };
 }
 
 export function applyEvent(record, event, now) {
   if (event.name === "speech_stopped") {
-    if (!event.source) record.speechEndAt = now;
+    if (!event.source) {
+      record.speechEndAt = now;
+      record.committedUserTurns += 1;
+    }
     return;
   }
-  if (event.name === "input_transcript" && event.completed === true) record.committedUserTurns += 1;
+  if (event.name === "speech_started" && record.assistantPlaying) record.interruptions += 1;
   if (event.name === "playback_started") {
     record.playbacks += 1;
+    record.assistantPlaying = true;
     if (record.speechEndAt != null) {
       const elapsed = Math.round(now - record.speechEndAt);
       (record.consultPending ? record.consultMs : record.ordinaryMs).push(elapsed);
       record.speechEndAt = null;
     }
   }
-  if (event.name === "interrupted") record.interruptions += 1;
+  if (event.name === "assistant_stopped") record.assistantPlaying = false;
   if (event.name === "consult_started") record.consultPending = true;
   if (event.name === "consult_finished") {
     record.consults += 1;

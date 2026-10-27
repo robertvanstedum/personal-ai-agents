@@ -1,12 +1,15 @@
 """Local host for the Chunk A page. Keys stay in the Keychain. Nothing is deployed.
 
-    python3 core/realtime_voice/bench/serve.py
+    python3 -m core.realtime_voice.bench.serve
 
-The page is http://127.0.0.1:8766/. Provider use is billed. The process stops
+The page is http://127.0.0.1:8790/. Provider use is billed. The process stops
 if either voice key is missing. It does not write the keys anywhere.
 """
 import os
 import subprocess
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from flask import Flask, send_from_directory
 
@@ -15,7 +18,7 @@ from core.realtime_voice.consult import ConsultLedger, create_consult_blueprint,
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BENCH = os.path.dirname(os.path.abspath(__file__))
-PORT = 8766
+PORT = 8790
 
 
 def keychain(service, account):
@@ -26,6 +29,12 @@ def keychain(service, account):
     if done.returncode != 0 or not done.stdout.strip():
         raise SystemExit(f"Chunk A page stopped: no Keychain item {service}/{account}. Nothing was started.")
     return done.stdout.strip()
+
+
+def load_key(env_name, service, account):
+    if os.environ.get(env_name):
+        return
+    os.environ[env_name] = keychain(service, account)
 
 
 def persona(name):
@@ -46,16 +55,18 @@ def persona(name):
 
 def create_app():
     app = Flask(__name__)
+    ledger = ConsultLedger()
     app.register_blueprint(create_bootstrap_blueprint(
         domain="bench", locale="en-US", get_persona=persona, is_production=lambda: False,
+        local_owner=42, consult_ledger=ledger,
     ))
-    ledger = ConsultLedger()
     app.register_blueprint(create_consult_blueprint(
         backend=stub_backend, ledger=ledger,
         csrf_ok=lambda: True,
-        owner_id=lambda: "local",
-        session_owner=lambda session_id: "local" if session_id else None,
+        owner_id=lambda: 42,
+        session_owner=ledger.owner_of,
     ))
+    app.extensions["voice_ledger"] = ledger
 
     @app.route("/")
     def page():
@@ -73,8 +84,8 @@ def create_app():
 
 
 def main():
-    os.environ.setdefault("OPENAI_API_KEY", keychain("OPENAI_API_KEY", "OPENAI_API_KEY"))
-    os.environ.setdefault("XAI_API_KEY", keychain("XAI_API_KEY", "XAI_API_KEY"))
+    load_key("OPENAI_API_KEY", "openai", "api_key")
+    load_key("XAI_API_KEY", "xai", "api_key")
     create_app().run(host="127.0.0.1", port=PORT, debug=False)
 
 

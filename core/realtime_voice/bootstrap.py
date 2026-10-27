@@ -107,7 +107,7 @@ def _memo_duration_guard() -> DurationGuard:
     )
 
 
-def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_production):
+def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_production, local_owner=None, consult_ledger=None):
     """
     get_persona: Callable[[str], dict | None] -- domain-owned allow-list.
         Returns {"name", "prompt_txt", "scenes": {key: text}, "voices":
@@ -187,6 +187,8 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
     @bp.route("/api/realtime-voice/bootstrap", methods=["POST"])
     def bootstrap():
         user_id = resolve_user_id(request)
+        if user_id is None and local_owner is not None and request.remote_addr == "127.0.0.1":
+            user_id = local_owner
         if user_id is None:
             return jsonify({"ok": False, "error": "identity required"}), 401
 
@@ -271,8 +273,10 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
 
         _log_outcome(domain, user_id, provider, credential.get("model"), "started")
         guard = DurationGuard()
+        voice_session_id = consult_ledger.issue(user_id) if consult_ledger is not None else None
         return jsonify({
             "ok": True,
+            "voice_session_id": voice_session_id,
             **credential,
             "warning_minutes": guard.warning_minutes,
             "max_minutes": guard.max_minutes,

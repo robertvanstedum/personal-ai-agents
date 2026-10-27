@@ -52,6 +52,7 @@ document.querySelector("#start").addEventListener("click", async () => {
     bootstrapUrl: "/api/realtime-voice/bootstrap",
     onStateChange(state) { statusEl.textContent = state; },
     onPlayback() { hear("playback_started", {}); },
+    onFunctionCall: (call) => consult(call.call_id, record.ownerText || "Check with MC"),
     onFatalError(info) { statusEl.textContent = `Error: ${info.reason || "unknown"}`; },
     onFinalize() { render(); },
   });
@@ -62,7 +63,10 @@ document.querySelector("#start").addEventListener("click", async () => {
     const raw = adapter.on.bind(adapter);
     adapter.on = (name, handler) => raw(name, (event) => {
       if (name === "speech_stopped" && !event?.source) hear("speech_stopped", {});
-      if (name === "input_transcript" && event?.completed === true) hear("input_transcript", { completed: true });
+      if (name === "input_transcript" && event?.completed === true) {
+        record.ownerText = event.text || record.ownerText;
+        hear("input_transcript", { completed: true });
+      }
       if (name === "interrupted") hear("interrupted", {});
       handler(event);
     });
@@ -71,18 +75,23 @@ document.querySelector("#start").addEventListener("click", async () => {
   await controller.startSession({ provider, persona: "bench", scene: "" });
 });
 
-document.querySelector("#check").addEventListener("click", async () => {
-  if (!record) return;
+async function consult(callId, ownerText) {
   hear("consult_started", {});
+  const holding = setTimeout(() => controller?._adapter?.sendContinuationInstruction("Still checking."), 10000);
   const response = await fetch("/api/realtime-voice/consult", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      session_id: controller?._sessionId, call_id: `host-${Date.now()}`,
-      name: "consult", owner_transcript_item: "Check with MC", arguments: {},
+      session_id: controller?._sessionId, call_id: callId,
+      name: "consult", owner_transcript_item: ownerText, arguments: {},
     }),
   });
+  clearTimeout(holding);
   hear("consult_finished", { ok: response.ok });
+  return response.json();
+}
+document.querySelector("#check").addEventListener("click", () => {
+  if (record) consult(`host-${Date.now()}`, record.ownerText || "Check with MC");
 });
 document.querySelector("#end").addEventListener("click", () => controller?.endSession("user_ended"));
 </script>
