@@ -16,7 +16,7 @@ existing role as the post-session review model, untouched by this module.
 import os
 
 ALLOWED_PROVIDERS = frozenset({"openai", "xai"})
-ALLOWED_LOCALES = frozenset({"de-AT", "pt-BR"})
+ALLOWED_LOCALES = frozenset({"de-AT", "pt-BR", "en-US"})
 
 _APPLICATION_DEFAULT_PROVIDER = "openai"
 

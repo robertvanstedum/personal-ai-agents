@@ -43,9 +43,23 @@ _RATE_LIMIT_WINDOW_SECONDS = 60
 _rate_limit_state: dict[str, list[float]] = {}
 
 _DEFAULT_VOICE = {"openai": "marin", "xai": "eve"}
+_ALLOWED_TOOL_NAMES = frozenset({"consult", "save_note"})
+
+
+def _allowlisted_tools(tools):
+    if not isinstance(tools, list) or not tools:
+        return False
+    names = []
+    for tool in tools:
+        if not isinstance(tool, dict) or set(tool) != {"type", "name", "description", "parameters"}:
+            return False
+        if tool["type"] != "function" or tool["name"] not in _ALLOWED_TOOL_NAMES:
+            return False
+        names.append(tool["name"])
+    return len(names) == len(set(names))
 _TRANSCRIPTION_LANGUAGE = {
-    "openai": {"de-AT": "de", "pt-BR": "pt"},
-    "xai": {"de-AT": "de", "pt-BR": "pt-BR"},
+    "openai": {"de-AT": "de", "pt-BR": "pt", "en-US": "en"},
+    "xai": {"de-AT": "de", "pt-BR": "pt-BR", "en-US": "en"},
 }
 _MEMO_TRANSCRIPTION_LANGUAGE = {"de-AT": "de", "pt-BR": "pt"}
 _DEFAULT_MEMO_WARNING_MINUTES = 13
@@ -205,10 +219,18 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
             _log_outcome(domain, user_id, provider, None, "unknown_persona")
             return jsonify({"ok": False, "error": "unknown persona"}), 400
 
-        scene_text = persona["scenes"].get(scene)
-        if scene_text is None:
-            _log_outcome(domain, user_id, provider, None, "unknown_scene")
-            return jsonify({"ok": False, "error": "unknown scene"}), 400
+        scenes = persona.get("scenes") or {}
+        if scenes:
+            scene_text = scenes.get(scene)
+            if scene_text is None:
+                _log_outcome(domain, user_id, provider, None, "unknown_scene")
+                return jsonify({"ok": False, "error": "unknown scene"}), 400
+        else:
+            scene_text = ""
+        tools = persona.get("tools") or None
+        if tools is not None and not _allowlisted_tools(tools):
+            _log_outcome(domain, user_id, provider, None, "invalid_tools")
+            return jsonify({"ok": False, "error": "invalid tools"}), 400
 
         # Instructions are always built server-side from repository data --
         # any `instructions` field the client sent is discarded, never
@@ -233,6 +255,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
                     turn_detection=turn_detection,
                     transcription_language=transcription_language,
                     user_id_for_safety_identifier=str(user_id),
+                    tools=tools,
                 )
             else:
                 credential = xai_voice.mint_ephemeral_credential(
@@ -240,6 +263,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
                     voice=voice,
                     turn_detection=turn_detection,
                     transcription_language=transcription_language,
+                    tools=tools,
                 )
         except (openai_realtime.OpenAIRealtimeError, xai_voice.XAIVoiceError) as e:
             _log_outcome(domain, user_id, provider, None, "provider_error")

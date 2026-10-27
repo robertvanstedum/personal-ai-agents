@@ -342,6 +342,73 @@ def test_unknown_persona_is_rejected(client):
     assert resp.status_code == 400
 
 
+CONSULT = {
+    "type": "function",
+    "name": "consult",
+    "description": "Ask the stub.",
+    "parameters": {"type": "object", "properties": {}},
+}
+
+
+def _bench_persona(name):
+    if name == "bench":
+        return {
+            "name": "Bench",
+            "prompt_txt": "You are the bench persona.",
+            "scenes": {},
+            "voices": {},
+            "tools": [CONSULT],
+        }
+    return _fake_persona_lookup(name)
+
+
+def test_scene_less_english_persona_passes_only_its_allowlisted_tool(monkeypatch):
+    """Synthetic session. No provider is called. German personas are untouched."""
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(create_bootstrap_blueprint(
+        domain="bench", locale="en-US", get_persona=_bench_persona, is_production=lambda: True,
+    ))
+    seen = {}
+
+    def mint(**kwargs):
+        seen.update(kwargs)
+        return {"provider": "openai", "client_secret": "ek_fake", "expires_at": 1, "model": "gpt-realtime-2.1"}
+
+    with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential", side_effect=mint):
+        resp = app.test_client().post(
+            "/api/realtime-voice/bootstrap",
+            json={"provider": "openai", "persona": "bench"},
+            headers={"X-Minimoi-Auth-Id": "77"},
+        )
+    assert resp.status_code == 200, resp.get_json()
+    assert seen["tools"] == [CONSULT]
+    assert seen["transcription_language"] == "en"
+    assert "English is the default" in seen["instructions"]
+    assert "isolated German word" in seen["instructions"]
+
+
+def test_a_persona_cannot_carry_a_tool_outside_the_list(monkeypatch):
+    def lookup(name):
+        persona = _bench_persona(name)
+        persona["tools"] = [{**CONSULT, "name": "shell"}]
+        return persona
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(create_bootstrap_blueprint(
+        domain="bench", locale="en-US", get_persona=lookup, is_production=lambda: True,
+    ))
+    with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential") as mint:
+        resp = app.test_client().post(
+            "/api/realtime-voice/bootstrap",
+            json={"provider": "openai", "persona": "bench"},
+            headers={"X-Minimoi-Auth-Id": "78"},
+        )
+    assert resp.status_code == 400
+    mint.assert_not_called()
+
+
 def test_unknown_scene_for_known_persona_is_rejected(client):
     with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential"):
         resp = client.post(
