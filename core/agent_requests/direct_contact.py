@@ -50,7 +50,7 @@ class Target:
     revision: str
 
     def __post_init__(self):
-        if not re.fullmatch(r'[a-z][a-z0-9-]{0,39}', self.alias) or self.recipient not in L.RECIPIENTS:
+        if not re.fullmatch(r'[a-z][a-z0-9-]{0,39}', self.alias) or self.recipient not in L.CONNECTED:
             raise Refused('invalid_target')
         if not re.fullmatch(r'[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}', self.session_id):
             raise Refused('invalid_session')

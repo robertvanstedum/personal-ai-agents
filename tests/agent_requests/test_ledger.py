@@ -231,3 +231,19 @@ def test_a_progress_or_a_question_before_any_receipt_also_implies_exactly_one(ro
     ar.needs_you(root, rid, "claude-code", "Which one?")
     ar.progress(root, rid, "claude-code", "still here")
     assert [e["kind"] for e in ar.load(root, rid)["events"]].count("receipt") == 1
+
+
+def test_grok_can_ask_and_answer_through_the_ledger_like_the_other_agents(root):
+    # Grok joined the dev team (INIT-2026-0010, 27 Oct): it asks and answers in the ledger; it has no automated connection.
+    made = _cli(root, "ask", "--from", "grok", "--to", "claude-code", "--conversation", CONV, "Phase 0 is ready for review.")
+    rid = json.loads(made.stdout)["request_id"]
+    assert rid in _cli(root, "pending", "--as", "claude-code").stdout
+    back = _cli(root, "ask", "--from", "claude-code", "--to", "grok", "--conversation", CONV, "Reviewed: accepted with two findings.")
+    rid2 = json.loads(back.stdout)["request_id"]
+    assert rid2 in _cli(root, "pending", "--as", "grok").stdout
+    assert json.loads(_cli(root, "result", rid2, "--as", "grok", "Fixed", "both.").stdout)["recorded"] is True
+    assert _cli(root, "result", rid2, "--as", "codex", "x").returncode == 1                                   # not the recipient
+
+
+def test_grok_has_no_automated_connection_or_mc_direct_contact():
+    assert "grok" in ar.RECIPIENTS and "grok" in ar.ACTORS and "grok" not in ar.CONNECTED
