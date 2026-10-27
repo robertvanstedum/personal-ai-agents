@@ -4,5 +4,5 @@ BEGIN;
 ALTER TABLE guild.mc_tool_proposals DROP CONSTRAINT IF EXISTS mc_tool_proposals_kind_check;
 ALTER TABLE guild.mc_tool_proposals ADD CONSTRAINT mc_tool_proposals_kind_check
     CHECK (kind IN ('lesson', 'guest_reject', 'guest_reject_batch', 'issue_comment', 'data_repair',
-                    'delegate_research', 'access_invite', 'delegate_build'));
+                    'delegate_research', 'access_invite', 'delegate_build')) NOT VALID;  -- re-run safe: a later migration's list (020) validates existing rows
 COMMIT;
