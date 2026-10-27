@@ -10,6 +10,8 @@ import json
 import urllib.parse
 import urllib.request
 
+from core.supervision.store import name
+
 REPO = "robertvanstedum/personal-ai-agents"
 RELEASE_WORKFLOWS = ("deploy.yml", "deploy-mc-agent.yml", "deploy-iotconnect.yml")
 STALL_AFTER = timedelta(minutes=20)        # a turn that ended with no stop line, or open work, and nothing since
@@ -60,7 +62,7 @@ def ci_state(check_runs):
 
 
 def _who(stop):
-    return ("Claude Code" if stop["agent"] == "claude-code" else "Codex") + f" {stop['session'][:8]}" + \
+    return name(stop["agent"]) + f" {stop['session'][:8]}" + \
         (f" ({stop['branch']})" if stop.get("branch") else "")
 
 
@@ -140,7 +142,7 @@ def check_in(store, github, *, now=None, since=None):
         work = {"jobs": [], "runners": []}
         errors.append(f"delegations unreadable ({type(exc).__name__})")
     for job in work["jobs"]:
-        who = "Claude Code" if job["actor"] == "claude-code" else "Codex"
+        who = name(job["actor"])
         what = f"{who} {job['scope']} “{job['brief'][:60]}”"
         if job["state"] in ("queued", "claimed", "running"):
             minutes = int((job["now"] - (job["started_at"] or job["created_at"])).total_seconds() // 60)
@@ -157,6 +159,12 @@ def check_in(store, github, *, now=None, since=None):
             items.append({"key": f"delegation-ended:{job['request_id']}", "kind": "error",
                           "text": f"{what} ended {job['state'].replace('_', ' ')}"
                                   + (f" ({job['code']})" if job.get("code") else "") + "."})
+    try:     # an agent asking Robert through the ledger (needs-you) reaches him once, word for word
+        for e in (store.recent_exchanges(kinds=["needs_you"], limit=10) if hasattr(store, "recent_exchanges") else []):
+            items.append({"key": f"exchange-needs:{e['event_key']}", "kind": "waiting_on_robert",
+                          "text": f"{name(e['actor'])} asks you: {e['text'][:300]}"})
+    except Exception as exc:
+        errors.append(f"agent exchanges unreadable ({type(exc).__name__})")
     for err in errors:
         items.append({"key": f"watch-error:{err}:{now:%Y%m%d%H}", "kind": "error", "text": f"Check-in: {err}."})
     summary = {"at": now.isoformat(), "prs": prs, "failed_releases": failed_runs, "sessions": sessions,
@@ -181,7 +189,7 @@ def message(items, summary):
             lines.extend(f"• {t}" for t in group)
     if summary.get("running"):
         lines.append("\nRunning:")
-        lines.extend(f"• {'Claude Code' if r['agent'] == 'claude-code' else 'Codex'}: {r['brief'][:70]} "
+        lines.extend(f"• {name(r['agent'])}: {r['brief'][:70]} "
                      f"({r['state']}, {r['minutes']} min)" for r in summary["running"])
     tail = [f"{len(summary['prs'])} open PRs", f"{len(summary['pending_decisions'])} decisions waiting"]
     if summary["nudged"]:

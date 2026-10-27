@@ -34,7 +34,7 @@ class FakeBot:
 
 @unittest.skipUnless(DSN, "requires disposable MC_BINDING_TEST_DSN")
 class SupervisionFlow(PostgresFixture, unittest.TestCase):
-    migrations = ("core/supervision/sql/001_supervision.sql",)
+    migrations = ("core/supervision/sql/001_supervision.sql", "core/supervision/sql/002_grok_and_exchanges.sql")
 
     def setUp(self):
         with self.guard.cursor() as cur:
@@ -146,6 +146,22 @@ class SupervisionFlow(PostgresFixture, unittest.TestCase):
         self.assertEqual((ok.status_code, ok.get_json()), (200, {"decisions": [], "nudges": []}))
         bad = c.post(supervision.PATH, json={"phase": "decide"}, headers={"Authorization": "Bearer " + token})
         self.assertEqual(bad.status_code, 400)
+
+    def test_exchanges_are_kept_once_and_read_newest_first(self):
+        rid = "r-" + "b" * 24
+        body = {"phase": "report", "exchanges": [
+            {"request_id": rid, "event_id": "ask", "kind": "ask", "actor": "grok", "to": "claude-code",
+             "at": time.time() - 120, "text": "P0 ready for review."},
+            {"request_id": rid, "event_id": "0123abcd", "kind": "needs_you", "actor": "claude-code", "to": "grok",
+             "at": time.time() - 60, "text": "Robert: which phone path?"}]}
+        self.assertEqual(len(self.store.worker(body)["exchanges"]), 2)
+        self.store.worker(body)                                      # the same entries again: kept once
+        got = self.store.recent_exchanges()
+        self.assertEqual([(e["kind"], e["actor"]) for e in got], [("needs_you", "claude-code"), ("ask", "grok")])
+        self.assertEqual([e["kind"] for e in self.store.recent_exchanges(kinds=["needs_you"])], ["needs_you"])
+        self.store.worker({"phase": "report", "stops": [
+            {"report_key": "stop-grok0001", "agent": "grok", "session": "grok-sess1", "state": "done",
+             "stopped_at": time.time()}]})                            # Grok's stop line fits the table now
 
     def test_worker_cannot_answer(self):
         for body in ({"phase": "decide"}, {"phase": "report", "decisions": []},
