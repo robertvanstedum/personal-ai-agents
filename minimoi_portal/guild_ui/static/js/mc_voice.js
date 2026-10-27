@@ -3,7 +3,7 @@
 // Speaking with Master Craftsman (MC voice, v1). Off unless the server says so (data-mc-voice) AND the capabilities call answers.
 //
 // Chained, on the shared Confer controller: the microphone goes straight to the speech provider for TRANSCRIPTION only; each final transcript is submitted through the
-// page's ordinary kept-note path (conversation.js submitVoiceUtterance), so Master Craftsman himself answers; then his kept reply is read aloud from the server's record.
+// page's ordinary kept-note path. Without managed voice, the button says Voice unavailable and sends nothing.
 // The controller's transcript is the owner's request, never a model's paraphrase. Nothing here stores audio or a provider transcript; the page keeps only what the note
 // path keeps. On the record only: going Private, an unknown record mode, minimizing, or leaving the page ends the session first, including one still starting.
 //
@@ -13,7 +13,7 @@ import { $, announce } from './dom.js';
 import { paintVoiceButton } from './voice_button.js';
 import { live, onChange } from './state.js';
 import { recordMode } from './api.js';
-import { submitVoiceUtterance, panelMode } from './conversation.js';
+import { panelMode } from './conversation.js';
 
 const WORDS = {
   private: 'Voice stopped: it is not built for Private yet. Typing in Private works as before.',
@@ -134,58 +134,10 @@ export function initMcVoice(page) {
     setPhase('connecting');
     paint(true);
     if (managed) {await startManaged(mine,current);return;}
-    say(`Connecting… Your speech is sent to ${provider} to be turned into text, and Master Craftsman's replies are read aloud by the same service.`);
-    try {
-      const { ConferVoiceController } = await import(`${api}/mc/voice/static/realtime-confer-controller.js`);
-      if (!current()) return;                        // stopped while the code loaded
-      class McVoiceController extends ConferVoiceController {
-        // The shared controller would POST the transcript to a turn URL and play a server speech URL. Here the transcript goes through the page's own note path and
-        // the kept reply is read from the record, so only the submit step is replaced; the session, transcription, duplicate-item and stale-generation handling are the controller's.
-        async _submitTurn(text, requestId) {
-          if (!this._active || !current()) return;       // a queued utterance of a stopped attempt is dropped, not sent
-          this._onUserTurn(text);
-          this._onStateChange('thinking');
-          const result = await submitVoiceUtterance(text, requestId);
-          if (!this._active || !current()) return;       // stopped, minimized, Private, or a new attempt since: nothing is spoken
-          if (!result.ok) {
-            this._onStateChange('listening');
-            this._onError({ reason: result.reason, detail: result.message });
-            return;
-          }
-          const c = page.conversation ? `?c=${encodeURIComponent(page.conversation.id)}` : '';
-          await this._play(`${api}/mc/voice/speech/${encodeURIComponent(result.note_request_id)}${c}`);
-        }
-
-      }
-      const guarded = (fn) => (...args) => { if (current()) fn(...args); };     // nothing from an older attempt repaints the page
-      const c = new McVoiceController({
-        capabilitiesUrl: `${api}/mc/voice/capabilities`,
-        bootstrapUrl: `${api}/mc/voice/bootstrap`,
-        turnUrl: null,
-        conversationId: page.conversation ? page.conversation.id : 'owner',
-        requestHeaders: headers,
-        onStateChange: guarded((state, info) => {
-          if (state === 'listening') { setPhase('listening'); if (!showingError) say('Listening… say your message; I will send it when you pause.'); }   // a problem stays on screen until the next turn
-          else if (state === 'thinking') {setPhase('working');say('Working on it…');}
-          else if (state === 'speaking') {setPhase('speaking');say('Speaking…');}
-          else if (state === 'reconnecting') {setPhase('connecting');say('Reconnecting…');}
-          else if (state === 'interrupted') {setPhase('listening');say('Listening…');}
-          else if (state === 'stopped' && info && info.reason === 'duration_limit') stop('limit');
-        }),
-        onProvisionalTranscript: guarded((text) => { if (text) say(`Hearing: ${text}`); }),
-        onWarning: guarded(() => say('Voice will stop in about two minutes.', { loud: true })),
-        onError: guarded((e) => {
-          say((e && (e.detail || e.reason)) ? `Voice: ${e.detail || e.reason}` : 'Voice could not continue.', { loud: true, error: true });
-          if (e && ['start_failed', 'microphone_denied', 'reconnect_failed'].includes(e.reason)) stop('failed', { quiet: true });
-        }),
-      });
-      controller = c;
-      await c.start('openai');
-    } catch (e) {
-      if (current()) { stop('failed', { quiet: true }); say(`Voice could not start${e && e.message ? `: ${e.message}` : ''}. Typing still works.`, { loud: true, error: true }); }
-    } finally {
-      if (current()) starting = false;
-    }
+    say('Voice unavailable. Live voice is not on for this Master Craftsman, so nothing was sent. Typing still works.', { loud: true, error: true });
+    setPhase('unavailable');
+    starting = false;
+    paint(false);
   }
 
   async function startManaged(mine,current) {
