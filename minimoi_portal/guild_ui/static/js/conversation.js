@@ -542,6 +542,33 @@ function streamLine() {
   return li;
 }
 
+// A render event carries the whole answer so far (#402). Replacing it all twice a second tore down and rebuilt every
+// settled paragraph and table, and snapped an opened Details shut. Instead the blocks that did not change are left
+// alone: only the first changed block and what follows it are replaced, and a Details fold is kept (with its open
+// state) while its own blocks are brought up to date the same way.
+function sameNode(a, b) {
+  if (a.nodeType !== b.nodeType) return false;
+  return a.nodeType === 1 ? a.outerHTML === b.outerHTML : a.textContent === b.textContent;
+}
+
+function morphChildren(parent, next) {
+  const cur = Array.from(parent.childNodes);
+  let i = 0;
+  while (i < cur.length && i < next.length && sameNode(cur[i], next[i])) i += 1;
+  if (i < cur.length && i < next.length && cur[i].nodeName === 'DETAILS' && next[i].nodeName === 'DETAILS') {
+    morphChildren(cur[i], Array.from(next[i].childNodes));
+    i += 1;
+  }
+  for (const n of cur.slice(i)) n.remove();
+  for (const n of next.slice(i)) parent.append(n);
+}
+
+function applyRendered(rendered, html, doc = document) {
+  const t = doc.createElement('template');
+  t.innerHTML = html;                                    // sanitised on the server (markdown_render.py)
+  morphChildren(rendered, Array.from(t.content.childNodes));
+}
+
 function endLine(li, state) {
   li.stopTicking();
   li.dataset.ended = 'true';
@@ -627,7 +654,7 @@ async function streamMasterCraftsman(t, via) {
       showTail();
       follow();
     } else if (ev.t === 'render' && typeof ev.html === 'string' && Number.isInteger(ev.deltas)) {
-      rendered.innerHTML = ev.html;           // sanitised on the server (markdown_render.py)
+      applyRendered(rendered, ev.html);       // only the changed blocks are replaced (#402)
       upto = Math.min(ev.deltas, deltas.length);
       showTail();
       follow();
