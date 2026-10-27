@@ -190,6 +190,20 @@ class CatalogueTests(unittest.TestCase):
             with self.assertRaises(catalogue.ArgumentsRefused, msg=args):
                 v("minimoi_data_repair_ticket", args)
 
+    def test_an_issue_body_may_span_lines_and_nothing_else_may(self):
+        """#395: every issue MC proposed in prod was refused for its line breaks."""
+        v = catalogue.validate
+        body = "## Symptom\n\nThe text flickered.\n\n- one\n\t- two"
+        self.assertEqual(v("minimoi_issue_create", {"title": "MC chat flickers", "body": body})["body"], body)
+        self.assertEqual(v("minimoi_issue_update", {"number": 402, "body": body})["body"], body)
+        self.assertEqual(v("minimoi_issue_comment", {"number": 402, "summary": body, "refs": ["guild:3"]})["summary"], body)
+        for args in ({"title": "MC chat\nflickers", "body": body},          # a title stays one line
+                     {"title": "MC chat flickers", "body": "a\rb and more"},  # other control characters still refuse
+                     {"title": "MC chat flickers", "body": "a\x00b and more"},
+                     {"title": "MC chat flickers", "body": body + "\n"}):     # untrimmed still refuses
+            with self.assertRaises(catalogue.ArgumentsRefused, msg=repr(args)):
+                v("minimoi_issue_create", args)
+
     def test_session_key_parsing(self):
         user = "guild-mc:" + "0" * 32
         self.assertEqual(parse_session_key(f"agent:mc-chat:openai-user:{user}", "mc-chat", {"mc-chat"}), user)
