@@ -11,7 +11,9 @@ Guest rejects follow MINIMOI_MC_GUEST_ACTIONS=1. GitHub issue reads (public, no 
 unless MINIMOI_MC_TOOLS_GITHUB=0. Changes to existing issues (comments, edits, labels, close/reopen:
 MINIMOI_MC_TOOLS_COMMENTS=1) and new issues and data-repair tickets (MINIMOI_MC_TOOLS_TICKETS=1) need
 MINIMOI_MC_ISSUES_TOKEN_FILE: a private file holding a GitHub token that can only write issues in MINIMOI_GITHUB_REPO.
-Without it MC is told they are off. Each write still needs its own policy rule and Robert's exact yes.
+Without it MC is told they are off. Each write still needs its own policy rule and Robert's exact yes. Handing
+Robert's own message to Claude Code, Codex or Grok (minimoi_agent_ask) needs the front door
+(MINIMOI_GUILD_AGENT_REQUESTS=1) and its policy rule.
 """
 from __future__ import annotations
 
@@ -449,8 +451,22 @@ def proposal_reader(services, principal):
     return read_shown
 
 
+def agent_asker(asks):
+    """``ask(conversation_id, note_text, note_request_id, to) -> (made, words)`` through the front door
+    (agent_ask.AskService, the request ledger at <store>/agent_requests), or None while MINIMOI_GUILD_AGENT_REQUESTS
+    is off. The text is the owner's kept note, read by the tool service; the request ids come from the note."""
+    if asks is None:
+        return None
+
+    def ask(conversation_id, note_text, note_request_id, to):
+        made = asks.ask({"id": conversation_id}, {"text": note_text}, note_request_id, list(to))
+        return made, asks.words(made)
+    return ask
+
+
 def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, show=None, read_shown=None,
-                  read_owner_note=None, domain_health=None, registers=None, board=None, export_conversation=None, recall_source=None):
+                  read_owner_note=None, domain_health=None, registers=None, board=None, export_conversation=None, recall_source=None,
+                  agent_ask=None):
     from core.mc_tools.service import ToolService
     lessons = None
     if lessons_root and os.path.isabs(lessons_root) and lessons_env in ("dev", "prod"):
@@ -465,7 +481,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup, policy=policy_source(cfg), read_owner_note=read_owner_note,
                        domain_health=domain_health, registers=registers, board=board, export_conversation=export_conversation, recall_source=recall_source,
-                       artifact_root=artifact_root(os.environ))
+                       artifact_root=artifact_root(os.environ), agent_ask=agent_ask)
 
 
 def artifact_root(environ):
@@ -517,7 +533,8 @@ def attach(app, blueprint_name, services):
                             export_conversation=conversation_exporter(services, cfg["principal"]),
                             domain_health=domain_health_reader(environ, app.extensions[blueprint_name].get("base_url", "")),
                             registers=_mc_registers(environ, cfg["principal"],
-                                                    app.extensions[blueprint_name].get("base_url", "")))
+                                                    app.extensions[blueprint_name].get("base_url", "")),
+                            agent_ask=agent_asker(app.extensions[blueprint_name].get("agent_asks")))
     agent_worker_sha = (environ.get('MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256') or '').strip().lower()
     enrollment_path = environ.get('MINIMOI_MC_AGENT_ENROLLMENT')
     if enrollment_path and re.fullmatch('[0-9a-f]{64}',agent_worker_sha):

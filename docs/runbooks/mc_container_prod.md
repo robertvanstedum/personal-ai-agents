@@ -105,6 +105,22 @@ approval: MC proposes, Robert says yes in the chat, the portal writes. Both rule
 - **Rotate** (before the expiry): update the parameter, run `issues on` again.
 - **Off:** `issues off` (removes the file and both flags). `switch cos` also clears both flags.
 
+## MC hands Robert's requests to the agents (27 Oct 2026)
+
+Robert tells MC on production "ask Claude Code / Codex / Grok / all to …". MC calls `minimoi_agent_ask` (`to`, a
+display `title`); the portal writes **Robert's own kept message**, never MC's words, into the production request ledger
+(`<guild store>/agent_requests`, origin `owner_message_via_mc`), one request per agent, ids fixed by his note. Tier 2,
+standing approval, one per turn (`agent.ask.owner_note`, OPS-2026-10-27-mc-front-door-prod).
+
+- **Turn on:** `MINIMOI_GUILD_AGENT_REQUESTS=1` in `/opt/minimoi/.env`, policy revision `mc-prod-20261027-agent-ask`
+  approved by Robert with `approve-policy`, portal redeploy, and MC's container offering the tool. No migration.
+- **Relay:** the supervision sync (`scripts/mc_host/supervision_sync.py`, worker token, outbound HTTPS only) pulls
+  each request, creates it in the Mac's shared ledger with the same id and content, and acks it; it carries each
+  agent's receipt, progress, result, needs-you and cancel back up, applied with the ledger's own rules (only the
+  recipient answers; duplicates have one effect; nothing for a request that was not relayed), plus which agents are
+  listening. Robert re-runs `scripts/mc_host/install_supervision_sync.sh` on the Mac to install the new sync.
+- The worker token can relay; it can never create a request on production, answer a decision or act as Robert.
+
 ## MC's web search: the gateway's key database (26 Oct 2026)
 
 MC searches through its own capped gateway key (`minimoi-cos-web-search` only, `/v1/responses` only, $5 per 30 days,

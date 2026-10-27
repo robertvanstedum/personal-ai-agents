@@ -37,6 +37,7 @@
       "minimoi_agent_contact",
       "minimoi_agent_status",
       "minimoi_agent_watch",
+      "minimoi_agent_ask",
       "minimoi_career_trial",
       "minimoi_recall"
     ]

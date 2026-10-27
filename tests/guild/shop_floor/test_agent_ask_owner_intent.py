@@ -98,4 +98,14 @@ class OwnerGuardTests(unittest.TestCase):
  def test_fresh_directive_after_blank_line_ends_quoted_data(self):
   got,error=self.guard('> Example for later:\nAsk Codex to review.\n\nAsk Claude Code to review.', ['claude-code']);self.assertIsNone(error);self.assertEqual(got['to'],['claude-code'])
 
+ def test_grok_and_all_are_recipients_too(self):
+  self.assertIsNone(self.guard('Ask Grok to review.',['grok'])[1])
+  self.assertIsNone(self.guard('Ask all to review the plan.',['claude-code','codex','grok'])[1])
+  self.assertIsNone(self.guard('Ask Codex and Grok to review.',['codex','grok'])[1])
+  self.assertIsNotNone(self.guard('Ask all to review the plan.',['claude-code','codex'])[1])         # all is three, never two
+  self.assertIsNotNone(self.guard('Ask Claude Code, not Grok.',['grok'])[1])
+ def test_actual_jobhook_ask_grok_line_dispatches_to_grok_only(self):
+  hook,service=self.hook('Please ask Grok to check the phone path.');hook.decide('ASK grok: Phone path',clean=True)
+  args,kw=service.ask.call_args;self.assertEqual(args[3],['grok'])
+
 if __name__=='__main__':unittest.main()

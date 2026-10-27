@@ -1031,6 +1031,36 @@
       }
     },
     {
+      "name": "minimoi_agent_ask",
+      "capability": "agent.ask.owner_note",
+      "label": "Hand Robert's message to Claude Code, Codex or Grok",
+      "description": "When Robert asks you to ask, tell or hand something to Claude Code, Codex or Grok (or all of them), call this once with who (to: claude-code, codex, grok, or all for the three) and a short title. MiniMoi sends Robert's own current message, word for word, as the request; your words are never sent, and the title is only a label. It goes into the agents' request ledger, where their sessions pick it up; their pickup, progress, questions and reports come back into this conversation, attributed to them. The result says what is known (the request ids, and whether a listener was seen); a request is not delivery, and a report is the agent's own, not a verification. Tell Robert the result in a few words.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "to",
+          "title"
+        ],
+        "properties": {
+          "to": {
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "codex",
+              "grok",
+              "all"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        }
+      }
+    },
+    {
       "name": "minimoi_career_trial",
       "label": "Run synthetic Career Kit trial",
       "capability": "host.career.synthetic",

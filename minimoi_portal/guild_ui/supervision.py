@@ -2,7 +2,8 @@
 
 * ``attach``: the Mac sync's one path on the public port, ``/internal/supervision/v1/worker``, authenticated by its
   own token (only its SHA-256 is configured: MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256). It can report stop lines and
-  ask decisions; it can never answer one.
+  ask decisions; it can never answer one. While MC's front door is on it also relays Robert's requests to the agents
+  down and their replies up (core/supervision/relay.py); it can never create a request here.
 * ``owner_decision_command``: Robert's own Guild turn "approve D-12" / "no D-12" answers that decision. Only his kept
   owner note counts (never MC's text); the receipt names the conversation and note and quotes him.
 * ``context_block``: what MC is told on each of Robert's Guild turns: decisions waiting on him and the last check-in,
@@ -70,15 +71,23 @@ def door(app, path, endpoint, digest, handler, *, refused=(ValueError,), clock=t
     app.add_url_rule(path, endpoint, view, methods=["POST"])
 
 
-def attach(app, environ, *, store_factory=store, clock=time.monotonic, per_minute=30):
-    """Open the Mac sync's path, or do nothing."""
+def attach(app, environ, *, store_factory=store, clock=time.monotonic, per_minute=30, ledger_root=None):
+    """Open the Mac sync's path, or do nothing. ``ledger_root`` is MC's front door's request ledger
+    (``<store>/agent_requests``, agent_ask.attach), or None while the front door is off: then nothing is relayed."""
     digest = (environ.get("MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256") or "").strip().lower()
     if not enabled(environ) or not re.fullmatch(r"[0-9a-f]{64}", digest) or "supervision_worker" in app.view_functions:
         return False                                   # off, or already opened by another Guild mount
     from core.supervision.store import Refused
-    door(app, PATH, "supervision_worker", digest, lambda body: store_factory().worker(body),
-         refused=(ValueError, Refused), clock=clock, per_minute=per_minute)
-    _log.info("supervision: Mac sync path open (%s only)", PATH)
+    if ledger_root:
+        from core.supervision.relay import Relay
+        relay = Relay(ledger_root)
+        handler = lambda body: store_factory().worker(body, relay=relay)                    # noqa: E731
+    else:
+        handler = lambda body: store_factory().worker(body)                                 # noqa: E731
+    # An agent's report relayed up is up to 16 KiB of text (the ledger's own bound), so a report may be ~200 KiB.
+    door(app, PATH, "supervision_worker", digest, handler, refused=(ValueError, Refused), clock=clock,
+         per_minute=per_minute, body_max=262144)
+    _log.info("supervision: Mac sync path open (%s only)%s", PATH, ", relaying the front door's requests" if ledger_root else "")
     return True
 
 

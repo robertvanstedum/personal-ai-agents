@@ -55,6 +55,10 @@ HANDLERS = {
     "agent_contact_v1": Handler("minimoi_agent_contact", "agent.contact.existing", frozenset({2}), "native_agent_receipt_v1", "none"),
     "agent_status_v1": Handler("minimoi_agent_status", "agent.contact.status", frozenset({1}), None, "none"),
     "agent_watch_v1": Handler("minimoi_agent_watch", "agent.watch", frozenset({2}), "native_notice_readback_v1", "none"),
+    # Robert's own kept note, word for word, handed in his turn to his own agents through the request ledger (the front
+    # door, agent_ask.AskService); the agents treat a request as data, never as authority. No model text is sent.
+    "agent_ask_v1": Handler("minimoi_agent_ask", "agent.ask.owner_note", frozenset({2}), "agent_request_readback_v1",
+                            "none"),
     "career_trial_v1": Handler("minimoi_career_trial", "host.career.synthetic", frozenset({2}), "host_artifact_readback_v1", "none"),
     "working_write_v1": Handler("minimoi_working_write", "host.artifacts.create", frozenset({2}), "host_artifact_readback_v1", "none"),
     "conversation_export_v1": Handler("minimoi_conversation_export", "host.conversation.export", frozenset({2}), "host_artifact_readback_v1", "none"),
