@@ -187,6 +187,20 @@ def test_parse_ask_is_strict():
     assert parse_ask("ASK codex: T\x07", ended_cleanly=True) is None
 
 
+def test_grok_and_all_in_the_ask_line_and_the_words_name_each_agent(tmp_path):
+    assert parse_ask("ASK grok: T", ended_cleanly=True)["to"] == ["grok"]
+    assert parse_ask("ASK all: T", ended_cleanly=True)["to"] == ["claude-code", "codex", "grok"]
+    assert agent_ask.scan_asks("ASK all: T", ended_cleanly=True)["proposal"]["to"] == ["claude-code", "codex", "grok"]
+    svc = AskService(str(tmp_path))
+    made = svc.ask({"id": "c-0123456789abcdef"}, {"text": "Review the plan."}, "n-1", ["claude-code", "codex", "grok"])
+    assert [(m["to"], m["ok"]) for m in made] == [("claude-code", True), ("codex", True), ("grok", True)]
+    assert svc.words(made).startswith("Asked Claude Code, Codex and Grok.")
+    from core import agent_requests as ar
+    ar.result(str(tmp_path), made[2]["request_id"], "grok", "Looks fine.")
+    notes = svc._notes_for(ar.load(str(tmp_path), made[2]["request_id"]))
+    assert notes[-1][2] is agent_ask.AUTHORS["grok"] and notes[-1][2].label == "Grok"
+
+
 def test_when_the_request_cannot_be_written_it_says_so_and_drops_mcs_own_sentence(asks, monkeypatch):
     owner_text = TEXT.replace("Claude Code", "Codex")
     def boom(*a, **k):
@@ -271,7 +285,7 @@ def _open_one(asks, to="claude-code", seed="seed"):
 def test_a_turn_with_no_requests_sends_the_owners_words_and_only_the_first_turn_of_a_conversation_carries_the_one_time_reminder(asks):
     client, token, cid, note, events = _plain_turn(asks, None, "How is the build?")
     [first] = _sent_texts(asks)
-    assert first.startswith("How is the build?\n\n[Platform reminder from the portal, not from the owner") and "ASK <claude-code|codex|both>" in first
+    assert first.startswith("How is the build?\n\n[Platform reminder from the portal, not from the owner") and "ASK <claude-code|codex|grok|both|all>" in first
     assert "Status of the requests" not in first and "not read-only" in first
     _plain_turn(asks, cid, "And again?")
     assert _sent_texts(asks)[-1] == "And again?\n\n" + input_context()                                                      # ASK reminder once; exact owner words plus independent modality metadata

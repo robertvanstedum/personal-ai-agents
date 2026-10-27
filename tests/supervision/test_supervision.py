@@ -343,6 +343,7 @@ class GrokAndExchanges(unittest.TestCase):
         import supervision_sync as sync
         ledger = tempfile.mkdtemp()
         sync.LEDGER = Path(ledger)
+        sync.WORKER_LEDGER = Path(tempfile.mkdtemp())                  # never this Mac's real MC worker ledger
         req, _ = ar.create_request(ledger, request_id=ar.request_id_for("grok-p0"), frm="grok", to="claude-code",
                                    action="P0 ready for review.", conversation_id="shop-floor-thread")
         ar.result(ledger, req["request_id"], "claude-code", "Accepted.")

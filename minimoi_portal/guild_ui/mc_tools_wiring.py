@@ -11,7 +11,9 @@ Guest rejects follow MINIMOI_MC_GUEST_ACTIONS=1. GitHub issue reads (public, no 
 unless MINIMOI_MC_TOOLS_GITHUB=0. Changes to existing issues (comments, edits, labels, close/reopen:
 MINIMOI_MC_TOOLS_COMMENTS=1) and new issues and data-repair tickets (MINIMOI_MC_TOOLS_TICKETS=1) need
 MINIMOI_MC_ISSUES_TOKEN_FILE: a private file holding a GitHub token that can only write issues in MINIMOI_GITHUB_REPO.
-Without it MC is told they are off. Each write still needs its own policy rule and Robert's exact yes.
+Without it MC is told they are off. Each write still needs its own policy rule and Robert's exact yes. Handing
+Robert's own message to Claude Code, Codex or Grok (minimoi_agent_ask) needs the front door
+(MINIMOI_GUILD_AGENT_REQUESTS=1) and its policy rule.
 """
 from __future__ import annotations
 
@@ -449,8 +451,42 @@ def proposal_reader(services, principal):
     return read_shown
 
 
+FILES_BY_TOOL_REFUSED = ("Not sent. Your message asks for files to go with it, and this way of asking the agents cannot "
+                         "send files. Nothing was put to any agent.")
+
+
+class AgentAsker:
+    """MC's tool's way through the front door (agent_ask.AskService, the request ledger at <store>/agent_requests).
+    ``check`` is the ASK line's own owner-intent check on Robert's kept note, run before anything is recorded: the
+    agents MC names must be exactly the agents his own words ask, never inferred, quoted, negated or broadened.
+    Calling it asks them: ``(conversation_id, note_text, note_request_id, to) -> (made, words)``."""
+
+    def __init__(self, asks):
+        self.asks = asks
+
+    def check(self, note_text, to):
+        """None when Robert's own words ask exactly these agents, else (code, plain words)."""
+        from .agent_ask import owner_ask_proposal
+        got, refusal = owner_ask_proposal(note_text, {"to": list(to), "files": None}, ())
+        if refusal:
+            return "owner_intent_mismatch", refusal.replace("**", "")
+        if got.get("files"):
+            return "owner_files_unsupported", FILES_BY_TOOL_REFUSED
+        return None
+
+    def __call__(self, conversation_id, note_text, note_request_id, to):
+        made = self.asks.ask({"id": conversation_id}, {"text": note_text}, note_request_id, list(to))
+        return made, self.asks.words(made)
+
+
+def agent_asker(asks):
+    """An AgentAsker over the front door, or None while MINIMOI_GUILD_AGENT_REQUESTS is off."""
+    return None if asks is None else AgentAsker(asks)
+
+
 def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, show=None, read_shown=None,
-                  read_owner_note=None, domain_health=None, registers=None, board=None, export_conversation=None, recall_source=None):
+                  read_owner_note=None, domain_health=None, registers=None, board=None, export_conversation=None, recall_source=None,
+                  agent_ask=None):
     from core.mc_tools.service import ToolService
     lessons = None
     if lessons_root and os.path.isabs(lessons_root) and lessons_env in ("dev", "prod"):
@@ -465,7 +501,7 @@ def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, sho
                        standard_changes=cfg["standard_changes"],
                        guests_lookup=_guests_lookup, policy=policy_source(cfg), read_owner_note=read_owner_note,
                        domain_health=domain_health, registers=registers, board=board, export_conversation=export_conversation, recall_source=recall_source,
-                       artifact_root=artifact_root(os.environ))
+                       artifact_root=artifact_root(os.environ), agent_ask=agent_ask)
 
 
 def artifact_root(environ):
@@ -517,7 +553,8 @@ def attach(app, blueprint_name, services):
                             export_conversation=conversation_exporter(services, cfg["principal"]),
                             domain_health=domain_health_reader(environ, app.extensions[blueprint_name].get("base_url", "")),
                             registers=_mc_registers(environ, cfg["principal"],
-                                                    app.extensions[blueprint_name].get("base_url", "")))
+                                                    app.extensions[blueprint_name].get("base_url", "")),
+                            agent_ask=agent_asker(app.extensions[blueprint_name].get("agent_asks")))
     agent_worker_sha = (environ.get('MINIMOI_MC_AGENT_WORKER_TOKEN_SHA256') or '').strip().lower()
     enrollment_path = environ.get('MINIMOI_MC_AGENT_ENROLLMENT')
     if enrollment_path and re.fullmatch('[0-9a-f]{64}',agent_worker_sha):

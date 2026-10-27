@@ -597,6 +597,24 @@
       "max_operations_per_turn": 5
     },
     {
+      "capability": "agent.ask.owner_note",
+      "version": 1,
+      "actors": [
+        "mc"
+      ],
+      "origins": [
+        "owner_turn"
+      ],
+      "tier": 2,
+      "approval": "standing",
+      "source_requirement": "current_owner_turn",
+      "handler": "agent_ask_v1",
+      "verify": "agent_request_readback_v1",
+      "undo": null,
+      "egress": "none",
+      "max_operations_per_turn": 1
+    },
+    {
       "capability": "host.career.synthetic",
       "version": 1,
       "actors": [

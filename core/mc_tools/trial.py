@@ -9,7 +9,7 @@ from __future__ import annotations
 ACTION_TOOLS = ("minimoi_guest_request_reject", "minimoi_issue_comment", "minimoi_issue_create", "minimoi_issue_update",
                 "minimoi_data_repair_ticket",
                 "minimoi_lesson_propose", "minimoi_delegate_research", "minimoi_access_invite",
-                "minimoi_keep_preference", "minimoi_revoke_preference")
+                "minimoi_keep_preference", "minimoi_revoke_preference", "minimoi_agent_ask")
 
 
 def one_offer_report(conn, *, principal: str, since) -> dict:

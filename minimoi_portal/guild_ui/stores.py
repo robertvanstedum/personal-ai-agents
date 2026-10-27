@@ -68,6 +68,7 @@ MASTER_CRAFTSMAN = Author("master_craftsman", "agent", "Master Craftsman")
 CHIEF_OF_STAFF = Author("chief_of_staff", "agent", "Chief of Staff")
 CLAUDE_CODE = Author("claude_code", "agent", "Claude Code")
 CODEX = Author("codex", "agent", "Codex")
+GROK = Author("grok", "agent", "Grok")
 GUILD_PLATFORM = Author("guild_platform", "platform", "Guild platform")
 
 
@@ -526,4 +527,4 @@ class FloorStores(BoardMixin):
 
 
 __all__ = ["Author", "WriteResult", "FloorStores", "FloorStoreUnavailable", "FloorStoreNotConfigured", "MASTER_CRAFTSMAN", "CHIEF_OF_STAFF", "CLAUDE_CODE", "CODEX",
-           "GUILD_PLATFORM", "POSTIT_MAX", "NOTE_MAX", "RAIL_CAP", "DEFAULT_FLOOR", "utc_now"]
+           "GROK", "GUILD_PLATFORM", "POSTIT_MAX", "NOTE_MAX", "RAIL_CAP", "DEFAULT_FLOOR", "utc_now"]

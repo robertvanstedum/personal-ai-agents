@@ -133,28 +133,52 @@ class Store:
             conn.close()
 
     # ---- the Mac sync (worker token) ----------------------------------------------------------------------------
-    def worker(self, body):
-        """One bounded call from the Mac sync: report | pull | ack. Raises Refused for anything malformed."""
+    def worker(self, body, relay=None):
+        """One bounded call from the Mac sync: report | pull | ack. Raises Refused for anything malformed. ``relay``
+        (core/supervision/relay.Relay over production's request ledger, or None while MC's front door is off) also
+        carries Robert's requests to the agents down and their replies up."""
+        from . import relay as R
         need(type(body) is dict and body.get("phase") in ("report", "pull", "ack"))
         phase = body["phase"]
         if phase == "report":
-            need(set(body) <= {"phase", "stops", "asks", "exchanges"})
+            need(set(body) <= {"phase", "stops", "asks", "exchanges", "relay_events", "listeners"})
             stops = body.get("stops", [])
             asks = body.get("asks", [])
             exchanges = body.get("exchanges", [])
+            events = body.get("relay_events", [])
             need(type(stops) is list and len(stops) <= MAX_STOPS and type(asks) is list and len(asks) <= MAX_ASKS)
             need(type(exchanges) is list and len(exchanges) <= MAX_EXCHANGES)
+            need(type(events) is list and len(events) <= R.MAX_EVENTS)
             stops, asks = [clean_stop(s) for s in stops], [clean_ask(a) for a in asks]
             exchanges = [clean_exchange(e) for e in exchanges]
-            return self._run(lambda cur: self._report(cur, stops, asks, exchanges))
+            try:
+                events = [R.clean_event(e) for e in events]
+                listeners = R.clean_listeners(body.get("listeners", {}))
+            except R.Refused:
+                raise Refused("supervision_request_invalid") from None
+            out = self._run(lambda cur: self._report(cur, stops, asks, exchanges))
+            if events:
+                out["relay_events"] = (relay.apply(events) if relay is not None else
+                                       [{"key": f"{e['request_id']}:{e['event_id']}", "state": "refused",
+                                         "code": "relay_off"} for e in events])
+            if relay is not None and listeners:
+                out["listeners"] = relay.listeners(listeners)
+            return out
         if phase == "pull":
             need(set(body) == {"phase"})
-            return self._run(self._pull)
-        need(set(body) <= {"phase", "decisions", "nudges"})
+            out = self._run(self._pull)
+            return R.fill(out, relay.pull()) if relay is not None else out
+        need(set(body) <= {"phase", "decisions", "nudges", "requests"})
         decisions, nudges = body.get("decisions", []), body.get("nudges", [])
+        requests = body.get("requests", [])
         need(type(decisions) is list and len(decisions) <= 50 and all(type(k) is str and KEY.match(k) for k in decisions))
         need(type(nudges) is list and len(nudges) <= 50 and all(type(i) is int and i > 0 for i in nudges))
-        return self._run(lambda cur: self._ack(cur, decisions, nudges))
+        need(type(requests) is list and len(requests) <= R.MAX_PULL
+             and all(type(r) is str and REQUEST_ID.match(r) for r in requests))
+        out = self._run(lambda cur: self._ack(cur, decisions, nudges))
+        if requests:
+            out["requests"] = relay.ack(requests) if relay is not None else []
+        return out
 
     @staticmethod
     def _report(cur, stops, asks, exchanges=()):
