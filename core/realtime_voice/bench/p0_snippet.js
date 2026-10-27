@@ -5,7 +5,9 @@
  * import that file, so the paste carries it.
  */
 const VERSION = "20260809-ga1";
-const mod = await import(`./static/realtime-voice/realtime-voice-controller.js?v=${VERSION}`);
+const controllerUrl = new URL("/app/german/static/realtime-voice/realtime-voice-controller.js", location.origin);
+controllerUrl.searchParams.set("v", VERSION);
+const mod = await import(controllerUrl.href);
 const Controller = mod.RealtimeVoiceController;
 if (typeof Controller !== "function" || typeof Controller.prototype?._wireAdapterEvents !== "function") {
   throw new Error("P0 observer refused: RealtimeVoiceController._wireAdapterEvents is missing. Nothing was patched.");
@@ -68,4 +70,5 @@ window.__p0 = () => ({
   ended: null,
   notMeasured: ["speech_end_to_first_audible_playback"],
 });
-console.log("P0 observer attached. After the session: copy(JSON.stringify(window.__p0(), null, 2))");
+console.log("P0 observer attached. After the session, paste this and the timings print here:");
+console.log("JSON.stringify(window.__p0(), null, 2)");

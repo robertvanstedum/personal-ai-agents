@@ -12,7 +12,7 @@ SNIPPET = BENCH / "p0_snippet.js"
 
 def test_snippet_uses_the_deployed_relative_specifier_and_refuses_a_missing_controller():
     text = SNIPPET.read_text()
-    assert 'await import(`./static/realtime-voice/realtime-voice-controller.js?v=${VERSION}`)' in text
+    assert 'new URL("/app/german/static/realtime-voice/realtime-voice-controller.js"' in text
     assert 'VERSION = "20260809-ga1"' in text
     assert "Nothing was patched" in text
     assert "/api/realtime-voice/bootstrap" not in text
