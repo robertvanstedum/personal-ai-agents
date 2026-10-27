@@ -53,6 +53,9 @@ export class OpenAIWebRTCAdapter {
     this._pc = new RTCPeerConnection();
     this._pc.ontrack = (event) => {
       this._remoteAudioEl.srcObject = event.streams[0];
+      this._remoteAudioEl.addEventListener("playing", () => {
+        this._emit("playback_started", {});
+      }, { once: true });
     };
 
     try {

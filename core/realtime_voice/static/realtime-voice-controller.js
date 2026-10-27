@@ -208,6 +208,7 @@ export class RealtimeVoiceController {
         this._pendingAssistantTurns.push(evt.text.trim());
       }
     });
+    on("playback_started", () => this._onInputState("playback_started"));
     on("assistant_stopped", () => {
       for (const text of this._pendingAssistantTurns.splice(0)) {
         this._onAssistantTurn(text);
