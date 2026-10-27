@@ -1,51 +1,56 @@
 /**
  * Phase 0 timings for German Gespräche. Spec 164 §4 and §5.
  *
- * The shared controller is unchanged. This wraps the adapter after the
- * controller wires it, and records times only. Spoken words are counted,
- * never kept.
+ * The shared controller is unchanged. This wraps adapter.on after the
+ * controller wires it, and records times only. Spoken words are never read.
  *
  * speech-end to first audible playback is not claimed here. OpenAI plays
  * audio inside the WebRTC stream, and the controller has no playback event.
- * That split is a Phase 1 measurement hook. What this records now is
- * speech-end to the first assistant transcript event, interruption, and
- * committed user turns.
+ * That split is a Phase 1 measurement hook.
  */
-export function attachObserver(controller, session) {
+export function observe(adapter, session, clock = () => performance.now()) {
   const events = [];
-  const note = (name) => events.push({ name, atMs: Math.round(performance.now()) });
+  const note = (name) => events.push({ name, atMs: Math.round(clock()) });
+  const rawOn = adapter.on.bind(adapter);
+  adapter.on = (name, handler) => rawOn(name, (event) => {
+    if (name === "speech_stopped" && !event?.source) {
+      session.speechEndAt = clock();
+      note("speech_stopped");
+    }
+    if (name === "output_transcript" && session.speechEndAt != null && session.openReply == null) {
+      session.openReply = {
+        speechEndToFirstTranscriptMs: Math.round(clock() - session.speechEndAt),
+      };
+      session.speechEndAt = null;
+      note("first_assistant_transcript");
+    }
+    if (name === "interrupted") {
+      session.interruptions += 1;
+      note("interrupted");
+    }
+    if (name === "assistant_stopped" && session.openReply) {
+      session.replies.push(session.openReply);
+      session.openReply = null;
+      note("assistant_stopped");
+    }
+    if (name === "input_transcript" && event?.completed === true) {
+      session.committedUserTurns += 1;
+      note("committed_user_turn");
+    }
+    handler(event);
+  });
+  session.events = () => events.map(({ name, atMs }) => ({ name, atMs }));
+}
+
+export function attachObserver(controller, session, clock) {
   const original = controller._wireAdapterEvents.bind(controller);
   controller._wireAdapterEvents = () => {
     original();
     const adapter = controller._adapter;
     if (!adapter || adapter.__p0Observed) return;
     adapter.__p0Observed = true;
-    const rawOn = adapter.on.bind(adapter);
-    adapter.on = (name, handler) => rawOn(name, (event) => {
-      if (name === "speech_stopped" && !event?.source) {
-        session.speechEndAt = performance.now();
-        note("speech_stopped");
-      }
-      if (name === "output_transcript" && session.speechEndAt != null && session.openReply == null) {
-        session.openReply = {
-          speechEndToFirstTranscriptMs: Math.round(performance.now() - session.speechEndAt),
-        };
-        session.speechEndAt = null;
-        note("first_assistant_transcript");
-      }
-      if (name === "interrupted") {
-        session.interruptions += 1;
-        note("interrupted");
-      }
-      if (name === "assistant_stopped" && session.openReply) {
-        session.replies.push(session.openReply);
-        session.openReply = null;
-        note("assistant_stopped");
-      }
-      handler(event);
-    });
+    observe(adapter, session, clock);
   };
-  session.events = () => events.map(({ name, atMs }) => ({ name, atMs }));
 }
 
 export function sessionRecord(provider, persona, scene) {
