@@ -1,19 +1,22 @@
-# MC voice in Conversation mode on the shared voice utility: specification v0.2
+# MC voice in Conversation mode on the shared voice utility: specification v0.3
 
 **27 October 2026 · Claude Code for Robert (v0.1 by Grok) · INIT-2026-0010 · GitHub issue #420 · PR #421**
 
-**Status: near-final draft v0.2 for Claude chat's review, then Robert's; authorizes no build.** Robert settled the
-three open decisions on 27 October (§15). Robert's yes starts
+**Status: final draft v0.3 for Robert's review; authorizes no build.** Claude Code, Codex and Claude chat have
+reviewed it (Claude chat: approve, recommendations folded in here). Robert settled the open decisions on 27 October
+(§15). Robert's yes starts
 code, and the first code is the German baseline measurement and the standalone bench. This file authorizes no
 container, credential, deploy, production flag, merge or provider call.
 
-v0.2 replaces v0.1. It folds in, in this order of authority:
+v0.3 adds Claude chat's recommendations (`REVIEW_claude-chat_spec164.md`) to v0.2, which replaced v0.1. It folds
+in, in this order of authority:
 1. **Robert's binding decision** (`coordination/ROBERT_DECISION_spec164_reuse_and_rollout.md`): German's working voice
    code is the base; extend it; no fourth voice implementation; standalone first, then MC and CoS, then back to
    German with no degradation. Robert's words: "German is the code base, extend and expand ... I don't want a 4th
    version of voice."
 2. **Codex's review** (`REVIEW_codex_spec164.md`, C1–C7).
-3. **Claude Code's reviews** (`REVIEW_claude-code_spec164.md`, `REVIEW_claude-code_spec164_r2.md`).
+3. **Claude Code's reviews** (`REVIEW_claude-code_spec164.md`, `REVIEW_claude-code_spec164_r2.md`) and **Claude
+   chat's review** (`REVIEW_claude-chat_spec164.md`).
 4. Robert's earlier decisions: Grok Voice on the tool-using path (CC_04); the spec amendment (CC_01a); four reviews
    before code (CC_01a).
 
@@ -87,8 +90,9 @@ What Robert gets:
   to turn-taking.
 
 **New, but thin hosts only:**
-- The standalone test page (§5): a page plus one consult endpoint; no session loop.
-- MC's consult endpoint (§3, §9): the existing typed turn service behind a bridge route.
+- **One consult route handler** with a swappable backend: a stub backend for the standalone page, MC's typed turn
+  service for MC (later CoS's). The page and MC use the same handler, so the page proves the code path MC ships.
+- The standalone test page (§5): a page on that handler; no session loop.
 
 **Untouched by this spec:** the managed sideband path (`controlled_*`, `server_openai.py`) as COS uses it today, and
 German's pages. CoS's move, if any, is decided in phase 3 (§10).
@@ -118,7 +122,16 @@ service; a voice consult gets **no authority a typed note does not have**. What 
 - `call_id` and operation ids deduplicate: a repeated or replayed call has one effect.
 - The text acted on is the owner's own transcript item, not the model's paraphrase in the arguments; the model's
   arguments are advisory.
-- Tools are allow-listed per persona (MC: `consult`, `save_note`); German personas have none.
+- Tools are allow-listed per persona (MC: `consult`, `save_note`); German personas have none. Adding a tool to a
+  persona's list is an **owner adoption** through the same gate as any persona or card change (a new persona
+  release), never a configuration edit.
+- **A per-session consult cap** (12 by default). At the cap MC says, in one line, "I'll check the rest after we
+  talk"; further consults are refused for that session. Dedup stops replays; the cap stops a provider loop.
+- **The host can invoke a consult too**, not only the provider's `function_call`: the same route, called by a
+  "Check with MC" control now (a spoken wake phrase later). Tool-capable providers keep the model-initiated path;
+  a provider that cannot call tools still supports checking with MC (§16).
+- **Long consults get a spoken holding line**: if a consult runs past about 10 seconds, MC says one brief update
+  ("still checking"). No text; silence is the phone's failure mode.
 
 **Fallback if this is rejected:** MC voice with tools runs on the managed sideband for OpenAI only (it exists),
 and Grok Voice with tools waits for a provider-supported server attach. German keeps xAI on the direct path. The
@@ -164,12 +177,18 @@ page's code is the code MC and CoS use next; it is not rewritten in integration.
 
 One store, the one that already retains voice turns (`mc_voice_transcripts.retain`):
 - Every admitted user turn, assistant turn, consult request and consult receipt is retained **as it happens**,
-  tagged with the voice session id, in order, with stable ids, partial/interrupted status kept.
+  tagged with the voice session id, with stable ids, **start and end timestamps** (not only order), and
+  partial/interrupted status kept. Timestamps make overlapping speech representable later (§16) and feed the
+  latency measures.
 - Retained voice records are **hidden from the open conversation while the session is live**, in every view
   (refresh, another tab), not only the current page.
 - **Reveal** happens once, on the session's end receipt. If a session dies without one (tab closed, network loss,
   server restart), the records are revealed on the next conversation load after the session's maximum duration
-  has passed; never twice.
+  has passed; never twice. On the phone this is the common case (screen lock and backgrounding stop the microphone),
+  so until the reveal the conversation shows a neutral line, "Voice session ended unexpectedly; recovering what was
+  said", never an empty gap.
+- Live **state** stays visible during a session (voice on, elapsed time, End, Check with MC): that is state, not
+  transcript.
 - What is shown: the dialogue (owner turns and the assistant's spoken turns) plus a compact line per consult with
   its receipt. A consult's backend text is evidence, shown only if it differs from what was spoken, and labeled.
   Interrupted assistant speech is marked as interrupted.
@@ -200,11 +219,18 @@ to include it. Voice ids are validated against the provider's allowed list at lo
 back to the provider default and the page says so. A session pins its card and voice at start; a change applies to
 the next session.
 
+Nothing about who a person is lives in shared configuration: a person is a card over the shared layer. A provider
+that cannot take the card cannot be MC's voice yet; that is an identity requirement, not an adapter gap.
+
+**Identity audition:** the same short script on OpenAI and Grok Voice, judged by ear on one question, "is this
+MC?" Timbre will differ; manner, brevity, pronunciations and German handling must not.
+
 **CoS** gets her own card when she integrates (phase 3), not MC's. Robert, 27 Oct: "own card, I might want a French
 CoS or Portuguese." So a card names its person's language and accent, and a person's card may be swapped for another
 language without code changes; MC's Viennese manner, currently appended to every managed session
 (`controlled_config.py:9-29`), stops applying to CoS when she moves to her card. Until phase 3 her effective voice
-is unchanged.
+is unchanged. Anything of her current manner Robert wants to keep is written into her card deliberately; nothing is
+inherited by side effect.
 
 ## 8. Ending a session and the summary (Codex C5)
 
@@ -212,7 +238,10 @@ is unchanged.
   button ends capture. A negated or accidental "we're done" ("we're not done") does not end.
 - The summary is generated **from this session's retained records only** (§6), bounded, with omissions marked
   ("summary covers the last N turns"); never from earlier sessions in the same conversation.
-- It appears as a **summary proposal** tied to the voice session id. Robert confirms, edits or declines it in
+- **Spoken and written are different texts.** Spoken: two or three sentences, the way a colleague sums up at the
+  door; the no-lists-aloud rule applies. Written: the fuller proposal, with the consult lines.
+- It appears as a **summary proposal** tied to the voice session id, with no expiry: Robert may confirm an hour
+  later from his phone. Robert confirms, edits or declines it in
   writing. His confirmation confirms the summary only: it authorizes nothing the summary mentions; any action
   still needs its own request and receipt.
 - If the summary fails, the retained turns are still revealed, with "summary unavailable"; Robert can ask for it
@@ -260,10 +289,23 @@ Robert's microphone and phone tests remain separate and outstanding until he doe
 
 ## 13. Cross-surface checks (all phases, as relevant)
 
+Every phase that changes a shared file re-runs the voice smoke checks of every tenant of the shared controller:
+German Gespräche, Portuguese Conversas and COS Confer, not only German at phase 4. Recovery after an abnormal end
+(§6) is tested as a first-class flow on each phase, not once.
+
 Guild Voice ↔ Dictate; German voice → floating MC → German again; closing the floating panel during connect and
 during a consult; two sessions in one conversation (summary covers only the second); a long session beyond the
 continuity window; microphone denied; network loss and End during a consult; a receipt arriving after speech was
 interrupted; saved-conversation switching.
+
+## 13a. Conversation quality is a release gate
+
+Imported from the Board spec (`SPEC_CONVERSATIONAL_PARTNERSHIP_BOARD_v0.2`, §12): "Conversation quality is a release
+gate alongside correctness: the reviewer scores each ordinary case for understood intent, justified clarification,
+continuity, useful action, truthful concise response and perceived responsiveness. A mechanically correct note
+preceded by needless approval requests fails the experience." For voice: an MC that narrates receipts, asks
+permission to check things, or reads structure aloud fails the gate, whatever its latency. The identity audition
+(§7) and Robert's listening test are part of this gate.
 
 ## 14. Not in this build
 
@@ -293,3 +335,14 @@ locally on a high-end Mac, unverified. What it would mean here, when it becomes 
   speech, and the tool bridge (§3) would need a model that can call tools, which a speech-only model may not.
 - A local model would change cost and privacy, and the phone path.
 Revisit when it has a public API or downloadable weights.
+
+Kept open now, at no cost: timestamps on retained turns (§6); host-invoked consults (§3); VAD settings treated as
+provider-mode parameters, not part of the shared contract; a local model would be a registry entry with no
+credential mint; MC's card stays MiniMoi's source of truth.
+
+## 17. Later improvements (named, not in this build)
+
+- **Pause the microphone without ending the session** (doorbell, barista, someone walks in). The first candidate for
+  the phase-4 German backport, so German gains it too.
+- **Voice usage in the morning ops brief**: one line of daily provider voice spend, once phone use is daily. No new
+  meter.
