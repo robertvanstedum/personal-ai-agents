@@ -356,9 +356,10 @@ class GrokAndExchanges(unittest.TestCase):
         self.assertEqual(sync.exchanges(sent, _time.time()), [])
 
     def test_stop_py_accepts_grok(self):
+        env = {k: v for k, v in os.environ.items() if k not in ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CODEX_SESSION_ID")}
         out = subprocess.run([sys.executable, str(ROOT / "scripts/agents/stop.py"), "line", "--agent", "grok",
-                              "--state", "done"], capture_output=True, text=True,
-                             env={**os.environ, "MINIMOI_SUPERVISION_DIR": __import__("tempfile").mkdtemp()})
+                              "--session", "grok-test-0001", "--state", "done"], capture_output=True, text=True,
+                             env={**env, "MINIMOI_SUPERVISION_DIR": __import__("tempfile").mkdtemp()})
         self.assertEqual(out.returncode, 0, out.stderr)
 
 
