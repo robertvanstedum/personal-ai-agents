@@ -8,7 +8,7 @@
  * audio inside the WebRTC stream, and the controller has no playback event.
  * That split is a Phase 1 measurement hook.
  */
-export function observe(adapter, session, clock = () => performance.now()) {
+export function observe(adapter, session, clock) {
   const events = [];
   const note = (name) => events.push({ name, atMs: Math.round(clock()) });
   const rawOn = adapter.on.bind(adapter);
@@ -18,9 +18,7 @@ export function observe(adapter, session, clock = () => performance.now()) {
       note("speech_stopped");
     }
     if (name === "output_transcript" && session.speechEndAt != null && session.openReply == null) {
-      session.openReply = {
-        speechEndToFirstTranscriptMs: Math.round(clock() - session.speechEndAt),
-      };
+      session.openReply = { speechEndToFirstTranscriptMs: Math.round(clock() - session.speechEndAt) };
       session.speechEndAt = null;
       note("first_assistant_transcript");
     }
@@ -44,12 +42,13 @@ export function observe(adapter, session, clock = () => performance.now()) {
 
 export function attachObserver(controller, session, clock) {
   const original = controller._wireAdapterEvents.bind(controller);
-  controller._wireAdapterEvents = () => {
+  controller._wireAdapterEvents = function () {
+    const adapter = this._adapter;
+    if (adapter && !adapter.__p0Observed) {
+      adapter.__p0Observed = true;
+      observe(adapter, session, clock);
+    }
     original();
-    const adapter = controller._adapter;
-    if (!adapter || adapter.__p0Observed) return;
-    adapter.__p0Observed = true;
-    observe(adapter, session, clock);
   };
 }
 
