@@ -208,6 +208,18 @@ test('argument checks mirror the catalogue', () => {
   }
 });
 
+test('an issue body may span lines, and nothing else may (#395)', () => {
+  const schema = {type: 'object', additionalProperties: false, required: ['title', 'body'],
+                  properties: {title: {type: 'string', minLength: 5, maxLength: 200}, body: {type: 'string', minLength: 10, maxLength: 6000}}};
+  const body = '## Symptom\n\nThe text flickered.\n\n- one\n\t- two';
+  assert.ok(checkArguments(schema, {title: 'MC chat flickers', body}, 'minimoi_issue_create'));
+  assert.equal(checkArguments(schema, {title: 'MC chat flickers', body}, 'minimoi_some_other_tool'), false);
+  for (const a of [{title: 'MC chat\nflickers', body}, {title: 'MC chat flickers', body: 'a\rb and more'},
+                   {title: 'MC chat flickers', body: 'a\u0000b and more'}, {title: 'MC chat flickers', body: body + '\n'}]) {
+    assert.equal(checkArguments(schema, a, 'minimoi_issue_create'), false, JSON.stringify(a));
+  }
+});
+
 test('the credential file must be private, regular and not a link', () => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'mc-tools-')));
   const file = join(dir, 'token');

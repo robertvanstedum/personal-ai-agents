@@ -116,14 +116,18 @@ export function runSealer(key = randomBytes(32)) {
 }
 
 const okText = s => typeof s === 'string' && s === s.trim() && !/[\p{Cc}\p{Cf}\p{Co}\p{Cs}]/u.test(s);
+// Written text (an issue body, a comment) may span lines: a line break and a tab are allowed there and nowhere else
+// (#395: every issue MC proposed in prod was refused for its line breaks). Mirrored in core/mc_tools/catalogue.py.
+const MULTILINE = new Set(['minimoi_issue_create.body', 'minimoi_issue_update.body', 'minimoi_issue_comment.summary']);
+const okLines = s => typeof s === 'string' && okText(s.replace(/[\n\t]/g, ' '));
 
 /** The same strict check MiniMoi repeats: unknown keys, wrong types and out-of-range values refuse. */
-export function checkArguments(schema, args) {
+export function checkArguments(schema, args, tool = '') {
   if (!args || typeof args !== 'object' || Array.isArray(args) || Object.getPrototypeOf(args) !== Object.prototype) return false;
   const props = schema.properties;
   const keys = Object.keys(args);
   if (keys.some(k => !Object.hasOwn(props, k)) || (schema.required || []).some(k => !Object.hasOwn(args, k))) return false;
-  return keys.every(k => checkValue(props[k], args[k]));
+  return keys.every(k => checkValue(props[k], args[k], MULTILINE.has(`${tool}.${k}`)));
 }
 
 // Board schemas allow ordinary multilingual text, newline, emoji joiners,
@@ -153,9 +157,9 @@ export function checkBoardValue(spec, value) {
   return !spec.type && Boolean(spec.enum);
 }
 
-function checkValue(spec, v) {
+function checkValue(spec, v, multiline = false) {
   if (spec.type === 'string') {
-    if (!okText(v) || v.length < (spec.minLength ?? 0) || v.length > (spec.maxLength ?? 1000)) return false;
+    if (!(multiline ? okLines(v) : okText(v)) || v.length < (spec.minLength ?? 0) || v.length > (spec.maxLength ?? 1000)) return false;
     if (spec.enum && !spec.enum.includes(v)) return false;
     return !spec.pattern || new RegExp(spec.pattern).test(v);
   }
@@ -416,7 +420,7 @@ export function toolFactory({endpoint, token, tokenFile, agents, tools, diskPath
         }
         const args = opened.args;
         const boardTool = spec.name.startsWith('minimoi_board_') || spec.name === 'minimoi_clarify_action' || spec.name === 'minimoi_working_write';
-        if (!(boardTool ? checkBoardValue(spec.parameters, args) : checkArguments(spec.parameters, args))
+        if (!(boardTool ? checkBoardValue(spec.parameters, args) : checkArguments(spec.parameters, args, spec.name))
             || (spec.name === 'minimoi_agent_contact' && !contactModeMatches(args))
             || (spec.name === 'minimoi_recall' && !recallArguments(args))) {
           return text('Those arguments do not fit this tool, so nothing was sent to MiniMoi.', {status: 'refused', code: 'arguments_invalid'});

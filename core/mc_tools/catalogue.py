@@ -24,14 +24,21 @@ class ArgumentsRefused(ActionContractError):
     """The arguments do not match the tool's schema. A fixed code, never the value."""
 
 
-def _text_ok(value: str) -> bool:
-    return not any(unicodedata.category(c) in ("Cc", "Cf", "Co", "Cs") for c in value)
+# Fields that hold written text (an issue body, a comment) may span lines: a line break and a tab are allowed there and
+# nowhere else (#395: every issue MC proposed in prod was refused for its line breaks). Mirrored in the minimoi-tools plugin.
+MULTILINE = frozenset({("minimoi_issue_create", "body"), ("minimoi_issue_update", "body"),
+                       ("minimoi_issue_comment", "summary")})
 
 
-def _check(spec: dict, value) -> None:
+def _text_ok(value: str, multiline: bool = False) -> bool:
+    return not any(unicodedata.category(c) in ("Cc", "Cf", "Co", "Cs") and not (multiline and c in "\n\t")
+                   for c in value)
+
+
+def _check(spec: dict, value, multiline: bool = False) -> None:
     kind = spec["type"]
     if kind == "string":
-        if type(value) is not str or not _text_ok(value) or value != value.strip():
+        if type(value) is not str or not _text_ok(value, multiline) or value != value.strip():
             raise ArgumentsRefused("tool_argument_invalid")
         if not spec.get("minLength", 0) <= len(value) <= spec.get("maxLength", 1000):
             raise ArgumentsRefused("tool_argument_invalid")
@@ -78,7 +85,7 @@ def validate(name: str, arguments) -> dict:
     if set(arguments) - set(props) or set(schema.get("required", ())) - set(arguments):
         raise ArgumentsRefused("tool_arguments_invalid")
     for key, value in arguments.items():
-        _check(props[key], value)
+        _check(props[key], value, (name, key) in MULTILINE)
     return dict(arguments)
 
 
