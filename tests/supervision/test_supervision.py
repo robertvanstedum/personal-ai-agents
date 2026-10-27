@@ -339,8 +339,7 @@ class GrokAndExchanges(unittest.TestCase):
         import tempfile
         import time as _time
         from core import agent_requests as ar
-        sys.path.insert(0, str(ROOT / "scripts/mc_host"))
-        import supervision_sync as sync
+        from scripts.mc_host import supervision_sync as sync
         ledger = tempfile.mkdtemp()
         sync.LEDGER = Path(ledger)
         sync.WORKER_LEDGER = Path(tempfile.mkdtemp())                  # never this Mac's real MC worker ledger
