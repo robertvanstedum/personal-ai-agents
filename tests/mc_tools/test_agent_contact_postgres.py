@@ -61,6 +61,12 @@ class AgentContactTests(Base,unittest.TestCase):
             self.assertEqual(r['status'],'refused')
         self.assertEqual(self.one('SELECT count(*) FROM guild.mc_agent_contacts')[0],0)
 
+    def test_an_unknown_target_is_refused_with_the_enrolled_chats_named(self):
+        r=self.invoke('minimoi_agent_contact',{'target':'codex','mode':'status_request'})
+        self.assertEqual((r['status'],r['code']),('refused','agent_not_enrolled'))
+        self.assertIn('Enrolled chats (use one as target): codex-owner.',r['message'])
+        self.assertEqual(self.one('SELECT count(*) FROM guild.mc_agent_contacts')[0],0)
+
     def test_exact_note_or_fixed_status_and_idempotent_pending(self):
         ref=self.contact()
         self.assertEqual(self.contact(),ref)
