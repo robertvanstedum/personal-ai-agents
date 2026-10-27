@@ -103,6 +103,8 @@ class OwnerGuardTests(unittest.TestCase):
   self.assertIsNone(self.guard('Ask all to review the plan.',['claude-code','codex','grok'])[1])
   self.assertIsNone(self.guard('Ask Codex and Grok to review.',['codex','grok'])[1])
   self.assertIsNotNone(self.guard('Ask all to review the plan.',['claude-code','codex'])[1])         # all is three, never two
+  self.assertIsNone(self.guard('Ask everyone to review the plan.',['claude-code','codex','grok'])[1])
+  self.assertIsNotNone(self.guard('Do not ask everyone.',['claude-code','codex','grok'])[1])
   self.assertIsNotNone(self.guard('Ask Claude Code, not Grok.',['grok'])[1])
  def test_actual_jobhook_ask_grok_line_dispatches_to_grok_only(self):
   hook,service=self.hook('Please ask Grok to check the phone path.');hook.decide('ASK grok: Phone path',clean=True)

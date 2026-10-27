@@ -107,8 +107,10 @@ approval: MC proposes, Robert says yes in the chat, the portal writes. Both rule
 
 ## MC hands Robert's requests to the agents (27 Oct 2026)
 
-Robert tells MC on production "ask Claude Code / Codex / Grok / all to …". MC calls `minimoi_agent_ask` (`to`, a
-display `title`); the portal writes **Robert's own kept message**, never MC's words, into the production request ledger
+Robert tells MC on production "ask Claude Code / Codex / Grok / all to …". MC calls `minimoi_agent_ask` (`to`: the
+agents his words name, or `["all"]`; a display `title`). The portal first runs the ASK line's owner-intent check on his
+kept note (the agents must be exactly the ones he asks; negated, quoted or absent asks are refused, nothing recorded),
+then writes **Robert's own kept message**, never MC's words, into the production request ledger
 (`<guild store>/agent_requests`, origin `owner_message_via_mc`), one request per agent, ids fixed by his note. Tier 2,
 standing approval, one per turn (`agent.ask.owner_note`, OPS-2026-10-27-mc-front-door-prod).
 

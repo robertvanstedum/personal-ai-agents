@@ -44,6 +44,7 @@ TEXT_KINDS = ("progress", "result", "needs_you")
 TEXT_MAX = 16 * 1024
 ACTION_MAX = 4000
 MAX_RELAY_EVENTS, MAX_PULL = 20, 20
+READ_MAX = 262144             # one answer read from production; its pull stays under core/supervision/relay.PULL_BYTES
 LISTENING_S = 120
 RELAY_BYTES = 196608          # one relay report stays well under production's 256 KiB body bound
 _RID = re.compile(r"^r-[0-9a-f]{20,40}$")
@@ -77,7 +78,7 @@ def call(body, secret):
                                  headers={"Content-Type": "application/json", "Authorization": "Bearer " + secret,
                                           "User-Agent": "MiniMoi-supervision-sync/1"})
     with opener.open(req, timeout=20) as r:
-        return json.loads(r.read(262144))
+        return json.loads(r.read(READ_MAX))
 
 
 def _pending(kind, limit):
@@ -88,7 +89,10 @@ def _pending(kind, limit):
 def _publish(path, value):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True, ensure_ascii=False))
+    with open(tmp, "w", encoding="utf-8") as fh:                 # on disk before it replaces the old copy
+        fh.write(json.dumps(value, sort_keys=True, ensure_ascii=False))
+        fh.flush()
+        os.fsync(fh.fileno())
     os.replace(tmp, path)
 
 
@@ -292,7 +296,8 @@ def relay_events(relayed, sent):
 def relay_up(secret, now):
     """The agents' replies to Robert's relayed requests, packed under RELAY_BYTES (always at least one), and which
     agents are listening. A reply production refused for want of its relay marker is tried again next time."""
-    relayed, sent = _keys("relayed.json"), _keys("relay-sent.json")
+    relayed = _keys("relayed.json") | _keys("relay-pending.json")       # an ack still pending counts: see down()
+    sent = _keys("relay-sent.json")
     events, skip = relay_events(relayed, sent)
     ages = listeners(now)
     _remember("relay-sent.json", sent, skip)
@@ -354,11 +359,19 @@ def down(secret):
                 made.append(r["request_id"])
         except OSError:
             continue                                   # not created, so not acked: production offers it again
-    if acked["decisions"] or acked["nudges"] or made:
-        answer = call({"phase": "ack", **acked, **({"requests": made} if made else {})}, secret)
-        # Replies go up only for requests production marked relayed; one not marked is pulled and acked again.
-        ok = {rid for rid in answer.get("requests", []) if isinstance(rid, str) and rid in made}
-        _remember("relayed.json", _keys("relayed.json"), ok, keep=2000)
+    # Created here, so recorded as "relayed, ack pending" on disk BEFORE the ack: production stops offering a request
+    # once it has marked it, so a lost answer (or a crash before saving it) must never lose track of it. Pending ids
+    # count as relayed for the replies going up, and their ack is sent again (production's ack is write-once).
+    confirmed = _keys("relayed.json")
+    pending = (_keys("relay-pending.json") | set(made)) - confirmed
+    _remember("relay-pending.json", _keys("relay-pending.json"), set(made), keep=2000)
+    to_ack = (made + sorted(pending - set(made)))[:MAX_PULL]
+    if acked["decisions"] or acked["nudges"] or to_ack:
+        answer = call({"phase": "ack", **acked, **({"requests": to_ack} if to_ack else {})}, secret)
+        ok = {rid for rid in answer.get("requests", []) if isinstance(rid, str) and rid in to_ack}
+        _remember("relayed.json", confirmed, ok, keep=2000)
+        # An answer settles every id it was asked about: confirmed, or refused by production for good.
+        _publish(ROOT / "relay-pending.json", sorted(_keys("relay-pending.json") - set(to_ack)))
     return dict(acked, requests=made)
 
 

@@ -451,17 +451,37 @@ def proposal_reader(services, principal):
     return read_shown
 
 
-def agent_asker(asks):
-    """``ask(conversation_id, note_text, note_request_id, to) -> (made, words)`` through the front door
-    (agent_ask.AskService, the request ledger at <store>/agent_requests), or None while MINIMOI_GUILD_AGENT_REQUESTS
-    is off. The text is the owner's kept note, read by the tool service; the request ids come from the note."""
-    if asks is None:
+FILES_BY_TOOL_REFUSED = ("Not sent. Your message asks for files to go with it, and this way of asking the agents cannot "
+                         "send files. Nothing was put to any agent.")
+
+
+class AgentAsker:
+    """MC's tool's way through the front door (agent_ask.AskService, the request ledger at <store>/agent_requests).
+    ``check`` is the ASK line's own owner-intent check on Robert's kept note, run before anything is recorded: the
+    agents MC names must be exactly the agents his own words ask, never inferred, quoted, negated or broadened.
+    Calling it asks them: ``(conversation_id, note_text, note_request_id, to) -> (made, words)``."""
+
+    def __init__(self, asks):
+        self.asks = asks
+
+    def check(self, note_text, to):
+        """None when Robert's own words ask exactly these agents, else (code, plain words)."""
+        from .agent_ask import owner_ask_proposal
+        got, refusal = owner_ask_proposal(note_text, {"to": list(to), "files": None}, ())
+        if refusal:
+            return "owner_intent_mismatch", refusal.replace("**", "")
+        if got.get("files"):
+            return "owner_files_unsupported", FILES_BY_TOOL_REFUSED
         return None
 
-    def ask(conversation_id, note_text, note_request_id, to):
-        made = asks.ask({"id": conversation_id}, {"text": note_text}, note_request_id, list(to))
-        return made, asks.words(made)
-    return ask
+    def __call__(self, conversation_id, note_text, note_request_id, to):
+        made = self.asks.ask({"id": conversation_id}, {"text": note_text}, note_request_id, list(to))
+        return made, self.asks.words(made)
+
+
+def agent_asker(asks):
+    """An AgentAsker over the front door, or None while MINIMOI_GUILD_AGENT_REQUESTS is off."""
+    return None if asks is None else AgentAsker(asks)
 
 
 def build_service(cfg, *, lessons_root=None, lessons_env=None, invites=None, show=None, read_shown=None,

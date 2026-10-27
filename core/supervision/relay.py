@@ -21,6 +21,10 @@ from core.agent_requests import ledger as L
 
 MAX_PULL = 20
 MAX_EVENTS = 20
+# The whole pull answer (decisions, nudges, then requests) stays under PULL_BYTES as the portal sends it (Flask's JSON:
+# ASCII escapes, so one non-BMP character is 12 bytes). The Mac reads at most READ_MAX (supervision_sync.READ_MAX, the
+# same number); the gap leaves room for an indented debug answer. Requests that do not fit come on the next pull.
+PULL_BYTES, READ_MAX = 196608, 262144
 LISTENING_S = 120
 KINDS = ("receipt", "progress", "result", "needs_you", "cancel")
 ACTORS = ("mc", "claude-code", "codex", "grok")          # never "robert": the worker cannot act as Robert
@@ -50,6 +54,25 @@ def clean_event(e):
     need(bool(text.strip()) if e["kind"] in TEXT_KINDS else not text)
     return {"request_id": e["request_id"], "event_id": e["event_id"], "kind": e["kind"], "actor": e["actor"],
             "text": text}
+
+
+def wire_size(value) -> int:
+    """Bytes of ``value`` as the portal's jsonify writes it (ensure_ascii, sorted keys, compact)."""
+    return len(json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("ascii"))
+
+
+def fill(answer: dict, requests: list[dict]) -> dict:
+    """``answer`` with as many of ``requests`` as fit, in order, under PULL_BYTES for the whole answer. Decisions and
+    nudges are already in it, so requests never crowd them out; the rest wait for the next pull."""
+    out = dict(answer, requests=[])
+    used = wire_size(out)
+    for r in requests:
+        size = wire_size(r) + (1 if out["requests"] else 0)
+        if used + size > PULL_BYTES:
+            break
+        out["requests"].append(r)
+        used += size
+    return out
 
 
 def clean_listeners(value):

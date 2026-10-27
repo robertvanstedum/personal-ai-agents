@@ -46,7 +46,7 @@ _SPACED = re.compile(r"(?<![A-Za-z])(?:[A-Za-z][\s.\-_'*]+){2,}[A-Za-z](?![A-Za-
 PROD_CHANGE_KINDS = {"guest_reject": "production data change", "access_invite": "production access change"}
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Robert types it back
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
-ASK_GROUPS = {"all": ("claude-code", "codex", "grok")}       # minimoi_agent_ask: who one ``to`` names
+ASK_AGENTS = ("claude-code", "codex", "grok")                # minimoi_agent_ask: who can be asked; "all" is the three
 REFUSED_WORDS = {
     "tool_turn_not_live": "This tool only works inside Robert's own live turn, and that turn is no longer running. Nothing was done.",
     "tool_session_invalid": "This conversation is not one MiniMoi can act in. Nothing was done.",
@@ -206,8 +206,8 @@ class ToolService:
         self.export_conversation, self.artifact_root = export_conversation, artifact_root or ROOT
         self._host_effects, self._host_effect_lock = {}, threading.Lock()
         self.agent_contact = agent_contact
-        # agent_ask(conversation_id, note_text, note_request_id, to) -> (made, words): the front door's AskService
-        # (portal wiring), or None while asking the agents is off.
+        # agent_ask(conversation_id, note_text, note_request_id, to) -> (made, words), with agent_ask.check(note_text,
+        # to) -> None | (code, words): the front door (portal wiring, AgentAsker), or None while asking the agents is off.
         self.agent_ask = agent_ask
 
     def _change_gate(self, kind):
@@ -883,17 +883,25 @@ class ToolService:
     # ── tier 2: Robert's own message handed to his agents (the front door, OPS-2026-10-27) ───────────────────────
     def _agent_ask(self, args, caller, observation):
         """Robert's current kept note, word for word, as one request per named agent in the request ledger. The model
-        names who and a display title only; its words are never sent. The ledger ids come from the note, so a retry (a
-        new call id, a crash after the write) never makes a second request; the receipt finishes from the ledger's
-        own answer, and the words say only what is known (recorded, and whether a listener was seen)."""
+        names who and a display title only; its words are never sent, and the agents it names must be exactly the
+        ones Robert's own words ask (checked before anything is recorded). The ledger ids come from the note, so a
+        retry (a new call id, a crash after the write) never makes a second request; the receipt finishes from the
+        ledger's own answer, and the words say only what is known (recorded, and whether a listener was seen)."""
         if self.agent_ask is None or not self._tier2(caller):
             return refused("tool_unavailable")
-        to = list(ASK_GROUPS.get(args["to"], (args["to"],)))
+        if "all" in args["to"] and len(args["to"]) > 1:
+            return refused("tool_argument_invalid")
+        to = list(ASK_AGENTS) if args["to"] == ["all"] else [a for a in ASK_AGENTS if a in args["to"]]
         with self._tx() as conn:
             b = self._bind(conn, caller)
         text, refusal = self._owner_words(b)
         if refusal:
             return refusal
+        mismatch = self.agent_ask.check(text, to)
+        if mismatch:
+            code, words = mismatch
+            return result("refused", code, f"{words} Do not try other agents; ask Robert whom he means, in his words.",
+                          {"to": to})
         edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
         canonical = {"to": to, "source": {"conversation": b.conversation_id, "note": b.note_request_id,
                                           "edition": edition}}

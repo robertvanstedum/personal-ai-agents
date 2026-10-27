@@ -44,7 +44,8 @@ TITLE_ACCEPT_MAX = 300                 # a longer first line from MC is still un
 LISTENING_S = 90                       # a watcher touches its marker every few seconds; older than this is "not listening"
 NAMES = {"claude-code": "Claude Code", "codex": "Codex", "grok": "Grok"}
 AUTHORS = {"claude-code": CLAUDE_CODE, "codex": CODEX, "grok": GROK}
-GROUPS = {"both": ["claude-code", "codex"], "all": ["claude-code", "codex", "grok"], "claude": ["claude-code"]}
+GROUPS = {"both": ["claude-code", "codex"], "all": ["claude-code", "codex", "grok"], "everyone": ["claude-code", "codex", "grok"],
+          "claude": ["claude-code"]}
 _ASK = re.compile(r"^ASK (claude-code|claude|codex|grok|both|all)(?: \+files(:latest)?)?: ([^\x00-\x1f\x7f]{1,%d})$" % TITLE_ACCEPT_MAX)
 OFF_WORDS = "Asking the agents is not switched on. Nothing was sent."
 BLOCK_CHARS = 8000                     # the whole status block, for one turn
@@ -189,7 +190,7 @@ def holding_prefix(text: str) -> bool:
 
 OWNER_INTENT_REFUSED = ("**Not sent.** The proposed recipient does not match a clear instruction in your current message. Nothing was put to any agent. Please name Claude Code, Codex, Grok, both or all explicitly.")
 OWNER_FILES_REFUSED = ("**Not sent.** I could not match the requested files to your current instruction and attachments. Nothing was put to any agent. Please attach the file to this message or explicitly request the latest file.")
-_OWNER_AGENT = r"(?:claude[ -]code|codex|grok|both|all)"
+_OWNER_AGENT = r"(?:claude[ -]code|codex|grok|both|all|everyone)"
 _OWNER_DIRECT = re.compile(r"\b(?:ask|tell|task|contact)\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
 _OWNER_TO = re.compile(r"\b(?:hand|send|pass|forward|give|assign)\b[^.!?;\n]{0,250}?\bto\s+(?P<agent>" + _OWNER_AGENT + r")\b", re.I)
 _OWNER_NEGATIVE = re.compile(r"\b(?:not|never|without|don't|do not|do\s+not)\b", re.I)

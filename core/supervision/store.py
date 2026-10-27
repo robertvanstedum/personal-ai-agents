@@ -167,9 +167,7 @@ class Store:
         if phase == "pull":
             need(set(body) == {"phase"})
             out = self._run(self._pull)
-            if relay is not None:
-                out["requests"] = relay.pull()
-            return out
+            return R.fill(out, relay.pull()) if relay is not None else out
         need(set(body) <= {"phase", "decisions", "nudges", "requests"})
         decisions, nudges = body.get("decisions", []), body.get("nudges", [])
         requests = body.get("requests", [])

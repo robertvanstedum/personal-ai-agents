@@ -37,7 +37,8 @@ class _Cur:
         return None
 
 
-class RelayTests(unittest.TestCase):
+class _Rig(unittest.TestCase):
+    """A temp production ledger behind the portal's real door, a temp Mac ledger and the real sync."""
     def setUp(self):
         self.prod, self.mac, self.state = (tempfile.mkdtemp() for _ in range(3))
         self.relay = R.Relay(self.prod)
@@ -48,8 +49,28 @@ class RelayTests(unittest.TestCase):
             patcher = mock.patch.object(sync, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        patcher = mock.patch.object(sync, "call", lambda body, secret: json.loads(json.dumps(
-            self.store.worker(json.loads(sync._body(body)), relay=self.relay))))
+        # The sync's calls go through the portal's real door (Flask, jsonify) and the sync's own read bound.
+        import hashlib as _h
+        from flask import Flask
+        from minimoi_portal.guild_ui import supervision
+        patcher = mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://unused"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        app, secret = Flask("relay"), "s" * 48
+        supervision.attach(app, {"MINIMOI_SUPERVISION": "1",
+                                 "MINIMOI_SUPERVISION_WORKER_TOKEN_SHA256": _h.sha256(secret.encode()).hexdigest()},
+                           store_factory=lambda: self.store, per_minute=100000, ledger_root=self.prod)
+        client = app.test_client()
+
+        def call(body, _secret):
+            r = client.post(supervision.PATH, data=sync._body(body), content_type="application/json",
+                            headers={"Authorization": "Bearer " + secret})
+            self.wire.append(len(r.get_data()))
+            if r.status_code != 200:
+                raise OSError(f"http {r.status_code}")
+            return json.loads(r.get_data()[:sync.READ_MAX])
+        self.wire = []
+        patcher = mock.patch.object(sync, "call", call)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.made = AskService(self.prod).ask({"id": CONV}, {"text": NOTE}, "n-1", ["grok", "codex"])
@@ -61,6 +82,8 @@ class RelayTests(unittest.TestCase):
     def prod_doc(self, rid):
         return ar.load(self.prod, rid)
 
+
+class RelayTests(_Rig):
     def test_round_trip_request_down_receipt_and_result_up(self):
         got = sync.down("t")
         self.assertEqual(sorted(got["requests"]), sorted([self.grok, self.codex]))
@@ -225,6 +248,98 @@ class RelayTests(unittest.TestCase):
                                       action="Review P0.")[0]["request_id"]
             asks = [e for e in sync.exchanges(set(), time.time()) if e["kind"] == "ask"]
         self.assertEqual(sorted(e["request_id"] for e in asks), sorted([rid, other]))
+
+
+class LostAckAndPullBoundTests(_Rig):
+    """Codex review of 016b7bc4: a lost ACK answer must not strand the relay, and a pull must fit the Mac's read."""
+
+    def finish_on_the_mac_and_sync(self):
+        ar.result(self.mac, self.grok, "grok", "Completed on the Mac.")
+        sync.up("t")
+        sync.down("t")
+        self.assertEqual(self.prod_doc(self.grok)["closed"], "result")
+        self.assertEqual(self.prod_doc(self.grok)["events"][-1]["text"], "Completed on the Mac.")
+        self.assertTrue({self.grok, self.codex} <= sync._keys("relayed.json"))
+        self.assertEqual(sync._keys("relay-pending.json"), set())
+
+    def test_the_ack_answer_lost_after_production_committed_it(self):
+        real = sync.call
+
+        def lose_ack(body, secret):
+            answer = real(body, secret)
+            if body["phase"] == "ack":
+                raise OSError("answer lost after production committed the ack")
+            return answer
+        with mock.patch.object(sync, "call", lose_ack), self.assertRaises(OSError):
+            sync.down("t")
+        self.assertTrue(self.relay.relayed(self.grok))                         # production marked it, stops offering it
+        self.assertEqual(self.relay.pull(), [])
+        self.assertEqual(sync._keys("relay-pending.json"), {self.grok, self.codex})      # the Mac kept track first
+        self.finish_on_the_mac_and_sync()
+
+    def test_a_crash_after_the_ack_before_the_local_save(self):
+        real = sync._remember
+
+        def crash(name, have, new, keep=5000):
+            if name == "relayed.json":
+                raise SystemExit("crashed before saving")
+            return real(name, have, new, keep)
+        with mock.patch.object(sync, "_remember", crash), self.assertRaises(SystemExit):
+            sync.down("t")
+        self.assertTrue(self.relay.relayed(self.grok))
+        self.assertEqual(sync._keys("relayed.json"), set())
+        self.finish_on_the_mac_and_sync()
+
+    def test_the_ack_lost_before_production_committed_it_is_sent_again(self):
+        real = sync.call
+
+        def drop(body, secret):
+            if body["phase"] == "ack":
+                raise OSError("connection reset before production saw it")
+            return real(body, secret)
+        with mock.patch.object(sync, "call", drop), self.assertRaises(OSError):
+            sync.down("t")
+        self.assertFalse(self.relay.relayed(self.grok))
+        ar.result(self.mac, self.grok, "grok", "Done.")
+        up = sync.up("t")                                                       # refused not_relayed: kept for later
+        self.assertIn("not_relayed", [o.get("code") for o in up["relay_events"]])
+        sync.down("t")                                                          # pulled again, created (no change), acked
+        sync.up("t")
+        self.assertEqual(self.prod_doc(self.grok)["closed"], "result")
+        self.assertEqual(len([e for e in self.mac_events(self.grok) if e["kind"] == "delivery"]), 1)
+
+    def test_the_worst_unicode_pull_fits_the_mac_s_read_and_everything_arrives(self):
+        self.assertEqual((sync.READ_MAX, R.READ_MAX), (262144, 262144))       # one documented pair
+        self.assertGreaterEqual(R.READ_MAX - R.PULL_BYTES, 65536)
+        ids = [AskService(self.prod).ask({"id": CONV}, {"text": "😀" * 3900}, f"unicode-{i}", ["codex"])[0]["request_id"]
+               for i in range(20)]
+        first = sync.down("t")
+        self.assertLessEqual(self.wire[0], R.PULL_BYTES)                       # the pull, as the portal sent it
+        self.assertTrue(0 < len(first["requests"]) < 22)
+        for _ in range(10):
+            if not sync.down("t")["requests"]:
+                break
+        self.assertTrue(all(n <= R.PULL_BYTES for n in self.wire))
+        self.assertTrue(set(ids) | {self.grok, self.codex} <= sync._keys("relayed.json"))
+        self.assertEqual(ar.load(self.mac, ids[-1])["request"]["action"], "😀" * 3900)
+
+    def test_decisions_and_nudges_come_first_and_are_never_starved(self):
+        receipt = {"channel": "telegram", "text": "x" * 4000}
+        decisions = [{"request_key": f"ask-{i:010d}", "code": f"D-{i}", "state": "approved", "session": "s-0001",
+                      "agent": "codex", "text_sha256": "a" * 64, "receipt": receipt} for i in range(20)]
+        nudges = [{"id": i + 1, "agent": "codex", "session": "s-0001", "kind": "continue", "text": "n" * 300}
+                  for i in range(20)]
+        for i in range(20):
+            AskService(self.prod).ask({"id": CONV}, {"text": "😀" * 3900}, f"big-{i}", ["grok"])
+        with mock.patch.object(Store, "_pull", staticmethod(lambda cur: {"decisions": decisions, "nudges": nudges})):
+            out = self.store.worker({"phase": "pull"}, relay=self.relay)
+        self.assertEqual((len(out["decisions"]), len(out["nudges"])), (20, 20))
+        self.assertLessEqual(R.wire_size(out), R.PULL_BYTES)
+        self.assertTrue(0 < len(out["requests"]) < 22)
+        huge = [dict(d, receipt={"channel": "telegram", "text": "😀" * 4000}) for d in decisions]
+        with mock.patch.object(Store, "_pull", staticmethod(lambda cur: {"decisions": huge, "nudges": nudges})):
+            out = self.store.worker({"phase": "pull"}, relay=self.relay)
+        self.assertEqual((len(out["decisions"]), out["requests"]), (20, []))  # requests wait; decisions still go
 
 
 class ContentHashTests(unittest.TestCase):
