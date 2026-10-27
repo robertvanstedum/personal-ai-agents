@@ -186,7 +186,7 @@ def main(argv=None):
     for name in ("line", "ask", "wait"):
         s = sub.add_parser(name)
         s.add_argument("--session")
-        s.add_argument("--agent", choices=("claude-code", "codex"))
+        s.add_argument("--agent", choices=("claude-code", "codex", "grok"))
         if name in ("line", "ask"):
             s.add_argument("--pr", type=int)
             s.add_argument("--issue", type=int)

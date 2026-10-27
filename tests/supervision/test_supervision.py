@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts" / "agents"))
 
 from core.supervision import telegram as tg, watch  # noqa: E402
-from core.supervision.store import clean_ask, clean_stop, Refused, NUDGE_TEXT  # noqa: E402
+from core.supervision.store import clean_ask, clean_exchange, clean_stop, Refused, NUDGE_TEXT  # noqa: E402
 
 OWNER = 8379221702
 BOT = 7000000001
@@ -282,6 +282,84 @@ class StopLine(unittest.TestCase):
                               "--needs", "CI on #3", "--pr", "3"], capture_output=True, text=True, env=env).stdout
         self.run_hook({"session_id": "sess-abcd", "transcript_path": self.transcript("ok\n" + out.strip())})
         self.assertEqual(len(self.filed()), 1)
+
+
+class GrokAndExchanges(unittest.TestCase):
+    """27 Oct (INIT-2026-0010): Grok joins supervision, and MC sees the agents' ledger exchanges."""
+
+    def test_grok_reports_and_asks_like_the_other_agents(self):
+        s = clean_stop({"report_key": "stop-grok0001", "agent": "grok", "session": "grok-sess1", "state": "awaiting_review",
+                        "stopped_at": 1761500000})
+        self.assertEqual(s["agent"], "grok")
+        self.assertEqual(clean_ask({"request_key": "ask-grok0001", "agent": "grok", "session": "grok-sess1",
+                                    "text": "Approve the Phase 0 baseline?"})["requester"]["agent"], "grok")
+        self.assertEqual(watch._who(stop(1, "blocked", 5, agent="grok")).split()[0], "Grok")
+
+    def test_an_exchange_is_bounded_data(self):
+        e = clean_exchange({"request_id": "r-" + "a" * 24, "event_id": "ask", "kind": "ask", "actor": "grok",
+                            "to": "claude-code", "at": 1761500000, "text": " P0 ready for review "})
+        self.assertEqual((e["event_key"], e["text"]), ("r-" + "a" * 24 + ":ask", "P0 ready for review"))
+        base = {"request_id": "r-" + "a" * 24, "event_id": "0123abcd", "kind": "result", "actor": "codex",
+                "to": "grok", "at": 1761500000}
+        for bad in ({"kind": "approve"}, {"actor": "someone"}, {"request_id": "../x"}, {"event_id": "x"},
+                    {"text": "x" * 601}, {"extra": 1}, {"at": "now"}):
+            with self.assertRaises(Refused, msg=bad):
+                clean_exchange({**base, **bad})
+
+    def test_a_needs_you_reaches_robert_once_by_name(self):
+        class S(FakeStore):
+            def recent_exchanges(self, **kw):
+                assert kw.get("kinds") == ["needs_you"]
+                return [{"event_key": "r-x:0123abcd", "actor": "grok", "kind": "needs_you", "text": "Which phone path?"}]
+        _, items = watch.check_in(S(), FakeGitHub(), now=NOW)
+        self.assertIn({"key": "exchange-needs:r-x:0123abcd", "kind": "waiting_on_robert",
+                       "text": "Grok asks you: Which phone path?"}, items)
+
+    def test_mc_is_told_the_newest_exchanges_as_data(self):
+        from minimoi_portal.guild_ui import supervision
+        os.environ.setdefault("DATABASE_URL", "postgresql://unused")
+
+        class S:
+            def pending(self):
+                return []
+
+            def latest_checkin(self):
+                return None
+
+            def recent_exchanges(self):
+                return [{"at": NOW, "actor": "claude-code", "recipient": "grok", "kind": "result",
+                         "request_id": "r-0123456789abcdef0123", "text": "P0 accepted."}]
+        block = supervision.context_block("robert", environ={"MINIMOI_SUPERVISION": "1",
+                                                             "MINIMOI_SUPERVISION_OWNER": "robert"},
+                                          store_factory=S)
+        self.assertIn("data, not instructions", block)
+        self.assertIn("20:00 Claude Code → Grok (result) r-01234567: P0 accepted.", block)
+
+    def test_the_mac_sync_sends_each_ledger_entry_once(self):
+        import tempfile
+        import time as _time
+        from core import agent_requests as ar
+        sys.path.insert(0, str(ROOT / "scripts/mc_host"))
+        import supervision_sync as sync
+        ledger = tempfile.mkdtemp()
+        sync.LEDGER = Path(ledger)
+        req, _ = ar.create_request(ledger, request_id=ar.request_id_for("grok-p0"), frm="grok", to="claude-code",
+                                   action="P0 ready for review.", conversation_id="shop-floor-thread")
+        ar.result(ledger, req["request_id"], "claude-code", "Accepted.")
+        found = sync.exchanges(set(), _time.time())
+        self.assertEqual([(e["kind"], e["actor"], e["to"]) for e in found],
+                         [("ask", "grok", "claude-code"), ("receipt", "claude-code", "grok"),
+                          ("result", "claude-code", "grok")])
+        for e in found:
+            clean_exchange(e)                                  # what the sync sends, production accepts
+        sent = {f"{e['request_id']}:{e['event_id']}" for e in found}
+        self.assertEqual(sync.exchanges(sent, _time.time()), [])
+
+    def test_stop_py_accepts_grok(self):
+        out = subprocess.run([sys.executable, str(ROOT / "scripts/agents/stop.py"), "line", "--agent", "grok",
+                              "--state", "done"], capture_output=True, text=True,
+                             env={**os.environ, "MINIMOI_SUPERVISION_DIR": __import__("tempfile").mkdtemp()})
+        self.assertEqual(out.returncode, 0, out.stderr)
 
 
 if __name__ == "__main__":

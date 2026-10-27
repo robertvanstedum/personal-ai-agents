@@ -52,6 +52,7 @@ MIGRATIONS=(
   core/mc_tools/sql/020_issue_create_update.sql
   core/mc_delegation_dispatcher/sql/001_delegations.sql
   core/supervision/sql/001_supervision.sql
+  core/supervision/sql/002_grok_and_exchanges.sql
 )
 
 log() { echo "mc-migrate: $*"; }

@@ -12,7 +12,18 @@ import re
 
 KEY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 SESSION = re.compile(r"^[A-Za-z0-9._:-]{4,96}$")
-AGENTS = ("claude-code", "codex")
+AGENTS = ("claude-code", "codex", "grok")
+NAMES = {"claude-code": "Claude Code", "codex": "Codex", "grok": "Grok", "mc": "MC", "robert": "Robert"}
+EXCHANGE_KINDS = ("ask", "receipt", "progress", "result", "needs_you", "cancel")
+EXCHANGE_ACTORS = ("mc", "claude-code", "codex", "grok", "robert")
+REQUEST_ID = re.compile(r"^r-[0-9a-f]{20,40}$")
+EVENT_ID = re.compile(r"^(ask|[0-9a-f]{8,40})$")
+MAX_EXCHANGES = 50
+
+
+def name(agent):
+    """How a person or agent is named to Robert and MC."""
+    return NAMES.get(agent, agent)
 STATES = ("done", "blocked", "awaiting_owner", "awaiting_review", "waiting_ci", "error", "unreported")
 CODE = re.compile(r"^D-?(\d{1,9})$", re.I)
 MAX_STOPS, MAX_ASKS = 20, 5
@@ -90,6 +101,19 @@ def clean_ask(a):
             "requester": {"agent": a["agent"], "session": a["session"], "branch": _text(a.get("branch", ""), 200)}}
 
 
+def clean_exchange(e):
+    """One entry from the agents' request ledger on the Mac (core/agent_requests): an ask or a reply. The words are
+    an agent's, kept as data for MC and Robert to read; they never become an instruction or an answer."""
+    need(type(e) is dict and set(e) <= {"request_id", "event_id", "kind", "actor", "to", "at", "text"})
+    need(type(e.get("request_id")) is str and REQUEST_ID.match(e["request_id"]))
+    need(type(e.get("event_id")) is str and EVENT_ID.match(e["event_id"]))
+    need(e.get("kind") in EXCHANGE_KINDS and e.get("actor") in EXCHANGE_ACTORS and e.get("to") in EXCHANGE_ACTORS)
+    need(type(e.get("at")) in (int, float) and 1.6e9 < e["at"] < 4e9)
+    return {"event_key": f"{e['request_id']}:{e['event_id']}", "request_id": e["request_id"], "kind": e["kind"],
+            "actor": e["actor"], "recipient": e["to"], "text": _text(e.get("text", ""), 600),
+            "at": datetime.fromtimestamp(e["at"], timezone.utc)}
+
+
 class Store:
     def __init__(self, connect):
         self.connect = connect
@@ -114,12 +138,15 @@ class Store:
         need(type(body) is dict and body.get("phase") in ("report", "pull", "ack"))
         phase = body["phase"]
         if phase == "report":
-            need(set(body) <= {"phase", "stops", "asks"})
+            need(set(body) <= {"phase", "stops", "asks", "exchanges"})
             stops = body.get("stops", [])
             asks = body.get("asks", [])
+            exchanges = body.get("exchanges", [])
             need(type(stops) is list and len(stops) <= MAX_STOPS and type(asks) is list and len(asks) <= MAX_ASKS)
+            need(type(exchanges) is list and len(exchanges) <= MAX_EXCHANGES)
             stops, asks = [clean_stop(s) for s in stops], [clean_ask(a) for a in asks]
-            return self._run(lambda cur: self._report(cur, stops, asks))
+            exchanges = [clean_exchange(e) for e in exchanges]
+            return self._run(lambda cur: self._report(cur, stops, asks, exchanges))
         if phase == "pull":
             need(set(body) == {"phase"})
             return self._run(self._pull)
@@ -130,8 +157,13 @@ class Store:
         return self._run(lambda cur: self._ack(cur, decisions, nudges))
 
     @staticmethod
-    def _report(cur, stops, asks):
-        out = {"stops": [], "asks": []}
+    def _report(cur, stops, asks, exchanges=()):
+        out = {"stops": [], "asks": [], "exchanges": []}
+        for e in exchanges:
+            cur.execute("""INSERT INTO guild.supervision_exchanges (event_key, request_id, kind, actor, recipient, text, at)
+                VALUES (%(event_key)s, %(request_id)s, %(kind)s, %(actor)s, %(recipient)s, %(text)s, %(at)s)
+                ON CONFLICT (event_key) DO NOTHING""", e)
+            out["exchanges"].append(e["event_key"])
         for s in stops:
             cur.execute("""INSERT INTO guild.supervision_stops (report_key, agent, session, state, needs, next,
                     decision_key, pr, issue, branch, waiting, stopped_at)
@@ -309,6 +341,18 @@ class Store:
             cur.execute("""SELECT runner_id, state, seen_at, clock_timestamp() AS now
                 FROM guild.mc_delegation_runners ORDER BY seen_at DESC LIMIT 5""")
             return {"jobs": jobs, "runners": cur.fetchall()}
+        return self._run(q)
+
+    def recent_exchanges(self, *, hours=24, limit=12, kinds=None):
+        """The agents' newest ledger entries (asks and replies), newest first. Empty before the table exists."""
+        def q(cur):
+            cur.execute("SELECT to_regclass('guild.supervision_exchanges') IS NOT NULL AS present")
+            if not cur.fetchone()["present"]:
+                return []
+            cur.execute("""SELECT event_key, request_id, kind, actor, recipient, text, at FROM guild.supervision_exchanges
+                WHERE at > clock_timestamp() - make_interval(hours => %s) AND (%s::text[] IS NULL OR kind = ANY(%s))
+                ORDER BY at DESC, id DESC LIMIT %s""", (hours, kinds, kinds, limit))
+            return cur.fetchall()
         return self._run(q)
 
     def latest_checkin(self):
