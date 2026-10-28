@@ -1,7 +1,7 @@
 """The A1 fix round (A1_FIX_BRIEF.md; Spec 165 v0.2 §4.4, §5) in the host core, through the fake adapter of
 test_direct_host.py (an in-memory store, not the Guild). Each test fails on the tree before its item's commit. No provider,
 no Keychain, no microphone, no network."""
-from test_direct_host import BASE, OWNER, consult, rig, start  # noqa: F401
+from test_direct_host import BASE, ENV, OWNER, consult, rig, start  # noqa: F401
 
 
 def bare(r, sid, **fields):
@@ -299,7 +299,7 @@ def test_after_a_restart_the_store_answers_and_a_request_with_no_outcome_stays_u
     r.store.put("owner", sid, record("consult_request", "consult_request:t2", owner_item_id="t2",
                                      text_sha256=digest("What is on my agenda?")))      # admitted, then the process died
     restarted = Flask("restarted")                                                   # a new process: same store, no memory
-    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ={}, budget=r.budget)
+    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ=dict(ENV), budget=r.budget, summary_http=r.gateway)
     client = restarted.test_client()
     assert read(r, sid, "t1", client=client).get_json()["outcome"] == "done"
     lost = read(r, sid, "t2", client=client).get_json()
@@ -413,7 +413,7 @@ def test_a_summary_for_a_session_this_process_does_not_hold_keeps_the_pages_coun
     sid = start(r)
     post(r, sid, [turn(r, "user", "t0", "Kept words.")])
     restarted = Flask("restarted")
-    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ={}, budget=r.budget)
+    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ=dict(ENV), budget=r.budget, summary_http=r.gateway)
     summary = restarted.test_client().post(BASE + f"/session/{sid}/summary", headers=OWNER, json={
         "conversation_id": "owner", "last_item_id": "t1", "unacknowledged": ["t1"]}).get_json()
     assert r.store.markers[(sid, "end")]["capture"] == "incomplete" and r.store.markers[(sid, "end")]["missing"] == 1
@@ -429,7 +429,84 @@ def test_a_session_summarized_without_any_end_or_report_is_not_claimed_complete(
     sid = start(r)
     post(r, sid, [turn(r, "user", "t0", "Words.")])
     restarted = Flask("restarted")
-    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ={}, budget=r.budget)
+    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ=dict(ENV), budget=r.budget, summary_http=r.gateway)
     restarted.test_client().post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"})
     assert r.store.markers[(sid, "end")]["capture"] == "incomplete" and "missing" not in r.store.markers[(sid, "end")]
     assert "was not kept, so it is not below" in r.host.prompts[-1]
+
+
+# ── Item 10: the summary is a plain completion through the model gateway (§5.4, D22 a) ─────────────────────────────────
+
+def summarized(r):
+    from test_direct_host import post, turn
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "We looked at the agenda. We're done.")])
+    return sid, r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"}).get_json()
+
+
+def test_the_summary_request_has_no_tools_no_agent_and_no_binding_and_is_bounded(rig):
+    r = rig
+    _sid, answer = summarized(r)
+    assert answer["state"] == "proposed"
+    (sent,) = r.gateway.requests
+    assert set(sent["json"]) == {"model", "stream", "max_tokens", "temperature", "messages"}       # no tools, no user
+    assert "tools" not in sent["json"] and "tool_choice" not in sent["json"] and "user" not in sent["json"]
+    assert sent["json"]["model"] == "minimoi-voice-summary" and sent["json"]["stream"] is False
+    assert sent["url"] == "http://model-gateway:4000/v1/chat/completions" and sent["allow_redirects"] is False
+    assert sent["headers"]["Authorization"] == "Bearer test-only-summary-key"
+    system, user = sent["json"]["messages"]
+    assert system["role"] == "system" and "Test Person" in system["content"] and "plain and brief" in system["content"]
+    assert user["role"] == "user" and "BEGIN_VOICE_RECORDS" in user["content"] and "agenda" in user["content"]
+    connect, read = sent["timeout"]
+    assert connect + read < 45                                    # the server has stopped waiting before the page's bound
+
+
+def test_a_tool_call_shaped_answer_is_unavailable():
+    from types import SimpleNamespace
+    from core.realtime_voice.summary_gateway import GatewaySummary
+    for message, finish in (({"role": "assistant", "content": None, "tool_calls": [{"id": "x"}]}, "tool_calls"),
+                            ({"role": "assistant", "content": "{}", "function_call": {"name": "x"}}, "stop"),
+                            ({"role": "assistant", "content": "x"}, "tool_calls")):
+        answer = {"object": "chat.completion", "choices": [{"index": 0, "finish_reason": finish, "message": message}]}
+        calls = []
+
+        def tool_call(url, **kw):
+            calls.append(kw)
+            return SimpleNamespace(status_code=200, json=lambda: answer)
+        client = GatewaySummary("voice-summary-tp", environ=dict(ENV), http_post=tool_call)
+        assert client("system", "prompt") == (None, "tool_call") and len(calls) == 1
+
+
+def test_a_missing_key_refuses_and_nothing_is_sent(rig):
+    from flask import Flask
+    from core.realtime_voice.direct_host import install_direct_voice
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Hello.")])
+    keyless = Flask("keyless")
+    install_direct_voice(keyless, r.host, url_prefix="/tp/voice", environ={"MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "1"},
+                         budget=r.budget, summary_http=r.gateway)
+    answer = keyless.test_client().post(BASE + f"/session/{sid}/summary", headers=OWNER,
+                                        json={"conversation_id": "owner"}).get_json()
+    assert answer["state"] == "unavailable" and answer["error"] == "no_summary_key" and not r.gateway.requests
+
+
+def test_a_gateway_that_times_out_is_unavailable_once_and_nothing_is_written_after_it(rig):
+    import requests
+    r = rig
+    calls = []
+
+    def slow(url, **kw):
+        calls.append(kw["timeout"])
+        raise requests.exceptions.ReadTimeout("synthetic")
+    from core.realtime_voice.summary_gateway import GatewaySummary
+    assert GatewaySummary("voice-summary-tp", environ=dict(ENV), http_post=slow)("s", "p") == (None, "timeout")
+    assert calls == [(5, 30)]                                     # one bounded call, never retried
+    down = GatewaySummary("voice-summary-tp", environ=dict(ENV), http_post=lambda *a, **k: (_ for _ in ()).throw(
+        requests.exceptions.ConnectionError("synthetic")))
+    assert down("s", "p") == (None, "gateway_down")
+    r.host.model = None                                            # the gateway refuses: the route's answer, then nothing
+    sid, answer = summarized(r)
+    assert answer["state"] == "unavailable" and answer["line"] == "Summary unavailable."
+    assert r.store.summary("owner", sid) is None and len(r.gateway.requests) == 1

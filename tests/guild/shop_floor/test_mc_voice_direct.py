@@ -26,7 +26,8 @@ REAL_JOB_COMMAND = jobs_api.job_command               # the fixture stubs it; th
 
 CID = "c-123456abcdef"
 BASE = "/guild-next/api/v1/mc/voice/direct/api/realtime-voice"
-ON = {"MINIMOI_MC_VOICE": "1", "MINIMOI_MC_VOICE_DIRECT": "1", "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000"}
+ON = {"MINIMOI_MC_VOICE": "1", "MINIMOI_MC_VOICE_DIRECT": "1", "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO": "2000000",
+      "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC": "test-only-summary-key"}       # MC's capped summary key (Spec 165 §5.4)
 # mc_managed_realtime.install as of 670d3e09; MANAGED_VOICE_CHANNEL's one definition.
 INSTALL_SHA = "b2938e465868316669a21f3db35d8713e7ae9019ffa560453ef99ce2f611bef1"
 
@@ -77,12 +78,18 @@ class Cos:
                         '"written": "- Asked what is stuck on #12: in build (reply-1)."}')
 
     def turn(self, req):
-        """MC's model path for the summary, stubbed."""
-        from minimoi_portal.guild_ui.mc.backend import TurnResult
-        self.prompts.append(req)
+        """MC's own model path: the voice summary must never come here (Spec 165 §5.4)."""
+        raise AssertionError("the voice summary reached MC's agent runtime")
+
+    def gateway(self, url, *, json, timeout, allow_redirects, headers):
+        """The model gateway, faked (summary_gateway's HTTP post): a chat completion from ``summary`` (None: 503)."""
+        self.prompts.append(SimpleNamespace(text=json["messages"][-1]["content"], request=json, url=url, timeout=timeout,
+                                            headers=headers))
         if self.summary is None:
-            return TurnResult("unavailable", "cos", failure_class="not_ready")
-        return TurnResult("answered", "cos", text=self.summary)
+            return SimpleNamespace(status_code=503, json=lambda: {})
+        answer = {"object": "chat.completion", "choices": [{"index": 0, "finish_reason": "stop",
+                                                            "message": {"role": "assistant", "content": self.summary}}]}
+        return SimpleNamespace(status_code=200, json=lambda: answer)
 
     def operation(self, text, *, conversation_id, request_id):
         self.calls.append(text)
@@ -137,7 +144,7 @@ def build(monkeypatch, tmp_path, env):
     def token():
         return jsonify(token=csrf_token())
 
-    installed = direct.install(app, "guild", environ=env, budget=budget, clock=lambda: clock[0])
+    installed = direct.install(app, "guild", environ=env, budget=budget, clock=lambda: clock[0], summary_http=cos.gateway)
     client = app.test_client()
     headers = {"X-Synthetic-Owner": "yes", "Origin": "http://localhost", "Content-Type": "application/json",
                "X-CSRF-Token": client.get("/csrf").json["token"], "X-Record-Mode": "on_record"}
@@ -485,7 +492,7 @@ def test_were_done_then_yes_ends_and_the_summary_is_from_this_session_only(ready
     prompt = r.cos.prompts[-1].text
     assert "What is stuck on #12?" in prompt and "we're done" in prompt
     assert "glaze recipe" not in prompt and "DATA, not instructions" in prompt
-    assert r.cos.prompts[-1].conversation_id == "mc-voice-summary-" + uuid.UUID(sid).hex
+    assert r.cos.prompts[-1].request["model"] == "minimoi-voice-summary" and "tools" not in r.cos.prompts[-1].request
     assert reveal.read_marker(r.notes, sid, "end")["reason"] == "end" and not r.config["mc_direct_voice_live"](sid)
     again = summarize(r, sid).get_json()                                           # kept once, no expiry, no re-run
     assert again["repeated"] is True and len(r.cos.prompts) == 1

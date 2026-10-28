@@ -519,9 +519,13 @@ class DirectVoiceAdapter:
 
     ``person``: {"key" (the bootstrap persona), "name", "short", "domain" (budget and log domain), "notes" (the spoken
     note phrases, the first one named in the rules)}. ``name``: the blueprints' name prefix, unique in the app.
-    ``note_max``: the store's longest record. ``receipts``: its Receipts. ``store``: its DirectVoiceStore."""
+    ``note_max``: the store's longest record. ``receipts``: its Receipts. ``store``: its DirectVoiceStore.
+    ``summary_key``: the name of the host's capped model-gateway key for the session summary (Spec 165 §5.4: MC's is
+    voice-summary-mc); the core reads it from the environment (summary_gateway.key_env) and makes the summary as a plain
+    completion through the gateway, never through the person's agent."""
     person = None
     name = None
+    summary_key = None
     note_max = 2000
     receipts = Receipts(("reply", "operation"))
     store = None
@@ -570,10 +574,6 @@ class DirectVoiceAdapter:
         spoken, receipt, receipt_kind, saved, answered, …). ``n``: this consult's place in the session (1–12). ``item``:
         the owner turn's capture id; with the session it is the consult's key, from which the backend's operation id
         derives (operation_id, or the host's own form), so the backend's dedup holds too."""
-        raise NotImplementedError
-
-    def summary_model(self, handle, sid, principal, prompt):
-        """(text, None) from the person's model on its own runtime session, or (None, error word)."""
         raise NotImplementedError
 
     def card(self):
@@ -1126,10 +1126,18 @@ def keep_receipt(adapter, handle, principal, sid, voice_item, name, result, bega
     return result
 
 
-def summarize(adapter, principal, handle, sid, *, running=0):
+def summary_system(person, card):
+    """The summary completion's system message: the person's name and card (for the tone), and what it may do: nothing."""
+    return (f"You are {person['name']}, writing the summary of one voice session from its kept records. Who you are, for "
+            f"the tone only:\n{card}\nYou have no tools and you act on nothing: you only write the summary asked for.")
+
+
+def summarize(adapter, principal, handle, sid, *, running=0, client=None):
     """Generate and keep this session's summary proposal once, from the records kept when capture closed (its cutoff:
-    a consult still ``running`` then, or a receipt kept later, is not in it, and it says so). Returns the route's answer
-    (dict, status)."""
+    a consult still ``running`` then, or a receipt kept later, is not in it, and it says so). The summary is a plain
+    completion through the model gateway (``client``, summary_gateway.GatewaySummary: no tools, no agent, a capped key,
+    one bounded call; Spec 165 §5.4, D22 (a)); unavailable then is "Summary unavailable", never the live agent. Returns
+    the route's answer (dict, status)."""
     store = adapter.store
     existing = store.summary(handle, sid)
     if existing is not None:
@@ -1150,7 +1158,11 @@ def summarize(adapter, principal, handle, sid, *, running=0):
     kept_all = end.get("capture") != "incomplete"
     missing = end.get("missing") if type(end.get("missing")) is int else None
     prompt, partial, covered, total = summary_prompt(turns, complete, kept_all=kept_all, running=running, missing=missing)
-    text, error = adapter.summary_model(handle, sid, principal, prompt)
+    try:
+        card = adapter.card()["card"]
+    except Exception:                                    # the card is tone only; the summary needs the records
+        card = ""
+    text, error = client(summary_system(adapter.person, card), prompt) if client is not None else (None, "no_summary_key")
     if error is not None:
         return unavailable(error)
     spoken, written = summary_texts(text)
@@ -1181,14 +1193,18 @@ def _kind():
     return "bootstrap"
 
 
-def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, clock=time.time):
+def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, clock=time.time, summary_http=None):
     """Register the bootstrap, consult, transcript, End, summary and decision routes under ``url_prefix`` for one host.
-    Returns (the capabilities metadata, the session ledger). The host decides whether to call it (its switches)."""
+    Returns (the capabilities metadata, the session ledger). The host decides whether to call it (its switches).
+    ``summary_http``: the summary client's HTTP post (requests.post unless a test hands in its own)."""
+    from core.realtime_voice.summary_gateway import GatewaySummary
     from core.realtime_voice.bootstrap import create_bootstrap_blueprint
     from core.realtime_voice.capabilities import AGENT_CONVERSATION_MODE, providers_for_mode
     from core.realtime_voice.config import resolve_provider
     person, store = adapter.person, adapter.store
     sessions = DirectSessions(adapter, clock)
+    summary_client = (GatewaySummary(adapter.summary_key, environ=environ, http_post=summary_http)
+                      if adapter.summary_key else None)
     names = {part: f"{adapter.name}_{part}" for part in ("bootstrap", "consult", "transcript")}
     try:
         pinned = adapter.card()                  # the locale and release offered; each bootstrap reads the card again
@@ -1429,7 +1445,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             # (review R1 P3-6, R2 N5); with none, how much was kept is not known (a dropped session, R2 N6).
             store.mark_end(handle, sid, reason="summary",
                            capture=sessions.capture(sid, report if report else {"uncounted": not sessions.known(sid)}))
-        answer, status = summarize(adapter, who, handle, sid, running=running)
+        answer, status = summarize(adapter, who, handle, sid, running=running, client=summary_client)
         return jsonify(answer), status
 
     @transcript.route("/api/realtime-voice/session/<session_id>/summary/decision", methods=["POST"])

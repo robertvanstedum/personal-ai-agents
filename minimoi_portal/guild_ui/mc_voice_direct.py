@@ -4,7 +4,8 @@ The core (core.realtime_voice.direct_host, Spec 165 §4) owns the session ledger
 the summary and decision flows and their routes. This file is what is the Guild's (Spec 165 §4.2, §4.4): the owner guard
 and write guard (owner_api, check_write, check_stop, MC turns on), conversation lookup (api._conversation, ID_RE), the
 floor store (markers and tags through mc_voice_reveal, turns through mc_voice_transcripts.retain), _TaggedFloor, MC's
-typed turn, the summary model call, MC's operating rules and continuity, and the title touch.
+typed turn, MC's operating rules and continuity, and the title touch. MC's summary is the core's plain gateway completion
+under his capped key, voice-summary-mc (Spec 165 §5.4), never his agent runtime.
 
 A consult is MC's typed turn (api._ledger_turn + api._answer_turn, what POST /mc/turns runs after its prelude) on the
 owner's own latest transcript item, kept first as his note labelled voice, exactly as POST /notes keeps a typed one. The
@@ -29,7 +30,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-import uuid
 from pathlib import Path
 
 from flask import current_app, g
@@ -169,6 +169,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
     note_max = NOTE_MAX
     receipts = reveal.RECEIPTS
     store = _FloorStore()
+    summary_key = "voice-summary-mc"        # MC's capped model-gateway key for the summary (Spec 165 §5.4, D22 (a))
 
     def __init__(self, app, config, mount):
         self.app, self.config, self.name = app, config, mount + "_mc_voice"
@@ -337,45 +338,8 @@ class _MasterCraftsman(DirectVoiceAdapter):
                 result["error"] = answer.get("status")
         return result
 
-    def summary_model(self, conv, sid, principal, prompt):
-        """MC's own model path, as the morning glance uses it: its own runtime session, not this conversation's, under
-        the turn ledger's gate and MC's one-at-a-time lock."""
-        from . import api, feature_environ
-        from .mc import TurnRequest
-        from .mc.ledger_gate import Refusal, gate
-        services = cfg()["services"]
-        if not services.mc_turns:
-            return None, "mc_turns_off"
-        hexed = uuid.UUID(sid).hex
-        try:
-            turn = gate(services, feature_environ(), principal=principal, conversation_id=conv["id"],
-                        note_request_id="voice-summary-" + hexed, request_id="voice-summary-" + hexed, kind="voice")
-        except Refusal as refused:
-            return None, refused.body.get("error") or "refused"
-        if not api._mc_acquire(principal):
-            if turn is not None:
-                turn.finish_not_sent({"error": "busy"})
-            return None, "busy"
-        try:
-            if turn is not None:
-                turn.mark_started()
-            result = services.mc.turn(TurnRequest("mc-voice-summary-" + hexed, prompt, "voice-summary-" + hexed,
-                                                  context={"mode": "on_record", "page": reveal.PAGE_SUMMARY}))
-            if turn is not None:
-                turn.finish_model({"status": result.status, "backend_kind": result.backend_kind}, 200)
-        except Exception:
-            if turn is not None and not turn.finished:
-                turn.finish_unknown("exception")
-            log.exception("mc direct voice: summary failed")
-            return None, "unavailable"
-        finally:
-            api._mc_release(principal)
-        if result.status != "answered":
-            return None, result.failure_class or result.status
-        return result.text, None
 
-
-def install(app, mount, *, environ, budget=None, clock=time.time):
+def install(app, mount, *, environ, budget=None, clock=time.time, summary_http=None):
     """Register MC's direct-path bootstrap, consult and transcript routes on this mount (the core's routes, with this
     adapter); False (nothing registered) when off."""
     from .mc_voice import enabled
@@ -384,7 +348,7 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
     config = app.extensions[mount]
     adapter = _MasterCraftsman(app, config, mount)
     metadata, sessions = install_direct_voice(app, adapter, url_prefix=config["url_prefix"] + PREFIX, environ=environ,
-                                              budget=budget, clock=clock)
+                                              budget=budget, clock=clock, summary_http=summary_http)
     config["mc_direct_voice"] = metadata
     config["mc_direct_voice_live"] = sessions.live      # server-side only: which sessions the reveal treats as live
     config["mc_direct_voice_tagged"] = adapter.tags.tagged   # server-side only: notes this process tagged with a session

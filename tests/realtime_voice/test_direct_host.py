@@ -24,7 +24,7 @@ from core.realtime_voice.voice_card import load_pinned
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "/tp/voice/api/realtime-voice"
-ENV = {core.ALLOWANCE_ENV: "2000000"}
+ENV = {core.ALLOWANCE_ENV: "2000000", "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_TP": "test-only-summary-key"}
 PERSON = {"key": "test_person", "name": "Test Person", "short": "TP", "domain": "tp", "notes": ("save a note:",)}
 OWNER = {"X-Owner": "robert", "X-Csrf": "ok", "Content-Type": "application/json"}
 
@@ -90,10 +90,29 @@ class Store(DirectVoiceStore):
         return Kept("kept", text, False)
 
 
+class Gateway:
+    """The model gateway, faked: one chat completion from the host's ``model`` text (None: the gateway answers 503). Every
+    request is kept, and its user message is the host's prompt."""
+
+    def __init__(self, host):
+        self.host, self.requests = host, []
+
+    def __call__(self, url, *, json, timeout, allow_redirects, headers):
+        self.requests.append({"url": url, "json": json, "timeout": timeout, "headers": headers,
+                              "allow_redirects": allow_redirects})
+        self.host.prompts.append(json["messages"][-1]["content"])
+        if not self.host.model:
+            return SimpleNamespace(status_code=503, json=lambda: {})
+        answer = {"object": "chat.completion", "choices": [{"index": 0, "finish_reason": "stop",
+                                                            "message": {"role": "assistant", "content": self.host.model}}]}
+        return SimpleNamespace(status_code=200, json=lambda: answer)
+
+
 class Host(DirectVoiceAdapter):
     person = PERSON
     name = "tp_voice"
     note_max = 500
+    summary_key = "voice-summary-tp"
     receipts = Receipts(("reply", "note", "reminder"))
 
     def __init__(self, card_root):
@@ -138,10 +157,6 @@ class Host(DirectVoiceAdapter):
             return {"answered": True, "saved": True, "receipt": f"op-{n}", "spoken": "Saved."}
         return {"answered": True, "receipt": f"turn-{n}", "receipt_kind": "reply", "spoken": "Two items."}
 
-    def summary_model(self, handle, sid, principal, prompt):
-        self.prompts.append(prompt)
-        return (self.model, None) if self.model else (None, "not_ready")
-
     def card(self):
         return load_pinned(self.card_root)
 
@@ -175,10 +190,12 @@ def rig(monkeypatch, tmp_path):
     monkeypatch.setattr("core.realtime_voice.bootstrap._rate_limit_state", {})
     budget = VoiceBudget("sqlite:///" + str(tmp_path / "budget.db"), cap_usd=lambda: 20)
     budget.ensure_schema()
+    gateway = Gateway(host)
     metadata, sessions = install_direct_voice(app, host, url_prefix="/tp/voice", environ=dict(ENV), budget=budget,
-                                              clock=lambda: clock[0])
+                                              clock=lambda: clock[0], summary_http=gateway)
     return SimpleNamespace(app=app, client=app.test_client(), host=host, mints=mints, clock=clock, budget=budget,
-                           metadata=metadata, sessions=sessions, store=host.store, card_root=tmp_path / "card")
+                           metadata=metadata, sessions=sessions, store=host.store, card_root=tmp_path / "card",
+                           gateway=gateway)
 
 
 def start(r, **body):
@@ -375,7 +392,7 @@ def test_a_summary_is_unavailable_with_nothing_kept_or_no_model_and_the_words_sa
     post(r, other, [turn(r, "user", "t0", "Hello")])
     r.host.model = None
     down = r.client.post(BASE + f"/session/{other}/summary", headers=OWNER, json={"conversation_id": "owner"}).get_json()
-    assert down["error"] == "not_ready" and r.store.markers[(other, "end")]["reason"] == "end"   # still revealed
+    assert down["error"] == "gateway_error" and r.store.markers[(other, "end")]["reason"] == "end"   # still revealed
 
 
 def test_a_summary_belongs_to_its_owner_and_conversation(rig):

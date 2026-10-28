@@ -198,3 +198,27 @@ def test_every_later_view_says_incomplete_n_and_a_dropped_session_may_not_be_who
     by_id = {s["session_id"]: s for s in sessions}
     assert by_id[sid]["capture"] == "incomplete" and by_id[sid]["missing"] == 2
     assert by_id[dropped]["state"] == "dropped" and by_id[dropped]["capture"] == "unknown"
+
+
+# ── Item 10: MC's summary is a plain gateway completion under his capped key, never his agent ───────────────────────────
+
+def test_mcs_summary_goes_through_the_gateway_with_his_key_and_never_his_agent(ready):
+    from test_mc_voice_direct import summarize
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [turn(r, "user", "t0", "What is stuck on #12? We're done.")])
+    answer = summarize(r, sid).get_json()                       # Cos.turn (his agent) raises if it is reached
+    assert answer["state"] == "proposed"
+    sent = r.cos.prompts[-1]
+    assert sent.headers["Authorization"] == "Bearer test-only-summary-key" and "tools" not in sent.request
+    assert sent.request["messages"][0]["content"].startswith("You are Master Craftsman")
+
+
+def test_mcs_summary_without_its_key_is_unavailable_and_nothing_is_sent(monkeypatch, tmp_path):
+    from test_mc_voice_direct import ON, build, summarize
+    env = {k: v for k, v in ON.items() if k != "MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC"}
+    r = build(monkeypatch, tmp_path, env)
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [turn(r, "user", "t0", "Hello.")])
+    answer = summarize(r, sid).get_json()
+    assert answer["state"] == "unavailable" and answer["error"] == "no_summary_key" and not r.cos.prompts
