@@ -449,7 +449,8 @@ def test_one_owner_turn_is_one_effect_for_any_host(rig):
     sid = start(r)
     first = consult(r, sid, call_id="host-1", turn="t1").get_json()
     second = consult(r, sid, call_id="call_2", name="save_note", turn="t1").get_json()     # the same words, the model's
-    assert len(r.host.turns) == 1 and second["receipt"] == first["receipt"] and second["same_turn"] is True
+    assert len(r.host.turns) == 1 and first["receipt"] == "turn-1" and second["same_turn"] is True
+    assert second["first_tool"] == "consult" and second["spoken"].startswith("That was already handled: Two items.")
     assert consult(r, sid, call_id="call_3", turn="t3").get_json()["receipt"] == "turn-2"     # his next words: a new turn
     bare = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "c4", "name": "consult",
                                                                  "owner_transcript_item": "x"})

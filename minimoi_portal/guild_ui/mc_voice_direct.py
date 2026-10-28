@@ -322,6 +322,9 @@ class _MasterCraftsman(DirectVoiceAdapter):
             kind, receipt = "job", job.get("id") if isinstance(job.get("id"), str) and job.get("id") else None
         result.update(receipt=receipt, receipt_kind=kind,
                       spoken=speakable(said or "") if isinstance(said, str) and said.strip() else FAILED)
+        if (answered and operation.get("type") == "cos_note" and operation.get("saved") is True
+                and isinstance(operation.get("operation_id"), str) and operation["operation_id"]):
+            result["saved"] = True             # a consult on "make a note that …" saved it: its receipt says so (R1 P2-3)
         if acted:
             result["job_command"] = command
         if not (answered or acted):

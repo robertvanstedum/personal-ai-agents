@@ -139,3 +139,16 @@ def test_a_long_mc_turn_is_pending_and_its_reply_lands_in_the_conversation_and_t
     beat = post(r, sid, []).get_json()
     assert beat["completed"][0]["owner_item_id"] == "t1" and beat["completed"][0]["spoken"] == "Item 12 is in build."
     assert any("Answered. Reply reply-1." in (row.get("text") or "") for row in r.notes.rows.values())
+
+
+# ── R1 P2-3: Codex's B1 path, Check and then the model's save_note (test_a1_repro.py) ───────────────────────────────────
+
+def test_check_then_the_models_save_note_says_saved_because_the_check_saved_it(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    words = "Make a note that the kiln needs a new seal"
+    first = call(r, sid, call_id="host-1", name="consult", words=words, owner_item_id="t1").get_json()
+    second = call(r, sid, call_id="call_model", name="save_note", words=words, owner_item_id="t1").get_json()
+    assert len(r.cos.calls) == 1 and first["saved"] is True
+    assert second["same_turn"] is True and second["saved"] is True and second["first_tool"] == "consult"
+    assert second["spoken"].startswith("That was already handled:")

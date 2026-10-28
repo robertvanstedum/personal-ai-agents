@@ -161,13 +161,15 @@ def tools(person):
                          "The server acts on Robert's own last words, not on these arguments. Speak the result's 'spoken' "
                          "text without adding claims. Its 'outcome' is done, not_done, pending (still running: the answer "
                          "will be in the conversation; say only that) or unknown (the result did not come back: say only "
-                         "that, and that it must be checked before asking again)."),
+                         "that, and that it must be checked before asking again). If 'same_turn' is true, his words were "
+                         "already acted on (by the other tool, or by Check): say only 'spoken'."),
          "parameters": {"type": "object", "properties": {"question": {"type": "string"}}}},
         {"type": "function", "name": "save_note",
          "description": (f"Save a note when Robert says {notes}. The server saves his own "
                          "words, not these arguments. Say it is saved only when the result has 'saved' true. If "
                          "'outcome' is pending or unknown, say only what 'spoken' says: the note must be checked before it "
-                         "is saved again."),
+                         "is saved again. If 'same_turn' is true, his words were already acted on (by the other tool, or by "
+                         "Check): say only 'spoken'."),
          "parameters": {"type": "object", "properties": {"note": {"type": "string"}}}},
     ]
 
@@ -707,20 +709,21 @@ class DirectSessions(ConsultLedger):
             state = self._sessions.get(sid)
             return len(state.get("running", {})) if state else 0
 
-    def settle(self, sid, item, call_id, result):
-        """The owner turn has its result: kept for its call id and for the turn, and no longer running."""
+    def settle(self, sid, item, call_id, result, tool=None):
+        """The owner turn has its result: kept for its call id and for the turn (with the tool that asked), and no longer
+        running."""
         with self._lock:
             state = self._sessions.get(sid)
             if state is None:
                 return
             state["results"][call_id] = result
             state["calls"].pop(call_id, None)
-            state.setdefault("settled", {})[item] = (call_id, result)
+            state.setdefault("settled", {})[item] = (call_id, tool, result)
             if state.setdefault("running", {}).get(item) == call_id:
                 del state["running"][item]
 
     def item_result(self, sid, item):
-        """(the first call id, its full result) for an owner turn settled here, or None."""
+        """(the first call id, its tool, its full result) for an owner turn settled here, or None."""
         with self._lock:
             state = self._sessions.get(sid)
             return state.get("settled", {}).get(item) if state else None
@@ -928,23 +931,36 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
         existing = get(adapter, handle, sid, asked["id"])                       # another dispatch put it first
         if existing is None:
             return not_done("not_recorded", NOT_RECORDED), 200
-    return same_key(adapter, sessions, handle, sid, call_id, item, words, existing)
+    return same_key(adapter, sessions, handle, sid, call_id, item, words, existing, name)
 
 
-def same_key(adapter, sessions, handle, sid, call_id, item, words, existing):
-    """A second dispatch of an owner turn already admitted: (answer, status), running nothing."""
+ALREADY = "That was already handled: {spoken} Ask the other part on its own."
+
+
+def same_key(adapter, sessions, handle, sid, call_id, item, words, existing, name):
+    """A second dispatch of an owner turn already admitted: (answer, status), running nothing. From the same tool it is
+    the first result (same_turn when the call id differs). From the other tool (two requests in one utterance, or Check
+    and then the model's save_note) it is not passed off as that tool's own success: it carries the first action's
+    outcome, same_turn and the first tool's name, and says it was already handled and to ask the other part on its
+    own; saved is true only when the first result holds a saved-note receipt (review R1 P2-3)."""
     if existing.get("text_sha256") != words:
         return not_done("turn_mismatch", TURN_MISMATCH), 409
     if sessions.running(sid, item):
         return IN_FLIGHT, 409
     settled = sessions.item_result(sid, item)
     if settled is not None:
-        first, result = settled
+        first, tool, result = settled
     else:
         kept = get(adapter, handle, sid, outcome_id(item))
-        first, result = (kept.get("call_id"), kept.get("result")) if kept else (None, None)
+        first, tool, result = (kept.get("call_id"), kept.get("tool"), kept.get("result")) if kept else (None, None, None)
     if not isinstance(result, dict):
         answer = {"ok": False, "error": "no result", "outcome": "unknown", "spoken": UNKNOWN}
+    elif tool is not None and tool != name:
+        outcome = result.get("outcome") if result.get("outcome") in OUTCOMES else ("done" if result.get("ok") else "not_done")
+        spoken = (result.get("spoken") or "").strip()
+        answer = {"ok": outcome == "done", "call_id": call_id, "outcome": outcome, "same_turn": True, "first_tool": tool,
+                  "saved": result.get("saved") is True,                    # the host says so only with a note's receipt
+                  "spoken": ALREADY.format(spoken=spoken if spoken.endswith((".", "?", "!")) else spoken + ".")}
     else:
         answer = {**result, **({"same_turn": True} if first != call_id else {})}
     sessions.remember(sid, call_id, answer)
@@ -971,7 +987,7 @@ def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n,
         except Exception:                                # never left running: the turn is settled unknown
             log.exception("%s direct voice: consult worker failed", adapter.person["domain"])
             result = settled_result({"ok": False, "call_id": call_id, "error": "exception", "outcome": "unknown"})
-            sessions.settle(sid, item, call_id, result)
+            sessions.settle(sid, item, call_id, result, name)
         with lock:
             state["result"] = result
             told = state["told_pending"]
@@ -1008,7 +1024,7 @@ def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, ite
     if done.outcome not in ("stored", "duplicate"):
         log.error("%s direct voice: consult outcome not recorded (%s)", adapter.person["domain"], done.reason or done.outcome)
     result = keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began)
-    sessions.settle(sid, item, call_id, result)
+    sessions.settle(sid, item, call_id, result, name)
     return result
 
 

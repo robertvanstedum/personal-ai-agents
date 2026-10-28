@@ -54,7 +54,8 @@ def test_a_second_dispatch_of_a_recorded_key_gets_its_stored_outcome_and_runs_no
                                      call_id="call_first", outcome="done",
                                      result={"ok": True, "saved": True, "receipt": "op-9", "spoken": "Saved."}))
     answer = consult(r, sid, call_id="host-2", turn="t7").get_json()                # Check after the model
-    assert answer["receipt"] == "op-9" and answer["same_turn"] is True and not r.host.turns
+    assert answer["saved"] is True and answer["same_turn"] is True and answer["first_tool"] == "save_note"
+    assert answer["outcome"] == "done" and not r.host.turns
 
 
 def test_a_recorded_key_with_no_outcome_and_nothing_running_is_unknown_and_never_rerun(rig):
@@ -92,7 +93,7 @@ def test_a_retry_check_and_a_new_call_id_on_one_key_are_one_effect_through_one_d
     model = consult(r, sid, call_id="call_model", name="save_note", words="save a note: the kiln", turn="t2").get_json()
     check = consult(r, sid, call_id="host-1", words="save a note: the kiln", turn="t2").get_json()   # Check after the model
     retry = consult(r, sid, call_id="call_model", name="save_note", words="save a note: the kiln", turn="t2").get_json()
-    assert len(r.host.turns) == 1 and check["receipt"] == model["receipt"] == retry["receipt"] and retry == model
+    assert len(r.host.turns) == 1 and retry == model and check["saved"] is True and check["first_tool"] == "save_note"
     assert check["same_turn"] is True and len([k for k in records_of(r, sid) if k.startswith("consult_request")]) == 1
 
 
@@ -233,3 +234,32 @@ def test_a_turn_that_finishes_in_time_is_answered_and_not_told_again(rig):
     sid = start(r)
     assert consult(r, sid, call_id="call_1", turn="t1").get_json()["outcome"] == "done"
     assert "completed" not in post(r, sid, []).get_json()
+
+
+# ── R1 P2-3: a replay to the other tool is not that tool's own success ───────────────────────────────────────────────
+
+def test_two_requests_in_one_utterance_the_second_tool_is_told_it_was_already_handled(rig):
+    r = rig
+    sid = start(r)
+    words = "save a note: the kiln, and what is on my agenda?"
+    note = consult(r, sid, call_id="m1", name="save_note", words=words, turn="t1").get_json()
+    asked = consult(r, sid, call_id="m2", name="consult", words=words, turn="t1").get_json()
+    assert note["saved"] is True and len(r.host.turns) == 1
+    assert asked["same_turn"] is True and asked["first_tool"] == "save_note" and asked["outcome"] == "done"
+    assert asked["spoken"] == "That was already handled: Saved. Ask the other part on its own."
+    assert "receipt" not in asked and asked["saved"] is True                    # the note's receipt, not a consult's answer
+
+
+def test_a_consult_then_the_models_save_note_is_not_saved_unless_the_first_saved_a_note(rig):
+    r = rig
+    sid = start(r)
+    consult(r, sid, call_id="host-1", name="consult", turn="t2")               # Check: an answer, no note
+    note = consult(r, sid, call_id="m2", name="save_note", turn="t2").get_json()
+    assert note["saved"] is False and note["first_tool"] == "consult" and note["same_turn"] is True
+    assert note["spoken"].startswith("That was already handled: Two items.")
+
+
+def test_the_tool_texts_say_how_to_speak_same_turn_and_pending():
+    from core.realtime_voice.direct_host import tools
+    for tool in tools({"name": "Test Person", "notes": ("save a note:",)}):
+        assert "'same_turn'" in tool["description"] and "pending" in tool["description"]
