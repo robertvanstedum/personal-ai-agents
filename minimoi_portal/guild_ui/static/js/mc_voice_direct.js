@@ -15,6 +15,12 @@ export const EDIT_MAX = 1860;
 // too, with the count when the server has one (Spec 165 §5.2). A session that ended without End (dropped) may not have all
 // of it, and says so (review R2 N6).
 export const INCOMPLETE_LINE = 'Some of what was said in this voice session was not kept. What was kept is in the conversation.';
+// The thread's posts after the session are bounded (review L N7), each above the server's own: a decision is one store write;
+// an ask for a summary may join an attempt the server bounds at 35 s. With no answer, the words say what may still be true.
+const DECISION_WAIT_MS = 15000;
+const ASK_WAIT_MS = 45000;
+export const DECISION_NO_ANSWER = 'The server did not answer. The decision may have been kept; reload to see it.';
+export const ASK_NO_ANSWER = 'The server did not answer. The summary may still appear here.';
 export const DROPPED_LINE = 'This voice session ended without closing; some of what was said may not have been kept.';
 export function incompleteLine(n) {
   return Number.isInteger(n) && n > 0
@@ -69,7 +75,7 @@ export function voiceThread(d) {
     async function decide(decision, text) {
       busy(true); tell('');
       const r = await d.post(direct.summary_decision_url.split('{session_id}').join(encodeURIComponent(sid)),
-        { conversation_id: d.conversationId(), decision, ...(decision === 'edit' ? { text } : {}) });
+        { conversation_id: d.conversationId(), decision, ...(decision === 'edit' ? { text } : {}) }, { timeoutMs: DECISION_WAIT_MS });
       const body = r.body || {};
       if (r.status === 200 && body.ok) {
         actions.remove();
@@ -88,7 +94,7 @@ export function voiceThread(d) {
         return false;
       }
       busy(false);
-      tell(body.message || (r.status === 0 ? 'The server did not answer. Nothing was changed.' : 'That was not kept. Nothing was changed.'));
+      tell(body.message || (r.status === 0 ? DECISION_NO_ANSWER : 'That was not kept. Nothing was changed.'));
       return false;
     }
 
@@ -133,14 +139,15 @@ export function voiceThread(d) {
     const tell = (text) => { result.textContent = text; result.hidden = !text; };
     button.addEventListener('click', async () => {
       button.disabled = true; tell('Asking…');
-      const r = await d.post(String(direct.summary_url).split('{session_id}').join(encodeURIComponent(sid)), { conversation_id: d.conversationId() });
+      const r = await d.post(String(direct.summary_url).split('{session_id}').join(encodeURIComponent(sid)), { conversation_id: d.conversationId() },
+        { timeoutMs: ASK_WAIT_MS });
       const body = r.body || {};
       if (r.status === 200 && body.ok) { box.remove(); await d.reveal?.(); return; }
       button.disabled = false;
       // Still being written (an attempt already running, which this ask joined): no second one starts (review CX V2-5).
       tell(r.status === 200 && body.state === 'unavailable' ? 'Still unavailable. You can ask again later.'
         : r.status === 200 && body.state === 'pending' ? 'The summary is still being written; it will appear here.'
-        : body.message || (r.status === 0 ? 'The server did not answer. Nothing was changed.' : 'The summary could not be asked for. Nothing was changed.'));
+        : body.message || (r.status === 0 ? ASK_NO_ANSWER : 'The summary could not be asked for. Nothing was changed.'));
     });
   }
   function unask(sid) {

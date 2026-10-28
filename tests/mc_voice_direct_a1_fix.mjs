@@ -694,4 +694,47 @@ await t.check("L N6: the model's call acts on the words kept at the first comple
   assert.deepEqual([p.body.owner_item_id, p.body.owner_transcript_item], ['t0', 'Save a note: the kiln is hot']);
 });
 
+// L N7 (the last pass's verification): the Guild thread's posts after the session (the summary decision, "Ask for a summary")
+// are bounded too, with the session module's jsonPost, so a request that never answers ends in words that are true.
+function threadWithHangingPosts() {
+  const doc = fakeDocument(), thread = doc.createElement('ol'), timers = new Map(), sent = [];
+  let next = 1, now = 0;
+  thread.setAttribute('data-mc-thread', '');
+  const later = (fn, ms) => { const id = next++; timers.set(id, { fn, due: now + ms }); return id; };
+  const advance = (ms) => { now += ms; for (const [id, t] of [...timers]) if (t.due <= now) { timers.delete(id); t.fn(); } };
+  const fetchNever = (url, opts) => { sent.push({ url, signal: opts.signal }); return new Promise(() => {}); };
+  const post = D.jsonPost(fetchNever, () => ({}), { setTimeout: later, clearTimeout: (id) => timers.delete(id) });
+  const DIRECT = { summary_decision_url: '/x/session/{session_id}/summary/decision', summary_url: '/x/session/{session_id}/summary' };
+  const view = T.voiceThread({ doc, direct: DIRECT, thread: () => thread, mine: () => null, conversationId: () => 'c-1', post, reveal: async () => {} });
+  const row = (attrs) => { const li = doc.createElement('li'); for (const [k, v] of Object.entries(attrs)) li.setAttribute(k, v);
+    const meta = doc.createElement('p'), when = doc.createElement('span'); when.setAttribute('data-iso', '2026-10-28T10:20:00.000Z');
+    meta.append(when); li.append(meta); thread.append(li); return li; };
+  return { view, row, advance, sent };
+}
+await t.check('L N7: a summary decision that never answers is aborted at its bound and says it may have been kept', async () => {
+  const h = threadWithHangingPosts();
+  const proposal = h.row({ 'data-note': '5', 'data-voice-kind': 'summary_proposal', 'data-voice-session': SID });
+  const sessions = [{ session_id: SID, state: 'ended', started_at: '2026-10-28T10:00:00.000Z', summary: 'proposed' }];
+  h.view.paint(sessions, [{ id: 5, text: '[Voice summary proposal] x\n\nWe looked at #12.', voice: { session_id: SID, kind: 'summary_proposal' } }]);
+  const card = proposal.querySelector('[data-voice-summary-card]');
+  card.querySelector('[data-voice-summary-confirm]').click(); await flush();
+  assert.ok(h.sent[0].signal, 'the decision post is not bounded');
+  h.advance(15000); await flush();
+  assert.equal(h.sent[0].signal.aborted, true);
+  assert.equal(card.querySelector('[data-voice-summary-result]').textContent, T.DECISION_NO_ANSWER);
+  assert.equal(card.querySelector('[data-voice-summary-confirm]').disabled, false);
+});
+await t.check('L N7: "Ask for a summary" that never answers is aborted at its bound and says the summary may still appear', async () => {
+  const h = threadWithHangingPosts();
+  const row = h.row({ 'data-note': '6', 'data-voice-kind': 'summary_unavailable', 'data-voice-session': SID });
+  h.view.paint([{ session_id: SID, state: 'ended', summary: 'unavailable' }]);
+  const ask = row.querySelector('[data-voice-summary-retry]');
+  ask.click(); await flush();
+  assert.ok(h.sent[0].signal, 'the ask is not bounded');
+  h.advance(45000); await flush();
+  assert.equal(h.sent[0].signal.aborted, true);
+  assert.equal(row.querySelector('[data-voice-summary-result]').textContent, T.ASK_NO_ANSWER);
+  assert.equal(ask.disabled, false);
+});
+
 t.done();
