@@ -1176,6 +1176,27 @@ class PlatformOutcome:
         return self.verdict() != "DONE" and bool(self._CLAIMS.search(text or ""))
 
 
+# A direct-path voice consult (mc_voice_direct) runs the typed turn on words the voice model chose to send, perhaps
+# Robert's answer to its own question, and he never sees what a bare yes would confirm. There, a waiting proposal is
+# confirmed or cancelled only by name ("yes P-7K3M") and a job is stopped only by "stop the job" (review B #1).
+VOICE_NAME_PROPOSAL = "Say which: 'yes P-' and the code. Nothing was done."
+VOICE_IN_WRITING = "In voice, confirm or cancel that in writing, in the chat. Nothing was done."
+VOICE_NAME_JOB = "Say 'stop the job' to stop it. Nothing was stopped."
+
+
+def _voice_named_only() -> bool:
+    """True only inside a direct-path voice consult, set server side by mc_voice_direct; typed turns never set it."""
+    from flask import has_request_context
+    return has_request_context() and getattr(g, "mc_voice_named_only", False) is True
+
+
+def _voice_name_it(op_type, words):
+    """The platform's answer to a bare confirm, cancel or stop in voice: a clarification; nothing was done."""
+    return jsonify(status="answered", backend_kind="platform", reply_note=None, message=words,
+                   operation={"type": op_type, "state": "clarify", "reason": "name_required", "saved": False},
+                   history_saved=False), 200
+
+
 def _platform_outcome(floor, note_key, result, *, area):
     from . import feature_environ
     outcome = PlatformOutcome(floor, note_key, result, area)
@@ -1251,6 +1272,8 @@ def _owner_lesson_command(found):
             return None
         if not pending:
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        if _voice_named_only():
+            return _voice_name_it("lesson", VOICE_IN_WRITING)
     try:
         result = handler.handle(command, conversation=conv["id"], turn_key=note_id)
     except Exception:
@@ -1288,6 +1311,8 @@ def _owner_guest_command(found):
             return None
         if not pending:
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        if _voice_named_only():
+            return _voice_name_it("guest_action", VOICE_IN_WRITING)
     try:
         result = commands.handle(command, conversation=conv["id"], turn_key=note_id)
     except Exception:
@@ -1321,6 +1346,8 @@ def _owner_tool_proposal_command(found):
     try:
         if not handler.has_pending(conv["id"], note_id):
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
+        if code is None and _voice_named_only():
+            return _voice_name_it("mc_tool_proposal", VOICE_NAME_PROPOSAL)
         result = handler.handle(kind, conversation=conv["id"], turn_key=note_id, code=code)
     except Exception:
         _mc_log().exception("tool proposal command could not be completed")

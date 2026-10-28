@@ -19,6 +19,9 @@ from minimoi_portal.guild_ui.mc_voice_transcripts import HEADER
 from minimoi_portal.guild_ui.conversations import ConversationNotFound
 from minimoi_portal.guild_ui.security import csrf_token
 from minimoi_portal.guild_ui.stores import WriteResult
+from minimoi_portal.guild_ui import jobs_api
+
+REAL_JOB_COMMAND = jobs_api.job_command               # the fixture stubs it; the review tests use the real one
 
 CID = "c-123456abcdef"
 BASE = "/guild-next/api/v1/mc/voice/direct/api/realtime-voice"
@@ -530,3 +533,128 @@ def test_the_typed_turn_marks_a_direct_voice_consult_for_openclaw_only_and_says_
     calls = [n for n in ast.walk(ast.parse(inspect.getsource(direct))) if isinstance(n, ast.Call)
              and getattr(n.func, "attr", None) == "_answer_turn"]
     assert [k.arg for c in calls for k in c.keywords] == ["host_channel"]
+
+
+# ── review B #1: in voice a bare yes, no or stop is not a command ────────────────────────────────────────────────
+
+class Jobs:
+    """A job manager with one running job of Robert's in this conversation."""
+
+    def __init__(self):
+        self.stopped, self.started, self.wake = [], [], SimpleNamespace(set=lambda: None)
+        self.store = SimpleNamespace(list=lambda cid: [{"id": "j1", "principal": "robert", "state": "running"}])
+
+    def stop(self, cid, principal, job_id):
+        self.stopped.append(job_id)
+        return {"id": job_id}, "stop_requested"
+
+    def view(self, job):
+        return {"id": job["id"], "message": "Stop requested."}
+
+    def start(self, conv, principal, note, note_id, docs, **kw):
+        self.started.append(note_id)
+        return {"id": "j2"}, None
+
+
+class Proposals:
+    """A tool-proposal handler with one proposal waiting in this conversation."""
+
+    def __init__(self):
+        self.handled = []
+
+    def has_pending(self, cid, note_id):
+        return True
+
+    def handle(self, kind, *, conversation, turn_key, code=None):
+        self.handled.append((kind, code))
+        return {"reply": f"Done: {code}.", "operation": {"type": "mc_tool_proposal", "state": "verified",
+                                                         "operation_id": "op-" + str(code)}}
+
+
+@pytest.fixture
+def waiting(ready, monkeypatch):
+    """A proposal waits and a job runs; MC's tools are on for Robert (so the proposal parser is consulted)."""
+    from minimoi_portal.guild_ui import mc_tools_wiring
+    handler, jobs = Proposals(), Jobs()
+    monkeypatch.setattr(mc_tools_wiring, "settings", lambda environ: {"principal": "robert"})
+    monkeypatch.setattr(mc_tools_wiring, "proposals", lambda environ, **kw: handler)
+    monkeypatch.setattr(mc_tools_wiring, "proposal_reader", lambda services, principal: None)
+    monkeypatch.setattr(jobs_api, "job_command", REAL_JOB_COMMAND)
+    ready.config["jobs"] = jobs
+    return SimpleNamespace(r=ready, handler=handler, jobs=jobs)
+
+
+@pytest.mark.parametrize("words", ["yes", "Yes.", "ok", "sure", "go ahead", "do it", "no", "cancel"])
+def test_a_bare_yes_or_no_in_voice_confirms_nothing_and_asks_for_the_code(waiting, words):
+    r = waiting.r
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words=words).get_json()
+    assert waiting.handler.handled == [] and not r.turns                       # nothing confirmed, no model asked
+    assert result["spoken"] == api.VOICE_NAME_PROPOSAL and result["receipt"] is None
+
+
+def test_a_named_yes_in_voice_confirms_that_proposal(waiting):
+    r = waiting.r
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words="yes P-7K3M").get_json()
+    assert waiting.handler.handled == [("confirm", "P-7K3M")] and result["ok"] is True
+    assert "P-7K3M" in result["spoken"]
+
+
+@pytest.mark.parametrize("words", ["stop", "Stop!", "stop it", "cancel it"])
+def test_a_bare_stop_in_voice_stops_no_job(waiting, words):
+    r = waiting.r
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words=words).get_json()
+    assert waiting.jobs.stopped == [] and result["spoken"] == api.VOICE_NAME_JOB
+
+
+def test_stop_the_job_in_voice_stops_it(waiting):
+    r = waiting.r
+    sid = start(r)["voice_session_id"]
+    call(r, sid, words="Stop the job.")
+    assert waiting.jobs.stopped == ["j1"]
+
+
+def test_typed_turns_keep_the_bare_forms_exactly(waiting, monkeypatch):
+    """The voice-only rule: the same handlers, with no voice consult in progress, act on a bare yes and a bare stop."""
+    r = waiting.r
+    services = r.config["services"]
+    conv = {"id": CID, "principal": "robert"}
+    monkeypatch.setattr(jobs_api, "manager", lambda: waiting.jobs)
+    with r.app.test_request_context():
+        found = (services, "robert", conv, r.notes, {"text": "yes", "author_kind": "owner", "who": "robert"},
+                 "n-1", "n-1", [])
+        api._owner_tool_proposal_command(found)
+        stop = (services, "robert", conv, r.notes, {"text": "stop"}, "n-2", "n-2", [])
+        body = REAL_JOB_COMMAND(stop)[0].get_json()
+    assert waiting.handler.handled == [("confirm", None)]
+    assert waiting.jobs.stopped == ["j1"] and body["job_command"] == "stop"
+
+
+def test_a_bare_confirm_of_a_waiting_lesson_or_guest_rejection_in_voice_asks_for_it_in_writing(ready, monkeypatch):
+    from core.mc_domain_actions import guest_commands
+    from core.mc_lessons import commands as lessons
+    done = []
+
+    class Pending:
+        def __init__(self, *a, **k):
+            pass
+
+        def has_pending(self, *a):
+            return True
+
+        def handle(self, *a, **k):
+            done.append(a)
+            return {"reply": "Done.", "operation": {"type": "lesson", "state": "verified"}}
+    monkeypatch.setattr(api, "_lesson_ledger", lambda principal: object())
+    monkeypatch.setattr(lessons, "LessonCommands", Pending)
+    r = ready
+    sid = start(r)["voice_session_id"]
+    assert call(r, sid, call_id="l1", words="Confirm").get_json()["spoken"] == api.VOICE_IN_WRITING
+    monkeypatch.setattr(api, "_lesson_ledger", lambda principal: None)
+    r.config["feature_environ"].update(MINIMOI_MC_GUEST_ACTIONS="1", MINIMOI_MC_GUEST_ACTIONS_ENV="dev")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic.invalid/none")
+    monkeypatch.setattr(guest_commands, "GuestCommands", Pending)
+    assert call(r, sid, call_id="g1", words="Confirm").get_json()["spoken"] == api.VOICE_IN_WRITING
+    assert done == [] and not r.turns

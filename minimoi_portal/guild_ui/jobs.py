@@ -105,11 +105,18 @@ ERROR_WORDS = {"relay_unreachable": "the relay could not be reached", "relay_los
 # ── the owner's words: commands and proposals, decided by the server ──────────────────────────────
 
 _STOP_WORDS = {"stop", "stop the job", "stop job", "stop it", "cancel the job", "cancel job", "cancel it", "stop the running job"}
+# The ones that name the job: in voice only these stop it ("stop" alone may answer the voice model, review B #1).
+_NAMED_STOP_WORDS = {"stop the job", "stop job", "cancel the job", "cancel job", "stop the running job"}
 _FORCE = re.compile(r"\brun (?:this|it|that) as a job\b")
 
 
 def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[.!?\"'`]+", " ", (text or "").lower())).strip()
+
+
+def names_the_job(text: str) -> bool:
+    """A stop request that says "job" ("stop the job"), not a bare "stop" or "stop it"."""
+    return _norm(text) in _NAMED_STOP_WORDS
 
 
 def interpret(text: str) -> str | None:
