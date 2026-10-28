@@ -325,3 +325,39 @@ def test_a_turn_still_running_reads_pending_and_its_result_is_told_when_it_lands
     worker.join(5)
     assert answered[0]["outcome"] == "done"
     assert post(r, sid, []).get_json()["completed"][0]["owner_item_id"] == "t1"   # told: the read said pending
+
+
+# ── Item 6: a receipt that lands after the summary is kept, marked, and never remakes the summary ───────────────────────
+
+def test_a_receipt_after_the_summary_is_kept_marked_and_the_summary_is_not_remade(rig, monkeypatch):
+    import threading
+    from core.realtime_voice import direct_host as core
+    from test_direct_host import post, turn
+    r = rig
+    monkeypatch.setattr(core, "CONSULT_WAIT_S", 0.05)
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Run the nightly job, then we're done.")])
+    release = threading.Event()
+    slow = r.host.typed_turn
+    r.host.typed_turn = lambda *a, **kw: (release.wait(5), slow(*a, **kw))[1]
+    assert consult(r, sid, call_id="call_1", turn="t0").get_json()["outcome"] == "pending"
+    summary = r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"}).get_json()
+    assert summary["state"] == "proposed" and "still running" in summary["written"]
+    release.set()
+    for _ in range(200):
+        if "consult_outcome:t0" in records_of(r, sid):
+            break
+        threading.Event().wait(0.01)
+    receipt = r.store.rows[-1]["text"]
+    assert receipt.startswith("[Arrived after the summary] Answered. Reply turn-1.")
+    assert r.host.receipts.parts(receipt)["outcome"] == "answered · arrived after the summary"
+    assert len(r.host.prompts) == 1 and r.store.summary("owner", sid) == summary["written"]   # not remade
+    again = r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"}).get_json()
+    assert again["repeated"] is True and len(r.host.prompts) == 1
+
+
+def test_a_receipt_before_the_summary_is_not_marked(rig):
+    r = rig
+    sid = start(r)
+    consult(r, sid, call_id="call_1", turn="t0")
+    assert r.store.rows[-1]["text"].startswith("Answered.")

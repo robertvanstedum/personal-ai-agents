@@ -174,3 +174,11 @@ def test_a_revealed_consult_with_no_receipt_is_shown_as_result_unknown(ready):
     assert len(line) == 1 and line[0]["kind"] == "consult_receipt" and line[0]["outcome"] == "result unknown"
     got = r.client.get(BASE + f"/consult/{sid}/t3?conversation_id={CID}", headers=r.headers).get_json()
     assert got["outcome"] == "unknown" and got["recorded"] is True and not r.turns
+
+
+# ── Item 6: MC's thread reads a late receipt as late ───────────────────────────────────────────────────────────────────
+
+def test_mcs_thread_says_a_late_receipt_arrived_after_the_summary():
+    parts = reveal.receipt_parts("[Arrived after the summary] Answered. Reply mc-1. Spoken: Item 12 is in build.")
+    assert parts == {"outcome": "answered · arrived after the summary", "ref_kind": "Reply", "ref": "mc-1",
+                     "spoken": "Item 12 is in build."}

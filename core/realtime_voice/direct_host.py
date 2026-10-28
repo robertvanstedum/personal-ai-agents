@@ -195,6 +195,9 @@ def compose_instructions(operating_rules, card, data):
 
 # ── receipts ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
+LATE = "Arrived after the summary"
+
+
 class Receipts:
     """A host's receipt words. ``kinds``: what an answered consult's receipt may be (MC: reply, operation, job).
     ``acted``: for a consult where the platform acted without answering (MC: a job command), the result key that says so
@@ -208,12 +211,14 @@ class Receipts:
                  **dict(self.acted.values()), **(dict([acted_other]) if acted_other else {})}
         refs = sorted({kind.capitalize() for kind in (*self.kinds, "operation", *([acted_kind] if acted_kind else []))})
         self.outcomes = heads
-        self._line = re.compile(r"(?P<head>" + "|".join(map(re.escape, heads)) + r"|Not answered \([^)]*\)"
+        self._line = re.compile(r"(?:\[(?P<late>" + re.escape(LATE) + r")\] )?(?P<head>" + "|".join(map(re.escape, heads)) + r"|Not answered \([^)]*\)"
                                 r"|Outcome unknown \([^)]*\))\."
                                 r"(?: (?P<ref_kind>" + "|".join(refs) + r") (?P<ref>\S+)\.)?"
                                 r"(?: Spoken:(?: (?P<spoken>.*))?)?", re.S)
 
-    def line(self, name, result):
+    def line(self, name, result, *, late=False):
+        """``late``: the receipt landed after the session's summary was made (Spec 165 §5.2): marked so, never folded
+        into the summary."""
         receipt, kind = result.get("receipt"), result.get("receipt_kind")
         command = result.get(self.acted_key) if self.acted_key else None
         if result.get("outcome") == "unknown":                 # dispatched, no result came back (Spec 165 §5.1)
@@ -228,7 +233,8 @@ class Receipts:
             head = "Answered." + (f" {kind.capitalize()} {receipt}." if kind and receipt else "")
         else:
             head = f"Not answered ({result.get('error') or 'unavailable'})."
-        return f"{head} Spoken: {result.get('spoken') or ''}".strip()[:TURN_MAX_BYTES // 4]
+        mark = f"[{LATE}] " if late else ""
+        return f"{mark}{head} Spoken: {result.get('spoken') or ''}".strip()[:TURN_MAX_BYTES // 4]
 
     def parts(self, text):
         """{outcome, ref_kind, ref, spoken} of a receipt line, or {} when it is not one (shown then as kept)."""
@@ -237,6 +243,8 @@ class Receipts:
             return {}
         head = match["head"]
         outcome = "result unknown" if head.startswith("Outcome unknown") else self.outcomes.get(head, "not done")
+        if match["late"]:
+            outcome += " · " + LATE.lower()
         return {"outcome": outcome, "ref_kind": match["ref_kind"],
                 "ref": match["ref"], "spoken": (match["spoken"] or "").strip()}
 
@@ -1033,15 +1041,25 @@ def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, ite
                                             outcome=outcome, result=compact(result)))
     if done.outcome not in ("stored", "duplicate"):
         log.error("%s direct voice: consult outcome not recorded (%s)", adapter.person["domain"], done.reason or done.outcome)
-    result = keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began)
+    result = keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began, late=after_summary(adapter, handle, sid))
     sessions.settle(sid, item, call_id, result, name)
     return result
 
 
-def keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began):
+def after_summary(adapter, handle, sid):
+    """Whether this session's summary was already made (proposed, decided or unavailable): a receipt landing now is
+    late (Spec 165 §5.2). It is kept and revealed after the summary, marked so; the summary is never made again."""
     try:
-        adapter.store.keep(handle, principal, sid, "receipt", voice_item, 0, adapter.receipts.line(name, result), False,
-                           started=began, ended=stamp(now()))
+        return adapter.store.summary_state(handle, sid) not in ("none", "unknown")
+    except Exception:
+        log.exception("%s direct voice: summary state not read", adapter.person["domain"])
+        return False
+
+
+def keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began, late=False):
+    try:
+        adapter.store.keep(handle, principal, sid, "receipt", voice_item, 0, adapter.receipts.line(name, result, late=late),
+                           False, started=began, ended=stamp(now()))
     except Exception:
         log.exception("%s direct voice: consult receipt not kept", adapter.person["domain"])
         result = {**result, "receipt_kept": False}
