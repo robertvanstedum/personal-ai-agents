@@ -234,6 +234,16 @@ function voiceLine(note) {
     'data-note': note.id, 'data-voice-kind': v.kind, 'data-voice-session': v.session_id, 'data-at': v.started_at || note.created_at,
     'data-author-kind': v.kind === 'owner_turn' ? 'owner' : turn || v.kind === 'consult_reply' ? 'agent' : 'platform' });
   if (hidden) { li.hidden = true; return li; }
+  if (v.kind === 'consult_receipt' && v.outcome) {
+    // "Checked with MC · answered", then what was spoken; the reply / operation / job id stays in the record and the
+    // title, never in the visible text (UI review D1).
+    if (v.ref) { li.setAttribute('data-voice-ref', v.ref); li.setAttribute('title', `${v.ref_kind || 'Receipt'} ${v.ref}`); }
+    const head = el('p', { class: 'msg-meta' });
+    head.append(el('span', { class: 'msg-label' }, `Checked with MC · ${v.outcome}`));
+    li.append(head);
+    if (v.spoken) li.append(el('p', { class: 'msg-text small' }, v.spoken));
+    return li;
+  }
   if (v.kind === 'consult_receipt') { li.append(el('p', { class: 'msg-text small' }, v.text || note.text)); return li; }
   if (turn && Number(v.part) > 1) { li.setAttribute('data-voice-part', String(v.part)); li.append(el('p', { class: 'msg-text' }, v.text)); return li; }
   const label = v.kind === 'owner_turn' ? 'You · spoken' : v.kind === 'assistant_turn' ? `${mcName()} · spoken` : `${mcName()}'s full answer`;

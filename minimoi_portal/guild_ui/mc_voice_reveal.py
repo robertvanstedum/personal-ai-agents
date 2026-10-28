@@ -226,11 +226,15 @@ def _voice(row, replies, sid):
         match = HEADER.match(row.get("text") or "")
         if match is None:
             return {**out, "kind": "voice_note"}
-        return {**out, "kind": {"owner ASR": "owner_turn", "assistant generated; playback unverified": "assistant_turn",
-                                "consult request": "consult_request", "consult receipt": "consult_receipt"}[match["speaker"]],
-                "text": row["text"][match.end():], "partial": match["partial"] == "true",
-                "interrupted": match["interrupted"] == "true", "started_at": match["start"], "ended_at": match["end"],
-                "part": int(match["part"]), "parts": int(match["total"])}
+        kind = {"owner ASR": "owner_turn", "assistant generated; playback unverified": "assistant_turn",
+                "consult request": "consult_request", "consult receipt": "consult_receipt"}[match["speaker"]]
+        text = row["text"][match.end():]
+        shown = {"text": text, "partial": match["partial"] == "true", "interrupted": match["interrupted"] == "true",
+                 "started_at": match["start"], "ended_at": match["end"], "part": int(match["part"]),
+                 "parts": int(match["total"])}
+        if kind == "consult_receipt":
+            shown.update(receipt_parts(text))
+        return {**out, "kind": kind, **shown}
     if page == PAGE_SUMMARY:
         return {**out, "kind": {key(sid, "summary"): "summary_proposal", key(sid, "summary-decision"): "summary_decision",
                                 key(sid, "summary-unavailable"): "summary_unavailable"}.get(row.get("request_id"), "summary")}
@@ -239,6 +243,28 @@ def _voice(row, replies, sid):
     if _CONSULT_ID.fullmatch(str(row.get("request_id") or "")):
         return {**out, "kind": "consult_note"}
     return {**out, "kind": "consult_outcome"}                     # a tagged platform note written during a consult
+
+
+# A consult receipt as mc_voice_direct._receipt_line writes it ("Answered. Reply mc-…. Spoken: …"). The record keeps it
+# whole; the thread shows "Checked with MC · <outcome>" and the spoken words, with the reply, operation or job id kept
+# out of the visible text (UI review D1: machine detail in Robert's thread).
+_RECEIPT = re.compile(r"(?P<head>Answered|Saved|Not saved|Job started|Delegated job started|Job stop requested|Job command"
+                      r"|Not answered \([^)]*\))\.(?: (?P<ref_kind>Reply|Operation|Job) (?P<ref>\S+)\.)?"
+                      r"(?: Spoken:(?: (?P<spoken>.*))?)?", re.S)
+RECEIPT_OUTCOME = {"Answered": "answered", "Saved": "note saved", "Not saved": "note not saved",
+                   "Job started": "job started", "Delegated job started": "delegated job started",
+                   "Job stop requested": "job stop requested", "Job command": "job command sent"}
+
+
+def receipt_parts(text):
+    """{outcome, ref_kind, ref, spoken} of a consult receipt line, or {} when it is not one (the thread then shows the
+    line as kept)."""
+    match = _RECEIPT.fullmatch((text or "").strip())
+    if match is None:
+        return {}
+    head = match["head"]
+    return {"outcome": RECEIPT_OUTCOME.get(head, "not done"), "ref_kind": match["ref_kind"], "ref": match["ref"],
+            "spoken": (match["spoken"] or "").strip()}
 
 
 def full_differs(text):

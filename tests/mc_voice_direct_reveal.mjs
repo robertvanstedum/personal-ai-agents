@@ -44,8 +44,24 @@ let n = 0;
 }
 {
   const li = sandbox.voiceLine(note(4, { kind: 'consult_receipt', text: 'Answered. Reply mc-1. Spoken: Item 12 is in build.' }));
-  assert.equal(li.textContent, 'Answered. Reply mc-1. Spoken: Item 12 is in build.');
+  assert.equal(li.textContent, 'Answered. Reply mc-1. Spoken: Item 12 is in build.');    // a line the server could not read: as kept
   assert.match(li.className, /msg-voice-receipt/);
+  n++;
+}
+// UI review D1: the receipt reads "Checked with MC · <outcome>", then what was spoken; the id is in the title and a data
+// attribute, never in the visible text. The same for every receipt kind.
+for (const [outcome, refKind, ref, spoken] of [['answered', 'Reply', 'mc-e46f0123456789abcdef0123456789abcaf171', 'Item 12 is in build.'],
+  ['note saved', 'Operation', 'op-7', 'Saved: the kiln needs a seal.'], ['job started', 'Job', 'j1', 'Started the nightly job.'],
+  ['not done', null, null, 'That did not go through. Nothing is claimed.']]) {
+  const text = `whatever ${ref || ''} the record keeps`;
+  const li = sandbox.voiceLine(note(8, { kind: 'consult_receipt', text, outcome, ref_kind: refKind, ref, spoken }));
+  assert.equal(li.textContent, `Checked with MC · ${outcome}${spoken}`, outcome);
+  if (ref) {
+    assert(!li.textContent.includes(ref), outcome);
+    assert.equal(li.getAttribute('data-voice-ref'), ref);
+    assert.equal(li.getAttribute('title'), `${refKind} ${ref}`);
+  } else assert.equal(li.getAttribute('title'), null);
+  assert.equal(li.getAttribute('data-author-kind'), 'platform');
   n++;
 }
 for (const voice of [{ kind: 'consult_note' }, { kind: 'consult_request', text: 'consult: x' }, { kind: 'consult_reply', full_differs: false }]) {

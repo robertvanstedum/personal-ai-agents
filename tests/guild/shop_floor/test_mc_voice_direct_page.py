@@ -79,7 +79,12 @@ def test_a_revealed_session_renders_as_spoken_turns_and_one_line_per_consult_in_
     said = re.search(r'<li [^>]*data-voice-kind="assistant_turn".*?</li>', html, re.S).group(0)
     assert "Master Craftsman · spoken" in said and "interrupted" in said and "Let me check" in said
     receipt = re.search(r'<li [^>]*data-voice-kind="consult_receipt".*?</li>', html, re.S).group(0)
-    assert "Answered." in receipt and "Spoken: Item 12 is in build." in receipt
+    # UI review D1: "Checked with MC · answered", then what was spoken; the reply id only in the title and data attribute.
+    assert "Checked with MC · answered" in receipt and "Item 12 is in build." in receipt
+    ref = re.search(r'data-voice-ref="([^"]+)"', receipt).group(1)
+    assert f'title="Reply {ref}"' in receipt
+    visible = re.sub(r"<[^>]+>", "", receipt)
+    assert ref not in visible and "Answered." not in visible and "Spoken:" not in visible
     for hidden in ("consult_note", "consult_request"):
         row = re.search(rf'<li [^>]*data-voice-kind="{hidden}"[^>]*>', html).group(0)
         assert row.endswith(" hidden>"), hidden

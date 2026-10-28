@@ -923,6 +923,42 @@ def test_a_job_started_from_a_voice_consult_posts_its_result_tagged_with_that_se
     assert {row["request_id"]: row["voice"]["kind"] for row in rows}[result] == "consult_outcome"
 
 
+# ── UI review D1: the thread shows a receipt's outcome and spoken words; its id stays in the record ─────────────────
+
+@pytest.mark.parametrize("name,result,outcome,ref", [
+    ("consult", {"answered": True, "receipt": "mc-e46f0123456789abcdef0123456789abcaf171", "receipt_kind": "reply",
+                 "spoken": "Item 12 is in build."}, "answered", "mc-e46f0123456789abcdef0123456789abcaf171"),
+    ("consult", {"answered": True, "receipt": None, "receipt_kind": None, "spoken": "Yes."}, "answered", None),
+    ("consult", {"answered": True, "receipt": "op-1", "receipt_kind": "operation", "spoken": "Done."}, "answered", "op-1"),
+    ("save_note", {"saved": True, "receipt": "op-2", "spoken": "Saved."}, "note saved", "op-2"),
+    ("save_note", {"saved": False, "spoken": "The note is not saved."}, "note not saved", None),
+    ("consult", {"job_command": "run_job", "receipt": "j1", "receipt_kind": "job", "spoken": "Started."}, "job started", "j1"),
+    ("consult", {"job_command": "delegate", "spoken": "Started."}, "delegated job started", None),
+    ("consult", {"job_command": "stop", "receipt": "j2", "receipt_kind": "job", "spoken": "Stopping."}, "job stop requested", "j2"),
+    ("consult", {"answered": False, "error": "busy", "spoken": "That did not go through."}, "not done", None),
+    ("consult", {"answered": False, "spoken": ""}, "not done", None),
+])
+def test_every_receipt_line_reads_back_as_its_outcome_and_spoken_words(name, result, outcome, ref):
+    line = direct._receipt_line(name, result)
+    parts = reveal.receipt_parts(line)
+    assert parts["outcome"] == outcome and parts["ref"] == ref and parts["spoken"] == (result.get("spoken") or "")
+    if ref:
+        assert ref in line                                                           # the record keeps it whole
+
+
+def test_a_revealed_receipt_carries_its_outcome_apart_from_its_id(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    call(r, sid)
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+    rows, _ = shown(r)
+    receipt = [row["voice"] for row in rows if row["voice"]["kind"] == "consult_receipt"][0]
+    assert receipt["text"] == "Answered. Reply reply-1. Spoken: Item 12 is in build."
+    assert (receipt["outcome"], receipt["ref_kind"], receipt["ref"], receipt["spoken"]) == (
+        "answered", "Reply", "reply-1", "Item 12 is in build.")
+    assert reveal.receipt_parts("Something else entirely.") == {}
+
+
 # ── UI review #9: voice tagging fails open, on purpose ────────────────────────────────────────────────────────────
 # A tag write that fails never stops an MC output: the notice or the job's result is still kept and shown, and may show
 # while the session is live. Acceptable because these are MC outputs, not transcript text (B_direct_path.md).

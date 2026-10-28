@@ -12,8 +12,13 @@
 {% macro voice_row(n) -%}
 {%- set v = n.voice %}{% set turn = v.kind in ('owner_turn', 'assistant_turn') %}
 {%- set hide = v.kind in ('consult_note', 'consult_request') or (v.kind == 'consult_reply' and v.full_differs == false) %}
-<li class="msg msg-voice {{ 'msg-platform msg-voice-receipt' if v.kind == 'consult_receipt' else 'msg-note' }}" data-note="{{ n.id }}" data-voice-kind="{{ v.kind }}" data-voice-session="{{ v.session_id }}" data-at="{{ v.started_at or n.created_at }}" data-author-kind="{{ 'owner' if v.kind == 'owner_turn' else ('platform' if v.kind == 'consult_receipt' else 'agent') }}"{% if turn and v.part > 1 %} data-voice-part="{{ v.part }}"{% endif %}{% if hide %} hidden{% endif %}>
+<li class="msg msg-voice {{ 'msg-platform msg-voice-receipt' if v.kind == 'consult_receipt' else 'msg-note' }}" data-note="{{ n.id }}" data-voice-kind="{{ v.kind }}" data-voice-session="{{ v.session_id }}" data-at="{{ v.started_at or n.created_at }}" data-author-kind="{{ 'owner' if v.kind == 'owner_turn' else ('platform' if v.kind == 'consult_receipt' else 'agent') }}"{% if turn and v.part > 1 %} data-voice-part="{{ v.part }}"{% endif %}{% if v.kind == 'consult_receipt' and v.ref %} data-voice-ref="{{ v.ref }}" title="{{ v.ref_kind }} {{ v.ref }}"{% endif %}{% if hide %} hidden{% endif %}>
   {%- if hide %}
+  {%- elif v.kind == 'consult_receipt' and v.outcome %}{# the reply / operation / job id stays in the record and the title, not the text (UI review D1) #}
+  <p class="msg-meta"><span class="msg-label">Checked with MC · {{ v.outcome }}</span></p>
+  {%- if v.spoken %}
+  <p class="msg-text small">{{ v.spoken }}</p>
+  {%- endif %}
   {%- elif v.kind == 'consult_receipt' %}
   <p class="msg-text small">{{ v.text or n.text }}</p>
   {%- elif turn and v.part > 1 %}
