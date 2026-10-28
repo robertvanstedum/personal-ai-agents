@@ -247,7 +247,7 @@ await t.check('item 7, R2 N6: the thread says incomplete with its count, and a d
   const doc = fakeDocument(), thread = doc.createElement('ol');
   const view = T.voiceThread({ doc, direct: {}, thread: () => thread, mine: () => null, conversationId: () => 'c-1', post: async () => ({}), reveal: async () => {} });
   view.paint([{ session_id: SID, state: 'ended', started_at: '2026-10-28T10:00:00.000Z', summary: 'none', capture: 'incomplete', missing: 2 },
-    { session_id: 'other', state: 'dropped', started_at: '2026-10-28T09:00:00.000Z', summary: 'none', capture: 'unknown' }]);
+    { session_id: 'other', state: 'dropped', started_at: '2026-10-28T09:00:00.000Z', summary: 'none', capture: 'unconfirmed' }]);   // G4
   assert.equal(thread.querySelector(`[data-voice-line="${SID}"]`)?.textContent,
     'Some of what was said in this voice session was not kept (2 turns). What was kept is in the conversation.');
   assert.match(thread.querySelector('[data-voice-line="other"]')?.textContent || '', /may not have been kept/);

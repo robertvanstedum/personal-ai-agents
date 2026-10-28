@@ -273,11 +273,14 @@ receipt_parts = RECEIPTS.parts
 
 
 def _capture(status, end):
+    """What a later view says of capture (Spec 165 §5.2): incomplete with its count from the end marker; unconfirmed for a
+    session whose End never arrived (v0.3, CX V2-4, G4: dropped, or still recovering on this or another device), never
+    complete; else nothing (complete)."""
     end = end or {}
     if end.get("capture") == "incomplete":
         return {"capture": "incomplete", **({"missing": end["missing"]} if type(end.get("missing")) is int else {})}
-    if status == "dropped" and not end:
-        return {"capture": "unknown"}
+    if end.get("capture") == "unconfirmed" or (not end and status in ("dropped", "recovering", "unknown")):
+        return {"capture": "unconfirmed"}
     return {}
 
 
@@ -401,8 +404,8 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
                          # How its spoken summary ended, and whether it was heard (only when drained; v0.3 §5.3, G3).
                          **(_playback(floor, sid) if summary in ("proposed", "confirmed", "edited", "declined") else {}),
                          # Some of what was said is known not to be kept (review B4): every later view says so, with
-                         # the count when there is one (Spec 165 §5.2). A session that ended without End (dropped) may
-                         # not have all of it: unknown, said too (review R2 N6).
+                         # the count when there is one (Spec 165 §5.2). A session whose End never came may not have all
+                         # of it: unconfirmed, said too (review R2 N6; v0.3 G4).
                          **_capture(status, end)})
     return shown, sessions
 

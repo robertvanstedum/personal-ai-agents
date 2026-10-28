@@ -157,7 +157,7 @@ export function voiceThread(d) {
         if (!s || typeof s.session_id !== 'string') continue;
         const text = s.state === 'live' ? (s.session_id === d.mine() ? null : LIVE_ELSEWHERE)
           : ['recovering', 'unknown'].includes(s.state) ? (s.line || RECOVERING)
-          : s.capture === 'incomplete' ? incompleteLine(s.missing) : s.capture === 'unknown' ? DROPPED_LINE : null;
+          : s.capture === 'incomplete' ? incompleteLine(s.missing) : s.capture === 'unconfirmed' ? DROPPED_LINE : null;   // §5.2, G4
         line(s.session_id, text, s.started_at);
         if (s.summary === 'proposed') card(s.session_id);
         if (s.summary === 'unavailable' && ['ended', 'dropped'].includes(s.state)) ask(s.session_id); else unask(s.session_id);

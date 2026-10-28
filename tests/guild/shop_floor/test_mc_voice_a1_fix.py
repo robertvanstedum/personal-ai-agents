@@ -197,7 +197,7 @@ def test_every_later_view_says_incomplete_n_and_a_dropped_session_may_not_be_who
     _rows, sessions = shown(r, when=datetime.now(timezone.utc) + timedelta(minutes=31))   # no End ever came: dropped
     by_id = {s["session_id"]: s for s in sessions}
     assert by_id[sid]["capture"] == "incomplete" and by_id[sid]["missing"] == 2
-    assert by_id[dropped]["state"] == "dropped" and by_id[dropped]["capture"] == "unknown"
+    assert by_id[dropped]["state"] == "dropped" and by_id[dropped]["capture"] == "unconfirmed"     # G4: the spec's word
 
 
 # ── Item 10: MC's summary is a plain gateway completion under his capped key, never his agent ───────────────────────────
@@ -322,7 +322,7 @@ def test_fr_s4_the_ledgers_already_dispatched_and_already_done_are_never_not_don
     assert not r.turns
 
 
-# ── The last pass: Spec 165 v0.3 G3 on MC's view ───────────────────────────────────────────────────────────────
+# ── The last pass: Spec 165 v0.3 G3 and G4 on MC's view ───────────────────────────────────────────────────────────────
 
 def test_g3_mcs_view_says_how_the_spoken_summary_ended_and_heard_only_when_drained(ready):
     from test_mc_voice_direct import summarize
@@ -340,3 +340,19 @@ def test_g3_mcs_view_says_how_the_spoken_summary_ended_and_heard_only_when_drain
     assert by_id[heard]["summary_playback"] == "drained" and by_id[heard]["summary_heard"] is True
     assert by_id[cut]["summary_playback"] == "barged_in" and by_id[cut]["summary_heard"] is False
 
+
+def test_g4_a_session_whose_end_never_came_is_unconfirmed_on_another_device_and_never_complete(ready):
+    """Spec 165 v0.3 §5.2 (CX V2-4): if End never arrives, every later view on any device shows the capture as unconfirmed,
+    never complete. Another device: this process holds nothing of the session (live and known say no)."""
+    from datetime import datetime, timedelta, timezone
+    from minimoi_portal.guild_ui import mc_voice_reveal
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [turn(r, "user", "t0", "Said, then the page went away.")])
+    rows = r.notes.list_notes(limit=200).data["notes"]
+    _shown, sessions = mc_voice_reveal.view(r.notes, rows)                               # within its time: recovering
+    (session,) = [s for s in sessions if s["session_id"] == sid]
+    assert session["state"] == "recovering" and session["capture"] == "unconfirmed"
+    _shown, sessions = mc_voice_reveal.view(r.notes, rows, when=datetime.now(timezone.utc) + timedelta(minutes=31))
+    (session,) = [s for s in sessions if s["session_id"] == sid]
+    assert session["state"] == "dropped" and session["capture"] == "unconfirmed"
