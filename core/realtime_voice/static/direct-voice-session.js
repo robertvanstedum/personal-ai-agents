@@ -56,6 +56,8 @@ const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still 
 const QUIET_WAIT_MS = 8000;               // a line for the voice waits this long for a pause, then is sent (the pause was missed)
 const SUMMARY_WAIT_MS = 45000;            // the summary's answer is awaited this long (Spec 165 §5.3), then "Summary unavailable"
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
+const END_WAIT_MS = 10000;                // End's answer is awaited this long; past it the page says the server did not confirm
+const REVEAL_WAIT_MS = 10000;             // the thread's reload is awaited this long before the session's end is shown
 const DRAIN_CAP_MS = 90000;               // the spoken summary plays at most 15 characters a second plus 5 s, and never past this
 const START_END_MS = 15000;               // End pressed while still connecting waits for the connection at most this long
 const POST_EVENTS = 20, POST_BYTES = 60000;   // the server takes 20 events and 64 KB a post; JSON overhead stays inside
@@ -403,6 +405,12 @@ export function directVoice(d) {
       sayAtPause(`Say this briefly, adding nothing: About what you asked earlier: ${spoken}`);
     }
   }
+  // A promise, or its fallback after `ms` (fake timers in the tests): what a bounded wait resolves to.
+  function within(promise, ms, fallback) {
+    let timer = null;
+    return Promise.race([Promise.resolve(promise).catch(() => fallback), new Promise((resolve) => { timer = later(() => resolve(fallback), ms); })])
+      .finally(() => cancel(timer));
+  }
   function endNow(reason) {
     held = null;
     if (!finalized && c && typeof c.endSession === 'function') c.endSession(reason);
@@ -610,23 +618,28 @@ export function directVoice(d) {
       ending.then(closed, closed);
       return ending;
     }
+    // Every wait here is bounded, and a barrier that already gave up (Sum up's five seconds) is not awaited again: its
+    // posts that never answered stay unacknowledged and are reported as such (review CX A1-C3). So End, the reveal and the
+    // page's ended line always come, even when a post, End or the reload never settles.
     ending = (async () => {
       const id = sessionId();
       let incomplete = false, missing = null;
       if (id) {
-        await capture?.finish(result?.turns || []);
+        const abandoned = Boolean(capture?.stopped);
+        const delivering = capture?.finish(result?.turns || []);     // closes at the boundary; posts what is owed unless stopped
+        if (!abandoned) await within(delivering, FLUSH_WAIT_MS);
         if (sentFinal) return;                               // the page went away meanwhile: End already left with keepalive
         const closing = capture ? capture.report() : {};     // End carries it; the server counts what it does not hold (§5.2)
         incomplete = Boolean(closing.unacknowledged?.length);
         missing = incomplete ? closing.unacknowledged.length : 0;
-        const r = await postJson(at(direct.end_url), closing);
+        const r = await within(postJson(at(direct.end_url), closing), END_WAIT_MS, { status: -1, body: {} });
         if (sentFinal) return;
         if (r.status === 200 && r.body.ok && ['complete', 'incomplete'].includes(r.body.capture)) {
           incomplete = r.body.capture === 'incomplete';      // the server's count: what it holds, not what this page heard back
           missing = Number.isInteger(r.body.missing) ? r.body.missing : null;
         }
         if (!(r.status === 200 && r.body.ok) && !failed) endedWords = ['Voice ended here, but the server did not confirm it. What was said appears when the session\'s time runs out.', true];
-        await d.reveal?.();
+        await within(Promise.resolve().then(() => d.reveal?.()), REVEAL_WAIT_MS);
       }
       const fallback = failed || !id ? null : incomplete ? incompleteWords(missing) : ENDED;
       const [line, error] = endedWords || [fallback, incomplete && fallback !== null];

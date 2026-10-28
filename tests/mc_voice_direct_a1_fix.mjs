@@ -329,4 +329,37 @@ await t.check('CX A1-C4: a summary response the controller never reports is ende
   assert.deepEqual(r.c.ended, ['normal_end']);
 });
 
+// ── CX A1-C3: finalization never awaits an abandoned capture chain; End and the reveal are bounded ─────────────────────
+// Through the session's own completion promise (end() resolves once End is sent and the thread is reloaded).
+const NEVER = () => new Promise(() => {});
+async function settles(r, promise, step = 1000, limit = 60) {
+  let done = false;
+  promise.then(() => { done = true; });
+  for (let i = 0; i < limit && !done; i++) { await flush(); r.advance(step); }
+  await flush();
+  return done;
+}
+await t.check('CX A1-C3 (Sum up): after the barrier gives up on a post that never answers, the session still completes', async () => {
+  const r = rig({ routes: { '/transcript': (b) => (b.events.length ? NEVER() : null),
+    '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'The agenda is complete.' } }) } });
+  await r.s.start('openai'); r.c.hear([user('Last detail')]); await flush();
+  r.s.sumUp(); await flush(); r.advance(5000); await flush(20);
+  assert.deepEqual(r.posts('/summary')[0].body.unacknowledged, ['t0']);
+  r.c.drained('resp_1'); await flush(20);
+  assert.deepEqual(r.c.ended, ['normal_end']);
+  assert.equal(await settles(r, r.s.end('user_ended')), true, 'the completion promise never settled');
+  assert.equal(r.posts('/end').length, 1); assert.deepEqual(r.posts('/end')[0].body.unacknowledged, ['t0']);
+  assert.equal(r.reveals.length, 1);
+  assert.match(r.ended.at(-1)[0], /was not kept \(1 turn\)/);
+});
+await t.check('CX A1-C3 (End): a final post and End that never answer still let the session complete', async () => {
+  const r = rig({ routes: { '/transcript': (b) => (b.events.length ? NEVER() : null), '/end': NEVER } });
+  await r.s.start('openai'); r.c.hear([user('Last detail')]); await flush();
+  const finished = r.s.end('user_ended');
+  assert.equal(await settles(r, finished), true, 'the completion promise never settled');
+  assert.equal(r.posts('/end').length, 1); assert.deepEqual(r.posts('/end')[0].body.unacknowledged, ['t0']);
+  assert.equal(r.reveals.length, 1); assert.equal(r.ended.length, 1);
+  assert.match(r.ended.at(-1)[0], /server did not confirm/);
+});
+
 t.done();
