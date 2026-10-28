@@ -391,7 +391,76 @@ for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter
     assert.equal(s.bound(s.calls[1]), null, 'the follow-up took his new words');
     assert.deepEqual(s.bound(s.calls[2]), { state: 'bound', index: 0, text: 'Make a note that the glaze is ready' });
   });
+  // L M1 (the last pass's verification, must-fix; the reviewer's probe, asserting the correct behaviour): the cough's
+  // response starts after Robert has begun his next words. A hold made then could settle on either utterance's item, so it
+  // is never made: the response binds nothing.
+  await check(`L M1 (${name}): a cough's response that starts after his next speech began never takes that speech`, async () => {
+    const { a, s } = open();
+    await clocked(async (pass) => {
+      cough(a);
+      pass(300);
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });                   // Robert starts
+      a._handleServerEvent({ type: 'response.created', response: { id: 'noise' } });         // the cough's response, late
+      pass(700);
+      a._handleServerEvent(said('later_item', 'Save a note: the real request'));
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+      if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'later_item' });
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R_real' } });         // his own response
+      a._handleServerEvent(callIn('noise', 'noise_call')); await tick();
+      a._handleServerEvent(callIn('R_real', 'real_call')); await tick();
+    });
+    assert.equal(s.bound(s.calls[0]), null, "the cough's call took his next words");
+    assert.deepEqual(s.bound(s.calls[1]), { state: 'bound', index: 0, text: 'Save a note: the real request' });
+  });
+  // L N1 (pre-existing; the reviewer's probe): two speech spans end before one response starts, and neither item is known
+  // yet. The response could answer either: it binds nothing, never the first item to appear. Where every span's item is
+  // already known, today's rule holds (the newest).
+  await check(`L N1 (${name}): merged speech spans whose items are not known bind nothing`, async () => {
+    const { a, s } = open();
+    cough(a); cough(a);                                                // U1 ends, then U2 starts and ends
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_both' } });
+    a._handleServerEvent(said('item_u1', 'Hmm, let me think.'));
+    a._handleServerEvent(said('item_u2', 'Save a note that the kiln is hot'));
+    a._handleServerEvent(callIn('R_both', 'call_both')); await tick();
+    assert.equal(s.bound(s.calls[0]), null, 'a merged response was bound to the first item to appear');
+  });
+  await check(`L N1 (${name}): merged speech spans with only the first item known bind nothing`, async () => {
+    const { a, s } = open();
+    utterance(a, 'item_u1', 'Hmm, let me think.');                    // U1's item known
+    cough(a);                                                          // U2 ends, its item not known yet
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_both' } });
+    a._handleServerEvent(said('item_u2', 'Save a note that the kiln is hot'));
+    a._handleServerEvent(callIn('R_both', 'call_both')); await tick();
+    assert.equal(s.bound(s.calls[0]), null, 'a merged response was bound to the one item known');
+  });
+  await check(`L N1 guard (${name}): merged speech spans whose items are all known still bind the newest`, async () => {
+    const { a, s } = open();
+    utterance(a, 'item_u1', 'Hmm, let me think.');
+    utterance(a, 'item_u2', 'Save a note that the kiln is hot');
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_both' } });
+    a._handleServerEvent(callIn('R_both', 'call_both')); await tick();
+    assert.deepEqual(s.bound(s.calls[0]), { state: 'bound', index: 1, text: 'Save a note that the kiln is hot' });
+  });
 }
+
+// L N2 (the last pass's verification): an expired hold is dropped where it is read, so a later utterance reported only by
+// its commit (no speech events) is still a new utterance with its own response.
+await check('L N2 (OpenAI): after a hold expires, a commit-only utterance is his, and its response binds to it', async () => {
+  const a = new OpenAIWebRTCAdapter(); const s = session(a, { trackResponses: true });
+  const real = Date.now; let at = real();
+  Date.now = () => at;
+  try {
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });                     // a cough, no commit
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R0' } });              // holds the cough
+    at += 3000;                                                                             // the hold's bound passes
+    a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'item_B' });       // no speech events
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_B' } });
+    a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
+    a._handleServerEvent(callIn('R_B', 'call_B')); await tick();
+  } finally { Date.now = real; }
+  assert.deepEqual(s.bound(s.calls[0]), { state: 'bound', index: 0, text: 'Make a note that the glaze is ready' });
+});
 
 // F2 (Codex's delta review at a17ddc8d; its response_origin.mjs precursor, asserting the correct behaviour): a host that
 // asks for it (oncePerItem: MC's page) hears each owner item's completion once. A replayed provider event, or a second
@@ -419,4 +488,4 @@ if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1, F1, F2); real controller and adapters, synthetic provider events.`);
+console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1, F1, F2, L M1, L N1, L N2); real controller and adapters, synthetic provider events.`);

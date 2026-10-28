@@ -46,7 +46,7 @@ const MARK_TTL_MS = 3000;
     this._trackResponses = trackResponses;           // optional: tag each response this controller asks for (V R2-M1)
     this._inputs = [];               // owner input items (provider ids), in the order they became known (Spec 165 §5.1)
     this._utterance = null;          // inputs known when his current utterance began (speech_started), until it ends
-    this._ended = null;              // his utterance that ended and awaits its response: {index, seq, at, committed}
+    this._ended = null;              // his utterance that ended and awaits its response: {index, spans, seq, at, committed}
     this._commits = false;           // the adapter reports committed input (OpenAI's input_audio_buffer.committed)
     this._requests = [];             // responses this controller asked for, not yet started, in order: {owner, tag, seq, at, done}
     this._seq = 0;                   // the order in which ended utterances and requests became known
@@ -137,7 +137,9 @@ const MARK_TTL_MS = 3000;
    *    committed), bound to the newest input item that appeared since that utterance began and before any later one began,
    *    whether its transcript came before or after his speech ended, or committed or not; with none yet, it holds that
    *    utterance (never a place a later one fills) until the first item to appear, with no new speech in between and
-   *    within MARK_TTL_MS of the end of his speech: new speech first, or the bound first, voids it (review F1). Where the
+   *    within MARK_TTL_MS of the end of his speech: new speech first, or the bound first, voids it (review F1). It binds
+   *    nothing when his next speech is already under way as it starts (review L M1), or when speech spans were merged and
+   *    not every span's item is known (L N1); with every item known, the newest. Where the
    *    adapter reports committed input (OpenAI), only a committed utterance has a response. An ended utterance with no
    *    input item for MARK_TTL_MS is noise and binds nothing;
    *  - anything else (a response with no ended utterance and no request of this controller's) answers none of his inputs.
@@ -200,10 +202,12 @@ const MARK_TTL_MS = 3000;
   }
 
   // His utterance has ended (speech_stopped): its response is the provider's next one of its own. A second utterance
-  // ending before that response starts keeps the first one's start, so the response answers the newest of them.
+  // ending before that response starts is merged with it (spans counts them): the response answers the newest of them
+  // only once every span's item is known; otherwise it could answer more than one, and binds nothing (review L N1).
   _heardEnd() {
     if (this._utterance === null) return;
-    this._ended = { index: this._ended ? this._ended.index : this._utterance, seq: ++this._seq, at: Date.now() };
+    this._ended = { index: this._ended ? this._ended.index : this._utterance, spans: (this._ended ? this._ended.spans : 0) + 1,
+      seq: ++this._seq, at: Date.now() };
     this._utterance = null;
   }
 
@@ -214,7 +218,8 @@ const MARK_TTL_MS = 3000;
     if (this._utterance !== null) this._heardEnd();
     // A commit with no speech events is a new utterance, unless a response already holds his utterance for its item (F1):
     // then it is that utterance's late commit, and settles the hold.
-    if (this._ended === null && id && !this._inputs.includes(id) && !this._holds.length) this._ended = { index: this._inputs.length, seq: ++this._seq, at: Date.now() };
+    this._holds = this._holds.filter((hold) => this._settled(hold) === undefined || ((hold.item = null), false));   // expired: let go (L N2)
+    if (this._ended === null && id && !this._inputs.includes(id) && !this._holds.length) this._ended = { index: this._inputs.length, spans: 1, seq: ++this._seq, at: Date.now() };
     if (this._ended) this._ended.committed = true;
     this._sawInput(id);
   }
@@ -274,7 +279,12 @@ const MARK_TTL_MS = 3000;
     } else if (his) {
       const known = this._utterance === null ? this._inputs.length : Math.min(this._utterance, this._inputs.length);
       this._ended = null;
-      owner = known > his.index ? this._inputs[known - 1] : this._hold(his);
+      // Bound only to what it can be shown to answer: the newest item once every span's item is known; a hold for a single
+      // span whose item is not known yet; nothing when spans were merged and an item is missing (review L N1), or when his
+      // next speech is already under way, since a hold made now could settle on that speech's item (review L M1).
+      if (known - his.index >= his.spans) owner = this._inputs[known - 1];
+      else if (his.spans > 1 || this._utterance !== null) owner = null;
+      else owner = this._hold(his);
     }
     if (id) this._answers.set(id, owner);
 `,
