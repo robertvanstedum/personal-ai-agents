@@ -20,12 +20,13 @@ import re
 from flask import Response, jsonify, request, send_from_directory, stream_with_context
 
 from core.realtime_voice import budget
+# MC's reply as plain speech, cut at SPEECH_MAX_CHARS with a spoken pointer to the chat: the direct path's too (Spec 165 §4.2).
+from core.realtime_voice.direct_host import SPEECH_MAX_CHARS, speakable as _speakable  # noqa: F401
 
 from . import cfg, feature_enabled, voice_release
 from .security import check_write, json_error
 
 ENV = "MINIMOI_MC_VOICE"
-SPEECH_MAX_CHARS = 3500                                # a longer reply is read in part and the page says so aloud
 _NOTE_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
 _STATIC_OK = ("realtime-confer-controller.js", "adapters/openai-transcription-webrtc-adapter.js")
 _MANAGED_STATIC = ("realtime-voice-controller.js","adapters/openai-webrtc-adapter.js","adapters/xai-websocket-adapter.js")
@@ -116,21 +117,6 @@ def bootstrap():
     except openai_realtime.OpenAIRealtimeError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
     return jsonify({"ok": True, **credential, "warning_minutes": guard.warning_minutes, "max_minutes": guard.max_minutes})
-
-
-def _speakable(text: str) -> str:
-    """MC's reply as plain speech: the markdown marks removed, a long reply cut at a sentence with a spoken pointer to the chat."""
-    t = re.sub(r"```.*?```", " (a code block, shown in the chat) ", text or "", flags=re.S)
-    t = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", t)
-    t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", t)
-    t = re.sub(r"[`*_#>]+", "", t)
-    t = re.sub(r"\n{2,}", ". ", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    if len(t) > SPEECH_MAX_CHARS:
-        cut = t[:SPEECH_MAX_CHARS]
-        stop = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
-        t = (cut[:stop + 1] if stop > SPEECH_MAX_CHARS // 2 else cut).rstrip() + " The rest is in the chat."
-    return t
 
 
 def speech(note_request_id):

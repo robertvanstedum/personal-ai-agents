@@ -4,7 +4,7 @@ import secrets
 import uuid
 
 from core.realtime_voice.transcripts import MAX_BYTES, note_parts
-from core.realtime_voice.controlled_session import SessionRefused
+from core.realtime_voice.errors import SessionRefused
 from .stores import Author, NOTE_MAX
 
 AUTHOR_PREFIX = 'managed_voice_transcript:'

@@ -10,13 +10,17 @@ tool-proposal or decision) is tagged with the consult's session as it is written
 tag note (page 'voice-session', never shown) names the note's request id, and the process also holds the tag in
 memory until the tag note is read. Such a note is that session's record here, hidden and revealed with it.
 
-The state is read from those markers and the clock, so it holds across tabs, refreshes and a portal restart:
+The state is read from those markers and the clock (direct_host.state), so it holds across tabs, refreshes and a portal
+restart:
 - ended (end marker): revealed;
 - dropped (no end marker, maximum duration passed): revealed, on the next load;
 - live (open in this process and heard from within LIVE_WINDOW_S): hidden;
 - recovering (otherwise): hidden, and the conversation shows RECOVERY instead of a gap.
 Reveal is a view of durable records, so it happens once: nothing is copied or re-sent, and a revealed session cannot
 be hidden again. A session with no start marker (the managed path's) is shown as before.
+
+The host-agnostic half (the state from markers, end intent, receipt lines, what is spoken of a reply, the recovery and
+summary words) is core.realtime_voice.direct_host's, imported here; this module is the Guild floor store and its view.
 """
 from __future__ import annotations
 
@@ -24,46 +28,18 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
 
-RECOVERY = "Voice session ended unexpectedly; recovering what was said."
-SUMMARY_PROMPT = "Shall I sum up?"
-SUMMARY_UNAVAILABLE = "Summary unavailable."
+from core.realtime_voice.direct_host import (LIVE_WINDOW_S, RECOVERY, SUMMARY_PROMPT, SUMMARY_UNAVAILABLE,  # noqa: F401
+                                             Receipts, affirmative, done_intent, full_differs, now, parse_stamp,
+                                             session_id, stamp, state as _state)
+
 PAGE_SESSION = "voice-session"
 PAGE_SUMMARY = "voice-summary"
 SESSION_AUTHOR = "voice_session:"
 SUMMARY_AUTHOR = "voice_summary:"
 MARKER = "[Voice session] "
-LIVE_WINDOW_S = 60                 # the page posts a heartbeat every 20 s while connected
 CONSULT_CAP = 12                   # core.realtime_voice.consult.CAP: a session has at most this many consult notes
 _CONSULT_ID = re.compile(r"vc-([0-9a-f]{32})-([0-9]{2})")
-
-
-def now():
-    return datetime.now(timezone.utc)
-
-
-def stamp(when):
-    return when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def parse_stamp(text):
-    try:
-        return datetime.strptime(text, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-    except (TypeError, ValueError):
-        try:
-            return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        except (TypeError, ValueError):
-            return None
-
-
-def session_id(value):
-    """The canonical session id (a UUID string), or None."""
-    try:
-        canonical = str(uuid.UUID(value))
-    except (TypeError, ValueError, AttributeError):
-        return None
-    return canonical if canonical == value else None
 
 
 def key(sid, what):
@@ -175,15 +151,7 @@ def state(floor, sid, *, live=lambda sid: False, when=None):
     if start is None:
         return None, None, None
     end = read_marker(floor, sid, "end")
-    if end is not None:
-        return "ended", start, end
-    began = parse_stamp(start.get("started_at"))
-    limit = start.get("max_minutes")
-    if began is None or type(limit) is not int:
-        return "dropped", start, None                    # an unreadable start is never hidden for ever
-    if (when or now()) >= began + timedelta(minutes=limit):
-        return "dropped", start, None
-    return ("live" if live(sid) else "recovering"), start, None
+    return _state(start, end, sid, live=live, when=when), start, end
 
 
 class Hider:
@@ -245,34 +213,16 @@ def _voice(row, replies, sid):
     return {**out, "kind": "consult_outcome"}                     # a tagged platform note written during a consult
 
 
-# A consult receipt as mc_voice_direct._receipt_line writes it ("Answered. Reply mc-…. Spoken: …"). The record keeps it
-# whole; the thread shows "Checked with MC · <outcome>" and the spoken words, with the reply, operation or job id kept
-# out of the visible text (UI review D1: machine detail in Robert's thread).
-_RECEIPT = re.compile(r"(?P<head>Answered|Saved|Not saved|Job started|Delegated job started|Job stop requested|Job command"
-                      r"|Not answered \([^)]*\))\.(?: (?P<ref_kind>Reply|Operation|Job) (?P<ref>\S+)\.)?"
-                      r"(?: Spoken:(?: (?P<spoken>.*))?)?", re.S)
-RECEIPT_OUTCOME = {"Answered": "answered", "Saved": "note saved", "Not saved": "note not saved",
-                   "Job started": "job started", "Delegated job started": "delegated job started",
-                   "Job stop requested": "job stop requested", "Job command": "job command sent"}
-
-
-def receipt_parts(text):
-    """{outcome, ref_kind, ref, spoken} of a consult receipt line, or {} when it is not one (the thread then shows the
-    line as kept)."""
-    match = _RECEIPT.fullmatch((text or "").strip())
-    if match is None:
-        return {}
-    head = match["head"]
-    return {"outcome": RECEIPT_OUTCOME.get(head, "not done"), "ref_kind": match["ref_kind"], "ref": match["ref"],
-            "spoken": (match["spoken"] or "").strip()}
-
-
-def full_differs(text):
-    """Whether MC's kept reply says more than was spoken from it (mc_voice._speakable: cut at its limit, a code block or a
-    link's address left out). Markdown marks, punctuation and line breaks do not count: the words are compared."""
-    from .mc_voice import _speakable
-    words = lambda t: re.sub(r"\W+", " ", t or "").strip().lower()          # noqa: E731
-    return words(_speakable(text or "")) != words(text)
+# MC's receipt words (direct_host.Receipts): a consult's receipt line ("Answered. Reply mc-…. Spoken: …") as the core
+# writes it for this host, and read back here. The record keeps it whole; the thread shows "Checked with MC · <outcome>"
+# and the spoken words, with the reply, operation or job id kept out of the visible text (UI review D1: machine detail in
+# Robert's thread). A spoken job command (jobs_api.job_command) is an action the platform took, not a failure.
+RECEIPTS = Receipts(("reply", "operation", "job"), acted_key="job_command", acted_kind="job",
+                    acted={"run_job": ("Job started", "job started"),
+                           "delegate": ("Delegated job started", "delegated job started"),
+                           "stop": ("Job stop requested", "job stop requested")},
+                    acted_other=("Job command", "job command sent"))
+receipt_parts = RECEIPTS.parts
 
 
 def process_view(config):
@@ -328,25 +278,7 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
     return shown, sessions
 
 
-# ── §8: the spoken end and the summary proposal ──────────────────────────────────────────────────────────────────
-# "We're done" proposes ending; a negated, hedged or questioned one does not; a yes to the proposal ends.
-_DONE = re.compile(r"\b(?:we(?:'re|’re| are) (?:all )?(?:done|finished)|(?:i'?m|i’m|i am) (?:all )?done|"
-                   r"that(?:'s|’s| is) (?:all|it) for (?:now|today)|let(?:'s|’s| us) (?:stop|end|wrap up)\b)", re.I)
-_HEDGED = re.compile(r"\b(?:not|never|nearly|almost|yet|if|when|until|unless|before)\b|n['’]t\b|\?\s*\Z", re.I)
-_YES = re.compile(r"\A\W*(?:yes|yeah|yep|sure|please|go ahead|do it|sum (?:it )?up|ok(?:ay)?|ja|genau)\b", re.I)
-_NO = re.compile(r"\b(?:no|not|don'?t|don’t|nein|wait)\b", re.I)
-
-
-def done_intent(text):
-    """True only for a plain spoken end ("we're done", "that's all for today"), clause by clause."""
-    if not isinstance(text, str):
-        return False
-    return any(_DONE.search(clause) and not _HEDGED.search(clause) for clause in re.split(r"(?<=[.!;])\s+|,\s*", text))
-
-
-def affirmative(text):
-    return isinstance(text, str) and bool(_YES.match(text)) and not _NO.search(text)
-
+# ── §8: the summary proposal (done_intent and affirmative are direct_host's) ──────────────────────────────────────
 
 def summary_state(floor, sid):
     """none | proposed | confirmed | edited | declined | unavailable (a proposal wins over an earlier failure)."""

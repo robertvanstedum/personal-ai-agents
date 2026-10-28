@@ -23,10 +23,7 @@ ID = re.compile(r"[A-Za-z0-9_-]{1,160}\Z")
 
 
 from core.realtime_voice.budget import VoiceBudgetError
-
-
-class SessionRefused(VoiceBudgetError):
-    pass
+from core.realtime_voice.errors import SessionRefused    # moved there (Spec 165 §4.2); the same class, re-exported
 
 
 class UnresolvedOperation(SessionRefused):

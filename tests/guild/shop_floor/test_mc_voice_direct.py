@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 from flask import Flask, jsonify, redirect, request
 
+from core.realtime_voice import direct_host
 from core.realtime_voice.budget import VoiceBudget
 from minimoi_portal.guild_ui import api, mc_voice_direct as direct, mc_voice_reveal as reveal
 from minimoi_portal.guild_ui.mc_voice_transcripts import HEADER
@@ -301,7 +302,8 @@ def test_the_managed_sideband_and_its_channel_are_unchanged(ready):
     source = inspect.getsource(direct).split('"""', 2)[2]
     assert "mc.cos" not in source and "MANAGED_VOICE_CHANNEL" not in source
     imports = [line.strip() for line in source.splitlines() if "import" in line and "mc_managed_realtime" in line]
-    assert imports == ["from .mc_managed_realtime import INSTRUCTIONS"]          # its text, never its install
+    assert imports == []                                     # MC's operating rules moved here (Spec 165 §4.2)…
+    assert mc_managed_realtime.INSTRUCTIONS is direct.INSTRUCTIONS                 # …and the managed host reads them
 
 
 # ── §6 durable capture ────────────────────────────────────────────────────────────────────────────────────────────
@@ -393,7 +395,7 @@ def test_transcript_posts_are_owner_bound_checked_and_capped_and_off_record_keep
     big = r.client.post(BASE + f"/session/{sid}/transcript", data="x" * (65 * 1024), headers=r.headers)
     assert big.status_code == 413
     assert len(voice_records(r)) == 1
-    monkeypatch.setattr(direct, "SESSION_MAX_EVENTS", 3)
+    monkeypatch.setattr(direct_host, "SESSION_MAX_EVENTS", 3)
     assert post(r, sid, [turn(r, "user", "item_u1", "One"), turn(r, "user", "item_u2", "Two")]).status_code == 200
     assert post(r, sid, [turn(r, "user", "item_u1", "One")]).status_code == 200      # the same turn again: kept once
     assert post(r, sid, [turn(r, "user", "item_u3", "Three")]).status_code == 429
@@ -470,7 +472,7 @@ def test_were_done_then_yes_ends_and_the_summary_is_from_this_session_only(ready
     summary = summarize(r, sid).get_json()
     assert summary["ok"] is True and summary["state"] == "proposed"
     assert summary["spoken"] == "We looked at item twelve; it is in build. Nothing else was done."
-    assert summary["written"].startswith(direct.PROPOSAL_HEAD) and "in build (reply-1)" in summary["written"]
+    assert summary["written"].startswith(direct_host.PROPOSAL_HEAD) and "in build (reply-1)" in summary["written"]
     assert summary["spoken"] not in summary["written"] and summary["covers"]["omitted"] is False
     prompt = r.cos.prompts[-1].text
     assert "What is stuck on #12?" in prompt and "we're done" in prompt
@@ -486,7 +488,7 @@ def test_were_done_then_yes_ends_and_the_summary_is_from_this_session_only(ready
 
 def test_the_summary_is_bounded_and_marks_what_it_omits(ready, monkeypatch):
     r = ready
-    monkeypatch.setattr(direct, "SUMMARY_MAX_TURNS", 2)
+    monkeypatch.setattr(direct_host, "SUMMARY_MAX_TURNS", 2)
     sid = start(r)["voice_session_id"]
     post(r, sid, [turn(r, "user", f"item_u{n}", f"Turn number {n}.", n) for n in range(5)])
     summary = summarize(r, sid).get_json()
@@ -941,7 +943,7 @@ def test_a_job_started_from_a_voice_consult_posts_its_result_tagged_with_that_se
     ("consult", {"answered": False, "spoken": ""}, "not done", None),
 ])
 def test_every_receipt_line_reads_back_as_its_outcome_and_spoken_words(name, result, outcome, ref):
-    line = direct._receipt_line(name, result)
+    line = reveal.RECEIPTS.line(name, result)
     parts = reveal.receipt_parts(line)
     assert parts["outcome"] == outcome and parts["ref"] == ref and parts["spoken"] == (result.get("spoken") or "")
     if ref:
@@ -1043,7 +1045,7 @@ def test_a_retried_transcript_post_does_not_use_up_the_session_byte_cap(ready, m
     r = ready
     sid = start(r)["voice_session_id"]
     words = "x" * 1000
-    monkeypatch.setattr(direct, "SESSION_MAX_BYTES", 2500)
+    monkeypatch.setattr(direct_host, "SESSION_MAX_BYTES", 2500)
     batch = [turn(r, "user", "item_u1", words), turn(r, "assistant", "item_a1", words, 3)]
     for _ in range(5):                                                              # the page retries the same post
         assert post(r, sid, batch).status_code == 200
