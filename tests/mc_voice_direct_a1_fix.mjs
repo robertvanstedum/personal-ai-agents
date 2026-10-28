@@ -135,7 +135,7 @@ await t.check('item 4: a finished result the heartbeat reports is said once, at 
   r.advance(20000); await flush();                                     // reported again: said once
   assert.deepEqual(r.c.instructions, said);
 });
-await t.check('R2: Check answers at a pause, never while a response is under way, and at most 8 s later', async () => {
+await t.check('R2, FR N3: Check answers at a pause, never while a response is under way or he is speaking', async () => {
   const r = rig(); await r.s.start('openai');
   r.c.utter('Is the kiln job done?');
   r.c.options.onInputState('speech_started'); r.c.options.onInputState('speech_stopped');
@@ -149,7 +149,26 @@ await t.check('R2: Check answers at a pause, never while a response is under way
   await r.s.check(); await flush();
   assert.equal(r.c.instructions.length, 1);
   r.advance(7999); assert.equal(r.c.instructions.length, 1);
-  r.advance(1); assert.equal(r.c.instructions.length, 2);                // the pause was missed: sent at the bound
+  r.advance(1); assert.equal(r.c.instructions.length, 1);                // he is still speaking: never over his words (FR N3)
+  r.advance(20000); assert.equal(r.c.instructions.length, 1);
+  r.c.options.onInputState('speech_stopped');                            // a response follows his words
+  r.advance(7999); assert.equal(r.c.instructions.length, 1);
+  r.advance(1); assert.equal(r.c.instructions.length, 2);                // that response's end was missed: sent at the bound
+});
+await t.check('FR N3: the spoken summary waits for a pause: not over his words or a response under way, at most 8 s', async () => {
+  for (const ending of ['turn', 'bound']) {
+    const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at item twelve.' } }) } });
+    await r.s.start('openai');
+    r.c.utter('Sum it up.');
+    r.c.options.onInputState('speech_started'); r.c.options.onInputState('speech_stopped');   // a response to his words follows
+    r.s.sumUp(); await flush();
+    assert.deepEqual(r.c.tracked, [], `${ending}: the summary was sent while a response was under way`);
+    if (ending === 'turn') r.c.options.onAssistantTurn('Sure.');                                // that response ends
+    else { r.advance(7999); await flush(); assert.deepEqual(r.c.tracked, []); r.advance(1); }   // its end was missed
+    await flush();
+    assert.equal(r.c.tracked.length, 1, ending);
+    assert.match(r.c.instructions.at(-1), /^Say only this, then stop: We looked at item twelve\.$/);
+  }
 });
 
 // ── Item 5: after an unknown, the page asks once what became of the turn ─────────────────────────────────────────────

@@ -4,8 +4,10 @@
 // drives German's transcript path through them, on a browser without Array.prototype.at too. The additions are: the controller's public methods (sessionId(), state(), speak(),
 // speakTracked(), inputOf()), its optional onPlaybackDrained callback and the adapter events it listens to (response_started,
 // playback_drained, input_item: nothing reaches a page that passes no callback), its response attribution (review CX A1-C2:
-// which owner input each response answers), the adapters' response tracking that emits them (Spec 165 §5.1, §5.3), the
-// response id on each function call, and new adapter cache keys. Pinned two ways: each source with exactly those additions taken out hashes to
+// which owner input each response answers), whether a response is under way (review FR N3), the adapters' response tracking
+// that emits them (Spec 165 §5.1, §5.3), the response id on each function call, the OpenAI adapter's optional response tag
+// (sent only when a host's tracked instruction passes one; German's bytes are unchanged, checked below), and new adapter
+// cache keys. Pinned two ways: each source with exactly those additions taken out hashes to
 // its 93bf00c6 file (the Chunk B baseline; what production German, Portuguese and CoS receive at merge from origin/main is
 // listed in A1_FIX_RESULT.md); and the methods, driven on a synthetic transport, send nothing unless a host calls them, and
 // nothing on the managed path. No provider, microphone or network.
@@ -16,8 +18,9 @@ import assert from 'node:assert/strict';
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
 const CONTROLLER = [
-  [`// Both adapters changed for the playback events and response attribution: new keys so browsers fetch them (Spec 165 §4.3, §5.3).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-attrib1";
+  [`// Both adapters changed for the playback events and response attribution, and OpenAI's again for the response tag: new keys
+// so browsers fetch them (Spec 165 §4.3, §5.3; review FR N3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-tag1";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-attrib1";`,
    `import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261015-managed-end1";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";`],
@@ -30,9 +33,13 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
     this._inputs = [];               // owner input items (provider ids), in the order they became known (Spec 165 §5.1)
     this._utterance = null;          // inputs known when his current utterance began (speech_started), until a response binds it
     this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or {index} (pending)
+    this._responseActive = false;    // a response started and not yet done (response_started .. assistant_stopped)
+    this._tags = 0;                  // speakTracked's own tags, so it knows its response (review FR N3)
 `,
    ``],
-  [`    on("response_started", (evt) => { for (const resolve of this._responseWaiters.splice(0)) resolve(evt.response_id || null); });
+  [`    on("response_started", (evt) => { this._responseActive = true; for (const waiter of this._responseWaiters.slice()) waiter(evt); });
+    on("assistant_stopped", () => { this._responseActive = false; });
+    on("connected", () => { this._responseActive = false; });
     on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null); });
 `,
    ``],
@@ -46,21 +53,37 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
 
   /** A host's one-off instruction to the voice on the direct path (a holding line, "say this briefly"): true when the
    *  session's transport took it. Never on the managed path. German and Portuguese do not call it. */
-  speak(instruction) {
+  speak(instruction, tag = null) {
     if (this._managedBootstrap || !this._adapter) return false;
-    try { this._adapter.sendContinuationInstruction(instruction); return true; } catch (_) { return false; }
+    try {
+      if (tag) this._adapter.sendContinuationInstruction(instruction, tag); else this._adapter.sendContinuationInstruction(instruction);
+      return true;
+    } catch (_) { return false; }
   }
 
-  /** speak(), tracked (Spec 165 §5.3): resolves with the id of the response the instruction starts (the adapter's next
-   *  response_started), or null when none is reported within maxMs or the transport refused it. A host passes
-   *  onPlaybackDrained to learn when that response's audio has played out. German and Portuguese do not call it. */
+  /** speak(), tracked (Spec 165 §5.3; review FR N3): resolves with the id of the response this instruction starts, or null
+   *  when that cannot be told within maxMs, or the transport refused it. A host passes onPlaybackDrained to learn when that
+   *  response's audio has played out. The instruction carries a tag of its own. An adapter that sends it as the response's
+   *  metadata and reads it back (echoesResponseTag: OpenAI) knows the response by it, and any other response is not it. With
+   *  no tag echoed (xAI), the first response to start is taken only if none was under way when the instruction was sent;
+   *  otherwise the next one may be another's (a function result's follow-up), so the answer is null and the host's own
+   *  bound ends what it waits for. German and Portuguese do not call it. */
   speakTracked(instruction, maxMs = 5000) {
     return new Promise((resolve) => {
+      const tag = \`minimoi-\${++this._tags}\`, idle = !this._responseActive, echoes = Boolean(this._adapter?.echoesResponseTag);
       let timer = null;
-      const done = (id) => { clearTimeout(timer); resolve(id); };
-      this._responseWaiters.push(done);
-      timer = setTimeout(() => { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); resolve(null); }, maxMs);
-      if (!this.speak(instruction)) { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); done(null); }
+      const stop = (id) => {
+        const i = this._responseWaiters.indexOf(wait);
+        if (i >= 0) this._responseWaiters.splice(i, 1);
+        clearTimeout(timer); resolve(id);
+      };
+      const wait = (evt) => {
+        if (evt.tag) { if (evt.tag === tag) stop(evt.response_id || null); }
+        else if (!echoes) stop(idle ? evt.response_id || null : null);
+      };
+      this._responseWaiters.push(wait);
+      timer = setTimeout(() => stop(null), maxMs);
+      if (!this.speak(instruction, tag)) stop(null);
     });
   }
 
@@ -192,14 +215,22 @@ const ADAPTERS = {
 `,
    ``],
   [`    this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)
+    this.echoesResponseTag = true;   // a tagged instruction's response says so at response.created (review FR N3)
 `,
    ``],
+  [`  sendContinuationInstruction(text, tag) {`,
+   `  sendContinuationInstruction(text) {`],
+  [`    // A host's tracked instruction (Spec 165 §5.3, review FR N3) tags its response's metadata; untagged, the bytes are as before.
+    this._dc?.send(JSON.stringify(tag ? { type: "response.create", response: { metadata: { minimoi_tag: tag } } } : { type: "response.create" }));
+`,
+   `    this._dc?.send(JSON.stringify({ type: "response.create" }));
+`],
   [`      // Spec 165 §5.3: response_started on response.created; playback_drained {response_id} when the provider says that
       // response's audio buffer stopped (played out) or was cleared (barge-in), or at response.done when it had no audio.
       // That output_audio_buffer.stopped means audible playback has drained in the browser is not verified against the
       // provider. Nothing listens unless a host passes onPlaybackDrained; German and Portuguese do not.
       case "response.created":
-        this._emit("response_started", { response_id: event.response?.id || null });
+        this._emit("response_started", { response_id: event.response?.id || null, tag: event.response?.metadata?.minimoi_tag || null });
         break;
       case "output_audio_buffer.started":
         this._audible.add(event.response_id || null);
@@ -318,6 +349,22 @@ try {
   managed._adapter = new Adapter();
   assert.equal(managed.speak('x'), false);
   assert.deepEqual(managed._adapter.sent, []);
+  n++;
+  // The real OpenAI adapter: German's instruction sends the bytes it sent before; only a host's tracked one carries a tag
+  // in the response's metadata, and response.created reports it (review FR N3).
+  const { OpenAIWebRTCAdapter: RealOpenAI } = await import(new URL('adapters/openai-webrtc-adapter.js', PATH));
+  const wire = new RealOpenAI(), frames = [];
+  wire._dc = { send: (frame) => frames.push(frame) };
+  wire.sendContinuationInstruction('Begin.');
+  assert.deepEqual(frames, ['{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"Begin."}]}}',
+    '{"type":"response.create"}']);
+  wire.sendContinuationInstruction('Say only this.', 'minimoi-1');
+  assert.equal(frames[3], '{"type":"response.create","response":{"metadata":{"minimoi_tag":"minimoi-1"}}}');
+  const started = [];
+  wire.on('response_started', (e) => started.push(e));
+  wire._handleServerEvent({ type: 'response.created', response: { id: 'r1' } });
+  wire._handleServerEvent({ type: 'response.created', response: { id: 'r2', metadata: { minimoi_tag: 'minimoi-1' } } });
+  assert.deepEqual(started, [{ response_id: 'r1', tag: null }, { response_id: 'r2', tag: 'minimoi-1' }]);
   n++;
 } finally { Object.assign(globalThis, saved); }
 // No syntax or API newer than these files used before (review FR S2): German, Portuguese and CoS load them on every browser

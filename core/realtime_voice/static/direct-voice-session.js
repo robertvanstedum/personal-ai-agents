@@ -375,10 +375,11 @@ export function directVoice(d) {
   // A line for the voice (Check's answer, a finished result) is sent only at a pause: never while Robert is speaking or a
   // response is under way, since a provider may refuse a second response then (review R2, "at a pause"). The page knows a
   // response is under way from his speech ending (one follows), a function call (its result starts one) or its own line,
-  // until the voice's turn completes. A line waits at most QUIET_WAIT_MS: past that the pause was missed (a response
-  // with no spoken words reports no turn), and it is sent.
+  // until the voice's turn completes. A line waits at most QUIET_WAIT_MS for a response to report its end: past that the
+  // response is taken as done (one with no spoken words reports no turn). A line is never sent while he is speaking: the
+  // wait starts again when his speech stops, since a response to it follows (review FR N3).
   let speaking = false, responding = false, quietTimer = null;
-  const lines = [];
+  const lines = [], pauses = [];
   const quiet = () => !speaking && !responding;
   function sayAtPause(instruction) {
     if (finalized || summary) return;
@@ -386,14 +387,27 @@ export function directVoice(d) {
     pump();
   }
   function pump() {
-    if (!lines.length || finalized) return;
+    if (finalized) return;
+    if (!lines.length) { if (quiet()) for (const go of pauses.splice(0)) go(); return; }
     if (!quiet()) {
-      if (!quietTimer) quietTimer = later(() => { quietTimer = null; speaking = responding = false; pump(); }, QUIET_WAIT_MS);
+      if (!quietTimer && !speaking) quietTimer = later(() => { quietTimer = null; responding = false; pump(); }, QUIET_WAIT_MS);
       return;
     }
     if (quietTimer) { cancel(quietTimer); quietTimer = null; }
     if (speak(lines.shift())) responding = true;
-    if (lines.length) pump();
+    pump();
+  }
+  // The summary waits for a pause too (review FR N3): once nothing is under way and no line is waiting, or at most
+  // QUIET_WAIT_MS. The microphone is muted by then (the barrier), so his words no longer reach the voice; at the bound a
+  // response still reported under way is taken as done, as for a line.
+  function atPause() {
+    return new Promise((resolve) => {
+      let timer = null;
+      const go = () => { cancel(timer); const i = pauses.indexOf(go); if (i >= 0) pauses.splice(i, 1); resolve(); };
+      pauses.push(go);
+      timer = later(() => { responding = false; go(); }, QUIET_WAIT_MS);
+      pump();
+    });
   }
   // Finished results the server reports (Spec 165 §5.1: a turn answered pending): said once each, at a pause. The server
   // repeats each until a post acknowledges it in `told`, so an answer lost on the way is not a result never said (FR N7).
@@ -589,7 +603,10 @@ export function directVoice(d) {
         // The summary is one tracked response (Spec 165 §5.3; review B6): the session ends when the controller reports that
         // response's audio drained, at barge-in, or at the bound. Another response draining never closes it.
         const instruction = `Say only this, then stop: ${said}`;
-        const tracked = typeof c?.speakTracked === 'function' ? c.speakTracked(instruction) : (speak(instruction) ? Promise.resolve(null) : null);
+        await atPause();
+        if (finalized) return;
+        const tracked = !connected ? null
+          : typeof c?.speakTracked === 'function' ? c.speakTracked(instruction) : (speak(instruction) ? Promise.resolve(null) : null);
         if (tracked) {
           become('speaking_summary');
           speakTimer = later(() => summaryHeard('bound'), summaryBound(said));
@@ -719,7 +736,11 @@ export function directVoice(d) {
       },
       onInputState: (phase) => {
         if (phase === 'speech_started') { speaking = true; if (lifecycle === 'speaking_summary') summaryHeard(); }   // barge-in
-        if (phase === 'speech_stopped') { speaking = false; responding = true; }         // a response follows his words
+        if (phase === 'speech_stopped') {                                                // a response follows his words
+          speaking = false; responding = true;
+          if (quietTimer) { cancel(quietTimer); quietTimer = null; }
+          pump();                                            // a waiting line's bound starts now (FR N3)
+        }
         if (!connected || finalized) return;
         ui.phase(phase === 'speaking' ? 'speaking' : ['consulting', 'understood', 'speech_stopped'].includes(phase) ? 'working' : 'listening');
       },

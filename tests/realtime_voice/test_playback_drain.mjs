@@ -43,12 +43,15 @@ function host(adapter) {
     onAssistantTurn: () => { if (typeof c.speakTracked !== 'function' && !ended.length) { ended.push('turn'); c.endSession('normal_end'); } },
   });
   c._adapter = adapter; c._state = 'active'; c._wireAdapterEvents();
-  adapter.sendContinuationInstruction = () => {};
+  const tags = [];                                                    // what a tagged instruction asked the provider to echo
+  adapter.sendContinuationInstruction = (_text, tag) => { tags.push(tag || null); };
   const ask = async () => {
     if (typeof c.speakTracked === 'function') { const p = c.speakTracked('Say only this, then stop: …'); return p.then((id) => { mine = id; }); }
     c.speak?.('Say only this, then stop: …');
   };
-  return { c, ended, ask };
+  // The provider's response.created for the instruction: OpenAI echoes the response metadata it was sent (review FR N3).
+  const created = (id) => ({ type: 'response.created', response: { id, ...(tags.at(-1) ? { metadata: { minimoi_tag: tags.at(-1) } } : {}) } });
+  return { c, ended, ask, created, mine: () => mine };
 }
 function xai() {
   const a = new XAIWebSocketAdapter();
@@ -76,10 +79,10 @@ await check('B6 xAI: the summary\'s response done with audio queued is not cut: 
 });
 await check('B6 xAI: another response draining first never closes the summary', async () => {
   const { a, ctx, ended, ask } = xai();
-  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_other' } });   // a reply already under way
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_other' } });   // a reply, its audio still playing
   a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_other', delta: CHUNK });
-  const asked = ask();
   a._handleServerEvent({ type: 'response.done', response: { id: 'resp_other', output: [] } });
+  const asked = ask();                                                    // at a pause: no response under way (FR N3)
   a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
   await asked;
   a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_sum', delta: CHUNK });
@@ -115,9 +118,9 @@ await check('B6 OpenAI: the summary ends at output_audio_buffer.stopped for its 
     const a = new OpenAIWebRTCAdapter();
     let closed = 0;
     a.end = () => { closed += 1; };
-    const { ended, ask } = host(a);
+    const { ended, ask, created } = host(a);
     const asked = ask();
-    a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
+    a._handleServerEvent(created('resp_sum'));
     await asked;
     a._handleServerEvent({ type: 'output_audio_buffer.started', response_id: 'resp_sum' });
     a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [{ content: [{ type: 'output_audio' }] }] } });
@@ -137,9 +140,9 @@ await check('CX A1-C4 OpenAI: a summary response with no audio, or cancelled wit
     const a = new OpenAIWebRTCAdapter();
     let closed = 0;
     a.end = () => { closed += 1; };
-    const { ended, ask } = host(a);
+    const { ended, ask, created } = host(a);
     const asked = ask();
-    a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
+    a._handleServerEvent(created('resp_sum'));
     await asked;
     a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', status, output: [] } });
     await flush();
@@ -157,6 +160,37 @@ await check('B6 German and Portuguese pass no callback: drains reach nobody and 
   a._audioContext.sources[0].end();
   await flush();
   assert.equal(c._state, 'active'); assert.equal(a._audioContext.closed, 0);
+});
+
+await check('FR N3 OpenAI: a function result\'s response starting first is not taken as the summary; its own tagged one is', async () => {
+  const a = new OpenAIWebRTCAdapter();
+  let closed = 0;
+  a.end = () => { closed += 1; };
+  const { ended, ask, created, mine } = host(a);
+  const asked = ask();
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_fn' } });      // a function result's follow-up, untagged
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_x', metadata: { minimoi_tag: 'minimoi-999' } } });
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_fn', output: [] } });   // drains with no audio
+  await flush();
+  assert.equal(mine(), undefined); assert.deepEqual(ended, []);
+  a._handleServerEvent(created('resp_sum'));
+  await asked;
+  assert.equal(mine(), 'resp_sum');
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [] } });
+  await flush();
+  assert.deepEqual(ended, ['drained']); assert.equal(closed, 1);
+});
+await check('FR N3 xAI (no tag echoed): asked while a response is under way, the next response is not taken as the summary', async () => {
+  const { a, ended, ask, mine } = xai();
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_reply' } });   // under way: its function call may follow
+  const asked = ask();
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_reply', output: [] } });
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_fn' } });
+  await asked;
+  assert.equal(mine(), null);                                             // unknown: the host's bound ends the summary
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_fn', output: [] } });
+  await flush();
+  assert.deepEqual(ended, []);
 });
 
 if (failures.length) {

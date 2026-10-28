@@ -21,8 +21,9 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-// Both adapters changed for the playback events and response attribution: new keys so browsers fetch them (Spec 165 §4.3, §5.3).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-attrib1";
+// Both adapters changed for the playback events and response attribution, and OpenAI's again for the response tag: new keys
+// so browsers fetch them (Spec 165 §4.3, §5.3; review FR N3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-tag1";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-attrib1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
@@ -72,6 +73,8 @@ export class RealtimeVoiceController {
     this._inputs = [];               // owner input items (provider ids), in the order they became known (Spec 165 §5.1)
     this._utterance = null;          // inputs known when his current utterance began (speech_started), until a response binds it
     this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or {index} (pending)
+    this._responseActive = false;    // a response started and not yet done (response_started .. assistant_stopped)
+    this._tags = 0;                  // speakTracked's own tags, so it knows its response (review FR N3)
     this._openingInstruction = openingInstruction;
     this._pendingAssistantTurns = [];
 
@@ -228,7 +231,9 @@ export class RealtimeVoiceController {
       }
     });
     on("playback_started", () => this._onPlayback());
-    on("response_started", (evt) => { for (const resolve of this._responseWaiters.splice(0)) resolve(evt.response_id || null); });
+    on("response_started", (evt) => { this._responseActive = true; for (const waiter of this._responseWaiters.slice()) waiter(evt); });
+    on("assistant_stopped", () => { this._responseActive = false; });
+    on("connected", () => { this._responseActive = false; });
     on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null); });
     on("assistant_stopped", () => {
       for (const text of this._pendingAssistantTurns.splice(0)) {
@@ -335,21 +340,37 @@ export class RealtimeVoiceController {
 
   /** A host's one-off instruction to the voice on the direct path (a holding line, "say this briefly"): true when the
    *  session's transport took it. Never on the managed path. German and Portuguese do not call it. */
-  speak(instruction) {
+  speak(instruction, tag = null) {
     if (this._managedBootstrap || !this._adapter) return false;
-    try { this._adapter.sendContinuationInstruction(instruction); return true; } catch (_) { return false; }
+    try {
+      if (tag) this._adapter.sendContinuationInstruction(instruction, tag); else this._adapter.sendContinuationInstruction(instruction);
+      return true;
+    } catch (_) { return false; }
   }
 
-  /** speak(), tracked (Spec 165 §5.3): resolves with the id of the response the instruction starts (the adapter's next
-   *  response_started), or null when none is reported within maxMs or the transport refused it. A host passes
-   *  onPlaybackDrained to learn when that response's audio has played out. German and Portuguese do not call it. */
+  /** speak(), tracked (Spec 165 §5.3; review FR N3): resolves with the id of the response this instruction starts, or null
+   *  when that cannot be told within maxMs, or the transport refused it. A host passes onPlaybackDrained to learn when that
+   *  response's audio has played out. The instruction carries a tag of its own. An adapter that sends it as the response's
+   *  metadata and reads it back (echoesResponseTag: OpenAI) knows the response by it, and any other response is not it. With
+   *  no tag echoed (xAI), the first response to start is taken only if none was under way when the instruction was sent;
+   *  otherwise the next one may be another's (a function result's follow-up), so the answer is null and the host's own
+   *  bound ends what it waits for. German and Portuguese do not call it. */
   speakTracked(instruction, maxMs = 5000) {
     return new Promise((resolve) => {
+      const tag = `minimoi-${++this._tags}`, idle = !this._responseActive, echoes = Boolean(this._adapter?.echoesResponseTag);
       let timer = null;
-      const done = (id) => { clearTimeout(timer); resolve(id); };
-      this._responseWaiters.push(done);
-      timer = setTimeout(() => { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); resolve(null); }, maxMs);
-      if (!this.speak(instruction)) { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); done(null); }
+      const stop = (id) => {
+        const i = this._responseWaiters.indexOf(wait);
+        if (i >= 0) this._responseWaiters.splice(i, 1);
+        clearTimeout(timer); resolve(id);
+      };
+      const wait = (evt) => {
+        if (evt.tag) { if (evt.tag === tag) stop(evt.response_id || null); }
+        else if (!echoes) stop(idle ? evt.response_id || null : null);
+      };
+      this._responseWaiters.push(wait);
+      timer = setTimeout(() => stop(null), maxMs);
+      if (!this.speak(instruction, tag)) stop(null);
     });
   }
 

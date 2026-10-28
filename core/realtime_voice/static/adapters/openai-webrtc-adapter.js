@@ -26,6 +26,7 @@ export class OpenAIWebRTCAdapter {
     this._remoteAudioEl = null;
     this._muted = false;
     this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)
+    this.echoesResponseTag = true;   // a tagged instruction's response says so at response.created (review FR N3)
   }
 
   on(eventName, handler) {
@@ -152,7 +153,7 @@ export class OpenAIWebRTCAdapter {
     this._emit("closed", { reason });
   }
 
-  sendContinuationInstruction(text) {
+  sendContinuationInstruction(text, tag) {
     // Text-only continuation (Section 9's idle re-engagement) -- per
     // OpenAI docs: conversation.item.create with input_text, then
     // response.create with output_modalities restricted appropriately.
@@ -160,7 +161,8 @@ export class OpenAIWebRTCAdapter {
       type: "conversation.item.create",
       item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
     }));
-    this._dc?.send(JSON.stringify({ type: "response.create" }));
+    // A host's tracked instruction (Spec 165 §5.3, review FR N3) tags its response's metadata; untagged, the bytes are as before.
+    this._dc?.send(JSON.stringify(tag ? { type: "response.create", response: { metadata: { minimoi_tag: tag } } } : { type: "response.create" }));
   }
 
   sendFunctionResult(callId, output) {
@@ -221,7 +223,7 @@ export class OpenAIWebRTCAdapter {
       // That output_audio_buffer.stopped means audible playback has drained in the browser is not verified against the
       // provider. Nothing listens unless a host passes onPlaybackDrained; German and Portuguese do not.
       case "response.created":
-        this._emit("response_started", { response_id: event.response?.id || null });
+        this._emit("response_started", { response_id: event.response?.id || null, tag: event.response?.metadata?.minimoi_tag || null });
         break;
       // Spec 165 §5.1: the owner input item a response answers is the one committed before it starts.
       case "input_audio_buffer.committed":
