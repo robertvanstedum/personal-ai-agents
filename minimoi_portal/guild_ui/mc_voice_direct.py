@@ -234,15 +234,26 @@ class _Sessions(ConsultLedger):
                     proposed, meta["proposed"] = False, False
         return proposed, confirmed
 
+    def first_words(self, session_id, text):
+        """Keep the owner's first consult words of this session: the conversation's title once it is revealed."""
+        with self._meta_lock:
+            meta = self._meta.get(session_id)
+            if meta is not None:
+                meta.setdefault("first_words", text)
+
     def close_session(self, session_id, reason="end"):
-        """End: closed here, and the end marker kept (the reveal). A failed write leaves the reveal to the clock."""
+        """End: closed here, and the end marker kept (the reveal), then the conversation titled from his first consult
+        words if it has no title yet. A failed write leaves the reveal to the clock."""
         super().close_session(session_id)
         from . import api
         cid = self.conversation_of(session_id)
         try:
             conv, refusal = api._conversation(cid) if cid else (None, True)
-            if refusal is None:
-                reveal.mark_end(api._conv_floor(conv), session_id, reason=reason)
+            if refusal is None and reveal.mark_end(api._conv_floor(conv), session_id, reason=reason) is not None:
+                with self._meta_lock:
+                    first = (self._meta.get(session_id) or {}).pop("first_words", None)
+                if first:
+                    api._touch(conv, first_text=first)
         except Exception:
             log.exception("mc direct voice: end marker not kept")
 
@@ -350,7 +361,10 @@ def _typed_turn(sessions, principal, session_id, call_id, name, conv, text, bad)
     if kept.outcome != "kept" or not kept.value:
         return {"ok": False, "error": "not_kept", "spoken": FAILED}
     if not kept.repeated:
-        conv = api._touch(conv, first_text=text)
+        # Bumped, never titled from spoken words while the session is withheld: the title is visible at once. End
+        # titles it from his first consult words, when the session is revealed (review B #7).
+        conv = api._touch(conv)
+        sessions.first_words(session_id, text)
     services = cfg()["services"]
     floor = _TaggedFloor(floor, sessions, session_id)          # after the consult note: it is the session's by its id
     found = (services, principal, conv, floor, kept.value, note_id, note_id, [])

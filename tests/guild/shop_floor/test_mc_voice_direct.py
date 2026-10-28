@@ -58,7 +58,11 @@ class Conversations:
             raise ConversationNotFound()
         return {"id": cid, "principal": principal, "archived": False, "notes_floor": "owner-floor"}
 
+    def __init__(self):
+        self.touched = []
+
     def touch(self, cid, principal, first_text=None):
+        self.touched.append(first_text)
         return self.get(cid, principal)
 
 
@@ -137,7 +141,7 @@ def build(monkeypatch, tmp_path, env):
     headers = {"X-Synthetic-Owner": "yes", "Origin": "http://localhost", "Content-Type": "application/json",
                "X-CSRF-Token": client.get("/csrf").json["token"], "X-Record-Mode": "on_record"}
     return SimpleNamespace(app=app, client=client, headers=headers, notes=notes, cos=cos, turns=turns, mints=mints,
-                           budget=budget, config=config, installed=installed, during=during, clock=clock)
+                           budget=budget, config=config, installed=installed, during=during, clock=clock, convs=convs)
 
 
 @pytest.fixture
@@ -818,3 +822,17 @@ def test_note_parts_compare_turn_times_as_times():
                    started="2026-10-27T20:00:02.5Z", ended="2026-10-27T20:00:02Z")
     assert stamp_time("2026-10-27T20:00:02.25Z") > stamp_time("2026-10-27T20:00:02Z")
     assert stamp_time("2026-10-27T20:00:02") is None and stamp_time(None) is None
+
+
+# ── review B #7: no title from spoken words while the session is withheld ────────────────────────────────────────
+
+def test_the_conversation_is_titled_from_spoken_words_only_when_the_session_is_revealed(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    call(r, sid, call_id="c1", words="What is stuck on #12?")
+    call(r, sid, call_id="c2", words="And on #13?")
+    assert r.convs.touched and all(first is None for first in r.convs.touched)     # bumped, never titled while live
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+    assert r.convs.touched[-1] == "What is stuck on #12?"                          # his first words, at the reveal
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+    assert r.convs.touched.count("What is stuck on #12?") == 1
