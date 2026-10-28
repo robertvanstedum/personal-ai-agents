@@ -53,6 +53,10 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
       this.options.onSessionInfo?.({ provider: args.provider, voice_session_id: SID, voice_notices: ['openai voice is unset, using marin'] });
       this._state = 'active'; this.options.onStateChange('active');
     }
+    utter(text) {                                          // a completed owner turn, as the controller reports it: the transcript, then the turn
+      this.turns = [...(this.turns || []), { speaker: 'user', text, completed: true }];
+      this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); this.options.onUserTurn(text);
+    }
     endSession(reason) {
       if (this._state === 'ended') return;
       this.ended.push(reason); this._state = 'ended'; this.options.onStateChange('ended');
@@ -322,7 +326,7 @@ for (const who of ['dictation', 'companion-closed']) {
     await new Promise((res) => { release = res; });
     return { ok: true, status: 200, json: async () => ({ ok: true, spoken: 'Done.' }) };
   };
-  r.instances[0].options.onUserTurn('Run the nightly job.');
+  r.instances[0].utter('Run the nightly job.');
   await r.click('[data-mc-voice-check]'); await r.click('[data-mc-voice-check]');
   assert.equal(r.posts('/consult').length, 1);
   assert.equal(r.node('[data-mc-voice-check]').disabled, true);

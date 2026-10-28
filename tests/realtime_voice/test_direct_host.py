@@ -164,8 +164,13 @@ def start(r, **body):
 def consult(r, sid, call_id="call_1", words="What is on my agenda?", name="consult", headers=OWNER, turn=None):
     return r.client.post(BASE + "/consult", headers=headers, json={"session_id": sid, "call_id": call_id, "name": name,
                                                                    "owner_transcript_item": words,
-                                                                   "owner_turn": turn or f"u-{call_id}",
+                                                                   "owner_item_id": turn or item_of(call_id),
                                                                    "arguments": {"question": "the model's paraphrase"}})
+
+
+def item_of(call_id):
+    """A call's own owner turn (a capture id, "t" + a number), so separate calls are separate turns unless a test names one."""
+    return "t" + str(int(hashlib.sha256(call_id.encode()).hexdigest(), 16) % 9000 + 1000)
 
 
 def at(r, seconds):
@@ -414,10 +419,10 @@ def test_one_owner_turn_is_one_effect_for_any_host(rig):
     """B1: a second call for the same owner turn, under any call id or function, gets the first one's answer."""
     r = rig
     sid = start(r)
-    first = consult(r, sid, call_id="host-1", turn="u1").get_json()
-    second = consult(r, sid, call_id="call_2", name="save_note", words="save a note: x", turn="u1").get_json()
+    first = consult(r, sid, call_id="host-1", turn="t1").get_json()
+    second = consult(r, sid, call_id="call_2", name="save_note", words="save a note: x", turn="t1").get_json()
     assert len(r.host.turns) == 1 and second["receipt"] == first["receipt"] and second["same_turn"] is True
-    assert consult(r, sid, call_id="call_3", turn="u2").get_json()["receipt"] == "turn-2"     # his next words: a new turn
+    assert consult(r, sid, call_id="call_3", turn="t3").get_json()["receipt"] == "turn-2"     # his next words: a new turn
     bare = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "c4", "name": "consult",
                                                                  "owner_transcript_item": "x"})
     assert bare.status_code == 400 and len(r.host.turns) == 2                              # no owner turn: refused
@@ -450,7 +455,7 @@ def test_what_was_not_kept_and_what_still_ran_are_marked_at_the_cutoff(rig):
     r = rig
     sid = start(r)
     post(r, sid, [turn(r, "user", "t0", "Kept words.")])
-    r.sessions.admit(sid, "call_running", "u9")
+    r.sessions.admit(sid, "call_running", "t9")
     summary = r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER,
                             json={"conversation_id": "owner", "capture": "incomplete"}).get_json()
     assert r.store.markers[(sid, "end")]["capture"] == "incomplete"

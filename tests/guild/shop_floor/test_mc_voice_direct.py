@@ -160,8 +160,13 @@ def start(r):
 def call(r, sid, call_id="call-1", name="consult", words="What is stuck on #12?", headers=None, **body):
     # Each call names the owner turn it acts on (review B1); by default its own, so separate calls are separate turns.
     return r.client.post(BASE + "/consult", headers=r.headers if headers is None else headers, json={
-        "session_id": sid, "call_id": call_id, "name": name, "owner_transcript_item": words, "owner_turn": f"u-{call_id}",
+        "session_id": sid, "call_id": call_id, "name": name, "owner_transcript_item": words, "owner_item_id": item_of(call_id),
         "arguments": {"question": "the model's paraphrase"}, **body})
+
+
+def item_of(call_id):
+    """A call's own owner turn (a capture id, "t" + a number), so separate calls are separate turns unless a test names one."""
+    return "t" + str(int(hashlib.sha256(call_id.encode()).hexdigest(), 16) % 9000 + 1000)
 
 
 def owner_notes(r):

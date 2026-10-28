@@ -78,6 +78,10 @@ function rig({ routes = {} } = {}) {
       this.ended.push(reason); this._state = 'ended'; this.options.onStateChange('ended');
       this.options.onFinalize({ turns: this.turns || [], partial_reason: reason, session_id: this._sessionId });
     }
+    utter(text) {                                          // a completed owner turn, as the controller reports it: the transcript, then the turn
+      this.turns = [...(this.turns || []), { speaker: 'user', text, completed: true }];
+      this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); this.options.onUserTurn(text);
+    }
     hear(turns) { this.turns = turns.map((t) => ({ ...t })); this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); }
   }
   const ui = { say: (text, o = {}) => said.push([text, o]), phase() {}, live() {}, elapsed() {}, notice() {}, propose() {},
@@ -101,25 +105,25 @@ async function check(name, fn) {
 // ── B1: one owner turn, one effect, whoever dispatches it ───────────────────────────────────────────────────────────────
 await check('B1 manual Check then the model on the same words name the same owner turn', async () => {
   const r = rig(); await r.s.start('openai');
-  r.c.options.onUserTurn('Save a note: the kiln needs a new seal');
+  r.c.utter('Save a note: the kiln needs a new seal');
   await r.s.check();
   await r.c.options.onFunctionCall({ call_id: 'provider-repeat', name: 'save_note', arguments: {} });
-  const turns = r.posts('/consult').map((p) => p.body.owner_turn);
+  const turns = r.posts('/consult').map((p) => p.body.owner_item_id);
   assert.equal(turns.length, 2); assert.ok(turns[0]); assert.equal(turns[0], turns[1]);
 });
 await check('B1 the same words said again are a new owner turn', async () => {
   const r = rig(); await r.s.start('openai');
-  r.c.options.onUserTurn('What is stuck on #12?');
+  r.c.utter('What is stuck on #12?');
   await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
-  r.c.options.onUserTurn('What is stuck on #12?');
+  r.c.utter('What is stuck on #12?');
   await r.c.options.onFunctionCall({ call_id: 'b', name: 'consult', arguments: {} });
-  const [first, second] = r.posts('/consult').map((p) => p.body.owner_turn);
+  const [first, second] = r.posts('/consult').map((p) => p.body.owner_item_id);
   assert.ok(first && second); assert.notEqual(first, second);
 });
 await check('B1 a second dispatch while the first runs is told it is still being checked, not that it failed', async () => {
   const r = rig({ routes: { '/consult': () => ({ status: 409, body: { ok: false, error: 'in flight', spoken: 'Still checking.' } }) } });
   await r.s.start('openai');
-  r.c.options.onUserTurn('Run the nightly job.');
+  r.c.utter('Run the nightly job.');
   const out = await r.c.options.onFunctionCall({ call_id: 'provider-2', name: 'consult', arguments: {} });
   assert.equal(out.ok, true); assert.equal(out.outcome, 'pending'); assert.doesNotMatch(out.spoken, /did not go through/);
 });
@@ -328,7 +332,7 @@ await check('B7 an answer lost on the way back is asked again as the same call a
   let n = 0;
   const r = rig({ routes: { '/consult': (body) => (++n === 1 ? 'network' : { status: 200, body: { ok: true, call_id: body.call_id, answered: true, saved: true, receipt: 'op-1', spoken: 'Saved.' } }) } });
   await r.s.start('openai');
-  r.c.options.onUserTurn('Save a note: the kiln is hot');
+  r.c.utter('Save a note: the kiln is hot');
   const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'save_note', arguments: {} });
   assert.equal(out.saved, true); assert.equal(out.spoken, 'Saved.');
   assert.deepEqual(r.posts('/consult').map((p) => p.body.call_id), ['call_1', 'call_1']);
@@ -337,14 +341,14 @@ await check('B7 a retry the server no longer knows (a restart) leaves the first 
   let n = 0;
   const r = rig({ routes: { '/consult': () => (++n === 1 ? 'network' : { status: 409, body: { ok: false, error: 'session ended' } }) } });
   await r.s.start('openai');
-  r.c.options.onUserTurn('Run the nightly job.');
+  r.c.utter('Run the nightly job.');
   const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
   assert.equal(out.outcome, 'unknown'); assert.equal(out.spoken, UNKNOWN);
 });
 await check('B7 an answer that never comes back is unknown, never "did not go through"', async () => {
   const r = rig({ routes: { '/consult': () => 'network' } });
   await r.s.start('openai');
-  r.c.options.onUserTurn('Run the nightly job.');
+  r.c.utter('Run the nightly job.');
   const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
   assert.equal(out.outcome, 'unknown'); assert.equal(out.spoken, UNKNOWN); assert.doesNotMatch(out.spoken, /did not go through/);
 });

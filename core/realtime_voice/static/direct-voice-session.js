@@ -133,6 +133,10 @@ export function sameWords(said, asked) {
 // still incomplete is posted as partial. Posts go one at a time, at most 20 events and 64 KB each; a retried post keeps the
 // same ids, so the server keeps each turn once.
 //
+// The owner turn a consult acts on is named by its capture id (Spec 165 §5.1's owner_item_id): ownerItem() is the id of the
+// owner item that completed last, the same "t" + index its transcript post carries, so the server can tie the consult to the
+// turn it kept. An earlier item that completes after a later one appeared is still named by its own place.
+//
 // Delivery is tracked per event (review B4): sent, kept (the server said so) or failed (refused, or the network twice). A
 // failed event is retried once more at the end (finish/flush), then counts as not kept: incomplete() is then true, and the
 // session's last words, End and the summary say so instead of claiming everything was kept.
@@ -140,7 +144,7 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
   const items = [];
   const queued = new Set(), inflight = new Set();      // batches waiting on the chain; batches sent and not yet answered
   const fate = new Map();                              // item id -> {event, state: sent | kept | failed, retry}
-  let chain = Promise.resolve(), stopped = false;
+  let chain = Promise.resolve(), stopped = false, ownerAt = -1;
   const iso = (ms) => new Date(ms).toISOString();
 
   function observe(turns) {
@@ -149,7 +153,10 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
       const it = items[i] || (items[i] = { speaker: t.speaker, text: '', completed: false, started: now, ended: null, posted: false });
       it.speaker = t.speaker === 'user' ? 'user' : 'assistant';
       it.text = typeof t.text === 'string' ? t.text : '';
-      if (t.completed && !it.completed) { it.completed = true; it.ended = now; }
+      if (t.completed && !it.completed) {
+        it.completed = true; it.ended = now;
+        if (it.speaker === 'user' && it.text.trim()) ownerAt = i;          // the owner turn that just completed
+      }
     });
   }
   function event(i, it, partial, interrupted) {
@@ -233,6 +240,8 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
   const last = (turns, opts) => { if (stopped) return chain; observe(turns); return enqueue([...again(), ...due(true)], opts); };
   return {
     update(turns) { if (stopped) return chain; observe(turns); return enqueue(due(false)); },
+    // The capture id of the owner turn that completed last ("t" + its place), or null before he has said anything.
+    ownerItem: () => (ownerAt >= 0 ? `t${ownerAt}` : null),
     finish: last,
     // The capture-closing barrier (review B2): post what is owed and resolve once every post is answered. The caller then
     // stops capture; it never awaits this from inside a post's own answer.
@@ -290,7 +299,7 @@ export function directVoice(d) {
   let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, endAfterTurn = null, ending = null, endedWords = null;
   let drainTimer = null, lastTurns = [];
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
-  let ownerTurn = 0, consultedTurn = -1, checking = false;          // Robert's turns, counted; the last one consulted
+  let consultedItem = null, checking = false;                     // the owner item last consulted (by the model or Check)
   const done = new Promise((resolve) => { closed = resolve; });     // settles once End is sent and the thread is reloaded
   done.then(() => { settled = true; });
 
@@ -332,17 +341,19 @@ export function directVoice(d) {
   }
 
   // §4: the function bridge. The server acts on Robert's own last words, never on the model's arguments; whatever comes back
-  // (any status) is the function's output, which the model is told to speak. Each call names the owner turn it acts on
-  // (review B1): the same for Check with <person> and the model's own call on the same words, so the server runs that turn
-  // once and gives a second call the first one's answer; his next words are a new turn.
+  // (any status) is the function's output, which the model is told to speak. Each call names the owner turn it acts on by
+  // its capture id, owner_item_id (review B1, Spec 165 §5.1): the same for Check with <person> and the model's own call on
+  // the same words, so the server runs that turn once and gives a second call the first one's answer; his next words are a
+  // new turn, with a new id.
   async function consult(callId, name, args) {
     const holding = later(() => speak('Still checking.'), HOLDING_MS);
     let advisory = args;
     if (typeof advisory === 'string') { try { advisory = JSON.parse(advisory); } catch (e) { advisory = {}; } }
     if (!advisory || typeof advisory !== 'object' || Array.isArray(advisory)) advisory = {};
-    if (lastOwner) consultedTurn = ownerTurn;                          // by the model or by Check with <person>
+    const item = capture?.ownerItem() || null;
+    if (lastOwner && item) consultedItem = item;                       // by the model or by Check with <person>
     const request = { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: lastOwner,
-      owner_turn: `u${ownerTurn}`, arguments: advisory };
+      owner_item_id: item, arguments: advisory };
     const lost = (x) => x.status === 0 || x.status >= 500;
     const inFlight = (x) => x.status === 409 && x.body.error === 'in flight';
     try {
@@ -374,7 +385,7 @@ export function directVoice(d) {
   async function check() {
     if (!connected || finalized || checking || summary) return;
     if (!lastOwner) { ui.say(words.sayFirst, { transient: true }); return; }
-    if (consultedTurn === ownerTurn) { ui.say(ALREADY_CHECKED, { transient: true }); return; }
+    if (consultedItem && consultedItem === capture?.ownerItem()) { ui.say(ALREADY_CHECKED, { transient: true }); return; }
     checking = true; ui.checking?.(true);
     try {
       ui.phase('working');
@@ -522,7 +533,7 @@ export function directVoice(d) {
       },
       onPlayback: () => {},
       onTranscriptUpdate: (turns) => { lastTurns = turns; if (!finalized) capture.update(turns); },
-      onUserTurn: (text) => { if (typeof text === 'string' && text.trim()) { lastOwner = text.trim(); ownerTurn += 1; } },
+      onUserTurn: (text) => { if (typeof text === 'string' && text.trim()) lastOwner = text.trim(); },
       onAssistantTurn: (text) => { if (endAfterTurn) endAfterTurn(text); },
       onFunctionCall: (call) => consult(call.call_id, call.name, call.arguments),
       onFinalize: (result) => finalize(result),

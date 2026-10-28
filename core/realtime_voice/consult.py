@@ -22,7 +22,8 @@ def _state(open_, owner):
 
 class ConsultLedger:
     """One effect per call: call-id dedup, an in-flight guard and the per-session cap. With an owner turn (the direct
-    path's owner_turn, Spec 165 review B1), one effect per owner turn too: a second call for a turn already admitted,
+    path's owner_item_id, the capture id of the completed owner turn: Spec 165 §5.1, review B1), one effect per owner turn
+    too: a second call for a turn already admitted,
     under any call id and either function, is that first call (its result, marked same_turn, or in flight), so a manual
     Check and the model's own call on the same words run the typed turn once. A later utterance is a new turn. A kept
     result is replayed after the session has closed too (read-only: nothing runs), so an answer lost on the way back can
@@ -96,8 +97,8 @@ def stub_backend(owner_text, arguments):
 
 
 def create_consult_blueprint(*, backend, ledger, csrf_ok, owner_id, session_owner, require_turn=False):
-    """``require_turn``: every call names the owner turn it acts on (owner_turn), and the ledger admits one effect per
-    turn (the direct path). Without it (the bench) a call may omit it."""
+    """``require_turn``: every call names the owner turn it acts on (owner_item_id, its capture id), and the ledger
+    admits one effect per turn (the direct path). Without it (the bench) a call may omit it."""
     bp = Blueprint("voice_consult", __name__)
 
     @bp.route("/api/realtime-voice/consult", methods=["POST"])
@@ -112,9 +113,9 @@ def create_consult_blueprint(*, backend, ledger, csrf_ok, owner_id, session_owne
         call_id = body.get("call_id")
         name = body.get("name")
         owner_text = body.get("owner_transcript_item")
-        turn = body.get("owner_turn")
+        turn = body.get("owner_item_id")
         if (not _token(session_id) or not _token(call_id) or name not in {"consult", "save_note"}
-                or (turn is not None and not _token(turn)) or (require_turn and turn is None)):
+                or (turn is not None and not owner_item(turn)) or (require_turn and turn is None)):
             return jsonify({"ok": False, "error": "invalid consult"}), 400
         if session_owner(session_id) != owner:
             return jsonify({"ok": False, "error": "not your session"}), 403
@@ -151,8 +152,14 @@ def create_consult_blueprint(*, backend, ledger, csrf_ok, owner_id, session_owne
 
 
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{1,80}")
+_ITEM = re.compile(r"t[0-9]{1,4}")
 
 
 def _token(value):
     """A session or call id: ASCII letters, digits, '-' and '_' (OpenAI's call ids are call_…), at most 80."""
     return isinstance(value, str) and _TOKEN.fullmatch(value) is not None
+
+
+def owner_item(value):
+    """An owner turn's capture id, as the session module names every item it posts: "t" and the item's place."""
+    return isinstance(value, str) and _ITEM.fullmatch(value) is not None

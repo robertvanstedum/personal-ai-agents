@@ -69,6 +69,10 @@ function rig({ routes = {}, refuse = null, holdConnect = false, conversation = '
       this.ended.push(reason); this._state = 'ended'; this.options.onStateChange('ended');
       this.options.onFinalize({ turns: this.turns || [], partial_reason: reason, session_id: this.sid });
     }
+    utter(text) {                                          // a completed owner turn, as the controller reports it: the transcript, then the turn
+      this.turns = [...(this.turns || []), { speaker: 'user', text, completed: true }];
+      this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); this.options.onUserTurn(text);
+    }
     hear(turns) { this.turns = turns.map((t) => ({ ...t })); this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); }   // what was said
   }
   const ui = {
@@ -148,11 +152,11 @@ for (const [status, detail, words] of [
     : body.call_id === 'call_cap' ? { status: 429, body: { ok: false, error: 'cap', spoken: "I'll check the rest after we talk." } } : null) } });
   await r.s.start('openai');
   const c = r.c;
-  c.options.onUserTurn('What is stuck on #12?');
+  c.utter('What is stuck on #12?');
   const out = await c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: '{"question":"the model\'s words"}' });
   const consult = r.posts('/consult')[0];
   assert.deepEqual(consult.body, { session_id: SID, call_id: 'call_1', name: 'consult', owner_transcript_item: 'What is stuck on #12?',
-    owner_turn: 'u1', arguments: { question: "the model's words" } });                 // the owner turn it acts on (review B1)
+    owner_item_id: 't0', arguments: { question: "the model's words" } });              // the owner turn it acts on: its capture id (B1)
   assert.deepEqual(consult.opts.headers, HEADERS);
   assert.equal(consult.opts.credentials, 'same-origin');
   assert.equal(out.spoken, 'Item 12 is in build.');
@@ -175,9 +179,9 @@ const UNKNOWN_RESULT = { ok: false, error: 'unknown', outcome: 'unknown', spoken
 {
   const r = rig({ routes: { '/consult': () => 'network' } });
   await r.s.start('openai');
-  r.c.options.onUserTurn('Anything new?');
+  r.c.utter('Anything new?');
   assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_n', name: 'consult', arguments: {} }), UNKNOWN_RESULT);
-  assert.deepEqual(r.posts('/consult').map((p) => [p.body.call_id, p.body.owner_turn]), [['call_n', 'u1'], ['call_n', 'u1']]);
+  assert.deepEqual(r.posts('/consult').map((p) => [p.body.call_id, p.body.owner_item_id]), [['call_n', 't0'], ['call_n', 't0']]);
   r.advance(20000);
   assert.deepEqual(r.c.instructions, []);
   scenarios++;
@@ -187,7 +191,7 @@ for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN
   [400, { ok: false, error: 'unavailable', spoken: D.NOT_DONE }, 1]]) {
   const r = rig({ routes: { '/consult': () => ({ status, body: null }) } });
   await r.s.start('openai');
-  r.c.options.onUserTurn('Anything new?');
+  r.c.utter('Anything new?');
   assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_u', name: 'consult', arguments: {} }), expected, String(status));
   assert.equal(r.posts('/consult').length, posts, String(status));
   assert.match(D.startRefusal({ reason: 'microphone_denied' }), /^Voice unavailable: the microphone/);
@@ -200,7 +204,7 @@ for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN
   await r.s.check();
   assert.match(r.said.at(-1)[0], /Say something first/);
   assert.equal(r.posts('/consult').length, 0);
-  r.c.options.onUserTurn('  Is the kiln job done?  ');
+  r.c.utter('  Is the kiln job done?  ');
   await r.s.check();
   const body = r.posts('/consult')[0].body;
   assert.match(body.call_id, /^host-\d+$/);
@@ -215,7 +219,7 @@ for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN
   let release = null;
   const r = rig({ routes: { '/consult': () => (release === null ? new Promise((res) => { release = () => res({ status: 200, body: { ok: true, spoken: 'Done.' } }); }) : null) } });
   await r.s.start('openai');
-  r.c.options.onUserTurn('Run the nightly job.');
+  r.c.utter('Run the nightly job.');
   const first = r.s.check();
   const second = r.s.check();                                                             // the double tap
   await flush();
@@ -226,10 +230,10 @@ for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN
   await r.s.check();                                                                      // the same turn again
   assert.equal(r.posts('/consult').length, 1);
   assert.deepEqual(r.said.at(-1), [D.ALREADY_CHECKED, { transient: true }]);
-  r.c.options.onUserTurn('Run the nightly job.');                                         // said again: a new turn
+  r.c.utter('Run the nightly job.');                                         // said again: a new turn
   await r.s.check();
   assert.equal(r.posts('/consult').length, 2);
-  r.c.options.onUserTurn('What is stuck on #12?');
+  r.c.utter('What is stuck on #12?');
   await r.c.options.onFunctionCall({ call_id: 'call_m', name: 'consult', arguments: {} });  // the model consulted it
   await r.s.check();
   assert.equal(r.posts('/consult').length, 3);
@@ -356,7 +360,7 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
   [403, 'csrf', D.SERVER_ENDED.csrf]]) {
   const r = rig({ routes: { '/consult': () => ({ status, body: { ok: false, error } }) } });
   await r.s.start('openai');
-  r.c.options.onUserTurn('Anything new?');
+  r.c.utter('Anything new?');
   assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_e', name: 'consult', arguments: {} }), { ok: false, error });
   await flush(10);
   assert.deepEqual(r.c.ended, ['server_ended'], error);
