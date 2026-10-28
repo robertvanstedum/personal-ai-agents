@@ -20,6 +20,14 @@ export const CONFIRM_SCOPE = 'Confirming confirms the summary only. Anything it 
 export const SUMMARY_UNAVAILABLE = 'Summary unavailable.';
 export const NOT_KEPT = 'Some of what was said could not be kept.';
 export const CAP = 'This voice session has kept all it may.';
+// The server refused the session's posts (UI review #2): the voice is ended here too, so nothing goes on being said that
+// cannot be kept. `cap` alone only stops posting (CAP above).
+export const SERVER_ENDED = {
+  session_ended: 'Voice stopped: the server ended this voice session. What was said before is kept.',
+  mc_turns_off: "Voice stopped: Master Craftsman's turns are off here. What was said before is kept.",
+  csrf: 'Voice stopped: this page is out of date. Reload it. What was said before is kept.',
+  refused: 'Voice stopped: the server refused this voice session. What was said before is kept.',
+};
 export const EDIT_MAX = 1860;
 const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
 const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its next turn, or after this
@@ -150,7 +158,7 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     if (r.status === 0 && !retried) return post(batch, true, opts);       // the network: once more, the same ids
     if (r.status === 422) { warn('voice transcript refused', code); return; }   // a page bug or a far-off clock: not retried
     if (r.status === 409 && code === 'not_kept') return onAnswer({ failed: 'not_kept' });
-    stopped = ['session_ended', 'not_listening', 'cap', 'not_your_session', 'csrf'].includes(code) || r.status === 403 || stopped;
+    stopped = ['session_ended', 'not_listening', 'cap', 'not_your_session', 'csrf', 'mc_turns_off'].includes(code) || r.status === 403 || stopped;
     return onAnswer({ failed: code || (r.status ? 'unavailable' : 'network'), status: r.status });
   }
   function enqueue(events, opts) {
@@ -223,7 +231,8 @@ export function directVoice(d) {
   }
   function propose(on) { proposing = on; ui.propose(on); }
 
-  // §5's answers: Sum up is offered, a spoken yes asks for the summary, a refusal stops posting.
+  // §5's answers: Sum up is offered, a spoken yes asks for the summary. The cap stops posting only; a session the server
+  // has ended or refuses (409 session_ended or mc_turns_off, any 403) is ended here too, with the reason left showing.
   function heard(body) {
     if (finalized && !body.failed) return;
     if (body.propose_end) propose(true);
@@ -231,6 +240,11 @@ export function directVoice(d) {
     if (body.failed === 'not_kept') ui.say(NOT_KEPT, { error: true });
     else if (body.failed === 'cap') ui.say(CAP, { error: true });
     else if (body.failed === 'not_listening' && !finalized) c?.endSession('not_listening');
+    else if (!finalized && (['session_ended', 'mc_turns_off'].includes(body.failed) || body.status === 403)) {
+      failed = true;
+      ui.say(SERVER_ENDED[body.failed] || SERVER_ENDED.refused, { loud: true, error: true });
+      endNow('server_ended');
+    }
   }
 
   // §4: the function bridge. The server acts on Robert's own last words, never on the model's arguments; whatever comes back
@@ -244,6 +258,12 @@ export function directVoice(d) {
       const r = await postJson(direct.consult_url, { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: lastOwner,
         arguments: advisory });
       if (r.status === 0) return { ok: false, error: 'network', spoken: NOT_DONE };
+      // The server has ended or refuses this session (409 "session ended", any 403): the answer still goes back to the
+      // model, then the voice is ended here as for a refused transcript post (UI review #2).
+      if ((r.status === 409 && r.body.error === 'session ended') || r.status === 403) {
+        const code = r.status === 409 ? 'session_ended' : String(r.body.error || 'refused').replace(/ /g, '_');
+        Promise.resolve().then(() => heard({ failed: code, status: r.status }));
+      }
       return Object.keys(r.body).length ? r.body : { ok: false, error: 'unavailable', spoken: NOT_DONE };   // an unreadable answer: not done
     } finally { cancel(holding); }
   }

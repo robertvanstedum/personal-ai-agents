@@ -295,6 +295,45 @@ for (const [status, error, words] of [[429, 'cap', D.CAP], [409, 'session_ended'
   assert.equal(r.posts('/transcript').length, 1, error);                                  // posting stopped, heartbeat too
   scenarios++;
 }
+// UI review #2: a session the server has ended or refuses is ended here too: the provider stops, End is sent, the reason stays.
+for (const [status, error, words, beat] of [
+  [409, 'session_ended', D.SERVER_ENDED.session_ended, false], [403, 'not_your_session', D.SERVER_ENDED.refused, false],
+  [403, 'csrf', D.SERVER_ENDED.csrf, false], [403, 'not_allowed', D.SERVER_ENDED.refused, false],
+  [409, 'mc_turns_off', D.SERVER_ENDED.mc_turns_off, false], [409, 'session_ended', D.SERVER_ENDED.session_ended, true],
+  [403, 'csrf', D.SERVER_ENDED.csrf, true]]) {
+  const r = rig({ routes: { '/transcript': (body) => ((beat ? !body.events.length : body.events.length) ? { status, body: { error } } : null) } });
+  await r.s.start('openai');
+  if (beat) r.advance(20000); else r.c.speak([{ speaker: 'user', text: 'one', completed: true }]);
+  await flush(10);
+  assert.deepEqual(r.c.ended, ['server_ended'], `${error} beat=${beat}`);
+  assert.deepEqual(r.said.at(-1), [words, { loud: true, error: true }]);
+  assert.deepEqual(r.live.at(-1), false);                                                  // the live bar goes
+  assert.equal(r.posts('/end').length, 1);
+  assert.deepEqual(r.ended.at(-1), [null, { error: false }]);                             // the reason is not replaced
+  assert.equal(r.timers.size, 0);
+  scenarios++;
+}
+// A consult the server answers "session ended" or refuses (403): the answer goes back, then the voice is ended here too.
+for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.session_ended], [403, 'not your session', D.SERVER_ENDED.refused],
+  [403, 'csrf', D.SERVER_ENDED.csrf]]) {
+  const r = rig({ routes: { '/consult': () => ({ status, body: { ok: false, error } }) } });
+  await r.s.start('openai');
+  r.c.options.onUserTurn('Anything new?');
+  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_e', name: 'consult', arguments: {} }), { ok: false, error });
+  await flush(10);
+  assert.deepEqual(r.c.ended, ['server_ended'], error);
+  assert.deepEqual(r.said.at(-1), [words, { loud: true, error: true }]);
+  scenarios++;
+}
+// The cap only stops posting: the voice goes on.
+{
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 429, body: { error: 'cap' } } : null) } });
+  await r.s.start('openai');
+  r.c.speak([{ speaker: 'user', text: 'one', completed: true }]);
+  await flush(10);
+  assert.deepEqual(r.c.ended, []); assert.equal(r.posts('/end').length, 0);
+  scenarios++;
+}
 {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length > 1 ? { status: 413, body: { error: 'too_large' } } : null) } });
   await r.s.start('openai');
