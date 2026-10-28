@@ -28,8 +28,8 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
   [`    this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
     this._responseWaiters = [];
     this._inputs = [];               // owner input items (provider ids), in the order they became known (Spec 165 §5.1)
-    this._inputOpen = false;         // owner speech has ended and its input item is not known yet
-    this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or {after: id}
+    this._utterance = null;          // inputs known when his current utterance began (speech_started), until a response binds it
+    this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or {index} (pending)
 `,
    ``],
   [`    on("response_started", (evt) => { for (const resolve of this._responseWaiters.splice(0)) resolve(evt.response_id || null); });
@@ -67,21 +67,24 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
 `,
    ``],
   [`    // Response attribution (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees it current.
-    on("speech_stopped", () => { this._inputOpen = true; });
+    on("speech_started", () => { if (this._utterance === null) this._utterance = this._inputs.length; });
     on("input_item", (evt) => this._sawInput(evt.item_id));
     on("input_transcript", (evt) => this._sawInput(evt.item_id));
-    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._inputOpen ? { after: this._lastInput() } : this._lastInput()); });
+    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._ownerNow()); });
 `,
    ``],
-  [`  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2): each response is bound when it starts to
-   *  the owner input current then (or, while his speech has ended without its item known yet, to the next one to appear),
-   *  and the call to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
+  [`  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2, FR M2): each response is bound when it
+   *  starts. If he has begun an utterance since the last binding (speech_started), it is bound to the newest input item that
+   *  appeared since then, whether its transcript came before or after his speech ended, or committed or not; with none yet,
+   *  to the first one to appear. Otherwise (a response the page asked for, a function result's follow-up) it is bound to the
+   *  newest input. The call is bound to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
    *  (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when the call is
    *  bound to no owner input. Never the latest input by default. German and Portuguese do not call it. */
   inputOf(call) {
-    const owner = call && call.response_id ? this._answers.get(call.response_id) : undefined;
+    let owner = call && call.response_id ? this._answers.get(call.response_id) : undefined;
     if (owner === undefined || owner === null) return null;
-    if (typeof owner === "object") return { state: "pending" };
+    if (typeof owner === "object") owner = this._inputs[owner.index];       // the first input of his utterance, once known
+    if (owner === undefined) return { state: "pending" };
     const order = [...this._items.entries()].sort((a, b) => a[1].firstSeq - b[1].firstSeq);
     const index = order.findIndex(([id]) => id === owner);
     if (index < 0) return { state: "pending" };
@@ -94,11 +97,14 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
   _lastInput() { return this._inputs.length ? this._inputs[this._inputs.length - 1] : null; }
 
   _sawInput(id) {
-    if (!id || this._inputs.includes(id)) return;
-    const before = this._lastInput();
-    this._inputs.push(id);
-    this._inputOpen = false;
-    for (const [rid, owner] of this._answers) if (owner && typeof owner === "object" && owner.after === before) this._answers.set(rid, id);
+    if (id && !this._inputs.includes(id)) this._inputs.push(id);
+  }
+
+  _ownerNow() {
+    const since = this._utterance;
+    this._utterance = null;
+    if (since === null) return this._lastInput();
+    return this._inputs.length > since ? this._lastInput() : { index: since };
   }
 
 `,

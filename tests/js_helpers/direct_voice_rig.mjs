@@ -60,27 +60,28 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
       this.turns = []; this.responses = 0; this.tracked = [];
       // Response attribution, as the real controller does it (Spec 165 §5.1): owner inputs in the order they became known,
       // whether his speech has ended with its input not yet known, and each response's owner input.
-      this.inputs = []; this.open = false; this.answers = new Map(); this.calls = 0;
+      this.inputs = []; this.utterance = null; this.answers = new Map(); this.calls = 0;
       controller = this;
     }
-    saw(i) {
-      if (this.inputs.includes(i)) return;
-      const before = this.inputs.at(-1) ?? null;
-      this.inputs.push(i); this.open = false;
-      for (const [rid, owner] of this.answers) if (owner && typeof owner === 'object' && owner.after === before) this.answers.set(rid, i);
+    saw(i) { if (!this.inputs.includes(i)) this.inputs.push(i); }
+    speechStopped() {                                      // he spoke (an utterance began and ended)
+      if (this.utterance === null) this.utterance = this.inputs.length;
+      this.options.onInputState('speech_started'); this.options.onInputState('speech_stopped');
     }
-    speechStopped() { this.open = true; this.options.onInputState('speech_started'); this.options.onInputState('speech_stopped'); }
-    respond() {                                            // a response starts now: bound to the owner input current now
+    respond() {                                            // a response starts now, bound as the controller binds it
       const id = `call_resp_${++this.calls}`;
-      this.answers.set(id, this.open ? { after: this.inputs.at(-1) ?? null } : (this.inputs.at(-1) ?? null));
+      const since = this.utterance, last = this.inputs.length ? this.inputs[this.inputs.length - 1] : null;
+      this.utterance = null;
+      this.answers.set(id, since === null ? last : this.inputs.length > since ? last : { index: since });
       return id;
     }
     callFrom(responseId, call) { return this.options.onFunctionCall({ ...call, response_id: responseId }); }
     fn(call) { return this.callFrom(this.respond(), call); }             // a response that starts now and calls a function
     inputOf(call) {
-      const owner = call && call.response_id ? this.answers.get(call.response_id) : undefined;
+      let owner = call && call.response_id ? this.answers.get(call.response_id) : undefined;
       if (owner === undefined || owner === null) return null;
-      if (typeof owner === 'object' || !this.turns[owner]) return { state: 'pending' };
+      if (typeof owner === 'object') owner = this.inputs[owner.index];
+      if (owner === undefined || !this.turns[owner]) return { state: 'pending' };
       return this.turns[owner].completed ? { state: 'bound', index: owner, text: this.turns[owner].text } : { state: 'pending' };
     }
     sessionId() { return this._sid; }

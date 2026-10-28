@@ -59,6 +59,7 @@ await check('CX A1-C2 xAI without a committed event: a response after his speech
   const a = new XAIWebSocketAdapter();
   const { calls, bound, seenAtTurn } = session(a);
   a._handleServerEvent(said('item_A', 'What is stuck on #12?'));
+  a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
   a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
   a._handleServerEvent({ type: 'response.created', response: { id: 'resp_2' } });
   a._handleServerEvent(callIn('resp_2', 'call_x'));
@@ -70,6 +71,43 @@ await check('CX A1-C2 xAI without a committed event: a response after his speech
   assert.deepEqual(seenAtTurn.at(-1), [{ state: 'bound', index: 1, text: 'Make a note that the glaze is ready' }],
     'not yet bound when the host heard the turn');                        // attribution runs before the host's callbacks
   assert.equal(seenAtTurn.length, 3);                                     // a duplicate completion: one item, no new input
+});
+// FR M2: xAI's cumulative interim transcript can arrive while he is still speaking, before speech_stopped; with or without
+// a committed event after it, the response is bound to that utterance's item, never to his next words (the reviewer's
+// probes/p1_xai_interim_binding.mjs, asserting the correct behaviour). xAI's real order is not observed live.
+const upd = (item, text, completed = false, n = 0) => ({ type: 'conversation.item.input_audio_transcription.updated', item_id: item, transcript: text, completed, event_id: `u_${item}_${n}` });
+for (const committed of [false, true]) {
+  await check(`FR M2 xAI: an interim transcript before speech_stopped${committed ? ', then committed,' : ''} binds the response to that utterance`, async () => {
+    const a = new XAIWebSocketAdapter();
+    const { calls, bound } = session(a);
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+    a._handleServerEvent(upd('item_A', 'Make a note that', false, 1));          // interim, while he speaks
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    if (committed) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'item_A' });
+    a._handleServerEvent({ type: 'response.created', response: { id: 'resp_A' } });
+    a._handleServerEvent(said('item_A', 'Make a note that the kiln is hot'));
+    a._handleServerEvent(callIn('resp_A', 'call_A'));
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(bound(calls[0]), { state: 'bound', index: 0, text: 'Make a note that the kiln is hot' });
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });          // his next words
+    a._handleServerEvent(upd('item_B', 'Delete the old', false, 1));
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    a._handleServerEvent(said('item_B', 'Delete the old glaze notes'));
+    assert.deepEqual(bound(calls[0]), { state: 'bound', index: 0, text: 'Make a note that the kiln is hot' }, 'rebound to his next words');
+  });
+}
+await check('CX A1-C2: a response the page asked for, with no new utterance, is bound to the newest input', async () => {
+  const a = new OpenAIWebRTCAdapter();
+  const { calls, bound } = session(a);
+  a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+  a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+  a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'item_A' });
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_A' } });
+  a._handleServerEvent(said('item_A', 'What time is it'));
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_page_line' } });   // the page's speak()
+  a._handleServerEvent(callIn('resp_page_line', 'call_P'));
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(bound(calls[0]), { state: 'bound', index: 0, text: 'What time is it' });
 });
 await check('CX A1-C2: a call with no response, or from a response that answered no owner input, is bound to nothing', async () => {
   const a = new OpenAIWebRTCAdapter();
