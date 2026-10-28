@@ -132,6 +132,20 @@ await check('B6 OpenAI: the summary ends at output_audio_buffer.stopped for its 
     assert.deepEqual(ended, ['drained'], last); assert.equal(closed, 1, last);
   }
 });
+await check('CX A1-C4 OpenAI: a summary response with no audio, or cancelled with none, drains at its end', async () => {
+  for (const status of ['completed', 'cancelled']) {
+    const a = new OpenAIWebRTCAdapter();
+    let closed = 0;
+    a.end = () => { closed += 1; };
+    const { ended, ask } = host(a);
+    const asked = ask();
+    a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
+    await asked;
+    a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', status, output: [] } });
+    await flush();
+    assert.deepEqual(ended, ['drained'], status); assert.equal(closed, 1, status);
+  }
+});
 await check('B6 German and Portuguese pass no callback: drains reach nobody and their session runs as before', async () => {
   const a = new XAIWebSocketAdapter();
   a._audioContext = context();

@@ -587,3 +587,25 @@ def test_the_core_names_the_owner_only_as_the_host_does(rig):
     for guild in ("saved conversation", "on the record", "Robert"):
         assert guild not in page, guild
     assert r.metadata["words"] == {}
+
+
+# ── Codex's A1 review (REVIEW_codex_A1.md), confirmed at 005c9e81 ───────────────────────────────────────────────────────
+
+def test_codex_a1_c1_a_backend_that_acts_then_raises_is_unknown_first_and_on_replay_with_one_effect(rig):
+    """CX A1-C1, Codex's review-evidence-codex-A1/test_codex_a1_repro.py turned to the correct behaviour (fixed by
+    15bd99e4): the effect is committed, then the backend raises; the answer and its replay say unknown, never "did not go
+    through", and the effect happened once."""
+    r = rig
+    sid = start(r)
+    effects = []
+
+    def apply_then_raise(*args, **kw):
+        effects.append("committed")
+        raise RuntimeError("response lost after commit")
+    r.host.typed_turn = apply_then_raise
+    response = consult(r, sid)
+    body = response.get_json()
+    assert effects == ["committed"] and response.status_code == 200
+    assert body["outcome"] == "unknown" and "did not go through" not in body["spoken"]
+    replay = consult(r, sid).get_json()
+    assert replay == body and len(effects) == 1

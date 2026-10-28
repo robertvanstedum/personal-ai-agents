@@ -308,4 +308,25 @@ await t.check('item 9: the summary ends on its own response\'s drain or at barge
   assert.deepEqual(b.c.ended, ['normal_end']);
 });
 
+// ── Codex's A1 review, CX A1-C4 (codex_a1_repro.mjs): confirmed fixed by 609a0fac ─────────────────────────────────────
+await t.check('CX A1-C4: an earlier response on the same topic never closes a summary that has not been heard', async () => {
+  const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'The agenda is complete.' } }) } });
+  await r.s.start('openai'); await r.s.sumUp(); await flush();
+  r.c.options.onAssistantTurn('The agenda is complete. Now we can discuss tomorrow.'); await flush();   // the older response
+  r.c.drained('resp_older'); await flush();
+  assert.deepEqual(r.c.ended, [], 'closed before the summary was heard');
+  r.c.drained('resp_1'); await flush();
+  assert.deepEqual(r.c.ended, ['normal_end']);
+});
+await t.check('CX A1-C4: a summary response the controller never reports is ended by its bound alone, not by any drain', async () => {
+  const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'The agenda is complete.' } }) } });
+  await r.s.start('openai');
+  r.c.speakTracked = (t) => { r.c.instructions.push(t); return Promise.resolve(null); };   // timed out: no response id
+  await r.s.sumUp(); await flush();
+  r.c.drained(null); r.c.drained('resp_1'); await flush();
+  assert.deepEqual(r.c.ended, []);
+  r.advance(D.summaryBound('The agenda is complete.')); await flush();
+  assert.deepEqual(r.c.ended, ['normal_end']);
+});
+
 t.done();
