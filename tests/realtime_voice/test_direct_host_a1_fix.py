@@ -1021,3 +1021,32 @@ def test_g1_a_hosts_in_writing_commands_are_refused_before_anything_runs_and_mc_
     assert consult(r, sid, call_id="call_ok", words="What is on my agenda?", turn="t1").get_json()["outcome"] == "done"
     assert DirectVoiceAdapter().in_writing("consult", "/new") is False
     assert _MasterCraftsman.in_writing is DirectVoiceAdapter.in_writing
+
+
+# G3 (Spec 165 v0.3 §5.3): End carries how the spoken summary's response ended; the core keeps it once, as a durable record,
+# and only drained is heard. An outcome it does not know is not kept; a later End changes nothing (first write wins).
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("outcome", ["drained", "barged_in", "cancelled", "cleared", "no_audio", "timeout"])
+def test_g3_end_keeps_how_the_spoken_summary_ended_and_only_drained_is_heard(rig, outcome):
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "We looked at #12. We're done.")])
+    assert summary_ask(r, sid).get_json()["state"] == "proposed"
+    ended = r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={"summary_playback": outcome})
+    assert ended.status_code == 200 and ended.get_json()["ok"] is True
+    kept = records_of(r, sid)["summary_playback"]
+    assert kept["kind"] == "summary_playback" and kept["outcome"] == outcome and kept["heard"] is (outcome == "drained")
+    r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={"summary_playback": "drained"})
+    assert records_of(r, sid)["summary_playback"]["outcome"] == outcome                # the first End's word stands
+
+
+@pytest.mark.parametrize("said", [None, "heard", 5, ["drained"]])
+def test_g3_an_end_with_no_or_an_unknown_playback_outcome_keeps_none(rig, said):
+    r = rig
+    sid = start(r)
+    body = {} if said is None else {"summary_playback": said}
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json=body).status_code == 200
+    assert "summary_playback" not in records_of(r, sid)

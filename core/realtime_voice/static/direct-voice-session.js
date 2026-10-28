@@ -380,6 +380,7 @@ export function directVoice(d) {
   let connected = false, finalized = false, failed = false, proposing = false, keepalive = false;
   let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, ending = null, endedWords = null;
   let lastTurns = [], summaryResponse = undefined;              // the spoken summary's response id, once the controller says
+  let playback = null;                                             // how the spoken summary ended (v0.3 §5.3, G3), for End
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
   let consultedItem = null, checking = false;                     // the owner item last consulted (by the model or Check)
   const binding = [];                                              // model calls waiting for their owner turn's transcript
@@ -653,7 +654,7 @@ export function directVoice(d) {
           : typeof c?.speakTracked === 'function' ? c.speakTracked(instruction) : (speak(instruction) ? Promise.resolve(null) : null);
         if (tracked) {
           become('speaking_summary');
-          speakTimer = later(() => summaryHeard('bound'), summaryBound(said));
+          speakTimer = later(() => summaryHeard('timeout'), summaryBound(said));
           tracked.then((id) => { if (id) summaryResponse = id; });   // no id reported: the bound alone ends it
           return;
         }
@@ -667,10 +668,13 @@ export function directVoice(d) {
     })();
     return summary;
   }
-  // The spoken summary has been heard to its end (its response drained), interrupted (barge-in), or its bound has passed.
-  function summaryHeard() {
+  // The spoken summary's response has ended (Spec 165 v0.3 §5.3, G3): heard to its end (drained), interrupted (barged_in,
+  // or the provider's cleared), cancelled, with no audio (no_audio), or its bound passed (timeout). Each ends the session;
+  // End carries how, and only drained is recorded as heard. An outcome the controller did not name is not claimed.
+  function summaryHeard(outcome) {
     if (lifecycle !== 'speaking_summary' || finalized) return;
     if (speakTimer) { cancel(speakTimer); speakTimer = null; }
+    playback = typeof outcome === 'string' && outcome ? outcome : null;
     c?.endSession('normal_end');
   }
 
@@ -709,7 +713,7 @@ export function directVoice(d) {
         const delivering = capture?.finish(result?.turns || []);     // closes at the boundary; posts what is owed unless stopped
         if (!abandoned) await within(delivering, FLUSH_WAIT_MS);
         if (sentFinal) return;                               // the page went away meanwhile: End already left with keepalive
-        const closing = capture ? capture.report() : {};     // End carries it; the server counts what it does not hold (§5.2)
+        const closing = { ...(capture ? capture.report() : {}), ...(playback ? { summary_playback: playback } : {}) };   // §5.2, G3
         incomplete = Boolean(closing.unacknowledged?.length);
         missing = incomplete ? closing.unacknowledged.length : 0;
         const r = await postJson(at(direct.end_url), closing, { timeoutMs: END_WAIT_MS });
@@ -794,7 +798,7 @@ export function directVoice(d) {
         if (state === 'reconnecting' && !finalized) c.endSession('disconnect');     // no silent reconnect: end visibly
       },
       onInputState: (phase) => {
-        if (phase === 'speech_started') { speaking = true; if (lifecycle === 'speaking_summary') summaryHeard(); }   // barge-in
+        if (phase === 'speech_started') { speaking = true; if (lifecycle === 'speaking_summary') summaryHeard('barged_in'); }
         if (phase === 'speech_stopped') {                                                // a response follows his words
           speaking = false; responding = true;
           if (quietTimer) { cancel(quietTimer); quietTimer = null; }
@@ -816,7 +820,7 @@ export function directVoice(d) {
       onUserTurn: () => rebind(),                 // a waiting model call may now have its words; nothing is dispatched here
       onAssistantTurn: () => { responding = false; pump(); },
       // Spec 165 §5.3: a response's audio has played out. Only the summary's own response ends the session.
-      onPlaybackDrained: (responseId) => { if (summaryResponse !== undefined && responseId === summaryResponse) summaryHeard(); },
+      onPlaybackDrained: (responseId, outcome) => { if (summaryResponse !== undefined && responseId === summaryResponse) summaryHeard(outcome); },
       onFunctionCall: (call) => modelCall(call),
       onFinalize: (result) => finalize(result),
     });

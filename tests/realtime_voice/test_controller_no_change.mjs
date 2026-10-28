@@ -10,7 +10,7 @@
 // V R2-M1: which owner input each response answers), for which the opening instruction, continueNaturally() and every
 // function result now pass through one recorder of the responses it asks for (the calls the adapter receives are the same,
 // with the same arguments, unless a host sets trackResponses; checked below); the adapters' response tracking that emits
-// those events (Spec 165 §5.1, §5.3), the response id on each function call, the OpenAI adapter's optional response tag
+// those events (Spec 165 §5.1, §5.3; with how each response's playback ended, v0.3 G3), the response id on each function call, the OpenAI adapter's optional response tag
 // (sent only when one is passed; German's bytes are unchanged, checked below), and new adapter cache keys. The strip
 // pairs below are generated from the diff against 93bf00c6 and checked to give its bytes exactly. Pinned two ways: each source with exactly those additions taken out hashes to
 // its 93bf00c6 file (the Chunk B baseline; what production German, Portuguese and CoS receive at merge from origin/main is
@@ -23,10 +23,11 @@ import assert from 'node:assert/strict';
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
 const CONTROLLER = [
-  [`// Both adapters changed for the playback events and response attribution, and OpenAI's again for the response tag on every
-// request: new keys so browsers fetch them (Spec 165 §4.3, §5.3; review FR N3, V R2-M1).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-bind1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-attrib1";
+  [`// Both adapters changed for the playback events and response attribution, OpenAI's again for the response tag on every
+// request, and both again for how a response's playback ended: new keys so browsers fetch them (Spec 165 §4.3, §5.3;
+// review FR N3, V R2-M1; v0.3 G3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-outcome1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-outcome1";
 `,
    `import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261015-managed-end1";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";
@@ -73,7 +74,8 @@ const MARK_TTL_MS = 3000;
 `,
    `        this._adapter.sendContinuationInstruction(this._openingInstruction);
 `],
-  [`    on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null); });
+  [`    // How it ended (v0.3 §5.3, G3): drained, barged_in, cancelled, cleared or no_audio, or null when the adapter did not say.
+    on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null, evt.outcome || null); });
 `,
    ``],
   [`        this._sendResult(call, {
@@ -291,21 +293,25 @@ const source = fs.readFileSync(PATH, 'utf8');
 // The adapters: exactly the additions below, nothing else (each taken out, the file is its 93bf00c6 bytes).
 const ADAPTERS = {
   'adapters/xai-websocket-adapter.js': ['afe83aa8aae73e4b47d6eaa920f8893932cf4bf04ee225e0918db06d5db3afbf', [
-  [`    this._responses = new Map();     // response id -> {sources, done}: which response each chunk of audio belongs to
+  [`    this._responses = new Map();     // response id -> {sources, done, audio, cancelled}: which response each chunk of audio belongs to
 `,
    ``],
-  [`  // Spec 165 §5.3: playback_drained {response_id} once a response is done and every chunk of its audio has played out (or
-  // was stopped at barge-in); a response with no audio drains at its end. Nothing listens unless a host passes
-  // onPlaybackDrained to the controller; German and Portuguese do not.
+  [`  // Spec 165 §5.3: playback_drained {response_id, outcome} once a response is done and every chunk of its audio has played
+  // out (or was stopped at barge-in); a response with no audio drains at its end. The outcome names how it ended (v0.3, G3):
+  // drained (its audio played to the end), barged_in (stopped at his speech), cancelled (the provider cancelled it), no_audio.
+  // Nothing listens unless a host passes onPlaybackDrained to the controller; German and Portuguese do not.
   _response(id) {
     const key = id || this._responseId || null;
-    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false });
+    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false, audio: false, cancelled: false });
     return [key, this._responses.get(key)];
   }
 
-  _drainedIf(key) {
+  _drainedIf(key, outcome = null) {
     const r = this._responses.get(key);
-    if (r && r.done && r.sources <= 0) { this._responses.delete(key); this._emit("playback_drained", { response_id: key }); }
+    if (r && r.done && r.sources <= 0) {
+      this._responses.delete(key);
+      this._emit("playback_drained", { response_id: key, outcome: outcome || (r.cancelled ? "cancelled" : r.audio ? "drained" : "no_audio") });
+    }
   }
 
 `,
@@ -314,42 +320,48 @@ const ADAPTERS = {
         this._responseId = event.response?.id || null;
         this._emit("response_started", { response_id: this._responseId });
         break;
-`,
-   ``],
-  [`this._playAudioChunk(event.delta || event.audio, event.response_id);`,
-   `this._playAudioChunk(event.delta || event.audio);`],
-  [`        {
-          const [key, r] = this._response(event.response?.id);
-          r.done = true;
-          this._drainedIf(key);
-        }
-`,
-   ``],
-  [`  _playAudioChunk(base64Audio, responseId) {`,
-   `  _playAudioChunk(base64Audio) {`],
-  [`    const [key, owner] = this._response(responseId);
-    owner.sources += 1;
-    source.addEventListener("ended", () => {
-      this._playbackSources.delete(source);
-      if (owner.sources > 0) { owner.sources -= 1; this._drainedIf(key); }
-    }, { once: true });`,
-   `    source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });`],
-  [`    const cut = [...this._responses].filter(([, r]) => r.sources > 0).map(([key]) => key);
-`,
-   ``],
-  [`    for (const key of cut) {                                // stopped at barge-in: what was queued is not going to play
-      const r = this._responses.get(key);
-      if (r) { r.sources = 0; r.done = true; this._drainedIf(key); }
-    }
-`,
-   ``],
-  [`      // Spec 165 §5.1: the owner input item a response answers (if xAI sends this OpenAI-shaped event; not verified).
+      // Spec 165 §5.1: the owner input item a response answers (if xAI sends this OpenAI-shaped event; not verified).
       case "input_audio_buffer.committed":
         this._emit("input_item", { item_id: event.item_id || null });
         break;
 `,
    ``],
+  [`        this._playAudioChunk(event.delta || event.audio, event.response_id);
+`,
+   `        this._playAudioChunk(event.delta || event.audio);
+`],
   [`              response_id: event.response?.id || this._responseId || null,
+`,
+   ``],
+  [`        }
+        {
+          const [key, r] = this._response(event.response?.id);
+          r.done = true;
+          r.cancelled = event.response?.status === "cancelled";
+          this._drainedIf(key);
+`,
+   ``],
+  [`  _playAudioChunk(base64Audio, responseId) {
+`,
+   `  _playAudioChunk(base64Audio) {
+`],
+  [`    const [key, owner] = this._response(responseId);
+    owner.sources += 1;
+    owner.audio = true;
+    source.addEventListener("ended", () => {
+      this._playbackSources.delete(source);
+      if (owner.sources > 0) { owner.sources -= 1; this._drainedIf(key); }
+    }, { once: true });
+`,
+   `    source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });
+`],
+  [`    const cut = [...this._responses].filter(([, r]) => r.sources > 0).map(([key]) => key);
+`,
+   ``],
+  [`    for (const key of cut) {                                // stopped at barge-in: what was queued is not going to play
+      const r = this._responses.get(key);
+      if (r) { r.sources = 0; r.done = true; this._drainedIf(key, "barged_in"); }
+    }
 `,
    ``]],
   ],
@@ -361,28 +373,29 @@ const ADAPTERS = {
 `,
    `  sendContinuationInstruction(text) {
 `],
-  [`      item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
-    }));
-    this._dc?.send(JSON.stringify(_responseCreate(tag)));
+  [`    this._dc?.send(JSON.stringify(_responseCreate(tag)));
+  }
+
+  sendFunctionResult(callId, output, tag) {
 `,
-   `      item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
-    }));
-    this._dc?.send(JSON.stringify({ type: "response.create" }));
+   `    this._dc?.send(JSON.stringify({ type: "response.create" }));
+  }
+
+  sendFunctionResult(callId, output) {
 `],
-  [`  sendFunctionResult(callId, output, tag) {
+  [`    this._dc?.send(JSON.stringify(_responseCreate(tag)));
+  }
+
+  _handleServerEvent(event) {
 `,
-   `  sendFunctionResult(callId, output) {
+   `    this._dc?.send(JSON.stringify({ type: "response.create" }));
+  }
+
+  _handleServerEvent(event) {
 `],
-  [`      },
-    }));
-    this._dc?.send(JSON.stringify(_responseCreate(tag)));
-`,
-   `      },
-    }));
-    this._dc?.send(JSON.stringify({ type: "response.create" }));
-`],
-  [`      // Spec 165 §5.3: response_started on response.created; playback_drained {response_id} when the provider says that
-      // response's audio buffer stopped (played out) or was cleared (barge-in), or at response.done when it had no audio.
+  [`      // Spec 165 §5.3: response_started on response.created; playback_drained {response_id, outcome} when the provider says
+      // that response's audio buffer stopped (outcome drained: played out) or was cleared (cleared: barge-in), or at
+      // response.done when it had no audio (no_audio, or cancelled when the provider cancelled it) (v0.3, G3).
       // That output_audio_buffer.stopped means audible playback has drained in the browser is not verified against the
       // provider. Nothing listens unless a host passes onPlaybackDrained; German and Portuguese do not.
       case "response.created":
@@ -399,7 +412,7 @@ const ADAPTERS = {
       case "output_audio_buffer.cleared":
         for (const id of event.response_id ? [event.response_id] : [...this._audible]) {
           this._audible.delete(id);
-          this._emit("playback_drained", { response_id: id });
+          this._emit("playback_drained", { response_id: id, outcome: event.type === "output_audio_buffer.cleared" ? "cleared" : "drained" });
         }
         break;
 `,
@@ -409,7 +422,7 @@ const ADAPTERS = {
    ``],
   [`        }
         if (!this._audible.has(event.response?.id || null) && !_hasAudio(event.response)) {
-          this._emit("playback_drained", { response_id: event.response?.id || null });
+          this._emit("playback_drained", { response_id: event.response?.id || null, outcome: event.response?.status === "cancelled" ? "cancelled" : "no_audio" });
 `,
    ``],
   [`

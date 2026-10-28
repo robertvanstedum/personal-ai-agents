@@ -30,9 +30,10 @@ import json
 import re
 import uuid
 
-from core.realtime_voice.direct_host import (LIVE_WINDOW_S, RECOVERY, SUMMARY_PROMPT, SUMMARY_UNAVAILABLE,  # noqa: F401
-                                             Put, Receipts, affirmative, done_intent, full_differs, now, parse_stamp,
-                                             same_record, session_id, stamp, state as _state)
+from core.realtime_voice.direct_host import (LIVE_WINDOW_S, PLAYBACK, PLAYBACK_RECORD, RECOVERY,  # noqa: F401
+                                             SUMMARY_PROMPT, SUMMARY_UNAVAILABLE, Put, Receipts, affirmative, done_intent,
+                                             full_differs, now, parse_stamp, same_record, session_id, stamp,
+                                             state as _state)
 
 PAGE_SESSION = "voice-session"
 PAGE_SUMMARY = "voice-summary"
@@ -280,6 +281,18 @@ def _capture(status, end):
     return {}
 
 
+def _playback(floor, sid):
+    """How the session's spoken summary ended (Spec 165 v0.3 §5.3, G3), from its durable record: {summary_playback,
+    summary_heard} (heard only when drained), or {} when none was kept or it cannot be read."""
+    try:
+        rec = get_record(floor, sid, PLAYBACK_RECORD)
+    except Exception:
+        return {}
+    if not isinstance(rec, dict) or rec.get("outcome") not in PLAYBACK:
+        return {}
+    return {"summary_playback": rec["outcome"], "summary_heard": rec["outcome"] == "drained" and rec.get("heard") is True}
+
+
 def process_view(config):
     """view's keywords from a mount's config: what this process (mc_voice_direct.install) knows of its sessions."""
     return {"live": config.get("mc_direct_voice_live") or (lambda _sid: False),
@@ -380,10 +393,13 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
     sessions = []
     for sid in direct:
         status, start, end = hider(sid)
+        summary = summary_state(floor, sid) if status in ("ended", "dropped") else None
         sessions.append({"session_id": sid, "state": status,
                          "started_at": (start or {}).get("started_at"), "ended_at": (end or {}).get("ended_at"),
                          "line": RECOVERY if status in ("recovering", "unknown") else None,
-                         "summary": summary_state(floor, sid) if status in ("ended", "dropped") else None,
+                         "summary": summary,
+                         # How its spoken summary ended, and whether it was heard (only when drained; v0.3 §5.3, G3).
+                         **(_playback(floor, sid) if summary in ("proposed", "confirmed", "edited", "declined") else {}),
                          # Some of what was said is known not to be kept (review B4): every later view says so, with
                          # the count when there is one (Spec 165 §5.2). A session that ended without End (dropped) may
                          # not have all of it: unknown, said too (review R2 N6).

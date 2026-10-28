@@ -7,6 +7,10 @@
 // offers them, else (an older controller) it ends at the summary's generation end, as A1's page did before its playback wait.
 // So against an older tree (VOICE_REVIEW_ROOT=<checkout>) the cases fail on cut-off audio, not on a missing method (review
 // R2 N10).
+//
+// G3 (Spec 165 v0.3 §5.3): the callback names how the response ended: drained (heard to the end), barged_in, cancelled or
+// cleared, no_audio, or (the page's own bound) timeout. Each ends the summary; only drained is heard. The host here records
+// the outcome it is given, and each case says which.
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 
@@ -36,12 +40,12 @@ const CHUNK = Buffer.alloc(9600).toString('base64');                     // 0.2 
 
 // The host: the summary instruction, tracked; the end when its own response drains (or, on an older controller, at its turn).
 function host(adapter) {
-  const ended = [];
+  const ended = [], outcomes = [];
   let mine;
   const c = new RealtimeVoiceController({
     trackResponses: true,                                             // as the direct session module does
     onFunctionCall: async () => ({ ok: true, outcome: 'done', spoken: 'Done.' }),
-    onPlaybackDrained: (id) => { if (mine !== undefined && id === mine) { ended.push('drained'); c.endSession('normal_end'); } },
+    onPlaybackDrained: (id, outcome) => { if (mine !== undefined && id === mine) { ended.push('drained'); outcomes.push(outcome); c.endSession('normal_end'); } },
     onAssistantTurn: () => { if (typeof c.speakTracked !== 'function' && !ended.length) { ended.push('turn'); c.endSession('normal_end'); } },
   });
   c._adapter = adapter; c._state = 'active'; c._wireAdapterEvents();
@@ -54,7 +58,7 @@ function host(adapter) {
   };
   // The provider's response.created for the instruction: OpenAI echoes the response metadata it was sent (review FR N3).
   const created = (id, tag = tags.at(-1)) => ({ type: 'response.created', response: { id, ...(tag ? { metadata: { minimoi_tag: tag } } : {}) } });
-  return { c, ended, ask, created, tags, mine: () => mine };
+  return { c, ended, outcomes, ask, created, tags, mine: () => mine };
 }
 function xai() {
   const a = new XAIWebSocketAdapter();
@@ -64,7 +68,7 @@ function xai() {
 }
 
 await check('B6 xAI: the summary\'s response done with audio queued is not cut: the session ends after the last chunk plays', async () => {
-  const { a, ctx, c, ended, ask } = xai();
+  const { a, ctx, c, ended, outcomes, ask } = xai();
   const asked = ask();
   a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
   await asked;
@@ -79,9 +83,10 @@ await check('B6 xAI: the summary\'s response done with audio queued is not cut: 
   ctx.sources.at(-1).end();
   await flush();
   assert.deepEqual(ended, ['drained']); assert.equal(ctx.closed, 1);
+  assert.deepEqual(outcomes, ['drained']);                                // G3: heard to the end
 });
 await check('B6 xAI: another response draining first never closes the summary', async () => {
-  const { a, ctx, ended, ask } = xai();
+  const { a, ctx, ended, outcomes, ask } = xai();
   a._handleServerEvent({ type: 'response.created', response: { id: 'resp_other' } });   // a reply, its audio still playing
   a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_other', delta: CHUNK });
   a._handleServerEvent({ type: 'response.done', response: { id: 'resp_other', output: [] } });
@@ -95,33 +100,46 @@ await check('B6 xAI: another response draining first never closes the summary', 
   a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [] } });
   ctx.sources[1].end();
   await flush();
-  assert.deepEqual(ended, ['drained']);
+  assert.deepEqual(ended, ['drained']); assert.deepEqual(outcomes, ['drained']);
 });
-await check('B6 xAI: barge-in stops what was queued, and that counts as drained', async () => {
-  const { a, ended, ask } = xai();
+await check('B6 xAI: barge-in stops what was queued and ends the summary, named barged_in, never heard (G3)', async () => {
+  const { a, ended, outcomes, ask } = xai();
   const asked = ask();
   a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
   await asked;
   a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_sum', delta: CHUNK });
   a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
   await flush();
-  assert.deepEqual(ended, ['drained']);
+  assert.deepEqual(ended, ['drained']); assert.deepEqual(outcomes, ['barged_in']);
 });
-await check('B6 xAI: a response with no audio drains at its end', async () => {
-  const { a, ended, ask } = xai();
+await check('B6 xAI: a response with no audio ends at its end, named no_audio (G3)', async () => {
+  const { a, ended, outcomes, ask } = xai();
   const asked = ask();
   a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
   await asked;
   a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [] } });
   await flush();
-  assert.deepEqual(ended, ['drained']);
+  assert.deepEqual(ended, ['drained']); assert.deepEqual(outcomes, ['no_audio']);
+});
+await check('G3 xAI: a summary response cancelled after some audio ends when that audio stops, named cancelled', async () => {
+  const { a, ctx, ended, outcomes, ask } = xai();
+  const asked = ask();
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
+  await asked;
+  a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_sum', delta: CHUNK });
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', status: 'cancelled', output: [] } });
+  await flush();
+  assert.deepEqual(ended, []);
+  ctx.sources[0].end();
+  await flush();
+  assert.deepEqual(ended, ['drained']); assert.deepEqual(outcomes, ['cancelled']);
 });
 await check('B6 OpenAI: the summary ends at output_audio_buffer.stopped for its response, not at response.done', async () => {
   for (const last of ['output_audio_buffer.stopped', 'output_audio_buffer.cleared']) {
     const a = new OpenAIWebRTCAdapter();
     let closed = 0;
     a.end = () => { closed += 1; };
-    const { ended, ask, created } = host(a);
+    const { ended, outcomes, ask, created } = host(a);
     const asked = ask();
     a._handleServerEvent(created('resp_sum'));
     await asked;
@@ -136,20 +154,22 @@ await check('B6 OpenAI: the summary ends at output_audio_buffer.stopped for its 
     a._handleServerEvent({ type: last, response_id: 'resp_sum' });
     await flush();
     assert.deepEqual(ended, ['drained'], last); assert.equal(closed, 1, last);
+    assert.deepEqual(outcomes, [last === 'output_audio_buffer.stopped' ? 'drained' : 'cleared'], last);   // G3
   }
 });
-await check('CX A1-C4 OpenAI: a summary response with no audio, or cancelled with none, drains at its end', async () => {
+await check('CX A1-C4 OpenAI: a summary response with no audio, or cancelled with none, ends at its end, named so (G3)', async () => {
   for (const status of ['completed', 'cancelled']) {
     const a = new OpenAIWebRTCAdapter();
     let closed = 0;
     a.end = () => { closed += 1; };
-    const { ended, ask, created } = host(a);
+    const { ended, outcomes, ask, created } = host(a);
     const asked = ask();
     a._handleServerEvent(created('resp_sum'));
     await asked;
     a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', status, output: [] } });
     await flush();
     assert.deepEqual(ended, ['drained'], status); assert.equal(closed, 1, status);
+    assert.deepEqual(outcomes, [status === 'cancelled' ? 'cancelled' : 'no_audio'], status);
   }
 });
 await check('B6 German and Portuguese pass no callback: drains reach nobody and their session runs as before', async () => {
@@ -212,4 +232,4 @@ if (failures.length) {
   console.log(`${failures.length} of ${cases} playback-drain regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} playback-drain regressions passed (review B6, Spec 165 §5.3); synthetic audio context, no provider or microphone.`);
+console.log(`${cases} playback-drain regressions passed (review B6, G3, Spec 165 §5.3); synthetic audio context, no provider or microphone.`);

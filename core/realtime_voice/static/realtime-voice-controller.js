@@ -21,10 +21,11 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-// Both adapters changed for the playback events and response attribution, and OpenAI's again for the response tag on every
-// request: new keys so browsers fetch them (Spec 165 §4.3, §5.3; review FR N3, V R2-M1).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-bind1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-attrib1";
+// Both adapters changed for the playback events and response attribution, OpenAI's again for the response tag on every
+// request, and both again for how a response's playback ended: new keys so browsers fetch them (Spec 165 §4.3, §5.3;
+// review FR N3, V R2-M1; v0.3 G3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-outcome1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-outcome1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 // Response attribution (Spec 165 §5.1; review V R2-M1): a response this controller asked for that has not started in this
@@ -247,7 +248,8 @@ export class RealtimeVoiceController {
       }
     });
     on("playback_started", () => this._onPlayback());
-    on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null); });
+    // How it ended (v0.3 §5.3, G3): drained, barged_in, cancelled, cleared or no_audio, or null when the adapter did not say.
+    on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null, evt.outcome || null); });
     on("assistant_stopped", () => {
       for (const text of this._pendingAssistantTurns.splice(0)) {
         this._onAssistantTurn(text);

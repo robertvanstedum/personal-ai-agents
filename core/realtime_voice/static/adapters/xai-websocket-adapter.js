@@ -34,7 +34,7 @@ export class XAIWebSocketAdapter {
     this._micReady = false;
     this._connectedEmitted = false;
     this._playbackSources = new Set();
-    this._responses = new Map();     // response id -> {sources, done}: which response each chunk of audio belongs to
+    this._responses = new Map();     // response id -> {sources, done, audio, cancelled}: which response each chunk of audio belongs to
   }
 
   on(eventName, handler) {
@@ -171,18 +171,22 @@ export class XAIWebSocketAdapter {
     this._audioContext = null;
   }
 
-  // Spec 165 §5.3: playback_drained {response_id} once a response is done and every chunk of its audio has played out (or
-  // was stopped at barge-in); a response with no audio drains at its end. Nothing listens unless a host passes
-  // onPlaybackDrained to the controller; German and Portuguese do not.
+  // Spec 165 §5.3: playback_drained {response_id, outcome} once a response is done and every chunk of its audio has played
+  // out (or was stopped at barge-in); a response with no audio drains at its end. The outcome names how it ended (v0.3, G3):
+  // drained (its audio played to the end), barged_in (stopped at his speech), cancelled (the provider cancelled it), no_audio.
+  // Nothing listens unless a host passes onPlaybackDrained to the controller; German and Portuguese do not.
   _response(id) {
     const key = id || this._responseId || null;
-    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false });
+    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false, audio: false, cancelled: false });
     return [key, this._responses.get(key)];
   }
 
-  _drainedIf(key) {
+  _drainedIf(key, outcome = null) {
     const r = this._responses.get(key);
-    if (r && r.done && r.sources <= 0) { this._responses.delete(key); this._emit("playback_drained", { response_id: key }); }
+    if (r && r.done && r.sources <= 0) {
+      this._responses.delete(key);
+      this._emit("playback_drained", { response_id: key, outcome: outcome || (r.cancelled ? "cancelled" : r.audio ? "drained" : "no_audio") });
+    }
   }
 
   sendContinuationInstruction(text) {
@@ -250,6 +254,7 @@ export class XAIWebSocketAdapter {
         {
           const [key, r] = this._response(event.response?.id);
           r.done = true;
+          r.cancelled = event.response?.status === "cancelled";
           this._drainedIf(key);
         }
         this._emit("assistant_stopped", { usage: event.response?.usage || event.usage });
@@ -310,6 +315,7 @@ export class XAIWebSocketAdapter {
     if (this._playbackSources.size === 1) this._emit("playback_started", {});
     const [key, owner] = this._response(responseId);
     owner.sources += 1;
+    owner.audio = true;
     source.addEventListener("ended", () => {
       this._playbackSources.delete(source);
       if (owner.sources > 0) { owner.sources -= 1; this._drainedIf(key); }
@@ -328,7 +334,7 @@ export class XAIWebSocketAdapter {
     this._playbackQueueTime = this._audioContext?.currentTime || 0;
     for (const key of cut) {                                // stopped at barge-in: what was queued is not going to play
       const r = this._responses.get(key);
-      if (r) { r.sources = 0; r.done = true; this._drainedIf(key); }
+      if (r) { r.sources = 0; r.done = true; this._drainedIf(key, "barged_in"); }
     }
   }
 }

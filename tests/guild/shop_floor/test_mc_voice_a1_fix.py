@@ -320,3 +320,23 @@ def test_fr_s4_the_ledgers_already_dispatched_and_already_done_are_never_not_don
     assert out["t1"]["outcome"] == "unknown" and out["t2"]["outcome"] == "unknown"
     assert out["t3"]["outcome"] == "done" and out["t3"]["spoken"] == "Item 12 is in build." and out["t3"]["receipt"]
     assert not r.turns
+
+
+# ── The last pass: Spec 165 v0.3 G3 on MC's view ───────────────────────────────────────────────────────────────
+
+def test_g3_mcs_view_says_how_the_spoken_summary_ended_and_heard_only_when_drained(ready):
+    from test_mc_voice_direct import summarize
+    r = ready
+    heard, cut = start(r)["voice_session_id"], None
+    post(r, heard, [turn(r, "user", "t0", "What is stuck on #12? We're done.")])
+    assert summarize(r, heard).get_json()["state"] == "proposed"
+    r.client.post(BASE + f"/session/{heard}/end", headers=r.headers, json={"summary_playback": "drained"})
+    cut = start(r)["voice_session_id"]
+    post(r, cut, [turn(r, "user", "t0", "What runs tonight? We're done.")])
+    assert summarize(r, cut).get_json()["state"] == "proposed"
+    r.client.post(BASE + f"/session/{cut}/end", headers=r.headers, json={"summary_playback": "barged_in"})
+    _rows, sessions = shown(r)
+    by_id = {s["session_id"]: s for s in sessions}
+    assert by_id[heard]["summary_playback"] == "drained" and by_id[heard]["summary_heard"] is True
+    assert by_id[cut]["summary_playback"] == "barged_in" and by_id[cut]["summary_heard"] is False
+

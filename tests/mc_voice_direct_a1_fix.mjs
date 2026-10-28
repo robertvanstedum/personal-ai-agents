@@ -632,4 +632,31 @@ await t.check('G2: a holding line due while he speaks waits for the pause, and o
   assert.deepEqual(r.c.instructions, ['Still checking.'], 'a holding line was said after its consult had answered');
 });
 
+// G3 (Spec 165 v0.3 §5.3): how the spoken summary's response ended (the controller's drained, barged_in, cancelled, cleared,
+// no_audio, or the page's own bound: timeout) ends the session every time, and End carries it so the record says it; only
+// drained is heard.
+const summarized = () => rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We checked twelve.' } }) } });
+for (const [label, finish, expected] of [
+  ['its audio heard to the end', (r) => r.c.drained(r.c.tracked[0], 'drained'), 'drained'],
+  ['the provider cleared it', (r) => r.c.drained(r.c.tracked[0], 'cleared'), 'cleared'],
+  ['it had no audio', (r) => r.c.drained(r.c.tracked[0], 'no_audio'), 'no_audio'],
+  ['he spoke over it', (r) => r.c.options.onInputState('speech_started'), 'barged_in'],
+  ['its bound passed', (r) => r.advance(D.summaryBound('We checked twelve.')), 'timeout']]) {
+  await t.check(`G3: the summary ends when ${label}, and End says so (${expected})`, async () => {
+    const r = summarized();
+    await r.s.start('openai'); await r.s.sumUp(); await flush();
+    assert.equal(r.s.state(), 'speaking_summary');
+    finish(r); await flush(20);
+    assert.deepEqual(r.c.ended, ['normal_end']);
+    assert.equal(r.posts('/end')[0].body.summary_playback, expected);
+  });
+}
+await t.check('G3: a drain that names no outcome ends the summary, and End claims nothing about it', async () => {
+  const r = summarized();
+  await r.s.start('openai'); await r.s.sumUp(); await flush();
+  r.c.drained(r.c.tracked[0], null); await flush(20);
+  assert.deepEqual(r.c.ended, ['normal_end']);
+  assert.equal('summary_playback' in r.posts('/end')[0].body, false);
+});
+
 t.done();

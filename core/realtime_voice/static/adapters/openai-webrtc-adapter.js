@@ -216,8 +216,9 @@ export class OpenAIWebRTCAdapter {
       case "response.cancelled":
         this._emit("interrupted", {});
         break;
-      // Spec 165 §5.3: response_started on response.created; playback_drained {response_id} when the provider says that
-      // response's audio buffer stopped (played out) or was cleared (barge-in), or at response.done when it had no audio.
+      // Spec 165 §5.3: response_started on response.created; playback_drained {response_id, outcome} when the provider says
+      // that response's audio buffer stopped (outcome drained: played out) or was cleared (cleared: barge-in), or at
+      // response.done when it had no audio (no_audio, or cancelled when the provider cancelled it) (v0.3, G3).
       // That output_audio_buffer.stopped means audible playback has drained in the browser is not verified against the
       // provider. Nothing listens unless a host passes onPlaybackDrained; German and Portuguese do not.
       case "response.created":
@@ -234,7 +235,7 @@ export class OpenAIWebRTCAdapter {
       case "output_audio_buffer.cleared":
         for (const id of event.response_id ? [event.response_id] : [...this._audible]) {
           this._audible.delete(id);
-          this._emit("playback_drained", { response_id: id });
+          this._emit("playback_drained", { response_id: id, outcome: event.type === "output_audio_buffer.cleared" ? "cleared" : "drained" });
         }
         break;
       case "response.done":
@@ -249,7 +250,7 @@ export class OpenAIWebRTCAdapter {
           }
         }
         if (!this._audible.has(event.response?.id || null) && !_hasAudio(event.response)) {
-          this._emit("playback_drained", { response_id: event.response?.id || null });
+          this._emit("playback_drained", { response_id: event.response?.id || null, outcome: event.response?.status === "cancelled" ? "cancelled" : "no_audio" });
         }
         this._emit("assistant_stopped", { usage: event.response?.usage });
         if (event.response?.usage) this._emit("usage", event.response.usage);

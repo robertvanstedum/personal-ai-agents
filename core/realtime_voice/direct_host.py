@@ -1299,6 +1299,29 @@ def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, ite
     return result
 
 
+# How the spoken summary's response ended (Spec 165 v0.3 §5.3, G3): drained (heard to its end), barged_in, cancelled,
+# cleared, no_audio, or the page's own bound (timeout). Each ended the session; only drained is heard. The page's End carries
+# it, and it is kept once, as a durable record (first write wins). An outcome not named here is not kept.
+PLAYBACK = ("drained", "barged_in", "cancelled", "cleared", "no_audio", "timeout")
+PLAYBACK_RECORD = "summary_playback"
+
+
+def keep_playback(adapter, sessions, sid, outcome):
+    """Keep how the spoken summary ended for session ``sid``: a Put, or None when there is nothing to keep or no store to
+    keep it in. Never raises: End is never stopped by it."""
+    if not isinstance(outcome, str) or outcome not in PLAYBACK:
+        return None
+    try:
+        cid = sessions.conversation_of(sid)
+        handle, refused = adapter.conversation(cid) if cid else (None, True)
+        if refused is not None:
+            return None
+        return put(adapter, handle, sid, record(PLAYBACK_RECORD, PLAYBACK_RECORD, outcome=outcome, heard=outcome == "drained"))
+    except Exception:
+        log.exception("%s direct voice: summary playback not kept", adapter.person["domain"])
+        return None
+
+
 def after_summary(adapter, handle, sid):
     """Whether this session's summary was already made (proposed, decided or unavailable): a receipt landing now is
     late (Spec 165 §5.2). It is kept and revealed after the summary, marked so; the summary is never made again."""
@@ -1607,6 +1630,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 if len(ids) < len(carried):
                     sessions.uncounted(session_id)
         capture = sessions.close_session(session_id, report=report)
+        if isinstance(body, dict) and "summary_playback" in body:          # how the spoken summary ended (v0.3 §5.3, G3)
+            keep_playback(adapter, sessions, session_id, body.get("summary_playback"))
         return jsonify({"ok": True, "ended": True, "capture": capture["capture"],
                         **({"missing": capture["missing"]} if "missing" in capture else {})})
 

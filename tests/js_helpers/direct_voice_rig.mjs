@@ -129,7 +129,7 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
       this.saw(this.turns.length - 1);
       this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); this.options.onUserTurn(text);
     }
-    drained(id) { this.options.onPlaybackDrained?.(id); }
+    drained(id, outcome = 'drained') { this.options.onPlaybackDrained?.(id, outcome); }   // how it ended (v0.3 G3)
   }
   const ui = { say: (text, o = {}) => said.push([text, o]), phase() {}, live() {}, elapsed() {}, notice() {}, propose() {},
     ended: (words, o) => ended.push([words, o]), checking() {}, lifecycle: (s) => lifecycle.push(s) };
