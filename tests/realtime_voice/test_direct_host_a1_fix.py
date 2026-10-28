@@ -826,3 +826,53 @@ def test_fr_n2_a_gateway_that_trickles_its_answer_is_cut_at_the_total_deadline(m
     finally:                                               # the abandoned read finishes on its own, off this test's clock
         threading.Thread(target=lambda: (server.shutdown(), server.server_close()), daemon=True).start()
     assert answer == (None, "timeout") and took < 2.5              # the trickle alone runs about 3.3 s
+
+
+# ── FR N1: "still being written" only while an attempt may really run ───────────────────────────────────────────────────
+
+def summary_ask(r, sid):
+    return r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"})
+
+
+def test_fr_n1_a_summary_attempt_the_store_refuses_is_unavailable_not_still_being_written(rig):
+    """The reviewer's probe, asserting the correct behaviour: nothing ran, so nothing is being written."""
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Words.")])
+    r.store.put_ok = False
+    answer = summary_ask(r, sid)
+    assert answer.status_code == 200 and answer.get_json()["state"] == "unavailable" and not r.gateway.requests
+    assert answer.get_json()["error"] == "not_recorded" and r.store.summary_state("owner", sid) == "unavailable"
+    r.store.put_ok = True
+    assert summary_ask(r, sid).get_json()["state"] == "proposed" and len(r.gateway.requests) == 1   # a retry runs
+
+
+def test_fr_n1_an_attempt_that_raises_concludes_unavailable_and_a_retry_runs_at_once(rig):
+    """The reviewer's probe, asserting the correct behaviour: no 500, no minute of "pending"."""
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Words.")])
+    real = r.store.records
+    r.store.records = lambda *a: (_ for _ in ()).throw(RuntimeError("store down"))
+    first = summary_ask(r, sid)
+    r.store.records = real
+    assert first.status_code == 200 and first.get_json()["state"] == "unavailable" and first.get_json()["error"] == "exception"
+    assert records_of(r, sid)["summary_outcome:1"]["state"] == "unavailable"
+    second = summary_ask(r, sid).get_json()
+    assert second["state"] == "proposed" and len(r.gateway.requests) == 1
+
+
+def test_fr_n1_an_attempt_whose_outcome_cannot_be_kept_is_never_still_being_written_here(rig):
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Words.")])
+    r.store.refuse_kinds = {"summary_outcome"}
+    real = r.store.records
+    r.store.records = lambda *a: (_ for _ in ()).throw(RuntimeError("store down"))
+    assert summary_ask(r, sid).get_json()["state"] == "unavailable"
+    r.store.records = real
+    assert "summary_outcome:1" not in records_of(r, sid)
+    assert summary_ask(r, sid).get_json()["state"] == "proposed"               # attempt 2, not "still being written"

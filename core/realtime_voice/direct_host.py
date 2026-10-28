@@ -655,6 +655,18 @@ class DirectSessions(ConsultLedger):
             run = self._summaries[sid] = {"done": threading.Event(), "answer": None}
             return True, run
 
+    def summary_concluded(self, sid, attempt=None):
+        """The summary attempts that concluded here (adding ``attempt``): never "still being written", even when their
+        outcome record could not be kept (FR N1). Kept with the session's meta, so pruned with it."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            if meta is None:
+                return frozenset({attempt}) if attempt is not None else frozenset()
+            done = meta.setdefault("summary_concluded", set())
+            if attempt is not None:
+                done.add(attempt)
+            return frozenset(done)
+
     def summary_end(self, sid, run, answer):
         with self._summary_lock:
             run["answer"] = answer
@@ -1264,7 +1276,13 @@ def summary_attempt(adapter, sessions, principal, handle, sid, *, running=0, cli
     never unavailable, and nothing new starts. One that old enough ran in a process that died (its gateway call is bounded
     well inside ATTEMPT_STALE_S): it is concluded unknown, and a new attempt may start. "Summary unavailable" comes only
     from an attempt that concluded so; a retry after it starts the next attempt. A proposal, once kept, is repeated to
-    every later ask and device. Returns (answer, status)."""
+    every later ask and device.
+
+    "Still being written" (pending) is said only while an attempt may really run (FR N1): one running here, or one
+    recorded elsewhere and still recent. An attempt the store refuses to record never ran: it concludes unavailable
+    (not_recorded), and nothing is pending. An attempt that fails inside (the store or the client raising) concludes
+    unavailable with its outcome record, so a retry may start at once; this process also remembers it concluded, so
+    even when that record cannot be kept it is never "still being written" here. Returns (answer, status)."""
     mine, run = sessions.summary_begin(sid)
     if not mine:
         run["done"].wait(SUMMARY_JOIN_S)
@@ -1272,35 +1290,58 @@ def summary_attempt(adapter, sessions, principal, handle, sid, *, running=0, cli
         return (answer if answer is not None else ({"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200))
     answer = ({"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200)
     try:
-        answer = _attempt(adapter, principal, handle, sid, running=running, client=client, clock=clock)
+        answer = _attempt(adapter, sessions, principal, handle, sid, running=running, client=client, clock=clock)
+        return answer
+    except Exception:                                   # before any attempt was recorded: nothing runs, nothing pending
+        log.exception("%s direct voice: summary attempt failed", adapter.person["domain"])
+        answer = summary_failed(adapter, handle, sid, "exception")
         return answer
     finally:
         sessions.summary_end(sid, run, answer)
 
 
-def _attempt(adapter, principal, handle, sid, *, running, client, clock):
+def summary_failed(adapter, handle, sid, error):
+    """A summary attempt that concluded without a proposal: "Summary unavailable", and a retry may start. Its line is
+    kept in the conversation when the store takes it (the thread's Ask for a summary hangs on it)."""
+    try:
+        adapter.store.keep_summary(handle, sid, "summary-unavailable", UNAVAILABLE_TEXT)
+    except Exception:
+        log.exception("%s direct voice: summary-unavailable line not kept", adapter.person["domain"])
+    return {"ok": False, "error": error, "state": "unavailable", "line": SUMMARY_UNAVAILABLE}, 200
+
+
+def _attempt(adapter, sessions, principal, handle, sid, *, running, client, clock):
     store = adapter.store
     if store.summary(handle, sid) is not None:
         return summarize(adapter, principal, handle, sid, running=running, client=client)        # repeated
+    concluded = sessions.summary_concluded(sid)
     n = 1
     while True:
         began = get(adapter, handle, sid, f"summary_attempt:{n}")
         if began is None:
             break
-        if get(adapter, handle, sid, f"summary_outcome:{n}") is None:
+        if n not in concluded and get(adapter, handle, sid, f"summary_outcome:{n}") is None:
             at = parse_stamp(began.get("at"))
             if at is not None and clock() - at.timestamp() < ATTEMPT_STALE_S:
                 return {"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200     # running elsewhere, or not known
             put(adapter, handle, sid, record("summary_outcome", f"summary_outcome:{n}", attempt=n, state="unknown"))
         n += 1
     started = put(adapter, handle, sid, record("summary_attempt", f"summary_attempt:{n}", attempt=n))
-    if started.outcome == "refused":
-        return {"ok": False, "error": "not_recorded", "state": "pending", "line": SUMMARY_PENDING}, 200
+    if started.outcome == "refused":                                  # never ran: concluded, nothing is being written
+        return summary_failed(adapter, handle, sid, "not_recorded")
     if started.outcome != "stored":                                   # another process began attempt n first
         return {"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200
-    answer, status = summarize(adapter, principal, handle, sid, running=running, client=client)
-    put(adapter, handle, sid, record("summary_outcome", f"summary_outcome:{n}", attempt=n,
-                                     state=answer.get("state") or "unknown", error=answer.get("error")))
+    try:
+        answer, status = summarize(adapter, principal, handle, sid, running=running, client=client)
+    except Exception:
+        log.exception("%s direct voice: summary attempt %d failed", adapter.person["domain"], n)
+        answer, status = summary_failed(adapter, handle, sid, "exception")
+    sessions.summary_concluded(sid, n)
+    try:
+        put(adapter, handle, sid, record("summary_outcome", f"summary_outcome:{n}", attempt=n,
+                                         state=answer.get("state") or "unknown", error=answer.get("error")))
+    except Exception:
+        log.exception("%s direct voice: summary outcome %d not recorded", adapter.person["domain"], n)
     return answer, status
 
 
