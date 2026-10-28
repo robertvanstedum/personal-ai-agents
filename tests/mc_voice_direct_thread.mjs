@@ -6,7 +6,8 @@ import { fakeDocument } from './js_helpers/fake_dom.mjs';
 const D = await import(new URL('../minimoi_portal/guild_ui/static/js/mc_voice_direct.js', import.meta.url));
 
 const SID = '7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f', OTHER = '0f1e2d3c-4b5a-4968-8776-655443322110';
-const DIRECT = { summary_decision_url: '/api/v1/mc/voice/direct/api/realtime-voice/session/{session_id}/summary/decision' };
+const DIRECT = { summary_decision_url: '/api/v1/mc/voice/direct/api/realtime-voice/session/{session_id}/summary/decision',
+  summary_url: '/api/v1/mc/voice/direct/api/realtime-voice/session/{session_id}/summary' };
 const PROPOSAL = '[Voice summary proposal] For this voice session only. Not confirmed. Covers all 4 retained records of this session.\n\nWe looked at #12: in build.';
 
 function rig({ answer = () => ({ status: 200, body: { ok: true, state: 'confirmed', repeated: false, authorizes: 'nothing beyond the summary' } }), mine = null } = {}) {
@@ -138,6 +139,36 @@ let n = 0;
   const proposal = r.row(5, '2026-10-28T10:20:00.000Z', { 'data-voice-kind': 'summary_proposal', 'data-voice-session': SID });
   r.t.paint([{ session_id: SID, state: 'ended', summary: 'confirmed' }, { session_id: OTHER, state: 'ended', summary: 'proposed' }]);
   assert.equal(proposal.querySelector('[data-voice-summary-card]'), null);
+  n++;
+}
+// UI review #8: "Summary unavailable" offers a quiet "Ask for a summary" (any device, later); a proposal that comes back is
+// revealed (its card follows); still unavailable keeps the button; once proposed, the button goes.
+{
+  let answers = [{ status: 200, body: { ok: false, error: 'busy', state: 'unavailable', line: 'Summary unavailable.' } },
+    { status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at #12.', written: 'w' } }];
+  const r = rig({ answer: () => answers.shift() });
+  const row = r.row(6, '2026-10-28T10:20:00.000Z', { 'data-voice-kind': 'summary_unavailable', 'data-voice-session': SID });
+  r.t.paint([{ session_id: SID, state: 'live', summary: 'unavailable' }]);
+  assert.equal(row.querySelector('[data-voice-summary-retry]'), null);                    // not while live
+  r.t.paint([{ session_id: SID, state: 'ended', summary: 'unavailable' }]);
+  r.t.paint([{ session_id: SID, state: 'ended', summary: 'unavailable' }]);
+  assert.equal(row.querySelectorAll('[data-voice-summary-ask]').length, 1);              // never twice
+  const ask = row.querySelector('[data-voice-summary-retry]');
+  assert.equal(ask.textContent, D.ASK_SUMMARY);
+  ask.click();
+  assert.equal(ask.disabled, true);
+  await flush();
+  assert.deepEqual(r.posts[0], { url: `/api/v1/mc/voice/direct/api/realtime-voice/session/${SID}/summary`, body: { conversation_id: 'c-1' } });
+  assert.equal(ask.disabled, false);
+  assert.equal(row.querySelector('[data-voice-summary-result]').textContent, 'Still unavailable. You can ask again later.');
+  assert.equal(r.reveals.length, 0);
+  ask.click();
+  await flush();
+  assert.equal(r.posts.length, 2);
+  assert.equal(row.querySelector('[data-voice-summary-ask]'), null);                    // asked: the proposal is revealed
+  assert.equal(r.reveals.length, 1);
+  r.t.paint([{ session_id: SID, state: 'ended', summary: 'proposed' }]);
+  assert.equal(row.querySelector('[data-voice-summary-ask]'), null);
   n++;
 }
 console.log(`${n} direct-voice thread scenarios passed (recovering line, live elsewhere, summary card Confirm/Edit/Decline); fake DOM only.`);

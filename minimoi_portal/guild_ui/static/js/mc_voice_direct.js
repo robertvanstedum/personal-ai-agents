@@ -18,6 +18,7 @@ export const LIVE_ELSEWHERE = 'Voice session in progress; what is said appears w
 export const RECOVERING = 'Voice session ended unexpectedly; recovering what was said.';
 export const CONFIRM_SCOPE = 'Confirming confirms the summary only. Anything it mentions still needs its own request.';
 export const SUMMARY_UNAVAILABLE = 'Summary unavailable.';
+export const ASK_SUMMARY = 'Ask for a summary';
 export const NOT_KEPT = 'Some of what was said could not be kept.';
 export const CAP = 'This voice session has kept all it may.';
 // The server refused the session's posts (UI review #2): the voice is ended here too, so nothing goes on being said that
@@ -532,6 +533,32 @@ export function voiceThread(d) {
     });
   }
 
+  // §7: "Summary unavailable" may be asked again later, from any device (the route allows it after End): one quiet button
+  // on the session's summary-unavailable note (UI review #8). A proposal that comes back is shown as its card.
+  function ask(sid) {
+    const row = d.thread()?.querySelector(`[data-voice-kind="summary_unavailable"][data-voice-session="${sid}"]`);
+    if (!row || row.querySelector('[data-voice-summary-ask]')) return;
+    const box = make('p', { class: 'mc-voice-summary-actions', 'data-voice-summary-ask': '' });
+    const button = make('button', { type: 'button', class: 'btn-mini', 'data-voice-summary-retry': '' }, ASK_SUMMARY);
+    const result = make('span', { class: 'small', role: 'status', 'data-voice-summary-result': '' });
+    result.hidden = true;
+    box.append(button, result);
+    row.append(box);
+    const tell = (text) => { result.textContent = text; result.hidden = !text; };
+    button.addEventListener('click', async () => {
+      button.disabled = true; tell('Asking…');
+      const r = await d.post(String(direct.summary_url).split('{session_id}').join(encodeURIComponent(sid)), { conversation_id: d.conversationId() });
+      const body = r.body || {};
+      if (r.status === 200 && body.ok) { box.remove(); await d.reveal?.(); return; }
+      button.disabled = false;
+      tell(r.status === 200 && body.state === 'unavailable' ? 'Still unavailable. You can ask again later.'
+        : body.message || (r.status === 0 ? 'The server did not answer. Nothing was changed.' : 'The summary could not be asked for. Nothing was changed.'));
+    });
+  }
+  function unask(sid) {
+    d.thread()?.querySelector(`[data-voice-kind="summary_unavailable"][data-voice-session="${sid}"]`)?.querySelector('[data-voice-summary-ask]')?.remove();
+  }
+
   return {
     // Paint the sessions the notes answer named: `notes` (optional) supplies the proposal's words for Edit.
     paint(sessions, notes) {
@@ -544,6 +571,7 @@ export function voiceThread(d) {
           : ['recovering', 'unknown'].includes(s.state) ? (s.line || RECOVERING) : null;
         line(s.session_id, text, s.started_at);
         if (s.summary === 'proposed') card(s.session_id);
+        if (s.summary === 'unavailable' && ['ended', 'dropped'].includes(s.state)) ask(s.session_id); else unask(s.session_id);
       }
     },
   };
