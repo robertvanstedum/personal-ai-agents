@@ -130,8 +130,10 @@ const MARK_TTL_MS = 3000;
    *    utterance with no input item for MARK_TTL_MS is noise and binds nothing;
    *  - anything else (a response with no ended utterance and no request of this controller's) answers none of his inputs.
    *  Which is which: by the tag a request carries when the adapter reports it back (OpenAI's response.metadata, once seen
-   *  in the session: then an untagged response is the provider's); else by order, the requests and his ended utterances
-   *  starting their responses in the order they became known. The call is bound to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
+   *  in the session: then an untagged response is the provider's); else by order, the requests starting their responses
+   *  in the order they were sent. By order alone, a response that starts while one of the requests and his ended
+   *  utterance both wait is ambiguous: it binds nothing (its calls are refused as not heard), and both are let go
+   *  (review R3-S1). The call is bound to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
    *  (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when the call is
    *  bound to no owner input. Never the latest input by default. German and Portuguese do not call it. */
   inputOf(call) {
@@ -211,7 +213,13 @@ const MARK_TTL_MS = 3000;
     if (evt.tag) {
       this._echoed = true;
       mine = this._requests.find((r) => r.tag === evt.tag) || { owner: null };   // a request of another page: not his
-    } else if (!this._echoed && this._requests.length && (!his || this._requests[0].seq < his.seq)) {
+    } else if (!this._echoed && this._requests.length) {
+      if (his) {                                    // by order alone, a request of ours and his utterance both wait:
+        this._ended = null;                         // which one this is cannot be told, so it binds nothing and both are
+        this._drop([this._requests[0]]);            // let go; its calls are refused as not heard (review R3-S1)
+        if (id) this._answers.set(id, null);
+        return;
+      }
       mine = this._requests[0];
     }
     let owner = null;

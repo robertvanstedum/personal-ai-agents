@@ -219,8 +219,76 @@ await check('V note B: an ended utterance with no input item yet is still his wi
   assert.deepEqual(s.bound(s.calls[0]), { state: 'bound', index: 0, text: 'Make a note that the kiln is hot' });
 });
 
+// R3-S1 (the reviewer's probes/r3_binding.mjs cases F, G and H, with the provider's follow-up responses starting as they
+// would): by order alone (xAI; OpenAI until a tag comes back), a response that starts while a request of the controller's
+// and his ended utterance both wait cannot be told apart. It binds nothing, so its calls are refused as not heard ("say it
+// again"); no call ever acts on another turn's words. Both waits are let go, and the next turns bind as before.
+const A_ = { state: 'bound', index: 0, text: 'What is stuck on twelve? Make a note of it.' };
+for (const [name, make, commits] of [['xAI', () => new XAIWebSocketAdapter(), false], ['OpenAI in order mode', () => new OpenAIWebRTCAdapter(), true]]) {
+  const utter = (a, item) => {
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    if (commits && item) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: item });
+  };
+  const first = async (a) => {                                    // he asks A; its response calls consult; the result is sent
+    utter(a, 'item_A');
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R1' } });
+    a._handleServerEvent(said('item_A', A_.text));
+    a._handleServerEvent(callIn('R1', 'call_1', 'consult'));
+  };
+  await check(`R3-S1 case F (${name}): a result sent as his speech stopped: his response and the follow-up bind nothing, never each other's turn`, async () => {
+    const a = make(); const s = session(a, { trackResponses: true });
+    await first(a);
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });                  // B begins
+    await tick();                                                                       // the result is sent (its request recorded)
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });                 // the stop reaches the page just after
+    if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'item_B' });
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_B' } });           // the provider made his response first
+    a._handleServerEvent(callIn('R_B', 'call_B', 'save_note')); await tick();
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_f' } });
+    a._handleServerEvent(callIn('R_f', 'call_2', 'consult')); await tick();
+    a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
+    assert.deepEqual(s.bound(s.calls[0]), A_);
+    assert.equal(s.bound(s.calls[1]), null, 'his request for B was bound to A');
+    assert.equal(s.bound(s.calls[2]), null, 'the follow-up was bound to his new words');
+  });
+  await check(`R3-S1 case G (${name}): a cough, then a follow-up: the follow-up binds nothing, and his next request is his own`, async () => {
+    const a = make(); const s = session(a, { trackResponses: true });
+    await first(a);
+    utter(a, 'item_cough');                                                             // a cough: on OpenAI committed, no words
+    await tick();                                                                       // the result is sent within 3 s of it
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_f' } });
+    a._handleServerEvent(callIn('R_f', 'call_2', 'save_note')); await tick();
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_f2' } });          // that call's own follow-up
+    a._handleServerEvent({ type: 'response.done', response: { id: 'R_f2', output: [] } });
+    utter(a, 'item_B');
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_B' } });
+    a._handleServerEvent(callIn('R_B', 'call_B', 'save_note')); await tick();
+    a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
+    assert.equal(s.bound(s.calls[1]), null, 'the follow-up was bound to the cough or his next words');
+    const b = s.bound(s.calls[2]);
+    assert.equal(b && b.text, 'Make a note that the glaze is ready', 'his next request was bound to another turn');
+  });
+  await check(`R3-S1 case H (${name}): a request that never starts: his next request binds nothing, and the one after is his own`, async () => {
+    const a = make(); const s = session(a, { trackResponses: true });
+    await first(a); await tick();                                                       // the result is sent; its response never starts
+    utter(a, 'item_B');
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_B' } });
+    a._handleServerEvent(callIn('R_B', 'call_B', 'save_note')); await tick();
+    a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
+    assert.equal(s.bound(s.calls[1]), null, 'his request was bound to the earlier turn');
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_Bf' } });          // "say it again": that result's follow-up
+    a._handleServerEvent({ type: 'response.done', response: { id: 'R_Bf', output: [] } });
+    utter(a, 'item_C');                                                                 // he says it again
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_C' } });
+    a._handleServerEvent(callIn('R_C', 'call_C', 'save_note')); await tick();
+    a._handleServerEvent(said('item_C', 'Make a note that the glaze is ready.'));
+    assert.deepEqual(s.bound(s.calls[2]), { state: 'bound', index: 2, text: 'Make a note that the glaze is ready.' });
+  });
+}
+
 if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1); real controller and adapters, synthetic provider events.`);
+console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1); real controller and adapters, synthetic provider events.`);
