@@ -119,3 +119,37 @@ def test_a_header_release_carries_the_voice_card_and_its_hash(tmp_path):
     made = json.loads((releases / "0.1.99/manifest.json").read_text())
     assert made["files"]["voice.json"] == hashlib.sha256((releases / "0.1.18/voice.json").read_bytes()).hexdigest()
     assert (releases / "0.1.99/voice.json").read_bytes() == (releases / "0.1.18/voice.json").read_bytes()
+
+
+# Review R1 P3-11 / R2 N3: a card that matches its hash but has the wrong shapes is refused as ValueError (which every caller
+# catches), never AttributeError or TypeError, which would stop a host from starting while direct voice is on.
+@pytest.mark.parametrize("payload", [["schema", 1], "a card", {"schema": 1, "card": "x", "language": ["en-US"]},
+                                     {"schema": 1, "card": "x", "language": {"en": 1}}, {"schema": 1, "card": "x", "voices": ["marin"]}])
+def test_a_malformed_card_is_refused_as_value_error(tmp_path, payload):
+    release_with(tmp_path, "1.0.0", payload)
+    with pytest.raises(ValueError):
+        load_card(tmp_path, "1.0.0")
+
+
+@pytest.mark.parametrize("manifest", [["voice.json"], {"files": ["voice.json"]}, {"files": "voice.json"}])
+def test_a_malformed_manifest_is_refused_as_value_error(tmp_path, manifest):
+    folder = release_with(tmp_path, "1.0.0", {"schema": 1, "card": "x"})
+    (folder / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError):
+        load_card(tmp_path, "1.0.0")
+
+
+def test_a_malformed_card_does_not_stop_the_host_from_starting(tmp_path):
+    """install_direct_voice reads the card at install: a malformed one means voice unavailable, not a failed portal start."""
+    from flask import Flask
+    from core.realtime_voice.direct_host import DirectVoiceAdapter, install_direct_voice
+    release_with(tmp_path, "1.0.0", {"schema": 1, "card": "x", "language": ["en-US"]}, pin=True)
+
+    class Host(DirectVoiceAdapter):
+        person = {"key": "p", "name": "P", "short": "P", "domain": "p", "notes": ("save a note:",)}
+        name = "p_voice"
+
+        def card(self):
+            return load_pinned(tmp_path)
+    metadata, _sessions = install_direct_voice(Flask("malformed"), Host(), url_prefix="/p", environ={})
+    assert metadata["card_release"] is None

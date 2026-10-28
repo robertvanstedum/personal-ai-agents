@@ -33,20 +33,27 @@ def load_card(root, release):
         raise ValueError("voice card release is not a release name")
     folder = Path(root) / "releases" / release
     manifest = json.loads((folder / "manifest.json").read_text())
-    want = (manifest.get("files") or {}).get("voice.json") if isinstance(manifest, dict) else None
+    files = manifest.get("files") if isinstance(manifest, dict) else None
+    want = files.get("voice.json") if isinstance(files, dict) else None
     raw = (folder / "voice.json").read_bytes()
     if not isinstance(want, str) or hashlib.sha256(raw).hexdigest() != want:
         raise ValueError("voice card does not match its release manifest")
     payload = json.loads(raw.decode("utf-8"))
+    # Every shape is checked before it is read, so a malformed card (valid JSON, wrong types) is refused as ValueError, as
+    # every caller expects, and never stops a host from starting (review R1 P3-11, R2 N3).
+    if not isinstance(payload, dict):
+        raise ValueError("voice card is not an object")
     if payload.get("schema") != 1 or not isinstance(payload.get("card"), str) or not payload["card"].strip():
         raise ValueError("voice card is missing its text")
     language = payload.get("language", DEFAULT_LANGUAGE)
-    if language not in ALLOWED_LOCALES:
+    if not isinstance(language, str) or language not in ALLOWED_LOCALES:
         raise ValueError("voice card language is not an allowed locale")
     accent = payload.get("accent")
     if accent is not None and (not isinstance(accent, str) or not accent.strip() or len(accent) > ACCENT_MAX):
         raise ValueError("voice card accent is not a short label")
     voices = payload.get("voices") or {}
+    if not isinstance(voices, dict):
+        raise ValueError("voice card voices are not an object")
     chosen = {}
     notices = []
     for provider, default in _DEFAULT_VOICE.items():
