@@ -638,6 +638,17 @@ def test_typed_proposal_parsing_is_unchanged_by_the_spoken_form():
         assert spoken_named(left) == left
 
 
+@pytest.mark.parametrize("words", ["no, plan B", "ok, pay it", "No, plan B.", "yes, P 1O0L", "okay, pull it",
+                                   "yes, proposal pilot"])
+def test_an_ordinary_spoken_reply_is_never_read_as_a_code(words):
+    """UI review #4: only the code alphabet (no 0/O or 1/I/L) is read as a spoken code."""
+    from core.mc_tools.proposals import spoken_named
+    from core.mc_tools.service import _CODE_ALPHABET
+    assert spoken_named(words) == words
+    assert set("01OIL").isdisjoint(_CODE_ALPHABET)
+    assert spoken_named("yes P 7K3M") == "yes P-7K3M" and spoken_named("no, p. 9 z 9 z") == "no P-9Z9Z"
+
+
 def test_typed_turns_parse_a_spaced_code_exactly_as_typed(waiting):
     """Outside a voice consult the same handler sees the typed text unchanged: 'yes P 7K3M' is no command."""
     r = waiting.r
