@@ -23,7 +23,6 @@ import time
 from flask import Blueprint, jsonify, request
 
 from core.identity import resolve_user_display_name, resolve_user_id
-from core.realtime_voice import budget as voice_budget
 from core.realtime_voice.capabilities import (
     MEMO_MODE,
     ProviderUnavailableError,
@@ -276,6 +275,12 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         # allowance is never spent on a session that could not be recorded; if the provider session then does not
         # start, the ledger's abandon() closes it (MC: an end marker, reason not_started). Without admit, as before.
         early = consult_ledger is not None and admit is not None
+        if admit is not None:
+            # Imported only for a host that admits (MC): the budget module reads the America/Chicago zone at import,
+            # and German and Portuguese ship no tzdata (review B #8).
+            from core.realtime_voice.budget import VoiceBudgetError as budget_refused
+        else:
+            budget_refused = ()                            # an empty tuple: no except clause matches
         voice_session_id = consult_ledger.issue(user_id) if early else None
 
         def abandon():
@@ -301,7 +306,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
                         transcription_language=transcription_language,
                         tools=tools,
                     )
-        except voice_budget.VoiceBudgetError as e:
+        except budget_refused as e:
             abandon()
             _log_outcome(domain, user_id, provider, None, "budget_refused")
             return jsonify({"ok": False, "error": e.public}), e.status

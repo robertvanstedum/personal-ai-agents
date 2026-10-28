@@ -685,3 +685,22 @@ def test_without_an_allowance_the_session_is_issued_after_the_mint_as_before():
                                                                    "expires_at": 1, "model": "m"}):
         _host(_Ledger(events), events, admit=False).post("/api/realtime-voice/bootstrap", json=_valid_body())
     assert events == ["mint", "issue"]
+
+
+def test_german_and_portuguese_import_the_shared_bootstrap_without_time_zone_data():
+    """The budget module reads America/Chicago at import; Portuguese ships no tzdata. The bootstrap imports the
+    budget only for a host that admits (review B #8)."""
+    import os
+    import subprocess
+    import sys
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = ("import sys, zoneinfo\n"
+            "def missing(key):\n    raise zoneinfo.ZoneInfoNotFoundError(key)\n"
+            "zoneinfo.ZoneInfo = missing\n"
+            "from core.realtime_voice.bootstrap import create_bootstrap_blueprint\n"
+            "create_bootstrap_blueprint(domain='portuguese', locale='pt-BR', get_persona=lambda n: None,\n"
+            "                           is_production=lambda: True)\n"
+            "assert 'core.realtime_voice.budget' not in sys.modules\n")
+    done = subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True,
+                          env={**os.environ, "PYTHONPATH": root})
+    assert done.returncode == 0, done.stderr
