@@ -58,6 +58,8 @@ def load_card(root, release):
     notices = []
     for provider, default in _DEFAULT_VOICE.items():
         wanted = voices.get(provider)
+        if wanted is not None and not isinstance(wanted, str):        # a list or object is malformed (review FR S3)
+            raise ValueError("voice card voice is not a name")
         if wanted in ALLOWED[provider]:
             chosen[provider] = wanted
         else:

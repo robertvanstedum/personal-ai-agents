@@ -124,7 +124,11 @@ def test_a_header_release_carries_the_voice_card_and_its_hash(tmp_path):
 # Review R1 P3-11 / R2 N3: a card that matches its hash but has the wrong shapes is refused as ValueError (which every caller
 # catches), never AttributeError or TypeError, which would stop a host from starting while direct voice is on.
 @pytest.mark.parametrize("payload", [["schema", 1], "a card", {"schema": 1, "card": "x", "language": ["en-US"]},
-                                     {"schema": 1, "card": "x", "language": {"en": 1}}, {"schema": 1, "card": "x", "voices": ["marin"]}])
+                                     {"schema": 1, "card": "x", "language": {"en": 1}}, {"schema": 1, "card": "x", "voices": ["marin"]},
+                                     # review FR S3: a voice that is not a name
+                                     {"schema": 1, "card": "x", "voices": {"openai": ["cedar"]}},
+                                     {"schema": 1, "card": "x", "voices": {"xai": {"a": 1}}},
+                                     {"schema": 1, "card": "x", "voices": {"openai": 7}}])
 def test_a_malformed_card_is_refused_as_value_error(tmp_path, payload):
     release_with(tmp_path, "1.0.0", payload)
     with pytest.raises(ValueError):
