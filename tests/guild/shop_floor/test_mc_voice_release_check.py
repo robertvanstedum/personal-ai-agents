@@ -118,22 +118,29 @@ def test_one_bridged_consult_reaches_openclaw_and_returns_an_answered_receipt_an
 
 @pytest.mark.parametrize("env", [{k: v for k, v in ON.items() if k != "MINIMOI_MC_VOICE_DIRECT"},
                                  {k: v for k, v in ON.items() if k != "MINIMOI_MC_VOICE"}])
-def test_with_the_flag_off_voice_is_unavailable_and_the_chained_relay_is_not_reachable_from_the_composer(
+def test_with_the_direct_flag_off_its_routes_are_absent_and_the_composer_keeps_todays_relay(
         load_portal, floor_db, monkeypatch, tmp_path, env):
+    """Production today (MINIMOI_MC_VOICE=1, the direct path held off, managed off) keeps today's chained relay until the
+    direct path is switched on there (Spec 165 §9, §11); once direct or managed is offered, start() returns before it."""
     _portal, runtime, minted, client, token = portal_with(load_portal, floor_db, monkeypatch, tmp_path, env)
     capabilities = client.get(API + "/mc/voice/capabilities")
+    relay = client.get(API + "/mc/voice/static/realtime-confer-controller.js")
     if env.get("MINIMOI_MC_VOICE") == "1":
         assert capabilities.get_json()["direct_voice"] is None and capabilities.get_json()["managed_realtime"] is None
+        assert relay.status_code == 200 and b"ConferVoiceController" in relay.data      # the relay the composer starts
     else:
-        assert capabilities.status_code == 404
+        assert capabilities.status_code == 404 and relay.status_code == 404
     assert client.post(DIRECT + "/bootstrap", headers=headers(token), json={}).status_code == 404
     assert client.post(DIRECT + "/consult", headers=headers(token), json={}).status_code == 404
     composer = COMPOSER.read_text()
-    # With neither the direct nor the managed path, the composer's start says "Voice unavailable" and sends nothing.
-    assert "if (managed) {await startManaged(mine,current);return;}\n    say('Voice unavailable." in composer
+    start = composer[composer.index("async function start()"):composer.index("const DIRECT_ENDED")]
+    direct_first = start.index("if (direct) {await startDirect(mine,current);return;}")
+    managed_next = start.index("if (managed) {await startManaged(mine,current);return;}")
+    assert direct_first < managed_next < start.index("realtime-confer-controller.js")
+    assert composer.count("realtime-confer-controller") == 1                    # only there, after both
     direct_page = COMPOSER.with_name("mc_voice_direct.js").read_text()          # the direct path's page code (CC_16)
     for chained in ("realtime-confer-controller", "ConferVoiceController", "/mc/voice/bootstrap", "/mc/voice/speech"):
-        assert chained not in composer and chained not in direct_page
+        assert chained not in direct_page
     assert not runtime.sent and not minted
 
 

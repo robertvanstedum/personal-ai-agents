@@ -10,8 +10,9 @@ const realDirect = await import(DIRECT_URL);
 const source = fs.readFileSync(new URL('../minimoi_portal/guild_ui/static/js/mc_voice.js', import.meta.url), 'utf8')
   .replace(/^import .*;$/gm, '').replace('export function initMcVoice', 'function initMcVoice')
   .replaceAll('import(`${api}/mc/voice/static/realtime-voice-controller.js`)', 'importControlled()')
+  .replace('import(`${api}/mc/voice/static/realtime-confer-controller.js`)', 'importConfer()')
   .replace("import('./mc_voice_direct.js')", 'importDirect()');
-assert.ok(!source.includes("import('./mc_voice_direct.js')"));
+assert.ok(!source.includes("import('./mc_voice_direct.js')") && !source.includes('realtime-confer-controller.js'));
 const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 
 const SID = '7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f';
@@ -24,7 +25,8 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
 async function rig({ capabilities = { ok: true, mode: 'agent_conversation', providers: [], managed_realtime: null, direct_voice: DIRECT }, summary = null,
   notesBody = null } = {}) {
   const nodes = {}, instances = [], docEvents = {}, windowEvents = {}, dispatched = [], calls = [], timers = [];
-  let directLoads = 0;
+  const confers = [], submitted = [];
+  let directLoads = 0, conferLoads = 0;
   const node = (s) => nodes[s] ??= { selector: s, textContent: '', value: s.includes('provider') ? 'openai' : '', disabled: false, hidden: s !== '[data-mc-voice-btn]' ? false : true,
     open: false, checked: false, attrs: {}, listeners: {}, parentElement: { hidden: false },
     options: s.includes('provider') ? [{ value: 'openai', textContent: 'OpenAI', disabled: false, dataset: {} }, { value: 'xai', textContent: 'Grok (xAI) · not available yet', disabled: true, dataset: {} }] : undefined,
@@ -50,6 +52,17 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
       this.options.onFinalize({ turns: [], partial_reason: reason, session_id: SID });
     }
   }
+  // Today's chained relay (production MC voice until the direct path is on there): the shared Confer controller, which mc_voice.js
+  // extends with its own submit step. Only the parts that step and the start use.
+  class ConferVoiceController {
+    constructor(options) { this.options = options; this._active = false; this.userTurns = []; this.played = []; this.stopped = []; confers.push(this); }
+    async start(provider) { this.provider = provider; this._active = true; this.options.onStateChange('listening'); }
+    stop(reason) { this.stopped.push(reason); this._active = false; }
+    _onUserTurn(text) { this.userTurns.push(text); }
+    _onStateChange(state, info) { this.options.onStateChange(state, info); }
+    _onError(e) { this.options.onError(e); }
+    async _play(url) { this.played.push(url); }
+  }
   const fetch = async (url, opts = {}) => {
     const body = opts.body ? JSON.parse(opts.body) : null;
     calls.push({ url, opts, body });
@@ -64,6 +77,8 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
     setInterval() { return 0; }, clearInterval() {}, localStorage: { getItem: () => null, setItem() {} } };
   const sandbox = { $: node, announce() {}, live: { known: true, off: false }, onChange() {}, recordMode: () => 'on_record', panelMode: () => 'open',
     mergeNotes: (notes) => merged.push(...notes), paintVoiceButton: undefined, document, AbortController, setTimeout, clearTimeout, CustomEvent,
+    submitVoiceUtterance: async (text, requestId) => { submitted.push([text, requestId]); return { ok: true, note_request_id: 'mc-note-1' }; },
+    importConfer: async () => { conferLoads++; return { ConferVoiceController }; },
     MutationObserver: class { observe() {} }, window: win, fetch, console,
     importControlled: async () => ({ RealtimeVoiceController: Controller }), importDirect: async () => { directLoads++; return realDirect; } };
   vm.createContext(sandbox);
@@ -71,7 +86,8 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
   const page = { urls: { api: '/api' }, csrf_token: 'csrf-synthetic', conversation: { id: 'c-1' }, floor: { notes: { recent: [], voice_sessions: [] } } };
   sandbox.initMcVoice(page);
   await flush();
-  return { nodes, node, instances, calls, dispatched, docEvents, windowEvents, timers, merged, sandbox, page, document, get directLoads() { return directLoads; },
+  return { nodes, node, instances, confers, submitted, calls, dispatched, docEvents, windowEvents, timers, merged, sandbox, page, document,
+    get directLoads() { return directLoads; }, get conferLoads() { return conferLoads; },
     async click(sel = '[data-mc-voice-btn]') { node(sel).click(); await flush(); }, status: () => node('[data-mc-voice-status]').textContent,
     posts: (end) => calls.filter((c) => c.opts.method === 'POST' && c.url.endsWith(end)) };
 }
@@ -115,23 +131,81 @@ let n = 0;
   for (const p of r.calls.filter((x) => x.opts.method === 'POST')) assert.equal(p.opts.headers['X-CSRF-Token'], 'csrf-synthetic');
   n++;
 }
-// §1: no direct_voice: today's behaviour, unchanged: no managed path either -> "Voice unavailable", nothing sent, no direct file.
+// §1: no direct_voice and no managed_realtime (production today: MINIMOI_MC_VOICE=1, the direct path held off, managed off):
+// today's chained relay, exactly as on main: the shared Confer controller for transcription, each final transcript through the
+// page's kept-note path, MC's kept reply read aloud from the server's record. No direct file, no direct or managed controller.
 {
-  const r = await rig({ capabilities: { ok: true, providers: [{ provider: 'openai' }], managed_realtime: null, direct_voice: null } });
+  const r = await rig({ capabilities: { ok: true, mode: 'agent_conversation', default_provider: 'openai', providers: [{ provider: 'openai', label: 'OpenAI' }],
+    managed_realtime: null, direct_voice: null } });
+  assert.equal(r.node('[data-mc-voice-btn]').hidden, false);
   assert.equal(r.directLoads, 0);
-  await r.click();
-  assert.match(r.status(), /^Voice unavailable\. Live voice is not on for this Master Craftsman/);
+  r.node('[data-mc-voice-btn]').click();
+  assert.equal(r.status(), "Connecting… Your speech is sent to OpenAI to be turned into text, and Master Craftsman's replies are read aloud by the same service.");
+  await flush();
+  assert.equal(r.conferLoads, 1); assert.equal(r.confers.length, 1);
+  const c = r.confers[0];
+  assert.equal(c.provider, 'openai');                                                     // main starts the chained relay on OpenAI
+  assert.equal(c.options.capabilitiesUrl, '/api/mc/voice/capabilities');
+  assert.equal(c.options.bootstrapUrl, '/api/mc/voice/bootstrap');
+  assert.equal(c.options.turnUrl, null);
+  assert.equal(c.options.conversationId, 'c-1');
+  assert.equal(JSON.stringify(c.options.requestHeaders()), JSON.stringify({ 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-synthetic', 'X-Record-Mode': 'on_record' }));
+  assert.equal(r.status(), 'Listening… say your message; I will send it when you pause.');
+  assert.equal(r.node('[data-mc-voice-btn]').attrs['aria-pressed'], 'true');
+  c.options.onProvisionalTranscript('What is on');
+  assert.equal(r.status(), 'Hearing: What is on');
+  await c._submitTurn('What is on the board?', 'req-1');                                  // a final transcript: the kept-note path
+  assert.deepEqual(r.submitted, [['What is on the board?', 'req-1']]);
+  assert.deepEqual(c.userTurns, ['What is on the board?']);
+  assert.deepEqual(c.played, ['/api/mc/voice/speech/mc-note-1?c=c-1']);                   // the kept reply, read from the record
   assert.equal(r.instances.length, 0); assert.equal(r.directLoads, 0);
-  assert.equal(r.calls.filter((x) => x.opts.method === 'POST').length, 0);
+  assert.equal(r.calls.filter((x) => x.opts.method === 'POST').length, 0);               // the page itself posts nothing here
   assert.equal(r.node('[data-mc-voice-transcript-choice]').parentElement.hidden, false);
+  await r.click();                                                                        // the button again: stopped
+  assert.deepEqual(c.stopped, ['user_ended']);
+  assert.equal(r.status(), 'Voice ended. Agent work already accepted may still finish.');
+  await c._submitTurn('late words', 'req-2');                                             // a queued utterance of a stopped attempt
+  assert.equal(r.submitted.length, 1);
+  // A refused start says so, as on main; typing still works.
+  const r2 = await rig({ capabilities: { ok: true, providers: [{ provider: 'openai', label: 'OpenAI' }], managed_realtime: null, direct_voice: null } });
+  r2.sandbox.importConfer = async () => { throw new Error('no key'); };
+  await r2.click();
+  assert.equal(r2.status(), 'Voice could not start: no key. Typing still works.');
+  assert.equal(r2.node('[data-mc-voice-btn]').attrs['aria-pressed'], 'false');
   n++;
 }
-// managed_realtime only: the managed path, unchanged (the direct file is never loaded).
+// managed_realtime only: the managed path, unchanged (the direct file and the chained relay are never loaded).
 {
   const r = await rig({ capabilities: { ok: true, providers: [{ provider: 'openai' }], managed_realtime: { session_url: '/fake', provider: 'openai' }, direct_voice: null } });
   await r.click();
-  assert.equal(r.directLoads, 0);
+  assert.equal(r.directLoads, 0); assert.equal(r.conferLoads, 0);
   assert.ok(r.instances[0].options.managedBootstrap);
+  n++;
+}
+// Once the direct path is offered, a failure never falls back to the managed path or the chained relay: "Voice unavailable:
+// <reason>", even when managed_realtime is offered too.
+{
+  const both = { ok: true, providers: [{ provider: 'openai' }], managed_realtime: { session_url: '/fake', provider: 'openai' }, direct_voice: DIRECT };
+  const r = await rig({ capabilities: both });
+  r.sandbox.importDirect = async () => { throw new Error('the file did not load'); };
+  r.sandbox.importControlled = async () => { throw new Error('the controller did not load'); };
+  await r.click();
+  assert.equal(r.status(), 'Voice unavailable: the voice page could not load. Typing still works.');
+  assert.equal(r.conferLoads, 0); assert.equal(r.confers.length, 0); assert.equal(r.instances.length, 0);
+  // The bootstrap refused: the refusal's words, and nothing else is tried.
+  const r2 = await rig({ capabilities: both });
+  const original = r2.sandbox.importControlled;
+  r2.sandbox.importControlled = async () => {
+    const { RealtimeVoiceController: Base } = await original();
+    return { RealtimeVoiceController: class extends Base {
+      async startSession(args) { this.args = args; this.options.onFatalError({ reason: 'bootstrap_rejected', status: 503, detail: 'unavailable' }); } } };
+  };
+  await r2.click();
+  await flush();
+  assert.equal(r2.status(), 'Voice unavailable here right now.');
+  assert.equal(r2.conferLoads, 0); assert.equal(r2.confers.length, 0);
+  assert.ok(r2.instances.every((c) => !c.options.managedBootstrap));
+  assert.equal(r2.node('[data-mc-voice-btn]').attrs['aria-pressed'], 'false');
   n++;
 }
 // UI review #5 (#420 on every MC voice path): the managed path's own ended line clears after about five seconds too, or at
@@ -284,13 +358,19 @@ for (const who of ['dictation', 'companion-closed']) {
   assert.equal(r.status(), '');
   n++;
 }
-// The chained relay is never referenced by the composer or the direct path.
+// The chained relay is never referenced by the direct path, and the composer reaches it only after the direct and managed
+// paths: start() returns from either before the chained relay's first line.
 {
   const composer = fs.readFileSync(new URL('../minimoi_portal/guild_ui/static/js/mc_voice.js', import.meta.url), 'utf8');
   const direct = fs.readFileSync(DIRECT_URL, 'utf8');
   for (const chained of ['realtime-confer-controller', 'ConferVoiceController', '/mc/voice/bootstrap', '/mc/voice/speech']) {
-    assert(!composer.includes(chained) && !direct.includes(chained), chained);
+    assert(!direct.includes(chained), chained);
   }
+  const body = composer.slice(composer.indexOf('async function start()'), composer.indexOf('const DIRECT_ENDED'));
+  const at = (text) => { const i = body.indexOf(text); assert(i >= 0, text); return i; };
+  assert(at('if (direct) {await startDirect(mine,current);return;}') < at('if (managed) {await startManaged(mine,current);return;}'));
+  assert(at('if (managed) {await startManaged(mine,current);return;}') < at('realtime-confer-controller.js'));
+  assert.equal(composer.split('realtime-confer-controller').length, 2);                 // one reference, inside start()
   n++;
 }
 console.log(`${n} direct-voice host scenarios passed (path choice, provider choice, mic handover, panel close, pagehide, sum up, status line); no network or microphone.`);
