@@ -229,7 +229,8 @@ def test_consult_runs_the_typed_turn_once_on_the_owners_words_and_a_replay_does_
     turn = r.turns[0]
     assert turn["note"]["text"] == "What is stuck on #12?" and turn["note"]["author_kind"] == "owner"
     assert turn["note"]["context"] == {"page": "voice"} and turn["note_id"] == result["note_request_id"]
-    assert "host_channel" not in turn and turn["conv"]["id"] == CID
+    from minimoi_portal.guild_ui.mc.openclaw import VOICE_MARKER
+    assert turn["host_channel"] is VOICE_MARKER and turn["conv"]["id"] == CID
     assert owner_notes(r) == [result["note_request_id"]] == ["vc-" + uuid.UUID(sid).hex + "-01"]
     assert "paraphrase" not in str(r.notes.rows)
 
@@ -491,3 +492,37 @@ def test_robert_confirms_edits_or_declines_in_writing_and_confirming_authorizes_
     assert r.cos.calls == [] and len(r.turns) == 0                                  # nothing it mentions was done
     decision = r.notes.rows[reveal.key(sid, "summary-decision")]
     assert decision["author_kind"] == "platform" and "authorizes nothing" in decision["text"]
+
+
+# ── §9 the voice marker for the OpenClaw kind ────────────────────────────────────────────────────────────────────
+
+def test_the_openclaw_adapter_translates_only_its_own_server_held_voice_marker():
+    import json
+    from minimoi_portal.guild_ui.mc import openclaw
+    from minimoi_portal.guild_ui.mc.backend import TurnRequest
+    from minimoi_portal.guild_ui.mc.cos import MANAGED_VOICE_CHANNEL
+    adapter = openclaw.OpenClawMasterCraftsman("http://mc-relay:8790/v1", "t" * 40, http_get=object, http_post=object)
+
+    def sent(context):
+        body = json.loads(adapter._payload(TurnRequest("c-1", "What is stuck?", "n-1", context=context)))
+        return body["messages"][0]["content"]
+    voiced = sent({"page": "voice", "host_channel": openclaw.VOICE_MARKER})
+    assert voiced.startswith('[Shop floor context: {"channel": "' + openclaw.VOICE_CHANNEL_WORDS + '", "page": "voice"}]')
+    assert "object at" not in voiced and "host_channel" not in voiced
+    for forged in (MANAGED_VOICE_CHANNEL, "voice", {"channel": "voice"}, openclaw.VOICE_CHANNEL_WORDS):
+        assert sent({"page": "voice", "host_channel": forged}) == '[Shop floor context: {"page": "voice"}]\nWhat is stuck?'
+    assert sent({}) == "What is stuck?"
+
+
+def test_the_typed_turn_marks_a_direct_voice_consult_for_openclaw_only_and_says_the_words_were_spoken():
+    import ast
+    import inspect
+    from minimoi_portal.guild_ui.mc_voice_transcripts import input_context
+    source = inspect.getsource(api.run_mc_turn)
+    assert 'services.mc.kind == "openclaw" and host_channel is VOICE_MARKER' in source
+    assert "direct_voice=host_channel is VOICE_MARKER" in source
+    assert "provider's transcription" in input_context(direct_voice=True) and "managed" not in input_context(direct_voice=True)
+    assert input_context() == input_context(direct_voice=False)                     # typed turns are unchanged
+    calls = [n for n in ast.walk(ast.parse(inspect.getsource(direct))) if isinstance(n, ast.Call)
+             and getattr(n.func, "attr", None) == "_answer_turn"]
+    assert [k.arg for c in calls for k in c.keywords] == ["host_channel"]

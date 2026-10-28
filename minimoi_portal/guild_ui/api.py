@@ -905,8 +905,9 @@ def _delivery_requested(note):
     return feature_environ().get(mc_deliveries.FLAG) == "1" and mc_deliveries.requested(note.get("text"))
 
 
-def _answer_turn(found, turn):
-    """/mc/turns after its guards and ledger claim (also a dispatched waiting turn, P2)."""
+def _answer_turn(found, turn, host_channel=None):
+    """/mc/turns after its guards and ledger claim (also a dispatched waiting turn, P2). ``host_channel`` is a
+    server-held marker only (a direct-path voice consult: mc.openclaw.VOICE_MARKER), never request data."""
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     phase = "before"
     try:
@@ -923,7 +924,8 @@ def _answer_turn(found, turn):
         phase = "model"
         answer, status = run_mc_turn(services, conversations=_conversations(), floor=floor, conv=conv,
                                      principal=principal, note=note, note_id=note_id, request_id=request_id,
-                                     attachment_ids=attachment_ids, ledger_turn=turn)
+                                     attachment_ids=attachment_ids, ledger_turn=turn,
+                                     **({"host_channel": host_channel} if host_channel is not None else {}))
         if turn is not None:
             turn.finish_model(answer, status)
         return jsonify(answer), status
@@ -2221,8 +2223,10 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
             except Exception:
                 _mc_log().warning("mc turn %s: Board proposal preparation unavailable", turn_id)
         from .mc.cos import MANAGED_VOICE_CHANNEL
+        from .mc.openclaw import VOICE_MARKER
         context_text = _with_context(_with_agent(_with_files(sent_text, files), agent_state), sent_text, conv, principal,
-                                     current_voice=host_channel is MANAGED_VOICE_CHANNEL)
+                                     current_voice=host_channel is MANAGED_VOICE_CHANNEL,
+                                     direct_voice=host_channel is VOICE_MARKER)
         if board_plan is not None:
             context_text += "\n\n" + board_plan.contract()
         if delivery:
@@ -2232,6 +2236,8 @@ def run_mc_turn(services, *, conversations, floor, conv, principal, note, note_i
         from .mc.cos import MANAGED_VOICE_CHANNEL
         if services.mc.kind == "cos" and host_channel is MANAGED_VOICE_CHANNEL:
             turn_context["host_channel"] = MANAGED_VOICE_CHANNEL
+        elif services.mc.kind == "openclaw" and host_channel is VOICE_MARKER:
+            turn_context["host_channel"] = VOICE_MARKER          # the OpenClaw adapter translates it (Spec 164 §9)
         req = TurnRequest(conversation_id=session_conversation_id(conv, principal), text=context_text,
                           note_request_id=note_id, correlation_id=turn_id, context=turn_context)
         _mc_log().info("mc turn %s start backend=%s files=%d", turn_id, services.mc.kind, len(files.report) if files else 0)
@@ -2489,12 +2495,12 @@ def _with_agent(text: str, state) -> str:
     return f"{text}\n\n{state.text}" if state is not None else text
 
 
-def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False) -> str:
+def _with_context(text: str, owner_text: str, conv, principal: str, *, current_voice=False, direct_voice=False) -> str:
     """Then, as more marked DATA, what a quick question needs in the SAME turn (#298): the GitHub items the owner's words point at, and the true state of this
     conversation's jobs, plus explicitly referenced Board notes. Board read failure is explicit DATA; it never becomes completion. Never reached by a Private turn."""
     from . import mc_context
     from .mc_voice_transcripts import input_context
-    extra = [input_context(current_voice=current_voice)]
+    extra = [input_context(current_voice=current_voice, direct_voice=direct_voice)]
     from . import release_context
     release = release_context.block(owner_text)
     if release:

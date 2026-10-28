@@ -313,7 +313,10 @@ def _typed_turn(sessions, principal, session_id, call_id, name, conv, text, bad)
         turn = api._ledger_turn(found, kind="voice")
     except Refusal as refused:
         return {"ok": False, "error": refused.body.get("error"), "spoken": refused.body.get("message") or FAILED}
-    response = current_app.make_response(api._answer_turn(found, turn))
+    from .mc.openclaw import VOICE_MARKER
+    # A voice marker, server-held (not the managed sideband's sentinel, never a browser value): the typed turn says the words
+    # were spoken, and the OpenClaw adapter translates it into its context (Spec 164 §9).
+    response = current_app.make_response(api._answer_turn(found, turn, host_channel=VOICE_MARKER))
     answer = response.get_json(silent=True) if response.is_json else None
     answer = answer if isinstance(answer, dict) else {}
     answered = response.status_code == 200 and answer.get("status") == "answered"
