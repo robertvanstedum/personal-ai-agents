@@ -189,14 +189,16 @@ def test_bootstrap_issues_an_owner_session_with_a_sceneless_english_persona_and_
 def test_the_session_text_is_composed_here_rules_then_card_then_this_conversation(ready):
     """Spec 164 §7: the shared operating rules whole, then MC's card, then bounded continuity; no language-practice text."""
     from minimoi_portal.guild_ui.mc_managed_realtime import INSTRUCTIONS
-    from core.realtime_voice.voice_card import load_card
+    from core.realtime_voice.voice_card import load_pinned
     r = ready
     earlier = start(r)["voice_session_id"]
     post(r, earlier, [turn(r, "user", "item_u1", "The glaze recipe is in the blue folder.")])
     r.client.post(BASE + f"/session/{earlier}/end", headers=r.headers)
     start(r)
     first, second = r.mints[0]["instructions"], r.mints[1]["instructions"]
-    card = load_card("0.1.18")["card"]
+    pinned = load_pinned(direct.CARD_ROOT)                     # MC's card is pinned by data (Spec 165 §4.5)
+    assert pinned["release"] == "0.1.18" and r.config["mc_direct_voice"]["card_release"] == "0.1.18"
+    card = pinned["card"]
     rules, who, now = second.index(INSTRUCTIONS), second.index(card), second.index("THIS CONVERSATION SO FAR (DATA)")
     assert second.startswith("=== OPERATING RULES ===") and rules < who < now
     assert direct.NO_CONTINUITY in first and "The glaze recipe is in the blue folder." in second[now:]

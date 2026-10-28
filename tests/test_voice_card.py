@@ -1,4 +1,5 @@
-"""MC's voice card loads from a release, only when its hash is the manifest's, and never invents a voice id."""
+"""A person's voice card loads from that person's release folder, only when its hash is the manifest's, never invents a
+voice id, and is pinned by data: <root>/pin.json names the release (Spec 165 §4.5). Optional language and accent."""
 import hashlib
 import json
 import shutil
@@ -8,63 +9,104 @@ from pathlib import Path
 
 import pytest
 
-from core.realtime_voice.voice_card import load_card
+from core.realtime_voice.voice_card import load_card, load_pinned
 
 REPO = Path(__file__).resolve().parents[1]
+MC_ROOT = REPO / "services/mc_operations/personas/mc-chat"
 
 
-def release_with(folder, payload):
-    folder.mkdir()
+def release_with(root, release, payload, *, pin=False):
+    folder = root / "releases" / release
+    folder.mkdir(parents=True)
     raw = json.dumps(payload).encode()
     (folder / "voice.json").write_bytes(raw)
     (folder / "manifest.json").write_text(json.dumps({"files": {"voice.json": hashlib.sha256(raw).hexdigest()}}))
+    if pin:
+        (root / "pin.json").write_text(json.dumps({"release": release}))
+    return folder
 
 
-def test_an_unset_voice_uses_the_provider_default_and_says_so(tmp_path, monkeypatch):
-    import core.realtime_voice.voice_card as cards
-    release_with(tmp_path / "0.9.0", {
+def test_an_unset_voice_uses_the_provider_default_and_says_so(tmp_path):
+    release_with(tmp_path, "0.9.0", {
         "schema": 1,
         "card": "Master Craftsman. English by default. Light Austrian accent.",
         "voices": {},
     })
-    monkeypatch.setattr(cards, "RELEASES", tmp_path)
-    loaded = load_card("0.9.0")
+    loaded = load_card(tmp_path, "0.9.0")
     assert loaded["voices"] == {"openai": "marin", "xai": "eve"}
     assert loaded["notices"] == ["openai voice is unset, using marin", "xai voice is unset, using eve"]
     assert "Austrian" in loaded["card"]
+    assert loaded["language"] == "en-US" and loaded["accent"] is None and loaded["release"] == "0.9.0"   # absent: en-US
 
 
-def test_a_named_voice_is_kept_and_an_unknown_one_falls_back(tmp_path, monkeypatch):
-    import core.realtime_voice.voice_card as cards
-    release_with(tmp_path / "0.9.1", {
+def test_a_named_voice_is_kept_and_an_unknown_one_falls_back(tmp_path):
+    release_with(tmp_path, "0.9.1", {
         "schema": 1,
         "card": "Master Craftsman.",
         "voices": {"openai": "cedar", "xai": "not-a-voice"},
     })
-    monkeypatch.setattr(cards, "RELEASES", tmp_path)
-    loaded = load_card("0.9.1")
+    loaded = load_card(tmp_path, "0.9.1")
     assert loaded["voices"]["openai"] == "cedar"
     assert loaded["voices"]["xai"] == "eve"
     assert loaded["notices"] == ["xai voice is unset, using eve"]
 
 
-def test_the_card_is_refused_unless_its_hash_is_the_manifests(tmp_path, monkeypatch):
-    import core.realtime_voice.voice_card as cards
-    monkeypatch.setattr(cards, "RELEASES", tmp_path)
-    release_with(tmp_path / "0.9.2", {"schema": 1, "card": "Master Craftsman.", "voices": {}})
-    (tmp_path / "0.9.2" / "voice.json").write_text(json.dumps({"schema": 1, "card": "Someone else.", "voices": {}}))
+def test_the_card_is_refused_unless_its_hash_is_the_manifests(tmp_path):
+    folder = release_with(tmp_path, "0.9.2", {"schema": 1, "card": "Master Craftsman.", "voices": {}})
+    (folder / "voice.json").write_text(json.dumps({"schema": 1, "card": "Someone else.", "voices": {}}))
     with pytest.raises(ValueError, match="manifest"):
-        load_card("0.9.2")
-    release_with(tmp_path / "0.9.3", {"schema": 1, "card": "Master Craftsman.", "voices": {}})
-    (tmp_path / "0.9.3" / "manifest.json").write_text(json.dumps({"files": {}}))      # not listed: refused too
+        load_card(tmp_path, "0.9.2")
+    folder = release_with(tmp_path, "0.9.3", {"schema": 1, "card": "Master Craftsman.", "voices": {}})
+    (folder / "manifest.json").write_text(json.dumps({"files": {}}))      # not listed: refused too
     with pytest.raises(ValueError, match="manifest"):
-        load_card("0.9.3")
+        load_card(tmp_path, "0.9.3")
 
 
-def test_the_candidate_release_is_listed_and_verified():
-    manifest = json.loads((REPO / "services/mc_operations/personas/mc-chat/releases/0.1.18/manifest.json").read_text())
+def test_the_pin_names_the_release_and_a_missing_or_bad_pin_is_refused(tmp_path):
+    release_with(tmp_path, "0.9.4", {"schema": 1, "card": "Chief of Staff.", "voices": {"openai": "cedar"}}, pin=True)
+    assert load_pinned(tmp_path)["card"] == "Chief of Staff." and load_pinned(tmp_path)["release"] == "0.9.4"
+    for pin in ({"release": "0.9.9"}, {}, {"release": "0.9.4", "card": "x"}, ["0.9.4"], {"release": 4}):
+        (tmp_path / "pin.json").write_text(json.dumps(pin))
+        with pytest.raises((OSError, ValueError)):
+            load_pinned(tmp_path)
+    (tmp_path / "pin.json").write_text("not json")
+    with pytest.raises(ValueError):
+        load_pinned(tmp_path)
+    (tmp_path / "pin.json").unlink()
+    with pytest.raises(OSError):
+        load_pinned(tmp_path)
+
+
+def test_a_release_is_a_name_never_a_path(tmp_path):
+    release_with(tmp_path, "0.9.5", {"schema": 1, "card": "x.", "voices": {}})
+    for release in ("../releases/0.9.5", "0.9.5/", "/etc", "..", "0.9.5\n", "", None):
+        with pytest.raises(ValueError, match="release name"):
+            load_card(tmp_path, release)
+    (tmp_path / "pin.json").write_text(json.dumps({"release": "../../mc-chat/releases/0.1.18"}))
+    with pytest.raises(ValueError, match="release name"):
+        load_pinned(tmp_path)
+
+
+def test_language_is_an_allowed_locale_and_accent_a_short_label(tmp_path):
+    loaded = load_card(tmp_path, release_with(tmp_path, "0.9.6", {
+        "schema": 1, "card": "Chefe de gabinete.", "voices": {}, "language": "pt-BR", "accent": "light Austrian"}).name)
+    assert loaded["language"] == "pt-BR" and loaded["accent"] == "light Austrian"
+    for n, extra in enumerate(({"language": "fr-FR"}, {"language": None}, {"language": "EN-us"}, {"accent": ""},
+                               {"accent": 7}, {"accent": "x" * 81})):
+        release = f"0.8.{n}"
+        release_with(tmp_path, release, {"schema": 1, "card": "x.", "voices": {}, **extra})
+        with pytest.raises(ValueError, match="language|accent"):
+            load_card(tmp_path, release)
+
+
+def test_mcs_card_is_pinned_and_verified():
+    manifest = json.loads((MC_ROOT / "releases/0.1.18/manifest.json").read_text())
     assert "voice.json" in manifest["files"]
-    assert load_card("0.1.18")["card"].startswith("Master Craftsman, Robert's colleague in the work.")
+    assert json.loads((MC_ROOT / "pin.json").read_text()) == {"release": "0.1.18"}
+    pinned = load_pinned(MC_ROOT)
+    assert pinned["release"] == "0.1.18" and pinned["language"] == "en-US"
+    assert pinned["card"].startswith("Master Craftsman, Robert's colleague in the work.")
+    assert pinned == load_card(MC_ROOT, "0.1.18")
 
 
 def test_a_header_release_carries_the_voice_card_and_its_hash(tmp_path):

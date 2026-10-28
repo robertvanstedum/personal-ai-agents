@@ -27,6 +27,7 @@ import re
 import threading
 import time
 import uuid
+from pathlib import Path
 
 from flask import Blueprint, current_app, g, jsonify, request
 
@@ -36,7 +37,7 @@ from core.realtime_voice.consult import ConsultLedger, create_consult_blueprint
 from core.realtime_voice.controlled_session import SessionRefused
 from core.realtime_voice.duration_guard import DurationGuard
 from core.realtime_voice.transcripts import MAX_BYTES as TURN_MAX_BYTES, STAMP, stamp_time
-from core.realtime_voice.voice_card import load_card
+from core.realtime_voice.voice_card import load_pinned
 
 from . import _api_error, cfg, mc_voice_reveal as reveal, owner_api
 from .security import check_stop, check_write, json_error
@@ -45,9 +46,10 @@ from .stores import NOTE_MAX
 log = logging.getLogger(__name__)
 ENV = "MINIMOI_MC_VOICE_DIRECT"
 ALLOWANCE_ENV = "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO"
-RELEASE = "0.1.18"                 # MC's card; read at each bootstrap, so a session keeps the card it started with
+# MC's card: <CARD_ROOT>/pin.json names the adopted release (Spec 165 §4.5); read at each bootstrap, so a session keeps
+# the card it started with. The session locale is the card's language (absent: en-US).
+CARD_ROOT = Path(__file__).resolve().parents[2] / "services/mc_operations/personas/mc-chat"
 PERSONA = "master_craftsman"
-LOCALE = "en-US"
 PREFIX = "/api/v1/mc/voice/direct"
 NOT_SAVED = "The note is not saved."
 NOT_A_NOTE = "Nothing was saved. Say 'make a note that' and the note, and I'll save it."
@@ -102,13 +104,16 @@ def _instructions(card):
                          "=== THIS CONVERSATION SO FAR (DATA) ===\n\n" + (continuity or NO_CONTINUITY)))
 
 
-def _persona(name):
+def _persona(name, locale):
     if name != PERSONA:
         return None
     try:
-        card = load_card(RELEASE)
+        card = load_pinned(CARD_ROOT)
     except (OSError, ValueError):                  # missing, unreadable or not the manifest's: voice unavailable
-        log.exception("mc direct voice: card %s unavailable", RELEASE)
+        log.exception("mc direct voice: card unavailable")
+        return None
+    if card["language"] != locale:                 # the pin changed under a running portal: not this session's locale
+        log.error("mc direct voice: card language %s is not the offered %s", card["language"], locale)
         return None
     return {"name": "Master Craftsman", "prompt_txt": card["card"], "scenes": {}, "voices": card["voices"],
             "tools": TOOLS, "notices": card["notices"], "instructions": _instructions(card["card"])}
@@ -593,6 +598,12 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
         return False
     config = app.extensions[mount]
     sessions = _Sessions(clock)
+    try:
+        pinned = load_pinned(CARD_ROOT)              # the locale and release offered; each bootstrap reads the card again
+    except (OSError, ValueError):
+        log.exception("mc direct voice: card unavailable")
+        pinned = {}
+    locale, release = pinned.get("language", "en-US"), pinned.get("release")
     base = config["url_prefix"] + PREFIX
     boot_name, consult_name = mount + "_mc_voice_bootstrap", mount + "_mc_voice_consult"
 
@@ -664,7 +675,7 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
             log.exception("mc direct voice: consult failed")
             return {"ok": False, "error": "unavailable", "spoken": FAILED}
 
-    boot = create_bootstrap_blueprint(domain="mc", locale=LOCALE, get_persona=_persona,
+    boot = create_bootstrap_blueprint(domain="mc", locale=locale, get_persona=lambda name: _persona(name, locale),
                                       is_production=lambda: os.environ.get("MINIMOI_ROLE") != "development",
                                       consult_ledger=sessions, owner=owner, admit=admit)
     boot.before_request(bootstrap_guard)
@@ -816,7 +827,7 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
         app.register_blueprint(bp, url_prefix=base, name=name)
     from core.realtime_voice.capabilities import AGENT_CONVERSATION_MODE, providers_for_mode
     from core.realtime_voice.config import resolve_provider
-    offered = [p.public_dict() for p in providers_for_mode(AGENT_CONVERSATION_MODE, LOCALE)]   # a static table, not a key
+    offered = [p.public_dict() for p in providers_for_mode(AGENT_CONVERSATION_MODE, locale)]   # a static table, not a key
     config["mc_direct_voice"] = {"path": "direct", "providers": offered,
                                  "default_provider": resolve_provider(explicit=None, saved_preference=None,
                                                                       is_production=True),
@@ -826,7 +837,7 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
                                  "transcript_url": base + "/api/realtime-voice/session/{session_id}/transcript",
                                  "summary_url": base + "/api/realtime-voice/session/{session_id}/summary",
                                  "summary_decision_url": base + "/api/realtime-voice/session/{session_id}/summary/decision",
-                                 "heartbeat_seconds": 20, "persona": PERSONA, "locale": LOCALE, "card_release": RELEASE}
+                                 "heartbeat_seconds": 20, "persona": PERSONA, "locale": locale, "card_release": release}
     config["mc_direct_voice_live"] = sessions.live      # server-side only: which sessions the reveal treats as live
     config["mc_direct_voice_tagged"] = sessions.tagged  # server-side only: notes this process tagged with a session
     config["mc_direct_voice_known"] = sessions.known    # server-side only: sessions this process issued
