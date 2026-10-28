@@ -20,6 +20,28 @@ _AS_DOWNLOAD=re.compile(r'^(?:please\s+)?(?:deliver|send|give|export|save|provid
 _SO_I_DOWNLOAD=re.compile(r'^(?:please\s+)?(?:deliver|send|give|export|save|provide|package|put|attach|share|drop|post)\s+(?:me\s+|us\s+)?'
                           r'(?:it|them|this|that|these|the|my|our|a|an)\b[^.!?\n]{0,120}?\s+(?:so\s+(?:that\s+)?|and\s+)I\s+(?:can\s+)?download\b',re.I)
 _QUOTES=re.compile(r'''"[^"]*"|“[^”]*”|‘[^’]*’|(?<!\w)'[^']*'(?!\w)|`[^`]*`''')
+# A delivery clause may follow an explicit composition command. Do not search
+# arbitrary prose for an imperative: reporting, conditions and negation can
+# govern the whole sentence, including the words after "and".
+_COMPOSE=re.compile(r'^(?:please\s+)?(?:write|draft|compose|create|prepare|make|generate|build|summarize|revise)\s+',re.I)
+_CLAUSE_JOIN=re.compile(r'(?:,\s*|\s+)(?:and(?:\s+then)?|then)\s+|;\s+',re.I)
+_DEPENDENT=re.compile(r"\b(?:if|unless|whether|until)\b|\b(?:not|never|don[’']t)\s+(?:\w+\s+){0,2}(?:write|create|make|send|give|save|deliver|export|package|generate|provide|attach|share|drop|post)\b",re.I)
+_REPORTED=re.compile(r':|\b(?:explain|says|said|pretend)\b',re.I)
+
+
+def _delivery_command(command):
+ return bool(_REQUEST.match(command) or _PACKAGE.match(command)
+             or _AS_DOWNLOAD.match(command) or _SO_I_DOWNLOAD.match(command))
+
+
+def _compound_delivery(command):
+ # Keep the whole composition prefix: a conjunction may belong to its subject
+ # ("pros and cons"), not mark another command. Never expose a delivery command
+ # through a reported/example prefix; conditions and negation cover the full
+ # sentence, including text after the delivery clause.
+ if not _COMPOSE.match(command) or _DEPENDENT.search(command) or _REPORTED.search(command):
+  return False
+ return any(_delivery_command(command[join.end():]) for join in _CLAUSE_JOIN.finditer(command))
 
 
 def _owner_sentences(text):
@@ -54,8 +76,7 @@ def requested(text):
  for sentence in _owner_sentences(text):
   polite=bool(_POLITE.match(sentence))
   command=_POLITE.sub('',sentence)
-  if (polite or not sentence.endswith('?')) and (_REQUEST.match(command) or _PACKAGE.match(command)
-                                                 or _AS_DOWNLOAD.match(command) or _SO_I_DOWNLOAD.match(command)):
+  if (polite or not sentence.endswith('?')) and not _DEPENDENT.search(command) and (_delivery_command(command) or _compound_delivery(command)):
    return True
  return False
 

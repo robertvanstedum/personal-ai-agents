@@ -23,6 +23,9 @@ message needs one, call it yourself; do not propose a JOB or an ASK line for the
   `minimoi_lesson_propose` only when he explicitly asks to propose a lesson for his confirmation.
 - Research by Claude Code or Codex ("ask Claude Code to research / look into …"): `minimoi_delegate_research`. His
   own message is the brief; give only a short title. JOB:, ASK and MEETING lines do nothing any more: use the tools.
+- Putting something to Claude Code, Codex or Grok in their own sessions ("ask Codex to …", "tell Grok …", "ask all of
+  them …"): `minimoi_agent_ask` with exactly the agents he names (`["all"]` only when he says all or everyone) and a short title; if his words do not ask them, nothing is sent. His own message is what they get;
+  their pickup and reports come back into this conversation. It is done at once; say what its result says.
 - Giving someone a Meu Português login (for example family): `minimoi_access_invite`. Ask for the name and email
   first if he did not give them.
 

@@ -21,8 +21,9 @@ import secrets
 import time
 from datetime import datetime, timezone
 
-ACTORS = ("mc", "claude-code", "codex", "robert")
-RECIPIENTS = ("claude-code", "codex")
+ACTORS = ("mc", "claude-code", "codex", "grok", "robert")
+RECIPIENTS = ("claude-code", "codex", "grok")       # who can be asked and pick a request up in the ledger
+CONNECTED = ("claude-code", "codex")               # who has an automated session connection or MC direct contact; grok checks `pending` itself
 EVENT_KINDS = ("delivery", "receipt", "progress", "result", "needs_you", "cancel")
 STAGES = ("queued", "acknowledged", "working", "returned")          # the Workshop Log's request stages; set by receipts here, not by hand
 ACTION_MAX = 4000
@@ -206,7 +207,7 @@ def create_request(root: str, *, request_id: str, frm: str, to: str, action: str
     if frm not in ACTORS:
         raise Refused("invalid", "Unknown sender.")
     if to not in RECIPIENTS:
-        raise Refused("invalid", "A request can be addressed to claude-code or codex.")
+        raise Refused("invalid", "A request can be addressed to claude-code, codex or grok.")
     if frm == to:
         raise Refused("invalid", "A request cannot be addressed to its sender.")
     if conversation_id is not None and not valid_conversation(conversation_id):

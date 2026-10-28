@@ -12,7 +12,18 @@ import re
 
 KEY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 SESSION = re.compile(r"^[A-Za-z0-9._:-]{4,96}$")
-AGENTS = ("claude-code", "codex")
+AGENTS = ("claude-code", "codex", "grok")
+NAMES = {"claude-code": "Claude Code", "codex": "Codex", "grok": "Grok", "mc": "MC", "robert": "Robert"}
+EXCHANGE_KINDS = ("ask", "receipt", "progress", "result", "needs_you", "cancel")
+EXCHANGE_ACTORS = ("mc", "claude-code", "codex", "grok", "robert")
+REQUEST_ID = re.compile(r"^r-[0-9a-f]{20,40}$")
+EVENT_ID = re.compile(r"^(ask|[0-9a-f]{8,40})$")
+MAX_EXCHANGES = 50
+
+
+def name(agent):
+    """How a person or agent is named to Robert and MC."""
+    return NAMES.get(agent, agent)
 STATES = ("done", "blocked", "awaiting_owner", "awaiting_review", "waiting_ci", "error", "unreported")
 CODE = re.compile(r"^D-?(\d{1,9})$", re.I)
 MAX_STOPS, MAX_ASKS = 20, 5
@@ -90,6 +101,19 @@ def clean_ask(a):
             "requester": {"agent": a["agent"], "session": a["session"], "branch": _text(a.get("branch", ""), 200)}}
 
 
+def clean_exchange(e):
+    """One entry from the agents' request ledger on the Mac (core/agent_requests): an ask or a reply. The words are
+    an agent's, kept as data for MC and Robert to read; they never become an instruction or an answer."""
+    need(type(e) is dict and set(e) <= {"request_id", "event_id", "kind", "actor", "to", "at", "text"})
+    need(type(e.get("request_id")) is str and REQUEST_ID.match(e["request_id"]))
+    need(type(e.get("event_id")) is str and EVENT_ID.match(e["event_id"]))
+    need(e.get("kind") in EXCHANGE_KINDS and e.get("actor") in EXCHANGE_ACTORS and e.get("to") in EXCHANGE_ACTORS)
+    need(type(e.get("at")) in (int, float) and 1.6e9 < e["at"] < 4e9)
+    return {"event_key": f"{e['request_id']}:{e['event_id']}", "request_id": e["request_id"], "kind": e["kind"],
+            "actor": e["actor"], "recipient": e["to"], "text": _text(e.get("text", ""), 600),
+            "at": datetime.fromtimestamp(e["at"], timezone.utc)}
+
+
 class Store:
     def __init__(self, connect):
         self.connect = connect
@@ -109,29 +133,61 @@ class Store:
             conn.close()
 
     # ---- the Mac sync (worker token) ----------------------------------------------------------------------------
-    def worker(self, body):
-        """One bounded call from the Mac sync: report | pull | ack. Raises Refused for anything malformed."""
+    def worker(self, body, relay=None):
+        """One bounded call from the Mac sync: report | pull | ack. Raises Refused for anything malformed. ``relay``
+        (core/supervision/relay.Relay over production's request ledger, or None while MC's front door is off) also
+        carries Robert's requests to the agents down and their replies up."""
+        from . import relay as R
         need(type(body) is dict and body.get("phase") in ("report", "pull", "ack"))
         phase = body["phase"]
         if phase == "report":
-            need(set(body) <= {"phase", "stops", "asks"})
+            need(set(body) <= {"phase", "stops", "asks", "exchanges", "relay_events", "listeners"})
             stops = body.get("stops", [])
             asks = body.get("asks", [])
+            exchanges = body.get("exchanges", [])
+            events = body.get("relay_events", [])
             need(type(stops) is list and len(stops) <= MAX_STOPS and type(asks) is list and len(asks) <= MAX_ASKS)
+            need(type(exchanges) is list and len(exchanges) <= MAX_EXCHANGES)
+            need(type(events) is list and len(events) <= R.MAX_EVENTS)
             stops, asks = [clean_stop(s) for s in stops], [clean_ask(a) for a in asks]
-            return self._run(lambda cur: self._report(cur, stops, asks))
+            exchanges = [clean_exchange(e) for e in exchanges]
+            try:
+                events = [R.clean_event(e) for e in events]
+                listeners = R.clean_listeners(body.get("listeners", {}))
+            except R.Refused:
+                raise Refused("supervision_request_invalid") from None
+            out = self._run(lambda cur: self._report(cur, stops, asks, exchanges))
+            if events:
+                out["relay_events"] = (relay.apply(events) if relay is not None else
+                                       [{"key": f"{e['request_id']}:{e['event_id']}", "state": "refused",
+                                         "code": "relay_off"} for e in events])
+            if relay is not None and listeners:
+                out["listeners"] = relay.listeners(listeners)
+            return out
         if phase == "pull":
             need(set(body) == {"phase"})
-            return self._run(self._pull)
-        need(set(body) <= {"phase", "decisions", "nudges"})
+            out = self._run(self._pull)
+            return R.fill(out, relay.pull()) if relay is not None else out
+        need(set(body) <= {"phase", "decisions", "nudges", "requests"})
         decisions, nudges = body.get("decisions", []), body.get("nudges", [])
+        requests = body.get("requests", [])
         need(type(decisions) is list and len(decisions) <= 50 and all(type(k) is str and KEY.match(k) for k in decisions))
         need(type(nudges) is list and len(nudges) <= 50 and all(type(i) is int and i > 0 for i in nudges))
-        return self._run(lambda cur: self._ack(cur, decisions, nudges))
+        need(type(requests) is list and len(requests) <= R.MAX_PULL
+             and all(type(r) is str and REQUEST_ID.match(r) for r in requests))
+        out = self._run(lambda cur: self._ack(cur, decisions, nudges))
+        if requests:
+            out["requests"] = relay.ack(requests) if relay is not None else []
+        return out
 
     @staticmethod
-    def _report(cur, stops, asks):
-        out = {"stops": [], "asks": []}
+    def _report(cur, stops, asks, exchanges=()):
+        out = {"stops": [], "asks": [], "exchanges": []}
+        for e in exchanges:
+            cur.execute("""INSERT INTO guild.supervision_exchanges (event_key, request_id, kind, actor, recipient, text, at)
+                VALUES (%(event_key)s, %(request_id)s, %(kind)s, %(actor)s, %(recipient)s, %(text)s, %(at)s)
+                ON CONFLICT (event_key) DO NOTHING""", e)
+            out["exchanges"].append(e["event_key"])
         for s in stops:
             cur.execute("""INSERT INTO guild.supervision_stops (report_key, agent, session, state, needs, next,
                     decision_key, pr, issue, branch, waiting, stopped_at)
@@ -309,6 +365,18 @@ class Store:
             cur.execute("""SELECT runner_id, state, seen_at, clock_timestamp() AS now
                 FROM guild.mc_delegation_runners ORDER BY seen_at DESC LIMIT 5""")
             return {"jobs": jobs, "runners": cur.fetchall()}
+        return self._run(q)
+
+    def recent_exchanges(self, *, hours=24, limit=12, kinds=None):
+        """The agents' newest ledger entries (asks and replies), newest first. Empty before the table exists."""
+        def q(cur):
+            cur.execute("SELECT to_regclass('guild.supervision_exchanges') IS NOT NULL AS present")
+            if not cur.fetchone()["present"]:
+                return []
+            cur.execute("""SELECT event_key, request_id, kind, actor, recipient, text, at FROM guild.supervision_exchanges
+                WHERE at > clock_timestamp() - make_interval(hours => %s) AND (%s::text[] IS NULL OR kind = ANY(%s))
+                ORDER BY at DESC, id DESC LIMIT %s""", (hours, kinds, kinds, limit))
+            return cur.fetchall()
         return self._run(q)
 
     def latest_checkin(self):

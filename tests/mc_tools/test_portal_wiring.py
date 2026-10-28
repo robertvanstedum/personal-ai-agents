@@ -245,3 +245,24 @@ class StartupPolicyTests(unittest.TestCase):
             self.assertIsNone(w.attach(app, "bp", SimpleNamespace(mc=None)))
         connect.assert_not_called()
         serve.assert_not_called()
+
+    def test_the_front_door_reaches_the_tool_service_only_when_it_is_attached(self):
+        for asks, wired in ((None, False), (object(), True)):
+            app = mock.MagicMock()
+            app.extensions = {"bp": {"feature_environ": ON, "agent_asks": asks}}
+            service = SimpleNamespace(policy=SimpleNamespace(current=lambda: (None, "policy_unapproved")))
+            with mock.patch.dict(os.environ, {"DATABASE_URL": "postgresql://unused"}), \
+                    mock.patch.object(w, "build_service", return_value=service) as build:
+                w.attach(app, "bp", SimpleNamespace(mc=None, store=None, floor=None))
+            self.assertEqual(build.call_args.kwargs["agent_ask"] is not None, wired)
+
+
+class AgentAskerTests(unittest.TestCase):
+    def test_asks_through_the_front_door_with_the_owner_note_and_returns_its_words(self):
+        import tempfile
+        from minimoi_portal.guild_ui.agent_ask import AskService
+        self.assertIsNone(w.agent_asker(None))
+        ask = w.agent_asker(AskService(tempfile.mkdtemp()))
+        made, words = ask("c-0123456789abcdef", "Robert's words.", "n-1", ("grok",))
+        self.assertEqual([(m["to"], m["ok"]) for m in made], [("grok", True)])
+        self.assertTrue(words.startswith("Asked Grok:"))

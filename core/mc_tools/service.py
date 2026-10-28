@@ -46,6 +46,7 @@ _SPACED = re.compile(r"(?<![A-Za-z])(?:[A-Za-z][\s.\-_'*]+){2,}[A-Za-z](?![A-Za-
 PROD_CHANGE_KINDS = {"guest_reject": "production data change", "access_invite": "production access change"}
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"        # no 0/O or 1/I/L: Robert types it back
 AGENT_NAMES = {"claude-code": "Claude Code", "codex": "Codex"}
+ASK_AGENTS = ("claude-code", "codex", "grok")                # minimoi_agent_ask: who can be asked; "all" is the three
 REFUSED_WORDS = {
     "tool_turn_not_live": "This tool only works inside Robert's own live turn, and that turn is no longer running. Nothing was done.",
     "tool_session_invalid": "This conversation is not one MiniMoi can act in. Nothing was done.",
@@ -167,7 +168,8 @@ class ToolService:
                  comments: bool = False, guest_rejects: bool = False, github=None, show=None, read_shown=None,
                  isolated_runtime: bool = False, worker: str = "mc-tools", guests_lookup=None, people=None,
                  standard_changes=None, display_tz: str = offers.DISPLAY_TZ, policy=None, read_owner_note=None,
-                 domain_health=None, registers=None, board=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None):
+                 domain_health=None, registers=None, board=None, export_conversation=None, artifact_root=None, agent_contact=None, recall_source=None,
+                 agent_ask=None):
         """``connect()`` returns a new psycopg2 connection to the guild database (autocommit off).
         ``lessons`` is a LessonLedger (or None: lessons off). ``guests_lookup(email)`` returns an existing
         guest login with that email (or None); invites are refused while it is missing."""
@@ -204,6 +206,9 @@ class ToolService:
         self.export_conversation, self.artifact_root = export_conversation, artifact_root or ROOT
         self._host_effects, self._host_effect_lock = {}, threading.Lock()
         self.agent_contact = agent_contact
+        # agent_ask(conversation_id, note_text, note_request_id, to) -> (made, words), with agent_ask.check(note_text,
+        # to) -> None | (code, words): the front door (portal wiring, AgentAsker), or None while asking the agents is off.
+        self.agent_ask = agent_ask
 
     def _change_gate(self, kind):
         """(standard change, None) when MC may offer this kind here, else (None, refusal). Dev: no gate. Prod: a data or
@@ -874,6 +879,72 @@ class ToolService:
         return result("done", code, message, {"reference": ref_id, "revision": revision,
                                               "undo": {"reference": ref_id, "revision": revision} if code == "recorded"
                                               else None, "receipt_id": str(receipt["receipt_id"])})
+
+    # ── tier 2: Robert's own message handed to his agents (the front door, OPS-2026-10-27) ───────────────────────
+    def _agent_ask(self, args, caller, observation):
+        """Robert's current kept note, word for word, as one request per named agent in the request ledger. The model
+        names who and a display title only; its words are never sent, and the agents it names must be exactly the
+        ones Robert's own words ask (checked before anything is recorded). The ledger ids come from the note, so a
+        retry (a new call id, a crash after the write) never makes a second request; the receipt finishes from the
+        ledger's own answer, and the words say only what is known (recorded, and whether a listener was seen)."""
+        if self.agent_ask is None or not self._tier2(caller):
+            return refused("tool_unavailable")
+        if "all" in args["to"] and len(args["to"]) > 1:
+            return refused("tool_argument_invalid")
+        to = list(ASK_AGENTS) if args["to"] == ["all"] else [a for a in ASK_AGENTS if a in args["to"]]
+        with self._tx() as conn:
+            b = self._bind(conn, caller)
+        text, refusal = self._owner_words(b)
+        if refusal:
+            return refusal
+        mismatch = self.agent_ask.check(text, to)
+        if mismatch:
+            code, words = mismatch
+            return result("refused", code, f"{words} Do not try other agents; ask Robert whom he means, in his words.",
+                          {"to": to})
+        edition = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        canonical = {"to": to, "source": {"conversation": b.conversation_id, "note": b.note_request_id,
+                                          "edition": edition}}
+        op = self._operation_id(b, "agent.ask.owner_note", canonical)
+        effect = lease = None
+        with self._tx() as conn:
+            b = self._bind_again(conn, caller, b)
+            if effects.receipt_exists(conn, self.principal, self.environment, op):
+                lease = effects.reconcile_effect(conn, principal=self.principal, environment=self.environment,
+                                                 operation_id=op, worker=self.worker)
+            else:
+                effect = effects.begin_standing_effect(conn, b, effects.request("agent.ask.owner_note", canonical),
+                                                       operation_id=op, worker=self.worker)
+        try:
+            made, words = self.agent_ask(b.conversation_id, text, b.note_request_id, to)
+        except Exception:
+            _log.exception("mc tools: agent ask outcome unknown")
+            made, words = None, None
+        ok = [m.get("ok") for m in made or ()]
+        unsure = made is None or None in ok
+        outcome = {"requests": [{"request_id": m.get("request_id"), "to": m.get("to"), "ok": m.get("ok"),
+                                 "listening": m.get("listening")} for m in made or ()]}
+        with self._tx() as conn:
+            if unsure:
+                if effect is not None:
+                    effect.unknown(conn)
+                elif lease is not None:
+                    effects.RECEIPTS.finish(conn, lease, "unknown")
+            elif effect is not None:
+                effect.finish(conn, "agent_ask", outcome, verified=all(ok))
+            elif lease is not None:
+                evidence = effects.record_evidence(conn, b.context(), op, "agent_ask", outcome)
+                effects.RECEIPTS.finish(conn, lease, "verified" if all(ok) else "failed", evidence_refs=(evidence,))
+            receipt = effects.RECEIPTS.read(conn, self.principal, self.environment, op)
+        data = {**outcome, "title": args["title"], "receipt_id": str(receipt["receipt_id"])}
+        if made is None:
+            return result("unknown", "agent_ask_unconfirmed", "MiniMoi could not confirm whether Robert's message was "
+                          "put to the agents. Do not repeat it; tell Robert, and he can check this conversation for "
+                          "their pickup.", data)
+        status, code = (("unknown", "agent_ask_unconfirmed") if unsure else ("done", "asked") if all(ok)
+                        else ("done", "asked_partly") if True in ok else ("refused", "agent_ask_not_recorded"))
+        return result(status, code, f"{words}\n\nTell Robert this in a few words, and nothing more about delivery. "
+                      "Their pickup and reports come back into this conversation on their own.", data)
 
     # ── tier 2: owner preferences (spec §10.1–10.2, M1.3) ────────────────────────────────────────────────────
     def _operation_id(self, b, capability, canonical) -> str:

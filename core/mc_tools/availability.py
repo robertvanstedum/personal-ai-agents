@@ -34,6 +34,8 @@ def snapshot(service, policy_tools, offered_tools):
         "minimoi_keep_preference": [(service.lessons is not None, "lessons_unavailable"),
                                     (service.read_owner_note is not None, "owner_note_reader_unavailable")],
         "minimoi_revoke_preference": [(service.lessons is not None, "lessons_unavailable")],
+        "minimoi_agent_ask": [(getattr(service, "agent_ask", None) is not None, "agent_requests_unavailable"),
+                              (service.read_owner_note is not None, "owner_note_reader_unavailable")],
         "minimoi_record_gap": [(service.registers is not None, "work_register_unavailable"),
                                (service.read_owner_note is not None, "owner_note_reader_unavailable")],
         "minimoi_withdraw_gap": [(service.registers is not None, "work_register_unavailable")],

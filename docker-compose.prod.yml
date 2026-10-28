@@ -299,6 +299,8 @@ services:
       - MINIMOI_MC_DELEGATION_PRINCIPAL=robert
       # Guild jobs carry delegated work (jobs_wiring.py): without them no delegation can start. Off unless .env sets 1.
       - MINIMOI_GUILD_JOBS=${MINIMOI_GUILD_JOBS:-0}
+      # MC's front door to the agents (agent_ask.py, minimoi_agent_ask): Robert's own message into the request ledger. Off unless .env sets 1.
+      - MINIMOI_GUILD_AGENT_REQUESTS=${MINIMOI_GUILD_AGENT_REQUESTS:-0}
       # The Mac delegation runner's HTTPS door (no database port): on with its token hash, set by
       # `deploy_mc_container_ec2.sh runner on <sha256>`.
       - MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256=${MINIMOI_MC_DELEGATION_RUNNER_TOKEN_SHA256:-}
