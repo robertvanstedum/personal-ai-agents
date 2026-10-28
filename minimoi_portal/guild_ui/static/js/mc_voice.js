@@ -277,7 +277,8 @@ export function initMcVoice(page) {
             terminal=true;endedAttempt=mine;controller=null;starting=false;paint(false);
             selector.disabled=false;choice.disabled=false;
             revealSaved();
-            if(!showingError)say('Voice ended. Agent work already accepted may still finish.');
+            // #420 on every MC voice path (UI review #5): the ended line clears after about five seconds or at the next send.
+            if(!showingError)say('Voice ended. Agent work already accepted may still finish.',{transient:true});
           }
         },
         onInputState:phase=>{

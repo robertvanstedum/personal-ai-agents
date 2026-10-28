@@ -37,7 +37,7 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
       this._adapter = { sendContinuationInstruction: (t) => this.instructions.push(t) }; instances.push(this); }
     async startSession(args) {
       this.args = args; this._sessionId = SID;
-      this.options.onSessionInfo({ provider: args.provider, voice_session_id: SID, voice_notices: ['openai voice is unset, using marin'] });
+      this.options.onSessionInfo?.({ provider: args.provider, voice_session_id: SID, voice_notices: ['openai voice is unset, using marin'] });
       this._state = 'active'; this.options.onStateChange('active');
     }
     endSession(reason) {
@@ -128,6 +128,33 @@ let n = 0;
   await r.click();
   assert.equal(r.directLoads, 0);
   assert.ok(r.instances[0].options.managedBootstrap);
+  n++;
+}
+// UI review #5 (#420 on every MC voice path): the managed path's own ended line clears after about five seconds too, or at
+// the next send; an error there stays. An intended change to today's managed path (B_direct_path.md).
+{
+  const managedCaps = { ok: true, providers: [{ provider: 'openai' }], managed_realtime: { session_url: '/fake', provider: 'openai' }, direct_voice: null };
+  const r = await rig({ capabilities: managedCaps });
+  await r.click();
+  r.instances[0].endSession('user_ended');                                               // the provider ended it
+  await flush();
+  assert.equal(r.status(), 'Voice ended. Agent work already accepted may still finish.');
+  const clear = r.timers.filter((t) => t.ms === 5000).at(-1);
+  assert.ok(clear, 'the managed ended line is transient'); clear.fn();
+  assert.equal(r.status(), '');
+  const r2 = await rig({ capabilities: managedCaps });
+  await r2.click();
+  r2.instances[0].endSession('user_ended');
+  await flush();
+  r2.node('[data-mc-composer]').submit();                                                // the next send, before five seconds
+  assert.equal(r2.status(), '');
+  const r3 = await rig({ capabilities: managedCaps });
+  await r3.click();
+  r3.instances[0].options.onFatalError({ reason: 'provider_failure' });
+  r3.instances[0].endSession('fatal_error');
+  await flush();
+  for (const t of r3.timers.filter((x) => x.ms === 5000)) t.fn();
+  assert.match(r3.status(), /^Voice stopped\. Any agent action already accepted may still finish/);   // an error stays
   n++;
 }
 // §8: Dictate, or the floating panel closing (companion-closed), takes the microphone: voice ends, and End is sent.
