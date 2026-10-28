@@ -287,6 +287,10 @@ class _MasterCraftsman(DirectVoiceAdapter):
         answer = response.get_json(silent=True) if response.is_json else None
         answer = answer if isinstance(answer, dict) else {}
         answered = response.status_code == 200 and answer.get("status") == "answered"
+        # Dispatched to MC and no result came back: its own deadline or the relay's (timeout_uncertain: "the outcome is
+        # unknown"), a stopped turn, or a runtime error. MC may have acted with his tools, so the outcome is unknown,
+        # never "did not go through" (Spec 165 §5.1; review R1 P1-1). Every other refusal says it did not happen.
+        uncertain = answer.get("status") in ("timeout_uncertain", "cancelled", "error")
         # A spoken job command (jobs_api.job_command) answers 200 with status "job": the platform acted, so it is not a
         # failure; saying so would have Robert repeat himself and start a second job (review B #2).
         command = answer.get("job_command") if isinstance(answer.get("job_command"), str) else None
@@ -302,7 +306,9 @@ class _MasterCraftsman(DirectVoiceAdapter):
             result.update(saved=saved, receipt=receipt if saved else None,
                           spoken=speakable(said or "") if saved else NOT_SAVED)
             if not saved:
-                result["ok"] = False
+                result.update(ok=False, outcome="unknown" if uncertain else "not_done")
+                if uncertain:
+                    result["error"] = answer.get("status")
             return result
         receipt = kind = None
         if answered:
@@ -321,6 +327,9 @@ class _MasterCraftsman(DirectVoiceAdapter):
         if not (answered or acted):
             result["ok"] = False
             result["error"] = answer.get("error") if isinstance(answer.get("error"), str) else None
+            result["outcome"] = "unknown" if uncertain else "not_done"
+            if uncertain:
+                result["error"] = answer.get("status")
         return result
 
     def summary_model(self, conv, sid, principal, prompt):

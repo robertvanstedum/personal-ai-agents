@@ -39,7 +39,11 @@ log = logging.getLogger(__name__)
 
 ALLOWANCE_ENV = "MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO"   # one value for every direct host (Spec 165 D10)
 DEFAULT_LOCALE = "en-US"
-FAILED = "That did not go through. Nothing is claimed."
+# Spec 165 §5.1: every consult answer is one of four outcomes, each with its own words.
+OUTCOMES = ("done", "not_done", "pending", "unknown")
+FAILED = "That did not go through. Nothing was done."                              # not_done (or the refusal's own words)
+PENDING = "That's taking longer; the answer will be in the conversation."          # pending
+UNKNOWN = "I didn't get the result back. Check it in writing before asking again."  # unknown
 HEARTBEAT_SECONDS = 20
 # The page's transcript posts (§6): bounded per request and per session. Nothing is kept from a refused post.
 POST_MAX_BYTES = 64 * 1024
@@ -154,15 +158,15 @@ def tools(person):
         {"type": "function", "name": "consult",
          "description": (f"Ask {person['name']}'s own turn for current facts, project state, files, jobs or any work. "
                          "The server acts on Robert's own last words, not on these arguments. Speak the result's 'spoken' "
-                         "text without adding claims. If 'ok' is false, say it did not go through; but if 'outcome' is "
-                         "'unknown', say only that the answer did not come back and it must be checked before asking "
-                         "again."),
+                         "text without adding claims. Its 'outcome' is done, not_done, pending (still running: the answer "
+                         "will be in the conversation; say only that) or unknown (the result did not come back: say only "
+                         "that, and that it must be checked before asking again)."),
          "parameters": {"type": "object", "properties": {"question": {"type": "string"}}}},
         {"type": "function", "name": "save_note",
          "description": (f"Save a note when Robert says {notes}. The server saves his own "
                          "words, not these arguments. Say it is saved only when the result has 'saved' true. If "
-                         "'outcome' is 'unknown', say only that the answer did not come back and the note must be "
-                         "checked before it is saved again."),
+                         "'outcome' is pending or unknown, say only what 'spoken' says: the note must be checked before it "
+                         "is saved again."),
          "parameters": {"type": "object", "properties": {"note": {"type": "string"}}}},
     ]
 
@@ -201,14 +205,17 @@ class Receipts:
                  **dict(self.acted.values()), **(dict([acted_other]) if acted_other else {})}
         refs = sorted({kind.capitalize() for kind in (*self.kinds, "operation", *([acted_kind] if acted_kind else []))})
         self.outcomes = heads
-        self._line = re.compile(r"(?P<head>" + "|".join(map(re.escape, heads)) + r"|Not answered \([^)]*\))\."
+        self._line = re.compile(r"(?P<head>" + "|".join(map(re.escape, heads)) + r"|Not answered \([^)]*\)"
+                                r"|Outcome unknown \([^)]*\))\."
                                 r"(?: (?P<ref_kind>" + "|".join(refs) + r") (?P<ref>\S+)\.)?"
                                 r"(?: Spoken:(?: (?P<spoken>.*))?)?", re.S)
 
     def line(self, name, result):
         receipt, kind = result.get("receipt"), result.get("receipt_kind")
         command = result.get(self.acted_key) if self.acted_key else None
-        if name == "save_note":
+        if result.get("outcome") == "unknown":                 # dispatched, no result came back (Spec 165 §5.1)
+            head = f"Outcome unknown ({result.get('error') or 'no result'})."
+        elif name == "save_note":
             head = f"Saved. Operation {receipt}." if result.get("saved") else "Not saved."
         elif command:
             words = (self.acted.get(command) or self.acted_other)[0]
@@ -225,7 +232,9 @@ class Receipts:
         match = self._line.fullmatch((text or "").strip())
         if match is None:
             return {}
-        return {"outcome": self.outcomes.get(match["head"], "not done"), "ref_kind": match["ref_kind"],
+        head = match["head"]
+        outcome = "result unknown" if head.startswith("Outcome unknown") else self.outcomes.get(head, "not done")
+        return {"outcome": outcome, "ref_kind": match["ref_kind"],
                 "ref": match["ref"], "spoken": (match["spoken"] or "").strip()}
 
 
@@ -790,7 +799,28 @@ class DirectSessions(ConsultLedger):
 
 NOT_RECORDED = "That could not be recorded, so nothing was done."
 TURN_MISMATCH = "Those words are not the turn they name, so nothing was done. Say it again."
-UNKNOWN = "I didn't get the result back. Check it in writing before asking again."
+
+
+IN_FLIGHT = {"ok": False, "error": "in flight", "outcome": "pending", "spoken": PENDING}
+
+
+def not_done(error, spoken=FAILED):
+    """A consult answer for an action that did not happen (Spec 165 §5.1 not_done)."""
+    return {"ok": False, "error": error, "outcome": "not_done", "spoken": spoken}
+
+
+def settled_result(result):
+    """A typed turn's result with its outcome (§5.1): the host's own (done, not_done or unknown), else done when ok and
+    not_done when not. Only done is ok. Unknown is said in its own words, never as a failure."""
+    outcome = result.get("outcome")
+    if outcome not in ("done", "not_done", "unknown"):
+        outcome = "done" if result.get("ok") else "not_done"
+    result = {**result, "outcome": outcome, "ok": outcome == "done"}
+    if outcome == "unknown":
+        result["spoken"] = UNKNOWN
+    elif outcome == "not_done" and not (isinstance(result.get("spoken"), str) and result["spoken"].strip()):
+        result["spoken"] = FAILED
+    return result
 
 
 def request_id(item):
@@ -836,16 +866,16 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     if replayed == "replay":
         return prior, 200
     if replayed == "in_flight":
-        return {"ok": False, "error": "in flight", "spoken": HOLDING_LINE}, 409
+        return IN_FLIGHT, 409
     cid = sessions.conversation_of(sid)
     handle, refused = adapter.conversation(cid) if cid else (None, True)      # never a default conversation
     if refused is not None:
-        return {"ok": False, "error": "conversation", "spoken": "That conversation is not available now. " + FAILED}, 200
+        return not_done("conversation", "That conversation is not available now. " + FAILED), 200
     voice_item = "k" + item                       # the turn's consult request and receipt, kept as voice records
     began = stamp(now())
 
     def refused_here(result):                     # a refusal that ran nothing: its own receipt, for this call only
-        result = {"ok": False, **result}
+        result = {"ok": False, **result, "outcome": "not_done"}
         result = keep_receipt(adapter, handle, principal, sid, "x" + digest(call_id)[:32], name, result, began)
         sessions.remember(sid, call_id, result)
         return result, 200
@@ -857,43 +887,43 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     existing = get(adapter, handle, sid, asked["id"])
     if existing is None:
         if not sessions.is_open(sid) or sessions.expired(sid):
-            return {"ok": False, "error": "session ended"}, 409
+            return not_done("session ended"), 409
         if sessions.capped(sid):
-            return {"ok": False, "error": "cap", "spoken": CAP_LINE}, 429
+            return not_done("cap", CAP_LINE), 429
         own = adapter.refuse(name, text)
         if own is not None:
             return refused_here(own)
         if not sessions.hold(sid, item, call_id):
-            return {"ok": False, "error": "in flight", "spoken": HOLDING_LINE}, 409
+            return IN_FLIGHT, 409
         try:                                      # his words, kept as the turn's consult request record (shown at reveal)
             adapter.store.keep(handle, principal, sid, "consult", voice_item, 0, f"{name}: {text}", False, started=began,
                                ended=began)
         except Exception:
             log.exception("%s direct voice: consult request not kept", adapter.person["domain"])
             sessions.release(sid, item, call_id)
-            return {"ok": False, "error": "not_kept", "spoken": FAILED}, 200
+            return not_done("not_kept", FAILED), 200
         kept = put(adapter, handle, sid, asked)
         if kept.outcome == "stored":
             n = sessions.admitted(sid)
             if n is None:                                                       # the cap, reached meanwhile
                 sessions.release(sid, item, call_id)
-                return {"ok": False, "error": "cap", "spoken": CAP_LINE}, 429
+                return not_done("cap", CAP_LINE), 429
             return dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began), 200
         sessions.release(sid, item, call_id)
         if kept.outcome == "refused":
-            return {"ok": False, "error": "not_recorded", "spoken": NOT_RECORDED}, 200
+            return not_done("not_recorded", NOT_RECORDED), 200
         existing = get(adapter, handle, sid, asked["id"])                       # another dispatch put it first
         if existing is None:
-            return {"ok": False, "error": "not_recorded", "spoken": NOT_RECORDED}, 200
+            return not_done("not_recorded", NOT_RECORDED), 200
     return same_key(adapter, sessions, handle, sid, call_id, item, words, existing)
 
 
 def same_key(adapter, sessions, handle, sid, call_id, item, words, existing):
     """A second dispatch of an owner turn already admitted: (answer, status), running nothing."""
     if existing.get("text_sha256") != words:
-        return {"ok": False, "error": "turn_mismatch", "spoken": TURN_MISMATCH}, 409
+        return not_done("turn_mismatch", TURN_MISMATCH), 409
     if sessions.running(sid, item):
-        return {"ok": False, "error": "in flight", "spoken": HOLDING_LINE}, 409
+        return IN_FLIGHT, 409
     settled = sessions.item_result(sid, item)
     if settled is not None:
         first, result = settled
@@ -901,7 +931,7 @@ def same_key(adapter, sessions, handle, sid, call_id, item, words, existing):
         kept = get(adapter, handle, sid, outcome_id(item))
         first, result = (kept.get("call_id"), kept.get("result")) if kept else (None, None)
     if not isinstance(result, dict):
-        answer = {"ok": False, "error": "unknown", "outcome": "unknown", "spoken": UNKNOWN}
+        answer = {"ok": False, "error": "no result", "outcome": "unknown", "spoken": UNKNOWN}
     else:
         answer = {**result, **({"same_turn": True} if first != call_id else {})}
     sessions.remember(sid, call_id, answer)
@@ -915,13 +945,13 @@ def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, ite
     started = time.monotonic()
     try:
         result = adapter.typed_turn(handle, principal, sid, n, name, text, item=item)
-    except Exception:
+    except Exception:                                    # after dispatch: it may have acted (review R1 P1-1)
         log.exception("%s direct voice: consult failed", adapter.person["domain"])
-        result = {"ok": False, "error": "unavailable", "spoken": FAILED}
-    result = {"ok": True, "call_id": call_id, **result}
+        result = {"ok": False, "error": "exception", "outcome": "unknown"}
+    result = settled_result({"ok": True, "call_id": call_id, **result})
     if time.monotonic() - started >= HOLD_AFTER_SECONDS:
         result["holding_line"] = HOLDING_LINE
-    outcome = "done" if result.get("ok") else "not_done"
+    outcome = result["outcome"]
     done = put(adapter, handle, sid, record(OUTCOME, outcome_id(item), owner_item_id=item, tool=name, call_id=call_id,
                                             outcome=outcome, result=compact(result)))
     if done.outcome not in ("stored", "duplicate"):

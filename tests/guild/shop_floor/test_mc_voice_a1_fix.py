@@ -70,3 +70,43 @@ def test_save_note_on_words_that_are_not_a_note_leaves_the_turn_for_the_models_c
     second = call(r, sid, call_id="m2", name="consult", words=words, owner_item_id="t1").get_json()
     assert first["error"] == "not_a_note" and first["saved"] is False
     assert not second.get("same_turn") and second["answered"] is True and len(r.turns) == 1
+
+
+# ── Item 4 / R1 P1-1: MC's turn dispatched with no result is unknown (test_a1_repro.py) ────────────────────────────────
+
+def _after_dispatch(r, monkeypatch, outcome):
+    from minimoi_portal.guild_ui import api
+
+    def turn(actual, **kw):
+        r.turns.append(kw)
+        if outcome == "raise":
+            raise RuntimeError("after dispatch")
+        return {"status": outcome, "failure_class": "local_timeout", "reply_note": None}, 200
+    monkeypatch.setattr(api, "run_mc_turn", turn)
+
+
+def test_mcs_timeout_uncertain_or_cancelled_turn_is_unknown_never_did_not_go_through(ready, monkeypatch):
+    r = ready
+    for n, status in enumerate(("timeout_uncertain", "cancelled"), 1):
+        _after_dispatch(r, monkeypatch, status)
+        sid = start(r)["voice_session_id"]
+        out = call(r, sid, call_id=f"c{n}", owner_item_id="t1").get_json()
+        assert len(r.turns) == n                                                   # dispatched to MC
+        assert out["outcome"] == "unknown" and out["ok"] is False and "did not go through" not in out["spoken"]
+        receipts = [row["text"] for row in r.notes.rows.values() if "Outcome unknown" in (row.get("text") or "")]
+        assert len(receipts) == n and "Not answered" not in receipts[-1]
+        assert call(r, sid, call_id=f"c{n}", owner_item_id="t1").get_json()["outcome"] == "unknown"   # the page's retry
+        r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+        shown_rows, _ = shown(r)
+        lines = [row["voice"] for row in shown_rows if row.get("voice", {}).get("kind") == "consult_receipt"
+                 and row["voice"]["session_id"] == sid]
+        assert lines[0]["outcome"] == "result unknown"                             # revealed as unknown, not "not done"
+
+
+def test_an_exception_after_mcs_turn_was_dispatched_is_unknown(ready, monkeypatch):
+    r = ready
+    _after_dispatch(r, monkeypatch, "raise")
+    sid = start(r)["voice_session_id"]
+    out = call(r, sid, call_id="c1", owner_item_id="t1").get_json()
+    assert len(r.turns) == 1 and out["outcome"] == "unknown" and "did not go through" not in out["spoken"]
+

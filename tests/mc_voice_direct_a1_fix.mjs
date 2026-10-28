@@ -97,4 +97,18 @@ await t.check('R1 P1-2: an empty transcript is not words: nothing is sent', asyn
   assert.equal(r.posts('/consult').length, 1);
 });
 
+// ── Item 4: the page's own outcomes use §5.1's words; only done is ok ───────────────────────────────────────────────────
+await t.check('item 4: a turn still running is pending, an answer that never came is unknown, a refusal is not done', async () => {
+  const answers = { a: { status: 409, body: { ok: false, error: 'in flight' } }, b: 'network', c: { status: 400, body: null } };
+  const r = rig({ routes: { '/consult': (body) => answers[body.call_id] } });
+  await r.s.start('openai');
+  r.c.utter('Run the nightly job.');
+  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} }),
+    { ok: false, error: 'in flight', outcome: 'pending', spoken: "That's taking longer; the answer will be in the conversation." });
+  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'b', name: 'consult', arguments: {} }),
+    { ok: false, error: 'unknown', outcome: 'unknown', spoken: "I didn't get the result back. Check it in writing before asking again." });
+  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'c', name: 'consult', arguments: {} }),
+    { ok: false, error: 'unavailable', outcome: 'not_done', spoken: 'That did not go through. Nothing was done.' });
+});
+
 t.done();

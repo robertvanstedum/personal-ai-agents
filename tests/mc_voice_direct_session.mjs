@@ -188,7 +188,7 @@ const UNKNOWN_RESULT = { ok: false, error: 'unknown', outcome: 'unknown', spoken
 }
 // An unreadable answer: refused (4xx) is not done; accepted or the server failing is not known. A refused microphone says so.
 for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN_RESULT, 1],
-  [400, { ok: false, error: 'unavailable', spoken: D.NOT_DONE }, 1]]) {
+  [400, { ok: false, error: 'unavailable', outcome: 'not_done', spoken: D.NOT_DONE }, 1]]) {
   const r = rig({ routes: { '/consult': () => ({ status, body: null }) } });
   await r.s.start('openai');
   r.c.utter('Anything new?');

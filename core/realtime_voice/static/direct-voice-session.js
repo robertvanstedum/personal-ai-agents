@@ -17,7 +17,7 @@
 
 export const NO_CONVERSATION = 'Open a saved conversation before using voice.';
 export const ENDED = 'Voice ended. What was said is in the conversation.';
-export const NOT_DONE = 'That did not go through. Nothing is claimed.';
+export const NOT_DONE = 'That did not go through. Nothing was done.';
 export const SUMMARY_UNAVAILABLE = 'Summary unavailable.';
 export const NOT_KEPT = 'Some of what was said could not be kept.';
 export const CAP = 'This voice session has kept all it may.';
@@ -31,9 +31,10 @@ export const SERVER_ENDED = {
 export const ALREADY_CHECKED = 'Already checked; say it again to re-ask.';
 // Some of what was said is not known to be kept (review B4): said instead of ENDED, never a claim that all of it was.
 export const INCOMPLETE = 'Voice ended. Some of what was said could not be kept; the rest is in the conversation.';
-// A consult whose answer did not come back (review B7): not "failed", which would invite asking again.
-export const UNKNOWN = 'The answer did not come back, so whether that went through is not known. Check before asking again.';
-export const STILL_CHECKING = 'Still checking that.';
+// A consult's four outcomes (Spec 165 §5.1): done (its reply), not_done (NOT_DONE or the refusal), pending, unknown. Unknown is
+// a consult whose answer did not come back (review B7): never "failed", which would invite asking again.
+export const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";
+export const PENDING = "That's taking longer; the answer will be in the conversation.";
 export const SUMMARY_PENDING = 'The summary is still being written; it will appear in the conversation.';
 // A model call that came before its own words were transcribed, and they did not come in time (review R1 P1-2): nothing is
 // sent, so nothing is done on older words.
@@ -379,11 +380,11 @@ export function directVoice(d) {
         Promise.resolve().then(() => heard({ failed: code, status: r.status }));
       }
       if (retried && !(r.status === 200 && Object.keys(r.body).length)) return { ok: false, error: 'unknown', outcome: 'unknown', spoken: UNKNOWN };
-      if (inFlight(r)) return { ok: true, outcome: 'pending', spoken: STILL_CHECKING };   // the same words, already being checked (B1)
+      if (inFlight(r)) return { ok: false, error: 'in flight', outcome: 'pending', spoken: PENDING };   // the same turn, still running (B1)
       if (Object.keys(r.body).length) return r.body;
       // An unreadable answer: refused is not done; accepted but unreadable is not known (review B7).
       return r.status >= 200 && r.status < 300 ? { ok: false, error: 'unknown', outcome: 'unknown', spoken: UNKNOWN }
-        : { ok: false, error: 'unavailable', spoken: NOT_DONE };
+        : { ok: false, error: 'unavailable', outcome: 'not_done', spoken: NOT_DONE };
     } finally { cancel(holding); }
   }
 

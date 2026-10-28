@@ -146,3 +146,45 @@ def test_an_unavailable_conversation_or_an_unkept_request_binds_nothing(rig):
     assert not r.host.turns and "consult_request:t2" not in records_of(r, sid)
     later = consult(r, sid, call_id="c3", turn="t2").get_json()
     assert later["receipt"] == "turn-1" and len(r.host.turns) == 1
+
+
+# ── Item 4 / R1 P1-1: four outcomes with their words; dispatched with no result is unknown, everywhere ──────────────────
+
+def test_every_consult_answer_is_one_of_four_outcomes_with_its_words(rig):
+    from core.realtime_voice import direct_host as core
+    r = rig
+    sid = start(r)
+    assert consult(r, sid, call_id="c1", turn="t1").get_json()["outcome"] == "done"
+    r.host.refusals = {"save_note": {"error": "not_a_note", "spoken": "Nothing was saved."}}
+    refused = consult(r, sid, call_id="c2", name="save_note", turn="t2").get_json()
+    assert refused["outcome"] == "not_done" and refused["ok"] is False and refused["spoken"] == "Nothing was saved."
+    assert core.FAILED == "That did not go through. Nothing was done."
+    assert core.PENDING == "That's taking longer; the answer will be in the conversation."
+    assert core.UNKNOWN == "I didn't get the result back. Check it in writing before asking again."
+
+
+def test_an_exception_after_dispatch_is_unknown_in_the_answer_the_receipt_the_record_and_every_replay(rig):
+    r = rig
+    sid = start(r)
+
+    def boom(*a, **kw):
+        r.host.turns.append(a)
+        raise RuntimeError("after dispatch")
+    r.host.typed_turn = boom
+    answer = consult(r, sid, call_id="c1", turn="t1").get_json()
+    assert answer["outcome"] == "unknown" and answer["ok"] is False and "did not go through" not in answer["spoken"]
+    receipt = r.store.rows[-1]["text"]
+    assert receipt.startswith("Outcome unknown (") and r.host.receipts.parts(receipt)["outcome"] == "result unknown"
+    assert records_of(r, sid)["consult_outcome:t1"]["outcome"] == "unknown"
+    assert consult(r, sid, call_id="c1", turn="t1").get_json()["outcome"] == "unknown"              # the page's retry
+    assert consult(r, sid, call_id="host-2", turn="t1").get_json()["outcome"] == "unknown"          # Check after it
+    assert len(r.host.turns) == 1
+
+
+def test_a_host_that_reports_unknown_is_said_and_revealed_as_unknown(rig):
+    r = rig
+    sid = start(r)
+    r.host.typed_turn = lambda *a, **kw: {"ok": False, "error": "timeout_uncertain", "outcome": "unknown", "spoken": "x"}
+    answer = consult(r, sid, call_id="c1", turn="t1").get_json()
+    assert answer["outcome"] == "unknown" and answer["spoken"].startswith("I didn't get the result back")
+    assert r.store.rows[-1]["text"].startswith("Outcome unknown (timeout_uncertain).")

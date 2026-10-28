@@ -22,7 +22,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman',
   locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' } };
-const UNKNOWN = 'The answer did not come back, so whether that went through is not known. Check before asking again.';
+const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";      // Spec 165 §5.1's words
 const INCOMPLETE = 'Voice ended. Some of what was said could not be kept; the rest is in the conversation.';
 const PENDING = 'The summary is still being written; it will appear in the conversation.';
 
@@ -125,7 +125,7 @@ await check('B1 a second dispatch while the first runs is told it is still being
   await r.s.start('openai');
   r.c.utter('Run the nightly job.');
   const out = await r.c.options.onFunctionCall({ call_id: 'provider-2', name: 'consult', arguments: {} });
-  assert.equal(out.ok, true); assert.equal(out.outcome, 'pending'); assert.doesNotMatch(out.spoken, /did not go through/);
+  assert.equal(out.outcome, 'pending'); assert.doesNotMatch(out.spoken, /did not go through/);   // only done is ok (§5.1)
 });
 
 // ── B2: Sum up closes the record only after the last turns are kept ─────────────────────────────────────────────────────
