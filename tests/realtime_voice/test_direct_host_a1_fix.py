@@ -1073,3 +1073,34 @@ def test_l_s1_words_that_are_not_bare_still_run(rig):
     assert len(r.host.turns) == 3
     assert consult(r, sid, call_id="call_um", words="Um, yes.", turn="t9").get_json()["spoken"] == "Confirm that in writing."
     assert len(r.host.turns) == 3
+
+
+def test_l_n4_a_bare_yes_or_an_in_writing_command_after_end_is_session_ended_not_a_refusal(rig):
+    """L N4: the session is checked first. After End, a bare yes is 409 "session ended", as any consult is, and keeps nothing."""
+    r = rig
+    sid = start(r)
+    r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={})
+    rows = len(r.store.rows)
+    late = consult(r, sid, call_id="call_yes", words="Yes.", turn="t1")
+    assert late.status_code == 409 and late.get_json()["error"] == "session ended"
+    r.host.in_writing = lambda name, text: text.startswith("/")
+    late = consult(r, sid, call_id="call_new", words="/new", turn="t2")
+    assert late.status_code == 409 and late.get_json()["error"] == "session ended"
+    assert len(r.store.rows) == rows and not r.host.turns
+
+
+def test_l_n5_a_host_in_writing_hook_that_raises_is_a_refusal_before_anything_runs(rig, caplog):
+    """L N5: a raising hook never becomes a 500 (which the page would say as "I didn't get the result back"): it is refused
+    before dispatch, not_done, "Do that in writing.", logged, and nothing is admitted."""
+    r = rig
+    sid = start(r)
+
+    def broken(name, text):
+        raise RuntimeError("hook down")
+    r.host.in_writing = broken
+    answer = consult(r, sid, call_id="call_x", words="What is on my agenda?", turn="t0")
+    body = answer.get_json()
+    assert answer.status_code == 200 and body["outcome"] == "not_done" and body["error"] == "in_writing"
+    assert body["spoken"] == "Do that in writing."
+    assert "consult_request:t0" not in records_of(r, sid) and not r.host.turns
+    assert "in_writing" in caplog.text

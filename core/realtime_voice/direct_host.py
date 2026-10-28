@@ -1138,9 +1138,16 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     text, bad = adapter.clean(owner_text, adapter.note_max, "spoken words")
     if bad is not None:
         return refused_here({"error": "invalid", "spoken": FAILED})
-    if bare_confirmation(text):                   # D16: a bare yes or stop authorizes nothing (Spec 165 v0.3 §6.4)
-        return refused_here({"error": "confirmation", "spoken": CONFIRM_IN_WRITING})
-    if adapter.in_writing(name, text):            # the host's commands done in writing only
+    try:                                          # the host's commands done in writing only
+        in_writing = bool(adapter.in_writing(name, text))
+    except Exception:                             # a hook that raises refuses: nothing has run (review L N5)
+        log.exception("%s direct voice: in_writing hook failed; refused", adapter.person["domain"])
+        in_writing = True
+    if bare_confirmation(text) or in_writing:
+        if not sessions.is_open(sid) or sessions.expired(sid):          # the session first (review L N4)
+            return not_done("session ended"), 409
+        if bare_confirmation(text):               # D16: a bare yes or stop authorizes nothing (Spec 165 v0.3 §6.4)
+            return refused_here({"error": "confirmation", "spoken": CONFIRM_IN_WRITING})
         return refused_here({"error": "in_writing", "spoken": IN_WRITING})
     words = digest(text)
     asked = record(REQUEST, request_id(item), owner_item_id=item, text_sha256=words)
