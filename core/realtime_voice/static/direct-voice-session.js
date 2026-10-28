@@ -395,7 +395,8 @@ export function directVoice(d) {
     if (speak(lines.shift())) responding = true;
     if (lines.length) pump();
   }
-  // Finished results the server reports once (Spec 165 §5.1: a turn answered pending): said once each, at a pause.
+  // Finished results the server reports (Spec 165 §5.1: a turn answered pending): said once each, at a pause. The server
+  // repeats each until a post acknowledges it in `told`, so an answer lost on the way is not a result never said (FR N7).
   const told = new Set();
   function tell(completed) {
     for (const done of Array.isArray(completed) ? completed : []) {
@@ -692,7 +693,8 @@ export function directVoice(d) {
     if (!cid) { failed = true; ui.ended(words.noConversation, { error: true }); return false; }
     const { RealtimeVoiceController } = await d.loadController();
     if (finalized) return false;
-    capture = createCapture({ send: (events, opts) => postJson(at(direct.transcript_url), { events }, opts || {}),
+    // Every post names the finished results already told, so the server keeps each until the page has it (FR N7).
+    capture = createCapture({ send: (events, opts) => postJson(at(direct.transcript_url), { events, ...(told.size ? { told: [...told] } : {}) }, opts || {}),
       clock, onAnswer: heard, warn: d.warn || (() => {}), turnsOff: words.off });
     c = new RealtimeVoiceController({
       bootstrapUrl: direct.bootstrap_url, requestHeaders: d.headers, includeTranscriptAfterEnd: true,

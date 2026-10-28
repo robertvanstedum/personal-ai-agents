@@ -419,4 +419,24 @@ await t.check('CX V2-4: the leaving page\'s End is one envelope within the keepa
   assert.equal(new Set(sent[0].body.unacknowledged).size, 590);
 });
 
+
+await t.check('FR N7: a finished result the server repeats is said once, and every later post acknowledges it', async () => {
+  const done = { owner_item_id: 't0', tool: 'consult', outcome: 'done', spoken: 'The nightly job finished.' };
+  const acks = [];
+  const r = rig({ routes: { '/transcript': (body) => {
+    acks.push(body.told || null);
+    if (body.events.length) return null;
+    return { status: 200, body: { ok: true, kept: 0, ...((body.told || []).includes('t0') ? {} : { completed: [done] }) } };
+  } } });
+  await r.s.start('openai');
+  r.advance(20000); await flush();                                     // reported; the page has not acknowledged it yet
+  r.advance(20000); await flush();                                     // reported again (as if the first answer was lost)
+  const said = ['Say this briefly, adding nothing: About what you asked earlier: The nightly job finished.'];
+  assert.deepEqual(r.c.instructions, said);                            // said once
+  assert.equal(acks[0], null);                                         // nothing told before the first report
+  assert.deepEqual(acks.at(-1), ['t0']);                               // the next post acknowledges it
+  r.advance(20000); await flush();
+  assert.deepEqual(acks.at(-1), ['t0']); assert.deepEqual(r.c.instructions, said);
+});
+
 t.done();

@@ -868,11 +868,20 @@ class DirectSessions(ConsultLedger):
             if sid in self._meta:
                 self._meta[sid].setdefault("completed", []).append(done)
 
-    def take_completed(self, sid):
-        """The completed results not yet told, once each."""
+    def take_completed(self, sid, told=frozenset()):
+        """The completed results the page has not acknowledged. Each stays here until a post names its owner turn as told
+        (FR N7), so a result whose answer was lost goes again with the next one; the page says each once (it keeps the
+        ids it has told and sends them back)."""
         with self._meta_lock:
             meta = self._meta.get(sid)
-            return meta.pop("completed", []) if meta else []
+            if not meta:
+                return []
+            left = [done for done in meta.get("completed", []) if done.get("owner_item_id") not in told]
+            if left:
+                meta["completed"] = left
+            else:
+                meta.pop("completed", None)
+            return [dict(done) for done in left]
 
     def proposing(self, sid):
         """Whether the server's proposal to end stands (a later ordinary owner turn withdraws it, as Keep talking does)."""
@@ -1526,8 +1535,11 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         if bad is not None:
             return refusal(bad, "Those transcript events are not valid. Nothing was kept.", 422)
         sessions.seen(sid)
+        acked = body.get("told") if isinstance(body, dict) else None          # the owner turns the page has told (FR N7)
+        acked = frozenset(i for i in acked if owner_item(i)) if isinstance(acked, list) and len(acked) <= 2 * CAP else frozenset()
+
         def told():                          # turns answered pending that have finished, said once at a pause (§5.1)
-            completed = sessions.take_completed(sid)
+            completed = sessions.take_completed(sid, acked)
             return {"completed": completed} if completed else {}
         if not posted:
             return jsonify(ok=True, kept=0, **told())

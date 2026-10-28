@@ -246,7 +246,9 @@ def test_a_long_turn_is_pending_then_kept_when_it_completes_and_told_once_on_the
     assert r.store.rows[-1]["text"].startswith("Answered. Reply turn-1.")          # the receipt, when it completed
     beat = post(r, sid, []).get_json()
     assert beat["completed"] == [{"owner_item_id": "t1", "tool": "consult", "outcome": "done", "spoken": "Two items."}]
-    assert "completed" not in post(r, sid, []).get_json()                          # told once
+    assert post(r, sid, []).get_json()["completed"] == beat["completed"]           # not acknowledged yet: again (FR N7)
+    acked = r.client.post(BASE + f"/session/{sid}/transcript", headers=OWNER, json={"events": [], "told": ["t1"]})
+    assert "completed" not in acked.get_json() and "completed" not in post(r, sid, []).get_json()   # acknowledged: gone
     assert consult(r, sid, call_id="call_1", turn="t1").get_json()["receipt"] == "turn-1"   # the page's retry: the result
     assert len(r.host.turns) == 1
 
@@ -762,3 +764,21 @@ def test_fr_n6_refusals_that_run_nothing_count_toward_the_sessions_cap(rig):
     assert capped.status_code == 429 and capped.get_json()["spoken"] == CAP_LINE
     assert len(r.store.rows) == receipts and not r.host.turns                       # nothing more kept, nothing ran
     assert consult(r, sid, call_id="call_y", turn="t100").status_code == 429
+
+
+def test_fr_n7_a_finished_result_whose_answer_is_lost_is_told_on_the_next_post_and_never_after_its_ack(rig):
+    """FR N7 (the review: "once" was really "at most once"): a finished result stays on the server until a post names its
+    owner turn in told; a malformed told acknowledges nothing."""
+    from test_direct_host import post
+    r = rig
+    sid = start(r)
+    r.sessions.announce(sid, {"owner_item_id": "t3", "tool": "consult", "outcome": "done", "spoken": "Done."})
+    r.sessions.announce(sid, {"owner_item_id": "t4", "tool": "consult", "outcome": "not_done", "spoken": "Busy."})
+    lost = post(r, sid, [])                                                          # this answer never reaches the page
+    assert [d["owner_item_id"] for d in lost.get_json()["completed"]] == ["t3", "t4"]
+    beat = lambda told: r.client.post(BASE + f"/session/{sid}/transcript", headers=OWNER,
+                                      json={"events": [], "told": told}).get_json().get("completed", [])
+    assert [d["owner_item_id"] for d in beat("t3")] == ["t3", "t4"]                 # not a list: acknowledges nothing
+    assert [d["owner_item_id"] for d in beat(["x9", 4])] == ["t3", "t4"]            # not capture ids
+    assert [d["owner_item_id"] for d in beat(["t3"])] == ["t4"]
+    assert beat(["t3", "t4"]) == [] and beat([]) == []
