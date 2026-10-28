@@ -514,8 +514,9 @@ export function directVoice(d) {
   // its capture id, owner_item_id (review B1, Spec 165 §5.1): the same for Check with <person> and the model's own call on
   // the same words, so the server runs that turn once and gives a second call the first one's answer; his next words are a
   // new turn, with a new id.
-  async function consult(callId, name, args, owner) {
-    const stopHolding = holding();
+  // `held`: the holding lines' stop when the caller started them already (a model call starts them when it arrives, L N3).
+  async function consult(callId, name, args, owner, held = null) {
+    const stopHolding = held || holding();
     let advisory = args;
     if (typeof advisory === 'string') { try { advisory = JSON.parse(advisory); } catch (e) { advisory = {}; } }
     if (!advisory || typeof advisory !== 'object' || Array.isArray(advisory)) advisory = {};
@@ -589,13 +590,16 @@ export function directVoice(d) {
     });
   }
   function rebind() { for (const retry of [...binding]) if (retry()) binding.splice(binding.indexOf(retry), 1); }
+  // The holding lines' clock starts when the call arrives, before any wait for its words, so the first line comes by 8 s
+  // from the call (Spec 165 v0.3 §12.4; review L N3).
   async function modelCall(call) {
     responding = false;                                    // the response that called it is done; its result starts the next
+    const stopHolding = holding();
     try {
       const owner = await boundOwner(call);
       if (!owner) return { ok: false, outcome: 'not_done', error: 'not_heard', spoken: NOT_HEARD };
-      return await consult(call.call_id, call.name, call.arguments, owner);
-    } finally { responding = true; }
+      return await consult(call.call_id, call.name, call.arguments, owner, stopHolding);
+    } finally { stopHolding(); responding = true; }
   }
 
   // Check with <person>: the host asks for Robert's last words, then has the voice say the answer, adding nothing. One at a time

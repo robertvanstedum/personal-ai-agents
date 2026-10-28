@@ -659,4 +659,18 @@ await t.check('G3: a drain that names no outcome ends the summary, and End claim
   assert.equal('summary_playback' in r.posts('/end')[0].body, false);
 });
 
+// L N3 (the last pass's verification): the holding clock starts when the model's call arrives, not after its wait for its
+// words, so the first line comes by 8 s from the call even when the transcript follows the call by 2.5 s.
+await t.check('L N3: a call that arrives before its words still hears "Still checking." 8 s after the call', async () => {
+  const { r, release } = held(null);
+  await r.s.start('openai');
+  r.c.speechStopped();                                                 // he spoke; his words are not transcribed yet
+  const out = r.c.callFrom(r.c.respond(), { call_id: 'call_early', name: 'consult', arguments: {} }); await flush();
+  r.advance(2500); r.c.utter('Run the nightly job.'); await flush();   // his words, 2.5 s after the call
+  assert.equal(r.posts('/consult').length, 1);
+  r.advance(5499); assert.deepEqual(r.c.instructions, []);
+  r.advance(1); assert.deepEqual(r.c.instructions, ['Still checking.'], 'the first line came later than 8 s after the call');
+  release(); assert.equal((await out).outcome, 'done');
+});
+
 t.done();
