@@ -96,9 +96,9 @@ class _TaggedFloor:
     whatever its key) is first tagged with this voice session, in this process and by a durable tag note, so the
     reveal withholds it with the session's other records (review B #3). Everything else is the floor itself."""
 
-    def __init__(self, floor, tags, session_id):
+    def __init__(self, floor, tags, session_id, note_id):
         self._floor, self._tags, self._sid = floor, tags, session_id
-        self._own = set(reveal.consult_reply_ids(session_id))      # MC's replies are the session's by their key
+        self._own = {reveal.reply_id(note_id), *reveal.consult_reply_ids(session_id)}   # MC's replies: the session's by key
 
     def __getattr__(self, name):
         return getattr(self._floor, name)
@@ -242,14 +242,15 @@ class _MasterCraftsman(DirectVoiceAdapter):
         blueprint.register_error_handler(Exception, _api_error)
         self.app.extensions[name] = self.config            # cfg() and owner_api resolve this mount on these routes
 
-    def typed_turn(self, conv, principal, session_id, n, name, text):
+    def typed_turn(self, conv, principal, session_id, n, name, text, *, item):
         from . import api
         from .mc.ledger_gate import Refusal
         if name == "save_note" and not _is_note_command(text):
             return {"ok": False, "error": "not_a_note", "saved": False, "spoken": NOT_A_NOTE}
-        # The owner's words kept as his note, as POST /notes keeps a typed one; one id per admitted call
-        # (vc-<session>-<n>), so a replay is one note and the reveal can find MC's reply to it.
-        note_id = reveal.consult_note_id(session_id, n)
+        # The owner's words kept as his note, as POST /notes keeps a typed one. Its id is MC's typed-turn request id, and
+        # it derives from the consult's key (Spec 165 §5.1): vc-<session>-<owner item>. A second dispatch of the same owner
+        # turn, however it got past admission, is the same note, and MC's one reply per note answers it from the store.
+        note_id = reveal.consult_note_id(session_id, item)
         floor = api._conv_floor(conv)
         kept = floor.add_note(note_id, text, api._author(), page="voice")
         if kept.outcome != "kept" or not kept.value:
@@ -261,7 +262,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
             with self._lock:
                 self._first.setdefault(session_id, text)
         services = cfg()["services"]
-        floor = _TaggedFloor(floor, self.tags, session_id)       # after the consult note: it is the session's by its id
+        floor = _TaggedFloor(floor, self.tags, session_id, note_id)   # after the consult note: the session's by its id
         found = (services, principal, conv, floor, kept.value, note_id, note_id, [])
         g.topic_context = None
         g.mc_kept_owner_scope = (principal, conv["id"], note_id)

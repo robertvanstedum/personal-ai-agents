@@ -33,7 +33,7 @@ def test_the_request_is_recorded_durably_before_dispatch_and_its_outcome_after(r
     sid = start(r)
     seen = []
     turn = r.host.typed_turn
-    r.host.typed_turn = lambda *a: seen.append(sorted(records_of(r, sid))) or turn(*a)
+    r.host.typed_turn = lambda *a, **kw: seen.append(sorted(records_of(r, sid))) or turn(*a, **kw)
     answer = consult(r, sid, call_id="call_1", turn="t5").get_json()
     assert seen == [["consult_request:t5"]]                                       # written before the typed turn ran
     request, outcome = records_of(r, sid)["consult_request:t5"], records_of(r, sid)["consult_outcome:t5"]
@@ -94,3 +94,31 @@ def test_a_retry_check_and_a_new_call_id_on_one_key_are_one_effect_through_one_d
     retry = consult(r, sid, call_id="call_model", name="save_note", words="save a note: the kiln", turn="t2").get_json()
     assert len(r.host.turns) == 1 and check["receipt"] == model["receipt"] == retry["receipt"] and retry == model
     assert check["same_turn"] is True and len([k for k in records_of(r, sid) if k.startswith("consult_request")]) == 1
+
+
+# ── Item 3: operation ids derive from the key (§5.1) ────────────────────────────────────────────────────────────────
+
+def test_the_core_names_one_operation_per_owner_turn_and_host_by_uuid5():
+    import uuid
+    from core.realtime_voice.direct_host import VOICE_NS, operation_id
+    sid = "0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b"
+    one = operation_id("cos", sid, "t5")
+    assert uuid.UUID(one).version == 5 and one == str(uuid.uuid5(VOICE_NS, f"cos:{sid}:t5"))
+    assert one == operation_id("cos", sid, "t5")                                   # a retry: the same operation
+    assert len({one, operation_id("cos", sid, "t6"), operation_id("mc", sid, "t5"),
+                operation_id("cos", "1b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b", "t5")}) == 4
+    assert str(VOICE_NS) == str(uuid.uuid5(uuid.NAMESPACE_URL, "https://minimoi.ai/spec/165/voice-operation"))
+    for bad in (("", sid, "t5"), ("a:b", sid, "t5"), ("cos", "not-a-session", "t5"), ("cos", sid, "u5")):
+        try:
+            operation_id(*bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+
+
+def test_the_hosts_typed_turn_is_given_the_owner_turn_its_operation_derives_from(rig):
+    r = rig
+    sid = start(r)
+    consult(r, sid, call_id="call_1", turn="t5")
+    consult(r, sid, call_id="host-2", turn="t5")
+    assert r.host.items == ["t5"]

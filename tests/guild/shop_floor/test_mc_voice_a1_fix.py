@@ -36,3 +36,25 @@ def test_codex_b1_check_then_the_models_note_saves_one_note_with_one_durable_req
     r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
     rows, _sessions = shown(r)
     assert not [row for row in rows if (row.get("text") or "").startswith(reveal.RECORD)]   # never shown
+
+
+# ── Item 3: MC's typed-turn request id derives from the key (§5.1) ──────────────────────────────────────────────────
+
+def test_mcs_typed_turn_request_id_is_the_consult_key_and_its_reply_is_the_sessions(ready):
+    import uuid
+    from minimoi_portal.guild_ui.stores import Author
+    r = ready
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, call_id="call-a", owner_item_id="t5").get_json()
+    note_id = "vc-" + uuid.UUID(sid).hex + "-t5"
+    assert result["note_request_id"] == note_id and r.turns[0]["note_id"] == note_id
+    assert reveal.consult_note_id(sid, "t5") == note_id
+    # However a second dispatch of the same owner turn reached MC, it is the same note: kept once, so MC's one reply per
+    # note answers it from the store (api.run_mc_turn).
+    assert r.notes.add_note(note_id, "What is stuck on #12?", Author("robert", "owner", "Robert"), page="voice").repeated
+    assert reveal.tag_for_turn(r.notes, note_id, "mc-notice-1") == sid          # a later note of this turn: tagged
+    r.notes.add_note(reveal.reply_id(note_id), "Item 12 is in build.", Author("master_craftsman", "agent", "MC"))
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+    rows, _sessions = shown(r)
+    kinds = {row["request_id"]: row["voice"]["kind"] for row in rows if "voice" in row}
+    assert kinds[note_id] == "consult_note" and kinds[reveal.reply_id(note_id)] == "consult_reply"

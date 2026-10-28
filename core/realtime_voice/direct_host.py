@@ -336,6 +336,17 @@ SCHEMA = 1
 RECORD_MAX = 1800                    # a record's JSON, so every store (MC: a 2,000-character floor note) can hold it
 REQUEST, OUTCOME = "consult_request", "consult_outcome"
 _ITEM = re.compile(r"t[0-9]{1,4}")
+# Operation ids derive from the consult's key (Spec 165 §5.1), so a platform's own dedup holds as well: a host whose
+# backend takes a UUID request id (CoS's Confer turn, A2) uses operation_id(); MC's note id is vc-<session>-<owner item>.
+VOICE_NS = uuid.UUID("9fd60506-e160-5db5-b10c-e7376c284872")    # uuid5(NAMESPACE_URL, "https://minimoi.ai/spec/165/voice-operation")
+
+
+def operation_id(host, sid, item):
+    """The UUID of the one operation an owner turn may cause on ``host``: uuid5(VOICE_NS, "<host>:<session>:<item>"). The
+    tool is not in it: one effect per owner turn, whichever tool asks (the settled rule)."""
+    if not isinstance(host, str) or not host or ":" in host or session_id(sid) is None or not owner_item(item):
+        raise ValueError("an operation id needs a host name, a session id and an owner item")
+    return str(uuid.uuid5(VOICE_NS, f"{host}:{sid}:{item}"))
 
 
 def owner_item(value):
@@ -508,9 +519,11 @@ class DirectVoiceAdapter:
         """Model output made safe to keep and show (the summary's written text)."""
         return text
 
-    def typed_turn(self, handle, principal, sid, n, name, text):
+    def typed_turn(self, handle, principal, sid, n, name, text, *, item):
         """The owner's words through the person's typed turn, as if typed: the result the provider is given (ok,
-        spoken, receipt, receipt_kind, saved, answered, …). ``n``: this consult's place in the session (1–12)."""
+        spoken, receipt, receipt_kind, saved, answered, …). ``n``: this consult's place in the session (1–12). ``item``:
+        the owner turn's capture id; with the session it is the consult's key, from which the backend's operation id
+        derives (operation_id, or the host's own form), so the backend's dedup holds too."""
         raise NotImplementedError
 
     def summary_model(self, handle, sid, principal, prompt):
@@ -884,7 +897,7 @@ def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, ite
         result = {"ok": False, "error": "not_kept", "spoken": FAILED}
     else:
         try:
-            result = adapter.typed_turn(handle, principal, sid, n, name, text)
+            result = adapter.typed_turn(handle, principal, sid, n, name, text, item=item)
         except Exception:
             log.exception("%s direct voice: consult failed", adapter.person["domain"])
             result = {"ok": False, "error": "unavailable", "spoken": FAILED}

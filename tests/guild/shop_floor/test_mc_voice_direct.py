@@ -247,7 +247,7 @@ def test_consult_runs_the_typed_turn_once_on_the_owners_words_and_a_replay_does_
     assert turn["note"]["context"] == {"page": "voice"} and turn["note_id"] == result["note_request_id"]
     from minimoi_portal.guild_ui.mc.openclaw import VOICE_MARKER
     assert turn["host_channel"] is VOICE_MARKER and turn["conv"]["id"] == CID
-    assert owner_notes(r) == [result["note_request_id"]] == ["vc-" + uuid.UUID(sid).hex + "-01"]
+    assert owner_notes(r) == [result["note_request_id"]] == ["vc-" + uuid.UUID(sid).hex + "-" + item_of("call-1")]
     assert "paraphrase" not in str(r.notes.rows)
 
 

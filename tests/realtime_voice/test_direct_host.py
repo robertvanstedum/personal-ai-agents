@@ -96,7 +96,7 @@ class Host(DirectVoiceAdapter):
 
     def __init__(self, card_root):
         self.store, self.card_root, self.turns, self.prompts, self.kinds, self.ends = Store(), card_root, [], [], [], []
-        self.deny, self.keep_ok, self.model = {}, True, '{"spoken": "We checked the agenda.", "written": "- Agenda: two items (turn-1)."}'
+        self.deny, self.keep_ok, self.items, self.model = {}, True, [], '{"spoken": "We checked the agenda.", "written": "- Agenda: two items (turn-1)."}'
 
     def owner(self):
         return ("robert", "Robert") if request.headers.get("X-Owner") == "robert" else None
@@ -122,8 +122,9 @@ class Host(DirectVoiceAdapter):
             return None, refusal("invalid", f"The {what} is empty or too long.", 422)
         return text.strip(), None
 
-    def typed_turn(self, handle, principal, sid, n, name, text):
+    def typed_turn(self, handle, principal, sid, n, name, text, *, item):
         self.turns.append((handle, principal, sid, n, name, text))
+        self.items.append(item)
         if name == "save_note":
             return {"answered": True, "saved": True, "receipt": f"op-{n}", "spoken": "Saved."}
         return {"answered": True, "receipt": f"turn-{n}", "receipt_kind": "reply", "spoken": "Two items."}

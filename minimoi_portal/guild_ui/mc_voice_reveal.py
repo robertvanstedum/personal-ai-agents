@@ -3,7 +3,8 @@
 One store: the conversation's floor notes, where mc_voice_transcripts.retain keeps voice turns. A direct-path session
 writes a start marker at bootstrap and an end marker at End (platform notes, page 'voice-session', never shown as
 messages). Its records are its transcript notes (author managed_voice_transcript:<session>), its consult notes
-(vc-<session hex>-<n>) and MC's kept replies to them (api._reply_key of those ids), its summary proposal and decision.
+(vc-<session hex>-<owner item>, from the consult's key; vc-<session hex>-<n> before Spec 165's fix round) and MC's kept
+replies to them (api._reply_key of those ids), its summary proposal and decision.
 
 Every other note written while a consult runs (a platform receipt or reply: owner-action, board, register, library,
 tool-proposal or decision) is tagged with the consult's session as it is written (mc_voice_direct._TaggedFloor): a
@@ -40,21 +41,30 @@ SUMMARY_AUTHOR = "voice_summary:"
 MARKER = "[Voice session] "
 RECORD = "[Voice record] "         # a durable record of the session (Spec 165 §4.4): a consult's request and outcome
 CONSULT_CAP = 12                   # core.realtime_voice.consult.CAP: a session has at most this many consult notes
-_CONSULT_ID = re.compile(r"vc-([0-9a-f]{32})-([0-9]{2})")
+# A consult note's id: vc-<session hex>-<owner item> (the consult's key, Spec 165 §5.1), or vc-<session hex>-<n> (A1).
+_CONSULT_ID = re.compile(r"vc-([0-9a-f]{32})-([0-9]{2}|t[0-9]{1,4})")
 
 
 def key(sid, what):
     return str(uuid.uuid5(uuid.UUID(sid), "voice-session:" + what))
 
 
-def consult_note_id(sid, n):
-    return f"vc-{uuid.UUID(sid).hex}-{n:02d}"
+def consult_note_id(sid, turn):
+    """The note a consult keeps the owner's words as, and MC's typed-turn request id: derived from the consult's key
+    (Spec 165 §5.1), the session and the owner turn's capture id ("t5"), so a second dispatch of the same owner turn is
+    the same note and MC's one reply per note holds too. An int ``turn`` is A1's place-in-session form, still read."""
+    return f"vc-{uuid.UUID(sid).hex}-{turn:02d}" if isinstance(turn, int) else f"vc-{uuid.UUID(sid).hex}-{turn}"
+
+
+def reply_id(note_id):
+    """MC's kept reply to a note (api._reply_key, without importing the routes)."""
+    return "mc-" + hashlib.sha256(note_id.encode()).hexdigest()[:40]
 
 
 def consult_reply_ids(sid):
-    """MC's kept replies to this session's consult notes (api._reply_key, without importing the routes)."""
-    return {"mc-" + hashlib.sha256(consult_note_id(sid, n).encode()).hexdigest()[:40]: n
-            for n in range(1, CONSULT_CAP + 1)}
+    """MC's kept replies to this session's A1-form consult notes (vc-<hex>-01 … -12). Replies to key-form notes are
+    found from the notes themselves (view) or known by the turn that writes them (_TaggedFloor)."""
+    return {reply_id(consult_note_id(sid, n)): n for n in range(1, CONSULT_CAP + 1)}
 
 
 def _session_author(sid):
@@ -89,7 +99,8 @@ def mark_tag(floor, sid, request_id):
 
 def tag_for_turn(floor, owner_turn, request_id):
     """Tag a note written outside a consult's own request (an MC tool callback's notice, a job's later result) with the
-    voice session whose consult note is ``owner_turn`` (vc-<session>-<n>), before it is written. Returns the session,
+    voice session whose consult note is ``owner_turn`` (vc-<session>-<owner item>, or A1's -<n>), before it is written.
+    Returns the session,
     or None when the owner turn is not a voice consult (a typed turn: nothing is tagged)."""
     match = _CONSULT_ID.fullmatch(str(owner_turn or ""))
     if match is None or not isinstance(request_id, str):
@@ -293,6 +304,11 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
     replies = {}
     for sid in direct:
         replies.update({reply: sid for reply in consult_reply_ids(sid)})
+    for row in rows:                                   # replies to key-form consult notes, from the notes in view
+        match = _CONSULT_ID.fullmatch(str(row.get("request_id") or ""))
+        sid = str(uuid.UUID(match.group(1))) if match else None
+        if sid in direct:
+            replies[reply_id(row["request_id"])] = sid
     shown = []
     for row in rows:
         sid = owner(row) or replies.get(row.get("request_id"))
