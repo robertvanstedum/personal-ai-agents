@@ -60,6 +60,13 @@ const END_WAIT_MS = 10000;                // End's answer is awaited this long; 
 const REVEAL_WAIT_MS = 10000;             // the thread's reload is awaited this long before the session's end is shown
 const DRAIN_CAP_MS = 90000;               // the spoken summary plays at most 15 characters a second plus 5 s, and never past this
 const START_END_MS = 15000;               // End pressed while still connecting waits for the connection at most this long
+// Every request the live page makes is bounded and aborted at its bound (review F3), each bound above the server's own, so no
+// request can hold the capture chain, a consult or the end for ever. A request past its bound has no answer (status 0).
+const CAPTURE_POST_MS = 15000;            // a transcript post or heartbeat: past it, that attempt has no answer (one of its two)
+const CONSULT_POST_MS = 35000;            // above the server's 25 s wait (it answers pending then): past it, unknown
+const CONTROL_POST_MS = 10000;            // one Keep talking request
+const KEEP_TALKING_WAIT_MS = 25000;       // the whole withdrawal: the posts before it, its request and its one retry
+const RECONCILE_WAIT_MS = 10000;          // the reconciliation read after an unknown
 const POST_EVENTS = 20, POST_BYTES = 60000;   // the server takes 20 events and 64 KB a post; JSON overhead stays inside
 const CLOSE_BYTES = 64 * 1024 - 1024;     // the leaving page's one close envelope (End with its events and report), whole
 const TEXT_BYTES = 16000;
@@ -116,31 +123,44 @@ export function noticeWords(notices, provider) {
   }).join(' ');
 }
 
-// A same-origin JSON POST with the page's headers (§2). Never throws: {ok, status, body}; status 0 when the server did not answer.
-export function jsonPost(fetchFn, headers) {
-  return async (target, body, opts = {}) => {
-    try {
-      const r = await fetchFn(target, { method: 'POST', credentials: 'same-origin', headers: headers(), body: JSON.stringify(body),
-        ...(opts.keepalive ? { keepalive: true } : {}) });
-      const json = await r.json().catch(() => ({}));
-      return { ok: r.ok, status: r.status, body: json && typeof json === 'object' ? json : {} };
-    } catch (e) {
-      return { ok: false, status: 0, body: {} };
-    }
+// A same-origin JSON request with the page's headers (§2). Never throws: {ok, status, body}; status 0 when the server did not
+// answer. With opts.timeoutMs it is bounded (review F3): the request and the reading of its answer are aborted at the bound,
+// which answers {ok: false, status: 0, body: {}, timedOut: true}. `timers` ({setTimeout, clearTimeout}) lets the tests' fake
+// clock run the bound.
+function jsonRequest(fetchFn, headers, timers, method) {
+  const later = timers.setTimeout || ((fn, ms) => setTimeout(fn, ms));
+  const cancel = timers.clearTimeout || ((t) => clearTimeout(t));
+  return (target, body, opts = {}) => {
+    const ms = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 0;
+    const abort = ms && typeof AbortController === 'function' ? new AbortController() : null;
+    const request = (async () => {
+      try {
+        const r = await fetchFn(target, { method, credentials: 'same-origin', headers: headers(),
+          ...(method === 'POST' ? { body: JSON.stringify(body) } : {}), ...(opts.keepalive ? { keepalive: true } : {}),
+          ...(abort ? { signal: abort.signal } : {}) });
+        const json = await r.json().catch(() => ({}));
+        return { ok: r.ok, status: r.status, body: json && typeof json === 'object' ? json : {} };
+      } catch (e) {
+        return { ok: false, status: 0, body: {} };
+      }
+    })();
+    if (!ms) return request;
+    let timer = null;
+    const bound = new Promise((resolve) => {
+      timer = later(() => { try { abort?.abort(); } catch (e) { /* the answer below stands */ } resolve({ ok: false, status: 0, body: {}, timedOut: true }); }, ms);
+    });
+    return Promise.race([request, bound]).finally(() => cancel(timer));
   };
 }
+export function jsonPost(fetchFn, headers, timers = {}) {
+  const post = jsonRequest(fetchFn, headers, timers, 'POST');
+  return async (target, body, opts = {}) => post(target, body, opts);
+}
 
-// A same-origin JSON GET with the page's headers (a reconciliation read). Never throws: {ok, status, body}.
-export function jsonGet(fetchFn, headers) {
-  return async (target) => {
-    try {
-      const r = await fetchFn(target, { method: 'GET', credentials: 'same-origin', headers: headers() });
-      const json = await r.json().catch(() => ({}));
-      return { ok: r.ok, status: r.status, body: json && typeof json === 'object' ? json : {} };
-    } catch (e) {
-      return { ok: false, status: 0, body: {} };
-    }
-  };
+// A same-origin JSON GET with the page's headers (a reconciliation read). Never throws: {ok, status, body}; bounded like a POST.
+export function jsonGet(fetchFn, headers, timers = {}) {
+  const get = jsonRequest(fetchFn, headers, timers, 'GET');
+  return async (target, opts = {}) => get(target, null, opts);
 }
 
 const clockWords = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
@@ -260,7 +280,7 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     }
     if (r.status === 409 && code === 'not_kept') { mark(batch, 'failed', 'not_kept'); return onAnswer({ failed: 'not_kept' }); }
     stopped = ['session_ended', 'not_listening', 'cap', 'not_your_session', 'csrf', turnsOff].includes(code) || r.status === 403 || stopped;
-    const reason = code || (r.status ? 'unavailable' : 'network');
+    const reason = code || (r.timedOut ? 'timeout' : r.status ? 'unavailable' : 'network');
     mark(batch, 'failed', reason);
     return onAnswer({ failed: reason, status: r.status });
   }
@@ -365,8 +385,8 @@ export function directVoice(d) {
   done.then(() => { settled = true; });
 
   const at = (template) => String(template).split('{session_id}').join(encodeURIComponent(sid || ''));
-  const postJson = jsonPost(d.fetch, d.headers);
-  const getJson = jsonGet(d.fetch, d.headers);
+  const postJson = jsonPost(d.fetch, d.headers, { setTimeout: later, clearTimeout: cancel });
+  const getJson = jsonGet(d.fetch, d.headers, { setTimeout: later, clearTimeout: cancel });
   const sessionId = () => { const own = c?.sessionId?.(); return sid || (typeof own === 'string' ? own : null); };
   const speak = (instruction) => { try { return Boolean(c?.speak(instruction)); } catch (e) { return false; } };
   function stopTimers() {
@@ -489,13 +509,16 @@ export function directVoice(d) {
     const lost = (x) => x.status === 0 || x.status >= 500;
     const inFlight = (x) => x.status === 409 && x.body.error === 'in flight';
     try {
-      let r = await postJson(direct.consult_url, request);
+      let r = await postJson(direct.consult_url, request, { timeoutMs: CONSULT_POST_MS });
+      // No answer within the bound, which sits above the server's own 25 s wait: the consult may be running, so its outcome is
+      // unknown, and the server is asked once what became of it; never not done, and never posted again (review F3).
+      if (r.timedOut) return reconcile(item);
       // No answer (the network, or the server failing): the same call once more. The server runs a call once and keeps its
       // answer, so this runs it for the first time or returns what it did, never twice. Anything but that answer (no answer
       // again, still running out of reach, or a session the server no longer holds, as after a restart): the first
       // attempt's outcome is unknown, not failed (review B7).
       const retried = lost(r);
-      if (retried) r = await postJson(direct.consult_url, request);
+      if (retried) r = await postJson(direct.consult_url, request, { timeoutMs: CONSULT_POST_MS });
       // The server has ended or refuses this session (409 "session ended", any 403): the answer still goes back to the
       // model, then the voice is ended here as for a refused transcript post (UI review #2).
       if ((r.status === 409 && r.body.error === 'session ended') || r.status === 403) {
@@ -516,7 +539,7 @@ export function directVoice(d) {
     const unknown = { ok: false, error: 'unknown', outcome: 'unknown', spoken: UNKNOWN };
     if (!item || typeof direct.reconcile_url !== 'string' || !cid) return unknown;
     const url = `${at(direct.reconcile_url).split('{owner_item_id}').join(encodeURIComponent(item))}?conversation_id=${encodeURIComponent(cid)}`;
-    const r = await getJson(url);
+    const r = await getJson(url, { timeoutMs: RECONCILE_WAIT_MS });
     return r.status === 200 && ['done', 'not_done', 'pending'].includes(r.body.outcome) ? r.body : unknown;
   }
 
@@ -599,12 +622,8 @@ export function directVoice(d) {
       const closing = capture ? capture.report() : {};
       capture?.stop();
       become('summarizing');
-      let timer = null;
-      const r = await Promise.race([
-        postJson(at(direct.summary_url), { conversation_id: cid, ...closing }),
-        new Promise((resolve) => { timer = later(() => resolve({ status: -1, body: {} }), SUMMARY_WAIT_MS); }),
-      ]);
-      cancel(timer);
+      const asked = await postJson(at(direct.summary_url), { conversation_id: cid, ...closing }, { timeoutMs: SUMMARY_WAIT_MS });
+      const r = asked.timedOut ? { status: -1, body: {} } : asked;        // the page's own bound (aborted there)
       if (finalized) return;
       const body = r.body || {};
       const said = typeof body.spoken === 'string' ? body.spoken.trim() : '';
@@ -677,7 +696,7 @@ export function directVoice(d) {
         const closing = capture ? capture.report() : {};     // End carries it; the server counts what it does not hold (§5.2)
         incomplete = Boolean(closing.unacknowledged?.length);
         missing = incomplete ? closing.unacknowledged.length : 0;
-        const r = await within(postJson(at(direct.end_url), closing), END_WAIT_MS, { status: -1, body: {} });
+        const r = await postJson(at(direct.end_url), closing, { timeoutMs: END_WAIT_MS });
         if (sentFinal) return;
         if (r.status === 200 && r.body.ok && ['complete', 'incomplete'].includes(r.body.capture)) {
           incomplete = r.body.capture === 'incomplete';      // the server's count: what it holds, not what this page heard back
@@ -697,19 +716,32 @@ export function directVoice(d) {
   // Keep talking (Spec 165 §5.3, review B5, R1 P3-8): the server's proposal is withdrawn too, so a later conversational yes
   // ends nothing. It goes after the posts queued before it (a "we're done" still in flight cannot re-propose behind it), is
   // retried once with the same body when it gets no answer, and if it still fails the page says so and ends the voice:
-  // a yes heard later must not end the session by a proposal the server still holds.
+  // a yes heard later must not end the session by a proposal the server still holds. The whole withdrawal (the wait for the
+  // posts before it, its request and its retry, each bounded) has one bound, KEEP_TALKING_WAIT_MS (review F3): not confirmed
+  // by then, it takes the same failure path, and capture stops first, so nothing said after it is posted behind a withdrawal
+  // that may not have happened; End reports those turns not kept. Resolves once the withdrawal is confirmed or has failed.
   function keepTalking() {
     propose(false);
     if (!capture || lifecycle !== 'live') return Promise.resolve();
-    return capture.after(async () => {
-      const url = at(direct.keep_talking_url);
-      let r = await postJson(url, {});
-      if (r.status === 0 || r.status >= 500) r = await postJson(url, {});
-      if (r.status === 200 && r.body.ok) return;
-      if (finalized || lifecycle !== 'live') return;
-      failed = true;
-      ui.say(KEEP_TALKING_FAILED, { loud: true, error: true });
-      endNow('keep_talking_failed');
+    return new Promise((resolve) => {
+      let over = false, timer = null;
+      const settle = (confirmed) => {
+        if (over) return;
+        over = true; cancel(timer); resolve();
+        if (confirmed || finalized || lifecycle !== 'live') return;
+        capture.stop();
+        failed = true;
+        ui.say(KEEP_TALKING_FAILED, { loud: true, error: true });
+        endNow('keep_talking_failed');
+      };
+      timer = later(() => settle(false), KEEP_TALKING_WAIT_MS);
+      capture.after(async () => {
+        if (over) return;
+        const url = at(direct.keep_talking_url);
+        let r = await postJson(url, {}, { timeoutMs: CONTROL_POST_MS });
+        if (!over && (r.status === 0 || r.status >= 500)) r = await postJson(url, {}, { timeoutMs: CONTROL_POST_MS });
+        settle(r.status === 200 && r.body.ok);
+      });
     });
   }
 
@@ -720,7 +752,8 @@ export function directVoice(d) {
     const { RealtimeVoiceController } = await d.loadController();
     if (finalized) return false;
     // Every post names the finished results already told, so the server keeps each until the page has it (FR N7).
-    capture = createCapture({ send: (events, opts) => postJson(at(direct.transcript_url), { events, ...(told.size ? { told: [...told] } : {}) }, opts || {}),
+    capture = createCapture({ send: (events, opts) => postJson(at(direct.transcript_url), { events, ...(told.size ? { told: [...told] } : {}) },
+      { timeoutMs: CAPTURE_POST_MS, ...(opts || {}) }),
       clock, onAnswer: heard, warn: d.warn || (() => {}), turnsOff: words.off });
     c = new RealtimeVoiceController({
       bootstrapUrl: direct.bootstrap_url, requestHeaders: d.headers, includeTranscriptAfterEnd: true,
@@ -729,7 +762,7 @@ export function directVoice(d) {
       onSessionInfo: (info) => {
         if (typeof info?.voice_session_id === 'string') sid = info.voice_session_id;
         // Ended while the server was still starting it: that session is ended on the server too, never left open.
-        if (finalized) { if (sid) postJson(at(direct.end_url), {}); return; }
+        if (finalized) { if (sid) postJson(at(direct.end_url), {}, { timeoutMs: END_WAIT_MS }); return; }
         ui.notice(noticeWords(info?.voice_notices, info?.provider || provider));
       },
       onStateChange: (state) => {

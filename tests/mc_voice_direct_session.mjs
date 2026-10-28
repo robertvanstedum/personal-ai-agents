@@ -178,7 +178,7 @@ for (const [status, detail, words] of [
   assert.equal(r.posts('/consult')[2].body.name, 'save_note');
   r.advance(9999); assert.deepEqual(c.instructions, []);
   r.advance(1); assert.deepEqual(c.instructions, ['Still checking.']);                    // the holding line, once
-  r.advance(30000); assert.deepEqual(c.instructions, ['Still checking.']);
+  r.advance(20000); assert.deepEqual(c.instructions, ['Still checking.']);              // 30 s: inside the page's 35 s bound (F3)
   release(); assert.deepEqual(await saved, { ok: true, spoken: 'Done.' });
   scenarios++;
 }

@@ -500,4 +500,81 @@ await t.check("F2: the model's call after a replayed completion acts on its own 
   assert.deepEqual([p.body.owner_item_id, p.body.owner_transcript_item], ['t1', 'Save a note: second request']);
 });
 
+// F3 (P2; Codex's last page case, asserting the correct behaviour): every POST the live page makes is bounded, with an abort
+// and a bound per kind above the server's own, so none can hold the capture chain for ever. Keep talking's whole withdrawal
+// (the posts before it, its POST and its one retry) has one total bound; past it, the existing failure path and End, and
+// capture never resumes behind the withdrawal that was not confirmed.
+const never = () => new Promise(() => {});
+await t.check("F3 (Codex's case): a Keep talking request that never answers takes the failure path and End within its bound", async () => {
+  const r = rig({ routes: { '/keep_talking': never } });
+  await r.s.start('openai');
+  let done = false; r.s.keepTalking().then(() => { done = true; }); await flush();
+  r.c.utter('A new detail after Keep talking.'); await flush();
+  for (let i = 0; i < 25; i++) { r.advance(1000); await flush(); }     // the clock runs as it would: each bound in turn
+  assert.equal(done, true, 'Keep talking never settled');
+  assert.equal(r.posts('/keep_talking').length, 2);                   // its POST and one retry, each bounded
+  assert.deepEqual(r.said.at(-1), [D.KEEP_TALKING_FAILED, { loud: true, error: true }]);
+  assert.deepEqual(r.c.ended, ['keep_talking_failed']);
+  assert.equal(r.s.state(), 'ended');
+  const posted = r.posts('/transcript').flatMap((p) => p.body.events.map((e) => e.text));
+  assert.deepEqual(posted, [], 'capture resumed behind a withdrawal that was not confirmed');
+  r.advance(60000); await flush(20);
+  assert.deepEqual(r.posts('/transcript').flatMap((p) => p.body.events.map((e) => e.text)), []);
+  const [end] = r.posts('/end');
+  assert.deepEqual(end.body.unacknowledged, ['t0']);                   // End reports it not kept
+});
+await t.check('F3: Keep talking behind a transcript post that never answers fails at its total bound, never sent late', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? never() : null) } });
+  await r.s.start('openai');
+  r.c.utter('A detail before Keep talking.'); await flush();
+  let done = false; r.s.keepTalking().then(() => { done = true; }); await flush();
+  for (let i = 0; i < 24; i++) { r.advance(1000); await flush(); }
+  assert.equal(done, false);
+  r.advance(1000); await flush(20);                                    // 25 s: the whole withdrawal's bound
+  assert.equal(done, true);
+  assert.deepEqual(r.c.ended, ['keep_talking_failed']);
+  for (let i = 0; i < 60; i++) { r.advance(1000); await flush(); }     // the transcript post's bounds pass behind it
+  assert.equal(r.posts('/keep_talking').length, 0, 'the withdrawal was sent after its bound');
+});
+await t.check('F3: a transcript post that never answers fails after two bounded attempts, and later capture goes on', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.some((e) => e.text === 'A lost detail.') ? never() : null) } });
+  await r.s.start('openai');
+  r.c.utter('A lost detail.'); await flush();
+  r.advance(15000); await flush();                                     // the first attempt's bound: the same ids once more
+  assert.equal(r.posts('/transcript').length, 2);
+  assert.deepEqual(r.posts('/transcript').map((p) => p.body.events[0].item_id), ['t0', 't0']);
+  r.advance(15000); await flush();                                     // the second attempt's bound: failed
+  assert.deepEqual(r.said.at(-1), [D.NOT_KEPT, { error: true }]);
+  r.c.utter('The next detail.'); await flush();
+  assert.equal(r.posts('/transcript').at(-1).body.events[0].text, 'The next detail.');
+  r.s.end('user'); await flush(20);
+  assert.deepEqual(r.posts('/end')[0].body.unacknowledged, ['t0']);
+  assert.match(r.ended.at(-1)[0], /not kept \(1 turn\)/);
+});
+await t.check('F3: a consult that never answers is unknown at its bound, with one reconciliation read and no second POST', async () => {
+  const r = rig({ routes: { '/consult': never } });
+  await r.s.start('openai');
+  r.c.utter('Run the nightly job.'); await flush();
+  let out = null; r.c.fn({ call_id: 'call_1', name: 'consult', arguments: {} }).then((o) => { out = o; });
+  await flush();
+  r.advance(34999); await flush();
+  assert.equal(out, null, 'unknown before the bound, which sits above the server\'s 25 s');
+  r.advance(1); await flush(20);
+  assert.equal(r.posts('/consult').length, 1);
+  assert.equal(r.gets('/consult/').length, 1);
+  assert.equal(out?.outcome, 'unknown');
+  assert.equal(out?.spoken, D.UNKNOWN);
+});
+await t.check('F3: every POST the live page makes carries an abort, except the leaving page\'s keepalive End', async () => {
+  const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We checked twelve.' } }) } });
+  await r.s.start('openai');
+  r.c.utter('What is stuck on #12?'); await flush();
+  await r.c.fn({ call_id: 'call_1', name: 'consult', arguments: {} });
+  await r.s.keepTalking(); r.advance(20000); await flush();
+  r.s.sumUp(); await flush(); r.advance(8000); await flush(); r.c.drained(r.c.tracked[0]); await flush(20);
+  const posts = r.calls.filter((x) => x.method === 'POST');
+  assert.deepEqual([...new Set(posts.map((x) => x.url.split('/').at(-1)))].sort(), ['consult', 'end', 'keep_talking', 'summary', 'transcript']);
+  for (const p of posts) assert.ok(p.opts.signal, `${p.url} is not bounded`);
+});
+
 t.done();
