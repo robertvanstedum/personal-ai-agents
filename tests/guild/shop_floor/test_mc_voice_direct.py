@@ -896,6 +896,50 @@ def test_a_job_started_from_a_voice_consult_posts_its_result_tagged_with_that_se
     assert {row["request_id"]: row["voice"]["kind"] for row in rows}[result] == "consult_outcome"
 
 
+# ── UI review #9: voice tagging fails open, on purpose ────────────────────────────────────────────────────────────
+# A tag write that fails never stops an MC output: the notice or the job's result is still kept and shown, and may show
+# while the session is live. Acceptable because these are MC outputs, not transcript text (B_direct_path.md).
+
+def _tag_fails(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("tag store down")
+    monkeypatch.setattr(reveal, "tag_for_turn", boom)
+
+
+def test_a_tool_notice_is_still_shown_when_its_voice_tag_cannot_be_written(ready, monkeypatch):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])
+    show = shower(r, monkeypatch)
+    _tag_fails(monkeypatch)
+    assert show(CID, "mc-preference-op-9", "Kept: lesson L9.", owner_turn=reveal.consult_note_id(sid, 1)) is True
+    rows, sessions = shown(r)
+    assert sessions[0]["state"] == "live" and [row["request_id"] for row in rows] == ["mc-preference-op-9"]
+    assert reveal.tag_key("mc-preference-op-9") not in r.notes.rows
+
+
+def test_a_job_result_is_still_posted_when_its_voice_tag_cannot_be_written(ready, tmp_path, monkeypatch):
+    from minimoi_portal.guild_ui import jobs
+    from minimoi_portal.guild_ui.stores import Author
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])
+    note_id = reveal.consult_note_id(sid, 1)
+    r.notes.add_note(note_id, "Run this as a job: rebuild the index", Author("robert", "owner", "Robert"), page="voice")
+    mgr = jobs.JobManager(str(tmp_path / "jobs"), relay=SimpleNamespace(connected=True), conversations=Conversations(),
+                          floor_for=lambda conv: r.notes)
+    job, refusal = mgr.start({"id": CID, "principal": "robert"}, "robert", r.notes.get_note(note_id), note_id, None,
+                             title="Rebuild")
+    assert refusal is None
+    _tag_fails(monkeypatch)
+    mgr.store.mutate(CID, job["id"], lambda j: j.update(state="running"))
+    mgr._finalize_completed(mgr.store.get(CID, job["id"]), {"result_text": "Index rebuilt."}, time.time(), lambda j: None)
+    result = jobs.result_request_id(job["id"])
+    assert result in r.notes.rows and reveal.tag_key(result) not in r.notes.rows
+    rows, sessions = shown(r)
+    assert sessions[0]["state"] == "live" and result in [row["request_id"] for row in rows]
+
+
 # ── review B #4: the allowance is reserved only for a recorded session ──────────────────────────────────────────
 
 def test_no_allowance_is_spent_when_the_start_marker_cannot_be_kept(ready, monkeypatch):
