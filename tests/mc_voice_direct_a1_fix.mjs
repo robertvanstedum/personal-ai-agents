@@ -21,13 +21,14 @@ await t.check('item 1: a consult names the capture id of the owner turn it acts 
 await t.check('item 1: an owner turn that completes after a later item appeared is named by its own place', async () => {
   const r = rig(); await r.s.start('openai');
   r.c.hear([user('Check the kiln', false), assistant('Let me', false), user('and the glaze', false)]);
-  r.c.hear([user('Check the kiln'), assistant('Let me', false), user('and the glaze', false)]);
-  r.c.options.onUserTurn('Check the kiln');
-  await r.c.options.onFunctionCall({ call_id: 'call_a', name: 'consult', arguments: {} });
-  r.c.hear([user('Check the kiln'), assistant('Let me', false), user('and the glaze')]);
+  r.c.hear([user('Check the kiln', false), assistant('Let me', false), user('and the glaze')]);   // the later one first
   r.c.options.onUserTurn('and the glaze');
   await r.c.options.onFunctionCall({ call_id: 'call_b', name: 'consult', arguments: {} });
-  assert.deepEqual(r.posts('/consult').map((p) => p.body.owner_item_id), ['t0', 't2']);
+  r.c.hear([user('Check the kiln'), assistant('Let me', false), user('and the glaze')]);
+  r.c.options.onUserTurn('Check the kiln');
+  await r.c.options.onFunctionCall({ call_id: 'call_a', name: 'consult', arguments: {} });
+  assert.deepEqual(r.posts('/consult').map((p) => [p.body.owner_item_id, p.body.owner_transcript_item]),
+    [['t2', 'and the glaze'], ['t0', 'Check the kiln']]);
 });
 await t.check('item 1: Check and the model on one turn name one id; the same words said again are a new id', async () => {
   const r = rig(); await r.s.start('openai');
@@ -37,6 +38,63 @@ await t.check('item 1: Check and the model on one turn name one id; the same wor
   r.c.utter('Make a note that the kiln needs a new seal');
   await r.c.options.onFunctionCall({ call_id: 'call_n', name: 'save_note', arguments: {} });
   assert.deepEqual(r.posts('/consult').map((p) => p.body.owner_item_id), ['t0', 't0', 't1']);
+});
+
+// ── R1 P1-2, R2 S4: a model call that arrives before its own transcript (repro_a1.mjs R1, R2) ───────────────────────────
+await t.check('R1 P1-2: a call before its transcript waits for it, then acts once on the new words and its turn', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('What is stuck on #12?');
+  await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
+  r.c.options.onInputState('speech_started'); r.c.options.onInputState('speech_stopped');   // he says the next thing
+  const pending = r.c.options.onFunctionCall({ call_id: 'b', name: 'save_note', arguments: { note: 'the kiln needs a new seal' } });
+  await flush();
+  assert.equal(r.posts('/consult').length, 1, 'sent before its own words were transcribed');
+  r.advance(1500);
+  r.c.utter('Make a note that the kiln needs a new seal');                                  // the transcript lands
+  await pending; await flush();
+  const [first, second] = r.posts('/consult').map((p) => p.body);
+  assert.equal(r.posts('/consult').length, 2);
+  assert.equal(first.owner_item_id, 't0');
+  assert.deepEqual([second.owner_item_id, second.owner_transcript_item], ['t1', 'Make a note that the kiln needs a new seal']);
+});
+await t.check('R1 P1-2: a call whose transcript never comes sends nothing and says it did not catch it', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('What is stuck on #12?');
+  await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
+  r.c.options.onInputState('speech_started');
+  const pending = r.c.options.onFunctionCall({ call_id: 'b', name: 'save_note', arguments: {} });
+  await flush(); r.advance(2999); await flush();
+  assert.equal(r.posts('/consult').length, 1);
+  r.advance(1);
+  const out = await pending;
+  assert.deepEqual(out, { ok: false, outcome: 'not_done', error: 'not_heard', spoken: D.NOT_HEARD });
+  assert.equal(r.posts('/consult').length, 1, 'acted on the older words');
+});
+await t.check('R1 P1-2 (repro R2): a call before its transcript, while the earlier consult runs, is not absorbed as pending', async () => {
+  let release;
+  const r = rig({ routes: { '/consult': (body) => (body.call_id === 'a' ? new Promise((res) => { release = () => res({ status: 200, body: { ok: true, outcome: 'done', spoken: 'Logged.' } }); }) : null) } });
+  await r.s.start('openai');
+  r.c.utter('Check the kiln temperature log.');
+  const first = r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
+  await flush();
+  r.c.options.onInputState('speech_started');
+  const second = r.c.options.onFunctionCall({ call_id: 'b', name: 'save_note', arguments: {} });
+  await flush();
+  r.c.utter('Make a note that the kiln is hot');
+  const out = await second; release(); await first;
+  assert.notEqual(out.outcome, 'pending');
+  assert.deepEqual(r.posts('/consult').map((p) => p.body.owner_item_id), ['t0', 't1']);
+});
+await t.check('R1 P1-2: an empty transcript is not words: nothing is sent', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('What is stuck on #12?');
+  await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
+  r.c.options.onInputState('speech_started');
+  const pending = r.c.options.onFunctionCall({ call_id: 'b', name: 'consult', arguments: {} });
+  await flush();
+  r.c.options.onUserTurn('');
+  assert.equal((await pending).error, 'not_heard');
+  assert.equal(r.posts('/consult').length, 1);
 });
 
 t.done();
