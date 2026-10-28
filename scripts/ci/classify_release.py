@@ -63,6 +63,7 @@ def _is_release_only(path: str) -> bool:
         or path in LOCAL_TOOL_FILES
         or ((path.startswith(VAULT_LOCAL_PREFIXES) or path in VAULT_LOCAL_FILES) and path not in VAULT_SERVER_FILES)
         or path in GUILD_LOCAL_TOOLS
+        or path in MC_RUNNER_LOCAL_FILES
         or path.startswith("services/agent_installer/")
         or path.startswith(OPS_ONLY_PREFIXES)
         or path in OPS_ONLY_FILES
@@ -312,6 +313,22 @@ GUILD_BACKEND_PREFIXES = ("core/agent_requests/",)
 GUILD_BACKEND_FILES = frozenset({"core/limits.py", "core/github_awareness.py", "scripts/mc/github_awareness.py"})
 GUILD_LOCAL_TOOLS = frozenset({"scripts/agent_connection.py", "scripts/agent_requests.py"})
 
+# The MC delegation runner (core/mc_delegation_runner/). Its one production consumer is the portal image, through:
+# - the delegation dispatcher the portal runs (core/mc_delegation_dispatcher: store.py reads envelope.py, door.py reads
+#   dispatcher_adapter.py), and
+# - the front-door connections' code in core/agent_requests/ (portal-owned above), which reads launch_env.py, the one
+#   environment policy for agent processes.
+# Importing any of them runs the package's __init__.py. The Mac runner and the Mac connections use them too, from their
+# own installed copies. The rest runs only in the Mac runner's own bundle (scripts/mc_host/install_delegation_runner.sh);
+# no service image imports it. Exact files: a new module here keeps the conservative core/ fallback, and
+# tests/test_release_classifier.py fails if another production consumer appears or the portal side reaches a
+# runner-only file.
+MC_RUNNER_PORTAL_FILES = frozenset({"core/mc_delegation_runner/__init__.py", "core/mc_delegation_runner/envelope.py",
+                                    "core/mc_delegation_runner/dispatcher_adapter.py", "core/mc_delegation_runner/launch_env.py"})
+MC_RUNNER_LOCAL_FILES = frozenset({"core/mc_delegation_runner/cli.py", "core/mc_delegation_runner/runner.py",
+                                   "core/mc_delegation_runner/commands.py", "core/mc_delegation_runner/cost.py",
+                                   "core/mc_delegation_runner/workspace.py"})
+
 
 def _is_staging_only(path: str) -> bool:
     return path in STAGING_ONLY_FILES or path.startswith(STAGING_ONLY_PREFIXES)
@@ -385,6 +402,8 @@ def classify(paths: list[str],
             services.update(("portal", "cos-bot", "cos-scheduler"))
         elif path.startswith(GUILD_BACKEND_PREFIXES) or path in GUILD_BACKEND_FILES:
             services.add("portal")
+        elif path in MC_RUNNER_PORTAL_FILES:
+            services.add("portal")                                   # the portal's dispatcher and agent_requests read these
         elif path.startswith(("core/", "utils/")):
             services.update(PYTHON_SERVICES)
         elif path == "docker/Dockerfile.portal" or path == "docker/requirements.portal.txt":

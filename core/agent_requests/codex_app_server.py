@@ -18,6 +18,7 @@ import subprocess
 import threading
 
 from core.agent_requests.connection import Delivery, Probe, Provider
+from core.mc_delegation_runner import launch_env
 
 APPROVAL_POLICIES = ("on-request", "untrusted")           # the installed protocol also has "never": not offered
 SANDBOXES = ("read-only", "workspace-write")           # "danger-full-access" is not offered
@@ -64,6 +65,12 @@ class CodexAppServerProvider(Provider):
     def argv(self) -> list[str]:
         return [self.codex_bin, "app-server", "--listen", "stdio://"]
 
+    def child_env(self) -> dict:
+        """The app-server's environment, from the one launch policy (``launch_env``), never the whole parent environment: a provider key or token in this
+        process's environment could make Codex bill the API instead of the ChatGPT plan. Extras by exact name only (``launch_env.EXTRA_ALLOW``): the
+        child's own ledger and a UTF-8 ``LANG`` for the commands it runs."""
+        return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "LANG": "en_US.UTF-8"})
+
     # ── operator action ──
     def start(self, *, create: bool = False) -> str:
         """Start the app-server and bind it to the configured thread: ``thread/resume`` of the stored id, or (only when ``create`` and no id is configured) ``thread/start``.
@@ -75,7 +82,7 @@ class CodexAppServerProvider(Provider):
         with self._lock:
             self._ready, self._busy, self._attention, self._waiting = False, False, "", {}
             self._proc = self._popen(self.argv(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=self.cwd, text=True, bufsize=1,
-                                     env={**os.environ, "MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root})
+                                     env=self.child_env())
             proc = self._proc
         threading.Thread(target=self._read, args=(proc,), daemon=True).start()
         try:

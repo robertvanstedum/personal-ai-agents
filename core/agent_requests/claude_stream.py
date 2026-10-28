@@ -17,6 +17,7 @@ import threading
 import uuid
 
 from core.agent_requests.connection import Delivery, Probe, Provider, _UUID
+from core.mc_delegation_runner import launch_env
 
 PERMISSION_MODES = ("default", "acceptEdits", "plan")          # bypassPermissions is not offered
 _TOOL = re.compile(r"^[A-Za-z0-9_:*.\-/ ()]{1,400}$")
@@ -100,6 +101,12 @@ class ClaudeStreamProvider(Provider):
             out += ["--name", self.display_name]
         return out
 
+    def child_env(self) -> dict:
+        """The session's environment, from the one launch policy (``launch_env``), never the whole parent environment: a provider key or token in this
+        process's environment would make Claude Code bill the API instead of the plan sign-in. Extras by exact name only (``launch_env.EXTRA_ALLOW``): the
+        child's own ledger (never the global default), ``DISABLE_AUTOUPDATER`` so the pinned CLI never replaces itself, and a UTF-8 ``LANG``."""
+        return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "DISABLE_AUTOUPDATER": "1", "LANG": "en_US.UTF-8"})
+
     # ── operator action ──
     def start(self) -> None:
         with self._lock:
@@ -124,7 +131,7 @@ class ClaudeStreamProvider(Provider):
                 origin = float(hint) if isinstance(hint, (int, float)) and not isinstance(hint, bool) and hint == hint and hint >= 0 else None
             self._origin = self._last_cum = origin
             self._proc = self._popen(self.argv(cap, origin or 0.0), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=self.cwd, text=True, bufsize=1,
-                                     env={**os.environ, "MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root})      # the child's own ledger, never the global default
+                                     env=self.child_env())
             self._busy = False
             self.resume = True                                  # any later start continues the same saved session
             threading.Thread(target=self._read, args=(self._proc,), daemon=True).start()

@@ -5,22 +5,23 @@
 * The clone has **no remote**: there is nothing to push to, and the git config also refuses
   pushes. Push/merge/deploy authority is never implied by a build scope.
 * The child process environment is rebuilt from an allowlist; tokens for GitHub, AWS, MiniMoi
-  services and model providers are not passed through.
+  services and model providers are not passed through. The policy is defined once, in
+  ``launch_env`` (shared with the front-door connections); this module adds only ``GIT_TERMINAL_PROMPT``.
 """
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
+from core.mc_delegation_runner import launch_env
+
 _TASK = re.compile(r"^[0-9a-f-]{36}-g[1-9][0-9]{0,8}$")    # <request uuid>-g<generation>
-ENV_ALLOW = ("PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "USER", "SHELL")
+ENV_ALLOW = launch_env.BASE_ALLOW
 # Credential names that must never reach a delegate, even if present in the runner's environment.
-ENV_DENY_PATTERNS = (r"^GH_", r"^GITHUB_", r"^AWS_", r"^MINIMOI_", r"_API_KEY$", r"_TOKEN$",
-                     r"^DATABASE_URL$", r"^SSH_AUTH_SOCK$")
+ENV_DENY_PATTERNS = launch_env.DENY_PATTERNS
 
 
 class WorkspaceError(RuntimeError):
@@ -36,13 +37,10 @@ def _git(args, cwd=None, timeout=120):
 
 
 def child_env(extra: dict | None = None) -> dict:
-    env = {k: v for k, v in os.environ.items() if k in ENV_ALLOW}
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    for k, v in (extra or {}).items():
-        if any(re.search(p, k) for p in ENV_DENY_PATTERNS):
-            raise WorkspaceError("credential_variable_refused")
-        env[k] = v
-    return env
+    try:
+        return launch_env.child_env({"GIT_TERMINAL_PROMPT": "0", **(extra or {})})
+    except launch_env.EnvRefused:
+        raise WorkspaceError("credential_variable_refused") from None
 
 
 def prepare(root: Path, mirror: Path, task_name: str, ref: str) -> Path:
