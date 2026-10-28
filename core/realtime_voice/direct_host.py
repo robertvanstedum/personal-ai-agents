@@ -1051,6 +1051,8 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     began = stamp(now())
 
     def refused_here(result):                     # a refusal that ran nothing: its own receipt, for this call only
+        if sessions.admitted(sid) is None:        # counted toward the session's cap, as each keeps a record (FR N6)
+            return not_done("cap", CAP_LINE), 429
         result = {"ok": False, **result, "outcome": "not_done"}
         result = keep_receipt(adapter, handle, principal, sid, "x" + digest(call_id)[:32], name, result, began)
         sessions.remember(sid, call_id, result)

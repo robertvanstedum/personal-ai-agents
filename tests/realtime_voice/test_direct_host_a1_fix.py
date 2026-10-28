@@ -134,7 +134,7 @@ def test_a_hosts_own_refusal_binds_nothing_and_the_other_tool_still_acts_on_the_
     note = consult(r, sid, call_id="m1", name="save_note", turn="t1").get_json()
     asked = consult(r, sid, call_id="m2", name="consult", turn="t1").get_json()
     assert note["error"] == "not_a_note" and not note.get("same_turn")
-    assert asked["receipt"] == "turn-1" and not asked.get("same_turn") and len(r.host.turns) == 1
+    assert asked["receipt"] == "turn-2" and not asked.get("same_turn") and len(r.host.turns) == 1   # the refusal counted (FR N6)
 
 
 def test_an_unavailable_conversation_or_an_unkept_request_binds_nothing(rig):
@@ -721,3 +721,21 @@ def test_fr_n10_a_replay_to_the_other_tool_follows_the_first_outcome(rig):
     other = consult(r, sid, call_id="call_m", name="save_note", turn="t0").get_json()
     assert other["outcome"] == "not_done" and "already handled" not in other["spoken"]
     assert other["spoken"] == "That was already tried and not done: Master Craftsman is busy."
+
+
+def test_fr_n6_refusals_that_run_nothing_count_toward_the_sessions_cap(rig):
+    """A model looping save_note on words that are not a note: each refusal keeps a receipt record, so each is counted
+    toward the session's cap, and past it nothing more is kept."""
+    from core.realtime_voice.consult import CAP, CAP_LINE
+    r = rig
+    sid = start(r)
+    for i in range(CAP):
+        r.host.refusals["save_note"] = {"error": "not_a_note", "spoken": "That is not a note."}
+        answer = consult(r, sid, call_id=f"call_{i}", name="save_note", turn=f"t{i}")
+        assert answer.status_code == 200 and answer.get_json()["outcome"] == "not_done"
+    receipts = len(r.store.rows)
+    r.host.refusals["save_note"] = {"error": "not_a_note", "spoken": "That is not a note."}
+    capped = consult(r, sid, call_id="call_x", name="save_note", turn="t99")
+    assert capped.status_code == 429 and capped.get_json()["spoken"] == CAP_LINE
+    assert len(r.store.rows) == receipts and not r.host.turns                       # nothing more kept, nothing ran
+    assert consult(r, sid, call_id="call_y", turn="t100").status_code == 429
