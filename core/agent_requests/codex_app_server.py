@@ -67,8 +67,9 @@ class CodexAppServerProvider(Provider):
 
     def child_env(self) -> dict:
         """The app-server's environment, from the one launch policy (``launch_env``), never the whole parent environment: a provider key or token in this
-        process's environment could make Codex bill the API instead of the ChatGPT plan. The one extra, by exact name, is the child's own ledger."""
-        return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root})
+        process's environment could make Codex bill the API instead of the ChatGPT plan. Extras by exact name only (``launch_env.EXTRA_ALLOW``): the
+        child's own ledger and a UTF-8 ``LANG`` for the commands it runs."""
+        return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "LANG": "en_US.UTF-8"})
 
     # ── operator action ──
     def start(self, *, create: bool = False) -> str:

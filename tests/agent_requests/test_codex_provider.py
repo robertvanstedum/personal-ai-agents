@@ -456,8 +456,16 @@ def test_provider_keys_and_tokens_in_the_managers_environment_never_reach_the_co
     assert "NOT_ON_THE_LIST" not in env and env["HOME"] == os.environ["HOME"] and env["PATH"] == os.environ["PATH"]
 
 
+def test_the_codex_app_server_keeps_a_utf8_locale_without_one_in_the_manager(tmp_path, root, monkeypatch):
+    monkeypatch.delenv("LANG", raising=False)
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.setenv("LC_CTYPE", "C.UTF-8")                                                      # what PEP 538 coercion leaves in the manager
+    env = _env_given_to_codex(tmp_path, root)
+    assert env["LANG"] == "en_US.UTF-8" and "LC_CTYPE" not in env                                  # its zsh, sed and awk read text as UTF-8
+
+
 def test_the_codex_app_servers_own_extras_go_through_the_policys_refusal(tmp_path, root, monkeypatch):
     from core.mc_delegation_runner import launch_env
-    monkeypatch.setattr(launch_env, "REVIEWED_NAMES", {})                                          # without its review, the ledger name matches ^MINIMOI_ and is refused
+    monkeypatch.setattr(launch_env, "DENY_OVERRIDES", frozenset())                                 # without its review, the ledger name matches ^MINIMOI_ and is refused
     with pytest.raises(launch_env.EnvRefused, match="MINIMOI_AGENT_REQUESTS_DIR"):
         _env_given_to_codex(tmp_path, root)

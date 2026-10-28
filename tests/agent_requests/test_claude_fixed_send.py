@@ -90,9 +90,9 @@ def test_the_fixed_sender_gives_claude_code_only_names_inside_the_one_launch_pol
     box,rid,calls,children,path=fixture(tmp_path,monkeypatch)
     box.dispatch(rid)
     env=calls[0][1]['env']
-    # It copies nothing from its parent: a fixed HOME, PATH and LANG, all on the policy's base list and none credential-shaped.
+    # It copies nothing from its parent: a fixed HOME, PATH and LANG, all names on the policy's base list.
     assert set(env)=={'HOME','PATH','LANG'} and set(env)<=set(launch_env.BASE_ALLOW)
-    assert not any(launch_env.denied(n) for n in env) and 'sk-test-not-real' not in env.values()
+    assert not set(six)&set(env) and 'sk-test-not-real' not in env.values() and env['LANG']=='en_US.UTF-8'
 
 
 @pytest.mark.parametrize('mode',['partial','denied'])

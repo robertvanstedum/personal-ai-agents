@@ -713,9 +713,22 @@ def test_provider_keys_and_tokens_in_the_managers_environment_never_reach_the_cl
     p.close()
 
 
+def test_the_claude_session_keeps_a_utf8_locale_without_one_in_the_manager(fake_cli, tmp_path, root, monkeypatch):
+    """Under launchd the manager has no LANG; Python's locale coercion (PEP 538) sets LC_CTYPE=C.UTF-8 in its own environment, which the old
+    whole-environment copy passed on. LC_CTYPE is not on the list, so the session gets LANG=en_US.UTF-8 explicitly."""
+    monkeypatch.delenv("LANG", raising=False)
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.setenv("LC_CTYPE", "C.UTF-8")
+    seen = {}
+    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: EnvSpy(seen, *a, **k))
+    p.start()
+    assert seen["env"]["LANG"] == "en_US.UTF-8" and "LC_CTYPE" not in seen["env"]
+    p.close()
+
+
 def test_the_claude_sessions_own_extras_go_through_the_policys_refusal(fake_cli, tmp_path, root, monkeypatch):
     from core.mc_delegation_runner import launch_env
-    monkeypatch.setattr(launch_env, "REVIEWED_NAMES", {})                                          # without its review, the ledger name matches ^MINIMOI_ and is refused
+    monkeypatch.setattr(launch_env, "DENY_OVERRIDES", frozenset())                                 # without its review, the ledger name matches ^MINIMOI_ and is refused
     seen = {}
     p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: EnvSpy(seen, *a, **k))
     with pytest.raises(launch_env.EnvRefused, match="MINIMOI_AGENT_REQUESTS_DIR"):

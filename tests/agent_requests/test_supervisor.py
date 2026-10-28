@@ -198,7 +198,8 @@ PARENT_SECRETS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GH_TOKE
 @pytest.mark.parametrize("agent", ["claude-code", "codex"])
 def test_keys_and_tokens_in_the_connections_own_environment_never_reach_the_agent_it_starts(tmp_path, agent):
     """End to end through the operator CLI, as launchd runs it: the six credentials sit in the manager's environment (fake values), the session still
-    answers, and the agent process it started was given none of them, nor any other name off the list, and the connection's own ledger."""
+    answers, and the agent process it started was given none of them, nor the one unlisted sentinel, and was given the connection's own ledger and LANG.
+    (The full-set check is in the unit tests: the fake's sh wrapper adds PWD, SHLVL and _ here.)"""
     root = str(tmp_path / "ledger")
     work = tmp_path / "work"
     work.mkdir()
@@ -226,6 +227,7 @@ def test_keys_and_tokens_in_the_connections_own_environment_never_reach_the_agen
         assert not set(PARENT_SECRETS) & set(start["names"]) and "NOT_ON_THE_LIST" not in start["names"]
         assert start["ledger"] == root                                                                     # the connection's own ledger, never the global default
         assert ("DISABLE_AUTOUPDATER" in start["names"]) == (agent == "claude-code")
+        assert "LANG" in start["names"]
 
 
 def test_the_launchd_plist_is_valid_keeps_the_manager_alive_with_throttling_and_names_every_argument(tmp_path):

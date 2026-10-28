@@ -103,9 +103,9 @@ class ClaudeStreamProvider(Provider):
 
     def child_env(self) -> dict:
         """The session's environment, from the one launch policy (``launch_env``), never the whole parent environment: a provider key or token in this
-        process's environment would make Claude Code bill the API instead of the plan sign-in. Extras by exact name only: the child's own ledger (never the
-        global default) and ``DISABLE_AUTOUPDATER``, so the pinned CLI never replaces itself."""
-        return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "DISABLE_AUTOUPDATER": "1"})
+        process's environment would make Claude Code bill the API instead of the plan sign-in. Extras by exact name only (``launch_env.EXTRA_ALLOW``): the
+        child's own ledger (never the global default), ``DISABLE_AUTOUPDATER`` so the pinned CLI never replaces itself, and a UTF-8 ``LANG``."""
+        return launch_env.child_env({"MINIMOI_AGENT_REQUESTS_DIR": self.ledger_root, "DISABLE_AUTOUPDATER": "1", "LANG": "en_US.UTF-8"})
 
     # ── operator action ──
     def start(self) -> None:
