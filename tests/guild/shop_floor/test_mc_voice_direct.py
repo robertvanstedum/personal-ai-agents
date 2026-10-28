@@ -746,3 +746,35 @@ def test_notes_a_typed_turn_writes_are_not_tagged(ready):
     r.notes.add_note("owner-action-typed-receipt", "Saved.", Author("guild", "platform", "Guild"))
     rows, _ = shown(r)
     assert [row["request_id"] for row in rows] == ["owner-action-typed-receipt"] and "voice" not in rows[0]
+
+
+# ── review B #4: the allowance is reserved only for a recorded session ──────────────────────────────────────────
+
+def test_no_allowance_is_spent_when_the_start_marker_cannot_be_kept(ready, monkeypatch):
+    r = ready
+    monkeypatch.setattr(reveal, "mark_start", lambda *a, **k: None)
+    refused = r.client.post(BASE + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
+                                                       "conversation_id": CID}, headers=r.headers)
+    assert refused.status_code == 503 and not r.mints and r.budget.status()["reserved_usd"] == 0
+
+
+def test_a_failed_mint_ends_the_recorded_session_as_not_started(ready, monkeypatch):
+    from core.realtime_voice.providers.openai_realtime import OpenAIRealtimeError
+    r = ready
+
+    def fail(**kw):
+        raise OpenAIRealtimeError("upstream")
+    monkeypatch.setattr("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential", fail)
+    failed = r.client.post(BASE + "/bootstrap", json={"persona": "master_craftsman", "provider": "openai",
+                                                      "conversation_id": CID}, headers=r.headers)
+    assert failed.status_code == 502
+    starts = [row for row in r.notes.rows.values() if '"event": "start"' in row["text"]]
+    sid = json_of(starts[0])["session_id"]
+    assert reveal.read_marker(r.notes, sid, "end")["reason"] == "not_started"
+    sessions = r.config["mc_direct_voice_live"].__self__
+    assert not sessions.is_open(sid) and shown(r)[1][0]["state"] == "ended"
+
+
+def json_of(row):
+    import json
+    return json.loads(row["text"][len(reveal.MARKER):])

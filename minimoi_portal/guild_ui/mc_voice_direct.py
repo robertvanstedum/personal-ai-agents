@@ -232,7 +232,7 @@ class _Sessions(ConsultLedger):
                     proposed, meta["proposed"] = False, False
         return proposed, confirmed
 
-    def close_session(self, session_id):
+    def close_session(self, session_id, reason="end"):
         """End: closed here, and the end marker kept (the reveal). A failed write leaves the reveal to the clock."""
         super().close_session(session_id)
         from . import api
@@ -240,9 +240,14 @@ class _Sessions(ConsultLedger):
         try:
             conv, refusal = api._conversation(cid) if cid else (None, True)
             if refusal is None:
-                reveal.mark_end(api._conv_floor(conv), session_id, reason="end")
+                reveal.mark_end(api._conv_floor(conv), session_id, reason=reason)
         except Exception:
             log.exception("mc direct voice: end marker not kept")
+
+    def abandon(self, session_id):
+        """The bootstrap recorded the session but the provider session did not start (budget refused or mint failed):
+        closed here, with an end marker whose reason is not_started (bootstrap, review B #4)."""
+        self.close_session(session_id, reason="not_started")
 
 
 def _bound(principal, conv):

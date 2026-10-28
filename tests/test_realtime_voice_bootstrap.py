@@ -613,3 +613,75 @@ def test_a_host_owner_replaces_the_proxy_headers_and_a_budget_refusal_stops_the_
     ))
     assert signed_out.test_client().post("/api/realtime-voice/bootstrap", json=_valid_body(),
                                          headers=forged).status_code == 401
+
+
+class _Ledger:
+    """Records the order of issue / abandon against the mint (review B #4)."""
+
+    def __init__(self, events, refuse=False):
+        self.events, self.refuse = events, refuse
+
+    def issue(self, user_id):
+        self.events.append("issue")
+        if self.refuse:
+            raise RuntimeError("not recorded")
+        return "session-1"
+
+    def abandon(self, session_id):
+        self.events.append(("abandon", session_id))
+
+
+def _host(ledger, events, admit=True):
+    import contextlib
+
+    @contextlib.contextmanager
+    def reserve(user_id):
+        events.append("reserve")
+        yield
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(create_bootstrap_blueprint(
+        domain="mcorder", locale="de-AT", get_persona=_fake_persona_lookup, is_production=lambda: True,
+        owner=lambda: ("robert", "Robert"), consult_ledger=ledger, admit=reserve if admit else None))
+    return app.test_client()
+
+
+def test_with_an_allowance_the_session_is_recorded_before_anything_is_reserved_or_minted():
+    from core.realtime_voice.providers.openai_realtime import OpenAIRealtimeError
+    events = []
+
+    def mint(**kw):
+        events.append("mint")
+        return {"provider": "openai", "client_secret": "ek_fake", "expires_at": 1, "model": "m"}
+    with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential", side_effect=mint):
+        ok = _host(_Ledger(events), events).post("/api/realtime-voice/bootstrap", json=_valid_body())
+    assert ok.get_json()["voice_session_id"] == "session-1" and events == ["issue", "reserve", "mint"]
+
+    events.clear()                                         # the start marker cannot be kept: nothing reserved or minted
+    with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential", side_effect=mint):
+        with pytest.raises(RuntimeError):
+            _host(_Ledger(events, refuse=True), events).post("/api/realtime-voice/bootstrap", json=_valid_body())
+    assert events == ["issue"]
+
+    events.clear()                                         # the mint fails: the recorded session is abandoned
+    with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential",
+               side_effect=OpenAIRealtimeError("upstream")):
+        failed = _host(_Ledger(events), events).post("/api/realtime-voice/bootstrap", json=_valid_body())
+    assert failed.status_code == 502 and events == ["issue", "reserve", ("abandon", "session-1")]
+
+
+def test_without_an_allowance_the_session_is_issued_after_the_mint_as_before():
+    """German and Portuguese pass no admit: their order is unchanged, and a failed mint issues nothing."""
+    from core.realtime_voice.providers.openai_realtime import OpenAIRealtimeError
+    events = []
+    with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential",
+               side_effect=OpenAIRealtimeError("upstream")):
+        assert _host(_Ledger(events), events, admit=False).post("/api/realtime-voice/bootstrap",
+                                                                json=_valid_body()).status_code == 502
+    assert events == []
+    with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential",
+               side_effect=lambda **kw: events.append("mint") or {"provider": "openai", "client_secret": "e",
+                                                                   "expires_at": 1, "model": "m"}):
+        _host(_Ledger(events), events, admit=False).post("/api/realtime-voice/bootstrap", json=_valid_body())
+    assert events == ["mint", "issue"]

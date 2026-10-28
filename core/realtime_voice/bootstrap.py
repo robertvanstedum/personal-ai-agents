@@ -126,7 +126,10 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         the proxy headers are then never read. None: German/Portuguese as before.
     admit: Callable[[id], context manager] -- reserves the host's allowance
         around the provider mint (core.realtime_voice.budget); a budget refusal
-        answers before the provider is contacted. None: as before.
+        answers before the provider is contacted. With admit, consult_ledger.issue
+        runs first (nothing is reserved for a session that cannot be recorded) and
+        consult_ledger.abandon(session_id), if it has one, runs when the mint does
+        not start a session. None: as before.
     """
     bp = Blueprint(f"realtime_voice_bootstrap_{domain}", __name__)
 
@@ -269,6 +272,16 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         turn_detection = _default_turn_detection(provider)
         transcription_language = _TRANSCRIPTION_LANGUAGE[provider][locale]
 
+        # A host that reserves an allowance (admit) records its session first (MC: the durable start marker), so an
+        # allowance is never spent on a session that could not be recorded; if the provider session then does not
+        # start, the ledger's abandon() closes it (MC: an end marker, reason not_started). Without admit, as before.
+        early = consult_ledger is not None and admit is not None
+        voice_session_id = consult_ledger.issue(user_id) if early else None
+
+        def abandon():
+            if early and hasattr(consult_ledger, "abandon"):
+                consult_ledger.abandon(voice_session_id)
+
         try:
             with admit(user_id) if admit is not None else contextlib.nullcontext():
                 if provider == "openai":
@@ -289,15 +302,21 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
                         tools=tools,
                     )
         except voice_budget.VoiceBudgetError as e:
+            abandon()
             _log_outcome(domain, user_id, provider, None, "budget_refused")
             return jsonify({"ok": False, "error": e.public}), e.status
         except (openai_realtime.OpenAIRealtimeError, xai_voice.XAIVoiceError) as e:
+            abandon()
             _log_outcome(domain, user_id, provider, None, "provider_error")
             return jsonify({"ok": False, "error": str(e)}), 502
+        except BaseException:
+            abandon()
+            raise
 
         _log_outcome(domain, user_id, provider, credential.get("model"), "started")
         guard = DurationGuard()
-        voice_session_id = consult_ledger.issue(user_id) if consult_ledger is not None else None
+        if not early:
+            voice_session_id = consult_ledger.issue(user_id) if consult_ledger is not None else None
         return jsonify({
             "ok": True,
             "voice_session_id": voice_session_id,
