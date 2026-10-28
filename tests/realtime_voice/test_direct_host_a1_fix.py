@@ -263,3 +263,65 @@ def test_the_tool_texts_say_how_to_speak_same_turn_and_pending():
     from core.realtime_voice.direct_host import tools
     for tool in tools({"name": "Test Person", "notes": ("save a note:",)}):
         assert "'same_turn'" in tool["description"] and "pending" in tool["description"]
+
+
+# ── Item 5: reconciliation, GET …/consult/<session>/<owner_item_id>: the stored outcome, running nothing ────────────────
+
+def read(r, sid, item, cid="owner", client=None):
+    return (client or r.client).get(BASE + f"/consult/{sid}/{item}?conversation_id={cid}", headers=OWNER)
+
+
+def test_reconciliation_reads_the_stored_outcome_runs_nothing_and_works_after_end(rig):
+    r = rig
+    sid = start(r)
+    done = consult(r, sid, call_id="call_1", turn="t1").get_json()
+    got = read(r, sid, "t1")
+    assert got.status_code == 200 and got.headers["Cache-Control"] == "no-store"
+    assert got.get_json()["outcome"] == "done" and got.get_json()["receipt"] == done["receipt"]
+    assert got.get_json()["tool"] == "consult" and got.get_json()["recorded"] is True
+    r.client.post(BASE + f"/session/{sid}/end", headers=OWNER)
+    assert read(r, sid, "t1").get_json()["receipt"] == done["receipt"] and len(r.host.turns) == 1
+    assert "read" in r.host.kinds
+    missing = read(r, sid, "t9")
+    assert missing.status_code == 404 and missing.get_json()["outcome"] == "unknown" and missing.get_json()["recorded"] is False
+    assert read(r, sid, "x9").status_code == 422
+    assert read(r, sid, "t1", cid="elsewhere").status_code == 404                  # not this session's conversation
+    other = r.client.get(BASE + f"/consult/{sid}/t1?conversation_id=owner", headers={**OWNER, "X-Owner": "guest"})
+    assert other.status_code == 403
+
+
+def test_after_a_restart_the_store_answers_and_a_request_with_no_outcome_stays_unknown(rig):
+    from flask import Flask
+    from core.realtime_voice.direct_host import digest, install_direct_voice, record
+    r = rig
+    sid = start(r)
+    consult(r, sid, call_id="call_1", turn="t1")
+    r.store.put("owner", sid, record("consult_request", "consult_request:t2", owner_item_id="t2",
+                                     text_sha256=digest("What is on my agenda?")))      # admitted, then the process died
+    restarted = Flask("restarted")                                                   # a new process: same store, no memory
+    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ={}, budget=r.budget)
+    client = restarted.test_client()
+    assert read(r, sid, "t1", client=client).get_json()["outcome"] == "done"
+    lost = read(r, sid, "t2", client=client).get_json()
+    assert lost["outcome"] == "unknown" and lost["recorded"] is True and len(r.host.turns) == 1
+
+
+def test_a_turn_still_running_reads_pending_and_its_result_is_told_when_it_lands(rig, monkeypatch):
+    import threading
+    from core.realtime_voice import direct_host as core
+    from test_direct_host import post
+    r = rig
+    monkeypatch.setattr(core, "CONSULT_WAIT_S", 5)
+    sid = start(r)
+    release, entered = threading.Event(), threading.Event()
+    turn = r.host.typed_turn
+    r.host.typed_turn = lambda *a, **kw: (entered.set(), release.wait(5), turn(*a, **kw))[2]
+    answered = []
+    worker = threading.Thread(target=lambda: answered.append(consult(r, sid, call_id="call_1", turn="t1").get_json()))
+    worker.start()
+    assert entered.wait(5)
+    assert read(r, sid, "t1").get_json()["outcome"] == "pending"                 # the page's answer was lost meanwhile
+    release.set()
+    worker.join(5)
+    assert answered[0]["outcome"] == "done"
+    assert post(r, sid, []).get_json()["completed"][0]["owner_item_id"] == "t1"   # told: the read said pending

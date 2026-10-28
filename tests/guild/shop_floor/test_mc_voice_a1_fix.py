@@ -152,3 +152,25 @@ def test_check_then_the_models_save_note_says_saved_because_the_check_saved_it(r
     assert len(r.cos.calls) == 1 and first["saved"] is True
     assert second["same_turn"] is True and second["saved"] is True and second["first_tool"] == "consult"
     assert second["spoken"].startswith("That was already handled:")
+
+
+# ── Item 5: a consult with no receipt (the process died mid-turn) is shown as unknown ──────────────────────────────────
+
+def test_a_revealed_consult_with_no_receipt_is_shown_as_result_unknown(ready):
+    from core.realtime_voice.direct_host import digest
+    r = ready
+    sid = start(r)["voice_session_id"]
+    store, conv = direct._FloorStore(), {"id": CID}
+    from core.realtime_voice.transcripts import note_parts
+    from minimoi_portal.guild_ui.mc_voice_transcripts import AUTHOR_PREFIX, PAGE
+    from minimoi_portal.guild_ui.stores import Author
+    for key, text in note_parts(sid, "consult", "kt3", 0, "consult: Run the nightly job.", False, limit=2000):
+        r.notes.add_note(key, text, Author(AUTHOR_PREFIX + sid, "platform", "Voice transcript"), page=PAGE)
+    store.put(conv, sid, record("consult_request", "consult_request:t3", owner_item_id="t3",
+                                text_sha256=digest("Run the nightly job.")))
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+    rows, _ = shown(r)
+    line = [row["voice"] for row in rows if row.get("voice", {}).get("session_id") == sid and row["voice"].get("unresolved")]
+    assert len(line) == 1 and line[0]["kind"] == "consult_receipt" and line[0]["outcome"] == "result unknown"
+    got = r.client.get(BASE + f"/consult/{sid}/t3?conversation_id={CID}", headers=r.headers).get_json()
+    assert got["outcome"] == "unknown" and got["recorded"] is True and not r.turns

@@ -189,6 +189,8 @@ class _MasterCraftsman(DirectVoiceAdapter):
         verdict = _verified_owner()
         if verdict.status_code != 204:
             return verdict
+        if kind == "read":                                   # a GET that changes nothing: the owner only
+            return None
         refusal = (check_stop if kind == "end" else check_write)(self.config["base_url"])
         if refusal is not None:
             return refusal
@@ -387,4 +389,5 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
     config["mc_direct_voice_live"] = sessions.live      # server-side only: which sessions the reveal treats as live
     config["mc_direct_voice_tagged"] = adapter.tags.tagged   # server-side only: notes this process tagged with a session
     config["mc_direct_voice_known"] = sessions.known    # server-side only: sessions this process issued
+    config["mc_direct_voice_running"] = sessions.running   # server-side only: owner turns whose consult runs here
     return True

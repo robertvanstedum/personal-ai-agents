@@ -503,8 +503,8 @@ class DirectVoiceAdapter:
         raise NotImplementedError
 
     def guard(self, kind):
-        """A refusal response, or None. kind: bootstrap, consult, transcript, end, summary, decision. End must work
-        wherever the session could be started (off the record too)."""
+        """A refusal response, or None. kind: bootstrap, consult, transcript, end, summary, decision, read (a GET that
+        changes nothing: the owner only). End must work wherever the session could be started (off the record too)."""
         raise NotImplementedError
 
     def csrf_ok(self):
@@ -764,6 +764,16 @@ class DirectSessions(ConsultLedger):
                     proposed = outcomes[key] == "propose"
         return proposed, confirmed
 
+    def tell_when_done(self, sid, item):
+        """Someone was told this turn is still running (a reconciliation read): tell its result when it lands."""
+        with self._meta_lock:
+            if sid in self._meta:
+                self._meta[sid].setdefault("tell", set()).add(item)
+
+    def told_when_done(self, sid, item):
+        with self._meta_lock:
+            return item in (self._meta.get(sid) or {}).get("tell", ())
+
     def announce(self, sid, done):
         """A turn answered pending has completed: its result goes with the session's next transcript answer."""
         with self._meta_lock:
@@ -992,7 +1002,7 @@ def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n,
             state["result"] = result
             told = state["told_pending"]
         finished.set()
-        if told:
+        if told or sessions.told_when_done(sid, item):
             sessions.announce(sid, {"owner_item_id": item, "tool": name, "outcome": result["outcome"],
                                     "spoken": result.get("spoken") or ""})
     worker = copy_current_request_context(work) if has_request_context() else work
@@ -1082,6 +1092,8 @@ def summarize(adapter, principal, handle, sid, *, running=0):
 # ── the routes ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _kind():
+    if request.method == "GET":
+        return "read"                                   # reconciliation: owner-only, no-store, runs nothing
     for kind, tail in (("end", "/end"), ("decision", "/decision"), ("summary", "/summary"),
                        ("transcript", "/transcript"), ("consult", "/consult")):
         if request.path.endswith(tail):
@@ -1274,14 +1286,16 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             answer["end_confirmed"] = True                              # the page asks for the summary (it ends)
         return jsonify(answer)
 
-    def owned_session(raw_sid):
+    def owned_session(raw_sid, cid=None):
         """(owner, session, conversation id, handle) from the session's durable start marker, so a summary can be asked
-        for and decided long after the session, from another device or after a restart."""
-        if request.content_length is None or request.content_length > 32 * 1024:
-            return None, refusal("too_large", "That request is too large. Nothing was changed.", 413)
+        for and decided, and a consult reconciled, long after the session, from another device or after a restart. A
+        POST names the conversation in its body; a GET (``cid``) in its query."""
+        if request.method == "POST":
+            if request.content_length is None or request.content_length > 32 * 1024:
+                return None, refusal("too_large", "That request is too large. Nothing was changed.", 413)
+            body = request.get_json(silent=True)
+            cid = body.get("conversation_id") if isinstance(body, dict) else None
         who, sid = principal(), session_id(raw_sid)
-        body = request.get_json(silent=True)
-        cid = body.get("conversation_id") if isinstance(body, dict) else None
         if sid is None or who is None or not isinstance(cid, str) or not adapter.conversation_ok(cid):
             return None, refusal("not_your_session", "That is not your voice session.", 403)
         handle, refused = adapter.conversation(cid)
@@ -1291,6 +1305,33 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         if start is None or start.get("principal") != who or start.get("conversation_id") != cid:
             return None, refusal("not_your_session", "That is not your voice session.", 403)
         return (who, sid, cid, handle), None
+
+    @transcript.route("/api/realtime-voice/consult/<session_id>/<owner_item_id>", methods=["GET"])
+    def reconcile(session_id, owner_item_id):
+        """What became of one owner turn's action (Spec 165 §5.1): the stored outcome, read from the store, running
+        nothing. The key is per owner turn, so there is no tool in the path. It works after End, from another device
+        and after a restart (the conversation is named in the query). Admitted with no outcome and running nowhere
+        here (the process that ran it died): unknown, and nothing re-runs by itself. Never admitted: 404, unknown."""
+        found, refused = owned_session(session_id, request.args.get("conversation_id"))
+        if refused is not None:
+            return refused
+        _who, sid, _cid, handle = found
+        if not owner_item(owner_item_id):
+            return refusal("invalid", "That is not an owner turn's id.", 422)
+        if get(adapter, handle, sid, request_id(owner_item_id)) is None:
+            return jsonify({"ok": False, "owner_item_id": owner_item_id, "outcome": "unknown", "error": "not_found",
+                            "recorded": False, "spoken": UNKNOWN}), 404
+        if sessions.running(sid, owner_item_id):
+            sessions.tell_when_done(sid, owner_item_id)       # its result goes with the next heartbeat when it lands
+            return jsonify({**IN_FLIGHT, "owner_item_id": owner_item_id, "recorded": True})
+        settled = sessions.item_result(sid, owner_item_id)
+        kept = get(adapter, handle, sid, outcome_id(owner_item_id))
+        result = settled[2] if settled is not None else (kept or {}).get("result")
+        if not isinstance(result, dict):
+            return jsonify({"ok": False, "owner_item_id": owner_item_id, "outcome": "unknown", "error": "no result",
+                            "recorded": True, "spoken": UNKNOWN})
+        tool = settled[1] if settled is not None else (kept or {}).get("tool")
+        return jsonify({**result, "owner_item_id": owner_item_id, "tool": tool, "recorded": True})
 
     @transcript.route("/api/realtime-voice/session/<session_id>/summary", methods=["POST"])
     def summary(session_id):
@@ -1357,6 +1398,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 "transcript_url": url_prefix + "/api/realtime-voice/session/{session_id}/transcript",
                 "summary_url": url_prefix + "/api/realtime-voice/session/{session_id}/summary",
                 "summary_decision_url": url_prefix + "/api/realtime-voice/session/{session_id}/summary/decision",
+                "reconcile_url": url_prefix + "/api/realtime-voice/consult/{session_id}/{owner_item_id}",
                 "heartbeat_seconds": HEARTBEAT_SECONDS, "persona": person["key"], "locale": locale,
                 "card_release": release, "person": {"name": person["name"], "short": person["short"]}}
     return metadata, sessions

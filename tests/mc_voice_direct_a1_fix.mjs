@@ -146,4 +146,27 @@ await t.check('R2: Check answers at a pause, never while a response is under way
   r.advance(1); assert.equal(r.c.instructions.length, 2);                // the pause was missed: sent at the bound
 });
 
+// ── Item 5: after an unknown, the page asks once what became of the turn ─────────────────────────────────────────────
+await t.check('item 5: an answer lost twice is asked about once, and the stored outcome is what is said', async () => {
+  const r = rig({ routes: { '/consult': () => 'network',
+    '/t0': () => ({ status: 200, body: { ok: true, outcome: 'done', owner_item_id: 't0', receipt: 'mc-9', spoken: 'Item 12 is in build.' } }) } });
+  await r.s.start('openai');
+  r.c.utter('What is stuck on #12?');
+  const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
+  assert.equal(r.posts('/consult').length, 2);
+  const [asked] = r.gets('/consult/');
+  assert.equal(asked.url, `/guild-next/api/v1/mc/voice/direct/api/realtime-voice/consult/${SID}/t0?conversation_id=c-1`);
+  assert.equal(r.gets('/consult/').length, 1);
+  assert.equal(out.outcome, 'done'); assert.equal(out.spoken, 'Item 12 is in build.');
+});
+await t.check('item 5: a read that does not answer, or says unknown, leaves it unknown', async () => {
+  for (const answer of ['network', { status: 200, body: { ok: false, outcome: 'unknown', spoken: 'x' } }, { status: 404, body: {} }]) {
+    const r = rig({ routes: { '/consult': () => 'network', '/t0': () => answer } });
+    await r.s.start('openai');
+    r.c.utter('What is stuck on #12?');
+    const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
+    assert.equal(out.outcome, 'unknown'); assert.equal(out.spoken, D.UNKNOWN);
+  }
+});
+
 t.done();

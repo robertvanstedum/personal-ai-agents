@@ -113,6 +113,19 @@ export function jsonPost(fetchFn, headers) {
   };
 }
 
+// A same-origin JSON GET with the page's headers (a reconciliation read). Never throws: {ok, status, body}.
+export function jsonGet(fetchFn, headers) {
+  return async (target) => {
+    try {
+      const r = await fetchFn(target, { method: 'GET', credentials: 'same-origin', headers: headers() });
+      const json = await r.json().catch(() => ({}));
+      return { ok: r.ok, status: r.status, body: json && typeof json === 'object' ? json : {} };
+    } catch (e) {
+      return { ok: false, status: 0, body: {} };
+    }
+  };
+}
+
 const clockWords = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
 const bytes = (text) => new TextEncoder().encode(text).length;
 function fit(text) {                                   // at most 16,000 bytes; a cut turn is posted as partial
@@ -316,6 +329,7 @@ export function directVoice(d) {
 
   const at = (template) => String(template).split('{session_id}').join(encodeURIComponent(sid || ''));
   const postJson = jsonPost(d.fetch, d.headers);
+  const getJson = jsonGet(d.fetch, d.headers);
   const sessionId = () => { const own = c?.sessionId?.(); return sid || (typeof own === 'string' ? own : null); };
   const speak = (instruction) => { try { return Boolean(c?.speak(instruction)); } catch (e) { return false; } };
   function stopTimers() {
@@ -419,13 +433,22 @@ export function directVoice(d) {
         const code = r.status === 409 ? 'session_ended' : String(r.body.error || 'refused').replace(/ /g, '_');
         Promise.resolve().then(() => heard({ failed: code, status: r.status }));
       }
-      if (retried && !(r.status === 200 && Object.keys(r.body).length)) return { ok: false, error: 'unknown', outcome: 'unknown', spoken: UNKNOWN };
+      if (retried && !(r.status === 200 && Object.keys(r.body).length)) return reconcile(item);
       if (inFlight(r)) return { ok: false, error: 'in flight', outcome: 'pending', spoken: PENDING };   // the same turn, still running (B1)
       if (Object.keys(r.body).length) return r.body;
       // An unreadable answer: refused is not done; accepted but unreadable is not known (review B7).
-      return r.status >= 200 && r.status < 300 ? { ok: false, error: 'unknown', outcome: 'unknown', spoken: UNKNOWN }
+      return r.status >= 200 && r.status < 300 ? reconcile(item)
         : { ok: false, error: 'unavailable', outcome: 'not_done', spoken: NOT_DONE };
     } finally { cancel(holding); }
+  }
+  // The answer did not come back (Spec 165 §5.1): the page asks the server once what became of that owner turn. The
+  // server reads its store and runs nothing; done, not done or still running is said as it is, anything else stays unknown.
+  async function reconcile(item) {
+    const unknown = { ok: false, error: 'unknown', outcome: 'unknown', spoken: UNKNOWN };
+    if (!item || typeof direct.reconcile_url !== 'string' || !cid) return unknown;
+    const url = `${at(direct.reconcile_url).split('{owner_item_id}').join(encodeURIComponent(item))}?conversation_id=${encodeURIComponent(cid)}`;
+    const r = await getJson(url);
+    return r.status === 200 && ['done', 'not_done', 'pending'].includes(r.body.outcome) ? r.body : unknown;
   }
 
   // A model call answers the owner speech that came just before it. Transcription is asynchronous to the response (OpenAI

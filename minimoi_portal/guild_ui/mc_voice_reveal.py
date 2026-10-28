@@ -274,14 +274,52 @@ def process_view(config):
     """view's keywords from a mount's config: what this process (mc_voice_direct.install) knows of its sessions."""
     return {"live": config.get("mc_direct_voice_live") or (lambda _sid: False),
             "tagged": config.get("mc_direct_voice_tagged") or (lambda _rid: None),
-            "known": config.get("mc_direct_voice_known") or (lambda _sid: False)}
+            "known": config.get("mc_direct_voice_known") or (lambda _sid: False),
+            "running": config.get("mc_direct_voice_running") or (lambda _sid, _item: False)}
 
 
-def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda request_id: None, known=lambda sid: False):
+def _record_row(row, sid):
+    """A durable record note of this session (put_record), parsed, or None."""
+    if (not isinstance(row, dict) or row.get("who") != SESSION_AUTHOR + sid or row.get("author_kind") != "platform"
+            or (row.get("context") or {}).get("page") != PAGE_SESSION or not str(row.get("text") or "").startswith(RECORD)):
+        return None
+    try:
+        found = json.loads(row["text"][len(RECORD):])
+    except ValueError:
+        return None
+    return found if isinstance(found, dict) else None
+
+
+def transcript_id(sid, role, item, part=0):
+    """A voice record's note id, as mc_voice_transcripts.retain keeps it (core transcripts.note_parts)."""
+    return str(uuid.uuid5(uuid.UUID(sid), f"transcript:{role}:{item}:0:{part}"))
+
+
+def _unresolved(floor, rows, sid, running):
+    """{consult request note id: what to show} for this session's admitted consults that have no receipt: the process
+    that ran one died mid-turn (result unknown until reconciled), or it is still running here (Spec 165 §5.1)."""
+    ids = {row.get("request_id") for row in rows}
+    out = {}
+    for row in rows:
+        rec = _record_row(row, sid)
+        item = (rec or {}).get("owner_item_id")
+        if (rec or {}).get("kind") != "consult_request" or not isinstance(item, str):
+            continue
+        receipt = transcript_id(sid, "receipt", "k" + item)
+        if receipt in ids or floor.get_note(receipt) is not None:
+            continue
+        out[transcript_id(sid, "consult", "k" + item)] = "still running" if running(sid, item) else "result unknown"
+    return out
+
+
+def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda request_id: None, known=lambda sid: False,
+         running=lambda sid, item: False):
     """(rows to show, the direct-path sessions in this window). Markers are never shown; a live or recovering
     session's records are withheld; a revealed session's records carry ``voice`` {session_id, kind, …} (_voice).
     ``tagged(request_id)``: the session this process tagged a note with, before its tag note can be read.
-    ``known(sid)``: a direct-path session this process holds (it stays hidden if its markers cannot be read)."""
+    ``known(sid)``: a direct-path session this process holds (it stays hidden if its markers cannot be read).
+    ``running(sid, item)``: an owner turn's consult still running in this process. A revealed consult with no receipt
+    is shown as one ("Checked with MC · result unknown", or "still running"), never as nothing."""
     if not isinstance(rows, list) or not rows:
         return rows, []
     tags = dict(found for found in map(_tag_of, rows) if found is not None)
@@ -309,6 +347,13 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
         sid = str(uuid.UUID(match.group(1))) if match else None
         if sid in direct:
             replies[reply_id(row["request_id"])] = sid
+    unresolved = {}
+    for sid in direct:
+        if not hider.hidden(sid):
+            try:
+                unresolved.update(_unresolved(floor, rows, sid, running))
+            except Exception:                           # a floor that cannot be read: the request stays as it is
+                pass
     shown = []
     for row in rows:
         sid = owner(row) or replies.get(row.get("request_id"))
@@ -317,7 +362,11 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
             continue
         if (row.get("context") or {}).get("page") == PAGE_SESSION or hider.hidden(sid):
             continue
-        shown.append({**row, "voice": _voice(row, replies, sid)})
+        voice = _voice(row, replies, sid)
+        if voice.get("kind") == "consult_request" and row.get("request_id") in unresolved:
+            voice = {**voice, "kind": "consult_receipt", "outcome": unresolved[row["request_id"]], "unresolved": True,
+                     "spoken": "", "ref": None, "ref_kind": None}
+        shown.append({**row, "voice": voice})
     sessions = []
     for sid in direct:
         status, start, end = hider(sid)
