@@ -1,4 +1,8 @@
-"""A person's voice card, loaded from a persona release. Shared code holds no person."""
+"""A person's voice card, loaded from a persona release. Shared code holds no person.
+
+voice.json is listed in the release manifest; the bytes read are the bytes hashed, and a card whose hash is not the
+manifest's is refused (ValueError), as the projection refuses any other persona file (scripts/mc_persona)."""
+import hashlib
 import json
 from pathlib import Path
 
@@ -14,7 +18,12 @@ RELEASES = Path(__file__).resolve().parents[2] / "services/mc_operations/persona
 
 def load_card(release):
     folder = RELEASES / release
-    payload = json.loads((folder / "voice.json").read_text())
+    manifest = json.loads((folder / "manifest.json").read_text())
+    want = (manifest.get("files") or {}).get("voice.json") if isinstance(manifest, dict) else None
+    raw = (folder / "voice.json").read_bytes()
+    if not isinstance(want, str) or hashlib.sha256(raw).hexdigest() != want:
+        raise ValueError("voice card does not match its release manifest")
+    payload = json.loads(raw.decode("utf-8"))
     if payload.get("schema") != 1 or not isinstance(payload.get("card"), str) or not payload["card"].strip():
         raise ValueError("voice card is missing its text")
     voices = payload.get("voices") or {}

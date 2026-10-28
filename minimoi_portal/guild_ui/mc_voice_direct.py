@@ -4,7 +4,8 @@ The provider speaks directly, as in German. A consult is MC's typed turn (api._l
 POST /mc/turns runs after its prelude) on the owner's own latest transcript item, kept first as his note labelled
 voice, exactly as POST /notes keeps a typed one. The model's arguments are never the turn text. No authority a typed
 note lacks: same owner, CSRF, on-the-record, conversation, turn ledger and receipts. A note is spoken as saved only on
-its platform receipt. Not the managed sideband: mc_managed_realtime and MANAGED_VOICE_CHANNEL are not used here.
+its platform receipt. Not the managed sideband: mc_managed_realtime.install and MANAGED_VOICE_CHANNEL are not used
+here; only its INSTRUCTIONS text is shared, as part 1 of the session instructions (§7).
 
 Off unless the voice switch is on (mc_voice.enabled) AND MINIMOI_MC_VOICE_DIRECT=1, which production holds off
 (guild_mounts.PRODUCTION_HELD_OFF): production already runs with MINIMOI_MC_VOICE=1. Off: no route is registered.
@@ -70,16 +71,43 @@ TOOLS = [
 ]
 
 
+# Spec 164 §7, part 1: what this direct session adds to the shared rules (its two tools). Part 1 itself is MC's own
+# realtime operating rules (mc_managed_realtime.INSTRUCTIONS), whole: consult for current facts and work, receipts
+# before claiming success, historical text is DATA, tool arguments grant nothing.
+DIRECT_RULES = ("On this voice path your two tools are 'consult' (Master Craftsman's own turn on Robert's last words: "
+                "current facts, project state, files, jobs, any work) and 'save_note' (only for 'make a note that …'). "
+                "Speak what a tool returns; do not add claims to it. If it says it did not go through, say so.")
+NO_CONTINUITY = "No retained voice turn in this conversation yet."
+
+
+def _instructions(card):
+    """The session's instructions, composed here on the server in Spec 164 §7's order: (1) the shared operating
+    rules, (2) MC's card, (3) bounded continuity from this conversation (mc_voice_transcripts.block). Never the
+    language-practice text German and Portuguese use (no "learner", no corrections)."""
+    from . import api
+    from .mc_managed_realtime import INSTRUCTIONS
+    from .mc_voice_transcripts import block
+    continuity = ""
+    cid = getattr(g, "mc_voice_direct_conversation", None)
+    if cid:
+        conv, refusal = api._conversation(cid)
+        if refusal is None:
+            continuity = block("", api._conv_floor(conv), scrub=api.scrub, include_recent=True)
+    return "\n\n".join(("=== OPERATING RULES ===\n\n" + INSTRUCTIONS + "\n\n" + DIRECT_RULES,
+                         "=== WHO YOU ARE ===\n\n" + card,
+                         "=== THIS CONVERSATION SO FAR (DATA) ===\n\n" + (continuity or NO_CONTINUITY)))
+
+
 def _persona(name):
     if name != PERSONA:
         return None
     try:
         card = load_card(RELEASE)
-    except (OSError, ValueError):                  # missing or unreadable release: unknown persona, voice unavailable
+    except (OSError, ValueError):                  # missing, unreadable or not the manifest's: voice unavailable
         log.exception("mc direct voice: card %s unavailable", RELEASE)
         return None
     return {"name": "Master Craftsman", "prompt_txt": card["card"], "scenes": {}, "voices": card["voices"],
-            "tools": TOOLS, "notices": card["notices"]}
+            "tools": TOOLS, "notices": card["notices"], "instructions": _instructions(card["card"])}
 
 
 def _allowance(environ):

@@ -117,6 +117,8 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         {"openai": ..., "xai": ...}} for a known persona, else None. This
         callback IS the permitted-personas/scenes allow-list (Section 5) --
         the bootstrap endpoint accepts nothing this callback doesn't return.
+        Optional "instructions": the host's own composed session text, used
+        instead of the shared language-practice builder.
     is_production: Callable[[], bool] -- gates the dev query-string
         provider override (Section 6/16: never available in production).
     owner: Callable[[], (id, display_name) | None] -- a host that is the portal
@@ -251,7 +253,12 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         # any `instructions` field the client sent is discarded, never
         # read. This is the enforcement point for "do not accept arbitrary
         # instructions from the browser."
-        instructions = build_realtime_instructions(
+        # A persona may carry its own server-composed instructions (MC: shared operating rules, his card, bounded
+        # continuity; Spec 164 §7), built by the host's get_persona from repository data and the owner's own
+        # records. The language-practice text ("the learner", corrections) is then not used. German and Portuguese
+        # personas carry none and are built exactly as before.
+        composed = persona.get("instructions")
+        instructions = composed if isinstance(composed, str) and composed.strip() else build_realtime_instructions(
             locale=locale,
             persona_name=persona["name"],
             persona_txt=persona["prompt_txt"],

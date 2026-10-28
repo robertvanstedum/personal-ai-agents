@@ -388,6 +388,35 @@ def test_scene_less_english_persona_passes_only_its_allowlisted_tool(monkeypatch
     assert "isolated German word" in seen["instructions"]
 
 
+def test_a_host_composed_persona_text_replaces_the_language_practice_text_and_german_is_unchanged():
+    """Spec 164 §7: MC's composition never carries "the learner" or corrections; a persona without one is built as before."""
+    def lookup(name):
+        persona = _bench_persona(name)
+        if persona is not None and name == "bench":
+            persona["instructions"] = "=== OPERATING RULES ===\n\nComposed by the host."
+        return persona
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(create_bootstrap_blueprint(
+        domain="composed", locale="en-US", get_persona=lookup, is_production=lambda: True,
+    ))
+    seen = []
+
+    def mint(**kwargs):
+        seen.append(kwargs)
+        return {"provider": "openai", "client_secret": "ek_fake", "expires_at": 1, "model": "gpt-realtime-2.1"}
+
+    with patch("core.realtime_voice.bootstrap.openai_realtime.mint_ephemeral_credential", side_effect=mint):
+        resp = app.test_client().post("/api/realtime-voice/bootstrap", json={"provider": "openai", "persona": "bench",
+                                      "instructions": "from the browser"}, headers={"X-Minimoi-Auth-Id": "79"})
+        german = app.test_client().post("/api/realtime-voice/bootstrap", json=_valid_body(),
+                                        headers={"X-Minimoi-Auth-Id": "79"})
+    assert resp.status_code == 200 and german.status_code == 200
+    assert seen[0]["instructions"] == "=== OPERATING RULES ===\n\nComposed by the host."
+    assert "learner" in seen[1]["instructions"] and "CORRECTIONS" in seen[1]["instructions"]
+
+
 def test_a_persona_cannot_carry_a_tool_outside_the_list(monkeypatch):
     def lookup(name):
         persona = _bench_persona(name)
