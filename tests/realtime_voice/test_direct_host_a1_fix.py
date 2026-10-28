@@ -697,3 +697,27 @@ def test_fr_m1_a_store_failure_after_the_turn_says_the_result_and_that_its_recor
     body = consult(r, sid, call_id="call_1", turn="t0").get_json()
     assert body["outcome"] == "done" and body["receipt"] == "turn-1" and body["record_kept"] is False
     assert body["spoken"] == "Two items. " + RECORD_LOST
+
+
+def test_fr_s1_the_same_turn_with_other_words_after_it_acted_is_never_said_as_nothing_done(rig):
+    """FR S1 (the reviewer's probe, asserting the correct behaviour): Check acted, then the model's delayed call names the
+    same owner item with re-completed words; it is still refused, but in the words of the turn's real outcome."""
+    r = rig
+    sid = start(r)
+    first = consult(r, sid, call_id="host-1", words="save a note: the glaze is ready", turn="t0")
+    assert first.get_json()["outcome"] == "done" and len(r.host.turns) == 1
+    second = consult(r, sid, call_id="call_m", words="save a note: the glaze is ready.", name="save_note", turn="t0")
+    body = second.get_json()
+    assert second.status_code == 409 and body["error"] == "turn_mismatch" and len(r.host.turns) == 1
+    assert body["outcome"] == "done" and "nothing was done" not in body["spoken"]
+    assert body["spoken"] == "That turn was already acted on; check it in writing."
+
+
+def test_fr_n10_a_replay_to_the_other_tool_follows_the_first_outcome(rig):
+    r = rig
+    sid = start(r)
+    r.host.typed_turn = lambda *a, **kw: {"ok": False, "error": "busy", "spoken": "Master Craftsman is busy."}
+    consult(r, sid, call_id="host-1", turn="t0")
+    other = consult(r, sid, call_id="call_m", name="save_note", turn="t0").get_json()
+    assert other["outcome"] == "not_done" and "already handled" not in other["spoken"]
+    assert other["spoken"] == "That was already tried and not done: Master Craftsman is busy."

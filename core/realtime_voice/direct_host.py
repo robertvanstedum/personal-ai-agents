@@ -957,7 +957,11 @@ class DirectSessions(ConsultLedger):
 # ── one consult, and the summary ─────────────────────────────────────────────────────────────────────────────────
 
 NOT_RECORDED = "That could not be recorded, so nothing was done."
-TURN_MISMATCH = "Those words are not the turn they name, so nothing was done. Say it again."
+# The same owner turn named with other words (review FR S1): never replayed, and never "nothing was done" when the turn
+# acted. The words follow the turn's real outcome.
+TURN_MISMATCH = {"done": "That turn was already acted on; check it in writing.",
+                 "not_done": "That turn was not done; say it again if you want it.",
+                 "pending": PENDING, "unknown": UNKNOWN}
 
 
 IN_FLIGHT = {"ok": False, "error": "in flight", "outcome": "pending", "spoken": PENDING}
@@ -1090,7 +1094,10 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     return same_key(adapter, sessions, handle, sid, call_id, item, words, existing, name)
 
 
-ALREADY = "That was already handled: {spoken} Ask the other part on its own."
+# A replay to the other tool, by the first action's outcome (review R1 P2-3, FR N10).
+ALREADY = {"done": "That was already handled: {spoken} Ask the other part on its own.",
+           "not_done": "That was already tried and not done: {spoken}",
+           "unknown": "That was already asked, and its result did not come back. Check it in writing before asking again."}
 
 
 def same_key(adapter, sessions, handle, sid, call_id, item, words, existing, name):
@@ -1099,16 +1106,21 @@ def same_key(adapter, sessions, handle, sid, call_id, item, words, existing, nam
     and then the model's save_note) it is not passed off as that tool's own success: it carries the first action's
     outcome, same_turn and the first tool's name, and says it was already handled and to ask the other part on its
     own; saved is true only when the first result holds a saved-note receipt (review R1 P2-3)."""
-    if existing.get("text_sha256") != words:
-        return not_done("turn_mismatch", TURN_MISMATCH), 409
-    if sessions.running(sid, item):
-        return IN_FLIGHT, 409
-    settled = sessions.item_result(sid, item)
+    running = sessions.running(sid, item)
+    settled = None if running else sessions.item_result(sid, item)
     if settled is not None:
         first, tool, result = settled
+    elif running:
+        first = tool = result = None
     else:
         kept = get(adapter, handle, sid, outcome_id(item))
         first, tool, result = (kept.get("call_id"), kept.get("tool"), kept.get("result")) if kept else (None, None, None)
+    if existing.get("text_sha256") != words:
+        state = ("pending" if running else
+                 result.get("outcome") if isinstance(result, dict) and result.get("outcome") in TURN_MISMATCH else "unknown")
+        return {"ok": False, "error": "turn_mismatch", "outcome": state, "spoken": TURN_MISMATCH[state]}, 409
+    if running:
+        return IN_FLIGHT, 409
     if not isinstance(result, dict):
         answer = {"ok": False, "error": "no result", "outcome": "unknown", "spoken": UNKNOWN}
     elif tool is not None and tool != name:
@@ -1116,7 +1128,8 @@ def same_key(adapter, sessions, handle, sid, call_id, item, words, existing, nam
         spoken = (result.get("spoken") or "").strip()
         answer = {"ok": outcome == "done", "call_id": call_id, "outcome": outcome, "same_turn": True, "first_tool": tool,
                   "saved": result.get("saved") is True,                    # the host says so only with a note's receipt
-                  "spoken": ALREADY.format(spoken=spoken if spoken.endswith((".", "?", "!")) else spoken + ".")}
+                  "spoken": ALREADY.get(outcome, ALREADY["unknown"]).format(
+                      spoken=spoken if spoken.endswith((".", "?", "!")) else spoken + ".")}
     else:
         answer = {**result, **({"same_turn": True} if first != call_id else {})}
     sessions.remember(sid, call_id, answer)
