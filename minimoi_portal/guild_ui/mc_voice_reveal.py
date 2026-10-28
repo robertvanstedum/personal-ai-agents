@@ -235,10 +235,18 @@ def _voice(row, replies, sid):
         return {**out, "kind": {key(sid, "summary"): "summary_proposal", key(sid, "summary-decision"): "summary_decision",
                                 key(sid, "summary-unavailable"): "summary_unavailable"}.get(row.get("request_id"), "summary")}
     if row.get("request_id") in replies:
-        return {**out, "kind": "consult_reply"}
+        return {**out, "kind": "consult_reply", "full_differs": full_differs(row.get("text"))}
     if _CONSULT_ID.fullmatch(str(row.get("request_id") or "")):
         return {**out, "kind": "consult_note"}
     return {**out, "kind": "consult_outcome"}                     # a tagged platform note written during a consult
+
+
+def full_differs(text):
+    """Whether MC's kept reply says more than was spoken from it (mc_voice._speakable: cut at its limit, a code block or a
+    link's address left out). Markdown marks, punctuation and line breaks do not count: the words are compared."""
+    from .mc_voice import _speakable
+    words = lambda t: re.sub(r"\W+", " ", t or "").strip().lower()          # noqa: E731
+    return words(_speakable(text or "")) != words(text)
 
 
 def process_view(config):

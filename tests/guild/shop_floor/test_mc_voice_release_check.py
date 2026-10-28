@@ -131,8 +131,9 @@ def test_with_the_flag_off_voice_is_unavailable_and_the_chained_relay_is_not_rea
     composer = COMPOSER.read_text()
     # With neither the direct nor the managed path, the composer's start says "Voice unavailable" and sends nothing.
     assert "if (managed) {await startManaged(mine,current);return;}\n    say('Voice unavailable." in composer
+    direct_page = COMPOSER.with_name("mc_voice_direct.js").read_text()          # the direct path's page code (CC_16)
     for chained in ("realtime-confer-controller", "ConferVoiceController", "/mc/voice/bootstrap", "/mc/voice/speech"):
-        assert chained not in composer
+        assert chained not in composer and chained not in direct_page
     assert not runtime.sent and not minted
 
 

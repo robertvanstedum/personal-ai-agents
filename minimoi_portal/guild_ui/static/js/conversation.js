@@ -221,9 +221,45 @@ export function setBriefing(briefing) {
   if (text) text.textContent = briefing.text.replace(/^As of [^·]+·/, `As of ${localTime(briefing.observed_at)} ·`);
 }
 
+// A revealed voice record (Spec 164 §6): Robert's spoken words and MC's, each as said; one compact line per consult (its
+// receipt); MC's full answer only when it says more than was spoken; the consult's own note hidden (it repeats his words).
+// The server-rendered thread does the same (_mc_conversation.html, voice_row).
+const VOICE_HIDDEN = ['consult_note', 'consult_request'];
+function voiceLine(note) {
+  const v = note.voice;
+  const hidden = VOICE_HIDDEN.includes(v.kind) || (v.kind === 'consult_reply' && v.full_differs === false);
+  const turn = v.kind === 'owner_turn' || v.kind === 'assistant_turn';
+  if (!hidden && !turn && v.kind !== 'consult_receipt' && v.kind !== 'consult_reply') return null;     // summaries, outcomes: as notes
+  const li = el('li', { class: `msg msg-voice ${v.kind === 'consult_receipt' ? 'msg-platform msg-voice-receipt' : 'msg-note'}`,
+    'data-note': note.id, 'data-voice-kind': v.kind, 'data-voice-session': v.session_id, 'data-at': v.started_at || note.created_at,
+    'data-author-kind': v.kind === 'owner_turn' ? 'owner' : turn || v.kind === 'consult_reply' ? 'agent' : 'platform' });
+  if (hidden) { li.hidden = true; return li; }
+  if (v.kind === 'consult_receipt') { li.append(el('p', { class: 'msg-text small' }, v.text || note.text)); return li; }
+  if (turn && Number(v.part) > 1) { li.setAttribute('data-voice-part', String(v.part)); li.append(el('p', { class: 'msg-text' }, v.text)); return li; }
+  const label = v.kind === 'owner_turn' ? 'You · spoken' : v.kind === 'assistant_turn' ? `${mcName()} · spoken` : `${mcName()}'s full answer`;
+  const meta = el('p', { class: 'msg-meta' });
+  meta.append(el('span', { class: 'msg-label' }, label), document.createTextNode(' · '),
+    el('span', { 'data-iso': v.started_at || note.created_at }, localTime(v.started_at || note.created_at)));
+  if (v.interrupted) meta.append(document.createTextNode(' · interrupted'));
+  else if (v.partial) meta.append(document.createTextNode(' · partial'));
+  li.append(meta);
+  if (turn) { li.append(el('p', { class: 'msg-text' }, v.text)); return li; }
+  const body = el('div', { class: 'msg-text msg-md' });
+  if (typeof note.html === 'string' && note.html) body.innerHTML = note.html;          // sanitised on the server
+  else body.textContent = note.text;
+  li.append(body);
+  return li;
+}
+
 function noteLine(note) {
+  if (note && note.voice && typeof note.voice === 'object') {
+    const voiced = voiceLine(note);
+    if (voiced) return voiced;
+  }
   const li = clone('tpl-note');
   li.dataset.note = note.id;
+  if (note.created_at) li.dataset.at = note.created_at;
+  if (note.voice && typeof note.voice === 'object') { li.dataset.voiceKind = note.voice.kind; li.dataset.voiceSession = note.voice.session_id; }
   if (note.request_id) li.dataset.noteRequest = note.request_id;
   setSlot(li, 'label', note.author_label);
   setSlot(li, 'when', localTime(note.created_at));
@@ -274,6 +310,21 @@ function askForTokens() {
     }
     if (pending) askForTokens(); else tokenAsks = 0;
   }, 4000);
+}
+
+// Notes this page did not have yet (a voice session revealed at End): each put in its place by id, never twice. Returns how
+// many were added. Nothing is re-sent: these are the server's kept records, shown.
+export function mergeNotes(notes) {
+  if (!thread || !Array.isArray(notes)) return 0;
+  let added = 0;
+  for (const note of notes.slice().sort((a, b) => Number(a.id) - Number(b.id))) {
+    if (!note || note.id == null || thread.querySelector(`[data-note="${note.id}"]`)) continue;
+    const next = Array.from(thread.querySelectorAll('[data-note]')).find((n) => Number(n.dataset.note) > Number(note.id));
+    thread.insertBefore(noteLine(note), next || thread.querySelector('[data-live-turn]') || null);
+    added += 1;
+  }
+  if (added) follow();
+  return added;
 }
 
 function appendNote(note) {

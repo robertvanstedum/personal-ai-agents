@@ -1,5 +1,6 @@
-// Optional managed realtime uses the shared controlled-session host and controller.
-// The chained behavior below remains the fallback when managed metadata is absent.
+// Which path Voice takes is the capabilities answer's: direct_voice present -> the direct path (mc_voice_direct.js, Spec 164
+// v0.3, the provider speaking directly with MC's typed turn behind each consult); else managed_realtime present -> the managed
+// path below; else "Voice unavailable" and nothing is sent. A path that was offered and failed says why; no other is tried.
 // Speaking with Master Craftsman (MC voice, v1). Off unless the server says so (data-mc-voice) AND the capabilities call answers.
 //
 // Chained, on the shared Confer controller: the microphone goes straight to the speech provider for TRANSCRIPTION only; each final transcript is submitted through the
@@ -13,7 +14,7 @@ import { $, announce } from './dom.js';
 import { paintVoiceButton } from './voice_button.js';
 import { live, onChange } from './state.js';
 import { recordMode } from './api.js';
-import { panelMode } from './conversation.js';
+import { panelMode, mergeNotes } from './conversation.js';
 
 const WORDS = {
   private: 'Voice stopped: it is not built for Private yet. Typing in Private works as before.',
@@ -21,6 +22,7 @@ const WORDS = {
   minimized: 'Voice stopped: the chat was minimized.',
   limit: 'Voice stopped: the session reached its time limit.',
 };
+const STATUS_CLEAR_MS = 5000;        // #420: "Voice ended…" clears after about five seconds, or at the next send
 
 export function initMcVoice(page) {
   const button = $('[data-mc-voice-btn]');
@@ -39,7 +41,7 @@ export function initMcVoice(page) {
   onChange(paintExport);
 
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
-  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
+  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, directMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
 
   let visualState = 'idle', pressed = false;
   const draw = () => {
@@ -51,7 +53,14 @@ export function initMcVoice(page) {
     }
   };
   const setPhase = state => { visualState = state; draw(); };
-  const say = (text, { loud = false, error = false } = {}) => { showingError = error; status.textContent = text; status.hidden = !text; draw(); if (loud && text) announce(text); };
+  let clearing = null;
+  const say = (text, { loud = false, error = false, transient = false } = {}) => {
+    showingError = error; status.textContent = text; status.hidden = !text; draw(); if (loud && text) announce(text);
+    if (clearing) window.clearTimeout?.(clearing);
+    clearing = null;
+    // An ended line is a passing note (#420); an error stays until the next action.
+    if (transient && text && typeof window.setTimeout === 'function') clearing = window.setTimeout(() => { if (status.textContent === text && !showingError) say(''); }, STATUS_CLEAR_MS);
+  };
   const paint = (on) => { pressed=on;button.setAttribute('aria-pressed', String(on));draw();button.disabled=restartBlocked||Boolean(ending); };
   const headers = () => ({ 'Content-Type':'application/json', 'X-CSRF-Token': page.csrf_token, 'X-Record-Mode': recordMode() });
   const busy = () => Boolean(controller || starting || ending);
@@ -73,7 +82,7 @@ export function initMcVoice(page) {
     }
     let saved = null;
     try { saved = window.localStorage.getItem(PROVIDER_KEY); } catch (e) { /* the choice simply is not remembered */ }
-    const pick = options.find(o => o.value === saved && !o.disabled) || options.find(o => !o.disabled);
+    const pick = options.find(o => o.value === saved && !o.disabled) || options.find(o => o.value === body.default_provider && !o.disabled) || options.find(o => !o.disabled);
     if (pick) select.value = pick.value;
     else select.disabled = true;                // nothing this host can run: no choice to make, and none faked
   }
@@ -82,10 +91,12 @@ export function initMcVoice(page) {
     try {
       const r = await fetch(`${api}/mc/voice/capabilities`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok || !body.ok || !(body.providers || []).length) return null;
+      direct = body.direct_voice && typeof body.direct_voice === 'object' && (body.direct_voice.providers || []).length ? body.direct_voice : null;
+      if (!r.ok || !body.ok || !((body.providers || []).length || direct)) return null;
       managed=body.managed_realtime || null;
-      if (managed) $('[data-mc-managed-settings]').hidden=false;
-      offerProviders(body);
+      if (managed || direct) $('[data-mc-managed-settings]').hidden=false;
+      offerProviders(direct ? { providers: direct.providers, default_provider: direct.default_provider } : body);
+      if (direct) { initDirect(); const first = direct.providers[0]; return first.label || first.provider; }
       return body.providers[0].label || body.providers[0].provider || 'the speech provider';
     } catch (e) { return null; }
   }
@@ -107,7 +118,7 @@ export function initMcVoice(page) {
       if(['user_ended','limit'].includes(reason))transcriptReveal?.();
       for(const selector of ['[data-mc-voice-provider]','[data-mc-voice-transcript-choice]']){const node=$(selector);if(node)node.disabled=false;}
       paint(false);
-      if(!quiet&&!showingError)say(WORDS[reason]||'Voice ended. Agent work already accepted may still finish.',{loud:Boolean(WORDS[reason])});
+      if(!quiet&&!showingError)say(WORDS[reason]||(direct?DIRECT_ENDED:'Voice ended. Agent work already accepted may still finish.'),{loud:Boolean(WORDS[reason]),transient:!WORDS[reason]});
     };
     if(result&&typeof result.then==='function'){
       const pending=Promise.resolve(result).catch(()=>{
@@ -133,11 +144,75 @@ export function initMcVoice(page) {
     const current = () => mine === session;
     setPhase('connecting');
     paint(true);
+    if (direct) {await startDirect(mine,current);return;}
     if (managed) {await startManaged(mine,current);return;}
     say('Voice unavailable. Live voice is not on for this Master Craftsman, so nothing was sent. Typing still works.', { loud: true, error: true });
     setPhase('unavailable');
     starting = false;
     paint(false);
+  }
+
+  // The direct path (UI_CONTRACT_chunk_B.md). Its own file is loaded only now that the capabilities answer offered it.
+  const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
+  const loadDirect = () => directMod ? Promise.resolve(directMod) : import('./mc_voice_direct.js').then((m) => (directMod = m));
+  const liveBar = () => $('[data-mc-voice-live]');
+  async function revealDirect() {
+    const cid = page.conversation?.id;
+    if (!cid || !directThread) return;
+    try {
+      const r = await fetch(`${api}/notes?limit=200&conversation=${encodeURIComponent(cid)}`, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || page.conversation?.id !== cid) return;
+      mergeNotes(body.notes || []);
+      directThread.paint(body.voice_sessions, body.notes);
+    } catch (e) { /* the thread shows it on the next load */ }
+  }
+  async function initDirect() {
+    const choice = $('[data-mc-voice-transcript-choice]');
+    if (choice?.parentElement) choice.parentElement.hidden = true;          // no running text on this path: it is revealed at End
+    try {
+      const mod = await loadDirect();
+      directThread = mod.voiceThread({ doc: document, direct, thread: () => $('[data-mc-thread]'), mine: () => directSession?.sessionId() || null,
+        post: mod.jsonPost((...a) => fetch(...a), headers), conversationId: () => page.conversation?.id, reveal: revealDirect });
+      directThread.paint(page.floor?.notes?.voice_sessions, page.floor?.notes?.recent);
+    } catch (e) { /* Voice says so when it is pressed */ }
+    $('[data-mc-voice-end]')?.addEventListener?.('click', () => { if (directSession?.proposing()) directSession.sumUp(); else if (busy()) stop('user_ended'); });
+    $('[data-mc-voice-check]')?.addEventListener?.('click', () => directSession?.check());
+    $('[data-mc-voice-sumup]')?.addEventListener?.('click', () => directSession?.sumUp());
+    $('[data-mc-voice-keep]')?.addEventListener?.('click', () => directSession?.keepTalking());
+  }
+  async function startDirect(mine,current) {
+    const selector=$('[data-mc-voice-provider]');
+    if(selector)selector.disabled=true;
+    say('Connecting voice…');
+    let handle=null,mineSession=null;
+    const mineNow=()=>controller===handle&&handle!==null;
+    const ui={
+      say:(text,o)=>{if(current()||endedAttempt===mine)say(text,o);},
+      phase:(state)=>{if(current())setPhase(state);},
+      live:(on)=>{const bar=liveBar();if(bar)bar.hidden=!on||!current();if(!on){const p=$('[data-mc-voice-propose]');if(p)p.hidden=true;}},
+      elapsed:(text)=>{const n=$('[data-mc-voice-elapsed]');if(n)n.textContent=text;},
+      notice:(text)=>{const n=$('[data-mc-voice-notice]');if(n){n.textContent=text||'';n.hidden=!text;}},
+      propose:(on)=>{const p=$('[data-mc-voice-propose]');if(p)p.hidden=!on||!current();if(on&&current())announce('Shall I sum up?');},
+      // The session ended by itself (a refusal, the provider, the summary, the time limit): the button is ready again.
+      ended:(words,{error=false}={})=>{
+        if(directSession===mineSession)directSession=null;
+        if(mineNow()){controller=null;starting=false;endedAttempt=mine;paint(false);setPhase('idle');if(selector)selector.disabled=false;}
+        if(words&&(current()||endedAttempt===mine))say(words,{loud:error,error,transient:!error});
+      },
+    };
+    try {
+      const mod=await loadDirect();
+      if(!current())return;
+      const s=mod.directVoice({page,direct,ui,headers,fetch:(...a)=>fetch(...a),reveal:revealDirect,
+        loadController:()=>import(`${api}/mc/voice/static/realtime-voice-controller.js`),
+        setTimeout:(fn,ms)=>window.setTimeout(fn,ms),clearTimeout:(t)=>window.clearTimeout(t),
+        setInterval:(fn,ms)=>window.setInterval(fn,ms),clearInterval:(t)=>window.clearInterval(t)});
+      handle={stop:reason=>s.end(reason)};
+      controller=handle;directSession=mineSession=s;
+      await s.start(selector?.value||direct.default_provider);
+    } catch (_) {if(current()){stop('failed',{quiet:true});say('Voice unavailable: the voice page could not load. Typing still works.',{loud:true,error:true});}}
+    finally {if(current())starting=false;if(!busy()&&selector)selector.disabled=false;}
   }
 
   async function startManaged(mine,current) {
@@ -254,6 +329,8 @@ export function initMcVoice(page) {
     transcriptPaint?.();
   });
   button.addEventListener('click', () => { if (busy()) stop('user_ended'); else start(); });
+  // #420: the next send clears the voice status line, an ended note or an error alike (an error stays until an action).
+  $('[data-mc-composer]')?.addEventListener?.('submit', () => { if (!busy() && status.textContent) say(''); });
   document.addEventListener('guild:mic-claim', (e) => { if (e.detail?.who !== 'voice' && busy()) stop('user_ended', { quiet: true }); });
   onChange(() => { if (live.off || !live.known) {transcriptEpoch++;transcriptCancel?.();transcriptCancel=null;transcriptReveal=null;transcriptPaint=null;if(busy())stop(live.off?'private':'record_unknown');const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';} });
   new MutationObserver(() => { if (busy() && panelMode() === 'pill') stop('minimized'); }).observe(document.body, { attributes: true, attributeFilter: ['data-mc-mode'] });

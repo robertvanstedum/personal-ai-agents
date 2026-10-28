@@ -6,8 +6,33 @@
 {% set private_off_why = ('Private is not available with the ' ~ mc_name ~ ': it keeps its own record') if private_off == 'backend' else 'Private is off here: every message is recorded before it is sent' %}
 {# Shared full-page and contextual chat. Private uses its separate non-persistent
    path; attachment delivery reports the actual per-file state. #}
+{# A revealed voice record (Spec 164 §6; only the direct voice path writes them): Robert's spoken words and MC's, as said; one
+   compact line per consult (its receipt); MC's full answer only when it says more than was spoken; the consult's own note
+   hidden (it repeats his words). conversation.js (voiceLine) renders the same for records it adds. #}
+{% macro voice_row(n) -%}
+{%- set v = n.voice %}{% set turn = v.kind in ('owner_turn', 'assistant_turn') %}
+{%- set hide = v.kind in ('consult_note', 'consult_request') or (v.kind == 'consult_reply' and v.full_differs == false) %}
+<li class="msg msg-voice {{ 'msg-platform msg-voice-receipt' if v.kind == 'consult_receipt' else 'msg-note' }}" data-note="{{ n.id }}" data-voice-kind="{{ v.kind }}" data-voice-session="{{ v.session_id }}" data-at="{{ v.started_at or n.created_at }}" data-author-kind="{{ 'owner' if v.kind == 'owner_turn' else ('platform' if v.kind == 'consult_receipt' else 'agent') }}"{% if turn and v.part > 1 %} data-voice-part="{{ v.part }}"{% endif %}{% if hide %} hidden{% endif %}>
+  {%- if hide %}
+  {%- elif v.kind == 'consult_receipt' %}
+  <p class="msg-text small">{{ v.text or n.text }}</p>
+  {%- elif turn and v.part > 1 %}
+  <p class="msg-text">{{ v.text }}</p>
+  {%- else %}
+  <p class="msg-meta"><span class="msg-label">{{ 'You · spoken' if v.kind == 'owner_turn' else (mc_name ~ ' · spoken' if turn else mc_name ~ '’s full answer') }}</span> · <span data-iso="{{ v.started_at or n.created_at }}">{{ hhmm(v.started_at or n.created_at) }}</span>{% if v.interrupted %} · interrupted{% elif v.partial %} · partial{% endif %}</p>
+  {%- if turn %}
+  <p class="msg-text">{{ v.text }}</p>
+  {%- elif n.html %}
+  <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
+  {%- else %}
+  <p class="msg-text">{{ n.text }}</p>
+  {%- endif %}
+  {%- endif %}
+</li>
+{%- endmacro %}
 {% macro note_row(n) -%}
-<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}"{% if n.request_id %} data-note-request="{{ n.request_id }}"{% endif %}>
+{% if n.voice and n.voice.kind in ('owner_turn', 'assistant_turn', 'consult_receipt', 'consult_reply', 'consult_note', 'consult_request') %}{{ voice_row(n) }}{% else -%}
+<li class="msg {{ 'msg-platform' if n.author_kind == 'platform' else 'msg-note' }}" data-kind="{{ 'platform' if n.author_kind == 'platform' else 'note' }}" data-author-kind="{{ n.author_kind }}" data-note="{{ n.id }}"{% if n.request_id %} data-note-request="{{ n.request_id }}"{% endif %}{% if n.voice %} data-voice-kind="{{ n.voice.kind }}" data-voice-session="{{ n.voice.session_id }}"{% endif %}>
   <p class="msg-meta"><span class="msg-label">{{ n.author_label }}</span> · <span data-iso="{{ n.created_at }}">{{ hhmm(n.created_at) }}</span><span class="msg-extra">{% if n.context.area %} · {{ n.context.area }}{% endif %}{% if n.context.item_ref %} · #{{ n.context.item_ref }}{% endif %}{% if n.author_kind != 'platform' %} · kept as a note{% endif %}</span></p>
   {%- if n.html %}
   <div class="msg-text msg-md">{{ n.html|safe }}</div>{# sanitised server-side (markdown_render.py) #}
@@ -22,6 +47,7 @@
   <ul class="msg-files small" data-note-files aria-label="Files in the request">{% for f in sent %}<li class="msg-file" data-status="{{ f.status }}"><span class="msg-file-icon" aria-hidden="true">📄 </span><span class="msg-file-name">{{ f.name }}</span>{% if f.status == 'partly_read' %} · sent in part ({{ f.reason }}){% elif f.status == 'staged' %} · copy placed for Master Craftsman to open ({{ f.reason }}){% elif f.status != 'read' %} · not sent ({{ f.reason }}){% endif %}</li>{% endfor %}</ul>
   {%- endif %}
 </li>
+{%- endif %}
 {%- endmacro %}
 <button type="button" class="mc-pill" data-mc-pill aria-controls="mc-panel" aria-expanded="false">
   <img src="/static/guild/guild-mc-portrait.jpg" alt="" width="40" height="40">
@@ -93,6 +119,16 @@
   {# Waiting messages (issue #346): how many wait, a pause and its Continue. Shown only while the turn ledger is on (mc_queue.js). #}
   <div class="mc-queue-bar" data-mc-queue-bar role="status" hidden><span data-mc-queue-text></span> <button type="button" class="btn-mini" data-mc-queue-continue hidden>Continue</button></div>
   <p class="mc-blocker" data-mc-blocker role="status"{% if not state.blockers %} hidden{% endif %}>{% for b in state.blockers %}<span data-blocker="{{ b.kind }}">{{ b.text }}</span>{% endfor %}</p>
+  {% if mc_voice_direct_on %}{# MC voice on the direct path (mc_voice_direct.js): while a session is live only its state shows, never what is said. #}
+  <div class="mc-voice-live" data-mc-voice-live role="group" aria-label="Voice conversation" hidden>
+    <span class="mc-voice-on"><span class="mc-voice-dot" aria-hidden="true"></span>Voice on</span>
+    <span class="mc-elapsed" data-mc-voice-elapsed aria-hidden="true">0s</span>
+    <button type="button" class="btn-mini" data-mc-voice-check title="Ask Master Craftsman about your last words">Check with MC</button>
+    <button type="button" class="btn-mini" data-mc-voice-end>End</button>
+    <span class="mc-voice-propose" data-mc-voice-propose hidden>Shall I sum up? <button type="button" class="btn-mini" data-mc-voice-sumup>Sum up</button> <button type="button" class="btn-mini" data-mc-voice-keep>Keep talking</button></span>
+    <span class="mc-voice-notice" data-mc-voice-notice hidden></span>
+  </div>
+  {% endif %}
   {% if mc_voice_on %}<details data-mc-voice-transcript hidden><summary>Voice transcript from this session · may be partial</summary><pre data-mc-voice-transcript-text></pre></details>{% endif %}
   <form class="mc-composer" data-mc-composer>
     {% if page_id == 'floor' %}
