@@ -296,3 +296,27 @@ def test_fr_m1_mcs_long_answer_with_umlauts_and_curly_quotes_is_done_with_its_re
     kept = reveal.get_record(r.notes, sid, "consult_outcome:t1")
     assert kept["outcome"] == "done" and encoded(kept) <= RECORD_MAX
     assert any("Answered. Reply reply-9." in (row.get("text") or "") for row in r.notes.rows.values())
+
+
+# ── FR S4: the turn ledger's "already" refusals are never not_done (the reviewer's probe) ───────────────────────────────
+
+def test_fr_s4_the_ledgers_already_dispatched_and_already_done_are_never_not_done(ready, monkeypatch):
+    from minimoi_portal.guild_ui import api
+    from minimoi_portal.guild_ui.mc.ledger_gate import Refusal
+    from minimoi_portal.guild_ui.stores import Author
+    r = ready
+    sid = start(r)["voice_session_id"]
+    out = {}
+    for item, (code, words, status) in (("t1", ("already_dispatched", "This note was already sent; it is still running.", 409)),
+                                        ("t2", ("already_done", "This note was already handled; nothing was sent again.", 200)),
+                                        ("t3", ("already_done", "This note was already handled; nothing was sent again.", 200))):
+        def gate(found, kind="typed", _c=code, _w=words, _s=status):
+            raise Refusal(_c, _w, _s)
+        monkeypatch.setattr(api, "_ledger_turn", gate)
+        if item == "t3":                                                   # handled earlier, with MC's kept reply
+            note = reveal.consult_note_id(sid, "t3")
+            r.notes.add_note(reveal.reply_id(note), "Item 12 is in build.", Author("master_craftsman", "agent", "MC"))
+        out[item] = call(r, sid, call_id="c" + item, owner_item_id=item).get_json()
+    assert out["t1"]["outcome"] == "unknown" and out["t2"]["outcome"] == "unknown"
+    assert out["t3"]["outcome"] == "done" and out["t3"]["spoken"] == "Item 12 is in build." and out["t3"]["receipt"]
+    assert not r.turns

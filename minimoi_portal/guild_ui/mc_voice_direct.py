@@ -293,7 +293,18 @@ class _MasterCraftsman(DirectVoiceAdapter):
         try:
             turn = api._ledger_turn(found, kind="voice")
         except Refusal as refused:
-            return {"ok": False, "error": refused.body.get("error"), "spoken": refused.body.get("message") or FAILED}
+            # Classified by the dispatch boundary (review CX code note, FR S4). The turn ledger saying this note was already
+            # sent, is waiting to be sent, or was already handled is about an earlier dispatch of the same owner turn: never
+            # "not done". Already handled, with MC's kept reply, is done with that reply as its receipt; otherwise unknown.
+            code = refused.body.get("error")
+            if code == "already_done" and name == "consult":
+                reply = floor.get_note(reveal.reply_id(note_id))
+                if isinstance(reply, dict) and isinstance(reply.get("text"), str) and reply["text"].strip():
+                    return {"note_request_id": note_id, "answered": True, "outcome": "done", "receipt": reply.get("request_id"),
+                            "receipt_kind": "reply", "spoken": speakable(reply["text"])}
+            if code in ("already_done", "already_dispatched", "already_queued"):
+                return {"ok": False, "error": code, "outcome": "unknown", "note_request_id": note_id}
+            return {"ok": False, "error": code, "spoken": refused.body.get("message") or FAILED}
         from .mc.openclaw import VOICE_MARKER
         # The words were chosen by the voice model: a bare yes, no or stop is not a command here, only a named one
         # (api._voice_named_only, review B #1). Server held, for this consult only; a typed turn never sets it.
