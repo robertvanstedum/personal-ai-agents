@@ -60,7 +60,7 @@ def conversation(client, token):
 def consult(client, token, sid, call_id="call_1", words="What is stuck on #12?", **extra):
     return client.post(DIRECT + "/consult", headers=headers(token, **extra), json={
         "session_id": sid, "call_id": call_id, "name": "consult", "owner_transcript_item": words,
-        "arguments": {"question": "the model's paraphrase"}})
+        "owner_turn": f"u-{call_id}", "arguments": {"question": "the model's paraphrase"}})       # its own turn (B1)
 
 
 def test_the_surface_reports_the_direct_path_and_its_providers(released):

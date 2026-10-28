@@ -154,11 +154,15 @@ def tools(person):
         {"type": "function", "name": "consult",
          "description": (f"Ask {person['name']}'s own turn for current facts, project state, files, jobs or any work. "
                          "The server acts on Robert's own last words, not on these arguments. Speak the result's 'spoken' "
-                         "text without adding claims. If 'ok' is false, say it did not go through."),
+                         "text without adding claims. If 'ok' is false, say it did not go through; but if 'outcome' is "
+                         "'unknown', say only that the answer did not come back and it must be checked before asking "
+                         "again."),
          "parameters": {"type": "object", "properties": {"question": {"type": "string"}}}},
         {"type": "function", "name": "save_note",
          "description": (f"Save a note when Robert says {notes}. The server saves his own "
-                         "words, not these arguments. Say it is saved only when the result has 'saved' true."),
+                         "words, not these arguments. Say it is saved only when the result has 'saved' true. If "
+                         "'outcome' is 'unknown', say only that the answer did not come back and the note must be "
+                         "checked before it is saved again."),
          "parameters": {"type": "object", "properties": {"note": {"type": "string"}}}},
     ]
 
@@ -520,10 +524,8 @@ class DirectSessions(ConsultLedger):
             fresh = meta is not None and self.clock() - meta["seen"] <= LIVE_WINDOW_S
         return fresh and self.is_open(sid) and not self.expired(sid)
 
-    def admit(self, sid, call_id):
-        if self.expired(sid):
-            return "closed", None
-        status, prior = super().admit(sid, call_id)
+    def admit(self, sid, call_id, turn=None):
+        status, prior = super().admit(sid, call_id, turn, closed=self.expired(sid))
         if status == "new":
             with self._meta_lock:
                 meta = self._meta[sid]
@@ -735,7 +737,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
     boot.register_error_handler(SessionRefused, lambda _exc: refusal(
         "unavailable", "Voice unavailable: the voice session could not be recorded in this conversation.", 503))
     consulting = create_consult_blueprint(backend=consult_backend, ledger=sessions, csrf_ok=adapter.csrf_ok,
-                                          owner_id=principal, session_owner=sessions.owner_of)
+                                          owner_id=principal, session_owner=sessions.owner_of, require_turn=True)
     consulting.before_request(guard)
     transcript = Blueprint("voice_transcript", __name__)
 

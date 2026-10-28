@@ -29,6 +29,9 @@ export const SERVER_ENDED = {
   refused: 'Voice stopped: the server refused this voice session. What was said before is kept.',
 };
 export const ALREADY_CHECKED = 'Already checked; say it again to re-ask.';
+// A consult whose answer did not come back (review B7): not "failed", which would invite asking again.
+export const UNKNOWN = 'The answer did not come back, so whether that went through is not known. Check before asking again.';
+export const STILL_CHECKING = 'Still checking that.';
 const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
 const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its next turn, or after this
 const START_END_MS = 15000;               // End pressed while still connecting waits for the connection at most this long
@@ -264,24 +267,39 @@ export function directVoice(d) {
   }
 
   // §4: the function bridge. The server acts on Robert's own last words, never on the model's arguments; whatever comes back
-  // (any status) is the function's output, which the model is told to speak.
+  // (any status) is the function's output, which the model is told to speak. Each call names the owner turn it acts on
+  // (review B1): the same for Check with <person> and the model's own call on the same words, so the server runs that turn
+  // once and gives a second call the first one's answer; his next words are a new turn.
   async function consult(callId, name, args) {
     const holding = later(() => speak('Still checking.'), HOLDING_MS);
     let advisory = args;
     if (typeof advisory === 'string') { try { advisory = JSON.parse(advisory); } catch (e) { advisory = {}; } }
     if (!advisory || typeof advisory !== 'object' || Array.isArray(advisory)) advisory = {};
     if (lastOwner) consultedTurn = ownerTurn;                          // by the model or by Check with <person>
+    const request = { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: lastOwner,
+      owner_turn: `u${ownerTurn}`, arguments: advisory };
+    const lost = (x) => x.status === 0 || x.status >= 500;
+    const inFlight = (x) => x.status === 409 && x.body.error === 'in flight';
     try {
-      const r = await postJson(direct.consult_url, { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: lastOwner,
-        arguments: advisory });
-      if (r.status === 0) return { ok: false, error: 'network', spoken: NOT_DONE };
+      let r = await postJson(direct.consult_url, request);
+      // No answer (the network, or the server failing): the same call once more. The server runs a call once and keeps its
+      // answer, so this runs it for the first time or returns what it did, never twice. Anything but that answer (no answer
+      // again, still running out of reach, or a session the server no longer holds, as after a restart): the first
+      // attempt's outcome is unknown, not failed (review B7).
+      const retried = lost(r);
+      if (retried) r = await postJson(direct.consult_url, request);
       // The server has ended or refuses this session (409 "session ended", any 403): the answer still goes back to the
       // model, then the voice is ended here as for a refused transcript post (UI review #2).
       if ((r.status === 409 && r.body.error === 'session ended') || r.status === 403) {
         const code = r.status === 409 ? 'session_ended' : String(r.body.error || 'refused').replace(/ /g, '_');
         Promise.resolve().then(() => heard({ failed: code, status: r.status }));
       }
-      return Object.keys(r.body).length ? r.body : { ok: false, error: 'unavailable', spoken: NOT_DONE };   // an unreadable answer: not done
+      if (retried && !(r.status === 200 && Object.keys(r.body).length)) return { ok: false, error: 'unknown', outcome: 'unknown', spoken: UNKNOWN };
+      if (inFlight(r)) return { ok: true, outcome: 'pending', spoken: STILL_CHECKING };   // the same words, already being checked (B1)
+      if (Object.keys(r.body).length) return r.body;
+      // An unreadable answer: refused is not done; accepted but unreadable is not known (review B7).
+      return r.status >= 200 && r.status < 300 ? { ok: false, error: 'unknown', outcome: 'unknown', spoken: UNKNOWN }
+        : { ok: false, error: 'unavailable', spoken: NOT_DONE };
     } finally { cancel(holding); }
   }
 

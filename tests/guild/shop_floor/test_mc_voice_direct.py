@@ -158,8 +158,9 @@ def start(r):
 
 
 def call(r, sid, call_id="call-1", name="consult", words="What is stuck on #12?", headers=None, **body):
+    # Each call names the owner turn it acts on (review B1); by default its own, so separate calls are separate turns.
     return r.client.post(BASE + "/consult", headers=r.headers if headers is None else headers, json={
-        "session_id": sid, "call_id": call_id, "name": name, "owner_transcript_item": words,
+        "session_id": sid, "call_id": call_id, "name": name, "owner_transcript_item": words, "owner_turn": f"u-{call_id}",
         "arguments": {"question": "the model's paraphrase"}, **body})
 
 
@@ -437,7 +438,9 @@ def test_a_consult_that_completes_after_end_keeps_its_receipt_and_does_not_run_a
     result = call(r, sid).get_json()
     assert result["answered"] is True and len(r.turns) == 1
     assert reveal.read_marker(r.notes, sid, "end") is not None
-    assert call(r, sid).status_code == 409 and len(r.turns) == 1                   # no re-run after End
+    again = call(r, sid)                     # the same call after End: its kept answer, read only (review B7), no re-run
+    assert again.status_code == 200 and again.get_json() == result and len(r.turns) == 1
+    assert call(r, sid, call_id="call-2").status_code == 409 and len(r.turns) == 1  # a new call after End: none
     rows, states = shown(r)
     assert states[0]["state"] == "ended" and "consult_receipt" in [row["voice"]["kind"] for row in rows]
 

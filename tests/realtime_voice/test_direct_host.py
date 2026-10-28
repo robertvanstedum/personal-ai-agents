@@ -160,9 +160,10 @@ def start(r, **body):
     return answer.get_json()["voice_session_id"]
 
 
-def consult(r, sid, call_id="call_1", words="What is on my agenda?", name="consult", headers=OWNER):
+def consult(r, sid, call_id="call_1", words="What is on my agenda?", name="consult", headers=OWNER, turn=None):
     return r.client.post(BASE + "/consult", headers=headers, json={"session_id": sid, "call_id": call_id, "name": name,
                                                                    "owner_transcript_item": words,
+                                                                   "owner_turn": turn or f"u-{call_id}",
                                                                    "arguments": {"question": "the model's paraphrase"}})
 
 
@@ -404,3 +405,28 @@ def test_the_core_names_no_person_and_imports_no_host():
     page = re.sub(r"//.*", "", (ROOT / "core/realtime_voice/static/direct-voice-session.js").read_text())
     for person in ("Master Craftsman", "Chief of Staff", "mc_turns_off", "Check with MC", "'MC'"):
         assert person not in page, person
+
+
+# ── Codex's Chunk B review, in the core every host inherits (REVIEW_codex_chunk_B.md) ───────────────────────────────────
+
+def test_one_owner_turn_is_one_effect_for_any_host(rig):
+    """B1: a second call for the same owner turn, under any call id or function, gets the first one's answer."""
+    r = rig
+    sid = start(r)
+    first = consult(r, sid, call_id="host-1", turn="u1").get_json()
+    second = consult(r, sid, call_id="call_2", name="save_note", words="save a note: x", turn="u1").get_json()
+    assert len(r.host.turns) == 1 and second["receipt"] == first["receipt"] and second["same_turn"] is True
+    assert consult(r, sid, call_id="call_3", turn="u2").get_json()["receipt"] == "turn-2"     # his next words: a new turn
+    bare = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "c4", "name": "consult",
+                                                                 "owner_transcript_item": "x"})
+    assert bare.status_code == 400 and len(r.host.turns) == 2                              # no owner turn: refused
+
+
+def test_a_kept_answer_replays_after_end_and_nothing_new_runs(rig):
+    """B7."""
+    r = rig
+    sid = start(r)
+    result = consult(r, sid).get_json()
+    r.client.post(BASE + f"/session/{sid}/end", headers=OWNER)
+    assert consult(r, sid).get_json() == result and len(r.host.turns) == 1
+    assert consult(r, sid, call_id="call_9").status_code == 409

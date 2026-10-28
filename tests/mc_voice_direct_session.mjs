@@ -151,7 +151,7 @@ for (const [status, detail, words] of [
   const out = await c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: '{"question":"the model\'s words"}' });
   const consult = r.posts('/consult')[0];
   assert.deepEqual(consult.body, { session_id: SID, call_id: 'call_1', name: 'consult', owner_transcript_item: 'What is stuck on #12?',
-    arguments: { question: "the model's words" } });
+    owner_turn: 'u1', arguments: { question: "the model's words" } });                 // the owner turn it acts on (review B1)
   assert.deepEqual(consult.opts.headers, HEADERS);
   assert.equal(consult.opts.credentials, 'same-origin');
   assert.equal(out.spoken, 'Item 12 is in build.');
@@ -167,22 +167,28 @@ for (const [status, detail, words] of [
   release(); assert.deepEqual(await saved, { ok: true, spoken: 'Done.' });
   scenarios++;
 }
-// A consult the server never answered is spoken as not done; the holding line is cleared when it answers in time.
+// Review B7: a consult the server never answered is asked once more as the same call (one effect: the server keeps its
+// answer), and if that is not answered either, its outcome is unknown, never "did not go through". The holding line is
+// cleared when it answers in time.
+const UNKNOWN_RESULT = { ok: false, error: 'unknown', outcome: 'unknown', spoken: D.UNKNOWN };
 {
   const r = rig({ routes: { '/consult': () => 'network' } });
   await r.s.start('openai');
   r.c.options.onUserTurn('Anything new?');
-  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_n', name: 'consult', arguments: {} }), { ok: false, error: 'network', spoken: D.NOT_DONE });
+  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_n', name: 'consult', arguments: {} }), UNKNOWN_RESULT);
+  assert.deepEqual(r.posts('/consult').map((p) => [p.body.call_id, p.body.owner_turn]), [['call_n', 'u1'], ['call_n', 'u1']]);
   r.advance(20000);
   assert.deepEqual(r.c.instructions, []);
   scenarios++;
 }
-// An unreadable answer is not done; a refused microphone says so.
-{
-  const r = rig({ routes: { '/consult': () => ({ status: 502, body: null }) } });
+// An unreadable answer: refused (4xx) is not done; accepted or the server failing is not known. A refused microphone says so.
+for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN_RESULT, 1],
+  [400, { ok: false, error: 'unavailable', spoken: D.NOT_DONE }, 1]]) {
+  const r = rig({ routes: { '/consult': () => ({ status, body: null }) } });
   await r.s.start('openai');
   r.c.options.onUserTurn('Anything new?');
-  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_u', name: 'consult', arguments: {} }), { ok: false, error: 'unavailable', spoken: D.NOT_DONE });
+  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_u', name: 'consult', arguments: {} }), expected, String(status));
+  assert.equal(r.posts('/consult').length, posts, String(status));
   assert.match(D.startRefusal({ reason: 'microphone_denied' }), /^Voice unavailable: the microphone/);
   scenarios++;
 }
