@@ -111,4 +111,39 @@ await t.check('item 4: a turn still running is pending, an answer that never cam
     { ok: false, error: 'unavailable', outcome: 'not_done', spoken: 'That did not go through. Nothing was done.' });
 });
 
+await t.check('item 4: a finished result the heartbeat reports is said once, at a pause', async () => {
+  let beats = 0;
+  const done = { owner_item_id: 't0', tool: 'consult', outcome: 'done', spoken: 'The nightly job finished.' };
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? null : { status: 200, body: { ok: true, kept: 0, ...(++beats <= 2 ? { completed: [done] } : {}) } }) } });
+  await r.s.start('openai');
+  r.c.options.onInputState('speech_started');                          // Robert is talking: no line now
+  r.advance(20000); await flush();                                     // the heartbeat reports the finished result
+  assert.deepEqual(r.c.instructions, []);
+  r.c.options.onInputState('speech_stopped');                          // a response to his words follows
+  r.advance(3000); await flush();
+  assert.deepEqual(r.c.instructions, []);
+  r.c.options.onAssistantTurn('Sure.'); await flush();                 // the pause
+  const said = ['Say this briefly, adding nothing: About what you asked earlier: The nightly job finished.'];
+  assert.deepEqual(r.c.instructions, said);
+  r.c.options.onAssistantTurn('Good.');
+  r.advance(20000); await flush();                                     // reported again: said once
+  assert.deepEqual(r.c.instructions, said);
+});
+await t.check('R2: Check answers at a pause, never while a response is under way, and at most 8 s later', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Is the kiln job done?');
+  r.c.options.onInputState('speech_started'); r.c.options.onInputState('speech_stopped');
+  r.c.utter('Is the kiln job done?');
+  await r.s.check(); await flush();
+  assert.deepEqual(r.c.instructions, [], 'spoken while a response was under way');
+  r.c.options.onAssistantTurn('Let me look.'); await flush();
+  assert.equal(r.c.instructions.length, 1);
+  r.c.options.onInputState('speech_started');
+  r.c.utter('And the glaze?');
+  await r.s.check(); await flush();
+  assert.equal(r.c.instructions.length, 1);
+  r.advance(7999); assert.equal(r.c.instructions.length, 1);
+  r.advance(1); assert.equal(r.c.instructions.length, 2);                // the pause was missed: sent at the bound
+});
+
 t.done();

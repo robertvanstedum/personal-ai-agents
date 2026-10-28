@@ -41,6 +41,7 @@ export const SUMMARY_PENDING = 'The summary is still being written; it will appe
 export const NOT_HEARD = "I didn't catch that; say it again.";
 const HEAR_WAIT_MS = 3000;                // a model call waits this long for the transcript of the owner speech it answers
 const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
+const QUIET_WAIT_MS = 8000;               // a line for the voice waits this long for a pause, then is sent (the pause was missed)
 const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its own turn, or after this
 const SUMMARY_WAIT_MS = 90000;            // the summary's answer is awaited this long (review B3); a later one is still kept
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
@@ -279,6 +280,7 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
         if (stopped) return;
         const r = await send([]);
         if (r.status === 409 || r.status === 403) { stopped = true; onAnswer({ failed: (r.body && r.body.error) || 'session_ended', status: r.status }); }
+        else if (r.status === 200) onAnswer(r.body || {});               // it may carry finished results (completed)
       }).catch((e) => warn('voice heartbeat failed', e));
       return chain;
     },
@@ -322,7 +324,44 @@ export function directVoice(d) {
     if (speakTimer) cancel(speakTimer);
     if (heldTimer) cancel(heldTimer);
     if (drainTimer) cancel(drainTimer);
-    ticker = beat = speakTimer = heldTimer = drainTimer = null;
+    if (quietTimer) cancel(quietTimer);
+    ticker = beat = speakTimer = heldTimer = drainTimer = quietTimer = null;
+    lines.length = 0;
+  }
+
+  // A line for the voice (Check's answer, a finished result) is sent only at a pause: never while Robert is speaking or a
+  // response is under way, since a provider may refuse a second response then (review R2, "at a pause"). The page knows a
+  // response is under way from his speech ending (one follows), a function call (its result starts one) or its own line,
+  // until the voice's turn completes. A line waits at most QUIET_WAIT_MS: past that the pause was missed (a response
+  // with no spoken words reports no turn), and it is sent.
+  let speaking = false, responding = false, quietTimer = null;
+  const lines = [];
+  const quiet = () => !speaking && !responding;
+  function sayAtPause(instruction) {
+    if (finalized || summary) return;
+    lines.push(instruction);
+    pump();
+  }
+  function pump() {
+    if (!lines.length || finalized) return;
+    if (!quiet()) {
+      if (!quietTimer) quietTimer = later(() => { quietTimer = null; speaking = responding = false; pump(); }, QUIET_WAIT_MS);
+      return;
+    }
+    if (quietTimer) { cancel(quietTimer); quietTimer = null; }
+    if (speak(lines.shift())) responding = true;
+    if (lines.length) pump();
+  }
+  // Finished results the server reports once (Spec 165 §5.1: a turn answered pending): said once each, at a pause.
+  const told = new Set();
+  function tell(completed) {
+    for (const done of Array.isArray(completed) ? completed : []) {
+      const key = done && typeof done.owner_item_id === 'string' ? done.owner_item_id : null;
+      if (!key || told.has(key)) continue;
+      told.add(key);
+      const spoken = typeof done.spoken === 'string' && done.spoken.trim() ? done.spoken.trim() : (done.outcome === 'done' ? 'It is done.' : NOT_DONE);
+      sayAtPause(`Say this briefly, adding nothing: About what you asked earlier: ${spoken}`);
+    }
   }
   function endNow(reason) {
     held = null;
@@ -337,6 +376,7 @@ export function directVoice(d) {
   // Any other post not kept (refused, or the network twice) says so at once (review B4).
   function heard(body) {
     if (finalized && !body.failed) return;
+    if (body.completed) tell(body.completed);
     if (body.propose_end && !summary) propose(true);
     if (body.end_confirmed) Promise.resolve().then(sumUp);
     if (!body.failed) return;
@@ -355,7 +395,7 @@ export function directVoice(d) {
   // the same words, so the server runs that turn once and gives a second call the first one's answer; his next words are a
   // new turn, with a new id.
   async function consult(callId, name, args) {
-    const holding = later(() => speak('Still checking.'), HOLDING_MS);
+    const holding = later(() => { if (quiet() && speak('Still checking.')) responding = true; }, HOLDING_MS);
     let advisory = args;
     if (typeof advisory === 'string') { try { advisory = JSON.parse(advisory); } catch (e) { advisory = {}; } }
     if (!advisory || typeof advisory !== 'object' || Array.isArray(advisory)) advisory = {};
@@ -403,9 +443,12 @@ export function directVoice(d) {
     });
   }
   async function modelCall(call) {
-    const heardIt = await awaitWords();
-    if (!heardIt || !lastOwner || !capture?.ownerItem()) return { ok: false, outcome: 'not_done', error: 'not_heard', spoken: NOT_HEARD };
-    return consult(call.call_id, call.name, call.arguments);
+    responding = false;                                    // the response that called it is done; its result starts the next
+    try {
+      const heardIt = await awaitWords();
+      if (!heardIt || !lastOwner || !capture?.ownerItem()) return { ok: false, outcome: 'not_done', error: 'not_heard', spoken: NOT_HEARD };
+      return await consult(call.call_id, call.name, call.arguments);
+    } finally { responding = true; }
   }
 
   // Check with <person>: the host asks for Robert's last words, then has the voice say the answer, adding nothing. One at a time
@@ -421,7 +464,7 @@ export function directVoice(d) {
       const body = await consult(`host-${clock()}`, 'consult', {});
       if (finalized) return;
       const spoken = body && typeof body.spoken === 'string' && body.spoken.trim() ? body.spoken.trim() : NOT_DONE;
-      speak(`Say this briefly, adding nothing: ${spoken}`);
+      sayAtPause(`Say this briefly, adding nothing: ${spoken}`);
       ui.phase('listening');
     } finally { checking = false; ui.checking?.(false); }
   }
@@ -551,6 +594,8 @@ export function directVoice(d) {
       },
       onInputState: (phase) => {
         if (phase === 'speech_started' || phase === 'speech_stopped') hearing = true;     // his words, not yet transcribed
+        if (phase === 'speech_started') speaking = true;
+        if (phase === 'speech_stopped') { speaking = false; responding = true; }         // a response follows his words
         if (!connected || finalized) return;
         ui.phase(phase === 'speaking' ? 'speaking' : ['consulting', 'understood', 'speech_stopped'].includes(phase) ? 'working' : 'listening');
       },
@@ -569,7 +614,7 @@ export function directVoice(d) {
         hearing = false; lastHeard = Boolean(words);
         for (const done of transcribed.splice(0)) done(lastHeard);
       },
-      onAssistantTurn: (text) => { if (endAfterTurn) endAfterTurn(text); },
+      onAssistantTurn: (text) => { responding = false; if (endAfterTurn) endAfterTurn(text); pump(); },
       onFunctionCall: (call) => modelCall(call),
       onFinalize: (result) => finalize(result),
     });

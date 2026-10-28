@@ -188,3 +188,48 @@ def test_a_host_that_reports_unknown_is_said_and_revealed_as_unknown(rig):
     answer = consult(r, sid, call_id="c1", turn="t1").get_json()
     assert answer["outcome"] == "unknown" and answer["spoken"].startswith("I didn't get the result back")
     assert r.store.rows[-1]["text"].startswith("Outcome unknown (timeout_uncertain).")
+
+
+# ── Item 4: the 25-second worker, pending, the receipt at completion, the result on the next heartbeat ─────────────────
+
+def test_a_long_turn_is_pending_then_kept_when_it_completes_and_told_once_on_the_next_heartbeat(rig, monkeypatch):
+    import threading
+    from core.realtime_voice import direct_host as core
+    from test_direct_host import post
+    r = rig
+    monkeypatch.setattr(core, "CONSULT_WAIT_S", 0.05)
+    sid = start(r)
+    release, entered = threading.Event(), threading.Event()
+    turn = r.host.typed_turn
+
+    def slow(*a, **kw):
+        entered.set()
+        assert release.wait(5)
+        return turn(*a, **kw)
+    r.host.typed_turn = slow
+    answer = consult(r, sid, call_id="call_1", turn="t1")
+    assert answer.status_code == 200 and answer.get_json()["outcome"] == "pending" and entered.is_set()
+    assert answer.get_json()["spoken"] == core.PENDING
+    assert "consult_outcome:t1" not in records_of(r, sid)                       # still running
+    assert consult(r, sid, call_id="host-2", turn="t1").get_json()["outcome"] == "pending"   # Check meanwhile
+    assert "completed" not in post(r, sid, []).get_json()
+    release.set()
+    for _ in range(200):
+        if "consult_outcome:t1" in records_of(r, sid):
+            break
+        threading.Event().wait(0.01)
+    assert records_of(r, sid)["consult_outcome:t1"]["outcome"] == "done"
+    assert r.store.rows[-1]["text"].startswith("Answered. Reply turn-1.")          # the receipt, when it completed
+    beat = post(r, sid, []).get_json()
+    assert beat["completed"] == [{"owner_item_id": "t1", "tool": "consult", "outcome": "done", "spoken": "Two items."}]
+    assert "completed" not in post(r, sid, []).get_json()                          # told once
+    assert consult(r, sid, call_id="call_1", turn="t1").get_json()["receipt"] == "turn-1"   # the page's retry: the result
+    assert len(r.host.turns) == 1
+
+
+def test_a_turn_that_finishes_in_time_is_answered_and_not_told_again(rig):
+    from test_direct_host import post
+    r = rig
+    sid = start(r)
+    assert consult(r, sid, call_id="call_1", turn="t1").get_json()["outcome"] == "done"
+    assert "completed" not in post(r, sid, []).get_json()

@@ -110,3 +110,32 @@ def test_an_exception_after_mcs_turn_was_dispatched_is_unknown(ready, monkeypatc
     out = call(r, sid, call_id="c1", owner_item_id="t1").get_json()
     assert len(r.turns) == 1 and out["outcome"] == "unknown" and "did not go through" not in out["spoken"]
 
+
+
+# ── Item 4: MC's typed turn in the worker, under the request's own context ─────────────────────────────────────────────
+
+def test_a_long_mc_turn_is_pending_and_its_reply_lands_in_the_conversation_and_the_next_heartbeat(ready, monkeypatch):
+    import threading
+    from core.realtime_voice import direct_host as core
+    from minimoi_portal.guild_ui import api
+    r = ready
+    monkeypatch.setattr(core, "CONSULT_WAIT_S", 0.05)
+    release = threading.Event()
+
+    def slow(actual, **kw):
+        r.turns.append(kw)
+        assert release.wait(5)
+        return {"status": "answered", "reply_note": {"text": "Item **12** is in build.", "request_id": "reply-1"}}, 200
+    monkeypatch.setattr(api, "run_mc_turn", slow)
+    sid = start(r)["voice_session_id"]
+    first = call(r, sid, call_id="c1", owner_item_id="t1").get_json()
+    assert first["outcome"] == "pending" and len(r.turns) == 1
+    release.set()
+    for _ in range(200):
+        if reveal.get_record(r.notes, sid, "consult_outcome:t1"):
+            break
+        threading.Event().wait(0.01)
+    assert reveal.get_record(r.notes, sid, "consult_outcome:t1")["outcome"] == "done"
+    beat = post(r, sid, []).get_json()
+    assert beat["completed"][0]["owner_item_id"] == "t1" and beat["completed"][0]["spoken"] == "Item 12 is in build."
+    assert any("Answered. Reply reply-1." in (row.get("text") or "") for row in r.notes.rows.values())

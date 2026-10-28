@@ -27,7 +27,7 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, copy_current_request_context, g, has_request_context, jsonify, request
 
 from core.realtime_voice import budget as shared_budget
 from core.realtime_voice.consult import CAP, CAP_LINE, HOLD_AFTER_SECONDS, HOLDING_LINE, ConsultLedger, valid_token
@@ -56,6 +56,7 @@ RECOVERY = "Voice session ended unexpectedly; recovering what was said."
 SUMMARY_PROMPT = "Shall I sum up?"
 SUMMARY_UNAVAILABLE = "Summary unavailable."
 SPEECH_MAX_CHARS = 3500              # a longer reply is read in part and the page says so aloud
+CONSULT_WAIT_S = 25                  # a consult is waited for this long, under every proxy and portal timeout, then pending
 
 
 # ── times and ids ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -760,6 +761,18 @@ class DirectSessions(ConsultLedger):
                     proposed = outcomes[key] == "propose"
         return proposed, confirmed
 
+    def announce(self, sid, done):
+        """A turn answered pending has completed: its result goes with the session's next transcript answer."""
+        with self._meta_lock:
+            if sid in self._meta:
+                self._meta[sid].setdefault("completed", []).append(done)
+
+    def take_completed(self, sid):
+        """The completed results not yet told, once each."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            return meta.pop("completed", []) if meta else []
+
     def withdraw(self, sid):
         """Keep talking: the proposal to end is withdrawn here too, so a later conversational yes ends nothing."""
         with self._meta_lock:
@@ -908,7 +921,7 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
             if n is None:                                                       # the cap, reached meanwhile
                 sessions.release(sid, item, call_id)
                 return not_done("cap", CAP_LINE), 429
-            return dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began), 200
+            return run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began), 200
         sessions.release(sid, item, call_id)
         if kept.outcome == "refused":
             return not_done("not_recorded", NOT_RECORDED), 200
@@ -936,6 +949,44 @@ def same_key(adapter, sessions, handle, sid, call_id, item, words, existing):
         answer = {**result, **({"same_turn": True} if first != call_id else {})}
     sessions.remember(sid, call_id, answer)
     return answer, 200
+
+
+def run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began):
+    """The admitted owner turn runs in a worker (Spec 165 §5.1). This request waits CONSULT_WAIT_S for it: the result if
+    it finishes, else pending ("the answer will be in the conversation"). The worker keeps the outcome record and the
+    receipt when the turn completes, whenever that is, and, when this request already answered pending, queues the
+    result for the session's next transcript answer (the heartbeat), so the voice says it once, at a pause: no extra
+    request and no timer.
+
+    The worker's authority is the owner's admitted request and nothing more: it runs this one turn, under that
+    request's own context (owner, conversation, guard already passed), writes only this session's outcome record and
+    receipt, never retries and never starts anything else. It is a daemon thread, so it dies with the process. If the
+    process dies mid-turn, the request record stays without an outcome: every later dispatch and the reconciliation
+    read say unknown ("check it in writing"), and nothing re-runs by itself."""
+    lock, finished, state = threading.Lock(), threading.Event(), {"result": None, "told_pending": False}
+
+    def work():
+        try:
+            result = dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began)
+        except Exception:                                # never left running: the turn is settled unknown
+            log.exception("%s direct voice: consult worker failed", adapter.person["domain"])
+            result = settled_result({"ok": False, "call_id": call_id, "error": "exception", "outcome": "unknown"})
+            sessions.settle(sid, item, call_id, result)
+        with lock:
+            state["result"] = result
+            told = state["told_pending"]
+        finished.set()
+        if told:
+            sessions.announce(sid, {"owner_item_id": item, "tool": name, "outcome": result["outcome"],
+                                    "spoken": result.get("spoken") or ""})
+    worker = copy_current_request_context(work) if has_request_context() else work
+    threading.Thread(target=worker, name=f"voice-consult-{item}", daemon=True).start()
+    finished.wait(CONSULT_WAIT_S)
+    with lock:
+        if state["result"] is not None:
+            return state["result"]
+        state["told_pending"] = True
+    return {"ok": False, "call_id": call_id, "outcome": "pending", "spoken": PENDING}
 
 
 def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began):
@@ -1181,8 +1232,11 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         sessions.seen(sid)
         if isinstance(body, dict) and body.get("proposal") == "withdrawn":
             sessions.withdraw(sid)                                     # Keep talking (review B5)
+        def told():                          # turns answered pending that have finished, said once at a pause (§5.1)
+            completed = sessions.take_completed(sid)
+            return {"completed": completed} if completed else {}
         if not posted:
-            return jsonify(ok=True, kept=0)
+            return jsonify(ok=True, kept=0, **told())
         if not sessions.count(sid, [(e[:3], len(e[3].encode())) for e in posted]):
             return refusal("cap", "This voice session has kept all it may. Nothing more was kept.", 429)
         handle, refused = adapter.conversation(sessions.conversation_of(sid))
@@ -1197,7 +1251,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         except (SessionRefused, ValueError):
             return refusal("not_kept", "A transcript turn could not be kept.", 409, kept=kept)
         proposed, confirmed = sessions.heard(sid, [(e[:3], e[3]) for e in posted if e[0] == "user" and not e[4]])
-        answer = {"ok": True, "kept": kept}
+        answer = {"ok": True, "kept": kept, **told()}
         if proposed:
             answer.update(propose_end=True, prompt=SUMMARY_PROMPT)       # the page offers End; nothing ends yet
         if confirmed:
