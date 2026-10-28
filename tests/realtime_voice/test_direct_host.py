@@ -5,6 +5,7 @@ import ast
 import hashlib
 import json
 import re
+import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -16,8 +17,8 @@ from flask import Flask, request
 
 from core.realtime_voice import direct_host as core
 from core.realtime_voice.budget import VoiceBudget
-from core.realtime_voice.direct_host import (DirectVoiceAdapter, DirectVoiceStore, Kept, Receipts, compose_instructions,
-                                             direct_rules, install_direct_voice, refusal, stamp)
+from core.realtime_voice.direct_host import (DirectVoiceAdapter, DirectVoiceStore, Kept, Put, Receipts, compose_instructions,
+                                             direct_rules, install_direct_voice, refusal, same_record, stamp)
 from core.realtime_voice.transcripts import SPEAKERS
 from core.realtime_voice.voice_card import load_pinned
 
@@ -31,6 +32,22 @@ OWNER = {"X-Owner": "robert", "X-Csrf": "ok", "Content-Type": "application/json"
 class Store(DirectVoiceStore):
     def __init__(self):
         self.markers, self.rows, self.summaries, self.start_ok = {}, [], {}, True
+        self.kept_records, self.put_ok, self.lock = {}, True, threading.Lock()
+
+    def put(self, handle, sid, record):
+        """First write wins; the same id with other content (anything but ``at``) is a conflict (Spec 165 §4.4)."""
+        if not self.put_ok:
+            return Put("refused", "test store refuses")
+        with self.lock:
+            old = self.kept_records.get((sid, record["id"]))
+            if old is None:
+                self.kept_records[(sid, record["id"])] = json.loads(json.dumps(record))
+                return Put("stored")
+            return Put("duplicate" if same_record(old, record) else "conflict")
+
+    def get(self, handle, sid, record_id):
+        found = self.kept_records.get((sid, record_id))
+        return json.loads(json.dumps(found)) if found is not None else None
 
     def mark_start(self, handle, sid, *, principal, max_minutes, started):
         if not self.start_ok:
@@ -420,7 +437,7 @@ def test_one_owner_turn_is_one_effect_for_any_host(rig):
     r = rig
     sid = start(r)
     first = consult(r, sid, call_id="host-1", turn="t1").get_json()
-    second = consult(r, sid, call_id="call_2", name="save_note", words="save a note: x", turn="t1").get_json()
+    second = consult(r, sid, call_id="call_2", name="save_note", turn="t1").get_json()     # the same words, the model's
     assert len(r.host.turns) == 1 and second["receipt"] == first["receipt"] and second["same_turn"] is True
     assert consult(r, sid, call_id="call_3", turn="t3").get_json()["receipt"] == "turn-2"     # his next words: a new turn
     bare = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "c4", "name": "consult",
@@ -455,7 +472,7 @@ def test_what_was_not_kept_and_what_still_ran_are_marked_at_the_cutoff(rig):
     r = rig
     sid = start(r)
     post(r, sid, [turn(r, "user", "t0", "Kept words.")])
-    r.sessions.admit(sid, "call_running", "t9")
+    r.sessions.hold(sid, "t9", "call_running")
     summary = r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER,
                             json={"conversation_id": "owner", "capture": "incomplete"}).get_json()
     assert r.store.markers[(sid, "end")]["capture"] == "incomplete"

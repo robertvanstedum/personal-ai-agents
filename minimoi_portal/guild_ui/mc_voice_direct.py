@@ -151,6 +151,12 @@ class _FloorStore(DirectVoiceStore):
         kept = self._floor(conv).add_note(reveal.key(sid, what), text, reveal.summary_author(sid), page=reveal.PAGE_SUMMARY)
         return Kept(kept.outcome, kept.value["text"] if kept.value else None, bool(kept.repeated))
 
+    def put(self, conv, sid, record):
+        return reveal.put_record(self._floor(conv), sid, record)
+
+    def get(self, conv, sid, record_id):
+        return reveal.get_record(self._floor(conv), sid, record_id)
+
 
 def _is_note_command(text):
     from . import board_commands, owner_actions

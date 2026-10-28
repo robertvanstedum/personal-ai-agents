@@ -20,3 +20,77 @@ def test_a_consult_names_its_owner_turn_by_capture_id_and_nothing_else_is_accept
     assert not r.host.turns
     answer = bare(r, sid, owner_item_id="t3")
     assert answer.status_code == 200 and len(r.host.turns) == 1
+
+
+# ── Item 2: durable admission: a consult_request record first, the first write wins (§5.1, §4.4) ───────────────────────
+
+def records_of(r, sid):
+    return {rid: rec for (s, rid), rec in r.store.kept_records.items() if s == sid}
+
+
+def test_the_request_is_recorded_durably_before_dispatch_and_its_outcome_after(rig):
+    r = rig
+    sid = start(r)
+    seen = []
+    turn = r.host.typed_turn
+    r.host.typed_turn = lambda *a: seen.append(sorted(records_of(r, sid))) or turn(*a)
+    answer = consult(r, sid, call_id="call_1", turn="t5").get_json()
+    assert seen == [["consult_request:t5"]]                                       # written before the typed turn ran
+    request, outcome = records_of(r, sid)["consult_request:t5"], records_of(r, sid)["consult_outcome:t5"]
+    assert request["schema"] == 1 and request["kind"] == "consult_request" and request["owner_item_id"] == "t5"
+    assert request["at"] and len(request["text_sha256"]) == 64 and "agenda" not in str(request)   # the words' digest only
+    assert outcome["kind"] == "consult_outcome" and outcome["outcome"] == "done" and outcome["call_id"] == "call_1"
+    assert outcome["tool"] == "consult" and outcome["result"]["receipt"] == answer["receipt"]
+
+
+def test_a_second_dispatch_of_a_recorded_key_gets_its_stored_outcome_and_runs_nothing(rig):
+    """The store answers, not this process's memory: the key's outcome was kept (here by another process)."""
+    from core.realtime_voice.direct_host import digest, record
+    r = rig
+    sid = start(r)
+    r.store.put("owner", sid, record("consult_request", "consult_request:t7", owner_item_id="t7",
+                                     text_sha256=digest("What is on my agenda?")))
+    r.store.put("owner", sid, record("consult_outcome", "consult_outcome:t7", owner_item_id="t7", tool="save_note",
+                                     call_id="call_first", outcome="done",
+                                     result={"ok": True, "saved": True, "receipt": "op-9", "spoken": "Saved."}))
+    answer = consult(r, sid, call_id="host-2", turn="t7").get_json()                # Check after the model
+    assert answer["receipt"] == "op-9" and answer["same_turn"] is True and not r.host.turns
+
+
+def test_a_recorded_key_with_no_outcome_and_nothing_running_is_unknown_and_never_rerun(rig):
+    """The process that admitted it died mid-turn: the request stays unknown, and nothing re-runs by itself."""
+    from core.realtime_voice.direct_host import digest, record
+    r = rig
+    sid = start(r)
+    r.store.put("owner", sid, record("consult_request", "consult_request:t8", owner_item_id="t8",
+                                     text_sha256=digest("What is on my agenda?")))
+    answer = consult(r, sid, call_id="call_retry", turn="t8")
+    assert answer.status_code == 200 and answer.get_json()["outcome"] == "unknown" and not r.host.turns
+    assert "did not go through" not in answer.get_json()["spoken"]
+
+
+def test_the_same_key_with_other_words_is_refused_and_runs_nothing(rig):
+    r = rig
+    sid = start(r)
+    consult(r, sid, call_id="call_1", turn="t1", words="What is on my agenda?")
+    other = consult(r, sid, call_id="call_2", turn="t1", words="Delete the agenda.")
+    assert other.status_code == 409 and other.get_json()["error"] == "turn_mismatch" and len(r.host.turns) == 1
+
+
+def test_a_request_the_store_cannot_keep_is_never_dispatched(rig):
+    r = rig
+    sid = start(r)
+    r.store.put_ok = False
+    answer = consult(r, sid, call_id="call_1", turn="t1").get_json()
+    assert answer["ok"] is False and answer["error"] == "not_recorded" and not r.host.turns
+    assert "nothing was done" in answer["spoken"]
+
+
+def test_a_retry_check_and_a_new_call_id_on_one_key_are_one_effect_through_one_dispatcher(rig):
+    r = rig
+    sid = start(r)
+    model = consult(r, sid, call_id="call_model", name="save_note", words="save a note: the kiln", turn="t2").get_json()
+    check = consult(r, sid, call_id="host-1", words="save a note: the kiln", turn="t2").get_json()   # Check after the model
+    retry = consult(r, sid, call_id="call_model", name="save_note", words="save a note: the kiln", turn="t2").get_json()
+    assert len(r.host.turns) == 1 and check["receipt"] == model["receipt"] == retry["receipt"] and retry == model
+    assert check["same_turn"] is True and len([k for k in records_of(r, sid) if k.startswith("consult_request")]) == 1

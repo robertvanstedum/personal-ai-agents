@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, g, jsonify, request
 
 from core.realtime_voice import budget as shared_budget
-from core.realtime_voice.consult import ConsultLedger, create_consult_blueprint
+from core.realtime_voice.consult import CAP, CAP_LINE, HOLD_AFTER_SECONDS, HOLDING_LINE, ConsultLedger, valid_token
 from core.realtime_voice.duration_guard import DurationGuard
 from core.realtime_voice.errors import SessionRefused
 from core.realtime_voice.transcripts import MAX_BYTES as TURN_MAX_BYTES, STAMP, stamp_time
@@ -331,6 +331,76 @@ def summary_texts(reply):
     return spoken, written.strip()
 
 
+# ── durable records (Spec 165 §4.4) ───────────────────────────────────────────────────────────────────────────────
+SCHEMA = 1
+RECORD_MAX = 1800                    # a record's JSON, so every store (MC: a 2,000-character floor note) can hold it
+REQUEST, OUTCOME = "consult_request", "consult_outcome"
+_ITEM = re.compile(r"t[0-9]{1,4}")
+
+
+def owner_item(value):
+    """An owner turn's capture id, as the session module names every item it posts: "t" and the item's place."""
+    return isinstance(value, str) and _ITEM.fullmatch(value) is not None
+
+
+class Put:
+    """What a store's put did: "stored" (the first write), "duplicate" (the same record again), "conflict" (the same id
+    with other content: nothing is changed) or "refused" with its reason (not kept). A store returns one only once the
+    record is durable; it never logs a failure and carries on."""
+    __slots__ = ("outcome", "reason")
+    OUTCOMES = ("stored", "duplicate", "conflict", "refused")
+
+    def __init__(self, outcome, reason=None):
+        if outcome not in self.OUTCOMES:
+            raise ValueError(f"not a put outcome: {outcome!r}")
+        self.outcome, self.reason = outcome, reason
+
+    def __repr__(self):
+        return f"Put({self.outcome!r}{', ' + repr(self.reason) if self.reason else ''})"
+
+
+def record(kind, rid, **fields):
+    """A durable record: schema 1, a stable id, its kind, when it was written, and its fields."""
+    return {"schema": SCHEMA, "id": rid, "kind": kind, "at": stamp(now()), **fields}
+
+
+def same_record(a, b):
+    """Whether two records say the same: everything but the time each was written (``at``) is equal."""
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return False
+    return {k: v for k, v in a.items() if k != "at"} == {k: v for k, v in b.items() if k != "at"}
+
+
+def valid_record(rec):
+    return (isinstance(rec, dict) and rec.get("schema") == SCHEMA and isinstance(rec.get("id"), str) and rec["id"]
+            and isinstance(rec.get("kind"), str) and rec["kind"] and isinstance(rec.get("at"), str)
+            and len(json.dumps(rec, sort_keys=True)) <= RECORD_MAX)
+
+
+def put(adapter, handle, sid, rec):
+    """The store's put, checked: a Put. A record the core built badly, or a store that raised, is refused here (and
+    logged), never taken as kept."""
+    if not valid_record(rec):
+        raise ValueError("not a durable record")
+    try:
+        done = adapter.store.put(handle, sid, rec)
+    except Exception:
+        log.exception("%s direct voice: %s record not kept", adapter.person["domain"], rec["kind"])
+        return Put("refused", "unavailable")
+    return done if isinstance(done, Put) else Put("refused", "store")
+
+
+def get(adapter, handle, sid, rid):
+    """The store's record ``rid`` for this session, or None: also when it cannot be read (logged), so admission falls to
+    put, whose first write wins, and a reader says unknown."""
+    try:
+        found = adapter.store.get(handle, sid, rid)
+    except Exception:
+        log.exception("%s direct voice: record not read", adapter.person["domain"])
+        return None
+    return found if isinstance(found, dict) and found.get("id") == rid else None
+
+
 # ── the adapter interface (Spec 165 §4.4) ──────────────────────────────────────────────────────────────────────────
 
 class Kept:
@@ -378,6 +448,17 @@ class DirectVoiceStore:
 
     def keep_summary(self, handle, sid, what, text):
         """Keep the "summary", "summary-unavailable" or "summary-decision" record once: a Kept."""
+        raise NotImplementedError
+
+    def put(self, handle, sid, record):
+        """Keep one durable record of the session (Spec 165 §4.4: a dict with schema 1, a stable id, kind and at, at most
+        RECORD_MAX characters of JSON): a Put. The first write wins; the same id with other content (anything but ``at``,
+        same_record) is a conflict and changes nothing; a record that cannot be kept is refused with its reason. Return
+        only once the record is durable."""
+        raise NotImplementedError
+
+    def get(self, handle, sid, record_id):
+        """The record kept under ``record_id`` for this session, as put, or None."""
         raise NotImplementedError
 
 
@@ -493,7 +574,7 @@ class DirectSessions(ConsultLedger):
             raise SessionRefused("Voice session not recorded")
         with self._meta_lock:
             self._meta[sid] = {"conversation": cid, "started": started, "max_s": max_minutes * 60,
-                               "seen": started, "next": 0, "index": {}, "items": set(), "bytes": 0}
+                               "seen": started, "items": set(), "bytes": 0}
         self.open_session(sid, owner)
         return sid
 
@@ -534,19 +615,86 @@ class DirectSessions(ConsultLedger):
             fresh = meta is not None and self.clock() - meta["seen"] <= LIVE_WINDOW_S
         return fresh and self.is_open(sid) and not self.expired(sid)
 
-    def admit(self, sid, call_id, turn=None):
-        status, prior = super().admit(sid, call_id, turn, closed=self.expired(sid))
-        if status == "new":
-            with self._meta_lock:
-                meta = self._meta[sid]
-                meta["next"] += 1                           # at most CAP admissions per session: 1 … 12
-                meta["index"][call_id] = meta["next"]
-            self.seen(sid)
-        return status, prior
+    # One effect per owner turn (Spec 165 §5.1). The durable half is the store's consult_request record (consult(): first
+    # write wins); this is the in-process half, under the ledger's lock: which owner turns are running here, their full
+    # results, and the per-session cap. A call id is a second layer: its result is replayed as before (ConsultLedger).
 
-    def index_of(self, sid, call_id):
-        with self._meta_lock:
-            return self._meta[sid]["index"][call_id]
+    def replay_call(self, sid, call_id):
+        """("replay", its result) for a call id already answered, ("in_flight", None) while it runs, else (None, None)."""
+        with self._lock:
+            state = self._sessions.get(sid)
+            if state is None:
+                return None, None
+            if call_id in state["results"]:
+                return "replay", state["results"][call_id]
+            if call_id in state["calls"]:
+                return "in_flight", None
+            return None, None
+
+    def hold(self, sid, item, call_id):
+        """Hold the owner turn ``item`` as running here for ``call_id``: False when it is already running here."""
+        with self._lock:
+            state = self._sessions.get(sid)
+            if state is None:
+                return False
+            running = state.setdefault("running", {})
+            if item in running or call_id in state["calls"]:
+                return False
+            running[item] = call_id
+            state["calls"][call_id] = "in_flight"
+            return True
+
+    def release(self, sid, item, call_id):
+        """Nothing was admitted after all (the request record was already there, or not kept): let go of the turn."""
+        with self._lock:
+            state = self._sessions.get(sid)
+            if state is not None:
+                if state.setdefault("running", {}).get(item) == call_id:
+                    del state["running"][item]
+                state["calls"].pop(call_id, None)
+
+    def admitted(self, sid):
+        """Count one admission against the cap: its place in the session (1 … CAP), or None when the cap is reached."""
+        with self._lock:
+            state = self._sessions.get(sid)
+            if state is None or state.get("admitted", 0) >= CAP:
+                return None
+            state["admitted"] = state.get("admitted", 0) + 1
+            return state["admitted"]
+
+    def capped(self, sid):
+        with self._lock:
+            state = self._sessions.get(sid)
+            return state is not None and state.get("admitted", 0) >= CAP
+
+    def running(self, sid, item):
+        with self._lock:
+            state = self._sessions.get(sid)
+            return bool(state) and item in state.get("running", {})
+
+    def in_flight(self, sid):
+        """How many of this session's owner turns are still running here (the summary's cutoff, review B2)."""
+        with self._lock:
+            state = self._sessions.get(sid)
+            return len(state.get("running", {})) if state else 0
+
+    def settle(self, sid, item, call_id, result):
+        """The owner turn has its result: kept for its call id and for the turn, and no longer running."""
+        with self._lock:
+            state = self._sessions.get(sid)
+            if state is None:
+                return
+            state["results"][call_id] = result
+            state["calls"].pop(call_id, None)
+            state.setdefault("settled", {})[item] = (call_id, result)
+            if state.setdefault("running", {}).get(item) == call_id:
+                del state["running"][item]
+
+    def item_result(self, sid, item):
+        """(the first call id, its full result) for an owner turn settled here, or None."""
+        with self._lock:
+            state = self._sessions.get(sid)
+            return state.get("settled", {}).get(item) if state else None
 
     def count(self, sid, sized):
         """Admit a post's new turns against the session caps; False (nothing counted) when over. ``sized`` is
@@ -621,23 +769,141 @@ class DirectSessions(ConsultLedger):
 
 # ── one consult, and the summary ─────────────────────────────────────────────────────────────────────────────────
 
-def consult(adapter, sessions, principal, sid, call_id, name, owner_text):
-    """One bridged call through the host's typed turn, its request and receipt kept as voice records. Returns the result
-    the provider is given (remembered per call_id). A consult that finishes after End still keeps its receipt."""
+NOT_RECORDED = "That could not be recorded, so nothing was done."
+TURN_MISMATCH = "Those words are not the turn they name, so nothing was done. Say it again."
+UNKNOWN = "I didn't get the result back. Check it in writing before asking again."
+
+
+def request_id(item):
+    return f"{REQUEST}:{item}"
+
+
+def outcome_id(item):
+    return f"{OUTCOME}:{item}"
+
+
+def digest(text):
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def compact(result, limit=RECORD_MAX - 400):
+    """A result small enough for a durable record: its fields as they are, the spoken words cut at a sentence with a
+    pointer to the conversation when they are long (the whole answer is the receipt's)."""
+    keep = {k: v for k, v in result.items() if k in ("ok", "outcome", "error", "answered", "saved", "receipt",
+                                                    "receipt_kind", "note_request_id", "job_command", "spoken")}
+    spoken = keep.get("spoken")
+    if isinstance(spoken, str) and len(json.dumps(keep)) > limit:
+        room = max(0, limit - len(json.dumps({**keep, "spoken": ""})) - 40)
+        cut = spoken[:room]
+        stop = cut.rfind(". ")
+        keep["spoken"] = (cut[:stop + 1] if stop > room // 2 else cut).rstrip() + " The rest is in the conversation."
+    return keep
+
+
+def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
+    """One owner action, admitted durably before it is dispatched (Spec 165 §5.1). The key is (session, owner_item_id):
+    one effect per owner turn, whichever tool asks (the tool is recorded, not keyed: a consult on "make a note that …"
+    saves the note, so Check and the model's save_note are one action). Before dispatch a consult_request record is put
+    through the store and the first write wins; a second dispatch of the key (another call id, Check after the model, a
+    retry) gets the outcome kept for it, or in_flight while it runs, or unknown when it was admitted but has no outcome
+    and runs nowhere here; the same key with other words is refused (turn_mismatch). A call id already answered is
+    replayed first (the second layer). Returns (the answer the provider is given, HTTP status)."""
+    replayed, prior = sessions.replay_call(sid, call_id)
+    if replayed == "replay":
+        return prior, 200
+    if replayed == "in_flight":
+        return {"ok": False, "error": "in flight", "spoken": HOLDING_LINE}, 409
     cid = sessions.conversation_of(sid)
     handle, refused = adapter.conversation(cid) if cid else (None, True)      # never a default conversation
     if refused is not None:
-        return {"ok": False, "error": "conversation", "spoken": "That conversation is not available now. " + FAILED}
-    item = "c" + hashlib.sha256(call_id.encode()).hexdigest()[:32]
+        return {"ok": False, "error": "conversation", "spoken": "That conversation is not available now. " + FAILED}, 200
+    voice_item = "k" + item                       # the turn's consult request and receipt, kept as voice records
     began = stamp(now())
     text, bad = adapter.clean(owner_text, adapter.note_max, "spoken words")
-    if bad is None:
-        adapter.store.keep(handle, principal, sid, "consult", item, 0, f"{name}: {text}", False, started=began, ended=began)
-        result = adapter.typed_turn(handle, principal, sid, sessions.index_of(sid, call_id), name, text)
-    else:
+    if bad is not None:
         result = {"ok": False, "error": "invalid", "spoken": FAILED}
+        keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began)
+        sessions.remember(sid, call_id, result)
+        return result, 200
+    words = digest(text)
+    asked = record(REQUEST, request_id(item), owner_item_id=item, text_sha256=words)
+    existing = get(adapter, handle, sid, asked["id"])
+    if existing is None:
+        if not sessions.is_open(sid) or sessions.expired(sid):
+            return {"ok": False, "error": "session ended"}, 409
+        if sessions.capped(sid):
+            return {"ok": False, "error": "cap", "spoken": CAP_LINE}, 429
+        if not sessions.hold(sid, item, call_id):
+            return {"ok": False, "error": "in flight", "spoken": HOLDING_LINE}, 409
+        kept = put(adapter, handle, sid, asked)
+        if kept.outcome == "stored":
+            n = sessions.admitted(sid)
+            if n is None:                                                       # the cap, reached meanwhile
+                sessions.release(sid, item, call_id)
+                return {"ok": False, "error": "cap", "spoken": CAP_LINE}, 429
+            return dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began), 200
+        sessions.release(sid, item, call_id)
+        if kept.outcome == "refused":
+            return {"ok": False, "error": "not_recorded", "spoken": NOT_RECORDED}, 200
+        existing = get(adapter, handle, sid, asked["id"])                       # another dispatch put it first
+        if existing is None:
+            return {"ok": False, "error": "not_recorded", "spoken": NOT_RECORDED}, 200
+    return same_key(adapter, sessions, handle, sid, call_id, item, words, existing)
+
+
+def same_key(adapter, sessions, handle, sid, call_id, item, words, existing):
+    """A second dispatch of an owner turn already admitted: (answer, status), running nothing."""
+    if existing.get("text_sha256") != words:
+        return {"ok": False, "error": "turn_mismatch", "spoken": TURN_MISMATCH}, 409
+    if sessions.running(sid, item):
+        return {"ok": False, "error": "in flight", "spoken": HOLDING_LINE}, 409
+    settled = sessions.item_result(sid, item)
+    if settled is not None:
+        first, result = settled
+    else:
+        kept = get(adapter, handle, sid, outcome_id(item))
+        first, result = (kept.get("call_id"), kept.get("result")) if kept else (None, None)
+    if not isinstance(result, dict):
+        answer = {"ok": False, "error": "unknown", "outcome": "unknown", "spoken": UNKNOWN}
+    else:
+        answer = {**result, **({"same_turn": True} if first != call_id else {})}
+    sessions.remember(sid, call_id, answer)
+    return answer, 200
+
+
+def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began):
+    """The admitted owner turn through the host's typed turn: its request kept as a voice record first, then the turn,
+    then its outcome record and receipt. A consult that finishes after End still keeps both."""
+    voice_item = "k" + item
+    started = time.monotonic()
     try:
-        adapter.store.keep(handle, principal, sid, "receipt", item, 0, adapter.receipts.line(name, result), False,
+        adapter.store.keep(handle, principal, sid, "consult", voice_item, 0, f"{name}: {text}", False, started=began,
+                           ended=began)
+    except Exception:                                    # not kept: nothing is dispatched
+        log.exception("%s direct voice: consult request not kept", adapter.person["domain"])
+        result = {"ok": False, "error": "not_kept", "spoken": FAILED}
+    else:
+        try:
+            result = adapter.typed_turn(handle, principal, sid, n, name, text)
+        except Exception:
+            log.exception("%s direct voice: consult failed", adapter.person["domain"])
+            result = {"ok": False, "error": "unavailable", "spoken": FAILED}
+    result = {"ok": True, "call_id": call_id, **result}
+    if time.monotonic() - started >= HOLD_AFTER_SECONDS:
+        result["holding_line"] = HOLDING_LINE
+    outcome = "done" if result.get("ok") else "not_done"
+    done = put(adapter, handle, sid, record(OUTCOME, outcome_id(item), owner_item_id=item, tool=name, call_id=call_id,
+                                            outcome=outcome, result=compact(result)))
+    if done.outcome not in ("stored", "duplicate"):
+        log.error("%s direct voice: consult outcome not recorded (%s)", adapter.person["domain"], done.reason or done.outcome)
+    result = keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began)
+    sessions.settle(sid, item, call_id, result)
+    return result
+
+
+def keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began):
+    try:
+        adapter.store.keep(handle, principal, sid, "receipt", voice_item, 0, adapter.receipts.line(name, result), False,
                            started=began, ended=stamp(now()))
     except Exception:
         log.exception("%s direct voice: consult receipt not kept", adapter.person["domain"])
@@ -764,23 +1030,47 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    def consult_backend(owner_text, _arguments):
-        body = request.get_json(silent=True) or {}          # the route has validated these
-        who, sid, call_id, name = principal(), body["session_id"], body["call_id"], body["name"]
-        try:
-            return consult(adapter, sessions, who, sid, call_id, name, owner_text)
-        except Exception:
-            log.exception("%s direct voice: consult failed", person["domain"])
-            return {"ok": False, "error": "unavailable", "spoken": FAILED}
-
     boot = create_bootstrap_blueprint(domain=person["domain"], locale=locale, get_persona=get_persona,
                                       is_production=adapter.is_production, consult_ledger=sessions, owner=adapter.owner,
                                       admit=admit)
     boot.before_request(bootstrap_guard)
     boot.register_error_handler(SessionRefused, lambda _exc: refusal(
         "unavailable", "Voice unavailable: the voice session could not be recorded in this conversation.", 503))
-    consulting = create_consult_blueprint(backend=consult_backend, ledger=sessions, csrf_ok=adapter.csrf_ok,
-                                          owner_id=principal, session_owner=sessions.owner_of, require_turn=True)
+    consulting = Blueprint("voice_consult", __name__)
+
+    @consulting.route("/api/realtime-voice/consult", methods=["POST"])
+    def consult_route():
+        """The model's function call, or Check with <person>: one owner action through the durable dispatcher (consult).
+        The server acts on the owner's own transcript item, named by its capture id, never on the model's arguments."""
+        if not adapter.csrf_ok():
+            return jsonify({"ok": False, "error": "csrf"}), 403
+        who = principal()
+        if who is None:
+            return jsonify({"ok": False, "error": "identity required"}), 401
+        body = request.get_json(force=True, silent=True) or {}
+        sid, call_id, name = body.get("session_id"), body.get("call_id"), body.get("name")
+        owner_text, item = body.get("owner_transcript_item"), body.get("owner_item_id")
+        if (not valid_token(sid) or not valid_token(call_id) or name not in {"consult", "save_note"}
+                or not owner_item(item)):
+            return jsonify({"ok": False, "error": "invalid consult"}), 400
+        if sessions.owner_of(sid) != who:
+            return jsonify({"ok": False, "error": "not your session"}), 403
+        if not isinstance(owner_text, str) or not owner_text.strip():
+            return jsonify({"ok": False, "error": "owner text required"}), 400
+        answer, status = consult(adapter, sessions, who, sid, call_id, name, owner_text, item)
+        return jsonify(answer), status
+
+    @consulting.route("/api/realtime-voice/session/<session_id>/end", methods=["POST"])
+    def end(session_id):
+        """End: the session is closed here and its end marker kept (the reveal). A second End is harmless."""
+        if not adapter.csrf_ok():
+            return jsonify({"ok": False, "error": "csrf"}), 403
+        who = principal()
+        if who is None or sessions.owner_of(session_id) != who:
+            return jsonify({"ok": False, "error": "not your session"}), 403
+        sessions.close_session(session_id)
+        return jsonify({"ok": True, "ended": True})
+
     consulting.before_request(guard)
     transcript = Blueprint("voice_transcript", __name__)
 

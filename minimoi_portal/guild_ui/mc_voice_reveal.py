@@ -30,14 +30,15 @@ import re
 import uuid
 
 from core.realtime_voice.direct_host import (LIVE_WINDOW_S, RECOVERY, SUMMARY_PROMPT, SUMMARY_UNAVAILABLE,  # noqa: F401
-                                             Receipts, affirmative, done_intent, full_differs, now, parse_stamp,
-                                             session_id, stamp, state as _state)
+                                             Put, Receipts, affirmative, done_intent, full_differs, now, parse_stamp,
+                                             same_record, session_id, stamp, state as _state)
 
 PAGE_SESSION = "voice-session"
 PAGE_SUMMARY = "voice-summary"
 SESSION_AUTHOR = "voice_session:"
 SUMMARY_AUTHOR = "voice_summary:"
 MARKER = "[Voice session] "
+RECORD = "[Voice record] "         # a durable record of the session (Spec 165 §4.4): a consult's request and outcome
 CONSULT_CAP = 12                   # core.realtime_voice.consult.CAP: a session has at most this many consult notes
 _CONSULT_ID = re.compile(r"vc-([0-9a-f]{32})-([0-9]{2})")
 
@@ -104,6 +105,37 @@ def _tag_of(row):
     fields = _marker_fields(row, sid, "tag") if sid is not None else None
     rid = (fields or {}).get("request_id")
     return (rid, sid) if isinstance(rid, str) and row.get("request_id") == tag_key(rid) else None
+
+
+def record_key(sid, rid):
+    return str(uuid.uuid5(uuid.UUID(sid), "voice-record:" + rid))
+
+
+def put_record(floor, sid, rec):
+    """Keep one durable record (Spec 165 §4.4) as a session note (page voice-session, never shown): a Put. The note's
+    request id is the record's, so the floor's own idempotency is the first-write-wins rule; a different record under it
+    is a conflict, unless only its time differs (same_record). The floor commits before it answers."""
+    text = RECORD + json.dumps(rec, sort_keys=True, separators=(",", ":"))
+    kept = floor.add_note(record_key(sid, rec["id"]), text, _session_author(sid), page=PAGE_SESSION)
+    if kept.outcome == "kept" and kept.value:
+        return Put("duplicate" if kept.repeated else "stored")
+    if kept.outcome == "idempotency_mismatch":
+        return Put("duplicate" if same_record(get_record(floor, sid, rec["id"]), rec) else "conflict")
+    return Put("refused", str(kept.outcome))
+
+
+def get_record(floor, sid, rid):
+    """The durable record ``rid`` of this session, or None."""
+    row = floor.get_note(record_key(sid, rid))
+    if (not isinstance(row, dict) or row.get("author_kind") != "platform" or row.get("who") != SESSION_AUTHOR + sid
+            or (row.get("context") or {}).get("page") != PAGE_SESSION or not isinstance(row.get("text"), str)
+            or not row["text"].startswith(RECORD)):
+        return None
+    try:
+        found = json.loads(row["text"][len(RECORD):])
+    except ValueError:
+        return None
+    return found if isinstance(found, dict) and found.get("id") == rid else None
 
 
 def mark_start(floor, sid, *, principal, conversation_id, max_minutes, started=None):

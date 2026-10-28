@@ -118,7 +118,7 @@ def test_a_consult_still_running_at_the_summary_is_outside_its_cutoff_and_it_say
     r = ready
     sid = start(r)["voice_session_id"]
     post(r, sid, [turn(r, "user", "u1", "Check the kiln, then we're done.")])
-    sessions_of(r).admit(sid, "call-running")                                             # admitted, still running
+    sessions_of(r).hold(sid, "t9", "call-running")                                        # admitted, still running
     summary = summarize(r, sid).get_json()
     assert summary["state"] == "proposed"
     assert "still running" in r.cos.prompts[-1].text and "still running" in summary["written"]
