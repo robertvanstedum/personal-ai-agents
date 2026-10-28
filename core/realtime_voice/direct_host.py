@@ -59,6 +59,9 @@ SPEECH_MAX_CHARS = 3500              # a longer reply is read in part and the pa
 CONSULT_WAIT_S = 25                  # a consult is waited for this long, under every proxy and portal timeout, then pending
 CONSULT_MAX_BYTES = 32 * 1024        # a consult body (review R1 P3-10), like the summary's
 PRUNE_AFTER_S = 3600                 # a session's memory here is let go this long after its maximum duration
+SUMMARY_JOIN_S = 40                  # a second ask joins a summary attempt running here this long, inside the page's 45 s
+ATTEMPT_STALE_S = 60                 # an attempt with no outcome this old ran in a process that died: a new one may start
+SUMMARY_PENDING = "The summary is still being written; it will appear in the conversation."
 
 
 # ── times and ids ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -634,6 +637,24 @@ class DirectSessions(ConsultLedger):
     def __init__(self, adapter, clock=time.time):
         super().__init__()
         self._adapter, self._meta, self._meta_lock, self.clock = adapter, {}, threading.Lock(), clock
+        self._summaries, self._summary_lock = {}, threading.Lock()       # session -> the summary attempt running here
+
+    def summary_begin(self, sid):
+        """(True, run) when this request makes the session's summary now, or (False, run) for the attempt already running
+        here, which it joins (Spec 165 §5.3; review CX V2-5): one generation at a time per session, whoever asks."""
+        with self._summary_lock:
+            run = self._summaries.get(sid)
+            if run is not None:
+                return False, run
+            run = self._summaries[sid] = {"done": threading.Event(), "answer": None}
+            return True, run
+
+    def summary_end(self, sid, run, answer):
+        with self._summary_lock:
+            run["answer"] = answer
+            if self._summaries.get(sid) is run:
+                del self._summaries[sid]
+        run["done"].set()
 
     def prune(self):
         """Let go of the sessions whose maximum duration ended more than PRUNE_AFTER_S ago (review R1 P3-10): their
@@ -1170,6 +1191,53 @@ def summary_system(person, card):
             f"the tone only:\n{card}\nYou have no tools and you act on nothing: you only write the summary asked for.")
 
 
+def summary_attempt(adapter, sessions, principal, handle, sid, *, running=0, client=None, clock=time.time):
+    """The session's summary, made by one attempt at a time with its own durable identity (Spec 165 §5.3; review CX
+    V2-5). A second ask while an attempt runs here joins it (the same answer, no second generation). An attempt recorded
+    with no outcome that is still recent ran elsewhere, or is running: the answer is pending ("still being written"),
+    never unavailable, and nothing new starts. One that old enough ran in a process that died (its gateway call is bounded
+    well inside ATTEMPT_STALE_S): it is concluded unknown, and a new attempt may start. "Summary unavailable" comes only
+    from an attempt that concluded so; a retry after it starts the next attempt. A proposal, once kept, is repeated to
+    every later ask and device. Returns (answer, status)."""
+    mine, run = sessions.summary_begin(sid)
+    if not mine:
+        run["done"].wait(SUMMARY_JOIN_S)
+        answer = run["answer"]
+        return (answer if answer is not None else ({"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200))
+    answer = ({"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200)
+    try:
+        answer = _attempt(adapter, principal, handle, sid, running=running, client=client, clock=clock)
+        return answer
+    finally:
+        sessions.summary_end(sid, run, answer)
+
+
+def _attempt(adapter, principal, handle, sid, *, running, client, clock):
+    store = adapter.store
+    if store.summary(handle, sid) is not None:
+        return summarize(adapter, principal, handle, sid, running=running, client=client)        # repeated
+    n = 1
+    while True:
+        began = get(adapter, handle, sid, f"summary_attempt:{n}")
+        if began is None:
+            break
+        if get(adapter, handle, sid, f"summary_outcome:{n}") is None:
+            at = parse_stamp(began.get("at"))
+            if at is not None and clock() - at.timestamp() < ATTEMPT_STALE_S:
+                return {"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200     # running elsewhere, or not known
+            put(adapter, handle, sid, record("summary_outcome", f"summary_outcome:{n}", attempt=n, state="unknown"))
+        n += 1
+    started = put(adapter, handle, sid, record("summary_attempt", f"summary_attempt:{n}", attempt=n))
+    if started.outcome == "refused":
+        return {"ok": False, "error": "not_recorded", "state": "pending", "line": SUMMARY_PENDING}, 200
+    if started.outcome != "stored":                                   # another process began attempt n first
+        return {"ok": False, "state": "pending", "line": SUMMARY_PENDING}, 200
+    answer, status = summarize(adapter, principal, handle, sid, running=running, client=client)
+    put(adapter, handle, sid, record("summary_outcome", f"summary_outcome:{n}", attempt=n,
+                                     state=answer.get("state") or "unknown", error=answer.get("error")))
+    return answer, status
+
+
 def summarize(adapter, principal, handle, sid, *, running=0, client=None):
     """Generate and keep this session's summary proposal once, from the records kept when capture closed (its cutoff:
     a consult still ``running`` then, or a receipt kept later, is not in it, and it says so). The summary is a plain
@@ -1214,6 +1282,9 @@ def summarize(adapter, principal, handle, sid, *, running=0, client=None):
         bound += " A consult still running when the session ended is not in it."
     kept = store.keep_summary(handle, sid, "summary",
                               (PROPOSAL_HEAD + " " + bound + "\n\n" + adapter.scrub(written))[:adapter.note_max])
+    if kept.outcome == "idempotency_mismatch" and store.summary(handle, sid) is not None:
+        return {"ok": True, "repeated": True, "state": store.summary_state(handle, sid),       # another kept it first
+                "written": store.summary(handle, sid), "spoken": None}, 200
     if kept.outcome != "kept" or not kept.text:
         return unavailable("not_kept")
     return {"ok": True, "state": "proposed", "spoken": spoken, "written": kept.text,
@@ -1501,7 +1572,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             # (review R1 P3-6, R2 N5); with none, how much was kept is not known (a dropped session, R2 N6).
             store.mark_end(handle, sid, reason="summary",
                            capture=sessions.capture(sid, report if report else {"uncounted": not sessions.known(sid)}))
-        answer, status = summarize(adapter, who, handle, sid, running=running, client=summary_client)
+        answer, status = summary_attempt(adapter, sessions, who, handle, sid, running=running, client=summary_client,
+                                         clock=sessions.clock)
         return jsonify(answer), status
 
     @transcript.route("/api/realtime-voice/session/<session_id>/summary/decision", methods=["POST"])

@@ -274,13 +274,13 @@ await t.check('R2 N9: the session names its states, and leaving live or a later 
   await direct.s.end('user_ended'); await flush();
   assert.deepEqual(direct.lifecycle, ['live', 'ended']);                                  // End goes straight to ended
 });
-await t.check('item 8: the summary is awaited 45 s, then "Summary unavailable"; End during it still closes once', async () => {
+await t.check('item 8, CX V2-5: the summary is awaited 45 s; past it the page says it may still appear, never unavailable', async () => {
   const r = rig({ routes: { '/summary': () => new Promise(() => {}) } });
   await r.s.start('openai');
   r.s.sumUp(); await flush();
   r.advance(44999); await flush(); assert.deepEqual(r.c.ended, []);
   r.advance(1); await flush(20);
-  assert.deepEqual(r.c.ended, ['normal_end']); assert.deepEqual(r.ended.at(-1), [D.SUMMARY_UNAVAILABLE, { error: false }]);
+  assert.deepEqual(r.c.ended, ['normal_end']); assert.deepEqual(r.ended.at(-1), [D.SUMMARY_MAY_APPEAR, { error: false }]);
 });
 await t.check('R1 P3-7 (repro R3): a lost summary answer (504, 502, no answer) may still appear; a refusal could not be asked', async () => {
   for (const [answer, words, error] of [[{ status: 504, body: {} }, D.SUMMARY_MAY_APPEAR, false], [{ status: 502, body: {} }, D.SUMMARY_MAY_APPEAR, false],

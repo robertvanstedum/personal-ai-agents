@@ -115,3 +115,15 @@ def test_the_summary_is_a_plain_gateway_completion_with_no_tools(host):
     (sent,) = h.summaries()
     assert answer["state"] == "proposed" and sent["model"] == "minimoi-voice-summary"
     assert not {"tools", "tool_choice", "user"} & set(sent)
+
+
+def test_a_summary_attempt_is_recorded_once_and_a_second_ask_repeats_its_proposal(host):
+    """CX V2-5: the attempt's identity lives in the host's store, and a later ask, from any device, gets the same proposal."""
+    h = host
+    sid = h.start()
+    post(h, sid, [h.event("user", "t0", "We looked at #12. We're done.")])
+    asked = lambda: h.client.post(h.base + f"/session/{sid}/summary", headers=h.headers,  # noqa: E731
+                                  json={"conversation_id": h.cid}).get_json()
+    first, second = asked(), asked()
+    assert first["state"] == "proposed" and second["repeated"] is True and second["written"] == first["written"]
+    assert len(h.summaries()) == 1

@@ -54,7 +54,7 @@ export const NOT_HEARD = "I didn't catch that; say it again.";
 const HEAR_WAIT_MS = 3000;                // a model call waits this long for the transcript of the owner speech it answers
 const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
 const QUIET_WAIT_MS = 8000;               // a line for the voice waits this long for a pause, then is sent (the pause was missed)
-const SUMMARY_WAIT_MS = 45000;            // the summary's answer is awaited this long (Spec 165 §5.3), then "Summary unavailable"
+const SUMMARY_WAIT_MS = 45000;            // the summary's answer is awaited this long (Spec 165 §5.3); then it may still appear
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
 const END_WAIT_MS = 10000;                // End's answer is awaited this long; past it the page says the server did not confirm
 const REVEAL_WAIT_MS = 10000;             // the thread's reload is awaited this long before the session's end is shown
@@ -592,8 +592,10 @@ export function directVoice(d) {
           return;
         }
       }
-      if (r.status === -1 || (r.status === 200 && body.state === 'unavailable')) endedWords = [SUMMARY_UNAVAILABLE, false];
-      else if (r.status === 0 || r.status >= 500) endedWords = [SUMMARY_MAY_APPEAR, false];     // lost, maybe kept (R1 P3-7)
+      // "Summary unavailable" only when the server's attempt concluded so (review CX V2-5). The page's own bound, a lost
+      // answer (no answer, a proxy's 502/504) or an attempt still running (pending) may yet keep a proposal (R1 P3-7).
+      if (r.status === 200 && body.state === 'unavailable') endedWords = [SUMMARY_UNAVAILABLE, false];
+      else if (r.status === -1 || r.status === 0 || r.status >= 500 || (r.status === 200 && body.state === 'pending')) endedWords = [SUMMARY_MAY_APPEAR, false];
       else if (r.status !== 200) endedWords = [body.message || `${SUMMARY_REFUSED}${incomplete ? '' : ' What was said is kept.'}`, true];
       c?.endSession('normal_end');
     })();

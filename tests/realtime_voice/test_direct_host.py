@@ -96,8 +96,12 @@ class Gateway:
 
     def __init__(self, host):
         self.host, self.requests = host, []
+        self.entered, self.hold = threading.Event(), None       # a test may hold the gateway's answer
 
     def __call__(self, url, *, json, timeout, allow_redirects, headers):
+        self.entered.set()
+        if self.hold is not None:
+            assert self.hold.wait(5)
         self.requests.append({"url": url, "json": json, "timeout": timeout, "headers": headers,
                               "allow_redirects": allow_redirects})
         self.host.prompts.append(json["messages"][-1]["content"])

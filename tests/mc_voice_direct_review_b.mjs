@@ -25,7 +25,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' } };
 const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";      // Spec 165 §5.1's words
 const INCOMPLETE = (n) => `Voice ended. Some of what was said was not kept (${n} turn${n === 1 ? '' : 's'}). What was kept is in the conversation.`;   // §5.2
-const UNAVAILABLE = 'Summary unavailable.';                  // after the 45 s bound (Spec 165 §5.3; the server's call is bounded)
+const MAY_APPEAR = 'The summary may still appear in the conversation.';   // past the 45 s bound: not failure (review CX V2-5)
 
 function rig({ routes = {} } = {}) {
   const calls = [], said = [], ended = [], reveals = [];
@@ -211,7 +211,7 @@ await check('B3 a summary that does not answer in time ends honestly, once; a la
   r.s.sumUp(); await flush();
   r.advance(45000); await flush(20);
   assert.deepEqual(r.c.ended, ['normal_end']); assert.equal(r.posts('/end').length, 1);
-  assert.deepEqual(r.ended.at(-1), [UNAVAILABLE, { error: false }]);
+  assert.deepEqual(r.ended.at(-1), [MAY_APPEAR, { error: false }]);
   release(); await flush();
   assert.deepEqual(r.c.instructions, []); assert.equal(r.posts('/end').length, 1);
 });

@@ -609,3 +609,57 @@ def test_codex_a1_c1_a_backend_that_acts_then_raises_is_unknown_first_and_on_rep
     assert body["outcome"] == "unknown" and "did not go through" not in body["spoken"]
     replay = consult(r, sid).get_json()
     assert replay == body and len(effects) == 1
+
+
+# ── CX V2-5 (Codex's Spec 165 v0.2 delta review): a summary attempt has its own identity ────────────────────────────────
+
+def ask_summary(r, sid, client=None):
+    return (client or r.client).post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"})
+
+
+def test_two_devices_asking_at_once_get_one_generation_one_proposal_and_one_decision(rig):
+    import threading
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "We looked at the agenda. We're done.")])
+    r.gateway.hold = threading.Event()
+    answers = []
+    first = threading.Thread(target=lambda: answers.append(ask_summary(r, sid).get_json()))
+    first.start()
+    assert r.gateway.entered.wait(5)                                     # the first device's generation is running
+    second = threading.Thread(target=lambda: answers.append(ask_summary(r, sid).get_json()))   # the other device asks
+    second.start()
+    threading.Event().wait(0.1)
+    r.gateway.hold.set()
+    first.join(5); second.join(5)
+    assert len(r.gateway.requests) == 1                                  # one generation
+    assert {a["state"] for a in answers} == {"proposed"} and answers[0]["written"] == answers[1]["written"]
+    decided = [r.client.post(BASE + f"/session/{sid}/summary/decision", headers=OWNER,
+                             json={"conversation_id": "owner", "decision": d}) for d in ("confirm", "decline")]
+    assert decided[0].status_code == 200 and decided[1].status_code == 409   # one decision is kept
+    assert r.store.summary_state("owner", sid) == "confirmed"
+
+
+def test_an_attempt_recorded_elsewhere_is_pending_until_it_is_stale_and_unavailable_comes_only_from_a_concluded_one(rig):
+    from datetime import datetime, timezone
+    from core.realtime_voice.direct_host import record, stamp
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Words.")])
+    r.store.put("owner", sid, {**record("summary_attempt", "summary_attempt:1", attempt=1),
+                               "at": stamp(datetime.fromtimestamp(r.clock[0], timezone.utc))})   # another process, now
+    pending = ask_summary(r, sid).get_json()
+    assert pending["state"] == "pending" and not r.gateway.requests and r.store.summary("owner", sid) is None
+    assert ("summary-unavailable" not in {what for (_s, what) in r.store.summaries})
+    r.clock[0] += 61                                                    # its process died: no outcome after the bound
+    r.host.model = None                                                 # this attempt fails at the gateway
+    failed = ask_summary(r, sid).get_json()
+    assert failed["state"] == "unavailable" and len(r.gateway.requests) == 1
+    assert r.store.get("owner", sid, "summary_outcome:1")["state"] == "unknown"
+    assert r.store.get("owner", sid, "summary_outcome:2")["state"] == "unavailable"
+    r.host.model = '{"spoken": "Done.", "written": "- Words (turn-1)."}'
+    again = ask_summary(r, sid).get_json()                              # Ask for a summary, after it concluded
+    assert again["state"] == "proposed" and len(r.gateway.requests) == 2
+    assert r.store.get("owner", sid, "summary_attempt:3") is not None

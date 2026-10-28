@@ -137,7 +137,9 @@ export function voiceThread(d) {
       const body = r.body || {};
       if (r.status === 200 && body.ok) { box.remove(); await d.reveal?.(); return; }
       button.disabled = false;
+      // Still being written (an attempt already running, which this ask joined): no second one starts (review CX V2-5).
       tell(r.status === 200 && body.state === 'unavailable' ? 'Still unavailable. You can ask again later.'
+        : r.status === 200 && body.state === 'pending' ? 'The summary is still being written; it will appear here.'
         : body.message || (r.status === 0 ? 'The server did not answer. Nothing was changed.' : 'The summary could not be asked for. Nothing was changed.'));
     });
   }
