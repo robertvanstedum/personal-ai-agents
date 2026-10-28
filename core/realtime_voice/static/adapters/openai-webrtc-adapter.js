@@ -178,7 +178,8 @@ export class OpenAIWebRTCAdapter {
   _handleServerEvent(event) {
     switch (event.type) {
       case "input_audio_buffer.speech_started":
-        this._emit("speech_started", {});
+        // Spec 165 §5.1 (review W M1): the item this speech will be committed as, when the provider names it.
+        this._emit("speech_started", { item_id: event.item_id || null });
         break;
       case "input_audio_buffer.speech_stopped":
         this._emit("speech_stopped", {});

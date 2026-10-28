@@ -28,8 +28,8 @@ import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-outcome1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
-// Response attribution (Spec 165 §5.1; review V R2-M1): a response this controller asked for that has not started in this
-// long is taken as never coming; his ended utterance with no input item in this long is taken as noise (V note B).
+// Response attribution (Spec 165 §5.1; review V R2-M1, W M1): a response this controller asked for that has not started in
+// this long is taken as never coming; a speech span of his is owed its input item for this long after it ends (V note B).
 const REQUEST_TTL_MS = 10000;
 const MARK_TTL_MS = 3000;
 const OPENING_INSTRUCTION =
@@ -75,16 +75,14 @@ export class RealtimeVoiceController {
     this._onSessionInfo = onSessionInfo || (() => {});
     this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
     this._trackResponses = trackResponses;           // optional: tag each response this controller asks for (V R2-M1)
-    this._inputs = [];               // owner input items (provider ids), in the order they became known (Spec 165 §5.1)
-    this._utterance = null;          // inputs known when his current utterance began (speech_started), until it ends
-    this._ended = null;              // his utterance that ended and awaits its response: {index, spans, seq, at, committed}
+    this._spans = [];                // his speech spans, in order: {end: ms or null while he speaks, named: item id, committed}
+    this._owners = new Map();        // input item id -> the spans it may belong to (one: shown to be that span's)
+    this._answered = -1;             // spans up to this place have been answered by a response of the provider's
     this._commits = false;           // the adapter reports committed input (OpenAI's input_audio_buffer.committed)
     this._requests = [];             // responses this controller asked for, not yet started, in order: {owner, tag, seq, at, done}
-    this._seq = 0;                   // the order in which ended utterances and requests became known
+    this._seq = 0;                   // the order in which the requests were made
     this._echoed = false;            // the adapter has reported a request's tag back (OpenAI's response.metadata)
-    this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or a hold (below)
-    this._holds = [];                // holds not yet settled: a response bound to his utterance before its item was known,
-                                     // {at: when his speech ended, item: undefined until known, then its id, or null (void)}
+    this._answers = new Map();       // response id -> null, or {span}: the speech span of his it answers (inputOf)
     this._tags = 0;
     // Optional (review F2): a host that hears each owner item's completion once (MC's page). A replayed provider event, or
     // a second completion of an item already completed, is not a new turn. German and Portuguese pass no option.
@@ -215,9 +213,9 @@ export class RealtimeVoiceController {
       handler(event);
     });
     // Response attribution (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees it current.
-    on("connected", () => { this._utterance = this._ended = null; this._drop(this._requests.slice()); this._echoed = this._commits = false; this._void(); });
-    on("speech_started", () => { this._void(); if (this._utterance === null) this._utterance = this._inputs.length; });
-    on("speech_stopped", () => this._heardEnd());
+    on("connected", () => { this._spans = []; this._owners = new Map(); this._answered = -1; this._drop(this._requests.slice()); this._echoed = this._commits = false; });
+    on("speech_started", (evt) => this._speechStart(evt && evt.item_id));
+    on("speech_stopped", () => this._speechEnd());
     on("input_item", (evt) => this._committed(evt.item_id));
     on("input_transcript", (evt) => { this._fresh = this._firstCompletion(evt); this._sawInput(evt.item_id); });
     on("response_started", (evt) => this._started(evt));
@@ -376,44 +374,36 @@ export class RealtimeVoiceController {
     });
   }
 
-  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2, FR M2, V R2-M1). Each response is bound
-   *  when it starts, by where it came from:
+  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2, FR M2, V R2-M1, R3-S1, W M1). Each
+   *  response is placed when it starts, by where it came from:
    *  - a response this controller asked for: a function result's follow-up answers what the call it continues answered
-   *    (it inherits that call's owner item); the page's own instruction answers none of his inputs. Neither takes or uses
-   *    up his utterance;
-   *  - a response the provider made from his speech: it answers his utterance that ended (speech_stopped, or his input
-   *    committed), bound to the newest input item that appeared since that utterance began and before any later one began,
-   *    whether its transcript came before or after his speech ended, or committed or not; with none yet, it holds that
-   *    utterance (never a place a later one fills) until the first item to appear, with no new speech in between and
-   *    within MARK_TTL_MS of the end of his speech: new speech first, or the bound first, voids it (review F1). It binds
-   *    nothing when his next speech is already under way as it starts (review L M1), or when speech spans were merged and
-   *    not every span's item is known (L N1); with every item known, the newest. Where the
-   *    adapter reports committed input (OpenAI), only a committed utterance has a response. An ended utterance with no
-   *    input item for MARK_TTL_MS is noise and binds nothing;
-   *  - anything else (a response with no ended utterance and no request of this controller's) answers none of his inputs.
+   *    (it shares that call's claim); the page's own instruction answers none of his inputs. Neither takes his speech;
+   *  - a response the provider made from his speech: it answers his latest ended speech span not yet answered (where the
+   *    adapter reports committed input, as OpenAI does, only a committed one; never one that is noise, ended with no item
+   *    past its bound);
+   *  - anything else answers none of his inputs.
    *  Which is which: by the tag a request carries when the adapter reports it back (OpenAI's response.metadata, once seen
    *  in the session: then an untagged response is the provider's); else by order, the requests starting their responses
-   *  in the order they were sent. By order alone, a response that starts while one of the requests and his ended
-   *  utterance both wait is ambiguous: it binds nothing (its calls are refused as not heard), and both are let go
-   *  (review R3-S1). The call is bound to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
-   *  (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when the call is
-   *  bound to no owner input. Never the latest input by default. German and Portuguese do not call it. */
+   *  in the order they were sent. By order alone, a response that starts while one of the requests and his ended speech
+   *  both wait is ambiguous: it answers nothing, and both are let go (review R3-S1).
+   *  Attribution is one-to-one or nothing (review W M1; see _sawInput). A response of his answers its span's item once that
+   *  span has exactly one item shown to be its own, and pending while the span is still owed one; otherwise (an item that
+   *  could be another span's, two items, or none by its bound) it answers nothing, and its calls are refused as not heard.
+   *  The call is bound to its response by response_id. {state: "bound", index, text} once that item's transcript has
+   *  completed (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when
+   *  the call is bound to no owner input. Never the latest input by default. German and Portuguese do not call it. */
   inputOf(call) {
-    let owner = call && call.response_id ? this._answers.get(call.response_id) : undefined;
-    if (owner === undefined || owner === null) return null;
-    if (typeof owner === "object") owner = this._settled(owner);            // a hold: his utterance's item once known
-    if (owner === null) return null;
-    if (owner === undefined) return { state: "pending" };
+    const claim = call && call.response_id ? this._answers.get(call.response_id) : undefined;
+    if (!claim) return null;
+    const span = this._spanState(claim.span);
+    if (span.kind === "owed") return { state: "pending" };
+    if (span.kind !== "one") return null;
     const order = [...this._items.entries()].sort((a, b) => a[1].firstSeq - b[1].firstSeq);
-    const index = order.findIndex(([id]) => id === owner);
+    const index = order.findIndex(([id]) => id === span.item);
     if (index < 0) return { state: "pending" };
     const item = order[index][1];
     return item.completed ? { state: "bound", index, text: item.text || "" } : { state: "pending" };
   }
-
-  // Index access, not Array.prototype.at: these listeners run in every German, Portuguese and CoS session, and must work
-  // on every browser the controller ran on before (Safari before 15.4 has no .at; review FR S2).
-  _lastInput() { return this._inputs.length ? this._inputs[this._inputs.length - 1] : null; }
 
   // Whether a transcript event completes its item for the first time (read before the event is recorded).
   _firstCompletion(evt) {
@@ -422,54 +412,87 @@ export class RealtimeVoiceController {
     return !(item && item.completed);
   }
 
+  // One-to-one or nothing (Spec 165 §5.1: "could be bound to more than one turn, is refused or held, never guessed"; review
+  // W M1). Each speech span of his is owed an input item from its start until it has one, or until MARK_TTL_MS after it
+  // ends. Where the provider names a span's item (OpenAI's speech_started or committed item_id), that link stands and nothing
+  // is inferred. By order alone, an item that first appears belongs to the one span still owed an item, when there is exactly
+  // one; with several still owed, it could be any of them, so it belongs to none and taints them all; with none owed, it is
+  // an extra item for the open spans (a span with two items answers nothing either). Index access, never
+  // Array.prototype.at: these listeners run in every German, Portuguese and CoS session (Safari before 15.4; review FR S2).
   _sawInput(id) {
-    if (id && !this._inputs.includes(id)) { this._inputs.push(id); this._known(id); }
+    if (!id || this._owners.has(id)) return;
+    const now = Date.now();
+    const open = this._spans.filter((span) => !span.named && (span.end === null || now - span.end < MARK_TTL_MS));
+    const owed = open.filter((span) => this._spanState(span).kind === "owed");
+    this._owners.set(id, owed.length ? owed : open);
   }
 
-  // A hold (review F1): a response that started after his utterance ended, before that utterance had an input item, holds
-  // the utterance itself, never a place in _inputs that a later utterance fills. It settles on the first input item to
-  // appear after it, with no new speech in between and within MARK_TTL_MS of the end of his speech (the bound of the noise
-  // rule); new speech first, or the bound first, voids it (null): its calls, and the follow-ups of its calls, which share
-  // it, answer none of his inputs.
-  _hold(his) {
-    const hold = { at: his.at, item: undefined };
-    this._holds.push(hold);
-    return hold;
+  // A span's attribution now: one (its item), owed (no item yet, still speaking or within its bound), none (no item by its
+  // bound: noise), or bad (an item that could be another span's, or more than one item).
+  _spanState(span) {
+    let item = null, items = 0;
+    for (const [id, spans] of this._owners) {
+      if (spans.indexOf(span) < 0) continue;
+      if (spans.length > 1) return { kind: "bad" };
+      items += 1; item = id;
+    }
+    if (items > 1) return { kind: "bad" };
+    if (items === 1) return { kind: "one", item };
+    return span.end === null || Date.now() - span.end < MARK_TTL_MS ? { kind: "owed" } : { kind: "none" };
   }
 
-  _settled(hold) {
-    return hold.item === undefined && Date.now() - hold.at >= MARK_TTL_MS ? null : hold.item;
+  _speaking() {
+    const span = this._spans.length ? this._spans[this._spans.length - 1] : null;
+    return span && span.end === null ? span : null;
   }
 
-  _known(id) {
-    for (const hold of this._holds.splice(0)) hold.item = this._settled(hold) === null ? null : id;
+  _speechStart(item) {
+    let span = this._speaking();
+    if (!span) { span = { end: null, named: null, committed: false }; this._spans.push(span); }
+    if (item) this._name(span, item);
   }
 
-  _void() {
-    for (const hold of this._holds.splice(0)) hold.item = null;
+  _speechEnd() {
+    const span = this._speaking();
+    if (span) span.end = Date.now();
   }
 
-  // His utterance has ended (speech_stopped): its response is the provider's next one of its own. A second utterance
-  // ending before that response starts is merged with it (spans counts them): the response answers the newest of them
-  // only once every span's item is known; otherwise it could answer more than one, and binds nothing (review L N1).
-  _heardEnd() {
-    if (this._utterance === null) return;
-    this._ended = { index: this._ended ? this._ended.index : this._utterance, spans: (this._ended ? this._ended.spans : 0) + 1,
-      seq: ++this._seq, at: Date.now() };
-    this._utterance = null;
+  _name(span, item) {
+    span.named = item;
+    this._owners.set(item, [span]);
   }
 
-  // His input committed (OpenAI's input_audio_buffer.committed): his utterance has ended, whatever speech events came, and
-  // the provider's response to it may start. Where the adapter reports commits, only a committed utterance has one.
-  _committed(id) {
+  // His input committed (OpenAI's input_audio_buffer.committed): the span it closes is ended and named by the committed
+  // item; where the adapter reports commits, only a committed span has a response. A commit after his speech ended belongs
+  // to his latest span while that span is uncommitted, within its bound, and holds no other item; otherwise (a commit with
+  // no speech events) it is a new span.
+  _committed(item) {
     this._commits = true;
-    if (this._utterance !== null) this._heardEnd();
-    // A commit with no speech events is a new utterance, unless a response already holds his utterance for its item (F1):
-    // then it is that utterance's late commit, and settles the hold.
-    this._holds = this._holds.filter((hold) => this._settled(hold) === undefined || ((hold.item = null), false));   // expired: let go (L N2)
-    if (this._ended === null && id && !this._inputs.includes(id) && !this._holds.length) this._ended = { index: this._inputs.length, spans: 1, seq: ++this._seq, at: Date.now() };
-    if (this._ended) this._ended.committed = true;
-    this._sawInput(id);
+    let span = this._speaking();
+    if (span) span.end = Date.now();
+    else {
+      span = this._spans.length ? this._spans[this._spans.length - 1] : null;
+      const state = span ? this._spanState(span) : null;
+      if (!span || span.committed || Date.now() - span.end >= MARK_TTL_MS || (span.named && span.named !== item)
+          || (state.kind === "one" && state.item !== item)) {
+        span = { end: Date.now(), named: null, committed: false };
+        this._spans.push(span);
+      }
+    }
+    span.committed = true;
+    if (item) this._name(span, item);
+  }
+
+  // His latest ended span not yet answered, by its place, when a response of the provider's may answer it: committed where
+  // the adapter reports commits, and not noise. Else null.
+  _his() {
+    for (let i = this._spans.length - 1; i > this._answered; i--) {
+      const span = this._spans[i];
+      if (span.end === null) continue;
+      if ((this._commits && !span.committed) || this._spanState(span).kind === "none") return null;
+      return i;
+    }
+    return null;
   }
 
   // A response this controller asks for (a function result's follow-up, the opening or continuation instruction, or the
@@ -505,15 +528,14 @@ export class RealtimeVoiceController {
   _started(evt) {
     const now = Date.now(), id = evt.response_id || null;
     this._drop(this._requests.filter((r) => now - r.at >= REQUEST_TTL_MS));
-    if (this._ended && this._inputs.length <= this._ended.index && now - this._ended.at >= MARK_TTL_MS) this._ended = null;
-    const his = this._ended && (!this._commits || this._ended.committed) ? this._ended : null;
+    const his = this._his();
     let mine = null;
     if (evt.tag) {
       this._echoed = true;
       mine = this._requests.find((r) => r.tag === evt.tag) || { owner: null };   // a request of another page: not his
     } else if (!this._echoed && this._requests.length) {
-      if (his) {                                    // by order alone, a request of ours and his utterance both wait:
-        this._ended = null;                         // which one this is cannot be told, so it binds nothing and both are
+      if (his !== null) {                           // by order alone, a request of ours and his speech both wait:
+        this._answered = his;                       // which one this is cannot be told, so it binds nothing and both are
         this._drop([this._requests[0]]);            // let go; its calls are refused as not heard (review R3-S1)
         if (id) this._answers.set(id, null);
         return;
@@ -524,15 +546,9 @@ export class RealtimeVoiceController {
     if (mine) {
       owner = mine.owner;
       this._drop([mine], id);
-    } else if (his) {
-      const known = this._utterance === null ? this._inputs.length : Math.min(this._utterance, this._inputs.length);
-      this._ended = null;
-      // Bound only to what it can be shown to answer: the newest item once every span's item is known; a hold for a single
-      // span whose item is not known yet; nothing when spans were merged and an item is missing (review L N1), or when his
-      // next speech is already under way, since a hold made now could settle on that speech's item (review L M1).
-      if (known - his.index >= his.spans) owner = this._inputs[known - 1];
-      else if (his.spans > 1 || this._utterance !== null) owner = null;
-      else owner = this._hold(his);
+    } else if (his !== null) {
+      this._answered = his;
+      owner = { span: this._spans[his] };          // its item, once shown (inputOf)
     }
     if (id) this._answers.set(id, owner);
   }

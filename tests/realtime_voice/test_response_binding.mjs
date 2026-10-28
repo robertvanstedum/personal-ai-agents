@@ -267,7 +267,10 @@ for (const [name, make, commits] of [['xAI', () => new XAIWebSocketAdapter(), fa
     a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
     assert.equal(s.bound(s.calls[1]), null, 'the follow-up was bound to the cough or his next words');
     const b = s.bound(s.calls[2]);
-    assert.equal(b && b.text, 'Make a note that the glaze is ready', 'his next request was bound to another turn');
+    // W M1: on xAI the cough (no item) is still owed one when B's words appear, so they could be the cough's: re-asked.
+    // OpenAI commits both, naming each item: B's request is his own.
+    if (!commits) assert.equal(b, null, 'bound an item that could be the cough\'s');
+    else assert.equal(b && b.text, 'Make a note that the glaze is ready', 'his next request was bound to another turn');
   });
   await check(`R3-S1 case H (${name}): a request that never starts: his next request binds nothing, and the one after is his own`, async () => {
     const a = make(); const s = session(a, { trackResponses: true });
@@ -288,12 +291,13 @@ for (const [name, make, commits] of [['xAI', () => new XAIWebSocketAdapter(), fa
 }
 
 // F1 (Codex's delta review at a17ddc8d, P1; its response_origin.mjs, asserting the correct behaviour): a response that
-// starts after his utterance ended, before that utterance has an input item, holds that utterance, never a place in the
-// list of inputs that a later utterance fills. It binds only to an item shown to be that utterance's: the first to appear
-// after it, with no new speech in between and within its bound (MARK_TTL_MS, 3 s from the end of his speech). New speech
-// first, or the bound passing first, voids it: its calls, and the follow-ups of its calls, answer none of his inputs
-// ("I didn't catch that; say it again"). On xAI, and on OpenAI with and without its response tag reported back; on
-// OpenAI the cough's utterance is not committed (the order in which OpenAI commits is not observed live).
+// starts after his utterance ended, before that utterance has an input item, answers that utterance, never a place in the
+// list of inputs that a later utterance fills. Since W M1 the rule is one-to-one or nothing: it binds only an item shown to
+// be its span's (named by the provider, or appearing while that span is the only one still owed an item, within 3 s of
+// the end of its speech). An item that could be another span's, or none by the bound, binds nothing: its calls, and the
+// follow-ups of its calls, answer none of his inputs ("I didn't catch that; say it again"). On xAI, and on OpenAI with and
+// without its response tag reported back; on OpenAI the cough's utterance is not committed (the order in which OpenAI
+// commits is not observed live).
 const F1_LATER = 'Save a note: a later request';
 for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter(), false, false],
   ['OpenAI, tag reported back', () => new OpenAIWebRTCAdapter(), true, true],
@@ -334,9 +338,13 @@ for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter
         a._handleServerEvent({ type: 'response.created', response: { id: 'R_later' } });      // his own response
         a._handleServerEvent(callIn('noise_response', 'noise_call')); await tick();          // the cough's delayed call
         a._handleServerEvent(callIn('R_later', 'later_call')); await tick();
+        pass(3000);                                                    // the cough's span is past its bound
+        assert.equal(s.bound(s.calls[0]), null, "the cough's call took the later utterance's item and words");
+        // W M1: inside 3 s on xAI the cough is still owed an item when his words appear, so they could be the cough's: his
+        // own response re-asks ("say it again"). Where the provider names the item (OpenAI's commit), it binds.
+        if (gap < 3000 && !commits) assert.equal(s.bound(s.calls[1]), null, 'bound an item that could be the cough\'s');
+        else assert.deepEqual(s.bound(s.calls[1]), { state: 'bound', index: 0, text: F1_LATER });
       });
-      assert.equal(s.bound(s.calls[0]), null, "the cough's call took the later utterance's item and words");
-      assert.deepEqual(s.bound(s.calls[1]), { state: 'bound', index: 0, text: F1_LATER });
     });
   }
   await check(`F1 new speech before a late item (${name}): the binding is void, and the item is not taken`, async () => {
@@ -369,31 +377,36 @@ for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter
       pass(2500);                                                      // 3 s since his speech ended
       assert.equal(s.bound(s.calls[0]), null, 'still pending past its bound');
       a._handleServerEvent(said('item_late', 'Make a note that the glaze is ready'));     // no new speech, but too late
+      assert.equal(s.bound(s.calls[0]), null, 'bound to an item that appeared past its bound');
     });
-    assert.equal(s.bound(s.calls[0]), null, 'bound to an item that appeared past its bound');
   });
   await check(`F1 follow-up inheritance (${name}): the follow-up of a voided response's call answers none of his inputs`, async () => {
     const { a, s } = open();
-    cough(a);
-    a._handleServerEvent({ type: 'response.created', response: { id: 'R0' } });
-    a._handleServerEvent(callIn('R0', 'call_0', 'consult')); await tick();                 // its result: the follow-up asked for
-    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });                     // B begins: R0's binding is void
-    a._handleServerEvent(started(s, 'R_f', echo));                                          // the follow-up starts
-    a._handleServerEvent(callIn('R_f', 'call_f', 'save_note')); await tick();
-    a._handleServerEvent(started(s, 'R_f2', echo));                                         // that call's own follow-up
-    a._handleServerEvent({ type: 'response.done', response: { id: 'R_f2', output: [] } });
-    a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
-    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
-    if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'item_B' });
-    a._handleServerEvent({ type: 'response.created', response: { id: 'R_B' } });
-    a._handleServerEvent(callIn('R_B', 'call_B', 'save_note')); await tick();
-    assert.equal(s.bound(s.calls[0]), null, "the voided response's call was bound");
-    assert.equal(s.bound(s.calls[1]), null, 'the follow-up took his new words');
-    assert.deepEqual(s.bound(s.calls[2]), { state: 'bound', index: 0, text: 'Make a note that the glaze is ready' });
+    await clocked(async (pass) => {
+      cough(a);
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R0' } });
+      a._handleServerEvent(callIn('R0', 'call_0', 'consult')); await tick();                 // its result: the follow-up asked for
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });                     // B begins: R0's binding is void
+      a._handleServerEvent(started(s, 'R_f', echo));                                          // the follow-up starts
+      a._handleServerEvent(callIn('R_f', 'call_f', 'save_note')); await tick();
+      a._handleServerEvent(started(s, 'R_f2', echo));                                         // that call's own follow-up
+      a._handleServerEvent({ type: 'response.done', response: { id: 'R_f2', output: [] } });
+      a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+      if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'item_B' });
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R_B' } });
+      a._handleServerEvent(callIn('R_B', 'call_B', 'save_note')); await tick();
+      pass(3000);                                                        // the cough's span is past its bound
+      assert.equal(s.bound(s.calls[0]), null, "the voided response's call was bound");
+      assert.equal(s.bound(s.calls[1]), null, 'the follow-up took his new words');
+      // W M1: on xAI his words appeared while the cough was still owed an item: re-asked. OpenAI's commit names them.
+      if (!commits) assert.equal(s.bound(s.calls[2]), null, 'bound an item that could be the cough\'s');
+      else assert.deepEqual(s.bound(s.calls[2]), { state: 'bound', index: 0, text: 'Make a note that the glaze is ready' });
+    });
   });
   // L M1 (the last pass's verification, must-fix; the reviewer's probe, asserting the correct behaviour): the cough's
-  // response starts after Robert has begun his next words. A hold made then could settle on either utterance's item, so it
-  // is never made: the response binds nothing.
+  // response starts after Robert has begun his next words. Under W M1's one-to-one rule an item appearing then could be
+  // either utterance's, so the cough's response binds nothing.
   await check(`L M1 (${name}): a cough's response that starts after his next speech began never takes that speech`, async () => {
     const { a, s } = open();
     await clocked(async (pass) => {
@@ -408,9 +421,12 @@ for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter
       a._handleServerEvent({ type: 'response.created', response: { id: 'R_real' } });         // his own response
       a._handleServerEvent(callIn('noise', 'noise_call')); await tick();
       a._handleServerEvent(callIn('R_real', 'real_call')); await tick();
+      pass(3000);                                                      // the cough's span is past its bound
+      assert.equal(s.bound(s.calls[0]), null, "the cough's call took his next words");
+      // W M1: on xAI his words appeared while the cough was still owed an item: re-asked. OpenAI's commit names them.
+      if (!commits) assert.equal(s.bound(s.calls[1]), null, 'bound an item that could be the cough\'s');
+      else assert.deepEqual(s.bound(s.calls[1]), { state: 'bound', index: 0, text: 'Save a note: the real request' });
     });
-    assert.equal(s.bound(s.calls[0]), null, "the cough's call took his next words");
-    assert.deepEqual(s.bound(s.calls[1]), { state: 'bound', index: 0, text: 'Save a note: the real request' });
   });
   // L N1 (pre-existing; the reviewer's probe): two speech spans end before one response starts, and neither item is known
   // yet. The response could answer either: it binds nothing, never the first item to appear. Where every span's item is
@@ -424,14 +440,17 @@ for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter
     a._handleServerEvent(callIn('R_both', 'call_both')); await tick();
     assert.equal(s.bound(s.calls[0]), null, 'a merged response was bound to the first item to appear');
   });
-  await check(`L N1 (${name}): merged speech spans with only the first item known bind nothing`, async () => {
+  // W M1 restates this L N1 case: U1 has its item, and U2's item appears while U2 is the only span still owed one, so it is
+  // one-to-one and binds (L N1 had refused it). On OpenAI U2 is not committed, so it has no response of its own.
+  await check(`L N1 (${name}): merged speech spans, the second item appearing while only its span is owed, bind one-to-one`, async () => {
     const { a, s } = open();
     utterance(a, 'item_u1', 'Hmm, let me think.');                    // U1's item known
     cough(a);                                                          // U2 ends, its item not known yet
     a._handleServerEvent({ type: 'response.created', response: { id: 'R_both' } });
     a._handleServerEvent(said('item_u2', 'Save a note that the kiln is hot'));
     a._handleServerEvent(callIn('R_both', 'call_both')); await tick();
-    assert.equal(s.bound(s.calls[0]), null, 'a merged response was bound to the one item known');
+    if (commits) assert.equal(s.bound(s.calls[0]), null);
+    else assert.deepEqual(s.bound(s.calls[0]), { state: 'bound', index: 1, text: 'Save a note that the kiln is hot' });
   });
   await check(`L N1 guard (${name}): merged speech spans whose items are all known still bind the newest`, async () => {
     const { a, s } = open();
@@ -440,6 +459,84 @@ for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter
     a._handleServerEvent({ type: 'response.created', response: { id: 'R_both' } });
     a._handleServerEvent(callIn('R_both', 'call_both')); await tick();
     assert.deepEqual(s.bound(s.calls[0]), { state: 'bound', index: 1, text: 'Save a note that the kiln is hot' });
+  });
+  // W M1 (the verification at d886bbf0, must-fix; the mirror of L M1): an utterance U0 ends with no item; Robert begins U1;
+  // U0's late item appears while U0 is still owed it. It cannot be shown whose it is, so neither U0's response nor U1's
+  // takes it: attribution is one-to-one or nothing. The reviewer's three orders, the hold variant and the L M1 path. On
+  // OpenAI this is its first utterance (no commit seen before U1's own).
+  const A0 = 'Save a note that A', B1 = 'and check the board';
+  const upd = (item, text) => ({ type: 'conversation.item.input_audio_transcription.updated', item_id: item, transcript: text, completed: false, event_id: `u_${item}` });
+  const vm1 = [
+    ['order 1: U0\'s item during U1, U1\'s response before U1\'s item', (a, pass) => {
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+      pass(300); a._handleServerEvent(said('u0', A0));
+      pass(1500); a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R1' } });
+      if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'u1' });
+      a._handleServerEvent(said('u1', B1));
+    }],
+    ['order 2: U1\'s interim first, then U0\'s item', (a, pass) => {
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+      pass(300); a._handleServerEvent(upd('u1', 'and check'));
+      pass(200); a._handleServerEvent(said('u0', A0));
+      pass(1000); a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+      if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'u1' });
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R1' } });
+      a._handleServerEvent(said('u1', B1));
+    }],
+    ['order 3 (the hold): U1\'s response starts, then U0\'s item', (a, pass) => {
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+      pass(1000); a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R1' } });
+      pass(200); a._handleServerEvent(said('u0', A0));
+      if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'u1' });
+      a._handleServerEvent(said('u1', B1));
+    }]];
+  for (const [label, rest] of vm1) {
+    for (const lmPath of [false, true]) {
+      await check(`W M1 ${label}${lmPath ? ', R0 after U1 began (the L M1 path)' : ''} (${name}): neither response takes U0's late item`, async () => {
+        const { a, s } = open();
+        await clocked(async (pass) => {
+          cough(a);                                                    // U0 ends: "Save a note that A", no item yet
+          if (!lmPath) a._handleServerEvent({ type: 'response.created', response: { id: 'R0' } });
+          pass(600);
+          rest(a, (ms) => { pass(ms); if (lmPath && !s.started) { s.started = true; a._handleServerEvent({ type: 'response.created', response: { id: 'R0' } }); } });
+          a._handleServerEvent(callIn('R0', 'c0')); await tick();
+          a._handleServerEvent(callIn('R1', 'c1')); await tick();
+          const r0 = s.bound(s.calls[0]), r1 = s.bound(s.calls[1]);
+          assert.notEqual(r1 && r1.text, A0, "U1's response took U0's words");
+          assert.notEqual(r0 && r0.text, B1, "U0's response took U1's words");
+          assert.equal(r1, null, "U1's response bound an item it cannot prove is U1's");
+          assert.equal(r0 && r0.state === 'bound' ? r0.text : null, null, "U0's response bound an item it cannot prove is U0's");
+        });
+      });
+    }
+  }
+  // W N4 (the verification at d886bbf0): items are counted per span, one-to-one. One span that yields two items binds
+  // neither fragment; a span with two items plus a span with none binds nothing.
+  await check(`W N4 (${name}): one span that yields two items binds neither fragment`, async () => {
+    const { a, s } = open();
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+    a._handleServerEvent(said('frag_a', 'Make a note'));
+    a._handleServerEvent(said('frag_b', 'that the kiln is hot'));
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R' } });
+    a._handleServerEvent(callIn('R', 'c')); await tick();
+    assert.equal(s.bound(s.calls[0]), null);
+  });
+  await check(`W N4 (${name}): a span with two items and a span with none bind nothing`, async () => {
+    const { a, s } = open();
+    await clocked(async (pass) => {
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+      a._handleServerEvent(said('frag_a', 'Make a note'));
+      a._handleServerEvent(said('frag_b', 'that the kiln is hot'));
+      a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+      cough(a);
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R' } });
+      a._handleServerEvent(callIn('R', 'c')); await tick();
+      pass(3000);
+      assert.equal(s.bound(s.calls[0]), null);
+    });
   });
 }
 
@@ -488,4 +585,4 @@ if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1, F1, F2, L M1, L N1, L N2); real controller and adapters, synthetic provider events.`);
+console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1, F1, F2, L M1, L N1, L N2, W M1, W N4); real controller and adapters, synthetic provider events.`);
