@@ -28,6 +28,7 @@ export const SERVER_ENDED = {
   csrf: 'Voice stopped: this page is out of date. Reload it. What was said before is kept.',
   refused: 'Voice stopped: the server refused this voice session. What was said before is kept.',
 };
+export const ALREADY_CHECKED = 'Already checked; say it again to re-ask.';
 export const EDIT_MAX = 1860;
 const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
 const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its next turn, or after this
@@ -198,7 +199,8 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
 }
 
 // One direct voice session. `ui` is mc_voice.js's: say(text, {error, loud, transient}), phase(state), live(on), elapsed(text),
-// notice(text), propose(on), ended(words, {error}) (the session ended by itself; mc_voice.js resets its button).
+// notice(text), propose(on), checking(on) (Check with MC in flight), ended(words, {error}) (the session ended by itself;
+// mc_voice.js resets its button).
 export function directVoice(d) {
   const { page, direct, ui } = d;
   const clock = d.clock || Date.now;
@@ -210,6 +212,7 @@ export function directVoice(d) {
   let connected = false, finalized = false, failed = false, proposing = false, keepalive = false;
   let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, endAfterTurn = null, ending = null, endedWords = null;
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
+  let ownerTurn = 0, consultedTurn = -1, checking = false;          // Robert's turns, counted; the last one consulted
   const done = new Promise((resolve) => { closed = resolve; });     // settles once End is sent and the thread is reloaded
   done.then(() => { settled = true; });
 
@@ -254,6 +257,7 @@ export function directVoice(d) {
     let advisory = args;
     if (typeof advisory === 'string') { try { advisory = JSON.parse(advisory); } catch (e) { advisory = {}; } }
     if (!advisory || typeof advisory !== 'object' || Array.isArray(advisory)) advisory = {};
+    if (lastOwner) consultedTurn = ownerTurn;                          // by the model or by Check with MC
     try {
       const r = await postJson(direct.consult_url, { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: lastOwner,
         arguments: advisory });
@@ -268,16 +272,22 @@ export function directVoice(d) {
     } finally { cancel(holding); }
   }
 
-  // Check with MC: the host asks for Robert's last words, then has the voice say the answer, adding nothing.
+  // Check with MC: the host asks for Robert's last words, then has the voice say the answer, adding nothing. One at a time
+  // (the button is disabled meanwhile), and never twice for the same turn of his, whoever consulted it: a repeat would run a
+  // second typed turn and could start a second job (UI review #3). Saying the words again makes a new turn to check.
   async function check() {
-    if (!connected || finalized) return;
+    if (!connected || finalized || checking) return;
     if (!lastOwner) { ui.say('Say something first: Check with MC sends your last words.', { transient: true }); return; }
-    ui.phase('working');
-    const body = await consult(`host-${clock()}`, 'consult', {});
-    if (finalized) return;
-    const spoken = body && typeof body.spoken === 'string' && body.spoken.trim() ? body.spoken.trim() : NOT_DONE;
-    speak(`Say this briefly, adding nothing: ${spoken}`);
-    ui.phase('listening');
+    if (consultedTurn === ownerTurn) { ui.say(ALREADY_CHECKED, { transient: true }); return; }
+    checking = true; ui.checking?.(true);
+    try {
+      ui.phase('working');
+      const body = await consult(`host-${clock()}`, 'consult', {});
+      if (finalized) return;
+      const spoken = body && typeof body.spoken === 'string' && body.spoken.trim() ? body.spoken.trim() : NOT_DONE;
+      speak(`Say this briefly, adding nothing: ${spoken}`);
+      ui.phase('listening');
+    } finally { checking = false; ui.checking?.(false); }
   }
 
   // §7: the summary. The route ends capture and asks MC's own model path; the voice says the spoken part, then the session ends.
@@ -387,7 +397,7 @@ export function directVoice(d) {
       },
       onPlayback: () => {},
       onTranscriptUpdate: (turns) => { if (!finalized) capture.update(turns); },
-      onUserTurn: (text) => { if (typeof text === 'string' && text.trim()) lastOwner = text.trim(); },
+      onUserTurn: (text) => { if (typeof text === 'string' && text.trim()) { lastOwner = text.trim(); ownerTurn += 1; } },
       onAssistantTurn: () => { if (endAfterTurn) endAfterTurn(); },
       onFunctionCall: (call) => consult(call.call_id, call.name, call.arguments),
       onFinalize: (result) => finalize(result),

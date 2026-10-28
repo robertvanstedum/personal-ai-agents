@@ -170,6 +170,29 @@ for (const who of ['dictation', 'companion-closed']) {
   assert.equal(r.posts('/end')[1].opts.keepalive, true);
   n++;
 }
+// UI review #3: Check with MC is disabled while its consult is in flight; a double tap sends one consult.
+{
+  const r = await rig();
+  await r.click();
+  let release;
+  const original = r.sandbox.fetch;
+  r.sandbox.fetch = async (url, opts) => {
+    if (!url.endsWith('/consult')) return original(url, opts);
+    r.calls.push({ url, opts, body: JSON.parse(opts.body) });
+    await new Promise((res) => { release = res; });
+    return { ok: true, status: 200, json: async () => ({ ok: true, spoken: 'Done.' }) };
+  };
+  r.instances[0].options.onUserTurn('Run the nightly job.');
+  await r.click('[data-mc-voice-check]'); await r.click('[data-mc-voice-check]');
+  assert.equal(r.posts('/consult').length, 1);
+  assert.equal(r.node('[data-mc-voice-check]').disabled, true);
+  release(); await flush();
+  assert.equal(r.node('[data-mc-voice-check]').disabled, false);
+  await r.click('[data-mc-voice-check]');
+  assert.equal(r.posts('/consult').length, 1);
+  assert.equal(r.status(), 'Already checked; say it again to re-ask.');
+  n++;
+}
 // §7: while "Shall I sum up?" is offered, End asks for the summary (as Sum up does); an error line stays until the next send.
 {
   const r = await rig({ summary: { status: 403, body: { error: 'csrf', message: 'This page is out of date. Reload it.' } } });

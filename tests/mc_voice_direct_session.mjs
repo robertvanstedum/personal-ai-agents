@@ -14,7 +14,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
 const HEADERS = { 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-synthetic', 'X-Record-Mode': 'on_record' };
 
 function rig({ routes = {}, refuse = null, holdConnect = false, conversation = 'c-1', notices = ['openai voice is unset, using marin', 'xai voice is unset, using eve'] } = {}) {
-  const calls = [], said = [], phases = [], live = [], elapsed = [], notice = [], propose = [], ended = [], reveals = [];
+  const calls = [], said = [], phases = [], live = [], elapsed = [], notice = [], propose = [], ended = [], reveals = [], checking = [];
   const timers = new Map(); let nextTimer = 1, now = Date.parse('2026-10-28T10:00:00.000Z');
   const later = (fn, ms, repeat = false) => { const id = nextTimer++; timers.set(id, { fn, ms, repeat, due: now + ms }); return id; };
   const advance = (ms) => {
@@ -69,14 +69,14 @@ function rig({ routes = {}, refuse = null, holdConnect = false, conversation = '
   }
   const ui = {
     say: (text, o = {}) => said.push([text, o]), phase: (p) => phases.push(p), live: (on) => live.push(on), elapsed: (t) => elapsed.push(t),
-    notice: (t) => notice.push(t), propose: (on) => propose.push(on), ended: (words, o) => ended.push([words, o]),
+    notice: (t) => notice.push(t), propose: (on) => propose.push(on), ended: (words, o) => ended.push([words, o]), checking: (on) => checking.push(on),
   };
   const page = { conversation: conversation ? { id: conversation } : null };
   const s = D.directVoice({ page, direct: DIRECT, ui, headers: () => ({ ...HEADERS }), fetch, reveal: async () => { reveals.push(true); },
     loadController: async () => ({ RealtimeVoiceController: Controller }), clock: () => now,
     setTimeout: (fn, ms) => later(fn, ms), clearTimeout: (id) => timers.delete(id),
     setInterval: (fn, ms) => later(fn, ms, true), clearInterval: (id) => timers.delete(id) });
-  return { s, calls, said, phases, live, elapsed, notice, propose, ended, reveals, timers, advance, get c() { return controller; },
+  return { s, calls, said, phases, live, elapsed, notice, propose, ended, reveals, checking, timers, advance, get c() { return controller; },
     posts: (end) => calls.filter((c) => c.url.endsWith(end)), now: () => now, tick: (ms) => { now += ms; } };
 }
 const at = (r, t) => new Date(t).toISOString();
@@ -197,6 +197,33 @@ for (const [status, detail, words] of [
   assert.equal(body.call_id.length <= 80, true);
   assert.equal(body.owner_transcript_item, 'Is the kiln job done?');
   assert.deepEqual(r.c.instructions, ['Say this briefly, adding nothing: Item 12 is in build.']);
+  scenarios++;
+}
+// UI review #3: Check with MC runs one at a time (a double tap sends one consult) and never twice for the same turn of
+// Robert's, whoever consulted it; saying it again is a new turn and may be checked.
+{
+  let release = null;
+  const r = rig({ routes: { '/consult': () => (release === null ? new Promise((res) => { release = () => res({ status: 200, body: { ok: true, spoken: 'Done.' } }); }) : null) } });
+  await r.s.start('openai');
+  r.c.options.onUserTurn('Run the nightly job.');
+  const first = r.s.check();
+  const second = r.s.check();                                                             // the double tap
+  await flush();
+  assert.equal(r.posts('/consult').length, 1);
+  assert.deepEqual(r.checking, [true]);                                                   // the button is disabled meanwhile
+  release(); await first; await second;
+  assert.deepEqual(r.checking, [true, false]);
+  await r.s.check();                                                                      // the same turn again
+  assert.equal(r.posts('/consult').length, 1);
+  assert.deepEqual(r.said.at(-1), [D.ALREADY_CHECKED, { transient: true }]);
+  r.c.options.onUserTurn('Run the nightly job.');                                         // said again: a new turn
+  await r.s.check();
+  assert.equal(r.posts('/consult').length, 2);
+  r.c.options.onUserTurn('What is stuck on #12?');
+  await r.c.options.onFunctionCall({ call_id: 'call_m', name: 'consult', arguments: {} });  // the model consulted it
+  await r.s.check();
+  assert.equal(r.posts('/consult').length, 3);
+  assert.deepEqual(r.said.at(-1), [D.ALREADY_CHECKED, { transient: true }]);
   scenarios++;
 }
 // §5: each item posted once when it completes, keyed by place; an interrupted reply posted partial; a heartbeat every 20 s.

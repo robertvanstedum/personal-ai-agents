@@ -194,6 +194,7 @@ export function initMcVoice(page) {
       elapsed:(text)=>{const n=$('[data-mc-voice-elapsed]');if(n)n.textContent=text;},
       notice:(text)=>{const n=$('[data-mc-voice-notice]');if(n){n.textContent=text||'';n.hidden=!text;}},
       propose:(on)=>{const p=$('[data-mc-voice-propose]');if(p)p.hidden=!on||!current();if(on&&current())announce('Shall I sum up?');},
+      checking:(on)=>{const b=$('[data-mc-voice-check]');if(b)b.disabled=Boolean(on);},
       // The session ended by itself (a refusal, the provider, the summary, the time limit): the button is ready again.
       ended:(words,{error=false}={})=>{
         if(directSession===mineSession)directSession=null;
