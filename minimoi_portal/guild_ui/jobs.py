@@ -585,6 +585,13 @@ class JobManager:
         note = self._note(job)
         ctx = (note or {}).get("context") or {}
         floor = self._floor(job)
+        # A job started from a voice consult: its result is that voice session's record, tagged before it is written,
+        # so it is withheld while the session is live and revealed with it (mc_voice_reveal.tag_for_turn).
+        try:
+            from .mc_voice_reveal import tag_for_turn
+            tag_for_turn(floor, job.get("note_id"), result_request_id(jid))
+        except Exception:
+            log.exception("job %s: voice session tag not kept; the result is still posted", jid)
         kept = floor.add_note(result_request_id(jid), job["result_pending"], MASTER_CRAFTSMAN, area=ctx.get("area"),   # 2: posted once
                               item_ref=ctx.get("item_ref"), page=ctx.get("page"))
         if getattr(kept, "outcome", None) != "kept" or not getattr(kept, "value", None):

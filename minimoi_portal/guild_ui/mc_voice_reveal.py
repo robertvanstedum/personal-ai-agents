@@ -110,6 +110,18 @@ def mark_tag(floor, sid, request_id):
     return kept.outcome == "kept" and bool(kept.value)
 
 
+def tag_for_turn(floor, owner_turn, request_id):
+    """Tag a note written outside a consult's own request (an MC tool callback's notice, a job's later result) with the
+    voice session whose consult note is ``owner_turn`` (vc-<session>-<n>), before it is written. Returns the session,
+    or None when the owner turn is not a voice consult (a typed turn: nothing is tagged)."""
+    match = _CONSULT_ID.fullmatch(str(owner_turn or ""))
+    if match is None or not isinstance(request_id, str):
+        return None
+    sid = str(uuid.UUID(match.group(1)))
+    mark_tag(floor, sid, request_id)
+    return sid
+
+
 def _tag_of(row):
     """(tagged request id, session) for a tag note, else None."""
     sid = session_of(row)

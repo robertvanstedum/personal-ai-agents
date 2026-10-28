@@ -318,17 +318,33 @@ def _conversation_floor(services, principal, conversation_id):
 def proposal_shower(services, principal):
     """``show(conversation_id, note_key, text) -> bool``: the platform keeps a proposal, word for word, as its own note
     in that conversation, so Robert approves what the platform showed, not MC's retelling (review P1-1). The note key
-    is the proposal's own: a repeat keeps one note, and different text under it is refused (spec §9.1)."""
-    def show(conversation_id, note_key, text):
+    is the proposal's own: a repeat keeps one note, and different text under it is refused (spec §9.1).
+
+    ``owner_turn`` is the tool binding's owner note. When it is a voice consult's note, a notice (a kept or undone
+    lesson) is tagged with that voice session before it is written, so it is withheld while the session is live and
+    revealed with it (mc_voice_reveal.tag_for_turn). A proposal card is NOT tagged, on purpose: Robert approves the exact
+    card the platform showed, by its code (review P1-1, spec §9.1), so it stays on the page while voice is live."""
+    def show(conversation_id, note_key, text, owner_turn=None):
         from .stores import GUILD_PLATFORM
         try:
             floor = _conversation_floor(services, principal, conversation_id)
-            return floor is not None and \
-                floor.add_note(note_key, text, GUILD_PLATFORM, area="Guild", page="mc").outcome == "kept"
+            if floor is None:
+                return False
+            if owner_turn is not None and not note_key.startswith(PROPOSAL_CARD_PREFIX):
+                from .mc_voice_reveal import tag_for_turn
+                try:
+                    tag_for_turn(floor, owner_turn, note_key)
+                except Exception:                              # the notice still goes; it may show while voice is live
+                    _log.exception("mc tools: voice session tag not kept")
+            return floor.add_note(note_key, text, GUILD_PLATFORM, area="Guild", page="mc").outcome == "kept"
         except Exception:
             _log.exception("mc tools: proposal could not be shown")
             return False
+    show.owner_turn = True                         # core.mc_tools.service passes the binding's owner note to this shower
     return show
+
+
+PROPOSAL_CARD_PREFIX = "mc-tool-proposal-"         # core.mc_tools.offers.note_key
 
 
 # This portal process's tool-admission epoch (core.mc_tools.binding.start_portal_epoch): recorded before the listener

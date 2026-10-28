@@ -796,6 +796,95 @@ def test_notes_a_typed_turn_writes_are_not_tagged(ready):
     assert [row["request_id"] for row in rows] == ["owner-action-typed-receipt"] and "voice" not in rows[0]
 
 
+# ── CC_16 (a): notes written in a separate request are tagged through the binding's owner turn ─────────────────
+
+def shower(r, monkeypatch):
+    from minimoi_portal.guild_ui import mc_tools_wiring
+    monkeypatch.setattr(mc_tools_wiring, "_conversation_floor",
+                        lambda services, principal, cid: r.notes if cid == CID else None)
+    return mc_tools_wiring.proposal_shower(r.config["services"], "robert")
+
+
+def test_a_tool_notice_written_by_a_callback_during_a_voice_consult_is_withheld_and_revealed_with_it(ready, monkeypatch):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])
+    show = shower(r, monkeypatch)
+    assert show.owner_turn is True                         # core.mc_tools.service passes the binding's owner note
+    assert show(CID, "mc-preference-op-1", "Kept: lesson L3.", owner_turn=reveal.consult_note_id(sid, 1)) is True
+    rows, sessions = shown(r)
+    assert sessions[0]["state"] == "live" and rows == []
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+    rows, _ = shown(r)
+    assert [(row["request_id"], row["voice"]["kind"]) for row in rows] == [("mc-preference-op-1", "consult_outcome")]
+
+
+def test_a_proposal_card_stays_on_the_page_while_voice_is_live_on_purpose(ready, monkeypatch):
+    """Pinned choice: Robert approves the exact card the platform showed, by its code (review P1-1, spec §9.1), so a
+    proposal card made during a voice consult is not tagged and is shown while the session is live."""
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])
+    show = shower(r, monkeypatch)
+    card = "mc-tool-proposal-" + str(uuid.uuid4())
+    assert show(CID, card, "Proposal P-7K3M, waiting for you.", owner_turn=reveal.consult_note_id(sid, 1)) is True
+    rows, sessions = shown(r)
+    assert sessions[0]["state"] == "live"
+    assert [row["request_id"] for row in rows] == [card] and "voice" not in rows[0]
+    assert reveal.tag_key(card) not in r.notes.rows
+
+
+def test_a_typed_turns_tool_notice_is_not_tagged(ready, monkeypatch):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])
+    show = shower(r, monkeypatch)
+    assert show(CID, "mc-preference-op-2", "Kept.", owner_turn="note-typed-1") is True
+    assert show(CID, "mc-preference-op-3", "Kept.") is True
+    rows, _ = shown(r)
+    assert [row["request_id"] for row in rows] == ["mc-preference-op-2", "mc-preference-op-3"]
+
+
+def test_the_tool_service_gives_the_owner_turn_only_to_a_shower_that_takes_it():
+    from core.mc_tools.service import ToolService
+    seen = []
+    svc = object.__new__(ToolService)
+
+    def plain(cid, key, text):
+        seen.append((cid, key))
+        return True
+    svc.show = plain
+    assert svc._show("c", "k", "t", owner_turn="vc-x") is True               # an older shower: three arguments
+    svc.show = lambda cid, key, text, owner_turn=None: seen.append(owner_turn) or True
+    svc.show.owner_turn = True
+    svc._show("c", "k", "t", owner_turn="vc-x")
+    assert seen == [("c", "k"), "vc-x"]
+
+
+def test_a_job_started_from_a_voice_consult_posts_its_result_tagged_with_that_session(ready, tmp_path):
+    from minimoi_portal.guild_ui import jobs
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])
+    note_id = reveal.consult_note_id(sid, 1)
+    from minimoi_portal.guild_ui.stores import Author
+    r.notes.add_note(note_id, "Run this as a job: rebuild the index", Author("robert", "owner", "Robert"), page="voice")
+    mgr = jobs.JobManager(str(tmp_path / "jobs"), relay=SimpleNamespace(connected=True), conversations=Conversations(),
+                          floor_for=lambda conv: r.notes)
+    conv = {"id": CID, "principal": "robert"}
+    job, refusal = mgr.start(conv, "robert", r.notes.get_note(note_id), note_id, None, title="Rebuild")
+    assert refusal is None
+    mgr.store.mutate(CID, job["id"], lambda j: j.update(state="running"))
+    mgr._finalize_completed(mgr.store.get(CID, job["id"]), {"result_text": "Index rebuilt."}, time.time(), lambda j: None)
+    result = jobs.result_request_id(job["id"])
+    assert result in r.notes.rows and reveal.tag_key(result) in r.notes.rows
+    rows, sessions = shown(r)
+    assert sessions[0]["state"] == "live" and result not in [row["request_id"] for row in rows]
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+    rows, _ = shown(r)
+    assert {row["request_id"]: row["voice"]["kind"] for row in rows}[result] == "consult_outcome"
+
+
 # ── review B #4: the allowance is reserved only for a recorded session ──────────────────────────────────────────
 
 def test_no_allowance_is_spent_when_the_start_marker_cannot_be_kept(ready, monkeypatch):
