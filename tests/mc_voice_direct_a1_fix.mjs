@@ -403,4 +403,20 @@ await t.check('CX A1-C2: a duplicate completion of the same captured item is not
   assert.deepEqual(r.said.at(-1), [D.ALREADY_CHECKED, { transient: true }]);
 });
 
+// ── CX V2-4 (spec delta review): pagehide is one bounded close envelope, counted in event ids ─────────────────────────
+await t.check('CX V2-4: the leaving page\'s End is one envelope within the keepalive budget, with every unacknowledged id', async () => {
+  const r = rig({ routes: { '/transcript': (b) => (b.events.length ? new Promise(() => {}) : null) } });
+  await r.s.start('openai');
+  const many = [];
+  for (let i = 0; i < 590; i++) many.push(i % 2 ? assistant(`turn ${i} `.repeat(30)) : user(`turn ${i} `.repeat(30)));
+  r.c.hear(many); await flush();
+  const before = r.calls.length;
+  r.s.end('pagehide');
+  const sent = r.calls.slice(before);
+  assert.deepEqual(sent.map((x) => x.url.split('/').pop()), ['end']);
+  assert.ok(Buffer.byteLength(sent[0].opts.body) <= 64 * 1024, `${Buffer.byteLength(sent[0].opts.body)} bytes`);
+  assert.equal(sent[0].body.unacknowledged.length, 590);                 // counted in unique event ids, not batches
+  assert.equal(new Set(sent[0].body.unacknowledged).size, 590);
+});
+
 t.done();

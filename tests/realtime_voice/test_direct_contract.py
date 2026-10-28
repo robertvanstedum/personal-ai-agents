@@ -24,7 +24,7 @@ def driver(kind, request, monkeypatch, tmp_path):
         r = request.getfixturevalue("rig")
         return SimpleNamespace(
             kind=kind, base=fake.BASE, headers=fake.OWNER, cid="owner",
-            start=lambda: fake.start(r), turns=lambda: len(r.host.turns),
+            start=lambda: fake.start(r), turns=lambda: len(r.host.turns), effects=lambda: len(r.host.turns),
             summaries=lambda: [q["json"] for q in r.gateway.requests],
             event=lambda role, item, text, offset=1: fake.turn(r, role, item, text, offset),
             client=r.client, r=r)
@@ -32,6 +32,7 @@ def driver(kind, request, monkeypatch, tmp_path):
     return SimpleNamespace(
         kind=kind, base=mc.BASE, headers=r.headers, cid=mc.CID,
         start=lambda: mc.start(r)["voice_session_id"], turns=lambda: len(r.turns),
+        effects=lambda: len(r.turns) + len(r.cos.calls),                  # MC's turns and the notes his platform saved
         summaries=lambda: [p.request for p in r.cos.prompts],
         event=lambda role, item, text, offset=1: mc.turn(r, role, item, text, offset),
         client=r.client, r=r)
@@ -127,3 +128,17 @@ def test_a_summary_attempt_is_recorded_once_and_a_second_ask_repeats_its_proposa
     first, second = asked(), asked()
     assert first["state"] == "proposed" and second["repeated"] is True and second["written"] == first["written"]
     assert len(h.summaries()) == 1
+
+
+def test_one_effect_per_owner_turn_holds_from_save_note_to_check_and_from_check_to_save_note(host):
+    """CX V2-1 (the settled rule): one effectful dispatch per (host, session, owner item) across both tools."""
+    h = host
+    sid = h.start()
+    words = "Make a note that the kiln is hot"                       # a note command: either tool would save it
+    model_first = ask(h, sid, "call_model", "t1", words=words, name="save_note").get_json()
+    check_after = ask(h, sid, "host-1", "t1", words=words).get_json()
+    check_first = ask(h, sid, "host-2", "t2", words=words).get_json()
+    model_after = ask(h, sid, "call_model_2", "t2", words=words, name="save_note").get_json()
+    assert check_after["same_turn"] is True and model_after["same_turn"] is True
+    assert model_first.get("same_turn") is None and check_first.get("same_turn") is None
+    assert h.effects() == 2                                            # one effect per owner item, whichever tool came first

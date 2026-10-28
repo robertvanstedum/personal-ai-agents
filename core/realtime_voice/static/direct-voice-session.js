@@ -61,6 +61,7 @@ const REVEAL_WAIT_MS = 10000;             // the thread's reload is awaited this
 const DRAIN_CAP_MS = 90000;               // the spoken summary plays at most 15 characters a second plus 5 s, and never past this
 const START_END_MS = 15000;               // End pressed while still connecting waits for the connection at most this long
 const POST_EVENTS = 20, POST_BYTES = 60000;   // the server takes 20 events and 64 KB a post; JSON overhead stays inside
+const CLOSE_BYTES = 64 * 1024 - 1024;     // the leaving page's one close envelope (End with its events and report), whole
 const TEXT_BYTES = 16000;
 
 // §3: what the bootstrap's refusal means, in the words the contract gives. `detail` is the body's `error` (a code, or words).
@@ -218,12 +219,12 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     });
     return out;
   }
-  function batches(events) {
+  function batches(events, limit = POST_BYTES) {
     const out = [];
     let cur = [], size = 16;
     for (const e of events) {
       const n = bytes(JSON.stringify(e)) + 1;
-      if (cur.length && (cur.length >= POST_EVENTS || size + n > POST_BYTES)) { out.push(cur); cur = []; size = 16; }
+      if (cur.length && (cur.length >= POST_EVENTS || size + n > limit)) { out.push(cur); cur = []; size = 16; }
       cur.push(e); size += n;
     }
     if (cur.length) out.push(cur);
@@ -303,9 +304,12 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
       close(turns);
       const waiting = [...inflight, ...queued].flat();
       inflight.clear(); queued.clear();
-      const owed = batches([...waiting, ...due(true)]);
+      const owing = [...waiting, ...due(true)];
       stopped = true;
-      return { events: owed[0] || [], ...report() };
+      // One bounded envelope (review CX V2-4): the report goes whole, and the events fit in what the keepalive budget leaves.
+      const closing = report();
+      const owed = batches(owing, Math.max(1024, CLOSE_BYTES - bytes(JSON.stringify(closing))));
+      return { events: owed[0] || [], ...closing };
     },
     heartbeat() {
       if (stopped) return chain;
