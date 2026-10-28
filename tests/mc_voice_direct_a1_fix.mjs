@@ -673,4 +673,25 @@ await t.check('L N3: a call that arrives before its words still hears "Still che
   release(); assert.equal((await out).outcome, 'done');
 });
 
+// L N6 (the last pass's verification): an item's words are frozen at its first completion. A second completion of the same
+// item with other words (xAI's .updated with completed, then .completed) changes nothing: the transcript post, Check and the
+// model's call all carry the first words, so what is kept is what is acted on.
+await t.check('L N6: Check acts on the words kept at the first completion, not on a later completion of the same item', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Save a note: the kiln is hot'); await flush();
+  r.c.hear([user('Save a note: the glaze is hot')]); await flush();    // the same item, completed again with other words
+  await r.s.check();
+  const [p] = r.posts('/consult');
+  assert.deepEqual([p.body.owner_item_id, p.body.owner_transcript_item], ['t0', 'Save a note: the kiln is hot']);
+  assert.deepEqual(r.posts('/transcript').flatMap((x) => x.body.events.map((e) => e.text)), ['Save a note: the kiln is hot']);
+});
+await t.check("L N6: the model's call acts on the words kept at the first completion", async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Save a note: the kiln is hot'); await flush();
+  r.c.hear([user('Save a note: the glaze is hot')]); await flush();
+  await r.c.fn({ call_id: 'call_1', name: 'save_note', arguments: {} });
+  const [p] = r.posts('/consult');
+  assert.deepEqual([p.body.owner_item_id, p.body.owner_transcript_item], ['t0', 'Save a note: the kiln is hot']);
+});
+
 t.done();

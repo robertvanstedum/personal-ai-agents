@@ -208,7 +208,7 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     (Array.isArray(turns) ? turns : []).forEach((t, i) => {
       const it = items[i] || (items[i] = { speaker: t.speaker, text: '', completed: false, started: now, ended: null, posted: false });
       it.speaker = t.speaker === 'user' ? 'user' : 'assistant';
-      it.text = typeof t.text === 'string' ? t.text : '';
+      if (!it.completed) it.text = typeof t.text === 'string' ? t.text : '';   // frozen at its first completion (L N6)
       if (t.completed && !it.completed) {
         it.completed = true; it.ended = now;
         if (it.speaker === 'user' && it.text.trim()) ownerAt = i;          // the owner turn that just completed
@@ -308,6 +308,13 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
   const last = (turns, opts) => { close(turns); if (stopped) return chain; return enqueue(due(true), opts); };
   return {
     update(turns) { if (stopped || boundary !== null) return chain; observe(turns); return enqueue(due(false)); },
+    // An item's words as kept at its first completion (review L N6: a later completion with other words changes nothing),
+    // or null while it has not completed. What is posted, Checked and acted on for an item is these words.
+    said(i) {
+      const it = Number.isInteger(i) ? items[i] : null;
+      const text = it && it.completed && typeof it.text === 'string' ? it.text.trim() : '';
+      return text || null;
+    },
     // The owner turn that completed last: {item: its capture id ("t" + its place), text: its words}, both from capture's own
     // record of that item, or null before he has said anything (review F2).
     owner() {
@@ -572,7 +579,7 @@ export function directVoice(d) {
       const b = typeof c?.inputOf === 'function' ? c.inputOf(call) : null;
       if (!b) return null;
       if (b.state !== 'bound') return 'pending';
-      const text = String(b.text || '').trim();
+      const text = String(capture?.said(b.index) ?? b.text ?? '').trim();   // the words capture kept for that item (L N6)
       return text ? { item: `t${b.index}`, text } : null;
     };
     const first = look();
