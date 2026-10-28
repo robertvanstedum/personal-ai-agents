@@ -3,8 +3,8 @@
   * sends each decision an agent asked, word for word, to Robert's private chat, and records the message it went in;
   * reads his replies; only his own reply to that exact message answers it (core/supervision/telegram.py), and the
     receipt keeps his words; a Guild-chat answer (portal) lands in the same record and is announced here;
-  * every CHECKIN_MINUTES runs one check-in (core/supervision/watch.py): tells him once about what needs him, about
-    errors and stalls, a session's finished CI included; it sends nothing to an agent session.
+  * every CHECKIN_MINUTES runs one check-in (core/supervision/watch.py): nudges agents with fixed texts on work that
+    does not need him, and tells him once about what does, about errors and stalls.
 
 No model, no approval of its own. Environment: DATABASE_URL, TELEGRAM_CHAT_ID (Robert's private chat; his user id is
 the same number unless MINIMOI_OWNER_TELEGRAM_USER_ID says otherwise), and the approvals bot's token (``_token``).
