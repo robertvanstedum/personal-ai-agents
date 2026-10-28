@@ -30,8 +30,6 @@ MAX_STOPS, MAX_ASKS = 20, 5
 
 # Fixed texts: a nudge never carries words a model wrote.
 NUDGE_TEXT = {
-    "continue": ("MC check-in: your last turn ended with work still open and nothing waiting on Robert. Continue your "
-                 "already-authorized work now, or end with a MINIMOI-STOP line saying exactly what blocks you."),
     "ci_finished": ("MC check-in: the CI you were waiting on has finished ({conclusion}). Read the result and continue "
                     "your already-authorized work."),
 }
