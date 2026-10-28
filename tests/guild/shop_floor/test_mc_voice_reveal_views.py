@@ -37,7 +37,7 @@ def test_the_notes_list_the_page_and_the_export_withhold_a_recovering_session_th
     assert [n["text"] for n in listed["notes"]] == ["a typed note"]
     assert listed["voice_sessions"] == [{"session_id": sid, "state": "recovering", "line": reveal.RECOVERY,
                                          "started_at": listed["voice_sessions"][0]["started_at"], "ended_at": None,
-                                         "summary": None}]
+                                         "summary": None, "capture": "unconfirmed"}]     # no End yet (v0.3 §5.2, G4)
     page = client.get(f"/guild-next/guild/build?c={cid}")
     assert page.status_code == 200 and "a typed note" in page.text and "kiln seal" not in page.text
     export = client.get(API + f"/conversations/{cid}/voice-transcript")
