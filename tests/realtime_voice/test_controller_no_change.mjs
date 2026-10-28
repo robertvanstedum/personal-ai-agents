@@ -48,13 +48,15 @@ const MARK_TTL_MS = 3000;
     this._requests = [];             // responses this controller asked for, not yet started, in order: {owner, tag, seq, at, done}
     this._seq = 0;                   // the order in which ended utterances and requests became known
     this._echoed = false;            // the adapter has reported a request's tag back (OpenAI's response.metadata)
-    this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or {index} (pending)
+    this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or a hold (below)
+    this._holds = [];                // holds not yet settled: a response bound to his utterance before its item was known,
+                                     // {at: when his speech ended, item: undefined until known, then its id, or null (void)}
     this._tags = 0;
 `,
    ``],
   [`    // Response attribution (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees it current.
-    on("connected", () => { this._utterance = this._ended = null; this._drop(this._requests.slice()); this._echoed = this._commits = false; });
-    on("speech_started", () => { if (this._utterance === null) this._utterance = this._inputs.length; });
+    on("connected", () => { this._utterance = this._ended = null; this._drop(this._requests.slice()); this._echoed = this._commits = false; this._void(); });
+    on("speech_started", () => { this._void(); if (this._utterance === null) this._utterance = this._inputs.length; });
     on("speech_stopped", () => this._heardEnd());
     on("input_item", (evt) => this._committed(evt.item_id));
     on("input_transcript", (evt) => this._sawInput(evt.item_id));
@@ -68,21 +70,21 @@ const MARK_TTL_MS = 3000;
   [`    on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null); });
 `,
    ``],
-  [`      if (!this._onFunctionCall) {
-        this._sendResult(call, {
+  [`        this._sendResult(call, {
+          error: "Function bridge unavailable",
 `,
-   `      if (!this._onFunctionCall) {
-        this._adapter.sendFunctionResult(call.call_id, {
+   `        this._adapter.sendFunctionResult(call.call_id, {
+          error: "Function bridge unavailable",
 `],
   [`        this._sendResult(call, output);
 `,
    `        this._adapter.sendFunctionResult(call.call_id, output);
 `],
-  [`      } catch (error) {
-        this._sendResult(call, {
+  [`        this._sendResult(call, {
+          error: error?.message || "COS function failed",
 `,
-   `      } catch (error) {
-        this._adapter.sendFunctionResult(call.call_id, {
+   `        this._adapter.sendFunctionResult(call.call_id, {
+          error: error?.message || "COS function failed",
 `],
   [`    if (!this._managedBootstrap && this._adapter) this._ask(null, (tag) => this._instruct(CONTINUATION_INSTRUCTION, tag));
   }
@@ -125,9 +127,11 @@ const MARK_TTL_MS = 3000;
    *    up his utterance;
    *  - a response the provider made from his speech: it answers his utterance that ended (speech_stopped, or his input
    *    committed), bound to the newest input item that appeared since that utterance began and before any later one began,
-   *    whether its transcript came before or after his speech ended, or committed or not; with none yet, to the first one
-   *    to appear. Where the adapter reports committed input (OpenAI), only a committed utterance has a response. An ended
-   *    utterance with no input item for MARK_TTL_MS is noise and binds nothing;
+   *    whether its transcript came before or after his speech ended, or committed or not; with none yet, it holds that
+   *    utterance (never a place a later one fills) until the first item to appear, with no new speech in between and
+   *    within MARK_TTL_MS of the end of his speech: new speech first, or the bound first, voids it (review F1). Where the
+   *    adapter reports committed input (OpenAI), only a committed utterance has a response. An ended utterance with no
+   *    input item for MARK_TTL_MS is noise and binds nothing;
    *  - anything else (a response with no ended utterance and no request of this controller's) answers none of his inputs.
    *  Which is which: by the tag a request carries when the adapter reports it back (OpenAI's response.metadata, once seen
    *  in the session: then an untagged response is the provider's); else by order, the requests starting their responses
@@ -139,7 +143,8 @@ const MARK_TTL_MS = 3000;
   inputOf(call) {
     let owner = call && call.response_id ? this._answers.get(call.response_id) : undefined;
     if (owner === undefined || owner === null) return null;
-    if (typeof owner === "object") owner = this._inputs[owner.index];       // the first input of his utterance, once known
+    if (typeof owner === "object") owner = this._settled(owner);            // a hold: his utterance's item once known
+    if (owner === null) return null;
     if (owner === undefined) return { state: "pending" };
     const order = [...this._items.entries()].sort((a, b) => a[1].firstSeq - b[1].firstSeq);
     const index = order.findIndex(([id]) => id === owner);
@@ -153,7 +158,30 @@ const MARK_TTL_MS = 3000;
   _lastInput() { return this._inputs.length ? this._inputs[this._inputs.length - 1] : null; }
 
   _sawInput(id) {
-    if (id && !this._inputs.includes(id)) this._inputs.push(id);
+    if (id && !this._inputs.includes(id)) { this._inputs.push(id); this._known(id); }
+  }
+
+  // A hold (review F1): a response that started after his utterance ended, before that utterance had an input item, holds
+  // the utterance itself, never a place in _inputs that a later utterance fills. It settles on the first input item to
+  // appear after it, with no new speech in between and within MARK_TTL_MS of the end of his speech (the bound of the noise
+  // rule); new speech first, or the bound first, voids it (null): its calls, and the follow-ups of its calls, which share
+  // it, answer none of his inputs.
+  _hold(his) {
+    const hold = { at: his.at, item: undefined };
+    this._holds.push(hold);
+    return hold;
+  }
+
+  _settled(hold) {
+    return hold.item === undefined && Date.now() - hold.at >= MARK_TTL_MS ? null : hold.item;
+  }
+
+  _known(id) {
+    for (const hold of this._holds.splice(0)) hold.item = this._settled(hold) === null ? null : id;
+  }
+
+  _void() {
+    for (const hold of this._holds.splice(0)) hold.item = null;
   }
 
   // His utterance has ended (speech_stopped): its response is the provider's next one of its own. A second utterance
@@ -169,7 +197,9 @@ const MARK_TTL_MS = 3000;
   _committed(id) {
     this._commits = true;
     if (this._utterance !== null) this._heardEnd();
-    if (this._ended === null && id && !this._inputs.includes(id)) this._ended = { index: this._inputs.length, seq: ++this._seq, at: Date.now() };
+    // A commit with no speech events is a new utterance, unless a response already holds his utterance for its item (F1):
+    // then it is that utterance's late commit, and settles the hold.
+    if (this._ended === null && id && !this._inputs.includes(id) && !this._holds.length) this._ended = { index: this._inputs.length, seq: ++this._seq, at: Date.now() };
     if (this._ended) this._ended.committed = true;
     this._sawInput(id);
   }
@@ -229,7 +259,7 @@ const MARK_TTL_MS = 3000;
     } else if (his) {
       const known = this._utterance === null ? this._inputs.length : Math.min(this._utterance, this._inputs.length);
       this._ended = null;
-      owner = known > his.index ? this._inputs[known - 1] : { index: his.index };
+      owner = known > his.index ? this._inputs[known - 1] : this._hold(his);
     }
     if (id) this._answers.set(id, owner);
 `,

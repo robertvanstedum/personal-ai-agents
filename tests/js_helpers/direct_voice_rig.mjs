@@ -63,22 +63,29 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
       // provider makes (respond) answers his ended utterance; a function result's follow-up (follow) answers what the call
       // it continues answered. Here a new owner input with no ended utterance pending stands for an utterance whose speech
       // events the test does not spell out.
-      this.inputs = []; this.heard = null; this.answers = new Map(); this.calls = 0;
+      // A response bound before its utterance's item is known holds that utterance (review F1): the next input settles it;
+      // new speech first voids it.
+      this.inputs = []; this.heard = null; this.answers = new Map(); this.calls = 0; this.holds = [];
       controller = this;
     }
     saw(i) {
       if (this.inputs.includes(i)) return;
-      if (this.heard === null) this.heard = { index: this.inputs.length };
+      if (this.holds.length) { for (const hold of this.holds.splice(0)) hold.item = i; }       // a late item: no new utterance
+      else if (this.heard === null) this.heard = { index: this.inputs.length };
       this.inputs.push(i);
     }
     speechStopped() {                                      // he spoke (an utterance began and ended), its words not known yet
+      for (const hold of this.holds.splice(0)) hold.item = null;                            // new speech voids a hold
       if (this.heard === null) this.heard = { index: this.inputs.length };
       this.options.onInputState('speech_started'); this.options.onInputState('speech_stopped');
     }
     respond() {                                            // the provider's response starts now, bound as the controller binds it
       const id = `call_resp_${++this.calls}`, ended = this.heard;
       this.heard = null;
-      this.answers.set(id, !ended ? null : this.inputs.length > ended.index ? this.inputs[this.inputs.length - 1] : { index: ended.index });
+      let owner = null;
+      if (ended && this.inputs.length > ended.index) owner = this.inputs[this.inputs.length - 1];
+      else if (ended) { owner = { item: undefined }; this.holds.push(owner); }
+      this.answers.set(id, owner);
       return id;
     }
     follow(call) {                                         // a function result's follow-up starts: it answers what the call did
@@ -91,7 +98,8 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     inputOf(call) {
       let owner = call && call.response_id ? this.answers.get(call.response_id) : undefined;
       if (owner === undefined || owner === null) return null;
-      if (typeof owner === 'object') owner = this.inputs[owner.index];
+      if (typeof owner === 'object') owner = owner.item;
+      if (owner === null) return null;
       if (owner === undefined || !this.turns[owner]) return { state: 'pending' };
       return this.turns[owner].completed ? { state: 'bound', index: owner, text: this.turns[owner].text } : { state: 'pending' };
     }

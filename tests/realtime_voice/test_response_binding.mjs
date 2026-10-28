@@ -287,8 +287,114 @@ for (const [name, make, commits] of [['xAI', () => new XAIWebSocketAdapter(), fa
   });
 }
 
+// F1 (Codex's delta review at a17ddc8d, P1; its response_origin.mjs, asserting the correct behaviour): a response that
+// starts after his utterance ended, before that utterance has an input item, holds that utterance, never a place in the
+// list of inputs that a later utterance fills. It binds only to an item shown to be that utterance's: the first to appear
+// after it, with no new speech in between and within its bound (MARK_TTL_MS, 3 s from the end of his speech). New speech
+// first, or the bound passing first, voids it: its calls, and the follow-ups of its calls, answer none of his inputs
+// ("I didn't catch that; say it again"). On xAI, and on OpenAI with and without its response tag reported back; on
+// OpenAI the cough's utterance is not committed (the order in which OpenAI commits is not observed live).
+const F1_LATER = 'Save a note: a later request';
+for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter(), false, false],
+  ['OpenAI, tag reported back', () => new OpenAIWebRTCAdapter(), true, true],
+  ['OpenAI, no tag reported back', () => new OpenAIWebRTCAdapter(), true, false]]) {
+  const open = () => {
+    const a = make(); const s = session(a, { trackResponses: true });
+    if (echo) {                                                        // a page line, its tag reported back: echo is on
+      assert.equal(s.c.speak('Say this briefly, adding nothing: one moment.'), true);
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R_line', metadata: { minimoi_tag: s.tags.at(-1) } } });
+      a._handleServerEvent({ type: 'response.done', response: { id: 'R_line', output: [] } });
+    }
+    return { a, s };
+  };
+  const cough = (a) => {                                               // speech, no item, no transcript
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+  };
+  const utterance = (a, item, text) => {                               // a whole utterance with its words
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });
+    a._handleServerEvent(said(item, text));
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: item });
+  };
+  const clocked = async (fn) => {
+    const real = Date.now; let at = real();
+    Date.now = () => at;
+    try { await fn((ms) => { at += ms; }); } finally { Date.now = real; }
+  };
+  for (const [gap, label] of [[20000, "Codex's case: 20 s later"], [1000, 'inside 3 s']]) {
+    await check(`F1 ${label} (${name}): a cough's response never takes his later utterance`, async () => {
+      const { a, s } = open();
+      await clocked(async (pass) => {
+        cough(a);
+        a._handleServerEvent({ type: 'response.created', response: { id: 'noise_response' } });
+        assert.deepEqual(s.bound({ response_id: 'noise_response' }), { state: 'pending' });
+        pass(gap);
+        utterance(a, 'later_item', F1_LATER);
+        a._handleServerEvent({ type: 'response.created', response: { id: 'R_later' } });      // his own response
+        a._handleServerEvent(callIn('noise_response', 'noise_call')); await tick();          // the cough's delayed call
+        a._handleServerEvent(callIn('R_later', 'later_call')); await tick();
+      });
+      assert.equal(s.bound(s.calls[0]), null, "the cough's call took the later utterance's item and words");
+      assert.deepEqual(s.bound(s.calls[1]), { state: 'bound', index: 0, text: F1_LATER });
+    });
+  }
+  await check(`F1 new speech before a late item (${name}): the binding is void, and the item is not taken`, async () => {
+    const { a, s } = open();
+    cough(a);                                                          // utterance A, its item not known yet
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_A' } });
+    a._handleServerEvent(callIn('R_A', 'call_A')); await tick();
+    assert.deepEqual(s.bound(s.calls[0]), { state: 'pending' });
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });                     // B begins first
+    a._handleServerEvent(said('item_late', 'Make a note that the kiln is hot'));            // A's or B's: not known
+    assert.equal(s.bound(s.calls[0]), null, 'bound to an item that appeared after new speech began');
+  });
+  await check(`F1 a late item with no new speech (${name}): still binds to that utterance`, async () => {
+    const { a, s } = open();
+    cough(a);
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_A' } });
+    a._handleServerEvent(callIn('R_A', 'call_A')); await tick();
+    if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'item_A' });   // a late commit
+    a._handleServerEvent(said('item_A', 'Make a note that the kiln is hot'));
+    assert.deepEqual(s.bound(s.calls[0]), { state: 'bound', index: 0, text: 'Make a note that the kiln is hot' });
+  });
+  await check(`F1 its own bound passes without an item (${name}): void, never pending for ever`, async () => {
+    const { a, s } = open();
+    await clocked(async (pass) => {
+      cough(a);
+      pass(500);
+      a._handleServerEvent({ type: 'response.created', response: { id: 'R_A' } });
+      a._handleServerEvent(callIn('R_A', 'call_A')); await tick();
+      assert.deepEqual(s.bound(s.calls[0]), { state: 'pending' });
+      pass(2500);                                                      // 3 s since his speech ended
+      assert.equal(s.bound(s.calls[0]), null, 'still pending past its bound');
+      a._handleServerEvent(said('item_late', 'Make a note that the glaze is ready'));     // no new speech, but too late
+    });
+    assert.equal(s.bound(s.calls[0]), null, 'bound to an item that appeared past its bound');
+  });
+  await check(`F1 follow-up inheritance (${name}): the follow-up of a voided response's call answers none of his inputs`, async () => {
+    const { a, s } = open();
+    cough(a);
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R0' } });
+    a._handleServerEvent(callIn('R0', 'call_0', 'consult')); await tick();                 // its result: the follow-up asked for
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });                     // B begins: R0's binding is void
+    a._handleServerEvent(started(s, 'R_f', echo));                                          // the follow-up starts
+    a._handleServerEvent(callIn('R_f', 'call_f', 'save_note')); await tick();
+    a._handleServerEvent(started(s, 'R_f2', echo));                                         // that call's own follow-up
+    a._handleServerEvent({ type: 'response.done', response: { id: 'R_f2', output: [] } });
+    a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    if (commits) a._handleServerEvent({ type: 'input_audio_buffer.committed', item_id: 'item_B' });
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_B' } });
+    a._handleServerEvent(callIn('R_B', 'call_B', 'save_note')); await tick();
+    assert.equal(s.bound(s.calls[0]), null, "the voided response's call was bound");
+    assert.equal(s.bound(s.calls[1]), null, 'the follow-up took his new words');
+    assert.deepEqual(s.bound(s.calls[2]), { state: 'bound', index: 0, text: 'Make a note that the glaze is ready' });
+  });
+}
+
 if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1); real controller and adapters, synthetic provider events.`);
+console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1, F1); real controller and adapters, synthetic provider events.`);
