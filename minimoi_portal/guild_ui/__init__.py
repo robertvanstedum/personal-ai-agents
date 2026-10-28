@@ -301,6 +301,8 @@ def register_guild_ui(app, *, owner_guard, current_user, url_prefix: str, bluepr
     attach_agent_asks(app, blueprint_name, services)   # asking Claude Code / Codex through MC: nothing happens unless MINIMOI_GUILD_AGENT_REQUESTS is on
     from .mc_managed_realtime import install as attach_mc_realtime
     attach_mc_realtime(app,blueprint_name,environ=app.extensions[blueprint_name]['feature_environ'])
+    from .mc_voice_direct import install as attach_mc_direct_voice
+    attach_mc_direct_voice(app, blueprint_name, environ=app.extensions[blueprint_name]["feature_environ"])   # MC voice, direct path: off unless MINIMOI_MC_VOICE and MINIMOI_MC_VOICE_DIRECT
     from .mc_tools_wiring import attach as attach_mc_tools
     attach_mc_tools(app, blueprint_name, services)     # MC's tool listener: nothing happens unless MINIMOI_MC_TOOLS is on
     from .supervision import attach as attach_supervision, attach_runner_door

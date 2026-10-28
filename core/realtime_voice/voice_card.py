@@ -9,7 +9,7 @@ OPENAI_VOICES = frozenset({
 })
 XAI_VOICES = frozenset({"eve", "ara", "leo", "rex", "sal"})
 ALLOWED = {"openai": OPENAI_VOICES, "xai": XAI_VOICES}
-RELEASES = Path("services/mc_operations/personas/mc-chat/releases")
+RELEASES = Path(__file__).resolve().parents[2] / "services/mc_operations/personas/mc-chat/releases"   # not the working directory
 
 
 def load_card(release):

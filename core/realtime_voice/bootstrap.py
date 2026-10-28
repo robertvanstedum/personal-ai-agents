@@ -16,12 +16,14 @@ Per _working/CLAUDE_CODE_BUILD_SPEC_voice_realtime_2026-07-24.md Section 6:
   - log user_id/domain/provider/model/start time/outcome, never credentials,
     raw audio, or full prompt content
 """
+import contextlib
 import os
 import time
 
 from flask import Blueprint, jsonify, request
 
 from core.identity import resolve_user_display_name, resolve_user_id
+from core.realtime_voice import budget as voice_budget
 from core.realtime_voice.capabilities import (
     MEMO_MODE,
     ProviderUnavailableError,
@@ -107,7 +109,8 @@ def _memo_duration_guard() -> DurationGuard:
     )
 
 
-def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_production, local_owner=None, consult_ledger=None):
+def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_production, local_owner=None, consult_ledger=None,
+                               owner=None, admit=None):
     """
     get_persona: Callable[[str], dict | None] -- domain-owned allow-list.
         Returns {"name", "prompt_txt", "scenes": {key: text}, "voices":
@@ -116,6 +119,12 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         the bootstrap endpoint accepts nothing this callback doesn't return.
     is_production: Callable[[], bool] -- gates the dev query-string
         provider override (Section 6/16: never available in production).
+    owner: Callable[[], (id, display_name) | None] -- a host that is the portal
+        itself (no proxy strips X-Minimoi-* there) names its signed-in owner;
+        the proxy headers are then never read. None: German/Portuguese as before.
+    admit: Callable[[id], context manager] -- reserves the host's allowance
+        around the provider mint (core.realtime_voice.budget); a budget refusal
+        answers before the provider is contacted. None: as before.
     """
     bp = Blueprint(f"realtime_voice_bootstrap_{domain}", __name__)
 
@@ -186,9 +195,12 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
 
     @bp.route("/api/realtime-voice/bootstrap", methods=["POST"])
     def bootstrap():
-        user_id = resolve_user_id(request)
-        if user_id is None and local_owner is not None and request.remote_addr == "127.0.0.1":
-            user_id = local_owner
+        if owner is not None:
+            user_id, learner_name = owner() or (None, None)
+        else:
+            user_id = resolve_user_id(request)
+            if user_id is None and local_owner is not None and request.remote_addr == "127.0.0.1":
+                user_id = local_owner
         if user_id is None:
             return jsonify({"ok": False, "error": "identity required"}), 401
 
@@ -200,7 +212,8 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         explicit_provider = body.get("provider")
         persona_name = body.get("persona", "")
         scene = body.get("scene", "")
-        learner_name = resolve_user_display_name(request)
+        if owner is None:
+            learner_name = resolve_user_display_name(request)
 
         production = is_production()
         dev_override = request.args.get("provider") if not production else None
@@ -250,23 +263,27 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
         transcription_language = _TRANSCRIPTION_LANGUAGE[provider][locale]
 
         try:
-            if provider == "openai":
-                credential = openai_realtime.mint_ephemeral_credential(
-                    instructions=instructions,
-                    voice=voice,
-                    turn_detection=turn_detection,
-                    transcription_language=transcription_language,
-                    user_id_for_safety_identifier=str(user_id),
-                    tools=tools,
-                )
-            else:
-                credential = xai_voice.mint_ephemeral_credential(
-                    instructions=instructions,
-                    voice=voice,
-                    turn_detection=turn_detection,
-                    transcription_language=transcription_language,
-                    tools=tools,
-                )
+            with admit(user_id) if admit is not None else contextlib.nullcontext():
+                if provider == "openai":
+                    credential = openai_realtime.mint_ephemeral_credential(
+                        instructions=instructions,
+                        voice=voice,
+                        turn_detection=turn_detection,
+                        transcription_language=transcription_language,
+                        user_id_for_safety_identifier=str(user_id),
+                        tools=tools,
+                    )
+                else:
+                    credential = xai_voice.mint_ephemeral_credential(
+                        instructions=instructions,
+                        voice=voice,
+                        turn_detection=turn_detection,
+                        transcription_language=transcription_language,
+                        tools=tools,
+                    )
+        except voice_budget.VoiceBudgetError as e:
+            _log_outcome(domain, user_id, provider, None, "budget_refused")
+            return jsonify({"ok": False, "error": e.public}), e.status
         except (openai_realtime.OpenAIRealtimeError, xai_voice.XAIVoiceError) as e:
             _log_outcome(domain, user_id, provider, None, "provider_error")
             return jsonify({"ok": False, "error": str(e)}), 502
@@ -278,6 +295,7 @@ def create_bootstrap_blueprint(*, domain: str, locale: str, get_persona, is_prod
             "ok": True,
             "voice_session_id": voice_session_id,
             **credential,
+            **({"voice_notices": list(persona["notices"])} if persona.get("notices") else {}),
             "warning_minutes": guard.warning_minutes,
             "max_minutes": guard.max_minutes,
         })
