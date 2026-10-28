@@ -483,14 +483,24 @@ def notes_list():
     conv, refusal = _conversation(request.args.get("conversation"))
     if refusal is not None:
         return refusal
-    res = _conv_floor(conv).list_notes(before=before, limit=max(1, min(limit or 50, 200)))
-    data = res.data if res.ok else {}
+    floor = _conv_floor(conv)
+    res = floor.list_notes(before=before, limit=max(1, min(limit or 50, 200)))
+    data = dict(res.data) if res.ok else {}
+    voice = []
     if res.ok:
+        # A live or recovering voice session's records are withheld here, in every view (Spec 164 §6).
+        from . import mc_voice_reveal
+        data["notes"], voice = mc_voice_reveal.view(floor, data.get("notes"), live=_voice_live())
         turn_log_of(cfg()["services"]).annotate(data.get("notes"))
         with_html(data.get("notes"))
     return jsonify({**_source(res), "notes": data.get("notes") if res.ok else None,
-                    "more": data.get("more") if res.ok else None,
+                    "more": data.get("more") if res.ok else None, "voice_sessions": voice,
                     "message": None if res.ok else floor_state.notes_zone(res)["text"]})
+
+
+def _voice_live():
+    """Which direct-path voice sessions this process holds live (mc_voice_direct); none when it is not installed."""
+    return cfg().get("mc_direct_voice_live") or (lambda _sid: False)
 
 
 @owner_api

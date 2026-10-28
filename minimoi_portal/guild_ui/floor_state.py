@@ -149,13 +149,18 @@ def compute(c: dict, *, notes_limit: int = 0, conversation: dict | None = None) 
     cap = layout["floor"].get("postit_cap", 4)
     floor_res = services.floor.summary(principal_of(c), rail_cap=cap, notes_limit=notes_limit)
     mc = mc_view(services, notes_ok=floor_res.ok)
-    notes_res = floor_res
+    notes_res, notes_floor = floor_res, services.floor
     if notes_limit and conversation and conversation.get("notes_floor") not in (None, services.floor.floor):
         # A conversation's own notes (slice 2) live under its own floor key.
-        conv_res = services.floor.for_floor(conversation["notes_floor"]).list_notes(limit=notes_limit)
+        notes_floor = services.floor.for_floor(conversation["notes_floor"])
+        conv_res = notes_floor.list_notes(limit=notes_limit)
         notes_res = _NotesRead(conv_res)
     notes = notes_zone(notes_res, mc["notes_text"])
     if notes.get("recent"):
+        # A live or recovering voice session's records are withheld in every view (Spec 164 §6).
+        from .mc_voice_reveal import view
+        notes["recent"], notes["voice_sessions"] = view(notes_floor, notes["recent"],
+                                                        live=c.get("mc_direct_voice_live") or (lambda _sid: False))
         from .mc.turn_log import turn_log_of
         turn_log_of(services).annotate(notes["recent"])
         from .markdown_render import with_html

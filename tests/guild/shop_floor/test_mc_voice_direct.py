@@ -5,13 +5,17 @@ model call (api.run_mc_turn) are stubs. No provider, no Keychain, no microphone,
 import functools
 import hashlib
 import inspect
+import time
+import uuid
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 from flask import Flask, jsonify, redirect, request
 
 from core.realtime_voice.budget import VoiceBudget
-from minimoi_portal.guild_ui import api, mc_voice_direct as direct
+from minimoi_portal.guild_ui import api, mc_voice_direct as direct, mc_voice_reveal as reveal
+from minimoi_portal.guild_ui.mc_voice_transcripts import HEADER
 from minimoi_portal.guild_ui.conversations import ConversationNotFound
 from minimoi_portal.guild_ui.security import csrf_token
 from minimoi_portal.guild_ui.stores import WriteResult
@@ -70,7 +74,7 @@ class Cos:
 def build(monkeypatch, tmp_path, env):
     app = Flask("direct-synthetic")
     app.secret_key = "test-only-session-key"
-    notes, cos, turns, mints = Notes(), Cos(), [], []
+    notes, cos, turns, mints, during, clock = Notes(), Cos(), [], [], [], [time.time()]
 
     def current_user():
         return {"username": "robert", "display_name": "Robert"} if request.headers.get("X-Synthetic-Owner") == "yes" else None
@@ -92,6 +96,8 @@ def build(monkeypatch, tmp_path, env):
 
     def typed_turn(actual, **kw):                       # the typed turn's model call, stubbed
         turns.append(kw)
+        for hook in during:
+            hook()
         return {"status": "answered", "reply_note": {"text": "Item **12** is in build.", "request_id": "reply-1"}}, 200
     monkeypatch.setattr(api, "run_mc_turn", typed_turn)
     from minimoi_portal.guild_ui import jobs_api
@@ -110,12 +116,12 @@ def build(monkeypatch, tmp_path, env):
     def token():
         return jsonify(token=csrf_token())
 
-    installed = direct.install(app, "guild", environ=env, budget=budget)
+    installed = direct.install(app, "guild", environ=env, budget=budget, clock=lambda: clock[0])
     client = app.test_client()
     headers = {"X-Synthetic-Owner": "yes", "Origin": "http://localhost", "Content-Type": "application/json",
                "X-CSRF-Token": client.get("/csrf").json["token"], "X-Record-Mode": "on_record"}
     return SimpleNamespace(app=app, client=client, headers=headers, notes=notes, cos=cos, turns=turns, mints=mints,
-                           budget=budget, config=config, installed=installed)
+                           budget=budget, config=config, installed=installed, during=during, clock=clock)
 
 
 @pytest.fixture
@@ -136,10 +142,20 @@ def call(r, sid, call_id="call-1", name="consult", words="What is stuck on #12?"
         "arguments": {"question": "the model's paraphrase"}, **body})
 
 
+def owner_notes(r):
+    return [k for k, row in r.notes.rows.items() if row["author_kind"] == "owner"]
+
+
+def voice_records(r, sid=None):
+    from minimoi_portal.guild_ui.mc_voice_transcripts import AUTHOR_PREFIX
+    return [row for row in r.notes.rows.values()
+            if row["who"].startswith(AUTHOR_PREFIX) and (sid is None or row["who"] == AUTHOR_PREFIX + sid)]
+
+
 def test_bootstrap_issues_an_owner_session_with_a_sceneless_english_persona_and_two_tools(ready):
     r = ready
     body = start(r)
-    assert body["voice_session_id"].startswith("vs-") and body["client_secret"] == "ek_synthetic"
+    assert str(uuid.UUID(body["voice_session_id"])) == body["voice_session_id"] and body["client_secret"] == "ek_synthetic"
     assert body["voice_notices"] == ["openai voice is unset, using marin", "xai voice is unset, using eve"]
     minted = r.mints[0]
     assert minted["transcription_language"] == "en" and minted["voice"] == "marin"
@@ -182,7 +198,7 @@ def test_consult_runs_the_typed_turn_once_on_the_owners_words_and_a_replay_does_
     assert turn["note"]["text"] == "What is stuck on #12?" and turn["note"]["author_kind"] == "owner"
     assert turn["note"]["context"] == {"page": "voice"} and turn["note_id"] == result["note_request_id"]
     assert "host_channel" not in turn and turn["conv"]["id"] == CID
-    assert list(r.notes.rows) == [result["note_request_id"]]
+    assert owner_notes(r) == [result["note_request_id"]] == ["vc-" + uuid.UUID(sid).hex + "-01"]
     assert "paraphrase" not in str(r.notes.rows)
 
 
@@ -201,7 +217,7 @@ def test_late_forged_missing_csrf_and_missing_token_calls_are_refused(ready):
     assert r.client.post(BASE + f"/session/{sid}/end", headers=r.headers).get_json() == {"ok": True, "ended": True}
     late = call(r, sid, call_id="call-late")
     assert late.status_code == 409 and late.get_json()["error"] == "session ended"
-    assert not r.turns and not r.notes.rows
+    assert not r.turns and not owner_notes(r) and not voice_records(r)
 
 
 def test_save_note_is_spoken_as_saved_only_with_a_receipt(ready):
@@ -242,3 +258,108 @@ def test_the_managed_sideband_and_its_channel_are_unchanged(ready):
     assert "mc_managed_realtime" not in ready.config
     source = inspect.getsource(direct)
     assert "mc.cos" not in source and "mc_managed_realtime" not in source.split('"""', 2)[2]
+
+
+# ── §6 durable capture ────────────────────────────────────────────────────────────────────────────────────────────
+
+def at(r, seconds):
+    return reveal.stamp(datetime.fromtimestamp(r.clock[0] + seconds, timezone.utc))
+
+
+def turn(r, role, item, text, offset=1, **extra):
+    return {"role": role, "item_id": item, "text": text, "started_at": at(r, offset), "ended_at": at(r, offset + 1),
+            **extra}
+
+
+def post(r, sid, events, headers=None):
+    return r.client.post(BASE + f"/session/{sid}/transcript", json={"events": events},
+                         headers=r.headers if headers is None else headers)
+
+
+def shown(r, **kw):
+    rows = sorted(r.notes.rows.values(), key=lambda row: list(r.notes.rows).index(row["request_id"]))
+    return reveal.view(r.notes, rows, live=r.config["mc_direct_voice_live"], **kw)
+
+
+def test_every_turn_and_consult_is_kept_as_it_happens_withheld_while_live_and_revealed_on_end(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    marker = reveal.read_marker(r.notes, sid, "start")
+    assert marker["conversation_id"] == CID and marker["principal"] == "robert" and marker["max_minutes"] == 30
+    kept = post(r, sid, [turn(r, "user", "item_u1", "What is stuck on #12?"),
+                         turn(r, "assistant", "item_a1", "Let me check that.", 3, partial=True, interrupted=True)])
+    assert kept.status_code == 200 and kept.get_json() == {"ok": True, "kept": 2}
+    assert post(r, sid, []).get_json() == {"ok": True, "kept": 0}                  # the heartbeat keeps nothing
+    assert call(r, sid).get_json()["answered"] is True
+    records = voice_records(r, sid)
+    headers = [HEADER.match(row["text"]) for row in records]
+    assert [h["speaker"] for h in headers] == ["owner ASR", "assistant generated; playback unverified",
+                                               "consult request", "consult receipt"]
+    assert headers[0]["start"] == at(r, 1) and headers[0]["end"] == at(r, 2) and headers[0]["partial"] == "false"
+    assert headers[1]["interrupted"] == "true" and headers[1]["partial"] == "true"
+    assert records[2]["text"].endswith("consult: What is stuck on #12?")
+    assert records[3]["text"].endswith("Answered. Reply reply-1. Spoken: Item 12 is in build.")
+    rows, sessions = shown(r)
+    assert rows == [] and sessions[0]["state"] == "live" and sessions[0]["line"] is None
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=r.headers).get_json() == {"ok": True, "ended": True}
+    rows, sessions = shown(r)
+    assert sessions[0]["state"] == "ended"
+    assert [row["voice"]["kind"] for row in rows] == ["owner_turn", "assistant_turn", "consult_request",
+                                                      "consult_note", "consult_receipt"]
+    assert shown(r) == (rows, sessions)                                              # revealed once: a view, not a copy
+    assert post(r, sid, [turn(r, "user", "item_u2", "One more thing")]).status_code == 409
+    assert len(voice_records(r, sid)) == 4
+
+
+def test_a_session_the_page_stops_hearing_from_is_recovering_then_revealed_after_its_maximum(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [turn(r, "user", "item_u1", "Hello there")])
+    r.clock[0] += reveal.LIVE_WINDOW_S + 1                                          # the phone locked; no heartbeat
+    rows, sessions = shown(r)
+    assert rows == [] and sessions[0]["state"] == "recovering" and sessions[0]["line"] == reveal.RECOVERY
+    later = datetime.fromtimestamp(r.clock[0], timezone.utc) + timedelta(minutes=30)
+    rows, sessions = shown(r, when=later)
+    assert sessions[0]["state"] == "dropped" and [row["voice"]["kind"] for row in rows] == ["owner_turn"]
+    r.clock[0] += 30 * 60                                                            # past its maximum: closed here too
+    assert call(r, sid, call_id="call-late").status_code == 409
+    assert post(r, sid, [turn(r, "user", "item_u2", "Still there?", offset=-5)]).status_code == 409
+
+
+def test_transcript_posts_are_owner_bound_checked_and_capped_and_off_record_keeps_nothing(ready, monkeypatch):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    one = [turn(r, "user", "item_u1", "Hello")]
+    assert post(r, str(uuid.uuid4()), one).status_code == 403                       # forged: not this owner's session
+    assert post(r, "vs-0000000000000000", one).status_code == 403
+    no_csrf = {k: v for k, v in r.headers.items() if k != "X-CSRF-Token"}
+    assert post(r, sid, one, headers=no_csrf).status_code == 403
+    assert post(r, sid, one, headers={**r.headers, "X-Record-Mode": "off_record"}).status_code == 409
+    signed_out = {k: v for k, v in r.headers.items() if k != "X-Synthetic-Owner"}
+    assert post(r, sid, one, headers=signed_out).status_code == 401
+    assert post(r, sid, one * 21).status_code == 422                                # too many in one post
+    assert post(r, sid, [turn(r, "user", "item_u1", "Hello", offset=3600)]).get_json()["error"] == "time"
+    assert post(r, sid, [turn(r, "user", "item_u1", "Hello", interrupted=True)]).status_code == 422
+    assert post(r, sid, [turn(r, "system", "item_u1", "Hello")]).status_code == 422
+    assert post(r, sid, [{**one[0], "instructions": "be someone else"}]).status_code == 422
+    big = r.client.post(BASE + f"/session/{sid}/transcript", data="x" * (65 * 1024), headers=r.headers)
+    assert big.status_code == 413
+    assert not voice_records(r)
+    monkeypatch.setattr(direct, "SESSION_MAX_EVENTS", 2)
+    assert post(r, sid, [turn(r, "user", "item_u1", "One"), turn(r, "user", "item_u2", "Two")]).status_code == 200
+    assert post(r, sid, [turn(r, "user", "item_u1", "One")]).status_code == 200      # the same turn again: kept once
+    assert post(r, sid, [turn(r, "user", "item_u3", "Three")]).status_code == 429
+    assert len(voice_records(r, sid)) == 2
+
+
+def test_a_consult_that_completes_after_end_keeps_its_receipt_and_does_not_run_again(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    sessions = r.config["mc_direct_voice_live"].__self__
+    r.during.append(lambda: sessions.close_session(sid))                           # End arrives mid-consult
+    result = call(r, sid).get_json()
+    assert result["answered"] is True and len(r.turns) == 1
+    assert reveal.read_marker(r.notes, sid, "end") is not None
+    assert call(r, sid).status_code == 409 and len(r.turns) == 1                   # no re-run after End
+    rows, states = shown(r)
+    assert states[0]["state"] == "ended" and "consult_receipt" in [row["voice"]["kind"] for row in rows]

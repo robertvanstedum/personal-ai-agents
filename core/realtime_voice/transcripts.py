@@ -1,4 +1,6 @@
-"""Bounded metadata/text from trusted provider-final events; no IO or browser input."""
+"""Bounded metadata/text from provider-final events (server-held, or posted by the owner's page on the direct path,
+validated here); no IO."""
+import re
 import uuid
 
 MAX_BYTES = 16000
@@ -39,21 +41,37 @@ def assistant_entries(response, *, interrupted=False):
     return entries
 
 
-def note_parts(sid, role, item, index, text, partial, *, limit):
-    if (role not in {'user', 'assistant'} or type(index) is not int or not 0 <= index < MAX_CONTENT
+# Speakers a retained note names. user/assistant are the provider's turns; consult/receipt are the direct path's
+# bridged consult and its outcome (Spec 164 §6). Callers that pass neither stamps nor interrupted get the old header.
+SPEAKERS = {'user': 'owner ASR', 'assistant': 'assistant generated; playback unverified',
+            'consult': 'consult request', 'receipt': 'consult receipt'}
+STAMP = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z')
+
+
+def note_parts(sid, role, item, index, text, partial, *, limit, started=None, ended=None, interrupted=False):
+    if (role not in SPEAKERS or type(index) is not int or not 0 <= index < MAX_CONTENT
             or not isinstance(text, str) or not 0 < len(text.encode()) <= MAX_BYTES
-            or type(partial) is not bool or type(limit) is not int or not 512 <= limit <= 4000):
+            or type(partial) is not bool or type(limit) is not int or not 512 <= limit <= 4000
+            or type(interrupted) is not bool or (interrupted and not partial)):
         raise ValueError('voice_transcript_bound')
     session = uuid.UUID(sid)
     if not isinstance(item, str) or not 1 <= len(item) <= 160 or not all(c.isascii() and (c.isalnum() or c in '_-') for c in item):
         raise ValueError('voice_transcript_identity')
-    who = 'owner ASR' if role == 'user' else 'assistant generated; playback unverified'
+    tail = ']\n'
+    if started is not None or ended is not None:
+        # Start and end of the turn (UTC, ISO 8601 Z): overlap and latency stay representable later.
+        if not all(isinstance(t, str) and STAMP.fullmatch(t) for t in (started, ended)) or started > ended:
+            raise ValueError('voice_transcript_time')
+        tail = f'; start={started}; end={ended}' + tail
+    if interrupted:
+        tail = tail[:-2] + '; interrupted=true]\n'
+    who = SPEAKERS[role]
     # Fixed-width upper-bound header reserves space for every part count.
     prefix = f'[Voice transcript: {who}; partial={str(partial).lower()}; '
-    available = limit - len(prefix) - len('part=999/999]\n')
+    available = limit - len(prefix) - len('part=999/999') - len(tail)
     if available < 1:
         raise ValueError('voice_transcript_bound')
     pieces = [text[start:start + available] for start in range(0, len(text), available)]
     return [(str(uuid.uuid5(session, f'transcript:{role}:{item}:{index}:{part}')),
-             prefix + f'part={part + 1}/{len(pieces)}]\n' + piece)
+             prefix + f'part={part + 1}/{len(pieces)}' + tail + piece)
             for part, piece in enumerate(pieces)]
