@@ -964,8 +964,17 @@ def test_fr_n1_an_attempt_whose_outcome_cannot_be_kept_is_never_still_being_writ
 BARE = ["yes", "Yes.", "YES!", "yeah", "Yep.", "Sure.", "okay", "OK, go ahead.", "Yes, go ahead.", "Go ahead", "do it",
         "Yes please.", "Yes, do it.", "Alright, go for it!", "That’s right.", "Sounds good.", "Of course.", "Right, then do it.",
         "no", "No.", "Stop.", "stop", "Cancel.", "Never mind.", "Wait.", "Hold on.", "Don't.", "Don’t!", "Nope.",
-        "Forget it.", "Ja.", "Genau.", "Nein.", "Sim.", "Não.", "Yes, thanks.", "Okay, thank you.", "Yes, yes."]
+        "Forget it.", "Ja.", "Genau.", "Nein.", "Sim.", "Não.", "Yes, thanks.", "Okay, thank you.", "Yes, yes.",
+        # L S1 (the last pass's verification): every phrase the reviewer listed, then the decision's words.
+        "Um, yes.", "Uh, yeah.", "Oh yes.", "Well, okay.", "Yes, go.", "Go.", "Yes, proceed.", "Yes, do it now.", "Yes sir.",
+        "Mm-hmm.", "Uh-huh.", "Ja bitte.", "Ja, mach das.", "Sim, pode.",
+        "Hmm, okay.", "So, yes.", "Now, go ahead.", "Er, yes.", "Ah, okay.", "Mhm.", "Proceed.", "Bitte.", "Ja, mach es.",
+        "Ja, gerne.", "In Ordnung.", "Einverstanden.", "Pode.", "Pode sim.", "Sim, pode fazer.", "Sim, claro.", "Certo.",
+        "Isso mesmo.", "Com certeza.", "Tudo bem."]
 NOT_BARE = ["Yes, save a note that the kiln is hot.", "Go ahead and check #12.", "Stop the nightly job.",
+            "Ja, speicher eine Notiz, dass der Ofen heiß ist.", "Go ahead and check the build status.",
+            "Sim, pode verificar o build?", "Um, what is on my agenda?", "Well, stop the nightly job.", "So now what?",
+            "Hmm.", "Um.", "Well.", "Now.", "Sir.", "Go check the kiln.", "Proceed with the backup.", "Bitte speichere das.",
             "Cancel the reminder for Friday.", "No, ask about item 12 instead.", "What is stuck on #12?", "Thanks.", "",
             "Okay so what is on my agenda", "Right now, what is running?", None, 12]
 
@@ -1050,3 +1059,17 @@ def test_g3_an_end_with_no_or_an_unknown_playback_outcome_keeps_none(rig, said):
     body = {} if said is None else {"summary_playback": said}
     assert r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json=body).status_code == 200
     assert "summary_playback" not in records_of(r, sid)
+
+
+
+def test_l_s1_words_that_are_not_bare_still_run(rig):
+    """L S1: a confirmation with a request in it is not bare, in English, German and Portuguese, and runs."""
+    r = rig
+    sid = start(r)
+    for i, words in enumerate(["Yes, save a note that the kiln is hot.", "Ja, speicher eine Notiz, dass der Ofen heiß ist.",
+                               "Go ahead and check the build status."]):
+        body = consult(r, sid, call_id=f"call_{i}", words=words, turn=f"t{i}").get_json()
+        assert body["outcome"] == "done", (words, body)
+    assert len(r.host.turns) == 3
+    assert consult(r, sid, call_id="call_um", words="Um, yes.", turn="t9").get_json()["spoken"] == "Confirm that in writing."
+    assert len(r.host.turns) == 3

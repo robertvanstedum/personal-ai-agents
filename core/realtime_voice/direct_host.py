@@ -167,8 +167,13 @@ _BARE = frozenset((
     "sounds good", "that's right", "that's fine", "fine", "good", "great", "perfect", "absolutely", "of course", "indeed",
     "no", "nope", "nah", "stop", "cancel", "abort", "wait", "hold on", "hang on", "never mind", "nevermind", "don't",
     "forget it", "not now",
-    "ja", "genau", "nein", "stopp", "halt", "sim", "claro", "não", "nao"))
-_GLUE = frozenset(("and", "then", "just", "thanks", "thank you"))      # allowed beside them, never bare on their own
+    "ja", "genau", "nein", "stopp", "halt", "sim", "claro", "não", "nao",
+    # L S1: short spoken forms, and German and Portuguese confirmations
+    "go", "proceed", "mm hmm", "mhm", "mmhmm", "uh huh", "bitte", "mach das", "mach es", "gerne", "in ordnung",
+    "einverstanden", "pode", "pode sim", "pode fazer", "certo", "isso", "isso mesmo", "com certeza", "tudo bem"))
+# Allowed beside them, never bare on their own: joining words, thanks, and the fillers speech recognition writes (L S1).
+_GLUE = frozenset(("and", "then", "just", "thanks", "thank you", "sir",
+                   "um", "uh", "oh", "well", "so", "hmm", "now", "er", "erm", "ah"))
 
 
 def bare_confirmation(text):
