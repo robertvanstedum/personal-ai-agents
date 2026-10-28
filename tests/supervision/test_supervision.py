@@ -85,7 +85,7 @@ class Cleaning(unittest.TestCase):
             clean_ask({"request_key": "ask-12345678", "agent": "codex", "session": "sess-1234", "text": "short"})
 
     def test_nudges_are_fixed_text(self):
-        self.assertIn("Continue your already-authorized work", NUDGE_TEXT["continue"])
+        self.assertNotIn("continue", NUDGE_TEXT)          # retired 28 Oct: a silent stop is told to Robert, never nudged
         self.assertIn("passed", NUDGE_TEXT["ci_finished"].format(conclusion="passed"))
 
 
@@ -174,10 +174,11 @@ class CheckIn(unittest.TestCase):
         gh = FakeGitHub(prs=[pr(1, "a" * 40)], checks={"a" * 40: [DONE]})
         summary, items = watch.check_in(st, gh, now=NOW)
         keys = {i["key"] for i in items}
-        self.assertTrue({"stop:2", "stop:4", "stalled:8", "review-wait:9"} <= keys)
+        self.assertTrue({"stop:2", "stop:4", "stalled:6", "stalled:8", "review-wait:9"} <= keys)
+        self.assertNotIn("stalled:7", keys)         # under 20 min: not yet
         self.assertNotIn("stop:3", keys)            # its decision goes to Robert word for word, on its own
-        self.assertEqual([(s, k) for s, k, _ in st.nudges], [(5, "ci_finished"), (6, "continue")])
-        self.assertEqual(st.escalated, [8])
+        self.assertEqual([(s, k) for s, k, _ in st.nudges], [(5, "ci_finished")])     # no "continue" nudge
+        self.assertEqual(st.escalated, [6, 8])
         self.assertEqual(summary["pending_decisions"], ["D-1"])
 
     def test_github_down_is_an_error_not_a_crash(self):

@@ -1,7 +1,7 @@
 """One build check-in: open PRs and their CI, failed releases, agents' stop lines and decisions waiting on Robert.
 
-``check_in`` is deterministic (no model): it nudges agent sessions with fixed texts on work that does not need Robert,
-and returns the items Robert must hear about. Each item has a stable key so he is told once, not every 15 minutes.
+``check_in`` is deterministic (no model): it nudges an agent session with a fixed text only when CI it waits on has
+finished, and returns the items Robert must hear about. Each item has a stable key so he is told once, not every 15 minutes.
 """
 from __future__ import annotations
 
@@ -14,8 +14,7 @@ from core.supervision.store import name
 
 REPO = "robertvanstedum/personal-ai-agents"
 RELEASE_WORKFLOWS = ("deploy.yml", "deploy-mc-agent.yml", "deploy-iotconnect.yml")
-STALL_AFTER = timedelta(minutes=20)        # a turn that ended with no stop line, or open work, and nothing since
-ESCALATE_AFTER = timedelta(minutes=40)     # a nudge that changed nothing: Robert hears about it
+STALL_AFTER = timedelta(minutes=20)        # a turn that ended with no stop line, or open work, and nothing since: Robert hears
 REVIEW_WAIT = timedelta(minutes=60)
 GREEN_SETTLE = timedelta(minutes=10)
 UNCLAIMED_AFTER = timedelta(minutes=5)     # a queued delegation nobody picked up: the Mac runner is not there
@@ -127,14 +126,12 @@ def check_in(store, github, *, now=None, since=None):
             items.append({"key": f"review-wait:{stop['id']}", "kind": "stalled",
                           "text": f"{who} has waited {int(age.total_seconds() // 60)} min for a review: "
                                   f"{stop['needs'] or ''}".strip()})
-        elif stop["state"] == "unreported" and age >= STALL_AFTER:
-            if stop["nudged_at"] is None:
-                if store.nudge(stop["id"], "continue"):
-                    nudged.append(stop["session"][:8])
-            elif now - stop["nudged_at"] >= ESCALATE_AFTER - STALL_AFTER and stop["escalated_at"] is None:
-                store.mark_escalated(stop["id"])
-                items.append({"key": f"stalled:{stop['id']}", "kind": "stalled",
-                              "text": f"{who} stopped without saying why and did not resume after a nudge."})
+        elif stop["state"] == "unreported" and age >= STALL_AFTER and stop["escalated_at"] is None:
+            # No "continue" nudge any more (Robert, 28 Oct: not a permanent feature): a silent stop is told to Robert
+            # and MC as stalled, once; nothing wakes the session.
+            store.mark_escalated(stop["id"])
+            items.append({"key": f"stalled:{stop['id']}", "kind": "stalled",
+                          "text": f"{who} stopped {int(age.total_seconds() // 60)} min ago without saying why."})
     running = []
     try:
         work = store.delegations() if hasattr(store, "delegations") else {"jobs": [], "runners": []}
