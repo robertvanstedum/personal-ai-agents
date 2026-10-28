@@ -636,11 +636,14 @@ def waiting(ready, monkeypatch):
 
 @pytest.mark.parametrize("words", ["yes", "Yes.", "ok", "sure", "go ahead", "do it", "no", "cancel"])
 def test_a_bare_yes_or_no_in_voice_confirms_nothing_and_asks_for_the_code(waiting, words):
+    """Spec 165 v0.3 §6.4, D16 (a): a bare yes or no is refused by the core before MC's turn runs ("Confirm that in
+    writing."); the named form ("yes P-7K3M", below) still reaches MC's proposal handler."""
     r = waiting.r
     sid = start(r)["voice_session_id"]
     result = call(r, sid, words=words).get_json()
     assert waiting.handler.handled == [] and not r.turns                       # nothing confirmed, no model asked
-    assert result["spoken"] == api.VOICE_NAME_PROPOSAL and result["receipt"] is None
+    assert result["spoken"] == direct_host.CONFIRM_IN_WRITING and result["error"] == "confirmation"
+    assert result.get("receipt") is None
 
 
 def test_a_named_yes_in_voice_confirms_that_proposal(waiting):
@@ -706,12 +709,14 @@ def test_typed_turns_parse_a_spaced_code_exactly_as_typed(waiting):
     assert waiting.handler.handled == []
 
 
-@pytest.mark.parametrize("words", ["stop", "Stop!", "stop it", "cancel it"])
-def test_a_bare_stop_in_voice_stops_no_job(waiting, words):
+@pytest.mark.parametrize("words,spoken", [("stop", direct_host.CONFIRM_IN_WRITING), ("Stop!", direct_host.CONFIRM_IN_WRITING),
+                                          ("stop it", api.VOICE_NAME_JOB), ("cancel it", api.VOICE_NAME_JOB)])
+def test_a_bare_stop_in_voice_stops_no_job(waiting, words, spoken):
+    """A stop word alone is refused by the core (D16 (a)); "stop it" is not bare and reaches MC, which asks for the job."""
     r = waiting.r
     sid = start(r)["voice_session_id"]
     result = call(r, sid, words=words).get_json()
-    assert waiting.jobs.stopped == [] and result["spoken"] == api.VOICE_NAME_JOB
+    assert waiting.jobs.stopped == [] and result["spoken"] == spoken
 
 
 def test_stop_the_job_in_voice_stops_it(waiting):
@@ -756,12 +761,25 @@ def test_a_bare_confirm_of_a_waiting_lesson_or_guest_rejection_in_voice_asks_for
     monkeypatch.setattr(lessons, "LessonCommands", Pending)
     r = ready
     sid = start(r)["voice_session_id"]
-    assert call(r, sid, call_id="l1", words="Confirm").get_json()["spoken"] == api.VOICE_IN_WRITING
+    # The core refuses the bare word first (Spec 165 v0.3 §6.4, D16 (a)); MC's own voice guard stays behind it.
+    assert call(r, sid, call_id="l1", words="Confirm").get_json()["spoken"] == direct_host.CONFIRM_IN_WRITING
+    found = lambda: (r.config["services"], "robert", {"id": CID, "principal": "robert"}, r.notes,  # noqa: E731
+                     {"text": "Confirm", "author_kind": "owner", "who": "robert"}, "n-1", "n-1", [])
+    with r.app.test_request_context():
+        from flask import g
+        g.mc_voice_named_only = True
+        lesson = api._owner_lesson_command(found())
+        assert lesson[0].get_json()["message"] == api.VOICE_IN_WRITING
     monkeypatch.setattr(api, "_lesson_ledger", lambda principal: None)
     r.config["feature_environ"].update(MINIMOI_MC_GUEST_ACTIONS="1", MINIMOI_MC_GUEST_ACTIONS_ENV="dev")
     monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic.invalid/none")
     monkeypatch.setattr(guest_commands, "GuestCommands", Pending)
-    assert call(r, sid, call_id="g1", words="Confirm").get_json()["spoken"] == api.VOICE_IN_WRITING
+    assert call(r, sid, call_id="g1", words="Confirm").get_json()["spoken"] == direct_host.CONFIRM_IN_WRITING
+    with r.app.test_request_context(BASE + "/consult", method="POST"):       # the consult's blueprint: its feature settings
+        from flask import g
+        g.mc_voice_named_only = True
+        guest = api._owner_guest_command(found())
+        assert guest[0].get_json()["message"] == api.VOICE_IN_WRITING
     assert done == [] and not r.turns
 
 

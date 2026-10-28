@@ -155,6 +155,40 @@ def affirmative(text):
     return isinstance(text, str) and bool(_YES.match(text)) and not _NO.search(text)
 
 
+# Spec 165 v0.3 §6.4, D16 (a): a consult whose owner words are only a confirmation or a stop word ("yes", "go ahead",
+# "stop") is refused before anything is recorded or run, on every host. What the voice asked ("shall I …?") is confirmed in
+# writing: a spoken yes authorizes nothing. The yes to "Shall I sum up?" is a transcript turn (affirmative, above), not a
+# consult, and still closes capture; End and barge-in still stop the audio. A small closed set, tested phrase by phrase.
+CONFIRM_IN_WRITING = "Confirm that in writing."
+IN_WRITING = "Do that in writing."          # a host's commands done in writing only (DirectVoiceAdapter.in_writing)
+_BARE = frozenset((
+    "yes", "yeah", "yep", "yup", "yes please", "sure", "ok", "okay", "alright", "all right", "right", "correct", "exactly",
+    "confirm", "confirmed", "go ahead", "go on", "go for it", "do it", "do that", "do so", "please do", "please",
+    "sounds good", "that's right", "that's fine", "fine", "good", "great", "perfect", "absolutely", "of course", "indeed",
+    "no", "nope", "nah", "stop", "cancel", "abort", "wait", "hold on", "hang on", "never mind", "nevermind", "don't",
+    "forget it", "not now",
+    "ja", "genau", "nein", "stopp", "halt", "sim", "claro", "não", "nao"))
+_GLUE = frozenset(("and", "then", "just", "thanks", "thank you"))      # allowed beside them, never bare on their own
+
+
+def bare_confirmation(text):
+    """True when the words are only confirmation or stop words (at least one of them), with nothing else said."""
+    if not isinstance(text, str):
+        return False
+    words = re.sub(r"[^\w']+", " ", text.lower().replace("\u2019", "'")).replace("_", " ").split()
+    i = found = 0
+    while i < len(words):
+        for n in (3, 2, 1):
+            phrase = " ".join(words[i:i + n])
+            if len(words) - i >= n and (phrase in _BARE or phrase in _GLUE):
+                found += phrase in _BARE
+                i += n
+                break
+        else:
+            return False
+    return found > 0
+
+
 # ── the two tools and the rules that go with them ──────────────────────────────────────────────────────────────────
 
 OWNER = "the owner"              # the owner's name in the core's words when a host names none (the adapter's owner_name)
@@ -590,6 +624,13 @@ class DirectVoiceAdapter:
         command), as the result the provider is given ({error, spoken, …}), or None. A refusal here binds nothing: the
         owner turn may still be acted on by the other tool."""
         return None
+
+    def in_writing(self, name, text):
+        """Optional: whether the owner's words are a command this host does only in writing (Spec 165 v0.3 §6.4: CoS's
+        /new, /remind and other slash commands). The core refuses them before anything is recorded or run, with
+        IN_WRITING, counted like every refusal. MC supplies none: its typed turn takes its commands in voice by name, and
+        clarifies a bare confirm, cancel or stop in writing itself."""
+        return False
 
     def typed_turn(self, handle, principal, sid, n, name, text, *, item):
         """The owner's words through the person's typed turn, as if typed: the result the provider is given (ok,
@@ -1092,6 +1133,10 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     text, bad = adapter.clean(owner_text, adapter.note_max, "spoken words")
     if bad is not None:
         return refused_here({"error": "invalid", "spoken": FAILED})
+    if bare_confirmation(text):                   # D16: a bare yes or stop authorizes nothing (Spec 165 v0.3 §6.4)
+        return refused_here({"error": "confirmation", "spoken": CONFIRM_IN_WRITING})
+    if adapter.in_writing(name, text):            # the host's commands done in writing only
+        return refused_here({"error": "in_writing", "spoken": IN_WRITING})
     words = digest(text)
     asked = record(REQUEST, request_id(item), owner_item_id=item, text_sha256=words)
     existing = get(adapter, handle, sid, asked["id"])

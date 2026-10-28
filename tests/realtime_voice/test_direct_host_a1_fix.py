@@ -955,3 +955,69 @@ def test_fr_n1_an_attempt_whose_outcome_cannot_be_kept_is_never_still_being_writ
     r.store.records = real
     assert "summary_outcome:1" not in records_of(r, sid)
     assert summary_ask(r, sid).get_json()["state"] == "proposed"               # attempt 2, not "still being written"
+
+
+# ── The last pass: Spec 165 v0.3 (G1–G4) and Codex's delta review at a17ddc8d (CC_22) ────────────────────────────────────
+
+# G1 (Spec 165 v0.3 §6.4, D16 (a)): a consult whose owner words are only a confirmation or a stop word is refused in the core,
+# before anything is recorded or run, on every host: "Confirm that in writing." A small closed set, tested phrase by phrase.
+BARE = ["yes", "Yes.", "YES!", "yeah", "Yep.", "Sure.", "okay", "OK, go ahead.", "Yes, go ahead.", "Go ahead", "do it",
+        "Yes please.", "Yes, do it.", "Alright, go for it!", "That’s right.", "Sounds good.", "Of course.", "Right, then do it.",
+        "no", "No.", "Stop.", "stop", "Cancel.", "Never mind.", "Wait.", "Hold on.", "Don't.", "Don’t!", "Nope.",
+        "Forget it.", "Ja.", "Genau.", "Nein.", "Sim.", "Não.", "Yes, thanks.", "Okay, thank you.", "Yes, yes."]
+NOT_BARE = ["Yes, save a note that the kiln is hot.", "Go ahead and check #12.", "Stop the nightly job.",
+            "Cancel the reminder for Friday.", "No, ask about item 12 instead.", "What is stuck on #12?", "Thanks.", "",
+            "Okay so what is on my agenda", "Right now, what is running?", None, 12]
+
+
+def test_g1_bare_confirmations_and_stop_words_are_told_apart_phrase_by_phrase():
+    from core.realtime_voice.direct_host import bare_confirmation
+    assert [p for p in BARE if not bare_confirmation(p)] == []
+    assert [p for p in NOT_BARE if bare_confirmation(p)] == []
+
+
+def test_g1_a_bare_yes_is_refused_in_writing_runs_nothing_and_counts_as_a_refusal(rig):
+    from core.realtime_voice.consult import CAP_LINE
+    from core.realtime_voice.direct_host import REFUSAL_CAP
+    r = rig
+    sid = start(r)
+    for i, words in enumerate(["Yes.", "Go ahead.", "Stop."]):
+        answer = consult(r, sid, call_id=f"call_{i}", words=words, turn=f"t{i}")
+        body = answer.get_json()
+        assert answer.status_code == 200 and body["outcome"] == "not_done" and body["error"] == "confirmation"
+        assert body["spoken"] == "Confirm that in writing."
+        assert f"consult_request:t{i}" not in records_of(r, sid)                    # never admitted: no record of an effect
+    assert not r.host.turns
+    for i in range(3, REFUSAL_CAP):                                                  # each counts under the refusals' cap
+        consult(r, sid, call_id=f"call_{i}", words="Yes.", turn=f"t{i}")
+    capped = consult(r, sid, call_id="call_cap", words="Yes.", turn="t50")
+    assert capped.status_code == 429 and capped.get_json()["spoken"] == CAP_LINE
+    real = consult(r, sid, call_id="call_real", words="Yes, save a note that the kiln is hot.", turn="t51", name="save_note")
+    assert real.get_json()["outcome"] == "done" and len(r.host.turns) == 1          # not bare: it runs
+
+
+def test_g1_the_yes_to_shall_i_sum_up_still_ends_the_session_while_a_bare_consult_yes_is_refused(rig):
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    assert post(r, sid, [turn(r, "user", "t0", "We're done.")]).get_json()["propose_end"] is True
+    assert consult(r, sid, call_id="call_yes", words="Yes.", turn="t1").get_json()["spoken"] == "Confirm that in writing."
+    assert post(r, sid, [turn(r, "user", "t1", "Yes.", 3)]).get_json()["end_confirmed"] is True
+    assert not r.host.turns
+
+
+def test_g1_a_hosts_in_writing_commands_are_refused_before_anything_runs_and_mc_supplies_none(rig):
+    """Spec 165 v0.3 §6.4 asks A2 for CoS's commands refused with "Do that in writing." The core holds the hook and the words;
+    a host supplies only its set (in_writing). MC's typed turn handles its own commands in voice (named ones only; a bare
+    confirm, cancel or stop is clarified in writing by MC itself), so MC supplies none."""
+    from core.realtime_voice.direct_host import DirectVoiceAdapter
+    from minimoi_portal.guild_ui.mc_voice_direct import _MasterCraftsman
+    r = rig
+    sid = start(r)
+    r.host.in_writing = lambda name, text: text.startswith("/")
+    body = consult(r, sid, call_id="call_new", words="/new", turn="t0").get_json()
+    assert body["outcome"] == "not_done" and body["error"] == "in_writing" and body["spoken"] == "Do that in writing."
+    assert not r.host.turns and "consult_request:t0" not in records_of(r, sid)
+    assert consult(r, sid, call_id="call_ok", words="What is on my agenda?", turn="t1").get_json()["outcome"] == "done"
+    assert DirectVoiceAdapter().in_writing("consult", "/new") is False
+    assert _MasterCraftsman.in_writing is DirectVoiceAdapter.in_writing

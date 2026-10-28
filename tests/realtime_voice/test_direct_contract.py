@@ -142,3 +142,19 @@ def test_one_effect_per_owner_turn_holds_from_save_note_to_check_and_from_check_
     assert check_after["same_turn"] is True and model_after["same_turn"] is True
     assert model_first.get("same_turn") is None and check_first.get("same_turn") is None
     assert h.effects() == 2                                            # one effect per owner item, whichever tool came first
+
+
+def test_a_bare_confirmation_is_refused_in_writing_on_every_host_and_the_summary_yes_still_works(host):
+    """Spec 165 v0.3 §6.4, D16 (a), G1: the core refuses a consult whose words are only a confirmation or a stop word, on
+    every host, before anything is recorded or run. The yes to "Shall I sum up?" is a transcript turn, and still ends."""
+    h = host
+    sid = h.start()
+    assert post(h, sid, [h.event("user", "t0", "We're done.")]).get_json()["propose_end"] is True
+    refused = ask(h, sid, "call_1", "t1", words="Yes.").get_json()
+    assert refused["outcome"] == "not_done" and refused["spoken"] == "Confirm that in writing." and h.effects() == 0
+    read = h.client.get(h.base + f"/consult/{sid}/t1?conversation_id={h.cid}", headers=h.headers)
+    assert read.status_code == 404                                       # never admitted
+    assert ask(h, sid, "call_2", "t1", words="Yes.", name="save_note").get_json()["error"] == "confirmation"
+    assert ask(h, sid, "call_3", "t2", words="Yes, what is stuck on #12?").get_json()["outcome"] == "done"
+    assert h.turns() == 1                                                # not bare: it runs
+    assert post(h, sid, [h.event("user", "t1", "Yes.", 3)]).get_json()["end_confirmed"] is True
