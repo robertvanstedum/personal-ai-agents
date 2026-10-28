@@ -113,6 +113,7 @@ class Host(DirectVoiceAdapter):
     name = "tp_voice"
     note_max = 500
     summary_key = "voice-summary-tp"
+    owner_name = "Rosa"                              # the core names the owner as the host does, never "Robert" of its own
     receipts = Receipts(("reply", "note", "reminder"))
 
     def __init__(self, card_root):
@@ -161,7 +162,7 @@ class Host(DirectVoiceAdapter):
         return load_pinned(self.card_root)
 
     def instructions(self, card, handle):
-        return compose_instructions("Test rules.\n\n" + direct_rules(self.person), card, f"continuity of {handle}")
+        return compose_instructions("Test rules.\n\n" + direct_rules(self.person, self.owner_name), card, f"continuity of {handle}")
 
     def ended(self, handle, sid):
         self.ends.append(sid)
@@ -245,7 +246,7 @@ def test_a_host_gets_the_routes_the_metadata_and_a_recorded_session(rig):
     assert "'save a note:'" in minted["tools"][1]["description"]
     text = minted["instructions"]
     assert text.index("Test rules.") < text.index("Test Person, plain and brief.") < text.index("continuity of owner")
-    assert "Test Person's own turn on Robert's last words" in text and "Shall I sum up?" in text
+    assert "Test Person's own turn on Rosa's last words" in text and "Shall I sum up?" in text and "Robert" not in text
     assert r.budget.status()["reserved_usd"] == 2.0
 
 

@@ -176,6 +176,10 @@ class _MasterCraftsman(DirectVoiceAdapter):
     receipts = reveal.RECEIPTS
     store = _FloorStore()
     summary_key = "voice-summary-mc"        # MC's capped model-gateway key for the summary (Spec 165 §5.4, D22 (a))
+    owner_name = "Robert"                    # the core's words name the owner as MC's always have (review R1 P3-12)
+    words = {"no_conversation": "Open a saved conversation before using voice.",                      # the Guild's words
+             "not_listening": "Voice is on the record only. Go back on the record to use it.",
+             "invalid": "Voice unavailable: open a saved conversation, on the record."}
 
     def __init__(self, app, config, mount):
         self.app, self.config, self.name = app, config, mount + "_mc_voice"
@@ -237,7 +241,7 @@ class _MasterCraftsman(DirectVoiceAdapter):
         from . import api
         from .mc_voice_transcripts import block
         continuity = block("", api._conv_floor(conv), scrub=api.scrub, include_recent=True) if conv is not None else ""
-        return compose_instructions(INSTRUCTIONS + "\n\n" + direct_rules(PERSON), card, continuity or NO_CONTINUITY)
+        return compose_instructions(INSTRUCTIONS + "\n\n" + direct_rules(PERSON, self.owner_name), card, continuity or NO_CONTINUITY)
 
     def forget(self, sids):
         """Sessions that ended long ago (the core prunes them): their tags and first consult words go too."""

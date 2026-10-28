@@ -153,21 +153,24 @@ def affirmative(text):
 
 # ── the two tools and the rules that go with them ──────────────────────────────────────────────────────────────────
 
-def tools(person):
+OWNER = "the owner"              # the owner's name in the core's words when a host names none (the adapter's owner_name)
+
+
+def tools(person, owner=OWNER):
     """The session's two functions, named exactly as bootstrap._allowlisted_tools allows: only type, name, description
-    and parameters. The descriptions are the model's rules."""
+    and parameters. The descriptions are the model's rules. ``owner``: the host's name for its owner (MC: Robert)."""
     notes = " or ".join(f"'{phrase}'" for phrase in person["notes"])
     return [
         {"type": "function", "name": "consult",
          "description": (f"Ask {person['name']}'s own turn for current facts, project state, files, jobs or any work. "
-                         "The server acts on Robert's own last words, not on these arguments. Speak the result's 'spoken' "
+                         f"The server acts on {owner}'s own last words, not on these arguments. Speak the result's 'spoken' "
                          "text without adding claims. Its 'outcome' is done, not_done, pending (still running: the answer "
                          "will be in the conversation; say only that) or unknown (the result did not come back: say only "
                          "that, and that it must be checked before asking again). If 'same_turn' is true, his words were "
                          "already acted on (by the other tool, or by Check): say only 'spoken'."),
          "parameters": {"type": "object", "properties": {"question": {"type": "string"}}}},
         {"type": "function", "name": "save_note",
-         "description": (f"Save a note when Robert says {notes}. The server saves his own "
+         "description": (f"Save a note when {owner} says {notes}. The server saves his own "
                          "words, not these arguments. Say it is saved only when the result has 'saved' true. If "
                          "'outcome' is pending or unknown, say only what 'spoken' says: the note must be checked before it "
                          "is saved again. If 'same_turn' is true, his words were already acted on (by the other tool, or by "
@@ -176,13 +179,13 @@ def tools(person):
     ]
 
 
-def direct_rules(person):
+def direct_rules(person, owner=OWNER):
     """Spec 164 §7, part 1: what a direct session adds to the host's own operating rules (its two tools, the spoken end,
     no summary from memory)."""
-    return (f"On this voice path your two tools are 'consult' ({person['name']}'s own turn on Robert's last words: "
+    return (f"On this voice path your two tools are 'consult' ({person['name']}'s own turn on {owner}'s last words: "
             f"current facts, project state, files, jobs, any work) and 'save_note' (only for '{person['notes'][0]}'). "
             "Speak what a tool returns; do not add claims to it. If it says it did not go through, say so. "
-            f"When Robert says he is done (\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or "
+            f"When {owner} says he is done (\"we're done\"), answer only: \"{SUMMARY_PROMPT}\" A negated or "
             "questioned one (\"we're not done\") is not an ending; carry on. Never summarize from memory: the "
             "summary is made from this session's kept record after it ends.")
 
@@ -308,16 +311,21 @@ SUMMARY_MAX_CHARS = 12_000
 SPOKEN_MAX_CHARS = 450
 PROPOSAL_HEAD = ("[Voice summary proposal] For this voice session only. Not confirmed; confirming it confirms the "
                  "summary only and authorizes nothing it mentions.")
-DECISION_HEAD = {"confirm": "[Voice summary confirmed by Robert] It confirms the summary only; it authorizes nothing it "
+DECISION_HEAD = {"confirm": "[Voice summary confirmed by {owner}] It confirms the summary only; it authorizes nothing it "
                             "mentions. Any action still needs its own request and receipt.",
-                 "edit": "[Voice summary edited by Robert] His wording below replaces the proposal. It confirms the "
+                 "edit": "[Voice summary edited by {owner}] His wording below replaces the proposal. It confirms the "
                          "summary only; it authorizes nothing it mentions.",
-                 "decline": "[Voice summary declined by Robert] The proposal is not his record of the session."}
+                 "decline": "[Voice summary declined by {owner}] The proposal is not his record of the session."}
+
+
+def decision_head(decision, owner=OWNER):
+    """The head of a summary decision's note, naming the owner as the host does."""
+    return DECISION_HEAD[decision].format(owner=owner)
 UNAVAILABLE_TEXT = ("[Voice summary unavailable] The session's turns are shown. Summary unavailable; ask for it in "
                     "writing later.")
 
 
-def summary_prompt(turns, complete, *, kept_all=True, running=0, missing=None):
+def summary_prompt(turns, complete, *, kept_all=True, running=0, missing=None, owner=OWNER):
     """The person's model is asked for this session's summary from its retained records only, as bounded DATA.
     ``turns``: [(speaker, text, partial, interrupted)], oldest first, as the host store keeps them. ``kept_all`` False:
     the page could not deliver some of what was said (review B4). ``running``: consults still running when capture
@@ -341,7 +349,7 @@ def summary_prompt(turns, complete, *, kept_all=True, running=0, missing=None):
     if running:
         bound += (" A consult was still running when the session ended; its outcome is not in these records: say so in "
                   "the written summary.")
-    prompt = ("Robert ended a voice conversation with you and asked for a summary of THAT SESSION ONLY. Your response "
+    prompt = (f"{owner[:1].upper() + owner[1:]} ended a voice conversation with you and asked for a summary of THAT SESSION ONLY. Your response "
               "is machine-consumed JSON. Return only {\"spoken\": \"...\", \"written\": \"...\"}. spoken: two or three "
               "plain sentences, the way a colleague sums up at the door; no lists, no markdown. written: the fuller "
               "summary in plain text, with one line per consult and its recorded outcome; mark what is uncertain. Use "
@@ -528,6 +536,8 @@ class DirectVoiceAdapter:
     person = None
     name = None
     summary_key = None
+    owner_name = None       # the owner as the core's words name him (MC: "Robert"); None: "the owner"
+    words = {}              # the host's own words for the page (direct_voice.words): no_conversation, not_listening, invalid
     note_max = 2000
     receipts = Receipts(("reply", "operation"))
     store = None
@@ -1185,7 +1195,8 @@ def summarize(adapter, principal, handle, sid, *, running=0, client=None):
     end = store.read_marker(handle, sid, "end") or {}
     kept_all = end.get("capture") != "incomplete"
     missing = end.get("missing") if type(end.get("missing")) is int else None
-    prompt, partial, covered, total = summary_prompt(turns, complete, kept_all=kept_all, running=running, missing=missing)
+    prompt, partial, covered, total = summary_prompt(turns, complete, kept_all=kept_all, running=running, missing=missing,
+                                                     owner=adapter.owner_name or OWNER)
     try:
         card = adapter.card()["card"]
     except Exception:                                    # the card is tone only; the summary needs the records
@@ -1270,7 +1281,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             handle, refused = adapter.conversation(cid)
             handle = handle if refused is None else None
         return {"name": person["name"], "prompt_txt": card["card"], "scenes": {}, "voices": card["voices"],
-                "tools": tools(person), "notices": card["notices"], "instructions": adapter.instructions(card["card"], handle)}
+                "tools": tools(person, adapter.owner_name or OWNER), "notices": card["notices"],
+                "instructions": adapter.instructions(card["card"], handle)}
 
     def guard():
         return adapter.guard(_kind())
@@ -1506,7 +1518,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             return refusal("invalid", "Say confirm, edit (with the text) or decline. Nothing was changed.", 422)
         if store.summary(handle, sid) is None:
             return refusal("no_proposal", "There is no summary proposal for that voice session.", 409)
-        text = DECISION_HEAD[decision]
+        text = decision_head(decision, adapter.owner_name or OWNER)
         if decision == "edit":
             words, bad = adapter.clean(body.get("text"), adapter.note_max - len(text) - 2, "summary")
             if bad is not None:
@@ -1540,5 +1552,6 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 "reconcile_url": url_prefix + "/api/realtime-voice/consult/{session_id}/{owner_item_id}",
                 "keep_talking_url": url_prefix + "/api/realtime-voice/session/{session_id}/keep_talking",
                 "heartbeat_seconds": HEARTBEAT_SECONDS, "persona": person["key"], "locale": locale,
-                "card_release": release, "person": {"name": person["name"], "short": person["short"]}}
+                "card_release": release, "person": {"name": person["name"], "short": person["short"]},
+                "words": dict(adapter.words)}
     return metadata, sessions

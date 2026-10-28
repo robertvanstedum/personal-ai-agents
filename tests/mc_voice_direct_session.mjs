@@ -12,7 +12,9 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   bootstrap_url: `${BASE}/bootstrap`, consult_url: `${BASE}/consult`, end_url: `${BASE}/session/{session_id}/end`,
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman',
-  locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' } };
+  locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' },
+  words: { no_conversation: 'Open a saved conversation before using voice.',                           // MC's own words (the server's)
+    not_listening: 'Voice is on the record only. Go back on the record to use it.', invalid: 'Voice unavailable: open a saved conversation, on the record.' } };
 const HEADERS = { 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-synthetic', 'X-Record-Mode': 'on_record' };
 
 function rig({ routes = {}, refuse = null, holdConnect = false, conversation = 'c-1', notices = ['openai voice is unset, using marin', 'xai voice is unset, using eve'] } = {}) {
@@ -115,7 +117,7 @@ let scenarios = 0;
   const r = rig({ conversation: null });
   assert.equal(await r.s.start('openai'), false);
   assert.equal(r.c, null);
-  assert.deepEqual(r.ended, [[D.NO_CONVERSATION, { error: true }]]);
+  assert.deepEqual(r.ended, [['Open a saved conversation before using voice.', { error: true }]]);   // MC's words, from the server
   scenarios++;
 }
 // §3 table: every refusal has its words; nothing was minted, so nothing is ended or revealed.

@@ -236,3 +236,30 @@ def test_mcs_tags_and_first_words_are_let_go_with_a_long_ended_session(ready):
     r.clock[0] += 31 * 60 + 3601
     start(r)
     assert adapter.tags.tagged("mc-notice-1") is None and sid not in adapter._first
+
+
+# ── R1 P3-12, R2 N2: MC's adapter supplies the owner's name and the Guild's words; his text is byte-identical ───────────
+
+MC_TEXT_SHA = "260acffefbc343c6eba7169a156c355a7327eb42247518418d86aee007c6245a"   # at acf5d756, before the words moved
+
+
+def test_mcs_instructions_tool_text_heads_and_summary_prompt_are_byte_identical_now_his_adapter_supplies_them():
+    import hashlib
+    import json
+    from core.realtime_voice import direct_host as core
+    owner = direct._MasterCraftsman.owner_name
+    rules = core.direct_rules(direct.PERSON, owner)
+    blob = json.dumps({"tools": core.tools(direct.PERSON, owner), "rules": rules,
+                       "instructions": direct.INSTRUCTIONS + "\n\n" + rules,
+                       "heads": {d: core.decision_head(d, owner) for d in ("confirm", "edit", "decline")},
+                       "prompt": core.summary_prompt([("owner ASR", "We're done.", False, False)], True, owner=owner)[0]},
+                      sort_keys=True)
+    assert hashlib.sha256(blob.encode()).hexdigest() == MC_TEXT_SHA
+
+
+def test_mcs_page_words_come_from_his_adapter(ready):
+    r = ready
+    words = r.config["mc_direct_voice"]["words"]
+    assert words == {"no_conversation": "Open a saved conversation before using voice.",
+                     "not_listening": "Voice is on the record only. Go back on the record to use it.",
+                     "invalid": "Voice unavailable: open a saved conversation, on the record."}

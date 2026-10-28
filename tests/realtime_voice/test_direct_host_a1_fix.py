@@ -562,3 +562,28 @@ def test_sessions_long_past_their_maximum_duration_are_let_go_and_the_store_stil
     assert r.sessions.known(new)
     got = r.client.get(BASE + f"/consult/{old}/t1?conversation_id=owner", headers=OWNER).get_json()
     assert got["outcome"] == "done"                                 # the store still answers for it
+
+
+# ── R1 P3-12, R2 N2: the owner's name and the host's page words come from the adapter ──────────────────────────────────
+
+def test_the_core_names_the_owner_only_as_the_host_does(rig):
+    import re
+    from pathlib import Path
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    minted = r.mints[-1]
+    assert "Rosa's own last words" in minted["tools"][0]["description"] and "Robert" not in str(minted["tools"])
+    assert "Rosa's last words" in minted["instructions"] and "Robert" not in minted["instructions"]
+    post(r, sid, [turn(r, "user", "t0", "We're done.")])
+    r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"})
+    assert r.host.prompts[-1].startswith("Rosa ended a voice conversation")
+    r.client.post(BASE + f"/session/{sid}/summary/decision", headers=OWNER, json={"conversation_id": "owner", "decision": "confirm"})
+    assert r.store.summaries[(sid, "summary-decision")].startswith("[Voice summary confirmed by Rosa]")
+    root = Path(__file__).resolve().parents[2]
+    core = re.sub(r'"""[\s\S]*?"""|#.*', "", (root / "core/realtime_voice/direct_host.py").read_text())
+    assert "Robert" not in core
+    page = re.sub(r"//.*", "", (root / "core/realtime_voice/static/direct-voice-session.js").read_text())
+    for guild in ("saved conversation", "on the record", "Robert"):
+        assert guild not in page, guild
+    assert r.metadata["words"] == {}

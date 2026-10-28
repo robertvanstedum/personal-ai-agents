@@ -15,7 +15,8 @@
 // No imports: the host page hands in the page, the fetch, the controller's loader and its ui, so the node tests drive this
 // file with a fake controller, a fake fetch and fake timers.
 
-export const NO_CONVERSATION = 'Open a saved conversation before using voice.';
+// The host's own words come with direct_voice.words (MC: "a saved conversation", "on the record"); these are the defaults.
+export const NO_CONVERSATION = 'Open a conversation before using voice.';
 export const ENDED = 'Voice ended. What was said is in the conversation.';
 export const NOT_DONE = 'That did not go through. Nothing was done.';
 export const SUMMARY_UNAVAILABLE = 'Summary unavailable.';
@@ -64,26 +65,29 @@ const TEXT_BYTES = 16000;
 const START_WORDS = {
   not_allowed: "Voice unavailable: this needs the owner's sign-in.",
   csrf: 'Voice unavailable: this page is out of date. Reload it.',
-  not_listening: 'Voice is on the record only. Go back on the record to use it.',
-  invalid: 'Voice unavailable: open a saved conversation, on the record.',
+  not_listening: 'Voice is not available in this mode.',
+  invalid: 'Voice unavailable: open a conversation first.',
   not_found: 'Voice unavailable: that conversation is not available.',
   unavailable: 'Voice unavailable here right now.',
 };
 // The words that name the person ({name, short}, from direct_voice.person). The host's own "turns are off" refusal is
 // <short>_turns_off (MC: mc_turns_off); without a person there is none.
-export function personWords(person) {
+export function personWords(person, host = {}) {
   const name = typeof person?.name === 'string' && person.name ? person.name : 'the agent';
   const short = typeof person?.short === 'string' && person.short ? person.short : name;
   const off = typeof person?.short === 'string' && person.short ? `${person.short.toLowerCase()}_turns_off` : null;
+  const own = (key) => (typeof host?.[key] === 'string' && host[key].trim() ? { [key]: host[key].trim() } : {});
+  const start = { ...START_WORDS, ...own('not_listening'), ...own('invalid') };
   return {
     off,
-    start: off ? { ...START_WORDS, [off]: `Voice unavailable: ${name}'s turns are off here.` } : START_WORDS,
+    noConversation: own('no_conversation').no_conversation || NO_CONVERSATION,
+    start: off ? { ...start, [off]: `Voice unavailable: ${name}'s turns are off here.` } : start,
     serverEnded: off ? { ...SERVER_ENDED, [off]: `Voice stopped: ${name}'s turns are off here. What was said before is kept.` } : SERVER_ENDED,
     sayFirst: `Say something first: Check with ${short} sends your last words.`,
   };
 }
-export function startRefusal(info, person) {
-  const words = personWords(person).start;
+export function startRefusal(info, person, host) {
+  const words = personWords(person, host).start;
   const reason = info?.reason, status = Number(info?.status) || 0;
   const detail = typeof info?.detail === 'string' ? info.detail.trim().slice(0, 240) : '';
   if (reason === 'bootstrap_network_error') return 'Voice unavailable: the server did not answer. Typing still works.';
@@ -333,7 +337,7 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
 // ended by itself; the page resets its button).
 export function directVoice(d) {
   const { page, direct, ui } = d;
-  const words = personWords(direct.person);
+  const words = personWords(direct.person, direct.words);
   const clock = d.clock || Date.now;
   const later = d.setTimeout || ((fn, ms) => setTimeout(fn, ms));
   const cancel = d.clearTimeout || ((t) => clearTimeout(t));
@@ -654,7 +658,7 @@ export function directVoice(d) {
   async function start(chosen) {
     cid = page.conversation?.id || null;
     provider = chosen || direct.default_provider;
-    if (!cid) { failed = true; ui.ended(NO_CONVERSATION, { error: true }); return false; }
+    if (!cid) { failed = true; ui.ended(words.noConversation, { error: true }); return false; }
     const { RealtimeVoiceController } = await d.loadController();
     if (finalized) return false;
     capture = createCapture({ send: (events, opts) => postJson(at(direct.transcript_url), { events }, opts || {}),
@@ -691,7 +695,7 @@ export function directVoice(d) {
       onStop: () => { endedWords = ['Voice stopped: the session reached its time limit.', false]; },
       onFatalError: (info) => {
         failed = true;
-        ui.say(startRefusal(info, direct.person), { loud: true, error: true });
+        ui.say(startRefusal(info, direct.person, direct.words), { loud: true, error: true });
         if (info?.reason === 'bootstrap_rejected' || info?.reason === 'bootstrap_network_error') finalize({ turns: [] });
       },
       onPlayback: () => {},
