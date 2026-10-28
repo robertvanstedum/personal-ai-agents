@@ -11,6 +11,8 @@ export const RECOVERING = 'Voice session ended unexpectedly; recovering what was
 export const CONFIRM_SCOPE = 'Confirming confirms the summary only. Anything it mentions still needs its own request.';
 export const ASK_SUMMARY = 'Ask for a summary';
 export const EDIT_MAX = 1860;
+// A session some of whose words are known not to be kept (review B4): said where it started, in every view, after a reload too.
+export const INCOMPLETE_LINE = 'Some of what was said in this voice session could not be kept.';
 
 // The thread side of §6 and §7: one quiet line where a recovering or elsewhere-live session started, and the summary card
 // (Confirm, Edit, Decline) on a waiting proposal, from any device, however much later.
@@ -144,7 +146,8 @@ export function voiceThread(d) {
       for (const s of Array.isArray(sessions) ? sessions : []) {
         if (!s || typeof s.session_id !== 'string') continue;
         const text = s.state === 'live' ? (s.session_id === d.mine() ? null : LIVE_ELSEWHERE)
-          : ['recovering', 'unknown'].includes(s.state) ? (s.line || RECOVERING) : null;
+          : ['recovering', 'unknown'].includes(s.state) ? (s.line || RECOVERING)
+          : s.capture === 'incomplete' ? INCOMPLETE_LINE : null;
         line(s.session_id, text, s.started_at);
         if (s.summary === 'proposed') card(s.session_id);
         if (s.summary === 'unavailable' && ['ended', 'dropped'].includes(s.state)) ask(s.session_id); else unask(s.session_id);

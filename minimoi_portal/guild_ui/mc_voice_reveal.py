@@ -111,8 +111,10 @@ def mark_start(floor, sid, *, principal, conversation_id, max_minutes, started=N
                                               "max_minutes": int(max_minutes), "started_at": stamp(started or now())})
 
 
-def mark_end(floor, sid, *, reason="end", ended=None):
-    return _write_marker(floor, sid, "end", {"reason": reason, "ended_at": stamp(ended or now())})
+def mark_end(floor, sid, *, reason="end", ended=None, incomplete=False):
+    """``incomplete``: some of what was said is known not to be kept; the marker says capture "incomplete" (review B4)."""
+    return _write_marker(floor, sid, "end", {"reason": reason, "ended_at": stamp(ended or now()),
+                                            **({"capture": "incomplete"} if incomplete else {})})
 
 
 def _marker_fields(row, sid, what):
@@ -274,7 +276,9 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
         sessions.append({"session_id": sid, "state": status,
                          "started_at": (start or {}).get("started_at"), "ended_at": (end or {}).get("ended_at"),
                          "line": RECOVERY if status in ("recovering", "unknown") else None,
-                         "summary": summary_state(floor, sid) if status in ("ended", "dropped") else None})
+                         "summary": summary_state(floor, sid) if status in ("ended", "dropped") else None,
+                         # Some of what was said is known not to be kept (review B4): every later view says so.
+                         **({"capture": "incomplete"} if (end or {}).get("capture") == "incomplete" else {})})
     return shown, sessions
 
 

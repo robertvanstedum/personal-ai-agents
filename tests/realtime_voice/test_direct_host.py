@@ -38,8 +38,9 @@ class Store(DirectVoiceStore):
         return self.markers.setdefault((sid, "start"), {"principal": principal, "conversation_id": handle,
                                                          "max_minutes": max_minutes, "started_at": stamp(started)})
 
-    def mark_end(self, handle, sid, *, reason):
-        return self.markers.setdefault((sid, "end"), {"reason": reason, "ended_at": stamp(core.now())})
+    def mark_end(self, handle, sid, *, reason, incomplete=False):
+        return self.markers.setdefault((sid, "end"), {"reason": reason, "ended_at": stamp(core.now()),
+                                                       **({"capture": "incomplete"} if incomplete else {})})
 
     def read_marker(self, handle, sid, what):
         return self.markers.get((sid, what))
@@ -422,6 +423,18 @@ def test_one_owner_turn_is_one_effect_for_any_host(rig):
     assert bare.status_code == 400 and len(r.host.turns) == 2                              # no owner turn: refused
 
 
+def test_end_intent_is_heard_once_per_turn_and_keep_talking_withdraws_it(rig):
+    """B5."""
+    r = rig
+    sid = start(r)
+    event = turn(r, "user", "t0", "Yes, we're done.")
+    assert post(r, sid, [event]).get_json().get("propose_end") is True
+    replay = post(r, sid, [event]).get_json()
+    assert replay.get("propose_end") is True and "end_confirmed" not in replay
+    r.client.post(BASE + f"/session/{sid}/transcript", headers=OWNER, json={"events": [], "proposal": "withdrawn"})
+    assert "end_confirmed" not in post(r, sid, [turn(r, "user", "t1", "Yes.")]).get_json()
+
+
 def test_a_kept_answer_replays_after_end_and_nothing_new_runs(rig):
     """B7."""
     r = rig
@@ -430,3 +443,19 @@ def test_a_kept_answer_replays_after_end_and_nothing_new_runs(rig):
     r.client.post(BASE + f"/session/{sid}/end", headers=OWNER)
     assert consult(r, sid).get_json() == result and len(r.host.turns) == 1
     assert consult(r, sid, call_id="call_9").status_code == 409
+
+
+def test_what_was_not_kept_and_what_still_ran_are_marked_at_the_cutoff(rig):
+    """B2, B4: the end marker says capture incomplete; a running consult is outside the summary, which says so."""
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Kept words.")])
+    r.sessions.admit(sid, "call_running", "u9")
+    summary = r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER,
+                            json={"conversation_id": "owner", "capture": "incomplete"}).get_json()
+    assert r.store.markers[(sid, "end")]["capture"] == "incomplete"
+    assert "could not be kept" in summary["written"] and "still running" in summary["written"]
+    assert "could not be kept" in r.host.prompts[-1] and "still running" in r.host.prompts[-1]
+    other = start(r)
+    r.client.post(BASE + f"/session/{other}/end", headers=OWNER, json={"capture": "incomplete"})
+    assert r.store.markers[(other, "end")]["capture"] == "incomplete"

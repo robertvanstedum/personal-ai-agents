@@ -29,11 +29,16 @@ export const SERVER_ENDED = {
   refused: 'Voice stopped: the server refused this voice session. What was said before is kept.',
 };
 export const ALREADY_CHECKED = 'Already checked; say it again to re-ask.';
+// Some of what was said is not known to be kept (review B4): said instead of ENDED, never a claim that all of it was.
+export const INCOMPLETE = 'Voice ended. Some of what was said could not be kept; the rest is in the conversation.';
 // A consult whose answer did not come back (review B7): not "failed", which would invite asking again.
 export const UNKNOWN = 'The answer did not come back, so whether that went through is not known. Check before asking again.';
 export const STILL_CHECKING = 'Still checking that.';
+export const SUMMARY_PENDING = 'The summary is still being written; it will appear in the conversation.';
 const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
-const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its next turn, or after this
+const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its own turn, or after this
+const SUMMARY_WAIT_MS = 90000;            // the summary's answer is awaited this long (review B3); a later one is still kept
+const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
 const START_END_MS = 15000;               // End pressed while still connecting waits for the connection at most this long
 const POST_EVENTS = 20, POST_BYTES = 60000;   // the server takes 20 events and 64 KB a post; JSON overhead stays inside
 const TEXT_BYTES = 16000;
@@ -114,9 +119,14 @@ function fit(text) {                                   // at most 16,000 bytes; 
 // once when it completes; an assistant item still incomplete when a later user item appears was interrupted; at the end what is
 // still incomplete is posted as partial. Posts go one at a time, at most 20 events and 64 KB each; a retried post keeps the
 // same ids, so the server keeps each turn once.
+//
+// Delivery is tracked per event (review B4): sent, kept (the server said so) or failed (refused, or the network twice). A
+// failed event is retried once more at the end (finish/flush), then counts as not kept: incomplete() is then true, and the
+// session's last words, End and the summary say so instead of claiming everything was kept.
 export function createCapture({ send, clock = Date.now, onAnswer = () => {}, warn = () => {}, turnsOff = null }) {
   const items = [];
   const queued = new Set(), inflight = new Set();      // batches waiting on the chain; batches sent and not yet answered
+  const fate = new Map();                              // item id -> {event, state: sent | kept | failed, retry}
   let chain = Promise.resolve(), stopped = false;
   const iso = (ms) => new Date(ms).toISOString();
 
@@ -133,8 +143,13 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     it.posted = true;
     const [text, cut] = fit(it.text.trim());
     const end = Math.max(it.ended ?? clock(), it.started);
-    return { role: it.speaker, item_id: `t${i}`, index: 0, text, partial: partial || cut, interrupted: it.speaker === 'assistant' && interrupted,
+    const e = { role: it.speaker, item_id: `t${i}`, index: 0, text, partial: partial || cut, interrupted: it.speaker === 'assistant' && interrupted,
       started_at: iso(it.started), ended_at: iso(end) };
+    fate.set(e.item_id, { event: e, state: 'sent', retry: true });
+    return e;
+  }
+  function mark(batch, state, retry = true) {
+    for (const e of batch) { const f = fate.get(e.item_id); if (f && f.state !== 'kept') { f.state = state; f.retry = retry; } }
   }
   function due(final) {
     const out = [];
@@ -145,6 +160,12 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
       else if (it.speaker === 'assistant' && items.slice(i + 1).some((n) => n && n.speaker === 'user')) out.push(event(i, it, true, true));
       else if (final) out.push(event(i, it, true, it.speaker === 'assistant'));
     });
+    return out;
+  }
+  // Failed events that may be sent once more (the network, or a write the server could not finish): at the end only.
+  function again() {
+    const out = [];
+    for (const f of fate.values()) if (f.state === 'failed' && f.retry) { f.retry = false; f.state = 'sent'; out.push(f.event); }
     return out;
   }
   function batches(events) {
@@ -164,17 +185,27 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     let r;
     try { r = await send(batch, opts); } finally { inflight.delete(batch); }
     const code = r.body && r.body.error;
-    if (r.status === 200) return onAnswer(r.body || {});
+    if (r.status === 200) { mark(batch, 'kept'); return onAnswer(r.body || {}); }
     if (r.status === 413 && batch.length > 1) {                       // split the post
       const half = Math.ceil(batch.length / 2);
       await post(batch.slice(0, half), retried, opts);
       return post(batch.slice(half), retried, opts);
     }
-    if (r.status === 409 && code === 'not_kept' && !retried) return post(batch.slice(Math.max(0, Number(r.body.kept) || 0)), true, opts);
+    if (r.status === 409 && code === 'not_kept' && !retried) {
+      const kept = Math.max(0, Number(r.body.kept) || 0);
+      mark(batch.slice(0, kept), 'kept');
+      return post(batch.slice(kept), true, opts);
+    }
     if (r.status === 0 && !retried) return post(batch, true, opts);       // the network: once more, the same ids
-    if (r.status === 422) { warn('voice transcript refused', code); return; }   // a page bug or a far-off clock: not retried
-    if (r.status === 409 && code === 'not_kept') return onAnswer({ failed: 'not_kept' });
+    // From here the batch is not known to be kept, and the page says so (review B4).
+    if (r.status === 422) {                                               // a page bug or a far-off clock: not retried
+      mark(batch, 'failed', false);
+      warn('voice transcript refused', code);
+      return onAnswer({ failed: 'invalid', status: 422 });
+    }
+    if (r.status === 409 && code === 'not_kept') { mark(batch, 'failed'); return onAnswer({ failed: 'not_kept' }); }
     stopped = ['session_ended', 'not_listening', 'cap', 'not_your_session', 'csrf', turnsOff].includes(code) || r.status === 403 || stopped;
+    mark(batch, 'failed', !stopped);
     return onAnswer({ failed: code || (r.status ? 'unavailable' : 'network'), status: r.status });
   }
   function enqueue(events, opts) {
@@ -184,19 +215,34 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     }
     return chain;
   }
+  // Everything still owed, once: the turns due now, partial ones too, and the failed ones a last time. Nothing once capture
+  // has stopped (the summary's cutoff, or the server ended it): what is said after that is not this session's record.
+  const last = (turns, opts) => { if (stopped) return chain; observe(turns); return enqueue([...again(), ...due(true)], opts); };
   return {
-    update(turns) { observe(turns); return enqueue(due(false)); },
-    finish(turns, opts) { observe(turns); return enqueue(due(true), opts); },
+    update(turns) { if (stopped) return chain; observe(turns); return enqueue(due(false)); },
+    finish: last,
+    // The capture-closing barrier (review B2): post what is owed and resolve once every post is answered. The caller then
+    // stops capture; it never awaits this from inside a post's own answer.
+    flush: last,
+    // A control post on the same chain, after every post before it (Keep talking withdraws the proposal, review B5).
+    control(extra) {
+      if (stopped) return chain;
+      chain = chain.then(() => (stopped ? null : send([], {}, extra))).catch((e) => warn('voice control post failed', e));
+      return chain;
+    },
     // The page is going away (UI review #1): no answer to a post can be awaited now, and a post still in flight is cancelled
-    // with the page. Everything not known to be kept (posts in flight, batches waiting on the chain, what is due at the end)
-    // is handed back in batches to send at once, and posting stops. A turn sent twice is kept once: the ids are the same.
+    // with the page. Everything not known to be kept (posts in flight, batches waiting on the chain, failed ones, what is due
+    // at the end) goes with End, in one request: the browser bounds what a leaving page may send, and posts sent beside End
+    // may arrive after it. What does not fit in that one post is not sent, and End says capture "incomplete"
+    // (the additional capture edge of review B4). A turn sent twice is kept once: the ids are the same.
     drain(turns) {
       observe(turns);
       const waiting = [...inflight, ...queued].flat();
       inflight.clear(); queued.clear();
-      const out = batches([...waiting, ...due(true)]);
+      const owed = batches([...waiting, ...again(), ...due(true)]);
       stopped = true;
-      return out;
+      const lost = [...fate.values()].some((f) => f.state === 'failed');
+      return { events: owed[0] || [], complete: owed.length <= 1 && !lost };
     },
     heartbeat() {
       if (stopped) return chain;
@@ -207,6 +253,8 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
       }).catch((e) => warn('voice heartbeat failed', e));
       return chain;
     },
+    // Some of what was said is not known to be kept: refused, failed twice, or never answered.
+    incomplete() { return [...fate.values()].some((f) => f.state !== 'kept'); },
     stop() { stopped = true; },
     get stopped() { return stopped; },
     settled() { return chain; },
@@ -227,6 +275,7 @@ export function directVoice(d) {
   let c = null, sid = null, cid = null, provider = null, lastOwner = '', capture = null;
   let connected = false, finalized = false, failed = false, proposing = false, keepalive = false;
   let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, endAfterTurn = null, ending = null, endedWords = null;
+  let lastTurns = [];
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
   let ownerTurn = 0, consultedTurn = -1, checking = false;          // Robert's turns, counted; the last one consulted
   const done = new Promise((resolve) => { closed = resolve; });     // settles once End is sent and the thread is reloaded
@@ -250,20 +299,22 @@ export function directVoice(d) {
   }
   function propose(on) { proposing = on; ui.propose(on); }
 
-  // §5's answers: Sum up is offered, a spoken yes asks for the summary. The cap stops posting only; a session the server
-  // has ended or refuses (409 session_ended or the person's turns off, any 403) is ended here too, with the reason left showing.
+  // §5's answers: Sum up is offered, a spoken yes asks for the summary (after this answer: the summary's barrier awaits the
+  // posts, so it never waits on the post it was asked from, review B2). The cap stops posting only; a session the server has
+  // ended or refuses (409 session_ended or the person's turns off, any 403) is ended here too, with the reason left showing.
+  // Any other post not kept (refused, or the network twice) says so at once (review B4).
   function heard(body) {
     if (finalized && !body.failed) return;
-    if (body.propose_end) propose(true);
-    if (body.end_confirmed) sumUp();
-    if (body.failed === 'not_kept') ui.say(NOT_KEPT, { error: true });
-    else if (body.failed === 'cap') ui.say(CAP, { error: true });
-    else if (body.failed === 'not_listening' && !finalized) c?.endSession('not_listening');
-    else if (!finalized && (['session_ended', words.off].includes(body.failed) || body.status === 403)) {
+    if (body.propose_end && !summary) propose(true);
+    if (body.end_confirmed) Promise.resolve().then(sumUp);
+    if (!body.failed) return;
+    if (body.failed === 'cap') ui.say(CAP, { error: true });
+    else if (body.failed === 'not_listening') { if (!finalized) c?.endSession('not_listening'); }
+    else if (!finalized && !summary && (['session_ended', words.off].includes(body.failed) || body.status === 403)) {
       failed = true;
       ui.say(words.serverEnded[body.failed] || SERVER_ENDED.refused, { loud: true, error: true });
       endNow('server_ended');
-    }
+    } else if (!finalized) ui.say(NOT_KEPT, { error: true });
   }
 
   // §4: the function bridge. The server acts on Robert's own last words, never on the model's arguments; whatever comes back
@@ -307,7 +358,7 @@ export function directVoice(d) {
   // (the button is disabled meanwhile), and never twice for the same turn of his, whoever consulted it: a repeat would run a
   // second typed turn and could start a second job (UI review #3). Saying the words again makes a new turn to check.
   async function check() {
-    if (!connected || finalized || checking) return;
+    if (!connected || finalized || checking || summary) return;
     if (!lastOwner) { ui.say(words.sayFirst, { transient: true }); return; }
     if (consultedTurn === ownerTurn) { ui.say(ALREADY_CHECKED, { transient: true }); return; }
     checking = true; ui.checking?.(true);
@@ -321,42 +372,54 @@ export function directVoice(d) {
     } finally { checking = false; ui.checking?.(false); }
   }
 
-  // §7: the summary. The route ends capture and asks the person's own model path; the voice says the spoken part, then the
-  // session ends.
+  // §7: the summary, behind a barrier (review B2, B3). No new spoken input is admitted (the microphone is muted; the voice
+  // still speaks), the heartbeat stops, the last turns are posted (partial ones too) and every post is answered; only then is
+  // the summary asked for, so it covers what was said, and is told when some of it could not be kept. The server closes
+  // capture when asked. Its answer is awaited at most SUMMARY_WAIT_MS (a later one is still kept and shown). The voice says the
+  // spoken part, then the session ends.
   function sumUp() {
     if (summary || finalized || !sessionId()) return summary;
     propose(false);
     ui.say('Summing up…');
     summary = (async () => {
-      const r = await postJson(at(direct.summary_url), { conversation_id: cid });
+      try { c?.mute?.(); } catch (e) { /* the barrier holds without it: capture stops below */ }
+      if (beat) { stopEvery(beat); beat = null; }
+      let wait = null;
+      await Promise.race([capture?.flush(lastTurns), new Promise((resolve) => { wait = later(resolve, FLUSH_WAIT_MS); })]);
+      cancel(wait);
+      if (finalized) return;
+      const incomplete = Boolean(capture?.incomplete());
+      capture?.stop();
+      let timer = null;
+      const r = await Promise.race([
+        postJson(at(direct.summary_url), { conversation_id: cid, ...(incomplete ? { capture: 'incomplete' } : {}) }),
+        new Promise((resolve) => { timer = later(() => resolve({ status: -1, body: {} }), SUMMARY_WAIT_MS); }),
+      ]);
+      cancel(timer);
       if (finalized) return;
       const body = r.body || {};
-      if (r.status === 200 && body.ok && body.state === 'proposed' && typeof body.spoken === 'string' && body.spoken.trim() && connected
-          && speak(`Say only this, then stop: ${body.spoken.trim()}`)) {
-        capture?.stop();                                     // the server has ended capture
+      const said = typeof body.spoken === 'string' ? body.spoken.trim() : '';
+      if (r.status === 200 && body.ok && body.state === 'proposed' && said && connected && speak(`Say only this, then stop: ${said}`)) {
         endAfterTurn = () => { endAfterTurn = null; c?.endSession('normal_end'); };
-        speakTimer = later(() => endAfterTurn?.(), SPEAK_SUMMARY_MS);
+        speakTimer = later(() => { endAfterTurn = null; if (!finalized) c?.endSession('normal_end'); }, SPEAK_SUMMARY_MS);
         return;
       }
-      if (r.status === 200 && body.state === 'unavailable') endedWords = [SUMMARY_UNAVAILABLE, false];
-      else if (r.status !== 200) endedWords = [body.message || 'The summary could not be asked for. What was said is kept.', true];
-      capture?.stop();
+      if (r.status === -1) endedWords = [SUMMARY_PENDING, false];
+      else if (r.status === 200 && body.state === 'unavailable') endedWords = [SUMMARY_UNAVAILABLE, false];
+      else if (r.status !== 200) endedWords = [body.message || `The summary could not be asked for.${incomplete ? '' : ' What was said is kept.'}`, true];
       c?.endSession('normal_end');
     })();
     return summary;
   }
-
-  // The page is going away: the last turns and End leave in this same tick, with keepalive, and nothing waits for a reply
-  // (none arrives after pagehide). End carries the final events itself, so they cannot arrive after it; only events beyond
-  // one post (rare: more than 20 turns or 60 KB unsent) go as transcript posts just before it. Once per session.
+  // The page is going away: End leaves in this same tick, with keepalive, carrying the last turns itself in one post (the
+  // browser bounds what a leaving page may send, and a post sent beside End may arrive after it). What does not fit is not
+  // sent, and End says capture "incomplete" (review B4). Nothing waits for a reply (none arrives after pagehide). Once per session.
   function sendFinal(turns) {
     const id = sessionId();
     if (!id || sentFinal) return;
     sentFinal = true;
-    const parts = capture ? capture.drain(turns || []) : [];
-    const last = parts.pop();
-    for (const events of parts) postJson(at(direct.transcript_url), { events }, { keepalive: true });
-    postJson(at(direct.end_url), last ? { events: last } : {}, { keepalive: true });
+    const { events, complete } = capture ? capture.drain(turns || []) : { events: [], complete: true };
+    postJson(at(direct.end_url), { ...(events.length ? { events } : {}), ...(complete ? {} : { capture: 'incomplete' }) }, { keepalive: true });
   }
 
   // §6: End on the server (after the last turns are posted), then the reveal. Once, whatever ended the session.
@@ -372,16 +435,19 @@ export function directVoice(d) {
     }
     ending = (async () => {
       const id = sessionId();
+      let incomplete = false;
       if (id) {
         await capture?.finish(result?.turns || []);
         if (sentFinal) return;                               // the page went away meanwhile: End already left with keepalive
-        const r = await postJson(at(direct.end_url), {});
+        incomplete = Boolean(capture?.incomplete());          // End says so, and so does the line below (review B4)
+        const r = await postJson(at(direct.end_url), incomplete ? { capture: 'incomplete' } : {});
         if (sentFinal) return;
         if (!(r.status === 200 && r.body.ok) && !failed) endedWords = ['Voice ended here, but the server did not confirm it. What was said appears when the session\'s time runs out.', true];
         await d.reveal?.();
       }
-      const [words, error] = endedWords || [failed || !id ? null : ENDED, false];
-      ui.ended(words, { error });
+      const fallback = failed || !id ? null : incomplete ? INCOMPLETE : ENDED;
+      const [line, error] = endedWords || [fallback, fallback === INCOMPLETE];
+      ui.ended(line, { error });
     })();
     ending.then(closed, closed);
     return ending;
@@ -393,8 +459,8 @@ export function directVoice(d) {
     if (!cid) { failed = true; ui.ended(NO_CONVERSATION, { error: true }); return false; }
     const { RealtimeVoiceController } = await d.loadController();
     if (finalized) return false;
-    capture = createCapture({ send: (events, opts) => postJson(at(direct.transcript_url), { events }, opts || {}), clock, onAnswer: heard,
-      warn: d.warn || (() => {}), turnsOff: words.off });
+    capture = createCapture({ send: (events, opts, extra) => postJson(at(direct.transcript_url), { events, ...(extra || {}) }, opts || {}),
+      clock, onAnswer: heard, warn: d.warn || (() => {}), turnsOff: words.off });
     c = new RealtimeVoiceController({
       bootstrapUrl: direct.bootstrap_url, requestHeaders: d.headers, includeTranscriptAfterEnd: true,
       openingInstruction: null,                   // the server composes the session's instructions; the page sends none
@@ -428,9 +494,9 @@ export function directVoice(d) {
         if (info?.reason === 'bootstrap_rejected' || info?.reason === 'bootstrap_network_error') finalize({ turns: [] });
       },
       onPlayback: () => {},
-      onTranscriptUpdate: (turns) => { if (!finalized) capture.update(turns); },
+      onTranscriptUpdate: (turns) => { lastTurns = turns; if (!finalized) capture.update(turns); },
       onUserTurn: (text) => { if (typeof text === 'string' && text.trim()) { lastOwner = text.trim(); ownerTurn += 1; } },
-      onAssistantTurn: () => { if (endAfterTurn) endAfterTurn(); },
+      onAssistantTurn: (text) => { if (endAfterTurn) endAfterTurn(text); },
       onFunctionCall: (call) => consult(call.call_id, call.name, call.arguments),
       onFinalize: (result) => finalize(result),
     });
@@ -442,7 +508,7 @@ export function directVoice(d) {
     start,
     check,
     sumUp,
-    keepTalking() { propose(false); },
+    keepTalking() { propose(false); capture?.control({ proposal: 'withdrawn' }); },     // the server's proposal too (B5)
     proposing: () => proposing,
     sessionId,
     // Ends the session for any reason (End, the microphone handed over, Private, the page going away). Resolves once End is sent.

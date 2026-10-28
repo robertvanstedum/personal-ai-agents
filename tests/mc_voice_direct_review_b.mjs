@@ -123,6 +123,164 @@ await check('B1 a second dispatch while the first runs is told it is still being
   assert.equal(out.ok, true); assert.equal(out.outcome, 'pending'); assert.doesNotMatch(out.spoken, /did not go through/);
 });
 
+// ── B2: Sum up closes the record only after the last turns are kept ─────────────────────────────────────────────────────
+await check('B2 the summary is asked only after the final transcript post is answered', async () => {
+  let release, order = [];
+  const r = rig({ routes: {
+    '/transcript': (body) => (body.events.length ? new Promise((res) => { release = () => { order.push('transcript-ack'); res({ status: 200, body: { ok: true, kept: body.events.length } }); }; }) : null),
+    '/summary': () => { order.push('summary'); return { status: 200, body: { ok: true, state: 'proposed', spoken: 'We checked twelve.' } }; } } });
+  await r.s.start('openai');
+  r.c.hear([user('One last detail.')]); await flush();
+  const asked = r.s.sumUp(); await flush();
+  assert.equal(r.posts('/summary').length, 0, 'summary asked before the transcript was kept');
+  release(); await asked; await flush();
+  assert.deepEqual(order, ['transcript-ack', 'summary']);
+});
+await check('B2 words still being said at Sum up are posted (partial) before the summary', async () => {
+  const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Done.' } }) } });
+  await r.s.start('openai');
+  r.c.hear([user('And one more thing about the gl', false)]);
+  await r.s.sumUp(); await flush();
+  const posted = r.calls.filter((x) => x.url.endsWith('/transcript') && x.body.events.length);
+  const summaryAt = r.calls.findIndex((x) => x.url.endsWith('/summary'));
+  assert.equal(posted.length, 1); assert.equal(posted[0].body.events[0].partial, true);
+  assert.ok(r.calls.indexOf(posted[0]) < summaryAt);
+  assert.ok(r.c.muted >= 1, 'no new spoken input is admitted while the record closes');
+});
+await check('B2 a refused final post makes the summary request say capture is incomplete', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 422, body: { error: 'time' } } : null),
+    '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Done.' } }) } });
+  await r.s.start('openai');
+  r.c.hear([user('Final words.')]);
+  await r.s.sumUp(); await flush();
+  assert.equal(r.posts('/summary')[0].body.capture, 'incomplete');
+});
+await check('B2 a final post that never answers holds the summary at most five seconds, and the summary says incomplete', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? new Promise(() => {}) : null),
+    '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Done.' } }) } });
+  await r.s.start('openai');
+  r.c.hear([user('Words in flight.')]); await flush();
+  r.s.sumUp(); await flush();
+  r.advance(4999); await flush();
+  assert.equal(r.posts('/summary').length, 0);
+  r.advance(1); await flush();
+  assert.equal(r.posts('/summary').length, 1); assert.equal(r.posts('/summary')[0].body.capture, 'incomplete');
+});
+await check('B2 a spoken yes asks for the summary after its own post, without waiting on itself', async () => {
+  const r = rig({ routes: {
+    '/transcript': (body) => (body.events.some((e) => e.text === 'Yes.') ? { status: 200, body: { ok: true, kept: 1, end_confirmed: true } } : null),
+    '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at item twelve.' } }) } });
+  await r.s.start('openai');
+  r.c.hear([user('Yes.')]);
+  await flush(20);
+  assert.equal(r.posts('/summary').length, 1);
+  assert.deepEqual(r.c.instructions, ['Say only this, then stop: We looked at item twelve.']);
+});
+
+// ── B3: a slow summary is not ended by the session's own heartbeat ─────────────────────────────────────────────────────
+await check('B3 no heartbeat while the summary is being made; the summary is still spoken', async () => {
+  let release, closed = false;
+  const r = rig({ routes: {
+    '/transcript': () => (closed ? { status: 409, body: { error: 'session_ended' } } : null),
+    '/summary': () => { closed = true; return new Promise((res) => { release = () => res({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Slow summary.' } }); }); } } });
+  await r.s.start('openai');
+  const asked = r.s.sumUp(); await flush();
+  const before = r.posts('/transcript').length;
+  r.advance(45000); await flush();
+  assert.equal(r.posts('/transcript').length, before, 'a heartbeat was sent after capture closed');
+  assert.deepEqual(r.c.ended, []);
+  release(); await asked; await flush();
+  assert.deepEqual(r.c.instructions, ['Say only this, then stop: Slow summary.']);
+});
+await check('B3 a summary that does not answer in time ends honestly, once; a late answer is not spoken', async () => {
+  let release;
+  const r = rig({ routes: { '/summary': () => new Promise((res) => { release = () => res({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Late.' } }); }) } });
+  await r.s.start('openai');
+  r.s.sumUp(); await flush();
+  r.advance(90000); await flush(20);
+  assert.deepEqual(r.c.ended, ['normal_end']); assert.equal(r.posts('/end').length, 1);
+  assert.deepEqual(r.ended.at(-1), [PENDING, { error: false }]);
+  release(); await flush();
+  assert.deepEqual(r.c.instructions, []); assert.equal(r.posts('/end').length, 1);
+});
+await check('B3 End during the summary closes the transport once and keeps the summary unspoken', async () => {
+  let release;
+  const r = rig({ routes: { '/summary': () => new Promise((res) => { release = () => res({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Late.' } }); }) } });
+  await r.s.start('openai');
+  r.s.sumUp(); await flush();
+  await r.s.end('user_ended'); await flush();
+  release(); await flush();
+  assert.deepEqual(r.c.ended, ['user_ended']); assert.equal(r.posts('/end').length, 1); assert.deepEqual(r.c.instructions, []);
+});
+
+// ── B4: what could not be kept is said, never claimed kept ──────────────────────────────────────────────────────────────
+await check('B4 a turn lost to the network twice is said, and End does not claim everything was kept', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? 'network' : null) } });
+  await r.s.start('openai');
+  r.c.hear([user('Lost words.')]); await flush();
+  assert.ok(r.said.some(([w]) => w === D.NOT_KEPT), 'no warning when the turn was not kept');
+  await r.s.end('user_ended'); await flush();
+  assert.equal(r.posts('/end')[0].body.capture, 'incomplete');
+  assert.deepEqual(r.ended.at(-1), [INCOMPLETE, { error: true }]);
+});
+await check('B4 a refused (422) turn is said and the end says some was not kept', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 422, body: { error: 'time' } } : null) } });
+  await r.s.start('openai');
+  r.c.hear([user('Refused words.')]); await flush();
+  assert.ok(r.said.some(([w]) => w === D.NOT_KEPT));
+  await r.s.end('user_ended'); await flush();
+  assert.deepEqual(r.ended.at(-1), [INCOMPLETE, { error: true }]);
+});
+await check('B4 a turn lost to the network is sent once more at End; kept then, the end is the ordinary one', async () => {
+  let down = true;
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length && down ? 'network' : null) } });
+  await r.s.start('openai');
+  r.c.hear([user('Words to keep.')]); await flush();
+  down = false;
+  await r.s.end('user_ended'); await flush();
+  const sent = r.posts('/transcript').filter((x) => x.body.events.length);
+  assert.equal(sent.length, 3); assert.equal(sent[2].body.events[0].item_id, 't0');
+  assert.deepEqual(r.posts('/end')[0].body, {}); assert.deepEqual(r.ended.at(-1), [D.ENDED, { error: false }]);
+});
+await check('B4 a partial write that fails again is not kept, and the end says so', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 409, body: { error: 'not_kept', kept: 0 } } : null) } });
+  await r.s.start('openai');
+  r.c.hear([user('One.'), { speaker: 'assistant', text: 'Two.', completed: true }]); await flush();
+  await r.s.end('user_ended'); await flush();
+  assert.equal(r.posts('/end')[0].body.capture, 'incomplete'); assert.deepEqual(r.ended.at(-1), [INCOMPLETE, { error: true }]);
+});
+await check('B4 a session known incomplete says so in the thread, after a reload too', async () => {
+  const doc = fakeDocument(), thread = doc.createElement('ol');
+  const t = T.voiceThread({ doc, direct: DIRECT, thread: () => thread, mine: () => null, conversationId: () => 'c-1', post: async () => ({}), reveal: async () => {} });
+  t.paint([{ session_id: SID, state: 'ended', started_at: '2026-10-28T10:00:00.000Z', line: null, summary: 'none', capture: 'incomplete' }]);
+  assert.match(thread.querySelector(`[data-voice-line="${SID}"]`)?.textContent || '', /could not be kept/);
+});
+await check('B4 edge: a leaving page sends End once, with one post of turns, and says incomplete for what did not fit', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? new Promise(() => {}) : null) } });
+  await r.s.start('openai');
+  r.c.hear([user('first')]); await flush();
+  const many = [user('first')];
+  for (let i = 1; i < 30; i++) many.push({ speaker: i % 2 ? 'assistant' : 'user', text: `turn ${i}`, completed: true });
+  r.c.hear(many); await flush();
+  const before = r.calls.length;
+  r.s.end('pagehide');
+  const sent = r.calls.slice(before);
+  assert.deepEqual(sent.map((x) => x.url.split('/').pop()), ['end']);
+  assert.equal(sent[0].opts.keepalive, true);
+  assert.equal(sent[0].body.events.length, 20); assert.equal(sent[0].body.events[0].item_id, 't0');
+  assert.equal(sent[0].body.capture, 'incomplete');
+});
+
+// ── B5: Keep talking withdraws the proposal on the server too ──────────────────────────────────────────────────────────
+await check('B5 Keep talking sends the withdrawal after the posts before it', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 200, body: { ok: true, kept: 1, propose_end: true } } : null) } });
+  await r.s.start('openai');
+  r.c.hear([user("We're done.")]); await flush();
+  r.s.keepTalking(); await flush();
+  const last = r.posts('/transcript').at(-1);
+  assert.deepEqual(last.body, { events: [], proposal: 'withdrawn' });
+});
+
 // ── B7: a lost answer is not a failed action ────────────────────────────────────────────────────────────────────────────
 await check('B7 an answer lost on the way back is asked again as the same call and its real result spoken', async () => {
   let n = 0;
