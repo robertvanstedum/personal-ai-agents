@@ -334,7 +334,9 @@ export function initMcVoice(page) {
   document.addEventListener('guild:mic-claim', (e) => { if (e.detail?.who !== 'voice' && busy()) stop('user_ended', { quiet: true }); });
   onChange(() => { if (live.off || !live.known) {transcriptEpoch++;transcriptCancel?.();transcriptCancel=null;transcriptReveal=null;transcriptPaint=null;if(busy())stop(live.off?'private':'record_unknown');const box=$('[data-mc-voice-transcript]');if(box)box.hidden=true;const text=$('[data-mc-voice-transcript-text]');if(text)text.textContent='';} });
   new MutationObserver(() => { if (busy() && panelMode() === 'pill') stop('minimized'); }).observe(document.body, { attributes: true, attributeFilter: ['data-mc-mode'] });
-  window.addEventListener('pagehide', () => { if (busy()) stop('pagehide', { quiet: true }); });
+  // A direct session already ending (End pressed, its last post or End unanswered) is told too: it sends End again with
+  // keepalive, since stop() returns the ending in progress (UI review #1).
+  window.addEventListener('pagehide', () => { directSession?.end('pagehide'); if (busy()) stop('pagehide', { quiet: true }); });
 
   available().then((label) => { if (label) { provider = label; button.hidden = false; } });
 }

@@ -398,6 +398,33 @@ def test_transcript_posts_are_owner_bound_checked_and_capped_and_off_record_keep
     assert len(voice_records(r, sid)) == 3
 
 
+def test_end_can_carry_the_last_turns_and_keeps_them_before_it_closes(ready):
+    """UI review #1: the page leaving sends its last turns with End in one keepalive request; they are kept as a
+    transcript post keeps them, then the session ends. Off the record nothing is kept, and End still ends."""
+    r = ready
+    sid = start(r)["voice_session_id"]
+    last = [turn(r, "user", "item_u1", "Before I go, note the kiln."), turn(r, "assistant", "item_a1", "Noted", 3,
+                                                                          partial=True, interrupted=True)]
+    ended = r.client.post(BASE + f"/session/{sid}/end", json={"events": last}, headers=r.headers)
+    assert ended.get_json() == {"ok": True, "ended": True}
+    assert [HEADER.match(row["text"])["speaker"] for row in voice_records(r, sid)] == [
+        "owner ASR", "assistant generated; playback unverified"]
+    assert reveal.read_marker(r.notes, sid, "end") is not None
+    rows, sessions = shown(r)
+    assert sessions[0]["state"] == "ended" and [row["voice"]["kind"] for row in rows] == ["owner_turn", "assistant_turn"]
+    assert post(r, sid, [turn(r, "user", "item_u2", "late")]).status_code == 409     # after End, nothing more
+
+    other = start(r)["voice_session_id"]
+    off = {**r.headers, "X-Record-Mode": "off_record"}
+    ended = r.client.post(BASE + f"/session/{other}/end", json={"events": [turn(r, "user", "item_u9", "Private words")]},
+                          headers=off)
+    assert ended.get_json() == {"ok": True, "ended": True} and voice_records(r, other) == []
+    bad = start(r)["voice_session_id"]                                               # invalid events: End still ends
+    ended = r.client.post(BASE + f"/session/{bad}/end", json={"events": [{"role": "system"}]}, headers=r.headers)
+    assert ended.get_json() == {"ok": True, "ended": True} and voice_records(r, bad) == []
+    assert not r.config["mc_direct_voice_live"](bad)
+
+
 def test_a_consult_that_completes_after_end_keeps_its_receipt_and_does_not_run_again(ready):
     r = ready
     sid = start(r)["voice_session_id"]

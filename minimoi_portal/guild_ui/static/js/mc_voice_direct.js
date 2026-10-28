@@ -92,6 +92,7 @@ function fit(text) {                                   // at most 16,000 bytes; 
 // same ids, so the server keeps each turn once.
 export function createCapture({ send, clock = Date.now, onAnswer = () => {}, warn = () => {} }) {
   const items = [];
+  const queued = new Set(), inflight = new Set();      // batches waiting on the chain; batches sent and not yet answered
   let chain = Promise.resolve(), stopped = false;
   const iso = (ms) => new Date(ms).toISOString();
 
@@ -135,7 +136,9 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
   }
   async function post(batch, retried, opts) {
     if (stopped || !batch.length) return;
-    const r = await send(batch, opts);
+    inflight.add(batch);
+    let r;
+    try { r = await send(batch, opts); } finally { inflight.delete(batch); }
     const code = r.body && r.body.error;
     if (r.status === 200) return onAnswer(r.body || {});
     if (r.status === 413 && batch.length > 1) {                       // split the post
@@ -151,12 +154,26 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     return onAnswer({ failed: code || (r.status ? 'unavailable' : 'network'), status: r.status });
   }
   function enqueue(events, opts) {
-    for (const batch of batches(events)) chain = chain.then(() => post(batch, false, opts)).catch((e) => warn('voice transcript post failed', e));
+    for (const batch of batches(events)) {
+      queued.add(batch);
+      chain = chain.then(() => { queued.delete(batch); return post(batch, false, opts); }).catch((e) => warn('voice transcript post failed', e));
+    }
     return chain;
   }
   return {
     update(turns) { observe(turns); return enqueue(due(false)); },
     finish(turns, opts) { observe(turns); return enqueue(due(true), opts); },
+    // The page is going away (UI review #1): no answer to a post can be awaited now, and a post still in flight is cancelled
+    // with the page. Everything not known to be kept (posts in flight, batches waiting on the chain, what is due at the end)
+    // is handed back in batches to send at once, and posting stops. A turn sent twice is kept once: the ids are the same.
+    drain(turns) {
+      observe(turns);
+      const waiting = [...inflight, ...queued].flat();
+      inflight.clear(); queued.clear();
+      const out = batches([...waiting, ...due(true)]);
+      stopped = true;
+      return out;
+    },
     heartbeat() {
       if (stopped) return chain;
       chain = chain.then(async () => {
@@ -184,8 +201,9 @@ export function directVoice(d) {
   let c = null, sid = null, cid = null, provider = null, lastOwner = '', capture = null;
   let connected = false, finalized = false, failed = false, proposing = false, keepalive = false;
   let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, endAfterTurn = null, ending = null, endedWords = null;
-  let held = null, heldTimer = null, closed;
+  let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
   const done = new Promise((resolve) => { closed = resolve; });     // settles once End is sent and the thread is reloaded
+  done.then(() => { settled = true; });
 
   const at = (template) => String(template).split('{session_id}').join(encodeURIComponent(sid || ''));
   const postJson = jsonPost(d.fetch, d.headers);
@@ -266,17 +284,37 @@ export function directVoice(d) {
     return summary;
   }
 
+  // The page is going away: the last turns and End leave in this same tick, with keepalive, and nothing waits for a reply
+  // (none arrives after pagehide). End carries the final events itself, so they cannot arrive after it; only events beyond
+  // one post (rare: more than 20 turns or 60 KB unsent) go as transcript posts just before it. Once per session.
+  function sendFinal(turns) {
+    const id = sessionId();
+    if (!id || sentFinal) return;
+    sentFinal = true;
+    const parts = capture ? capture.drain(turns || []) : [];
+    const last = parts.pop();
+    for (const events of parts) postJson(at(direct.transcript_url), { events }, { keepalive: true });
+    postJson(at(direct.end_url), last ? { events: last } : {}, { keepalive: true });
+  }
+
   // §6: End on the server (after the last turns are posted), then the reveal. Once, whatever ended the session.
   function finalize(result) {
     if (finalized) return ending;
     finalized = true; connected = false;
     stopTimers(); propose(false); ui.live(false);
+    if (keepalive) {
+      sendFinal(result?.turns);
+      ending = Promise.resolve();                            // nothing more to show on a page that is leaving
+      ending.then(closed, closed);
+      return ending;
+    }
     ending = (async () => {
       const id = sessionId();
       if (id) {
-        await capture?.finish(result?.turns || [], { keepalive });
-        const r = await postJson(at(direct.end_url), {}, { keepalive });
-        if (keepalive) return;                               // the page is going away: nothing more to show
+        await capture?.finish(result?.turns || []);
+        if (sentFinal) return;                               // the page went away meanwhile: End already left with keepalive
+        const r = await postJson(at(direct.end_url), {});
+        if (sentFinal) return;
         if (!(r.status === 200 && r.body.ok) && !failed) endedWords = ['Voice ended here, but the server did not confirm it. What was said appears when the session\'s time runs out.', true];
         await d.reveal?.();
       }
@@ -350,7 +388,12 @@ export function directVoice(d) {
     // the microphone while they connect, and ending the transport before that could leave it open.
     end(reason) {
       keepalive = reason === 'pagehide';
-      if (finalized) return done;
+      if (finalized) {
+        // An End already under way (its last post or End still waiting on the server) when the page goes away: send them
+        // again now with keepalive, since the replies it waits for will never arrive (UI review #1).
+        if (keepalive && !settled) sendFinal([]);
+        return done;
+      }
       const starting = c && !connected && ['requesting_mic', 'connecting'].includes(c._state);
       if (starting && !keepalive) {
         if (!held) { held = reason; heldTimer = later(() => endNow(reason), START_END_MS); }

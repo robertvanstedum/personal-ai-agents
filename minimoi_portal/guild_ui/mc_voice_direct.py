@@ -679,16 +679,38 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
     @transcript.route("/api/realtime-voice/session/<session_id>/transcript", methods=["POST"])
     def keep_transcript(session_id):
         """The page's completed owner and assistant turns, kept as they happen; an empty list is the heartbeat."""
-        from . import api
-        from .mc_voice_transcripts import retain
         if request.content_length is None or request.content_length > POST_MAX_BYTES:
             return json_error("too_large", "A transcript post is at most 64 KB. Nothing was kept.", 413)
+        return keep_events(session_id, request.get_json(silent=True))
+
+    def end_events():
+        """End may carry the page's last transcript events (UI review #1): as the page goes away it sends them with End in
+        one keepalive request, because no answer to an earlier post can be awaited then. They are kept exactly as a
+        transcript post keeps them (the same checks and caps), before the shared End closes the session. Off the record
+        nothing is kept (End itself still works there), and a refusal or failure here never stops End."""
+        if not request.path.endswith("/end"):
+            return None
+        if request.content_length is None or request.content_length > POST_MAX_BYTES:
+            return None
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or not body.get("events"):
+            return None
+        try:
+            if check_write(config["base_url"]) is None:
+                keep_events((request.view_args or {}).get("session_id"), body)
+        except Exception:
+            log.exception("mc direct voice: events sent with End not kept")
+        return None
+
+    def keep_events(session_id, body):
+        from . import api
+        from .mc_voice_transcripts import retain
         who, sid = principal(), reveal.session_id(session_id)
         if sid is None or who is None or sessions.owner_of(sid) != who:
             return json_error("not_your_session", "That is not your voice session. Nothing was kept.", 403)
         if not sessions.is_open(sid) or sessions.expired(sid):
             return json_error("session_ended", "That voice session has ended. Nothing was kept.", 409)
-        events, bad = _events(request.get_json(silent=True), sessions.started_at(sid), sessions.clock)
+        events, bad = _events(body, sessions.started_at(sid), sessions.clock)
         if bad is not None:
             return json_error(bad, "Those transcript events are not valid. Nothing was kept.", 422)
         sessions.seen(sid)
@@ -785,6 +807,7 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
                        authorizes="nothing beyond the summary")
 
     transcript.before_request(guard)
+    consult.before_request(end_events)                 # after the consult guard: owner and CSRF first, then the events
     transcript_name = mount + "_mc_voice_transcript"
     for bp, name in ((boot, boot_name), (consult, consult_name), (transcript, transcript_name)):
         bp.after_request(no_store)

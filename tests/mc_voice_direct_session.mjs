@@ -313,16 +313,70 @@ for (const [status, error, words] of [[429, 'cap', D.CAP], [409, 'session_ended'
   assert.equal(r.posts('/end').length, 1);
   scenarios++;
 }
-// pagehide: the last turns and End go with keepalive; nothing is revealed on a page that is leaving.
+// pagehide: the last turns go inside End, with keepalive, in the same tick; nothing is revealed on a page that is leaving.
 {
   const r = rig();
   await r.s.start('openai');
   r.c.turns = [{ speaker: 'user', text: 'Before I go', completed: false }];
-  await r.s.end('pagehide');
-  const [post, end] = r.calls.slice(-2);
-  assert.equal(post.opts.keepalive, true); assert.equal(end.opts.keepalive, true);
-  assert.equal(end.url.endsWith('/end'), true);
+  const before = r.calls.length;
+  r.s.end('pagehide');                                                                   // not awaited: no reply comes now
+  const sent = r.calls.slice(before);
+  assert.deepEqual(sent.map((x) => x.url.split('/').pop()), ['end']);
+  assert.equal(sent[0].opts.keepalive, true);
+  assert.deepEqual(sent[0].body.events.map((e) => [e.item_id, e.text, e.partial]), [['t0', 'Before I go', true]]);
+  await flush();
   assert.equal(r.reveals.length, 0);
+  scenarios++;
+}
+// UI review #1: pagehide while a transcript post is still unanswered: End leaves at once, carrying that post's turns and the
+// last ones (the in-flight post is cancelled with the page; the server keeps a turn sent twice once).
+{
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? new Promise(() => {}) : null) } });
+  await r.s.start('openai');
+  r.c.speak([{ speaker: 'user', text: 'First thing', completed: true }]);
+  await flush();
+  r.c.speak([{ speaker: 'user', text: 'First thing', completed: true }, { speaker: 'assistant', text: 'Right', completed: true },
+    { speaker: 'user', text: 'And then', completed: false }]);
+  await flush();
+  assert.equal(r.posts('/transcript').length, 1);                                        // the second waits on the first
+  const before = r.calls.length;
+  r.s.end('pagehide');
+  const sent = r.calls.slice(before);
+  assert.deepEqual(sent.map((x) => x.url.split('/').pop()), ['end']);
+  assert.equal(sent[0].opts.keepalive, true);
+  assert.deepEqual(sent[0].body.events.map((e) => e.item_id), ['t0', 't1', 't2']);
+  await flush(10);
+  assert.equal(r.posts('/transcript').length, 1);                                        // nothing queued is sent after it
+  assert.equal(r.posts('/end').length, 1);
+  scenarios++;
+}
+// UI review #1: an End already under way (its last post unanswered) when the page goes away is sent again with keepalive.
+{
+  let hang = false;
+  const r = rig({ routes: { '/transcript': (body) => (hang && body.events.length ? new Promise(() => {}) : null) } });
+  await r.s.start('openai');
+  r.c.turns = [{ speaker: 'user', text: 'Last words', completed: false }];
+  hang = true;
+  r.s.end('user_ended');
+  await flush();
+  assert.equal(r.posts('/end').length, 0);                                                // waiting on the last post
+  r.s.end('pagehide');
+  const ends = r.posts('/end');
+  assert.equal(ends.length, 1);
+  assert.equal(ends[0].opts.keepalive, true);
+  assert.deepEqual(ends[0].body.events.map((e) => [e.item_id, e.text]), [['t0', 'Last words']]);
+  r.s.end('pagehide');                                                                   // once
+  assert.equal(r.posts('/end').length, 1);
+  scenarios++;
+}
+// An End that has finished is not sent again when the page then goes away.
+{
+  const r = rig();
+  await r.s.start('openai');
+  await r.s.end('user_ended');
+  await flush();
+  r.s.end('pagehide');
+  assert.equal(r.posts('/end').length, 1);
   scenarios++;
 }
 // The provider dropping: the error stays, the session is ended on the server and revealed.

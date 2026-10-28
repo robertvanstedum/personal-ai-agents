@@ -151,6 +151,25 @@ for (const who of ['dictation', 'companion-closed']) {
   assert.equal(r.posts('/end')[0].opts.keepalive, true);
   n++;
 }
+// UI review #1: End pressed, its End still unanswered, then the page goes away: End is sent again with keepalive.
+{
+  const r = await rig();
+  await r.click();
+  const original = r.sandbox.fetch;
+  r.sandbox.fetch = async (url, opts) => {
+    if (!(url.endsWith('/end') && !opts.keepalive)) return original(url, opts);
+    r.calls.push({ url, opts, body: JSON.parse(opts.body) });
+    return new Promise(() => {});                                                          // never answered
+  };
+  await r.click('[data-mc-voice-end]');
+  await flush();
+  assert.equal(r.posts('/end').length, 1);
+  assert.notEqual(r.posts('/end')[0].opts.keepalive, true);
+  r.windowEvents.pagehide();
+  assert.equal(r.posts('/end').length, 2);
+  assert.equal(r.posts('/end')[1].opts.keepalive, true);
+  n++;
+}
 // §7: while "Shall I sum up?" is offered, End asks for the summary (as Sum up does); an error line stays until the next send.
 {
   const r = await rig({ summary: { status: 403, body: { error: 'csrf', message: 'This page is out of date. Reload it.' } } });
