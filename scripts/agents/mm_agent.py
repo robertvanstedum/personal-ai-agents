@@ -28,6 +28,9 @@ Config layers checked:
 
 Not checkable here: Grok's remote campaign patches.
 
+Which copy starts: for Claude Code, MiniMoi's pinned copy under ~/minimoi-runtime/tools (the one the agent connection
+runs), newest version first, before Homebrew's.
+
 Supervised profile: Robert is present, so SSH_AUTH_SOCK passes for his normal git use. Unattended work items use the
 stricter delegate policy in core/mc_delegation_runner/workspace.py.
 
@@ -36,6 +39,7 @@ Exit codes: 0 checked, 64 usage, 69 tool missing or failed to start, 78 refused 
 """
 from __future__ import annotations
 
+import glob
 import hashlib
 import json
 import os
@@ -75,8 +79,11 @@ ETC = Path("/etc")
 MANAGED_PREFS = Path("/Library/Managed Preferences")
 CLAUDE_MANAGED_SETTINGS = Path("/Library/Application Support/ClaudeCode/managed-settings.json")
 MDM_DOMAIN = {"claude": "com.anthropic.claudecode", "codex": "com.openai.codex", "grok": "ai.x.grok"}
+# MiniMoi's pinned Claude Code (the copy the agent connection runs) comes first, newest version first. Homebrew's
+# copy is not kept current: on 28 Oct it was 2.1.76, against 2.1.308 in the runtime folder.
 BINARIES = {
-    "claude": ("/opt/homebrew/bin/claude", "~/.local/bin/claude", "~/.claude/local/claude"),
+    "claude": ("~/minimoi-runtime/tools/claude-code-*/claude.app/Contents/MacOS/claude",
+               "/opt/homebrew/bin/claude", "~/.local/bin/claude", "~/.claude/local/claude"),
     "codex": ("~/.local/bin/codex", "/opt/homebrew/bin/codex"),
     "grok": ("~/.grok/bin/grok",),
 }
@@ -280,13 +287,27 @@ def check_codex(home, cwd, environ, args, probe):
 CHECKS = {"claude": check_claude, "codex": check_codex, "grok": check_grok}
 
 
+def _version(text):
+    return tuple(int(n) for n in re.findall(r"\d+", text))
+
+
+def _expand(candidate, home):
+    """One candidate as paths. A '*' matches the installed versions, newest first (2.1.308 before 2.1.40)."""
+    path = candidate.replace("~", str(home), 1) if candidate.startswith("~") else candidate
+    if "*" not in path:
+        return [path]
+    head, tail = path.split("*", 1)
+    found = glob.glob(glob.escape(head) + "*" + glob.escape(tail))
+    return sorted(found, key=lambda p: _version(p[len(head):len(p) - len(tail)]), reverse=True)
+
+
 def resolve_binary(tool, home, self_path):
     """The first installed candidate that is not this launcher. None when the tool is not installed."""
     me = os.path.realpath(self_path)
     for candidate in BINARIES[tool]:
-        path = candidate.replace("~", str(home), 1) if candidate.startswith("~") else candidate
-        if os.path.isfile(path) and os.access(path, os.X_OK) and os.path.realpath(path) != me:
-            return path
+        for path in _expand(candidate, home):
+            if os.path.isfile(path) and os.access(path, os.X_OK) and os.path.realpath(path) != me:
+                return path
     return None
 
 

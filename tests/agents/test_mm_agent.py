@@ -345,6 +345,39 @@ class Door(Harness):
         mm.BINARIES = {**mm.BINARIES, "grok": (str(self.root / "absent"),)}
         self.assertEqual(self.run_main(["mm-grok"]), mm.EX_UNAVAILABLE)
 
+    RUNTIME_CLAUDE = "~/minimoi-runtime/tools/claude-code-*/claude.app/Contents/MacOS/claude"
+
+    def runtime_claude(self, version, executable=True):
+        path = self.home / "minimoi-runtime" / "tools" / f"claude-code-{version}" / "claude.app" / "Contents" / "MacOS" / "claude"
+        path.parent.mkdir(parents=True)
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755 if executable else 0o644)
+        return str(path)
+
+    def test_the_pinned_runtime_claude_comes_before_homebrew(self):
+        real = self._saved[0]["claude"]
+        self.assertEqual(real[0], self.RUNTIME_CLAUDE)
+        self.assertLess(real.index(self.RUNTIME_CLAUDE), real.index("/opt/homebrew/bin/claude"))
+
+    def test_the_newest_runtime_claude_starts_by_version_not_by_name(self):
+        for version in ("2.1.9", "2.1.40"):
+            self.runtime_claude(version)
+        newest = self.runtime_claude("2.1.308")
+        mm.BINARIES = {**mm.BINARIES, "claude": (self.RUNTIME_CLAUDE, self.bins["claude"])}
+        self.assertEqual(mm.resolve_binary("claude", self.home, str(self.root / "mm-agent")), newest)
+        self.assertEqual(self.run_main(["mm-claude", "--version"]), 0)
+        self.assertEqual(self.calls[0][0], newest)
+
+    def test_a_runtime_copy_that_cannot_run_is_skipped(self):
+        older = self.runtime_claude("2.1.40")
+        self.runtime_claude("2.1.308", executable=False)
+        mm.BINARIES = {**mm.BINARIES, "claude": (self.RUNTIME_CLAUDE, self.bins["claude"])}
+        self.assertEqual(mm.resolve_binary("claude", self.home, str(self.root / "mm-agent")), older)
+
+    def test_without_a_runtime_copy_the_next_candidate_starts(self):
+        mm.BINARIES = {**mm.BINARIES, "claude": (self.RUNTIME_CLAUDE, self.bins["claude"])}
+        self.assertEqual(mm.resolve_binary("claude", self.home, str(self.root / "mm-agent")), self.bins["claude"])
+
     def test_the_launcher_never_starts_itself(self):
         me = self.root / "mm-agent"
         me.write_text("#!/bin/sh\n")
