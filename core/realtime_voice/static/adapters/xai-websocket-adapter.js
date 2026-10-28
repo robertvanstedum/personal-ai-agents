@@ -228,6 +228,10 @@ export class XAIWebSocketAdapter {
         this._responseId = event.response?.id || null;
         this._emit("response_started", { response_id: this._responseId });
         break;
+      // Spec 165 §5.1: the owner input item a response answers (if xAI sends this OpenAI-shaped event; not verified).
+      case "input_audio_buffer.committed":
+        this._emit("input_item", { item_id: event.item_id || null });
+        break;
       case "response.output_audio.delta":
         this._playAudioChunk(event.delta || event.audio, event.response_id);
         this._emit("assistant_started", {});
@@ -239,6 +243,7 @@ export class XAIWebSocketAdapter {
               call_id: item.call_id,
               name: item.name,
               arguments: item.arguments,
+              response_id: event.response?.id || this._responseId || null,
             });
           }
         }

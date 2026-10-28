@@ -58,7 +58,30 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     constructor(options) {
       this.options = options; this._state = 'idle'; this._sid = null; this.instructions = []; this.ended = []; this.muted = 0;
       this.turns = []; this.responses = 0; this.tracked = [];
+      // Response attribution, as the real controller does it (Spec 165 §5.1): owner inputs in the order they became known,
+      // whether his speech has ended with its input not yet known, and each response's owner input.
+      this.inputs = []; this.open = false; this.answers = new Map(); this.calls = 0;
       controller = this;
+    }
+    saw(i) {
+      if (this.inputs.includes(i)) return;
+      const before = this.inputs.at(-1) ?? null;
+      this.inputs.push(i); this.open = false;
+      for (const [rid, owner] of this.answers) if (owner && typeof owner === 'object' && owner.after === before) this.answers.set(rid, i);
+    }
+    speechStopped() { this.open = true; this.options.onInputState('speech_started'); this.options.onInputState('speech_stopped'); }
+    respond() {                                            // a response starts now: bound to the owner input current now
+      const id = `call_resp_${++this.calls}`;
+      this.answers.set(id, this.open ? { after: this.inputs.at(-1) ?? null } : (this.inputs.at(-1) ?? null));
+      return id;
+    }
+    callFrom(responseId, call) { return this.options.onFunctionCall({ ...call, response_id: responseId }); }
+    fn(call) { return this.callFrom(this.respond(), call); }             // a response that starts now and calls a function
+    inputOf(call) {
+      const owner = call && call.response_id ? this.answers.get(call.response_id) : undefined;
+      if (owner === undefined || owner === null) return null;
+      if (typeof owner === 'object' || !this.turns[owner]) return { state: 'pending' };
+      return this.turns[owner].completed ? { state: 'bound', index: owner, text: this.turns[owner].text } : { state: 'pending' };
     }
     sessionId() { return this._sid; }
     state() { return this._state; }
@@ -76,9 +99,14 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
       this.ended.push(reason); this._state = 'ended'; this.options.onStateChange('ended');
       this.options.onFinalize({ turns: this.turns.map((t) => ({ ...t })), partial_reason: reason, session_id: this._sid });
     }
-    hear(turns) { this.turns = turns.map((t) => ({ ...t })); this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); }
+    hear(turns) {
+      this.turns = turns.map((t) => ({ ...t }));
+      this.turns.forEach((t, i) => { if (t.speaker === 'user') this.saw(i); });
+      this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t })));
+    }
     utter(text) {                                          // a completed owner turn: the transcript update, then the turn
       this.turns = [...this.turns, user(text)];
+      this.saw(this.turns.length - 1);
       this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); this.options.onUserTurn(text);
     }
     drained(id) { this.options.onPlaybackDrained?.(id); }

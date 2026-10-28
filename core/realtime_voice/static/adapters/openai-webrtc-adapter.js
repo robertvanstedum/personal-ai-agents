@@ -223,6 +223,10 @@ export class OpenAIWebRTCAdapter {
       case "response.created":
         this._emit("response_started", { response_id: event.response?.id || null });
         break;
+      // Spec 165 §5.1: the owner input item a response answers is the one committed before it starts.
+      case "input_audio_buffer.committed":
+        this._emit("input_item", { item_id: event.item_id || null });
+        break;
       case "output_audio_buffer.started":
         this._audible.add(event.response_id || null);
         break;
@@ -240,6 +244,7 @@ export class OpenAIWebRTCAdapter {
               call_id: item.call_id,
               name: item.name,
               arguments: item.arguments,
+              response_id: event.response?.id || null,
             });
           }
         }

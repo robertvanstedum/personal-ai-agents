@@ -21,9 +21,9 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-// Both adapters changed for the playback events: new keys so browsers fetch them (Spec 165 §4.3, §5.3).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-drained1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-drained1";
+// Both adapters changed for the playback events and response attribution: new keys so browsers fetch them (Spec 165 §4.3, §5.3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-attrib1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-attrib1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 const OPENING_INSTRUCTION =
@@ -69,6 +69,9 @@ export class RealtimeVoiceController {
     this._onSessionInfo = onSessionInfo || (() => {});
     this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
     this._responseWaiters = [];
+    this._inputs = [];               // owner input items (provider ids), in the order they became known (Spec 165 §5.1)
+    this._inputOpen = false;         // owner speech has ended and its input item is not known yet
+    this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or {after: id}
     this._openingInstruction = openingInstruction;
     this._pendingAssistantTurns = [];
 
@@ -193,6 +196,11 @@ export class RealtimeVoiceController {
       if (this._managedBootstrap && generation !== this._generation) return;
       handler(event);
     });
+    // Response attribution (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees it current.
+    on("speech_stopped", () => { this._inputOpen = true; });
+    on("input_item", (evt) => this._sawInput(evt.item_id));
+    on("input_transcript", (evt) => this._sawInput(evt.item_id));
+    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._inputOpen ? { after: this._inputs.at(-1) ?? null } : (this._inputs.at(-1) ?? null)); });
     on("connected", () => {
       this._setState("active");
       this._startedAt = Date.now();
@@ -343,6 +351,30 @@ export class RealtimeVoiceController {
       timer = setTimeout(() => { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); resolve(null); }, maxMs);
       if (!this.speak(instruction)) { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); done(null); }
     });
+  }
+
+  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2): each response is bound when it starts to
+   *  the owner input current then (or, while his speech has ended without its item known yet, to the next one to appear),
+   *  and the call to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
+   *  (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when the call is
+   *  bound to no owner input. Never the latest input by default. German and Portuguese do not call it. */
+  inputOf(call) {
+    const owner = call && call.response_id ? this._answers.get(call.response_id) : undefined;
+    if (owner === undefined || owner === null) return null;
+    if (typeof owner === "object") return { state: "pending" };
+    const order = [...this._items.entries()].sort((a, b) => a[1].firstSeq - b[1].firstSeq);
+    const index = order.findIndex(([id]) => id === owner);
+    if (index < 0) return { state: "pending" };
+    const item = order[index][1];
+    return item.completed ? { state: "bound", index, text: item.text || "" } : { state: "pending" };
+  }
+
+  _sawInput(id) {
+    if (!id || this._inputs.includes(id)) return;
+    const before = this._inputs.at(-1) ?? null;
+    this._inputs.push(id);
+    this._inputOpen = false;
+    for (const [rid, owner] of this._answers) if (owner && typeof owner === "object" && owner.after === before) this._answers.set(rid, id);
   }
 
   mute() { this._adapter?.mute(); }

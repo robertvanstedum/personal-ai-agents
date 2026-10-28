@@ -15,7 +15,7 @@ const t = runner('A1 fix-round session regressions');
 await t.check('item 1: a consult names the capture id of the owner turn it acts on, the id its transcript post carries', async () => {
   const r = rig(); await r.s.start('openai');
   r.c.utter('What is stuck on #12?'); await flush();
-  await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
+  await r.c.fn({ call_id: 'call_1', name: 'consult', arguments: {} });
   const [consult] = r.posts('/consult');
   assert.equal(consult.body.owner_item_id, 't0');
   assert.equal('owner_turn' in consult.body, false);
@@ -24,13 +24,15 @@ await t.check('item 1: a consult names the capture id of the owner turn it acts 
 });
 await t.check('item 1: an owner turn that completes after a later item appeared is named by its own place', async () => {
   const r = rig(); await r.s.start('openai');
+  r.c.hear([user('Check the kiln', false)]);
+  const first = r.c.respond();                                                                // answers t0, still being transcribed
   r.c.hear([user('Check the kiln', false), assistant('Let me', false), user('and the glaze', false)]);
   r.c.hear([user('Check the kiln', false), assistant('Let me', false), user('and the glaze')]);   // the later one first
   r.c.options.onUserTurn('and the glaze');
-  await r.c.options.onFunctionCall({ call_id: 'call_b', name: 'consult', arguments: {} });
+  await r.c.fn({ call_id: 'call_b', name: 'consult', arguments: {} });
   r.c.hear([user('Check the kiln'), assistant('Let me', false), user('and the glaze')]);
   r.c.options.onUserTurn('Check the kiln');
-  await r.c.options.onFunctionCall({ call_id: 'call_a', name: 'consult', arguments: {} });
+  await r.c.callFrom(first, { call_id: 'call_a', name: 'consult', arguments: {} });
   assert.deepEqual(r.posts('/consult').map((p) => [p.body.owner_item_id, p.body.owner_transcript_item]),
     [['t2', 'and the glaze'], ['t0', 'Check the kiln']]);
 });
@@ -38,9 +40,9 @@ await t.check('item 1: Check and the model on one turn name one id; the same wor
   const r = rig(); await r.s.start('openai');
   r.c.utter('Make a note that the kiln needs a new seal');
   await r.s.check();
-  await r.c.options.onFunctionCall({ call_id: 'call_m', name: 'save_note', arguments: {} });
+  await r.c.fn({ call_id: 'call_m', name: 'save_note', arguments: {} });
   r.c.utter('Make a note that the kiln needs a new seal');
-  await r.c.options.onFunctionCall({ call_id: 'call_n', name: 'save_note', arguments: {} });
+  await r.c.fn({ call_id: 'call_n', name: 'save_note', arguments: {} });
   assert.deepEqual(r.posts('/consult').map((p) => p.body.owner_item_id), ['t0', 't0', 't1']);
 });
 
@@ -48,9 +50,9 @@ await t.check('item 1: Check and the model on one turn name one id; the same wor
 await t.check('R1 P1-2: a call before its transcript waits for it, then acts once on the new words and its turn', async () => {
   const r = rig(); await r.s.start('openai');
   r.c.utter('What is stuck on #12?');
-  await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
-  r.c.options.onInputState('speech_started'); r.c.options.onInputState('speech_stopped');   // he says the next thing
-  const pending = r.c.options.onFunctionCall({ call_id: 'b', name: 'save_note', arguments: { note: 'the kiln needs a new seal' } });
+  await r.c.fn({ call_id: 'a', name: 'consult', arguments: {} });
+  r.c.speechStopped();                                                                      // he says the next thing
+  const pending = r.c.fn({ call_id: 'b', name: 'save_note', arguments: { note: 'the kiln needs a new seal' } });
   await flush();
   assert.equal(r.posts('/consult').length, 1, 'sent before its own words were transcribed');
   r.advance(1500);
@@ -64,9 +66,9 @@ await t.check('R1 P1-2: a call before its transcript waits for it, then acts onc
 await t.check('R1 P1-2: a call whose transcript never comes sends nothing and says it did not catch it', async () => {
   const r = rig(); await r.s.start('openai');
   r.c.utter('What is stuck on #12?');
-  await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
-  r.c.options.onInputState('speech_started');
-  const pending = r.c.options.onFunctionCall({ call_id: 'b', name: 'save_note', arguments: {} });
+  await r.c.fn({ call_id: 'a', name: 'consult', arguments: {} });
+  r.c.speechStopped();
+  const pending = r.c.fn({ call_id: 'b', name: 'save_note', arguments: {} });
   await flush(); r.advance(2999); await flush();
   assert.equal(r.posts('/consult').length, 1);
   r.advance(1);
@@ -79,10 +81,10 @@ await t.check('R1 P1-2 (repro R2): a call before its transcript, while the earli
   const r = rig({ routes: { '/consult': (body) => (body.call_id === 'a' ? new Promise((res) => { release = () => res({ status: 200, body: { ok: true, outcome: 'done', spoken: 'Logged.' } }); }) : null) } });
   await r.s.start('openai');
   r.c.utter('Check the kiln temperature log.');
-  const first = r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
+  const first = r.c.fn({ call_id: 'a', name: 'consult', arguments: {} });
   await flush();
-  r.c.options.onInputState('speech_started');
-  const second = r.c.options.onFunctionCall({ call_id: 'b', name: 'save_note', arguments: {} });
+  r.c.speechStopped();
+  const second = r.c.fn({ call_id: 'b', name: 'save_note', arguments: {} });
   await flush();
   r.c.utter('Make a note that the kiln is hot');
   const out = await second; release(); await first;
@@ -92,11 +94,11 @@ await t.check('R1 P1-2 (repro R2): a call before its transcript, while the earli
 await t.check('R1 P1-2: an empty transcript is not words: nothing is sent', async () => {
   const r = rig(); await r.s.start('openai');
   r.c.utter('What is stuck on #12?');
-  await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} });
-  r.c.options.onInputState('speech_started');
-  const pending = r.c.options.onFunctionCall({ call_id: 'b', name: 'consult', arguments: {} });
+  await r.c.fn({ call_id: 'a', name: 'consult', arguments: {} });
+  r.c.speechStopped();
+  const pending = r.c.fn({ call_id: 'b', name: 'consult', arguments: {} });
   await flush();
-  r.c.options.onUserTurn('');
+  r.c.hear([...r.c.turns, user('')]); r.c.options.onUserTurn('');                          // transcribed, and empty
   assert.equal((await pending).error, 'not_heard');
   assert.equal(r.posts('/consult').length, 1);
 });
@@ -107,11 +109,11 @@ await t.check('item 4: a turn still running is pending, an answer that never cam
   const r = rig({ routes: { '/consult': (body) => answers[body.call_id] } });
   await r.s.start('openai');
   r.c.utter('Run the nightly job.');
-  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'a', name: 'consult', arguments: {} }),
+  assert.deepEqual(await r.c.fn({ call_id: 'a', name: 'consult', arguments: {} }),
     { ok: false, error: 'in flight', outcome: 'pending', spoken: "That's taking longer; the answer will be in the conversation." });
-  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'b', name: 'consult', arguments: {} }),
+  assert.deepEqual(await r.c.fn({ call_id: 'b', name: 'consult', arguments: {} }),
     { ok: false, error: 'unknown', outcome: 'unknown', spoken: "I didn't get the result back. Check it in writing before asking again." });
-  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'c', name: 'consult', arguments: {} }),
+  assert.deepEqual(await r.c.fn({ call_id: 'c', name: 'consult', arguments: {} }),
     { ok: false, error: 'unavailable', outcome: 'not_done', spoken: 'That did not go through. Nothing was done.' });
 });
 
@@ -156,7 +158,7 @@ await t.check('item 5: an answer lost twice is asked about once, and the stored 
     '/t0': () => ({ status: 200, body: { ok: true, outcome: 'done', owner_item_id: 't0', receipt: 'mc-9', spoken: 'Item 12 is in build.' } }) } });
   await r.s.start('openai');
   r.c.utter('What is stuck on #12?');
-  const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
+  const out = await r.c.fn({ call_id: 'call_1', name: 'consult', arguments: {} });
   assert.equal(r.posts('/consult').length, 2);
   const [asked] = r.gets('/consult/');
   assert.equal(asked.url, `/guild-next/api/v1/mc/voice/direct/api/realtime-voice/consult/${SID}/t0?conversation_id=c-1`);
@@ -168,7 +170,7 @@ await t.check('item 5: a read that does not answer, or says unknown, leaves it u
     const r = rig({ routes: { '/consult': () => 'network', '/t0': () => answer } });
     await r.s.start('openai');
     r.c.utter('What is stuck on #12?');
-    const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
+    const out = await r.c.fn({ call_id: 'call_1', name: 'consult', arguments: {} });
     assert.equal(out.outcome, 'unknown'); assert.equal(out.spoken, D.UNKNOWN);
   }
 });
@@ -360,6 +362,45 @@ await t.check('CX A1-C3 (End): a final post and End that never answer still let 
   assert.equal(r.posts('/end').length, 1); assert.deepEqual(r.posts('/end')[0].body.unacknowledged, ['t0']);
   assert.equal(r.reveals.length, 1); assert.equal(r.ended.length, 1);
   assert.match(r.ended.at(-1)[0], /server did not confirm/);
+});
+
+// ── CX A1-C2: a function call acts on the owner turn its own response answers (codex_a1_repro.mjs) ─────────────────────
+await t.check('CX A1-C2: Check on a first request, a second utterance, then the first response\'s delayed call: it acts on the first', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Save a note: first request');
+  const first = r.c.respond();                                                // the response to the first request starts
+  await r.s.check();
+  r.c.utter('Save a note: second request');
+  await r.c.callFrom(first, { call_id: 'late-first-response', name: 'save_note', arguments: { note: 'first request' } });
+  const p = r.posts('/consult').at(-1).body;
+  assert.deepEqual([p.owner_item_id, p.owner_transcript_item], ['t0', 'Save a note: first request'], 'rebound to the newer turn');
+});
+await t.check('CX A1-C2: overlapping turns: each response\'s call names its own turn, whatever order the calls land in', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Check the kiln.'); const a = r.c.respond();
+  r.c.utter('And the glaze.'); const b = r.c.respond();
+  await r.c.callFrom(b, { call_id: 'b', name: 'consult', arguments: {} });
+  await r.c.callFrom(a, { call_id: 'a', name: 'consult', arguments: {} });
+  assert.deepEqual(r.posts('/consult').map((p) => [p.body.call_id, p.body.owner_item_id, p.body.owner_transcript_item]),
+    [['b', 't1', 'And the glaze.'], ['a', 't0', 'Check the kiln.']]);
+});
+await t.check('CX A1-C2: a call bound to no owner input is refused before anything is sent, never given the latest words', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Run the nightly job.');
+  const out = await r.c.options.onFunctionCall({ call_id: 'orphan', name: 'consult', arguments: {} });   // no response id
+  const unknown = await r.c.callFrom('resp_never_started', { call_id: 'stray', name: 'consult', arguments: {} });
+  assert.equal(out.outcome, 'not_done'); assert.equal(unknown.outcome, 'not_done');
+  assert.equal(r.posts('/consult').length, 0);
+});
+await t.check('CX A1-C2: a duplicate completion of the same captured item is not a new turn', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Make a note that the kiln is hot');
+  await r.c.fn({ call_id: 'a', name: 'save_note', arguments: {} });
+  r.c.hear(r.c.turns); r.c.options.onUserTurn('Make a note that the kiln is hot');        // the same item completes again
+  await r.c.fn({ call_id: 'b', name: 'save_note', arguments: {} });
+  await r.s.check();
+  assert.deepEqual(r.posts('/consult').map((p) => p.body.owner_item_id), ['t0', 't0']);
+  assert.deepEqual(r.said.at(-1), [D.ALREADY_CHECKED, { transient: true }]);
 });
 
 t.done();

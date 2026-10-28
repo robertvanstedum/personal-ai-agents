@@ -1,8 +1,9 @@
 // The shared controller and adapters after Spec 165 A1 and its fix round, for German and Portuguese: byte-for-byte the files
 // they ran before, plus additive parts they never use: the controller's public methods (sessionId(), state(), speak(),
-// speakTracked()), its optional onPlaybackDrained callback and the two adapter events it listens to (response_started,
-// playback_drained: nothing reaches a page that passes no callback), the adapters' response tracking that emits them
-// (Spec 165 §5.3), and new adapter cache keys. Pinned two ways: each source with exactly those additions taken out hashes to
+// speakTracked(), inputOf()), its optional onPlaybackDrained callback and the adapter events it listens to (response_started,
+// playback_drained, input_item: nothing reaches a page that passes no callback), its response attribution (review CX A1-C2:
+// which owner input each response answers), the adapters' response tracking that emits them (Spec 165 §5.1, §5.3), the
+// response id on each function call, and new adapter cache keys. Pinned two ways: each source with exactly those additions taken out hashes to
 // its 93bf00c6 file (the Chunk B baseline; what production German, Portuguese and CoS receive at merge from origin/main is
 // listed in A1_FIX_RESULT.md); and the methods, driven on a synthetic transport, send nothing unless a host calls them, and
 // nothing on the managed path. No provider, microphone or network.
@@ -13,9 +14,9 @@ import assert from 'node:assert/strict';
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
 const CONTROLLER = [
-  [`// Both adapters changed for the playback events: new keys so browsers fetch them (Spec 165 §4.3, §5.3).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-drained1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-drained1";`,
+  [`// Both adapters changed for the playback events and response attribution: new keys so browsers fetch them (Spec 165 §4.3, §5.3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-attrib1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-attrib1";`,
    `import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261015-managed-end1";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";`],
   [`    onSessionInfo, onPlaybackDrained = null,
@@ -24,6 +25,9 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
 `],
   [`    this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
     this._responseWaiters = [];
+    this._inputs = [];               // owner input items (provider ids), in the order they became known (Spec 165 §5.1)
+    this._inputOpen = false;         // owner speech has ended and its input item is not known yet
+    this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or {after: id}
 `,
    ``],
   [`    on("response_started", (evt) => { for (const resolve of this._responseWaiters.splice(0)) resolve(evt.response_id || null); });
@@ -59,7 +63,41 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
   }
 
 `,
-   ``]];
+   ``],
+  [`    // Response attribution (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees it current.
+    on("speech_stopped", () => { this._inputOpen = true; });
+    on("input_item", (evt) => this._sawInput(evt.item_id));
+    on("input_transcript", (evt) => this._sawInput(evt.item_id));
+    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._inputOpen ? { after: this._inputs.at(-1) ?? null } : (this._inputs.at(-1) ?? null)); });
+`,
+   ``],
+  [`  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2): each response is bound when it starts to
+   *  the owner input current then (or, while his speech has ended without its item known yet, to the next one to appear),
+   *  and the call to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
+   *  (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when the call is
+   *  bound to no owner input. Never the latest input by default. German and Portuguese do not call it. */
+  inputOf(call) {
+    const owner = call && call.response_id ? this._answers.get(call.response_id) : undefined;
+    if (owner === undefined || owner === null) return null;
+    if (typeof owner === "object") return { state: "pending" };
+    const order = [...this._items.entries()].sort((a, b) => a[1].firstSeq - b[1].firstSeq);
+    const index = order.findIndex(([id]) => id === owner);
+    if (index < 0) return { state: "pending" };
+    const item = order[index][1];
+    return item.completed ? { state: "bound", index, text: item.text || "" } : { state: "pending" };
+  }
+
+  _sawInput(id) {
+    if (!id || this._inputs.includes(id)) return;
+    const before = this._inputs.at(-1) ?? null;
+    this._inputs.push(id);
+    this._inputOpen = false;
+    for (const [rid, owner] of this._answers) if (owner && typeof owner === "object" && owner.after === before) this._answers.set(rid, id);
+  }
+
+`,
+   ``]
+];
 let n = 0;
 
 const source = fs.readFileSync(PATH, 'utf8');
@@ -123,9 +161,24 @@ const ADAPTERS = {
       if (r) { r.sources = 0; r.done = true; this._drainedIf(key); }
     }
 `,
+   ``],
+  [`      // Spec 165 §5.1: the owner input item a response answers (if xAI sends this OpenAI-shaped event; not verified).
+      case "input_audio_buffer.committed":
+        this._emit("input_item", { item_id: event.item_id || null });
+        break;
+`,
+   ``],
+  [`              response_id: event.response?.id || this._responseId || null,
+`,
    ``]],
   ],
   'adapters/openai-webrtc-adapter.js': ['dae118fd252add9a80755a363d64ce6b4ef377b004d177e8dc10bba5a3c274a7', [
+  [`      // Spec 165 §5.1: the owner input item a response answers is the one committed before it starts.
+      case "input_audio_buffer.committed":
+        this._emit("input_item", { item_id: event.item_id || null });
+        break;
+`,
+   ``],
   [`    this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)
 `,
    ``],
@@ -159,6 +212,9 @@ const ADAPTERS = {
 function _hasAudio(response) {
   return (response?.output || []).some((item) => (item?.content || []).some((part) => ["audio", "output_audio"].includes(part?.type)));
 }
+`,
+   ``],
+  [`              response_id: event.response?.id || null,
 `,
    ``]],
   ],

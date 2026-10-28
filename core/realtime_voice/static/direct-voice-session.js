@@ -285,8 +285,6 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     update(turns) { if (stopped || boundary !== null) return chain; observe(turns); return enqueue(due(false)); },
     // The capture id of the owner turn that completed last ("t" + its place), or null before he has said anything.
     ownerItem: () => (ownerAt >= 0 ? `t${ownerAt}` : null),
-    // An owner item that appeared after the last completed one and is not complete yet: words still being transcribed.
-    ownerPending: () => items.some((it, i) => it && i > ownerAt && it.speaker === 'user' && !it.completed),
     finish: last,
     // The capture-closing barrier (review B2, R2 S2): close at the boundary, post what is owed and resolve once every post is
     // answered. The caller never awaits this from inside a post's own answer.
@@ -351,8 +349,7 @@ export function directVoice(d) {
   let lastTurns = [], summaryResponse = undefined;              // the spoken summary's response id, once the controller says
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
   let consultedItem = null, checking = false;                     // the owner item last consulted (by the model or Check)
-  let hearing = false, lastHeard = true;                           // owner speech not yet transcribed; whether the last had words
-  const transcribed = [];                                          // model calls waiting for that transcript
+  const binding = [];                                              // model calls waiting for their owner turn's transcript
   const done = new Promise((resolve) => { closed = resolve; });     // settles once End is sent and the thread is reloaded
   done.then(() => { settled = true; });
 
@@ -454,14 +451,14 @@ export function directVoice(d) {
   // its capture id, owner_item_id (review B1, Spec 165 §5.1): the same for Check with <person> and the model's own call on
   // the same words, so the server runs that turn once and gives a second call the first one's answer; his next words are a
   // new turn, with a new id.
-  async function consult(callId, name, args) {
+  async function consult(callId, name, args, owner) {
     const holding = later(() => { if (quiet() && speak('Still checking.')) responding = true; }, HOLDING_MS);
     let advisory = args;
     if (typeof advisory === 'string') { try { advisory = JSON.parse(advisory); } catch (e) { advisory = {}; } }
     if (!advisory || typeof advisory !== 'object' || Array.isArray(advisory)) advisory = {};
-    const item = capture?.ownerItem() || null;
-    if (lastOwner && item) consultedItem = item;                       // by the model or by Check with <person>
-    const request = { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: lastOwner,
+    const item = owner.item;
+    consultedItem = item;                                             // by the model or by Check with <person>
+    const request = { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: owner.text,
       owner_item_id: item, arguments: advisory };
     const lost = (x) => x.status === 0 || x.status >= 500;
     const inFlight = (x) => x.status === 409 && x.body.error === 'in flight';
@@ -497,26 +494,41 @@ export function directVoice(d) {
     return r.status === 200 && ['done', 'not_done', 'pending'].includes(r.body.outcome) ? r.body : unknown;
   }
 
-  // A model call answers the owner speech that came just before it. Transcription is asynchronous to the response (OpenAI
-  // says so; review R1 P1-2, R2 S4), so the call can arrive before that speech's transcript: then it would carry the
-  // previous turn and its words. So while owner speech has no completed transcript (speech started, or an owner item still
-  // being transcribed), the call waits for it, at most HEAR_WAIT_MS; then it is sent naming that new turn. If the transcript
-  // does not come, or came empty, nothing is sent and the voice says it did not catch it: never an act on older words.
-  function awaitWords() {
-    if (!hearing && !capture?.ownerPending()) return Promise.resolve(lastHeard);
+  // A model call acts on the owner turn its own response answers, never on whichever turn finished last (review CX A1-C2,
+  // R1 P1-2, R2 S4). The controller binds each response, when it starts, to the owner input item it answers, and the call
+  // to its response (controller.inputOf(call)): the item's capture id and its words. If that turn's transcript has not
+  // completed yet (transcription runs alongside the response), the call waits for it, at most HEAR_WAIT_MS. A call with no
+  // binding (no response id, a response that answered no owner input), one whose turn never completes, or whose words came
+  // empty is refused before anything is sent: "I didn't catch that; say it again." It is never rebound to newer words.
+  function boundOwner(call) {
+    const look = () => {
+      const b = typeof c?.inputOf === 'function' ? c.inputOf(call) : null;
+      if (!b) return null;
+      if (b.state !== 'bound') return 'pending';
+      const text = String(b.text || '').trim();
+      return text ? { item: `t${b.index}`, text } : null;
+    };
+    const first = look();
+    if (first !== 'pending') return Promise.resolve(first);
     return new Promise((resolve) => {
       let timer = null;
-      const done = (ok) => { cancel(timer); resolve(ok); };
-      timer = later(() => { const i = transcribed.indexOf(done); if (i >= 0) transcribed.splice(i, 1); resolve(false); }, HEAR_WAIT_MS);
-      transcribed.push(done);
+      const retry = () => { const b = look(); if (b === 'pending') return false; cancel(timer); resolve(b); return true; };
+      timer = later(() => {
+        const i = binding.indexOf(retry);
+        if (i >= 0) binding.splice(i, 1);
+        const b = look();
+        resolve(b === 'pending' ? null : b);
+      }, HEAR_WAIT_MS);
+      binding.push(retry);
     });
   }
+  function rebind() { for (const retry of [...binding]) if (retry()) binding.splice(binding.indexOf(retry), 1); }
   async function modelCall(call) {
     responding = false;                                    // the response that called it is done; its result starts the next
     try {
-      const heardIt = await awaitWords();
-      if (!heardIt || !lastOwner || !capture?.ownerItem()) return { ok: false, outcome: 'not_done', error: 'not_heard', spoken: NOT_HEARD };
-      return await consult(call.call_id, call.name, call.arguments);
+      const owner = await boundOwner(call);
+      if (!owner) return { ok: false, outcome: 'not_done', error: 'not_heard', spoken: NOT_HEARD };
+      return await consult(call.call_id, call.name, call.arguments, owner);
     } finally { responding = true; }
   }
 
@@ -525,12 +537,12 @@ export function directVoice(d) {
   // second typed turn and could start a second job (UI review #3). Saying the words again makes a new turn to check.
   async function check() {
     if (!connected || finalized || checking || summary) return;
-    if (!lastOwner) { ui.say(words.sayFirst, { transient: true }); return; }
+    if (!lastOwner || !capture?.ownerItem()) { ui.say(words.sayFirst, { transient: true }); return; }
     if (consultedItem && consultedItem === capture?.ownerItem()) { ui.say(ALREADY_CHECKED, { transient: true }); return; }
     checking = true; ui.checking?.(true);
     try {
       ui.phase('working');
-      const body = await consult(`host-${clock()}`, 'consult', {});
+      const body = await consult(`host-${clock()}`, 'consult', {}, { item: capture.ownerItem(), text: lastOwner });
       if (finalized) return;
       const spoken = body && typeof body.spoken === 'string' && body.spoken.trim() ? body.spoken.trim() : NOT_DONE;
       sayAtPause(`Say this briefly, adding nothing: ${spoken}`);
@@ -698,7 +710,6 @@ export function directVoice(d) {
         if (state === 'reconnecting' && !finalized) c.endSession('disconnect');     // no silent reconnect: end visibly
       },
       onInputState: (phase) => {
-        if (phase === 'speech_started' || phase === 'speech_stopped') hearing = true;     // his words, not yet transcribed
         if (phase === 'speech_started') { speaking = true; if (lifecycle === 'speaking_summary') summaryHeard(); }   // barge-in
         if (phase === 'speech_stopped') { speaking = false; responding = true; }         // a response follows his words
         if (!connected || finalized) return;
@@ -712,12 +723,11 @@ export function directVoice(d) {
         if (info?.reason === 'bootstrap_rejected' || info?.reason === 'bootstrap_network_error') finalize({ turns: [] });
       },
       onPlayback: () => {},
-      onTranscriptUpdate: (turns) => { lastTurns = turns; if (!finalized) capture.update(turns); },
+      onTranscriptUpdate: (turns) => { lastTurns = turns; if (!finalized) capture.update(turns); rebind(); },
       onUserTurn: (text) => {
         const words = typeof text === 'string' ? text.trim() : '';
         if (words) lastOwner = words;
-        hearing = false; lastHeard = Boolean(words);
-        for (const done of transcribed.splice(0)) done(lastHeard);
+        rebind();
       },
       onAssistantTurn: () => { responding = false; pump(); },
       // Spec 165 §5.3: a response's audio has played out. Only the summary's own response ends the session.

@@ -53,6 +53,13 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
       this.options.onSessionInfo?.({ provider: args.provider, voice_session_id: SID, voice_notices: ['openai voice is unset, using marin'] });
       this._state = 'active'; this.options.onStateChange('active');
     }
+    inputOf() {             // this fake's responses answer the owner turn that came last (the real binding: test_response_binding.mjs)
+      const turns = this.turns || [];
+      let i = turns.length - 1;
+      while (i >= 0 && turns[i].speaker !== 'user') i -= 1;
+      if (i < 0) return null;
+      return turns[i].completed ? { state: 'bound', index: i, text: turns[i].text } : { state: 'pending' };
+    }
     utter(text) {                                          // a completed owner turn, as the controller reports it: the transcript, then the turn
       this.turns = [...(this.turns || []), { speaker: 'user', text, completed: true }];
       this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); this.options.onUserTurn(text);
