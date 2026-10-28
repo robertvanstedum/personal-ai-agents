@@ -13,6 +13,7 @@ import uuid
 
 import pytest
 
+from agent_fakes import CONTROLS_PRELUDE, fake_controls, given_environments
 from core import agent_requests as ar
 from core.agent_requests.claude_stream import ClaudeStreamProvider
 from core.agent_requests.connection import (BACKOFF_S, MAX_ATTEMPTS, ConnectionManager, Delivery, IdentityMismatch, LeaseHeld, Probe, Provider,
@@ -353,7 +354,7 @@ def test_the_connection_folder_refuses_a_link(root, tmp_path):
 
 # ── the Claude stream-json provider, against a test double of the CLI ────────
 
-FAKE_CLAUDE = r'''
+FAKE_CLAUDE = CONTROLS_PRELUDE + r'''
 import json, os, re, shlex, subprocess, sys, time
 mode = os.environ.get("FAKE_MODE", "ack")
 sid = os.environ["FAKE_SID"]
@@ -388,7 +389,7 @@ def fake_cli(tmp_path, root, monkeypatch):
     wrapper = tmp_path / "claude"
     wrapper.write_text(f"#!/bin/sh\nexec {sys.executable} {script} \"$@\"\n")
     wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
-    monkeypatch.setenv("FAKE_SID", SID)
+    fake_controls(tmp_path, FAKE_SID=SID)
     monkeypatch.delenv("MINIMOI_AGENT_REQUESTS_DIR", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))                     # the default ledger lives under HOME: a command that fell back to it would write there
     return str(wrapper)
@@ -459,7 +460,7 @@ def test_a_real_round_trip_through_the_stream_provider_idle_to_receipt_to_result
 
 
 def test_a_busy_stream_session_queues_the_second_request_until_its_turn_ends(fake_cli, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_DELAY", "1.5")
+    fake_controls(tmp_path, FAKE_DELAY="1.5")
     a, b = ask(root, "a"), ask(root, "b")
     p = provider(fake_cli, tmp_path)
     m = mgr(root, p)
@@ -474,7 +475,7 @@ def test_a_busy_stream_session_queues_the_second_request_until_its_turn_ends(fak
 
 
 def test_a_session_that_dies_mid_turn_is_offline_the_request_is_not_resent_and_a_restart_continues_the_same_session(fake_cli, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "die")
+    fake_controls(tmp_path, FAKE_MODE="die")
     rid = ask(root)
     p = provider(fake_cli, tmp_path)
     m = mgr(root, p)
@@ -482,7 +483,7 @@ def test_a_session_that_dies_mid_turn_is_offline_the_request_is_not_resent_and_a
     assert m.step()["delivered"]["status"] == "accepted"
     assert wait_for(lambda: p.probe().state == "offline")
     assert m.step()["state"] == "offline" and m.step()["delivered"] is None                              # nobody to hand anything to
-    monkeypatch.setenv("FAKE_MODE", "ack")
+    fake_controls(tmp_path, FAKE_MODE="ack")
     p.start()                                                                                           # the operator restarts it: the SAME session id, resumed
     assert "--resume" in p.argv() and SID in p.argv()
     out = m.step()
@@ -659,8 +660,71 @@ def test_the_child_process_gets_the_managers_ledger_in_its_environment(fake_cli,
     p.close()
 
 
+# The credentials the brief names (operations, 28 Oct). A fake value only: nothing here is a real key.
+PARENT_SECRETS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY", "TELEGRAM_BOT_TOKEN")
+FAKE_VALUE = "sk-test-not-real"
+# Every name a front-door connection may give its child (the launch policy's base list, plus the connection's exact extras).
+CHILD_NAMES = {"PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "USER", "SHELL", "MINIMOI_AGENT_REQUESTS_DIR", "DISABLE_AUTOUPDATER"}
+
+
+class EnvSpy:
+    """A stand-in for Popen that keeps the keyword arguments it was given and stays 'alive' and silent."""
+    def __init__(self, seen, argv, **kw):
+        seen.update(kw)
+        self.stdin = self
+        self.stdout = LivePipe()
+
+    def write(self, _):
+        return 0
+
+    def flush(self):
+        pass
+
+    def poll(self):
+        return None
+
+    def close(self):
+        pass
+
+    def terminate(self):
+        pass
+
+    def kill(self):
+        pass
+
+    def wait(self, timeout=None):
+        return 0
+
+
+def test_provider_keys_and_tokens_in_the_managers_environment_never_reach_the_claude_session(fake_cli, tmp_path, root, monkeypatch):
+    for name in PARENT_SECRETS:
+        monkeypatch.setenv(name, FAKE_VALUE)
+    monkeypatch.setenv("MINIMOI_AGENT_REQUESTS_DIR", str(tmp_path / "the-global-default"))          # a ledger in the manager's own environment is not the session's
+    monkeypatch.setenv("NOT_ON_THE_LIST", "harmless")                                               # not a secret, and still not passed: an allowlist, not a filter
+    seen = {}
+    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: EnvSpy(seen, *a, **k))
+    p.start()
+    env = seen["env"]
+    assert not set(PARENT_SECRETS) & set(env) and FAKE_VALUE not in env.values()
+    assert env["MINIMOI_AGENT_REQUESTS_DIR"] == root                                               # the connection's own ledger, never the global default
+    assert env["DISABLE_AUTOUPDATER"] == "1"                                                       # the pinned CLI never replaces itself
+    assert set(env) <= CHILD_NAMES and "NOT_ON_THE_LIST" not in env
+    assert env["HOME"] == os.environ["HOME"] and env["PATH"] == os.environ["PATH"]                 # the sign-in and the tools are still found
+    p.close()
+
+
+def test_the_claude_sessions_own_extras_go_through_the_policys_refusal(fake_cli, tmp_path, root, monkeypatch):
+    from core.mc_delegation_runner import launch_env
+    monkeypatch.setattr(launch_env, "REVIEWED_NAMES", {})                                          # without its review, the ledger name matches ^MINIMOI_ and is refused
+    seen = {}
+    p = ClaudeStreamProvider(claude_bin=fake_cli, session_id=SID, cwd=str(tmp_path), allowed_tools=["Read"], ledger_root=root, popen=lambda *a, **k: EnvSpy(seen, *a, **k))
+    with pytest.raises(launch_env.EnvRefused, match="MINIMOI_AGENT_REQUESTS_DIR"):
+        p.start()
+    assert seen == {}                                                                               # nothing was started
+
+
 def test_a_stream_session_that_reports_a_different_session_id_fails_closed_and_is_never_armed_or_resent_to(fake_cli, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "mismatch")
+    fake_controls(tmp_path, FAKE_MODE="mismatch")
     a = ask(root, "a")
     p = provider(fake_cli, tmp_path, ledger_root=root)
     m = mgr(root, p)
@@ -676,7 +740,7 @@ def test_a_stream_session_that_reports_a_different_session_id_fails_closed_and_i
 
 
 def test_a_permission_the_session_was_denied_is_visible_attention_never_auto_approved(fake_cli, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "deny")
+    fake_controls(tmp_path, FAKE_MODE="deny")
     a = ask(root)
     p = provider(fake_cli, tmp_path, ledger_root=root)
     m = mgr(root, p)

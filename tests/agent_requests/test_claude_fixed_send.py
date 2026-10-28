@@ -83,6 +83,18 @@ def test_enqueue_then_live_pid_pickup_and_no_second_send(tmp_path,monkeypatch):
     assert not (box.root/'requests'/rid/'native-reply.json').exists()
 
 
+def test_the_fixed_sender_gives_claude_code_only_names_inside_the_one_launch_policy(tmp_path,monkeypatch):
+    from core.mc_delegation_runner import launch_env
+    six=('ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY','GH_TOKEN','AWS_SECRET_ACCESS_KEY','TELEGRAM_BOT_TOKEN')
+    for name in six:monkeypatch.setenv(name,'sk-test-not-real')
+    box,rid,calls,children,path=fixture(tmp_path,monkeypatch)
+    box.dispatch(rid)
+    env=calls[0][1]['env']
+    # It copies nothing from its parent: a fixed HOME, PATH and LANG, all on the policy's base list and none credential-shaped.
+    assert set(env)=={'HOME','PATH','LANG'} and set(env)<=set(launch_env.BASE_ALLOW)
+    assert not any(launch_env.denied(n) for n in env) and 'sk-test-not-real' not in env.values()
+
+
 @pytest.mark.parametrize('mode',['partial','denied'])
 def test_unknown_after_admission_never_reexecutes(tmp_path,monkeypatch,mode):
     box,rid,calls,children,path=fixture(tmp_path,monkeypatch,mode)

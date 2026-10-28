@@ -11,6 +11,7 @@ import time
 
 import pytest
 
+from agent_fakes import CONTROLS_PRELUDE, fake_controls, given_environments
 from core import agent_requests as ar
 from core.agent_requests.codex_app_server import CodexAppServerProvider
 from core.agent_requests.connection import ConnectionManager
@@ -19,7 +20,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 THREAD = "01a129b0-d511-7f03-a96d-645475ccd7a4"
 CONV = "c-132bc60f078e"
 
-FAKE_SERVER = r'''
+FAKE_SERVER = CONTROLS_PRELUDE + r'''
 import json, os, re, shlex, subprocess, sys, time
 mode = os.environ.get("FAKE_MODE", "ack")
 thread = os.environ.get("FAKE_THREAD", "01a129b0-d511-7f03-a96d-645475ccd7a4")
@@ -107,7 +108,7 @@ def fake_codex(tmp_path, monkeypatch):
     wrapper = tmp_path / "codex"
     wrapper.write_text(f"#!/bin/sh\nexec {sys.executable} {script} \"$@\"\n")
     wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
-    monkeypatch.setenv("FAKE_LOG", str(tmp_path / "wire.jsonl"))
+    fake_controls(tmp_path, FAKE_LOG=str(tmp_path / "wire.jsonl"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.delenv("MINIMOI_AGENT_REQUESTS_DIR", raising=False)
     return str(wrapper)
@@ -171,7 +172,7 @@ def test_starting_without_a_thread_or_an_explicit_create_is_refused(fake_codex, 
 @pytest.mark.parametrize("mode,why", [("resume_other", "identity_mismatch"), ("resume_cwd", "policy_mismatch: cwd"), ("resume_policy", "policy_mismatch: approvalPolicy"),
                                       ("resume_sandbox", "policy_mismatch: sandbox")])
 def test_a_resume_that_answers_a_different_thread_or_a_different_policy_fails_closed(fake_codex, tmp_path, root, monkeypatch, mode, why):
-    monkeypatch.setenv("FAKE_MODE", mode)
+    fake_controls(tmp_path, FAKE_MODE=mode)
     p = provider(fake_codex, tmp_path, root, thread_id=THREAD)
     with pytest.raises(RuntimeError, match=why):
         p.start()
@@ -223,7 +224,7 @@ def test_a_real_round_trip_idle_to_receipt_to_result_once_through_the_app_server
 
 
 def test_a_turn_that_completes_before_the_rpc_response_leaves_the_session_idle_not_stuck_busy(fake_codex, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "immediate")
+    fake_controls(tmp_path, FAKE_MODE="immediate")
     rid = ask(root)
     p = provider(fake_codex, tmp_path, root)
     p.start(create=True)
@@ -238,7 +239,7 @@ def test_a_turn_that_completes_before_the_rpc_response_leaves_the_session_idle_n
 
 
 def test_an_approval_that_arrives_before_the_rpc_response_is_declined_kept_visible_and_never_approved(fake_codex, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "approval_first")
+    fake_controls(tmp_path, FAKE_MODE="approval_first")
     rid = ask(root)
     p = provider(fake_codex, tmp_path, root)
     p.start(create=True)
@@ -256,7 +257,7 @@ def test_an_approval_that_arrives_before_the_rpc_response_is_declined_kept_visib
 
 
 def test_a_busy_provider_never_sends_and_a_json_rpc_error_is_a_refusal_that_frees_it(fake_codex, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "never_completes")
+    fake_controls(tmp_path, FAKE_MODE="never_completes")
     p = provider(fake_codex, tmp_path, root)
     p.start(create=True)
     assert p.deliver("hello", "r-1").status == "accepted"
@@ -264,7 +265,7 @@ def test_a_busy_provider_never_sends_and_a_json_rpc_error_is_a_refusal_that_free
     assert p.deliver("again", "r-2").status == "refused" and p.deliver("again", "r-2").reason == "busy"
     assert len([w for w in wire(tmp_path) if w.get("method") == "turn/start"]) == 1
     p.close()
-    monkeypatch.setenv("FAKE_MODE", "rpc_error")
+    fake_controls(tmp_path, FAKE_MODE="rpc_error")
     q = provider(fake_codex, tmp_path, root)
     q.start(create=True)
     got = q.deliver("hello", "r-3")
@@ -274,7 +275,7 @@ def test_a_busy_provider_never_sends_and_a_json_rpc_error_is_a_refusal_that_free
 
 @pytest.mark.parametrize("mode,reason", [("silent_rpc", "no_answer_after_write"), ("eof_after_write", "no_answer_after_write"), ("odd_answer", "unconfirmed_turn")])
 def test_no_answer_eof_or_an_odd_answer_after_the_write_is_unknown_never_accepted_and_never_resent(fake_codex, tmp_path, root, monkeypatch, mode, reason):
-    monkeypatch.setenv("FAKE_MODE", mode)
+    fake_controls(tmp_path, FAKE_MODE=mode)
     rid = ask(root)
     p = provider(fake_codex, tmp_path, root, request_timeout=0.6)
     p.start(create=True)
@@ -292,7 +293,7 @@ def test_no_answer_eof_or_an_odd_answer_after_the_write_is_unknown_never_accepte
 
 
 def test_garbage_lines_from_the_server_are_ignored(fake_codex, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "garbage")
+    fake_controls(tmp_path, FAKE_MODE="garbage")
     p = provider(fake_codex, tmp_path, root)
     assert p.start(create=True) == THREAD and p.probe().state == "idle"
     p.close()
@@ -403,18 +404,18 @@ def test_a_non_dict_result_is_treated_as_empty_never_an_attribute_error(fake_cod
 
 
 def test_a_stream_that_closes_while_the_child_lives_is_offline_and_a_restart_replaces_the_old_process(fake_codex, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "close_stdout")
+    fake_controls(tmp_path, FAKE_MODE="close_stdout")
     p = provider(fake_codex, tmp_path, root)
     with pytest.raises(Exception):
         p.start(create=True)                                                                              # the transport closed during the handshake: refused, not "idle"
     assert p.probe().state == "offline"
-    monkeypatch.setenv("FAKE_MODE", "ack")
+    fake_controls(tmp_path, FAKE_MODE="ack")
     assert p.start(create=True) == THREAD and p.probe().state == "idle"                                   # a clean restart works
     p.close()
 
 
 def test_the_provider_is_busy_from_the_moment_it_sends_not_from_the_moment_the_server_says_so(fake_codex, tmp_path, root, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "slow_started")
+    fake_controls(tmp_path, FAKE_MODE="slow_started")
     p = provider(fake_codex, tmp_path, root)
     p.start(create=True)
     assert p.deliver("first", "r-1").status == "accepted"
@@ -423,3 +424,40 @@ def test_the_provider_is_busy_from_the_moment_it_sends_not_from_the_moment_the_s
     assert second.status == "refused" and second.reason == "busy"                                         # a second notice cannot slip in during that window
     assert len([w for w in wire(tmp_path) if w.get("method") == "turn/start"]) == 1
     p.close()
+
+
+# ── the environment the app-server is given (operations brief, 28 Oct) ───────
+
+def _env_given_to_codex(tmp_path, root):
+    from test_connection import EnvSpy
+    seen = {}
+    work = tmp_path / "work"
+    work.mkdir(exist_ok=True)
+    fake = tmp_path / "codex"
+    fake.write_text("#!/bin/sh\nexit 0\n")
+    fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+    p = CodexAppServerProvider(codex_bin=str(fake), cwd=str(work), ledger_root=root, thread_id=THREAD, request_timeout=0.2,
+                               popen=lambda *a, **k: EnvSpy(seen, *a, **k))
+    with pytest.raises(TimeoutError):                                                              # the stand-in never answers initialize; only its environment matters here
+        p.start()
+    return seen["env"]
+
+
+def test_provider_keys_and_tokens_in_the_managers_environment_never_reach_the_codex_app_server(tmp_path, root, monkeypatch):
+    from test_connection import FAKE_VALUE, PARENT_SECRETS
+    for name in PARENT_SECRETS:
+        monkeypatch.setenv(name, FAKE_VALUE)
+    monkeypatch.setenv("MINIMOI_AGENT_REQUESTS_DIR", str(tmp_path / "the-global-default"))
+    monkeypatch.setenv("NOT_ON_THE_LIST", "harmless")
+    env = _env_given_to_codex(tmp_path, root)
+    assert not set(PARENT_SECRETS) & set(env) and FAKE_VALUE not in env.values()
+    assert env["MINIMOI_AGENT_REQUESTS_DIR"] == root                                               # the connection's own ledger, never the global default
+    assert set(env) <= {"PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "USER", "SHELL", "MINIMOI_AGENT_REQUESTS_DIR"}
+    assert "NOT_ON_THE_LIST" not in env and env["HOME"] == os.environ["HOME"] and env["PATH"] == os.environ["PATH"]
+
+
+def test_the_codex_app_servers_own_extras_go_through_the_policys_refusal(tmp_path, root, monkeypatch):
+    from core.mc_delegation_runner import launch_env
+    monkeypatch.setattr(launch_env, "REVIEWED_NAMES", {})                                          # without its review, the ledger name matches ^MINIMOI_ and is refused
+    with pytest.raises(launch_env.EnvRefused, match="MINIMOI_AGENT_REQUESTS_DIR"):
+        _env_given_to_codex(tmp_path, root)

@@ -137,6 +137,20 @@ def test_child_env_drops_credentials(monkeypatch):
         workspace.child_env({"GH_TOKEN": "x"})
 
 
+def test_child_env_drops_the_named_credentials_and_refuses_them_and_billing_switches_as_extras(monkeypatch):
+    six = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY", "TELEGRAM_BOT_TOKEN")
+    for k in six:
+        monkeypatch.setenv(k, "sk-test-not-real")
+    monkeypatch.setenv("NOT_ON_THE_LIST", "harmless")
+    env = workspace.child_env()
+    assert not set(six) & set(env) and "NOT_ON_THE_LIST" not in env and env["GIT_TERMINAL_PROMPT"] == "0"
+    # the six, and names that switch Claude Code or Codex to a key, a token or another endpoint (the fallback door refuses these too)
+    for k in six + ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_BASE_URL",
+                    "CODEX_API_KEY", "CODEX_ACCESS_TOKEN", "OPENAI_IDENTITY_TOKEN_FILE", "AZURE_FEDERATED_TOKEN_FILE", "anthropic_api_key"):
+        with pytest.raises(workspace.WorkspaceError):
+            workspace.child_env({k: "sk-test-not-real"})
+
+
 def test_remove_refuses_paths_outside_root(tmp_path):
     with pytest.raises(workspace.WorkspaceError):
         workspace.remove(tmp_path / "elsewhere", tmp_path / "ws")

@@ -14,6 +14,7 @@ import time
 
 import pytest
 
+from agent_fakes import fake_controls, given_environments
 from core import agent_requests as ar
 from core.agent_requests.connection import (ConnectionManager, Delivery, Probe, Provider, RESTART_BACKOFF_S, run_forever)
 from test_codex_provider import FAKE_SERVER, THREAD, wait_for
@@ -119,8 +120,12 @@ def _spawn(args, env):
 
 
 def _env(tmp_path, **extra):
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home"), "FAKE_SID": SID, "FAKE_THREAD": THREAD, "FAKE_DELAY": "0.1"}
-    env.update(extra)
+    """The operator CLI's environment. The fakes' FAKE_* controls go to their controls file: the connection never hands its own environment to the child."""
+    controls = {"FAKE_SID": SID, "FAKE_THREAD": THREAD, "FAKE_DELAY": "0.1"}
+    controls.update({k: v for k, v in extra.items() if k.startswith("FAKE_")})
+    fake_controls(tmp_path, **controls)
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home")}
+    env.update({k: v for k, v in extra.items() if not k.startswith("FAKE_")})
     return env
 
 
@@ -185,6 +190,42 @@ def test_the_codex_cli_creates_once_resumes_after_a_restart_and_refuses_a_second
         proc2.communicate(timeout=20)
     methods = [json.loads(x).get("method") for x in log.read_text().splitlines()]
     assert methods.count("thread/start") == 1 and methods.count("thread/resume") >= 1
+
+
+PARENT_SECRETS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY", "TELEGRAM_BOT_TOKEN")
+
+
+@pytest.mark.parametrize("agent", ["claude-code", "codex"])
+def test_keys_and_tokens_in_the_connections_own_environment_never_reach_the_agent_it_starts(tmp_path, agent):
+    """End to end through the operator CLI, as launchd runs it: the six credentials sit in the manager's environment (fake values), the session still
+    answers, and the agent process it started was given none of them, nor any other name off the list, and the connection's own ledger."""
+    root = str(tmp_path / "ledger")
+    work = tmp_path / "work"
+    work.mkdir()
+    given = tmp_path / "given-env.jsonl"
+    if agent == "claude-code":
+        fake = _wrapper(tmp_path, "claude", FAKE_CLAUDE)
+        args = ["--root", root, "--agent", "claude-code", "--provider", "claude-stream", "--session-id", SID, "--claude-bin", fake, "--cwd", str(work),
+                "--allowed-tools", "Read", "--interval", "0.2", "run", "--start"]
+    else:
+        fake = _wrapper(tmp_path, "codex", FAKE_SERVER)
+        args = ["--root", root, "--agent", "codex", "--provider", "codex-app-server", "--codex-bin", fake, "--cwd", str(work), "--interval", "0.2",
+                "--create", "run", "--start"]
+    env = _env(tmp_path, FAKE_ENV_OUT=str(given), MINIMOI_AGENT_REQUESTS_DIR=str(tmp_path / "the-global-default"), NOT_ON_THE_LIST="harmless",
+               **{name: "sk-test-not-real" for name in PARENT_SECRETS})
+    a = _ask(root, "a", agent)
+    proc = _spawn(args, env)
+    try:
+        assert wait_for(lambda: ar.load(root, a)["stage"] == "returned", 25)                               # the agent still works with the smaller environment
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        proc.communicate(timeout=20)
+    starts = given_environments(given)
+    assert starts                                                                                          # the fake recorded what it was given
+    for start in starts:
+        assert not set(PARENT_SECRETS) & set(start["names"]) and "NOT_ON_THE_LIST" not in start["names"]
+        assert start["ledger"] == root                                                                     # the connection's own ledger, never the global default
+        assert ("DISABLE_AUTOUPDATER" in start["names"]) == (agent == "claude-code")
 
 
 def test_the_launchd_plist_is_valid_keeps_the_manager_alive_with_throttling_and_names_every_argument(tmp_path):
