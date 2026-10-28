@@ -3,15 +3,37 @@
 | | |
 |---|---|
 | **Spec** | 165 |
-| **Date** | 28 October 2026 (v0.1 and v0.2) |
+| **Date** | 28 October 2026 (v0.1, v0.2 and v0.3) |
 | **Author** | Claude Code, for Robert |
-| **Status** | **Draft v0.2 for review.** Robert authorized the build on 28 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
+| **Status** | **Draft v0.3 for review.** Robert authorized the build on 28 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
 | **Decision owner** | Robert |
-| **Review record** | v0.1 (`64b1896f`): independent review (`docs/specs/reviews/REVIEW_independent_spec_165_v0.1.md`, `5f2ebdce`); Codex (`docs/specs/reviews/REVIEW_codex_spec_165_v0.1.md`, `89edb852`); Codex's Chunk B code review (`planning-studio/…/trial-01-mc-voice-2026-10-27/REVIEW_codex_chunk_B.md`), carried in §5. **Pending on v0.2:** Codex delta, Grok, Claude Chat. |
+| **Review record** | v0.1 (`64b1896f`): independent review (`docs/specs/reviews/REVIEW_independent_spec_165_v0.1.md`, `5f2ebdce`); Codex (`docs/specs/reviews/REVIEW_codex_spec_165_v0.1.md`, `89edb852`); Codex's Chunk B code review (`planning-studio/…/trial-01-mc-voice-2026-10-27/REVIEW_codex_chunk_B.md`), carried in §5. v0.2 (`729d29c9`): Codex's delta review (`docs/specs/reviews/REVIEW_codex_spec_165_v0.2_delta.md`, `49dae6de`), V2-1 to V2-5, all answered in v0.3. **Pending on v0.3:** Grok, then Claude Chat. |
 | **Builds on** | Spec 164 v0.3, approved 27 Oct (`437b7f8c`, PR #421); its phase order (§9–§11) is replaced here, the rest stands unless this spec says otherwise |
-| **Code base** | `grok/mc-voice-conversation` `93bf00c6` (PR #426, open; never merged alone). Build in progress: chunk A1 on `claude/voice-1-2`, stacked on `93bf00c6`, first commit `99b3d0f0` |
+| **Code base** | `grok/mc-voice-conversation` `93bf00c6` (PR #426, open; never merged alone). Build in progress: chunk A1 on `claude/voice-1-2`, stacked on `93bf00c6`, first commit `99b3d0f0`; its fix round at `005c9e81` (`A1_FIX_RESULT.md`), still being extended. §5.7 says where A1 does not yet meet this contract |
 | **Initiative** | INIT-2026-0010. Part B: issue #433 (queued) |
-| **References** | `file:line` is `93bf00c6` unless marked `main` (`4954ad9f`) or `A1` (`99b3d0f0`). **Unverified** items are in §20 |
+| **References** | `file:line` is `93bf00c6` unless marked `main` (`4954ad9f`), `A1` (`99b3d0f0`) or `A1F` (`005c9e81`). **Unverified** items are in §20 |
+
+## Changes from v0.2
+
+CX = Codex's delta review of v0.2; A1F = the A1 fix round at `005c9e81`.
+
+| Finding | Addressed in |
+|---|---|
+| CX V2-1 (P1): one effect per owner item across both tools, the request id from that key; bind each call to its own turn (CX A1-C2) | §5.1 |
+| CX V2-2 (P1): the CoS recall projection follows a revision and is rebuilt when late records land | §6.5 |
+| CX V2-3 (P2): one exact repair of a damaged tail | §6.5 |
+| CX V2-4 (P2): `pagehide` is one close envelope, counted in event ids; a missing End is `unconfirmed`; the barrier's timeout is final (CX A1-C3) | §5.2 |
+| CX V2-5 (P2): a summary has its own attempt; a client timeout is not a failure; one proposal across devices | §5.3 |
+| CX: playback outcomes named apart from "heard" (B6) | §5.3 |
+| CX S1 and code checks: `/new` and other commands refused before dispatch; outcomes classified by the dispatch boundary, never by exception class | §5.1; §6.4 |
+| CX: D20 enforced before dispatch and tested, not left to the prompt | §6.4; §12.1 |
+| CX: the 10–25 s holding-line gap | §12.4 |
+| CX: handover waits for the microphone and transport to be released, a connecting session included | §14.1 |
+| CX: record routes in S3 and S4; an S2 provider failure tested apart from an S3 rollback | §12.2 |
+| CX: sessions a day is capacity, not a promise | §7 |
+| CX: updated recommendations on D1–D23; D5 now agrees | §16 |
+| Adopted from A1F: the key `(session, owner_item_id)`; the request record's text hash; the store's `put`/`get` with the host's handle first; `unacknowledged` as event ids; `capture` with `missing`; `pagehide` as A1's single End; the summary gateway's alias and key names | §4.4; §5.1; §5.2; §5.4 |
+| Where A1F does not yet meet this contract | §5.7 (new) |
 
 ## Changes from v0.1
 
@@ -219,11 +241,13 @@ instruction to the voice; unrelated to the retired supervision nudge), unused by
 | `card()`, `instructions()` | pinned card; rules, card, continuity | pinned card; rules, card, briefing, continuity (§6.3) |
 | `summary_key`, `person` | MC's capped gateway key; `{"key":"master_craftsman","name":"Master Craftsman","short":"MC"}` | hers; `{"key":"chief_of_staff","name":"Chief of Staff","short":"CoS"}` |
 
-**Store interface** (core-defined, adapter-implemented; refusals typed, never logged-and-continued):
-`begin(session, owner, meta)`; `put(session, record)` → `stored | duplicate | conflict | refused(reason)`, returning
-only once durable; `close(session, boundary)` → `closed | already`; `records`; `state`; `sessions(owner,
-needing_attention)`. Records carry `schema: 1`, a stable `id`, `kind`, `at`. First write wins; the same id with other
-content is a `conflict`.
+**Store interface** (core-defined, adapter-implemented; refusals typed, never logged-and-continued). As built in
+A1F, every method takes the host's handle first, because MC's store is per conversation floor:
+`put(handle, session, record)` → `stored | duplicate | conflict | refused(reason)`, returning only once durable; and
+`get(handle, session, id)`. A2 adds only what the CoS store needs: `close(handle, session, boundary)` →
+`closed | already`, `records`, `state`, and `sessions(owner, needing_attention)` for the needs-attention list
+(§6.5). MC did not need them. Records carry `schema: 1`, a stable `id`, `kind`, `at`. First write wins; the same id
+with other content (anything but `at`) is a `conflict`.
 
 The core owns bootstrap (with `owner` and `admit`), consult, capture, End, summary, decision, caps, admission, the
 budget reservation before the mint, and capabilities: `direct_voice` when a start is allowed, `direct_records` when
@@ -247,18 +271,37 @@ code change with tests.
 Codex's Chunk B review (B1–B7) reproduced lifecycle defects the Chunk B suites miss. A1 fixes them once, in the
 core, before CoS uses it. This section is the contract A1 meets for both hosts.
 
-### 5.1 One owner action, one effect; four outcomes (B1, B7, CX-S1, IR-M4, IR-M5)
+### 5.1 One owner action, one effect; four outcomes (B1, B7, CX-S1, CX V2-1, IR-M4, IR-M5)
 
-- **Identity.** Every consult, from the model or from Check, carries `owner_item_id` (the capture id of the
-  completed owner turn) and its text. The action key is `(session, owner_item_id, tool)`.
-- **Durable admission at the host.** Before dispatch the core writes a `consult_request` record under the key
-  (first write wins). A second dispatch of that key (another call id, Check after the model, a retry) gets the
-  stored outcome, or `in_flight` and waits for the first. Call-id dedup stays as a second layer. Check goes
-  through the same dispatcher as the model; the disabled button is presentation, not the guard.
-- **A new effect needs a new turn.** Saying the words again is a new turn. Within one turn, `consult` and
-  `save_note` are one action each.
-- **Operation ids derive from the key**, so platform dedup also holds: MC's as today from the key; CoS's
-  `request_id = uuid5(VOICE_NS, f"{host}:{session}:{owner_item_id}:{tool}")`, `VOICE_NS` a core constant.
+- **Identity.** Every consult, from the model or from Check, carries `owner_item_id`: the capture id (`t<i>`) of
+  the completed owner turn it acts on. **The action key is `(session, owner_item_id)`, across both tools** (CX
+  V2-1). One thing Robert said is acted on once, whether it reaches `consult`, `save_note`, Check, or more than one
+  of them. Both typed-turn paths can save a note, so a key per tool would let one sentence save two.
+- **Each call is bound to its own turn** (CX A1-C2).
+  - A provider's function call is bound, through the response it belongs to, to the owner item that response
+    answers, and acts on that item's words. It is never rebound to whichever turn completed last.
+  - A call that cannot be bound, or could be bound to more than one turn, is refused or held, never guessed.
+  - A repeated completion of the same captured item is not a new turn.
+  - The model's arguments never choose other owner text.
+  - Which provider events carry the response id is unverified (§20).
+- **Durable admission at the host.** Before dispatch the core writes a `consult_request` record under the key,
+  first write wins: `{schema, id, kind, at, owner_item_id, text_sha256}`.
+  - The record keeps a hash of Robert's words, not the words; the words are in the visible consult record, and the
+    hash keeps the request within MC's floor-note size.
+  - A second dispatch of the key gets the stored outcome, or `in_flight` while the first runs here, or `unknown` if
+    it was admitted but has no outcome and runs nowhere. A second dispatch means another call id, Check after the
+    model, a retry, or the other tool.
+  - The second tool is told the turn was already handled. It is never handed the first one's success as its own.
+  - Call-id dedup stays as a second layer.
+  - Check goes through the same dispatcher as the model; the disabled button is presentation, not the guard.
+- **A new effect needs a new turn.** Saying the words again is a new turn, so a deliberate repeat is a new effect.
+  A refusal before dispatch did nothing, so it does not use up the turn.
+- **Operation ids derive from the key**, so platform dedup also holds:
+  - MC's is `vc-<session>-<owner_item_id>`;
+  - CoS's is `request_id = uuid5(VOICE_NS, f"{host}:{session}:{owner_item_id}")`, where `VOICE_NS` is a core
+    constant.
+
+  Neither contains a tool name.
 
 | Outcome | When | Spoken | At reveal |
 |---|---|---|---|
@@ -267,36 +310,66 @@ core, before CoS uses it. This section is the contract A1 meets for both hosts.
 | `pending` | still running after 25 s | "That's taking longer; the answer will be in the conversation." | the outcome when it lands |
 | `unknown` | dispatched, no answer: network loss, timeout, 5xx, edge 504, backend exception after dispatch | "I didn't get the result back. Check it in writing before asking again." | result unknown until reconciled |
 
+- **Outcomes follow the dispatch boundary** (CX). `not_done` means nothing was dispatched, or an authoritative
+  receipt says it did not happen. An exception's class alone never makes an outcome `not_done`. An error after
+  dispatch is `unknown`, even when the backend's own exception says "failed".
 - **Long turns.** The core runs the typed turn in a worker and waits 25 s (under every timeout), then `pending`;
   the receipt is written when it completes; the next heartbeat answer lists completed actions and the voice says
   the result once, at a pause. No extra request, no timer.
-- **Reconciliation.** `GET …/consult/<session>/<owner_item_id>/<tool>` returns the stored outcome and runs nothing;
-  the browser asks once after `unknown`; the store answers after a restart. A request with no receipt (the process
+- **Reconciliation.** `GET …/consult/<session>/<owner_item_id>` returns the stored outcome and runs nothing. MC
+  also names the conversation in the query, because its store is per conversation. The browser asks once after
+  `unknown`; the store answers after a restart. A request with no receipt (the process
   died) stays `unknown`, shown so; nothing re-runs by itself.
 
-*Regressions:* manual→model, model→manual, concurrent, repeated calls under new call ids (one effect); a repeated
-utterance (a new effect); an effect committed and its response dropped (no "failed"; the same-key read shows it).
+*Regressions:*
+- One effect each: manual→model, model→manual, concurrent, and repeated calls under new call ids.
+- One effect: a manual Check followed by the model's `save_note`, and the reverse.
+- A repeated sentence is a new effect.
+- No "failed": an effect committed and its response dropped (the same-key read shows it).
+- A backend that records its effect and then raises gives `unknown`, with one effect.
+- Two turns overlapping, with a delayed function call: it is bound to its own turn.
+- A duplicate transcript completion makes no new turn.
 
-### 5.2 Capture barrier and honest retention (B2, B4, pagehide)
+### 5.2 Capture barrier and honest retention (B2, B4, pagehide, CX V2-4)
 
 - Events are `queued → sent → acknowledged`, or `failed(reason)` after two attempts under the same id. Only
   acknowledged events are kept; a 422 or an exhausted retry is `failed`, never a silent warning.
-- **One barrier closes capture** for End, Sum up, the spoken "yes", `pagehide` and a server end: stop admitting
-  owner input; flush the open partial as `partial`; post everything unacknowledged; wait (5 s); send the close
-  with `{last_item_id, unacknowledged}`. The spoken-yes path schedules the barrier outside the capture chain's
-  callback, never awaiting the chain from inside it.
-- The server closes at that boundary, writing `capture: complete | incomplete(n)` into the end marker; later posts
-  are refused (409) and counted.
+- **One barrier closes capture** for End, Sum up, the spoken "yes" and a server end. In order:
+  1. stop admitting owner input;
+  2. flush the open partial as `partial`;
+  3. post everything unacknowledged;
+  4. wait, up to 5 s;
+  5. send the close with `{last_item_id, unacknowledged}`, where `unacknowledged` is the list of event ids the page
+     holds no acknowledgment for.
+
+  The spoken-yes path schedules the barrier outside the capture chain's callback, never awaiting the chain from
+  inside it.
+- **The barrier's timeout is final** (CX V2-4, A1-C3). Finalization carries the barrier's result forward and never
+  awaits the abandoned post again, so End, the reveal and the page's end always complete.
+- **The server closes at that boundary.**
+  - It counts the listed ids it does not hold, and writes `capture: complete`, or `capture: incomplete` with
+    `missing: n`, into the end marker. End answers the same.
+  - Later posts are refused (409) and counted in memory and the log, not in the marker, because first write wins.
+  - A turn that completes after the boundary, such as the voice's "Sure, summing up.", is not this session's record.
+  - Robert's words still being transcribed at the barrier are inside it, kept as partial.
 - "What was said is in the conversation." appears only for `complete`; otherwise "Some of what was said was not
   kept (n turns). What was kept is in the conversation.", and the summary prompt states the gap.
-- **`pagehide`:** batches in order within one 64 KB keepalive budget, End last with the count of earlier
-  unconfirmed batches; anything unconfirmed is `incomplete`, shown by any device's reveal.
+- **`pagehide` is its own close, not the barrier** (CX V2-4). A leaving page cannot wait, and separate keepalive
+  requests arrive in no guaranteed order. So the page sends **one** keepalive close envelope: End, carrying the
+  owed events that fit the keepalive budget, and the ids of those that don't.
+  - Counts are in unique event ids, never batches. Anything not delivered is `missing`.
+  - **If End itself never arrives,** the next bootstrap, recovery or reveal on any device shows that session's
+    capture as `unconfirmed`, never `complete`.
+
+  This is A1's single End carrying one batch, now with the count. The ordered keepalive batches of v0.2 are dropped:
+  a browser cannot order them.
 - **A late consult receipt** is kept and revealed after the summary, marked "arrived after the summary"; it does
   not regenerate the proposal.
 
 *Regressions:* two network failures then a successful End; 422; a failed final batch; a partial 409 after retry; a
-slow or rejected final post before Sum up; reload after an incomplete session; reordered `pagehide` batches and a
-keepalive refusal.
+slow or rejected final post before Sum up; reload after an incomplete session; a `pagehide` whose owed events overflow
+the keepalive budget (the overflow counted missing); a `pagehide` whose End never arrives (`unconfirmed` on the next
+device); a close post that never settles, on Sum up and on plain End (finalization still completes).
 
 ### 5.3 Ending: end intent, summarizing, playback (B3, B5, B6)
 
@@ -306,17 +379,34 @@ keepalive refusal.
 - **States:** `live → closing → summarizing → speaking_summary → ended` (End goes straight to `ended`). In
   `summarizing` capture heartbeats stop and are not expected; the transport stays open. In `live` a server refusal
   still ends the voice at once.
-- **Summary bound** 45 s, then "Summary unavailable", records intact, "Ask for a summary" later (as built,
-  `1dd34e30`). End during `summarizing` closes the voice; the summary still lands in writing.
+- **A summary has its own attempt** (CX V2-5).
+  - The core records one `summary_attempt` per session, first write wins, and moves it from `running` to `done` or
+    `failed`. It stays `running` until the server's call ends.
+  - The server's call is bounded (5 s to connect, 30 s to read) and never retried by itself, so every attempt
+    concludes.
+  - **45 s bounds the page's wait only.** Past it, while the attempt still runs, the page says "The summary is still
+    being written. It will appear in the conversation." It never calls a running attempt unavailable.
+  - **"Summary unavailable"** is said only once the attempt has concluded `failed`: no key, the gateway down, an
+    error, or a malformed or tool-call-shaped answer. The records stay intact. Only then may "Ask for a summary"
+    start a new attempt.
+  - **A second request joins the running attempt.** It never starts another generation. Two devices asking get one
+    proposal, and the first decision stands.
+  - A lost answer (0, 502, 504) says "The summary may still appear in the conversation." A refusal says "The summary
+    could not be asked for."
+  - End during `summarizing` closes the voice; the summary still lands in writing.
 - **The summary ends when it has been heard:** it is one tracked response; the session ends when the adapter
   reports that response's audio drained, at barge-in, or at a bound (15 characters a second plus 5 s, at most 90 s).
   Another response never closes it. New optional `onPlaybackDrained(responseId)`: xAI, its AudioContext queue empty;
   OpenAI WebRTC, candidate `output_audio_buffer.stopped` (**unverified**; A1 checks). German and Portuguese pass no
-  callback and behave as today.
+  callback and behave as today. The callback names how the response ended: `drained` (heard to the end),
+  `barged_in`, `cancelled` or `cleared`, `no_audio`, or the bound's `timeout` (CX on B6). Each of them ends the
+  session, but only `drained` is recorded as heard.
 
 *Regressions:* lost-response retry of "Yes, we're done"; proposal and confirmation in one batch; Keep talking then
 "yes"; summary before and after a heartbeat; summary failure, timeout and End during it (transport closed once,
-honest written result); response done with audio queued; empty response; barge-in; an unrelated pending response.
+honest written result); response done with audio queued; empty response; barge-in; an unrelated pending response; a
+summary call still running past 45 s (never "unavailable"; one proposal when it lands); "Ask for a summary" while one
+runs (it joins); two devices asking at once (one proposal, one decision).
 
 ### 5.4 The summary's execution boundary (CX-S2, D22)
 
@@ -326,7 +416,13 @@ model gateway**: this session's kept records (60 records or 12,000 characters, o
 name and card, no tool definitions, no agent runtime, no conversation binding, under a capped key per host
 (`voice-summary-mc`, `voice-summary-cos`); the model is gateway configuration. Gateway or key unavailable: "Summary
 unavailable", never the live agent. Confirming a summary authorizes nothing in it (as built). Tests: no `tools` in
-the request; a tool-call-shaped answer counts as unavailable; a missing key refuses.
+the request; a tool-call-shaped answer counts as unavailable; a missing key refuses; no agent runtime is invoked.
+
+**As built (A1F, `4c9c7327`).**
+- One non-streaming completion, at `MINIMOI_MODEL_GATEWAY_URL`, with model alias `minimoi-voice-summary`.
+- The keys are read from `MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC` and `…_COS`.
+- The alias, the keys and the portal's environment are not provisioned. Operations provides them before A4
+  (`A1_FIX_RESULT.md`). Until then the summary reads "Summary unavailable".
 
 ### 5.5 Tests carried from Chunk B
 
@@ -341,6 +437,21 @@ Production keeps the relay until MC is admitted (§11.1). His voice card is adop
 portal reads only `voice.json`; the agent container's release is separate). His rules move into the adapter
 unchanged; person-neutral rules go to the core (D17). The adapter works when MC's chat is kind `cos`, with a test.
 Voice ids by ear (D3).
+
+### 5.7 Where A1 does not yet meet this contract (A1F `005c9e81`)
+
+The A1 fix round is still being extended. This table is a snapshot of `A1_FIX_RESULT.md` and
+`A1_FIX_FINDINGS.md`; the review records are the evidence, and the next pin updates it.
+
+| Point | This contract | A1F | Closes in |
+|---|---|---|---|
+| Binding a call to its turn (A1-C2) | per response (§5.1) | A 3 s wait covers a call that arrives before its transcript, not one that arrives after a later turn | the fix round (in progress) |
+| The barrier's timeout (A1-C3) | final (§5.2) | being checked | the fix round |
+| Summary attempt (V2-5) | its own attempt; "still being written" while running (§5.3) | "Summary unavailable" at 45 s, which holds because the server's call is bounded at 35 s; the join and two-device rules are being checked | the fix round |
+| Playback outcomes (B6) | named outcomes; only `drained` is heard (§5.3) | barge-in and `cleared` count as drained | the fix round, or A3 |
+| Holding lines (§12.4) | by 8 s and 17 s; `pending` at 25 s | one line at 10 s | the fix round, or A3 |
+| Store `close`, `records`, `state`, `sessions` (§4.4) | A2 adds what CoS needs | not built; MC didn't need them | A2 |
+| CoS projection by revision; tail repair (§6.5) | as §6.5 | not built | A2 |
 
 ## 6. Chief of Staff standardization (core goal)
 
@@ -396,13 +507,21 @@ download.
 | reply, no operation | `done`, receipt `turn_id`; `speakable(reply)` |
 | `note_save` `saved` / `deduplicated` | `done`, receipt `operation_id`; "Saved." / "Already saved." |
 | `reminder_set` (only via `/remind …`, not offered in voice) | `done`, receipt `reminder_id`, `due_utc`; from the reply |
-| `/new`; `InvalidConferTurn`; `ConferOperationFailed` | `not_done`; "Start a new CoS conversation in writing." / its message / "That did not go through. Nothing was done." |
-| exception or timeout after dispatch to her runtime | `unknown` (§5.1) |
+| `InvalidConferTurn`; `ConferOperationFailed` raised before the operation | `not_done`; its message / "That did not go through. Nothing was done." |
+| `ConferOperationFailed` after the operation check (`confer_service.py:288-301`); any exception or timeout after dispatch to her runtime | `unknown` (§5.1), unless a receipt says otherwise |
 | `output_limit_reached` | `done`; the reply + "The rest is cut off; ask in writing." |
 
 `consult` and `save_note` replace `consult_cos_agent` and `save_cos_note`; `save_note` needs `parse_explicit_note`
 to match, else `not_done`: "Nothing was saved. Say 'save a note that…' and the note." **Reminders** are not by
 voice in 1.2 (D20): her rules say "Set reminders in writing", without MC's "remind me at <time>" sentence.
+
+**Refused before dispatch, in the CoS adapter** (CX).
+- Consult text that the turn service would treat as a command is refused with "Do that in writing." before
+  anything is recorded or sent. That covers `/new`, which resets her runtime (`confer_service.py:234-254`), so
+  mapping its result to `not_done` would be false; `/remind`; and any other slash command.
+- **The prompt line removes no authority.** Her runtime could still try to schedule a reminder from natural
+  language. So the release check says "Remind me at 5 pm to stretch." by voice and requires that no reminder record
+  exists afterwards. If one does, CoS voice is not admitted until that is fixed.
 
 **Approvals inventory (D16), on what is loaded:** `ConferTurnService` parses no confirmations; her runtime loads
 two plugins and OpenClaw's built-ins, with no approval mode configured (`exec` `full`, elevated off). No platform
@@ -417,22 +536,46 @@ consult whose owner text is only a confirmation or stop word, both hosts: "Confi
 - **Files:** `<session>.jsonl`; the id validated before any path is built; folder 0700, files 0600, `O_NOFOLLOW |
   O_APPEND`, fsync before `put` returns. A per-session lock plus `flock`; the id index rebuilt from the file after a
   restart. First write wins: from two devices, the first decision stands and the second hears "Already decided".
-- **Truncated tail:** a final line without newline or valid JSON is ignored and the session marked `incomplete`;
-  the next append starts on a new line.
+- **A damaged tail is repaired once, exactly** (CX V2-3). A record is committed only when its line ends in a
+  newline and is fsynced, and `put` answers only then. When a session file is opened, under the per-session lock
+  and `flock`:
+  1. Any bytes after the last newline-terminated valid line are copied to `<session>.tail-<UTC>.quarantine` (0600,
+     fsynced). This includes a complete JSON object without its newline: it was never acknowledged.
+  2. The file is truncated to that boundary and fsynced.
+  3. A `repair` record `{kind: "repair", quarantined_bytes, at}` is appended. It keeps the session `incomplete`
+     across restarts.
+
+  No later write is acknowledged until the repair is done. An invalid line inside the file, which this rule never
+  produces, stops that session's store with "Voice records damaged", shown in needs-attention. Nothing is guessed.
 - **No store, no voice:** bootstrap 503 "Voice unavailable: there is no place to keep what is said."
 - **Visible while live:** only the session's existence and state. After End or recovery: the records.
 - **Needs attention:** `GET …/voice/sessions` lists sessions recovering, dropped, `incomplete`, with an undecided or
   unavailable summary or an `unknown` consult, until decided or dismissed; `…/voice/sessions/<id>` is the detail
   and download. A settled, decided session leaves the list: not a history product.
-- **Recall (D6):** once a session settles (ended or dropped, nothing `pending`) it is projected into the recall
-  folder as `voice-<YYYY-MM-DD>-<session>.jsonl`, written under a temporary name, fsynced, renamed: the file is the
-  checkpoint, so a crash before the rename re-projects and after it does not duplicate. Projection runs at End, at
-  the sessions list and at the next bootstrap; no timer. Lines are DATA, never re-sent as instructions; abnormal
-  ends and late receipts marked; `system_note` names the files.
+- **Recall (D6), by revision** (CX V2-2). The store keeps a committed revision per session: its count of committed
+  records.
+  - **What is written.** Once a session has ended or dropped, it is projected into the recall folder as
+    `voice-<YYYY-MM-DD>-<session>.jsonl`, whose first line names the revision it was built from.
+  - **How it is rebuilt.** Under the session lock, the projection is rebuilt whenever the committed revision is
+    newer than the projected one: written under a temporary name, fsynced, renamed over the old file, then the
+    folder fsynced. A writer compares revisions under the lock before renaming, so an older snapshot never replaces
+    a newer one.
+  - **When.** It runs whenever something is committed: End, recovery, a late consult outcome, the summary, the
+    decision. It runs again at the sessions list and the next bootstrap, which repair a crash. No timer.
+  - **Pending consults.** A session with a `pending` consult is projected with it shown as pending, and projected
+    again when it lands.
+  - Lines are DATA, never re-sent as instructions. Abnormal ends and late receipts are marked. `system_note` names
+    the files.
 - **Retention:** as `conversation_log`, no expiry in 1.2.
 
-*Acceptance:* duplicate End and decision; two-device decisions; a crash between append, projection and rename; a
-failed disk write; a truncated line; restart; a receipt after End. Each effect once, incomplete state visible,
+*Acceptance:*
+- duplicate End and decision; two-device decisions;
+- a crash between append, projection and rename;
+- a failed disk write; a truncated line; restart; a receipt after End;
+- a late outcome, summary and decision after the first projection: each projected once;
+- two projections racing: the newer revision stays;
+- crash, read, append, second restart: with a valid but unterminated last object, and with duplicate or conflicting
+  ids. Each effect once, incomplete state visible,
 nothing lost because the summary is unavailable.
 
 ### 6.6 Confer UI on the same contract
@@ -485,7 +628,7 @@ fixed to `en` may turn German into English words. Cards with `transcription: "bi
 language and send the faithful-transcription hint managed CoS used; on xAI, no `language_hint` (behaviour
 unverified; the scripts check it). German and Portuguese have no card and are untouched.
 
-**Allowance.** Sessions a day = floor(cap ÷ allowance); the release note records both and the count. **Grok
+**Allowance.** Sessions a day = floor(cap ÷ allowance); the release note records both and the count. That is capacity, not a promise: both Dictates and the other host draw on the same pool (CX). **Grok
 alias:** `grok-voice-latest` floats; 1.2 records the model xAI reports and pins a dated id if one is offered.
 Robert auditions `cedar`, `marin` and others on OpenAI, `eve`, `ara`, `rex` on Grok (§11.4). No new meter.
 
@@ -646,7 +789,7 @@ no-change tests.
   definitions), and the shared contract suite runs against each adapter; not a ban on names.
 - **MC:** §5.5; kind `cos`.
 - **CoS:** MC's refusal set; UUID request ids, retried and repeated actions; the §6.4 mapping (exceptions after
-  dispatch are `unknown`); reminders and bare confirmations refused; file claims; §6.5 acceptance; voice folder not in
+  dispatch are `unknown`); `/new`, `/remind` and other commands refused before dispatch; a spoken reminder leaving no reminder record; bare confirmations refused; file claims; §6.5 acceptance; voice folder not in
   `cos-agent-a`'s mounts; prefix, timeouts and reads through the portal; not admitted = today; 24,000 bytes and order;
   no `VOICE_MANNER` text beyond the placed clauses; no tools in the summary request; one ledger, concurrent
   reservations adding up.
@@ -663,7 +806,7 @@ no-change tests.
 On the deployed configuration, real backends, stubbed transports: capabilities report providers, persona, locale,
 card release; one stub session with one consult reaches the real typed turn and returns `done`; forged and replayed
 call ids, a repeated owner action, a call after End and a missing CSRF token each have one effect or none; S1, S2,
-S3 behave as §11.1, and a page offered direct references no other path; no tools in the summary request; the CoS
+S3 behave as §11.1, and a page offered direct references no other path; the record, End, reconcile and decision routes stay installed and owner-authorized in S3 and S4; a provider failure while S2 stays selected is tested apart from a deliberate S3 rollback; no tools in the summary request; the CoS
 voice folder is not mounted into `cos-agent-a`; German and Portuguese answers unchanged. Robert's microphone and
 phone tests stay separate until he does them.
 
@@ -684,8 +827,9 @@ responsiveness; the booleans (turn completeness, interruption, identity, retenti
 **Latency, like for like:** speech end to first assistant transcript, German's Phase 0 metric; at least 10 ordinary
 replies per provider per host; same device class and network, noted; median and worst. Proposed pass (Robert may set
 it): median within 100 ms of German's Phase 0 median on that provider, and at most one reply in ten over 2 s. Grok's
-reference is five samples; Part B re-measures it. **Consults:** holding line by 10 s, `pending` by 25 s, never more
-than 10 s of silence. First audible is recorded for Part B; 1.2 claims no audible parity.
+reference is five samples; Part B re-measures it. **Consults** (CX): a holding line by 8 s ("Still checking."), a second
+line by 17 s ("Still working on it."), and `pending` at 25 s, so there is never more than 10 s of silence. The lines
+say only what is true, never a result. First audible is recorded for Part B; 1.2 claims no audible parity.
 
 ## 13. Part B — Language domains (queued, #433)
 
@@ -696,8 +840,10 @@ Part A is §3–§12; Part B is §14. No Part B work starts before 1.2 is in pro
 ### 14.1 What they get in 1.2, and only this (D23; CX-S7, IR-S16)
 
 If D23 (a) is adopted, in A3, one mirrored commit: a `minimoi:companion-opening` listener that, if their voice is
-live, ends it as their End button does (`controller.endSession(…)`, so their own `finalizeAndSave` runs) and hands that
-promise to `waitUntil`, so the panel opens only after their microphone is released; and the controller cache key
+live, ends it as their End button does (`controller.endSession(…)`, so their own `finalizeAndSave` runs). That includes
+a session still connecting. It hands `waitUntil` a promise that resolves only once the microphone track has stopped
+and the transport has closed, so the panel opens only after their microphone is released. The end call returning, or
+the transcript being saved, does not prove the microphone is released (CX); and the controller cache key
 bumped on both pages, so no browser mixes the old controller with new adapters. Nothing else changes on those pages.
 The controller additions ship inert for them.
 
@@ -732,7 +878,7 @@ voices, scenes and prompts do not change. Rollback: both previous image tags, to
 ## 16. Decisions for Robert
 
 D1–D17 are Robert's as in v0.1, some reframed; D18–D23 are new. Each shows Claude Code's (CC), the independent
-reviewer's (IR) and Codex's (CX) recommendation. None is settled until Robert says so.
+reviewer's (IR) and Codex's (CX) recommendation. In v0.3, Codex's recommendations are those of its v0.2 delta review. None is settled until Robert says so.
 
 **D1. CoS manner — a persona decision.** (a) Keep the shared persona; her card restates it for voice; (b) a
 CoS-only manner: split the persona, re-lock, rebuild `cos-agent-a`; (c) a new shared manner, same route. *CC: (a);
@@ -747,11 +893,11 @@ CoS-only manner: split the persona, re-lock, rebuild `cos-agent-a`; (c) a new sh
 keep it first. *CC: (a). IR: none. CX: (a) only if Robert explicitly replaces it; until then it stands.*
 
 **D5. CoS voice records.** (a) `<COS_CONVERSATIONS_DIR>/voice/`; (b) `COS_VOICE_DIR` on `${MINIMOI_ROOT}/cos_voice`,
-outside her runtime's mounts; (c) Postgres. *CC: (b), changed: (a) is in the folder her runtime greps. IR: (b). CX:
-(a) once S3 is closed; it did not raise the mount.*
+outside her runtime's mounts; (c) Postgres. *CC: (b): (a) is in the folder her runtime greps. IR: (b). CX: (b), changed in
+its delta review; verify the mounts and backups before activation. All three agree.*
 
 **D6. CoS recall.** (a) Project settled sessions as DATA (§6.5); (b) voice store only. *CC: (a). IR: (a), settled
-sessions only. CX: (a), idempotent and recoverable.*
+sessions only. CX: (a), revision-aware and recoverable (§6.5).*
 
 **D7. Download transcript.** (a) Keep, from kept records; (b) drop. *CC: (a). IR: none. CX: (a), owner-only,
 partial labelled.*
@@ -765,7 +911,7 @@ elapsed time alone.*
 
 **D10. Allowance.** (a) One value, one shared pool for MC, CoS and both Dictates; (b) per host; (c) a per-host share.
 *CC: (a), sessions a day in the release note; revisit if one host exhausts the day. IR: show sessions a day; decide
-whether one host may use the other's day. CX: (a); prove one ledger and concurrent reservations.*
+whether one host may use the other's day. CX: (a); prove one ledger and concurrent reservations; sessions a day is capacity, not a promise.*
 
 **D11. Production admission.** (a) Per-host start permission, separate from install; off returns MC to the relay and
 CoS to today's modes until A6; (b) remove from held-off. *CC: (a). IR: right shape; build the CoS half (§6.8). CX:
@@ -780,39 +926,39 @@ and both pages. IR: none. CX: (a), no concurrent edits.*
 on staging, hold the bundle; (b) only on Robert's word. IR: none. CX: (a); hold if CoS fails.*
 
 **D15. Reviewers.** The plan now: Codex delta, Grok, Claude Chat on v0.2. *CC: the plan answers D15. IR: none. CX:
-Claude Chat; no substitute for code checks or Robert's listening.*
+Codex delta (done), then Grok and Claude Chat; code review and listening stay separate gates.*
 
 **D16. Bare confirmations.** Inventory done (§6.4). (a) Refuse bare confirmation and stop words as consult text in
 the core, both hosts; (b) allow for CoS. *CC: (a); "yes" to "Shall I sum up?" stays. IR: inventory what is loaded
-(done). CX: (a); tell harmless confirmation from granting authority.*
+(done). CX: (a); tell harmless confirmation from granting authority; End and Stop still stop audio, and the refusal never blocks stopping.*
 
 **D17. Person-neutral rules.** (a) In the core for both; (b) MC as built, CoS in her rules. *CC: (a). IR: none. CX:
 (a); test the prompt change on both hosts and providers.*
 
 **D18. Spec 164 §3 trust for CoS (new).** (a) Extend it with §6.9's safeguards; (b) CoS voice without `consult`;
 (c) defer CoS voice. *CC: (a): typed Confer already has this authority; voice adds guards. IR: make it a named
-decision. CX: not raised; its CoS contracts assume (a).*
+decision. CX: (a), if Robert adopts it explicitly; bind the utterance, enforce excluded commands, keep receipts and unknowns.*
 
 **D19. Bilingual transcription (new).** (a) MC and CoS transcribe bilingually (§7); (b) English only, an accepted
-limit. *CC: (a). IR: requirement or accepted limit; check the transcript. CX: not raised.*
+limit. *CC: (a). IR: requirement or accepted limit; check the transcript. CX: (a); test the kept German and English transcript on both providers, and if xAI cannot meet it, report that for a decision.*
 
 **D20. CoS reminders by voice (new).** (a) Out of 1.2: "Set reminders in writing."; (b) a spoken-reminder parser as
 named scope with its own review. *CC: (a): a parser turns speech into a scheduled action, an authority question.
-IR: (a), or (b) as new scope. CX: map `reminder_set` if reached (done).*
+IR: (a), or (b) as new scope. CX: (a), enforced before dispatch and tested, not left to the prompt (§6.4).*
 
 **D21. Notes saved by CoS voice while live (new).** (a) Visible in Record, Track and memory at once; (b) hidden until
 End by a session tag. *CC: (a): he asked for it and heard the receipt; it is not the conversation. IR: either, as a
-decision. CX: not raised.*
+decision. CX: (a), for a deliberate note with a receipt; ordinary transcripts stay hidden.*
 
 **D22. Summary execution (new).** (a) Tool-less gateway completion, capped key per host (§5.4); (b) the agent runtime
 with its own session and a no-tools prompt (as built for MC); (c) the runtime with an enforced no-tool profile
 (OpenClaw support unverified). *CC: (a). IR: noted the separate session is possible (helps (b)'s session, not its
-tool guarantee). CX: an enforced boundary; refuse rather than fall back.*
+tool guarantee). CX: (a); reject (b); (c) only with a proven enforced profile, never as a fallback.*
 
 **D23. German and Portuguese in 1.2 (new).** (a) The handover listener and cache-key bump only (§14.1), mirrored;
 (b) the panel offers no voice or Dictate on those pages until Part B; (c) nothing, a recorded limit. *CC: (a): small
-and permanent; (b) is a workaround to undo later. IR: bump the key or test compatibility. CX: (a) if Robert accepts
-it, else (b) with the limit written down.*
+and permanent; (b) is a workaround to undo later. IR: bump the key or test compatibility. CX: (a), covering a session
+still connecting and the actual release; else (b); (c) cannot pass the handover gate.*
 
 ## 17. Not in this build
 
@@ -852,10 +998,12 @@ merge, flag or deploy without Robert's word.
   `VOICE_REALTIME_PROVIDER_DEFAULT`, `MINIMOI_MC_EVERYWHERE`, `MINIMOI_GUILD_CHAT`, `MINIMOI_COS_WRITE_GUARD`.
 - `cos_memory.md`'s production size (the 24,000-byte bound).
 - OpenAI WebRTC's playback-complete signal; xAI transcription without a language hint; a dated xAI model id.
+- Which provider events carry a response id, xAI's audio deltas included, and the real order of input-transcript and
+  function-call events. §5.1's binding rests on them.
 - Whether OpenClaw's built-ins ask for confirmation in ways its configuration does not show.
 - The cloud staging host: its name, keys, login, folders, allowance.
 - The summary keys (not yet created); the gateway's reachability from portal and `cos-scheduler` (both share its
   default compose network; not exercised); backup coverage of `${MINIMOI_ROOT}/cos_voice`.
 - In a browser: the panel over a live German or Portuguese session; MC's direct records under an old image (S5).
-- A1's code beyond `99b3d0f0`: this spec states the contract A1 must meet, not code that exists.
+- A1's code beyond `005c9e81`. This spec states the contract; §5.7 lists what A1 does not yet meet.
 - Every listening, phone and latency claim for the direct path; Grok Voice's first-audible timing.
