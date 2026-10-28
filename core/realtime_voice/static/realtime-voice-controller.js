@@ -42,6 +42,7 @@ export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
+    onSessionInfo,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -64,6 +65,7 @@ export class RealtimeVoiceController {
     this._onAssistantTurn = onAssistantTurn || (() => {});
     this._onFunctionCall = onFunctionCall || null;
     this._onPlayback = onPlayback || (() => {});
+    this._onSessionInfo = onSessionInfo || (() => {});
     this._openingInstruction = openingInstruction;
     this._pendingAssistantTurns = [];
 
@@ -159,6 +161,9 @@ export class RealtimeVoiceController {
     this._sessionId = bootstrap.voice_session_id || (this._managedBootstrap ? null : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     this._warningMinutes = bootstrap.warning_minutes;
     this._maxMinutes = bootstrap.max_minutes;
+    // Optional, host-owned: what the bootstrap said about this session (MC shows its voice notices). Never the credential.
+    this._onSessionInfo({provider: bootstrap.provider, model: bootstrap.model, voice_session_id: bootstrap.voice_session_id || null,
+      voice_notices: Array.isArray(bootstrap.voice_notices) ? bootstrap.voice_notices.slice() : []});
 
     this._adapter = bootstrap.provider === "openai" ? new OpenAIWebRTCAdapter() : new XAIWebSocketAdapter();
     this._wireAdapterEvents();

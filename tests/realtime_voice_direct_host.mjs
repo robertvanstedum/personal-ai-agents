@@ -30,5 +30,14 @@ try {
   await german.startSession({provider:'openai',persona:'frau_berger',scene:'bakery',learner_name:'Robert'});
   assert.deepEqual(sent[1][1].headers,{'Content-Type':'application/json'});
   assert.equal(sent[1][1].body,JSON.stringify({provider:'openai',persona:'frau_berger',scene:'bakery',learner_name:'Robert'}));
-  console.log('2 direct-host bootstrap scenarios passed');
+  // onSessionInfo (opt-in): the host sees the session id and the voice notices, never the credential.
+  globalThis.fetch=async()=>({ok:true,json:async()=>({provider:'openai',model:'m',client_secret:'ek_secret',warning_minutes:20,max_minutes:30,
+    voice_session_id:'0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b',voice_notices:['openai voice is unset, using marin']})});
+  const infos=[];
+  const noted=new Controller({bootstrapUrl:'/b',onSessionInfo:info=>infos.push(info)});
+  await noted.startSession({provider:'openai',persona:'master_craftsman',scene:'',conversation_id:'c-123456abcdef'});
+  assert.deepEqual(infos,[{provider:'openai',model:'m',voice_session_id:'0b5c9e2e-7f1a-4b8e-9d3c-2a1f0e9d8c7b',voice_notices:['openai voice is unset, using marin']}]);
+  assert(!JSON.stringify(infos).includes('ek_secret'));
+  await new Controller({bootstrapUrl:'/b'}).startSession({provider:'openai',persona:'frau_berger',scene:'bakery'});   // German: no hook, no change
+  console.log('3 direct-host bootstrap scenarios passed');
 } finally { Object.assign(globalThis,saved); }
