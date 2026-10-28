@@ -30,6 +30,9 @@ export const SERVER_ENDED = {
   refused: 'Voice stopped: the server refused this voice session. What was said before is kept.',
 };
 export const ALREADY_CHECKED = 'Already checked; say it again to re-ask.';
+// Capture has stopped (the session's cap, or the server refused a post): it no longer sees his newest words, so Check has no
+// turn of his it can name (review W N2).
+export const CHECK_FULL = 'The conversation is full; check in writing.';
 // Some of what was said is not known to be kept (review B4): said instead of ENDED, never a claim that all of it was.
 // Spec 165 §5.2's words, with the count when it is known (the server's, from End's answer, else the page's own).
 export const INCOMPLETE = 'Voice ended. Some of what was said was not kept. What was kept is in the conversation.';
@@ -615,6 +618,7 @@ export function directVoice(d) {
   // turn's id and its words come together from capture's record of it (review F2).
   async function check() {
     if (!connected || finalized || checking || summary) return;
+    if (capture?.stopped) { ui.say(CHECK_FULL, { transient: true }); return; }
     const owner = capture?.owner();
     if (!owner) { ui.say(words.sayFirst, { transient: true }); return; }
     if (consultedItem && consultedItem === owner.item) { ui.say(ALREADY_CHECKED, { transient: true }); return; }

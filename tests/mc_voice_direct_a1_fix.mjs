@@ -737,4 +737,19 @@ await t.check('L N7: "Ask for a summary" that never answers is aborted at its bo
   assert.equal(ask.disabled, false);
 });
 
+// W N2 (the verification at d886bbf0): after the transcript cap capture stops observing, so its last owner turn is no longer
+// his newest words. Check then says it is unavailable, instead of sending an older turn.
+await t.check('W N2: after the transcript cap, Check is unavailable and sends nothing', async () => {
+  let posts = 0;
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length && ++posts >= 2
+    ? { status: 429, body: { ok: false, error: 'cap', message: 'This voice session has kept all it may.' } } : null) } });
+  await r.s.start('openai');
+  r.c.utter('First request.'); await flush();
+  r.c.utter('Second request.'); await flush();                        // its post meets the cap: capture stops
+  r.c.utter('Third request.'); await flush();
+  await r.s.check();
+  assert.equal(r.posts('/consult').length, 0, 'Check sent an older turn after capture stopped');
+  assert.deepEqual(r.said.at(-1), [D.CHECK_FULL, { transient: true }]);
+});
+
 t.done();
