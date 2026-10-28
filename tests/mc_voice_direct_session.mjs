@@ -176,9 +176,11 @@ for (const [status, detail, words] of [
   const saved = c.options.onFunctionCall({ call_id: 'call_slow', name: 'save_note', arguments: {} });
   await flush();
   assert.equal(r.posts('/consult')[2].body.name, 'save_note');
-  r.advance(9999); assert.deepEqual(c.instructions, []);
-  r.advance(1); assert.deepEqual(c.instructions, ['Still checking.']);                    // the holding line, once
-  r.advance(20000); assert.deepEqual(c.instructions, ['Still checking.']);              // 30 s: inside the page's 35 s bound (F3)
+  r.advance(7999); assert.deepEqual(c.instructions, []);
+  r.advance(1); assert.deepEqual(c.instructions, ['Still checking.']);                    // the holding lines (Spec 165 §12.4)
+  c.options.onAssistantTurn('Still checking.');
+  r.advance(9000); assert.deepEqual(c.instructions, ['Still checking.', 'Still working on it.']);
+  r.advance(13000); assert.deepEqual(c.instructions, ['Still checking.', 'Still working on it.']);   // 30 s: inside the page's 35 s bound (F3)
   release(); assert.deepEqual(await saved, { ok: true, spoken: 'Done.' });
   scenarios++;
 }

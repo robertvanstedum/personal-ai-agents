@@ -577,4 +577,59 @@ await t.check('F3: every POST the live page makes carries an abort, except the l
   for (const p of posts) assert.ok(p.opts.signal, `${p.url} is not bounded`);
 });
 
+// G2 (Spec 165 v0.3 §12.4): a slow consult gets a holding line by 8 s ("Still checking.") and a second by 17 s ("Still
+// working on it."), and the server answers pending at 25 s, so there is never more than 10 s of silence. Each line still
+// waits for a pause, is never sent while he speaks, and is let go once the consult has answered: it says only what is true.
+const held = (answer) => {
+  let release = null;
+  const r = rig({ routes: { '/consult': () => new Promise((res) => { release = () => res(answer); }) } });
+  return { r, release: () => release() };
+};
+const PENDING_ANSWER = { status: 200, body: { ok: false, outcome: 'pending', spoken: D.PENDING } };
+await t.check('G2: a slow consult hears "Still checking." at 8 s and "Still working on it." at 17 s, then pending at 25 s', async () => {
+  const { r, release } = held(PENDING_ANSWER);
+  await r.s.start('openai');
+  r.c.utter('Run the nightly job.'); await flush();
+  let out = null; r.c.fn({ call_id: 'call_1', name: 'consult', arguments: {} }).then((o) => { out = o; }); await flush();
+  r.advance(7999); assert.deepEqual(r.c.instructions, []);
+  r.advance(1); assert.deepEqual(r.c.instructions, ['Still checking.']);
+  r.c.options.onAssistantTurn('Still checking.');                      // that line's response is done
+  r.advance(8999); assert.deepEqual(r.c.instructions, ['Still checking.']);
+  r.advance(1); assert.deepEqual(r.c.instructions, ['Still checking.', 'Still working on it.']);
+  r.c.options.onAssistantTurn('Still working on it.');
+  r.advance(8000); release(); await flush();                           // 25 s: the server's own pending answer
+  assert.equal(out?.outcome, 'pending');
+  r.advance(30000); await flush();
+  assert.deepEqual(r.c.instructions, ['Still checking.', 'Still working on it.']);    // nothing more: the lines are let go
+});
+await t.check('G2: a consult answered at 9 s gets one holding line only', async () => {
+  const { r, release } = held(null);
+  await r.s.start('openai');
+  r.c.utter('What is stuck on #12?'); await flush();
+  const out = r.c.fn({ call_id: 'call_1', name: 'consult', arguments: {} }); await flush();
+  r.advance(8000); r.c.options.onAssistantTurn('Still checking.');
+  r.advance(1000); release(); assert.equal((await out).outcome, 'done');
+  r.advance(30000); await flush();
+  assert.deepEqual(r.c.instructions, ['Still checking.']);
+});
+await t.check('G2: a holding line due while he speaks waits for the pause, and one whose consult answered first is never said', async () => {
+  const { r, release } = held(null);
+  await r.s.start('openai');
+  r.c.utter('Check the kiln.'); await flush();
+  const out = r.c.fn({ call_id: 'call_1', name: 'consult', arguments: {} }); await flush();
+  r.c.options.onInputState('speech_started');                          // he speaks over the wait
+  r.advance(8000); assert.deepEqual(r.c.instructions, [], 'a line was sent while he spoke');
+  r.c.options.onInputState('speech_stopped');                          // his words' response follows
+  r.advance(1000); assert.deepEqual(r.c.instructions, []);
+  r.c.options.onAssistantTurn('Sure.');                                // a pause: the line is still true, so it is said
+  assert.deepEqual(r.c.instructions, ['Still checking.']);
+  r.c.options.onAssistantTurn('Still checking.');
+  r.c.options.onInputState('speech_started');                          // he speaks again; the second line comes due
+  r.advance(8000); assert.deepEqual(r.c.instructions, ['Still checking.']);
+  release(); assert.equal((await out).outcome, 'done');                // answered before the pause
+  r.c.options.onInputState('speech_stopped'); r.c.options.onAssistantTurn('Right.');
+  r.advance(30000); await flush();
+  assert.deepEqual(r.c.instructions, ['Still checking.'], 'a holding line was said after its consult had answered');
+});
+
 t.done();

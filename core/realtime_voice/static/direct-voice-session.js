@@ -52,7 +52,9 @@ export const KEEP_TALKING_FAILED = 'Voice ended: Keep talking did not reach the 
 // sent, so nothing is done on older words.
 export const NOT_HEARD = "I didn't catch that; say it again.";
 const HEAR_WAIT_MS = 3000;                // a model call waits this long for the transcript of the owner speech it answers
-const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
+// A slow consult's holding lines (Spec 165 v0.3 §12.4): one by 8 s and a second by 17 s, and the server answers pending at
+// 25 s, so there is never more than 10 s of silence. Each says only what is true, never a result, and waits for a pause.
+const HOLDING = [[8000, 'Still checking.'], [17000, 'Still working on it.']];
 const QUIET_WAIT_MS = 8000;               // a line for the voice waits this long for a pause, then is sent (the pause was missed)
 const SUMMARY_WAIT_MS = 45000;            // the summary's answer is awaited this long (Spec 165 §5.3); then it may still appear
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
@@ -409,9 +411,16 @@ export function directVoice(d) {
   const lines = [], pauses = [];
   const quiet = () => !speaking && !responding;
   function sayAtPause(instruction) {
-    if (finalized || summary) return;
-    lines.push(instruction);
+    if (finalized || summary) return null;
+    const line = { text: instruction };
+    lines.push(line);
     pump();
+    return line;
+  }
+  // A line still waiting for its pause is let go (a holding line once its consult has answered: it would no longer be true).
+  function letGo(line) {
+    const i = line ? lines.indexOf(line) : -1;
+    if (i >= 0) lines.splice(i, 1);
   }
   function pump() {
     if (finalized) return;
@@ -421,8 +430,15 @@ export function directVoice(d) {
       return;
     }
     if (quietTimer) { cancel(quietTimer); quietTimer = null; }
-    if (speak(lines.shift())) responding = true;
+    if (speak(lines.shift().text)) responding = true;
     pump();
+  }
+  // A consult's holding lines (G2): each at its time, said at a pause; a line not yet said gives way to the next, and the
+  // one still waiting is let go when the consult answers. Returns the stop.
+  function holding() {
+    let waiting = null;
+    const timers = HOLDING.map(([ms, line]) => later(() => { letGo(waiting); waiting = sayAtPause(line); }, ms));
+    return () => { timers.forEach(cancel); letGo(waiting); };
   }
   // The summary waits for a pause too (review FR N3): once nothing is under way and no line is waiting, or at most
   // QUIET_WAIT_MS. The microphone is muted by then (the barrier), so his words no longer reach the voice; at the bound a
@@ -498,7 +514,7 @@ export function directVoice(d) {
   // the same words, so the server runs that turn once and gives a second call the first one's answer; his next words are a
   // new turn, with a new id.
   async function consult(callId, name, args, owner) {
-    const holding = later(() => { if (quiet() && speak('Still checking.')) responding = true; }, HOLDING_MS);
+    const stopHolding = holding();
     let advisory = args;
     if (typeof advisory === 'string') { try { advisory = JSON.parse(advisory); } catch (e) { advisory = {}; } }
     if (!advisory || typeof advisory !== 'object' || Array.isArray(advisory)) advisory = {};
@@ -531,7 +547,7 @@ export function directVoice(d) {
       // An unreadable answer: refused is not done; accepted but unreadable is not known (review B7).
       return r.status >= 200 && r.status < 300 ? reconcile(item)
         : { ok: false, error: 'unavailable', outcome: 'not_done', spoken: NOT_DONE };
-    } finally { cancel(holding); }
+    } finally { stopHolding(); }
   }
   // The answer did not come back (Spec 165 §5.1): the page asks the server once what became of that owner turn. The
   // server reads its store and runs nothing; done, not done or still running is said as it is, anything else stays unknown.
