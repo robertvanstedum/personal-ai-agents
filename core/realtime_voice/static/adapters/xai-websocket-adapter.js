@@ -34,7 +34,7 @@ export class XAIWebSocketAdapter {
     this._micReady = false;
     this._connectedEmitted = false;
     this._playbackSources = new Set();
-    this._idleWaiters = [];
+    this._responses = new Map();     // response id -> {sources, done}: which response each chunk of audio belongs to
   }
 
   on(eventName, handler) {
@@ -171,20 +171,18 @@ export class XAIWebSocketAdapter {
     this._audioContext = null;
   }
 
-  // Optional (Spec 165, review B6): resolves once every scheduled audio chunk has played out or been stopped, or after
-  // maxMs. A host ending after a closing line waits on it; German and Portuguese never call it.
-  whenPlaybackIdle(maxMs = 15000) {
-    if (!this._playbackSources.size) return Promise.resolve();
-    return new Promise((resolve) => {
-      let timer = null;
-      const done = () => { clearTimeout(timer); resolve(); };
-      timer = setTimeout(done, maxMs);
-      this._idleWaiters.push(done);
-    });
+  // Spec 165 §5.3: playback_drained {response_id} once a response is done and every chunk of its audio has played out (or
+  // was stopped at barge-in); a response with no audio drains at its end. Nothing listens unless a host passes
+  // onPlaybackDrained to the controller; German and Portuguese do not.
+  _response(id) {
+    const key = id || this._responseId || null;
+    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false });
+    return [key, this._responses.get(key)];
   }
 
-  _playbackIdle() {
-    if (!this._playbackSources.size) for (const done of this._idleWaiters.splice(0)) done();
+  _drainedIf(key) {
+    const r = this._responses.get(key);
+    if (r && r.done && r.sources <= 0) { this._responses.delete(key); this._emit("playback_drained", { response_id: key }); }
   }
 
   sendContinuationInstruction(text) {
@@ -226,8 +224,12 @@ export class XAIWebSocketAdapter {
       case "input_audio_buffer.speech_stopped":
         this._emit("speech_stopped", {});
         break;
+      case "response.created":
+        this._responseId = event.response?.id || null;
+        this._emit("response_started", { response_id: this._responseId });
+        break;
       case "response.output_audio.delta":
-        this._playAudioChunk(event.delta || event.audio);
+        this._playAudioChunk(event.delta || event.audio, event.response_id);
         this._emit("assistant_started", {});
         break;
       case "response.done":
@@ -239,6 +241,11 @@ export class XAIWebSocketAdapter {
               arguments: item.arguments,
             });
           }
+        }
+        {
+          const [key, r] = this._response(event.response?.id);
+          r.done = true;
+          this._drainedIf(key);
         }
         this._emit("assistant_stopped", { usage: event.response?.usage || event.usage });
         if (event.response?.usage || event.usage) {
@@ -286,7 +293,7 @@ export class XAIWebSocketAdapter {
     }
   }
 
-  _playAudioChunk(base64Audio) {
+  _playAudioChunk(base64Audio, responseId) {
     if (!this._audioContext || !base64Audio) return;
     const float32 = _base64PCM16ToFloat32(base64Audio);
     const buffer = this._audioContext.createBuffer(1, float32.length, 24000);
@@ -296,19 +303,28 @@ export class XAIWebSocketAdapter {
     source.connect(this._audioContext.destination);
     this._playbackSources.add(source);
     if (this._playbackSources.size === 1) this._emit("playback_started", {});
-    source.addEventListener("ended", () => { this._playbackSources.delete(source); this._playbackIdle(); }, { once: true });
+    const [key, owner] = this._response(responseId);
+    owner.sources += 1;
+    source.addEventListener("ended", () => {
+      this._playbackSources.delete(source);
+      if (owner.sources > 0) { owner.sources -= 1; this._drainedIf(key); }
+    }, { once: true });
     const startAt = Math.max(this._audioContext.currentTime, this._playbackQueueTime);
     source.start(startAt);
     this._playbackQueueTime = startAt + buffer.duration;
   }
 
   _stopPlayback() {
+    const cut = [...this._responses].filter(([, r]) => r.sources > 0).map(([key]) => key);
     for (const source of this._playbackSources) {
       try { source.stop(); } catch (_) {}
     }
     this._playbackSources.clear();
     this._playbackQueueTime = this._audioContext?.currentTime || 0;
-    this._playbackIdle();
+    for (const key of cut) {                                // stopped at barge-in: what was queued is not going to play
+      const r = this._responses.get(key);
+      if (r) { r.sources = 0; r.done = true; this._drainedIf(key); }
+    }
   }
 }
 

@@ -25,8 +25,7 @@ export class OpenAIWebRTCAdapter {
     this._micStream = null;
     this._remoteAudioEl = null;
     this._muted = false;
-    this._playing = false;
-    this._idleWaiters = [];
+    this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)
   }
 
   on(eventName, handler) {
@@ -153,20 +152,6 @@ export class OpenAIWebRTCAdapter {
     this._emit("closed", { reason });
   }
 
-  // Optional (Spec 165, review B6): resolves once the provider says its audio for the session has played out
-  // (output_audio_buffer.stopped or .cleared, WebRTC only), or at once when none is playing, or after maxMs. That the event
-  // means audible playback has drained in the browser is not verified against the provider. German and Portuguese never
-  // call it.
-  whenPlaybackIdle(maxMs = 15000) {
-    if (!this._playing) return Promise.resolve();
-    return new Promise((resolve) => {
-      let timer = null;
-      const done = () => { clearTimeout(timer); resolve(); };
-      timer = setTimeout(done, maxMs);
-      this._idleWaiters.push(done);
-    });
-  }
-
   sendContinuationInstruction(text) {
     // Text-only continuation (Section 9's idle re-engagement) -- per
     // OpenAI docs: conversation.item.create with input_text, then
@@ -231,13 +216,22 @@ export class OpenAIWebRTCAdapter {
       case "response.cancelled":
         this._emit("interrupted", {});
         break;
+      // Spec 165 §5.3: response_started on response.created; playback_drained {response_id} when the provider says that
+      // response's audio buffer stopped (played out) or was cleared (barge-in), or at response.done when it had no audio.
+      // That output_audio_buffer.stopped means audible playback has drained in the browser is not verified against the
+      // provider. Nothing listens unless a host passes onPlaybackDrained; German and Portuguese do not.
+      case "response.created":
+        this._emit("response_started", { response_id: event.response?.id || null });
+        break;
       case "output_audio_buffer.started":
-        this._playing = true;
+        this._audible.add(event.response_id || null);
         break;
       case "output_audio_buffer.stopped":
       case "output_audio_buffer.cleared":
-        this._playing = false;
-        for (const done of this._idleWaiters.splice(0)) done();
+        for (const id of event.response_id ? [event.response_id] : [...this._audible]) {
+          this._audible.delete(id);
+          this._emit("playback_drained", { response_id: id });
+        }
         break;
       case "response.done":
         for (const item of event.response?.output || []) {
@@ -249,6 +243,9 @@ export class OpenAIWebRTCAdapter {
             });
           }
         }
+        if (!this._audible.has(event.response?.id || null) && !_hasAudio(event.response)) {
+          this._emit("playback_drained", { response_id: event.response?.id || null });
+        }
         this._emit("assistant_stopped", { usage: event.response?.usage });
         if (event.response?.usage) this._emit("usage", event.response.usage);
         break;
@@ -259,4 +256,10 @@ export class OpenAIWebRTCAdapter {
         break;
     }
   }
+}
+
+// Whether a finished response carried audio (its output has an audio content part): its drain is then the provider's
+// output_audio_buffer.stopped, not its end.
+function _hasAudio(response) {
+  return (response?.output || []).some((item) => (item?.content || []).some((part) => ["audio", "output_audio"].includes(part?.type)));
 }

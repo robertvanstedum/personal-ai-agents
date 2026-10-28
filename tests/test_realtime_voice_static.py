@@ -96,8 +96,8 @@ def test_shared_controller_starts_with_persona_and_optional_live_transcript(germ
     assert "this._onTranscriptUpdate = onTranscriptUpdate || (() => {});" in source
     assert "this._onTranscriptUpdate([...this._items.values()]" in source
     # Bumped in Spec 165 A1: both adapters changed (the playback event), so browsers fetch them afresh.
-    assert "openai-webrtc-adapter.js?v=20261028-playback1" in source
-    assert "xai-websocket-adapter.js?v=20261028-playback1" in source
+    assert "openai-webrtc-adapter.js?v=20261028-drained1" in source
+    assert "xai-websocket-adapter.js?v=20261028-drained1" in source
 
 
 def test_xai_adapter_handles_current_audio_delta_and_connection_failures(german_client):

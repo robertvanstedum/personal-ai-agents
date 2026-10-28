@@ -53,7 +53,6 @@ export const NOT_HEARD = "I didn't catch that; say it again.";
 const HEAR_WAIT_MS = 3000;                // a model call waits this long for the transcript of the owner speech it answers
 const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
 const QUIET_WAIT_MS = 8000;               // a line for the voice waits this long for a pause, then is sent (the pause was missed)
-const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its own turn, or after this
 const SUMMARY_WAIT_MS = 45000;            // the summary's answer is awaited this long (Spec 165 §5.3), then "Summary unavailable"
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
 const DRAIN_CAP_MS = 90000;               // the spoken summary plays at most 15 characters a second plus 5 s, and never past this
@@ -146,17 +145,8 @@ function fit(text) {                                   // at most 16,000 bytes; 
   return [cut, true];
 }
 
-// Whether an assistant turn is the closing summary the voice was asked to say (review B6): most of the summary's words are in
-// it. An unrelated turn finishing first (a reply already under way) does not close the session.
-const wordsOf = (t) => new Set(String(t || '').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []);
-export function sameWords(said, asked) {
-  const want = wordsOf(asked);
-  if (!want.size) return true;
-  const got = wordsOf(said);
-  let hit = 0;
-  for (const w of want) if (got.has(w)) hit += 1;
-  return hit / want.size >= 0.6;
-}
+// How long the spoken summary may play (Spec 165 §5.3): 15 characters a second plus 5 s, never more than DRAIN_CAP_MS.
+export const summaryBound = (said) => Math.min(DRAIN_CAP_MS, Math.ceil(String(said || '').length / 15) * 1000 + 5000);
 
 // §5, durable capture. Every item the controller reports is keyed by its place ("t" + index, stable for the session), posted
 // once when it completes; an assistant item still incomplete when a later user item appears was interrupted; at the end what is
@@ -351,8 +341,8 @@ export function directVoice(d) {
   const stopEvery = d.clearInterval || ((t) => clearInterval(t));
   let c = null, sid = null, cid = null, provider = null, lastOwner = '', capture = null;
   let connected = false, finalized = false, failed = false, proposing = false, keepalive = false;
-  let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, endAfterTurn = null, ending = null, endedWords = null;
-  let drainTimer = null, lastTurns = [];
+  let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, ending = null, endedWords = null;
+  let lastTurns = [], summaryResponse = undefined;              // the spoken summary's response id, once the controller says
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
   let consultedItem = null, checking = false;                     // the owner item last consulted (by the model or Check)
   let hearing = false, lastHeard = true;                           // owner speech not yet transcribed; whether the last had words
@@ -370,9 +360,8 @@ export function directVoice(d) {
     if (beat) stopEvery(beat);
     if (speakTimer) cancel(speakTimer);
     if (heldTimer) cancel(heldTimer);
-    if (drainTimer) cancel(drainTimer);
     if (quietTimer) cancel(quietTimer);
-    ticker = beat = speakTimer = heldTimer = drainTimer = quietTimer = null;
+    ticker = beat = speakTimer = heldTimer = quietTimer = null;
     lines.length = 0;
   }
 
@@ -567,16 +556,17 @@ export function directVoice(d) {
       if (finalized) return;
       const body = r.body || {};
       const said = typeof body.spoken === 'string' ? body.spoken.trim() : '';
-      if (r.status === 200 && body.ok && body.state === 'proposed' && said && connected && speak(`Say only this, then stop: ${said}`)) {
-        become('speaking_summary');
-        endAfterTurn = (text) => {
-          if (!sameWords(text, said)) return;
-          endAfterTurn = null;
-          if (speakTimer) { cancel(speakTimer); speakTimer = null; }
-          afterPlayback(Math.min(DRAIN_CAP_MS, Math.ceil(said.length / 15) * 1000 + 5000));
-        };
-        speakTimer = later(() => { endAfterTurn = null; if (!finalized) c?.endSession('normal_end'); }, SPEAK_SUMMARY_MS);
-        return;
+      if (r.status === 200 && body.ok && body.state === 'proposed' && said && connected) {
+        // The summary is one tracked response (Spec 165 §5.3; review B6): the session ends when the controller reports that
+        // response's audio drained, at barge-in, or at the bound. Another response draining never closes it.
+        const instruction = `Say only this, then stop: ${said}`;
+        const tracked = typeof c?.speakTracked === 'function' ? c.speakTracked(instruction) : (speak(instruction) ? Promise.resolve(null) : null);
+        if (tracked) {
+          become('speaking_summary');
+          speakTimer = later(() => summaryHeard('bound'), summaryBound(said));
+          tracked.then((id) => { if (id) summaryResponse = id; });   // no id reported: the bound alone ends it
+          return;
+        }
       }
       if (r.status === -1 || (r.status === 200 && body.state === 'unavailable')) endedWords = [SUMMARY_UNAVAILABLE, false];
       else if (r.status === 0 || r.status >= 500) endedWords = [SUMMARY_MAY_APPEAR, false];     // lost, maybe kept (R1 P3-7)
@@ -585,12 +575,11 @@ export function directVoice(d) {
     })();
     return summary;
   }
-  // The summary's turn is done: end once its queued audio has played out (the controller's afterPlayback), at most `bound` ms.
-  function afterPlayback(bound) {
-    let over = false;
-    const go = () => { if (over) return; over = true; if (drainTimer) cancel(drainTimer); drainTimer = null; if (!finalized) c?.endSession('normal_end'); };
-    drainTimer = later(go, bound);
-    Promise.resolve().then(() => c?.afterPlayback?.(bound)).then(go, go);
+  // The spoken summary has been heard to its end (its response drained), interrupted (barge-in), or its bound has passed.
+  function summaryHeard() {
+    if (lifecycle !== 'speaking_summary' || finalized) return;
+    if (speakTimer) { cancel(speakTimer); speakTimer = null; }
+    c?.endSession('normal_end');
   }
 
   // The page is going away: End leaves in this same tick, with keepalive, carrying the last turns itself in one post (the
@@ -693,7 +682,7 @@ export function directVoice(d) {
       },
       onInputState: (phase) => {
         if (phase === 'speech_started' || phase === 'speech_stopped') hearing = true;     // his words, not yet transcribed
-        if (phase === 'speech_started') speaking = true;
+        if (phase === 'speech_started') { speaking = true; if (lifecycle === 'speaking_summary') summaryHeard(); }   // barge-in
         if (phase === 'speech_stopped') { speaking = false; responding = true; }         // a response follows his words
         if (!connected || finalized) return;
         ui.phase(phase === 'speaking' ? 'speaking' : ['consulting', 'understood', 'speech_stopped'].includes(phase) ? 'working' : 'listening');
@@ -713,7 +702,9 @@ export function directVoice(d) {
         hearing = false; lastHeard = Boolean(words);
         for (const done of transcribed.splice(0)) done(lastHeard);
       },
-      onAssistantTurn: (text) => { responding = false; if (endAfterTurn) endAfterTurn(text); pump(); },
+      onAssistantTurn: () => { responding = false; pump(); },
+      // Spec 165 §5.3: a response's audio has played out. Only the summary's own response ends the session.
+      onPlaybackDrained: (responseId) => { if (summaryResponse !== undefined && responseId === summaryResponse) summaryHeard(); },
       onFunctionCall: (call) => modelCall(call),
       onFinalize: (result) => finalize(result),
     });

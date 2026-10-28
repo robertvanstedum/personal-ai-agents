@@ -290,4 +290,22 @@ await t.check('R1 P3-7 (repro R3): a lost summary answer (504, 502, no answer) m
   }
 });
 
+// ── Item 9: the spoken summary is one tracked response (onPlaybackDrained), never matched by its words ─────────────────
+await t.check('item 9: the summary ends on its own response\'s drain or at barge-in, never on another response or its words', async () => {
+  const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at item twelve.' } }) } });
+  await r.s.start('openai');
+  await r.s.sumUp(); await flush();
+  assert.deepEqual(r.c.tracked, ['resp_1']);
+  r.c.options.onAssistantTurn('We looked at item twelve.'); await flush();      // its words, generated: not heard yet
+  r.c.drained('resp_other'); await flush();
+  assert.deepEqual(r.c.ended, []);
+  r.c.drained('resp_1'); await flush();
+  assert.deepEqual(r.c.ended, ['normal_end']);
+  const b = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at item twelve.' } }) } });
+  await b.s.start('openai');
+  await b.s.sumUp(); await flush();
+  b.c.options.onInputState('speech_started'); await flush();                     // barge-in
+  assert.deepEqual(b.c.ended, ['normal_end']);
+});
+
 t.done();

@@ -1,15 +1,36 @@
-// The shared controller and adapters after Spec 165 A1, for German and Portuguese: byte-for-byte the files they ran before,
-// plus additive public methods they never call (the controller's sessionId(), state(), speak() and afterPlayback(); the adapters'
-// whenPlaybackIdle(), review B6) and new adapter cache keys. Pinned two ways: each source with exactly those additions taken
-// out hashes to its 93bf00c6 file; and the methods, driven on a synthetic transport, send nothing unless a host calls them,
-// and nothing on the managed path. No provider, microphone or network.
+// The shared controller and adapters after Spec 165 A1 and its fix round, for German and Portuguese: byte-for-byte the files
+// they ran before, plus additive parts they never use: the controller's public methods (sessionId(), state(), speak(),
+// speakTracked()), its optional onPlaybackDrained callback and the two adapter events it listens to (response_started,
+// playback_drained: nothing reaches a page that passes no callback), the adapters' response tracking that emits them
+// (Spec 165 §5.3), and new adapter cache keys. Pinned two ways: each source with exactly those additions taken out hashes to
+// its 93bf00c6 file (the Chunk B baseline; what production German, Portuguese and CoS receive at merge from origin/main is
+// listed in A1_FIX_RESULT.md); and the methods, driven on a synthetic transport, send nothing unless a host calls them, and
+// nothing on the managed path. No provider, microphone or network.
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 
 const PATH = new URL('../../core/realtime_voice/static/realtime-voice-controller.js', import.meta.url);
 const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05';     // 93bf00c6, as German loads it today
-const ADDED_METHODS = `  /** The session's id (the server's voice_session_id when it issued one), or null. For a host page (Spec 165 §4.3);
+const CONTROLLER = [
+  [`// Both adapters changed for the playback events: new keys so browsers fetch them (Spec 165 §4.3, §5.3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-drained1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-drained1";`,
+   `import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261015-managed-end1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";`],
+  [`    onSessionInfo, onPlaybackDrained = null,
+`,
+   `    onSessionInfo,
+`],
+  [`    this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
+    this._responseWaiters = [];
+`,
+   ``],
+  [`    on("response_started", (evt) => { for (const resolve of this._responseWaiters.splice(0)) resolve(evt.response_id || null); });
+    on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null); });
+`,
+   ``],
+  [`  /** The session's id (the server's voice_session_id when it issued one), or null. For a host page (Spec 165 §4.3);
    *  German and Portuguese do not call it. */
   sessionId() { return this._sessionId; }
 
@@ -24,74 +45,123 @@ const ADDED_METHODS = `  /** The session's id (the server's voice_session_id whe
     try { this._adapter.sendContinuationInstruction(instruction); return true; } catch (_) { return false; }
   }
 
-  /** Resolves once the voice's queued audio has played out (the adapter's optional whenPlaybackIdle), or after maxMs, or at
-   *  once when the adapter cannot tell: a host ending after a closing line waits on it (Spec 165, review B6). German and
-   *  Portuguese do not call it. */
-  afterPlayback(maxMs = 15000) {
-    const adapter = this._adapter;
-    if (!adapter || typeof adapter.whenPlaybackIdle !== "function") return Promise.resolve();
-    return Promise.resolve().then(() => adapter.whenPlaybackIdle(maxMs)).catch(() => {});
+  /** speak(), tracked (Spec 165 §5.3): resolves with the id of the response the instruction starts (the adapter's next
+   *  response_started), or null when none is reported within maxMs or the transport refused it. A host passes
+   *  onPlaybackDrained to learn when that response's audio has played out. German and Portuguese do not call it. */
+  speakTracked(instruction, maxMs = 5000) {
+    return new Promise((resolve) => {
+      let timer = null;
+      const done = (id) => { clearTimeout(timer); resolve(id); };
+      this._responseWaiters.push(done);
+      timer = setTimeout(() => { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); resolve(null); }, maxMs);
+      if (!this.speak(instruction)) { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); done(null); }
+    });
   }
 
-`;
-const KEYS = [['// Both adapters changed for the playback event: new keys so browsers fetch them (Spec 165 §4.3).\n', ''],
-  ['openai-webrtc-adapter.js?v=20261028-playback1', 'openai-webrtc-adapter.js?v=20261015-managed-end1'],
-  ['xai-websocket-adapter.js?v=20261028-playback1', 'xai-websocket-adapter.js?v=20260725-transcript1']];
+`,
+   ``]];
 let n = 0;
 
 const source = fs.readFileSync(PATH, 'utf8');
 {
-  assert.equal(source.split(ADDED_METHODS).length, 2, 'the two methods, once, exactly as reviewed');
-  let before = source.replace(ADDED_METHODS, '');
-  for (const [now, then] of KEYS) { assert.equal(before.split(now).length, 2, now); before = before.replace(now, then); }
+  let before = source;
+  for (const [now, then] of CONTROLLER) { assert.equal(before.split(now).length, 2, now.slice(0, 60)); before = before.replace(now, then); }
   assert.equal(crypto.createHash('sha256').update(before).digest('hex'), BEFORE);   // nothing else changed
   n++;
 }
 // The adapters: exactly the additions below, nothing else (each taken out, the file is its 93bf00c6 bytes).
-const IDLE_WAIT = `    return new Promise((resolve) => {
-      let timer = null;
-      const done = () => { clearTimeout(timer); resolve(); };
-      timer = setTimeout(done, maxMs);
-      this._idleWaiters.push(done);
-    });
-  }
-`;
 const ADAPTERS = {
   'adapters/xai-websocket-adapter.js': ['afe83aa8aae73e4b47d6eaa920f8893932cf4bf04ee225e0918db06d5db3afbf', [
-    ['    this._idleWaiters = [];\n', ''],
-    [`  // Optional (Spec 165, review B6): resolves once every scheduled audio chunk has played out or been stopped, or after
-  // maxMs. A host ending after a closing line waits on it; German and Portuguese never call it.
-  whenPlaybackIdle(maxMs = 15000) {
-    if (!this._playbackSources.size) return Promise.resolve();
-${IDLE_WAIT}
-  _playbackIdle() {
-    if (!this._playbackSources.size) for (const done of this._idleWaiters.splice(0)) done();
+  [`    this._responses = new Map();     // response id -> {sources, done}: which response each chunk of audio belongs to
+`,
+   ``],
+  [`  // Spec 165 §5.3: playback_drained {response_id} once a response is done and every chunk of its audio has played out (or
+  // was stopped at barge-in); a response with no audio drains at its end. Nothing listens unless a host passes
+  // onPlaybackDrained to the controller; German and Portuguese do not.
+  _response(id) {
+    const key = id || this._responseId || null;
+    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false });
+    return [key, this._responses.get(key)];
   }
 
-`, ''],
-    ['source.addEventListener("ended", () => { this._playbackSources.delete(source); this._playbackIdle(); }, { once: true });',
-      'source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });'],
-    ['    this._playbackQueueTime = this._audioContext?.currentTime || 0;\n    this._playbackIdle();\n',
-      '    this._playbackQueueTime = this._audioContext?.currentTime || 0;\n']]],
+  _drainedIf(key) {
+    const r = this._responses.get(key);
+    if (r && r.done && r.sources <= 0) { this._responses.delete(key); this._emit("playback_drained", { response_id: key }); }
+  }
+
+`,
+   ``],
+  [`      case "response.created":
+        this._responseId = event.response?.id || null;
+        this._emit("response_started", { response_id: this._responseId });
+        break;
+`,
+   ``],
+  [`this._playAudioChunk(event.delta || event.audio, event.response_id);`,
+   `this._playAudioChunk(event.delta || event.audio);`],
+  [`        {
+          const [key, r] = this._response(event.response?.id);
+          r.done = true;
+          this._drainedIf(key);
+        }
+`,
+   ``],
+  [`  _playAudioChunk(base64Audio, responseId) {`,
+   `  _playAudioChunk(base64Audio) {`],
+  [`    const [key, owner] = this._response(responseId);
+    owner.sources += 1;
+    source.addEventListener("ended", () => {
+      this._playbackSources.delete(source);
+      if (owner.sources > 0) { owner.sources -= 1; this._drainedIf(key); }
+    }, { once: true });`,
+   `    source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });`],
+  [`    const cut = [...this._responses].filter(([, r]) => r.sources > 0).map(([key]) => key);
+`,
+   ``],
+  [`    for (const key of cut) {                                // stopped at barge-in: what was queued is not going to play
+      const r = this._responses.get(key);
+      if (r) { r.sources = 0; r.done = true; this._drainedIf(key); }
+    }
+`,
+   ``]],
+  ],
   'adapters/openai-webrtc-adapter.js': ['dae118fd252add9a80755a363d64ce6b4ef377b004d177e8dc10bba5a3c274a7', [
-    ['    this._playing = false;\n    this._idleWaiters = [];\n', ''],
-    [`  // Optional (Spec 165, review B6): resolves once the provider says its audio for the session has played out
-  // (output_audio_buffer.stopped or .cleared, WebRTC only), or at once when none is playing, or after maxMs. That the event
-  // means audible playback has drained in the browser is not verified against the provider. German and Portuguese never
-  // call it.
-  whenPlaybackIdle(maxMs = 15000) {
-    if (!this._playing) return Promise.resolve();
-${IDLE_WAIT}
-`, ''],
-    [`      case "output_audio_buffer.started":
-        this._playing = true;
+  [`    this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)
+`,
+   ``],
+  [`      // Spec 165 §5.3: response_started on response.created; playback_drained {response_id} when the provider says that
+      // response's audio buffer stopped (played out) or was cleared (barge-in), or at response.done when it had no audio.
+      // That output_audio_buffer.stopped means audible playback has drained in the browser is not verified against the
+      // provider. Nothing listens unless a host passes onPlaybackDrained; German and Portuguese do not.
+      case "response.created":
+        this._emit("response_started", { response_id: event.response?.id || null });
+        break;
+      case "output_audio_buffer.started":
+        this._audible.add(event.response_id || null);
         break;
       case "output_audio_buffer.stopped":
       case "output_audio_buffer.cleared":
-        this._playing = false;
-        for (const done of this._idleWaiters.splice(0)) done();
+        for (const id of event.response_id ? [event.response_id] : [...this._audible]) {
+          this._audible.delete(id);
+          this._emit("playback_drained", { response_id: id });
+        }
         break;
-`, '']]],
+`,
+   ``],
+  [`        if (!this._audible.has(event.response?.id || null) && !_hasAudio(event.response)) {
+          this._emit("playback_drained", { response_id: event.response?.id || null });
+        }
+`,
+   ``],
+  [`
+// Whether a finished response carried audio (its output has an audio content part): its drain is then the provider's
+// output_audio_buffer.stopped, not its end.
+function _hasAudio(response) {
+  return (response?.output || []).some((item) => (item?.content || []).some((part) => ["audio", "output_audio"].includes(part?.type)));
+}
+`,
+   ``]],
+  ],
 };
 for (const [name, [hash, edits]] of Object.entries(ADAPTERS)) {
   let text = fs.readFileSync(new URL(name, PATH), 'utf8');
@@ -144,6 +214,17 @@ try {
   assert.deepEqual(adapters.at(-1).sent, ['Still checking.']);
   adapters.at(-1).sendContinuationInstruction = () => { throw new Error('closed'); };
   assert.equal(host.speak('again'), false);                                              // a transport that refuses: false, no throw
+  n++;
+  // speakTracked(): the id of the response the instruction starts; a page that passes no onPlaybackDrained hears no drain.
+  adapters.at(-1).sendContinuationInstruction = (t) => adapters.at(-1).sent.push(t);
+  const tracked = host.speakTracked('Say only this.');
+  adapters.at(-1).emit('response_started', { response_id: 'resp_9' });
+  assert.equal(await tracked, 'resp_9');
+  adapters.at(-1).emit('playback_drained', { response_id: 'resp_9' });                    // no callback: nothing happens
+  const germanXai = new Controller({ bootstrapUrl: '/api/realtime-voice/bootstrap' });
+  await germanXai.startSession({ provider: 'xai', persona: 'frau_berger', scene: 'bakery', learner_name: 'Robert' });
+  adapters.at(-1).emit('playback_drained', { response_id: 'r1' });
+  assert.equal(germanXai.state(), 'active');
   n++;
   // The managed path never takes a page instruction.
   const managed = new Controller({ bootstrapUrl: '/b', managedBootstrap: { sessionUrl: '/m' } });

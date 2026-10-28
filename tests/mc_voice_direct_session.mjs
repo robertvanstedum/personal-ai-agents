@@ -54,6 +54,7 @@ function rig({ routes = {}, refuse = null, holdConnect = false, conversation = '
     sessionId() { return this.sid; }
     state() { return this._state; }                                                        // public (item 11)
     speak(t) { this.instructions.push(t); return true; }
+    speakTracked(t) { this.instructions.push(t); return Promise.resolve(`resp_${this.instructions.length}`); }   // §5.3
     async startSession(args) {
       this.args = args; this._state = 'requesting_mic';
       this.bootstrapHeaders = this.options.requestHeaders();
@@ -520,6 +521,9 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
   assert.deepEqual(r.c.instructions, ['Say only this, then stop: We looked at item twelve.']);
   assert.deepEqual(r.c.ended, []);
   r.c.options.onAssistantTurn('We looked at item twelve.');
+  await flush(10);
+  assert.deepEqual(r.c.ended, []);                                                        // generated, not yet heard (§5.3)
+  r.c.options.onPlaybackDrained('resp_1');                                                // its own response has played out
   await flush(10);
   assert.deepEqual(r.c.ended, ['normal_end']);
   assert.equal(r.posts('/end').length, 1); assert.equal(r.reveals.length, 1);

@@ -21,9 +21,9 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-// Both adapters changed for the playback event: new keys so browsers fetch them (Spec 165 §4.3).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-playback1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-playback1";
+// Both adapters changed for the playback events: new keys so browsers fetch them (Spec 165 §4.3, §5.3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-drained1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-drained1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 const OPENING_INSTRUCTION =
@@ -43,7 +43,7 @@ export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
-    onSessionInfo,
+    onSessionInfo, onPlaybackDrained = null,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -67,6 +67,8 @@ export class RealtimeVoiceController {
     this._onFunctionCall = onFunctionCall || null;
     this._onPlayback = onPlayback || (() => {});
     this._onSessionInfo = onSessionInfo || (() => {});
+    this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
+    this._responseWaiters = [];
     this._openingInstruction = openingInstruction;
     this._pendingAssistantTurns = [];
 
@@ -218,6 +220,8 @@ export class RealtimeVoiceController {
       }
     });
     on("playback_started", () => this._onPlayback());
+    on("response_started", (evt) => { for (const resolve of this._responseWaiters.splice(0)) resolve(evt.response_id || null); });
+    on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null); });
     on("assistant_stopped", () => {
       for (const text of this._pendingAssistantTurns.splice(0)) {
         this._onAssistantTurn(text);
@@ -328,13 +332,17 @@ export class RealtimeVoiceController {
     try { this._adapter.sendContinuationInstruction(instruction); return true; } catch (_) { return false; }
   }
 
-  /** Resolves once the voice's queued audio has played out (the adapter's optional whenPlaybackIdle), or after maxMs, or at
-   *  once when the adapter cannot tell: a host ending after a closing line waits on it (Spec 165, review B6). German and
-   *  Portuguese do not call it. */
-  afterPlayback(maxMs = 15000) {
-    const adapter = this._adapter;
-    if (!adapter || typeof adapter.whenPlaybackIdle !== "function") return Promise.resolve();
-    return Promise.resolve().then(() => adapter.whenPlaybackIdle(maxMs)).catch(() => {});
+  /** speak(), tracked (Spec 165 §5.3): resolves with the id of the response the instruction starts (the adapter's next
+   *  response_started), or null when none is reported within maxMs or the transport refused it. A host passes
+   *  onPlaybackDrained to learn when that response's audio has played out. German and Portuguese do not call it. */
+  speakTracked(instruction, maxMs = 5000) {
+    return new Promise((resolve) => {
+      let timer = null;
+      const done = (id) => { clearTimeout(timer); resolve(id); };
+      this._responseWaiters.push(done);
+      timer = setTimeout(() => { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); resolve(null); }, maxMs);
+      if (!this.speak(instruction)) { const i = this._responseWaiters.indexOf(done); if (i >= 0) this._responseWaiters.splice(i, 1); done(null); }
+    });
   }
 
   mute() { this._adapter?.mute(); }
