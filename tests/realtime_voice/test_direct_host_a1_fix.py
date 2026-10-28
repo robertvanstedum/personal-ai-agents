@@ -782,3 +782,47 @@ def test_fr_n7_a_finished_result_whose_answer_is_lost_is_told_on_the_next_post_a
     assert [d["owner_item_id"] for d in beat(["x9", 4])] == ["t3", "t4"]            # not capture ids
     assert [d["owner_item_id"] for d in beat(["t3"])] == ["t4"]
     assert beat(["t3", "t4"]) == [] and beat([]) == []
+
+
+def test_fr_n2_a_gateway_that_trickles_its_answer_is_cut_at_the_total_deadline(monkeypatch):
+    """FR N2 (the reviewer's probe, loopback only, the constants scaled down): requests' timeout is per read, so a gateway
+    that sends its headers and then a few bytes at a time held the call past connect + read. The total deadline cuts it."""
+    import json as _json
+    import threading
+    import time as _time
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from core.realtime_voice import summary_gateway as sg
+    body = _json.dumps({"choices": [{"index": 0, "finish_reason": "stop",
+                                     "message": {"role": "assistant", "content": "x" * 40}}]}).encode()
+
+    class Trickle(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                for i in range(0, len(body), 8):           # 8 bytes every 0.3 s: no read waits a whole second
+                    self.wfile.write(body[i:i + 8])
+                    self.wfile.flush()
+                    _time.sleep(0.3)
+            except OSError:
+                pass                                       # the client closed it at the deadline
+
+        def log_message(self, *a):
+            pass
+    server = HTTPServer(("127.0.0.1", 0), Trickle)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(sg, "CONNECT_TIMEOUT_S", 1)
+        monkeypatch.setattr(sg, "READ_TIMEOUT_S", 1)
+        monkeypatch.setattr(sg, "TOTAL_TIMEOUT_S", 1.5, raising=False)
+        client = sg.GatewaySummary("voice-summary-tp", environ={"MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_TP": "test-only",
+                                                                sg.GATEWAY_URL_ENV: f"http://127.0.0.1:{server.server_port}/v1"})
+        began = _time.monotonic()
+        answer = client("s", "p")
+        took = _time.monotonic() - began
+    finally:                                               # the abandoned read finishes on its own, off this test's clock
+        threading.Thread(target=lambda: (server.shutdown(), server.server_close()), daemon=True).start()
+    assert answer == (None, "timeout") and took < 2.5              # the trickle alone runs about 3.3 s

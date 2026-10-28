@@ -9,8 +9,10 @@ tools. So it is one chat completion through the LiteLLM model gateway, the way t
 * a capped key of its own per host, named by the host's adapter (MC: ``voice-summary-mc``), read from the environment
   as MINIMOI_GATEWAY_KEY_<NAME> (MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_MC); the model is gateway configuration: the request
   names the gateway's alias, minimoi-voice-summary, and the gateway maps it to a concrete model;
-* one call, bounded: 5 s to connect and 30 s to answer (a non-streaming completion sends nothing until it is done), so
-  the server has stopped waiting, and never retries, well inside the page's 45 s bound. When the page says "Summary
+* one call, never retried, bounded by a total deadline of 35 s (FR N2): inside it, 5 s to connect and 30 s for each
+  read. The per-read limit alone is not a bound (a gateway that trickles its body keeps a read alive), so the call runs
+  in its own thread and the server stops waiting at the deadline, well inside the page's 45 s bound and the core's 60 s
+  stale-attempt rule; an answer after it is dropped and its connection closed. When the page says "Summary
   unavailable", nothing is still being written for it here.
 
 Anything but a plain text answer is unavailable: no key, the gateway down or refusing, a timeout, an error status, a
@@ -21,12 +23,14 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 
 GATEWAY_URL_ENV = "MINIMOI_MODEL_GATEWAY_URL"
 DEFAULT_GATEWAY_URL = "http://model-gateway:4000/v1"       # the agent runtimes' own gateway address
 SUMMARY_MODEL = "minimoi-voice-summary"                    # a gateway alias: the concrete model is gateway configuration
 CONNECT_TIMEOUT_S = 5
 READ_TIMEOUT_S = 30
+TOTAL_TIMEOUT_S = 35                                       # the whole call, however the gateway sends its answer
 MAX_TOKENS = 1200
 TEMPERATURE = 0.2
 _NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
@@ -65,13 +69,32 @@ class GatewaySummary:
         if post is None:
             import requests
             post = requests.post
-        try:
-            response = post(self.url, json=self.request(system, prompt), timeout=(CONNECT_TIMEOUT_S, READ_TIMEOUT_S),
-                            allow_redirects=False,
-                            headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"})
-        except Exception as exc:                            # never retried: one bounded call
-            name = type(exc).__name__.lower()
+        body, headers = self.request(system, prompt), {"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"}
+        lock, finished, box = threading.Lock(), threading.Event(), {}
+
+        def call():
+            try:
+                answer = post(self.url, json=body, timeout=(CONNECT_TIMEOUT_S, READ_TIMEOUT_S), allow_redirects=False,
+                              headers=headers)
+            except Exception as exc:                        # never retried: one bounded call
+                answer, box["error"] = None, exc
+            with lock:
+                late = box.get("abandoned", False)
+                box["response"] = answer
+            finished.set()
+            if late and answer is not None and callable(getattr(answer, "close", None)):
+                answer.close()                              # past the deadline: nobody reads it
+        threading.Thread(target=call, name="voice-summary-gateway", daemon=True).start()
+        if not finished.wait(TOTAL_TIMEOUT_S):
+            with lock:
+                if "response" not in box:
+                    box["abandoned"] = True
+            if box.get("abandoned"):
+                return None, "timeout"
+        if "error" in box:
+            name = type(box["error"]).__name__.lower()
             return None, "timeout" if "timeout" in name else "gateway_down"
+        response = box["response"]
         status = getattr(response, "status_code", 0)
         if status in (401, 403):
             return None, "key_refused"
