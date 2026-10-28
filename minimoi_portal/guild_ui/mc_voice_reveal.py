@@ -175,21 +175,33 @@ def state(floor, sid, *, live=lambda sid: False, when=None):
 
 
 class Hider:
-    """Per-request: each session's state read once. Fail closed: an unreadable marker hides the session's records."""
+    """Per-request: each session's state read once. An unreadable start marker hides a session's records only when it
+    is known to be a direct-path session (``direct(sid)``: held in this process, or a direct-only record of it is in
+    view); a managed-path transcript, which has no start marker, is shown as before (review B #9)."""
 
-    def __init__(self, floor, *, live=lambda sid: False, when=None):
-        self.floor, self.live, self.when, self.known = floor, live, when or now(), {}
+    def __init__(self, floor, *, live=lambda sid: False, when=None, direct=lambda sid: False):
+        self.floor, self.live, self.when, self.direct, self.states = floor, live, when or now(), direct, {}
 
     def __call__(self, sid):
-        if sid not in self.known:
+        if sid not in self.states:
             try:
-                self.known[sid] = state(self.floor, sid, live=self.live, when=self.when)
+                self.states[sid] = state(self.floor, sid, live=self.live, when=self.when)
             except Exception:
-                self.known[sid] = ("unknown", None, None)
-        return self.known[sid]
+                self.states[sid] = ("unknown", None, None) if self.direct(sid) else (None, None, None)
+        return self.states[sid]
 
     def hidden(self, sid):
         return self(sid)[0] in ("live", "recovering", "unknown")
+
+
+def _direct_only(row, sid):
+    """A record only the direct path writes (a marker, tag or summary note, or a consult note), so its session is a
+    direct-path one whatever its markers read."""
+    who = row.get("who") if isinstance(row, dict) else None
+    if row.get("author_kind") == "platform" and who in (SESSION_AUTHOR + sid, SUMMARY_AUTHOR + sid):
+        return True
+    match = _CONSULT_ID.fullmatch(str(row.get("request_id") or ""))
+    return bool(match) and str(uuid.UUID(match.group(1))) == sid
 
 
 def _voice(row, replies, sid):
@@ -220,17 +232,20 @@ def _voice(row, replies, sid):
 def process_view(config):
     """view's keywords from a mount's config: what this process (mc_voice_direct.install) knows of its sessions."""
     return {"live": config.get("mc_direct_voice_live") or (lambda _sid: False),
-            "tagged": config.get("mc_direct_voice_tagged") or (lambda _rid: None)}
+            "tagged": config.get("mc_direct_voice_tagged") or (lambda _rid: None),
+            "known": config.get("mc_direct_voice_known") or (lambda _sid: False)}
 
 
-def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda request_id: None):
+def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda request_id: None, known=lambda sid: False):
     """(rows to show, the direct-path sessions in this window). Markers are never shown; a live or recovering
     session's records are withheld; a revealed session's records carry ``voice`` {session_id, kind, …} (_voice).
-    ``tagged(request_id)``: the session this process tagged a note with, before its tag note can be read."""
+    ``tagged(request_id)``: the session this process tagged a note with, before its tag note can be read.
+    ``known(sid)``: a direct-path session this process holds (it stays hidden if its markers cannot be read)."""
     if not isinstance(rows, list) or not rows:
         return rows, []
-    hider = Hider(floor, live=live, when=when)
     tags = dict(found for found in map(_tag_of, rows) if found is not None)
+    evidence = set(tags.values())
+    hider = Hider(floor, live=live, when=when, direct=lambda sid: known(sid) or sid in evidence)
 
     def owner(row):
         rid = row.get("request_id")
@@ -242,6 +257,8 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
         sid = owner(row)
         if sid is not None and sid not in sids:
             sids.append(sid)
+        if sid is not None and _direct_only(row, sid):
+            evidence.add(sid)
     direct = [sid for sid in sids if hider(sid)[0] is not None]
     replies = {}
     for sid in direct:

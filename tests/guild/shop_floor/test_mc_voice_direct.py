@@ -836,3 +836,20 @@ def test_the_conversation_is_titled_from_spoken_words_only_when_the_session_is_r
     assert r.convs.touched[-1] == "What is stuck on #12?"                          # his first words, at the reveal
     r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
     assert r.convs.touched.count("What is stuck on #12?") == 1
+
+
+# ── review B #9: an unreadable marker hides only a session known to be direct ────────────────────────────────────
+
+def test_a_session_this_process_issued_stays_hidden_when_its_marker_cannot_be_read(ready, monkeypatch):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [turn(r, "user", "item_u1", "Hello there")])
+    transcript = voice_records(r, sid)
+
+    def down(key):
+        raise RuntimeError("store down")
+    monkeypatch.setattr(r.notes, "get_note", down)
+    rows, sessions = reveal.view(r.notes, transcript, **reveal.process_view(r.config))
+    assert rows == [] and sessions[0]["state"] == "unknown"
+    rows, sessions = reveal.view(r.notes, transcript, live=lambda s: False)       # not held here: shown as before
+    assert len(rows) == 1 and sessions == []

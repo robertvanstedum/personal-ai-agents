@@ -105,3 +105,40 @@ def test_an_unreadable_marker_fails_closed():
     shown, sessions = reveal.view(broken, broken.all(), live=lambda s: False)
     assert [r["request_id"] for r in shown] == ["typed-1"]
     assert sessions[0]["state"] == "unknown" and sessions[0]["line"] == reveal.RECOVERY
+
+
+def _managed(floor, text="Managed path words."):
+    """A managed-path transcript: the same author prefix, but no start marker (never a direct session)."""
+    sid = str(uuid.uuid4())
+    for key, body in note_parts(sid, "user", "item_m", 0, text, False, limit=2000):
+        floor.add_note(key, body, Author(AUTHOR_PREFIX + sid, "platform", "Voice transcript"), page=PAGE)
+    return sid
+
+
+class _Down(Floor):
+    def get_note(self, key):
+        raise RuntimeError("store down")
+
+
+def test_a_failed_marker_read_does_not_hide_a_managed_transcript():
+    """Review B #9: with no direct-only record in view and the session not held here, the transcript is shown as
+    before; a direct session with its consult note in view still fails closed (above)."""
+    down = _Down()
+    managed = _managed(down)
+    down.add_note("typed-1", "an ordinary typed note", Author("robert", "owner", "Robert"))
+    shown, sessions = reveal.view(down, down.all(), live=lambda s: False)
+    assert len(shown) == 2 and sessions == [] and all("voice" not in row for row in shown)
+    assert reveal.Hider(down).hidden(managed) is False                       # the export path, too
+
+
+def test_a_failed_marker_read_still_hides_a_session_this_process_holds():
+    floor = Floor()
+    sid = str(uuid.uuid4())
+    reveal.mark_start(floor, sid, principal="robert", conversation_id="c-1", max_minutes=15, started=T0)
+    for key, body in note_parts(sid, "user", "item_u", 0, "Direct words.", False, limit=2000):
+        floor.add_note(key, body, Author(AUTHOR_PREFIX + sid, "platform", "Voice transcript"), page=PAGE)
+    down = _Down()
+    down.rows = {k: v for k, v in floor.rows.items() if v["context"]["page"] == PAGE}    # only its transcript in view
+    shown, sessions = reveal.view(down, down.all(), live=lambda s: False, known=lambda s: s == sid)
+    assert shown == [] and sessions[0]["state"] == "unknown" and sessions[0]["line"] == reveal.RECOVERY
+    assert reveal.Hider(down, direct=lambda s: s == sid).hidden(sid) is True

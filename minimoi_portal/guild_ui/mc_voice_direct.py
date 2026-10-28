@@ -158,6 +158,11 @@ class _Sessions(ConsultLedger):
         self.open_session(session_id, owner)
         return session_id
 
+    def known(self, session_id):
+        """A direct-path session this process issued (mc_voice_reveal.view's ``known``)."""
+        with self._meta_lock:
+            return session_id in self._meta
+
     def conversation_of(self, session_id):
         with self._meta_lock:
             meta = self._meta.get(session_id)
@@ -801,4 +806,5 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
                                  "heartbeat_seconds": 20, "persona": PERSONA, "locale": LOCALE, "card_release": RELEASE}
     config["mc_direct_voice_live"] = sessions.live      # server-side only: which sessions the reveal treats as live
     config["mc_direct_voice_tagged"] = sessions.tagged  # server-side only: notes this process tagged with a session
+    config["mc_direct_voice_known"] = sessions.known    # server-side only: sessions this process issued
     return True
