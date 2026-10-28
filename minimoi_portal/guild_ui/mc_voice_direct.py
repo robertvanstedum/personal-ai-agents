@@ -90,6 +90,12 @@ class _Tags:
         with self._lock:
             return self._tags.get(request_id)
 
+    def forget(self, sids):
+        """Let go of the tags of sessions that ended long ago (their tag notes on the floor still say so)."""
+        with self._lock:
+            for request_id in [rid for rid, sid in self._tags.items() if sid in sids]:
+                del self._tags[request_id]
+
 
 class _TaggedFloor:
     """The conversation's floor for one consult's typed turn: each note the turn creates (a platform receipt or reply,
@@ -232,6 +238,13 @@ class _MasterCraftsman(DirectVoiceAdapter):
         from .mc_voice_transcripts import block
         continuity = block("", api._conv_floor(conv), scrub=api.scrub, include_recent=True) if conv is not None else ""
         return compose_instructions(INSTRUCTIONS + "\n\n" + direct_rules(PERSON), card, continuity or NO_CONTINUITY)
+
+    def forget(self, sids):
+        """Sessions that ended long ago (the core prunes them): their tags and first consult words go too."""
+        self.tags.forget(sids)
+        with self._lock:
+            for sid in sids:
+                self._first.pop(sid, None)
 
     def ended(self, conv, sid):
         """The session is revealed: the conversation is titled from his first consult words if it has no title yet."""

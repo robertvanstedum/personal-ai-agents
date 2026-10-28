@@ -57,6 +57,8 @@ SUMMARY_PROMPT = "Shall I sum up?"
 SUMMARY_UNAVAILABLE = "Summary unavailable."
 SPEECH_MAX_CHARS = 3500              # a longer reply is read in part and the page says so aloud
 CONSULT_WAIT_S = 25                  # a consult is waited for this long, under every proxy and portal timeout, then pending
+CONSULT_MAX_BYTES = 32 * 1024        # a consult body (review R1 P3-10), like the summary's
+PRUNE_AFTER_S = 3600                 # a session's memory here is let go this long after its maximum duration
 
 
 # ── times and ids ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -587,6 +589,9 @@ class DirectVoiceAdapter:
     def ended(self, handle, sid):
         """Optional: the end marker was just kept (MC titles the conversation from the first consult words)."""
 
+    def forget(self, sids):
+        """Optional: these sessions ended long ago; let go of any per-session memory the host holds for them."""
+
     def mount(self, blueprint, name):
         """Optional: the host's own error handlers and request config for one of the core's blueprints, before it is
         registered."""
@@ -620,7 +625,25 @@ class DirectSessions(ConsultLedger):
         super().__init__()
         self._adapter, self._meta, self._meta_lock, self.clock = adapter, {}, threading.Lock(), clock
 
+    def prune(self):
+        """Let go of the sessions whose maximum duration ended more than PRUNE_AFTER_S ago (review R1 P3-10): their
+        meta, their ledger state (results, running turns) and, through the adapter's forget, its own per-session memory.
+        Their records are the store's, which still answers (reconciliation, the summary, the reveal). Each map is pruned
+        under its own lock, as everywhere else. Returns the sessions let go."""
+        cutoff = self.clock() - PRUNE_AFTER_S
+        with self._meta_lock:
+            gone = [sid for sid, meta in self._meta.items() if meta["started"] + meta["max_s"] < cutoff]
+            for sid in gone:
+                del self._meta[sid]
+        if gone:
+            with self._lock:
+                for sid in gone:
+                    self._sessions.pop(sid, None)
+            self._adapter.forget(set(gone))
+        return gone
+
     def issue(self, owner):
+        self.prune()                                       # a new session lets go of long-ended ones: no timer
         sid, cid = str(uuid.uuid4()), g.direct_voice_conversation
         handle, refused = self._adapter.conversation(cid)
         if refused is not None:
@@ -1291,6 +1314,8 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         who = principal()
         if who is None:
             return jsonify({"ok": False, "error": "identity required"}), 401
+        if request.content_length is None or request.content_length > CONSULT_MAX_BYTES:
+            return jsonify({"ok": False, "error": "too_large", "outcome": "not_done", "spoken": FAILED}), 413
         body = request.get_json(force=True, silent=True) or {}
         sid, call_id, name = body.get("session_id"), body.get("call_id"), body.get("name")
         owner_text, item = body.get("owner_transcript_item"), body.get("owner_item_id")

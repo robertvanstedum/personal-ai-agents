@@ -222,3 +222,17 @@ def test_mcs_summary_without_its_key_is_unavailable_and_nothing_is_sent(monkeypa
     post(r, sid, [turn(r, "user", "t0", "Hello.")])
     answer = summarize(r, sid).get_json()
     assert answer["state"] == "unavailable" and answer["error"] == "no_summary_key" and not r.cos.prompts
+
+
+# ── R1 P3-10: MC's per-session memory (tags, first words) goes with a long-ended session ───────────────────────────────
+
+def test_mcs_tags_and_first_words_are_let_go_with_a_long_ended_session(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    call(r, sid, call_id="c1", owner_item_id="t1")
+    adapter = r.config["mc_direct_voice_live"].__self__._adapter
+    adapter.tags.tag(sid, "mc-notice-1")
+    assert adapter.tags.tagged("mc-notice-1") == sid and sid in adapter._first
+    r.clock[0] += 31 * 60 + 3601
+    start(r)
+    assert adapter.tags.tagged("mc-notice-1") is None and sid not in adapter._first

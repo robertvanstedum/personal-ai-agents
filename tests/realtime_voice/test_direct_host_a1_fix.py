@@ -538,3 +538,27 @@ def test_a_later_ordinary_turn_withdraws_the_proposal_and_the_answer_says_so(rig
     sid = start(r)
     assert post(r, sid, [turn(r, "user", "t0", "We're done.")]).get_json()["proposing"] is True
     assert post(r, sid, [turn(r, "user", "t1", "Actually, one more thing about the kiln.")]).get_json()["proposing"] is False
+
+
+# ── R1 P3-10: a consult body is capped; long-ended sessions are let go from memory ──────────────────────────────────────
+
+def test_a_consult_body_over_32_kb_is_refused_before_anything_runs(rig):
+    r = rig
+    sid = start(r)
+    big = r.client.post(BASE + "/consult", headers=OWNER, json={"session_id": sid, "call_id": "c1", "name": "consult",
+                                                                "owner_transcript_item": "x" * 40_000, "owner_item_id": "t1"})
+    assert big.status_code == 413 and big.get_json()["outcome"] == "not_done" and not r.host.turns
+
+
+def test_sessions_long_past_their_maximum_duration_are_let_go_and_the_store_still_answers(rig):
+    r = rig
+    old = start(r)
+    consult(r, old, call_id="call_1", turn="t1")
+    forgotten = []
+    r.host.forget = lambda sids: forgotten.append(sids)
+    r.clock[0] += 31 * 60 + 3601                                   # past its maximum duration, and an hour more
+    new = start(r)                                                 # a new session lets go of the old one
+    assert forgotten == [{old}] and not r.sessions.known(old) and r.sessions.owner_of(old) is None
+    assert r.sessions.known(new)
+    got = r.client.get(BASE + f"/consult/{old}/t1?conversation_id=owner", headers=OWNER).get_json()
+    assert got["outcome"] == "done"                                 # the store still answers for it
