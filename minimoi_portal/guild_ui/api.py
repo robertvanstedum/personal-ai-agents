@@ -1189,6 +1189,7 @@ class PlatformOutcome:
 VOICE_NAME_PROPOSAL = "Say which: 'yes P-' and the code. Nothing was done."
 VOICE_IN_WRITING = "In voice, confirm or cancel that in writing, in the chat. Nothing was done."
 VOICE_NAME_JOB = "Say 'stop the job' to stop it. Nothing was stopped."
+VOICE_NO_SUCH_PROPOSAL = "I heard {code}, and no proposal {code} is waiting here. Nothing was done."
 
 
 def _voice_named_only() -> bool:
@@ -1341,8 +1342,10 @@ def _owner_tool_proposal_command(found):
     services, principal, conv, floor, note, note_id, request_id, attachment_ids = found
     if cfg is None or principal != cfg["principal"] or attachment_ids or getattr(g, "topic_context", None):
         return None
-    from core.mc_tools.proposals import parse
-    parsed = parse(note.get("text"))
+    from core.mc_tools.proposals import parse, spoken_named
+    voice = _voice_named_only()
+    # In voice, a code is read as speech recognition writes it ("yes P 7K3M"); a typed note is parsed exactly as typed.
+    parsed = parse(spoken_named(note.get("text")) if voice else note.get("text"))
     if parsed is None:
         return None
     kind, code = parsed
@@ -1353,9 +1356,12 @@ def _owner_tool_proposal_command(found):
     try:
         if not handler.has_pending(conv["id"], note_id):
             return None                       # an ordinary "confirm"/"cancel": not ours, the model answers
-        if code is None and _voice_named_only():
+        if code is None and voice:
             return _voice_name_it("mc_tool_proposal", VOICE_NAME_PROPOSAL)
         result = handler.handle(kind, conversation=conv["id"], turn_key=note_id, code=code)
+        if voice and code is not None and (result.get("operation") or {}).get("state") == "nothing_pending":
+            # A heard code that names no waiting proposal: nothing was done, and the answer says which code was heard.
+            result = {**result, "reply": VOICE_NO_SUCH_PROPOSAL.format(code=code)}
     except Exception:
         _mc_log().exception("tool proposal command could not be completed")
         result = {"reply": "I could not complete that, and I cannot confirm its outcome. Do not repeat it yet; "

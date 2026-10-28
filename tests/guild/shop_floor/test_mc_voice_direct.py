@@ -605,6 +605,50 @@ def test_a_named_yes_in_voice_confirms_that_proposal(waiting):
     assert "P-7K3M" in result["spoken"]
 
 
+@pytest.mark.parametrize("words,kind", [("yes P 7K3M", "confirm"), ("yes, P-7K3M", "confirm"),
+                                        ("Yes, P 7 K 3 M.", "confirm"), ("yes p. 7. k. 3. m", "confirm"),
+                                        ("Yes proposal P-7 K3M!", "confirm"), ("no, P 7K3M", "cancel")])
+def test_a_proposal_code_spoken_as_speech_recognition_writes_it_names_that_proposal(waiting, words, kind):
+    """CC_16 (b): in voice, the code as ASR writes it (spaces, hyphens, dots, spelled out) is the named form."""
+    r = waiting.r
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words=words).get_json()
+    assert waiting.handler.handled == [(kind, "P-7K3M")] and result["ok"] is True and not r.turns
+
+
+def test_a_spoken_code_that_names_no_waiting_proposal_does_nothing_and_says_which(waiting):
+    r = waiting.r
+    waiting.handler.handle = lambda kind, **kw: (waiting.handler.handled.append((kind, kw["code"])) or {
+        "reply": "Nothing is waiting for your confirmation in this conversation.",
+        "operation": {"type": "mc_tool_proposal", "state": "nothing_pending"}})
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words="yes P 9Z9Z").get_json()
+    assert waiting.handler.handled == [("confirm", "P-9Z9Z")] and not r.turns
+    assert result["spoken"] == api.VOICE_NO_SUCH_PROPOSAL.format(code="P-9Z9Z") and "Nothing was done" in result["spoken"]
+
+
+def test_typed_proposal_parsing_is_unchanged_by_the_spoken_form():
+    """Typed parsing stays byte for byte: the spoken normalization is the voice path's only."""
+    from core.mc_tools.proposals import parse, spoken_named
+    for typed in ("yes P 7K3M", "yes, P-7K3M", "Yes, P 7 K 3 M.", "no, P 7K3M"):
+        assert spoken_named(typed) != typed
+    assert parse("yes P 7K3M") is None and parse("Yes, P 7 K 3 M.") is None
+    assert parse("yes, P-7K3M") == ("confirm", "P-7K3M") and parse("yes") == ("confirm", None)
+    for left in ("yes", "yes please", "yes P 7K3", "yes P 7K3M5", "tell me about P 7K3M", None, "x" * 61):
+        assert spoken_named(left) == left
+
+
+def test_typed_turns_parse_a_spaced_code_exactly_as_typed(waiting):
+    """Outside a voice consult the same handler sees the typed text unchanged: 'yes P 7K3M' is no command."""
+    r = waiting.r
+    conv = {"id": CID, "principal": "robert"}
+    with r.app.test_request_context():
+        found = (r.config["services"], "robert", conv, r.notes,
+                 {"text": "yes P 7K3M", "author_kind": "owner", "who": "robert"}, "n-1", "n-1", [])
+        assert api._owner_tool_proposal_command(found) is None
+    assert waiting.handler.handled == []
+
+
 @pytest.mark.parametrize("words", ["stop", "Stop!", "stop it", "cancel it"])
 def test_a_bare_stop_in_voice_stops_no_job(waiting, words):
     r = waiting.r

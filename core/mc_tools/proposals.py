@@ -60,6 +60,24 @@ def parse(text):
     return ("confirm", None) if _YES.match(t) else ("cancel", None) if _NO.match(t) else None
 
 
+# Voice only (mc_voice_direct's consult): speech recognition writes a spoken code with spaces, dots or hyphens, and may
+# spell it out letter by letter ("yes P 7K3M", "yes, P-7K3M", "Yes P. 7 K 3 M."). Exactly four letters or digits after
+# the P, as the typed form; anything else is left as it was said.
+_SPOKEN = re.compile(r"^(?P<word>yes|ja|ok(?:ay)?|confirm|approve|no|nein|cancel)[,:.]?\s+(?:proposal\s+)?"
+                     r"p(?P<code>(?:[\s.\-]*[a-z0-9]){4})\s*[.!]?$", re.I)
+
+
+def spoken_named(text):
+    """The voice path's spoken proposal code in the typed named form ("yes P-7K3M"), else the text unchanged. Typed
+    turns never call this: parse() reads exactly what Robert typed."""
+    if not isinstance(text, str) or len(text) > 60:
+        return text
+    m = _SPOKEN.match(text.strip())
+    if m is None:
+        return text
+    return f"{m.group('word')} P-{re.sub(r'[^a-z0-9]', '', m.group('code'), flags=re.I).upper()}"
+
+
 def issue_text(payload, operation_id):
     """A DRAFT change record (RFC) under the change-control standard §4, not a work order (review P2-6): refs, change
     and environment only; names and emails stay in the database. It authorizes nothing by itself."""
