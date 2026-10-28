@@ -2,6 +2,7 @@
 validated here); no IO."""
 import re
 import uuid
+from datetime import datetime, timezone
 
 MAX_BYTES = 16000
 MAX_CONTENT = 32
@@ -48,6 +49,18 @@ SPEAKERS = {'user': 'owner ASR', 'assistant': 'assistant generated; playback unv
 STAMP = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z')
 
 
+def stamp_time(text):
+    """The UTC datetime of a STAMP ("…T20:00:00Z", "…T20:00:00.5Z"), or None. Stamps are compared as times, never as
+    strings: "20:00:00Z" sorts after "20:00:00.5Z" as text (review B #6)."""
+    if not isinstance(text, str) or not STAMP.fullmatch(text):
+        return None
+    try:
+        return datetime.strptime(text, '%Y-%m-%dT%H:%M:%S.%fZ' if '.' in text else '%Y-%m-%dT%H:%M:%SZ'
+                                 ).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
 def note_parts(sid, role, item, index, text, partial, *, limit, started=None, ended=None, interrupted=False):
     if (role not in SPEAKERS or type(index) is not int or not 0 <= index < MAX_CONTENT
             or not isinstance(text, str) or not 0 < len(text.encode()) <= MAX_BYTES
@@ -60,7 +73,8 @@ def note_parts(sid, role, item, index, text, partial, *, limit, started=None, en
     tail = ']\n'
     if started is not None or ended is not None:
         # Start and end of the turn (UTC, ISO 8601 Z): overlap and latency stay representable later.
-        if not all(isinstance(t, str) and STAMP.fullmatch(t) for t in (started, ended)) or started > ended:
+        times = [stamp_time(t) for t in (started, ended)]
+        if None in times or times[0] > times[1]:
             raise ValueError('voice_transcript_time')
         tail = f'; start={started}; end={ended}' + tail
     if interrupted:

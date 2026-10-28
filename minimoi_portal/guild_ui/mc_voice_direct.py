@@ -35,7 +35,7 @@ from core.realtime_voice.bootstrap import create_bootstrap_blueprint
 from core.realtime_voice.consult import ConsultLedger, create_consult_blueprint
 from core.realtime_voice.controlled_session import SessionRefused
 from core.realtime_voice.duration_guard import DurationGuard
-from core.realtime_voice.transcripts import MAX_BYTES as TURN_MAX_BYTES, STAMP
+from core.realtime_voice.transcripts import MAX_BYTES as TURN_MAX_BYTES, STAMP, stamp_time
 from core.realtime_voice.voice_card import load_card
 
 from . import _api_error, cfg, mc_voice_reveal as reveal, owner_api
@@ -430,10 +430,12 @@ def _events(body, started_at, clock):
                 or type(index) is not int or not 0 <= index < 32
                 or not isinstance(text, str) or not text.strip() or len(text.encode()) > TURN_MAX_BYTES
                 or type(partial) is not bool or type(interrupted) is not bool or (interrupted and role != "assistant")
-                or not all(isinstance(t, str) and STAMP.fullmatch(t) for t in (start, end)) or start > end):
+                or not all(isinstance(t, str) and STAMP.fullmatch(t) for t in (start, end))):
             return None, "invalid"
-        times = [reveal.parse_stamp(t) for t in (start, end)]
-        if any(t is None or not earliest <= t.timestamp() <= latest for t in times):
+        times = [stamp_time(t) for t in (start, end)]                # compared as times, not strings (review B #6)
+        if None in times or times[0] > times[1]:
+            return None, "invalid"
+        if any(not earliest <= t.timestamp() <= latest for t in times):
             return None, "time"
         out.append((role, item, index, text, partial or interrupted, interrupted, start, end))
     return out, None

@@ -793,3 +793,28 @@ def test_a_retried_transcript_post_does_not_use_up_the_session_byte_cap(ready, m
     assert post(r, sid, [turn(r, "user", "item_u2", "y" * 400, 5)]).status_code == 200
     assert post(r, sid, [turn(r, "user", "item_u3", "z" * 200, 7)]).status_code == 429    # now truly over
     assert len(voice_records(r, sid)) == 3
+
+
+# ── review B #6: turn times are compared as times ────────────────────────────────────────────────────────────────
+
+def test_turn_times_are_compared_as_times_not_as_text(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    whole = reveal.stamp(datetime.fromtimestamp(int(r.clock[0]) + 2, timezone.utc)).replace(".000Z", "Z")
+    half = whole[:-1] + ".5Z"
+    same_second = {"role": "user", "item_id": "item_u1", "text": "Hello", "started_at": whole, "ended_at": half}
+    assert post(r, sid, [same_second]).status_code == 200                          # "…02Z" ≤ "…02.5Z" as times
+    backwards = {"role": "user", "item_id": "item_u2", "text": "Hello", "started_at": half, "ended_at": whole}
+    assert post(r, sid, [backwards]).get_json()["error"] == "invalid"               # "…02.5Z" > "…02Z" as times
+
+
+def test_note_parts_compare_turn_times_as_times():
+    from core.realtime_voice.transcripts import note_parts, stamp_time
+    sid = str(uuid.uuid4())
+    assert note_parts(sid, "user", "i1", 0, "Hi", False, limit=1000,
+                      started="2026-10-27T20:00:02Z", ended="2026-10-27T20:00:02.5Z")
+    with pytest.raises(ValueError):
+        note_parts(sid, "user", "i1", 0, "Hi", False, limit=1000,
+                   started="2026-10-27T20:00:02.5Z", ended="2026-10-27T20:00:02Z")
+    assert stamp_time("2026-10-27T20:00:02.25Z") > stamp_time("2026-10-27T20:00:02Z")
+    assert stamp_time("2026-10-27T20:00:02") is None and stamp_time(None) is None
