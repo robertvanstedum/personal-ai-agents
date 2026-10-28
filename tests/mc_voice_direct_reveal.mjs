@@ -64,4 +64,26 @@ for (const kind of ['summary_proposal', 'summary_decision', 'summary_unavailable
   assert.equal(sandbox.voiceLine(note(7, { kind })), null, kind);                      // rendered as ordinary notes
   n++;
 }
+// UI review #6: the reveal adds only notes newer than the oldest shown (older history the page never showed stays unloaded),
+// each in its place by id and never twice.
+{
+  const mStart = source.indexOf('export function mergeNotes');
+  const mEnd = source.indexOf('function appendNote(note) {');
+  assert.ok(mStart > 0 && mEnd > mStart, 'mergeNotes block present');
+  const thread = doc.createElement('ol');
+  const row = (id) => { const li = doc.createElement('li'); li.setAttribute('data-note', String(id)); return li; };
+  thread.append(row(10), row(12));
+  const box = { thread, noteLine: (note) => row(note.id), follow: () => { box.followed += 1; }, followed: 0 };
+  vm.createContext(box);
+  vm.runInContext(`${source.slice(mStart, mEnd).replace('export function', 'function')}\nthis.mergeNotes = mergeNotes;`, box);
+  assert.equal(box.mergeNotes([{ id: 5 }, { id: 13 }, { id: 11 }, { id: 12 }, { id: 9 }, { id: 10 }]), 2);
+  assert.deepEqual(thread.elements.map((li) => li.getAttribute('data-note')), ['10', '11', '12', '13']);
+  assert.equal(box.followed, 1);
+  assert.equal(box.mergeNotes([{ id: 11 }, { id: 13 }]), 0);                            // never twice
+  const empty = { thread: doc.createElement('ol'), noteLine: (note) => row(note.id), follow: () => {} };
+  vm.createContext(empty);
+  vm.runInContext(`${source.slice(mStart, mEnd).replace('export function', 'function')}\nthis.mergeNotes = mergeNotes;`, empty);
+  assert.equal(empty.mergeNotes([{ id: 2 }, { id: 1 }]), 2);                            // an empty thread takes them all
+  n++;
+}
 console.log(`${n} revealed-voice-record scenarios passed; fake DOM only.`);

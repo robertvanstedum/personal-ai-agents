@@ -7,6 +7,11 @@ class Node {
   getAttribute(k) { return this.attrs.has(k) ? this.attrs.get(k) : null; }
   hasAttribute(k) { return this.attrs.has(k); }
   removeAttribute(k) { this.attrs.delete(k); }
+  get dataset() {                                     // read-only: data-* attributes, camelCased
+    const out = {};
+    for (const [k, v] of this.attrs) if (k.startsWith('data-')) out[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v;
+    return out;
+  }
   get className() { return this.getAttribute('class') || ''; }
   set className(v) { this.setAttribute('class', v); }
   get textContent() { return this.ownText + this.children.map((c) => (typeof c === 'string' ? c : c.textContent)).join(''); }

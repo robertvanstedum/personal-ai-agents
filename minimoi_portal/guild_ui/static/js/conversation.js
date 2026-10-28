@@ -312,13 +312,16 @@ function askForTokens() {
   }, 4000);
 }
 
-// Notes this page did not have yet (a voice session revealed at End): each put in its place by id, never twice. Returns how
-// many were added. Nothing is re-sent: these are the server's kept records, shown.
+// Notes this page did not have yet (a voice session revealed at End): each put in its place by id, never twice. Only notes
+// newer than the oldest one shown are added, as watchPlatformNotes reads only after its mark: older history the page never
+// showed stays unloaded (UI review #6). Returns how many were added. Nothing is re-sent: these are the server's kept records.
 export function mergeNotes(notes) {
   if (!thread || !Array.isArray(notes)) return 0;
+  const shown = Array.from(thread.querySelectorAll('[data-note]'), (n) => Number(n.dataset.note)).filter(Number.isSafeInteger);
+  const oldest = shown.length ? Math.min(...shown) : 0;
   let added = 0;
   for (const note of notes.slice().sort((a, b) => Number(a.id) - Number(b.id))) {
-    if (!note || note.id == null || thread.querySelector(`[data-note="${note.id}"]`)) continue;
+    if (!note || note.id == null || !(Number(note.id) > oldest) || thread.querySelector(`[data-note="${note.id}"]`)) continue;
     const next = Array.from(thread.querySelectorAll('[data-note]')).find((n) => Number(n.dataset.note) > Number(note.id));
     thread.insertBefore(noteLine(note), next || thread.querySelector('[data-live-turn]') || null);
     added += 1;
