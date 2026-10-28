@@ -831,6 +831,82 @@ def test_fr_n2_a_gateway_that_trickles_its_answer_is_cut_at_the_total_deadline(m
     assert answer == (None, "timeout") and took < 2.5              # the trickle alone runs about 3.3 s
 
 
+
+def trickling_gateway(body, every_s):
+    """A loopback gateway that sends its headers, then its body 8 bytes at a time; it records whether the client cut it."""
+    import threading
+    import time as _time
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    seen = {"cut": False, "done": threading.Event()}
+
+    class Trickle(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                for i in range(0, len(body), 8):
+                    self.wfile.write(body[i:i + 8])
+                    self.wfile.flush()
+                    _time.sleep(every_s)
+            except OSError:
+                seen["cut"] = True
+            finally:
+                seen["done"].set()
+
+        def log_message(self, *a):
+            pass
+    server = HTTPServer(("127.0.0.1", 0), Trickle)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, seen
+
+
+def test_v_gateway_note_the_cut_call_stops_reading_and_closes_its_connection_at_the_deadline(monkeypatch):
+    """V note gateway: at f7da4657 the call cut at the deadline kept reading in its thread until the gateway finished. Now
+    the thread stops at its next chunk and closes the connection: the gateway sees it cut, and the thread ends."""
+    import json as _json
+    import threading
+    import time as _time
+    from core.realtime_voice import summary_gateway as sg
+    body = _json.dumps({"choices": [{"index": 0, "finish_reason": "stop",
+                                     "message": {"role": "assistant", "content": "x" * 160}}]}).encode()
+    server, seen = trickling_gateway(body, 0.2)                       # about 5.5 s of trickle
+    try:
+        monkeypatch.setattr(sg, "CONNECT_TIMEOUT_S", 1)
+        monkeypatch.setattr(sg, "READ_TIMEOUT_S", 1)
+        monkeypatch.setattr(sg, "TOTAL_TIMEOUT_S", 1.0)
+        client = sg.GatewaySummary("voice-summary-tp", environ={"MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_TP": "test-only",
+                                                                sg.GATEWAY_URL_ENV: f"http://127.0.0.1:{server.server_port}/v1"})
+        assert client("s", "p") == (None, "timeout")
+        cut_by = _time.monotonic() + 2.5
+        assert seen["done"].wait(max(0.0, cut_by - _time.monotonic())), "the gateway was still being read"
+        assert seen["cut"] is True
+        while any(t.name == "voice-summary-gateway" for t in threading.enumerate()) and _time.monotonic() < cut_by:
+            _time.sleep(0.02)
+        assert not any(t.name == "voice-summary-gateway" for t in threading.enumerate())
+    finally:
+        threading.Thread(target=lambda: (server.shutdown(), server.server_close()), daemon=True).start()
+
+
+def test_v_gateway_note_an_answer_read_as_it_arrives_is_the_summary(monkeypatch):
+    """The streamed read returns the gateway's plain answer whole, when it arrives inside the deadline."""
+    import json as _json
+    import threading
+    from core.realtime_voice import summary_gateway as sg
+    body = _json.dumps({"choices": [{"index": 0, "finish_reason": "stop",
+                                     "message": {"role": "assistant", "content": "Wir haben über die Glasur gesprochen."}}]},
+                       ensure_ascii=False).encode()
+    server, seen = trickling_gateway(body, 0.0)
+    try:
+        client = sg.GatewaySummary("voice-summary-tp", environ={"MINIMOI_GATEWAY_KEY_VOICE_SUMMARY_TP": "test-only",
+                                                                sg.GATEWAY_URL_ENV: f"http://127.0.0.1:{server.server_port}/v1"})
+        assert client("s", "p") == ("Wir haben über die Glasur gesprochen.", None)
+        assert seen["done"].wait(2) and seen["cut"] is False
+    finally:
+        threading.Thread(target=lambda: (server.shutdown(), server.server_close()), daemon=True).start()
+
 # ── FR N1: "still being written" only while an attempt may really run ───────────────────────────────────────────────────
 
 def summary_ask(r, sid):

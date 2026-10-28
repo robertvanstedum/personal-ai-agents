@@ -12,8 +12,11 @@ tools. So it is one chat completion through the LiteLLM model gateway, the way t
 * one call, never retried, bounded by a total deadline of 35 s (FR N2): inside it, 5 s to connect and 30 s for each
   read. The per-read limit alone is not a bound (a gateway that trickles its body keeps a read alive), so the call runs
   in its own thread and the server stops waiting at the deadline, well inside the page's 45 s bound and the core's 60 s
-  stale-attempt rule; an answer after it is dropped and its connection closed. When the page says "Summary
-  unavailable", nothing is still being written for it here.
+  stale-attempt rule. The body is read as it arrives, and the thread stops reading and closes the connection at the
+  deadline (V note gateway): a gateway trickling its answer is cut at its next chunk. Until the headers arrive, and in a
+  read that gets nothing, the thread can only wait out the read's own 30 s: so it ends at most 30 s after the deadline
+  (65 s after the call began), and nothing is kept from it. When the page says "Summary unavailable", nothing is still
+  being written for it here.
 
 Anything but a plain text answer is unavailable: no key, the gateway down or refusing, a timeout, an error status, a
 malformed answer, or a tool-call-shaped answer (tool_calls, function_call, finish_reason tool_calls). Unavailable is
@@ -21,9 +24,11 @@ never the live agent: there is no fallback. The bytes here never reach a log.
 """
 from __future__ import annotations
 
+import json as _json
 import os
 import re
 import threading
+import time
 
 GATEWAY_URL_ENV = "MINIMOI_MODEL_GATEWAY_URL"
 DEFAULT_GATEWAY_URL = "http://model-gateway:4000/v1"       # the agent runtimes' own gateway address
@@ -31,6 +36,7 @@ SUMMARY_MODEL = "minimoi-voice-summary"                    # a gateway alias: th
 CONNECT_TIMEOUT_S = 5
 READ_TIMEOUT_S = 30
 TOTAL_TIMEOUT_S = 35                                       # the whole call, however the gateway sends its answer
+MAX_ANSWER_BYTES = 1 << 20                                 # a summary is a few KB; more is not one
 MAX_TOKENS = 1200
 TEMPERATURE = 0.2
 _NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
@@ -65,10 +71,7 @@ class GatewaySummary:
     def __call__(self, system, prompt):
         if not self._key:
             return None, "no_summary_key"
-        post = self._post
-        if post is None:
-            import requests
-            post = requests.post
+        post = self._post or _streamed(time.monotonic() + TOTAL_TIMEOUT_S)
         body, headers = self.request(system, prompt), {"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"}
         lock, finished, box = threading.Lock(), threading.Event(), {}
 
@@ -93,7 +96,7 @@ class GatewaySummary:
                 return None, "timeout"
         if "error" in box:
             name = type(box["error"]).__name__.lower()
-            return None, "timeout" if "timeout" in name else "gateway_down"
+            return None, "timeout" if "timeout" in name or isinstance(box["error"], _Late) else "gateway_down"
         response = box["response"]
         status = getattr(response, "status_code", 0)
         if status in (401, 403):
@@ -107,6 +110,44 @@ class GatewaySummary:
         except ValueError:
             return None, "malformed"
         return answer_text(payload)
+
+
+class _Late(Exception):
+    """The total deadline passed while the answer was still arriving."""
+
+
+class _Answer:
+    """What the streamed call read: its status and body (the part of a requests.Response the client uses)."""
+
+    def __init__(self, status_code, body):
+        self.status_code, self._body = status_code, body
+
+    def json(self):
+        return _json.loads(self._body)                     # ValueError (or its subclasses) when it is not JSON
+
+
+def _streamed(deadline):
+    """requests.post, its body read as it arrives (urllib3's read1), so the call's own thread stops at ``deadline`` and
+    closes the connection (V note gateway). Each read still waits at most READ_TIMEOUT_S."""
+    import requests
+
+    def post(url, *, json, timeout, allow_redirects, headers):
+        response = requests.post(url, json=json, timeout=timeout, allow_redirects=allow_redirects, headers=headers,
+                                 stream=True)
+        try:
+            body = bytearray()
+            while True:
+                if time.monotonic() >= deadline:
+                    raise _Late()
+                chunk = response.raw.read1(16384, decode_content=True)
+                if not chunk:
+                    return _Answer(response.status_code, bytes(body))
+                body += chunk
+                if len(body) > MAX_ANSWER_BYTES:
+                    return _Answer(response.status_code, b"")         # not a summary: malformed
+        finally:
+            response.close()
+    return post
 
 
 def answer_text(payload):
