@@ -324,6 +324,15 @@ export class RealtimeVoiceController {
     try { this._adapter.sendContinuationInstruction(instruction); return true; } catch (_) { return false; }
   }
 
+  /** Resolves once the voice's queued audio has played out (the adapter's optional whenPlaybackIdle), or after maxMs, or at
+   *  once when the adapter cannot tell: a host ending after a closing line waits on it (Spec 165, review B6). German and
+   *  Portuguese do not call it. */
+  afterPlayback(maxMs = 15000) {
+    const adapter = this._adapter;
+    if (!adapter || typeof adapter.whenPlaybackIdle !== "function") return Promise.resolve();
+    return Promise.resolve().then(() => adapter.whenPlaybackIdle(maxMs)).catch(() => {});
+  }
+
   mute() { this._adapter?.mute(); }
   unmute() { this._adapter?.unmute(); }
 

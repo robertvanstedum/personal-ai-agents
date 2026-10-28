@@ -34,6 +34,7 @@ export class XAIWebSocketAdapter {
     this._micReady = false;
     this._connectedEmitted = false;
     this._playbackSources = new Set();
+    this._idleWaiters = [];
   }
 
   on(eventName, handler) {
@@ -170,6 +171,22 @@ export class XAIWebSocketAdapter {
     this._audioContext = null;
   }
 
+  // Optional (Spec 165, review B6): resolves once every scheduled audio chunk has played out or been stopped, or after
+  // maxMs. A host ending after a closing line waits on it; German and Portuguese never call it.
+  whenPlaybackIdle(maxMs = 15000) {
+    if (!this._playbackSources.size) return Promise.resolve();
+    return new Promise((resolve) => {
+      let timer = null;
+      const done = () => { clearTimeout(timer); resolve(); };
+      timer = setTimeout(done, maxMs);
+      this._idleWaiters.push(done);
+    });
+  }
+
+  _playbackIdle() {
+    if (!this._playbackSources.size) for (const done of this._idleWaiters.splice(0)) done();
+  }
+
   sendContinuationInstruction(text) {
     this._ws?.send(JSON.stringify({
       type: "conversation.item.create",
@@ -279,7 +296,7 @@ export class XAIWebSocketAdapter {
     source.connect(this._audioContext.destination);
     this._playbackSources.add(source);
     if (this._playbackSources.size === 1) this._emit("playback_started", {});
-    source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });
+    source.addEventListener("ended", () => { this._playbackSources.delete(source); this._playbackIdle(); }, { once: true });
     const startAt = Math.max(this._audioContext.currentTime, this._playbackQueueTime);
     source.start(startAt);
     this._playbackQueueTime = startAt + buffer.duration;
@@ -291,6 +308,7 @@ export class XAIWebSocketAdapter {
     }
     this._playbackSources.clear();
     this._playbackQueueTime = this._audioContext?.currentTime || 0;
+    this._playbackIdle();
   }
 }
 

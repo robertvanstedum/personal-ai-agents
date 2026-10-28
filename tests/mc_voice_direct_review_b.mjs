@@ -281,6 +281,47 @@ await check('B5 Keep talking sends the withdrawal after the posts before it', as
   assert.deepEqual(last.body, { events: [], proposal: 'withdrawn' });
 });
 
+// ── B6: the spoken summary ends when its own turn has played out ────────────────────────────────────────────────────────
+const SPOKEN = 'We looked at item twelve and the kiln seal.';
+async function summarized(drain, spoken = SPOKEN) {
+  const r = rig({ routes: { '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken } }) } });
+  await r.s.start('openai');
+  await r.s.sumUp(); await flush();
+  if (drain) r.c.drain = drain;
+  return r;
+}
+await check('B6 the summary turn ends the session only after its audio has played out', async () => {
+  let played; const r = await summarized(new Promise((res) => { played = res; }));
+  r.c.options.onAssistantTurn('We looked at item twelve and the kiln seal.'); await flush();
+  assert.deepEqual(r.c.ended, [], 'ended at generation completion, before playback drained');
+  played(); await flush();
+  assert.deepEqual(r.c.ended, ['normal_end']);
+});
+await check('B6 an unrelated turn finishing first does not close the summary', async () => {
+  const r = await summarized();
+  r.c.options.onAssistantTurn('Sure.'); await flush();
+  assert.deepEqual(r.c.ended, []);
+  r.c.options.onAssistantTurn('We looked at item twelve and the kiln seal.'); await flush();
+  assert.deepEqual(r.c.ended, ['normal_end']);
+});
+await check('B6 playback that never reports done is let play its length at 15 characters a second plus 5 s', async () => {
+  const r = await summarized(new Promise(() => {}));
+  r.c.options.onAssistantTurn(SPOKEN); await flush();
+  const bound = Math.ceil(SPOKEN.length / 15) * 1000 + 5000;
+  r.advance(bound - 1); await flush(); assert.deepEqual(r.c.ended, []);
+  r.advance(1); await flush(); assert.deepEqual(r.c.ended, ['normal_end']);
+});
+await check('B6 a long summary, once its turn is done, is not cut by the 45 s wait for that turn', async () => {
+  const long = 'We went through the board item by item and agreed what comes next. '.repeat(10).trim();   // ~51 s to say
+  const r = await summarized(new Promise(() => {}), long);
+  r.advance(10000);
+  r.c.options.onAssistantTurn(long); await flush();
+  r.advance(40000); await flush();                                                     // 50 s after asking: still playing
+  assert.deepEqual(r.c.ended, []);
+  r.advance(Math.ceil(long.length / 15) * 1000 + 5000 - 40000); await flush();      // its own bound, from its turn
+  assert.deepEqual(r.c.ended, ['normal_end']);
+});
+
 // ── B7: a lost answer is not a failed action ────────────────────────────────────────────────────────────────────────────
 await check('B7 an answer lost on the way back is asked again as the same call and its real result spoken', async () => {
   let n = 0;

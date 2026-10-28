@@ -1,7 +1,8 @@
-// The shared controller after Spec 165 A1, for German and Portuguese: byte-for-byte the controller they ran before, plus two
-// additive public methods (sessionId(), speak()) they never call and new adapter cache keys. Pinned two ways: the source
-// with exactly those additions taken out hashes to the 93bf00c6 controller; and the methods, driven on a synthetic transport,
-// send nothing unless a host calls them, and nothing on the managed path. No provider, microphone or network.
+// The shared controller and adapters after Spec 165 A1, for German and Portuguese: byte-for-byte the files they ran before,
+// plus additive public methods they never call (the controller's sessionId(), speak() and afterPlayback(); the adapters'
+// whenPlaybackIdle(), review B6) and new adapter cache keys. Pinned two ways: each source with exactly those additions taken
+// out hashes to its 93bf00c6 file; and the methods, driven on a synthetic transport, send nothing unless a host calls them,
+// and nothing on the managed path. No provider, microphone or network.
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
@@ -19,6 +20,15 @@ const ADDED_METHODS = `  /** The session's id (the server's voice_session_id whe
     try { this._adapter.sendContinuationInstruction(instruction); return true; } catch (_) { return false; }
   }
 
+  /** Resolves once the voice's queued audio has played out (the adapter's optional whenPlaybackIdle), or after maxMs, or at
+   *  once when the adapter cannot tell: a host ending after a closing line waits on it (Spec 165, review B6). German and
+   *  Portuguese do not call it. */
+  afterPlayback(maxMs = 15000) {
+    const adapter = this._adapter;
+    if (!adapter || typeof adapter.whenPlaybackIdle !== "function") return Promise.resolve();
+    return Promise.resolve().then(() => adapter.whenPlaybackIdle(maxMs)).catch(() => {});
+  }
+
 `;
 const KEYS = [['// Both adapters changed for the playback event: new keys so browsers fetch them (Spec 165 §4.3).\n', ''],
   ['openai-webrtc-adapter.js?v=20261028-playback1', 'openai-webrtc-adapter.js?v=20261015-managed-end1'],
@@ -31,6 +41,58 @@ const source = fs.readFileSync(PATH, 'utf8');
   let before = source.replace(ADDED_METHODS, '');
   for (const [now, then] of KEYS) { assert.equal(before.split(now).length, 2, now); before = before.replace(now, then); }
   assert.equal(crypto.createHash('sha256').update(before).digest('hex'), BEFORE);   // nothing else changed
+  n++;
+}
+// The adapters: exactly the additions below, nothing else (each taken out, the file is its 93bf00c6 bytes).
+const IDLE_WAIT = `    return new Promise((resolve) => {
+      let timer = null;
+      const done = () => { clearTimeout(timer); resolve(); };
+      timer = setTimeout(done, maxMs);
+      this._idleWaiters.push(done);
+    });
+  }
+`;
+const ADAPTERS = {
+  'adapters/xai-websocket-adapter.js': ['afe83aa8aae73e4b47d6eaa920f8893932cf4bf04ee225e0918db06d5db3afbf', [
+    ['    this._idleWaiters = [];\n', ''],
+    [`  // Optional (Spec 165, review B6): resolves once every scheduled audio chunk has played out or been stopped, or after
+  // maxMs. A host ending after a closing line waits on it; German and Portuguese never call it.
+  whenPlaybackIdle(maxMs = 15000) {
+    if (!this._playbackSources.size) return Promise.resolve();
+${IDLE_WAIT}
+  _playbackIdle() {
+    if (!this._playbackSources.size) for (const done of this._idleWaiters.splice(0)) done();
+  }
+
+`, ''],
+    ['source.addEventListener("ended", () => { this._playbackSources.delete(source); this._playbackIdle(); }, { once: true });',
+      'source.addEventListener("ended", () => this._playbackSources.delete(source), { once: true });'],
+    ['    this._playbackQueueTime = this._audioContext?.currentTime || 0;\n    this._playbackIdle();\n',
+      '    this._playbackQueueTime = this._audioContext?.currentTime || 0;\n']]],
+  'adapters/openai-webrtc-adapter.js': ['dae118fd252add9a80755a363d64ce6b4ef377b004d177e8dc10bba5a3c274a7', [
+    ['    this._playing = false;\n    this._idleWaiters = [];\n', ''],
+    [`  // Optional (Spec 165, review B6): resolves once the provider says its audio for the session has played out
+  // (output_audio_buffer.stopped or .cleared, WebRTC only), or at once when none is playing, or after maxMs. That the event
+  // means audible playback has drained in the browser is not verified against the provider. German and Portuguese never
+  // call it.
+  whenPlaybackIdle(maxMs = 15000) {
+    if (!this._playing) return Promise.resolve();
+${IDLE_WAIT}
+`, ''],
+    [`      case "output_audio_buffer.started":
+        this._playing = true;
+        break;
+      case "output_audio_buffer.stopped":
+      case "output_audio_buffer.cleared":
+        this._playing = false;
+        for (const done of this._idleWaiters.splice(0)) done();
+        break;
+`, '']]],
+};
+for (const [name, [hash, edits]] of Object.entries(ADAPTERS)) {
+  let text = fs.readFileSync(new URL(name, PATH), 'utf8');
+  for (const [now, then] of edits) { assert.equal(text.split(now).length, 2, `${name}: ${now.slice(0, 60)}`); text = text.replace(now, then); }
+  assert.equal(crypto.createHash('sha256').update(text).digest('hex'), hash, name);
   n++;
 }
 

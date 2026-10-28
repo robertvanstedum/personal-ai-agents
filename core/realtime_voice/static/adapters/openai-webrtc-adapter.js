@@ -25,6 +25,8 @@ export class OpenAIWebRTCAdapter {
     this._micStream = null;
     this._remoteAudioEl = null;
     this._muted = false;
+    this._playing = false;
+    this._idleWaiters = [];
   }
 
   on(eventName, handler) {
@@ -151,6 +153,20 @@ export class OpenAIWebRTCAdapter {
     this._emit("closed", { reason });
   }
 
+  // Optional (Spec 165, review B6): resolves once the provider says its audio for the session has played out
+  // (output_audio_buffer.stopped or .cleared, WebRTC only), or at once when none is playing, or after maxMs. That the event
+  // means audible playback has drained in the browser is not verified against the provider. German and Portuguese never
+  // call it.
+  whenPlaybackIdle(maxMs = 15000) {
+    if (!this._playing) return Promise.resolve();
+    return new Promise((resolve) => {
+      let timer = null;
+      const done = () => { clearTimeout(timer); resolve(); };
+      timer = setTimeout(done, maxMs);
+      this._idleWaiters.push(done);
+    });
+  }
+
   sendContinuationInstruction(text) {
     // Text-only continuation (Section 9's idle re-engagement) -- per
     // OpenAI docs: conversation.item.create with input_text, then
@@ -214,6 +230,14 @@ export class OpenAIWebRTCAdapter {
         break;
       case "response.cancelled":
         this._emit("interrupted", {});
+        break;
+      case "output_audio_buffer.started":
+        this._playing = true;
+        break;
+      case "output_audio_buffer.stopped":
+      case "output_audio_buffer.cleared":
+        this._playing = false;
+        for (const done of this._idleWaiters.splice(0)) done();
         break;
       case "response.done":
         for (const item of event.response?.output || []) {

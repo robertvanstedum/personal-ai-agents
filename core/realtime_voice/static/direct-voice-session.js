@@ -39,6 +39,7 @@ const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still 
 const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its own turn, or after this
 const SUMMARY_WAIT_MS = 90000;            // the summary's answer is awaited this long (review B3); a later one is still kept
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
+const DRAIN_CAP_MS = 90000;               // the spoken summary plays at most 15 characters a second plus 5 s, and never past this
 const START_END_MS = 15000;               // End pressed while still connecting waits for the connection at most this long
 const POST_EVENTS = 20, POST_BYTES = 60000;   // the server takes 20 events and 64 KB a post; JSON overhead stays inside
 const TEXT_BYTES = 16000;
@@ -113,6 +114,18 @@ function fit(text) {                                   // at most 16,000 bytes; 
   let cut = text.slice(0, TEXT_BYTES);
   while (bytes(cut) > TEXT_BYTES) cut = cut.slice(0, -1);
   return [cut, true];
+}
+
+// Whether an assistant turn is the closing summary the voice was asked to say (review B6): most of the summary's words are in
+// it. An unrelated turn finishing first (a reply already under way) does not close the session.
+const wordsOf = (t) => new Set(String(t || '').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []);
+export function sameWords(said, asked) {
+  const want = wordsOf(asked);
+  if (!want.size) return true;
+  const got = wordsOf(said);
+  let hit = 0;
+  for (const w of want) if (got.has(w)) hit += 1;
+  return hit / want.size >= 0.6;
 }
 
 // §5, durable capture. Every item the controller reports is keyed by its place ("t" + index, stable for the session), posted
@@ -275,7 +288,7 @@ export function directVoice(d) {
   let c = null, sid = null, cid = null, provider = null, lastOwner = '', capture = null;
   let connected = false, finalized = false, failed = false, proposing = false, keepalive = false;
   let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, endAfterTurn = null, ending = null, endedWords = null;
-  let lastTurns = [];
+  let drainTimer = null, lastTurns = [];
   let held = null, heldTimer = null, closed, sentFinal = false, settled = false;
   let ownerTurn = 0, consultedTurn = -1, checking = false;          // Robert's turns, counted; the last one consulted
   const done = new Promise((resolve) => { closed = resolve; });     // settles once End is sent and the thread is reloaded
@@ -290,7 +303,8 @@ export function directVoice(d) {
     if (beat) stopEvery(beat);
     if (speakTimer) cancel(speakTimer);
     if (heldTimer) cancel(heldTimer);
-    ticker = beat = speakTimer = heldTimer = null;
+    if (drainTimer) cancel(drainTimer);
+    ticker = beat = speakTimer = heldTimer = drainTimer = null;
   }
   function endNow(reason) {
     held = null;
@@ -376,7 +390,7 @@ export function directVoice(d) {
   // still speaks), the heartbeat stops, the last turns are posted (partial ones too) and every post is answered; only then is
   // the summary asked for, so it covers what was said, and is told when some of it could not be kept. The server closes
   // capture when asked. Its answer is awaited at most SUMMARY_WAIT_MS (a later one is still kept and shown). The voice says the
-  // spoken part, then the session ends.
+  // spoken part, and the session ends once that turn has played out (review B6).
   function sumUp() {
     if (summary || finalized || !sessionId()) return summary;
     propose(false);
@@ -400,7 +414,12 @@ export function directVoice(d) {
       const body = r.body || {};
       const said = typeof body.spoken === 'string' ? body.spoken.trim() : '';
       if (r.status === 200 && body.ok && body.state === 'proposed' && said && connected && speak(`Say only this, then stop: ${said}`)) {
-        endAfterTurn = () => { endAfterTurn = null; c?.endSession('normal_end'); };
+        endAfterTurn = (text) => {
+          if (!sameWords(text, said)) return;
+          endAfterTurn = null;
+          if (speakTimer) { cancel(speakTimer); speakTimer = null; }
+          afterPlayback(Math.min(DRAIN_CAP_MS, Math.ceil(said.length / 15) * 1000 + 5000));
+        };
         speakTimer = later(() => { endAfterTurn = null; if (!finalized) c?.endSession('normal_end'); }, SPEAK_SUMMARY_MS);
         return;
       }
@@ -411,6 +430,14 @@ export function directVoice(d) {
     })();
     return summary;
   }
+  // The summary's turn is done: end once its queued audio has played out (the controller's afterPlayback), at most `bound` ms.
+  function afterPlayback(bound) {
+    let over = false;
+    const go = () => { if (over) return; over = true; if (drainTimer) cancel(drainTimer); drainTimer = null; if (!finalized) c?.endSession('normal_end'); };
+    drainTimer = later(go, bound);
+    Promise.resolve().then(() => c?.afterPlayback?.(bound)).then(go, go);
+  }
+
   // The page is going away: End leaves in this same tick, with keepalive, carrying the last turns itself in one post (the
   // browser bounds what a leaving page may send, and a post sent beside End may arrive after it). What does not fit is not
   // sent, and End says capture "incomplete" (review B4). Nothing waits for a reply (none arrives after pagehide). Once per session.
