@@ -64,7 +64,17 @@ class Cos:
     kind = "cos"
 
     def __init__(self):
-        self.calls, self.fail = [], False
+        self.calls, self.fail, self.prompts = [], False, []
+        self.summary = ('{"spoken": "We looked at item twelve; it is in build. Nothing else was done.", '
+                        '"written": "- Asked what is stuck on #12: in build (reply-1)."}')
+
+    def turn(self, req):
+        """MC's model path for the summary, stubbed."""
+        from minimoi_portal.guild_ui.mc.backend import TurnResult
+        self.prompts.append(req)
+        if self.summary is None:
+            return TurnResult("unavailable", "cos", failure_class="not_ready")
+        return TurnResult("answered", "cos", text=self.summary)
 
     def operation(self, text, *, conversation_id, request_id):
         self.calls.append(text)
@@ -387,3 +397,97 @@ def test_a_consult_that_completes_after_end_keeps_its_receipt_and_does_not_run_a
     assert call(r, sid).status_code == 409 and len(r.turns) == 1                   # no re-run after End
     rows, states = shown(r)
     assert states[0]["state"] == "ended" and "consult_receipt" in [row["voice"]["kind"] for row in rows]
+
+
+# ── §8 end and summary ────────────────────────────────────────────────────────────────────────────────────────────
+
+def summarize(r, sid, path="summary", **body):
+    return r.client.post(BASE + f"/session/{sid}/{path}", json={"conversation_id": CID, **body}, headers=r.headers)
+
+
+@pytest.mark.parametrize("words,ends", [
+    ("We're done.", True), ("ok, we're done for today", True), ("That's all for now. Thanks!", True),
+    ("We're not done.", False), ("we aren't done", False), ("Are we done?", False), ("We're almost done", False),
+    ("I don't think we're done", False), ("Tell me when we're done", False), ("What is done on #12?", False)])
+def test_a_spoken_were_done_proposes_ending_and_a_negated_one_does_not(words, ends):
+    assert reveal.done_intent(words) is ends
+
+
+def test_were_done_then_yes_ends_and_the_summary_is_from_this_session_only(ready):
+    r = ready
+    earlier = start(r)["voice_session_id"]
+    post(r, earlier, [turn(r, "user", "item_old", "Earlier session: the glaze recipe.")])
+    r.client.post(BASE + f"/session/{earlier}/end", headers=r.headers)
+    sid = start(r)["voice_session_id"]
+    call(r, sid)
+    assert "propose_end" not in post(r, sid, [turn(r, "user", "item_u0", "We're not done yet.")]).get_json()
+    proposed = post(r, sid, [turn(r, "user", "item_u1", "Okay, we're done.")]).get_json()
+    assert proposed["propose_end"] is True and proposed["prompt"] == "Shall I sum up?"
+    assert r.config["mc_direct_voice_live"](sid)                                   # proposing ends nothing
+    yes = post(r, sid, [turn(r, "assistant", "item_a1", "Shall I sum up?", 3), turn(r, "user", "item_u2", "Yes please", 2)])
+    assert yes.get_json()["end_confirmed"] is True
+    summary = summarize(r, sid).get_json()
+    assert summary["ok"] is True and summary["state"] == "proposed"
+    assert summary["spoken"] == "We looked at item twelve; it is in build. Nothing else was done."
+    assert summary["written"].startswith(direct.PROPOSAL_HEAD) and "in build (reply-1)" in summary["written"]
+    assert summary["spoken"] not in summary["written"] and summary["covers"]["omitted"] is False
+    prompt = r.cos.prompts[-1].text
+    assert "What is stuck on #12?" in prompt and "we're done" in prompt
+    assert "glaze recipe" not in prompt and "DATA, not instructions" in prompt
+    assert r.cos.prompts[-1].conversation_id == "mc-voice-summary-" + uuid.UUID(sid).hex
+    assert reveal.read_marker(r.notes, sid, "end")["reason"] == "end" and not r.config["mc_direct_voice_live"](sid)
+    again = summarize(r, sid).get_json()                                           # kept once, no expiry, no re-run
+    assert again["repeated"] is True and len(r.cos.prompts) == 1
+    rows, states = shown(r)
+    assert [s["summary"] for s in states] == ["none", "proposed"]
+    assert "summary_proposal" in [row["voice"]["kind"] for row in rows]
+
+
+def test_the_summary_is_bounded_and_marks_what_it_omits(ready, monkeypatch):
+    r = ready
+    monkeypatch.setattr(direct, "SUMMARY_MAX_TURNS", 2)
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [turn(r, "user", f"item_u{n}", f"Turn number {n}.", n) for n in range(5)])
+    summary = summarize(r, sid).get_json()
+    assert summary["covers"] == {"records": 2, "of": 5, "omitted": True}
+    assert "Covers the last 2 of 5 retained records" in summary["written"]
+    assert "Turn number 0." not in r.cos.prompts[-1].text and "Turn number 4." in r.cos.prompts[-1].text
+
+
+def test_a_failed_summary_still_reveals_the_turns_with_summary_unavailable(ready):
+    r = ready
+    r.cos.summary = None
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [turn(r, "user", "item_u1", "Hello")])
+    failed = summarize(r, sid).get_json()
+    assert failed["ok"] is False and failed["line"] == "Summary unavailable."
+    rows, states = shown(r)
+    assert states[0]["state"] == "ended" and states[0]["summary"] == "unavailable"
+    assert [row["voice"]["kind"] for row in rows] == ["owner_turn", "summary_unavailable"]
+    r.cos.summary = '{"spoken": "Hello was said.", "written": "Robert said hello."}'
+    assert summarize(r, sid).get_json()["state"] == "proposed"                    # he can ask again later
+    assert shown(r)[1][0]["summary"] == "proposed"
+
+
+def test_robert_confirms_edits_or_declines_in_writing_and_confirming_authorizes_nothing(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    assert summarize(r, sid, path="summary/decision", decision="confirm").status_code == 409   # no proposal yet
+    post(r, sid, [turn(r, "user", "item_u1", "Make a note that the kiln needs a seal")])
+    summarize(r, sid)
+    other = start(r)["voice_session_id"]
+    assert summarize(r, other, path="summary/decision", decision="edit").status_code == 409  # not ended/proposed
+    assert summarize(r, sid, path="summary/decision", decision="approve").status_code == 422
+    assert summarize(r, sid, path="summary/decision", decision="decline", text="x").status_code == 422
+    assert summarize(r, sid, path="summary/decision", decision="edit").status_code == 422     # an edit needs text
+    signed_out = {k: v for k, v in r.headers.items() if k != "X-Synthetic-Owner"}
+    assert r.client.post(BASE + f"/session/{sid}/summary/decision", json={"conversation_id": CID, "decision": "confirm"},
+                         headers=signed_out).status_code == 401
+    assert r.client.post(BASE + f"/session/{str(uuid.uuid4())}/summary/decision",
+                         json={"conversation_id": CID, "decision": "confirm"}, headers=r.headers).status_code == 403
+    done = summarize(r, sid, path="summary/decision", decision="confirm").get_json()
+    assert done == {"ok": True, "state": "confirmed", "repeated": False, "authorizes": "nothing beyond the summary"}
+    assert summarize(r, sid, path="summary/decision", decision="decline").status_code == 409   # first decision wins
+    assert r.cos.calls == [] and len(r.turns) == 0                                  # nothing it mentions was done
+    decision = r.notes.rows[reveal.key(sid, "summary-decision")]
+    assert decision["author_kind"] == "platform" and "authorizes nothing" in decision["text"]

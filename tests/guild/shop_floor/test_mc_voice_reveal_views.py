@@ -36,7 +36,8 @@ def test_the_notes_list_the_page_and_the_export_withhold_a_recovering_session_th
     listed = client.get(API + f"/notes?conversation={cid}").get_json()
     assert [n["text"] for n in listed["notes"]] == ["a typed note"]
     assert listed["voice_sessions"] == [{"session_id": sid, "state": "recovering", "line": reveal.RECOVERY,
-                                         "started_at": listed["voice_sessions"][0]["started_at"], "ended_at": None}]
+                                         "started_at": listed["voice_sessions"][0]["started_at"], "ended_at": None,
+                                         "summary": None}]
     page = client.get(f"/guild-next/guild/build?c={cid}")
     assert page.status_code == 200 and "a typed note" in page.text and "kiln seal" not in page.text
     export = client.get(API + f"/conversations/{cid}/voice-transcript")
@@ -47,6 +48,7 @@ def test_the_notes_list_the_page_and_the_export_withhold_a_recovering_session_th
     voice = [n for n in listed["notes"] if "voice" in n]
     assert [n["voice"] for n in voice] == [{"session_id": sid, "kind": "owner_turn"}]
     assert listed["voice_sessions"][0]["state"] == "ended" and listed["voice_sessions"][0]["line"] is None
+    assert listed["voice_sessions"][0]["summary"] == "none"
     assert not any("[Voice session]" in n["text"] for n in listed["notes"])           # markers are never messages
     assert "kiln seal" in client.get(API + f"/conversations/{cid}/voice-transcript").text
     assert "kiln seal" in client.get(f"/guild-next/guild/build?c={cid}").text

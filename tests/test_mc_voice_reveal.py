@@ -53,7 +53,7 @@ def test_a_live_session_is_withheld_in_every_view_and_revealed_once_on_end():
     shown, sessions = reveal.view(floor, floor.all(), live=lambda s: s == sid, when=T0 + timedelta(minutes=1))
     assert [r["request_id"] for r in shown] == ["typed-1"]
     assert sessions == [{"session_id": sid, "state": "live", "started_at": "2026-10-27T20:00:00.000Z",
-                         "ended_at": None, "line": None}]
+                         "ended_at": None, "line": None, "summary": None}]
     reveal.mark_end(floor, sid, ended=T0 + timedelta(minutes=2))
     first, sessions = reveal.view(floor, floor.all(), live=lambda s: True, when=T0 + timedelta(minutes=3))
     again, _ = reveal.view(floor, floor.all(), live=lambda s: True, when=T0 + timedelta(minutes=4))

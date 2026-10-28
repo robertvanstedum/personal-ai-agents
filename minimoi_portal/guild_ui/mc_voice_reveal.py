@@ -174,7 +174,10 @@ def _kind(row, replies):
         return {"owner ASR": "owner_turn", "assistant generated; playback unverified": "assistant_turn",
                 "consult request": "consult_request", "consult receipt": "consult_receipt"}.get(speaker, "voice_note")
     if page == PAGE_SUMMARY:
-        return "summary"
+        sid = session_of(row)
+        return {key(sid, "summary"): "summary_proposal", key(sid, "summary-decision"): "summary_decision",
+                key(sid, "summary-unavailable"): "summary_unavailable"}.get(row.get("request_id"), "summary") \
+            if sid else "summary"
     if row.get("request_id") in replies:
         return "consult_reply"
     return "consult_note"
@@ -209,6 +212,85 @@ def view(floor, rows, *, live=lambda sid: False, when=None):
         status, start, end = hider(sid)
         sessions.append({"session_id": sid, "state": status,
                          "started_at": (start or {}).get("started_at"), "ended_at": (end or {}).get("ended_at"),
-                         "line": RECOVERY if status in ("recovering", "unknown") else None})
+                         "line": RECOVERY if status in ("recovering", "unknown") else None,
+                         "summary": summary_state(floor, sid) if status in ("ended", "dropped") else None})
     return shown, sessions
+
+
+# ── §8: the spoken end and the summary proposal ──────────────────────────────────────────────────────────────────
+# "We're done" proposes ending; a negated, hedged or questioned one does not; a yes to the proposal ends.
+_DONE = re.compile(r"\b(?:we(?:'re|’re| are) (?:all )?(?:done|finished)|(?:i'?m|i’m|i am) (?:all )?done|"
+                   r"that(?:'s|’s| is) (?:all|it) for (?:now|today)|let(?:'s|’s| us) (?:stop|end|wrap up)\b)", re.I)
+_HEDGED = re.compile(r"\b(?:not|never|nearly|almost|yet|if|when|until|unless|before)\b|n['’]t\b|\?\s*\Z", re.I)
+_YES = re.compile(r"\A\W*(?:yes|yeah|yep|sure|please|go ahead|do it|sum (?:it )?up|ok(?:ay)?|ja|genau)\b", re.I)
+_NO = re.compile(r"\b(?:no|not|don'?t|don’t|nein|wait)\b", re.I)
+
+
+def done_intent(text):
+    """True only for a plain spoken end ("we're done", "that's all for today"), clause by clause."""
+    if not isinstance(text, str):
+        return False
+    return any(_DONE.search(clause) and not _HEDGED.search(clause) for clause in re.split(r"(?<=[.!;])\s+|,\s*", text))
+
+
+def affirmative(text):
+    return isinstance(text, str) and bool(_YES.match(text)) and not _NO.search(text)
+
+
+def summary_state(floor, sid):
+    """none | proposed | confirmed | edited | declined | unavailable (a proposal wins over an earlier failure)."""
+    try:
+        decision = _summary_row(floor.get_note(key(sid, "summary-decision")), sid)
+        if decision is not None:
+            return decision.get("decision") or "proposed"
+        if _summary_row(floor.get_note(key(sid, "summary")), sid) is not None:
+            return "proposed"
+        if _summary_row(floor.get_note(key(sid, "summary-unavailable")), sid) is not None:
+            return "unavailable"
+    except Exception:
+        return "unknown"
+    return "none"
+
+
+def _summary_row(row, sid):
+    if (not isinstance(row, dict) or row.get("author_kind") != "platform" or row.get("who") != SUMMARY_AUTHOR + sid
+            or (row.get("context") or {}).get("page") != PAGE_SUMMARY):
+        return None
+    head = (row.get("text") or "").split("\n", 1)[0]
+    for word in ("confirmed", "edited", "declined"):
+        if head.startswith(f"[Voice summary {word}"):
+            return {**row, "decision": word}
+    return row
+
+
+def summary_author(sid):
+    from .stores import Author
+    return Author(SUMMARY_AUTHOR + sid, "platform", "Voice summary")
+
+
+def records(floor, sid, *, max_pages=10):
+    """This session's retained records only, oldest first: [(speaker, text, partial, interrupted)], and whether the
+    whole session was read (its start marker was reached)."""
+    from .mc_voice_transcripts import AUTHOR_PREFIX, HEADER, PAGE
+    found, before, complete, start = [], None, False, key(sid, "start")
+    for _ in range(max_pages):
+        result = floor.list_notes(before=before, limit=200)
+        rows = result.data.get("notes") if result.ok else None
+        if not isinstance(rows, list):
+            break
+        for row in reversed(rows):
+            if row.get("request_id") == start:
+                complete = True
+                break
+            if (row.get("who") == AUTHOR_PREFIX + sid and row.get("author_kind") == "platform"
+                    and (row.get("context") or {}).get("page") == PAGE):
+                match = HEADER.match(row.get("text") or "")
+                if match:
+                    found.append((match["speaker"], row["text"][match.end():], match["partial"] == "true",
+                                  match["interrupted"] == "true"))
+        if complete or not rows or not result.data.get("more"):
+            complete = complete or not result.data.get("more")
+            break
+        before = rows[0]["id"]
+    return list(reversed(found)), complete
 
