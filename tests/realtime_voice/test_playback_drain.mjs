@@ -74,7 +74,7 @@ await check('B6 xAI: the summary\'s response done with audio queued is not cut: 
   await asked;
   for (let i = 0; i < 20; i++) a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_sum', delta: CHUNK });
   c._pendingAssistantTurns.push('We looked at item twelve.');
-  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [] } });
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', status: 'completed', output: [] } });
   await flush();
   assert.equal(ctx.closed, 0, 'audio cut off: closed at generation end with four seconds still queued');
   for (const s of ctx.sources.slice(0, -1)) s.end();
@@ -97,7 +97,7 @@ await check('B6 xAI: another response draining first never closes the summary', 
   ctx.sources[0].end();                                                   // the other response's audio drains
   await flush();
   assert.deepEqual(ended, [], 'closed by another response');
-  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [] } });
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', status: 'completed', output: [] } });
   ctx.sources[1].end();
   await flush();
   assert.deepEqual(ended, ['drained']); assert.deepEqual(outcomes, ['drained']);
@@ -150,6 +150,19 @@ for (const status of ['incomplete', 'failed', 'completed']) {
     assert.deepEqual(outcomes, [status === 'completed' ? 'drained' : 'cancelled']);
   });
 }
+// W N1 (the verification at d886bbf0): whether xAI's response.done carries status is not verified. Without one, nothing
+// says the response completed, so a summary whose audio played ends the session but claims no outcome (never drained).
+await check('W N1 xAI: a summary response with no status, its audio played, ends the session and claims no outcome', async () => {
+  const { a, ctx, ended, outcomes, ask } = xai();
+  const asked = ask();
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
+  await asked;
+  a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_sum', delta: CHUNK });
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [] } });
+  ctx.sources[0].end();
+  await flush();
+  assert.deepEqual(ended, ['drained']); assert.deepEqual(outcomes, [null]);
+});
 await check('B6 OpenAI: the summary ends at output_audio_buffer.stopped for its response, not at response.done', async () => {
   for (const last of ['output_audio_buffer.stopped', 'output_audio_buffer.cleared']) {
     const a = new OpenAIWebRTCAdapter();
@@ -248,4 +261,4 @@ if (failures.length) {
   console.log(`${failures.length} of ${cases} playback-drain regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} playback-drain regressions passed (review B6, G3, L N9, Spec 165 §5.3); synthetic audio context, no provider or microphone.`);
+console.log(`${cases} playback-drain regressions passed (review B6, G3, L N9, W N1, Spec 165 §5.3); synthetic audio context, no provider or microphone.`);

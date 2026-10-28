@@ -320,17 +320,17 @@ const source = fs.readFileSync(PATH, 'utf8');
 // The adapters: exactly the additions below, nothing else (each taken out, the file is its 93bf00c6 bytes).
 const ADAPTERS = {
   'adapters/xai-websocket-adapter.js': ['afe83aa8aae73e4b47d6eaa920f8893932cf4bf04ee225e0918db06d5db3afbf', [
-  [`    this._responses = new Map();     // response id -> {sources, done, audio, cancelled}: which response each chunk of audio belongs to
+  [`    this._responses = new Map();     // response id -> {sources, done, audio, status}: which response each chunk of audio belongs to
 `,
    ``],
   [`  // Spec 165 §5.3: playback_drained {response_id, outcome} once a response is done and every chunk of its audio has played
   // out (or was stopped at barge-in); a response with no audio drains at its end. The outcome names how it ended (v0.3, G3):
-  // drained (its audio played to the end), barged_in (stopped at his speech), cancelled (the provider cancelled it, or ended
-  // it incomplete or failed), no_audio.
+  // drained (completed, and its audio played to the end), barged_in (stopped at his speech), cancelled (the provider
+  // cancelled it, or ended it incomplete or failed), no_audio; or none claimed (null) when xAI gave no status.
   // Nothing listens unless a host passes onPlaybackDrained to the controller; German and Portuguese do not.
   _response(id) {
     const key = id || this._responseId || null;
-    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false, audio: false, cancelled: false });
+    if (!this._responses.has(key)) this._responses.set(key, { sources: 0, done: false, audio: false, status: null });
     return [key, this._responses.get(key)];
   }
 
@@ -338,7 +338,9 @@ const ADAPTERS = {
     const r = this._responses.get(key);
     if (r && r.done && r.sources <= 0) {
       this._responses.delete(key);
-      this._emit("playback_drained", { response_id: key, outcome: outcome || (r.cancelled ? "cancelled" : r.audio ? "drained" : "no_audio") });
+      const cut = ["cancelled", "incomplete", "failed"].includes(r.status);
+      this._emit("playback_drained", { response_id: key,
+        outcome: outcome || (cut ? "cancelled" : !r.audio ? "no_audio" : r.status === "completed" ? "drained" : null) });
     }
   }
 
@@ -365,9 +367,10 @@ const ADAPTERS = {
         {
           const [key, r] = this._response(event.response?.id);
           r.done = true;
-          // Cut short: cancelled, incomplete or failed is never heard to the end (review L N9). A response whose status is
-          // completed, or not given (xAI's status field is not verified), is drained once its audio has played.
-          r.cancelled = ["cancelled", "incomplete", "failed"].includes(event.response?.status);
+          // Cut short: cancelled, incomplete or failed is never heard to the end (review L N9). Only a response whose status
+          // says completed is drained once its audio has played; with no status (xAI's status field is not verified) no
+          // outcome is claimed (review W N1).
+          r.status = event.response?.status || null;
           this._drainedIf(key);
 `,
    ``],
