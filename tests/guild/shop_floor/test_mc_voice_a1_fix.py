@@ -58,3 +58,15 @@ def test_mcs_typed_turn_request_id_is_the_consult_key_and_its_reply_is_the_sessi
     rows, _sessions = shown(r)
     kinds = {row["request_id"]: row["voice"]["kind"] for row in rows if "voice" in row}
     assert kinds[note_id] == "consult_note" and kinds[reveal.reply_id(note_id)] == "consult_reply"
+
+
+# ── R1 P3-5, R2 S3: a refusal that ran nothing leaves the turn free (test_a1_repro.py) ─────────────────────────────────
+
+def test_save_note_on_words_that_are_not_a_note_leaves_the_turn_for_the_models_consult(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    words = "Remind me at five to call the kiln supplier"
+    first = call(r, sid, call_id="m1", name="save_note", words=words, owner_item_id="t1").get_json()
+    second = call(r, sid, call_id="m2", name="consult", words=words, owner_item_id="t1").get_json()
+    assert first["error"] == "not_a_note" and first["saved"] is False
+    assert not second.get("same_turn") and second["answered"] is True and len(r.turns) == 1

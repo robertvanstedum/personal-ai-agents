@@ -32,7 +32,7 @@ OWNER = {"X-Owner": "robert", "X-Csrf": "ok", "Content-Type": "application/json"
 class Store(DirectVoiceStore):
     def __init__(self):
         self.markers, self.rows, self.summaries, self.start_ok = {}, [], {}, True
-        self.kept_records, self.put_ok, self.lock = {}, True, threading.Lock()
+        self.kept_records, self.put_ok, self.lock, self.fail_keeps = {}, True, threading.Lock(), 0
 
     def put(self, handle, sid, record):
         """First write wins; the same id with other content (anything but ``at``) is a conflict (Spec 165 §4.4)."""
@@ -63,6 +63,9 @@ class Store(DirectVoiceStore):
         return self.markers.get((sid, what))
 
     def keep(self, handle, principal, sid, role, item, index, text, partial, *, started, ended, interrupted=False):
+        if self.fail_keeps:
+            self.fail_keeps -= 1
+            raise ValueError("not kept (test)")
         if not any(r["key"] == (sid, role, item, index) for r in self.rows):        # one record per stable id
             self.rows.append({"key": (sid, role, item, index), "sid": sid, "role": role, "text": text, "partial": partial,
                               "interrupted": interrupted, "started": started, "ended": ended, "principal": principal})
@@ -96,6 +99,7 @@ class Host(DirectVoiceAdapter):
 
     def __init__(self, card_root):
         self.store, self.card_root, self.turns, self.prompts, self.kinds, self.ends = Store(), card_root, [], [], [], []
+        self.down, self.refusals = 0, {}
         self.deny, self.keep_ok, self.items, self.model = {}, True, [], '{"spoken": "We checked the agenda.", "written": "- Agenda: two items (turn-1)."}'
 
     def owner(self):
@@ -115,7 +119,13 @@ class Host(DirectVoiceAdapter):
         return cid in ("owner", "elsewhere")
 
     def conversation(self, cid):
+        if cid == "owner" and self.down:
+            self.down -= 1
+            return None, refusal("not_found", "Not now.", 404)
         return (cid, None) if cid == "owner" else (None, refusal("not_found", "No such conversation.", 404))
+
+    def refuse(self, name, text):
+        return self.refusals.pop(name, None)
 
     def clean(self, text, limit, what):
         if not isinstance(text, str) or not text.strip() or len(text) > limit:

@@ -122,3 +122,27 @@ def test_the_hosts_typed_turn_is_given_the_owner_turn_its_operation_derives_from
     consult(r, sid, call_id="call_1", turn="t5")
     consult(r, sid, call_id="host-2", turn="t5")
     assert r.host.items == ["t5"]
+
+
+# ── R1 P3-5, R2 S3: a refusal that runs nothing binds no owner turn (one effect per turn) ───────────────────────────────
+
+def test_a_hosts_own_refusal_binds_nothing_and_the_other_tool_still_acts_on_the_turn(rig):
+    r = rig
+    sid = start(r)
+    r.host.refusals = {"save_note": {"error": "not_a_note", "spoken": "Nothing was saved."}}
+    note = consult(r, sid, call_id="m1", name="save_note", turn="t1").get_json()
+    asked = consult(r, sid, call_id="m2", name="consult", turn="t1").get_json()
+    assert note["error"] == "not_a_note" and not note.get("same_turn")
+    assert asked["receipt"] == "turn-1" and not asked.get("same_turn") and len(r.host.turns) == 1
+
+
+def test_an_unavailable_conversation_or_an_unkept_request_binds_nothing(rig):
+    r = rig
+    sid = start(r)
+    r.host.down = 1
+    assert consult(r, sid, call_id="c1", turn="t2").get_json()["error"] == "conversation"
+    r.store.fail_keeps = 1
+    assert consult(r, sid, call_id="c2", turn="t2").get_json()["error"] == "not_kept"
+    assert not r.host.turns and "consult_request:t2" not in records_of(r, sid)
+    later = consult(r, sid, call_id="c3", turn="t2").get_json()
+    assert later["receipt"] == "turn-1" and len(r.host.turns) == 1

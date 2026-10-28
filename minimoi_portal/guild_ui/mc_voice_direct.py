@@ -242,11 +242,15 @@ class _MasterCraftsman(DirectVoiceAdapter):
         blueprint.register_error_handler(Exception, _api_error)
         self.app.extensions[name] = self.config            # cfg() and owner_api resolve this mount on these routes
 
+    def refuse(self, name, text):
+        """save_note on words that are not a note command runs nothing; the turn stays free for a consult."""
+        if name == "save_note" and not _is_note_command(text):
+            return {"error": "not_a_note", "saved": False, "spoken": NOT_A_NOTE}
+        return None
+
     def typed_turn(self, conv, principal, session_id, n, name, text, *, item):
         from . import api
         from .mc.ledger_gate import Refusal
-        if name == "save_note" and not _is_note_command(text):
-            return {"ok": False, "error": "not_a_note", "saved": False, "spoken": NOT_A_NOTE}
         # The owner's words kept as his note, as POST /notes keeps a typed one. Its id is MC's typed-turn request id, and
         # it derives from the consult's key (Spec 165 §5.1): vc-<session>-<owner item>. A second dispatch of the same owner
         # turn, however it got past admission, is the same note, and MC's one reply per note answers it from the store.

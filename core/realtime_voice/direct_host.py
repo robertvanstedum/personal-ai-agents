@@ -519,6 +519,12 @@ class DirectVoiceAdapter:
         """Model output made safe to keep and show (the summary's written text)."""
         return text
 
+    def refuse(self, name, text):
+        """Optional: the host's own refusal of an action before anything runs (MC: save_note on words that are not a note
+        command), as the result the provider is given ({error, spoken, …}), or None. A refusal here binds nothing: the
+        owner turn may still be acted on by the other tool."""
+        return None
+
     def typed_turn(self, handle, principal, sid, n, name, text, *, item):
         """The owner's words through the person's typed turn, as if typed: the result the provider is given (ok,
         spoken, receipt, receipt_kind, saved, answered, …). ``n``: this consult's place in the session (1–12). ``item``:
@@ -820,7 +826,12 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     through the store and the first write wins; a second dispatch of the key (another call id, Check after the model, a
     retry) gets the outcome kept for it, or in_flight while it runs, or unknown when it was admitted but has no outcome
     and runs nowhere here; the same key with other words is refused (turn_mismatch). A call id already answered is
-    replayed first (the second layer). Returns (the answer the provider is given, HTTP status)."""
+    replayed first (the second layer).
+
+    One effect per owner turn: the turn is bound only when its action is about to run. A refusal that runs nothing (the
+    words refused, the conversation unavailable, the host's own refusal such as MC's save_note on words that are not a
+    note, or the request record not kept) binds nothing, so another tool may still act on the turn (review R1 P3-5,
+    R2 S3). Returns (the answer the provider is given, HTTP status)."""
     replayed, prior = sessions.replay_call(sid, call_id)
     if replayed == "replay":
         return prior, 200
@@ -832,12 +843,15 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
         return {"ok": False, "error": "conversation", "spoken": "That conversation is not available now. " + FAILED}, 200
     voice_item = "k" + item                       # the turn's consult request and receipt, kept as voice records
     began = stamp(now())
-    text, bad = adapter.clean(owner_text, adapter.note_max, "spoken words")
-    if bad is not None:
-        result = {"ok": False, "error": "invalid", "spoken": FAILED}
-        keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began)
+
+    def refused_here(result):                     # a refusal that ran nothing: its own receipt, for this call only
+        result = {"ok": False, **result}
+        result = keep_receipt(adapter, handle, principal, sid, "x" + digest(call_id)[:32], name, result, began)
         sessions.remember(sid, call_id, result)
         return result, 200
+    text, bad = adapter.clean(owner_text, adapter.note_max, "spoken words")
+    if bad is not None:
+        return refused_here({"error": "invalid", "spoken": FAILED})
     words = digest(text)
     asked = record(REQUEST, request_id(item), owner_item_id=item, text_sha256=words)
     existing = get(adapter, handle, sid, asked["id"])
@@ -846,8 +860,18 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
             return {"ok": False, "error": "session ended"}, 409
         if sessions.capped(sid):
             return {"ok": False, "error": "cap", "spoken": CAP_LINE}, 429
+        own = adapter.refuse(name, text)
+        if own is not None:
+            return refused_here(own)
         if not sessions.hold(sid, item, call_id):
             return {"ok": False, "error": "in flight", "spoken": HOLDING_LINE}, 409
+        try:                                      # his words, kept as the turn's consult request record (shown at reveal)
+            adapter.store.keep(handle, principal, sid, "consult", voice_item, 0, f"{name}: {text}", False, started=began,
+                               ended=began)
+        except Exception:
+            log.exception("%s direct voice: consult request not kept", adapter.person["domain"])
+            sessions.release(sid, item, call_id)
+            return {"ok": False, "error": "not_kept", "spoken": FAILED}, 200
         kept = put(adapter, handle, sid, asked)
         if kept.outcome == "stored":
             n = sessions.admitted(sid)
@@ -885,22 +909,15 @@ def same_key(adapter, sessions, handle, sid, call_id, item, words, existing):
 
 
 def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began):
-    """The admitted owner turn through the host's typed turn: its request kept as a voice record first, then the turn,
-    then its outcome record and receipt. A consult that finishes after End still keeps both."""
+    """The admitted owner turn through the host's typed turn, then its outcome record and receipt. A consult that
+    finishes after End still keeps both."""
     voice_item = "k" + item
     started = time.monotonic()
     try:
-        adapter.store.keep(handle, principal, sid, "consult", voice_item, 0, f"{name}: {text}", False, started=began,
-                           ended=began)
-    except Exception:                                    # not kept: nothing is dispatched
-        log.exception("%s direct voice: consult request not kept", adapter.person["domain"])
-        result = {"ok": False, "error": "not_kept", "spoken": FAILED}
-    else:
-        try:
-            result = adapter.typed_turn(handle, principal, sid, n, name, text, item=item)
-        except Exception:
-            log.exception("%s direct voice: consult failed", adapter.person["domain"])
-            result = {"ok": False, "error": "unavailable", "spoken": FAILED}
+        result = adapter.typed_turn(handle, principal, sid, n, name, text, item=item)
+    except Exception:
+        log.exception("%s direct voice: consult failed", adapter.person["domain"])
+        result = {"ok": False, "error": "unavailable", "spoken": FAILED}
     result = {"ok": True, "call_id": call_id, **result}
     if time.monotonic() - started >= HOLD_AFTER_SECONDS:
         result["holding_line"] = HOLDING_LINE
