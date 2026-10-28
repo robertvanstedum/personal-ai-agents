@@ -174,6 +174,15 @@ for (const [status, detail, words] of [
   assert.deepEqual(r.c.instructions, []);
   scenarios++;
 }
+// An unreadable answer is not done; a refused microphone says so.
+{
+  const r = rig({ routes: { '/consult': () => ({ status: 502, body: null }) } });
+  await r.s.start('openai');
+  r.c.options.onUserTurn('Anything new?');
+  assert.deepEqual(await r.c.options.onFunctionCall({ call_id: 'call_u', name: 'consult', arguments: {} }), { ok: false, error: 'unavailable', spoken: D.NOT_DONE });
+  assert.match(D.startRefusal({ reason: 'microphone_denied' }), /^Voice unavailable: the microphone/);
+  scenarios++;
+}
 // Check with MC: the host's call id, Robert's last words, and the answer said briefly, adding nothing.
 {
   const r = rig();

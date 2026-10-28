@@ -42,6 +42,7 @@ export function startRefusal(info) {
   const detail = typeof info?.detail === 'string' ? info.detail.trim().slice(0, 240) : '';
   if (reason === 'bootstrap_network_error') return 'Voice unavailable: the server did not answer. Typing still works.';
   if (reason === 'connection_failed') return 'Voice could not start: the voice provider did not connect. Typing still works.';
+  if (reason === 'microphone_denied' || reason === 'microphone_unavailable') return 'Voice unavailable: the microphone is not available to this page. Typing still works.';
   if (reason !== 'bootstrap_rejected') return 'Voice stopped: the voice connection ended. What was said is kept; typing still works.';
   if (status === 401) return 'Voice unavailable: sign in again.';
   if (Object.hasOwn(START_WORDS, detail)) return START_WORDS[detail];
@@ -224,7 +225,8 @@ export function directVoice(d) {
     try {
       const r = await postJson(direct.consult_url, { session_id: sessionId(), call_id: String(callId), name, owner_transcript_item: lastOwner,
         arguments: advisory });
-      return r.status === 0 ? { ok: false, error: 'network', spoken: NOT_DONE } : r.body;
+      if (r.status === 0) return { ok: false, error: 'network', spoken: NOT_DONE };
+      return Object.keys(r.body).length ? r.body : { ok: false, error: 'unavailable', spoken: NOT_DONE };   // an unreadable answer: not done
     } finally { cancel(holding); }
   }
 
