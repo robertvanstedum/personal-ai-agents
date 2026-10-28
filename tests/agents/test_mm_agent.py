@@ -37,20 +37,22 @@ class Harness(unittest.TestCase):
             path.write_text("#!/bin/sh\nexit 0\n")
             path.chmod(path.stat().st_mode | stat.S_IXUSR)
             self.bins[tool] = str(path)
-        self._saved = (mm.BINARIES, mm.CLAUDE_MANAGED_SETTINGS)
+        self._saved = (mm.BINARIES, mm.CLAUDE_MANAGED_SETTINGS, mm.ETC, mm.MANAGED_PREFS)
         mm.BINARIES = {tool: (path,) for tool, path in self.bins.items()}
         mm.CLAUDE_MANAGED_SETTINGS = self.root / "managed-settings.json"
+        mm.ETC = self.root / "etc"
+        mm.MANAGED_PREFS = self.root / "managed-prefs"
         self.calls = []
         self.environ = {"HOME": str(self.home), "PATH": "/usr/bin:/bin", "TERM": "xterm-256color",
                         "LANG": "en_US.UTF-8", "LC_CTYPE": "UTF-8", "SSH_AUTH_SOCK": "/tmp/agent.sock",
                         "PWD": str(self.project), "XPC_SERVICE_NAME": "0", **SECRET_VALUES}
 
     def tearDown(self):
-        mm.BINARIES, mm.CLAUDE_MANAGED_SETTINGS = self._saved
+        mm.BINARIES, mm.CLAUDE_MANAGED_SETTINGS, mm.ETC, mm.MANAGED_PREFS = self._saved
         self._tmp.cleanup()
 
     def write(self, rel, content):
-        path = self.home / rel
+        path = Path(rel) if Path(rel).is_absolute() else self.home / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content if isinstance(content, str) else json.dumps(content))
         return path
@@ -90,6 +92,13 @@ class CleanEnvironment(Harness):
         env, removed = mm.clean_env(self.environ, "claude")
         self.assertFalse({"ANTHROPIC_BASE_URL", "CLAUDECODE", "CLAUDE_CODE_SESSION_ID"} & set(env))
 
+    def test_only_posix_locale_names_pass(self):
+        self.environ.update(LC_ALL="C", LC_XAI_API_KEY="xai-test-value-3333")
+        env, removed = mm.clean_env(self.environ, "grok")
+        self.assertIn("LC_ALL", env)
+        self.assertNotIn("LC_XAI_API_KEY", env)
+        self.assertIn("LC_XAI_API_KEY", removed)
+
     def test_the_tool_home_variable_passes_only_for_its_own_tool(self):
         self.environ["GROK_HOME"] = str(self.home / ".grok")
         self.assertIn("GROK_HOME", mm.clean_env(self.environ, "grok")[0])
@@ -128,6 +137,38 @@ class Grok(Harness):
         self.assertEqual(self.run_main(["mm-grok"]), mm.EX_CONFIG)
         self.assertEqual(self.calls, [])
 
+    def test_every_documented_layer_is_checked(self):
+        layers = [".grok/managed_config.toml", ".grok/requirements.toml",
+                  str(self.root / "etc/grok/managed_config.toml"), str(self.root / "etc/grok/requirements.toml")]
+        self.sign_in("grok")
+        self.assertEqual(self.run_main(["mm-grok", "--mm-check"]), 0)
+        for layer in layers:
+            with self.subTest(layer=layer):
+                path = self.write(layer, '[model.fast]\napi_key = "literal"\n')
+                self.assertEqual(self.run_main(["mm-grok"]), mm.EX_CONFIG)
+                self.assertIn(str(path), self.stderr)
+                path.unlink()
+
+    def test_toml_spellings_that_hide_a_key_are_caught(self):
+        for text in ('"api_key" = "literal"\n', 'model.fast.api_key = "literal"\n',
+                     'fast = { api_key = "literal" }\n', '[auth]\nauth_provider_command = "/bin/echo"\n',
+                     '[model.x]\nauth_provider = "acme"\n'):
+            with self.subTest(text=text):
+                self.sign_in("grok")
+                self.write(".grok/config.toml", text)
+                self.assertEqual(self.run_main(["mm-grok"]), mm.EX_CONFIG)
+
+    def test_harmless_settings_pass(self):
+        self.sign_in("grok")
+        self.write(".grok/config.toml", '[models]\ndefault = "grok-build"\n[ui]\nauth_provider_label = "x"\n'
+                                        '[mcp_servers.s]\nbearer_token_env_var = "S"\n')
+        self.assertEqual(self.run_main(["mm-grok", "--mm-check"]), 0)
+
+    def test_managed_preferences_are_refused(self):
+        self.sign_in("grok")
+        self.write(str(self.root / "managed-prefs/ai.x.grok.plist"), "")
+        self.assertEqual(self.run_main(["mm-grok"]), mm.EX_CONFIG)
+
 
 class Claude(Harness):
     def test_starts_when_the_keychain_sign_in_exists(self):
@@ -156,6 +197,47 @@ class Claude(Harness):
         self.assertEqual(self.run_main(["mm-claude"]), mm.EX_CONFIG)
         self.assertIn("apiKeyHelper", self.stderr)
 
+    def test_settings_env_names_that_reroute_or_carry_auth_are_refused(self):
+        for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_UNIX_SOCKET", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
+                     "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "AWS_PROFILE"):
+            with self.subTest(name=name):
+                self.write(".claude/settings.json", {"env": {name: "literal"}})
+                self.assertEqual(self.run_main(["mm-claude"]), mm.EX_CONFIG)
+                self.assertIn(name, self.stderr)
+
+    def test_managed_settings_file_is_checked(self):
+        self.write(str(mm.CLAUDE_MANAGED_SETTINGS), {"apiKeyHelper": "/bin/echo"})
+        self.assertEqual(self.run_main(["mm-claude"]), mm.EX_CONFIG)
+        self.assertIn("managed-settings.json", self.stderr)
+
+    def test_managed_preferences_plist_is_checked(self):
+        import plistlib
+        path = self.root / "managed-prefs" / "com.anthropic.claudecode.plist"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(plistlib.dumps({"env": {"ANTHROPIC_API_KEY": "literal"}}))
+        self.assertEqual(self.run_main(["mm-claude"]), mm.EX_CONFIG)
+        self.assertIn("com.anthropic.claudecode.plist", self.stderr)
+
+    def test_remote_settings_are_checked(self):
+        self.write(".claude/remote-settings.json", {"apiKeyHelper": "/bin/echo"})
+        self.assertEqual(self.run_main(["mm-claude"]), mm.EX_CONFIG)
+
+    def test_a_settings_argument_is_checked_as_json_or_file(self):
+        self.assertEqual(self.run_main(["mm-claude", "--settings", '{"apiKeyHelper": "/bin/echo"}']), mm.EX_CONFIG)
+        self.write("Projects/demo/extra.json", {"env": {"ANTHROPIC_API_KEY": "literal"}})
+        self.assertEqual(self.run_main(["mm-claude", "--settings=extra.json"]), mm.EX_CONFIG)
+        self.write("Projects/demo/ok.json", {"model": "opus"})
+        self.assertEqual(self.run_main(["mm-claude", "--settings", "ok.json"]), 0)
+        self.assertEqual(self.calls[-1][1], [self.bins["claude"], "--settings", "ok.json"])
+
+    def test_a_custom_config_dir_probes_its_own_keychain_item(self):
+        import hashlib
+        folder = str(self.home / "alt-claude")
+        self.environ["CLAUDE_CONFIG_DIR"] = folder
+        asked = []
+        self.run_main(["mm-claude", "--mm-check"], probe=lambda service: asked.append(service) or True)
+        self.assertEqual(asked, ["Claude Code-credentials-" + hashlib.sha256(folder.encode()).hexdigest()[:8]])
+
     def test_permission_rules_that_mention_key_names_are_fine(self):
         self.write("Projects/demo/.claude/settings.local.json",
                    {"permissions": {"allow": ["Bash(grep -c ^XAI_API_KEY= .env)"]}})
@@ -181,6 +263,53 @@ class Codex(Harness):
     def test_a_config_that_prefers_the_api_key_is_refused(self):
         self.sign_in("codex")
         self.write(".codex/config.toml", 'preferred_auth_method = "apikey"\n')
+        self.assertEqual(self.run_main(["mm-codex"]), mm.EX_CONFIG)
+
+    def test_an_env_file_codex_loads_itself_is_refused_by_name(self):
+        self.sign_in("codex")
+        self.write(".codex/.env", "# comment\n\nexport OPENAI_API_KEY=literal\nOTHER=1\n")
+        self.assertEqual(self.run_main(["mm-codex"]), mm.EX_CONFIG)
+        self.assertIn("OPENAI_API_KEY, OTHER", self.stderr)
+        self.assertNotIn("literal", self.stderr)
+
+    def test_an_empty_or_comment_only_env_file_passes(self):
+        self.sign_in("codex")
+        self.write(".codex/.env", "# nothing here\n\n")
+        self.assertEqual(self.run_main(["mm-codex", "--mm-check"]), 0)
+
+    def test_provider_routes_in_any_layer_are_refused(self):
+        cases = [(".codex/config.toml", 'model_provider = "k"\n[model_providers.k]\nbase_url = "http://x"\n'),
+                 (".codex/config.toml", '[model_providers.openai]\nexperimental_bearer_token = "literal"\n'),
+                 (".codex/managed_config.toml", '[model_providers.k]\nenv_key = "OPENAI_API_KEY"\n'),
+                 (".codex/requirements.toml", 'profiles.w.forced_login_method = "api"\n'),
+                 (str(self.root / "etc/codex/config.toml"), 'forced_login_method = "api"\n'),
+                 (str(self.root / "etc/codex/managed_config.toml"), 'p = { model_provider = "k" }\n')]
+        self.sign_in("codex")
+        for layer, text in cases:
+            with self.subTest(layer=layer, text=text):
+                path = self.write(layer, text)
+                self.assertEqual(self.run_main(["mm-codex"]), mm.EX_CONFIG)
+                self.assertNotIn("literal", self.stderr)
+                path.unlink()
+
+    def test_the_openai_provider_and_chatgpt_login_pass(self):
+        self.sign_in("codex")
+        self.write(".codex/config.toml", 'model = "gpt-5.5"\nmodel_provider = "openai"\nforced_login_method = "chatgpt"\n')
+        self.assertEqual(self.run_main(["mm-codex", "--mm-check"]), 0)
+
+    def test_arguments_that_route_to_a_key_are_refused(self):
+        self.sign_in("codex")
+        for args in (["-c", "model_provider=oss"], ["--config=model_providers.k.env_key=X"], ["-cenv_key=X"],
+                     ["-c", "profiles.w.forced_login_method=api"], ["--remote-auth-token-env", "T"]):
+            with self.subTest(args=args):
+                self.assertEqual(self.run_main(["mm-codex", *args]), mm.EX_CONFIG)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.run_main(["mm-codex", "-c", 'model="gpt-5.5"', "-c", "model_provider=openai"]), 0)
+
+    def test_codex_managed_preferences_are_refused(self):
+        self.sign_in("codex")
+        self.write(str(self.root / "managed-prefs" / "vanstedum" / "com.openai.codex.plist"), "")
+        self.environ["USER"] = "vanstedum"
         self.assertEqual(self.run_main(["mm-codex"]), mm.EX_CONFIG)
 
 
@@ -222,6 +351,65 @@ class Door(Harness):
         me.chmod(0o755)
         mm.BINARIES = {**mm.BINARIES, "grok": (str(me),)}
         self.assertIsNone(mm.resolve_binary("grok", self.home, str(me)))
+
+    def test_the_launcher_never_starts_itself_through_a_symlink(self):
+        me = self.root / "mm-agent"
+        me.write_text("#!/bin/sh\n")
+        me.chmod(0o755)
+        (self.root / "mm-grok").symlink_to(me)
+        (self.root / "grok").symlink_to(me)
+        mm.BINARIES = {**mm.BINARIES, "grok": (str(self.root / "grok"),)}
+        self.assertIsNone(mm.resolve_binary("grok", self.home, str(self.root / "mm-grok")))
+
+    def test_the_keychain_probe_never_asks_for_the_secret(self):
+        seen = []
+
+        class Done:
+            returncode = 0
+        saved = mm.subprocess.run
+        mm.subprocess.run = lambda argv, **kw: seen.append(argv) or Done()
+        try:
+            self.assertTrue(mm.keychain_has("Claude Code-credentials"))
+        finally:
+            mm.subprocess.run = saved
+        (argv,) = seen
+        self.assertEqual(argv, ["/usr/bin/security", "find-generic-password", "-s", "Claude Code-credentials"])
+        self.assertFalse({"-w", "-g"} & set(argv))
+
+    def test_an_existing_record_file_is_tightened_and_a_symlink_is_not_followed(self):
+        self.sign_in("grok")
+        folder = self.home / ".minimoi" / "agents"
+        folder.mkdir(parents=True)
+        record = folder / "fallback_sessions.jsonl"
+        record.write_text("")
+        record.chmod(0o644)
+        self.run_main(["mm-grok"])
+        self.assertEqual(record.stat().st_mode & 0o777, 0o600)
+        record.unlink()
+        target = self.root / "elsewhere.txt"
+        target.write_text("")
+        record.symlink_to(target)
+        self.run_main(["mm-grok"])
+        self.assertEqual(target.read_text(), "")
+        self.assertIn("session not recorded", self.stderr)
+
+    def test_created_folders_are_private(self):
+        self.sign_in("grok")
+        self.run_main(["mm-grok"])
+        for folder in (self.home / ".minimoi", self.home / ".minimoi" / "agents"):
+            self.assertEqual(folder.stat().st_mode & 0o777, 0o700)
+
+    def test_a_start_failure_is_reported_not_raised(self):
+        self.sign_in("grok")
+        err = io.StringIO()
+
+        def fail(path, args, env):
+            raise PermissionError(13, "denied")
+        with contextlib.redirect_stderr(err):
+            code = mm.main(["mm-grok"], environ=self.environ, home=self.home, cwd=self.project,
+                           execve=fail, probe=lambda s: True, self_path=str(self.root / "mm-agent"))
+        self.assertEqual(code, mm.EX_UNAVAILABLE)
+        self.assertIn("could not be started", err.getvalue())
 
 
 if __name__ == "__main__":
