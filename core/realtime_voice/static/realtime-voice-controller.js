@@ -48,7 +48,7 @@ export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
-    onSessionInfo, onPlaybackDrained = null, trackResponses = false,
+    onSessionInfo, onPlaybackDrained = null, trackResponses = false, oncePerItem = false,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -85,6 +85,10 @@ export class RealtimeVoiceController {
     this._holds = [];                // holds not yet settled: a response bound to his utterance before its item was known,
                                      // {at: when his speech ended, item: undefined until known, then its id, or null (void)}
     this._tags = 0;
+    // Optional (review F2): a host that hears each owner item's completion once (MC's page). A replayed provider event, or
+    // a second completion of an item already completed, is not a new turn. German and Portuguese pass no option.
+    this._fresh = true;              // the completion being handled is the first of its item
+    if (oncePerItem && onUserTurn) this._onUserTurn = (text) => { if (this._fresh) onUserTurn(text); };
     this._openingInstruction = openingInstruction;
     this._pendingAssistantTurns = [];
 
@@ -214,7 +218,7 @@ export class RealtimeVoiceController {
     on("speech_started", () => { this._void(); if (this._utterance === null) this._utterance = this._inputs.length; });
     on("speech_stopped", () => this._heardEnd());
     on("input_item", (evt) => this._committed(evt.item_id));
-    on("input_transcript", (evt) => this._sawInput(evt.item_id));
+    on("input_transcript", (evt) => { this._fresh = this._firstCompletion(evt); this._sawInput(evt.item_id); });
     on("response_started", (evt) => this._started(evt));
     on("connected", () => {
       this._setState("active");
@@ -406,6 +410,13 @@ export class RealtimeVoiceController {
   // Index access, not Array.prototype.at: these listeners run in every German, Portuguese and CoS session, and must work
   // on every browser the controller ran on before (Safari before 15.4 has no .at; review FR S2).
   _lastInput() { return this._inputs.length ? this._inputs[this._inputs.length - 1] : null; }
+
+  // Whether a transcript event completes its item for the first time (read before the event is recorded).
+  _firstCompletion(evt) {
+    if (!evt.completed || (evt.provider_event_id && this._seenEventIds.has(evt.provider_event_id))) return false;
+    const item = this._items.get(evt.item_id);
+    return !(item && item.completed);
+  }
 
   _sawInput(id) {
     if (id && !this._inputs.includes(id)) { this._inputs.push(id); this._known(id); }

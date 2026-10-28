@@ -393,8 +393,30 @@ for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter
   });
 }
 
+// F2 (Codex's delta review at a17ddc8d; its response_origin.mjs precursor, asserting the correct behaviour): a host that
+// asks for it (oncePerItem: MC's page) hears each owner item's completion once. A replayed provider event, or a second
+// completion of an item already completed, is not a new turn. German and Portuguese pass no option and hear every
+// completion as before (pinned here and in test_controller_no_change.mjs).
+for (const [label, options, expected] of [
+  ['a host that asks (oncePerItem)', { oncePerItem: true }, ['Save a note: first request', 'Save a note: second request']],
+  ['German (no option): as before', {}, ['Save a note: first request', 'Save a note: second request', 'Save a note: first request',
+    'Save a note: second request']]]) {
+  await check(`F2 xAI, ${label}: a replayed completion, and a second completion of one item`, async () => {
+    const a = new XAIWebSocketAdapter(); const turns = [];
+    const c = new RealtimeVoiceController({ ...options, onUserTurn: (text) => turns.push(text) });
+    c._adapter = a; c._state = 'active'; c._wireAdapterEvents();
+    const first = said('item_a', 'Save a note: first request');
+    a._handleServerEvent(first);
+    a._handleServerEvent({ type: 'conversation.item.input_audio_transcription.updated', item_id: 'item_b',
+      transcript: 'Save a note: second request', completed: true, event_id: 'ev_b_upd' });
+    a._handleServerEvent(first);                                                         // the identical event, replayed
+    a._handleServerEvent(said('item_b', 'Save a note: second request'));                 // item_b completed again
+    assert.deepEqual(turns, expected);
+  });
+}
+
 if (failures.length) {
   console.log(`${failures.length} of ${cases} response-binding regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1, F1); real controller and adapters, synthetic provider events.`);
+console.log(`${cases} response-binding regressions passed (CX A1-C2, FR M2, V R2-M1, R3-S1, F1, F2); real controller and adapters, synthetic provider events.`);

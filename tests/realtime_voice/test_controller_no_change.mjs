@@ -3,8 +3,10 @@
 // xAI's per-response accounting see every German transcript and response; review FR S2), so the behaviour half below
 // drives German's transcript path through them, on a browser without Array.prototype.at too. The additions are: the
 // controller's public methods (sessionId(), state(), speak(), speakTracked(), inputOf()), its optional onPlaybackDrained
-// callback and trackResponses option, and the adapter events it listens to (response_started, playback_drained,
-// input_item, speech_stopped: nothing reaches a page that passes no callback); its response attribution (review CX A1-C2,
+// callback, its trackResponses and oncePerItem options (oncePerItem, review F2: a host hears each owner item's completion
+// once; German passes none and hears every completion as before, pinned in test_response_binding.mjs), and the adapter
+// events it listens to (response_started, playback_drained, input_item, speech_stopped: nothing reaches a page that passes
+// no callback); its response attribution (review CX A1-C2,
 // V R2-M1: which owner input each response answers), for which the opening instruction, continueNaturally() and every
 // function result now pass through one recorder of the responses it asks for (the calls the adapter receives are the same,
 // with the same arguments, unless a host sets trackResponses; checked below); the adapters' response tracking that emits
@@ -35,7 +37,7 @@ const REQUEST_TTL_MS = 10000;
 const MARK_TTL_MS = 3000;
 `,
    ``],
-  [`    onSessionInfo, onPlaybackDrained = null, trackResponses = false,
+  [`    onSessionInfo, onPlaybackDrained = null, trackResponses = false, oncePerItem = false,
 `,
    `    onSessionInfo,
 `],
@@ -52,6 +54,10 @@ const MARK_TTL_MS = 3000;
     this._holds = [];                // holds not yet settled: a response bound to his utterance before its item was known,
                                      // {at: when his speech ended, item: undefined until known, then its id, or null (void)}
     this._tags = 0;
+    // Optional (review F2): a host that hears each owner item's completion once (MC's page). A replayed provider event, or
+    // a second completion of an item already completed, is not a new turn. German and Portuguese pass no option.
+    this._fresh = true;              // the completion being handled is the first of its item
+    if (oncePerItem && onUserTurn) this._onUserTurn = (text) => { if (this._fresh) onUserTurn(text); };
 `,
    ``],
   [`    // Response attribution (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees it current.
@@ -59,7 +65,7 @@ const MARK_TTL_MS = 3000;
     on("speech_started", () => { this._void(); if (this._utterance === null) this._utterance = this._inputs.length; });
     on("speech_stopped", () => this._heardEnd());
     on("input_item", (evt) => this._committed(evt.item_id));
-    on("input_transcript", (evt) => this._sawInput(evt.item_id));
+    on("input_transcript", (evt) => { this._fresh = this._firstCompletion(evt); this._sawInput(evt.item_id); });
     on("response_started", (evt) => this._started(evt));
 `,
    ``],
@@ -156,6 +162,13 @@ const MARK_TTL_MS = 3000;
   // Index access, not Array.prototype.at: these listeners run in every German, Portuguese and CoS session, and must work
   // on every browser the controller ran on before (Safari before 15.4 has no .at; review FR S2).
   _lastInput() { return this._inputs.length ? this._inputs[this._inputs.length - 1] : null; }
+
+  // Whether a transcript event completes its item for the first time (read before the event is recorded).
+  _firstCompletion(evt) {
+    if (!evt.completed || (evt.provider_event_id && this._seenEventIds.has(evt.provider_event_id))) return false;
+    const item = this._items.get(evt.item_id);
+    return !(item && item.completed);
+  }
 
   _sawInput(id) {
     if (id && !this._inputs.includes(id)) { this._inputs.push(id); this._known(id); }

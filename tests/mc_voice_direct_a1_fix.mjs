@@ -461,4 +461,43 @@ await t.check('FR N7: a finished result the server repeats is said once, and eve
   assert.deepEqual(acks.at(-1), ['t0']); assert.deepEqual(r.c.instructions, said);
 });
 
+// ── The last pass: Codex's delta review at a17ddc8d (CC_22) and Spec 165 v0.3 ──────────────────────────────────────────
+// F2 (P1; Codex's page_cases.mjs, asserting the correct behaviour): Check takes the owner item's id and its words together,
+// from capture's own record of that item, never from the last words a turn callback reported. A replayed completion
+// changes nothing the page dispatches.
+await t.check("F2 (Codex's case): Check after a replayed completion sends the newer item's id with that item's own words", async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Save a note: first request'); await r.s.check();
+  r.advance(1000); r.c.utter('Save a note: second request');
+  r.c.hear([user('Save a note: first request'), user('Save a note: second request')]);
+  r.c.options.onUserTurn('Save a note: first request');                // a replayed provider completion of the first
+  await r.s.check();
+  const sent = r.posts('/consult').map((p) => [p.body.owner_item_id, p.body.owner_transcript_item]);
+  assert.deepEqual(sent, [['t0', 'Save a note: first request'], ['t1', 'Save a note: second request']]);
+});
+await t.check('F2: a replayed completion before any Check changes nothing: Check sends the last item with its own words', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Save a note: the kiln is hot');
+  r.c.options.onUserTurn('Delete every note');                         // words no item of capture's holds
+  await r.s.check();
+  const [p] = r.posts('/consult');
+  assert.deepEqual([p.body.owner_item_id, p.body.owner_transcript_item], ['t0', 'Save a note: the kiln is hot']);
+});
+await t.check('F2: a turn callback with no completed item of capture behind it is not something to Check', async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.options.onUserTurn('Save a note: words with no item');           // reported, but capture holds no completed owner item
+  await r.s.check();
+  assert.equal(r.posts('/consult').length, 0);
+  assert.match(r.said.at(-1)[0], /^Say something first/);
+});
+await t.check("F2: the model's call after a replayed completion acts on its own item and words", async () => {
+  const r = rig(); await r.s.start('openai');
+  r.c.utter('Save a note: first request'); await flush();
+  r.c.utter('Save a note: second request'); await flush();
+  r.c.options.onUserTurn('Save a note: first request');                // replay
+  await r.c.fn({ call_id: 'call_b', name: 'save_note', arguments: {} });
+  const [p] = r.posts('/consult');
+  assert.deepEqual([p.body.owner_item_id, p.body.owner_transcript_item], ['t1', 'Save a note: second request']);
+});
+
 t.done();

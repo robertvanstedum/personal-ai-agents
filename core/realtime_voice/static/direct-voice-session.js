@@ -160,9 +160,11 @@ export const summaryBound = (said) => Math.min(DRAIN_CAP_MS, Math.ceil(String(sa
 // still incomplete is posted as partial. Posts go one at a time, at most 20 events and 64 KB each; a retried post keeps the
 // same ids, so the server keeps each turn once.
 //
-// The owner turn a consult acts on is named by its capture id (Spec 165 §5.1's owner_item_id): ownerItem() is the id of the
-// owner item that completed last, the same "t" + index its transcript post carries, so the server can tie the consult to the
-// turn it kept. An earlier item that completes after a later one appeared is still named by its own place.
+// The owner turn a consult acts on is named by its capture id (Spec 165 §5.1's owner_item_id): owner() is the owner item
+// that completed last, its id (the same "t" + index its transcript post carries, so the server can tie the consult to the
+// turn it kept) and its words, read together from this one record (review F2: never an id from here and words from
+// elsewhere). An earlier item that completes after a later one appeared is still named by its own place. A completion of an
+// item already completed (a replayed provider event) is not a new turn.
 //
 // Each event moves queued → sent → acknowledged (the server said it kept it), or ends failed(reason) after two attempts under
 // the same id (Spec 165 §5.2): a refusal (422) at once; the network or a server failure, and a partial write, after one retry.
@@ -284,8 +286,13 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
   const last = (turns, opts) => { close(turns); if (stopped) return chain; return enqueue(due(true), opts); };
   return {
     update(turns) { if (stopped || boundary !== null) return chain; observe(turns); return enqueue(due(false)); },
-    // The capture id of the owner turn that completed last ("t" + its place), or null before he has said anything.
-    ownerItem: () => (ownerAt >= 0 ? `t${ownerAt}` : null),
+    // The owner turn that completed last: {item: its capture id ("t" + its place), text: its words}, both from capture's own
+    // record of that item, or null before he has said anything (review F2).
+    owner() {
+      const it = ownerAt >= 0 ? items[ownerAt] : null;
+      const text = it && typeof it.text === 'string' ? it.text.trim() : '';
+      return text ? { item: `t${ownerAt}`, text } : null;
+    },
     finish: last,
     // The capture-closing barrier (review B2, R2 S2): close at the boundary, post what is owed and resolve once every post is
     // answered. The caller never awaits this from inside a post's own answer.
@@ -347,7 +354,7 @@ export function directVoice(d) {
   const cancel = d.clearTimeout || ((t) => clearTimeout(t));
   const every = d.setInterval || ((fn, ms) => setInterval(fn, ms));
   const stopEvery = d.clearInterval || ((t) => clearInterval(t));
-  let c = null, sid = null, cid = null, provider = null, lastOwner = '', capture = null;
+  let c = null, sid = null, cid = null, provider = null, capture = null;
   let connected = false, finalized = false, failed = false, proposing = false, keepalive = false;
   let ticker = null, beat = null, started = 0, summary = null, speakTimer = null, ending = null, endedWords = null;
   let lastTurns = [], summaryResponse = undefined;              // the spoken summary's response id, once the controller says
@@ -553,15 +560,17 @@ export function directVoice(d) {
 
   // Check with <person>: the host asks for Robert's last words, then has the voice say the answer, adding nothing. One at a time
   // (the button is disabled meanwhile), and never twice for the same turn of his, whoever consulted it: a repeat would run a
-  // second typed turn and could start a second job (UI review #3). Saying the words again makes a new turn to check.
+  // second typed turn and could start a second job (UI review #3). Saying the words again makes a new turn to check. The
+  // turn's id and its words come together from capture's record of it (review F2).
   async function check() {
     if (!connected || finalized || checking || summary) return;
-    if (!lastOwner || !capture?.ownerItem()) { ui.say(words.sayFirst, { transient: true }); return; }
-    if (consultedItem && consultedItem === capture?.ownerItem()) { ui.say(ALREADY_CHECKED, { transient: true }); return; }
+    const owner = capture?.owner();
+    if (!owner) { ui.say(words.sayFirst, { transient: true }); return; }
+    if (consultedItem && consultedItem === owner.item) { ui.say(ALREADY_CHECKED, { transient: true }); return; }
     checking = true; ui.checking?.(true);
     try {
       ui.phase('working');
-      const body = await consult(`host-${clock()}`, 'consult', {}, { item: capture.ownerItem(), text: lastOwner });
+      const body = await consult(`host-${clock()}`, 'consult', {}, owner);
       if (finalized) return;
       const spoken = body && typeof body.spoken === 'string' && body.spoken.trim() ? body.spoken.trim() : NOT_DONE;
       sayAtPause(`Say this briefly, adding nothing: ${spoken}`);
@@ -754,11 +763,8 @@ export function directVoice(d) {
       },
       onPlayback: () => {},
       onTranscriptUpdate: (turns) => { lastTurns = turns; if (!finalized) capture.update(turns); rebind(); },
-      onUserTurn: (text) => {
-        const words = typeof text === 'string' ? text.trim() : '';
-        if (words) lastOwner = words;
-        rebind();
-      },
+      oncePerItem: true,                          // a replayed completion is not a new turn (review F2)
+      onUserTurn: () => rebind(),                 // a waiting model call may now have its words; nothing is dispatched here
       onAssistantTurn: () => { responding = false; pump(); },
       // Spec 165 §5.3: a response's audio has played out. Only the summary's own response ends the session.
       onPlaybackDrained: (responseId) => { if (summaryResponse !== undefined && responseId === summaryResponse) summaryHeard(); },
