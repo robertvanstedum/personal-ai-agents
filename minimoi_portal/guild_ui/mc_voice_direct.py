@@ -57,7 +57,7 @@ POST_MAX_BYTES = 64 * 1024
 POST_MAX_EVENTS = 20
 SESSION_MAX_EVENTS = 600
 SESSION_MAX_BYTES = 512 * 1024
-CLOCK_SLACK_S = 5
+CLOCK_SLACK_S = 300                  # a phone's clock may be off; times are evidence, not authority
 # Only type, name, description and parameters (bootstrap._allowlisted_tools). The descriptions are the model's rules.
 TOOLS = [
     {"type": "function", "name": "consult",

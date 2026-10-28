@@ -46,7 +46,9 @@ def test_the_notes_list_the_page_and_the_export_withhold_a_recovering_session_th
     reveal.mark_end(floor, sid)
     listed = client.get(API + f"/notes?conversation={cid}").get_json()
     voice = [n for n in listed["notes"] if "voice" in n]
-    assert [n["voice"] for n in voice] == [{"session_id": sid, "kind": "owner_turn"}]
+    assert [n["voice"] for n in voice] == [{"session_id": sid, "kind": "owner_turn", "text": "the kiln seal question",
+                                            "partial": False, "interrupted": False, "started_at": None,
+                                            "ended_at": None, "part": 1, "parts": 1}]
     assert listed["voice_sessions"][0]["state"] == "ended" and listed["voice_sessions"][0]["line"] is None
     assert listed["voice_sessions"][0]["summary"] == "none"
     assert not any("[Voice session]" in n["text"] for n in listed["notes"])           # markers are never messages

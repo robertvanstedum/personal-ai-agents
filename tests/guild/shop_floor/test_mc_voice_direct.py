@@ -342,6 +342,9 @@ def test_every_turn_and_consult_is_kept_as_it_happens_withheld_while_live_and_re
     assert [row["voice"]["kind"] for row in rows] == ["owner_turn", "assistant_turn", "consult_request",
                                                       "consult_note", "consult_receipt"]
     assert shown(r) == (rows, sessions)                                              # revealed once: a view, not a copy
+    said = rows[1]["voice"]
+    assert said["text"] == "Let me check that." and said["interrupted"] is True and said["partial"] is True
+    assert said["started_at"] == at(r, 3) and said["ended_at"] == at(r, 4)
     assert post(r, sid, [turn(r, "user", "item_u2", "One more thing")]).status_code == 409
     assert len(voice_records(r, sid)) == 4
 
@@ -374,17 +377,18 @@ def test_transcript_posts_are_owner_bound_checked_and_capped_and_off_record_keep
     assert post(r, sid, one, headers=signed_out).status_code == 401
     assert post(r, sid, one * 21).status_code == 422                                # too many in one post
     assert post(r, sid, [turn(r, "user", "item_u1", "Hello", offset=3600)]).get_json()["error"] == "time"
+    assert post(r, sid, [turn(r, "user", "item_skew", "Hello", offset=120)]).status_code == 200   # a phone clock 2 min fast
     assert post(r, sid, [turn(r, "user", "item_u1", "Hello", interrupted=True)]).status_code == 422
     assert post(r, sid, [turn(r, "system", "item_u1", "Hello")]).status_code == 422
     assert post(r, sid, [{**one[0], "instructions": "be someone else"}]).status_code == 422
     big = r.client.post(BASE + f"/session/{sid}/transcript", data="x" * (65 * 1024), headers=r.headers)
     assert big.status_code == 413
-    assert not voice_records(r)
-    monkeypatch.setattr(direct, "SESSION_MAX_EVENTS", 2)
+    assert len(voice_records(r)) == 1
+    monkeypatch.setattr(direct, "SESSION_MAX_EVENTS", 3)
     assert post(r, sid, [turn(r, "user", "item_u1", "One"), turn(r, "user", "item_u2", "Two")]).status_code == 200
     assert post(r, sid, [turn(r, "user", "item_u1", "One")]).status_code == 200      # the same turn again: kept once
     assert post(r, sid, [turn(r, "user", "item_u3", "Three")]).status_code == 429
-    assert len(voice_records(r, sid)) == 2
+    assert len(voice_records(r, sid)) == 3
 
 
 def test_a_consult_that_completes_after_end_keeps_its_receipt_and_does_not_run_again(ready):

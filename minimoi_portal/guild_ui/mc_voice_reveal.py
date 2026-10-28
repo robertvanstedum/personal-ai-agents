@@ -165,27 +165,32 @@ class Hider:
         return self(sid)[0] in ("live", "recovering", "unknown")
 
 
-def _kind(row, replies):
+def _voice(row, replies, sid):
+    """What the page needs to show a revealed record: its kind and, for a retained turn, its parsed header (speaker,
+    times, partial/interrupted, part) and its words without the header."""
     from .mc_voice_transcripts import HEADER, PAGE
     page = (row.get("context") or {}).get("page")
+    out = {"session_id": sid}
     if page == PAGE:
         match = HEADER.match(row.get("text") or "")
-        speaker = match["speaker"] if match else None
-        return {"owner ASR": "owner_turn", "assistant generated; playback unverified": "assistant_turn",
-                "consult request": "consult_request", "consult receipt": "consult_receipt"}.get(speaker, "voice_note")
+        if match is None:
+            return {**out, "kind": "voice_note"}
+        return {**out, "kind": {"owner ASR": "owner_turn", "assistant generated; playback unverified": "assistant_turn",
+                                "consult request": "consult_request", "consult receipt": "consult_receipt"}[match["speaker"]],
+                "text": row["text"][match.end():], "partial": match["partial"] == "true",
+                "interrupted": match["interrupted"] == "true", "started_at": match["start"], "ended_at": match["end"],
+                "part": int(match["part"]), "parts": int(match["total"])}
     if page == PAGE_SUMMARY:
-        sid = session_of(row)
-        return {key(sid, "summary"): "summary_proposal", key(sid, "summary-decision"): "summary_decision",
-                key(sid, "summary-unavailable"): "summary_unavailable"}.get(row.get("request_id"), "summary") \
-            if sid else "summary"
+        return {**out, "kind": {key(sid, "summary"): "summary_proposal", key(sid, "summary-decision"): "summary_decision",
+                                key(sid, "summary-unavailable"): "summary_unavailable"}.get(row.get("request_id"), "summary")}
     if row.get("request_id") in replies:
-        return "consult_reply"
-    return "consult_note"
+        return {**out, "kind": "consult_reply"}
+    return {**out, "kind": "consult_note"}
 
 
 def view(floor, rows, *, live=lambda sid: False, when=None):
     """(rows to show, the direct-path sessions in this window). Markers are never shown; a live or recovering
-    session's records are withheld; a revealed session's records carry ``voice`` {session_id, kind}."""
+    session's records are withheld; a revealed session's records carry ``voice`` {session_id, kind, …} (_voice)."""
     if not isinstance(rows, list) or not rows:
         return rows, []
     hider = Hider(floor, live=live, when=when)
@@ -206,7 +211,7 @@ def view(floor, rows, *, live=lambda sid: False, when=None):
             continue
         if (row.get("context") or {}).get("page") == PAGE_SESSION or hider.hidden(sid):
             continue
-        shown.append({**row, "voice": {"session_id": sid, "kind": _kind(row, replies)}})
+        shown.append({**row, "voice": _voice(row, replies, sid)})
     sessions = []
     for sid in direct:
         status, start, end = hider(sid)
