@@ -540,6 +540,30 @@ for (const [name, make, commits, echo] of [['xAI', () => new XAIWebSocketAdapter
   });
 }
 
+// W M1: where the provider names a span's item, the link stands and nothing is inferred. OpenAI's speech_started carries the
+// item id its speech will be committed as: a cough (no item) followed within 3 s by a request whose speech_started names its
+// item binds that request even with no commit at all, where by order alone it would be asked again.
+await check('W M1 (OpenAI): an item named at speech_started is that speech\'s, even inside a cough\'s bound and with no commit', async () => {
+  const a = new OpenAIWebRTCAdapter(); const s = session(a, { trackResponses: true });
+  const real = Date.now; let at = real();
+  Date.now = () => at;
+  try {
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started' });                     // a cough: no item named
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R0' } });
+    at += 1000;
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_started', item_id: 'item_B' });  // his request, its item named
+    a._handleServerEvent(said('item_B', 'Make a note that the glaze is ready'));
+    a._handleServerEvent({ type: 'input_audio_buffer.speech_stopped' });
+    a._handleServerEvent({ type: 'response.created', response: { id: 'R_B' } });
+    a._handleServerEvent(callIn('R0', 'call_0')); await tick();
+    a._handleServerEvent(callIn('R_B', 'call_B')); await tick();
+    at += 3000;                                                                             // the cough's span is past its bound
+    assert.equal(s.bound(s.calls[0]), null);
+    assert.deepEqual(s.bound(s.calls[1]), { state: 'bound', index: 0, text: 'Make a note that the glaze is ready' });
+  } finally { Date.now = real; }
+});
+
 // L N2 (the last pass's verification): an expired hold is dropped where it is read, so a later utterance reported only by
 // its commit (no speech events) is still a new utterance with its own response.
 await check('L N2 (OpenAI): after a hold expires, a commit-only utterance is his, and its response binds to it', async () => {
