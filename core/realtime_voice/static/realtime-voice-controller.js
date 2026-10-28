@@ -106,8 +106,10 @@ export class RealtimeVoiceController {
         ok: true, json: async () => ({provider: "openai", model: "gpt-realtime-2.1", warning_minutes: 13, max_minutes: 15}),
       } : await fetch(this._bootstrapUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, persona, scene, learner_name }),
+        // A host that guards its bootstrap (MC on the Guild: CSRF, record mode) passes requestHeaders and names
+        // its conversation; German and Portuguese pass neither, so their request is unchanged.
+        headers: { "Content-Type": "application/json", ...this._requestHeaders() },
+        body: JSON.stringify({ provider, persona, scene, learner_name, ...(conversation_id ? { conversation_id } : {}) }),
       });
     } catch (err) {
       this._setState("idle");
