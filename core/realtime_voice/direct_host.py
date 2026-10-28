@@ -1073,19 +1073,17 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
             return refused_here(own)
         if not sessions.hold(sid, item, call_id):
             return IN_FLIGHT, 409
-        try:                                      # his words, kept as the turn's consult request record (shown at reveal)
-            adapter.store.keep(handle, principal, sid, "consult", voice_item, 0, f"{name}: {text}", False, started=began,
-                               ended=began)
-        except Exception:
-            log.exception("%s direct voice: consult request not kept", adapter.person["domain"])
-            sessions.release(sid, item, call_id)
-            return not_done("not_kept", FAILED), 200
-        kept = put(adapter, handle, sid, asked)
+        kept = put(adapter, handle, sid, asked)   # the durable record first, then the visible one (FR N9)
         if kept.outcome == "stored":
             n = sessions.admitted(sid)
             if n is None:                                                       # the cap, reached meanwhile
-                sessions.release(sid, item, call_id)
-                return not_done("cap", CAP_LINE), 429
+                return unrun(adapter, sessions, handle, sid, call_id, name, item, not_done("cap", CAP_LINE)), 429
+            try:                                  # his words, kept as the turn's consult request record (shown at reveal)
+                adapter.store.keep(handle, principal, sid, "consult", voice_item, 0, f"{name}: {text}", False,
+                                   started=began, ended=began)
+            except Exception:
+                log.exception("%s direct voice: consult request not kept", adapter.person["domain"])
+                return unrun(adapter, sessions, handle, sid, call_id, name, item, not_done("not_kept", FAILED)), 200
             return run(adapter, sessions, principal, handle, sid, call_id, name, text, item, n, began), 200
         sessions.release(sid, item, call_id)
         if kept.outcome == "refused":
@@ -1094,6 +1092,22 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
         if existing is None:
             return not_done("not_recorded", NOT_RECORDED), 200
     return same_key(adapter, sessions, handle, sid, call_id, item, words, existing, name)
+
+
+def unrun(adapter, sessions, handle, sid, call_id, name, item, result):
+    """The turn's request record is kept but its action will not run (the cap reached meanwhile, or the visible request
+    record not kept): the turn is settled not_done, durably, so every later dispatch and read of it says so. If even
+    that outcome record cannot be kept, later reads say unknown (the request has no outcome), never done (FR N9)."""
+    result = {**result, "call_id": call_id}
+    try:
+        done = put(adapter, handle, sid, record(OUTCOME, outcome_id(item), owner_item_id=item, tool=name, call_id=call_id,
+                                                outcome="not_done", result=compact(result)))
+        if done.outcome not in ("stored", "duplicate"):
+            log.error("%s direct voice: unrun outcome not recorded (%s)", adapter.person["domain"], done.reason or done.outcome)
+    except Exception:
+        log.exception("%s direct voice: unrun outcome not recorded", adapter.person["domain"])
+    sessions.settle(sid, item, call_id, result, name)
+    return result
 
 
 # A replay to the other tool, by the first action's outcome (review R1 P2-3, FR N10).

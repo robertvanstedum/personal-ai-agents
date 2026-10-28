@@ -137,16 +137,39 @@ def test_a_hosts_own_refusal_binds_nothing_and_the_other_tool_still_acts_on_the_
     assert asked["receipt"] == "turn-2" and not asked.get("same_turn") and len(r.host.turns) == 1   # the refusal counted (FR N6)
 
 
-def test_an_unavailable_conversation_or_an_unkept_request_binds_nothing(rig):
+def test_an_unavailable_conversation_binds_nothing(rig):
     r = rig
     sid = start(r)
     r.host.down = 1
     assert consult(r, sid, call_id="c1", turn="t2").get_json()["error"] == "conversation"
-    r.store.fail_keeps = 1
-    assert consult(r, sid, call_id="c2", turn="t2").get_json()["error"] == "not_kept"
     assert not r.host.turns and "consult_request:t2" not in records_of(r, sid)
     later = consult(r, sid, call_id="c3", turn="t2").get_json()
     assert later["receipt"] == "turn-1" and len(r.host.turns) == 1
+
+
+def test_fr_n9_the_durable_request_comes_first_and_an_unkept_visible_one_settles_the_turn_not_done(rig):
+    """FR N9 (changed from A1's "an unkept request binds nothing"): the consult_request record is put before the visible
+    consult record. When the visible one cannot be kept after the put, the turn's action does not run and the turn is
+    settled not_done durably, so a later dispatch, another process or the reconciliation read all say not done; the
+    reveal never shows a consult with no outcome."""
+    r = rig
+    sid = start(r)
+    r.store.fail_keeps = 1
+    first = consult(r, sid, call_id="c2", turn="t2").get_json()
+    assert first["error"] == "not_kept" and first["outcome"] == "not_done" and not r.host.turns
+    kept = records_of(r, sid)
+    assert "consult_request:t2" in kept and kept["consult_outcome:t2"]["outcome"] == "not_done"
+    later = consult(r, sid, call_id="c3", turn="t2").get_json()
+    assert later["outcome"] == "not_done" and later["same_turn"] is True and not r.host.turns
+    assert r.client.get(BASE + f"/consult/{sid}/t2?conversation_id=owner", headers=OWNER).get_json()["outcome"] == "not_done"
+
+
+def test_fr_n9_a_refused_request_record_keeps_no_visible_consult(rig):
+    r = rig
+    sid = start(r)
+    r.store.refuse_kinds = {"consult_request"}
+    assert consult(r, sid, call_id="c1", turn="t4").get_json()["error"] == "not_recorded"
+    assert not r.host.turns and not [row for row in r.store.rows if row["role"] == "consult"]
 
 
 # ── Item 4 / R1 P1-1: four outcomes with their words; dispatched with no result is unknown, everywhere ──────────────────
