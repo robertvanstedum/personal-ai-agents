@@ -663,3 +663,37 @@ def test_an_attempt_recorded_elsewhere_is_pending_until_it_is_stale_and_unavaila
     again = ask_summary(r, sid).get_json()                              # Ask for a summary, after it concluded
     assert again["state"] == "proposed" and len(r.gateway.requests) == 2
     assert r.store.get("owner", sid, "summary_attempt:3") is not None
+
+
+# ── The fix round's independent review (REVIEW_independent_A1_fix.md), FR IDs ──────────────────────────────────────────
+
+LONG_TYPOGRAPHIC = "It’s ready; we’re firing now and it’ll cool by six — the glaze’s fine. " * 30
+
+
+def test_fr_m1_a_long_answer_with_curly_quotes_is_done_with_its_record_and_receipt(rig):
+    """FR M1 (the reviewer's probe, asserting the correct behaviour): the record is cut by its encoded size."""
+    from core.realtime_voice.direct_host import RECORD_MAX, encoded
+    r = rig
+    sid = start(r)
+    r.host.typed_turn = lambda *a, **kw: {"answered": True, "receipt": "turn-1", "receipt_kind": "reply",
+                                          "spoken": LONG_TYPOGRAPHIC}
+    body = consult(r, sid, call_id="call_long", turn="t0").get_json()
+    assert body["outcome"] == "done" and body["spoken"] == LONG_TYPOGRAPHIC and "record_kept" not in body
+    kept = r.store.get("owner", sid, "consult_outcome:t0")
+    assert kept["outcome"] == "done" and encoded(kept) <= RECORD_MAX
+    assert kept["result"]["spoken"].endswith(" The rest is in the conversation.")
+    assert [row for row in r.store.rows if row["role"] == "receipt"]
+    german = "Die Glasur ist fertig; über Nacht kühlt der Ofen ab, und morgen früh prüfen wir die Stücke. " * 30
+    r.host.typed_turn = lambda *a, **kw: {"answered": True, "receipt": "turn-2", "receipt_kind": "reply", "spoken": german}
+    assert consult(r, sid, call_id="call_de", turn="t1").get_json()["outcome"] == "done"
+    assert encoded(r.store.get("owner", sid, "consult_outcome:t1")) <= RECORD_MAX
+
+
+def test_fr_m1_a_store_failure_after_the_turn_says_the_result_and_that_its_record_was_not_kept(rig):
+    from core.realtime_voice.direct_host import RECORD_LOST
+    r = rig
+    sid = start(r)
+    r.store.refuse_kinds = {"consult_outcome"}
+    body = consult(r, sid, call_id="call_1", turn="t0").get_json()
+    assert body["outcome"] == "done" and body["receipt"] == "turn-1" and body["record_kept"] is False
+    assert body["spoken"] == "Two items. " + RECORD_LOST

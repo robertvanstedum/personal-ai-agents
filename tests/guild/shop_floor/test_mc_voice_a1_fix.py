@@ -279,3 +279,20 @@ def test_a_turn_mc_says_was_already_dispatched_is_unknown_never_not_done(ready, 
                                                                     "message": "MC's model key was refused."}, 200))
     refused = call(r, sid, call_id="c2", owner_item_id="t2").get_json()
     assert refused["outcome"] == "not_done"                            # MC's own answer: it did not happen
+
+
+# ── FR M1: MC's long German or typographic answer, end to end ──────────────────────────────────────────────────────────
+
+def test_fr_m1_mcs_long_answer_with_umlauts_and_curly_quotes_is_done_with_its_record_and_receipt(ready, monkeypatch):
+    from core.realtime_voice.direct_host import RECORD_MAX, encoded
+    from minimoi_portal.guild_ui import api
+    r = ready
+    reply = ("Die Glasur ist fertig – über Nacht kühlt der Ofen ab; it’s on the board as “ready”. " * 25).strip()
+    monkeypatch.setattr(api, "run_mc_turn", lambda actual, **kw: (
+        r.turns.append(kw) or {"status": "answered", "reply_note": {"text": reply, "request_id": "reply-9"}}, 200))
+    sid = start(r)["voice_session_id"]
+    out = call(r, sid, call_id="c1", owner_item_id="t1").get_json()
+    assert out["outcome"] == "done" and out["receipt"] == "reply-9" and "record_kept" not in out
+    kept = reveal.get_record(r.notes, sid, "consult_outcome:t1")
+    assert kept["outcome"] == "done" and encoded(kept) <= RECORD_MAX
+    assert any("Answered. Reply reply-9." in (row.get("text") or "") for row in r.notes.rows.values())

@@ -32,11 +32,11 @@ OWNER = {"X-Owner": "robert", "X-Csrf": "ok", "Content-Type": "application/json"
 class Store(DirectVoiceStore):
     def __init__(self):
         self.markers, self.rows, self.summaries, self.start_ok = {}, [], {}, True
-        self.kept_records, self.put_ok, self.lock, self.fail_keeps = {}, True, threading.Lock(), 0
+        self.kept_records, self.put_ok, self.lock, self.fail_keeps, self.refuse_kinds = {}, True, threading.Lock(), 0, set()
 
     def put(self, handle, sid, record):
         """First write wins; the same id with other content (anything but ``at``) is a conflict (Spec 165 §4.4)."""
-        if not self.put_ok:
+        if not self.put_ok or record["kind"] in self.refuse_kinds:
             return Put("refused", "test store refuses")
         with self.lock:
             old = self.kept_records.get((sid, record["id"]))

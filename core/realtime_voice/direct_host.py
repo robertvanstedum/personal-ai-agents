@@ -434,10 +434,16 @@ def same_record(a, b):
     return {k: v for k, v in a.items() if k != "at"} == {k: v for k, v in b.items() if k != "at"}
 
 
+def encoded(value):
+    """A record's size as it is measured everywhere: its JSON, with every non-ASCII character escaped (``\\u2019`` is six
+    characters), so a cut made by this measure always fits (review FR M1)."""
+    return len(json.dumps(value, sort_keys=True))
+
+
 def valid_record(rec):
     return (isinstance(rec, dict) and rec.get("schema") == SCHEMA and isinstance(rec.get("id"), str) and rec["id"]
             and isinstance(rec.get("kind"), str) and rec["kind"] and isinstance(rec.get("at"), str)
-            and len(json.dumps(rec, sort_keys=True)) <= RECORD_MAX)
+            and encoded(rec) <= RECORD_MAX)
 
 
 def put(adapter, handle, sid, rec):
@@ -988,17 +994,30 @@ def digest(text):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+REST = " The rest is in the conversation."
+RECORD_LOST = "Its record could not be kept here; the answer itself is in the conversation."
+
+
 def compact(result, limit=RECORD_MAX - 400):
     """A result small enough for a durable record: its fields as they are, the spoken words cut at a sentence with a
-    pointer to the conversation when they are long (the whole answer is the receipt's)."""
+    pointer to the conversation when they are long (the whole answer is the receipt's). Cut by the record's encoded
+    size, not by characters: curly quotes and umlauts are six characters each in the record (review FR M1)."""
     keep = {k: v for k, v in result.items() if k in ("ok", "outcome", "error", "answered", "saved", "receipt",
                                                     "receipt_kind", "note_request_id", "job_command", "spoken")}
     spoken = keep.get("spoken")
-    if isinstance(spoken, str) and len(json.dumps(keep)) > limit:
-        room = max(0, limit - len(json.dumps({**keep, "spoken": ""})) - 40)
-        cut = spoken[:room]
+    if isinstance(spoken, str) and encoded(keep) > limit:
+        low, high = 0, len(spoken)                                      # the longest prefix whose record fits
+        while low < high:
+            mid = (low + high + 1) // 2
+            if encoded({**keep, "spoken": spoken[:mid] + REST}) <= limit:
+                low = mid
+            else:
+                high = mid - 1
+        cut = spoken[:low]
         stop = cut.rfind(". ")
-        keep["spoken"] = (cut[:stop + 1] if stop > room // 2 else cut).rstrip() + " The rest is in the conversation."
+        keep["spoken"] = (cut[:stop + 1] if stop > low // 2 else cut).rstrip() + REST
+    if encoded(keep) > limit:                                           # never: the other fields are short
+        keep = {k: keep[k] for k in ("ok", "outcome") if k in keep}
     return keep
 
 
@@ -1155,12 +1174,21 @@ def dispatch(adapter, sessions, principal, handle, sid, call_id, name, text, ite
     result = settled_result({"ok": True, "call_id": call_id, **result})
     if time.monotonic() - started >= HOLD_AFTER_SECONDS:
         result["holding_line"] = HOLDING_LINE
-    outcome = result["outcome"]
-    done = put(adapter, handle, sid, record(OUTCOME, outcome_id(item), owner_item_id=item, tool=name, call_id=call_id,
-                                            outcome=outcome, result=compact(result)))
-    if done.outcome not in ("stored", "duplicate"):
-        log.error("%s direct voice: consult outcome not recorded (%s)", adapter.person["domain"], done.reason or done.outcome)
+    # From here the turn's result is known. Keeping its records can fail, but that never turns the known result into
+    # unknown (review FR M1): the result is said, with a plain word that its record could not be kept here.
+    kept_record = False
+    try:
+        done = put(adapter, handle, sid, record(OUTCOME, outcome_id(item), owner_item_id=item, tool=name, call_id=call_id,
+                                                outcome=result["outcome"], result=compact(result)))
+        kept_record = done.outcome in ("stored", "duplicate")
+        if not kept_record:
+            log.error("%s direct voice: consult outcome not recorded (%s)", adapter.person["domain"],
+                      done.reason or done.outcome)
+    except Exception:
+        log.exception("%s direct voice: consult outcome not recorded", adapter.person["domain"])
     result = keep_receipt(adapter, handle, principal, sid, voice_item, name, result, began, late=after_summary(adapter, handle, sid))
+    if not kept_record or result.get("receipt_kept") is False:
+        result = {**result, "record_kept": False, "spoken": f"{(result.get('spoken') or '').rstrip()} {RECORD_LOST}".strip()}
     sessions.settle(sid, item, call_id, result, name)
     return result
 
