@@ -158,9 +158,8 @@ def compute(c: dict, *, notes_limit: int = 0, conversation: dict | None = None) 
     notes = notes_zone(notes_res, mc["notes_text"])
     if notes.get("recent"):
         # A live or recovering voice session's records are withheld in every view (Spec 164 §6).
-        from .mc_voice_reveal import view
-        notes["recent"], notes["voice_sessions"] = view(notes_floor, notes["recent"],
-                                                        live=c.get("mc_direct_voice_live") or (lambda _sid: False))
+        from .mc_voice_reveal import process_view, view
+        notes["recent"], notes["voice_sessions"] = view(notes_floor, notes["recent"], **process_view(c))
         from .mc.turn_log import turn_log_of
         turn_log_of(services).annotate(notes["recent"])
         from .markdown_render import with_html

@@ -316,7 +316,7 @@ def post(r, sid, events, headers=None):
 
 def shown(r, **kw):
     rows = sorted(r.notes.rows.values(), key=lambda row: list(r.notes.rows).index(row["request_id"]))
-    return reveal.view(r.notes, rows, live=r.config["mc_direct_voice_live"], **kw)
+    return reveal.view(r.notes, rows, **{**reveal.process_view(r.config), **kw})
 
 
 def test_every_turn_and_consult_is_kept_as_it_happens_withheld_while_live_and_revealed_on_end(ready):
@@ -698,3 +698,51 @@ def test_a_refused_job_is_still_spoken_as_not_done(ready, monkeypatch):
     sid = start(r)["voice_session_id"]
     result = call(r, sid, words="Run this as a job: rebuild the index").get_json()
     assert result["ok"] is False and result["error"] == "queue_full" and result["receipt"] is None
+
+
+# ── review B #3: platform notes a consult writes are the session's records, hidden while it is live ──────────────
+
+def test_platform_receipts_written_during_a_consult_are_withheld_while_live_and_revealed_with_the_session(waiting):
+    r = waiting.r
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])                                                                # heartbeat: live
+    saved = call(r, sid, call_id="n1", name="save_note", words="Make a note that the kiln needs a new seal").get_json()
+    assert saved["saved"] is True
+    named = call(r, sid, call_id="p1", words="yes P-7K3M").get_json()
+    assert named["ok"] is True
+    written = [k for k in r.notes.rows if k.startswith(("owner-action-", "mc-tool-"))]
+    assert len(written) == 2                                                        # the receipts the probe saw leak
+    rows, sessions = shown(r)
+    assert sessions[0]["state"] == "live" and rows == []
+    for rid in written:                                                             # each tagged durably, by its id
+        tag = r.notes.rows[reveal.tag_key(rid)]
+        assert tag["context"]["page"] == reveal.PAGE_SESSION and tag["who"] == reveal.SESSION_AUTHOR + sid
+    # After a restart (nothing held in this process) the durable tags still withhold them while recovering.
+    rows, sessions = shown(r, live=lambda _sid: False, tagged=lambda _rid: None)
+    assert sessions[0]["state"] == "recovering" and rows == []
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
+    rows, _ = shown(r)
+    outcomes = [row["request_id"] for row in rows if row["voice"]["kind"] == "consult_outcome"]
+    assert sorted(outcomes) == sorted(written)
+    assert not any(row["request_id"] == reveal.tag_key(written[0]) for row in rows)    # tags are never shown
+
+
+def test_a_tag_held_in_this_process_withholds_a_note_whose_tag_note_is_outside_the_window(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])
+    call(r, sid, call_id="n1", name="save_note", words="Make a note that the kiln needs a new seal")
+    receipt = next(row for k, row in r.notes.rows.items() if k.startswith("owner-action-"))
+    rows, _ = reveal.view(r.notes, [receipt], **reveal.process_view(r.config))
+    assert rows == []
+
+
+def test_notes_a_typed_turn_writes_are_not_tagged(ready):
+    """Only a voice consult tags: a note kept outside one is shown as before."""
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [])
+    from minimoi_portal.guild_ui.stores import Author
+    r.notes.add_note("owner-action-typed-receipt", "Saved.", Author("guild", "platform", "Guild"))
+    rows, _ = shown(r)
+    assert [row["request_id"] for row in rows] == ["owner-action-typed-receipt"] and "voice" not in rows[0]

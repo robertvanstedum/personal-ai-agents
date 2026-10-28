@@ -490,7 +490,7 @@ def notes_list():
     if res.ok:
         # A live or recovering voice session's records are withheld here, in every view (Spec 164 §6).
         from . import mc_voice_reveal
-        data["notes"], voice = mc_voice_reveal.view(floor, data.get("notes"), live=_voice_live())
+        data["notes"], voice = mc_voice_reveal.view(floor, data.get("notes"), **_voice_view())
         turn_log_of(cfg()["services"]).annotate(data.get("notes"))
         with_html(data.get("notes"))
     return jsonify({**_source(res), "notes": data.get("notes") if res.ok else None,
@@ -501,6 +501,13 @@ def notes_list():
 def _voice_live():
     """Which direct-path voice sessions this process holds live (mc_voice_direct); none when it is not installed."""
     return cfg().get("mc_direct_voice_live") or (lambda _sid: False)
+
+
+def _voice_view():
+    """What mc_voice_reveal.view needs from this process (mc_voice_direct): which sessions are live, and which notes a
+    consult tagged with its session; nothing when it is not installed."""
+    from .mc_voice_reveal import process_view
+    return process_view(cfg())
 
 
 @owner_api

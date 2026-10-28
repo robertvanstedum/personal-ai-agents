@@ -5,6 +5,11 @@ writes a start marker at bootstrap and an end marker at End (platform notes, pag
 messages). Its records are its transcript notes (author managed_voice_transcript:<session>), its consult notes
 (vc-<session hex>-<n>) and MC's kept replies to them (api._reply_key of those ids), its summary proposal and decision.
 
+Every other note written while a consult runs (a platform receipt or reply: owner-action, board, register, library,
+tool-proposal or decision) is tagged with the consult's session as it is written (mc_voice_direct._TaggedFloor): a
+tag note (page 'voice-session', never shown) names the note's request id, and the process also holds the tag in
+memory until the tag note is read. Such a note is that session's record here, hidden and revealed with it.
+
 The state is read from those markers and the clock, so it holds across tabs, refreshes and a portal restart:
 - ended (end marker): revealed;
 - dropped (no end marker, maximum duration passed): revealed, on the next load;
@@ -89,6 +94,28 @@ def _write_marker(floor, sid, what, fields):
     if kept.outcome == "idempotency_mismatch":
         return read_marker(floor, sid, what)
     return None
+
+
+_TAG_NS = uuid.UUID("5c0f4f3e-6d1c-4b8e-9a51-3f1d2a7c9e40")       # tag keys: one per tagged request id, any session
+
+
+def tag_key(request_id):
+    return str(uuid.uuid5(_TAG_NS, "voice-tag:" + request_id))
+
+
+def mark_tag(floor, sid, request_id):
+    """Tag one note as written during this session's consult; the first tag of a request id wins."""
+    text = MARKER + json.dumps({"event": "tag", "session_id": sid, "request_id": request_id}, sort_keys=True)
+    kept = floor.add_note(tag_key(request_id), text, _session_author(sid), page=PAGE_SESSION)
+    return kept.outcome == "kept" and bool(kept.value)
+
+
+def _tag_of(row):
+    """(tagged request id, session) for a tag note, else None."""
+    sid = session_of(row)
+    fields = _marker_fields(row, sid, "tag") if sid is not None else None
+    rid = (fields or {}).get("request_id")
+    return (rid, sid) if isinstance(rid, str) and row.get("request_id") == tag_key(rid) else None
 
 
 def mark_start(floor, sid, *, principal, conversation_id, max_minutes, started=None):
@@ -185,18 +212,34 @@ def _voice(row, replies, sid):
                                 key(sid, "summary-unavailable"): "summary_unavailable"}.get(row.get("request_id"), "summary")}
     if row.get("request_id") in replies:
         return {**out, "kind": "consult_reply"}
-    return {**out, "kind": "consult_note"}
+    if _CONSULT_ID.fullmatch(str(row.get("request_id") or "")):
+        return {**out, "kind": "consult_note"}
+    return {**out, "kind": "consult_outcome"}                     # a tagged platform note written during a consult
 
 
-def view(floor, rows, *, live=lambda sid: False, when=None):
+def process_view(config):
+    """view's keywords from a mount's config: what this process (mc_voice_direct.install) knows of its sessions."""
+    return {"live": config.get("mc_direct_voice_live") or (lambda _sid: False),
+            "tagged": config.get("mc_direct_voice_tagged") or (lambda _rid: None)}
+
+
+def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda request_id: None):
     """(rows to show, the direct-path sessions in this window). Markers are never shown; a live or recovering
-    session's records are withheld; a revealed session's records carry ``voice`` {session_id, kind, …} (_voice)."""
+    session's records are withheld; a revealed session's records carry ``voice`` {session_id, kind, …} (_voice).
+    ``tagged(request_id)``: the session this process tagged a note with, before its tag note can be read."""
     if not isinstance(rows, list) or not rows:
         return rows, []
     hider = Hider(floor, live=live, when=when)
+    tags = dict(found for found in map(_tag_of, rows) if found is not None)
+
+    def owner(row):
+        rid = row.get("request_id")
+        if not isinstance(rid, str):
+            return session_of(row)
+        return session_of(row) or tags.get(rid) or tagged(rid)
     sids = []
     for row in rows:
-        sid = session_of(row)
+        sid = owner(row)
         if sid is not None and sid not in sids:
             sids.append(sid)
     direct = [sid for sid in sids if hider(sid)[0] is not None]
@@ -205,7 +248,7 @@ def view(floor, rows, *, live=lambda sid: False, when=None):
         replies.update({reply: sid for reply in consult_reply_ids(sid)})
     shown = []
     for row in rows:
-        sid = session_of(row) or replies.get(row.get("request_id"))
+        sid = owner(row) or replies.get(row.get("request_id"))
         if sid is None or sid not in direct:
             shown.append(row)
             continue

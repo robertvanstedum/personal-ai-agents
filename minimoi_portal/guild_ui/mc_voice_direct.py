@@ -128,6 +128,16 @@ class _Sessions(ConsultLedger):
     def __init__(self, clock=time.time):
         super().__init__()
         self._meta, self._meta_lock, self.clock = {}, threading.Lock(), clock
+        self._tags = {}                                     # request id -> session: notes written during a consult
+
+    def tag(self, session_id, request_id):
+        with self._meta_lock:
+            self._tags.setdefault(request_id, session_id)
+
+    def tagged(self, request_id):
+        """The session whose consult wrote this note, in this process (mc_voice_reveal.view's ``tagged``)."""
+        with self._meta_lock:
+            return self._tags.get(request_id)
 
     def issue(self, owner):
         from . import api
@@ -248,6 +258,28 @@ def _keep(principal, conv, session_id, role, item, text, *, started, ended, part
                   started=started, ended=ended, interrupted=interrupted)
 
 
+class _TaggedFloor:
+    """The conversation's floor for one consult's typed turn: each note the turn creates (a platform receipt or reply,
+    whatever its key) is first tagged with this voice session, in this process and by a durable tag note, so the
+    reveal withholds it with the session's other records (review B #3). Everything else is the floor itself."""
+
+    def __init__(self, floor, sessions, session_id):
+        self._floor, self._sessions, self._sid = floor, sessions, session_id
+        self._own = set(reveal.consult_reply_ids(session_id))      # MC's replies are the session's by their key
+
+    def __getattr__(self, name):
+        return getattr(self._floor, name)
+
+    def add_note(self, request_id, text, author, **kw):
+        if isinstance(request_id, str) and request_id not in self._own and self._floor.get_note(request_id) is None:
+            self._sessions.tag(self._sid, request_id)               # before the write: no view in between shows it
+            try:
+                reveal.mark_tag(self._floor, self._sid, request_id)
+            except Exception:                                       # held in this process; logged, never fatal
+                log.exception("mc direct voice: tag note not kept")
+        return self._floor.add_note(request_id, text, author, **kw)
+
+
 def _is_note_command(text):
     from . import board_commands, owner_actions
     action = owner_actions.parse(text)
@@ -313,6 +345,7 @@ def _typed_turn(sessions, principal, session_id, call_id, name, conv, text, bad)
     if not kept.repeated:
         conv = api._touch(conv, first_text=text)
     services = cfg()["services"]
+    floor = _TaggedFloor(floor, sessions, session_id)          # after the consult note: it is the session's by its id
     found = (services, principal, conv, floor, kept.value, note_id, note_id, [])
     g.topic_context = None
     g.mc_kept_owner_scope = (principal, conv["id"], note_id)
@@ -744,4 +777,5 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
                                  "summary_decision_url": base + "/api/realtime-voice/session/{session_id}/summary/decision",
                                  "heartbeat_seconds": 20, "persona": PERSONA, "locale": LOCALE, "card_release": RELEASE}
     config["mc_direct_voice_live"] = sessions.live      # server-side only: which sessions the reveal treats as live
+    config["mc_direct_voice_tagged"] = sessions.tagged  # server-side only: notes this process tagged with a session
     return True
