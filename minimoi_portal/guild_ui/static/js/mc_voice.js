@@ -176,6 +176,15 @@ export function initMcVoice(page) {
         post: mod.jsonPost((...a) => fetch(...a), headers), conversationId: () => page.conversation?.id, reveal: revealDirect });
       directThread.paint(page.floor?.notes?.voice_sessions, page.floor?.notes?.recent);
     } catch (e) { /* Voice says so when it is pressed */ }
+    // The thread's voice lines follow the conversation, not only this tab's own End (UI review #7): repainted from every notes
+    // read the page already makes, and read afresh when the tab comes back into view.
+    document.addEventListener('guild:notes-read', (e) => {
+      const read = e.detail || {};
+      if (!directThread || !page.conversation?.id || read.conversationId !== page.conversation.id) return;
+      mergeNotes((read.notes || []).filter((note) => note && note.voice));
+      directThread.paint(read.voice_sessions, read.notes);
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) revealDirect(); });
     $('[data-mc-voice-end]')?.addEventListener?.('click', () => { if (directSession?.proposing()) directSession.sumUp(); else if (busy()) stop('user_ended'); });
     $('[data-mc-voice-check]')?.addEventListener?.('click', () => directSession?.check());
     $('[data-mc-voice-sumup]')?.addEventListener?.('click', () => directSession?.sumUp());

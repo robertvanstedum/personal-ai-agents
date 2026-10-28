@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
+import { fakeDocument } from './js_helpers/fake_dom.mjs';
 const DIRECT_URL = new URL('../minimoi_portal/guild_ui/static/js/mc_voice_direct.js', import.meta.url);
 const realDirect = await import(DIRECT_URL);
 const source = fs.readFileSync(new URL('../minimoi_portal/guild_ui/static/js/mc_voice.js', import.meta.url), 'utf8')
@@ -20,7 +21,8 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman' };
 
-async function rig({ capabilities = { ok: true, mode: 'agent_conversation', providers: [], managed_realtime: null, direct_voice: DIRECT }, summary = null } = {}) {
+async function rig({ capabilities = { ok: true, mode: 'agent_conversation', providers: [], managed_realtime: null, direct_voice: DIRECT }, summary = null,
+  notesBody = null } = {}) {
   const nodes = {}, instances = [], docEvents = {}, windowEvents = {}, dispatched = [], calls = [], timers = [];
   let directLoads = 0;
   const node = (s) => nodes[s] ??= { selector: s, textContent: '', value: s.includes('provider') ? 'openai' : '', disabled: false, hidden: s !== '[data-mc-voice-btn]' ? false : true,
@@ -29,8 +31,10 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
     setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; },
     addEventListener(k, f) { (this.listeners[k] ||= []).push(f); this[k] = () => this.listeners[k].forEach((fn) => fn({})); } };
   nodes['[data-mc-voice-live]'] = { ...node('[data-mc-voice-live]'), hidden: true };
+  const fdoc = fakeDocument();
+  nodes['[data-mc-thread]'] = fdoc.createElement('ol');                                      // the thread: a small fake DOM
   const document = { body: { dataset: { mcVoice: 'true' } }, dispatchEvent(e) { dispatched.push(e); (docEvents[e.type] || []).forEach((fn) => fn(e)); },
-    addEventListener(k, f) { (docEvents[k] ||= []).push(f); } };
+    addEventListener(k, f) { (docEvents[k] ||= []).push(f); }, createElement: fdoc.createElement, hidden: false };
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } }
   class Controller {
     constructor(options) { this.options = options; this._state = 'idle'; this._sessionId = null; this.ended = []; this.instructions = [];
@@ -51,7 +55,7 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
     calls.push({ url, opts, body });
     let out = { status: 200, body: { ok: true } };
     if (url.endsWith('/mc/voice/capabilities')) out = { status: 200, body: capabilities };
-    else if (url.includes('/notes?')) out = { status: 200, body: { notes: [{ id: 9, text: 'revealed', voice: { kind: 'owner_turn', session_id: SID, text: 'revealed' } }], voice_sessions: [] } };
+    else if (url.includes('/notes?')) out = { status: 200, body: notesBody ? notesBody() : { notes: [{ id: 9, text: 'revealed', voice: { kind: 'owner_turn', session_id: SID, text: 'revealed' } }], voice_sessions: [] } };
     else if (url.endsWith('/summary') && summary) out = summary;
     return { ok: out.status === 200, status: out.status, headers: { get: () => 'application/json' }, json: async () => out.body };
   };
@@ -67,7 +71,7 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
   const page = { urls: { api: '/api' }, csrf_token: 'csrf-synthetic', conversation: { id: 'c-1' }, floor: { notes: { recent: [], voice_sessions: [] } } };
   sandbox.initMcVoice(page);
   await flush();
-  return { nodes, node, instances, calls, dispatched, docEvents, windowEvents, timers, merged, sandbox, page, get directLoads() { return directLoads; },
+  return { nodes, node, instances, calls, dispatched, docEvents, windowEvents, timers, merged, sandbox, page, document, get directLoads() { return directLoads; },
     async click(sel = '[data-mc-voice-btn]') { node(sel).click(); await flush(); }, status: () => node('[data-mc-voice-status]').textContent,
     posts: (end) => calls.filter((c) => c.opts.method === 'POST' && c.url.endsWith(end)) };
 }
@@ -155,6 +159,33 @@ let n = 0;
   await flush();
   for (const t of r3.timers.filter((x) => x.ms === 5000)) t.fn();
   assert.match(r3.status(), /^Voice stopped\. Any agent action already accepted may still finish/);   // an error stays
+  n++;
+}
+// UI review #7: the thread's voice lines are repainted from the page's own notes reads and when the tab comes back into view,
+// not only at load and after this tab's End.
+{
+  const OTHER = '0f1e2d3c-4b5a-4968-8776-655443322110';
+  let sessions = [];
+  const r = await rig({ notesBody: () => ({ notes: [], voice_sessions: sessions }) });
+  const thread = r.node('[data-mc-thread]');
+  const line = () => thread.querySelector(`[data-voice-line="${OTHER}"]`)?.textContent ?? null;
+  const read = (conversationId, voice_sessions, notes = []) => r.docEvents['guild:notes-read'].forEach((fn) => fn({ detail: { conversationId, notes, voice_sessions } }));
+  read('c-1', [{ session_id: OTHER, state: 'live', started_at: '2026-10-28T10:00:00.000Z', line: null }]);
+  assert.equal(line(), realDirect.LIVE_ELSEWHERE);                                        // live on another device
+  read('c-other', [{ session_id: OTHER, state: 'recovering', started_at: '2026-10-28T10:00:00.000Z', line: realDirect.RECOVERING }]);
+  assert.equal(line(), realDirect.LIVE_ELSEWHERE);                                        // another conversation's read: ignored
+  read('c-1', [{ session_id: OTHER, state: 'ended', started_at: '2026-10-28T10:00:00.000Z', line: null, summary: 'none' }],
+    [{ id: 21, voice: { kind: 'owner_turn', session_id: OTHER, text: 'said elsewhere' } }, { id: 22, text: 'typed' }]);
+  assert.equal(line(), null);                                                             // ended there: the line goes…
+  assert.deepEqual(r.merged.map((m) => m.id), [21]);                                       // …and its revealed records come in
+  sessions = [{ session_id: OTHER, state: 'recovering', started_at: '2026-10-28T10:00:00.000Z', line: realDirect.RECOVERING }];
+  const reads = r.calls.filter((c) => c.url.includes('/notes?')).length;
+  r.document.hidden = true; r.docEvents.visibilitychange.forEach((fn) => fn());
+  assert.equal(r.calls.filter((c) => c.url.includes('/notes?')).length, reads);           // hidden: nothing read
+  r.document.hidden = false; r.docEvents.visibilitychange.forEach((fn) => fn());
+  await flush();
+  assert.equal(r.calls.filter((c) => c.url.includes('/notes?')).length, reads + 1);
+  assert.equal(line(), realDirect.RECOVERING);
   n++;
 }
 // §8: Dictate, or the floating panel closing (companion-closed), takes the microphone: voice ends, and End is sent.

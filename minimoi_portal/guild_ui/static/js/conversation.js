@@ -335,6 +335,16 @@ function appendNote(note) {
   follow();
 }
 
+// Every first page of notes this page reads for a conversation is announced, so the voice thread (mc_voice.js) repaints its
+// recovering / elsewhere-live lines and summary cards from it, with no read of its own (UI review #7).
+function notesRead(conversationId, r, before) {
+  if (!before && r?.ok && Array.isArray(r.body?.voice_sessions)) {
+    document.dispatchEvent(new CustomEvent('guild:notes-read', { detail: { conversationId: conversationId || null,
+      notes: Array.isArray(r.body.notes) ? r.body.notes : [], voice_sessions: r.body.voice_sessions } }));
+  }
+  return r;
+}
+
 // The assistant response is not the platform's proposal. Read the persisted
 // cards independently, scoped to the conversation captured when Send was pressed.
 // This also serves buffered turns; it never retries a chat/tool write.
@@ -349,7 +359,7 @@ function watchPlatformNotes(t) {
       const timeout = window.setTimeout(() => controller.abort(), 5000);
       try {
         const conv = t.conversationId ? `&conversation=${encodeURIComponent(t.conversationId)}` : '';
-        return await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal);
+        return notesRead(t.conversationId, await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal), before);
       } finally { window.clearTimeout(timeout); }
     },
     insert: (note) => {
@@ -1211,7 +1221,7 @@ export function initConversation(p) {
         const timeout = window.setTimeout(() => controller.abort(), 5000);
         try {
           const conv = conversationId ? `&conversation=${encodeURIComponent(conversationId)}` : '';
-          return await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal);
+          return notesRead(conversationId, await apiGet(`/notes?limit=200${conv}${before ? `&before=${before}` : ''}`, undefined, controller.signal), before);
         } finally { window.clearTimeout(timeout); }
       },
       insert: (note) => {

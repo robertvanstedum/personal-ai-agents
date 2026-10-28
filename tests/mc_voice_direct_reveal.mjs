@@ -86,4 +86,27 @@ for (const kind of ['summary_proposal', 'summary_decision', 'summary_unavailable
   assert.equal(empty.mergeNotes([{ id: 2 }, { id: 1 }]), 2);                            // an empty thread takes them all
   n++;
 }
+// UI review #7: conversation.js announces each first page of notes it reads (with voice_sessions) for the voice thread.
+{
+  const rStart = source.indexOf('function notesRead(');
+  const rEnd = source.indexOf('// The assistant response is not the platform');
+  assert.ok(rStart > 0 && rEnd > rStart, 'notesRead block present');
+  assert.equal((source.match(/return notesRead\(/g) || []).length, 2);                    // both of the page's notes sweeps
+  const events = [];
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init.detail; } }
+  const box = { CustomEvent, document: { dispatchEvent: (e) => events.push(e) } };
+  vm.createContext(box);
+  vm.runInContext(`${source.slice(rStart, rEnd)}\nthis.notesRead = notesRead;`, box);
+  const answer = { ok: true, body: { notes: [{ id: 1 }], voice_sessions: [{ session_id: SID, state: 'live' }] } };
+  assert.equal(box.notesRead('c-1', answer, undefined), answer);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, 'guild:notes-read');
+  assert.equal(events[0].detail.conversationId, 'c-1');
+  assert.equal(events[0].detail.voice_sessions[0].session_id, SID);
+  box.notesRead('c-1', answer, 40);                                                     // an older page: not announced
+  box.notesRead('c-1', { ok: false, body: {} });
+  box.notesRead('c-1', { ok: true, body: { notes: [] } });                               // no voice_sessions: not announced
+  assert.equal(events.length, 1);
+  n++;
+}
 console.log(`${n} revealed-voice-record scenarios passed; fake DOM only.`);
