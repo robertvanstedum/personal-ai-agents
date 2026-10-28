@@ -1,18 +1,22 @@
 // The Guild composer and floating panel on the direct voice path (UI_CONTRACT_chunk_B.md §1, §8, §9): mc_voice.js picks the
 // direct path only when the capabilities answer offers it, hands the microphone over, ends voice when the panel closes, and
-// clears its status line. The real mc_voice.js and mc_voice_direct.js, with a fake controller, fetch, DOM nodes and timers.
+// clears its status line. The real mc_voice.js, mc_voice_direct.js (the Guild's thread) and the shared session module
+// (core/realtime_voice/static/direct-voice-session.js, Spec 165 §4.3), with a fake controller, fetch, DOM nodes and timers.
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { fakeDocument } from './js_helpers/fake_dom.mjs';
 const DIRECT_URL = new URL('../minimoi_portal/guild_ui/static/js/mc_voice_direct.js', import.meta.url);
 const realDirect = await import(DIRECT_URL);
+const SESSION_URL = new URL('../core/realtime_voice/static/direct-voice-session.js', import.meta.url);
+const realSession = await import(SESSION_URL);
 const source = fs.readFileSync(new URL('../minimoi_portal/guild_ui/static/js/mc_voice.js', import.meta.url), 'utf8')
   .replace(/^import .*;$/gm, '').replace('export function initMcVoice', 'function initMcVoice')
   .replaceAll('import(`${api}/mc/voice/static/realtime-voice-controller.js`)', 'importControlled()')
   .replace('import(`${api}/mc/voice/static/realtime-confer-controller.js`)', 'importConfer()')
-  .replace("import('./mc_voice_direct.js')", 'importDirect()');
-assert.ok(!source.includes("import('./mc_voice_direct.js')") && !source.includes('realtime-confer-controller.js'));
+  .replace("import('./mc_voice_direct.js')", 'importDirect()')
+  .replace('import(`${api}/mc/voice/static/direct-voice-session.js`)', 'importSession()');
+assert.ok(!source.includes("import('./mc_voice_direct.js')") && !source.includes('realtime-confer-controller.js') && !source.includes('direct-voice-session.js'));
 const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 
 const SID = '7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f';
@@ -20,13 +24,14 @@ const BASE = '/api/mc/voice/direct/api/realtime-voice';
 const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenAI' }, { provider: 'xai', label: 'Grok' }], default_provider: 'openai',
   bootstrap_url: `${BASE}/bootstrap`, consult_url: `${BASE}/consult`, end_url: `${BASE}/session/{session_id}/end`,
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
-  summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman' };
+  summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman',
+  person: { name: 'Master Craftsman', short: 'MC' } };
 
 async function rig({ capabilities = { ok: true, mode: 'agent_conversation', providers: [], managed_realtime: null, direct_voice: DIRECT }, summary = null,
   notesBody = null } = {}) {
   const nodes = {}, instances = [], docEvents = {}, windowEvents = {}, dispatched = [], calls = [], timers = [];
   const confers = [], submitted = [];
-  let directLoads = 0, conferLoads = 0;
+  let directLoads = 0, sessionLoads = 0, conferLoads = 0;
   const node = (s) => nodes[s] ??= { selector: s, textContent: '', value: s.includes('provider') ? 'openai' : '', disabled: false, hidden: s !== '[data-mc-voice-btn]' ? false : true,
     open: false, checked: false, attrs: {}, listeners: {}, parentElement: { hidden: false },
     options: s.includes('provider') ? [{ value: 'openai', textContent: 'OpenAI', disabled: false, dataset: {} }, { value: 'xai', textContent: 'Grok (xAI) · not available yet', disabled: true, dataset: {} }] : undefined,
@@ -39,10 +44,11 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
     addEventListener(k, f) { (docEvents[k] ||= []).push(f); }, createElement: fdoc.createElement, hidden: false };
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } }
   class Controller {
-    constructor(options) { this.options = options; this._state = 'idle'; this._sessionId = null; this.ended = []; this.instructions = [];
-      this._adapter = { sendContinuationInstruction: (t) => this.instructions.push(t) }; instances.push(this); }
+    constructor(options) { this.options = options; this._state = 'idle'; this.sid = null; this.ended = []; this.instructions = []; instances.push(this); }
+    sessionId() { return this.sid; }                                                      // the public surface only (Spec 165 §4.3)
+    speak(t) { this.instructions.push(t); return true; }
     async startSession(args) {
-      this.args = args; this._sessionId = SID;
+      this.args = args; this.sid = SID;
       this.options.onSessionInfo?.({ provider: args.provider, voice_session_id: SID, voice_notices: ['openai voice is unset, using marin'] });
       this._state = 'active'; this.options.onStateChange('active');
     }
@@ -80,14 +86,15 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
     submitVoiceUtterance: async (text, requestId) => { submitted.push([text, requestId]); return { ok: true, note_request_id: 'mc-note-1' }; },
     importConfer: async () => { conferLoads++; return { ConferVoiceController }; },
     MutationObserver: class { observe() {} }, window: win, fetch, console,
-    importControlled: async () => ({ RealtimeVoiceController: Controller }), importDirect: async () => { directLoads++; return realDirect; } };
+    importControlled: async () => ({ RealtimeVoiceController: Controller }), importDirect: async () => { directLoads++; return realDirect; },
+    importSession: async () => { sessionLoads++; return realSession; } };
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
   const page = { urls: { api: '/api' }, csrf_token: 'csrf-synthetic', conversation: { id: 'c-1' }, floor: { notes: { recent: [], voice_sessions: [] } } };
   sandbox.initMcVoice(page);
   await flush();
   return { nodes, node, instances, confers, submitted, calls, dispatched, docEvents, windowEvents, timers, merged, sandbox, page, document,
-    get directLoads() { return directLoads; }, get conferLoads() { return conferLoads; },
+    get directLoads() { return directLoads; }, get sessionLoads() { return sessionLoads; }, get conferLoads() { return conferLoads; },
     async click(sel = '[data-mc-voice-btn]') { node(sel).click(); await flush(); }, status: () => node('[data-mc-voice-status]').textContent,
     posts: (end) => calls.filter((c) => c.opts.method === 'POST' && c.url.endsWith(end)) };
 }
@@ -97,7 +104,7 @@ let n = 0;
 {
   const r = await rig();
   assert.equal(r.node('[data-mc-voice-btn]').hidden, false);
-  assert.equal(r.directLoads, 1);                                                         // loaded to paint the thread
+  assert.equal(r.directLoads, 1); assert.equal(r.sessionLoads, 1);                       // loaded to paint the thread
   const select = r.node('[data-mc-voice-provider]');
   assert.deepEqual(select.options.map((o) => [o.value, o.disabled, o.textContent]), [['openai', false, 'OpenAI'], ['xai', false, 'Grok (xAI)']]);
   assert.equal(select.value, 'openai');                                                   // direct.default_provider
@@ -158,7 +165,7 @@ let n = 0;
   assert.deepEqual(r.submitted, [['What is on the board?', 'req-1']]);
   assert.deepEqual(c.userTurns, ['What is on the board?']);
   assert.deepEqual(c.played, ['/api/mc/voice/speech/mc-note-1?c=c-1']);                   // the kept reply, read from the record
-  assert.equal(r.instances.length, 0); assert.equal(r.directLoads, 0);
+  assert.equal(r.instances.length, 0); assert.equal(r.directLoads, 0); assert.equal(r.sessionLoads, 0);
   assert.equal(r.calls.filter((x) => x.opts.method === 'POST').length, 0);               // the page itself posts nothing here
   assert.equal(r.node('[data-mc-voice-transcript-choice]').parentElement.hidden, false);
   await r.click();                                                                        // the button again: stopped
@@ -178,7 +185,7 @@ let n = 0;
 {
   const r = await rig({ capabilities: { ok: true, providers: [{ provider: 'openai' }], managed_realtime: { session_url: '/fake', provider: 'openai' }, direct_voice: null } });
   await r.click();
-  assert.equal(r.directLoads, 0); assert.equal(r.conferLoads, 0);
+  assert.equal(r.directLoads, 0); assert.equal(r.sessionLoads, 0); assert.equal(r.conferLoads, 0);
   assert.ok(r.instances[0].options.managedBootstrap);
   n++;
 }
@@ -187,7 +194,7 @@ let n = 0;
 {
   const both = { ok: true, providers: [{ provider: 'openai' }], managed_realtime: { session_url: '/fake', provider: 'openai' }, direct_voice: DIRECT };
   const r = await rig({ capabilities: both });
-  r.sandbox.importDirect = async () => { throw new Error('the file did not load'); };
+  r.sandbox.importSession = async () => { throw new Error('the file did not load'); };
   r.sandbox.importControlled = async () => { throw new Error('the controller did not load'); };
   await r.click();
   assert.equal(r.status(), 'Voice unavailable: the voice page could not load. Typing still works.');
@@ -362,7 +369,7 @@ for (const who of ['dictation', 'companion-closed']) {
 // paths: start() returns from either before the chained relay's first line.
 {
   const composer = fs.readFileSync(new URL('../minimoi_portal/guild_ui/static/js/mc_voice.js', import.meta.url), 'utf8');
-  const direct = fs.readFileSync(DIRECT_URL, 'utf8');
+  const direct = fs.readFileSync(DIRECT_URL, 'utf8') + fs.readFileSync(SESSION_URL, 'utf8');
   for (const chained of ['realtime-confer-controller', 'ConferVoiceController', '/mc/voice/bootstrap', '/mc/voice/speech']) {
     assert(!direct.includes(chained), chained);
   }

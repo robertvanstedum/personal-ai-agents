@@ -21,8 +21,9 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261015-managed-end1";
-import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260725-transcript1";
+// Both adapters changed for the playback event: new keys so browsers fetch them (Spec 165 §4.3).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-playback1";
+import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-playback1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
 const OPENING_INSTRUCTION =
@@ -310,6 +311,17 @@ export class RealtimeVoiceController {
   /** Idle re-engagement (Section 9) -- fixed, scene-neutral instruction. */
   continueNaturally() {
     if (!this._managedBootstrap) this._adapter?.sendContinuationInstruction(CONTINUATION_INSTRUCTION);
+  }
+
+  /** The session's id (the server's voice_session_id when it issued one), or null. For a host page (Spec 165 §4.3);
+   *  German and Portuguese do not call it. */
+  sessionId() { return this._sessionId; }
+
+  /** A host's one-off instruction to the voice on the direct path (a holding line, "say this briefly"): true when the
+   *  session's transport took it. Never on the managed path. German and Portuguese do not call it. */
+  speak(instruction) {
+    if (this._managedBootstrap || !this._adapter) return false;
+    try { this._adapter.sendContinuationInstruction(instruction); return true; } catch (_) { return false; }
   }
 
   mute() { this._adapter?.mute(); }

@@ -42,7 +42,7 @@ export function initMcVoice(page) {
   onChange(paintExport);
 
   // `session` numbers the attempt: stop() moves it on, and every callback of an older attempt (a late transcript, error, state change or answer) is then ignored.
-  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, directMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
+  let controller = null, starting = false, session = 0, provider = null, showingError = false, managed = null, direct = null, directMod = null, sessionMod = null, directSession = null, directThread = null, transcriptEnding = null, endedAttempt = null, restartBlocked = false, ending = null, transcriptPaint = null, transcriptReveal = null, transcriptCancel = null, transcriptEpoch = 0;
 
   let visualState = 'idle', pressed = false;
   const draw = () => {
@@ -203,9 +203,11 @@ export function initMcVoice(page) {
     }
   }
 
-  // The direct path (UI_CONTRACT_chunk_B.md). Its own file is loaded only now that the capabilities answer offered it.
+  // The direct path (UI_CONTRACT_chunk_B.md). Its files are loaded only now that the capabilities answer offered it: the
+  // Guild's thread (mc_voice_direct.js) and the shared session module (Spec 165 §4.3), served beside the controller.
   const DIRECT_ENDED = 'Voice ended. What was said is in the conversation.';
   const loadDirect = () => directMod ? Promise.resolve(directMod) : import('./mc_voice_direct.js').then((m) => (directMod = m));
+  const loadSession = () => sessionMod ? Promise.resolve(sessionMod) : import(`${api}/mc/voice/static/direct-voice-session.js`).then((m) => (sessionMod = m));
   const liveBar = () => $('[data-mc-voice-live]');
   async function revealDirect() {
     const cid = page.conversation?.id;
@@ -222,9 +224,9 @@ export function initMcVoice(page) {
     const choice = $('[data-mc-voice-transcript-choice]');
     if (choice?.parentElement) choice.parentElement.hidden = true;          // no running text on this path: it is revealed at End
     try {
-      const mod = await loadDirect();
+      const [mod, voice] = await Promise.all([loadDirect(), loadSession()]);
       directThread = mod.voiceThread({ doc: document, direct, thread: () => $('[data-mc-thread]'), mine: () => directSession?.sessionId() || null,
-        post: mod.jsonPost((...a) => fetch(...a), headers), conversationId: () => page.conversation?.id, reveal: revealDirect });
+        post: voice.jsonPost((...a) => fetch(...a), headers), conversationId: () => page.conversation?.id, reveal: revealDirect });
       directThread.paint(page.floor?.notes?.voice_sessions, page.floor?.notes?.recent);
     } catch (e) { /* Voice says so when it is pressed */ }
     // The thread's voice lines follow the conversation, not only this tab's own End (UI review #7): repainted from every notes
@@ -263,9 +265,9 @@ export function initMcVoice(page) {
       },
     };
     try {
-      const mod=await loadDirect();
+      const voice=await loadSession();
       if(!current())return;
-      const s=mod.directVoice({page,direct,ui,headers,fetch:(...a)=>fetch(...a),reveal:revealDirect,
+      const s=voice.directVoice({page,direct,ui,headers,fetch:(...a)=>fetch(...a),reveal:revealDirect,
         loadController:()=>import(`${api}/mc/voice/static/realtime-voice-controller.js`),
         setTimeout:(fn,ms)=>window.setTimeout(fn,ms),clearTimeout:(t)=>window.clearTimeout(t),
         setInterval:(fn,ms)=>window.setInterval(fn,ms),clearInterval:(t)=>window.clearInterval(t)});

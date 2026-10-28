@@ -1,7 +1,9 @@
-// MC voice on the direct path (UI_CONTRACT_chunk_B.md §2–§7): mc_voice_direct.js driven with a fake controller, a fake fetch
-// and fake timers. No DOM, network, provider or microphone.
+// MC voice on the direct path (UI_CONTRACT_chunk_B.md §2–§7): the shared session module (core/realtime_voice/static/
+// direct-voice-session.js, Spec 165 §4.3; mc_voice_direct.js until A1) driven with a fake controller, a fake fetch and fake
+// timers. The fake controller offers only the public surface (sessionId(), speak()), so a private read fails here.
+// No DOM, network, provider or microphone.
 import assert from 'node:assert/strict';
-const D = await import(new URL('../minimoi_portal/guild_ui/static/js/mc_voice_direct.js', import.meta.url));
+const D = await import(new URL('../core/realtime_voice/static/direct-voice-session.js', import.meta.url));
 const flush = async (n = 6) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
 
 const SID = '7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f';
@@ -10,7 +12,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   bootstrap_url: `${BASE}/bootstrap`, consult_url: `${BASE}/consult`, end_url: `${BASE}/session/{session_id}/end`,
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman',
-  locale: 'en-US', card_release: '0.1.18' };
+  locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' } };
 const HEADERS = { 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf-synthetic', 'X-Record-Mode': 'on_record' };
 
 function rig({ routes = {}, refuse = null, holdConnect = false, conversation = 'c-1', notices = ['openai voice is unset, using marin', 'xai voice is unset, using eve'] } = {}) {
@@ -48,13 +50,14 @@ function rig({ routes = {}, refuse = null, holdConnect = false, conversation = '
   };
   let controller = null;
   class Controller {
-    constructor(options) { this.options = options; this._state = 'idle'; this._sessionId = null; this.instructions = []; this.ended = [];
-      this._adapter = { sendContinuationInstruction: (t) => this.instructions.push(t) }; controller = this; }
+    constructor(options) { this.options = options; this._state = 'idle'; this.sid = null; this.instructions = []; this.ended = []; controller = this; }
+    sessionId() { return this.sid; }
+    speak(t) { this.instructions.push(t); return true; }
     async startSession(args) {
       this.args = args; this._state = 'requesting_mic';
       this.bootstrapHeaders = this.options.requestHeaders();
       if (refuse) { this._state = 'idle'; this.options.onFatalError({ reason: 'bootstrap_rejected', ...refuse }); return; }
-      this._sessionId = SID;
+      this.sid = SID;
       this.options.onSessionInfo({ provider: args.provider, voice_session_id: SID, voice_notices: notices });
       this._state = 'connecting'; this.options.onStateChange('connecting');
       if (!holdConnect) this.connect();
@@ -63,9 +66,9 @@ function rig({ routes = {}, refuse = null, holdConnect = false, conversation = '
     endSession(reason) {
       if (['ending', 'ended'].includes(this._state)) return;
       this.ended.push(reason); this._state = 'ended'; this.options.onStateChange('ended');
-      this.options.onFinalize({ turns: this.turns || [], partial_reason: reason, session_id: this._sessionId });
+      this.options.onFinalize({ turns: this.turns || [], partial_reason: reason, session_id: this.sid });
     }
-    speak(turns) { this.turns = turns.map((t) => ({ ...t })); this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); }
+    hear(turns) { this.turns = turns.map((t) => ({ ...t })); this.options.onTranscriptUpdate(this.turns.map((t) => ({ ...t }))); }   // what was said
   }
   const ui = {
     say: (text, o = {}) => said.push([text, o]), phase: (p) => phases.push(p), live: (on) => live.push(on), elapsed: (t) => elapsed.push(t),
@@ -231,19 +234,19 @@ for (const [status, detail, words] of [
   const r = rig();
   await r.s.start('openai');
   const c = r.c, t0 = r.now();
-  c.speak([{ speaker: 'user', text: 'What is', completed: false }]);
+  c.hear([{ speaker: 'user', text: 'What is', completed: false }]);
   r.tick(1500);
-  c.speak([{ speaker: 'user', text: 'What is stuck on #12?', completed: true }]);
+  c.hear([{ speaker: 'user', text: 'What is stuck on #12?', completed: true }]);
   await flush();
   let posts = r.posts('/transcript');
   assert.equal(posts.length, 1);
   assert.deepEqual(posts[0].body.events, [{ role: 'user', item_id: 't0', index: 0, text: 'What is stuck on #12?', partial: false, interrupted: false,
     started_at: at(r, t0), ended_at: at(r, t0 + 1500) }]);
   assert.deepEqual(posts[0].opts.headers, HEADERS);
-  c.speak([{ speaker: 'user', text: 'What is stuck on #12?', completed: true }, { speaker: 'assistant', text: 'Let me', completed: false }]);
+  c.hear([{ speaker: 'user', text: 'What is stuck on #12?', completed: true }, { speaker: 'assistant', text: 'Let me', completed: false }]);
   await flush();
   assert.equal(r.posts('/transcript').length, 1);                                       // nothing new completed, nothing posted
-  c.speak([{ speaker: 'user', text: 'What is stuck on #12?', completed: true }, { speaker: 'assistant', text: 'Let me check', completed: false },
+  c.hear([{ speaker: 'user', text: 'What is stuck on #12?', completed: true }, { speaker: 'assistant', text: 'Let me check', completed: false },
     { speaker: 'user', text: 'Actually', completed: false }]);
   await flush();
   posts = r.posts('/transcript');
@@ -279,7 +282,7 @@ for (const [status, detail, words] of [
   const r = rig();
   await r.s.start('openai');
   const turns = Array.from({ length: 45 }, (_, i) => ({ speaker: i % 2 ? 'assistant' : 'user', text: `turn ${i}`, completed: i < 44 }));
-  r.c.speak(turns);
+  r.c.hear(turns);
   await flush(20);
   const posts = r.posts('/transcript');
   assert.deepEqual(posts.map((p) => p.body.events.length), [20, 20, 4]);
@@ -295,7 +298,7 @@ for (const [status, detail, words] of [
   let tries = 0;
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? (++tries <= 2 ? { status: 409, body: { error: 'not_kept', kept: 1 } } : null) : null) } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: 'one', completed: true }, { speaker: 'assistant', text: 'two', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'one', completed: true }, { speaker: 'assistant', text: 'two', completed: true }]);
   await flush(10);
   const posts = r.posts('/transcript');
   assert.deepEqual(posts.map((p) => p.body.events.map((e) => e.item_id)), [['t0', 't1'], ['t1']]);   // the rest, once
@@ -305,7 +308,7 @@ for (const [status, detail, words] of [
 {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 422, body: { error: 'time' } } : null) } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: 'one', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'one', completed: true }]);
   await flush(10);
   assert.equal(r.posts('/transcript').length, 1);
   scenarios++;
@@ -313,10 +316,10 @@ for (const [status, detail, words] of [
 for (const [status, error, words] of [[429, 'cap', D.CAP], [409, 'session_ended', null], [403, 'not_your_session', null]]) {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status, body: { error } } : null) } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: 'one', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'one', completed: true }]);
   await flush(10);
   if (words) assert.deepEqual(r.said.at(-1), [words, { error: true }]);
-  r.c.speak([{ speaker: 'user', text: 'one', completed: true }, { speaker: 'user', text: 'two', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'one', completed: true }, { speaker: 'user', text: 'two', completed: true }]);
   r.advance(40000);
   await flush(10);
   assert.equal(r.posts('/transcript').length, 1, error);                                  // posting stopped, heartbeat too
@@ -326,11 +329,12 @@ for (const [status, error, words] of [[429, 'cap', D.CAP], [409, 'session_ended'
 for (const [status, error, words, beat] of [
   [409, 'session_ended', D.SERVER_ENDED.session_ended, false], [403, 'not_your_session', D.SERVER_ENDED.refused, false],
   [403, 'csrf', D.SERVER_ENDED.csrf, false], [403, 'not_allowed', D.SERVER_ENDED.refused, false],
-  [409, 'mc_turns_off', D.SERVER_ENDED.mc_turns_off, false], [409, 'session_ended', D.SERVER_ENDED.session_ended, true],
+  [409, 'mc_turns_off', "Voice stopped: Master Craftsman's turns are off here. What was said before is kept.", false],
+  [409, 'session_ended', D.SERVER_ENDED.session_ended, true],
   [403, 'csrf', D.SERVER_ENDED.csrf, true]]) {
   const r = rig({ routes: { '/transcript': (body) => ((beat ? !body.events.length : body.events.length) ? { status, body: { error } } : null) } });
   await r.s.start('openai');
-  if (beat) r.advance(20000); else r.c.speak([{ speaker: 'user', text: 'one', completed: true }]);
+  if (beat) r.advance(20000); else r.c.hear([{ speaker: 'user', text: 'one', completed: true }]);
   await flush(10);
   assert.deepEqual(r.c.ended, ['server_ended'], `${error} beat=${beat}`);
   assert.deepEqual(r.said.at(-1), [words, { loud: true, error: true }]);
@@ -356,7 +360,7 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
 {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 429, body: { error: 'cap' } } : null) } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: 'one', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'one', completed: true }]);
   await flush(10);
   assert.deepEqual(r.c.ended, []); assert.equal(r.posts('/end').length, 0);
   scenarios++;
@@ -364,7 +368,7 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
 {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length > 1 ? { status: 413, body: { error: 'too_large' } } : null) } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: 'one', completed: true }, { speaker: 'assistant', text: 'two', completed: true }, { speaker: 'user', text: 'three', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'one', completed: true }, { speaker: 'assistant', text: 'two', completed: true }, { speaker: 'user', text: 'three', completed: true }]);
   await flush(20);
   assert.deepEqual(r.posts('/transcript').map((p) => p.body.events.map((e) => e.item_id)), [['t0', 't1', 't2'], ['t0', 't1'], ['t0'], ['t1'], ['t2']]);
   scenarios++;
@@ -373,7 +377,7 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
 {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 409, body: { error: 'not_listening' } } : null) } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: 'one', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'one', completed: true }]);
   await flush(10);
   assert.deepEqual(r.c.ended, ['not_listening']);
   assert.equal(r.posts('/end').length, 1);
@@ -399,9 +403,9 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
 {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? new Promise(() => {}) : null) } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: 'First thing', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'First thing', completed: true }]);
   await flush();
-  r.c.speak([{ speaker: 'user', text: 'First thing', completed: true }, { speaker: 'assistant', text: 'Right', completed: true },
+  r.c.hear([{ speaker: 'user', text: 'First thing', completed: true }, { speaker: 'assistant', text: 'Right', completed: true },
     { speaker: 'user', text: 'And then', completed: false }]);
   await flush();
   assert.equal(r.posts('/transcript').length, 1);                                        // the second waits on the first
@@ -480,7 +484,7 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
   let n = 0;
   const r = rig({ routes: { '/transcript': (body) => (body.events.length && ++n === 1 ? { status: 200, body: { ok: true, kept: 1, propose_end: true, prompt: 'Shall I sum up?' } } : null) } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: "We're done.", completed: true }]);
+  r.c.hear([{ speaker: 'user', text: "We're done.", completed: true }]);
   await flush(10);
   assert.deepEqual(r.propose, [false, true].slice(1));
   assert.equal(r.s.proposing(), true);
@@ -496,7 +500,7 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
     '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We looked at item twelve.', written: '[Voice summary proposal] …', covers: {} } }),
   } });
   await r.s.start('openai');
-  r.c.speak([{ speaker: 'user', text: 'Yes.', completed: true }]);
+  r.c.hear([{ speaker: 'user', text: 'Yes.', completed: true }]);
   await flush(10);
   const ask = r.posts('/summary')[0];
   assert.equal(ask.url, `${BASE}/session/${SID}/summary`);

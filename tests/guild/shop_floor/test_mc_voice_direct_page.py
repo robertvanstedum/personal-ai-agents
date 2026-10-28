@@ -13,6 +13,7 @@ from test_mc_voice_release_check import API, DIRECT, ON, consult, conversation, 
 
 PAGE = "/guild-next/guild/build"
 SCRIPT = "/guild-next/guild/ui-assets/js/mc_voice_direct.js"
+SESSION = API + "/mc/voice/static/direct-voice-session.js"          # the shared session module (Spec 165 §4.3)
 NEW_MARKERS = ("data-mc-voice-live", "data-mc-voice-check", "data-mc-voice-end", "data-mc-voice-propose",
                "data-mc-voice-notice", "mc_voice_direct.js")
 VOICE_ONLY = {k: v for k, v in ON.items() if k != "MINIMOI_MC_VOICE_DIRECT"}
@@ -40,7 +41,9 @@ def test_with_the_direct_path_on_the_page_lists_and_serves_its_script_and_live_c
     assert " hidden" in live                                                  # nothing shows until a session is live
     assert ">Check with MC<" in html and ">End<" in html and ">Sum up<" in html and ">Keep talking<" in html
     served = client.get(SCRIPT)
-    assert served.status_code == 200 and b"export function directVoice" in served.data
+    assert served.status_code == 200 and b"export function voiceThread" in served.data       # the Guild's thread
+    session = client.get(SESSION)
+    assert session.status_code == 200 and b"export function directVoice" in session.data     # the session: core's
 
 
 @pytest.mark.parametrize("env", [VOICE_ONLY, {}], ids=["voice-on-direct-off", "voice-off"])
@@ -51,7 +54,7 @@ def test_with_the_direct_path_off_the_page_has_nothing_new_and_the_script_is_not
     for marker in NEW_MARKERS:
         assert marker not in html, marker
     assert ('data-mc-voice="true"' in html) is (env.get("MINIMOI_MC_VOICE") == "1")
-    assert client.get(SCRIPT).status_code == 404
+    assert client.get(SCRIPT).status_code == 404 and client.get(SESSION).status_code == 404
     assert client.get("/guild-next/guild/ui-assets/js/mc_voice.js").status_code == 200    # the rest is served as before
 
 

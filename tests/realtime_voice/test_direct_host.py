@@ -401,3 +401,6 @@ def test_the_core_names_no_person_and_imports_no_host():
     code = re.sub(r'"""[\s\S]*?"""|#.*', "", source)                                      # docstrings and comments aside
     for person in ("Master Craftsman", "Chief of Staff", "master_craftsman", "mc_turns", '"mc"'):
         assert person not in code, person
+    page = re.sub(r"//.*", "", (ROOT / "core/realtime_voice/static/direct-voice-session.js").read_text())
+    for person in ("Master Craftsman", "Chief of Staff", "mc_turns_off", "Check with MC", "'MC'"):
+        assert person not in page, person
