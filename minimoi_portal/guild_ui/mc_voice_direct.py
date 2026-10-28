@@ -206,15 +206,17 @@ class _Sessions(ConsultLedger):
         with self._meta_lock:
             return self._meta[session_id]["index"][call_id]
 
-    def count(self, session_id, items, size):
-        """Admit a post's new turns against the session caps; False (nothing counted) when over."""
+    def count(self, session_id, sized):
+        """Admit a post's new turns against the session caps; False (nothing counted) when over. ``sized`` is
+        [(turn key, bytes)]: a turn already counted (a retried post) adds nothing to either cap (review B #5)."""
         with self._meta_lock:
             meta = self._meta[session_id]
-            fresh = set(items) - meta["items"]
-            if len(meta["items"]) + len(fresh) > SESSION_MAX_EVENTS or meta["bytes"] + size > SESSION_MAX_BYTES:
+            fresh = {item: size for item, size in sized if item not in meta["items"]}
+            added = sum(fresh.values())
+            if len(meta["items"]) + len(fresh) > SESSION_MAX_EVENTS or meta["bytes"] + added > SESSION_MAX_BYTES:
                 return False
-            meta["items"] |= fresh
-            meta["bytes"] += size
+            meta["items"] |= set(fresh)
+            meta["bytes"] += added
             return True
 
     def heard(self, session_id, owner_texts):
@@ -671,7 +673,7 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
         sessions.seen(sid)
         if not events:
             return jsonify(ok=True, kept=0)
-        if not sessions.count(sid, [event[:3] for event in events], sum(len(e[3].encode()) for e in events)):
+        if not sessions.count(sid, [(e[:3], len(e[3].encode())) for e in events]):
             return json_error("cap", "This voice session has kept all it may. Nothing more was kept.", 429)
         conv, refusal = api._conversation(sessions.conversation_of(sid))
         if refusal is not None:

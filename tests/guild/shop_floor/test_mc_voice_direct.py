@@ -778,3 +778,18 @@ def test_a_failed_mint_ends_the_recorded_session_as_not_started(ready, monkeypat
 def json_of(row):
     import json
     return json.loads(row["text"][len(reveal.MARKER):])
+
+
+# ── review B #5: a retried post does not count its bytes again ───────────────────────────────────────────────────
+
+def test_a_retried_transcript_post_does_not_use_up_the_session_byte_cap(ready, monkeypatch):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    words = "x" * 1000
+    monkeypatch.setattr(direct, "SESSION_MAX_BYTES", 2500)
+    batch = [turn(r, "user", "item_u1", words), turn(r, "assistant", "item_a1", words, 3)]
+    for _ in range(5):                                                              # the page retries the same post
+        assert post(r, sid, batch).status_code == 200
+    assert post(r, sid, [turn(r, "user", "item_u2", "y" * 400, 5)]).status_code == 200
+    assert post(r, sid, [turn(r, "user", "item_u3", "z" * 200, 7)]).status_code == 429    # now truly over
+    assert len(voice_records(r, sid)) == 3
