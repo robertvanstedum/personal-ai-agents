@@ -178,12 +178,20 @@ let n = 0;
   assert.equal(r.status(), 'Voice ended. Agent work already accepted may still finish.');
   await c._submitTurn('late words', 'req-2');                                             // a queued utterance of a stopped attempt
   assert.equal(r.submitted.length, 1);
-  // A refused start says so, as on main; typing still works.
+  // A production-visible change at merge, intended (review R2 S1; Chunk B abf20433, #420): on the relay too, the ended line
+  // clears after about five seconds, where main kept it; and a refused start's line clears at the next typed send.
+  const clearing = r.timers.filter((t) => t.ms === 5000).at(-1);
+  assert.ok(clearing, 'the ended line is a passing note'); clearing.fn();
+  assert.equal(r.status(), '');
+  // A refused start says so, as on main; typing still works, and the next send clears the line.
   const r2 = await rig({ capabilities: { ok: true, providers: [{ provider: 'openai', label: 'OpenAI' }], managed_realtime: null, direct_voice: null } });
   r2.sandbox.importConfer = async () => { throw new Error('no key'); };
   await r2.click();
   assert.equal(r2.status(), 'Voice could not start: no key. Typing still works.');
   assert.equal(r2.node('[data-mc-voice-btn]').attrs['aria-pressed'], 'false');
+  assert.equal(r2.timers.filter((t) => t.ms === 5000).length, 0);                        // an error is not a passing note
+  r2.node('[data-mc-composer]').submit();                                                 // the next send
+  assert.equal(r2.status(), '');
   n++;
 }
 // managed_realtime only: the managed path, unchanged (the direct file and the chained relay are never loaded).
