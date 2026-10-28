@@ -61,6 +61,7 @@ CONSULT_MAX_BYTES = 32 * 1024        # a consult body (review R1 P3-10), like th
 PRUNE_AFTER_S = 3600                 # a session's memory here is let go this long after its maximum duration
 SUMMARY_JOIN_S = 40                  # a second ask joins a summary attempt running here this long, inside the page's 45 s
 ATTEMPT_STALE_S = 60                 # an attempt with no outcome this old ran in a process that died: a new one may start
+REFUSAL_CAP = 12                     # refusals that ran nothing but kept a receipt, per session: apart from the consults' CAP
 SUMMARY_PENDING = "The summary is still being written; it will appear in the conversation."
 
 
@@ -793,6 +794,16 @@ class DirectSessions(ConsultLedger):
             state["admitted"] = state.get("admitted", 0) + 1
             return state["admitted"]
 
+    def refused(self, sid):
+        """Count one refusal that ran nothing but keeps a receipt (FR N6, V note cap): its place (1 … REFUSAL_CAP), or None
+        when the session's refusals are used up. A cap of its own, so refusals never use up the real consults' CAP."""
+        with self._lock:
+            state = self._sessions.get(sid)
+            if state is None or state.get("refused", 0) >= REFUSAL_CAP:
+                return None
+            state["refused"] = state.get("refused", 0) + 1
+            return state["refused"]
+
     def capped(self, sid):
         with self._lock:
             state = self._sessions.get(sid)
@@ -1072,7 +1083,7 @@ def consult(adapter, sessions, principal, sid, call_id, name, owner_text, item):
     began = stamp(now())
 
     def refused_here(result):                     # a refusal that ran nothing: its own receipt, for this call only
-        if sessions.admitted(sid) is None:        # counted toward the session's cap, as each keeps a record (FR N6)
+        if sessions.refused(sid) is None:         # each keeps a record: counted, under a cap of their own (FR N6, V)
             return not_done("cap", CAP_LINE), 429
         result = {"ok": False, **result, "outcome": "not_done"}
         result = keep_receipt(adapter, handle, principal, sid, "x" + digest(call_id)[:32], name, result, began)
