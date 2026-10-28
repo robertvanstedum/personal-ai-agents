@@ -263,3 +263,19 @@ def test_mcs_page_words_come_from_his_adapter(ready):
     assert words == {"no_conversation": "Open a saved conversation before using voice.",
                      "not_listening": "Voice is on the record only. Go back on the record to use it.",
                      "invalid": "Voice unavailable: open a saved conversation, on the record."}
+
+
+# ── CX code note (spec delta review): not_done only before dispatch, or when MC's own answer says it did not happen ─────
+
+def test_a_turn_mc_says_was_already_dispatched_is_unknown_never_not_done(ready, monkeypatch):
+    from minimoi_portal.guild_ui import api
+    r = ready
+    monkeypatch.setattr(api, "run_mc_turn", lambda actual, **kw: ({"error": "already_dispatched", "state": "running",
+                                                                    "message": "This note was already sent."}, 409))
+    sid = start(r)["voice_session_id"]
+    out = call(r, sid, call_id="c1", owner_item_id="t1").get_json()
+    assert out["outcome"] == "unknown" and "did not go through" not in out["spoken"]
+    monkeypatch.setattr(api, "run_mc_turn", lambda actual, **kw: ({"status": "unavailable", "failure_class": "key_refused",
+                                                                    "message": "MC's model key was refused."}, 200))
+    refused = call(r, sid, call_id="c2", owner_item_id="t2").get_json()
+    assert refused["outcome"] == "not_done"                            # MC's own answer: it did not happen

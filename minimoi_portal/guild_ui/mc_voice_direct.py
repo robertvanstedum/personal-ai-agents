@@ -310,7 +310,11 @@ class _MasterCraftsman(DirectVoiceAdapter):
         # Dispatched to MC and no result came back: its own deadline or the relay's (timeout_uncertain: "the outcome is
         # unknown"), a stopped turn, or a runtime error. MC may have acted with his tools, so the outcome is unknown,
         # never "did not go through" (Spec 165 §5.1; review R1 P1-1). Every other refusal says it did not happen.
-        uncertain = answer.get("status") in ("timeout_uncertain", "cancelled", "error")
+        # Classified by the dispatch boundary, never by an exception or error class alone (review CX code note): the note
+        # already sent to MC by an earlier dispatch of this same key ("already_dispatched") is that earlier action, so
+        # this answer cannot say it did not happen.
+        uncertain = (answer.get("status") in ("timeout_uncertain", "cancelled", "error")
+                     or answer.get("error") == "already_dispatched")
         # A spoken job command (jobs_api.job_command) answers 200 with status "job": the platform acted, so it is not a
         # failure; saying so would have Robert repeat himself and start a second job (review B #2).
         command = answer.get("job_command") if isinstance(answer.get("job_command"), str) else None
