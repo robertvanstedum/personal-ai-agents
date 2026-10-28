@@ -46,6 +46,7 @@ async function rig({ capabilities = { ok: true, mode: 'agent_conversation', prov
   class Controller {
     constructor(options) { this.options = options; this._state = 'idle'; this.sid = null; this.ended = []; this.instructions = []; instances.push(this); }
     sessionId() { return this.sid; }                                                      // the public surface only (Spec 165 §4.3)
+    state() { return this._state; }
     speak(t) { this.instructions.push(t); return true; }
     async startSession(args) {
       this.args = args; this.sid = SID;

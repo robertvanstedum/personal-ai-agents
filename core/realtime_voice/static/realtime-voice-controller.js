@@ -317,6 +317,10 @@ export class RealtimeVoiceController {
    *  German and Portuguese do not call it. */
   sessionId() { return this._sessionId; }
 
+  /** The session's state (idle, requesting_mic, connecting, active, reconnecting, ending, ended). For a host page (Spec 165
+   *  §4.3), so it never reads a private field; German and Portuguese do not call it. */
+  state() { return this._state; }
+
   /** A host's one-off instruction to the voice on the direct path (a holding line, "say this briefly"): true when the
    *  session's transport took it. Never on the managed path. German and Portuguese do not call it. */
   speak(instruction) {

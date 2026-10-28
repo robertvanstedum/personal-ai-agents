@@ -1,5 +1,5 @@
 // The shared controller and adapters after Spec 165 A1, for German and Portuguese: byte-for-byte the files they ran before,
-// plus additive public methods they never call (the controller's sessionId(), speak() and afterPlayback(); the adapters'
+// plus additive public methods they never call (the controller's sessionId(), state(), speak() and afterPlayback(); the adapters'
 // whenPlaybackIdle(), review B6) and new adapter cache keys. Pinned two ways: each source with exactly those additions taken
 // out hashes to its 93bf00c6 file; and the methods, driven on a synthetic transport, send nothing unless a host calls them,
 // and nothing on the managed path. No provider, microphone or network.
@@ -12,6 +12,10 @@ const BEFORE = '682906489b0b3f9f02cd3df951da6fbaaef74c2aa49927d5905827ea3b8c7f05
 const ADDED_METHODS = `  /** The session's id (the server's voice_session_id when it issued one), or null. For a host page (Spec 165 §4.3);
    *  German and Portuguese do not call it. */
   sessionId() { return this._sessionId; }
+
+  /** The session's state (idle, requesting_mic, connecting, active, reconnecting, ending, ended). For a host page (Spec 165
+   *  §4.3), so it never reads a private field; German and Portuguese do not call it. */
+  state() { return this._state; }
 
   /** A host's one-off instruction to the voice on the direct path (a holding line, "say this briefly"): true when the
    *  session's transport took it. Never on the managed path. German and Portuguese do not call it. */
@@ -119,6 +123,7 @@ try {
   // German: no new option, no new call. The bootstrap request and the opening instruction are as before.
   const german = new Controller({ bootstrapUrl: '/api/realtime-voice/bootstrap' });
   assert.equal(german.sessionId(), null);
+  assert.equal(german.state(), 'idle');                                                // read-only: nothing is sent
   assert.equal(german.speak('nothing yet'), false);                                     // no session: nothing is sent
   await german.startSession({ provider: 'openai', persona: 'frau_berger', scene: 'bakery', learner_name: 'Robert' });
   assert.deepEqual(sent[0][1].headers, { 'Content-Type': 'application/json' });

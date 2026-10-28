@@ -64,6 +64,7 @@ function rig({ routes = {} } = {}) {
       controller = this;
     }
     sessionId() { return this._sessionId; }                 // the public surface (Spec 165 §4.3)
+    state() { return this._state; }
     speak(t) { this.instructions.push(t); return true; }
     afterPlayback() { return this.drain || Promise.resolve(); }
     mute() { this.muted += 1; }

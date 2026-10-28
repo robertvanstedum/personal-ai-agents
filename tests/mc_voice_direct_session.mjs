@@ -52,6 +52,7 @@ function rig({ routes = {}, refuse = null, holdConnect = false, conversation = '
   class Controller {
     constructor(options) { this.options = options; this._state = 'idle'; this.sid = null; this.instructions = []; this.ended = []; controller = this; }
     sessionId() { return this.sid; }
+    state() { return this._state; }                                                        // public (item 11)
     speak(t) { this.instructions.push(t); return true; }
     async startSession(args) {
       this.args = args; this._state = 'requesting_mic';

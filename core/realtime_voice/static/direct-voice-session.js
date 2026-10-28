@@ -9,8 +9,8 @@
 // refusal says "Voice unavailable: <reason>"; nothing else is tried, and no other voice path is a fallback.
 //
 // Words that name the person take direct_voice.person ({name, short}) from the server: "Check with MC", "Master Craftsman's
-// turns are off here" (the refusal code <short>_turns_off). The controller is read only through its public sessionId()
-// and speak(instruction).
+// turns are off here" (the refusal code <short>_turns_off). The controller is read only through its public methods
+// (sessionId(), state(), speak(instruction) and the playback ones), never a private field (tests/realtime_voice/test_no_copy.py).
 //
 // No imports: the host page hands in the page, the fetch, the controller's loader and its ui, so the node tests drive this
 // file with a fake controller, a fake fetch and fake timers.
@@ -549,7 +549,7 @@ export function directVoice(d) {
         if (keepalive && !settled) sendFinal([]);
         return done;
       }
-      const starting = c && !connected && ['requesting_mic', 'connecting'].includes(c._state);
+      const starting = c && !connected && ['requesting_mic', 'connecting'].includes(c.state?.());
       if (starting && !keepalive) {
         if (!held) { held = reason; heldTimer = later(() => endNow(reason), START_END_MS); }
         return done;

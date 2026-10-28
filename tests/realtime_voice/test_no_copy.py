@@ -18,6 +18,8 @@ SUMMARY_WORDS = ("BEGIN_VOICE_RECORDS", "THAT SESSION ONLY")
 CORE_CONSTANTS = {"SESSION_MAX_EVENTS", "SESSION_MAX_BYTES", "POST_MAX_EVENTS", "SUMMARY_MAX_TURNS", "SUMMARY_MAX_CHARS",
                   "PROPOSAL_HEAD", "DECISION_HEAD"}
 # The browser bridge: the model's function calls wired by a page, a consult body, or the session module's own functions.
+# The controller's private fields: the session module reads the controller only through its public methods (Spec 165 §4.3).
+PRIVATE_READ = re.compile(r"\._(?:state|sessionId|adapter)\b")
 BRIDGE = re.compile(r"\bonFunctionCall\b|\bsendFunctionResult\b|\bowner_transcript_item\b"
                     r"|\bfunction\s+(?:directVoice|createCapture|jsonPost)\b"
                     r"|\b(?:const|let|var)\s+(?:directVoice|createCapture|jsonPost)\s*=")
@@ -77,6 +79,24 @@ def test_no_host_page_or_script_defines_a_browser_bridge():
         if found:
             copies[str(path.relative_to(ROOT))] = found
     assert copies == {}
+
+
+def private_reads(text):
+    """[(line, field)] where a script reads one of the controller's private fields (comments aside)."""
+    code = re.sub(r"//[^\n]*", "", text)
+    return [(code.count("\n", 0, m.start()) + 1, m.group(0)) for m in PRIVATE_READ.finditer(code)]
+
+
+def test_the_session_module_reads_no_private_controller_field():
+    """The shared session module uses only the controller's public methods (sessionId(), state(), speak() and the
+    playback ones), so a controller change cannot silently break it (A1 fix round, item 11)."""
+    assert private_reads((CORE / "static" / "direct-voice-session.js").read_text()) == []
+
+
+@pytest.mark.parametrize("source", ["if (c._state === 'connecting') {}", "const id = controller._sessionId;",
+                                    "c._adapter.sendContinuationInstruction(x);"])
+def test_a_private_read_is_caught(source):
+    assert private_reads(source)
 
 
 def test_the_core_holds_each_of_them_once():
