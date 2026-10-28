@@ -658,3 +658,43 @@ def test_a_bare_confirm_of_a_waiting_lesson_or_guest_rejection_in_voice_asks_for
     monkeypatch.setattr(guest_commands, "GuestCommands", Pending)
     assert call(r, sid, call_id="g1", words="Confirm").get_json()["spoken"] == api.VOICE_IN_WRITING
     assert done == [] and not r.turns
+
+
+# ── review B #2: an action that happened is spoken as done, with its receipt ─────────────────────────────────────
+
+def test_a_job_started_by_voice_is_spoken_as_started_with_its_job_id_so_it_is_not_repeated(ready, monkeypatch):
+    r = ready
+    started = []
+
+    def job(found):
+        started.append(found[5])
+        return jsonify({"job_command": "run_job", "status": "job", "job": {"id": "j1"}, "message": "Started."}), 200
+    monkeypatch.setattr(jobs_api, "job_command", job)
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, call_id="c1", words="Run this as a job: rebuild the index").get_json()
+    assert result["ok"] is True and result["spoken"] == "Started." and direct.FAILED not in result["spoken"]
+    assert result["receipt"] == "j1" and result["receipt_kind"] == "job" and result["job_command"] == "run_job"
+    assert len(started) == 1 and not r.turns
+    receipt = [row for row in voice_records(r, sid) if HEADER.match(row["text"])["speaker"] == "consult receipt"]
+    assert receipt[0]["text"].endswith("Job started. Job j1. Spoken: Started.")
+
+
+def test_a_platform_operation_without_a_reply_note_is_answered_with_its_operation_id(ready, monkeypatch):
+    r = ready
+    monkeypatch.setattr(api, "_owner_board_command", lambda found: (jsonify(
+        status="answered", backend_kind="platform", reply_note=None, message="Pinned to the Board.",
+        operation={"type": "board_postit", "saved": True, "operation_id": "op-9"}, history_saved=False), 200))
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words="Pin this to the board: kiln seal").get_json()
+    assert result["ok"] is True and result["receipt"] == "op-9" and result["receipt_kind"] == "operation"
+    assert result["spoken"] == "Pinned to the Board."
+    receipt = [row for row in voice_records(r, sid) if HEADER.match(row["text"])["speaker"] == "consult receipt"]
+    assert receipt[0]["text"].endswith("Answered. Operation op-9. Spoken: Pinned to the Board.")
+
+
+def test_a_refused_job_is_still_spoken_as_not_done(ready, monkeypatch):
+    r = ready
+    monkeypatch.setattr(jobs_api, "job_command", lambda found: jobs_api.start_refusal("queue_full", "The queue is full."))
+    sid = start(r)["voice_session_id"]
+    result = call(r, sid, words="Run this as a job: rebuild the index").get_json()
+    assert result["ok"] is False and result["error"] == "queue_full" and result["receipt"] is None

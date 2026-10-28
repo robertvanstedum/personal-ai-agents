@@ -277,12 +277,19 @@ def _consult(sessions, principal, session_id, call_id, name, owner_text):
     return result
 
 
+JOB_DONE = {"run_job": "Job started", "delegate": "Delegated job started", "stop": "Job stop requested"}
+
+
 def _receipt_line(name, result):
     """A compact, factual line for the consult's record: what came back, never more than it says."""
+    receipt, kind = result.get("receipt"), result.get("receipt_kind")
     if name == "save_note":
-        head = f"Saved. Operation {result.get('receipt')}." if result.get("saved") else "Not saved."
+        head = f"Saved. Operation {receipt}." if result.get("saved") else "Not saved."
+    elif result.get("job_command"):
+        head = (f"{JOB_DONE.get(result['job_command'], 'Job command')}." +
+                (f" Job {receipt}." if kind == "job" and receipt else ""))
     elif result.get("answered"):
-        head = f"Answered. Reply {result.get('receipt')}."
+        head = "Answered." + (f" {kind.capitalize()} {receipt}." if kind and receipt else "")
     else:
         head = f"Not answered ({result.get('error') or 'unavailable'})."
     return f"{head} Spoken: {result.get('spoken') or ''}".strip()[:TURN_MAX_BYTES // 4]
@@ -326,11 +333,16 @@ def _typed_turn(sessions, principal, session_id, call_id, name, conv, text, bad)
     answer = response.get_json(silent=True) if response.is_json else None
     answer = answer if isinstance(answer, dict) else {}
     answered = response.status_code == 200 and answer.get("status") == "answered"
+    # A spoken job command (jobs_api.job_command) answers 200 with status "job": the platform acted, so it is not a
+    # failure; saying so would have Robert repeat himself and start a second job (review B #2).
+    command = answer.get("job_command") if isinstance(answer.get("job_command"), str) else None
+    acted = response.status_code == 200 and answer.get("status") == "job" and command is not None
     reply = answer.get("reply_note") if isinstance(answer.get("reply_note"), dict) else {}
+    operation = answer.get("operation") if isinstance(answer.get("operation"), dict) else {}
+    job = answer.get("job") if isinstance(answer.get("job"), dict) else {}
     said = reply.get("text") if answered and isinstance(reply.get("text"), str) else answer.get("message")
     result = {"note_request_id": note_id, "answered": answered}
     if name == "save_note":
-        operation = answer.get("operation") if isinstance(answer.get("operation"), dict) else {}
         receipt = operation.get("operation_id") or operation.get("id")
         saved = answered and operation.get("saved") is True and bool(receipt)
         result.update(saved=saved, receipt=receipt if saved else None,
@@ -338,10 +350,23 @@ def _typed_turn(sessions, principal, session_id, call_id, name, conv, text, bad)
         if not saved:
             result["ok"] = False
         return result
-    result.update(receipt=reply.get("request_id") if answered else None,
+    receipt = kind = None
+    if answered:
+        for kind, receipt in (("reply", reply.get("request_id")),
+                              ("operation", operation.get("operation_id") or operation.get("id"))):
+            if isinstance(receipt, str) and receipt:
+                break
+        else:
+            kind = receipt = None
+    elif acted:
+        kind, receipt = "job", job.get("id") if isinstance(job.get("id"), str) and job.get("id") else None
+    result.update(receipt=receipt, receipt_kind=kind,
                   spoken=_speakable(said or "") if isinstance(said, str) and said.strip() else FAILED)
-    if not answered:
+    if acted:
+        result["job_command"] = command
+    if not (answered or acted):
         result["ok"] = False
+        result["error"] = answer.get("error") if isinstance(answer.get("error"), str) else None
     return result
 
 
