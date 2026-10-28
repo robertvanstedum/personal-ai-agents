@@ -347,7 +347,7 @@ def test_every_turn_and_consult_is_kept_as_it_happens_withheld_while_live_and_re
     assert marker["conversation_id"] == CID and marker["principal"] == "robert" and marker["max_minutes"] == 30
     kept = post(r, sid, [turn(r, "user", "item_u1", "What is stuck on #12?"),
                          turn(r, "assistant", "item_a1", "Let me check that.", 3, partial=True, interrupted=True)])
-    assert kept.status_code == 200 and kept.get_json() == {"ok": True, "kept": 2}
+    assert kept.status_code == 200 and kept.get_json() == {"ok": True, "kept": 2, "proposing": False}
     assert post(r, sid, []).get_json() == {"ok": True, "kept": 0}                  # the heartbeat keeps nothing
     assert call(r, sid).get_json()["answered"] is True
     records = voice_records(r, sid)

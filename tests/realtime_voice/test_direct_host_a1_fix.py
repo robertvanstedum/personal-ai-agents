@@ -510,3 +510,31 @@ def test_a_gateway_that_times_out_is_unavailable_once_and_nothing_is_written_aft
     sid, answer = summarized(r)
     assert answer["state"] == "unavailable" and answer["line"] == "Summary unavailable."
     assert r.store.summary("owner", sid) is None and len(r.gateway.requests) == 1
+
+
+# ── Item 8: Keep talking is its own route; the transcript answers carry whether a proposal stands (R2 N9) ────────────────
+
+def test_keep_talking_is_its_own_route_and_the_old_transcript_withdrawal_is_gone(rig):
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    assert post(r, sid, [turn(r, "user", "t0", "We're done.")]).get_json()["proposing"] is True
+    old = r.client.post(BASE + f"/session/{sid}/transcript", headers=OWNER, json={"events": [], "proposal": "withdrawn"})
+    assert old.status_code == 200 and r.sessions.proposing(sid)                    # A1's control post withdraws nothing now
+    answer = r.client.post(BASE + f"/session/{sid}/keep_talking", headers=OWNER, json={})
+    assert answer.get_json() == {"ok": True, "proposal": "withdrawn", "proposing": False}
+    assert "keep_talking" in r.host.kinds
+    assert "end_confirmed" not in post(r, sid, [turn(r, "user", "t1", "Yes.")]).get_json()
+    other = {**OWNER, "X-Owner": "guest"}
+    assert r.client.post(BASE + f"/session/{sid}/keep_talking", headers=other, json={}).status_code == 403
+    r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={})
+    assert r.client.post(BASE + f"/session/{sid}/keep_talking", headers=OWNER, json={}).status_code == 409
+    assert r.metadata["keep_talking_url"] == BASE + "/session/{session_id}/keep_talking"
+
+
+def test_a_later_ordinary_turn_withdraws_the_proposal_and_the_answer_says_so(rig):
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    assert post(r, sid, [turn(r, "user", "t0", "We're done.")]).get_json()["proposing"] is True
+    assert post(r, sid, [turn(r, "user", "t1", "Actually, one more thing about the kiln.")]).get_json()["proposing"] is False

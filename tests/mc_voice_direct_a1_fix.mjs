@@ -231,4 +231,63 @@ await t.check('item 7, R2 N6: the thread says incomplete with its count, and a d
   assert.match(thread.querySelector('[data-voice-line="other"]')?.textContent || '', /may not have been kept/);
 });
 
+// ── Item 8: Keep talking (R1 P3-8), named states (R2 N9), the summary's 45 s bound and its words (R1 P3-7) ─────────────
+await t.check('R1 P3-8 (repro R4): Keep talking is retried once with the same body, then said and the voice ended', async () => {
+  const r = rig({ routes: { '/keep_talking': () => 'network' } });
+  await r.s.start('openai');
+  await r.s.keepTalking(); await flush(20);
+  assert.deepEqual(r.posts('/keep_talking').map((x) => x.body), [{}, {}]);
+  assert.deepEqual(r.said.at(-1), [D.KEEP_TALKING_FAILED, { loud: true, error: true }]);
+  assert.deepEqual(r.c.ended, ['keep_talking_failed']);
+});
+await t.check('item 8: Keep talking goes after the posts queued before it, and a second try that lands is enough', async () => {
+  let release, tries = 0;
+  const r = rig({ routes: {
+    '/transcript': (body) => (body.events.length ? new Promise((res) => { release = () => res({ status: 200, body: { ok: true, kept: 1, propose_end: true } }); }) : null),
+    '/keep_talking': () => (++tries === 1 ? { status: 502, body: {} } : { status: 200, body: { ok: true, proposal: 'withdrawn' } }) } });
+  await r.s.start('openai');
+  r.c.hear([user("We're done.")]); await flush();
+  const kept = r.s.keepTalking(); await flush();
+  assert.equal(r.posts('/keep_talking').length, 0, 'sent before the post queued before it was answered');
+  release(); await kept; await flush();
+  assert.equal(r.posts('/keep_talking').length, 2); assert.deepEqual(r.c.ended, []);
+});
+await t.check('R2 N9: the session names its states, and leaving live or a later ordinary turn hides Sum up', async () => {
+  const shown = [];
+  const r = rig({ routes: {
+    '/transcript': (body) => (body.events.some((e) => e.text === "We're done.") ? { status: 200, body: { ok: true, kept: 1, propose_end: true, proposing: true } }
+      : body.events.length ? { status: 200, body: { ok: true, kept: 1, proposing: false } } : null),
+    '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'We checked twelve.' } }) } });
+  await r.s.start('openai');
+  assert.equal(r.s.state(), 'live');
+  r.c.hear([user("We're done.")]); await flush();
+  assert.equal(r.s.proposing(), true);
+  r.c.hear([user("We're done."), user('Actually, the glaze first.')]); await flush();
+  assert.equal(r.s.proposing(), false, 'the buttons stayed up after the server withdrew the proposal');
+  await r.s.sumUp(); await flush();
+  assert.deepEqual(r.lifecycle, ['live', 'closing', 'summarizing', 'speaking_summary']);
+  await r.s.end('user_ended'); await flush();
+  assert.deepEqual(r.lifecycle.at(-1), 'ended'); assert.equal(r.s.state(), 'ended');
+  const direct = rig(); await direct.s.start('openai');
+  await direct.s.end('user_ended'); await flush();
+  assert.deepEqual(direct.lifecycle, ['live', 'ended']);                                  // End goes straight to ended
+});
+await t.check('item 8: the summary is awaited 45 s, then "Summary unavailable"; End during it still closes once', async () => {
+  const r = rig({ routes: { '/summary': () => new Promise(() => {}) } });
+  await r.s.start('openai');
+  r.s.sumUp(); await flush();
+  r.advance(44999); await flush(); assert.deepEqual(r.c.ended, []);
+  r.advance(1); await flush(20);
+  assert.deepEqual(r.c.ended, ['normal_end']); assert.deepEqual(r.ended.at(-1), [D.SUMMARY_UNAVAILABLE, { error: false }]);
+});
+await t.check('R1 P3-7 (repro R3): a lost summary answer (504, 502, no answer) may still appear; a refusal could not be asked', async () => {
+  for (const [answer, words, error] of [[{ status: 504, body: {} }, D.SUMMARY_MAY_APPEAR, false], [{ status: 502, body: {} }, D.SUMMARY_MAY_APPEAR, false],
+    ['network', D.SUMMARY_MAY_APPEAR, false], [{ status: 403, body: { message: 'This request could not be verified.' } }, 'This request could not be verified.', true]]) {
+    const r = rig({ routes: { '/summary': () => answer } });
+    await r.s.start('openai');
+    await r.s.sumUp(); await flush(20);
+    assert.deepEqual(r.ended.at(-1), [words, { error }], JSON.stringify(answer));
+  }
+});
+
 t.done();

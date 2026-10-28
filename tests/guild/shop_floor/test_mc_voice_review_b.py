@@ -79,8 +79,7 @@ def test_keep_talking_withdraws_the_proposal_so_a_later_yes_ends_nothing(ready):
     r = ready
     sid = start(r)["voice_session_id"]
     assert post(r, sid, [turn(r, "user", "u1", "We're done.")]).get_json().get("propose_end") is True
-    assert r.client.post(BASE + f"/session/{sid}/transcript", headers=r.headers,
-                         json={"events": [], "proposal": "withdrawn"}).status_code == 200
+    assert r.client.post(BASE + f"/session/{sid}/keep_talking", headers=r.headers, json={}).status_code == 200   # §5.3
     assert not post(r, sid, [turn(r, "user", "u2", "Yes, the glaze first.", 3)]).get_json().get("end_confirmed")
 
 

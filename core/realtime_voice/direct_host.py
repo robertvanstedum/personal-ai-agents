@@ -814,6 +814,11 @@ class DirectSessions(ConsultLedger):
             meta = self._meta.get(sid)
             return meta.pop("completed", []) if meta else []
 
+    def proposing(self, sid):
+        """Whether the server's proposal to end stands (a later ordinary owner turn withdraws it, as Keep talking does)."""
+        with self._meta_lock:
+            return bool((self._meta.get(sid) or {}).get("proposed"))
+
     def withdraw(self, sid):
         """Keep talking: the proposal to end is withdrawn here too, so a later conversational yes ends nothing."""
         with self._meta_lock:
@@ -1181,12 +1186,16 @@ def summarize(adapter, principal, handle, sid, *, running=0, client=None):
             "covers": {"records": covered, "of": total, "omitted": partial}}, 200
 
 
+def session_id_of(value):
+    return session_id(value)
+
+
 # ── the routes ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _kind():
     if request.method == "GET":
         return "read"                                   # reconciliation: owner-only, no-store, runs nothing
-    for kind, tail in (("end", "/end"), ("decision", "/decision"), ("summary", "/summary"),
+    for kind, tail in (("end", "/end"), ("decision", "/decision"), ("summary", "/summary"), ("keep_talking", "/keep_talking"),
                        ("transcript", "/transcript"), ("consult", "/consult")):
         if request.path.endswith(tail):
             return kind
@@ -1352,8 +1361,6 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         if bad is not None:
             return refusal(bad, "Those transcript events are not valid. Nothing was kept.", 422)
         sessions.seen(sid)
-        if isinstance(body, dict) and body.get("proposal") == "withdrawn":
-            sessions.withdraw(sid)                                     # Keep talking (review B5)
         def told():                          # turns answered pending that have finished, said once at a pause (§5.1)
             completed = sessions.take_completed(sid)
             return {"completed": completed} if completed else {}
@@ -1374,7 +1381,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         except (SessionRefused, ValueError):
             return refusal("not_kept", "A transcript turn could not be kept.", 409, kept=kept)
         proposed, confirmed = sessions.heard(sid, [(e[:3], e[3]) for e in posted if e[0] == "user" and not e[4]])
-        answer = {"ok": True, "kept": kept, **told()}
+        answer = {"ok": True, "kept": kept, "proposing": sessions.proposing(sid), **told()}
         if proposed:
             answer.update(propose_end=True, prompt=SUMMARY_PROMPT)       # the page offers End; nothing ends yet
         if confirmed:
@@ -1400,6 +1407,18 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         if start is None or start.get("principal") != who or start.get("conversation_id") != cid:
             return None, refusal("not_your_session", "That is not your voice session.", 403)
         return (who, sid, cid, handle), None
+
+    @transcript.route("/api/realtime-voice/session/<session_id>/keep_talking", methods=["POST"])
+    def keep_talking(session_id):
+        """Keep talking (Spec 165 §5.3, review B5): the server's proposal to end is withdrawn, so a later conversational
+        yes ends nothing. Idempotent: the page retries it once with the same body."""
+        who, sid = principal(), session_id_of(session_id)
+        if sid is None or who is None or sessions.owner_of(sid) != who:
+            return refusal("not_your_session", "That is not your voice session. Nothing was changed.", 403)
+        if not sessions.is_open(sid) or sessions.expired(sid):
+            return refusal("session_ended", "That voice session has ended. Nothing was changed.", 409)
+        sessions.withdraw(sid)
+        return jsonify(ok=True, proposal="withdrawn", proposing=False)
 
     @transcript.route("/api/realtime-voice/consult/<session_id>/<owner_item_id>", methods=["GET"])
     def reconcile(session_id, owner_item_id):
@@ -1494,6 +1513,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                 "summary_url": url_prefix + "/api/realtime-voice/session/{session_id}/summary",
                 "summary_decision_url": url_prefix + "/api/realtime-voice/session/{session_id}/summary/decision",
                 "reconcile_url": url_prefix + "/api/realtime-voice/consult/{session_id}/{owner_item_id}",
+                "keep_talking_url": url_prefix + "/api/realtime-voice/session/{session_id}/keep_talking",
                 "heartbeat_seconds": HEARTBEAT_SECONDS, "persona": person["key"], "locale": locale,
                 "card_release": release, "person": {"name": person["name"], "short": person["short"]}}
     return metadata, sessions

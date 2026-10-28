@@ -20,11 +20,12 @@ const BASE = '/guild-next/api/v1/mc/voice/direct/api/realtime-voice';
 const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenAI' }], default_provider: 'openai',
   bootstrap_url: `${BASE}/bootstrap`, consult_url: `${BASE}/consult`, end_url: `${BASE}/session/{session_id}/end`,
   transcript_url: `${BASE}/session/{session_id}/transcript`, summary_url: `${BASE}/session/{session_id}/summary`,
-  summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman',
+  summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, keep_talking_url: `${BASE}/session/{session_id}/keep_talking`,
+  heartbeat_seconds: 20, persona: 'master_craftsman',
   locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' } };
 const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";      // Spec 165 §5.1's words
 const INCOMPLETE = (n) => `Voice ended. Some of what was said was not kept (${n} turn${n === 1 ? '' : 's'}). What was kept is in the conversation.`;   // §5.2
-const PENDING = 'The summary is still being written; it will appear in the conversation.';
+const UNAVAILABLE = 'Summary unavailable.';                  // after the 45 s bound (Spec 165 §5.3; the server's call is bounded)
 
 function rig({ routes = {} } = {}) {
   const calls = [], said = [], ended = [], reveals = [];
@@ -191,7 +192,7 @@ await check('B3 no heartbeat while the summary is being made; the summary is sti
   await r.s.start('openai');
   const asked = r.s.sumUp(); await flush();
   const before = r.posts('/transcript').length;
-  r.advance(45000); await flush();
+  r.advance(40000); await flush();                       // two heartbeat intervals, inside the 45 s bound
   assert.equal(r.posts('/transcript').length, before, 'a heartbeat was sent after capture closed');
   assert.deepEqual(r.c.ended, []);
   release(); await asked; await flush();
@@ -202,9 +203,9 @@ await check('B3 a summary that does not answer in time ends honestly, once; a la
   const r = rig({ routes: { '/summary': () => new Promise((res) => { release = () => res({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Late.' } }); }) } });
   await r.s.start('openai');
   r.s.sumUp(); await flush();
-  r.advance(90000); await flush(20);
+  r.advance(45000); await flush(20);
   assert.deepEqual(r.c.ended, ['normal_end']); assert.equal(r.posts('/end').length, 1);
-  assert.deepEqual(r.ended.at(-1), [PENDING, { error: false }]);
+  assert.deepEqual(r.ended.at(-1), [UNAVAILABLE, { error: false }]);
   release(); await flush();
   assert.deepEqual(r.c.instructions, []); assert.equal(r.posts('/end').length, 1);
 });
@@ -277,12 +278,14 @@ await check('B4 edge: a leaving page sends End once, with one post of turns, and
 
 // ── B5: Keep talking withdraws the proposal on the server too ──────────────────────────────────────────────────────────
 await check('B5 Keep talking sends the withdrawal after the posts before it', async () => {
-  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 200, body: { ok: true, kept: 1, propose_end: true } } : null) } });
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 200, body: { ok: true, kept: 1, propose_end: true } } : null),
+    '/keep_talking': () => ({ status: 200, body: { ok: true, proposal: 'withdrawn' } }) } });
   await r.s.start('openai');
   r.c.hear([user("We're done.")]); await flush();
   r.s.keepTalking(); await flush();
-  const last = r.posts('/transcript').at(-1);
-  assert.deepEqual(last.body, { events: [], proposal: 'withdrawn' });
+  const last = r.calls.at(-1);                                   // its own route now (Spec 165 §5.3), after the posts before it
+  assert.ok(last.url.endsWith('/keep_talking')); assert.deepEqual(last.body, {});
+  assert.ok(r.calls.indexOf(r.posts('/transcript').at(-1)) < r.calls.indexOf(last));
 });
 
 // ── B6: the spoken summary ends when its own turn has played out ────────────────────────────────────────────────────────

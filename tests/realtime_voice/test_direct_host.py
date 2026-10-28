@@ -482,7 +482,7 @@ def test_end_intent_is_heard_once_per_turn_and_keep_talking_withdraws_it(rig):
     assert post(r, sid, [event]).get_json().get("propose_end") is True
     replay = post(r, sid, [event]).get_json()
     assert replay.get("propose_end") is True and "end_confirmed" not in replay
-    r.client.post(BASE + f"/session/{sid}/transcript", headers=OWNER, json={"events": [], "proposal": "withdrawn"})
+    assert r.client.post(BASE + f"/session/{sid}/keep_talking", headers=OWNER, json={}).get_json()["proposal"] == "withdrawn"
     assert "end_confirmed" not in post(r, sid, [turn(r, "user", "t1", "Yes.")]).get_json()
 
 

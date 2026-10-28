@@ -41,7 +41,12 @@ export function incompleteWords(n) {
 // a consult whose answer did not come back (review B7): never "failed", which would invite asking again.
 export const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";
 export const PENDING = "That's taking longer; the answer will be in the conversation.";
-export const SUMMARY_PENDING = 'The summary is still being written; it will appear in the conversation.';
+// The summary's words, each true for what the server is doing (review R1 P3-7). The server's own call is bounded under 45 s
+// (core/realtime_voice/summary_gateway.py), so after the page's bound nothing is still being written: unavailable. An answer
+// lost on the way back (no answer, or a proxy's 502/504) may still have kept a proposal: it may still appear.
+export const SUMMARY_MAY_APPEAR = 'The summary may still appear in the conversation.';
+export const SUMMARY_REFUSED = 'The summary could not be asked for.';
+export const KEEP_TALKING_FAILED = 'Voice ended: Keep talking did not reach the server, so a later yes could have ended the session.';
 // A model call that came before its own words were transcribed, and they did not come in time (review R1 P1-2): nothing is
 // sent, so nothing is done on older words.
 export const NOT_HEARD = "I didn't catch that; say it again.";
@@ -49,7 +54,7 @@ const HEAR_WAIT_MS = 3000;                // a model call waits this long for th
 const HOLDING_MS = 10000;                 // Chunk A's holding line: one "Still checking." when a consult is slow
 const QUIET_WAIT_MS = 8000;               // a line for the voice waits this long for a pause, then is sent (the pause was missed)
 const SPEAK_SUMMARY_MS = 45000;           // the spoken summary ends the session at its own turn, or after this
-const SUMMARY_WAIT_MS = 90000;            // the summary's answer is awaited this long (review B3); a later one is still kept
+const SUMMARY_WAIT_MS = 45000;            // the summary's answer is awaited this long (Spec 165 §5.3), then "Summary unavailable"
 const FLUSH_WAIT_MS = 5000;               // the barrier waits this long for the last posts' answers; after it, unanswered is not kept
 const DRAIN_CAP_MS = 90000;               // the spoken summary plays at most 15 characters a second plus 5 s, and never past this
 const START_END_MS = 15000;               // End pressed while still connecting waits for the connection at most this long
@@ -412,6 +417,17 @@ export function directVoice(d) {
   }
   function propose(on) { proposing = on; ui.propose(on); }
 
+  // The session's named states (Spec 165 §5.3): live → closing (the capture barrier) → summarizing (the summary asked for:
+  // capture heartbeats stop and are not expected; the transport stays open) → speaking_summary → ended. End goes straight to
+  // ended. Leaving live hides Sum up and Keep talking: the proposal is gone (review R2 N9).
+  let lifecycle = 'idle';
+  function become(next) {
+    if (lifecycle === next || lifecycle === 'ended') return;
+    lifecycle = next;
+    if (next !== 'live') propose(false);
+    ui.lifecycle?.(next);
+  }
+
   // §5's answers: Sum up is offered, a spoken yes asks for the summary (after this answer: the summary's barrier awaits the
   // posts, so it never waits on the post it was asked from, review B2). The cap stops posting only; a session the server has
   // ended or refuses (409 session_ended or the person's turns off, any 403) is ended here too, with the reason left showing.
@@ -420,6 +436,7 @@ export function directVoice(d) {
     if (finalized && !body.failed) return;
     if (body.completed) tell(body.completed);
     if (body.propose_end && !summary) propose(true);
+    else if (body.proposing === false && proposing) propose(false);     // a later ordinary turn withdrew it (R2 N9)
     if (body.end_confirmed) Promise.resolve().then(sumUp);
     if (!body.failed) return;
     if (body.failed === 'cap') ui.say(CAP, { error: true });
@@ -530,6 +547,7 @@ export function directVoice(d) {
     propose(false);
     ui.say('Summing up…');
     summary = (async () => {
+      become('closing');
       try { c?.mute?.(); } catch (e) { /* the barrier holds without it: capture stops below */ }
       if (beat) { stopEvery(beat); beat = null; }
       let wait = null;
@@ -539,6 +557,7 @@ export function directVoice(d) {
       const incomplete = Boolean(capture?.incomplete());
       const closing = capture ? capture.report() : {};
       capture?.stop();
+      become('summarizing');
       let timer = null;
       const r = await Promise.race([
         postJson(at(direct.summary_url), { conversation_id: cid, ...closing }),
@@ -549,6 +568,7 @@ export function directVoice(d) {
       const body = r.body || {};
       const said = typeof body.spoken === 'string' ? body.spoken.trim() : '';
       if (r.status === 200 && body.ok && body.state === 'proposed' && said && connected && speak(`Say only this, then stop: ${said}`)) {
+        become('speaking_summary');
         endAfterTurn = (text) => {
           if (!sameWords(text, said)) return;
           endAfterTurn = null;
@@ -558,9 +578,9 @@ export function directVoice(d) {
         speakTimer = later(() => { endAfterTurn = null; if (!finalized) c?.endSession('normal_end'); }, SPEAK_SUMMARY_MS);
         return;
       }
-      if (r.status === -1) endedWords = [SUMMARY_PENDING, false];
-      else if (r.status === 200 && body.state === 'unavailable') endedWords = [SUMMARY_UNAVAILABLE, false];
-      else if (r.status !== 200) endedWords = [body.message || `The summary could not be asked for.${incomplete ? '' : ' What was said is kept.'}`, true];
+      if (r.status === -1 || (r.status === 200 && body.state === 'unavailable')) endedWords = [SUMMARY_UNAVAILABLE, false];
+      else if (r.status === 0 || r.status >= 500) endedWords = [SUMMARY_MAY_APPEAR, false];     // lost, maybe kept (R1 P3-7)
+      else if (r.status !== 200) endedWords = [body.message || `${SUMMARY_REFUSED}${incomplete ? '' : ' What was said is kept.'}`, true];
       c?.endSession('normal_end');
     })();
     return summary;
@@ -589,6 +609,7 @@ export function directVoice(d) {
   function finalize(result) {
     if (finalized) return ending;
     finalized = true; connected = false;
+    become('ended');
     stopTimers(); propose(false); ui.live(false);
     if (keepalive) {
       sendFinal(result?.turns);
@@ -622,6 +643,25 @@ export function directVoice(d) {
     return ending;
   }
 
+  // Keep talking (Spec 165 §5.3, review B5, R1 P3-8): the server's proposal is withdrawn too, so a later conversational yes
+  // ends nothing. It goes after the posts queued before it (a "we're done" still in flight cannot re-propose behind it), is
+  // retried once with the same body when it gets no answer, and if it still fails the page says so and ends the voice:
+  // a yes heard later must not end the session by a proposal the server still holds.
+  function keepTalking() {
+    propose(false);
+    if (!capture || lifecycle !== 'live') return Promise.resolve();
+    return capture.after(async () => {
+      const url = at(direct.keep_talking_url);
+      let r = await postJson(url, {});
+      if (r.status === 0 || r.status >= 500) r = await postJson(url, {});
+      if (r.status === 200 && r.body.ok) return;
+      if (finalized || lifecycle !== 'live') return;
+      failed = true;
+      ui.say(KEEP_TALKING_FAILED, { loud: true, error: true });
+      endNow('keep_talking_failed');
+    });
+  }
+
   async function start(chosen) {
     cid = page.conversation?.id || null;
     provider = chosen || direct.default_provider;
@@ -644,7 +684,7 @@ export function directVoice(d) {
         if (state === 'active' && held) { endNow(held); return; }
         if (state === 'connecting') ui.phase('connecting');
         if (state === 'active' && !finalized) {
-          connected = true; started = clock();
+          connected = true; started = clock(); become('live');
           ui.live(true); ui.elapsed(clockWords(0)); ui.phase('listening'); ui.say('');
           ticker = every(() => ui.elapsed(clockWords(Math.floor((clock() - started) / 1000))), 1000);
           beat = every(() => capture.heartbeat(), Math.max(5, Number(direct.heartbeat_seconds) || 20) * 1000);
@@ -685,8 +725,9 @@ export function directVoice(d) {
     start,
     check,
     sumUp,
-    keepTalking() { propose(false); capture?.after(() => postJson(at(direct.transcript_url), { events: [], proposal: 'withdrawn' })); },     // the server's proposal too (B5)
+    keepTalking,
     proposing: () => proposing,
+    state: () => lifecycle,
     sessionId,
     // Ends the session for any reason (End, the microphone handed over, Private, the page going away). Resolves once End is sent.
     // While the provider is still connecting, the end waits for the connection (at most START_END_MS): the shared adapters take
