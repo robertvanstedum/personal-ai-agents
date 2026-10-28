@@ -134,6 +134,22 @@ await check('G3 xAI: a summary response cancelled after some audio ends when tha
   await flush();
   assert.deepEqual(ended, ['drained']); assert.deepEqual(outcomes, ['cancelled']);
 });
+// L N9 (the last pass's verification): on xAI only a response that completed, with its audio played, is drained. One whose
+// status is incomplete or failed was cut short, though its audio played: cancelled, never heard.
+for (const status of ['incomplete', 'failed', 'completed']) {
+  await check(`L N9 xAI: a summary response ${status} after its audio played is ${status === 'completed' ? 'drained' : 'cancelled'}`, async () => {
+    const { a, ctx, ended, outcomes, ask } = xai();
+    const asked = ask();
+    a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
+    await asked;
+    a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_sum', delta: CHUNK });
+    a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', status, output: [] } });
+    ctx.sources[0].end();
+    await flush();
+    assert.deepEqual(ended, ['drained']);
+    assert.deepEqual(outcomes, [status === 'completed' ? 'drained' : 'cancelled']);
+  });
+}
 await check('B6 OpenAI: the summary ends at output_audio_buffer.stopped for its response, not at response.done', async () => {
   for (const last of ['output_audio_buffer.stopped', 'output_audio_buffer.cleared']) {
     const a = new OpenAIWebRTCAdapter();
@@ -232,4 +248,4 @@ if (failures.length) {
   console.log(`${failures.length} of ${cases} playback-drain regressions FAILED:\n  ${failures.join('\n  ')}`);
   process.exit(1);
 }
-console.log(`${cases} playback-drain regressions passed (review B6, G3, Spec 165 §5.3); synthetic audio context, no provider or microphone.`);
+console.log(`${cases} playback-drain regressions passed (review B6, G3, L N9, Spec 165 §5.3); synthetic audio context, no provider or microphone.`);

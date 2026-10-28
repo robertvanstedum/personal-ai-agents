@@ -308,7 +308,8 @@ const ADAPTERS = {
    ``],
   [`  // Spec 165 §5.3: playback_drained {response_id, outcome} once a response is done and every chunk of its audio has played
   // out (or was stopped at barge-in); a response with no audio drains at its end. The outcome names how it ended (v0.3, G3):
-  // drained (its audio played to the end), barged_in (stopped at his speech), cancelled (the provider cancelled it), no_audio.
+  // drained (its audio played to the end), barged_in (stopped at his speech), cancelled (the provider cancelled it, or ended
+  // it incomplete or failed), no_audio.
   // Nothing listens unless a host passes onPlaybackDrained to the controller; German and Portuguese do not.
   _response(id) {
     const key = id || this._responseId || null;
@@ -347,7 +348,9 @@ const ADAPTERS = {
         {
           const [key, r] = this._response(event.response?.id);
           r.done = true;
-          r.cancelled = event.response?.status === "cancelled";
+          // Cut short: cancelled, incomplete or failed is never heard to the end (review L N9). A response whose status is
+          // completed, or not given (xAI's status field is not verified), is drained once its audio has played.
+          r.cancelled = ["cancelled", "incomplete", "failed"].includes(event.response?.status);
           this._drainedIf(key);
 `,
    ``],
