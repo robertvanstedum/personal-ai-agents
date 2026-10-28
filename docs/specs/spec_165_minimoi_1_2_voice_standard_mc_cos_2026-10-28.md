@@ -3,73 +3,103 @@
 | | |
 |---|---|
 | **Spec** | 165 |
-| **Date** | 28 October 2026 |
+| **Date** | 28 October 2026 (v0.1 and v0.2) |
 | **Author** | Claude Code, for Robert |
-| **Status** | **Draft v0.1 for review.** Authorizes no build, deploy, flag, merge, credential or provider call. |
+| **Status** | **Draft v0.2 for review.** Robert authorized the build on 28 Oct (§1). This spec authorizes no deploy, flag, merge, credential or provider call. |
 | **Decision owner** | Robert |
-| **Reviews required** | Claude Code self-review; Codex; one more (Claude chat recommended, §16 D15) |
-| **Builds on** | Spec 164 v0.3, approved 27 Oct (`origin/grok/spec-164-mc-voice:docs/specs/spec_164_mc_voice_conversation_mode_2026-10-27.md`, PR #421) |
-| **Replaces** | Spec 164's phase order (§9 MC, §10 CoS "later decision", §11 German backport). Everything else in 164 stands unless this spec says otherwise. |
-| **Code base** | `grok/mc-voice-conversation` at `93bf00c6` (PR #426, open, not merged): Chunk B backend, Guild UI, two independent reviews, all fixes |
-| **Standard** | `docs/specs/spec_shared_voice_interaction_standard_2026-08-15.md` (companion amendment in §15.4) |
-| **Initiative** | INIT-2026-0010. GitHub issue: none yet (to be opened when Robert approves the spec) |
-| **References** | `file:line` is `93bf00c6` unless marked `main` (`4954ad9f`). Anything this spec could not check is marked **unverified** and listed in §20. |
+| **Review record** | v0.1 (`64b1896f`): independent review (`docs/specs/reviews/REVIEW_independent_spec_165_v0.1.md`, `5f2ebdce`); Codex (`docs/specs/reviews/REVIEW_codex_spec_165_v0.1.md`, `89edb852`); Codex's Chunk B code review (`planning-studio/…/trial-01-mc-voice-2026-10-27/REVIEW_codex_chunk_B.md`), carried in §5. **Pending on v0.2:** Codex delta, Grok, Claude Chat. |
+| **Builds on** | Spec 164 v0.3, approved 27 Oct (`437b7f8c`, PR #421); its phase order (§9–§11) is replaced here, the rest stands unless this spec says otherwise |
+| **Code base** | `grok/mc-voice-conversation` `93bf00c6` (PR #426, open; never merged alone). Build in progress: chunk A1 on `claude/voice-1-2`, stacked on `93bf00c6`, first commit `99b3d0f0` |
+| **Initiative** | INIT-2026-0010. Part B: issue #433 (queued) |
+| **References** | `file:line` is `93bf00c6` unless marked `main` (`4954ad9f`) or `A1` (`99b3d0f0`). **Unverified** items are in §20 |
+
+## Changes from v0.1
+
+IR = independent review (M must fix, S should fix, m minor); CX = Codex spec review; B = Codex Chunk B review.
+
+| Finding | Addressed in |
+|---|---|
+| Robert, 28 Oct: build authorized, A1 in progress, one bundle, nudge retired, host topology, Part B #433 | §1; header; §11.2; §19 |
+| IR-M1 merging 1.2 turns production MC voice off | §2.1; §5.6; §11.1 (relay kept until admitted, A1 `99b3d0f0`); §9 |
+| IR-M2 full release, not five images | §2.4 (classifier run); §11.7 (classifier rules in A1; output recorded) |
+| IR-M3 voice store in the folder her runtime greps | §6.5; D5 now (b); §12.2 |
+| IR-M4 Confer request id must be a UUID | §5.1; §6.4 |
+| IR-M5 30 s portal timeout, 120 s turns | §5.1 (`pending`); §6.7 (route timeouts) |
+| IR-M6 no reminders by voice | §6.4; D20; scripts and tests changed |
+| IR-M7 D1 mis-framed: one shared persona | §1; §6.2; §4.5; D1 |
+| IR-S8 trust extension to CoS | §6.9; D18 |
+| IR-S9 German transcribed as English | §7; D19; scripts check the transcript |
+| IR-S10 CoS admission; CSRF on a flag; reads | §6.7; §6.8 |
+| IR-S11 voice notes show in Record and memory | §8; D21 |
+| IR-S12 language checks before production | §11.2 step 5; §11.5 step 2 |
+| IR-S13 latency criterion | §12.4 |
+| IR-S14 two facts settled | §2.2; §5.4; §20 |
+| IR-S15 approvals inventory premise | §2.2; §6.4 (inventory done); D16 |
+| IR-S16 mixed controller versions | §14.1; D23 |
+| IR-S17 two hosts on one cap | §7; D10 |
+| IR-S18 phone cases, CoS script, pass conditions | §11.3 |
+| IR-m19 four `.mjs` suites · m20 provider order · m21 MC kind `cos` · m22 env override · m24 two Dockerfiles | §5.5 · §2.4 · §2.1, §5.6 · §7 · §2.2 |
+| IR-m25 Chunk B gaps · m26 live runtime session · m27 Grok gets her briefing · m28 note wording, Grok alias | §8 · §8 · §6.3, D2 · §11.3, §7 |
+| IR-m23 line references | `controlled_host.py:14` fixed; `mc_voice_transcripts.py:7` **not changed, because** the import is on line 7 at `93bf00c6` |
+| CX-S1 CoS request and receipt contract | §5.1; §6.4 |
+| CX-S2 tool-disabled summary | §5.4; D22 |
+| CX-S3 CoS store and recall projection | §6.5 |
+| CX-S4 off, unadmitted, rollback states | §11.1; §11.6; §12.2 |
+| CX-S5 do not extract Chunk B defects | §5; §5.5; §19 |
+| CX-S6 CoS read identity | §4.4; §6.7 |
+| CX-S7 handover needs Part A work | §14.1; D23 |
+| CX-S8 like-for-like latency, language gate | §12.4; §14.3 |
+| CX decision table; notes (no-copy by architecture, French is code, dev is not the Mac) | §16; §12.1, §4.5, §11.2 |
+| B1, B7 · B2, B4 and the pagehide edge · B3, B5, B6 | §5.1 · §5.2 · §5.3 |
 
 ## In plain words
 
 MiniMoi 1.2 is one voice, used two ways. Master Craftsman and Chief of Staff both talk with Robert through the
-same direct voice path that German Gespräche already uses and that Chunk B extended for MC: the browser talks to
-OpenAI or Grok Voice directly, and when the voice needs real work done it asks the real agent ("let me check that"),
-which runs exactly as if Robert had typed the words.
+direct voice path German Gespräche already uses and Chunk B extended for MC: the browser talks to OpenAI or Grok
+Voice directly, and when real work is needed the voice asks the real agent, which runs as if Robert had typed.
 
-What changes for Robert:
-- **MC voice in production moves** from today's turn-by-turn relay (transcribe, MC writes, text-to-speech reads it)
-  to a live conversation. He can interrupt, a pause doesn't send, nothing scrolls on screen while he talks, and what
-  was said appears when the session ends, with a short summary he confirms in writing.
-- **CoS voice moves too, at the same time, onto the same code.** Today she has two voice modes of her own, OpenAI
-  only. After 1.2 she has one, the same as MC's, with OpenAI or Grok Voice. She keeps her own card and her own
-  manner; by default she sounds as she does today, unless Robert decides otherwise.
-- **Dictate stays exactly as it is**, on both pages.
-- **German and Portuguese stay as they are in 1.2.** Their improvements come after 1.2 is in production, together,
-  as one piece of work (Part B), gated on fresh measurements of both languages on both providers.
+- **MC in production moves** from today's turn-by-turn relay to a live conversation: he can interrupt, a pause
+  doesn't send, nothing scrolls while he talks, and what was said appears at End with a short summary he confirms
+  in writing. Until the switch, production keeps the relay.
+- **CoS moves at the same time onto the same code:** one voice mode instead of two, OpenAI or Grok. She stays the
+  shared Austrian colleague persona Robert approved for both (§6.2), with her own name and voice.
+- **Dictate is unchanged** on both pages.
+- **German and Portuguese behave as today**, with one safety line if Robert agrees: opening the floating MC panel
+  ends their voice first (D23). Their improvements are Part B (#433), after 1.2 is in production.
 
-What "standard" means here: one server core, one browser session module, one card format, one way to capture,
-hide, reveal and summarize, one consult contract, one budget, one release check. MC and CoS are thin adapters on
-that core. Nothing is copied.
+"Standard" means one server core, one browser module, one card format, one capture/reveal/summary contract
+(corrected by the Chunk B review, §5), one consult contract, one budget, one release check; MC and CoS are thin
+adapters. Nothing is copied.
 
-**Honest limits.**
-- Nothing in 1.2 has been heard yet. Chunk B is synthetic tests only; Robert's listening and phone tests are the
-  acceptance, and no agent claims them.
-- Voices are chosen by ear. MC in production today speaks with OpenAI's `cedar`; the direct path's default is
-  `marin`. CoS speaks `cedar` today. If nobody picks, both change sound.
-- Any change under `core/realtime_voice/` redeploys the German and Portuguese images too (the release classifier,
-  §2). "German deferred" means German's behaviour is unchanged in 1.2, not that its image is untouched. 1.2 must
-  prove that with tests and a short listen.
-- Provider bills are real. The daily voice allowance is MiniMoi's own limit, not a provider cap.
+**Honest limits.** Nothing has been heard yet; Robert's listening and phone tests are the acceptance. Voices are
+chosen by ear (MC speaks `cedar` today; the direct default is `marin`). Shared code redeploys the German and
+Portuguese images, and the bundle may deploy more (§11.7). Provider bills are real; the daily allowance is
+MiniMoi's limit, not a provider cap. A CoS voice consult carries her full typed authority, including running
+commands in her runtime (§6.9).
 
 ## 1. Robert's decisions (binding)
 
 28 October 2026:
 1. "We need a thorough spec and should target making MC and CoS both use new solution from the start. That is
    minimoi 1.2 and we defer German until in prod with 1.2."
-2. "spec german now too and put it into the queue + portuguese and we do language domains together." German and
-   Portuguese are Part B of this spec, built together, starting only after Part A is in production.
-3. "so even more important to standardize CoS." Standardizing CoS is a core goal of 1.2, not an add-on.
+2. "spec german now too and put it into the queue + portuguese and we do language domains together." Part B
+   (#433), together, after Part A is in production.
+3. "so even more important to standardize CoS." A core goal of 1.2.
+4. "you start building voice." A1 is in progress on `claude/voice-1-2`. PR #426 is not merged on its own; 1.2
+   ships as one bundle.
+5. The supervision "continue" nudge is retired (PR #434); nothing here relies on it. Permanent solutions, no
+   workarounds, learn on the real platform.
+6. Hosts: production (AWS); an always-on staging host on a cheaper cloud (arriving 28–29 Oct); the portable Mac. A
+   host's role is configuration, not hardware (INIT-2026-0011).
 
-Standing, from Spec 164 v0.3 (approved 27 Oct) and the reuse decision
-(`coordination/ROBERT_DECISION_spec164_reuse_and_rollout.md`):
-- German's code is the base. No fourth voice implementation, no copied controller, no domain session loop.
-- Dictate stays a separate control.
-- Each person has their own card. A French or Portuguese CoS is a card change, not a build.
-- Latency no worse than German on the same provider, expected to improve.
-- MC's manner is not inherited by CoS by side effect.
-- The trust model of Spec 164 §3: a voice consult from Robert's own browser carries the same trust as a typed
-  note, with the §3 safeguards.
-- Dessa (full duplex) is a future consideration only.
+Standing (Spec 164 v0.3; `coordination/ROBERT_DECISION_spec164_reuse_and_rollout.md`): German's code is the base,
+with no fourth implementation, copied controller or domain session loop; Dictate stays separate; each person has
+their own card; latency no worse than German on the same provider; Spec 164 §3's trust model for MC (CoS: D18);
+Dessa is future only.
 
-How this changes 164: 164 put CoS after MC as "an option, decided later" (§10) and German last (§11). Here MC and
-CoS ship together as 1.2, and German and Portuguese follow together as Part B. 164's standalone page (§5) stops
-being a separate gate (D4).
+**The shared persona.** MC and CoS share one canonical persona Robert approved on 16 Oct, compiled into CoS's
+runtime (§2.2). "Their own card" therefore means their own name, voice ids and voice-surface wording within it.
+Changing who either is, is a persona adoption, not a card edit (D1).
 
 ## 2. What exists today (verified)
 
@@ -77,772 +107,755 @@ being a separate gate (D4).
 
 | Fact | Reference |
 |---|---|
-| **Production MC voice is the chained relay.** On `main`, `mc_voice.js` uses the managed path only when the capabilities answer carries `managed_realtime`, else falls back to `ConferVoiceController` (transcription credential, typed turn, server text-to-speech) | `main:minimoi_portal/guild_ui/static/js/mc_voice.js:136-141` |
-| The managed MC host installs only when `MINIMOI_MC_MANAGED_REALTIME=1` **and** the MC kind is `cos`; production MC is `openclaw`, and the flag is in `PRODUCTION_HELD_OFF` unless `MINIMOI_GUILD_MANAGED_VOICE_PRODUCTION=1` | `mc_managed_realtime.py:28`; `guild_mounts.py:220-222`, `:288-293` |
-| The chained relay's server routes: `/mc/voice/bootstrap` (OpenAI transcription credential) and `/mc/voice/speech/<id>` (text-to-speech of MC's kept reply, voice `cedar`) | `mc_voice.py:86-118`, `:136-176`, `:188-193`; `core/realtime_voice/providers/openai_speech.py:12` |
-| The direct path is built: shared bootstrap with `owner` and `admit` hooks, shared consult route, transcript capture, hide-until-end, reveal, recovery, summary proposal, voice marker, release check, Guild UI | `mc_voice_direct.py` (833 lines); `B_direct_path.md` |
-| It is off unless `MINIMOI_MC_VOICE=1` and `MINIMOI_MC_VOICE_DIRECT=1`; the second is in `PRODUCTION_HELD_OFF`, so production cannot turn it on without a code change | `mc_voice_direct.py:46`, `:592`; `guild_mounts.py:222` |
-| On the branch the composer never falls back to the chained relay: direct, else managed, else "Voice unavailable" | `mc_voice.js:136-153` |
-| MC's card is `voice.json` in persona release `0.1.18`, whose manifest says `"status": "candidate"`; the MC agent container is deployed from `0.1.16`. The direct host pins the card with a constant | `services/mc_operations/personas/mc-chat/releases/0.1.18/manifest.json`; `.github/workflows/deploy-mc-agent.yml:47`; `mc_voice_direct.py:48` |
-| `voice_card.py` reads only MC's release folder (hard-coded path) | `core/realtime_voice/voice_card.py:16` |
-| MC's session text = `mc_managed_realtime.INSTRUCTIONS` + direct-path rules, then the card, then this conversation's recent voice turns | `mc_voice_direct.py:78-102` |
-| The direct host imports `SessionRefused` from the managed module and MC's operating rules from the managed MC host | `mc_voice_direct.py:36`, `:92`; `mc_voice_transcripts.py:7` |
-| The Guild direct UI reads two private controller members, `_sessionId` and `_adapter.sendContinuationInstruction` | `static/js/mc_voice_direct.js:222-223` |
-| MC Dictate has its own route (`/dictation/bootstrap`) and is independent of the relay | `guild_ui/dictation.py:77-79`; `static/js/dictation.js:111` |
+| **Production MC voice is the chained relay:** compose sets `MINIMOI_GUILD_VOICE_PRODUCTION=1`, `MINIMOI_MC_VOICE=1`; direct and managed are held off; `main`'s composer falls back to `ConferVoiceController` | `docker-compose.prod.yml:242-243`; `main:mc_voice.js:136-141`; `guild_mounts.py:220-222`, `:288-293` |
+| `93bf00c6` dropped that fallback ("Voice unavailable"). **A1 restores it:** direct, else managed, else the relay as on `main`; an offered path that fails never falls back | `mc_voice.js:136-153`; `A1:mc_voice.js` |
+| Relay routes: `/mc/voice/bootstrap`, `/mc/voice/speech/<id>` (`cedar`) | `mc_voice.py:86-193`; `openai_speech.py:12` |
+| The direct path is built and off unless `MINIMOI_MC_VOICE=1` and `MINIMOI_MC_VOICE_DIRECT=1`, the second held off in production | `mc_voice_direct.py:46`, `:592`; `guild_mounts.py:222` |
+| MC's card: candidate release `0.1.18` (agent runs `0.1.16`), pinned by constant; `voice_card.py` hard-codes MC's path | `…/0.1.18/manifest.json`; `deploy-mc-agent.yml:47`; `mc_voice_direct.py:48`; `voice_card.py:16` |
+| Session text = MC's rules + direct rules, card, recent voice turns | `mc_voice_direct.py:78-102` |
+| Couplings: `SessionRefused` and MC's rules from the managed modules; the UI reads `_sessionId`, `_adapter.sendContinuationInstruction` | `mc_voice_direct.py:36`, `:92`; `mc_voice_transcripts.py:7`; `mc_voice_direct.js:222-223` |
+| Capture keys items by place (`t<index>`), stable for the session | `mc_voice_direct.js:99`, `:122` |
+| MC kind is `openclaw` per deploy; its rollback sets `MINIMOI_GUILD_CHAT=cos` (consults then run on `cos-scheduler`); the live value is unverified | `deploy_mc_container_ec2.sh:197-199` |
 
 ### 2.2 Chief of Staff
 
 | Fact | Reference |
 |---|---|
-| Confer offers **two voice modes** when the managed host is ready: "Realtime · OpenAI" (managed) and "Voice · turn by turn" (chained); otherwise only the chained mode | `cos_ui.html:58-61`, `:491-492`, `:588-590` |
-| The managed host installs only with `MINIMOI_COS_MANAGED_REALTIME=1`, an allowance, and the `voice_control_*` tables present. Production compose defaults the flag to `0`; the value in `/opt/minimoi/.env` is **unverified** | `domains/cos/managed_realtime.py:15-46`; `docker-compose.prod.yml:250`, `:408` |
-| Managed CoS = OpenAI `gpt-realtime-2.1`, voice `cedar`, a server-held sideband; her instructions plus `VOICE_MANNER` appended to every managed session; tools `consult_cos_agent` and `save_cos_note` | `controlled_session.py:20`; `controlled_config.py:8-59` |
-| Her voice instructions = `_build_system_prompt()` (soul, context, the whole `cos_memory.md`, ops status, build state, date) plus a voice-surface paragraph | `chief_of_staff.py:614-646`, `:649-679` |
-| Her typed turns also carry `PARTNER_STYLE` (the "warm Austrian colleague" manner), so part of her Austrian manner is not voice-only | `domains/cos/confer_service.py:341-342`; `core/agent_partner.py:2-12` |
-| Managed consults: `confer_dispatch` runs `_process_confer_turn(canonical_text, channel='html_voice', …)`; a note needs `parse_explicit_note` and an operation receipt | `domains/cos/realtime_tools.py:9-19`; `chief_of_staff.py:811-841` |
-| Managed CoS keeps **no transcript server-side** (no `on_transcript`); the page offers "Download transcript on End" | `managed_realtime.py:51-53`; `controlled_host.py:13`; `cos_ui.html:544-551` |
-| The chained mode: `create_confer_voice_blueprint` mints an OpenAI transcription credential; the page sends each final transcript to `/ui/send` with `channel: html_voice`; the reply is read by `/ui/speech/<turn_id>` (`cedar`) from a 120-second in-memory `SpokenReplyStore`; a provisional "Hearing: …" line shows while he speaks | `core/realtime_voice/confer.py:20-55`; `chief_of_staff.py:76`, `:1429-1500`, `:1593-1630`; `spoken_reply_store.py`; `cos_ui.html:503-522` |
-| **CoS Dictate depends on that older blueprint:** it bootstraps from `../api/realtime-voice/confer/bootstrap`, and is enabled only when the blueprint's capabilities answer lists OpenAI | `cos_ui.html:552-557`, `:568-582`; `confer-input-controls.js:59-65` |
-| Confer has **one conversation, `owner`**, and **no server-rendered thread**: the page shows only what it appended in this tab | `managed_realtime.py:26-31`; `cos_ui.html:154`, `:296-326` |
-| Confer's durable record is `conversation_log` (one JSON line per typed turn, off unless `COS_CONVERSATIONS_DIR` is set); it is written by `_ui_turn` only, so managed-voice consults are not in it | `domains/cos/conversation_log.py:1-41`; `chief_of_staff.py:1480` |
-| The portal owns CoS login and CSRF. It CSRF-checks `/app/cos` writes only when the write guard is on or the path is under `api/realtime-voice/managed/`, and adds `X-Minimoi-Voice-Write-Verified: 1` only for that prefix | `minimoi_portal/app.py:722-756`; `minimoi_portal/proxy.py:303-306` |
-| `cos-scheduler` (which serves Confer) copies `core/`, `utils/`, `domains/guild/`, `domains/cos/` and a few files, but **not** `minimoi_portal/guild_ui/` or `services/mc_operations/`. It is one process | `docker/Dockerfile.cos-scheduler:8-15`; `chief_of_staff.py` comment above `_ui_turns` |
-| Confer already listens for `minimoi:companion-opening` and ends its voice and Dictate before the floating MC panel opens | `cos_ui.html:594-600` |
+| Two Confer voice modes when managed is enabled (compose default off; `.env` unverified), else turn by turn only. Managed: `gpt-realtime-2.1`, `cedar`, her instructions + `VOICE_MANNER`, no transcript kept | `cos_ui.html:58-61`; `managed_realtime.py:15-53`; `controlled_config.py:8-59`; `controlled_host.py:14` |
+| Her voice instructions = `_build_system_prompt()` (soul, context, all of `cos_memory.md`, ops, build state, date) + a voice paragraph | `chief_of_staff.py:614-679` |
+| **Shared persona:** `MASTER_CRAFTSMAN_PERSONA.md` v1.1, "Master Craftsman and Chief of Staff — shared persona"; "Your manner" is compiled into `cos-agent-a`'s SOUL, hash-locked, `approved_by: "Robert"`; "Voice and text should feel like the same teammate." Typed turns carry `PARTNER_STYLE` | `planning-studio/initiatives/INIT-2026-0007-interaction-vision/documents/MASTER_CRAFTSMAN_PERSONA.md:1-25`; `Dockerfile.cos-agent-a:19`, `:34`; `build-mc-soul.mjs:9-28`; `mc-role-lock.json:3`; `confer_service.py:341-342` |
+| **Her runtime's authority:** tools profile `full`, `exec` `full`, sandbox off, elevated off; loads `cos-bounded-search`, `mc-cutoff-delivery` only (not `mc-actions`); mounts `data/`, `cos/outbox`, `cos/planning-studio`, `docs`, `agent_logs` read-write, `cos/conversations` read-only. `cos-scheduler` mounts the Docker socket | `docker/cos-agent-a/openclaw.json`; `Dockerfile.cos-agent-a:36-37`; `docker-compose.prod.yml:85-110`, `:440-455` |
+| **Turn service:** `request_id` must be a UUID; notes return `note_save` (`saved`/`deduplicated`, `operation_id`); reminders only as `/remind <UTC ISO> <text>` → `reminder_set` (`reminder_id`, `due_utc`); "save a note that …" and "save a note: …" parse | `confer_service.py:38-55`, `:188-195`, `:255-327` |
+| OpenClaw backend: session from `conversation_id`; `tool_policy` **not enforced** | `openclaw_backend.py:132-135`, `:340-344`, `:400-409` |
+| Managed consults call `_process_confer_turn` directly, skipping `conversation_log` and file-claim checks | `realtime_tools.py:9-19`; `chief_of_staff.py:811-841`, `:1462-1481` |
+| Chained mode: transcription credential, `/ui/send`, a 120 s `SpokenReplyStore`, "Hearing: …"; **CoS Dictate depends on its blueprint** | `confer.py:20-55`; `chief_of_staff.py:1429-1630`; `cos_ui.html:503-582` |
+| One conversation, `owner`, no server thread; Record, Track and `/ui/memory` show `cos_memory.md` | `managed_realtime.py:26-31`; `cos_ui.html:296-326`; `chief_of_staff.py:1632-1650` |
+| `COS_CONVERSATIONS_DIR` **is set** in production compose, on `cos/conversations`, which `cos-agent-a` mounts and greps; append is best-effort | `docker-compose.prod.yml:102`, `:431`, `:448`; `conversation_log.py` |
+| Portal: CSRF on `/app/cos` writes only with the write guard (compose default empty) or under `api/realtime-voice/managed/`; the write marker only there, POST only; timeout `(5, 30)` except `ui/send`, `chat` | `app.py:722-756`; `proxy.py:303-306`, `:474-485`; `docker-compose.prod.yml:251` |
+| `Dockerfile.cos-scheduler` (staging, production) and `Dockerfile.cos` (local) copy `core/`, `domains/`, not `guild_ui/`. One process | `Dockerfile.cos-scheduler:8-15` |
+| Confer ends voice and Dictate on `minimoi:companion-opening` | `cos_ui.html:594-600` |
 
 ### 2.3 German and Portuguese
 
 | Fact | Reference |
 |---|---|
-| Both register `create_bootstrap_blueprint` with no `owner` and no `admit`: no budget reservation, identity from portal headers | `domains/german/html_server.py:127-131`; `domains/portuguese/html_server.py:77-81` |
-| Both import the controller with the cache key `?v=20260809-ga1` | `german_gesprache.html:1920`; `portuguese_conversas.html:1637` |
-| Neither page ends voice on `pagehide`, and neither listens for `minimoi:companion-opening` (no match for either in either template). So the floating MC panel can open over a live German session; whether the microphone is then contended is **unverified** in a browser | grep of both templates |
-| Persona voices are per persona and provider (German default `alloy`/`sal`) | `domains/german/html_server.py:87-91` |
-| Phase 0 baselines exist for **German only**: OpenAI median ≈705 ms, Grok median ≈775 ms with two ~3 s waits, speech end to first assistant transcript; first audible playback not measured. **Portuguese has no baseline** | `P0_run_openai_2026-10-27.md`; `P0_run_xai_2026-10-27.md` |
+| Bootstrap without `owner`/`admit`; controller key `?v=20260809-ga1`; end via `controller.endSession(…)` → their `finalizeAndSave` | `german/html_server.py:127-131`; `portuguese/html_server.py:77-81`; `german_gesprache.html:1920`, `:2032-2033` |
+| No `pagehide` end, no companion listener. The panel is injected on both pages when `MINIMOI_MC_EVERYWHERE=1` and waits only for listeners, so it opens at once over a live session, **in production today** | `companion.py:4-11`; `companion.js:45-56` |
+| Phase 0, German only: speech end to first assistant transcript, OpenAI median ≈705 ms, Grok ≈775 ms (5 samples, two ~3 s waits); no first-audible; no Portuguese baseline | `P0_run_*_2026-10-27.md` |
 
 ### 2.4 Shared code and release mechanics
 
 | Fact | Reference |
 |---|---|
-| Any change under `core/realtime_voice/` redeploys `portal`, `german`, `portuguese`, `cos-bot`, `cos-scheduler` on a push to `main` | `scripts/ci/classify_release.py:370-371` |
-| Changes under `domains/cos/` redeploy `cos-bot`, `cos-scheduler`; `minimoi_portal/` redeploys `portal`; `domains/guild/` redeploys `portal`, `cos-bot`, `cos-scheduler` | `classify_release.py:346-357` |
-| Both adapters changed on the branch (playback event), but the controller still imports them with old cache keys (`?v=20261015-managed-end1`, `?v=20260725-transcript1`) | `realtime-voice-controller.js:24-25`; `git diff origin/main..93bf00c6 -- core/realtime_voice` |
-| On Grok Voice the server-composed `session_config`, instructions included, is returned to the browser and sent by it as the first `session.update` (xAI does not take it at mint time). On OpenAI the server attaches it | `core/realtime_voice/providers/xai_voice.py:13-18`, `:74-99`; `xai-websocket-adapter.js:72-73` |
-| The consult cap is 12 a session, the holding line after 10 s | `core/realtime_voice/consult.py:13-16` |
-| Default voices `marin` (OpenAI) and `eve` (Grok); allowed ids are listed in `voice_card.py` | `bootstrap.py:46`; `voice_card.py:11-15` |
-| The shared daily voice cap defaults to $20 per America/Chicago day, durable, fail-closed, a reserved allowance not a bill; the portal and `cos-scheduler` share one ledger | `core/realtime_voice/budget.py:1-38` |
-| Provider default: explicit choice, else `VOICE_REALTIME_PROVIDER_DEFAULT`, else `openai` | `core/realtime_voice/config.py:28-61` |
-| Allowed locales: `de-AT`, `pt-BR`, `en-US` | `config.py:19` |
+| `core/realtime_voice/` → portal, german, portuguese, cos-bot, cos-scheduler; `domains/cos/` → cos-bot, cos-scheduler; `minimoi_portal/` → portal; **unknown paths → full** | `classify_release.py:346-371`, `:405-407` |
+| `origin/main...93bf00c6` classifies **full** (nine services) because of `services/mc_operations/personas/` and `scripts/mc_persona/`; without them seven (`core/mc_tools/` adds curator, system-bot) | run by Claude Code, 28 Oct |
+| Adapters changed; the controller imports them under old keys | `realtime-voice-controller.js:24-25` |
+| On Grok, the composed `session_config` goes through the browser | `xai_voice.py:13-18`, `:74-99` |
+| Consult ledger: in memory, call-id dedup only, cap 12, holding line 10 s | `consult.py:13-64` |
+| Provider: explicit, dev query override (not production), saved preference, `VOICE_REALTIME_PROVIDER_DEFAULT`, `openai` | `config.py:28-61` |
+| Transcription language from the locale (`en-US` → `en`); managed CoS sent none, with a faithful-transcription hint | `bootstrap.py:61-64`; `xai_voice.py:82`; `controlled_config.py:31-33`, `:49-50` |
+| Budget: $20 per Chicago day, durable, fail-closed, one ledger for portal and `cos-scheduler`; the session allowance has no default, and unset the direct host refuses | `budget.py:1-38`; `mc_voice_direct.py:117-121`, `:640-641` |
 
 ## 3. Goal and scope of 1.2
 
-**Goal.** Robert talks with Master Craftsman and with Chief of Staff, on the Mac and the phone, through one voice
-implementation, with the same behaviour, the same safeguards and the same release check, each sounding like
-themselves.
+**Goal.** Robert talks with MC and with CoS, on the Mac and the phone, through one voice implementation with the
+same behaviour, safeguards and release check, each sounding like themselves.
 
-**In scope (Part A):**
-- A host-agnostic direct-voice core extracted from the Chunk B Guild host (§4).
-- MC moved onto the core with no change in behaviour (§5).
-- CoS standardized on the core: her card, her manner written deliberately, her consult backend, her store, her
-  summary, the Confer UI on the same contract (§6).
-- Providers, voice ids, budgets and cost visibility per person (§7).
-- Every Chunk B safeguard, for both hosts (§8).
-- Retirement of the managed sideband, both chained relays and `VOICE_MANNER`, on a stated schedule (§9).
-- Rollout, release checks, Robert's listening and phone tests, production switch-over and rollback (§11).
-
-**Part B (queued, starts after 1.2 is in production):** German and Portuguese together (§14).
-
-**What "standard" means**, concretely; each is one thing, used by both hosts:
+**Part A:** the core extracted from Chunk B with the review's corrections (§4, §5); MC on it (§5.6); CoS on it (§6);
+providers, voices, budget (§7); safeguards (§8); retirement (§9); rollout and Robert's tests (§11); the language-page
+safety touch if D23 is adopted (§14.1). **Part B (#433):** German and Portuguese, after 1.2 is in production (§14).
 
 | Standard | Is | Lives in |
 |---|---|---|
-| One host core | session ledger, transcript validation and caps, end intent, summary flow, decision flow, route registration | `core/realtime_voice/direct_host.py` (new, from `mc_voice_direct.py`) |
-| One controller | `RealtimeVoiceController`, direct mode, plus two public methods (§4.3) | `core/realtime_voice/static/realtime-voice-controller.js` |
-| One browser session module | bridge, holding line, capture and heartbeat, End and `pagehide`, server-ended handling, Check, summary speaking | `core/realtime_voice/static/direct-voice-session.js` (new, from `mc_voice_direct.js`) |
-| One card format | `voice.json`, schema 1 plus optional `language` and `accent`, hash-checked against its release manifest, pinned by data | `core/realtime_voice/voice_card.py` (generalized) |
-| One capture/reveal/summary contract | `UI_CONTRACT_chunk_B.md` §1–§9, renamed for any person | the contract file, republished as the 1.2 contract (§10) |
-| One consult contract | `create_consult_blueprint`, unchanged: CSRF, owner, call-id dedup, in-flight guard, cap, End | `core/realtime_voice/consult.py` |
-| One budget | `budget.admit(kind="realtime_direct_session", domain=<host>, required=True)` before any mint | `core/realtime_voice/budget.py` |
-| One release check | the Chunk B release check, parametrized by host (§12.2) | `tests/realtime_voice/` (new shared check) plus one instance per host |
+| Host core | session ledger, owner-action admission, capture boundary, end intent, summary and decision, routes | `core/realtime_voice/direct_host.py` |
+| Controller | `RealtimeVoiceController` + additive `sessionId()`, `speak()`, playback drain | `…/static/realtime-voice-controller.js` |
+| Browser module | bridge, holding line, capture and acknowledgments, barrier, heartbeat, End, `pagehide`, Check, summary | `…/static/direct-voice-session.js` |
+| Card | `voice.json` schema 1 + `language`, `accent`, `transcription`; hash; pin | `voice_card.py` |
+| Contracts | `UI_CONTRACT_chunk_B.md` corrected by §5; consult per §5.1 | the 1.2 contract (§15) |
+| Budget | `admit(kind="realtime_direct_session", domain=<host>, required=True)` before any mint | `budget.py` |
+| Release check | parametrized by host (§12.2) | `tests/realtime_voice/` |
 
 ## 4. Architecture: one core, thin host adapters
 
-### 4.1 Why extract, and where to
+### 4.1 Why extract
 
-`mc_voice_direct.py` mixes two kinds of code. About half is host-agnostic: the session ledger with its caps,
-`seen`/`live`/`expired`, end-intent tracking (`_Sessions`, `:124-268`); transcript validation (`_events`,
-`:432-460`); the summary prompt and parsing (`:464-522`); the receipt line (`:338-350`); the transcript, End-events,
-summary and decision route flows inside `install` (`:679-807`). The rest is the Guild: the owner guard and write
-guard, the conversation store, the floor notes, the typed turn through `api._ledger_turn`/`_answer_turn`, the
-tagged floor, MC's card and continuity.
-
-CoS cannot import the Guild: `cos-scheduler` does not copy `minimoi_portal/guild_ui/` (§2.2). So the host-agnostic
-half moves to `core/realtime_voice/`, which every voice image already copies, and both MC and CoS call it. **Moved,
-not copied:** after the move, `mc_voice_direct.py` keeps only its adapter, and a test fails if a host file defines
-its own session ledger, transcript validator, summary flow or browser bridge (§12.1).
+About half of `mc_voice_direct.py` is host-agnostic: the session ledger (`:124-268`), transcript validation
+(`:432-460`), the summary prompt (`:464-522`), the receipt line (`:335-350`), the route flows (`:679-807`). CoS cannot
+import the Guild (`cos-scheduler` lacks `guild_ui/`), so that half moves to `core/realtime_voice/`, which every voice
+image copies: **moved, not copied**, and moved with the §5 corrections, so both hosts get them once.
 
 ### 4.2 What moves where (server)
 
-| Today | Moves to | Notes |
-|---|---|---|
-| `_Sessions` (`mc_voice_direct.py:124-268`) | `direct_host.DirectSessions(ConsultLedger)` | durable start/end markers become adapter calls (`store.mark_start`, `store.mark_end`); `first_words` becomes an optional adapter hook |
-| `_events`, `POST_MAX_*`, `SESSION_MAX_*`, `CLOCK_SLACK_S` (`:56-60`, `:432-460`) | `direct_host` | unchanged values |
-| `keep_events`, `end_events`, `owned_session`, `summary`, `decide` route flows (`:679-807`) | `direct_host.install_direct_voice(app, adapter, *, url_prefix, environ, budget)` | the routes and their bodies stay exactly as `UI_CONTRACT_chunk_B.md` |
-| `_summary_prompt`, `_summary_texts`, `PROPOSAL_HEAD`, `DECISION_HEAD`, `UNAVAILABLE_TEXT` (`:464-522`) | `direct_host` | the person's display name is a parameter |
-| `_receipt_line`, `JOB_DONE` (`:335-350`) | `direct_host`, with receipt kinds supplied by the adapter | MC: reply, operation, job; CoS: reply, note, reminder |
-| `TOOLS`, `DIRECT_RULES` (`:62-83`) | `direct_host.tools(person)`, `direct_host.direct_rules(person)` | names stay exactly `consult` and `save_note` (`bootstrap._ALLOWED_TOOL_NAMES`, `:47`) |
-| `done_intent`, `affirmative`, `receipt_parts`, `full_differs`, `state` (`mc_voice_reveal.py:172-208`, `:251-276`, `:333-350`) | `direct_host` (pure functions over an adapter store) | Guild's `view()` stays Guild (floor notes) |
-| `_speakable` (`mc_voice.py:121-133`) | `direct_host.speakable` | MC's chained relay goes in the cleanup (§9) |
-| `SessionRefused` (`controlled_session.py`) | `core/realtime_voice/errors.py` | so the managed modules can be deleted later without breaking the direct path |
-| MC's operating rules `INSTRUCTIONS` (`mc_managed_realtime.py:16-22`) | the MC adapter (`mc_voice_direct.py`) | same reason |
-| `voice_card.load_card(release)` with MC's path (`voice_card.py:16-39`) | `load_card(root, release)` plus `load_pinned(root)` | §4.5 |
+| Today | Moves to |
+|---|---|
+| `_Sessions`; `_events` and its limits | `direct_host.DirectSessions` (markers via the store); `direct_host` (values unchanged) |
+| route flows `keep_events`, `end_events`, `owned_session`, `summary`, `decide` | `direct_host.install_direct_voice(app, adapter, *, url_prefix, environ, budget, may_start)` |
+| `_summary_prompt`, `_summary_texts`, heads; `_receipt_line`, `JOB_DONE` | `direct_host`; the person's name and receipt kinds from the adapter |
+| `TOOLS`, `DIRECT_RULES` | `direct_host.tools(person)`, `direct_rules(person)`; names stay `consult`, `save_note` |
+| `done_intent`, `affirmative`, `receipt_parts`, `full_differs`, `state` (`mc_voice_reveal.py`); `_speakable` | `direct_host`; Guild's `view()` stays Guild |
+| `SessionRefused`; MC's `INSTRUCTIONS` | `core/realtime_voice/errors.py`; the MC adapter (text unchanged) |
+| `voice_card.load_card(release)` | `load_card(root, release)`, `load_pinned(root)` (§4.5) |
 
-Stays in **`minimoi_portal/guild_ui/mc_voice_direct.py`** (the MC adapter): the guard (`owner_api`, `check_write`,
-`check_stop`, MC turns on), conversation lookup (`api._conversation`, `ID_RE`), the floor store (markers, tags,
-`mc_voice_transcripts.retain`, `mc_voice_reveal.view`), `_TaggedFloor`, the typed turn (`_ledger_turn`,
-`_answer_turn`, `VOICE_MARKER`, `g.mc_voice_named_only`), the summary model call (`services.mc.turn`, ledger gate,
-`_mc_acquire`), MC's continuity (`mc_voice_transcripts.block`), the title touch.
-
-New **`domains/cos/direct_voice.py`** (the CoS adapter): §6.
+The MC adapter (`guild_ui/mc_voice_direct.py`) keeps the guard, conversation lookup, floor store (markers, tags,
+`retain`, `view`), `_TaggedFloor`, the typed turn, MC's continuity and the title touch. The CoS adapter is
+`domains/cos/direct_voice.py` (§6).
 
 ### 4.3 What moves where (browser)
 
-| Today (`minimoi_portal/guild_ui/static/js/mc_voice_direct.js`) | Moves to | Notes |
-|---|---|---|
-| `startRefusal`, `noticeWords`, `jsonPost`, `createCapture`, `directVoice` and their constants | `core/realtime_voice/static/direct-voice-session.js` | words that name the person ("Check with MC") take the person's short name |
-| `voiceThread` (Guild thread DOM) | stays Guild | CoS gets a small Confer renderer (§6.8) |
-| `controller._sessionId`, `controller._adapter.sendContinuationInstruction` | `controller.sessionId()` and `controller.speak(instruction)`, public, additive | German and Portuguese do not call them |
-
-Both pages load the module the same way the Guild does today: only when the capabilities answer offers the direct
-path. The shared controller's adapter imports get new cache keys, because both adapters changed (§2.4).
+`startRefusal`, `noticeWords`, `jsonPost`, `createCapture`, `directVoice` move to `direct-voice-session.js`, worded
+with the person's short name ("Check with CoS"). `voiceThread` stays Guild; Confer gets a small renderer (§6.6). The
+private members become public, additive `controller.sessionId()` and `controller.speak(instruction)` (a spoken
+instruction to the voice; unrelated to the retired supervision nudge), unused by German and Portuguese.
 
 ### 4.4 The adapter interface
 
-One small interface, written once in `direct_host`. Each host supplies:
-
 | Hook | MC (Guild) | CoS (Confer) |
 |---|---|---|
-| `owner()` → (id, display name) or None | signed-in Guild owner (`mc_voice_direct.py:604-610`) | `resolve_user_id` + tier owner + the portal's verified-write marker (as `managed_realtime.owner_guard`) |
-| `guard(kind)` → refusal or None | owner, CSRF, record mode, MC turns (`:620-632`) | owner and marker; CSRF is the portal's (§6.9); Confer has no Private mode (`managed_realtime.py:26-31`) |
-| `conversation(requested)` → handle | an owned, saved, on-record conversation | `owner` only; anything else refused |
-| `store` | floor notes, markers, tags, `retain` | file store (§6.6) |
-| `typed_turn(handle, session, call, name, owner_text)` → result | MC's typed turn (`:353-429`) | `_process_confer_turn` (§6.4) |
-| `summary_model(handle, session, prompt)` → text | `services.mc.turn`, own runtime session (`:525-585`) | her backend, own runtime session (§6.7) |
-| `card()` | MC's pinned card | her pinned card |
-| `instructions(card, handle)` | rules, card, continuity (§5) | rules, card, briefing and continuity (§6.3) |
-| `person` | `{"key": "master_craftsman", "name": "Master Craftsman", "short": "MC"}` | `{"key": "chief_of_staff", "name": "Chief of Staff", "short": "CoS"}` |
+| `read_owner()` | signed-in Guild owner | portal-forwarded identity, `resolve_user_id`, tier owner; **no** write marker |
+| `write_guard(kind)` | owner, CSRF, record mode, MC turns on | `read_owner()` + the portal's verified-write marker |
+| `conversation(requested)` | owned, saved, on-record conversation | `owner` only |
+| `store` | floor notes behind the store interface | file store (§6.5) |
+| `typed_turn(handle, action)` → outcome (§5.1) | MC's typed turn | `_process_confer_turn` (§6.4) |
+| `card()`, `instructions()` | pinned card; rules, card, continuity | pinned card; rules, card, briefing, continuity (§6.3) |
+| `summary_key`, `person` | MC's capped gateway key; `{"key":"master_craftsman","name":"Master Craftsman","short":"MC"}` | hers; `{"key":"chief_of_staff","name":"Chief of Staff","short":"CoS"}` |
 
-The core owns everything between: bootstrap (via `create_bootstrap_blueprint` with `owner` and `admit`, as built),
-consult (via `create_consult_blueprint`), transcript, End with events, summary, decision, caps, dedup, the budget
-reservation before the mint, and the capabilities metadata (`direct_voice`).
+**Store interface** (core-defined, adapter-implemented; refusals typed, never logged-and-continued):
+`begin(session, owner, meta)`; `put(session, record)` → `stored | duplicate | conflict | refused(reason)`, returning
+only once durable; `close(session, boundary)` → `closed | already`; `records`; `state`; `sessions(owner,
+needing_attention)`. Records carry `schema: 1`, a stable `id`, `kind`, `at`. First write wins; the same id with other
+content is a `conflict`.
+
+The core owns bootstrap (with `owner` and `admit`), consult, capture, End, summary, decision, caps, admission, the
+budget reservation before the mint, and capabilities: `direct_voice` when a start is allowed, `direct_records` when
+the owner has sessions needing attention.
 
 ### 4.5 Cards and pins as data
 
-A card lives in its person's own release folder with a manifest and a hash, as MC's does. The adapter does not
-name the release in code: it reads a one-line **pin** in the person's voice folder (`pin.json`,
-`{"release": "<v>"}`). Changing a card is a new release folder plus a pin change, both data, both reviewed as an
-owner adoption (Spec 164 §3: tool or card changes go through the persona release gate, never a configuration edit).
-`load_pinned(root)` refuses a missing pin, a missing release, or a hash that is not the manifest's (as `load_card`
-does today, `voice_card.py:19-25`).
+A card lives in its person's release folder with a manifest and hash; the adapter reads `pin.json`
+(`{"release": "<v>"}`). A card change is a new release plus a pin change, reviewed as an owner adoption (Spec 164
+§3). `load_pinned` refuses a missing pin or release or a wrong hash. Schema 1 gains optional `language` (an allowed
+locale; absent `en-US`; replaces MC's constant, `mc_voice_direct.py:50`), `accent` (a label) and `transcription`
+(`"bilingual"`, D19). The manifest gains `persona: {source, version, sha256}`, checked against `mc-role-lock.json`
+by the release check, so a persona change flags both cards.
 
-Schema 1 gains two optional fields:
-- `language`: the session locale, one of `config.ALLOWED_LOCALES`. The adapter takes its locale from the card, not a
-  constant (MC's is a constant today, `mc_voice_direct.py:50`). Absent means `en-US`.
-- `accent`: a short label for the reader of the card ("light Austrian"). Informational; the card text is what the
-  model reads.
+A Portuguese CoS is a card with `"language": "pt-BR"`. A **French** CoS also needs `fr-FR` in `ALLOWED_LOCALES` and
+the capability and transcription tables (`config.py:19`; `capabilities.py:47`, `:59`; `bootstrap.py:61-64`): a small
+code change with tests.
 
-So a Portuguese CoS is a new card with `"language": "pt-BR"`: no code. A **French** CoS also needs `fr-FR` in
-`ALLOWED_LOCALES`, the provider capability table and the transcription-language table (`config.py:19`,
-`capabilities.py:47`, `:59`, `bootstrap.py:61-64`): three allow-list lines, not a build, but not a card change only.
-This spec says so rather than overpromise.
+## 5. The corrected direct-voice contract, and MC on the core
 
-## 5. Master Craftsman on the core
+Codex's Chunk B review (B1–B7) reproduced lifecycle defects the Chunk B suites miss. A1 fixes them once, in the
+core, before CoS uses it. This section is the contract A1 meets for both hosts.
 
-MC's behaviour does not change in the extraction. The Chunk B suites are the regression harness: every test in
-`tests/guild/shop_floor/test_mc_voice_direct.py`, `test_mc_voice_direct_page.py`, `tests/test_mc_voice_reveal.py`
-and the five `tests/mc_voice_direct_*.mjs` files passes unchanged, apart from import paths.
+### 5.1 One owner action, one effect; four outcomes (B1, B7, CX-S1, IR-M4, IR-M5)
 
-What does change for MC in 1.2:
-- **Card pin as data** (§4.5). Release `0.1.18` is a candidate whose base is `0.1.16` plus the card. 1.2 releases
-  MC's voice card as an adopted release (a new version if the card text changes after the audition), and the pin
-  names it. Whether the MC agent container moves to that release at the same time is not a voice question; the
-  portal reads only `voice.json` from it.
-- **Operating rules moved** into the adapter (§4.2), text unchanged.
-- **Person-neutral voice rules into the shared direct rules (D17).** `VOICE_MANNER` carries rules that are not about
-  who anyone is: one or two short sentences then yield; drop an interrupted explanation; don't prompt in silence;
-  distinguish an unavailable tool, a failed lookup and unchecked evidence; claim a destination only from its receipt
-  (`controlled_config.py:19-29`). MC's direct path does not get them today. The recommendation is to put them in the
-  core's direct rules, worded for any person, so MC and CoS both have them and neither card carries the other's
-  manner.
-- **Voice ids by ear** (§7, D3).
-- **Production switch** (§11).
+- **Identity.** Every consult, from the model or from Check, carries `owner_item_id` (the capture id of the
+  completed owner turn) and its text. The action key is `(session, owner_item_id, tool)`.
+- **Durable admission at the host.** Before dispatch the core writes a `consult_request` record under the key
+  (first write wins). A second dispatch of that key (another call id, Check after the model, a retry) gets the
+  stored outcome, or `in_flight` and waits for the first. Call-id dedup stays as a second layer. Check goes
+  through the same dispatcher as the model; the disabled button is presentation, not the guard.
+- **A new effect needs a new turn.** Saying the words again is a new turn. Within one turn, `consult` and
+  `save_note` are one action each.
+- **Operation ids derive from the key**, so platform dedup also holds: MC's as today from the key; CoS's
+  `request_id = uuid5(VOICE_NS, f"{host}:{session}:{owner_item_id}:{tool}")`, `VOICE_NS` a core constant.
+
+| Outcome | When | Spoken | At reveal |
+|---|---|---|---|
+| `done` | the typed turn returned, with its receipt | the reply; "Saved." only with the receipt | answered / receipt |
+| `not_done` | refused before dispatch, or the backend said it did not happen | "That did not go through. Nothing was done." or the refusal | not done + reason |
+| `pending` | still running after 25 s | "That's taking longer; the answer will be in the conversation." | the outcome when it lands |
+| `unknown` | dispatched, no answer: network loss, timeout, 5xx, edge 504, backend exception after dispatch | "I didn't get the result back. Check it in writing before asking again." | result unknown until reconciled |
+
+- **Long turns.** The core runs the typed turn in a worker and waits 25 s (under every timeout), then `pending`;
+  the receipt is written when it completes; the next heartbeat answer lists completed actions and the voice says
+  the result once, at a pause. No extra request, no timer.
+- **Reconciliation.** `GET …/consult/<session>/<owner_item_id>/<tool>` returns the stored outcome and runs nothing;
+  the browser asks once after `unknown`; the store answers after a restart. A request with no receipt (the process
+  died) stays `unknown`, shown so; nothing re-runs by itself.
+
+*Regressions:* manual→model, model→manual, concurrent, repeated calls under new call ids (one effect); a repeated
+utterance (a new effect); an effect committed and its response dropped (no "failed"; the same-key read shows it).
+
+### 5.2 Capture barrier and honest retention (B2, B4, pagehide)
+
+- Events are `queued → sent → acknowledged`, or `failed(reason)` after two attempts under the same id. Only
+  acknowledged events are kept; a 422 or an exhausted retry is `failed`, never a silent warning.
+- **One barrier closes capture** for End, Sum up, the spoken "yes", `pagehide` and a server end: stop admitting
+  owner input; flush the open partial as `partial`; post everything unacknowledged; wait (5 s); send the close
+  with `{last_item_id, unacknowledged}`. The spoken-yes path schedules the barrier outside the capture chain's
+  callback, never awaiting the chain from inside it.
+- The server closes at that boundary, writing `capture: complete | incomplete(n)` into the end marker; later posts
+  are refused (409) and counted.
+- "What was said is in the conversation." appears only for `complete`; otherwise "Some of what was said was not
+  kept (n turns). What was kept is in the conversation.", and the summary prompt states the gap.
+- **`pagehide`:** batches in order within one 64 KB keepalive budget, End last with the count of earlier
+  unconfirmed batches; anything unconfirmed is `incomplete`, shown by any device's reveal.
+- **A late consult receipt** is kept and revealed after the summary, marked "arrived after the summary"; it does
+  not regenerate the proposal.
+
+*Regressions:* two network failures then a successful End; 422; a failed final batch; a partial 409 after retry; a
+slow or rejected final post before Sum up; reload after an incomplete session; reordered `pagehide` batches and a
+keepalive refusal.
+
+### 5.3 Ending: end intent, summarizing, playback (B3, B5, B6)
+
+- **End intent is idempotent by event id:** a replay gets its first answer and never advances state. A confirmation
+  must come from a later owner turn than the proposal. Keep talking clears the server's proposal
+  (`POST …/keep_talking`).
+- **States:** `live → closing → summarizing → speaking_summary → ended` (End goes straight to `ended`). In
+  `summarizing` capture heartbeats stop and are not expected; the transport stays open. In `live` a server refusal
+  still ends the voice at once.
+- **Summary bound** 45 s, then "Summary unavailable", records intact, "Ask for a summary" later (as built,
+  `1dd34e30`). End during `summarizing` closes the voice; the summary still lands in writing.
+- **The summary ends when it has been heard:** it is one tracked response; the session ends when the adapter
+  reports that response's audio drained, at barge-in, or at a bound (15 characters a second plus 5 s, at most 90 s).
+  Another response never closes it. New optional `onPlaybackDrained(responseId)`: xAI, its AudioContext queue empty;
+  OpenAI WebRTC, candidate `output_audio_buffer.stopped` (**unverified**; A1 checks). German and Portuguese pass no
+  callback and behave as today.
+
+*Regressions:* lost-response retry of "Yes, we're done"; proposal and confirmation in one batch; Keep talking then
+"yes"; summary before and after a heartbeat; summary failure, timeout and End during it (transport closed once,
+honest written result); response done with audio queued; empty response; barge-in; an unrelated pending response.
+
+### 5.4 The summary's execution boundary (CX-S2, D22)
+
+A "use no tools" prompt is not a boundary: neither agent adapter enforces `tool_policy` (`openclaw_backend.py:343`;
+MC `guild_ui/mc/openclaw.py:200-210`), and `cos-agent-a` runs `exec` `full`. The summary is a **plain completion through the
+model gateway**: this session's kept records (60 records or 12,000 characters, omissions marked) and the person's
+name and card, no tool definitions, no agent runtime, no conversation binding, under a capped key per host
+(`voice-summary-mc`, `voice-summary-cos`); the model is gateway configuration. Gateway or key unavailable: "Summary
+unavailable", never the live agent. Confirming a summary authorizes nothing in it (as built). Tests: no `tools` in
+the request; a tool-call-shaped answer counts as unavailable; a missing key refuses.
+
+### 5.5 Tests carried from Chunk B
+
+`test_mc_voice_direct.py`, `test_mc_voice_direct_page.py`, `test_mc_voice_reveal.py` and the four
+`tests/mc_voice_direct_*.mjs` (`host`, `reveal`, `session`, `thread`) pass apart from import paths, **except
+assertions that encode a B1–B7 defect**, each replaced by the expected behaviour and named in its commit. Codex's
+reproductions (`review-evidence-codex/`) become expected-behaviour regressions; Codex re-reviews the pinned A1 head.
+
+### 5.6 What changes for MC
+
+Production keeps the relay until MC is admitted (§11.1). His voice card is adopted as a release and pinned (the
+portal reads only `voice.json`; the agent container's release is separate). His rules move into the adapter
+unchanged; person-neutral rules go to the core (D17). The adapter works when MC's chat is kind `cos`, with a test.
+Voice ids by ear (D3).
 
 ## 6. Chief of Staff standardization (core goal)
 
-### 6.1 Her card: format and location
+### 6.1 Her card
 
-- **Location:** `domains/cos/voice/releases/<v>/voice.json` plus `manifest.json` (hash of `voice.json`), and
-  `domains/cos/voice/pin.json`. `domains/cos/` is copied into `cos-scheduler` (§2.2) and redeploys only CoS images
-  when it changes (§2.4). (`domains/guild/config/` holds her soul and context, but a change there also redeploys
-  the portal.)
-- **Format:** MC's schema 1, with `language: "en-US"`, `accent: "light Austrian"` (the default in §6.2), `card`, and
-  `voices`.
-- **Voices:** see §7 and D2. The draft keeps `"openai": "cedar"`, her voice today in both of her modes
-  (`controlled_config.py:51`; `openai_speech.py:12`), so she does not change sound by default; Grok is unset until
-  Robert picks by ear.
+`domains/cos/voice/releases/<v>/voice.json` + `manifest.json`, and `domains/cos/voice/pin.json` (redeploys only CoS
+images). Schema 1: `language: "en-US"`, `accent: "light Austrian"`, `transcription: "bilingual"`, `card`, `voices`
+(D2); the manifest names the persona.
 
-### 6.2 Her manner, written deliberately
+### 6.2 Her manner: the shared persona, written for voice
 
-**Default: preserve her current effective voice unless Robert decides otherwise (D1).** Her effective voice today
-on the managed path is her own voice-surface paragraph (`chief_of_staff.py:652-678`), plus `VOICE_MANNER` =
-`PARTNER_STYLE` + MC's Viennese partner manner (`controlled_config.py:8-30`). On the chained path the spoken words
-are her typed replies, which already carry `PARTNER_STYLE` (`confer_service.py:341-342`).
+Today's CoS voice is not MC's manner appended by accident: Robert approved one persona for both, compiled into her
+runtime (§2.2), so her consult answers and typed and Telegram replies already speak it. The realtime model does not
+read her SOUL, so her card **restates the persona's voice-relevant parts**, names the persona version (§4.5), and
+adds only her name and voice-surface wording; MC's card does the same. Each part of `VOICE_MANNER`
+(`controlled_config.py:8-30`) goes to one named place:
 
-Nothing is inherited by side effect: each part she keeps is written into her card or her rules, by name. This
-table lists every clause of `VOICE_MANNER` and where it goes for her:
+| Goes to | Clauses |
+|---|---|
+| Her card (from the persona) | warm Austrian colleague, `du`, dry humour; familiar Viennese partner, never a receptionist, concierge, servant, stranger or examiner; English by default with a light intelligible Austrian accent, no caricature or phonetic spelling, no invented memories; German as a brief phrase in his day, one formulation for "how do I say…"; follow his German in Austrian standard German, then return; no canned enthusiasm, flattery or filler |
+| Core direct rules, both (D17) | one or two short sentences, answer first; drop an interrupted explanation; don't prompt in silence; tell an unavailable tool from a failed lookup and unchecked evidence; claim saves, recipients and handoffs only from receipts; no claim of complete memory; Guild note ≠ CoS note ≠ Board post-it; no runtime ids; voice rules never expand authority |
+| Her rules | consult before saying something is unavailable; her voice paragraph (`chief_of_staff.py:652-678`) with `consult`, `save_note` |
 
-| `VOICE_MANNER` clause (`controlled_config.py`) | Kind | For CoS, by default |
-|---|---|---|
-| `PARTNER_STYLE`: warm Austrian colleague, fluent in English and German, follows his language, `du`, Austrian phrasing, dry humour, no caricature, no lessons | identity | **her card**, reworded as hers |
-| `PARTNER_STYLE`: precise confirmations; use tools before declaring unavailable; name the missing connection; note ≠ post-it ≠ request ≠ answer; label excerpts; no runtime ids; no authority | reporting | **shared direct rules** (D17) |
-| "familiar Viennese partner, friend and colleague: warm, sharp, candid, dry humour; never a receptionist, concierge, servant, stranger or language examiner" | identity | **her card** (kept on purpose; marked "kept from today's manner") |
-| English by default, light natural Austrian accent, intelligible, no caricature, no phonetic spelling, no invented memories or biography | identity | **her card** |
-| German belongs in his day: a brief phrase in context; "how do I say…" gets one natural formulation, then pause | identity | **her card** |
-| When he speaks German, follow in clear Austrian standard German with `du`, no exaggerated dialect, return to English; never a lesson | identity | **her card** |
-| No canned enthusiasm, flattery, apologies, recaps, filler; a teammate at the same desk | manner | **her card** |
-| No scripted offers of help or transfer announcements; report actual recipients and handoffs from receipts | reporting | **shared direct rules** |
-| One or two short sentences, about 15–40 words, then yield; lead with the answer; expand only when asked | manner | **shared direct rules** (also already in her paragraph) |
-| If interrupted, drop the explanation and follow; don't prompt in silence; next useful step within his authorization | manner | **shared direct rules** (also in her paragraph) |
-| "use consult_cos_agent" before saying something is unavailable | tool | **her rules**, with the tool renamed `consult` |
-| Distinguish an unavailable tool, a failed lookup, unchecked evidence; never invent access or promise success | reporting | **shared direct rules** |
-| No claim of complete history or universal memory; distinguish supplied context, returned evidence, kept notes | reporting | **shared direct rules** |
-| Guild note ≠ CoS memory note ≠ Board post-it; Board change only with a Board receipt | reporting | **shared direct rules** |
-| Voice rules never expand authority | rule | **shared direct rules** |
+**Draft card** (final after the audition):
 
-Her own voice-surface paragraph (`:652-678`) stays hers, in her rules, with two edits: `consult_cos_agent` →
-`consult`, `save_cos_note` → `save_note`.
+> Chief of Staff, Robert's familiar, candid partner, who keeps the work pointed at the right questions. Warm,
+> sharp, direct, with dry humour when it fits; never a receptionist, concierge, servant or language examiner.
+> English by default, with a light, natural, intelligible Austrian accent; never a caricature, never invented
+> shared memories. German belongs naturally in his day: an occasional brief phrase; asked how to say something, one
+> natural Austrian formulation, then pause. When he speaks German, follow in clear Austrian standard German with
+> du, then return to English; never a lesson. No canned enthusiasm, flattery or filler. Pronounce MiniMoi, Chief of
+> Staff, Master Craftsman, Claude Code, Codex and Grok the same way every time.
 
-**Draft card text** (for Robert's review; final wording after the audition):
-
-> Chief of Staff, Robert's familiar, candid partner: the one who keeps the work pointed at the right questions.
-> Warm, sharp, direct, with dry humour when it fits; never a receptionist, concierge, servant or language examiner.
-> English by default, with a light, natural, intelligible Austrian accent; never a caricature, never invented shared
-> memories. German belongs naturally in his day: an occasional brief phrase; when he asks how to say something, one
-> natural Austrian formulation, then pause. When he speaks German, follow in clear Austrian standard German with du,
-> and return to English naturally; never a lesson. No canned enthusiasm, flattery or filler. Pronounce MiniMoi, Chief
-> of Staff, Master Craftsman, Claude Code, Codex and Grok the same way every time.
-
-This keeps today's effective voice. It also means MC and CoS share an accent and much of a manner, because today's
-CoS voice was MC's manner appended. That is the honest default, and the reason D1 exists: the audition (§11.4) is
-where Robert hears whether she sounds like herself or like MC, and decides.
+So MC and CoS share an accent and most of a manner. If Robert wants them to differ, that is D1, a persona adoption.
 
 ### 6.3 Her session instructions
 
-Composed on her server, in Spec 164 §7's order, bounded:
-1. **Operating rules:** the core's direct rules for her person (tools, receipts, "Shall I sum up?", never summarize
-   from memory, the person-neutral rules of §6.2), then her voice-surface paragraph (renamed tools).
-2. **Who she is:** her card.
-3. **Data:** her briefing as today (`_build_system_prompt()`: soul, context, memory, ops status, build state,
-   date), then bounded continuity: the most recent revealed voice records for `owner` (§6.6), labelled DATA.
-
-Bound: 24,000 bytes, the managed path's own limit (`controlled_config.py:38-42`). Continuity is cut first, then the
-briefing's memory section, marked as cut; the rules and card are never cut. Over the bound with continuity and
-memory already cut, voice is unavailable and says so. (`cos_memory.md` is included whole today; its size in
-production is **unverified**.)
-
-On Grok Voice these instructions pass through Robert's own browser (§2.4). That is the same owner who can read her
-memory page; it is named here so nobody assumes otherwise. Nothing the browser could change grants anything: the
-server acts only on the owner's transcript item and the allow-listed tools (§8).
+Composed on her server in Spec 164 §7's order: the core's direct rules, then her voice paragraph; her card; DATA:
+her briefing (`_build_system_prompt()`), then bounded continuity. Bound 24,000 bytes (`controlled_config.py:38-42`):
+continuity cut first, then memory, marked as cut; rules and card never; still over, voice is unavailable and says
+so (`cos_memory.md`'s production size is unverified). On Grok, these instructions, her whole briefing included, go
+to xAI through Robert's own browser: a new provider for her data (D2). Nothing the browser changes grants anything.
 
 ### 6.4 Her consult backend
 
-`typed_turn` for CoS calls `_process_confer_turn(owner_text, channel="html_voice", conversation_id="owner",
-request_id=<vc-session-n>)` (`chief_of_staff.py:811-841`): the same service, authority and receipts as a typed
-Confer message, on Robert's own completed words, never the model's arguments.
+`typed_turn` calls `_process_confer_turn(owner_text, channel="html_voice", conversation_id="owner",
+request_id=<uuid5 of the action key>)`: the same service, authority and receipts as typed Confer, on Robert's
+completed words, plus `_ui_turn`'s `enforce_file_claims` and outbox snapshot, so voice cannot claim an undelivered
+download.
 
-| `ConferTurnResult` | Consult result |
+| Turn service result | Outcome; spoken |
 |---|---|
-| `reply`, no `operation` | `ok`, `answered`, spoken = `speakable(reply)`, receipt kind `reply`, id `turn_id` |
-| `operation.type == "note"` with an operation id | for `save_note` or a spoken "save a note:", `saved: true`, receipt = operation id |
-| reminder operation | `ok`, spoken from the reply, receipt kind `reminder` with its time |
-| `/new` (session reset) | refused in voice: "Start a new CoS conversation in writing." |
-| `InvalidConferTurn`, `ConferOperationFailed`, other exception | `ok: false`, spoken "That did not go through. Nothing is claimed." |
-| `output_limit_reached` | `ok`, spoken from the reply plus "The rest is cut off; ask in writing." |
+| reply, no operation | `done`, receipt `turn_id`; `speakable(reply)` |
+| `note_save` `saved` / `deduplicated` | `done`, receipt `operation_id`; "Saved." / "Already saved." |
+| `reminder_set` (only via `/remind …`, not offered in voice) | `done`, receipt `reminder_id`, `due_utc`; from the reply |
+| `/new`; `InvalidConferTurn`; `ConferOperationFailed` | `not_done`; "Start a new CoS conversation in writing." / its message / "That did not go through. Nothing was done." |
+| exception or timeout after dispatch to her runtime | `unknown` (§5.1) |
+| `output_limit_reached` | `done`; the reply + "The rest is cut off; ask in writing." |
 
-Typed Confer appends to `conversation_log` and enforces file claims (`_ui_turn`, `:1462-1481`); voice consults today
-skip both, because the managed dispatch calls the service directly. The CoS adapter runs the same `enforce_file_claims`
-and the same outbox snapshot as `_ui_turn` for a consult, so a voice answer cannot claim a download the platform did
-not deliver.
+`consult` and `save_note` replace `consult_cos_agent` and `save_cos_note`; `save_note` needs `parse_explicit_note`
+to match, else `not_done`: "Nothing was saved. Say 'save a note that…' and the note." **Reminders** are not by
+voice in 1.2 (D20): her rules say "Set reminders in writing", without MC's "remind me at <time>" sentence.
 
-**Bare confirm words.** MC's voice path refuses bare "yes", "stop" and the like as commands (review B #1). CoS's
-turn service has no confirm parsing of its own (`confer_service.py:198-330`), but her runtime (`cos-agent-a`,
-OpenClaw, with the `mc-actions` plugin, `docker/cos-agent-a/plugins/`) may ask questions a bare "yes" answers. Whether
-it has any approval flow a spoken "yes" could trigger is **unverified**. Chunk A2 inventories it first; if one
-exists, the CoS adapter applies the same rule: a bare confirmation in voice is answered "confirm that in writing".
+**Approvals inventory (D16), on what is loaded:** `ConferTurnService` parses no confirmations; her runtime loads
+two plugins and OpenClaw's built-ins, with no approval mode configured (`exec` `full`, elevated off). No platform
+approval waits on a "yes"; the risk is conversational (she asks "shall I…?" and acts on "yes"). The core refuses a
+consult whose owner text is only a confirmation or stop word, both hosts: "Confirm that in writing." The "yes" to
+"Shall I sum up?" stays: it closes capture and authorizes nothing.
 
-### 6.5 Her tools
+### 6.5 Her store (D5, CX-S3)
 
-| Managed today | Direct path (1.2) | How |
-|---|---|---|
-| `consult_cos_agent` (`controlled_config.py:56`) | `consult` | core tool definition with her name; acts on the owner's transcript item |
-| `save_cos_note` (`:57`) | `save_note` | `parse_explicit_note` (`confer_service.py:130`) must match, else "Nothing was saved. Say 'save a note:' and the note."; saved only with the operation receipt |
-| `realtime_tools.confer_dispatch` (`domains/cos/realtime_tools.py`) | the CoS adapter's `typed_turn` | same checks, in the core contract; `realtime_tools.py` is retired with the managed path (§9) |
-| canonical text = actual owner audio transcript | `owner_transcript_item` | unchanged principle |
+- **Where:** `COS_VOICE_DIR=/app/data/cos-voice` on `cos-scheduler`, host folder `${MINIMOI_ROOT}/cos_voice` (the
+  `cos_reminders` pattern), **not mounted into `cos-agent-a`**; the release check asserts it.
+- **Files:** `<session>.jsonl`; the id validated before any path is built; folder 0700, files 0600, `O_NOFOLLOW |
+  O_APPEND`, fsync before `put` returns. A per-session lock plus `flock`; the id index rebuilt from the file after a
+  restart. First write wins: from two devices, the first decision stands and the second hears "Already decided".
+- **Truncated tail:** a final line without newline or valid JSON is ignored and the session marked `incomplete`;
+  the next append starts on a new line.
+- **No store, no voice:** bootstrap 503 "Voice unavailable: there is no place to keep what is said."
+- **Visible while live:** only the session's existence and state. After End or recovery: the records.
+- **Needs attention:** `GET …/voice/sessions` lists sessions recovering, dropped, `incomplete`, with an undecided or
+  unavailable summary or an `unknown` consult, until decided or dismissed; `…/voice/sessions/<id>` is the detail
+  and download. A settled, decided session leaves the list: not a history product.
+- **Recall (D6):** once a session settles (ended or dropped, nothing `pending`) it is projected into the recall
+  folder as `voice-<YYYY-MM-DD>-<session>.jsonl`, written under a temporary name, fsynced, renamed: the file is the
+  checkpoint, so a crash before the rename re-projects and after it does not duplicate. Projection runs at End, at
+  the sessions list and at the next bootstrap; no timer. Lines are DATA, never re-sent as instructions; abnormal
+  ends and late receipts marked; `system_note` names the files.
+- **Retention:** as `conversation_log`, no expiry in 1.2.
 
-### 6.6 Her store: capture, hide, reveal
+*Acceptance:* duplicate End and decision; two-device decisions; a crash between append, projection and rename; a
+failed disk write; a truncated line; restart; a receipt after End. Each effect once, incomplete state visible,
+nothing lost because the summary is unavailable.
 
-Confer has no visible server thread (§2.2), so "hidden in every view" is simpler than in the Guild, and the store
-must be built. File first:
-- **Where:** `<COS_CONVERSATIONS_DIR>/voice/<session>.jsonl` (D5): one line per kept record (start marker, owner
-  turn, CoS turn, consult request, consult receipt, end marker, summary proposal, decision), with the same fields the
-  Guild keeps (session id, stable id, start/end, partial, interrupted). Written as it happens, append-only,
-  `O_NOFOLLOW` as `conversation_log.append` does.
-- **No store, no voice.** If the folder is not configured or the start marker cannot be written, bootstrap answers
-  503 "Voice unavailable: there is no place to keep what is said." Same rule as MC (`mc_voice_direct.py:153-154`).
-  Whether `COS_CONVERSATIONS_DIR` is set in production is **unverified**.
-- **State** is the core's: ended, dropped (no end marker after the maximum duration), live (open in this process,
-  heard within 60 s), recovering.
-- **Reveal:** End answers with the session's records; the page appends them to the thread (owner turns, her
-  spoken turns with "interrupted" marks, one line per consult, "Checked with CoS · answered"), then the summary card.
-- **Other tabs and devices:** a new `GET …/voice/sessions` lists sessions that are recovering or have an undecided
-  summary proposal. Confer calls it on load and shows the recovery line or the summary card; nothing else from
-  history, because Confer shows no history today.
-- **Her recall (D6):** at End the revealed session is appended to `conversation_log`, one line per owner/CoS turn and
-  consult, `channel: "html_voice"`, so CoS can recall what was said as she recalls typed turns. Labelled DATA; never
-  re-sent as owner instructions.
+### 6.6 Confer UI on the same contract
 
-### 6.7 Her summary
+- **One Voice button** once she is admitted (D8): no mode select, no "Hearing: …"; nothing said shows while live.
+- **Live bar:** voice on, elapsed, End, Check with CoS; Sum up and Keep talking when offered.
+- **Provider choice** in Confer's quiet style, remembered under its own key; `voice_notices` as one line.
+- **Reveal, recovery line, summary card, needs-attention list** in Confer's styles; the card says "Confirming
+  confirms the summary only. Anything it mentions still needs its own request."
+- **Download transcript (D7)** after reveal, from kept records, partial capture labelled.
+- **Dictate unchanged**, bootstrap included. Voice and Dictate yield to each other as today; the companion handler
+  ends the direct session; `pagehide` runs the barrier.
+- **Not admitted:** Confer behaves as today, plus one capabilities read; tested by behaviour, not page bytes.
+  Admitted and refused: "Voice unavailable: <reason>", never another mode.
 
-Same flow as MC (Spec 164 §8, `UI_CONTRACT_chunk_B.md` §7): "we're done" proposes; yes or Sum up ends capture;
-the summary comes from this session's kept records only (60 records / 12,000 characters, omissions marked); spoken
-and written texts differ; one proposal per session, no expiry; confirm, edit or decline in writing; confirming
-authorizes nothing it mentions.
+### 6.7 Portal changes for CoS (IR-S10, CX-S6, IR-M5)
 
-Her model path: `call_backend(prompt, context, tool_policy)` (`chief_of_staff.py:765-777`), with **its own runtime
-session**, so the summary request does not land in Robert's live CoS conversation, and with no tools. How the
-OpenClaw backend is given a separate session key is **unverified** (MC's adapter does it with a session id,
-`mc_voice_direct.py:564`); A2 confirms it before building. A confirmed or edited summary is appended to
-`conversation_log` as DATA. It is never written to `cos_memory.md` unless Robert asks for a note.
+One prefix for every CoS direct route, `api/realtime-voice/direct/`. POSTs under it are CSRF-checked and given
+`X-Minimoi-Voice-Write-Verified: 1` **unconditionally**, after the owner and CSRF gates, browser `X-Minimoi-*`
+stripped; Confer always renders the CSRF meta tag. GETs: owner identity only, `Cache-Control: no-store, private`.
+Timeouts `(5, 40)` for consult, `(5, 60)` for summary. Tested through the portal as owner, non-owner and forged
+headers. `X-Record-Mode` is irrelevant (no Private mode).
 
-### 6.8 Confer UI on the same contract
+### 6.8 Her switches
 
-- **One Voice button.** The "Voice mode" select and the chained "turn by turn" mode are removed when the direct
-  path is on (D8). The provisional "Hearing: …" line goes: nothing said shows while live.
-- **Live bar:** voice on, elapsed time, End, Check with CoS; while "Shall I sum up?" is offered, Sum up and Keep
-  talking. Same words as the Guild with her name.
-- **Provider choice:** OpenAI or Grok, in Confer's existing quiet style, default her default (§7), remembered under
-  its own key (MC's is `minimoi.voice.provider`, `mc_voice.js:70`); `voice_notices` as one small line.
-- **Reveal, recovery line, summary card:** as §6.6–§6.7, in Confer's existing styles. The summary card says
-  "Confirming confirms the summary only. Anything it mentions still needs its own request."
-- **"Download transcript on End" (D7):** recommended kept, as a quiet link after reveal, built from the kept
-  records instead of the browser's turns.
-- **Dictate unchanged,** including its bootstrap (`../api/realtime-voice/confer/bootstrap`), which must therefore
-  survive the retirement of the chained mode (§9).
-- **Microphone handover:** Voice yields to Dictate and Dictate to Voice, as today (`cos_ui.html:555`, `:586`); the
-  existing `minimoi:companion-opening` handler ends the direct session too; `pagehide` sends End with the final
-  events and keepalive (the Guild's `sendFinal`).
-- **Unavailable:** with the switch off, Confer is byte-for-byte today's page. With it on and a start refused, the
-  button says "Voice unavailable: <reason>". No silent fallback to the managed or chained mode.
+`MINIMOI_COS_VOICE_DIRECT=1` on `cos-scheduler` installs her routes; outside production it also allows starts. In
+production a start also needs `MINIMOI_COS_DIRECT_VOICE_PRODUCTION=1`, read in `cos-scheduler` only, through a
+held-off filter shaped like `guild_mounts.production_environ`. The portal needs no CoS flag.
 
-### 6.9 Portal changes for CoS
+### 6.9 What a CoS consult can do (D18)
 
-The portal is CoS's CSRF and owner gate (§2.2). For the direct path it must:
-- CSRF-check every POST under the new CoS direct prefix (as it does for `api/realtime-voice/managed/`,
-  `app.py:749-751`), and render the CSRF meta tag whenever the CoS direct path is on (`app.py:722-723`);
-- add `X-Minimoi-Voice-Write-Verified: 1` for that prefix only, after the owner and CSRF gates, browser values
-  stripped as today (`proxy.py:303-306`);
-- keep `X-Record-Mode` irrelevant for CoS (she has no Private mode) and say so in the contract.
+A voice consult is a typed Confer message: her runtime can run commands (`exec` `full`, no sandbox), write `data/`,
+`cos/outbox`, `cos/planning-studio`, `docs`, `agent_logs`, search the web; her turn service saves notes. A misheard
+consult can do what a typed message can. Safeguards: Spec 164 §3's, one effect per owner action, the
+bare-confirmation refusal, CSRF on every voice POST: stricter than typed Confer, whose CSRF depends on
+`MINIMOI_COS_WRITE_GUARD` (production value unverified).
 
-### 6.10 Her switch
-
-`MINIMOI_COS_VOICE_DIRECT=1` on `cos-scheduler` (and read by the portal for §6.9). Off: no route, Confer unchanged.
-Production admission is explicit, like MC's (§11.2).
-
-## 7. Providers, voices, budgets, cost
+## 7. Providers, voices, transcription, budget
 
 | | MC | CoS |
 |---|---|---|
-| Providers offered | OpenAI, Grok Voice | OpenAI, Grok Voice (new for her) |
-| Default provider | OpenAI (`config.resolve_provider`, no env override) | OpenAI, unchanged |
-| Models | OpenAI `gpt-realtime-2.1`; Grok `grok-voice-latest` (`openai_realtime.py:19`; `xai_voice.py:25`) | same |
-| Voice today in production | `cedar` (chained text-to-speech) | `cedar` (managed and chained) |
-| Voice ids in 1.2 | chosen by ear before the switch (D3); unset means `marin`/`eve` with a notice | draft `openai: cedar` (keeps today's), Grok by ear (D2) |
-| Budget | `admit(kind="realtime_direct_session", domain="mc", required=True)` before the mint | same with `domain="cos"` |
-| Per-session reservation | `MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO` | the same value (D10) |
-| Daily cap | shared `voice.daily_cap_usd`, default $20 per Chicago day, one ledger for portal and `cos-scheduler` | same |
-| Session limit | `DurationGuard` defaults (warning and maximum as German) | same |
-| Cost shown | capabilities carries `budget.public_status()`; refusals show the plain allowance message; "reserved allowance, not a bill" | same |
+| Providers; models | OpenAI `gpt-realtime-2.1`, Grok `grok-voice-latest` | same (Grok new for her) |
+| Default | `config.resolve_provider` (§2.4); the env default may override (production value unverified) | same |
+| Voice today; in 1.2 | `cedar` (relay); by ear (D3) | `cedar`; draft `cedar`, Grok by ear (D2) |
+| Transcription | bilingual (D19) | bilingual (D19) |
+| Budget; allowance; cap | `domain="mc"`; `MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO`; $20 per Chicago day, shared with both Dictates | `domain="cos"`; same (D10) |
 
-Choosing voices: Robert auditions on dev with the identity script (§11.4): `cedar`, `marin` and one or two others
-on OpenAI; `eve`, `ara`, `rex` on Grok. The question per voice is "is this MC?" and "is this CoS?". Two persons on
-one timbre is allowed but should be a choice, not an accident.
+**Bilingual transcription (D19).** The consult acts on the transcript, not on what the model heard; a session
+fixed to `en` may turn German into English words. Cards with `transcription: "bilingual"` omit the single
+language and send the faithful-transcription hint managed CoS used; on xAI, no `language_hint` (behaviour
+unverified; the scripts check it). German and Portuguese have no card and are untouched.
 
-No new meter. The one-line daily voice spend in the morning brief stays a later improvement (Spec 164 §17).
+**Allowance.** Sessions a day = floor(cap ÷ allowance); the release note records both and the count. **Grok
+alias:** `grok-voice-latest` floats; 1.2 records the model xAI reports and pins a dated id if one is offered.
+Robert auditions `cedar`, `marin` and others on OpenAI, `eve`, `ara`, `rex` on Grok (§11.4). No new meter.
 
-## 8. Safety carried from the Chunk B reviews
+## 8. Safety for both hosts
 
-Each holds for both hosts, enforced in the core unless marked adapter.
-
-| Safeguard | Source | How |
+| Safeguard | Source | Where |
 |---|---|---|
-| Owner, CSRF, record mode on every route; End works off the record | 164 §3; contract §2 | adapter guard; core refuses a session owner mismatch (`consult.py:89`) |
-| Model arguments never become owner text; the server acts on the owner's transcript item | 164 §3 | core consult route (`consult.py:86-103`) |
-| Tools allow-listed, exactly `consult` and `save_note` | 164 §3 | `bootstrap._allowlisted_tools` (`:50-60`) |
-| One effect per call: call-id dedup, in-flight guard, 12-consult cap | Chunk A | `ConsultLedger` (`consult.py:44-64`) |
-| Check-with button: in-flight guard, "Already checked" for a turn already consulted | UI review #3 | browser module |
-| A note is spoken as saved only on its platform receipt | 164 §9 | adapter result mapping; core checks `saved` and receipt |
-| Named proposal codes only, in voice; bare "yes"/"stop" refused as commands | review B #1; UI review #4 | MC adapter (`g.mc_voice_named_only`); CoS adapter after the §6.4 inventory |
-| An action that happened is reported as done | review B #2 | adapter result mapping |
-| Everything written during a consult is hidden with the session | review B #3; CC_16 (a) | MC `_TaggedFloor`; CoS writes only her own store during a consult, plus memory and reminders, which Confer does not display |
-| Budget reserved only after the session is recorded; `abandon()` on a failed mint | review B #4 | core via bootstrap (`bootstrap.py:274-319`) |
-| Caps count new turns only; times compared as times | review B #5, #6 | core |
-| No title from spoken words while live | review B #7 | MC adapter hook |
-| German/Portuguese import nothing new at import time | review B #8 | core keeps lazy imports |
-| A failed marker read never hides a non-direct transcript | review B #9 | MC adapter (`view`) |
-| Hide until End, reveal once, recovery line, never an empty gap | 164 §6 | core state; adapter store |
-| Server-ended sessions end the provider too (409 `session_ended`, any 403, turns off) | UI review #2 | browser module |
-| `pagehide` sends End with the last events, keepalive, same tick | UI review #1 | browser module; core End accepts events |
-| Tagging fails open for MC outputs only, never for spoken words | UI review #9 | MC adapter |
-| No silent fallback to any other voice path | 164 §2; Codex C7 | release check asserts the page references no other path |
-| No audio or transcript in operational logs | standard rule 6 | core logs ids and outcomes only (`bootstrap._log_outcome`) |
+| Owner, CSRF, record mode on writes; owner-only, no-store reads | 164 §3; CX-S6 | adapter guards; core refuses owner mismatch |
+| The server acts on the owner's transcript item; tools allow-listed `consult`, `save_note` | 164 §3 | core consult; bootstrap |
+| One effect per owner action; four truthful outcomes; reconciliation | B1, B7 | §5.1 |
+| Capture barrier; retention claimed only when acknowledged | B2, B4 | §5.2 |
+| Idempotent end intent; summarizing state; summary heard to its end | B3, B5, B6 | §5.3 |
+| Summary generation cannot call tools | CX-S2 | §5.4 |
+| Saves spoken only with receipts; done actions reported as done | 164 §9; review B #2 | adapter mapping |
+| Bare confirmations and stop words refused as consult text | review B #1; D16 | core |
+| Chunk B items carried as built: budget after the record, `abandon()` on a failed mint (B #4); caps and times (B #5, #6); no live title (B #7); lazy imports (B #8); marker-read failure (B #9); hide, reveal once, recovery line; server-ended ends the provider (UI #2); tagging fails open for MC outputs only (UI #9) | Chunk B reviews | core or MC adapter |
+| CoS voice store outside her runtime's mounts | IR-M3 | §6.5; release check |
+| No silent fallback: a page offered direct tries nothing else | 164 §2; C7 | release check |
+| No audio or transcript in operational logs | standard rule 6 | ids and outcomes only |
 
-## 9. Retirement: what is removed, when, and what stays
+**Known limits, accepted:** MC notes written in a separate request during a consult, and job-result notes, are
+untagged and show before End (Chunk B, "not covered"). A note saved by CoS voice appears in Record, Track and memory
+at once (D21). Consults run in the live runtime session (MC's conversation; CoS's `owner`), so the runtime knows what
+was said before End and a typed or Telegram reply could refer to it. On Grok, instructions pass through his browser.
 
-"No silent fallback" holds from the switch: a page with the direct path on never tries another path. Code removal
-comes after, so a rollback by image is always possible (§11.6).
+## 9. Retirement: what is removed, when, what stays
 
-| Component | Used today by | 1.2 switch release | Cleanup release (after acceptance, D9) | Kept |
-|---|---|---|---|---|
-| MC chained relay: `/mc/voice/bootstrap`, `/mc/voice/speech`, `realtime-confer-controller.js` served by `/mc/voice/static`, `conversation.js` `submitVoiceUtterance` | production MC voice | unreachable from the composer (already so on the branch); release check pins it | routes and code removed | — |
-| MC managed host `mc_managed_realtime.install` and its `mc_voice.js` branch | nothing in production (held off, kind `cos` only) | unchanged | removed; `INSTRUCTIONS` already moved (§4.2) | `MANAGED_VOICE_CHANNEL` until the Board no longer references it (check in cleanup) |
-| CoS managed host (`domains/cos/managed_realtime.py`, `realtime_tools.py`) | Confer "Realtime · OpenAI", if enabled (unverified) | Confer UI no longer offers it when the direct path is on | removed | — |
-| Shared managed sideband (`controlled_api.py`, `controlled_host.py`, `controlled_session.py`, `server_openai.py`, the controller's `managedBootstrap` branch) | MC managed, CoS managed | unchanged | removed with their tests; the controller branch removal touches German's file, so it lands with Part B's cross-surface checks, not alone (§14.3) | `voice_control_*` tables and their rows (§10) |
-| `controlled_config.VOICE_MANNER`, `TRANSCRIPTION_HINT` | managed sessions | no longer reached by MC or CoS | removed with `controlled_config.py`; the kept clauses live in cards and core rules (§6.2) | `core/agent_partner.PARTNER_STYLE` (still used by typed CoS, `confer_service.py:341`) |
-| CoS chained mode: `ConferVoiceController` on Confer, `/ui/speech`, `SpokenReplyStore`, `speech_output`/`speech_url` in `_ui_turn` | Confer "Voice · turn by turn" | removed from the Confer UI | server code removed | — |
-| `create_confer_voice_blueprint` (`core/realtime_voice/confer.py`) | the chained mode **and CoS Dictate** | stays (Dictate) | narrowed to Dictate: its capabilities answer and bootstrap stay; nothing else uses it | yes, until Dictate gets an `en-US` memo bootstrap (later, not 1.2) |
-| `realtime-confer-controller.js` | MC relay, CoS chained | stays (shared file) | removed once no page imports it; the release check proves none does | — |
-| Chunk A bench page (`core/realtime_voice/bench/`) | Robert's measurements | stays | stays | yes: the latency bench and the P0 snippet |
+Removal comes after acceptance (D9), so an image rollback always works.
 
-## 10. Migration of existing data
+| Component | Switch release | Cleanup A6 | Kept |
+|---|---|---|---|
+| MC relay (routes, the composer's relay branch, `submitVoiceUtterance`) | reached only when neither direct nor managed is offered: before admission and in S3 | removed | — |
+| MC managed host and its branch | held off | removed | `MANAGED_VOICE_CHANNEL` while the Board uses it |
+| CoS managed host, `realtime_tools.py`; CoS chained mode (`ConferVoiceController` on Confer, `/ui/speech`, `SpokenReplyStore`, `speech_*`) | not offered once admitted | removed | — |
+| Shared sideband (`controlled_*.py`, `server_openai.py`, the controller's `managedBootstrap` branch) | unchanged | removed with tests; the controller branch only in Part B | `voice_control_*` tables and rows |
+| `VOICE_MANNER`, `TRANSCRIPTION_HINT` | not reached by MC or CoS | removed; clauses in cards and core rules, the hint text in the core | `PARTNER_STYLE` |
+| `create_confer_voice_blueprint` | stays (Dictate) | narrowed to Dictate | until an `en-US` memo bootstrap |
+| `realtime-confer-controller.js` | stays | removed once no page imports it | — |
+| Bench (`core/realtime_voice/bench/`) | stays | stays | yes |
 
-- **MC:** chained-relay voice turns are ordinary kept notes and replies; they stay as they are. Managed-path
-  transcript notes (`managed_voice_transcript:` authors) keep rendering as today: a session without a start marker is
-  shown as before (`mc_voice_reveal.py:18`). Nothing to convert.
-- **CoS:** managed sessions kept no transcript server-side; their journal rows (`voice_control_owner`, `_session`,
-  `_call`, `_usage`) stay in the database untouched in 1.2 and in cleanup. Dropping tables or deleting rows is not
-  part of this spec and would need Robert's separate word. `SpokenReplyStore` is in memory with a 120-second life:
-  nothing to migrate. `conversation_log` lines from typed turns are unchanged; voice lines are added from 1.2 on
-  (D6).
-- **Budget ledger:** unchanged; new entries carry `domain="cos"` and kind `realtime_direct_session`.
-- **No backfill.** Old voice sessions are not re-revealed, re-summarized or re-sent.
+## 10. Migration
+
+MC: relay and managed notes render as today. CoS: `voice_control_*` rows untouched (dropping them needs Robert's
+word); `SpokenReplyStore` is memory only; typed `conversation_log` lines unchanged, voice projections from 1.2 on.
+Budget entries gain `domain="cos"`. No backfill.
 
 ## 11. Rollout
 
-### 11.1 Switches
+### 11.1 Switches and states (CX-S4)
 
-| Switch | Where | Off means |
+Installing a host (its routes, record routes included) is separate from **admission** (starting sessions). Outside
+production, installing allows starts. In production, starts also need `MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION`
+(portal, `production_environ`) or `MINIMOI_COS_DIRECT_VOICE_PRODUCTION` (`cos-scheduler`).
+
+| State | Reached by | MC | CoS | Record routes (sessions, reveal, End, reconcile, decision) |
+|---|---|---|---|---|
+| S0 today | `main` | relay | managed if enabled, else turn by turn | none |
+| S1 merged, not admitted | 1.2, admissions off | relay, as on `main` | as today | installed, empty |
+| S2 admitted | admission on | direct only; a failed start says why | direct only | on |
+| S3 admission off after S2 (fast rollback, until A6) | admission off | relay again: a deliberate state, not a fallback | today's modes | **on**: open sessions End, recovering ones reveal, proposals decided, outcomes reconciled; no new starts |
+| S4 after A6 | cleanup | off = "Voice unavailable: live voice is not on here."; typing and Dictate work | same | on |
+| S5 image rollback | previous tags | relay | today's modes | absent; records stay on disk. MC's direct records show in the old Guild as plain notes (it ignores markers: nothing hidden, proposals without controls; expected, untested). CoS's folder is untouched and unseen; projected sessions stay recallable. Redeploying 1.2 restores reveal and decisions; no old-image reader is built |
+
+The release check exercises S1, S2 and S3 with real portal and backend flag combinations.
+
+### 11.2 Staging first
+
+**Staging is a role:** the production compose plus `docker-compose.staging.yml` (images from the pinned release
+commit, `MINIMOI_ROLE=standby`) at an HTTPS name the phone reaches. It runs on the always-on cloud host once that is
+up and checked; until then, or whenever useful, on the Mac (today's dev.minimoi.ai). Staging rather than Mac dev,
+because the checks must run the production images (`Dockerfile.cos-scheduler`, `cos-agent-a`, the gateway, the
+budget ledger), an always-on host lets Robert test whenever he likes, and consult round trips are closer to
+production's; audio is browser-to-provider on any host. It needs owner login, staging provider keys, the summary
+keys, the voice folders and the allowance.
+
+1. Release checks green on the bundle, both hosts, providers blocked (§12.2).
+2. Both hosts installed. Robert on the Mac: MC and CoS scripts, both providers (§11.3).
+3. Audition and voice ids (§11.4); cards adopted; pins set.
+4. Robert on the phone: both hosts, both providers, the phone cases.
+5. Language smoke: Gespräche on OpenAI and Conversas on Grok (both adapters heard), two minutes each, with the
+   panel handover (D23); one typed Confer turn, one CoS Dictate, one MC Dictate.
+6. Quality gate (§12.4), by Robert's judgement.
+
+### 11.3 Robert's listening scripts
+
+**MC** (Mac, then phone; each provider):
+
+| # | Robert | Passes when |
 |---|---|---|
-| `MINIMOI_MC_VOICE` + `MINIMOI_MC_VOICE_DIRECT` | portal | MC direct routes absent (as built) |
-| `MINIMOI_COS_VOICE_DIRECT` | `cos-scheduler`, portal | CoS direct routes absent; Confer byte-for-byte today |
-| production admission (D11): `MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION`, `MINIMOI_COS_DIRECT_VOICE_PRODUCTION` | `production_environ` (`guild_mounts.py:275-300`) and the CoS equivalent | the direct switches are dropped in production even if set |
+| 1 | "What's open on the board today?" | one consult, a short answer, one "Checked with MC · answered" |
+| 2 | A sentence with a one-second pause | one owner turn |
+| 3 | Interrupt mid-reply | playback stops; reveal marks MC interrupted |
+| 4 | "Save a note that the voice test ran on <provider>." | "Saved." with a receipt; one note |
+| 5 | A German sentence, then an English question | he follows and returns; the reveal shows German as German |
+| 6 | Check twice; the same words again, Check | "Already checked"; the repeat is a new effect |
+| 7 | Check on words the model just consulted | "Already checked"; one effect |
+| 8 | "We're done" → "yes" | the summary heard to its end; the card in writing; confirm |
+| 9 | Reload during a second session | recovery line, then reveal |
+| 10 | Phone: Wi-Fi off during a consult | never "did not go through"; reveal shows the true outcome |
 
-Recommended (D11): keep the direct switches in `PRODUCTION_HELD_OFF`, admitted only by an explicit production flag,
-exactly as the managed path is (`guild_mounts.py:290-293`). Then the switch-over and the rollback are environment
-changes on a released image, not code releases.
+**CoS** (Mac, then phone; each provider):
 
-### 11.2 Dev first
+| # | Robert | Passes when |
+|---|---|---|
+| 1 | "What's on my agenda this week?" | one consult; a short answer |
+| 2–3 | The paused sentence; interrupt | one turn; playback stops |
+| 4 | "Save a note that the voice test ran on <provider>." | "Saved." with a receipt; the note in Record |
+| 5 | "Remind me at 5 pm to stretch." | "Set reminders in writing."; nothing saved |
+| 6 | Check with CoS twice | "Already checked" |
+| 7 | A bare "yes" when she asked something | "Confirm that in writing."; no consult |
+| 8 | A German sentence | her manner holds; the reveal shows German |
+| 9 | Open the floating MC panel | her voice ends first |
+| 10 | Dictate after ending | unchanged |
+| 11 | Reload mid-session | recovery, reveal |
+| 12 | "We're done" → summary; decide on another device | one decision, shown on both |
 
-Dev is the Mac through the Cloudflare tunnel (HTTPS, so the phone works). Order:
-1. Release check green on the branch for both hosts (§12.2), providers blocked.
-2. Both switches on in dev only. Robert on the Mac: MC script, then CoS script, both providers (§11.3).
-3. Identity audition and voice ids (§7). Card text finalized; releases adopted; pins set.
-4. Robert on the phone, both hosts, one provider each at least.
-5. Conversation-quality gate (§12.4) passed by Robert's judgement, not an agent's.
-
-### 11.3 Robert's listening test scripts
-
-**MC (Mac, then phone), each provider:**
-1. "MC, what's open on the board today?" (a consult).
-2. A sentence with a deliberate one-second pause in the middle (one turn).
-3. Interrupt MC mid-reply with a new question (playback stops, he follows).
-4. "Make a note that the voice test ran on <provider>." (saved only with a receipt).
-5. A German sentence, then an English question (language follows, returns).
-6. "Check with MC" button once, then again on the same words ("Already checked").
-7. "We're done" → "Shall I sum up?" → "yes"; confirm the summary card in writing.
-8. Reload during a second short session: the recovery line, then the reveal.
-
-**CoS (Mac, then phone), each provider:**
-1. "What's on my agenda this week?" (consult to Agent A).
-2. The paused sentence.
-3. Interrupt mid-reply.
-4. "Save a note: voice test on <provider>." (receipt).
-5. "Remind me at 5 pm to stretch." (reminder receipt with its time).
-6. A German sentence (her manner holds).
-7. Open the floating MC panel during the session (her voice ends first).
-8. Dictate a draft after ending (Dictate unchanged).
-9. "We're done" → summary → decide on another device.
-
-**Marks Robert records** (no transcript in any log): sounds like MC / like CoS; accent held; a stray German word
-did not flip the language; names pronounced right; felt as quick as Maria; anything said that was not true.
+**Phone cases** (each host, once): screen locked; app switched; AirPods or Bluetooth; speakerphone barge-in (echo
+must not interrupt); Wi-Fi to cellular. Pass: the session continues, or ends with what was kept revealed and any gap
+marked; never a silent loss. **Robert's marks** (never in logs): sounds like MC / CoS; accent held; a stray German
+word did not flip the language; names right; as quick as Maria; anything untrue.
 
 ### 11.4 Identity audition
 
-The same 60-second script per voice candidate, per person, per provider: greeting-free start, a short answer, a
-German phrase, a name list ("MiniMoi, Master Craftsman, Chief of Staff, Claude Code, Codex, Grok"). Robert's one
-question: is this MC? is this CoS? Manner, brevity and pronunciation must not differ by provider; timbre will.
+One 60-second script per voice, person and provider: no greeting, a short answer, a German phrase, the names
+("MiniMoi, Master Craftsman, Chief of Staff, Claude Code, Codex, Grok"). Robert's question: is this MC? is this CoS?
+Manner, brevity and pronunciation must not differ by provider; timbre will.
 
 ### 11.5 Production switch-over
 
-One bundle, deployed on Robert's word (bundle rule), from a clean `origin/main` release worktree and PR:
-1. Merge the 1.2 code with both production admissions off. Per the classifier this redeploys `portal`, `german`,
-   `portuguese`, `cos-bot`, `cos-scheduler` (§2.4).
-2. **German and Portuguese no-change check** on production right after: the release check's German and Portuguese
-   assertions (§12.2), then a two-minute listen on Gespräche and Conversas by Robert (one provider each). Any change
-   is a rollback of the bundle.
-3. Turn on MC's production admission. Robert's short MC script on the phone.
-4. Turn on CoS's. Robert's short CoS script on the phone.
-5. One week of daily use (D9), then the cleanup release (§9).
+One bundle (PR #426 and the A chunks), on Robert's word, from a clean `origin/main` release worktree and PR:
+1. Record image tags and the classifier's output in the release note. Merge, admissions off (S1).
+2. Health of every service deployed; the no-change assertions; Robert on Gespräche (one provider) and Conversas (the
+   other), two minutes each, the panel handover once; a typed Confer turn, CoS Dictate, MC Dictate, one MC relay
+   turn. Any regression: roll the bundle back.
+3. MC admission on; Robert's short MC script on the phone.
+4. CoS admission on; her short script. If CoS fails: her admission off (S3); MC's stays only on Robert's word.
+5. Daily use and D9's evidence; then A6.
 
 ### 11.6 Rollback
 
-- **Fast:** turn the production admission off (env, restart portal or `cos-scheduler`). MC and CoS show "Voice
-  unavailable: live voice is not on here." Typing and Dictate work. No silent fallback.
-- **Full:** redeploy the previous image tags (recorded in the release note before step 1), which contain today's MC
-  relay and CoS modes.
-- **Data:** nothing to undo. Kept records stay; a rollback hides no session and re-sends nothing.
+Fast: admission off (S3). Full: previous image tags (S5). Data: nothing to undo; nothing is re-sent.
 
 ### 11.7 Deploy only what changed
 
-1.2 touches `core/realtime_voice/`, `minimoi_portal/`, `domains/cos/`. The classifier then deploys five images; that
-is the honest cost of shared code. To keep German and Portuguese behaviour unchanged in that deploy: every change to a
-file they load is additive and opt-in (no new required callback, no changed default), and the tests in §12.1 prove
-their bootstrap requests and answers are byte-identical. The cleanup release removes code from files German loads
-(the controller's managed branch) only in Part B (§9).
+A1 adds classifier rules, with tests, for `services/mc_operations/personas/` (portal, whose only reader of
+`voice.json` is `voice_card`; the MC agent deploys through `deploy-mc-agent.yml`) and `scripts/mc_persona/`, listing
+each path's readers in the commit. The bundle deploys what the classifier says (seven services at `93bf00c6`, §2.4),
+recorded in the release note. Changes to files German or Portuguese load are additive and opt-in, proved by the
+no-change tests.
 
 ## 12. Tests, cross-surface checks and the quality gate
 
 ### 12.1 Automated (providers and Keychain blocked, `-p noprov`)
 
-- **Core:** session ledger, caps, end intent, transcript validation, summary and decision flows, driven through a
-  fake adapter. Card loader: pin, hash, `language` allow-list, refusal cases.
-- **No-copy check:** a test fails if any file outside `core/realtime_voice/` defines a consult ledger subclass, a
-  transcript validator, a summary prompt, or a browser function bridge.
-- **MC:** every Chunk B test passes unchanged (§5).
-- **CoS:** the same refusals as MC (forged, replayed, late calls; missing CSRF at the portal; wrong owner; no store);
-  `save_note` only with a receipt; reminder receipt; `/new` refused; file claims enforced; switch off = Confer
-  byte-for-byte; composed instructions within 24,000 bytes and in order; no `VOICE_MANNER` text in her direct session
-  except the clauses written into her card and the rules.
-- **German and Portuguese no-change:** the same bootstrap request body, the same composed instructions, no tools, no
-  voice notices, the same answer keys, no new import at import time; the controller with no new callback behaves as
-  before (`tests/realtime_voice_direct_host.mjs` pattern).
-- **Node:** the five Guild direct suites; a Confer suite for the live bar, reveal, recovery, summary card, Dictate
-  handover, companion handover and `pagehide`.
-- **Known failures left alone** (they fail on `main`): `test_html_server_db_conn_requires_explicit_role`,
-  `build_mc_handbook.mjs`, `confer_input_controls.mjs`, `confer_write_headers.mjs`. Confer work in A3 should fix the
-  last two if it can. The whole `tests` directory is not run in one go (a Telegram poller from `.env`, CC_17).
+- **Core**, through a fake adapter: §5.1–§5.4 with their regressions; the store interface; the card loader (pin,
+  hash, locale, `transcription`, persona hash against the lock).
+- **No-copy, by architecture:** host modules import the core and implement only §4.4 (import graph and
+  definitions), and the shared contract suite runs against each adapter; not a ban on names.
+- **MC:** §5.5; kind `cos`.
+- **CoS:** MC's refusal set; UUID request ids, retried and repeated actions; the §6.4 mapping (exceptions after
+  dispatch are `unknown`); reminders and bare confirmations refused; file claims; §6.5 acceptance; voice folder not in
+  `cos-agent-a`'s mounts; prefix, timeouts and reads through the portal; not admitted = today; 24,000 bytes and order;
+  no `VOICE_MANNER` text beyond the placed clauses; no tools in the summary request; one ledger, concurrent
+  reservations adding up.
+- **German and Portuguese no-change:** the same bootstrap request, answer and instructions, no tools, no notices, no
+  new import; the controller without new callbacks as before; with D23, the listener and the new key on both.
+- **Node:** the four Guild suites; a Confer suite (live bar, reveal, recovery, summary card, needs-attention,
+  Dictate and companion handover, `pagehide`).
+- **Known failures** (fail on `main`): `test_html_server_db_conn_requires_explicit_role`, `build_mc_handbook.mjs`,
+  `confer_input_controls.mjs`, `confer_write_headers.mjs`; A3 fixes the last two if it can. The whole `tests`
+  directory is not run at once (a Telegram poller, CC_17).
 
 ### 12.2 Release check (per host, Spec 164 §12)
 
-On the deployed configuration, through the real backends with stubbed transports:
-- capabilities report `direct_voice` with the intended providers, persona, locale and card release;
-- one stub-provider session with one consult reaches the real typed turn (MC: OpenClaw adapter; CoS: her turn
-  service with a stubbed runtime) and returns an answered receipt;
-- forged and replayed call ids, a call after End and a missing CSRF token each have one effect or none;
-- with the admission off: "Voice unavailable", and the page references no managed, chained or relay script;
-- German and Portuguese bootstrap answers unchanged.
-Robert's microphone and phone tests stay separate and outstanding until he does them.
+On the deployed configuration, real backends, stubbed transports: capabilities report providers, persona, locale,
+card release; one stub session with one consult reaches the real typed turn and returns `done`; forged and replayed
+call ids, a repeated owner action, a call after End and a missing CSRF token each have one effect or none; S1, S2,
+S3 behave as §11.1, and a page offered direct references no other path; no tools in the summary request; the CoS
+voice folder is not mounted into `cos-agent-a`; German and Portuguese answers unchanged. Robert's microphone and
+phone tests stay separate until he does them.
 
 ### 12.3 Cross-surface checks (Spec 164 §13)
 
-Guild Voice ↔ Dictate; Confer Voice ↔ Dictate; German voice → floating MC → German; Confer voice → floating MC →
-Confer; closing the panel while connecting and during a consult; two sessions in one conversation (summary covers the
-second only); a session past the continuity window; microphone denied; network loss and End during a consult; a
-receipt after interrupted speech; MC conversation switching; a CoS session on two devices. Recovery after an abnormal
-end is tested on every chunk, on both hosts.
+Guild and Confer Voice ↔ Dictate; German voice → panel → German (needs D23); Confer voice → panel → Confer; closing
+the panel while connecting and during a consult; two sessions in one conversation; a session past the continuity
+window; microphone denied; network loss and End during a consult; a receipt after interrupted speech; MC conversation
+switching; a CoS session on two devices; recovery after an abnormal end, both hosts, every chunk. Without D23 the
+language handover is a recorded limit, never a pass.
 
-### 12.4 Conversation quality is a release gate (Spec 164 §13a)
+### 12.4 Conversation quality and latency (Spec 164 §13a; IR-S13, CX-S8)
 
-A mechanically correct session that asks permission to check, narrates receipts, reads lists aloud, or answers in
-paragraphs fails, whatever its latency. Scored by Robert on his scripts: understood intent, justified clarification,
-continuity, useful action, truthful and concise reply, perceived responsiveness. Latency: speech end to first audible
-playback, per reply, ordinary and consult replies apart, on each provider; ordinary replies no worse than German's
-Phase 0 numbers on the same provider (measured as first transcript there, §2.3; 1.2 records both metrics so Part B
-has a first-audible baseline).
+A session that asks permission to check, narrates receipts, reads lists aloud or answers in paragraphs fails,
+whatever its latency. Robert scores intent, clarification, continuity, useful action, truthful concise replies and
+responsiveness; the booleans (turn completeness, interruption, identity, retention, truthful outcomes) all pass.
 
-## 13. Part B — Language domains (queued; starts after 1.2 is in production)
+**Latency, like for like:** speech end to first assistant transcript, German's Phase 0 metric; at least 10 ordinary
+replies per provider per host; same device class and network, noted; median and worst. Proposed pass (Robert may set
+it): median within 100 ms of German's Phase 0 median on that provider, and at most one reply in ten over 2 s. Grok's
+reference is five samples; Part B re-measures it. **Consults:** holding line by 10 s, `pending` by 25 s, never more
+than 10 s of silence. First audible is recorded for Part B; 1.2 claims no audible parity.
 
-Part A is §3–§12. Part B is §14. It is specified now so it can be queued; no Part B work starts before 1.2 is in
-production and Robert says so.
+## 13. Part B — Language domains (queued, #433)
+
+Part A is §3–§12; Part B is §14. No Part B work starts before 1.2 is in production and Robert says so.
 
 ## 14. German and Portuguese, together
 
-### 14.1 Scope and parity rule
+### 14.1 What they get in 1.2, and only this (D23; CX-S7, IR-S16)
 
-German Gespräche and Portuguese Conversas move together, in the same chunks and the same release. Every change is
-mirrored to both in the same commit series (the German/Portuguese parity rule). Neither is promoted alone.
+If D23 (a) is adopted, in A3, one mirrored commit: a `minimoi:companion-opening` listener that, if their voice is
+live, ends it as their End button does (`controller.endSession(…)`, so their own `finalizeAndSave` runs) and hands that
+promise to `waitUntil`, so the panel opens only after their microphone is released; and the controller cache key
+bumped on both pages, so no browser mixes the old controller with new adapters. Nothing else changes on those pages.
+The controller additions ship inert for them.
 
-### 14.2 What reaches them
+### 14.2 Part B: what reaches them, and what never does
 
-- **Measurement hooks and the playback event:** the controller's optional `onPlayback`, and the P0 snippet's
-  first-audible measure.
-- **Card composition, for persona voices only:** their persona voice ids may come from a card-shaped source, if and
-  only if the resulting session is byte-identical in instructions; no MC or CoS text.
-- **Shared controller fixes:** `pagehide` ends the session; a server-ended session ends the provider; the End-while-
-  connecting wait (CC_16 noted the same race in direct mode for German and Portuguese).
-- **The floating-panel handover:** a `minimoi:companion-opening` listener on both pages, so the panel waits for their
-  voice to end (they have none today, §2.3).
-- **Cache keys:** bump `?v=20260809-ga1` on both pages so browsers fetch the changed controller.
-- **Removal of the controller's `managedBootstrap` branch** (§9), with the German/Portuguese no-change tests.
-- **Later, if built by then:** pause the microphone without ending the session (Spec 164 §17), built once in the core,
-  reaching MC, CoS, German and Portuguese together.
+Gespräche and Conversas move together, in the same chunks, commits and release. **Reaches them:** measurement via
+the playback event; persona voice ids from a card-shaped source only if the session is byte-identical; controller
+fixes (`pagehide` ends the session, a server end ends the provider, the End-while-connecting race, CC_16); removal of
+`managedBootstrap`; later, pausing the microphone (Spec 164 §17), built once for all four. **Never:** tools,
+consults, hiding or reveal (they keep `finalizeAndSave`), summaries, MC's or CoS's cards, manner or rules, the direct
+routes, budget admission (D13).
 
-### 14.3 What never reaches them
+### 14.3 Phase 0 gates, both languages, both providers
 
-Tools; consults; transcript posting, hiding or reveal (they keep their own `finalizeAndSave`); summaries; MC's or
-CoS's cards, manner or rules; the direct host's routes; budget admission (D13: no behaviour change, recommended
-none in Part B).
+Before any Part B change, on the revision then deployed, reference commits recorded: German re-run and Portuguese's
+first baseline, OpenAI and Grok, first-audible now measurable. Per provider and language: at least 10 ordinary
+replies; committed turns per scripted thought; interruption; speech end to first transcript and to first audible;
+transcript delivery; persona voice; language held. Promotion: §12.4's statistic and tolerance on both providers in
+both languages, booleans passed, persona voices unchanged, handover working; any regression blocks both. Persona
+voices, scenes and prompts do not change. Rollback: both previous image tags, together.
 
-### 14.4 Phase 0 gates, both languages, both providers
+## 15. Changes to other documents (companion)
 
-Before any Part B change, on the production commit then deployed:
-- **German:** re-run Phase 0 on OpenAI and Grok, now with first-audible playback (the 27 Oct runs measured first
-  transcript only).
-- **Portuguese: its own baseline, first time.** No Portuguese numbers exist. Same snippet, same script translated, on
-  OpenAI and Grok, with a Portuguese persona.
-- Record per provider: committed turns per scripted thought (counted from provider speech-stop on Grok, §2.3),
-  interruption stops playback, speech end to first transcript and to first audible playback, transcript delivery at
-  end, persona voice, language held.
-- Promotion requires each number met or improved on both providers in both languages; persona voices unchanged;
-  transcript delivery unchanged; floating-panel handover working. Any regression blocks both.
-
-### 14.5 Persona voices unchanged
-
-German and Portuguese persona voice ids, scenes, prompts and settings do not change in Part B. A persona voice
-change is a separate owner decision.
-
-### 14.6 Rollback
-
-The previous German and Portuguese image tags, recorded before the release. Both roll back together.
-
-## 15. Changes to other documents (companion, not in this file)
-
-1. Spec 164: a header note that Spec 165 replaces its phase order (§9–§11).
-2. `UI_CONTRACT_chunk_B.md` → the 1.2 direct-voice contract, person-neutral, with the CoS host table.
+1. Spec 164: a header note that Spec 165 replaces its phase order.
+2. `UI_CONTRACT_chunk_B.md` → the 1.2 contract: person-neutral, corrected by §5, with the CoS host and §11.1 states.
 3. `B_direct_path.md`: unchanged (history).
-4. Shared voice standard, "Current mapping": MC (Guild and floating panel) and CoS Confer are Conversation mode,
-   turn owner the realtime provider, reasoning owner the provider with allow-listed `consult`/`save_note` into the
-   person's typed turn; MC and CoS Dictate are Memo mode. Robert approves the amendment with this spec.
+4. Shared voice standard, "Current mapping": MC and CoS Confer are Conversation mode (turn owner the provider,
+   allow-listed `consult`/`save_note` into the person's typed turn); both Dictates Memo mode. Robert approves it with
+   this spec.
+5. `conversation_log.system_note`: names the voice projection files.
 
-## 16. Open decisions for Robert
+## 16. Decisions for Robert
 
-**D1. CoS manner.** (a) Keep today's effective manner, Austrian accent and Viennese partner included, written into her
-card; (b) remove the Austrian identity now and write a CoS-only manner; (c) a new manner, written with Robert.
-*Recommendation: (a) for 1.2, then decide by ear in the audition; any change is a card change.*
+D1–D17 are Robert's as in v0.1, some reframed; D18–D23 are new. Each shows Claude Code's (CC), the independent
+reviewer's (IR) and Codex's (CX) recommendation. None is settled until Robert says so.
 
-**D2. CoS voice ids.** (a) Draft card keeps OpenAI `cedar` (today's), Grok by ear; (b) leave unset (`marin`/`eve`);
-(c) choose both by ear before the switch. *Recommendation: (a), confirmed or changed in the audition.*
+**D1. CoS manner — a persona decision.** (a) Keep the shared persona; her card restates it for voice; (b) a
+CoS-only manner: split the persona, re-lock, rebuild `cos-agent-a`; (c) a new shared manner, same route. *CC: (a);
+(b)/(c) only as a persona adoption after the audition. IR: (a), reframed so. CX: (a); Robert adopts the final card.*
 
-**D3. MC voice ids.** MC speaks `cedar` in production today; the direct default is `marin`. (a) Choose by ear before
-the switch; (b) preset `cedar`; (c) accept `marin`. *Recommendation: (a).*
+**D2. CoS voice ids.** (a) OpenAI `cedar`, Grok by ear; (b) unset; (c) both by ear. Grok receives her briefing.
+*CC: (a). IR: name the Grok data flow (done). CX: (a); no silent fallback to unset defaults.*
 
-**D4. Standalone page.** (a) Fold Spec 164 §5's standalone acceptance into the dev listening test on MC and CoS, keep
-the bench as a measurement tool; (b) keep it as a separate gate first. *Recommendation: (a): MC on dev is the same
-code and the first thing Robert should hear.*
+**D3. MC voice ids.** (a) By ear, `cedar` as reference; (b) preset `cedar`; (c) `marin`. *CC: (a). IR: none. CX: (a).*
 
-**D5. Where CoS keeps voice records.** (a) `<COS_CONVERSATIONS_DIR>/voice/`; (b) a new `COS_VOICE_DIR`; (c) Postgres.
-*Recommendation: (a), file first; voice refuses to start without it.*
+**D4. Standalone gate.** (a) Fold Spec 164 §5's standalone acceptance into the staging test; keep the bench; (b)
+keep it first. *CC: (a). IR: none. CX: (a) only if Robert explicitly replaces it; until then it stands.*
 
-**D6. CoS recall of voice sessions.** (a) Append revealed sessions to `conversation_log` as DATA; (b) keep them only
-in the voice store. *Recommendation: (a): she can then recall what was said, as MC can.*
+**D5. CoS voice records.** (a) `<COS_CONVERSATIONS_DIR>/voice/`; (b) `COS_VOICE_DIR` on `${MINIMOI_ROOT}/cos_voice`,
+outside her runtime's mounts; (c) Postgres. *CC: (b), changed: (a) is in the folder her runtime greps. IR: (b). CX:
+(a) once S3 is closed; it did not raise the mount.*
 
-**D7. "Download transcript on End" on Confer.** (a) Keep, built from kept records; (b) drop.
-*Recommendation: (a).*
+**D6. CoS recall.** (a) Project settled sessions as DATA (§6.5); (b) voice store only. *CC: (a). IR: (a), settled
+sessions only. CX: (a), idempotent and recoverable.*
 
-**D8. CoS chained "turn by turn" mode.** (a) Remove from the UI at the switch (server code in cleanup); (b) keep as a
-manual mode. *Recommendation: (a): one voice, no fallback; Dictate stays.*
+**D7. Download transcript.** (a) Keep, from kept records; (b) drop. *CC: (a). IR: none. CX: (a), owner-only,
+partial labelled.*
 
-**D9. When old code is deleted.** (a) A cleanup release after one week of daily production use and Robert's word;
-(b) delete in the switch release; (c) keep indefinitely. *Recommendation: (a); rollback in the meantime is the
-previous image.*
+**D8. CoS chained mode.** (a) Not offered once admitted; back only in S3; removed in A6; (b) keep as a manual mode.
+*CC: (a). IR: none. CX: (a), states settled (§11.1).*
 
-**D10. Allowance per host.** (a) One `MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO` for both, entries tagged by domain;
-(b) a separate value per host. *Recommendation: (a).*
+**D9. Deleting old code.** (a) A6 after a week of daily use, with evidence (S2 and S3 exercised, no open voice
+incident, Robert's word); (b) in the switch release; (c) never. *CC: (a). IR: order sound. CX: (a); evidence, not
+elapsed time alone.*
 
-**D11. Production admission.** (a) Keep the direct switches held off in production, admitted by explicit flags
-(`MINIMOI_GUILD_DIRECT_VOICE_PRODUCTION`, `MINIMOI_COS_DIRECT_VOICE_PRODUCTION`); (b) remove them from the held-off
-list in the release code. *Recommendation: (a): switch and rollback become env changes.*
+**D10. Allowance.** (a) One value, one shared pool for MC, CoS and both Dictates; (b) per host; (c) a per-host share.
+*CC: (a), sessions a day in the release note; revisit if one host exhausts the day. IR: show sessions a day; decide
+whether one host may use the other's day. CX: (a); prove one ledger and concurrent reservations.*
 
-**D12. Who builds the Confer UI.** (a) Claude Code, as with Chunk B's UI (CC_16), Codex reviews; (b) Codex, per the
-standing UI split. *Recommendation: (a), one writer for the shared browser module and both pages.*
+**D11. Production admission.** (a) Per-host start permission, separate from install; off returns MC to the relay and
+CoS to today's modes until A6; (b) remove from held-off. *CC: (a). IR: right shape; build the CoS half (§6.8). CX:
+(a), with the state matrix.*
 
-**D13. Budget for German and Portuguese.** (a) No budget admission in Part B (no behaviour change); (b) add it.
-*Recommendation: (a); revisit when language voice use grows.*
+**D12. Confer UI writer.** (a) Claude Code, Codex reviews; (b) Codex. *CC: (a), one writer for the shared module
+and both pages. IR: none. CX: (a), no concurrent edits.*
 
-**D14. MC and CoS switch together or a day apart.** (a) Same release, admissions turned on one after the other on
-the same day (§11.5); (b) MC first, CoS a few days later. *Recommendation: (a), per "both from the start"; (b) only
-if the CoS dev test is not accepted in time.*
+**D13. Language budgets.** (a) None in Part B; (b) add. *CC: (a). IR: none. CX: (a); no new hard cap implied.*
 
-**D15. Third reviewer.** (a) Claude chat (reviewed 164); (b) Grok; (c) MC. *Recommendation: (a).*
+**D14. MC and CoS together.** (a) One bundle, admissions in order on one day; (b) MC first. *CC: (a); if CoS fails
+on staging, hold the bundle; (b) only on Robert's word. IR: none. CX: (a); hold if CoS fails.*
 
-**D16. Gate on CoS agent approvals.** If the §6.4 inventory finds an approval flow a bare "yes" can trigger in
-`cos-agent-a`: (a) refuse bare confirmations in CoS voice, as MC does; (b) allow them. *Recommendation: (a).*
+**D15. Reviewers.** The plan now: Codex delta, Grok, Claude Chat on v0.2. *CC: the plan answers D15. IR: none. CX:
+Claude Chat; no substitute for code checks or Robert's listening.*
 
-**D17. Person-neutral voice rules.** (a) Move the brevity, interruption and reporting clauses of `VOICE_MANNER` into
-the core's direct rules for both MC and CoS; (b) MC as built (card only), CoS gets them in her rules only.
-*Recommendation: (a): one standard, and MC gains rules he had on the managed path.*
+**D16. Bare confirmations.** Inventory done (§6.4). (a) Refuse bare confirmation and stop words as consult text in
+the core, both hosts; (b) allow for CoS. *CC: (a); "yes" to "Shall I sum up?" stays. IR: inventory what is loaded
+(done). CX: (a); tell harmless confirmation from granting authority.*
+
+**D17. Person-neutral rules.** (a) In the core for both; (b) MC as built, CoS in her rules. *CC: (a). IR: none. CX:
+(a); test the prompt change on both hosts and providers.*
+
+**D18. Spec 164 §3 trust for CoS (new).** (a) Extend it with §6.9's safeguards; (b) CoS voice without `consult`;
+(c) defer CoS voice. *CC: (a): typed Confer already has this authority; voice adds guards. IR: make it a named
+decision. CX: not raised; its CoS contracts assume (a).*
+
+**D19. Bilingual transcription (new).** (a) MC and CoS transcribe bilingually (§7); (b) English only, an accepted
+limit. *CC: (a). IR: requirement or accepted limit; check the transcript. CX: not raised.*
+
+**D20. CoS reminders by voice (new).** (a) Out of 1.2: "Set reminders in writing."; (b) a spoken-reminder parser as
+named scope with its own review. *CC: (a): a parser turns speech into a scheduled action, an authority question.
+IR: (a), or (b) as new scope. CX: map `reminder_set` if reached (done).*
+
+**D21. Notes saved by CoS voice while live (new).** (a) Visible in Record, Track and memory at once; (b) hidden until
+End by a session tag. *CC: (a): he asked for it and heard the receipt; it is not the conversation. IR: either, as a
+decision. CX: not raised.*
+
+**D22. Summary execution (new).** (a) Tool-less gateway completion, capped key per host (§5.4); (b) the agent runtime
+with its own session and a no-tools prompt (as built for MC); (c) the runtime with an enforced no-tool profile
+(OpenClaw support unverified). *CC: (a). IR: noted the separate session is possible (helps (b)'s session, not its
+tool guarantee). CX: an enforced boundary; refuse rather than fall back.*
+
+**D23. German and Portuguese in 1.2 (new).** (a) The handover listener and cache-key bump only (§14.1), mirrored;
+(b) the panel offers no voice or Dictate on those pages until Part B; (c) nothing, a recorded limit. *CC: (a): small
+and permanent; (b) is a workaround to undo later. IR: bump the key or test compatibility. CX: (a) if Robert accepts
+it, else (b) with the limit written down.*
 
 ## 17. Not in this build
 
-A fourth voice implementation, a copied controller or a domain session loop. A server-held xAI session or media
-relay. German or Portuguese tools, summaries, transcript reveal or MC/CoS personality. Changes to German or
-Portuguese persona voices. Curator voice. Telegram voice (`telegram_voice` channel untouched). Voice cloning. A
-French CoS (possible later, §4.5). A memo `en-US` bootstrap for CoS Dictate. Command mode. Dropping
-`voice_control_*` tables. Production deploys or flags without Robert's word. Choosing voice ids for Robert.
+A fourth voice implementation, copied controller or domain session loop; a server-held xAI session or media relay;
+any German or Portuguese change beyond §14.1; persona voice changes; Curator or Telegram voice; voice cloning; a
+French CoS; an `en-US` memo bootstrap for CoS Dictate; spoken reminders for CoS; Command mode; dropping
+`voice_control_*`; deploys or flags without Robert's word; choosing voice ids for Robert.
 
 ## 18. Future (consideration only)
 
-- **Dessa (Block), full duplex.** As of 27 Oct a research preview with no public API, pricing or language list
-  (Spec 164 §16). It would join as a provider through the same registry and adapter shape; cards and records stay
-  MiniMoi's. Full duplex changes the turn model (the standard assumes provider VAD with a 1,200 ms silence), and the
-  consult bridge needs a model that can call tools. Revisit when it has an API or weights.
-- **Kept open now, at no cost:** start/end timestamps on every record (overlap representable); host-invoked consults
-  (a wake phrase later); VAD settings as provider parameters; a local model would be a registry entry with no
-  credential mint.
-- **Pause the microphone** without ending the session (§14.2).
-- **Morning brief voice line** (Spec 164 §17).
-- **CoS on the floating panel** (today the panel is MC's Guild page only).
+Dessa (Block), full duplex: a research preview with no public API (27 Oct); it would join through the same
+registry, but changes the turn model and needs tool calls. Kept open at no cost: timestamps on every record,
+host-invoked consults (a wake phrase later), VAD settings as provider parameters, a local model as a registry entry.
+Later: pausing the microphone; a morning-brief voice line (Spec 164 §17); CoS on the floating panel.
 
 ## 19. Build plan
 
-Each chunk: **build → independent review → fixes → verify**, then one handoff file. One writer per workspace.
-Reviews are by a fresh agent given the code, this spec and the contract, not the builder's conclusions. No agent
-polls or pings: each chunk ends with one file in
-`planning-studio/initiatives/INIT-2026-0010-grok-dev-onboarding/minimoi-1-2-voice/`, read when Robert starts the
-next session (CC_13). No push, merge, flag or deploy inside a chunk without Robert's word.
+Each chunk: **build → independent review → fixes → verify**, Codex on function, then one handoff file in
+`planning-studio/initiatives/INIT-2026-0010-grok-dev-onboarding/minimoi-1-2-voice/`, read when Robert starts the next
+session. One writer per workspace. No polling or pings, and nothing relies on the retired nudge: a chunk that stops
+without its handoff shows as "stalled" to Robert and MC (PR #434), and work resumes from the last handoff. No push,
+merge, flag or deploy without Robert's word.
 
-| Chunk | Builds | Review | Verify / done when |
-|---|---|---|---|
-| **A1 Core extraction** | `direct_host.py`, `errors.py`, `direct-voice-session.js`, controller `sessionId()`/`speak()`, adapter cache keys, card pins; MC moved onto the core | independent review of the diff; Codex on function | all Chunk B suites unchanged; no-copy check; German/Portuguese no-change tests |
-| **A2 CoS backend** | `domains/cos/direct_voice.py`, her card release and pin, composition and bound, store, summary path, portal gate, switch; the §6.4 approvals inventory first | independent review; Codex | CoS refusal set; release check (CoS); 24 KB bound; switch off = Confer unchanged |
-| **A3 Confer UI** | live bar, provider choice, reveal, recovery, summary card, `pagehide`, companion, Dictate untouched, chained mode hidden | independent review including a phone-width visual check | Confer node suite; Dictate and companion handover tests; the two Confer known failures fixed if possible |
-| **A4 Dev and listening** | dev switches on; release checks; Robert's Mac and phone scripts; audition; voice ids; card texts adopted | Robert's marks; Claude Code records numbers only | §11.2 steps 1–5 done by Robert; quality gate passed |
-| **A5 Production switch** | release worktree, PR, bundle; image tags recorded; admissions per §11.5 | Codex on the release; Robert's go | German/Portuguese no-change check; Robert's phone scripts on production |
-| **A6 Cleanup** | §9 removals, after D9's week | independent review | release check: no page references a retired path; managed tests removed with their code |
-| **B0 Baselines** | German re-run and Portuguese first baseline, both providers, first-audible | Claude Code checks the numbers | §14.4 table filled by Robert's runs |
-| **B1 Language integration** | §14.2 changes to both, mirrored; controller managed-branch removal | independent review; Codex | no-change tests; cross-surface checks |
-| **B2 Listening and promotion** | Robert's runs against B0 | Robert | every number met or better, both languages, both providers; else rollback |
+| Chunk | Builds | Done when |
+|---|---|---|
+| **A1 Core + corrected contract** (in progress) | relay kept (`99b3d0f0`); `direct_host.py`, `errors.py`, `direct-voice-session.js`; §5.1–§5.4; controller additions; adapter cache keys; pins, persona field; classifier rules; MC on the core | §5.5; B1–B7 regressions; no-copy; no-change; Codex re-review of the pinned head |
+| **A2 CoS backend** | `domains/cos/direct_voice.py`; card and pin; instructions and bound; store and projection; summary keys; portal prefix, guards, timeouts; switches | CoS refusal set; §6.5 acceptance; release check; not admitted = today |
+| **A3 Confer UI** (+ §14.1 if D23 (a)) | live bar, provider, reveal, recovery, needs-attention, summary card, `pagehide`, companion; Dictate untouched | Confer suite; handover tests on both language pages; phone-width visual check |
+| **A4 Staging and listening** | install on staging; release checks; Robert's scripts, phone cases, audition; cards adopted | §11.2 steps 1–6 by Robert |
+| **A5 Production** | release worktree, PR, bundle; tags and classifier output recorded | §11.5 steps 1–4 |
+| **A6 Cleanup** | §9 removals after D9 | no page references a retired path |
+| **B0–B2 Languages** | §14.3 baselines; §14.2 integration, mirrored; Robert's runs | every gate, both languages, both providers |
 
 ## 20. What this spec could not verify
 
-- Production environment values in `/opt/minimoi/.env`: `MINIMOI_COS_MANAGED_REALTIME` (so whether Confer in
-  production offers the managed mode or only turn-by-turn), `MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO`,
-  `VOICE_REALTIME_PROVIDER_DEFAULT`, `COS_CONVERSATIONS_DIR`, `MINIMOI_MC_EVERYWHERE`, `MINIMOI_GUILD_CHAT`. Read
-  only from compose defaults.
-- Whether `cos-agent-a` has approval flows a bare spoken "yes" could trigger (§6.4).
-- How CoS's OpenClaw backend can be given a separate runtime session for her summary (§6.7).
-- The size of `cos_memory.md` in production, and so whether her composed instructions fit 24,000 bytes (§6.3).
-- Whether opening the floating MC panel over a live German or Portuguese session leaves both microphones open: the
-  code has no handover listener on those pages; no browser test was run.
-- Every listening, phone and latency claim for the direct path: nothing has been heard; Chunk B ran with providers
-  blocked.
-- Grok Voice's first-audible timing (the 27 Oct runs suggest its transcript arrives near the end of a reply; a
-  hypothesis until measured).
+- Production `.env` values: `MINIMOI_COS_MANAGED_REALTIME`, `MINIMOI_REALTIME_SESSION_ALLOWANCE_MICRO`,
+  `VOICE_REALTIME_PROVIDER_DEFAULT`, `MINIMOI_MC_EVERYWHERE`, `MINIMOI_GUILD_CHAT`, `MINIMOI_COS_WRITE_GUARD`.
+- `cos_memory.md`'s production size (the 24,000-byte bound).
+- OpenAI WebRTC's playback-complete signal; xAI transcription without a language hint; a dated xAI model id.
+- Whether OpenClaw's built-ins ask for confirmation in ways its configuration does not show.
+- The cloud staging host: its name, keys, login, folders, allowance.
+- The summary keys (not yet created); the gateway's reachability from portal and `cos-scheduler` (both share its
+  default compose network; not exercised); backup coverage of `${MINIMOI_ROOT}/cos_voice`.
+- In a browser: the panel over a live German or Portuguese session; MC's direct records under an old image (S5).
+- A1's code beyond `99b3d0f0`: this spec states the contract A1 must meet, not code that exists.
+- Every listening, phone and latency claim for the direct path; Grok Voice's first-audible timing.
