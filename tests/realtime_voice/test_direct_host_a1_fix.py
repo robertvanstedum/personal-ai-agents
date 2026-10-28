@@ -361,3 +361,75 @@ def test_a_receipt_before_the_summary_is_not_marked(rig):
     sid = start(r)
     consult(r, sid, call_id="call_1", turn="t0")
     assert r.store.rows[-1]["text"].startswith("Answered.")
+
+
+# ── Item 7: the close's report, complete | incomplete(n) in the end marker, later posts refused and counted ────────────
+# (R1 P3-6, R2 N4, N5, N6 with it)
+
+def test_the_close_carries_its_report_and_the_marker_counts_only_what_the_server_does_not_hold(rig):
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Kept."), turn(r, "assistant", "t1", "Kept too, answer lost.")])
+    ended = r.client.post(BASE + f"/session/{sid}/end", headers=OWNER,
+                          json={"last_item_id": "t2", "unacknowledged": ["t1", "t2"]}).get_json()
+    assert ended == {"ok": True, "ended": True, "capture": "incomplete", "missing": 1}   # t1 is held; t2 is not
+    assert r.store.markers[(sid, "end")] | {} == {**r.store.markers[(sid, "end")], "capture": "incomplete", "missing": 1,
+                                                  "boundary": "t2"}
+    whole = start(r)
+    post(r, whole, [turn(r, "user", "t0", "All of it.")])
+    assert r.client.post(BASE + f"/session/{whole}/end", headers=OWNER,
+                         json={"last_item_id": "t0", "unacknowledged": []}).get_json()["capture"] == "complete"
+    assert r.store.markers[(whole, "end")]["capture"] == "complete"
+
+
+def test_a_post_after_the_close_is_refused_and_counted(rig):
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={"last_item_id": "t0", "unacknowledged": []})
+    assert post(r, sid, [turn(r, "assistant", "t1", "Sure, summing up.")]).status_code == 409
+    assert post(r, sid, []).status_code == 409
+    assert r.sessions.late_posts(sid) == 2 and r.store.markers[(sid, "end")]["capture"] == "complete"
+
+
+def test_events_end_may_not_keep_off_the_record_are_counted_not_kept(rig):
+    from test_direct_host import turn
+    r = rig
+    sid = start(r)
+    r.host.keep_ok = False
+    ended = r.client.post(BASE + f"/session/{sid}/end", headers=OWNER,
+                          json={"events": [turn(r, "user", "t0", "Private."), turn(r, "assistant", "t1", "Fine.")],
+                                "last_item_id": "t1", "unacknowledged": []}).get_json()
+    assert ended["capture"] == "incomplete" and ended["missing"] == 2 and not r.store.rows
+
+
+def test_a_summary_for_a_session_this_process_does_not_hold_keeps_the_pages_count(rig):
+    """R1 P3-6 / R2 N5: after a restart the summary's report still reaches the marker, the summary and every view."""
+    from flask import Flask
+    from core.realtime_voice.direct_host import install_direct_voice
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Kept words.")])
+    restarted = Flask("restarted")
+    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ={}, budget=r.budget)
+    summary = restarted.test_client().post(BASE + f"/session/{sid}/summary", headers=OWNER, json={
+        "conversation_id": "owner", "last_item_id": "t1", "unacknowledged": ["t1"]}).get_json()
+    assert r.store.markers[(sid, "end")]["capture"] == "incomplete" and r.store.markers[(sid, "end")]["missing"] == 1
+    assert "was not kept (1 turn)" in r.host.prompts[-1] and "was not kept (1 turn)" in summary["written"]
+
+
+def test_a_session_summarized_without_any_end_or_report_is_not_claimed_complete(rig):
+    """R2 N6: a session that ended without End (dropped), summarized later from another process."""
+    from flask import Flask
+    from core.realtime_voice.direct_host import install_direct_voice
+    from test_direct_host import post, turn
+    r = rig
+    sid = start(r)
+    post(r, sid, [turn(r, "user", "t0", "Words.")])
+    restarted = Flask("restarted")
+    install_direct_voice(restarted, r.host, url_prefix="/tp/voice", environ={}, budget=r.budget)
+    restarted.test_client().post(BASE + f"/session/{sid}/summary", headers=OWNER, json={"conversation_id": "owner"})
+    assert r.store.markers[(sid, "end")]["capture"] == "incomplete" and "missing" not in r.store.markers[(sid, "end")]
+    assert "was not kept, so it is not below" in r.host.prompts[-1]

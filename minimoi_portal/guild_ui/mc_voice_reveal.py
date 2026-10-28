@@ -154,10 +154,11 @@ def mark_start(floor, sid, *, principal, conversation_id, max_minutes, started=N
                                               "max_minutes": int(max_minutes), "started_at": stamp(started or now())})
 
 
-def mark_end(floor, sid, *, reason="end", ended=None, incomplete=False):
-    """``incomplete``: some of what was said is known not to be kept; the marker says capture "incomplete" (review B4)."""
-    return _write_marker(floor, sid, "end", {"reason": reason, "ended_at": stamp(ended or now()),
-                                            **({"capture": "incomplete"} if incomplete else {})})
+def mark_end(floor, sid, *, reason="end", ended=None, capture=None):
+    """``capture`` (Spec 165 §5.2): {"capture": "complete" | "incomplete", "missing": n, "boundary": last_item_id}, kept
+    in the marker for every later view and the summary. A marker without it (A1's, when complete) reads as complete."""
+    fields = {k: v for k, v in (capture or {}).items() if k in ("capture", "missing", "boundary")}
+    return _write_marker(floor, sid, "end", {"reason": reason, "ended_at": stamp(ended or now()), **fields})
 
 
 def _marker_fields(row, sid, what):
@@ -270,6 +271,15 @@ RECEIPTS = Receipts(("reply", "operation", "job"), acted_key="job_command", acte
 receipt_parts = RECEIPTS.parts
 
 
+def _capture(status, end):
+    end = end or {}
+    if end.get("capture") == "incomplete":
+        return {"capture": "incomplete", **({"missing": end["missing"]} if type(end.get("missing")) is int else {})}
+    if status == "dropped" and not end:
+        return {"capture": "unknown"}
+    return {}
+
+
 def process_view(config):
     """view's keywords from a mount's config: what this process (mc_voice_direct.install) knows of its sessions."""
     return {"live": config.get("mc_direct_voice_live") or (lambda _sid: False),
@@ -374,8 +384,10 @@ def view(floor, rows, *, live=lambda sid: False, when=None, tagged=lambda reques
                          "started_at": (start or {}).get("started_at"), "ended_at": (end or {}).get("ended_at"),
                          "line": RECOVERY if status in ("recovering", "unknown") else None,
                          "summary": summary_state(floor, sid) if status in ("ended", "dropped") else None,
-                         # Some of what was said is known not to be kept (review B4): every later view says so.
-                         **({"capture": "incomplete"} if (end or {}).get("capture") == "incomplete" else {})})
+                         # Some of what was said is known not to be kept (review B4): every later view says so, with
+                         # the count when there is one (Spec 165 §5.2). A session that ended without End (dropped) may
+                         # not have all of it: unknown, said too (review R2 N6).
+                         **_capture(status, end)})
     return shown, sessions
 
 

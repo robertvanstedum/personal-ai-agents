@@ -55,9 +55,8 @@ class Store(DirectVoiceStore):
         return self.markers.setdefault((sid, "start"), {"principal": principal, "conversation_id": handle,
                                                          "max_minutes": max_minutes, "started_at": stamp(started)})
 
-    def mark_end(self, handle, sid, *, reason, incomplete=False):
-        return self.markers.setdefault((sid, "end"), {"reason": reason, "ended_at": stamp(core.now()),
-                                                       **({"capture": "incomplete"} if incomplete else {})})
+    def mark_end(self, handle, sid, *, reason, capture=None):
+        return self.markers.setdefault((sid, "end"), {"reason": reason, "ended_at": stamp(core.now()), **(capture or {})})
 
     def read_marker(self, handle, sid, what):
         return self.markers.get((sid, what))
@@ -289,7 +288,7 @@ def test_a_consult_runs_the_hosts_turn_once_on_the_owners_words_with_its_request
     assert r.store.rows[-1]["text"] == "Saved. Operation op-2. Spoken: Saved."
     assert consult(r, str(uuid.uuid4()), call_id="call_3").status_code == 403               # not this owner's session
     assert consult(r, sid, call_id="call_4", headers={**OWNER, "X-Csrf": "forged"}).status_code == 403
-    assert r.client.post(BASE + f"/session/{sid}/end", headers=OWNER).get_json() == {"ok": True, "ended": True}
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=OWNER).get_json() == {"ok": True, "ended": True, "capture": "complete"}
     assert consult(r, sid, call_id="call_5").status_code == 409                             # after End: none
     assert len(r.host.turns) == 2 and r.host.ends == [sid] and r.store.markers[(sid, "end")]["reason"] == "end"
 
@@ -330,10 +329,11 @@ def test_end_keeps_the_events_it_carries_only_where_the_host_may_keep_them(rig):
     r = rig
     sid, other = start(r), start(r)
     ended = r.client.post(BASE + f"/session/{sid}/end", headers=OWNER, json={"events": [turn(r, "user", "t0", "Bye.")]})
-    assert ended.get_json() == {"ok": True, "ended": True} and [row["text"] for row in r.store.rows] == ["Bye."]
+    assert ended.get_json() == {"ok": True, "ended": True, "capture": "complete"} and [row["text"] for row in r.store.rows] == ["Bye."]
     r.host.keep_ok = False
     ended = r.client.post(BASE + f"/session/{other}/end", headers=OWNER, json={"events": [turn(r, "user", "t0", "Private.")]})
-    assert ended.get_json() == {"ok": True, "ended": True} and len(r.store.rows) == 1 and not r.sessions.is_open(other)
+    assert ended.get_json() == {"ok": True, "ended": True, "capture": "incomplete", "missing": 1}       # dropped (R2 N4)
+    assert len(r.store.rows) == 1 and not r.sessions.is_open(other)
 
 
 def test_the_summary_is_this_sessions_records_once_and_decided_in_writing(rig, monkeypatch):
@@ -488,8 +488,8 @@ def test_what_was_not_kept_and_what_still_ran_are_marked_at_the_cutoff(rig):
     summary = r.client.post(BASE + f"/session/{sid}/summary", headers=OWNER,
                             json={"conversation_id": "owner", "capture": "incomplete"}).get_json()
     assert r.store.markers[(sid, "end")]["capture"] == "incomplete"
-    assert "could not be kept" in summary["written"] and "still running" in summary["written"]
-    assert "could not be kept" in r.host.prompts[-1] and "still running" in r.host.prompts[-1]
+    assert "was not kept" in summary["written"] and "still running" in summary["written"]
+    assert "was not kept" in r.host.prompts[-1] and "still running" in r.host.prompts[-1]
     other = start(r)
     r.client.post(BASE + f"/session/{other}/end", headers=OWNER, json={"capture": "incomplete"})
     assert r.store.markers[(other, "end")]["capture"] == "incomplete"

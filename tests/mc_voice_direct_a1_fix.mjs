@@ -4,6 +4,10 @@
 // microphone. VOICE_SESSION_MODULE=<file> runs it against another copy of the module.
 import assert from 'node:assert/strict';
 import { D, SID, assistant, flush, rig, runner, user } from './js_helpers/direct_voice_rig.mjs';
+import { fakeDocument } from './js_helpers/fake_dom.mjs';
+import { pathToFileURL } from 'node:url';
+const T = await import(process.env.VOICE_THREAD_MODULE ? pathToFileURL(process.env.VOICE_THREAD_MODULE)
+  : new URL('../minimoi_portal/guild_ui/static/js/mc_voice_direct.js', import.meta.url));
 
 const t = runner('A1 fix-round session regressions');
 
@@ -167,6 +171,64 @@ await t.check('item 5: a read that does not answer, or says unknown, leaves it u
     const out = await r.c.options.onFunctionCall({ call_id: 'call_1', name: 'consult', arguments: {} });
     assert.equal(out.outcome, 'unknown'); assert.equal(out.spoken, D.UNKNOWN);
   }
+});
+
+// ── Item 7: capture states, the close's report, incomplete(n); R2 S2: the barrier admits nothing new ──────────────────
+await t.check('R2 S2: a turn that completes during Sum up\'s flush is not admitted, so a fully kept session is complete', async () => {
+  let release;
+  const r = rig({ routes: {
+    '/transcript': (body) => (body.events.some((e) => e.text === 'Last words.') ? new Promise((res) => { release = () => res({ status: 200, body: { ok: true, kept: 1 } }); }) : null),
+    '/summary': () => ({ status: 200, body: { ok: true, state: 'proposed', spoken: 'Done.' } }) } });
+  await r.s.start('openai');
+  r.c.hear([user('Last words.')]); await flush();
+  const asked = r.s.sumUp(); await flush();
+  r.c.hear([user('Last words.'), assistant('Sure, summing up.')]); await flush();     // the voice answers during the flush
+  release(); await asked; await flush();
+  const report = r.posts('/summary')[0].body;
+  assert.deepEqual([report.last_item_id, report.unacknowledged], ['t0', []]);
+  assert.equal(r.posts('/transcript').filter((x) => x.body.events.some((e) => e.item_id === 't1')).length, 0);
+});
+await t.check('item 7: an event ends failed after two attempts under one id, and End reports it', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? 'network' : null),
+    '/end': () => ({ status: 200, body: { ok: true, ended: true, capture: 'incomplete', missing: 1 } }) } });
+  await r.s.start('openai');
+  r.c.hear([user('Lost twice.')]); await flush();
+  await r.s.end('user_ended'); await flush();
+  const sent = r.posts('/transcript').filter((x) => x.body.events.length);
+  assert.deepEqual(sent.map((x) => x.body.events[0].item_id), ['t0', 't0']);         // no third attempt at End
+  assert.deepEqual(r.posts('/end')[0].body, { last_item_id: 't0', unacknowledged: ['t0'] });
+  assert.deepEqual(r.ended.at(-1), ['Voice ended. Some of what was said was not kept (1 turn). What was kept is in the conversation.', { error: true }]);
+});
+await t.check('item 7: End\'s line takes the server\'s count (it holds a turn whose answer was lost)', async () => {
+  let n = 0;
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length && n++ < 2 ? 'network' : null),
+    '/end': () => ({ status: 200, body: { ok: true, ended: true, capture: 'complete' } }) } });
+  await r.s.start('openai');
+  r.c.hear([user('Kept, though the answers were lost.')]); await flush();
+  await r.s.end('user_ended'); await flush();
+  assert.deepEqual(r.posts('/end')[0].body.unacknowledged, ['t0']);
+  assert.deepEqual(r.ended.at(-1), [D.ENDED, { error: false }]);
+});
+await t.check('item 7 (pagehide, single End): End carries one batch and the report, with no posts beside it', async () => {
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length ? new Promise(() => {}) : null) } });
+  await r.s.start('openai');
+  const many = [];
+  for (let i = 0; i < 25; i++) many.push(i % 2 ? assistant(`turn ${i}`) : user(`turn ${i}`));
+  r.c.hear(many); await flush();
+  const before = r.calls.length;
+  r.s.end('pagehide');
+  const sent = r.calls.slice(before);
+  assert.deepEqual(sent.map((x) => x.url.split('/').pop()), ['end']);
+  assert.deepEqual([sent[0].body.events.length, sent[0].body.last_item_id, sent[0].body.unacknowledged.length], [20, 't24', 25]);
+});
+await t.check('item 7, R2 N6: the thread says incomplete with its count, and a dropped session may not be whole', async () => {
+  const doc = fakeDocument(), thread = doc.createElement('ol');
+  const view = T.voiceThread({ doc, direct: {}, thread: () => thread, mine: () => null, conversationId: () => 'c-1', post: async () => ({}), reveal: async () => {} });
+  view.paint([{ session_id: SID, state: 'ended', started_at: '2026-10-28T10:00:00.000Z', summary: 'none', capture: 'incomplete', missing: 2 },
+    { session_id: 'other', state: 'dropped', started_at: '2026-10-28T09:00:00.000Z', summary: 'none', capture: 'unknown' }]);
+  assert.equal(thread.querySelector(`[data-voice-line="${SID}"]`)?.textContent,
+    'Some of what was said in this voice session was not kept (2 turns). What was kept is in the conversation.');
+  assert.match(thread.querySelector('[data-voice-line="other"]')?.textContent || '', /may not have been kept/);
 });
 
 t.done();

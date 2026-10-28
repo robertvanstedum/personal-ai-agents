@@ -30,7 +30,13 @@ export const SERVER_ENDED = {
 };
 export const ALREADY_CHECKED = 'Already checked; say it again to re-ask.';
 // Some of what was said is not known to be kept (review B4): said instead of ENDED, never a claim that all of it was.
-export const INCOMPLETE = 'Voice ended. Some of what was said could not be kept; the rest is in the conversation.';
+// Spec 165 §5.2's words, with the count when it is known (the server's, from End's answer, else the page's own).
+export const INCOMPLETE = 'Voice ended. Some of what was said was not kept. What was kept is in the conversation.';
+export function incompleteWords(n) {
+  return Number.isInteger(n) && n > 0
+    ? `Voice ended. Some of what was said was not kept (${n} turn${n === 1 ? '' : 's'}). What was kept is in the conversation.`
+    : INCOMPLETE;
+}
 // A consult's four outcomes (Spec 165 §5.1): done (its reply), not_done (NOT_DONE or the refusal), pending, unknown. Unknown is
 // a consult whose answer did not come back (review B7): never "failed", which would invite asking again.
 export const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";
@@ -156,17 +162,22 @@ export function sameWords(said, asked) {
 // owner item that completed last, the same "t" + index its transcript post carries, so the server can tie the consult to the
 // turn it kept. An earlier item that completes after a later one appeared is still named by its own place.
 //
-// Delivery is tracked per event (review B4): sent, kept (the server said so) or failed (refused, or the network twice). A
-// failed event is retried once more at the end (finish/flush), then counts as not kept: incomplete() is then true, and the
-// session's last words, End and the summary say so instead of claiming everything was kept.
+// Each event moves queued → sent → acknowledged (the server said it kept it), or ends failed(reason) after two attempts under
+// the same id (Spec 165 §5.2): a refusal (422) at once; the network or a server failure, and a partial write, after one retry.
+// Closing capture (close: End, Sum up, the spoken yes, the page going away) is one barrier: from its start nothing new is
+// admitted, so the boundary is the last item seen then (last_item_id); what is still being said is posted as partial; and
+// completeness is judged only up to that boundary (review R2 S2). report() is what the close carries: {last_item_id,
+// unacknowledged}, the ids up to the boundary not acknowledged, from which the server counts what it does not hold. A turn
+// that appears after the boundary (the voice's own "Sure, summing up.") is not this session's record: not posted, not counted.
 export function createCapture({ send, clock = Date.now, onAnswer = () => {}, warn = () => {}, turnsOff = null }) {
   const items = [];
   const queued = new Set(), inflight = new Set();      // batches waiting on the chain; batches sent and not yet answered
-  const fate = new Map();                              // item id -> {event, state: sent | kept | failed, retry}
-  let chain = Promise.resolve(), stopped = false, ownerAt = -1;
+  const fate = new Map();                              // item id -> {event, state: queued | sent | acknowledged | failed, reason, attempts}
+  let chain = Promise.resolve(), stopped = false, ownerAt = -1, boundary = null;
   const iso = (ms) => new Date(ms).toISOString();
 
   function observe(turns) {
+    if (boundary !== null) return;                     // closed: nothing new is admitted
     const now = clock();
     (Array.isArray(turns) ? turns : []).forEach((t, i) => {
       const it = items[i] || (items[i] = { speaker: t.speaker, text: '', completed: false, started: now, ended: null, posted: false });
@@ -184,27 +195,26 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     const end = Math.max(it.ended ?? clock(), it.started);
     const e = { role: it.speaker, item_id: `t${i}`, index: 0, text, partial: partial || cut, interrupted: it.speaker === 'assistant' && interrupted,
       started_at: iso(it.started), ended_at: iso(end) };
-    fate.set(e.item_id, { event: e, state: 'sent', retry: true });
+    fate.set(e.item_id, { event: e, state: 'queued', reason: null, attempts: 0 });
     return e;
   }
-  function mark(batch, state, retry = true) {
-    for (const e of batch) { const f = fate.get(e.item_id); if (f && f.state !== 'kept') { f.state = state; f.retry = retry; } }
+  function mark(batch, state, reason = null) {
+    for (const e of batch) {
+      const f = fate.get(e.item_id);
+      if (!f || f.state === 'acknowledged') continue;
+      f.state = state; f.reason = reason;
+      if (state === 'sent') f.attempts += 1;
+    }
   }
   function due(final) {
     const out = [];
     items.forEach((it, i) => {
-      if (!it || it.posted) return;
+      if (!it || it.posted || (boundary !== null && i > boundary)) return;
       if (!it.text.trim()) { if (it.completed || final) it.posted = true; return; }   // nothing was said: nothing to keep
       if (it.completed) out.push(event(i, it, false, false));
       else if (it.speaker === 'assistant' && items.slice(i + 1).some((n) => n && n.speaker === 'user')) out.push(event(i, it, true, true));
       else if (final) out.push(event(i, it, true, it.speaker === 'assistant'));
     });
-    return out;
-  }
-  // Failed events that may be sent once more (the network, or a write the server could not finish): at the end only.
-  function again() {
-    const out = [];
-    for (const f of fate.values()) if (f.state === 'failed' && f.retry) { f.retry = false; f.state = 'sent'; out.push(f.event); }
     return out;
   }
   function batches(events) {
@@ -221,31 +231,34 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
   async function post(batch, retried, opts) {
     if (stopped || !batch.length) return;
     inflight.add(batch);
+    mark(batch, 'sent');
     let r;
     try { r = await send(batch, opts); } finally { inflight.delete(batch); }
     const code = r.body && r.body.error;
-    if (r.status === 200) { mark(batch, 'kept'); return onAnswer(r.body || {}); }
-    if (r.status === 413 && batch.length > 1) {                       // split the post
+    if (r.status === 200) { mark(batch, 'acknowledged'); return onAnswer(r.body || {}); }
+    if (r.status === 413 && batch.length > 1) {                       // split the post (not an attempt)
+      for (const e of batch) { const f = fate.get(e.item_id); if (f && f.state === 'sent') { f.state = 'queued'; f.attempts -= 1; } }
       const half = Math.ceil(batch.length / 2);
       await post(batch.slice(0, half), retried, opts);
       return post(batch.slice(half), retried, opts);
     }
-    if (r.status === 409 && code === 'not_kept' && !retried) {
+    if (r.status === 409 && code === 'not_kept' && !retried) {        // a partial write: the rest, once more
       const kept = Math.max(0, Number(r.body.kept) || 0);
-      mark(batch.slice(0, kept), 'kept');
+      mark(batch.slice(0, kept), 'acknowledged');
       return post(batch.slice(kept), true, opts);
     }
-    if (r.status === 0 && !retried) return post(batch, true, opts);       // the network: once more, the same ids
-    // From here the batch is not known to be kept, and the page says so (review B4).
+    if ((r.status === 0 || r.status >= 500) && !retried) return post(batch, true, opts);   // no answer: once more, the same ids
+    // From here the batch is not kept: failed, with its reason, and the page says so (review B4).
     if (r.status === 422) {                                               // a page bug or a far-off clock: not retried
-      mark(batch, 'failed', false);
+      mark(batch, 'failed', 'invalid');
       warn('voice transcript refused', code);
       return onAnswer({ failed: 'invalid', status: 422 });
     }
-    if (r.status === 409 && code === 'not_kept') { mark(batch, 'failed'); return onAnswer({ failed: 'not_kept' }); }
+    if (r.status === 409 && code === 'not_kept') { mark(batch, 'failed', 'not_kept'); return onAnswer({ failed: 'not_kept' }); }
     stopped = ['session_ended', 'not_listening', 'cap', 'not_your_session', 'csrf', turnsOff].includes(code) || r.status === 403 || stopped;
-    mark(batch, 'failed', !stopped);
-    return onAnswer({ failed: code || (r.status ? 'unavailable' : 'network'), status: r.status });
+    const reason = code || (r.status ? 'unavailable' : 'network');
+    mark(batch, 'failed', reason);
+    return onAnswer({ failed: reason, status: r.status });
   }
   function enqueue(events, opts) {
     for (const batch of batches(events)) {
@@ -254,38 +267,46 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
     }
     return chain;
   }
-  // Everything still owed, once: the turns due now, partial ones too, and the failed ones a last time. Nothing once capture
-  // has stopped (the summary's cutoff, or the server ended it): what is said after that is not this session's record.
-  const last = (turns, opts) => { if (stopped) return chain; observe(turns); return enqueue([...again(), ...due(true)], opts); };
+  // The barrier's start: the last look at what was said, then nothing new is admitted. Idempotent.
+  function close(turns) {
+    if (boundary === null) { observe(turns); boundary = items.length - 1; }
+  }
+  // Up to the boundary (or everything, before one): the ids not acknowledged.
+  function unacknowledged() {
+    const out = [];
+    for (const [id, f] of fate) if (f.state !== 'acknowledged' && (boundary === null || Number(id.slice(1)) <= boundary)) out.push(id);
+    items.forEach((it, i) => { if (it && !it.posted && it.text.trim() && (boundary === null || i <= boundary)) out.push(`t${i}`); });
+    return out;
+  }
+  // Everything still owed up to the boundary, once: what is due now, partial ones too. Nothing once capture has stopped.
+  const last = (turns, opts) => { close(turns); if (stopped) return chain; return enqueue(due(true), opts); };
   return {
-    update(turns) { if (stopped) return chain; observe(turns); return enqueue(due(false)); },
+    update(turns) { if (stopped || boundary !== null) return chain; observe(turns); return enqueue(due(false)); },
     // The capture id of the owner turn that completed last ("t" + its place), or null before he has said anything.
     ownerItem: () => (ownerAt >= 0 ? `t${ownerAt}` : null),
     // An owner item that appeared after the last completed one and is not complete yet: words still being transcribed.
     ownerPending: () => items.some((it, i) => it && i > ownerAt && it.speaker === 'user' && !it.completed),
     finish: last,
-    // The capture-closing barrier (review B2): post what is owed and resolve once every post is answered. The caller then
-    // stops capture; it never awaits this from inside a post's own answer.
+    // The capture-closing barrier (review B2, R2 S2): close at the boundary, post what is owed and resolve once every post is
+    // answered. The caller never awaits this from inside a post's own answer.
     flush: last,
-    // A control post on the same chain, after every post before it (Keep talking withdraws the proposal, review B5).
-    control(extra) {
-      if (stopped) return chain;
-      chain = chain.then(() => (stopped ? null : send([], {}, extra))).catch((e) => warn('voice control post failed', e));
+    // A request after every post before it, on the same chain (Keep talking, review B5).
+    after(fn) {
+      chain = chain.then(() => fn()).catch((e) => warn('voice control post failed', e));
       return chain;
     },
     // The page is going away (UI review #1): no answer to a post can be awaited now, and a post still in flight is cancelled
-    // with the page. Everything not known to be kept (posts in flight, batches waiting on the chain, failed ones, what is due
-    // at the end) goes with End, in one request: the browser bounds what a leaving page may send, and posts sent beside End
-    // may arrive after it. What does not fit in that one post is not sent, and End says capture "incomplete"
-    // (the additional capture edge of review B4). A turn sent twice is kept once: the ids are the same.
+    // with the page. Capture closes at the boundary; everything not acknowledged up to it (posts in flight, batches waiting,
+    // what is due) goes with End, in one request (the browser bounds what a leaving page may send, and posts sent beside End
+    // may arrive after it; Spec 165 v0.2's ordered keepalive batches are not used, review R1). What does not fit is not sent.
+    // End carries the report, so the server counts what it does not hold. A turn sent twice is kept once: the ids are the same.
     drain(turns) {
-      observe(turns);
+      close(turns);
       const waiting = [...inflight, ...queued].flat();
       inflight.clear(); queued.clear();
-      const owed = batches([...waiting, ...again(), ...due(true)]);
+      const owed = batches([...waiting, ...due(true)]);
       stopped = true;
-      const lost = [...fate.values()].some((f) => f.state === 'failed');
-      return { events: owed[0] || [], complete: owed.length <= 1 && !lost };
+      return { events: owed[0] || [], ...report() };
     },
     heartbeat() {
       if (stopped) return chain;
@@ -297,12 +318,19 @@ export function createCapture({ send, clock = Date.now, onAnswer = () => {}, war
       }).catch((e) => warn('voice heartbeat failed', e));
       return chain;
     },
-    // Some of what was said is not known to be kept: refused, failed twice, or never answered.
-    incomplete() { return [...fate.values()].some((f) => f.state !== 'kept'); },
+    // Some of what was said up to the boundary is not known to be kept: failed, or never answered.
+    incomplete() { return unacknowledged().length > 0; },
+    // What a close carries (§5.2): the boundary and the ids up to it not acknowledged.
+    report,
+    states: () => Object.fromEntries([...fate].map(([id, f]) => [id, f.state === 'failed' ? `failed(${f.reason})` : f.state])),
     stop() { stopped = true; },
     get stopped() { return stopped; },
     settled() { return chain; },
   };
+  function report() {
+    return { last_item_id: boundary !== null && boundary >= 0 ? `t${boundary}` : (items.length ? `t${items.length - 1}` : null),
+      unacknowledged: unacknowledged() };
+  }
 }
 
 // One direct voice session. `ui` is the host page's: say(text, {error, loud, transient}), phase(state), live(on),
@@ -509,10 +537,11 @@ export function directVoice(d) {
       cancel(wait);
       if (finalized) return;
       const incomplete = Boolean(capture?.incomplete());
+      const closing = capture ? capture.report() : {};
       capture?.stop();
       let timer = null;
       const r = await Promise.race([
-        postJson(at(direct.summary_url), { conversation_id: cid, ...(incomplete ? { capture: 'incomplete' } : {}) }),
+        postJson(at(direct.summary_url), { conversation_id: cid, ...closing }),
         new Promise((resolve) => { timer = later(() => resolve({ status: -1, body: {} }), SUMMARY_WAIT_MS); }),
       ]);
       cancel(timer);
@@ -546,13 +575,14 @@ export function directVoice(d) {
 
   // The page is going away: End leaves in this same tick, with keepalive, carrying the last turns itself in one post (the
   // browser bounds what a leaving page may send, and a post sent beside End may arrive after it). What does not fit is not
-  // sent, and End says capture "incomplete" (review B4). Nothing waits for a reply (none arrives after pagehide). Once per session.
+  // sent. End carries the close's report ({last_item_id, unacknowledged}), so the server writes complete or incomplete(n)
+  // from what it holds (review B4, Spec 165 §5.2). Nothing waits for a reply (none arrives after pagehide). Once per session.
   function sendFinal(turns) {
     const id = sessionId();
     if (!id || sentFinal) return;
     sentFinal = true;
-    const { events, complete } = capture ? capture.drain(turns || []) : { events: [], complete: true };
-    postJson(at(direct.end_url), { ...(events.length ? { events } : {}), ...(complete ? {} : { capture: 'incomplete' }) }, { keepalive: true });
+    const { events, ...closing } = capture ? capture.drain(turns || []) : { events: [] };
+    postJson(at(direct.end_url), { ...(events.length ? { events } : {}), ...closing }, { keepalive: true });
   }
 
   // §6: End on the server (after the last turns are posted), then the reveal. Once, whatever ended the session.
@@ -568,18 +598,24 @@ export function directVoice(d) {
     }
     ending = (async () => {
       const id = sessionId();
-      let incomplete = false;
+      let incomplete = false, missing = null;
       if (id) {
         await capture?.finish(result?.turns || []);
         if (sentFinal) return;                               // the page went away meanwhile: End already left with keepalive
-        incomplete = Boolean(capture?.incomplete());          // End says so, and so does the line below (review B4)
-        const r = await postJson(at(direct.end_url), incomplete ? { capture: 'incomplete' } : {});
+        const closing = capture ? capture.report() : {};     // End carries it; the server counts what it does not hold (§5.2)
+        incomplete = Boolean(closing.unacknowledged?.length);
+        missing = incomplete ? closing.unacknowledged.length : 0;
+        const r = await postJson(at(direct.end_url), closing);
         if (sentFinal) return;
+        if (r.status === 200 && r.body.ok && ['complete', 'incomplete'].includes(r.body.capture)) {
+          incomplete = r.body.capture === 'incomplete';      // the server's count: what it holds, not what this page heard back
+          missing = Number.isInteger(r.body.missing) ? r.body.missing : null;
+        }
         if (!(r.status === 200 && r.body.ok) && !failed) endedWords = ['Voice ended here, but the server did not confirm it. What was said appears when the session\'s time runs out.', true];
         await d.reveal?.();
       }
-      const fallback = failed || !id ? null : incomplete ? INCOMPLETE : ENDED;
-      const [line, error] = endedWords || [fallback, fallback === INCOMPLETE];
+      const fallback = failed || !id ? null : incomplete ? incompleteWords(missing) : ENDED;
+      const [line, error] = endedWords || [fallback, incomplete && fallback !== null];
       ui.ended(line, { error });
     })();
     ending.then(closed, closed);
@@ -592,7 +628,7 @@ export function directVoice(d) {
     if (!cid) { failed = true; ui.ended(NO_CONVERSATION, { error: true }); return false; }
     const { RealtimeVoiceController } = await d.loadController();
     if (finalized) return false;
-    capture = createCapture({ send: (events, opts, extra) => postJson(at(direct.transcript_url), { events, ...(extra || {}) }, opts || {}),
+    capture = createCapture({ send: (events, opts) => postJson(at(direct.transcript_url), { events }, opts || {}),
       clock, onAnswer: heard, warn: d.warn || (() => {}), turnsOff: words.off });
     c = new RealtimeVoiceController({
       bootstrapUrl: direct.bootstrap_url, requestHeaders: d.headers, includeTranscriptAfterEnd: true,
@@ -649,7 +685,7 @@ export function directVoice(d) {
     start,
     check,
     sumUp,
-    keepTalking() { propose(false); capture?.control({ proposal: 'withdrawn' }); },     // the server's proposal too (B5)
+    keepTalking() { propose(false); capture?.after(() => postJson(at(direct.transcript_url), { events: [], proposal: 'withdrawn' })); },     // the server's proposal too (B5)
     proposing: () => proposing,
     sessionId,
     // Ends the session for any reason (End, the microphone handed over, Private, the page going away). Resolves once End is sent.

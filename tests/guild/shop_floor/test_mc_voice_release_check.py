@@ -107,7 +107,7 @@ def test_one_bridged_consult_reaches_openclaw_and_returns_an_answered_receipt_an
     assert client.post(DIRECT + "/consult", headers=no_csrf, json={"session_id": sid, "call_id": "call_4",
                        "name": "consult", "owner_transcript_item": "Again?"}).status_code == 403
     assert effects() == before
-    assert client.post(DIRECT + f"/session/{sid}/end", headers=headers(token)).get_json() == {"ok": True, "ended": True}
+    assert client.post(DIRECT + f"/session/{sid}/end", headers=headers(token)).get_json() == {"ok": True, "ended": True, "capture": "complete"}
     late = consult(client, token, sid, call_id="call_5")
     assert late.status_code == 409 and late.get_json()["error"] == "session ended"     # late: none
     assert len(runtime.sent) == 1

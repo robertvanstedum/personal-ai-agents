@@ -23,7 +23,7 @@ const DIRECT = { path: 'direct', providers: [{ provider: 'openai', label: 'OpenA
   summary_decision_url: `${BASE}/session/{session_id}/summary/decision`, heartbeat_seconds: 20, persona: 'master_craftsman',
   locale: 'en-US', card_release: '0.1.18', person: { name: 'Master Craftsman', short: 'MC' } };
 const UNKNOWN = "I didn't get the result back. Check it in writing before asking again.";      // Spec 165 §5.1's words
-const INCOMPLETE = 'Voice ended. Some of what was said could not be kept; the rest is in the conversation.';
+const INCOMPLETE = (n) => `Voice ended. Some of what was said was not kept (${n} turn${n === 1 ? '' : 's'}). What was kept is in the conversation.`;   // §5.2
 const PENDING = 'The summary is still being written; it will appear in the conversation.';
 
 function rig({ routes = {} } = {}) {
@@ -158,7 +158,7 @@ await check('B2 a refused final post makes the summary request say capture is in
   await r.s.start('openai');
   r.c.hear([user('Final words.')]);
   await r.s.sumUp(); await flush();
-  assert.equal(r.posts('/summary')[0].body.capture, 'incomplete');
+  assert.deepEqual(r.posts('/summary')[0].body.unacknowledged, ['t0']);           // the close's report (§5.2)
 });
 await check('B2 a final post that never answers holds the summary at most five seconds, and the summary says incomplete', async () => {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? new Promise(() => {}) : null),
@@ -169,7 +169,7 @@ await check('B2 a final post that never answers holds the summary at most five s
   r.advance(4999); await flush();
   assert.equal(r.posts('/summary').length, 0);
   r.advance(1); await flush();
-  assert.equal(r.posts('/summary').length, 1); assert.equal(r.posts('/summary')[0].body.capture, 'incomplete');
+  assert.equal(r.posts('/summary').length, 1); assert.deepEqual(r.posts('/summary')[0].body.unacknowledged, ['t0']);
 });
 await check('B2 a spoken yes asks for the summary after its own post, without waiting on itself', async () => {
   const r = rig({ routes: {
@@ -225,8 +225,8 @@ await check('B4 a turn lost to the network twice is said, and End does not claim
   r.c.hear([user('Lost words.')]); await flush();
   assert.ok(r.said.some(([w]) => w === D.NOT_KEPT), 'no warning when the turn was not kept');
   await r.s.end('user_ended'); await flush();
-  assert.equal(r.posts('/end')[0].body.capture, 'incomplete');
-  assert.deepEqual(r.ended.at(-1), [INCOMPLETE, { error: true }]);
+  assert.deepEqual(r.posts('/end')[0].body, { last_item_id: 't0', unacknowledged: ['t0'] });
+  assert.deepEqual(r.ended.at(-1), [INCOMPLETE(1), { error: true }]);
 });
 await check('B4 a refused (422) turn is said and the end says some was not kept', async () => {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 422, body: { error: 'time' } } : null) } });
@@ -234,31 +234,30 @@ await check('B4 a refused (422) turn is said and the end says some was not kept'
   r.c.hear([user('Refused words.')]); await flush();
   assert.ok(r.said.some(([w]) => w === D.NOT_KEPT));
   await r.s.end('user_ended'); await flush();
-  assert.deepEqual(r.ended.at(-1), [INCOMPLETE, { error: true }]);
+  assert.deepEqual(r.ended.at(-1), [INCOMPLETE(1), { error: true }]);
 });
-await check('B4 a turn lost to the network is sent once more at End; kept then, the end is the ordinary one', async () => {
-  let down = true;
-  const r = rig({ routes: { '/transcript': (body) => (body.events.length && down ? 'network' : null) } });
+await check('B4 a turn lost to the network once is sent again under the same id; kept then, the end is the ordinary one', async () => {
+  let down = 1;
+  const r = rig({ routes: { '/transcript': (body) => (body.events.length && down-- > 0 ? 'network' : null) } });
   await r.s.start('openai');
   r.c.hear([user('Words to keep.')]); await flush();
-  down = false;
   await r.s.end('user_ended'); await flush();
   const sent = r.posts('/transcript').filter((x) => x.body.events.length);
-  assert.equal(sent.length, 3); assert.equal(sent[2].body.events[0].item_id, 't0');
-  assert.deepEqual(r.posts('/end')[0].body, {}); assert.deepEqual(r.ended.at(-1), [D.ENDED, { error: false }]);
+  assert.equal(sent.length, 2); assert.equal(sent[1].body.events[0].item_id, 't0');       // two attempts, one id (§5.2)
+  assert.deepEqual(r.posts('/end')[0].body, { last_item_id: 't0', unacknowledged: [] }); assert.deepEqual(r.ended.at(-1), [D.ENDED, { error: false }]);
 });
 await check('B4 a partial write that fails again is not kept, and the end says so', async () => {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? { status: 409, body: { error: 'not_kept', kept: 0 } } : null) } });
   await r.s.start('openai');
   r.c.hear([user('One.'), { speaker: 'assistant', text: 'Two.', completed: true }]); await flush();
   await r.s.end('user_ended'); await flush();
-  assert.equal(r.posts('/end')[0].body.capture, 'incomplete'); assert.deepEqual(r.ended.at(-1), [INCOMPLETE, { error: true }]);
+  assert.deepEqual(r.posts('/end')[0].body.unacknowledged, ['t0', 't1']); assert.deepEqual(r.ended.at(-1), [INCOMPLETE(2), { error: true }]);
 });
 await check('B4 a session known incomplete says so in the thread, after a reload too', async () => {
   const doc = fakeDocument(), thread = doc.createElement('ol');
   const t = T.voiceThread({ doc, direct: DIRECT, thread: () => thread, mine: () => null, conversationId: () => 'c-1', post: async () => ({}), reveal: async () => {} });
   t.paint([{ session_id: SID, state: 'ended', started_at: '2026-10-28T10:00:00.000Z', line: null, summary: 'none', capture: 'incomplete' }]);
-  assert.match(thread.querySelector(`[data-voice-line="${SID}"]`)?.textContent || '', /could not be kept/);
+  assert.match(thread.querySelector(`[data-voice-line="${SID}"]`)?.textContent || '', /was not kept/);
 });
 await check('B4 edge: a leaving page sends End once, with one post of turns, and says incomplete for what did not fit', async () => {
   const r = rig({ routes: { '/transcript': (body) => (body.events.length ? new Promise(() => {}) : null) } });
@@ -273,7 +272,7 @@ await check('B4 edge: a leaving page sends End once, with one post of turns, and
   assert.deepEqual(sent.map((x) => x.url.split('/').pop()), ['end']);
   assert.equal(sent[0].opts.keepalive, true);
   assert.equal(sent[0].body.events.length, 20); assert.equal(sent[0].body.events[0].item_id, 't0');
-  assert.equal(sent[0].body.capture, 'incomplete');
+  assert.equal(sent[0].body.last_item_id, 't29'); assert.equal(sent[0].body.unacknowledged.length, 30);   // the server counts
 });
 
 // ── B5: Keep talking withdraws the proposal on the server too ──────────────────────────────────────────────────────────

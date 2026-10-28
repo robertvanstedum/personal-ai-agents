@@ -130,7 +130,7 @@ def test_a_summary_asked_with_capture_incomplete_marks_the_session_and_says_so(r
     post(r, sid, [turn(r, "user", "u1", "Some words that were kept.")])
     summary = summarize(r, sid, capture="incomplete").get_json()
     assert reveal.read_marker(r.notes, sid, "end")["capture"] == "incomplete"
-    assert "could not be kept" in r.cos.prompts[-1].text and "could not be kept" in summary["written"]
+    assert "was not kept" in r.cos.prompts[-1].text and "was not kept" in summary["written"]
     assert summary["covers"]["omitted"] is True
 
 
@@ -139,7 +139,7 @@ def test_an_end_saying_capture_incomplete_is_kept_and_shown_after_a_reload(ready
     sid = start(r)["voice_session_id"]
     post(r, sid, [turn(r, "user", "u1", "Kept words.")])
     ended = r.client.post(BASE + f"/session/{sid}/end", headers=r.headers, json={"capture": "incomplete"})
-    assert ended.get_json() == {"ok": True, "ended": True}
+    assert ended.get_json() == {"ok": True, "ended": True, "capture": "incomplete"}
     assert reveal.read_marker(r.notes, sid, "end")["capture"] == "incomplete"
     _rows, sessions = shown(r)                                                            # any later view, any device
     assert sessions[0]["state"] == "ended" and sessions[0]["capture"] == "incomplete"
@@ -149,7 +149,7 @@ def test_events_sent_with_end_that_are_refused_mark_the_session_incomplete(ready
     r = ready
     sid = start(r)["voice_session_id"]
     ended = r.client.post(BASE + f"/session/{sid}/end", headers=r.headers, json={"events": [{"role": "system"}]})
-    assert ended.get_json() == {"ok": True, "ended": True}
+    assert ended.get_json() == {"ok": True, "ended": True, "capture": "incomplete"}
     assert reveal.read_marker(r.notes, sid, "end")["capture"] == "incomplete"
 
 
@@ -159,6 +159,6 @@ def test_a_whole_session_keeps_its_end_marker_as_before(ready):
     post(r, sid, [turn(r, "user", "u1", "All kept.")])
     r.client.post(BASE + f"/session/{sid}/end", headers=r.headers)
     marker = reveal.read_marker(r.notes, sid, "end")
-    assert "capture" not in marker and "capture" not in shown(r)[1][0]
+    assert marker["capture"] == "complete" and "capture" not in shown(r)[1][0]           # §5.2: complete is written too
     assert json.loads(r.notes.get_note(reveal.key(sid, "end"))["text"][len(reveal.MARKER):]).keys() == {
-        "event", "session_id", "reason", "ended_at"}
+        "event", "session_id", "reason", "ended_at", "capture"}

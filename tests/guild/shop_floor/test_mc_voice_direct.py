@@ -263,7 +263,7 @@ def test_late_forged_missing_csrf_and_missing_token_calls_are_refused(ready):
     assert call(r, None).status_code == 400                                         # no session token
     assert call(r, sid, words="").status_code == 400
     assert r.client.post(BASE + f"/session/{sid}/end", headers=no_csrf).status_code == 403
-    assert r.client.post(BASE + f"/session/{sid}/end", headers=r.headers).get_json() == {"ok": True, "ended": True}
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=r.headers).get_json() == {"ok": True, "ended": True, "capture": "complete"}
     late = call(r, sid, call_id="call-late")
     assert late.status_code == 409 and late.get_json()["error"] == "session ended"
     assert not r.turns and not owner_notes(r) and not voice_records(r)
@@ -353,7 +353,7 @@ def test_every_turn_and_consult_is_kept_as_it_happens_withheld_while_live_and_re
     assert records[3]["text"].endswith("Answered. Reply reply-1. Spoken: Item 12 is in build.")
     rows, sessions = shown(r)
     assert rows == [] and sessions[0]["state"] == "live" and sessions[0]["line"] is None
-    assert r.client.post(BASE + f"/session/{sid}/end", headers=r.headers).get_json() == {"ok": True, "ended": True}
+    assert r.client.post(BASE + f"/session/{sid}/end", headers=r.headers).get_json() == {"ok": True, "ended": True, "capture": "complete"}
     rows, sessions = shown(r)
     assert sessions[0]["state"] == "ended"
     assert [row["voice"]["kind"] for row in rows] == ["owner_turn", "assistant_turn", "consult_request",
@@ -416,7 +416,7 @@ def test_end_can_carry_the_last_turns_and_keeps_them_before_it_closes(ready):
     last = [turn(r, "user", "item_u1", "Before I go, note the kiln."), turn(r, "assistant", "item_a1", "Noted", 3,
                                                                           partial=True, interrupted=True)]
     ended = r.client.post(BASE + f"/session/{sid}/end", json={"events": last}, headers=r.headers)
-    assert ended.get_json() == {"ok": True, "ended": True}
+    assert ended.get_json() == {"ok": True, "ended": True, "capture": "complete"}
     assert [HEADER.match(row["text"])["speaker"] for row in voice_records(r, sid)] == [
         "owner ASR", "assistant generated; playback unverified"]
     assert reveal.read_marker(r.notes, sid, "end") is not None
@@ -428,10 +428,10 @@ def test_end_can_carry_the_last_turns_and_keeps_them_before_it_closes(ready):
     off = {**r.headers, "X-Record-Mode": "off_record"}
     ended = r.client.post(BASE + f"/session/{other}/end", json={"events": [turn(r, "user", "item_u9", "Private words")]},
                           headers=off)
-    assert ended.get_json() == {"ok": True, "ended": True} and voice_records(r, other) == []
+    assert ended.get_json() == {"ok": True, "ended": True, "capture": "incomplete"} and voice_records(r, other) == []     # dropped off the record: not complete (R2 N4)
     bad = start(r)["voice_session_id"]                                               # invalid events: End still ends
     ended = r.client.post(BASE + f"/session/{bad}/end", json={"events": [{"role": "system"}]}, headers=r.headers)
-    assert ended.get_json() == {"ok": True, "ended": True} and voice_records(r, bad) == []
+    assert ended.get_json() == {"ok": True, "ended": True, "capture": "incomplete"} and voice_records(r, bad) == []
     assert not r.config["mc_direct_voice_live"](bad)
 
 

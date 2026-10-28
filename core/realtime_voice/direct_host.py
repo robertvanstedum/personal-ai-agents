@@ -251,6 +251,24 @@ class Receipts:
 
 # ── the page's transcript events ──────────────────────────────────────────────────────────────────────────────────
 
+def closing(body):
+    """The close's report in a request body (Spec 165 §5.2): {last_item_id, unacknowledged} as the page sent them;
+    "uncounted" when some of what was said is known not to be kept but not how much (an older page's bare capture
+    "incomplete", or a report that cannot be read); {} when nothing was said about it."""
+    if not isinstance(body, dict):
+        return {}
+    out = {}
+    if owner_item(body.get("last_item_id")):
+        out["last_item_id"] = body["last_item_id"]
+    unacknowledged = body.get("unacknowledged")
+    if (isinstance(unacknowledged, list) and len(unacknowledged) <= SESSION_MAX_EVENTS
+            and all(owner_item(item) for item in unacknowledged)):
+        out["unacknowledged"] = sorted(set(unacknowledged))
+    elif unacknowledged is not None or body.get("capture") == "incomplete":
+        out["uncounted"] = True
+    return out
+
+
 def events(body, started_at, clock):
     """The page's transcript events, all validated before any is kept: [(role, item, index, text, partial,
     interrupted, start, end)], or an error word."""
@@ -297,7 +315,7 @@ UNAVAILABLE_TEXT = ("[Voice summary unavailable] The session's turns are shown. 
                     "writing later.")
 
 
-def summary_prompt(turns, complete, *, kept_all=True, running=0):
+def summary_prompt(turns, complete, *, kept_all=True, running=0, missing=None):
     """The person's model is asked for this session's summary from its retained records only, as bounded DATA.
     ``turns``: [(speaker, text, partial, interrupted)], oldest first, as the host store keeps them. ``kept_all`` False:
     the page could not deliver some of what was said (review B4). ``running``: consults still running when capture
@@ -315,7 +333,8 @@ def summary_prompt(turns, complete, *, kept_all=True, running=0):
              f"These are all {covered} retained records of this session." if complete else
              f"These are {covered} retained records; earlier ones may be missing: say so in the written summary.")
     if not kept_all:
-        bound += (" Some of what was said in this session could not be kept, so it is not below: say so in the written "
+        count = f" ({missing} turn{'' if missing == 1 else 's'})" if isinstance(missing, int) and missing > 0 else ""
+        bound += (f" Some of what was said in this session was not kept{count}, so it is not below: say so in the written "
                   "summary.")
     if running:
         bound += (" A consult was still running when the session ended; its outcome is not in these records: say so in "
@@ -451,10 +470,11 @@ class DirectVoiceStore:
         """Keep the start marker (principal, conversation_id, max_minutes, started_at). Its fields, or None: no session."""
         raise NotImplementedError
 
-    def mark_end(self, handle, sid, *, reason, incomplete=False):
-        """Keep the end marker (the reveal); the first one wins. ``incomplete``: some of what was said is known not to
-        be kept (the marker then says capture "incomplete", for every later view and the summary). Its fields, or None
-        when not kept."""
+    def mark_end(self, handle, sid, *, reason, capture=None):
+        """Keep the end marker (the reveal); the first one wins. ``capture`` (Spec 165 §5.2): {"capture": "complete"} or
+        {"capture": "incomplete", "missing": n} (n absent when the count is not known), and "boundary" (the close's
+        last_item_id) when there was one: written into the marker, for every later view and the summary. Its fields,
+        or None when not kept."""
         raise NotImplementedError
 
     def read_marker(self, handle, sid, what):
@@ -800,28 +820,68 @@ class DirectSessions(ConsultLedger):
             if sid in self._meta:
                 self._meta[sid]["proposed"] = False
 
-    def mark_incomplete(self, sid):
-        """Some of what was said in this session is known not to be kept (review B4): its end marker will say so."""
+    # Capture (Spec 165 §5.2): which turns the server holds, which it knows it does not (refused with End, or dropped off the
+    # record), and the posts refused after the close (counted).
+
+    def kept_item(self, sid, item):
         with self._meta_lock:
             if sid in self._meta:
-                self._meta[sid]["incomplete"] = True
+                self._meta[sid].setdefault("kept_items", set()).add(item)
 
-    def incomplete(self, sid):
+    def missing(self, sid, items):
+        """Turns known not to be kept (events sent with End and refused, or dropped off the record, review R2 N4)."""
         with self._meta_lock:
-            return bool((self._meta.get(sid) or {}).get("incomplete"))
+            if sid in self._meta:
+                self._meta[sid].setdefault("missing", set()).update(items)
 
-    def close_session(self, sid, reason="end"):
-        """End: closed here, and the end marker kept (the reveal), then the adapter's ``ended``. A failed write leaves
-        the reveal to the clock."""
+    def uncounted(self, sid):
+        """Some of what was said is known not to be kept, and how much is not known (an older page's bare flag)."""
+        with self._meta_lock:
+            if sid in self._meta:
+                self._meta[sid]["uncounted"] = True
+
+    def late(self, sid):
+        """A post after the close: refused (409) and counted here and in the log."""
+        with self._meta_lock:
+            meta = self._meta.get(sid)
+            if meta is not None:
+                meta["late"] = meta.get("late", 0) + 1
+                return meta["late"]
+            return 0
+
+    def late_posts(self, sid):
+        with self._meta_lock:
+            return (self._meta.get(sid) or {}).get("late", 0)
+
+    def capture(self, sid, report=None):
+        """What the end marker says of capture (Spec 165 §5.2): complete, or incomplete with n, the turns up to the
+        boundary that this server does not hold. ``report`` is the close's {last_item_id, unacknowledged} (validated by
+        closing()); the page's unacknowledged ids that the server did keep (an answer lost on the way back) are not
+        missing. A session this process does not hold (after a restart) counts every unacknowledged id."""
+        with self._meta_lock:
+            meta = self._meta.get(sid) or {}
+            kept, missing, uncounted = set(meta.get("kept_items", ())), set(meta.get("missing", ())), meta.get("uncounted")
+        report = report or {}
+        missing |= {item for item in report.get("unacknowledged") or () if item not in kept}
+        uncounted = uncounted or report.get("uncounted")
+        out = ({"capture": "complete"} if not missing and not uncounted else
+               {"capture": "incomplete", **({} if uncounted else {"missing": len(missing)})})
+        if report.get("last_item_id"):
+            out["boundary"] = report["last_item_id"]
+        return out
+
+    def close_session(self, sid, reason="end", report=None):
+        """End: closed here, and the end marker kept (the reveal) with what it says of capture, then the adapter's
+        ``ended``. A failed write leaves the reveal to the clock. Returns the capture the marker says (or would)."""
         super().close_session(sid)
-        cid = self.conversation_of(sid)
+        cid, capture = self.conversation_of(sid), self.capture(sid, report)
         try:
             handle, refused = self._adapter.conversation(cid) if cid else (None, True)
-            if refused is None and self._adapter.store.mark_end(handle, sid, reason=reason,
-                                                               incomplete=self.incomplete(sid)) is not None:
+            if refused is None and self._adapter.store.mark_end(handle, sid, reason=reason, capture=capture) is not None:
                 self._adapter.ended(handle, sid)
         except Exception:
             log.exception("%s direct voice: end marker not kept", self._adapter.person["domain"])
+        return capture
 
     def abandon(self, sid):
         """The bootstrap recorded the session but the provider session did not start (budget refused or mint failed):
@@ -1088,7 +1148,8 @@ def summarize(adapter, principal, handle, sid, *, running=0):
         return unavailable("nothing_kept")
     end = store.read_marker(handle, sid, "end") or {}
     kept_all = end.get("capture") != "incomplete"
-    prompt, partial, covered, total = summary_prompt(turns, complete, kept_all=kept_all, running=running)
+    missing = end.get("missing") if type(end.get("missing")) is int else None
+    prompt, partial, covered, total = summary_prompt(turns, complete, kept_all=kept_all, running=running, missing=missing)
     text, error = adapter.summary_model(handle, sid, principal, prompt)
     if error is not None:
         return unavailable(error)
@@ -1096,7 +1157,8 @@ def summarize(adapter, principal, handle, sid, *, running=0):
     bound = (f"Covers the last {covered} of {total} retained records; earlier ones are omitted."
              if covered < total or not complete else f"Covers all {total} retained records of this session.")
     if not kept_all:
-        bound += " Some of what was said could not be kept."
+        bound += (f" Some of what was said was not kept ({missing} turn{'' if missing == 1 else 's'})." if missing
+                  else " Some of what was said was not kept.")
     if running:
         bound += " A consult still running when the session ended is not in it."
     kept = store.keep_summary(handle, sid, "summary",
@@ -1219,14 +1281,38 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
 
     @consulting.route("/api/realtime-voice/session/<session_id>/end", methods=["POST"])
     def end(session_id):
-        """End: the session is closed here and its end marker kept (the reveal). A second End is harmless."""
+        """End: capture closes at the page's boundary and the session's end marker is kept (the reveal), saying capture
+        complete or incomplete(n) (Spec 165 §5.2). A second End is harmless.
+
+        End may carry the page's last transcript events (UI review #1): as the page goes away it sends them with End in
+        one keepalive request, because no answer to an earlier post can be awaited then. They are kept exactly as a
+        transcript post keeps them (the same checks and caps), before the session closes. Where nothing may be kept (MC:
+        off the record) nothing is, and those turns count as not kept (review R2 N4); a refusal or failure here never
+        stops End. The body's {last_item_id, unacknowledged} is the close's report: the server counts the ids it does not
+        hold. The answer says what the marker says."""
         if not adapter.csrf_ok():
             return jsonify({"ok": False, "error": "csrf"}), 403
         who = principal()
         if who is None or sessions.owner_of(session_id) != who:
             return jsonify({"ok": False, "error": "not your session"}), 403
-        sessions.close_session(session_id)
-        return jsonify({"ok": True, "ended": True})
+        large = request.content_length is None or request.content_length > POST_MAX_BYTES
+        body = None if large else request.get_json(silent=True)
+        report = {"uncounted": True} if large and request.content_length else closing(body)
+        carried = body.get("events") if isinstance(body, dict) and isinstance(body.get("events"), list) else []
+        if carried and sessions.is_open(session_id):
+            ids = [e.get("item_id") for e in carried if isinstance(e, dict) and owner_item(e.get("item_id"))]
+            try:
+                kept = adapter.may_keep() and keep_events(session_id, body).status_code == 200
+            except Exception:
+                kept = False
+                log.exception("%s direct voice: events sent with End not kept", person["domain"])
+            if not kept:
+                sessions.missing(session_id, ids)
+                if len(ids) < len(carried):
+                    sessions.uncounted(session_id)
+        capture = sessions.close_session(session_id, report=report)
+        return jsonify({"ok": True, "ended": True, "capture": capture["capture"],
+                        **({"missing": capture["missing"]} if "missing" in capture else {})})
 
     consulting.before_request(guard)
     transcript = Blueprint("voice_transcript", __name__)
@@ -1238,39 +1324,13 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             return refusal("too_large", "A transcript post is at most 64 KB. Nothing was kept.", 413)
         return keep_events(session_id, request.get_json(silent=True))
 
-    def end_events():
-        """End may carry the page's last transcript events (UI review #1): as the page goes away it sends them with End in
-        one keepalive request, because no answer to an earlier post can be awaited then. They are kept exactly as a
-        transcript post keeps them (the same checks and caps), before the shared End closes the session. Where nothing
-        may be kept (MC: off the record) nothing is, End itself still works, and a refusal or failure here never stops
-        End. End may also say capture "incomplete" (the page knows some of what was said was not kept, review B4); so
-        may events it carries that are refused here. The end marker then says so."""
-        if not request.path.endswith("/end"):
-            return None
-        if request.content_length is None or request.content_length > POST_MAX_BYTES:
-            return None
-        body = request.get_json(silent=True)
-        if not isinstance(body, dict) or not (body.get("events") or body.get("capture") == "incomplete"):
-            return None
-        sid = session_id((request.view_args or {}).get("session_id"))
-        if sid is None or principal() is None or sessions.owner_of(sid) != principal():
-            return None                                    # the shared End refuses it
-        try:
-            if body.get("events") and adapter.may_keep():
-                if keep_events(sid, body).status_code != 200:
-                    sessions.mark_incomplete(sid)
-        except Exception:
-            sessions.mark_incomplete(sid)
-            log.exception("%s direct voice: events sent with End not kept", person["domain"])
-        if body.get("capture") == "incomplete":
-            sessions.mark_incomplete(sid)
-        return None
-
     def keep_events(raw_sid, body):
         who, sid = principal(), session_id(raw_sid)
         if sid is None or who is None or sessions.owner_of(sid) != who:
             return refusal("not_your_session", "That is not your voice session. Nothing was kept.", 403)
         if not sessions.is_open(sid) or sessions.expired(sid):
+            if sessions.known(sid):                         # after the close: refused and counted (Spec 165 §5.2)
+                log.info("%s direct voice: post after the close refused (%d so far)", person["domain"], sessions.late(sid))
             return refusal("session_ended", "That voice session has ended. Nothing was kept.", 409)
         posted, bad = events(body, sessions.started_at(sid), sessions.clock)
         if bad is not None:
@@ -1293,6 +1353,7 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
             for role, item, index, text, partial, interrupted, start, end in posted:
                 store.keep(handle, who, sid, role, item, index, text, partial, started=start, ended=end,
                            interrupted=interrupted)
+                sessions.kept_item(sid, item)
                 kept += 1
         except (SessionRefused, ValueError):
             return refusal("not_kept", "A transcript turn could not be kept.", 409, kept=kept)
@@ -1359,14 +1420,15 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
         if refused is not None:
             return refused
         who, sid, _cid, handle = found
-        body = request.get_json(silent=True)
-        if isinstance(body, dict) and body.get("capture") == "incomplete":
-            sessions.mark_incomplete(sid)                              # the page's final turns were not all kept (B4)
+        report = closing(request.get_json(silent=True))                # the close's report (§5.2; review B4)
         running = sessions.in_flight(sid)                              # outside this summary's cutoff (B2)
         if sessions.is_open(sid):
-            sessions.close_session(sid)
+            sessions.close_session(sid, report=report)
         elif store.read_marker(handle, sid, "end") is None:
-            store.mark_end(handle, sid, reason="summary", incomplete=sessions.incomplete(sid))
+            # Not held here (after a restart), or never ended: the page's report counts every id it did not hear back
+            # (review R1 P3-6, R2 N5); with none, how much was kept is not known (a dropped session, R2 N6).
+            store.mark_end(handle, sid, reason="summary",
+                           capture=sessions.capture(sid, report if report else {"uncounted": not sessions.known(sid)}))
         answer, status = summarize(adapter, who, handle, sid, running=running)
         return jsonify(answer), status
 
@@ -1402,7 +1464,6 @@ def install_direct_voice(app, adapter, *, url_prefix, environ, budget=None, cloc
                        authorizes="nothing beyond the summary")
 
     transcript.before_request(guard)
-    consulting.before_request(end_events)        # after the consult guard: owner and CSRF first, then the events
     for bp, name in ((boot, names["bootstrap"]), (consulting, names["consult"]), (transcript, names["transcript"])):
         bp.after_request(no_store)
         adapter.mount(bp, name)

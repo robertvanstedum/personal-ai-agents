@@ -126,8 +126,8 @@ class _FloorStore(DirectVoiceStore):
         return reveal.mark_start(self._floor(conv), sid, principal=principal, conversation_id=conv["id"],
                                  max_minutes=max_minutes, started=started)
 
-    def mark_end(self, conv, sid, *, reason, incomplete=False):
-        return reveal.mark_end(self._floor(conv), sid, reason=reason, incomplete=incomplete)
+    def mark_end(self, conv, sid, *, reason, capture=None):
+        return reveal.mark_end(self._floor(conv), sid, reason=reason, capture=capture)
 
     def read_marker(self, conv, sid, what):
         return reveal.read_marker(self._floor(conv), sid, what)

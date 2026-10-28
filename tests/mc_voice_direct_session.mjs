@@ -275,7 +275,7 @@ for (const [status, expected, posts] of [[502, UNKNOWN_RESULT, 2], [200, UNKNOWN
   const tail = r.calls.slice(order);
   assert.deepEqual(tail.map((x) => x.url.split('/').pop()), ['transcript', 'end']);
   assert.deepEqual(tail[0].body.events.map((e) => [e.item_id, e.role, e.partial, e.interrupted]), [['t2', 'user', true, false]]);
-  assert.deepEqual(tail[1].body, {});
+  assert.deepEqual(tail[1].body, { last_item_id: 't2', unacknowledged: [] });           // the close's report (§5.2)
   assert.equal(tail[1].url, `${BASE}/session/${SID}/end`);
   assert.deepEqual(tail[1].opts.headers, HEADERS);
   assert.equal(r.reveals.length, 1);
@@ -515,7 +515,7 @@ for (const [status, error, words] of [[409, 'session ended', D.SERVER_ENDED.sess
   await flush(10);
   const ask = r.posts('/summary')[0];
   assert.equal(ask.url, `${BASE}/session/${SID}/summary`);
-  assert.deepEqual(ask.body, { conversation_id: 'c-1' });
+  assert.deepEqual(ask.body, { conversation_id: 'c-1', last_item_id: 't0', unacknowledged: [] });   // the close's report (§5.2)
   assert.deepEqual(ask.opts.headers, HEADERS);
   assert.deepEqual(r.c.instructions, ['Say only this, then stop: We looked at item twelve.']);
   assert.deepEqual(r.c.ended, []);

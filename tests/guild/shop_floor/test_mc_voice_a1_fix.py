@@ -182,3 +182,19 @@ def test_mcs_thread_says_a_late_receipt_arrived_after_the_summary():
     parts = reveal.receipt_parts("[Arrived after the summary] Answered. Reply mc-1. Spoken: Item 12 is in build.")
     assert parts == {"outcome": "answered · arrived after the summary", "ref_kind": "Reply", "ref": "mc-1",
                      "spoken": "Item 12 is in build."}
+
+
+# ── Item 7: what every later view says of capture (R2 N6 with it) ─────────────────────────────────────────────────────
+
+def test_every_later_view_says_incomplete_n_and_a_dropped_session_may_not_be_whole(ready):
+    r = ready
+    sid = start(r)["voice_session_id"]
+    post(r, sid, [turn(r, "user", "t0", "Kept.")])
+    r.client.post(BASE + f"/session/{sid}/end", headers=r.headers, json={"last_item_id": "t2", "unacknowledged": ["t1", "t2"]})
+    dropped = start(r)["voice_session_id"]
+    post(r, dropped, [turn(r, "user", "t0", "Said, then the page went away.")])
+    from datetime import datetime, timedelta, timezone
+    _rows, sessions = shown(r, when=datetime.now(timezone.utc) + timedelta(minutes=31))   # no End ever came: dropped
+    by_id = {s["session_id"]: s for s in sessions}
+    assert by_id[sid]["capture"] == "incomplete" and by_id[sid]["missing"] == 2
+    assert by_id[dropped]["state"] == "dropped" and by_id[dropped]["capture"] == "unknown"
