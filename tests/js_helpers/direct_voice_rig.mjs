@@ -58,21 +58,32 @@ export function rig({ routes = {}, direct = DIRECT } = {}) {
     constructor(options) {
       this.options = options; this._state = 'idle'; this._sid = null; this.instructions = []; this.ended = []; this.muted = 0;
       this.turns = []; this.responses = 0; this.tracked = [];
-      // Response attribution, as the real controller does it (Spec 165 §5.1): owner inputs in the order they became known,
-      // whether his speech has ended with its input not yet known, and each response's owner input.
-      this.inputs = []; this.utterance = null; this.answers = new Map(); this.calls = 0;
+      // Response attribution, as the real controller does it (Spec 165 §5.1, V R2-M1): owner inputs in the order they became
+      // known, his utterance that ended and awaits the provider's response, and each response's owner input. A response the
+      // provider makes (respond) answers his ended utterance; a function result's follow-up (follow) answers what the call
+      // it continues answered. Here a new owner input with no ended utterance pending stands for an utterance whose speech
+      // events the test does not spell out.
+      this.inputs = []; this.heard = null; this.answers = new Map(); this.calls = 0;
       controller = this;
     }
-    saw(i) { if (!this.inputs.includes(i)) this.inputs.push(i); }
-    speechStopped() {                                      // he spoke (an utterance began and ended)
-      if (this.utterance === null) this.utterance = this.inputs.length;
+    saw(i) {
+      if (this.inputs.includes(i)) return;
+      if (this.heard === null) this.heard = { index: this.inputs.length };
+      this.inputs.push(i);
+    }
+    speechStopped() {                                      // he spoke (an utterance began and ended), its words not known yet
+      if (this.heard === null) this.heard = { index: this.inputs.length };
       this.options.onInputState('speech_started'); this.options.onInputState('speech_stopped');
     }
-    respond() {                                            // a response starts now, bound as the controller binds it
+    respond() {                                            // the provider's response starts now, bound as the controller binds it
+      const id = `call_resp_${++this.calls}`, ended = this.heard;
+      this.heard = null;
+      this.answers.set(id, !ended ? null : this.inputs.length > ended.index ? this.inputs[this.inputs.length - 1] : { index: ended.index });
+      return id;
+    }
+    follow(call) {                                         // a function result's follow-up starts: it answers what the call did
       const id = `call_resp_${++this.calls}`;
-      const since = this.utterance, last = this.inputs.length ? this.inputs[this.inputs.length - 1] : null;
-      this.utterance = null;
-      this.answers.set(id, since === null ? last : this.inputs.length > since ? last : { index: since });
+      this.answers.set(id, call && this.answers.has(call.response_id) ? this.answers.get(call.response_id) : null);
       return id;
     }
     callFrom(responseId, call) { return this.options.onFunctionCall({ ...call, response_id: responseId }); }

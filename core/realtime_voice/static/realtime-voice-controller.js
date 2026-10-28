@@ -21,12 +21,16 @@
  *   await controller.startSession({provider, persona, scene, learner_name});
  *   controller.endSession("user_ended");
  */
-// Both adapters changed for the playback events and response attribution, and OpenAI's again for the response tag: new keys
-// so browsers fetch them (Spec 165 §4.3, §5.3; review FR N3).
-import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-tag1";
+// Both adapters changed for the playback events and response attribution, and OpenAI's again for the response tag on every
+// request: new keys so browsers fetch them (Spec 165 §4.3, §5.3; review FR N3, V R2-M1).
+import { OpenAIWebRTCAdapter } from "./adapters/openai-webrtc-adapter.js?v=20261028-bind1";
 import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20261028-attrib1";
 
 const CONTINUATION_INSTRUCTION = "Continue naturally in character.";
+// Response attribution (Spec 165 §5.1; review V R2-M1): a response this controller asked for that has not started in this
+// long is taken as never coming; his ended utterance with no input item in this long is taken as noise (V note B).
+const REQUEST_TTL_MS = 10000;
+const MARK_TTL_MS = 3000;
 const OPENING_INSTRUCTION =
   "Begin in character with one short, natural greeting and one brief question " +
   "inviting the learner to say what they need. Do not give directions, suggest " +
@@ -44,7 +48,7 @@ export class RealtimeVoiceController {
   constructor({
     bootstrapUrl, onStateChange, onInputState, onWarning, onStop,
     onFatalError, onFinalize, onUserTurn, onAssistantTurn, onFunctionCall, onTranscriptUpdate, onPlayback,
-    onSessionInfo, onPlaybackDrained = null,
+    onSessionInfo, onPlaybackDrained = null, trackResponses = false,
     openingInstruction = OPENING_INSTRUCTION,
     managedBootstrap = null, requestHeaders = null, includeTranscriptAfterEnd = true,
   }) {
@@ -69,12 +73,16 @@ export class RealtimeVoiceController {
     this._onPlayback = onPlayback || (() => {});
     this._onSessionInfo = onSessionInfo || (() => {});
     this._onPlaybackDrained = onPlaybackDrained;     // optional (Spec 165 §5.3): a host that waits for a response's audio
-    this._responseWaiters = [];
+    this._trackResponses = trackResponses;           // optional: tag each response this controller asks for (V R2-M1)
     this._inputs = [];               // owner input items (provider ids), in the order they became known (Spec 165 §5.1)
-    this._utterance = null;          // inputs known when his current utterance began (speech_started), until a response binds it
+    this._utterance = null;          // inputs known when his current utterance began (speech_started), until it ends
+    this._ended = null;              // his utterance that ended and awaits its response: {index, seq, at, committed}
+    this._commits = false;           // the adapter reports committed input (OpenAI's input_audio_buffer.committed)
+    this._requests = [];             // responses this controller asked for, not yet started, in order: {owner, tag, seq, at, done}
+    this._seq = 0;                   // the order in which ended utterances and requests became known
+    this._echoed = false;            // the adapter has reported a request's tag back (OpenAI's response.metadata)
     this._answers = new Map();       // response id -> the owner input it answers: a provider id, null, or {index} (pending)
-    this._responseActive = false;    // a response started and not yet done (response_started .. assistant_stopped)
-    this._tags = 0;                  // speakTracked's own tags, so it knows its response (review FR N3)
+    this._tags = 0;
     this._openingInstruction = openingInstruction;
     this._pendingAssistantTurns = [];
 
@@ -200,16 +208,18 @@ export class RealtimeVoiceController {
       handler(event);
     });
     // Response attribution (Spec 165 §5.1), first, so a host asking inputOf() from any callback below sees it current.
+    on("connected", () => { this._utterance = this._ended = null; this._drop(this._requests.slice()); this._echoed = this._commits = false; });
     on("speech_started", () => { if (this._utterance === null) this._utterance = this._inputs.length; });
-    on("input_item", (evt) => this._sawInput(evt.item_id));
+    on("speech_stopped", () => this._heardEnd());
+    on("input_item", (evt) => this._committed(evt.item_id));
     on("input_transcript", (evt) => this._sawInput(evt.item_id));
-    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._ownerNow()); });
+    on("response_started", (evt) => this._started(evt));
     on("connected", () => {
       this._setState("active");
       this._startedAt = Date.now();
       this._startDurationWatch();
       if (this._openingInstruction && !this._managedBootstrap) {
-        this._adapter.sendContinuationInstruction(this._openingInstruction);
+        this._ask(null, (tag) => this._instruct(this._openingInstruction, tag));
       }
     });
     on("provider_phase", (evt) => {
@@ -231,9 +241,6 @@ export class RealtimeVoiceController {
       }
     });
     on("playback_started", () => this._onPlayback());
-    on("response_started", (evt) => { this._responseActive = true; for (const waiter of this._responseWaiters.slice()) waiter(evt); });
-    on("assistant_stopped", () => { this._responseActive = false; });
-    on("connected", () => { this._responseActive = false; });
     on("playback_drained", (evt) => { if (this._onPlaybackDrained) this._onPlaybackDrained(evt.response_id || null); });
     on("assistant_stopped", () => {
       for (const text of this._pendingAssistantTurns.splice(0)) {
@@ -246,7 +253,7 @@ export class RealtimeVoiceController {
         return;
       }
       if (!this._onFunctionCall) {
-        this._adapter.sendFunctionResult(call.call_id, {
+        this._sendResult(call, {
           error: "Function bridge unavailable",
         });
         return;
@@ -254,9 +261,9 @@ export class RealtimeVoiceController {
       this._onInputState("consulting");
       try {
         const output = await this._onFunctionCall(call);
-        this._adapter.sendFunctionResult(call.call_id, output);
+        this._sendResult(call, output);
       } catch (error) {
-        this._adapter.sendFunctionResult(call.call_id, {
+        this._sendResult(call, {
           error: error?.message || "COS function failed",
         });
       }
@@ -327,7 +334,7 @@ export class RealtimeVoiceController {
 
   /** Idle re-engagement (Section 9) -- fixed, scene-neutral instruction. */
   continueNaturally() {
-    if (!this._managedBootstrap) this._adapter?.sendContinuationInstruction(CONTINUATION_INSTRUCTION);
+    if (!this._managedBootstrap && this._adapter) this._ask(null, (tag) => this._instruct(CONTINUATION_INSTRUCTION, tag));
   }
 
   /** The session's id (the server's voice_session_id when it issued one), or null. For a host page (Spec 165 §4.3);
@@ -339,46 +346,42 @@ export class RealtimeVoiceController {
   state() { return this._state; }
 
   /** A host's one-off instruction to the voice on the direct path (a holding line, "say this briefly"): true when the
-   *  session's transport took it. Never on the managed path. German and Portuguese do not call it. */
-  speak(instruction, tag = null) {
+   *  session's transport took it. Its response answers none of his inputs. Never on the managed path. German and
+   *  Portuguese do not call it. */
+  speak(instruction) {
     if (this._managedBootstrap || !this._adapter) return false;
-    try {
-      if (tag) this._adapter.sendContinuationInstruction(instruction, tag); else this._adapter.sendContinuationInstruction(instruction);
-      return true;
-    } catch (_) { return false; }
+    try { this._ask(null, (tag) => this._instruct(instruction, tag)); return true; } catch (_) { return false; }
   }
 
-  /** speak(), tracked (Spec 165 §5.3; review FR N3): resolves with the id of the response this instruction starts, or null
-   *  when that cannot be told within maxMs, or the transport refused it. A host passes onPlaybackDrained to learn when that
-   *  response's audio has played out. The instruction carries a tag of its own. An adapter that sends it as the response's
-   *  metadata and reads it back (echoesResponseTag: OpenAI) knows the response by it, and any other response is not it. With
-   *  no tag echoed (xAI), the first response to start is taken only if none was under way when the instruction was sent;
-   *  otherwise the next one may be another's (a function result's follow-up), so the answer is null and the host's own
-   *  bound ends what it waits for. German and Portuguese do not call it. */
+  /** speak(), tracked (Spec 165 §5.3; review FR N3, V note D): resolves with the id of the response this instruction
+   *  starts, or null when it has not started within maxMs, or the transport refused it. The response is known as every
+   *  response this controller asks for is (see _started): by its tag when the adapter reports it back, else by the order
+   *  of the requests. A host passes onPlaybackDrained to learn when that response's audio has played out. German and
+   *  Portuguese do not call it. */
   speakTracked(instruction, maxMs = 5000) {
+    if (this._managedBootstrap || !this._adapter) return Promise.resolve(null);
     return new Promise((resolve) => {
-      const tag = `minimoi-${++this._tags}`, idle = !this._responseActive, echoes = Boolean(this._adapter?.echoesResponseTag);
-      let timer = null;
-      const stop = (id) => {
-        const i = this._responseWaiters.indexOf(wait);
-        if (i >= 0) this._responseWaiters.splice(i, 1);
-        clearTimeout(timer); resolve(id);
-      };
-      const wait = (evt) => {
-        if (evt.tag) { if (evt.tag === tag) stop(evt.response_id || null); }
-        else if (!echoes) stop(idle ? evt.response_id || null : null);
-      };
-      this._responseWaiters.push(wait);
-      timer = setTimeout(() => stop(null), maxMs);
-      if (!this.speak(instruction, tag)) stop(null);
+      let timer = null, entry = null;
+      try { entry = this._ask(null, (tag) => this._instruct(instruction, tag), (id) => { clearTimeout(timer); resolve(id); }); }
+      catch (_) { resolve(null); return; }
+      timer = setTimeout(() => { entry.done = null; resolve(null); }, maxMs);   // it stays in order; only the wait ends
     });
   }
 
-  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2, FR M2): each response is bound when it
-   *  starts. If he has begun an utterance since the last binding (speech_started), it is bound to the newest input item that
-   *  appeared since then, whether its transcript came before or after his speech ended, or committed or not; with none yet,
-   *  to the first one to appear. Otherwise (a response the page asked for, a function result's follow-up) it is bound to the
-   *  newest input. The call is bound to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
+  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2, FR M2, V R2-M1). Each response is bound
+   *  when it starts, by where it came from:
+   *  - a response this controller asked for: a function result's follow-up answers what the call it continues answered
+   *    (it inherits that call's owner item); the page's own instruction answers none of his inputs. Neither takes or uses
+   *    up his utterance;
+   *  - a response the provider made from his speech: it answers his utterance that ended (speech_stopped, or his input
+   *    committed), bound to the newest input item that appeared since that utterance began and before any later one began,
+   *    whether its transcript came before or after his speech ended, or committed or not; with none yet, to the first one
+   *    to appear. Where the adapter reports committed input (OpenAI), only a committed utterance has a response. An ended
+   *    utterance with no input item for MARK_TTL_MS is noise and binds nothing;
+   *  - anything else (a response with no ended utterance and no request of this controller's) answers none of his inputs.
+   *  Which is which: by the tag a request carries when the adapter reports it back (OpenAI's response.metadata, once seen
+   *  in the session: then an untagged response is the provider's); else by order, the requests and his ended utterances
+   *  starting their responses in the order they became known. The call is bound to its response by response_id. {state: "bound", index, text} once that item's transcript has completed
    *  (index: its place in the transcript list the host is given), {state: "pending"} until then, or null when the call is
    *  bound to no owner input. Never the latest input by default. German and Portuguese do not call it. */
   inputOf(call) {
@@ -401,11 +404,76 @@ export class RealtimeVoiceController {
     if (id && !this._inputs.includes(id)) this._inputs.push(id);
   }
 
-  _ownerNow() {
-    const since = this._utterance;
+  // His utterance has ended (speech_stopped): its response is the provider's next one of its own. A second utterance
+  // ending before that response starts keeps the first one's start, so the response answers the newest of them.
+  _heardEnd() {
+    if (this._utterance === null) return;
+    this._ended = { index: this._ended ? this._ended.index : this._utterance, seq: ++this._seq, at: Date.now() };
     this._utterance = null;
-    if (since === null) return this._lastInput();
-    return this._inputs.length > since ? this._lastInput() : { index: since };
+  }
+
+  // His input committed (OpenAI's input_audio_buffer.committed): his utterance has ended, whatever speech events came, and
+  // the provider's response to it may start. Where the adapter reports commits, only a committed utterance has one.
+  _committed(id) {
+    this._commits = true;
+    if (this._utterance !== null) this._heardEnd();
+    if (this._ended === null && id && !this._inputs.includes(id)) this._ended = { index: this._inputs.length, seq: ++this._seq, at: Date.now() };
+    if (this._ended) this._ended.committed = true;
+    this._sawInput(id);
+  }
+
+  // A response this controller asks for (a function result's follow-up, the opening or continuation instruction, or the
+  // page's own), in order, before it is sent; tagged when the host tracks responses (trackResponses). Every response.create
+  // the controller sends goes through here. Nothing is recorded if the transport refuses it.
+  _ask(owner, send, done = null) {
+    const entry = { owner, tag: this._trackResponses ? `minimoi-${++this._tags}` : null, seq: ++this._seq, at: Date.now(), done };
+    this._requests.push(entry);
+    try { send(entry.tag); } catch (error) { this._requests.splice(this._requests.indexOf(entry), 1); throw error; }
+    return entry;
+  }
+
+  _instruct(text, tag) {
+    if (tag) this._adapter.sendContinuationInstruction(text, tag); else this._adapter.sendContinuationInstruction(text);
+  }
+
+  // A function result: its follow-up answers what the call it continues answered (V R2-M1, R2-S1).
+  _sendResult(call, output) {
+    const owner = call && this._answers.has(call.response_id) ? this._answers.get(call.response_id) : null;
+    this._ask(owner, (tag) => {
+      if (tag) this._adapter.sendFunctionResult(call.call_id, output, tag); else this._adapter.sendFunctionResult(call.call_id, output);
+    });
+  }
+
+  _drop(entries, id = null) {
+    for (const entry of entries) {
+      const i = this._requests.indexOf(entry);
+      if (i >= 0) this._requests.splice(i, 1);
+      if (entry.done) { const done = entry.done; entry.done = null; done(id); }
+    }
+  }
+
+  _started(evt) {
+    const now = Date.now(), id = evt.response_id || null;
+    this._drop(this._requests.filter((r) => now - r.at >= REQUEST_TTL_MS));
+    if (this._ended && this._inputs.length <= this._ended.index && now - this._ended.at >= MARK_TTL_MS) this._ended = null;
+    const his = this._ended && (!this._commits || this._ended.committed) ? this._ended : null;
+    let mine = null;
+    if (evt.tag) {
+      this._echoed = true;
+      mine = this._requests.find((r) => r.tag === evt.tag) || { owner: null };   // a request of another page: not his
+    } else if (!this._echoed && this._requests.length && (!his || this._requests[0].seq < his.seq)) {
+      mine = this._requests[0];
+    }
+    let owner = null;
+    if (mine) {
+      owner = mine.owner;
+      this._drop([mine], id);
+    } else if (his) {
+      const known = this._utterance === null ? this._inputs.length : Math.min(this._utterance, this._inputs.length);
+      this._ended = null;
+      owner = known > his.index ? this._inputs[known - 1] : { index: his.index };
+    }
+    if (id) this._answers.set(id, owner);
   }
 
   mute() { this._adapter?.mute(); }

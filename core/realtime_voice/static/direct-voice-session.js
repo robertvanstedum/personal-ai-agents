@@ -715,6 +715,7 @@ export function directVoice(d) {
       clock, onAnswer: heard, warn: d.warn || (() => {}), turnsOff: words.off });
     c = new RealtimeVoiceController({
       bootstrapUrl: direct.bootstrap_url, requestHeaders: d.headers, includeTranscriptAfterEnd: true,
+      trackResponses: true,                       // each response it asks for is tagged, so it is known (V R2-M1, note D)
       openingInstruction: null,                   // the server composes the session's instructions; the page sends none
       onSessionInfo: (info) => {
         if (typeof info?.voice_session_id === 'string') sid = info.voice_session_id;

@@ -26,7 +26,6 @@ export class OpenAIWebRTCAdapter {
     this._remoteAudioEl = null;
     this._muted = false;
     this._audible = new Set();       // responses whose audio the provider says is playing (output_audio_buffer.started)
-    this.echoesResponseTag = true;   // a tagged instruction's response says so at response.created (review FR N3)
   }
 
   on(eventName, handler) {
@@ -161,11 +160,10 @@ export class OpenAIWebRTCAdapter {
       type: "conversation.item.create",
       item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
     }));
-    // A host's tracked instruction (Spec 165 §5.3, review FR N3) tags its response's metadata; untagged, the bytes are as before.
-    this._dc?.send(JSON.stringify(tag ? { type: "response.create", response: { metadata: { minimoi_tag: tag } } } : { type: "response.create" }));
+    this._dc?.send(JSON.stringify(_responseCreate(tag)));
   }
 
-  sendFunctionResult(callId, output) {
+  sendFunctionResult(callId, output, tag) {
     this._dc?.send(JSON.stringify({
       type: "conversation.item.create",
       item: {
@@ -174,7 +172,7 @@ export class OpenAIWebRTCAdapter {
         output: typeof output === "string" ? output : JSON.stringify(output),
       },
     }));
-    this._dc?.send(JSON.stringify({ type: "response.create" }));
+    this._dc?.send(JSON.stringify(_responseCreate(tag)));
   }
 
   _handleServerEvent(event) {
@@ -263,6 +261,12 @@ export class OpenAIWebRTCAdapter {
         break;
     }
   }
+}
+
+// A host that tracks its responses (Spec 165 §5.1, §5.3; review FR N3, V R2-M1) tags each one it asks for in the response's
+// metadata, and response.created reports the tag back. Untagged, the bytes are as before.
+function _responseCreate(tag) {
+  return tag ? { type: "response.create", response: { metadata: { minimoi_tag: tag } } } : { type: "response.create" };
 }
 
 // Whether a finished response carried audio (its output has an audio content part): its drain is then the provider's

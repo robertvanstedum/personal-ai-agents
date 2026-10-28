@@ -91,12 +91,14 @@ def test_shared_controller_starts_with_persona_and_optional_live_transcript(germ
 
     assert "one short, natural greeting" in source
     assert "Do not give directions" in source
-    assert "sendContinuationInstruction(this._openingInstruction)" in source
+    # Since V R2-M1 the opening instruction goes through the controller's request recorder; the adapter receives the same
+    # one-argument call (pinned by tests/realtime_voice/test_controller_no_change.mjs).
+    assert "this._instruct(this._openingInstruction, tag)" in source
     assert 'this._onInputState("speech_started")' in source
     assert "this._onTranscriptUpdate = onTranscriptUpdate || (() => {});" in source
     assert "this._onTranscriptUpdate([...this._items.values()]" in source
     # Bumped in Spec 165 A1: both adapters changed (the playback event), so browsers fetch them afresh.
-    assert "openai-webrtc-adapter.js?v=20261028-tag1" in source             # and again for the response tag (FR N3)
+    assert "openai-webrtc-adapter.js?v=20261028-bind1" in source            # and again for the response tag (FR N3, V R2-M1)
     assert "xai-websocket-adapter.js?v=20261028-attrib1" in source
 
 

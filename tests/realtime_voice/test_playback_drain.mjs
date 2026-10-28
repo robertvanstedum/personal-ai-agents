@@ -39,19 +39,22 @@ function host(adapter) {
   const ended = [];
   let mine;
   const c = new RealtimeVoiceController({
+    trackResponses: true,                                             // as the direct session module does
+    onFunctionCall: async () => ({ ok: true, outcome: 'done', spoken: 'Done.' }),
     onPlaybackDrained: (id) => { if (mine !== undefined && id === mine) { ended.push('drained'); c.endSession('normal_end'); } },
     onAssistantTurn: () => { if (typeof c.speakTracked !== 'function' && !ended.length) { ended.push('turn'); c.endSession('normal_end'); } },
   });
   c._adapter = adapter; c._state = 'active'; c._wireAdapterEvents();
-  const tags = [];                                                    // what a tagged instruction asked the provider to echo
+  const tags = [];                                                    // what each tagged request asked the provider to echo
   adapter.sendContinuationInstruction = (_text, tag) => { tags.push(tag || null); };
+  adapter.sendFunctionResult = (_id, _output, tag) => { tags.push(tag || null); };
   const ask = async () => {
     if (typeof c.speakTracked === 'function') { const p = c.speakTracked('Say only this, then stop: …'); return p.then((id) => { mine = id; }); }
     c.speak?.('Say only this, then stop: …');
   };
   // The provider's response.created for the instruction: OpenAI echoes the response metadata it was sent (review FR N3).
-  const created = (id) => ({ type: 'response.created', response: { id, ...(tags.at(-1) ? { metadata: { minimoi_tag: tags.at(-1) } } : {}) } });
-  return { c, ended, ask, created, mine: () => mine };
+  const created = (id, tag = tags.at(-1)) => ({ type: 'response.created', response: { id, ...(tag ? { metadata: { minimoi_tag: tag } } : {}) } });
+  return { c, ended, ask, created, tags, mine: () => mine };
 }
 function xai() {
   const a = new XAIWebSocketAdapter();
@@ -162,35 +165,47 @@ await check('B6 German and Portuguese pass no callback: drains reach nobody and 
   assert.equal(c._state, 'active'); assert.equal(a._audioContext.closed, 0);
 });
 
-await check('FR N3 OpenAI: a function result\'s response starting first is not taken as the summary; its own tagged one is', async () => {
+// FR N3, V note D: the summary's response is its own even when a function result's follow-up was asked for just before
+// it and starts first. The controller asks for both, in order: OpenAI knows each by the tag it reports back; xAI by order.
+const reply = { type: 'response.done', response: { id: 'resp_reply', output: [{ type: 'function_call', call_id: 'call_r', name: 'consult', arguments: '{}' }] } };
+await check('FR N3 OpenAI: a function result\'s follow-up asked for before the summary, and a response of his, are not the summary', async () => {
   const a = new OpenAIWebRTCAdapter();
   let closed = 0;
   a.end = () => { closed += 1; };
-  const { ended, ask, created, mine } = host(a);
+  const { ended, ask, created, tags, mine } = host(a);
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_reply' } });
+  a._handleServerEvent(reply); await flush();                             // its result is sent: a follow-up is asked for
   const asked = ask();
-  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_fn' } });      // a function result's follow-up, untagged
-  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_x', metadata: { minimoi_tag: 'minimoi-999' } } });
+  const [follow, summary] = tags;
+  a._handleServerEvent(created('resp_fn', follow));                      // the follow-up starts first
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_his' } });     // untagged: the provider's own
   a._handleServerEvent({ type: 'response.done', response: { id: 'resp_fn', output: [] } });   // drains with no audio
   await flush();
   assert.equal(mine(), undefined); assert.deepEqual(ended, []);
-  a._handleServerEvent(created('resp_sum'));
+  a._handleServerEvent(created('resp_sum', summary));
   await asked;
   assert.equal(mine(), 'resp_sum');
   a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [] } });
   await flush();
   assert.deepEqual(ended, ['drained']); assert.equal(closed, 1);
 });
-await check('FR N3 xAI (no tag echoed): asked while a response is under way, the next response is not taken as the summary', async () => {
-  const { a, ended, ask, mine } = xai();
-  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_reply' } });   // under way: its function call may follow
+await check('V note D xAI (no tag reported back): a follow-up asked for just before the summary starts first; the summary is its own', async () => {
+  const { a, ctx, ended, ask, mine } = xai();
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_reply' } });
+  a._handleServerEvent(reply); await flush();                             // the function result's response.create is on the wire
   const asked = ask();
-  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_reply', output: [] } });
-  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_fn' } });
-  await asked;
-  assert.equal(mine(), null);                                             // unknown: the host's bound ends the summary
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_fn' } });      // the follow-up, not started when asked
   a._handleServerEvent({ type: 'response.done', response: { id: 'resp_fn', output: [] } });
+  a._handleServerEvent({ type: 'response.created', response: { id: 'resp_sum' } });
+  await asked;
+  assert.equal(mine(), 'resp_sum', 'the summary took the follow-up\'s response');
   await flush();
-  assert.deepEqual(ended, []);
+  assert.deepEqual(ended, []);                                            // the follow-up's drain did not close it
+  a._handleServerEvent({ type: 'response.output_audio.delta', response_id: 'resp_sum', delta: CHUNK });
+  a._handleServerEvent({ type: 'response.done', response: { id: 'resp_sum', output: [] } });
+  ctx.sources.at(-1).end();
+  await flush();
+  assert.deepEqual(ended, ['drained']);
 });
 
 if (failures.length) {

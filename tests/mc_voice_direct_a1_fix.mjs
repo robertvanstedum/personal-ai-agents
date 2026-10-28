@@ -109,11 +109,12 @@ await t.check('item 4: a turn still running is pending, an answer that never cam
   const r = rig({ routes: { '/consult': (body) => answers[body.call_id] } });
   await r.s.start('openai');
   r.c.utter('Run the nightly job.');
-  assert.deepEqual(await r.c.fn({ call_id: 'a', name: 'consult', arguments: {} }),
+  const first = r.c.respond(), second = r.c.follow({ response_id: first }), third = r.c.follow({ response_id: second });
+  assert.deepEqual(await r.c.callFrom(first, { call_id: 'a', name: 'consult', arguments: {} }),
     { ok: false, error: 'in flight', outcome: 'pending', spoken: "That's taking longer; the answer will be in the conversation." });
-  assert.deepEqual(await r.c.fn({ call_id: 'b', name: 'consult', arguments: {} }),
+  assert.deepEqual(await r.c.callFrom(second, { call_id: 'b', name: 'consult', arguments: {} }),   // chained: the same turn
     { ok: false, error: 'unknown', outcome: 'unknown', spoken: "I didn't get the result back. Check it in writing before asking again." });
-  assert.deepEqual(await r.c.fn({ call_id: 'c', name: 'consult', arguments: {} }),
+  assert.deepEqual(await r.c.callFrom(third, { call_id: 'c', name: 'consult', arguments: {} }),
     { ok: false, error: 'unavailable', outcome: 'not_done', spoken: 'That did not go through. Nothing was done.' });
 });
 
@@ -413,10 +414,12 @@ await t.check('CX A1-C2: a call bound to no owner input is refused before anythi
 });
 await t.check('CX A1-C2: a duplicate completion of the same captured item is not a new turn', async () => {
   const r = rig(); await r.s.start('openai');
+  assert.equal(r.c.options.trackResponses, true);                                  // each response it asks for is tagged (V R2-M1)
   r.c.utter('Make a note that the kiln is hot');
-  await r.c.fn({ call_id: 'a', name: 'save_note', arguments: {} });
+  const first = r.c.respond();
+  await r.c.callFrom(first, { call_id: 'a', name: 'save_note', arguments: {} });
   r.c.hear(r.c.turns); r.c.options.onUserTurn('Make a note that the kiln is hot');        // the same item completes again
-  await r.c.fn({ call_id: 'b', name: 'save_note', arguments: {} });
+  await r.c.callFrom(r.c.follow({ response_id: first }), { call_id: 'b', name: 'save_note', arguments: {} });   // its follow-up's call
   await r.s.check();
   assert.deepEqual(r.posts('/consult').map((p) => p.body.owner_item_id), ['t0', 't0']);
   assert.deepEqual(r.said.at(-1), [D.ALREADY_CHECKED, { transient: true }]);
