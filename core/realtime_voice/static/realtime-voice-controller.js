@@ -200,7 +200,7 @@ export class RealtimeVoiceController {
     on("speech_stopped", () => { this._inputOpen = true; });
     on("input_item", (evt) => this._sawInput(evt.item_id));
     on("input_transcript", (evt) => this._sawInput(evt.item_id));
-    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._inputOpen ? { after: this._inputs.at(-1) ?? null } : (this._inputs.at(-1) ?? null)); });
+    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._inputOpen ? { after: this._lastInput() } : this._lastInput()); });
     on("connected", () => {
       this._setState("active");
       this._startedAt = Date.now();
@@ -369,9 +369,13 @@ export class RealtimeVoiceController {
     return item.completed ? { state: "bound", index, text: item.text || "" } : { state: "pending" };
   }
 
+  // Index access, not Array.prototype.at: these listeners run in every German, Portuguese and CoS session, and must work
+  // on every browser the controller ran on before (Safari before 15.4 has no .at; review FR S2).
+  _lastInput() { return this._inputs.length ? this._inputs[this._inputs.length - 1] : null; }
+
   _sawInput(id) {
     if (!id || this._inputs.includes(id)) return;
-    const before = this._inputs.at(-1) ?? null;
+    const before = this._lastInput();
     this._inputs.push(id);
     this._inputOpen = false;
     for (const [rid, owner] of this._answers) if (owner && typeof owner === "object" && owner.after === before) this._answers.set(rid, id);

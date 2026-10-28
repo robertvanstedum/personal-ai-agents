@@ -1,5 +1,7 @@
 // The shared controller and adapters after Spec 165 A1 and its fix round, for German and Portuguese: byte-for-byte the files
-// they ran before, plus additive parts they never use: the controller's public methods (sessionId(), state(), speak(),
+// they ran before, plus additive parts. Some of those parts run in every session (the response-attribution listeners and
+// xAI's per-response accounting see every German transcript and response; review FR S2), so the behaviour half below
+// drives German's transcript path through them, on a browser without Array.prototype.at too. The additions are: the controller's public methods (sessionId(), state(), speak(),
 // speakTracked(), inputOf()), its optional onPlaybackDrained callback and the adapter events it listens to (response_started,
 // playback_drained, input_item: nothing reaches a page that passes no callback), its response attribution (review CX A1-C2:
 // which owner input each response answers), the adapters' response tracking that emits them (Spec 165 §5.1, §5.3), the
@@ -68,7 +70,7 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
     on("speech_stopped", () => { this._inputOpen = true; });
     on("input_item", (evt) => this._sawInput(evt.item_id));
     on("input_transcript", (evt) => this._sawInput(evt.item_id));
-    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._inputOpen ? { after: this._inputs.at(-1) ?? null } : (this._inputs.at(-1) ?? null)); });
+    on("response_started", (evt) => { if (evt.response_id) this._answers.set(evt.response_id, this._inputOpen ? { after: this._lastInput() } : this._lastInput()); });
 `,
    ``],
   [`  /** The owner input item a function call answers (Spec 165 §5.1; review CX A1-C2): each response is bound when it starts to
@@ -87,9 +89,13 @@ import { XAIWebSocketAdapter } from "./adapters/xai-websocket-adapter.js?v=20260
     return item.completed ? { state: "bound", index, text: item.text || "" } : { state: "pending" };
   }
 
+  // Index access, not Array.prototype.at: these listeners run in every German, Portuguese and CoS session, and must work
+  // on every browser the controller ran on before (Safari before 15.4 has no .at; review FR S2).
+  _lastInput() { return this._inputs.length ? this._inputs[this._inputs.length - 1] : null; }
+
   _sawInput(id) {
     if (!id || this._inputs.includes(id)) return;
-    const before = this._inputs.at(-1) ?? null;
+    const before = this._lastInput();
     this._inputs.push(id);
     this._inputOpen = false;
     for (const [rid, owner] of this._answers) if (owner && typeof owner === "object" && owner.after === before) this._answers.set(rid, id);
@@ -282,6 +288,25 @@ try {
   adapters.at(-1).emit('playback_drained', { response_id: 'r1' });
   assert.equal(germanXai.state(), 'active');
   n++;
+  // German's transcript path runs through the new listeners: its callbacks see what they saw before, and nothing throws on
+  // a browser without Array.prototype.at (Safari before 15.4; review FR S2).
+  const at = Array.prototype.at;
+  delete Array.prototype.at;
+  try {
+    const seen = [], heard = [];
+    const lesson = new Controller({ bootstrapUrl: '/api/realtime-voice/bootstrap', onTranscriptUpdate: (t) => seen.push(t),
+      onUserTurn: (text) => heard.push(text) });
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ provider: 'xai', model: 'm', warning_minutes: 20, max_minutes: 30 }) });
+    await lesson.startSession({ provider: 'xai', persona: 'frau_berger', scene: 'bakery', learner_name: 'Robert' });
+    const wire = adapters[adapters.length - 1];
+    wire.emit('speech_started', {}); wire.emit('speech_stopped', {});
+    wire.emit('input_transcript', { item_id: 'i1', text: 'Ein Brot', is_delta: false, completed: false, provider_event_id: 'e1' });
+    wire.emit('input_transcript', { item_id: 'i1', text: 'Ein Brot, bitte', is_delta: false, completed: true, provider_event_id: 'e2' });
+    wire.emit('response_started', { response_id: 'r1' });
+    assert.deepEqual(heard, ['Ein Brot, bitte']);
+    assert.deepEqual(seen[seen.length - 1], [{ speaker: 'user', text: 'Ein Brot, bitte', completed: true }]);
+  } finally { Array.prototype.at = at; }
+  n++;
   // The managed path never takes a page instruction.
   const managed = new Controller({ bootstrapUrl: '/b', managedBootstrap: { sessionUrl: '/m' } });
   managed._adapter = new Adapter();
@@ -289,4 +314,13 @@ try {
   assert.deepEqual(managed._adapter.sent, []);
   n++;
 } finally { Object.assign(globalThis, saved); }
+// No syntax or API newer than these files used before (review FR S2): German, Portuguese and CoS load them on every browser
+// they ran on. Comments aside; Object.hasOwn no more often than at 93bf00c6.
+const NEWER = /\.at\(|\.findLast(?:Index)?\(|structuredClone\(|Object\.groupBy\(|\.toSorted\(|\.toReversed\(|\.toSpliced\(/;
+for (const [name, hasOwn] of [['realtime-voice-controller.js', 2], ['adapters/xai-websocket-adapter.js', 0], ['adapters/openai-webrtc-adapter.js', 0]]) {
+  const code = fs.readFileSync(new URL(name, PATH), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.equal(NEWER.exec(code)?.[0] ?? null, null, name);
+  assert.ok((code.match(/Object\.hasOwn\(/g) || []).length <= hasOwn, name);
+}
+n++;
 console.log(`${n} shared-controller no-change scenarios passed (German source pinned, additive methods); no provider or microphone.`);
