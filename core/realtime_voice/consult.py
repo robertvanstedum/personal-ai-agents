@@ -3,6 +3,7 @@
 The backend is swappable. The bench uses a stub. MC will pass its typed turn
 service. A consult has no authority the backend does not already have.
 """
+import re
 import secrets
 import threading
 import time
@@ -119,5 +120,9 @@ def create_consult_blueprint(*, backend, ledger, csrf_ok, owner_id, session_owne
     return bp
 
 
+_TOKEN = re.compile(r"[A-Za-z0-9_-]{1,80}")
+
+
 def _token(value):
-    return isinstance(value, str) and 1 <= len(value) <= 80 and value.replace("-", "").isalnum()
+    """A session or call id: ASCII letters, digits, '-' and '_' (OpenAI's call ids are call_…), at most 80."""
+    return isinstance(value, str) and _TOKEN.fullmatch(value) is not None

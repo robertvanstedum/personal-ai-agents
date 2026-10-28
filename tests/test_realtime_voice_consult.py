@@ -68,6 +68,8 @@ def test_missing_csrf_forged_call_and_late_call_are_refused():
     assert post(refused.test_client()).status_code == 403
     client = app_for(ledger).test_client()
     assert post(client, call_id="not a call").status_code == 400
+    assert post(client, call_id="cäll-1").status_code == 400                    # ASCII only
+    assert post(client, call_id="call_sHlR7iaFwQ2YQOqm").status_code == 200     # a provider's real call id shape
     ledger.close_session(SESSION)
     late = post(client, call_id="call-2")
     assert late.status_code == 409

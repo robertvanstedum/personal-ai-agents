@@ -699,7 +699,13 @@ def install(app, mount, *, environ, budget=None, clock=time.time):
         bp.register_error_handler(Exception, _api_error)
         app.extensions[name] = config                  # cfg() and owner_api resolve this mount on these routes
         app.register_blueprint(bp, url_prefix=base, name=name)
-    config["mc_direct_voice"] = {"bootstrap_url": base + "/api/realtime-voice/bootstrap",
+    from core.realtime_voice.capabilities import AGENT_CONVERSATION_MODE, providers_for_mode
+    from core.realtime_voice.config import resolve_provider
+    offered = [p.public_dict() for p in providers_for_mode(AGENT_CONVERSATION_MODE, LOCALE)]   # a static table, not a key
+    config["mc_direct_voice"] = {"path": "direct", "providers": offered,
+                                 "default_provider": resolve_provider(explicit=None, saved_preference=None,
+                                                                      is_production=True),
+                                 "bootstrap_url": base + "/api/realtime-voice/bootstrap",
                                  "consult_url": base + "/api/realtime-voice/consult",
                                  "end_url": base + "/api/realtime-voice/session/{session_id}/end",
                                  "transcript_url": base + "/api/realtime-voice/session/{session_id}/transcript",
