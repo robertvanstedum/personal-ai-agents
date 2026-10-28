@@ -134,3 +134,12 @@ def test_with_the_flag_off_voice_is_unavailable_and_the_chained_relay_is_not_rea
     for chained in ("realtime-confer-controller", "ConferVoiceController", "/mc/voice/bootstrap", "/mc/voice/speech"):
         assert chained not in composer
     assert not runtime.sent and not minted
+
+
+@pytest.mark.parametrize("env,xai", [(ON, True), ({k: v for k, v in ON.items() if k != "MINIMOI_MC_VOICE_DIRECT"}, False)])
+def test_the_page_may_reach_xai_only_when_the_direct_path_offers_it(load_portal, floor_db, monkeypatch, tmp_path, env, xai):
+    _portal, _runtime, _minted, client, _token = portal_with(load_portal, floor_db, monkeypatch, tmp_path, env)
+    csp = client.get("/guild-next/guild/build").headers["Content-Security-Policy"]
+    connect = next(part for part in csp.split(";") if part.strip().startswith("connect-src"))
+    assert "https://api.openai.com" in connect and connect.count("https://api.openai.com") == 1
+    assert ("wss://api.x.ai" in connect) is xai and "https://api.x.ai" not in connect

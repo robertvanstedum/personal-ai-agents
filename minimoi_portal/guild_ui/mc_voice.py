@@ -43,8 +43,16 @@ def enabled(environ=None) -> bool:
 
 
 def csp_connect_extra(environ=None) -> str:
-    """What the page's connect-src may also reach while voice is on: the provider's session endpoint, for the browser-to-provider audio session."""
-    return " https://api.openai.com" if enabled(environ) else ""
+    """What the page's connect-src may also reach while voice is on: the provider's session endpoint, for the browser-to-provider audio session.
+    With MC's direct path offering Grok on this mount, also xAI's realtime socket (the browser opens wss://api.x.ai itself)."""
+    if not enabled(environ):
+        return ""
+    try:
+        direct = cfg().get("mc_direct_voice") if environ is None else None
+    except RuntimeError:                                   # no mount bound (a probe): the OpenAI origin only, as before
+        direct = None
+    xai = bool(direct) and any(p.get("provider") == "xai" for p in direct.get("providers") or ())
+    return " https://api.openai.com" + (" wss://api.x.ai" if xai else "")
 
 
 def _off():
