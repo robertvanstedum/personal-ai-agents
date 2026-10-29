@@ -1,0 +1,12 @@
+{
+  "schema": "minimoi.authority.v1",
+  "environment": "prod",
+  "note": "Production's authority profile: today's behaviour. Version 1 only, so the store runs exactly today's statements and refuses every version 2 call. The routes record today's per-job caps (the delegation relay's 2 USD for Claude Code, which is Claude's own estimate on the subscription; Codex's 30-minute plan limit). No daily cap exists for delegations today, so none is written: under version 2 a missing value admits nothing. Both subscription routes stay supervised-only (spec v0.5 §8.2, R6.7-h), and launch_closure stays pending until the owner records both gating N5 items (R6.7-l).",
+  "protocols": [1],
+  "launch_closure": "pending",
+  "lease_s": 120,
+  "routes": {
+    "claude-code.subscription": {"unit": "usd_notional", "per_item": 2.0, "supervised_only": true},
+    "codex.subscription": {"unit": "minutes", "per_item": 30, "supervised_only": true}
+  }
+}

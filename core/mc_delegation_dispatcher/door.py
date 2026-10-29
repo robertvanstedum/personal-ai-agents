@@ -4,6 +4,10 @@ The runner already speaks six calls to its dispatcher (heartbeat, claim, progres
 ``handle`` checks one such call's shape strictly and passes it to ``DispatcherStore``, whose principal and
 environment are fixed by the server, never by the caller. ``HttpDispatcher`` is the runner's side: the same
 interface as ``StoreDispatcher``, over HTTPS (core/mc_delegation_runner/cli.py --door).
+
+A body without ``protocol`` is version 1 and is checked and passed exactly as before (spec v0.5 R3.2-d). A body with
+``protocol: 2`` must have every field of its call's version 2 shape (store.py's docstring), and nothing else; the
+store refuses it unless the authority configuration speaks version 2.
 """
 from __future__ import annotations
 
@@ -18,7 +22,8 @@ BODY_MAX = 160 * 1024
 _ID = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _WORD = re.compile(r"^[a-z_]{1,40}$")
-_CAPS = {"actors", "cost_enforced_actors", "scopes", "repositories"}      # RunnerConfig.caps()
+_ROUTE = re.compile(r"^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)*$")
+_CAPS ={"actors", "cost_enforced_actors", "scopes", "repositories"}      # RunnerConfig.caps()
 
 
 class Refused(ValueError):
@@ -47,6 +52,8 @@ def _caps(c):
 def handle(store, body):
     """One runner call -> {"value": ...}. Raises Refused for anything malformed."""
     need(type(body) is dict and type(body.get("op")) is str)
+    if "protocol" in body:
+        return _handle_v2(store, body)
     op = body["op"]
     args = {k: v for k, v in body.items() if k != "op"}
     rid = args.get("request_id")
@@ -78,6 +85,63 @@ def handle(store, body):
                                       artifacts=args["artifacts"], detail=args["detail"],
                                       output_text=args["output_text"])}
     raise Refused("runner_op_unknown")
+
+
+_V2 = {"heartbeat": {"runner_id", "state", "capabilities", "facts"},
+       "claim": {"runner_id", "capabilities"},
+       "progress": {"runner_id", "request_id", "generation", "event_id", "at", "phase", "checkpoint"},
+       "cancel_requested": {"request_id", "generation"},
+       "renew": {"runner_id", "request_id", "generation"},
+       "result": {"runner_id", "request_id", "generation", "event_id", "at", "status", "artifacts", "detail",
+                  "output_text", "route", "usage"}}
+
+
+def _checked(check, value):
+    try:
+        return check(value)
+    except ValueError:
+        raise Refused("runner_request_invalid") from None
+
+
+def _handle_v2(store, body):
+    # The store's own value checks, so the door and a direct caller are held to the same shapes.
+    from .store import check_capabilities, check_checkpoint, check_facts, check_usage, parse_at
+    need(type(body["protocol"]) is int and body["protocol"] == 2 and body["op"] in _V2)
+    op = body["op"]
+    args = {k: v for k, v in body.items() if k not in ("op", "protocol")}
+    need(set(args) == _V2[op])
+    if "runner_id" in args:
+        need(type(args["runner_id"]) is str and _ID.match(args["runner_id"]))
+    if op in ("heartbeat", "claim"):
+        caps = _checked(check_capabilities, args["capabilities"])
+        if op == "claim":
+            return {"value": store.claim(args["runner_id"], caps, protocol=2)}
+        need(type(args["state"]) is str and _WORD.match(args["state"]))
+        facts = _checked(check_facts, args["facts"])
+        return {"value": store.heartbeat(args["runner_id"], args["state"], caps, protocol=2, facts=facts)}
+    rid, gen = args["request_id"], args["generation"]
+    need(type(rid) is str and _UUID.match(rid) and type(gen) is int and 0 <= gen < 10**6)
+    if op == "cancel_requested":
+        return {"value": store.cancel_requested(rid, gen, protocol=2)}
+    if op == "renew":
+        return {"value": store.renew(rid, gen, protocol=2, runner_id=args["runner_id"])}
+    need(type(args["event_id"]) is str and _UUID.match(args["event_id"]))
+    _checked(parse_at, args["at"])
+    if op == "progress":
+        need(type(args["phase"]) is str and _WORD.match(args["phase"]))
+        checkpoint = _checked(check_checkpoint, args["checkpoint"])
+        return {"value": store.progress(rid, gen, args["phase"], protocol=2, runner_id=args["runner_id"],
+                                        event_id=args["event_id"], at=args["at"], checkpoint=checkpoint)}
+    need(type(args["status"]) is str and _WORD.match(args["status"]))
+    need(type(args["artifacts"]) is list and len(args["artifacts"]) <= 20 and _small_json(args["artifacts"], 8192))
+    need(type(args["detail"]) is dict and _small_json(args["detail"], 8192))
+    need(args["output_text"] is None or (type(args["output_text"]) is str and len(args["output_text"]) <= 64 * 1024))
+    need(type(args["route"]) is str and len(args["route"]) <= 64 and _ROUTE.match(args["route"]))
+    _checked(check_usage, args["usage"])
+    return {"value": store.result(rid, gen, event_id=args["event_id"], status=args["status"],
+                                  artifacts=args["artifacts"], detail=args["detail"], output_text=args["output_text"],
+                                  protocol=2, runner_id=args["runner_id"], at=args["at"], route=args["route"],
+                                  usage=args["usage"])}
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):

@@ -1,0 +1,14 @@
+{
+  "schema": "minimoi.authority.v1",
+  "environment": "dev",
+  "note": "Test values only (spec v0.5 §9.2), never production's: lease 60 s; fakework 2.0 test_units a day and 1.5 per item. fakework.subscription is configured supervised-only and anthropic.api is an API route outside the test family, both for T11b. fakework.api is T19e's test API route. launch_closure is pending, as it is everywhere until the owner records both gating N5 items. The other §9.2 values (contact, grace, offline hold, gap, progress timeouts, sweep, fakejudge) belong to the chunks that read them.",
+  "protocols": [1, 2],
+  "launch_closure": "pending",
+  "lease_s": 60,
+  "routes": {
+    "fakework": {"unit": "test_units", "per_day": 2.0, "per_item": 1.5, "supervised_only": false},
+    "fakework.subscription": {"unit": "test_units", "per_day": 2.0, "per_item": 1.5, "supervised_only": true},
+    "fakework.api": {"unit": "usd", "per_day": 10.0, "per_item": 3.0, "supervised_only": false},
+    "anthropic.api": {"unit": "usd", "per_day": 10.0, "per_item": 3.0, "supervised_only": false}
+  }
+}
